@@ -1,0 +1,14 @@
+{
+  "name": "elder-terms-vte",
+  "version": "0.0.1",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": ">=24.0.0",
+    "gestament": ">=0.2.0",
+    "prettier-max": ">=1.16.0",
+    "typescript": ">=6.0.0",
+    "vitest": ">=4.0.0"
+  }
+}

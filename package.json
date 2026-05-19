@@ -1,0 +1,11 @@
+{
+  "name": "elder-terms-root",
+  "version": "0.0.1",
+  "private": true,
+  "workspaces": [
+    "elder-terms-vte"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces"
+  }
+}
