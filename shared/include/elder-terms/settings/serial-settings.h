@@ -1,0 +1,166 @@
+#pragma once
+
+#include <string>
+#include <vector>
+
+#include <glib.h>
+
+#include <elder-terms/settings/settings-store.h>
+
+namespace elder_terms {
+
+/**
+ * Serial parity configuration.
+ */
+enum class SerialParity {
+  /** No parity bit. */
+  none,
+  /** Even parity. */
+  even,
+  /** Odd parity. */
+  odd,
+};
+
+/**
+ * Serial flow-control configuration.
+ */
+enum class SerialFlowControl {
+  /** No software or hardware flow control. */
+  none,
+  /** XON/XOFF software flow control. */
+  xon,
+  /** RTS/CTS hardware flow control. */
+  hard,
+};
+
+/**
+ * Serial modem line used to detect connection state.
+ */
+enum class SerialCarrierDetect {
+  /** Carrier detect / data carrier detect line. */
+  cd,
+  /** Clear to send line. */
+  cts,
+  /** Data set ready line. */
+  dsr,
+};
+
+/**
+ * Settings for the serial connection backend.
+ */
+struct SerialConnectionSettings {
+  /** Serial device path or identifier. */
+  std::string device;
+  /** Serial baud rate. */
+  gint64 baudrate;
+  /** Data bits per character. */
+  gint64 bits;
+  /** Parity mode. */
+  SerialParity parity;
+  /** Stop bits per character. */
+  gint64 stop_bit;
+  /** Flow-control mode. */
+  SerialFlowControl flow_control;
+  /** Modem line used to detect disconnects. */
+  SerialCarrierDetect carrier_detect;
+};
+
+/**
+ * Returns serial setting definitions.
+ *
+ * @returns Setting definitions for the serial INI section.
+ */
+std::vector<SettingDefinition> serial_connection_setting_definitions();
+
+/**
+ * Returns the setting key for [serial] device.
+ *
+ * @returns Setting key for the serial device selector.
+ */
+SettingKey serial_device_setting_key();
+
+/**
+ * Returns the setting key for [serial] baudrate.
+ *
+ * @returns Setting key for the serial baud rate.
+ */
+SettingKey serial_baudrate_setting_key();
+
+/**
+ * Returns the setting key for [serial] bits.
+ *
+ * @returns Setting key for serial data bits.
+ */
+SettingKey serial_bits_setting_key();
+
+/**
+ * Returns the setting key for [serial] parity.
+ *
+ * @returns Setting key for serial parity.
+ */
+SettingKey serial_parity_setting_key();
+
+/**
+ * Returns the setting key for [serial] stop_bit.
+ *
+ * @returns Setting key for serial stop bits.
+ */
+SettingKey serial_stop_bit_setting_key();
+
+/**
+ * Returns the setting key for [serial] flow_control.
+ *
+ * @returns Setting key for serial flow control.
+ */
+SettingKey serial_flow_control_setting_key();
+
+/**
+ * Returns the setting key for [serial] carrier_detect.
+ *
+ * @returns Setting key for serial carrier detection.
+ */
+SettingKey serial_carrier_detect_setting_key();
+
+/**
+ * Extracts serial connection settings from a store.
+ *
+ * @param store Source settings store.
+ * @returns Typed serial connection settings.
+ */
+SerialConnectionSettings serial_connection_settings(const SettingsStore &store);
+
+/**
+ * Converts a serial parity enum to its INI value.
+ *
+ * @param parity Serial parity.
+ * @returns INI value for the parity.
+ */
+std::string serial_parity_to_string(SerialParity parity);
+
+/**
+ * Converts a serial flow-control enum to its INI value.
+ *
+ * @param flow_control Serial flow-control mode.
+ * @returns INI value for the flow-control mode.
+ */
+std::string serial_flow_control_to_string(SerialFlowControl flow_control);
+
+/**
+ * Converts a serial carrier-detect enum to its INI value.
+ *
+ * @param carrier_detect Serial carrier-detect mode.
+ * @returns INI value for the carrier-detect mode.
+ */
+std::string
+serial_carrier_detect_to_string(SerialCarrierDetect carrier_detect);
+
+/**
+ * Appends serial-specific non-fatal warnings.
+ *
+ * @param store Source settings store.
+ * @param warnings Warning sink.
+ */
+void append_serial_connection_warnings(const SettingsStore &store,
+                                       std::vector<std::string> *warnings);
+
+} // namespace elder_terms

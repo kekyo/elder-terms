@@ -1,0 +1,32 @@
+{
+  "configurations": [
+    {
+      "name": "POSIX (Linux)",
+      "compilerPath": "/usr/bin/g++",
+      "intelliSenseMode": "linux-gcc-x64",
+      "cStandard": "c99",
+      "cppStandard": "c++20",
+      "compileCommands": "${workspaceFolder}/.build/compile_commands.json",
+      "defines": [
+        "CARDIO_WITH_GLIB=1",
+        "CARDIO_WITH_GIO=1"
+      ],
+      "includePath": [
+        "${workspaceFolder}/elder-terms-vte/src",
+        "${workspaceFolder}/node_modules/gestament/include",
+        "${workspaceFolder}/../cardio/include",
+        "${workspaceFolder}/../libxyzm/include"
+      ],
+      "browse": {
+        "path": [
+          "${workspaceFolder}/elder-terms-vte/src",
+          "${workspaceFolder}/node_modules/gestament/include",
+          "${workspaceFolder}/../cardio/include",
+          "${workspaceFolder}/../libxyzm/include"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      }
+    }
+  ],
+  "version": 4
+}

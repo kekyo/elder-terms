@@ -8,3 +8,6 @@ project(
     'werror=true',
   ],
 )
+
+subdir('shared')
+subdir('elder-terms-vte')

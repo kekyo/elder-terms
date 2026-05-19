@@ -1,0 +1,87 @@
+#pragma once
+
+#include <cstdint>
+#include <span>
+#include <vector>
+
+namespace elder_terms {
+
+/**
+ * Byte buffer used by the TELNET protocol parser and encoder.
+ */
+using TelnetBytes = std::vector<unsigned char>;
+
+/**
+ * Result of consuming bytes received from a TELNET server.
+ */
+struct TelnetProtocolResult {
+  /** Bytes that should be rendered by VTE. */
+  TelnetBytes terminal_data;
+  /** Protocol responses that should be sent back to the server. */
+  std::vector<TelnetBytes> responses;
+};
+
+/**
+ * Stateful TELNET protocol parser for terminal sessions.
+ */
+class TelnetProtocol {
+private:
+  enum class ParseState {
+    data,
+    command,
+    negotiation,
+    suboption,
+    suboption_command,
+  };
+
+  ParseState state = ParseState::data;
+  unsigned char pending_command = 0;
+  std::uint16_t columns = 80;
+  std::uint16_t rows = 24;
+  bool naws_enabled = false;
+  TelnetBytes suboption_bytes;
+
+  void handle_negotiation(unsigned char option, TelnetProtocolResult *result);
+  void handle_suboption();
+
+public:
+  /**
+   * Updates the window size used for NAWS responses.
+   *
+   * @param columns Terminal column count, clamped to 16 bits by the caller.
+   * @param rows Terminal row count, clamped to 16 bits by the caller.
+   */
+  void set_window_size(std::uint16_t columns, std::uint16_t rows);
+
+  /**
+   * Returns whether the server enabled NAWS.
+   *
+   * @returns True when NAWS updates should be sent after resizes.
+   */
+  bool is_naws_enabled() const;
+
+  /**
+   * Consumes bytes received from the TELNET server.
+   *
+   * @param bytes Raw bytes received from the server.
+   * @returns Terminal bytes and protocol responses produced by the parser.
+   */
+  TelnetProtocolResult receive(std::span<const unsigned char> bytes);
+
+  /**
+   * Encodes user input for TELNET transmission.
+   *
+   * @param bytes Raw user input bytes from VTE.
+   * @returns Bytes with TELNET IAC escaping applied.
+   */
+  TelnetBytes encode_user_input(std::span<const unsigned char> bytes) const;
+
+  /**
+   * Encodes the current terminal size as a NAWS subnegotiation.
+   *
+   * @returns TELNET NAWS subnegotiation bytes.
+   */
+  TelnetBytes encode_naws() const;
+};
+
+} // namespace elder_terms

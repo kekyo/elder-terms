@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "esbenp.prettier-vscode",
+    "mesonbuild.mesonbuild",
+    "ms-vscode.cpptools",
+    "vitest.explorer"
+  ]
+}

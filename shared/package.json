@@ -1,9 +1,10 @@
 {
-  "name": "elder-terms-vte",
+  "name": "elder-terms-shared",
   "version": "0.0.1",
+  "private": true,
   "scripts": {
     "build": "meson setup ../.build .. --reconfigure || meson setup ../.build .. && meson compile -C ../.build",
-    "test": "npm run build && meson test -C ../.build && vitest run"
+    "test": "npm run build && vitest run"
   },
   "devDependencies": {
     "@types/node": ">=24.0.0",
