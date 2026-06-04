@@ -1,14 +1,35 @@
 #include <vte/vte.h>
 
+#include <signal.h>
+
+#include <cardio.h>
+
+#include <array>
+#include <cerrno>
 #include <cstdlib>
+#include <deque>
 #include <iostream>
 #include <memory>
+#include <optional>
+#include <span>
+#include <stdexcept>
 #include <string>
+#include <system_error>
 #include <utility>
+#include <vector>
 
 #include "local-session.h"
 
+#include "../terminal-view-io.h"
+
 namespace elder_terms {
+
+class TerminalLocalShellSession;
+
+struct LocalShellSpawnState {
+  TerminalLocalShellSession *session = nullptr;
+  bool active = true;
+};
 
 static std::string shell_path() {
   const char *shell = std::getenv("SHELL");
@@ -19,10 +40,14 @@ static std::string shell_path() {
   return shell;
 }
 
-static void on_terminal_spawned(VteTerminal *, GPid, GError *error, gpointer) {
-  if (error != nullptr) {
-    std::cerr << "Failed to spawn shell: " << error->message << '\n';
+static int clamp_pty_dimension(glong value) {
+  if (value <= 0) {
+    return 0;
   }
+  if (value > G_MAXINT) {
+    return G_MAXINT;
+  }
+  return static_cast<int>(value);
 }
 
 static void notify_session_ended(const TerminalSessionCallbacks &callbacks) {
@@ -31,43 +56,312 @@ static void notify_session_ended(const TerminalSessionCallbacks &callbacks) {
   }
 }
 
+static void clear_gerror(GError **error) {
+  if (error != nullptr && *error != nullptr) {
+    g_clear_error(error);
+  }
+}
+
+static std::string gerror_message(GError *error, const char *fallback) {
+  if (error != nullptr && error->message != nullptr) {
+    return error->message;
+  }
+  return fallback;
+}
+
+static void terminate_child_noexcept(GPid pid) {
+  if (pid > 0) {
+    (void)::kill(pid, SIGHUP);
+  }
+}
+
 class TerminalLocalShellSession final : public TerminalSession {
 private:
-  GtkWidget *terminal = nullptr;
+  TerminalViewIo terminal_io;
   LocalShellConnectionSettings settings;
   TerminalSessionCallbacks callbacks;
-  gulong child_exited_handler_id = 0;
+  std::shared_ptr<LocalShellSpawnState> spawn_state;
+  std::optional<cardio::io_uring> io;
+  cardio::cancellation_source stop_source;
+  std::deque<std::vector<unsigned char>> outgoing;
+  std::optional<cardio::promise<void>> read_task;
+  std::optional<cardio::promise<void>> write_task;
+  VtePty *pty = nullptr;
+  GPid child_pid = 0;
+  int pty_fd = -1;
+  guint child_watch_id = 0;
   bool started = false;
   bool stopping = false;
+  bool cleaned_up = false;
+  bool writing = false;
+  bool ended_notified = false;
 
-  void disconnect_terminal_signal() {
-    if (child_exited_handler_id != 0) {
-      g_signal_handler_disconnect(terminal, child_exited_handler_id);
-      child_exited_handler_id = 0;
+  void deactivate_spawn_callback() {
+    if (spawn_state != nullptr) {
+      spawn_state->active = false;
+      spawn_state->session = nullptr;
+      spawn_state.reset();
     }
   }
 
-  void handle_child_exited(int status) {
-    (void)status;
+  void remove_child_watch() {
+    if (child_watch_id != 0) {
+      g_source_remove(child_watch_id);
+      child_watch_id = 0;
+    }
+  }
+
+  void release_pty() {
+    pty_fd = -1;
+    if (pty != nullptr) {
+      g_object_unref(pty);
+      pty = nullptr;
+    }
+  }
+
+  void terminate_child() {
+    if (child_pid != 0) {
+      terminate_child_noexcept(child_pid);
+      g_spawn_close_pid(child_pid);
+      child_pid = 0;
+    }
+  }
+
+  void notify_ended_once() {
+    if (ended_notified) {
+      return;
+    }
+
+    ended_notified = true;
+    notify_session_ended(callbacks);
+  }
+
+  void cleanup_session_resources() {
+    if (cleaned_up) {
+      return;
+    }
+
+    cleaned_up = true;
+    deactivate_spawn_callback();
+    terminal_io.disconnect_user_input();
+    outgoing.clear();
+    (void)stop_source.cancel();
+    remove_child_watch();
+    terminate_child();
+    release_pty();
+  }
+
+  void finish_naturally() {
     if (stopping) {
       return;
     }
 
-    disconnect_terminal_signal();
-    notify_session_ended(callbacks);
+    stopping = true;
+    cleanup_session_resources();
+    notify_ended_once();
   }
 
-  static void on_terminal_child_exited(VteTerminal *, gint status,
-                                       gpointer user_data) {
+  void set_current_pty_size() {
+    if (pty == nullptr) {
+      return;
+    }
+
+    const TerminalViewGridSize size = terminal_io.grid_size();
+    set_pty_size(size.columns, size.rows);
+  }
+
+  void set_pty_size(glong columns, glong rows) {
+    if (pty == nullptr || columns <= 0 || rows <= 0) {
+      return;
+    }
+
+    GError *error = nullptr;
+    if (!vte_pty_set_size(pty, clamp_pty_dimension(rows),
+                          clamp_pty_dimension(columns), &error)) {
+      if (!stopping) {
+        std::cerr << "Warning: failed to resize local PTY: "
+                  << gerror_message(error, "unknown error") << '\n';
+      }
+      clear_gerror(&error);
+    }
+  }
+
+  void create_pty() {
+    GError *error = nullptr;
+    pty = vte_pty_new_sync(VTE_PTY_DEFAULT, nullptr, &error);
+    if (pty == nullptr) {
+      const std::string message =
+          gerror_message(error, "failed to create local PTY");
+      clear_gerror(&error);
+      throw std::runtime_error(message);
+    }
+    pty_fd = vte_pty_get_fd(pty);
+    if (pty_fd < 0) {
+      throw std::runtime_error("local PTY returned an invalid fd");
+    }
+  }
+
+  void start_writer() {
+    if (writing || pty_fd < 0 || stopping || outgoing.empty()) {
+      return;
+    }
+
+    writing = true;
+    write_task.reset();
+    write_task.emplace(write_loop_async());
+  }
+
+  void enqueue_bytes(std::span<const unsigned char> bytes) {
+    if (bytes.empty() || stopping || pty_fd < 0) {
+      return;
+    }
+
+    outgoing.emplace_back(bytes.begin(), bytes.end());
+    start_writer();
+  }
+
+  void send_user_input(std::span<const unsigned char> bytes) {
+    enqueue_bytes(bytes);
+  }
+
+  void handle_child_exited(int status) {
+    (void)status;
+    finish_naturally();
+  }
+
+  void handle_spawn_finished(GObject *source_object, GAsyncResult *result) {
+    GError *error = nullptr;
+    GPid spawned_pid = 0;
+    if (!vte_pty_spawn_finish(VTE_PTY(source_object), result, &spawned_pid,
+                              &error)) {
+      if (!stopping) {
+        std::cerr << "Failed to spawn shell: "
+                  << gerror_message(error, "unknown error") << '\n';
+      }
+      clear_gerror(&error);
+      if (!stopping) {
+        stop();
+      }
+      return;
+    }
+
+    if (stopping) {
+      terminate_child_noexcept(spawned_pid);
+      g_spawn_close_pid(spawned_pid);
+      return;
+    }
+
+    child_pid = spawned_pid;
+    child_watch_id =
+        g_child_watch_add(child_pid, TerminalLocalShellSession::on_child_exited,
+                          this);
+  }
+
+  static void finish_inactive_spawn(GObject *source_object,
+                                    GAsyncResult *result) {
+    GError *error = nullptr;
+    GPid spawned_pid = 0;
+    if (vte_pty_spawn_finish(VTE_PTY(source_object), result, &spawned_pid,
+                             &error)) {
+      terminate_child_noexcept(spawned_pid);
+      g_spawn_close_pid(spawned_pid);
+    }
+    clear_gerror(&error);
+  }
+
+  static void on_pty_spawned(GObject *source_object, GAsyncResult *result,
+                             gpointer user_data) {
+    std::unique_ptr<std::shared_ptr<LocalShellSpawnState>> state_owner(
+        static_cast<std::shared_ptr<LocalShellSpawnState> *>(user_data));
+    const std::shared_ptr<LocalShellSpawnState> state = *state_owner;
+    if (state == nullptr || !state->active || state->session == nullptr) {
+      finish_inactive_spawn(source_object, result);
+      return;
+    }
+
+    state->session->handle_spawn_finished(source_object, result);
+  }
+
+  static void on_child_exited(GPid pid, gint status, gpointer user_data) {
     auto *self = static_cast<TerminalLocalShellSession *>(user_data);
+    self->child_watch_id = 0;
+    if (self->child_pid == pid) {
+      self->child_pid = 0;
+    }
+    g_spawn_close_pid(pid);
     self->handle_child_exited(status);
+  }
+
+  cardio::promise<void> read_loop_async() {
+    bool natural_end = false;
+    try {
+      std::array<unsigned char, 4096> buffer{};
+      while (!stopping && pty_fd >= 0) {
+        std::span<unsigned char> writable(buffer.data(), buffer.size());
+        const std::size_t read_size = co_await cardio::io_urings::read(
+            *io, pty_fd, std::as_writable_bytes(writable));
+        if (read_size == 0) {
+          natural_end = true;
+          break;
+        }
+        terminal_io.feed(std::span<const unsigned char>(buffer.data(),
+                                                        read_size));
+      }
+    } catch (const cardio::canceled_exception &) {
+    } catch (const std::system_error &error) {
+      if (!stopping && error.code().value() == EIO) {
+        natural_end = true;
+      } else if (!stopping) {
+        std::cerr << "Warning: local PTY read failed: " << error.what()
+                  << '\n';
+      }
+    } catch (const std::exception &error) {
+      if (!stopping) {
+        std::cerr << "Warning: local PTY read failed: " << error.what()
+                  << '\n';
+      }
+    }
+
+    if (natural_end) {
+      finish_naturally();
+    }
+  }
+
+  cardio::promise<void> write_loop_async() {
+    try {
+      while (!stopping && pty_fd >= 0 && !outgoing.empty()) {
+        std::vector<unsigned char> chunk = std::move(outgoing.front());
+        outgoing.pop_front();
+        std::size_t offset = 0;
+        while (!stopping && offset < chunk.size()) {
+          std::span<const unsigned char> remaining(chunk.data() + offset,
+                                                   chunk.size() - offset);
+          const std::size_t written = co_await cardio::io_urings::write(
+              *io, pty_fd, std::as_bytes(remaining));
+          if (written == 0) {
+            throw std::runtime_error("local PTY write made no progress");
+          }
+          offset += written;
+        }
+      }
+    } catch (const std::exception &error) {
+      if (!stopping) {
+        std::cerr << "Warning: local PTY write failed: " << error.what()
+                  << '\n';
+      }
+    }
+
+    writing = false;
+    if (!stopping && pty_fd >= 0 && !outgoing.empty()) {
+      start_writer();
+    }
   }
 
 public:
   TerminalLocalShellSession(GtkWidget *terminal,
                             LocalShellConnectionSettings settings,
                             TerminalSessionCallbacks callbacks)
-      : terminal(terminal),
+      : terminal_io(terminal),
         settings(std::move(settings)),
         callbacks(callbacks) {
   }
@@ -81,37 +375,50 @@ public:
       return true;
     }
 
-    std::string shell = shell_path();
-    char *argv[] = {
-        shell.data(),
-        nullptr,
-    };
+    try {
+      io.emplace(64);
+      create_pty();
+      set_current_pty_size();
+      terminal_io.connect_user_input(
+          [this](std::span<const unsigned char> bytes) {
+            send_user_input(bytes);
+          });
+      read_task.emplace(read_loop_async());
 
-    child_exited_handler_id =
-        g_signal_connect(terminal, "child-exited",
-                         G_CALLBACK(
-                             TerminalLocalShellSession::on_terminal_child_exited),
-                         this);
-    vte_terminal_spawn_async(VTE_TERMINAL(terminal), VTE_PTY_DEFAULT, nullptr,
-                             argv, nullptr, G_SPAWN_DEFAULT, nullptr, nullptr,
-                             nullptr, -1, nullptr, on_terminal_spawned,
-                             nullptr);
-    started = true;
-    return true;
+      std::string shell = shell_path();
+      char *argv[] = {
+          shell.data(),
+          nullptr,
+      };
+      spawn_state = std::make_shared<LocalShellSpawnState>();
+      spawn_state->session = this;
+      vte_pty_spawn_async(
+          pty, nullptr, argv, nullptr,
+          static_cast<GSpawnFlags>(G_SPAWN_DO_NOT_REAP_CHILD), nullptr, nullptr,
+          nullptr, -1, nullptr, TerminalLocalShellSession::on_pty_spawned,
+          new std::shared_ptr<LocalShellSpawnState>(spawn_state));
+
+      started = true;
+      return true;
+    } catch (const std::exception &error) {
+      std::cerr << "Warning: failed to initialize local shell session: "
+                << error.what() << '\n';
+      stop();
+      return false;
+    }
   }
 
   void stop() override {
-    if (stopping) {
+    if (stopping && cleaned_up) {
       return;
     }
 
     stopping = true;
-    disconnect_terminal_signal();
+    cleanup_session_resources();
   }
 
   void resize(glong columns, glong rows) override {
-    (void)columns;
-    (void)rows;
+    set_pty_size(columns, rows);
   }
 };
 
