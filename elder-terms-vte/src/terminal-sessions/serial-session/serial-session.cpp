@@ -4,7 +4,6 @@
 #include <unistd.h>
 
 #include <glib-unix.h>
-#include <vte/vte.h>
 
 #include <array>
 #include <cerrno>
@@ -13,12 +12,14 @@
 #include <deque>
 #include <iostream>
 #include <memory>
+#include <span>
 #include <string>
 #include <system_error>
 #include <utility>
 #include <variant>
 #include <vector>
 
+#include "../terminal-view-io.h"
 #include "serial-device-resolver.h"
 #include "serial-device-event-monitor.h"
 #include "serial-line-monitor.h"
@@ -65,14 +66,13 @@ static bool selected_carrier_signal_is_high(SerialLineSignals signals,
 
 class TerminalSerialSession final : public TerminalSession {
 private:
-  GtkWidget *terminal = nullptr;
+  TerminalViewIo terminal_io;
   SerialConnectionSettings settings;
   TerminalSessionCallbacks callbacks;
   SerialCarrierTracker carrier_tracker;
   std::deque<std::vector<unsigned char>> outgoing;
   std::unique_ptr<SerialDeviceEventMonitor> device_event_monitor;
   int serial_fd = -1;
-  gulong commit_handler_id = 0;
   guint read_watch_id = 0;
   guint write_watch_id = 0;
   guint carrier_poll_id = 0;
@@ -83,13 +83,6 @@ private:
   bool connection_warning_reported = false;
   bool disconnected_reported = false;
   bool carrier_disconnected = false;
-
-  void disconnect_terminal_signal() {
-    if (commit_handler_id != 0) {
-      g_signal_handler_disconnect(terminal, commit_handler_id);
-      commit_handler_id = 0;
-    }
-  }
 
   void remove_connection_sources() {
     remove_source(&read_watch_id);
@@ -103,12 +96,7 @@ private:
   }
 
   void feed_terminal(const unsigned char *data, std::size_t size) {
-    if (size == 0) {
-      return;
-    }
-    vte_terminal_feed(VTE_TERMINAL(terminal),
-                      reinterpret_cast<const char *>(data),
-                      static_cast<gssize>(size));
+    terminal_io.feed(std::span<const unsigned char>(data, size));
   }
 
   void schedule_disconnected_notification() {
@@ -400,27 +388,20 @@ private:
     return G_SOURCE_REMOVE;
   }
 
-  static void on_terminal_commit(VteTerminal *, const gchar *text, guint size,
-                                 gpointer user_data) {
-    auto *self = static_cast<TerminalSerialSession *>(user_data);
-    self->send_user_input(text, size);
-  }
-
-  void send_user_input(const gchar *text, guint size) {
-    if (text == nullptr || size == 0 || stopping || serial_fd < 0 ||
+  void send_user_input(std::span<const unsigned char> bytes) {
+    if (bytes.empty() || stopping || serial_fd < 0 ||
         carrier_disconnected) {
       return;
     }
 
-    const auto *data = reinterpret_cast<const unsigned char *>(text);
-    outgoing.emplace_back(data, data + static_cast<std::size_t>(size));
+    outgoing.emplace_back(bytes.begin(), bytes.end());
     start_writer();
   }
 
 public:
   TerminalSerialSession(GtkWidget *terminal, SerialConnectionSettings settings,
                         TerminalSessionCallbacks callbacks)
-      : terminal(terminal),
+      : terminal_io(terminal),
         settings(std::move(settings)),
         callbacks(callbacks),
         carrier_tracker(this->settings.carrier_detect) {
@@ -437,10 +418,10 @@ public:
     }
 
     stopping = false;
-    commit_handler_id =
-        g_signal_connect(terminal, "commit",
-                         G_CALLBACK(TerminalSerialSession::on_terminal_commit),
-                         this);
+    terminal_io.connect_user_input(
+        [this](std::span<const unsigned char> bytes) {
+          send_user_input(bytes);
+        });
     started = true;
 
     start_device_monitor();
@@ -457,7 +438,7 @@ public:
     }
 
     stopping = true;
-    disconnect_terminal_signal();
+    terminal_io.disconnect_user_input();
     remove_sources();
     stop_device_monitor();
     outgoing.clear();
