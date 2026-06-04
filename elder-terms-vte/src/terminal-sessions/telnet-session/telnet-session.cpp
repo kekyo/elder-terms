@@ -21,6 +21,7 @@
 
 #include "telnet-session.h"
 
+#include "../terminal-view-io.h"
 #include "telnet-protocol.h"
 
 namespace elder_terms {
@@ -159,6 +160,7 @@ static void notify_session_ended(const TerminalSessionCallbacks &callbacks) {
 class TerminalTelnetSession final : public TerminalSession {
 private:
   GtkWidget *terminal = nullptr;
+  TerminalViewIo terminal_io;
   TelnetConnectionSettings settings;
   TerminalSessionCallbacks callbacks;
   TelnetProtocol protocol;
@@ -168,24 +170,14 @@ private:
   std::optional<cardio::promise<void>> read_task;
   std::optional<cardio::promise<void>> write_task;
   int socket_fd = -1;
-  gulong commit_handler_id = 0;
   bool started = false;
   bool stopping = false;
   bool writing = false;
 
   void set_current_window_size() {
-    protocol.set_window_size(
-        clamp_terminal_dimension(vte_terminal_get_column_count(
-            VTE_TERMINAL(terminal))),
-        clamp_terminal_dimension(
-            vte_terminal_get_row_count(VTE_TERMINAL(terminal))));
-  }
-
-  void disconnect_terminal_signal() {
-    if (commit_handler_id != 0) {
-      g_signal_handler_disconnect(terminal, commit_handler_id);
-      commit_handler_id = 0;
-    }
+    const TerminalViewGridSize size = terminal_io.grid_size();
+    protocol.set_window_size(clamp_terminal_dimension(size.columns),
+                             clamp_terminal_dimension(size.rows));
   }
 
   void shutdown_socket_noexcept() {
@@ -195,11 +187,7 @@ private:
   }
 
   void feed_terminal(const TelnetBytes &bytes) {
-    if (!bytes.empty()) {
-      vte_terminal_feed(VTE_TERMINAL(terminal),
-                        reinterpret_cast<const char *>(bytes.data()),
-                        static_cast<gssize>(bytes.size()));
-    }
+    terminal_io.feed(std::span<const unsigned char>(bytes.data(), bytes.size()));
   }
 
   void enqueue_bytes(TelnetBytes bytes) {
@@ -285,7 +273,7 @@ private:
 
     const bool should_notify_session_ended = natural_end && !stopping;
     stopping = true;
-    disconnect_terminal_signal();
+    terminal_io.disconnect_user_input();
     outgoing.clear();
     co_await close_current_socket_async();
     if (should_notify_session_ended) {
@@ -323,26 +311,19 @@ private:
     }
   }
 
-  static void on_terminal_commit(VteTerminal *, const gchar *text, guint size,
-                                 gpointer user_data) {
-    auto *self = static_cast<TerminalTelnetSession *>(user_data);
-    self->send_user_input(text, size);
-  }
-
-  void send_user_input(const gchar *text, guint size) {
-    if (text == nullptr || size == 0) {
+  void send_user_input(std::span<const unsigned char> bytes) {
+    if (bytes.empty()) {
       return;
     }
 
-    const auto *data = reinterpret_cast<const unsigned char *>(text);
-    enqueue_bytes(protocol.encode_user_input(
-        std::span<const unsigned char>(data, static_cast<std::size_t>(size))));
+    enqueue_bytes(protocol.encode_user_input(bytes));
   }
 
 public:
   TerminalTelnetSession(GtkWidget *terminal, TelnetConnectionSettings settings,
                         TerminalSessionCallbacks callbacks)
       : terminal(terminal),
+        terminal_io(terminal),
         settings(std::move(settings)),
         callbacks(callbacks) {
   }
@@ -362,10 +343,10 @@ public:
       set_current_window_size();
       vte_terminal_set_delete_binding(VTE_TERMINAL(terminal),
                                       VTE_ERASE_ASCII_DELETE);
-      commit_handler_id =
-          g_signal_connect(terminal, "commit",
-                           G_CALLBACK(TerminalTelnetSession::on_terminal_commit),
-                           this);
+      terminal_io.connect_user_input(
+          [this](std::span<const unsigned char> bytes) {
+            send_user_input(bytes);
+          });
       read_task.emplace(read_loop_async());
       started = true;
       return true;
@@ -383,7 +364,7 @@ public:
     }
 
     stopping = true;
-    disconnect_terminal_signal();
+    terminal_io.disconnect_user_input();
     outgoing.clear();
     (void)stop_source.cancel();
     shutdown_socket_noexcept();

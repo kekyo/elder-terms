@@ -25,6 +25,7 @@ elder_terms_sources = [
   'src/terminal-sessions/serial-session/serial-termios.cpp',
   telnet_protocol_source,
   'src/terminal-sessions/telnet-session/telnet-session.cpp',
+  'src/terminal-sessions/terminal-view-io.cpp',
   'src/terminal-layout.cpp',
   'src/terminal-session.cpp',
 ]
