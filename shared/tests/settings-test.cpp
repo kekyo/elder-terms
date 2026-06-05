@@ -50,6 +50,8 @@ using elder_terms::terminal_display_settings;
 using elder_terms::terminal_height_setting_key;
 using elder_terms::terminal_width_setting_key;
 using elder_terms::terminal_zoom_setting_key;
+using elder_terms::transfer_base_path;
+using elder_terms::transfer_base_path_setting_key;
 
 static bool warnings_contain(const std::vector<std::string> &warnings,
                              const std::string &text) {
@@ -104,6 +106,8 @@ static void test_default_settings() {
   expect_true(display.zoom == 1.2, "default terminal zoom should be retained");
   expect_true(terminal_auto_close(store),
               "default terminal auto-close should be enabled");
+  expect_true(transfer_base_path(store).empty(),
+              "default transfer base path should be empty");
 
   const TerminalConnectionProfile profile = terminal_connection_profile(store);
   expect_true(profile.kind == TerminalConnectionKind::local_shell,
@@ -111,6 +115,25 @@ static void test_default_settings() {
   expect_true(std::holds_alternative<LocalShellConnectionSettings>(
                   profile.settings),
               "default connection settings should be local shell settings");
+}
+
+static void test_transfer_base_path_setting() {
+  const std::filesystem::path path = temporary_config_path("transfer-base");
+  write_config(path,
+               "[transfer]\n"
+               "base_path=file:///tmp/elder-terms-transfer\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  expect_true(transfer_base_path(result.store) ==
+                  "file:///tmp/elder-terms-transfer",
+              "transfer base_path should come from the configuration file");
 }
 
 static void test_telnet_profile() {
@@ -361,6 +384,10 @@ static void test_public_setting_keys() {
               "serial flow_control key should use the flow_control name");
   expect_true(serial_carrier_detect_setting_key().name == "carrier_detect",
               "serial carrier_detect key should use the carrier_detect name");
+  expect_true(transfer_base_path_setting_key().section == "transfer",
+              "transfer base_path key should use the transfer section");
+  expect_true(transfer_base_path_setting_key().name == "base_path",
+              "transfer base_path key should use the base_path name");
 }
 
 static void test_save_settings_omits_default_values() {
@@ -381,6 +408,9 @@ static void test_save_settings_omits_default_values() {
                     elder_terms::SettingValue{std::string("host.example")});
   set_setting_value(&store, telnet_port_setting_key(),
                     elder_terms::SettingValue{gint64{23}});
+  set_setting_value(
+      &store, transfer_base_path_setting_key(),
+      elder_terms::SettingValue{std::string("file:///tmp/downloads")});
 
   const SettingsSaveResult result = save_settings(store, path);
   expect_true(result.saved, "settings save should succeed");
@@ -401,6 +431,11 @@ static void test_save_settings_omits_default_values() {
               "saved settings should include non-default TELNET section");
   expect_true(content.find("address=host.example") != std::string::npos,
               "saved settings should include non-default TELNET address");
+  expect_true(content.find("[transfer]") != std::string::npos,
+              "saved settings should include non-default transfer section");
+  expect_true(content.find("base_path=file:///tmp/downloads") !=
+                  std::string::npos,
+              "saved settings should include non-default transfer base_path");
   expect_true(content.find("height=") == std::string::npos,
               "saved settings should omit default terminal height");
   expect_true(content.find("zoom=") == std::string::npos,
@@ -475,6 +510,7 @@ int main() {
     elder_terms_settings_test::test_default_settings();
     elder_terms_settings_test::test_telnet_profile();
     elder_terms_settings_test::test_serial_profile();
+    elder_terms_settings_test::test_transfer_base_path_setting();
     elder_terms_settings_test::test_invalid_values_fall_back_to_defaults();
     elder_terms_settings_test::test_invalid_serial_values_fall_back_to_defaults();
     elder_terms_settings_test::test_public_setting_keys();

@@ -2,9 +2,12 @@
 
 #include <gtk/gtk.h>
 
+#include <string>
+
 #include <elder-terms/settings.h>
 
 #include "terminal-session-callbacks.h"
+#include "terminal-transfer.h"
 
 namespace elder_terms {
 
@@ -49,6 +52,41 @@ void stop_terminal_session(TerminalSessionState *state);
  */
 void resize_terminal_session(TerminalSessionState *state, glong columns,
                              glong rows);
+
+/**
+ * Returns whether the active backend supports X/Y/ZMODEM transfers.
+ *
+ * @param state Session state created by create_terminal_session.
+ * @returns True when transfers can be requested.
+ */
+bool terminal_session_supports_transfer(const TerminalSessionState *state);
+
+/**
+ * Returns whether the active backend is transferring a file.
+ *
+ * @param state Session state created by create_terminal_session.
+ * @returns True while a transfer is active.
+ */
+bool terminal_session_transfer_in_progress(const TerminalSessionState *state);
+
+/**
+ * Starts one X/Y/ZMODEM transfer on the active backend.
+ *
+ * @param state Session state created by create_terminal_session.
+ * @param request Transfer request.
+ * @returns True when the request was accepted.
+ */
+bool start_terminal_session_transfer(TerminalSessionState *state,
+                                     TerminalTransferRequest request);
+
+/**
+ * Returns the title for a terminal session state.
+ *
+ * @param state Session state created by create_terminal_session.
+ * @returns Current backend title, or the application title when no backend
+ * session exists.
+ */
+std::string terminal_session_title(const TerminalSessionState *state);
 
 /**
  * Applies runtime-editable connection settings to the current backend.

@@ -110,6 +110,47 @@ static void unsupported_options_are_rejected() {
                   "Unsupported WILL should send DONT");
 }
 
+static void binary_negotiation_request_enables_both_directions() {
+  TelnetProtocol protocol;
+  const std::vector<TelnetBytes> requests = protocol.encode_enable_binary();
+
+  if (requests.size() != 2) {
+    throw std::runtime_error("BINARY negotiation should request both directions");
+  }
+  expect_bytes(requests[0], {255, 251, 0},
+               "BINARY negotiation should send WILL BINARY");
+  expect_bytes(requests[1], {255, 253, 0},
+               "BINARY negotiation should send DO BINARY");
+
+  const TelnetProtocolResult do_binary =
+      receive_bytes(&protocol, {255, 253, 0});
+  const TelnetProtocolResult will_binary =
+      receive_bytes(&protocol, {255, 251, 0});
+  if (!do_binary.responses.empty() || !will_binary.responses.empty()) {
+    throw std::runtime_error(
+        "Requested BINARY acknowledgements should not be echoed");
+  }
+  if (!protocol.is_binary_enabled()) {
+    throw std::runtime_error("DO/WILL BINARY should enable both directions");
+  }
+}
+
+static void binary_negotiation_rejects_dont_or_wont() {
+  TelnetProtocol dont_protocol;
+  (void)dont_protocol.encode_enable_binary();
+  (void)receive_bytes(&dont_protocol, {255, 254, 0});
+  if (!dont_protocol.is_binary_rejected()) {
+    throw std::runtime_error("DONT BINARY should reject requested BINARY");
+  }
+
+  TelnetProtocol wont_protocol;
+  (void)wont_protocol.encode_enable_binary();
+  (void)receive_bytes(&wont_protocol, {255, 252, 0});
+  if (!wont_protocol.is_binary_rejected()) {
+    throw std::runtime_error("WONT BINARY should reject requested BINARY");
+  }
+}
+
 static void user_input_escapes_iac() {
   TelnetProtocol protocol;
   const TelnetBytes input{'a', 255, 'b'};
@@ -139,6 +180,8 @@ int main() {
     elder_terms::naws_escapes_iac_sized_fields();
     elder_terms::supported_will_options_are_accepted();
     elder_terms::unsupported_options_are_rejected();
+    elder_terms::binary_negotiation_request_enables_both_directions();
+    elder_terms::binary_negotiation_rejects_dont_or_wont();
     elder_terms::user_input_escapes_iac();
     elder_terms::user_input_preserves_ascii_del();
   } catch (const std::exception &error) {

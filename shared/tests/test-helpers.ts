@@ -99,7 +99,10 @@ export const runSharedGtkTest = async (
   const directory = join(runResultsDirectory, sanitizePathSegment(testName));
   await mkdir(directory, { recursive: true });
 
-  const launcher = createGtkAppLauncher({ appPath });
+  const launcher = createGtkAppLauncher({
+    appPath,
+    xvfbTrayHost: false,
+  });
   const app = await launcher.launch(args);
   try {
     await body({ app, directory });

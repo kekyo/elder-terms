@@ -11,6 +11,7 @@ static constexpr unsigned char telnet_wont = 252;
 static constexpr unsigned char telnet_do = 253;
 static constexpr unsigned char telnet_dont = 254;
 static constexpr unsigned char telnet_iac = 255;
+static constexpr unsigned char telnet_option_binary = 0;
 static constexpr unsigned char telnet_option_echo = 1;
 static constexpr unsigned char telnet_option_suppress_go_ahead = 3;
 static constexpr unsigned char telnet_option_naws = 31;
@@ -30,6 +31,15 @@ static TelnetBytes negotiation_response(unsigned char command,
 void TelnetProtocol::handle_negotiation(unsigned char option,
                                         TelnetProtocolResult *result) {
   if (pending_command == telnet_do) {
+    if (option == telnet_option_binary) {
+      if (!local_binary_enabled && !local_binary_requested) {
+        result->responses.push_back(
+            negotiation_response(telnet_will, telnet_option_binary));
+      }
+      local_binary_enabled = true;
+      local_binary_requested = false;
+      return;
+    }
     if (option == telnet_option_naws) {
       if (!naws_enabled) {
         result->responses.push_back(
@@ -44,6 +54,13 @@ void TelnetProtocol::handle_negotiation(unsigned char option,
   }
 
   if (pending_command == telnet_dont) {
+    if (option == telnet_option_binary) {
+      local_binary_enabled = false;
+      if (local_binary_requested) {
+        binary_rejected = true;
+      }
+      local_binary_requested = false;
+    }
     if (option == telnet_option_naws) {
       naws_enabled = false;
     }
@@ -52,7 +69,14 @@ void TelnetProtocol::handle_negotiation(unsigned char option,
   }
 
   if (pending_command == telnet_will) {
-    if (option == telnet_option_echo ||
+    if (option == telnet_option_binary) {
+      if (!remote_binary_enabled && !remote_binary_requested) {
+        result->responses.push_back(
+            negotiation_response(telnet_do, telnet_option_binary));
+      }
+      remote_binary_enabled = true;
+      remote_binary_requested = false;
+    } else if (option == telnet_option_echo ||
         option == telnet_option_suppress_go_ahead) {
       result->responses.push_back(negotiation_response(telnet_do, option));
     } else {
@@ -62,6 +86,13 @@ void TelnetProtocol::handle_negotiation(unsigned char option,
   }
 
   if (pending_command == telnet_wont) {
+    if (option == telnet_option_binary) {
+      remote_binary_enabled = false;
+      if (remote_binary_requested) {
+        binary_rejected = true;
+      }
+      remote_binary_requested = false;
+    }
     result->responses.push_back(negotiation_response(telnet_dont, option));
   }
 }
@@ -78,6 +109,14 @@ void TelnetProtocol::set_window_size(std::uint16_t next_columns,
 
 bool TelnetProtocol::is_naws_enabled() const {
   return naws_enabled;
+}
+
+bool TelnetProtocol::is_binary_enabled() const {
+  return local_binary_enabled && remote_binary_enabled;
+}
+
+bool TelnetProtocol::is_binary_rejected() const {
+  return binary_rejected;
 }
 
 TelnetProtocolResult
@@ -145,6 +184,26 @@ TelnetProtocol::encode_user_input(std::span<const unsigned char> bytes) const {
   result.reserve(bytes.size());
   for (unsigned char byte : bytes) {
     append_escaped_byte(&result, byte);
+  }
+  return result;
+}
+
+std::vector<TelnetBytes> TelnetProtocol::encode_enable_binary() {
+  binary_rejected = false;
+  if (!local_binary_enabled) {
+    local_binary_requested = true;
+  }
+  if (!remote_binary_enabled) {
+    remote_binary_requested = true;
+  }
+
+  std::vector<TelnetBytes> result;
+  if (!local_binary_enabled) {
+    result.push_back(negotiation_response(telnet_will,
+                                          telnet_option_binary));
+  }
+  if (!remote_binary_enabled) {
+    result.push_back(negotiation_response(telnet_do, telnet_option_binary));
   }
   return result;
 }

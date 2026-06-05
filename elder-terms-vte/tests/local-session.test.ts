@@ -5,7 +5,12 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { GtkApp, GtkCapture } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
-import { runGtkTest, withTemporaryDirectory } from './gtk-test-helpers';
+import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
+import {
+  runGtkTest,
+  terminalForegroundLuminanceStats,
+  withTemporaryDirectory,
+} from './gtk-test-helpers';
 
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
@@ -36,12 +41,44 @@ const createExitingShellFixture = async (
   };
 };
 
+const createDelayedExitShellFixture = async (
+  directory: string
+): Promise<ExitingShellFixture> => {
+  const markerPath = join(directory, 'delayed-shell-exited.txt');
+  const shellPath = join(directory, 'delayed-exit-shell.sh');
+  const output = 'LOCAL_CONN_DIM_MARKER '.repeat(60);
+  await writeFile(
+    shellPath,
+    `#!/bin/sh\nprintf '%s\\n' ${shellQuote(output)}\nsleep 1\nprintf exited > ${shellQuote(markerPath)}\nexit 0\n`,
+    'utf8'
+  );
+  await chmod(shellPath, 0o755);
+
+  return {
+    markerPath,
+    shellPath,
+  };
+};
+
 const createOutputShellFixture = async (directory: string): Promise<string> => {
   const shellPath = join(directory, 'output-shell.sh');
   const output = 'LOCAL_OUTPUT_MARKER '.repeat(40);
   await writeFile(
     shellPath,
     `#!/bin/sh\nprintf '%s\\n' ${shellQuote(output)}\nexit 0\n`,
+    'utf8'
+  );
+  await chmod(shellPath, 0o755);
+  return shellPath;
+};
+
+const createRepeatingOutputShellFixture = async (
+  directory: string
+): Promise<string> => {
+  const shellPath = join(directory, 'repeating-output-shell.sh');
+  await writeFile(
+    shellPath,
+    `#!/bin/sh\ni=0\nwhile [ "$i" -lt 10 ]; do\n  printf 'LOCAL_BLINK_MARKER %s\\n' "$i"\n  i=$((i + 1))\n  sleep 0.05\ndone\nsleep 1\nexit 0\n`,
     'utf8'
   );
   await chmod(shellPath, 0o755);
@@ -111,6 +148,12 @@ const waitForFileText = async (
   );
 };
 
+const expectNoVteSpawnRuntimeWarning = (stderr: string): void => {
+  expect(stderr).not.toContain('VTE-WARNING');
+  expect(stderr).not.toContain('runtime check failed');
+  expect(stderr).not.toContain('ignored_spawn_flags');
+};
+
 const focusTerminal = async (app: GtkApp): Promise<void> => {
   const terminal = await app.getById('terminal_view');
   const terminalCapture = await terminal.capture();
@@ -121,6 +164,23 @@ const focusTerminal = async (app: GtkApp): Promise<void> => {
   );
   await app.input.setMouseButton('left', true);
   await app.input.setMouseButton('left', false);
+};
+
+const pressKeyUntilSdIndicatorOn = async (
+  app: GtkApp,
+  key: string
+): Promise<void> => {
+  await focusTerminal(app);
+  await toPass(
+    async () => {
+      await app.input.pressKey(key);
+      await waitForActivityIndicatorImageState(app, 'sd', 'on', 400);
+    },
+    {
+      message: 'SD indicator should light after local PTY input',
+      timeoutMs: 5_000,
+    }
+  );
 };
 
 const brightPixelCount = (capture: GtkCapture): number => {
@@ -191,9 +251,89 @@ describe.concurrent('elder-terms-vte local session', () => {
           const output = await app.output();
           expect(output.exitCode).toBeNull();
           expect(output.exitSignal).toBeNull();
+          expectNoVteSpawnRuntimeWarning(output.stderr);
           await evidence.log('local shell exit left app running', {
             exitCode: output.exitCode,
             exitSignal: output.exitSignal,
+          });
+        },
+        {
+          env: {
+            SHELL: shell.shellPath,
+          },
+        }
+      );
+    });
+  });
+
+  it('shows CONN while the local shell is running and clears it after exit', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const shell = await createDelayedExitShellFixture(directory);
+      const configPath = join(directory, 'auto-close-disabled.ini');
+      await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
+
+      await runGtkTest(
+        context,
+        ['-c', configPath],
+        async (app, evidence) => {
+          const terminal = await app.getById('terminal_view');
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
+          const connectedCapture = await waitForResult(
+            async () => {
+              const currentCapture = await terminal.capture();
+              expect(
+                terminalForegroundLuminanceStats(currentCapture).count
+              ).toBeGreaterThan(400);
+              return currentCapture;
+            },
+            {
+              message: 'connected local terminal should render visible output',
+              timeoutMs: 5_000,
+            }
+          );
+          const connectedStats =
+            terminalForegroundLuminanceStats(connectedCapture);
+
+          await waitForShellExit(shell.markerPath);
+          await waitForActivityIndicatorImageState(app, 'conn', 'off');
+          const disconnectedCapture = await waitForResult(
+            async () => {
+              const currentCapture = await terminal.capture();
+              const disconnectedStats =
+                terminalForegroundLuminanceStats(currentCapture);
+              expect(disconnectedStats.count).toBeGreaterThan(400);
+              expect(disconnectedStats.contrast).toBeLessThan(
+                connectedStats.contrast * 0.85
+              );
+              return currentCapture;
+            },
+            {
+              message: 'disconnected local terminal should be dimmed',
+              timeoutMs: 5_000,
+            }
+          );
+          await focusTerminal(app);
+          await app.input.pressKey('z');
+          await delay(300);
+          await waitForActivityIndicatorImageState(app, 'sd', 'off');
+
+          const output = await app.output();
+          expect(output.exitCode).toBeNull();
+          expect(output.exitSignal).toBeNull();
+          await evidence.captureEvidence(
+            'local terminal connected',
+            async () => connectedCapture
+          );
+          await evidence.captureEvidence(
+            'local terminal disconnected',
+            async () => disconnectedCapture
+          );
+          await evidence.log('local CONN tracked shell lifetime', {
+            exitCode: output.exitCode,
+            exitSignal: output.exitSignal,
+            connectedLuminance: connectedStats,
+            disconnectedLuminance:
+              terminalForegroundLuminanceStats(disconnectedCapture),
           });
         },
         {
@@ -241,6 +381,29 @@ describe.concurrent('elder-terms-vte local session', () => {
     });
   });
 
+  it('blinks RD when local shell output is read from the PTY', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const shellPath = await createRepeatingOutputShellFixture(directory);
+      const configPath = join(directory, 'auto-close-disabled.ini');
+      await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
+
+      await runGtkTest(
+        context,
+        ['-c', configPath],
+        async (app) => {
+          await waitForActivityIndicatorImageState(app, 'rd', 'on');
+          await delay(1_000);
+          await waitForActivityIndicatorImageState(app, 'rd', 'off');
+        },
+        {
+          env: {
+            SHELL: shellPath,
+          },
+        }
+      );
+    });
+  });
+
   it('writes VTE user input to the local shell PTY', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const shell = await createInputShellFixture(directory);
@@ -251,8 +414,9 @@ describe.concurrent('elder-terms-vte local session', () => {
         context,
         ['-c', configPath],
         async (app) => {
-          await focusTerminal(app);
-          await app.input.pressKey('a');
+          await pressKeyUntilSdIndicatorOn(app, 'a');
+          await delay(500);
+          await waitForActivityIndicatorImageState(app, 'sd', 'off');
           await app.input.pressKey('Return');
           await waitForFileText(shell.markerPath, 'a');
         },

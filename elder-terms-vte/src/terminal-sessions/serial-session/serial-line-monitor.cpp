@@ -4,6 +4,7 @@
 
 #include <cerrno>
 #include <system_error>
+#include <array>
 
 namespace elder_terms {
 
@@ -37,6 +38,35 @@ SerialCarrierEvent SerialCarrierTracker::update(SerialLineSignals signals) {
   return SerialCarrierEvent::none;
 }
 
+SerialLineSignals serial_line_signals_from_modem_status(int status) {
+  return {
+      .rts = (status & TIOCM_RTS) != 0,
+      .cts = (status & TIOCM_CTS) != 0,
+      .dtr = (status & TIOCM_DTR) != 0,
+      .dsr = (status & TIOCM_DSR) != 0,
+      .cd = (status & TIOCM_CAR) != 0,
+      .ri = (status & TIOCM_RNG) != 0,
+  };
+}
+
+std::array<ActivityIndicatorState, 6>
+serial_line_indicator_states(SerialLineSignals signals) {
+  return {
+      ActivityIndicatorState{.indicator = ActivityIndicatorId::rts,
+                             .active = signals.rts},
+      ActivityIndicatorState{.indicator = ActivityIndicatorId::cts,
+                             .active = signals.cts},
+      ActivityIndicatorState{.indicator = ActivityIndicatorId::dtr,
+                             .active = signals.dtr},
+      ActivityIndicatorState{.indicator = ActivityIndicatorId::dsr,
+                             .active = signals.dsr},
+      ActivityIndicatorState{.indicator = ActivityIndicatorId::cd,
+                             .active = signals.cd},
+      ActivityIndicatorState{.indicator = ActivityIndicatorId::ri,
+                             .active = signals.ri},
+  };
+}
+
 SerialLineSignals read_serial_line_signals(int fd) {
   int status = 0;
   if (::ioctl(fd, TIOCMGET, &status) < 0) {
@@ -44,11 +74,7 @@ SerialLineSignals read_serial_line_signals(int fd) {
                             "serial TIOCMGET failed");
   }
 
-  return {
-      .cd = (status & TIOCM_CAR) != 0,
-      .cts = (status & TIOCM_CTS) != 0,
-      .dsr = (status & TIOCM_DSR) != 0,
-  };
+  return serial_line_signals_from_modem_status(status);
 }
 
 } // namespace elder_terms

@@ -37,6 +37,22 @@ LaunchOptions parse_launch_options(int *argc, char **argv) {
       continue;
     }
 
+    if (argument == "--test-transfer-dialog-probe") {
+      options.test.transfer_dialog_probe = true;
+      ++index;
+      continue;
+    }
+
+    static constexpr const char transfer_source_uri_option[] =
+        "--test-transfer-source-uri=";
+    if (argument.rfind(transfer_source_uri_option, 0) == 0) {
+      options.test.transfer_source_uri =
+          argument.substr(std::char_traits<char>::length(
+              transfer_source_uri_option));
+      ++index;
+      continue;
+    }
+
     if (argument == "-c") {
       consume_path_option(&index, *argc, argv, "-c", &options.config_path);
       continue;

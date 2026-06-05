@@ -2,11 +2,26 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
 import { rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import type { GtkApp } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
-import { runGtkTest, withTemporaryDirectory } from './gtk-test-helpers';
+import {
+  activityIndicatorIconSize,
+  activityIndicatorLabels,
+  captureActivityIndicatorBox,
+  captureActivityIndicatorImage,
+  expectActivityIndicatorImageState,
+  serialActivityIndicatorIds,
+  waitForActivityIndicatorImageState,
+} from './activity-indicator-test-helpers';
+import {
+  runGtkTest,
+  terminalForegroundLuminanceStats,
+  withTemporaryDirectory,
+} from './gtk-test-helpers';
+import { expectElementKind } from './test-helpers';
 
 const helperPath = fileURLToPath(
   new URL('../../.build/elder-terms-vte/serial-pty-helper', import.meta.url)
@@ -130,6 +145,61 @@ const pressKeyUntilReceived = async (
   );
 };
 
+const pressKeyUntilReceivedAndSdIndicatorOn = async (
+  app: GtkApp,
+  helper: SerialPtyHelper,
+  key: string,
+  expectedHex: string
+): Promise<void> => {
+  await focusTerminal(app);
+  await toPass(
+    async () => {
+      await app.input.pressKey(key);
+      await delay(30);
+      await expectActivityIndicatorImageState(
+        await captureActivityIndicatorImage(app, 'sd'),
+        'on'
+      );
+      expect(hasReceivedHex(helper, expectedHex)).toBe(true);
+    },
+    {
+      message: `serial PTY helper should receive ${expectedHex} and SD should light`,
+      timeoutMs: 7_000,
+    }
+  );
+};
+
+const expectSerialActivityIndicatorsVisibleInitialState = async (
+  app: GtkApp
+): Promise<void> => {
+  const boxCaptures = await Promise.all(
+    serialActivityIndicatorIds.map((indicator) =>
+      captureActivityIndicatorBox(app, indicator)
+    )
+  );
+  for (let index = 1; index < boxCaptures.length; ++index) {
+    expect(boxCaptures[index - 1].bounds.x).toBeLessThan(
+      boxCaptures[index].bounds.x
+    );
+  }
+
+  for (const indicator of serialActivityIndicatorIds) {
+    const label = expectElementKind(
+      await app.getById(`${indicator}_indicator_label`),
+      'label'
+    );
+    expect(await label.text()).toBe(activityIndicatorLabels[indicator]);
+
+    const imageCapture = await captureActivityIndicatorImage(app, indicator);
+    expect(imageCapture.bounds.width).toBe(activityIndicatorIconSize);
+    expect(imageCapture.bounds.height).toBe(activityIndicatorIconSize);
+    await expectActivityIndicatorImageState(
+      imageCapture,
+      indicator === 'conn' ? 'on' : 'off'
+    );
+  }
+};
+
 describe.concurrent('elder-terms-vte serial session', () => {
   it('connects to a PTY serial device and transfers data in both directions', async (context) => {
     await withTemporaryDirectory(async (directory) => {
@@ -156,7 +226,22 @@ describe.concurrent('elder-terms-vte serial session', () => {
               timeoutMs: 5_000,
             }
           );
-          await pressKeyUntilReceived(app, helper, 'a', '61');
+          await expectSerialActivityIndicatorsVisibleInitialState(app);
+          await toPass(
+            async () => {
+              helper.writeCommand('TX serial-output');
+              await waitForActivityIndicatorImageState(app, 'rd', 'on', 400);
+            },
+            {
+              message: 'RD indicator should light after serial input',
+              timeoutMs: 7_000,
+            }
+          );
+          await delay(500);
+          await waitForActivityIndicatorImageState(app, 'rd', 'off');
+          await pressKeyUntilReceivedAndSdIndicatorOn(app, helper, 'a', '61');
+          await delay(500);
+          await waitForActivityIndicatorImageState(app, 'sd', 'off');
         });
       } finally {
         await helper.close();
@@ -189,10 +274,12 @@ describe.concurrent('elder-terms-vte serial session', () => {
               timeoutMs: 5_000,
             }
           );
+          await waitForActivityIndicatorImageState(app, 'conn', 'off');
 
           helper = await startSerialPtyHelper();
           await symlink(helper.slavePath, serialDevicePath);
           await pressKeyUntilReceived(app, helper, 'a', '61');
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
         });
       } finally {
         await helper?.close();
@@ -216,13 +303,34 @@ describe.concurrent('elder-terms-vte serial session', () => {
           'utf8'
         );
 
-        await runGtkTest(context, ['-c', configPath], async (app) => {
+        await runGtkTest(context, ['-c', configPath], async (app, evidence) => {
           const activeFirstHelper = firstHelper;
           if (activeFirstHelper === undefined) {
             throw new Error('first serial PTY helper is not running');
           }
 
+          const terminal = await app.getById('terminal_view');
           await pressKeyUntilReceived(app, activeFirstHelper, 'a', '61');
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
+          activeFirstHelper.writeCommand(
+            `TX ${'SERIAL_CONN_DIM_MARKER '.repeat(60)}`
+          );
+          const connectedCapture = await waitForResult(
+            async () => {
+              const currentCapture = await terminal.capture();
+              expect(
+                terminalForegroundLuminanceStats(currentCapture).count
+              ).toBeGreaterThan(400);
+              return currentCapture;
+            },
+            {
+              message: 'connected serial terminal should render visible output',
+              timeoutMs: 5_000,
+            }
+          );
+          const connectedStats =
+            terminalForegroundLuminanceStats(connectedCapture);
+
           await firstHelper?.close();
           await rm(serialDevicePath, { force: true });
 
@@ -238,10 +346,58 @@ describe.concurrent('elder-terms-vte serial session', () => {
               timeoutMs: 7_000,
             }
           );
+          await waitForActivityIndicatorImageState(app, 'conn', 'off');
+          const disconnectedCapture = await waitForResult(
+            async () => {
+              const currentCapture = await terminal.capture();
+              const disconnectedStats =
+                terminalForegroundLuminanceStats(currentCapture);
+              expect(disconnectedStats.count).toBeGreaterThan(400);
+              expect(disconnectedStats.contrast).toBeLessThan(
+                connectedStats.contrast * 0.85
+              );
+              return currentCapture;
+            },
+            {
+              message: 'disconnected serial terminal should be dimmed',
+              timeoutMs: 5_000,
+            }
+          );
+          const disconnectedStats =
+            terminalForegroundLuminanceStats(disconnectedCapture);
 
           secondHelper = await startSerialPtyHelper();
           await symlink(secondHelper.slavePath, serialDevicePath);
           await pressKeyUntilReceived(app, secondHelper, 'b', '62');
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
+          const restoredCapture = await waitForResult(
+            async () => {
+              const currentCapture = await terminal.capture();
+              const restoredStats =
+                terminalForegroundLuminanceStats(currentCapture);
+              expect(restoredStats.count).toBeGreaterThan(400);
+              expect(restoredStats.contrast).toBeGreaterThan(
+                disconnectedStats.contrast * 1.1
+              );
+              return currentCapture;
+            },
+            {
+              message: 'reconnected serial terminal should restore brightness',
+              timeoutMs: 5_000,
+            }
+          );
+          await evidence.captureEvidence(
+            'serial terminal connected',
+            async () => connectedCapture
+          );
+          await evidence.captureEvidence(
+            'serial terminal disconnected',
+            async () => disconnectedCapture
+          );
+          await evidence.captureEvidence(
+            'serial terminal restored',
+            async () => restoredCapture
+          );
         });
       } finally {
         await firstHelper?.close();

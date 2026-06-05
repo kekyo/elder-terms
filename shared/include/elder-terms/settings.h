@@ -12,6 +12,7 @@
 #include <elder-terms/settings/settings-store.h>
 #include <elder-terms/settings/telnet-settings.h>
 #include <elder-terms/settings/terminal-settings.h>
+#include <elder-terms/settings/transfer-settings.h>
 
 namespace elder_terms {
 

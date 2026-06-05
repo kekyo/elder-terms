@@ -148,6 +148,63 @@ export interface RunGtkTestOptions {
 const readPng = (capture: GtkCapture): PngImage => PNG.sync.read(capture.image);
 
 /**
+ * Foreground luminance summary for a terminal capture.
+ */
+export interface TerminalForegroundLuminanceStats {
+  /** Mean luminance of pixels different from the capture background. */
+  readonly average: number;
+  /** Mean luminance distance between foreground pixels and the background. */
+  readonly contrast: number;
+  /** Number of pixels considered foreground. */
+  readonly count: number;
+}
+
+/**
+ * Measures foreground luminance relative to the terminal background.
+ *
+ * @param capture Captured terminal widget image.
+ * @returns Foreground pixel count and average luminance.
+ */
+export const terminalForegroundLuminanceStats = (
+  capture: GtkCapture
+): TerminalForegroundLuminanceStats => {
+  const image = readPng(capture);
+  const backgroundRed = image.data[0];
+  const backgroundGreen = image.data[1];
+  const backgroundBlue = image.data[2];
+  const backgroundAlpha = image.data[3];
+  const backgroundLuminance =
+    0.2126 * backgroundRed + 0.7152 * backgroundGreen + 0.0722 * backgroundBlue;
+  let count = 0;
+  let contrast = 0;
+  let total = 0;
+
+  for (let offset = 0; offset < image.data.length; offset += 4) {
+    const red = image.data[offset];
+    const green = image.data[offset + 1];
+    const blue = image.data[offset + 2];
+    const alpha = image.data[offset + 3];
+    const distance =
+      Math.abs(red - backgroundRed) +
+      Math.abs(green - backgroundGreen) +
+      Math.abs(blue - backgroundBlue) +
+      Math.abs(alpha - backgroundAlpha);
+    if (alpha > 0 && distance > 24) {
+      const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+      total += luminance;
+      contrast += Math.abs(luminance - backgroundLuminance);
+      ++count;
+    }
+  }
+
+  return {
+    average: count === 0 ? 0 : total / count,
+    contrast: count === 0 ? 0 : contrast / count,
+    count,
+  };
+};
+
+/**
  * Creates and deletes a temporary directory for a test body.
  *
  * @param body Test body receiving the directory path.
@@ -184,6 +241,7 @@ export const runGtkTest = async (
     appPath,
     env: options?.env,
     onSystemOutput: evidence.recordSystemOutputEvent,
+    xvfbTrayHost: false,
   });
   const apps: GtkApp[] = [];
 

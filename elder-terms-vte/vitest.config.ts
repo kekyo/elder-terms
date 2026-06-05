@@ -32,8 +32,6 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts'],
-    fileParallelism: false,
-    maxConcurrency: 1,
     testTimeout: 30_000,
     coverage: {
       enabled: false,

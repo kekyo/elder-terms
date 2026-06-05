@@ -5,6 +5,7 @@
 #include <cardio.h>
 #include <vte/vte.h>
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <cstdint>
@@ -21,10 +22,13 @@
 
 #include "telnet-session.h"
 
+#include "../../terminal-transfer-runner.h"
 #include "../terminal-view-io.h"
 #include "telnet-protocol.h"
 
 namespace elder_terms {
+
+static constexpr std::uint32_t telnet_binary_timeout_ms = 5000;
 
 struct ResolvedSocketAddress {
   sockaddr_storage storage{};
@@ -157,6 +161,10 @@ static void notify_session_ended(const TerminalSessionCallbacks &callbacks) {
   }
 }
 
+static std::uint64_t monotonic_milliseconds() {
+  return static_cast<std::uint64_t>(g_get_monotonic_time() / 1000);
+}
+
 class TerminalTelnetSession final : public TerminalSession {
 private:
   GtkWidget *terminal = nullptr;
@@ -167,12 +175,16 @@ private:
   std::optional<cardio::io_uring> io;
   cardio::cancellation_source stop_source;
   std::deque<TelnetBytes> outgoing;
+  std::optional<cardio::cancellation_source> transfer_cancel_source;
   std::optional<cardio::promise<void>> read_task;
   std::optional<cardio::promise<void>> write_task;
+  std::optional<cardio::promise<void>> transfer_task;
   int socket_fd = -1;
   bool started = false;
   bool stopping = false;
   bool writing = false;
+  bool transfer_active = false;
+  std::deque<unsigned char> transfer_incoming;
 
   void set_current_window_size() {
     const TerminalViewGridSize size = terminal_io.grid_size();
@@ -190,6 +202,23 @@ private:
     terminal_io.feed(std::span<const unsigned char>(bytes.data(), bytes.size()));
   }
 
+  void append_transfer_input(const TelnetBytes &bytes) {
+    transfer_incoming.insert(transfer_incoming.end(), bytes.begin(),
+                             bytes.end());
+  }
+
+  void notify_activity(ActivityIndicatorId indicator) {
+    if (callbacks.activity) {
+      callbacks.activity(indicator);
+    }
+  }
+
+  void notify_indicator_state(ActivityIndicatorId indicator, bool active) {
+    if (callbacks.indicator_state) {
+      callbacks.indicator_state(indicator, active);
+    }
+  }
+
   void enqueue_bytes(TelnetBytes bytes) {
     if (bytes.empty() || stopping) {
       return;
@@ -201,7 +230,11 @@ private:
 
   void handle_received(std::span<const unsigned char> bytes) {
     TelnetProtocolResult result = protocol.receive(bytes);
-    feed_terminal(result.terminal_data);
+    if (transfer_active) {
+      append_transfer_input(result.terminal_data);
+    } else {
+      feed_terminal(result.terminal_data);
+    }
     for (TelnetBytes &response : result.responses) {
       enqueue_bytes(std::move(response));
     }
@@ -248,6 +281,7 @@ private:
       if (stopping) {
         co_return;
       }
+      notify_indicator_state(ActivityIndicatorId::conn, true);
 
       start_writer();
       std::array<unsigned char, 4096> buffer{};
@@ -259,6 +293,7 @@ private:
           natural_end = true;
           break;
         }
+        notify_activity(ActivityIndicatorId::rd);
         handle_received(std::span<const unsigned char>(buffer.data(),
                                                        read_size));
       }
@@ -273,9 +308,13 @@ private:
 
     const bool should_notify_session_ended = natural_end && !stopping;
     stopping = true;
+    cancel_transfer_noexcept();
     terminal_io.disconnect_user_input();
     outgoing.clear();
     co_await close_current_socket_async();
+    if (connection_opened) {
+      notify_indicator_state(ActivityIndicatorId::conn, false);
+    }
     if (should_notify_session_ended) {
       notify_session_ended(callbacks);
     }
@@ -295,6 +334,7 @@ private:
           if (written == 0) {
             throw std::runtime_error("TELNET write made no progress");
           }
+          notify_activity(ActivityIndicatorId::sd);
           offset += written;
         }
       }
@@ -302,6 +342,7 @@ private:
       if (!stopping) {
         std::cerr << "Warning: TELNET write failed: " << error.what() << '\n';
       }
+      cancel_transfer_noexcept();
       shutdown_socket_noexcept();
     }
 
@@ -311,8 +352,186 @@ private:
     }
   }
 
-  void send_user_input(std::span<const unsigned char> bytes) {
+  void cancel_transfer_noexcept() {
+    if (transfer_cancel_source.has_value()) {
+      (void)transfer_cancel_source->cancel();
+    }
+  }
+
+  cardio::promise<void>
+  wait_binary_negotiation_async(cardio::cancellation cancellation) {
+    const std::uint64_t start_ms = monotonic_milliseconds();
+    while (!protocol.is_binary_enabled()) {
+      if (protocol.is_binary_rejected()) {
+        throw xyzm_async_protocol_error("TELNET BINARY negotiation rejected");
+      }
+      if (!transfer_active || stopping || socket_fd < 0) {
+        throw xyzm_async_io_error("TELNET transfer is not connected");
+      }
+      cancellation.throw_if_cancellation_requested();
+      if (monotonic_milliseconds() - start_ms >= telnet_binary_timeout_ms) {
+        throw xyzm_async_timeout_error("TELNET BINARY negotiation timeout");
+      }
+
+      const std::uint64_t elapsed = monotonic_milliseconds() - start_ms;
+      const std::uint64_t remaining =
+          elapsed >= telnet_binary_timeout_ms
+              ? 1
+              : telnet_binary_timeout_ms - elapsed;
+      cardio::cancellation_source combined =
+          transfer_cancel_source.has_value()
+              ? cardio::cancellations::any(
+                    cancellation,
+                    transfer_cancel_source->get_cancellation())
+              : cardio::cancellations::any(cancellation);
+      try {
+        co_await cardio::promises::delay(
+            std::min<std::uint64_t>(10, remaining),
+            combined.get_cancellation());
+      } catch (const cardio::canceled_exception &) {
+        throw xyzm_async_cancelled_error("TELNET transfer cancelled");
+      }
+    }
+  }
+
+  cardio::promise<void>
+  send_transfer_bytes(std::span<const std::uint8_t> bytes,
+                      std::uint32_t timeout_ms, std::size_t &written_len,
+                      cardio::cancellation cancellation) {
+    cancellation.throw_if_cancellation_requested();
+    if (!transfer_active || stopping || socket_fd < 0 || !io.has_value()) {
+      throw xyzm_async_io_error("TELNET transfer is not connected");
+    }
     if (bytes.empty()) {
+      written_len = 0;
+      co_return;
+    }
+
+    TelnetBytes encoded = protocol.encode_user_input(bytes);
+    std::size_t offset = 0;
+    const std::uint64_t start_ms = monotonic_milliseconds();
+    while (offset < encoded.size()) {
+      if (!transfer_active || stopping || socket_fd < 0 || !io.has_value()) {
+        throw xyzm_async_io_error("TELNET transfer is not connected");
+      }
+      cancellation.throw_if_cancellation_requested();
+      if (timeout_ms == 0 ||
+          monotonic_milliseconds() - start_ms >= timeout_ms) {
+        throw xyzm_async_timeout_error("TELNET transfer send timeout");
+      }
+
+      std::span<const unsigned char> remaining(encoded.data() + offset,
+                                               encoded.size() - offset);
+      const std::size_t written = co_await cardio::io_urings::write(
+          *io, socket_fd, std::as_bytes(remaining), cancellation);
+      if (written == 0) {
+        throw xyzm_async_io_error("TELNET transfer write made no progress");
+      }
+      notify_activity(ActivityIndicatorId::sd);
+      offset += written;
+    }
+    written_len = bytes.size();
+    co_return;
+  }
+
+  cardio::promise<void>
+  recv_transfer_bytes(std::span<std::uint8_t> bytes,
+                      std::uint32_t timeout_ms, std::size_t &read_len,
+                      cardio::cancellation cancellation) {
+    if (bytes.empty()) {
+      read_len = 0;
+      co_return;
+    }
+
+    const std::uint64_t start_ms = monotonic_milliseconds();
+    while (transfer_incoming.empty()) {
+      if (!transfer_active || stopping || socket_fd < 0) {
+        throw xyzm_async_io_error("TELNET transfer is not connected");
+      }
+      cancellation.throw_if_cancellation_requested();
+      if (timeout_ms == 0 ||
+          monotonic_milliseconds() - start_ms >= timeout_ms) {
+        throw xyzm_async_timeout_error("TELNET transfer receive timeout");
+      }
+
+      const std::uint64_t elapsed = monotonic_milliseconds() - start_ms;
+      const std::uint64_t remaining =
+          elapsed >= timeout_ms ? 1 : timeout_ms - elapsed;
+      cardio::cancellation_source combined =
+          transfer_cancel_source.has_value()
+              ? cardio::cancellations::any(
+                    cancellation,
+                    transfer_cancel_source->get_cancellation())
+              : cardio::cancellations::any(cancellation);
+      try {
+        co_await cardio::promises::delay(std::min<std::uint64_t>(10, remaining),
+                                         combined.get_cancellation());
+      } catch (const cardio::canceled_exception &) {
+        throw xyzm_async_cancelled_error("TELNET transfer cancelled");
+      }
+    }
+
+    read_len = std::min(bytes.size(), transfer_incoming.size());
+    for (std::size_t index = 0; index < read_len; ++index) {
+      bytes[index] = transfer_incoming.front();
+      transfer_incoming.pop_front();
+    }
+  }
+
+  void finish_transfer(const TerminalTransferRequest &request,
+                       bool succeeded) {
+    transfer_active = false;
+    transfer_incoming.clear();
+    transfer_cancel_source.reset();
+    if (request.status) {
+      request.status("Terminal");
+    }
+    if (!stopping && socket_fd >= 0) {
+      terminal_io.connect_user_input(
+          [this](std::span<const unsigned char> next_bytes) {
+            send_user_input(next_bytes);
+          });
+    }
+    if (request.active) {
+      request.active(false);
+    }
+    if (request.finished) {
+      request.finished(succeeded);
+    }
+  }
+
+  cardio::promise<void>
+  transfer_loop_async(TerminalTransferRequest request,
+                      TerminalTransferTransport transport) {
+    bool succeeded = false;
+    try {
+      co_await wait_binary_negotiation_async(
+          transfer_cancel_source->get_cancellation());
+      TerminalTransferRequest run_request = request;
+      co_await run_terminal_transfer_async(
+          std::move(run_request), std::move(transport),
+          transfer_cancel_source->get_cancellation());
+      succeeded = true;
+    } catch (const xyzm_async_cancelled_error &) {
+      if (!stopping) {
+        std::cerr << "Warning: TELNET transfer cancelled" << '\n';
+      }
+    } catch (const cardio::canceled_exception &) {
+      if (!stopping) {
+        std::cerr << "Warning: TELNET transfer cancelled" << '\n';
+      }
+    } catch (const std::exception &error) {
+      if (!stopping) {
+        std::cerr << "Warning: TELNET transfer failed: " << error.what()
+                  << '\n';
+      }
+    }
+
+    finish_transfer(request, succeeded);
+  }
+
+  void send_user_input(std::span<const unsigned char> bytes) {
+    if (bytes.empty() || transfer_active) {
       return;
     }
 
@@ -336,6 +555,9 @@ public:
   bool start() override {
     if (started) {
       return true;
+    }
+    if (settings.address.empty()) {
+      return false;
     }
 
     try {
@@ -364,6 +586,7 @@ public:
     }
 
     stopping = true;
+    cancel_transfer_noexcept();
     terminal_io.disconnect_user_input();
     outgoing.clear();
     (void)stop_source.cancel();
@@ -376,6 +599,64 @@ public:
     if (protocol.is_naws_enabled()) {
       enqueue_bytes(protocol.encode_naws());
     }
+  }
+
+  bool supports_transfer() const override {
+    return true;
+  }
+
+  bool transfer_in_progress() const override {
+    return transfer_active;
+  }
+
+  bool start_transfer(TerminalTransferRequest request) override {
+    if (!started || stopping || transfer_active || socket_fd < 0) {
+      return false;
+    }
+    if (request.direction == TerminalTransferDirection::send &&
+        request.source_file_uris.empty()) {
+      return false;
+    }
+
+    transfer_cancel_source.emplace();
+    transfer_incoming.clear();
+    transfer_active = true;
+    terminal_io.disconnect_user_input();
+    outgoing.clear();
+    if (request.active) {
+      request.active(true);
+    }
+    for (TelnetBytes &bytes : protocol.encode_enable_binary()) {
+      enqueue_bytes(std::move(bytes));
+    }
+
+    TerminalTransferTransport transport{
+        .send = [this](std::span<const std::uint8_t> bytes,
+                       std::uint32_t timeout_ms, std::size_t &written_len,
+                       cardio::cancellation cancellation) {
+          return send_transfer_bytes(bytes, timeout_ms, written_len,
+                                     std::move(cancellation));
+        },
+        .recv = [this](std::span<std::uint8_t> bytes,
+                       std::uint32_t timeout_ms, std::size_t &read_len,
+                       cardio::cancellation cancellation) {
+          return recv_transfer_bytes(bytes, timeout_ms, read_len,
+                                     std::move(cancellation));
+        },
+        .now_ms = []() { return monotonic_milliseconds(); },
+    };
+    transfer_task.reset();
+    transfer_task.emplace(
+        transfer_loop_async(std::move(request), std::move(transport)));
+    return true;
+  }
+
+  std::string title() const override {
+    if (settings.address.empty()) {
+      return "telnet: (unknown)";
+    }
+
+    return "telnet: " + settings.address + ":" + std::to_string(settings.port);
   }
 };
 

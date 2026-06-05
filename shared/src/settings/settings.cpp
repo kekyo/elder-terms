@@ -82,6 +82,7 @@ SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults)
   append_definitions(&definitions, local_shell_connection_setting_definitions());
   append_definitions(&definitions, telnet_connection_setting_definitions());
   append_definitions(&definitions, serial_connection_setting_definitions());
+  append_definitions(&definitions, transfer_setting_definitions());
   return create_settings_store(std::move(definitions));
 }
 

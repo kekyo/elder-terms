@@ -4,6 +4,9 @@
 #error "serial-line-monitor-test must be built with test doubles enabled"
 #endif
 
+#include <sys/ioctl.h>
+
+#include <array>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
@@ -42,9 +45,9 @@ static void expect_true(bool condition, const std::string &message) {
 
 static void test_initial_low_does_not_disconnect_until_high_seen() {
   FakeSerialLineMonitor monitor({
-      {.cd = false, .cts = false, .dsr = false},
-      {.cd = true, .cts = false, .dsr = false},
-      {.cd = false, .cts = false, .dsr = false},
+      {.cd = false},
+      {.cd = true},
+      {.cd = false},
   });
   elder_terms::SerialCarrierTracker tracker(
       elder_terms::SerialCarrierDetect::cd);
@@ -62,9 +65,9 @@ static void test_initial_low_does_not_disconnect_until_high_seen() {
 
 static void test_selected_signal_controls_disconnect() {
   FakeSerialLineMonitor monitor({
-      {.cd = true, .cts = false, .dsr = false},
-      {.cd = true, .cts = true, .dsr = false},
-      {.cd = true, .cts = false, .dsr = false},
+      {.cts = false, .cd = true},
+      {.cts = true, .cd = true},
+      {.cts = false, .cd = true},
   });
   elder_terms::SerialCarrierTracker tracker(
       elder_terms::SerialCarrierDetect::cts);
@@ -80,6 +83,56 @@ static void test_selected_signal_controls_disconnect() {
               "CTS high-to-low should disconnect");
 }
 
+static void test_modem_status_maps_all_indicator_lines() {
+  const elder_terms::SerialLineSignals signals =
+      elder_terms::serial_line_signals_from_modem_status(
+          TIOCM_RTS | TIOCM_CTS | TIOCM_DTR | TIOCM_DSR | TIOCM_CAR |
+          TIOCM_RNG);
+
+  expect_true(signals.rts, "RTS status should be decoded");
+  expect_true(signals.cts, "CTS status should be decoded");
+  expect_true(signals.dtr, "DTR status should be decoded");
+  expect_true(signals.dsr, "DSR status should be decoded");
+  expect_true(signals.cd, "CD status should be decoded");
+  expect_true(signals.ri, "RI status should be decoded");
+}
+
+static void test_signals_build_indicator_states() {
+  const std::array<elder_terms::ActivityIndicatorState, 6> states =
+      elder_terms::serial_line_indicator_states({
+          .rts = true,
+          .cts = false,
+          .dtr = true,
+          .dsr = false,
+          .cd = true,
+          .ri = false,
+      });
+
+  expect_true(
+      states ==
+          std::array<elder_terms::ActivityIndicatorState, 6>{
+              elder_terms::ActivityIndicatorState{
+                  .indicator = elder_terms::ActivityIndicatorId::rts,
+                  .active = true},
+              elder_terms::ActivityIndicatorState{
+                  .indicator = elder_terms::ActivityIndicatorId::cts,
+                  .active = false},
+              elder_terms::ActivityIndicatorState{
+                  .indicator = elder_terms::ActivityIndicatorId::dtr,
+                  .active = true},
+              elder_terms::ActivityIndicatorState{
+                  .indicator = elder_terms::ActivityIndicatorId::dsr,
+                  .active = false},
+              elder_terms::ActivityIndicatorState{
+                  .indicator = elder_terms::ActivityIndicatorId::cd,
+                  .active = true},
+              elder_terms::ActivityIndicatorState{
+                  .indicator = elder_terms::ActivityIndicatorId::ri,
+                  .active = false},
+          },
+      "serial line states should preserve indicator order and signal levels");
+}
+
 } // namespace elder_terms_serial_line_monitor_test
 
 int main() {
@@ -88,6 +141,10 @@ int main() {
         test_initial_low_does_not_disconnect_until_high_seen();
     elder_terms_serial_line_monitor_test::
         test_selected_signal_controls_disconnect();
+    elder_terms_serial_line_monitor_test::
+        test_modem_status_maps_all_indicator_lines();
+    elder_terms_serial_line_monitor_test::
+        test_signals_build_indicator_states();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

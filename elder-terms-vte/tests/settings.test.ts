@@ -89,6 +89,14 @@ const expectSettingsDialogClosed = async (app: GtkApp): Promise<void> => {
   });
 };
 
+const expectTerminalFocused = async (app: GtkApp): Promise<void> => {
+  await toPass(async () => {
+    expect(
+      (await (await app.getById('terminal_view')).info()).states
+    ).toContain('focused');
+  });
+};
+
 const expectFileContent = async (
   path: string,
   expected: string
@@ -211,7 +219,38 @@ const expectSensitive = async (element: GtkWidgetElement): Promise<void> => {
   expect(info.states).toContain('sensitive');
 };
 
+const expectMainWindowTitle = async (
+  app: GtkApp,
+  expectedTitle: string
+): Promise<void> => {
+  const mainWindow = expectElementKind(
+    await app.getById('main_window'),
+    'window'
+  );
+  await toPass(async () => {
+    expect((await mainWindow.x11Info()).title).toBe(expectedTitle);
+  });
+};
+
 describe.concurrent('elder-terms-vte settings', () => {
+  it('shows the local terminal connection in the main window title', async (context) => {
+    await runGtkTest(context, ['--test-fixture'], async (app) => {
+      await expectMainWindowTitle(app, 'elder-terms: local terminal');
+    });
+  });
+
+  it('restores terminal focus after closing runtime settings dialog', async (context) => {
+    await runGtkTest(context, ['--test-fixture'], async (app) => {
+      await openSettingsDialog(app);
+      await expectElementKind(
+        await app.getById('settings_cancel_button'),
+        'button'
+      ).click();
+      await expectSettingsDialogClosed(app);
+      await expectTerminalFocused(app);
+    });
+  });
+
   it('uses the configured terminal grid size from an INI file', async (context) => {
     await runGtkTest(
       context,
@@ -457,6 +496,7 @@ describe.concurrent('elder-terms-vte settings', () => {
           return currentLayout;
         });
         expectWindowCellSize(layout, defaultColumns, defaultRows);
+        await expectMainWindowTitle(app, 'elder-terms: telnet: (unknown)');
 
         const output = await app.output();
         expect(output.stderr).toContain(
@@ -527,6 +567,7 @@ describe.concurrent('elder-terms-vte settings', () => {
             return currentLayout;
           });
           expectWindowCellSize(layout, defaultColumns, defaultRows);
+          await expectMainWindowTitle(app, 'elder-terms: serial: (unknown)');
 
           const output = await app.output();
           expect(output.stderr).toContain(
@@ -711,6 +752,10 @@ describe.concurrent('elder-terms-vte settings', () => {
           context,
           ['--test-fixture', '-c', configPath],
           async (app) => {
+            await expectMainWindowTitle(
+              app,
+              `elder-terms: telnet: 127.0.0.1:${port}`
+            );
             await openSettingsDialog(app);
 
             await expectSelectedConnectionType(app, 'TELNET');
@@ -736,6 +781,28 @@ describe.concurrent('elder-terms-vte settings', () => {
     });
   });
 
+  it('shows the configured serial connection in the main window title', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'serial.ini');
+      await writeFile(
+        configPath,
+        '[general]\ntype=serial\n\n[serial]\ndevice=/dev/ttyUSB1\nbaudrate=115200\n',
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app) => {
+          await expectMainWindowTitle(
+            app,
+            'elder-terms: serial: /dev/ttyUSB1:115200:n81n'
+          );
+        }
+      );
+    });
+  });
+
   it('reflects the current serial runtime settings in General and Serial', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'serial.ini');
@@ -749,6 +816,10 @@ describe.concurrent('elder-terms-vte settings', () => {
         context,
         ['--test-fixture', '-c', configPath],
         async (app) => {
+          await expectMainWindowTitle(
+            app,
+            'elder-terms: serial: /dev/ttyUSB0:115200:e72x'
+          );
           await openSettingsDialog(app);
 
           await expectSelectedConnectionType(app, 'Serial');
@@ -840,6 +911,61 @@ describe.concurrent('elder-terms-vte settings', () => {
             expect(config).toContain('flow_control=hard');
             expect(config).toContain('carrier_detect=cts');
           });
+        }
+      );
+    });
+  });
+
+  it('updates the serial connection title when runtime settings are applied', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'serial-apply-title.ini');
+      await writeFile(
+        configPath,
+        '[general]\ntype=serial\n\n[serial]\ndevice=/dev/ttyUSB1\nbaudrate=115200\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n',
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app) => {
+          await expectMainWindowTitle(
+            app,
+            'elder-terms: serial: /dev/ttyUSB1:115200:n81n'
+          );
+          await openSettingsDialog(app);
+          await showSerialSettingsPage(app);
+
+          await expectElementKind(
+            await app.getById('settings_serial_baudrate_spin'),
+            'spinButton'
+          ).setValue(57600);
+          await expectElementKind(
+            await app.getById('settings_serial_bits_combo'),
+            'comboBox'
+          ).selectChildAt(0);
+          await expectElementKind(
+            await app.getById('settings_serial_parity_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          await expectElementKind(
+            await app.getById('settings_serial_stop_bit_combo'),
+            'comboBox'
+          ).selectChildAt(1);
+          await expectElementKind(
+            await app.getById('settings_serial_flow_control_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          await expectSettingsDialogClosed(app);
+
+          await expectMainWindowTitle(
+            app,
+            'elder-terms: serial: /dev/ttyUSB1:57600:o52h'
+          );
         }
       );
     });

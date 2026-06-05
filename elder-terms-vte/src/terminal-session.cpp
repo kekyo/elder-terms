@@ -1,6 +1,6 @@
-#include <iostream>
 #include <memory>
 #include <utility>
+#include <variant>
 
 #include "terminal-session.h"
 
@@ -11,42 +11,10 @@
 
 namespace elder_terms {
 
-static std::unique_ptr<TerminalSession>
-create_backend(GtkWidget *terminal, const TerminalConnectionProfile &profile,
-               TerminalSessionCallbacks callbacks) {
-  if (profile.kind == TerminalConnectionKind::local_shell) {
-    const auto *settings =
-        std::get_if<LocalShellConnectionSettings>(&profile.settings);
-    if (settings != nullptr) {
-      return create_terminal_local_shell_session(terminal, *settings,
-                                                 callbacks);
-    }
-  }
+static constexpr const char *application_title = "elder-terms";
 
-  if (profile.kind == TerminalConnectionKind::telnet) {
-    const auto *settings =
-        std::get_if<TelnetConnectionSettings>(&profile.settings);
-    if (settings != nullptr) {
-      if (settings->address.empty()) {
-        return nullptr;
-      }
-      return create_terminal_telnet_session(terminal, *settings, callbacks);
-    }
-  }
-
-  if (profile.kind == TerminalConnectionKind::serial) {
-    const auto *settings =
-        std::get_if<SerialConnectionSettings>(&profile.settings);
-    if (settings != nullptr) {
-      if (settings->device.empty()) {
-        return nullptr;
-      }
-      return create_terminal_serial_session(terminal, *settings, callbacks);
-    }
-  }
-
-  std::cerr << "Warning: unsupported terminal connection profile" << '\n';
-  return nullptr;
+static std::string application_window_title(const std::string &session_title) {
+  return std::string(application_title) + ": " + session_title;
 }
 
 struct TerminalSessionState {
@@ -55,6 +23,37 @@ struct TerminalSessionState {
   TerminalSessionCallbacks callbacks;
   std::unique_ptr<TerminalSession> session;
 };
+
+struct TerminalSessionBackendCreator {
+  GtkWidget *terminal = nullptr;
+  TerminalSessionCallbacks callbacks;
+
+  std::unique_ptr<TerminalSession>
+  operator()(const LocalShellConnectionSettings &settings) const {
+    return create_terminal_local_shell_session(terminal, settings, callbacks);
+  }
+
+  std::unique_ptr<TerminalSession>
+  operator()(const TelnetConnectionSettings &settings) const {
+    return create_terminal_telnet_session(terminal, settings, callbacks);
+  }
+
+  std::unique_ptr<TerminalSession>
+  operator()(const SerialConnectionSettings &settings) const {
+    return create_terminal_serial_session(terminal, settings, callbacks);
+  }
+};
+
+static std::unique_ptr<TerminalSession>
+create_backend(GtkWidget *terminal, const TerminalConnectionProfile &profile,
+               TerminalSessionCallbacks callbacks) {
+  return std::visit(
+      TerminalSessionBackendCreator{
+          .terminal = terminal,
+          .callbacks = callbacks,
+      },
+      profile.settings);
+}
 
 TerminalSessionState *
 create_terminal_session(GtkWidget *terminal, TerminalConnectionProfile profile,
@@ -92,14 +91,49 @@ void resize_terminal_session(TerminalSessionState *state, glong columns,
   state->session->resize(columns, rows);
 }
 
+bool terminal_session_supports_transfer(const TerminalSessionState *state) {
+  if (state == nullptr || state->session == nullptr) {
+    return false;
+  }
+
+  return state->session->supports_transfer();
+}
+
+bool terminal_session_transfer_in_progress(const TerminalSessionState *state) {
+  if (state == nullptr || state->session == nullptr) {
+    return false;
+  }
+
+  return state->session->transfer_in_progress();
+}
+
+bool start_terminal_session_transfer(TerminalSessionState *state,
+                                     TerminalTransferRequest request) {
+  if (state == nullptr || state->session == nullptr) {
+    return false;
+  }
+
+  return state->session->start_transfer(std::move(request));
+}
+
+std::string terminal_session_title(const TerminalSessionState *state) {
+  if (state == nullptr || state->session == nullptr) {
+    return application_title;
+  }
+
+  return application_window_title(state->session->title());
+}
+
 void apply_terminal_session_connection_profile(
     TerminalSessionState *state, const TerminalConnectionProfile &profile) {
-  if (state == nullptr || state->session == nullptr) {
+  if (state == nullptr) {
     return;
   }
 
   state->profile = profile;
-  state->session->apply_connection_profile(state->profile);
+  if (state->session != nullptr) {
+    state->session->apply_connection_profile(state->profile);
+  }
 }
 
 void destroy_terminal_session(TerminalSessionState *state) {

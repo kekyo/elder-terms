@@ -2,9 +2,12 @@
 
 #include <glib.h>
 
+#include <string>
+
 #include <elder-terms/settings.h>
 
 #include "../terminal-session-callbacks.h"
+#include "../terminal-transfer.h"
 
 namespace elder_terms {
 
@@ -37,6 +40,42 @@ public:
    * @param rows Current VTE row count.
    */
   virtual void resize(glong columns, glong rows) = 0;
+
+  /**
+   * Returns the current backend-specific window title.
+   *
+   * @returns Window title describing the current session endpoint.
+   */
+  virtual std::string title() const = 0;
+
+  /**
+   * Returns whether this backend can start X/Y/ZMODEM transfers.
+   *
+   * @returns True when file transfers are supported.
+   */
+  virtual bool supports_transfer() const {
+    return false;
+  }
+
+  /**
+   * Returns whether a transfer is currently active.
+   *
+   * @returns True while a transfer task is active.
+   */
+  virtual bool transfer_in_progress() const {
+    return false;
+  }
+
+  /**
+   * Starts one X/Y/ZMODEM transfer request.
+   *
+   * @param request Transfer request.
+   * @returns True when the request was accepted.
+   */
+  virtual bool start_transfer(TerminalTransferRequest request) {
+    (void)request;
+    return false;
+  }
 
   /**
    * Applies runtime-editable connection settings.

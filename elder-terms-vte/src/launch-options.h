@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <string>
 
 namespace elder_terms {
 
@@ -11,6 +12,10 @@ namespace elder_terms {
 struct TestOptions {
   /** True when the app should render deterministic terminal fixture text. */
   bool fixture = false;
+  /** True when transfer dialogs should report their current folder URI. */
+  bool transfer_dialog_probe = false;
+  /** Optional source file URI used instead of opening the send file dialog. */
+  std::optional<std::string> transfer_source_uri;
 };
 
 /**

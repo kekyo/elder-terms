@@ -1,6 +1,10 @@
 #pragma once
 
+#include <array>
+
 #include <elder-terms/settings/serial-settings.h>
+
+#include "../../activity-indicator-id.h"
 
 namespace elder_terms {
 
@@ -8,12 +12,18 @@ namespace elder_terms {
  * Snapshot of serial modem line states.
  */
 struct SerialLineSignals {
-  /** Carrier detect / data carrier detect line. */
-  bool cd = false;
+  /** Request to send line. */
+  bool rts = false;
   /** Clear to send line. */
   bool cts = false;
+  /** Data terminal ready line. */
+  bool dtr = false;
   /** Data set ready line. */
   bool dsr = false;
+  /** Carrier detect / data carrier detect line. */
+  bool cd = false;
+  /** Ring indicator line. */
+  bool ri = false;
 };
 
 /**
@@ -52,6 +62,23 @@ public:
    */
   SerialCarrierEvent update(SerialLineSignals signals);
 };
+
+/**
+ * Builds modem-line signals from a TIOCMGET status bit field.
+ *
+ * @param status Raw TIOCMGET status bits.
+ * @returns Decoded modem-line snapshot.
+ */
+SerialLineSignals serial_line_signals_from_modem_status(int status);
+
+/**
+ * Lists serial modem-line indicator states from one signal snapshot.
+ *
+ * @param signals Current modem-line signals.
+ * @returns Activity indicator states for all modem lines.
+ */
+std::array<ActivityIndicatorState, 6>
+serial_line_indicator_states(SerialLineSignals signals);
 
 /**
  * Reads serial modem line states from an open fd.

@@ -10,13 +10,19 @@ gestament_include_dir = run_command(
   ['gestament-config', '--includedir'],
   check: true,
 ).stdout().strip()
-cardio_include_dir = '../../cardio/include'
+cardio_include_dir = meson.current_source_dir() / '../../cardio/include'
+libxyzm_root_dir = meson.current_source_dir() / '../../libxyzm'
+libxyzm_include_dir = libxyzm_root_dir / 'include'
+libxyzm_async_static_library = libxyzm_root_dir / 'build/libxyzm_async.a'
 
 telnet_protocol_source = 'src/terminal-sessions/telnet-session/telnet-protocol.cpp'
 elder_terms_sources = [
+  'src/activity-indicator.cpp',
   'src/launch-options.cpp',
   'src/main.cpp',
   'src/main-window.cpp',
+  'src/terminal-transfer.cpp',
+  'src/terminal-transfer-runner.cpp',
   'src/terminal-sessions/local-session/local-session.cpp',
   'src/terminal-sessions/serial-session/serial-device-event-monitor.cpp',
   'src/terminal-sessions/serial-session/serial-device-resolver.cpp',
@@ -36,6 +42,7 @@ executable(
   cpp_args: [
     '-I' + gestament_include_dir,
     '-I' + cardio_include_dir,
+    '-I' + libxyzm_include_dir,
     '-DCARDIO_WITH_GLIB=1',
     '-DCARDIO_WITH_GIO=1',
     '-DCARDIO_WITH_LINUX_IO_URING=1',
@@ -48,6 +55,9 @@ executable(
     libudev_dep,
     vte_dep,
   ],
+  link_args: [
+    libxyzm_async_static_library,
+  ],
 )
 
 telnet_protocol_test = executable(
@@ -59,6 +69,43 @@ telnet_protocol_test = executable(
 )
 
 test('telnet-protocol-test', telnet_protocol_test)
+
+activity_indicator_test = executable(
+  'activity-indicator-test',
+  [
+    'tests/cpp/activity-indicator-test.cpp',
+    'src/activity-indicator.cpp',
+  ],
+  dependencies: [
+    gtk_dep,
+  ],
+)
+
+test('activity-indicator-test', activity_indicator_test)
+
+terminal_transfer_runner_test = executable(
+  'terminal-transfer-runner-test',
+  [
+    'tests/cpp/terminal-transfer-runner-test.cpp',
+    'src/terminal-transfer.cpp',
+    'src/terminal-transfer-runner.cpp',
+  ],
+  cpp_args: [
+    '-I' + cardio_include_dir,
+    '-I' + libxyzm_include_dir,
+    '-DCARDIO_WITH_GLIB=1',
+    '-DCARDIO_WITH_GIO=1',
+  ],
+  dependencies: [
+    gio_dep,
+  ],
+  link_args: [
+    libxyzm_async_static_library,
+  ],
+)
+
+test('terminal-transfer-runner-test', terminal_transfer_runner_test,
+  timeout: 90)
 
 serial_device_resolver_test = executable(
   'serial-device-resolver-test',

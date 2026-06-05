@@ -3,6 +3,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <gtk/gtk.h>
 #include <vte/vte.h>
@@ -16,26 +17,102 @@
 #include "launch-options.h"
 #include "main-window.h"
 #include "terminal-layout.h"
+#include "terminal-transfer-runner.h"
 #include "terminal-session.h"
 
 struct ApplicationState {
+  elder_terms::MainWindow *main_window = nullptr;
   elder_terms::TerminalSessionState *session_state = nullptr;
   elder_terms::TerminalLayoutState *layout_state = nullptr;
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
   elder_terms::SettingsStore settings_store;
   std::optional<std::filesystem::path> config_path;
+  elder_terms::TestOptions test_options;
   bool auto_close = true;
+  bool connection_active = false;
+  bool transfer_active = false;
   GtkWidget *window = nullptr;
   GtkWidget *settings_dialog = nullptr;
   guint settings_dialog_close_idle_id = 0;
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
 };
 
+struct TransferMenuAction {
+  elder_terms::TerminalTransferProtocol protocol =
+      elder_terms::TerminalTransferProtocol::zmodem;
+  elder_terms::TerminalTransferDirection direction =
+      elder_terms::TerminalTransferDirection::send;
+};
+
 static void close_settings_dialog(ApplicationState *state);
 static void schedule_settings_dialog_close(ApplicationState *state);
+static void restore_terminal_focus(ApplicationState *state);
+
+static void update_application_terminal_presentation(
+    ApplicationState *state) {
+  if (state == nullptr) {
+    return;
+  }
+
+  elder_terms::set_main_window_terminal_interactive(
+      state->main_window,
+      state->connection_active && !state->transfer_active);
+  elder_terms::set_main_window_transfer_button_sensitive(
+      state->main_window,
+      state->connection_active && !state->transfer_active);
+}
+
+static void set_application_transfer_active(ApplicationState *state,
+                                            bool active) {
+  if (state == nullptr) {
+    return;
+  }
+
+  state->transfer_active = active;
+  update_application_terminal_presentation(state);
+}
+
+static void set_application_indicator_state(
+    ApplicationState *state, elder_terms::ActivityIndicatorId indicator, bool active) {
+  if (state == nullptr) {
+    return;
+  }
+
+  if (indicator == elder_terms::ActivityIndicatorId::conn &&
+      state->auto_close && !active) {
+    return;
+  }
+
+  if (indicator == elder_terms::ActivityIndicatorId::conn) {
+    state->connection_active = active;
+    elder_terms::set_main_window_indicator_state(state->main_window,
+                                                 indicator, active);
+    update_application_terminal_presentation(state);
+    return;
+  }
+
+  elder_terms::set_main_window_indicator_state(state->main_window, indicator, active);
+}
+
+static void restore_terminal_focus(ApplicationState *state) {
+  if (state == nullptr || state->window == nullptr ||
+      state->main_window == nullptr || state->main_window->terminal == nullptr) {
+    return;
+  }
+
+  if (!gtk_widget_get_visible(state->window) ||
+      !gtk_widget_get_visible(state->main_window->terminal)) {
+    return;
+  }
+
+  gtk_window_present(GTK_WINDOW(state->window));
+  gtk_widget_grab_focus(state->main_window->terminal);
+}
 
 static void on_main_window_destroy(GtkWidget *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
+  state->window = nullptr;
+  elder_terms::deactivate_main_window_activity_indicators(state->main_window);
   close_settings_dialog(state);
   elder_terms::stop_terminal_session(state->session_state);
   state->dispatcher_group->shutdown();
@@ -52,6 +129,7 @@ static void on_settings_dialog_destroy(GtkWidget *, gpointer user_data) {
     state->settings_widget = nullptr;
   }
   state->settings_dialog = nullptr;
+  restore_terminal_focus(state);
 }
 
 static void close_settings_dialog(ApplicationState *state) {
@@ -94,16 +172,26 @@ static void apply_runtime_settings(ApplicationState *state,
                                    const elder_terms::SettingsStore &store) {
   state->settings_store = store;
   state->auto_close = elder_terms::terminal_auto_close(state->settings_store);
+  const auto connection_profile =
+      elder_terms::terminal_connection_profile(state->settings_store);
+  elder_terms::set_main_window_activity_indicator_connection_kind(
+      state->main_window, connection_profile.kind);
   elder_terms::apply_terminal_session_connection_profile(
-      state->session_state,
-      elder_terms::terminal_connection_profile(state->settings_store));
+      state->session_state, connection_profile);
+  elder_terms::set_main_window_transfer_button_visible(
+      state->main_window,
+      elder_terms::terminal_session_supports_transfer(state->session_state));
+  update_application_terminal_presentation(state);
+  const std::string title =
+      elder_terms::terminal_session_title(state->session_state);
+  elder_terms::set_main_window_title(state->main_window, title);
   elder_terms::apply_terminal_display_settings(
       state->layout_state,
       elder_terms::terminal_display_settings(state->settings_store));
 }
 
-static bool save_runtime_settings(ApplicationState *state,
-                                  const elder_terms::SettingsStore &store) {
+static bool save_runtime_settings(
+  ApplicationState *state, const elder_terms::SettingsStore &store) {
   if (!state->config_path.has_value()) {
     return false;
   }
@@ -137,8 +225,8 @@ static void update_runtime_terminal_display_settings(
       elder_terms::SettingValue{terminal_display_settings.zoom});
 
   if (state->settings_widget != nullptr) {
-    elder_terms::update_settings_widget_store(state->settings_widget,
-                                              state->settings_store);
+    elder_terms::update_settings_widget_store(
+      state->settings_widget, state->settings_store);
   }
 }
 
@@ -182,13 +270,200 @@ static void open_settings_dialog(ApplicationState *state) {
       elder_terms::settings_widget_root(state->settings_widget));
 
   state->settings_dialog = dialog;
-  g_signal_connect(dialog, "destroy", G_CALLBACK(on_settings_dialog_destroy),
-                   state);
+  g_signal_connect(dialog, "destroy", G_CALLBACK(on_settings_dialog_destroy), state);
   gtk_widget_show_all(dialog);
 }
 
 static void on_settings_button_clicked(GtkButton *, gpointer user_data) {
   open_settings_dialog(static_cast<ApplicationState *>(user_data));
+}
+
+static gboolean emit_transfer_dialog_current_folder_uri(gpointer data) {
+  auto *chooser = GTK_FILE_CHOOSER(data);
+  char *uri = gtk_file_chooser_get_current_folder_uri(chooser);
+  std::cout << "ELDER_TERMS_TRANSFER_DIALOG_CURRENT_FOLDER_URI="
+            << (uri == nullptr ? "" : uri) << '\n'
+            << std::flush;
+  if (uri != nullptr) {
+    g_free(uri);
+  }
+  return G_SOURCE_REMOVE;
+}
+
+static void schedule_transfer_dialog_probe(GtkFileChooser *chooser) {
+  g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,
+                  emit_transfer_dialog_current_folder_uri,
+                  g_object_ref(chooser), g_object_unref);
+}
+
+static void set_transfer_dialog_initial_folder(ApplicationState *state,
+                                               GtkFileChooser *chooser) {
+  const std::string base_path =
+      elder_terms::transfer_base_path(state->settings_store);
+  const std::string folder_uri =
+      elder_terms::resolve_transfer_base_path_uri(base_path);
+  if (folder_uri.empty()) {
+    return;
+  }
+
+  if (!gtk_file_chooser_set_current_folder_uri(chooser, folder_uri.c_str())) {
+    std::cerr << "Warning: failed to set transfer file dialog folder: "
+              << folder_uri << '\n';
+  }
+}
+
+static std::vector<std::string> choose_transfer_files(
+    ApplicationState *state, elder_terms::TerminalTransferProtocol protocol) {
+  std::vector<std::string> uris;
+  if (state->test_options.transfer_source_uri.has_value()) {
+    uris.push_back(*state->test_options.transfer_source_uri);
+    return uris;
+  }
+
+  GtkFileChooserNative *dialog = gtk_file_chooser_native_new(
+      "Select file", GTK_WINDOW(state->window), GTK_FILE_CHOOSER_ACTION_OPEN,
+      "Open", "Cancel");
+  GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
+  gtk_file_chooser_set_local_only(chooser, FALSE);
+  gtk_file_chooser_set_select_multiple(
+      chooser,
+      protocol != elder_terms::TerminalTransferProtocol::xmodem);
+  set_transfer_dialog_initial_folder(state, chooser);
+  if (state->test_options.transfer_dialog_probe) {
+    schedule_transfer_dialog_probe(chooser);
+  }
+
+  const gint response = gtk_native_dialog_run(GTK_NATIVE_DIALOG(dialog));
+  if (response == GTK_RESPONSE_ACCEPT) {
+    GSList *files = gtk_file_chooser_get_files(chooser);
+    for (GSList *item = files; item != nullptr; item = item->next) {
+      GFile *file = G_FILE(item->data);
+      char *uri = g_file_get_uri(file);
+      if (uri != nullptr) {
+        uris.emplace_back(uri);
+        g_free(uri);
+      }
+      g_object_unref(file);
+    }
+    g_slist_free(files);
+  }
+
+  g_object_unref(dialog);
+  return uris;
+}
+
+static bool start_transfer_request(ApplicationState *state,
+                                   const TransferMenuAction &action,
+                                   std::vector<std::string> source_uris) {
+  elder_terms::TerminalTransferRequest request{
+      .protocol = action.protocol,
+      .direction = action.direction,
+      .base_path = elder_terms::transfer_base_path(state->settings_store),
+      .source_file_uris = std::move(source_uris),
+      .active =
+          [state](bool active) {
+            set_application_transfer_active(state, active);
+          },
+      .status =
+          [state](const std::string &status) {
+            elder_terms::set_main_window_status_text(state->main_window,
+                                                     status);
+          },
+      .finished =
+          [state](bool) {
+            restore_terminal_focus(state);
+          },
+  };
+
+  return elder_terms::start_terminal_session_transfer(state->session_state,
+                                                      std::move(request));
+}
+
+static void on_transfer_menu_item_activate(GtkMenuItem *item,
+                                           gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  const auto *action = static_cast<const TransferMenuAction *>(
+      g_object_get_data(G_OBJECT(item), "elder-terms-transfer-action"));
+  if (state == nullptr || action == nullptr) {
+    return;
+  }
+
+  std::vector<std::string> source_uris;
+  if (action->direction == elder_terms::TerminalTransferDirection::send) {
+    source_uris = choose_transfer_files(state, action->protocol);
+    if (source_uris.empty()) {
+      return;
+    }
+  }
+
+  if (!start_transfer_request(state, *action, std::move(source_uris))) {
+    elder_terms::set_main_window_status_text(state->main_window,
+                                             "Transfer unavailable");
+  }
+}
+
+static GtkWidget *create_transfer_menu_item(
+    ApplicationState *state, const char *id, const char *label,
+    elder_terms::TerminalTransferProtocol protocol,
+    elder_terms::TerminalTransferDirection direction) {
+  GtkWidget *item = gtk_menu_item_new_with_label(label);
+  gestament_gtk_assign_accessible_id(item, id);
+  auto *action = new TransferMenuAction{
+      .protocol = protocol,
+      .direction = direction,
+  };
+  g_object_set_data_full(G_OBJECT(item), "elder-terms-transfer-action",
+                         action,
+                         [](gpointer data) {
+                           delete static_cast<TransferMenuAction *>(data);
+                         });
+  g_signal_connect(item, "activate",
+                   G_CALLBACK(on_transfer_menu_item_activate), state);
+  return item;
+}
+
+static void install_transfer_menu(ApplicationState *state) {
+  GtkWidget *menu = gtk_menu_new();
+  gtk_menu_shell_append(
+      GTK_MENU_SHELL(menu),
+      create_transfer_menu_item(
+          state, "transfer_zmodem_send_item", "ZMODEM (send)",
+          elder_terms::TerminalTransferProtocol::zmodem,
+          elder_terms::TerminalTransferDirection::send));
+  gtk_menu_shell_append(
+      GTK_MENU_SHELL(menu),
+      create_transfer_menu_item(
+          state, "transfer_ymodem_send_item", "YMODEM (send)",
+          elder_terms::TerminalTransferProtocol::ymodem,
+          elder_terms::TerminalTransferDirection::send));
+  gtk_menu_shell_append(
+      GTK_MENU_SHELL(menu),
+      create_transfer_menu_item(
+          state, "transfer_xmodem_send_item", "XMODEM (send)",
+          elder_terms::TerminalTransferProtocol::xmodem,
+          elder_terms::TerminalTransferDirection::send));
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), gtk_separator_menu_item_new());
+  gtk_menu_shell_append(
+      GTK_MENU_SHELL(menu),
+      create_transfer_menu_item(
+          state, "transfer_zmodem_receive_item", "ZMODEM (receive)",
+          elder_terms::TerminalTransferProtocol::zmodem,
+          elder_terms::TerminalTransferDirection::receive));
+  gtk_menu_shell_append(
+      GTK_MENU_SHELL(menu),
+      create_transfer_menu_item(
+          state, "transfer_ymodem_receive_item", "YMODEM (receive)",
+          elder_terms::TerminalTransferProtocol::ymodem,
+          elder_terms::TerminalTransferDirection::receive));
+  gtk_menu_shell_append(
+      GTK_MENU_SHELL(menu),
+      create_transfer_menu_item(
+          state, "transfer_xmodem_receive_item", "XMODEM (receive)",
+          elder_terms::TerminalTransferProtocol::xmodem,
+          elder_terms::TerminalTransferDirection::receive));
+  gtk_widget_show_all(menu);
+  gtk_menu_button_set_popup(GTK_MENU_BUTTON(state->main_window->transfer_button),
+                            menu);
 }
 
 int main(int argc, char **argv) {
@@ -221,12 +496,16 @@ int main(int argc, char **argv) {
   }
 
   ApplicationState app_state{
+      .main_window = &*main_window,
       .session_state = nullptr,
       .layout_state = nullptr,
       .dispatcher_group = &dispatcher_group,
       .settings_store = settings_result.store,
       .config_path = launch_options.config_path,
+      .test_options = launch_options.test,
       .auto_close = elder_terms::terminal_auto_close(settings_result.store),
+      .connection_active = false,
+      .transfer_active = false,
       .window = main_window->window,
       .settings_dialog = nullptr,
       .settings_dialog_close_idle_id = 0,
@@ -237,51 +516,81 @@ int main(int argc, char **argv) {
     elder_terms::terminal_display_settings(app_state.settings_store);
   const auto connection_profile =
     elder_terms::terminal_connection_profile(app_state.settings_store);
+  elder_terms::set_main_window_activity_indicator_connection_kind(
+      &*main_window, connection_profile.kind);
 
   vte_terminal_set_font_scale(
     vte_terminal, terminal_display_settings.zoom);
   vte_terminal_set_size(
     vte_terminal, terminal_display_settings.width, terminal_display_settings.height);
 
-  if (!launch_options.test.fixture) {
-    app_state.session_state = elder_terms::create_terminal_session(
-      main_window->terminal,
-      connection_profile,
-      {
-        .ended = [&app_state]() {
-          if (app_state.auto_close && app_state.window != nullptr) {
-            gtk_widget_destroy(app_state.window);
-          }
-        },
-      });
-  }
+  app_state.session_state = elder_terms::create_terminal_session(
+    main_window->terminal,
+    connection_profile,
+    {
+      .ended = [&app_state]() {
+        if (!app_state.auto_close) {
+          set_application_indicator_state(
+              &app_state, elder_terms::ActivityIndicatorId::conn, false);
+        }
+        if (app_state.auto_close && app_state.window != nullptr) {
+          gtk_widget_destroy(app_state.window);
+        }
+      },
+      .activity = [&main_window](elder_terms::ActivityIndicatorId indicator) {
+        elder_terms::note_main_window_activity(&*main_window, indicator);
+      },
+      .indicator_state =
+          [&app_state](elder_terms::ActivityIndicatorId indicator, bool active) {
+            set_application_indicator_state(&app_state, indicator, active);
+          },
+    });
+  install_transfer_menu(&app_state);
+  elder_terms::set_main_window_transfer_button_visible(
+      &*main_window,
+      elder_terms::terminal_session_supports_transfer(
+          app_state.session_state));
+  update_application_terminal_presentation(&app_state);
+  const std::string title =
+      elder_terms::terminal_session_title(app_state.session_state);
+  elder_terms::set_main_window_title(&*main_window, title);
 
   app_state.layout_state = elder_terms::create_terminal_layout(
     *main_window, launch_options.test, terminal_display_settings,
     {
       .grid_size_changed = [&app_state](glong columns, glong rows) {
-        elder_terms::resize_terminal_session(app_state.session_state, columns,
-                                             rows);
+        elder_terms::resize_terminal_session(
+          app_state.session_state, columns, rows);
       },
       .display_settings_changed =
           [&app_state](
               elder_terms::TerminalDisplaySettings terminal_settings) {
-            update_runtime_terminal_display_settings(&app_state,
-                                                     terminal_settings);
+            update_runtime_terminal_display_settings(
+              &app_state, terminal_settings);
           },
     });
 
   elder_terms::connect_terminal_layout_signals(app_state.layout_state);
 
   g_signal_connect(
-    main_window->window, "destroy", G_CALLBACK(on_main_window_destroy),
-    &app_state);
-  g_signal_connect(main_window->settings_button, "clicked",
-                   G_CALLBACK(on_settings_button_clicked), &app_state);
+    main_window->window, "destroy",
+    G_CALLBACK(on_main_window_destroy), &app_state);
+  g_signal_connect(
+    main_window->settings_button, "clicked",
+    G_CALLBACK(on_settings_button_clicked), &app_state);
 
-  if (app_state.session_state != nullptr &&
-    !elder_terms::start_terminal_session(app_state.session_state)) {
-    std::cerr << "Warning: failed to start terminal session" << '\n';
+  bool session_started = false;
+  if (!launch_options.test.fixture && app_state.session_state != nullptr) {
+    session_started =
+        elder_terms::start_terminal_session(app_state.session_state);
+    if (!session_started) {
+      std::cerr << "Warning: failed to start terminal session" << '\n';
+    }
+  }
+  if (session_started && app_state.auto_close) {
+    set_application_indicator_state(&app_state,
+                                    elder_terms::ActivityIndicatorId::conn,
+                                    true);
   }
 
   gtk_widget_grab_focus(main_window->terminal);

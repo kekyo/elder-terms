@@ -28,6 +28,23 @@
             <property name="pack-type">end</property>
           </packing>
         </child>
+        <child>
+          <object class="GtkMenuButton" id="transfer_button">
+            <property name="visible">False</property>
+            <property name="can-focus">True</property>
+            <property name="tooltip-text">Transfer</property>
+            <child>
+              <object class="GtkImage" id="transfer_button_image">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="icon-name">document-send-symbolic</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="pack-type">end</property>
+          </packing>
+        </child>
       </object>
     </child>
     <child>
@@ -101,100 +118,6 @@
                 <property name="halign">end</property>
                 <property name="valign">center</property>
                 <property name="margin-end">6</property>
-                <child>
-                  <object class="GtkBox" id="sd_indicator_box">
-                    <property name="visible">True</property>
-                    <property name="can-focus">False</property>
-                    <property name="orientation">vertical</property>
-                    <property name="spacing">0</property>
-                    <property name="halign">center</property>
-                    <property name="valign">center</property>
-                    <property name="width-request">20</property>
-                    <child>
-                      <object class="GtkImage" id="sd_indicator_image">
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                        <property name="halign">center</property>
-                        <property name="valign">center</property>
-                        <property name="width-request">18</property>
-                        <property name="height-request">18</property>
-                      </object>
-                      <packing>
-                        <property name="expand">False</property>
-                        <property name="fill">False</property>
-                        <property name="position">0</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkLabel" id="sd_indicator_label">
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                        <property name="label">SD</property>
-                        <property name="xalign">0.5</property>
-                        <attributes>
-                          <attribute name="scale" value="0.75"/>
-                        </attributes>
-                      </object>
-                      <packing>
-                        <property name="expand">False</property>
-                        <property name="fill">False</property>
-                        <property name="position">1</property>
-                      </packing>
-                    </child>
-                  </object>
-                  <packing>
-                    <property name="expand">False</property>
-                    <property name="fill">False</property>
-                    <property name="position">0</property>
-                  </packing>
-                </child>
-                <child>
-                  <object class="GtkBox" id="rd_indicator_box">
-                    <property name="visible">True</property>
-                    <property name="can-focus">False</property>
-                    <property name="orientation">vertical</property>
-                    <property name="spacing">0</property>
-                    <property name="halign">center</property>
-                    <property name="valign">center</property>
-                    <property name="width-request">20</property>
-                    <child>
-                      <object class="GtkImage" id="rd_indicator_image">
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                        <property name="halign">center</property>
-                        <property name="valign">center</property>
-                        <property name="width-request">18</property>
-                        <property name="height-request">18</property>
-                      </object>
-                      <packing>
-                        <property name="expand">False</property>
-                        <property name="fill">False</property>
-                        <property name="position">0</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkLabel" id="rd_indicator_label">
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                        <property name="label">RD</property>
-                        <property name="xalign">0.5</property>
-                        <attributes>
-                          <attribute name="scale" value="0.75"/>
-                        </attributes>
-                      </object>
-                      <packing>
-                        <property name="expand">False</property>
-                        <property name="fill">False</property>
-                        <property name="position">1</property>
-                      </packing>
-                    </child>
-                  </object>
-                  <packing>
-                    <property name="expand">False</property>
-                    <property name="fill">False</property>
-                    <property name="position">1</property>
-                  </packing>
-                </child>
               </object>
               <packing>
                 <property name="expand">False</property>

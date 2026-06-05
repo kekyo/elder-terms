@@ -39,6 +39,11 @@ private:
   std::uint16_t columns = 80;
   std::uint16_t rows = 24;
   bool naws_enabled = false;
+  bool local_binary_enabled = false;
+  bool remote_binary_enabled = false;
+  bool local_binary_requested = false;
+  bool remote_binary_requested = false;
+  bool binary_rejected = false;
   TelnetBytes suboption_bytes;
 
   void handle_negotiation(unsigned char option, TelnetProtocolResult *result);
@@ -61,6 +66,20 @@ public:
   bool is_naws_enabled() const;
 
   /**
+   * Returns whether both TELNET BINARY directions are enabled.
+   *
+   * @returns True after WILL/DO BINARY negotiation succeeds both ways.
+   */
+  bool is_binary_enabled() const;
+
+  /**
+   * Returns whether BINARY negotiation was rejected.
+   *
+   * @returns True after receiving DONT/WONT BINARY for a requested direction.
+   */
+  bool is_binary_rejected() const;
+
+  /**
    * Consumes bytes received from the TELNET server.
    *
    * @param bytes Raw bytes received from the server.
@@ -75,6 +94,13 @@ public:
    * @returns Bytes with TELNET IAC escaping applied.
    */
   TelnetBytes encode_user_input(std::span<const unsigned char> bytes) const;
+
+  /**
+   * Encodes TELNET BINARY negotiation requests.
+   *
+   * @returns WILL BINARY and DO BINARY request bytes.
+   */
+  std::vector<TelnetBytes> encode_enable_binary();
 
   /**
    * Encodes the current terminal size as a NAWS subnegotiation.

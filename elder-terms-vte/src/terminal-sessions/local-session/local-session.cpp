@@ -133,7 +133,20 @@ private:
     }
 
     ended_notified = true;
+    notify_indicator_state(ActivityIndicatorId::conn, false);
     notify_session_ended(callbacks);
+  }
+
+  void notify_activity(ActivityIndicatorId indicator) {
+    if (callbacks.activity) {
+      callbacks.activity(indicator);
+    }
+  }
+
+  void notify_indicator_state(ActivityIndicatorId indicator, bool active) {
+    if (callbacks.indicator_state) {
+      callbacks.indicator_state(indicator, active);
+    }
   }
 
   void cleanup_session_resources() {
@@ -255,6 +268,7 @@ private:
     child_watch_id =
         g_child_watch_add(child_pid, TerminalLocalShellSession::on_child_exited,
                           this);
+    notify_indicator_state(ActivityIndicatorId::conn, true);
   }
 
   static void finish_inactive_spawn(GObject *source_object,
@@ -304,6 +318,7 @@ private:
           natural_end = true;
           break;
         }
+        notify_activity(ActivityIndicatorId::rd);
         terminal_io.feed(std::span<const unsigned char>(buffer.data(),
                                                         read_size));
       }
@@ -341,6 +356,7 @@ private:
           if (written == 0) {
             throw std::runtime_error("local PTY write made no progress");
           }
+          notify_activity(ActivityIndicatorId::sd);
           offset += written;
         }
       }
@@ -393,9 +409,9 @@ public:
       spawn_state = std::make_shared<LocalShellSpawnState>();
       spawn_state->session = this;
       vte_pty_spawn_async(
-          pty, nullptr, argv, nullptr,
-          static_cast<GSpawnFlags>(G_SPAWN_DO_NOT_REAP_CHILD), nullptr, nullptr,
-          nullptr, -1, nullptr, TerminalLocalShellSession::on_pty_spawned,
+          pty, nullptr, argv, nullptr, static_cast<GSpawnFlags>(0), nullptr,
+          nullptr, nullptr, -1, nullptr,
+          TerminalLocalShellSession::on_pty_spawned,
           new std::shared_ptr<LocalShellSpawnState>(spawn_state));
 
       started = true;
@@ -419,6 +435,10 @@ public:
 
   void resize(glong columns, glong rows) override {
     set_pty_size(columns, rows);
+  }
+
+  std::string title() const override {
+    return "local terminal";
   }
 };
 

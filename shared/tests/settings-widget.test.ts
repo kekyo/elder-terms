@@ -171,7 +171,7 @@ const waitForAppliedStore = async (app: GtkApp): Promise<AppliedStore> =>
     return parseAppliedStore(line as string);
   });
 
-describe('shared settings widget', () => {
+describe.concurrent('shared settings widget', () => {
   it('matches General visual fixtures for connection type and runtime state', async (context) => {
     const cases: readonly SettingVisualCase[] = [
       {

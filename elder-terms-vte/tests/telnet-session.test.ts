@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
+import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import {
   runGtkTest,
   telnetLocalhostConfigPath,
@@ -74,6 +75,13 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
     await withTemporaryDirectory(async (directory) => {
       const receivedChunks: Buffer[] = [];
       let acceptedSocket: Socket | undefined;
+      let negotiationInterval: ReturnType<typeof setInterval> | undefined;
+      const stopNegotiationInterval = (): void => {
+        if (negotiationInterval !== undefined) {
+          clearInterval(negotiationInterval);
+          negotiationInterval = undefined;
+        }
+      };
       const server = createServer((socket) => {
         acceptedSocket = socket;
         socket.on('data', (chunk) => {
@@ -81,7 +89,12 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
             typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk)
           );
         });
-        socket.write(Buffer.from([telnetIac, telnetDo, telnetNaws]));
+        socket.on('close', stopNegotiationInterval);
+        const writeNawsRequest = (): void => {
+          socket.write(Buffer.from([telnetIac, telnetDo, telnetNaws]));
+        };
+        writeNawsRequest();
+        negotiationInterval = setInterval(writeNawsRequest, 60);
         socket.write('connected\r\n');
       });
 
@@ -135,6 +148,13 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
             }
           );
 
+          await waitForActivityIndicatorImageState(app, 'rd', 'on');
+          await waitForActivityIndicatorImageState(app, 'sd', 'on');
+          stopNegotiationInterval();
+          await delay(500);
+          await waitForActivityIndicatorImageState(app, 'rd', 'off');
+          await waitForActivityIndicatorImageState(app, 'sd', 'off');
+
           await app.input.pressKey('a');
           await toPass(
             async () => {
@@ -148,6 +168,7 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
           );
         });
       } finally {
+        stopNegotiationInterval();
         acceptedSocket?.destroy();
         await closeServer(server);
       }
@@ -279,7 +300,6 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
         socket.on('close', () => {
           acceptedSocketClosed = true;
         });
-        socket.end();
       });
 
       try {
@@ -308,6 +328,8 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
               timeoutMs: 5_000,
             }
           );
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
+          acceptedSocket?.end();
           await toPass(
             async () => {
               expect(acceptedSocketClosed).toBe(true);
@@ -317,7 +339,7 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
               timeoutMs: 5_000,
             }
           );
-          await delay(1_000);
+          await waitForActivityIndicatorImageState(app, 'conn', 'off');
 
           const output = await app.output();
           expect(output.exitCode).toBeNull();
