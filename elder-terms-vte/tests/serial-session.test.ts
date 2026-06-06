@@ -338,7 +338,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
             async () => {
               await app.input.pressKey('x');
               expect((await app.output()).stderr).toMatch(
-                /serial (device not found|read failed|write failed|carrier detection failed)/
+                /serial (device not found|open failed|read failed|write failed|carrier detection failed)/
               );
             },
             {

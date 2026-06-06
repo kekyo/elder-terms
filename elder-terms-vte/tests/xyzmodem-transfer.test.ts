@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { constants } from 'node:fs';
@@ -25,6 +26,12 @@ interface TransferFixture {
   readonly sourceUri: string | undefined;
 }
 
+interface TransferSizeCase {
+  readonly byteLength: number;
+  readonly label: string;
+  readonly timeoutMs: number;
+}
+
 interface TransferConnectionStartOptions {
   readonly configPath: string;
   readonly loginScriptPath: string;
@@ -45,6 +52,62 @@ interface TransferConnectionCase {
 const protocols = ['xmodem', 'ymodem', 'zmodem'] as const;
 const directions = ['send', 'receive'] as const;
 const startDelaysMs = [250, 1000, 3000] as const;
+const transferSizeCasesByProtocol: Record<
+  TransferProtocol,
+  readonly TransferSizeCase[]
+> = {
+  xmodem: [
+    {
+      byteLength: 160,
+      label: '160B',
+      timeoutMs: 60_000,
+    },
+    {
+      byteLength: 16 * 1024,
+      label: '16KB',
+      timeoutMs: 90_000,
+    },
+    {
+      byteLength: 480 * 1024,
+      label: '480KB',
+      timeoutMs: 120_000,
+    },
+  ],
+  ymodem: [
+    {
+      byteLength: 320,
+      label: '320B',
+      timeoutMs: 60_000,
+    },
+    {
+      byteLength: 32 * 1024,
+      label: '32KB',
+      timeoutMs: 90_000,
+    },
+    {
+      byteLength: 960 * 1024,
+      label: '960KB',
+      timeoutMs: 120_000,
+    },
+  ],
+  zmodem: [
+    {
+      byteLength: 10 * 1024,
+      label: '10KB',
+      timeoutMs: 60_000,
+    },
+    {
+      byteLength: 1024 * 1024,
+      label: '1MB',
+      timeoutMs: 120_000,
+    },
+    {
+      byteLength: 30 * 1024 * 1024,
+      label: '30MB',
+      timeoutMs: 360_000,
+    },
+  ],
+};
 
 const requiredCommands = [
   '/usr/bin/socat',
@@ -65,16 +128,8 @@ const transferMenuItemId = (
   direction: TransferDirection
 ): string => `transfer_${protocol}_${direction}_item`;
 
-const makeTransferPayload = (): Buffer => {
-  const payload = Buffer.alloc(2048);
-  for (let index = 0; index < payload.length; ++index) {
-    payload[index] = (index * 37 + (index >> 2) + 17) & 0xff;
-  }
-  payload[3] = 0x00;
-  payload[7] = 0xff;
-  payload[1024] = 0x18;
-  return payload;
-};
+const makeTransferPayload = (byteLength: number): Buffer =>
+  randomBytes(byteLength);
 
 const expectRequiredCommands = async (): Promise<void> => {
   await Promise.all(
@@ -265,7 +320,8 @@ const writeTelnetConfig = async (
 const createTransferFixture = async (
   directory: string,
   protocol: TransferProtocol,
-  direction: TransferDirection
+  direction: TransferDirection,
+  sizeCase: TransferSizeCase
 ): Promise<TransferFixture> => {
   const localDirectory = join(directory, 'local');
   const remoteDirectory = join(directory, 'remote');
@@ -276,7 +332,7 @@ const createTransferFixture = async (
     mkdir(receiveDirectory, { recursive: true }),
   ]);
 
-  const payload = makeTransferPayload();
+  const payload = makeTransferPayload(sizeCase.byteLength);
   const configPath = join(directory, 'telnet.ini');
   const markerPath = join(directory, 'start-transfer.marker');
   const loginScriptPath = join(directory, 'login.sh');
@@ -388,16 +444,21 @@ const activateTransfer = async (
 
 const waitForFileBytes = async (
   path: string,
-  expected: Buffer
+  expected: Buffer,
+  protocol: TransferProtocol,
+  timeoutMs: number
 ): Promise<void> => {
   await waitForResult(
     async () => {
       const actual = await readFile(path);
-      expect(Buffer.compare(actual, expected)).toBe(0);
+      const comparable =
+        protocol === 'xmodem' ? actual.subarray(0, expected.length) : actual;
+      expect(comparable.length).toBe(expected.length);
+      expect(Buffer.compare(comparable, expected)).toBe(0);
     },
     {
       message: `transfer result should match ${path}`,
-      timeoutMs: 20_000,
+      timeoutMs,
     }
   );
 };
@@ -407,50 +468,71 @@ describe('elder-terms-vte XYZMODEM transfer e2e', () => {
     for (const protocol of protocols) {
       for (const direction of directions) {
         for (const startDelayMs of startDelaysMs) {
-          it(`${connectionCase.name} ${protocol} ${direction} starts after ${startDelayMs}ms`, async (context) => {
-            await expectRequiredCommands();
-            await withTemporaryDirectory(async (directory) => {
-              const fixture = await createTransferFixture(
-                directory,
-                protocol,
-                direction
-              );
-              const connection = await startConnection(connectionCase, fixture);
-              try {
-                const args = [
-                  '-c',
-                  fixture.configPath,
-                  ...(fixture.sourceUri === undefined
-                    ? []
-                    : [`--test-transfer-source-uri=${fixture.sourceUri}`]),
-                ];
-                await runGtkTest(context, args, async (app, evidence) => {
-                  await evidence.log('XYZMODEM e2e case', {
-                    command: fixture.command,
-                    connection: connectionCase.name,
-                    direction,
+          for (const sizeCase of transferSizeCasesByProtocol[protocol]) {
+            it(
+              `${connectionCase.name} ${protocol} ${direction} ${sizeCase.label} starts after ${startDelayMs}ms`,
+              async (context) => {
+                await expectRequiredCommands();
+                await withTemporaryDirectory(async (directory) => {
+                  const fixture = await createTransferFixture(
+                    directory,
                     protocol,
-                    startDelayMs,
-                  });
-                  await waitForActivityIndicatorImageState(app, 'conn', 'on');
+                    direction,
+                    sizeCase
+                  );
+                  const connection = await startConnection(
+                    connectionCase,
+                    fixture
+                  );
+                  try {
+                    const args = [
+                      '-c',
+                      fixture.configPath,
+                      ...(fixture.sourceUri === undefined
+                        ? []
+                        : [`--test-transfer-source-uri=${fixture.sourceUri}`]),
+                    ];
+                    await runGtkTest(context, args, async (app, evidence) => {
+                      await evidence.log('XYZMODEM e2e case', {
+                        command: fixture.command,
+                        connection: connectionCase.name,
+                        direction,
+                        protocol,
+                        size: sizeCase.label,
+                        sizeBytes: sizeCase.byteLength,
+                        startDelayMs,
+                      });
+                      await waitForActivityIndicatorImageState(
+                        app,
+                        'conn',
+                        'on'
+                      );
 
-                  if (direction === 'send') {
-                    await writeFile(fixture.markerPath, 'start', 'utf8');
-                    await delay(startDelayMs);
-                    await activateTransfer(app, protocol, direction);
-                  } else {
-                    await activateTransfer(app, protocol, direction);
-                    await delay(startDelayMs);
-                    await writeFile(fixture.markerPath, 'start', 'utf8');
+                      if (direction === 'send') {
+                        await writeFile(fixture.markerPath, 'start', 'utf8');
+                        await delay(startDelayMs);
+                        await activateTransfer(app, protocol, direction);
+                      } else {
+                        await activateTransfer(app, protocol, direction);
+                        await delay(startDelayMs);
+                        await writeFile(fixture.markerPath, 'start', 'utf8');
+                      }
+
+                      await waitForFileBytes(
+                        fixture.expectedPath,
+                        fixture.payload,
+                        protocol,
+                        sizeCase.timeoutMs
+                      );
+                    });
+                  } finally {
+                    await connection.close();
                   }
-
-                  await waitForFileBytes(fixture.expectedPath, fixture.payload);
                 });
-              } finally {
-                await connection.close();
-              }
-            });
-          }, 45_000);
+              },
+              sizeCase.timeoutMs + 30_000
+            );
+          }
         }
       }
     }
