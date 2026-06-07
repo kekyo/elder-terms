@@ -2,11 +2,13 @@
 
 #include <fcntl.h>
 #include <sys/eventfd.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 #include <glib-unix.h>
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <cerrno>
 #include <chrono>
@@ -20,6 +22,7 @@
 #include <span>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -112,6 +115,48 @@ static bool selected_carrier_signal_is_high(SerialLineSignals signals,
   return signals.cd;
 }
 
+class TerminalSerialSession;
+
+static int carrier_wait_mask() {
+  return TIOCM_CTS | TIOCM_DSR | TIOCM_CAR | TIOCM_RNG;
+}
+
+enum class CarrierWaitNotificationKind {
+  changed,
+  unavailable,
+};
+
+struct CarrierWaitState {
+  TerminalSerialSession *session = nullptr;
+  GMainContext *context = nullptr;
+  std::atomic<int> fd{-1};
+  std::atomic<bool> active{true};
+
+  explicit CarrierWaitState(TerminalSerialSession *session, int fd)
+      : session(session),
+        context(g_main_context_ref(g_main_context_default())),
+        fd(fd) {
+  }
+
+  ~CarrierWaitState() {
+    if (context != nullptr) {
+      g_main_context_unref(context);
+    }
+  }
+};
+
+struct CarrierWaitNotification {
+  std::shared_ptr<CarrierWaitState> state;
+  CarrierWaitNotificationKind kind = CarrierWaitNotificationKind::changed;
+};
+
+static void close_atomic_fd_noexcept(std::atomic<int> *fd) {
+  const int current = fd->exchange(-1);
+  if (current >= 0) {
+    (void)::close(current);
+  }
+}
+
 class TerminalSerialSession final : public TerminalSession {
 private:
   TerminalViewIo terminal_io;
@@ -120,6 +165,8 @@ private:
   SerialCarrierTracker carrier_tracker;
   std::deque<std::vector<unsigned char>> outgoing;
   std::unique_ptr<SerialDeviceEventMonitor> device_event_monitor;
+  std::shared_ptr<CarrierWaitState> carrier_wait_state;
+  std::jthread carrier_wait_thread;
   std::optional<cardio::cancellation_source> transfer_cancel_source;
   std::optional<cardio::promise<void>> transfer_task;
   int serial_fd = -1;
@@ -138,10 +185,23 @@ private:
   bool transfer_active = false;
   std::deque<unsigned char> transfer_incoming;
 
+  void stop_carrier_wait() {
+    if (carrier_wait_state != nullptr) {
+      carrier_wait_state->active = false;
+      close_atomic_fd_noexcept(&carrier_wait_state->fd);
+      carrier_wait_state.reset();
+    }
+    if (carrier_wait_thread.joinable()) {
+      carrier_wait_thread.request_stop();
+      carrier_wait_thread = std::jthread();
+    }
+  }
+
   void remove_connection_sources() {
     remove_source(&read_watch_id);
     remove_source(&write_watch_id);
     remove_source(&carrier_poll_id);
+    stop_carrier_wait();
   }
 
   void remove_sources() {
@@ -227,6 +287,103 @@ private:
 
     reconnect_poll_id =
         g_timeout_add(250, TerminalSerialSession::on_reconnect_poll, this);
+  }
+
+  void start_carrier_poll() {
+    if (stopping || serial_fd < 0 || carrier_poll_id != 0) {
+      return;
+    }
+
+    carrier_poll_id = g_timeout_add(100,
+                                    TerminalSerialSession::on_carrier_poll,
+                                    this);
+  }
+
+  static gboolean on_carrier_wait_notification(gpointer user_data) {
+    std::unique_ptr<CarrierWaitNotification> notification(
+        static_cast<CarrierWaitNotification *>(user_data));
+    if (!notification->state->active) {
+      return G_SOURCE_REMOVE;
+    }
+
+    TerminalSerialSession *session = notification->state->session;
+    if (session == nullptr || session->stopping || session->serial_fd < 0) {
+      return G_SOURCE_REMOVE;
+    }
+
+    if (notification->kind == CarrierWaitNotificationKind::changed) {
+      (void)session->handle_carrier_poll();
+    } else {
+      session->start_carrier_poll();
+    }
+    return G_SOURCE_REMOVE;
+  }
+
+  static void schedule_carrier_wait_notification(
+      const std::shared_ptr<CarrierWaitState> &state,
+      CarrierWaitNotificationKind kind) {
+    auto *notification = new CarrierWaitNotification{
+        .state = state,
+        .kind = kind,
+    };
+    g_main_context_invoke(state->context,
+                          TerminalSerialSession::on_carrier_wait_notification,
+                          notification);
+  }
+
+  bool start_carrier_wait() {
+    if (stopping || serial_fd < 0 || carrier_wait_state != nullptr) {
+      return carrier_wait_state != nullptr;
+    }
+
+    const int wait_fd = ::dup(serial_fd);
+    if (wait_fd < 0) {
+      return false;
+    }
+
+    auto state = std::make_shared<CarrierWaitState>(this, wait_fd);
+    try {
+      carrier_wait_thread = std::jthread(
+          [state](std::stop_token stop_token) {
+            while (!stop_token.stop_requested() && state->active) {
+              int mask = carrier_wait_mask();
+              const int fd = state->fd.load();
+              if (fd < 0) {
+                break;
+              }
+
+              if (::ioctl(fd, TIOCMIWAIT, &mask) == 0) {
+                schedule_carrier_wait_notification(
+                    state, CarrierWaitNotificationKind::changed);
+                continue;
+              }
+              if (errno == EINTR) {
+                continue;
+              }
+
+              schedule_carrier_wait_notification(
+                  state, CarrierWaitNotificationKind::unavailable);
+              break;
+            }
+            close_atomic_fd_noexcept(&state->fd);
+          });
+    } catch (...) {
+      state->active = false;
+      close_atomic_fd_noexcept(&state->fd);
+      return false;
+    }
+
+    carrier_wait_state = std::move(state);
+    return true;
+  }
+
+  void start_carrier_monitor() {
+    if (!handle_carrier_poll()) {
+      return;
+    }
+    if (!start_carrier_wait()) {
+      start_carrier_poll();
+    }
   }
 
   bool connect_if_available() {
@@ -335,15 +492,13 @@ private:
           serial_fd,
           static_cast<GIOCondition>(G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL),
           TerminalSerialSession::on_read_ready, this);
-      carrier_poll_id = g_timeout_add(100,
-                                      TerminalSerialSession::on_carrier_poll,
-                                      this);
       carrier_tracker = SerialCarrierTracker(settings.carrier_detect);
       line_warning_reported = false;
       connection_warning_reported = false;
       disconnected_reported = false;
       carrier_disconnected = false;
       notify_connected_state(true);
+      start_carrier_monitor();
       start_writer();
       return true;
     } catch (const std::exception &error) {
