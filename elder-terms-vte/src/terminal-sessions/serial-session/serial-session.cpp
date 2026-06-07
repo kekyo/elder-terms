@@ -115,6 +115,44 @@ static bool selected_carrier_signal_is_high(SerialLineSignals signals,
   return signals.cd;
 }
 
+static constexpr std::uint64_t transfer_start_control_retention_ms = 5000;
+static constexpr std::size_t transfer_start_control_max_bytes = 16;
+
+struct TimedTransferStartByte {
+  unsigned char value = 0;
+  std::uint64_t timestamp_ms = 0;
+};
+
+static bool is_transfer_start_control_byte(unsigned char value) {
+  return value == 0x15 || value == 'C' || value == 'G';
+}
+
+static bool
+is_transfer_start_control_chunk(std::span<const unsigned char> bytes) {
+  if (bytes.empty() || bytes.size() > transfer_start_control_max_bytes) {
+    return false;
+  }
+  return std::all_of(bytes.begin(), bytes.end(),
+                     is_transfer_start_control_byte);
+}
+
+static void prune_transfer_start_controls(
+    std::deque<TimedTransferStartByte> *controls,
+    std::uint64_t now_ms) {
+  while (!controls->empty() &&
+         now_ms - controls->front().timestamp_ms >
+             transfer_start_control_retention_ms) {
+    controls->pop_front();
+  }
+}
+
+static bool should_consume_transfer_start_controls(
+    const TerminalTransferRequest &request) {
+  return request.direction == TerminalTransferDirection::send &&
+         (request.protocol == TerminalTransferProtocol::xmodem ||
+          request.protocol == TerminalTransferProtocol::ymodem);
+}
+
 class TerminalSerialSession;
 
 static int carrier_wait_mask() {
@@ -184,6 +222,7 @@ private:
   bool carrier_disconnected = false;
   bool transfer_active = false;
   std::deque<unsigned char> transfer_incoming;
+  std::deque<TimedTransferStartByte> pending_transfer_start_controls;
 
   void stop_carrier_wait() {
     if (carrier_wait_state != nullptr) {
@@ -220,6 +259,36 @@ private:
     }
     transfer_incoming.insert(transfer_incoming.end(), data, data + size);
     notify_event_fd_noexcept(transfer_input_event_fd);
+  }
+
+  void remember_transfer_start_controls(const unsigned char *data,
+                                        std::size_t size) {
+    if (!is_transfer_start_control_chunk(
+            std::span<const unsigned char>(data, size))) {
+      return;
+    }
+
+    const std::uint64_t now_ms = monotonic_milliseconds();
+    prune_transfer_start_controls(&pending_transfer_start_controls, now_ms);
+    for (std::size_t index = 0; index < size; ++index) {
+      pending_transfer_start_controls.push_back(TimedTransferStartByte{
+          .value = data[index],
+          .timestamp_ms = now_ms,
+      });
+    }
+    while (pending_transfer_start_controls.size() >
+           transfer_start_control_max_bytes) {
+      pending_transfer_start_controls.pop_front();
+    }
+  }
+
+  void consume_pending_transfer_start_controls() {
+    const std::uint64_t now_ms = monotonic_milliseconds();
+    prune_transfer_start_controls(&pending_transfer_start_controls, now_ms);
+    for (const TimedTransferStartByte &byte : pending_transfer_start_controls) {
+      transfer_incoming.push_back(byte.value);
+    }
+    pending_transfer_start_controls.clear();
   }
 
   void notify_activity(ActivityIndicatorId indicator) {
@@ -532,6 +601,8 @@ private:
           append_transfer_input(buffer.data(),
                                 static_cast<std::size_t>(read_size));
         } else {
+          remember_transfer_start_controls(
+              buffer.data(), static_cast<std::size_t>(read_size));
           feed_terminal(buffer.data(), static_cast<std::size_t>(read_size));
         }
         continue;
@@ -1056,6 +1127,11 @@ public:
 
     transfer_cancel_source.emplace();
     transfer_incoming.clear();
+    if (should_consume_transfer_start_controls(request)) {
+      consume_pending_transfer_start_controls();
+    } else {
+      pending_transfer_start_controls.clear();
+    }
     transfer_active = true;
     terminal_io.disconnect_user_input();
     outgoing.clear();

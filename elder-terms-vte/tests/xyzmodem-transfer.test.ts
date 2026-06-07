@@ -52,6 +52,7 @@ interface TransferConnectionCase {
 const protocols = ['xmodem', 'ymodem', 'zmodem'] as const;
 const directions = ['send', 'receive'] as const;
 const startDelaysMs = [250, 1000, 3000] as const;
+const maxXmodemSendAdjustedDurationMs = 10_000;
 const transferSizeCasesByProtocol: Record<
   TransferProtocol,
   readonly TransferSizeCase[]
@@ -508,6 +509,7 @@ describe('elder-terms-vte XYZMODEM transfer e2e', () => {
                         'on'
                       );
 
+                      const startedAtMs = performance.now();
                       if (direction === 'send') {
                         await writeFile(fixture.markerPath, 'start', 'utf8');
                         await delay(startDelayMs);
@@ -524,6 +526,20 @@ describe('elder-terms-vte XYZMODEM transfer e2e', () => {
                         protocol,
                         sizeCase.timeoutMs
                       );
+                      const elapsedMs = performance.now() - startedAtMs;
+                      const adjustedElapsedMs = Math.max(
+                        0,
+                        elapsedMs - startDelayMs
+                      );
+                      await evidence.log('XYZMODEM e2e result', {
+                        adjustedElapsedMs,
+                        elapsedMs,
+                      });
+                      if (protocol === 'xmodem' && direction === 'send') {
+                        expect(adjustedElapsedMs).toBeLessThan(
+                          maxXmodemSendAdjustedDurationMs
+                        );
+                      }
                     });
                   } finally {
                     await connection.close();
