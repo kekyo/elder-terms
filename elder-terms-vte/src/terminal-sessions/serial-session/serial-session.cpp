@@ -1,6 +1,7 @@
 #include "serial-session.h"
 
 #include <fcntl.h>
+#include <sys/eventfd.h>
 #include <unistd.h>
 
 #include <glib-unix.h>
@@ -36,6 +37,44 @@ static void close_fd_noexcept(int *fd) {
   if (*fd >= 0) {
     (void)::close(*fd);
     *fd = -1;
+  }
+}
+
+static int open_event_fd() {
+  const int fd = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+  if (fd < 0) {
+    throw std::system_error(errno, std::generic_category(),
+                            "eventfd failed");
+  }
+  return fd;
+}
+
+static void notify_event_fd_noexcept(int fd) {
+  if (fd < 0) {
+    return;
+  }
+
+  while (::eventfd_write(fd, 1) < 0) {
+    if (errno == EINTR) {
+      continue;
+    }
+    return;
+  }
+}
+
+static void drain_event_fd_noexcept(int fd) {
+  if (fd < 0) {
+    return;
+  }
+
+  eventfd_t value = 0;
+  while (::eventfd_read(fd, &value) < 0) {
+    if (errno == EINTR) {
+      continue;
+    }
+    return;
+  }
+  while (::eventfd_read(fd, &value) == 0) {
   }
 }
 
@@ -84,6 +123,7 @@ private:
   std::optional<cardio::cancellation_source> transfer_cancel_source;
   std::optional<cardio::promise<void>> transfer_task;
   int serial_fd = -1;
+  int transfer_input_event_fd = -1;
   guint read_watch_id = 0;
   guint write_watch_id = 0;
   guint carrier_poll_id = 0;
@@ -115,7 +155,11 @@ private:
   }
 
   void append_transfer_input(const unsigned char *data, std::size_t size) {
+    if (size == 0) {
+      return;
+    }
     transfer_incoming.insert(transfer_incoming.end(), data, data + size);
+    notify_event_fd_noexcept(transfer_input_event_fd);
   }
 
   void notify_activity(ActivityIndicatorId indicator) {
@@ -500,6 +544,7 @@ private:
     if (transfer_cancel_source.has_value()) {
       (void)transfer_cancel_source->cancel();
     }
+    notify_event_fd_noexcept(transfer_input_event_fd);
   }
 
   cardio::promise<void>
@@ -562,6 +607,44 @@ private:
   }
 
   cardio::promise<void>
+  wait_transfer_input_async(std::uint32_t timeout_ms,
+                            std::uint64_t start_ms,
+                            cardio::cancellation cancellation) {
+    if (timeout_ms == 0 ||
+        monotonic_milliseconds() - start_ms >= timeout_ms) {
+      throw xyzm_async_timeout_error("serial transfer receive timeout");
+    }
+
+    const std::uint64_t elapsed = monotonic_milliseconds() - start_ms;
+    const std::uint64_t remaining =
+        elapsed >= timeout_ms ? 1 : timeout_ms - elapsed;
+    cardio::cancellation_source timeout_source =
+        cardio::cancellations::timeout(static_cast<std::uint32_t>(remaining));
+    cardio::cancellation_source combined =
+        transfer_cancel_source.has_value()
+            ? cardio::cancellations::any(
+                  cancellation, transfer_cancel_source->get_cancellation(),
+                  timeout_source.get_cancellation())
+            : cardio::cancellations::any(cancellation,
+                                         timeout_source.get_cancellation());
+
+    drain_event_fd_noexcept(transfer_input_event_fd);
+    try {
+      co_await cardio::from_fd(transfer_input_event_fd, cardio::fd_event::read,
+                               combined.get_cancellation());
+      drain_event_fd_noexcept(transfer_input_event_fd);
+    } catch (const cardio::canceled_exception &) {
+      if (cancellation.is_cancellation_requested() ||
+          (transfer_cancel_source.has_value() &&
+           transfer_cancel_source->get_cancellation()
+               .is_cancellation_requested())) {
+        throw xyzm_async_cancelled_error("serial transfer cancelled");
+      }
+      throw xyzm_async_timeout_error("serial transfer receive timeout");
+    }
+  }
+
+  cardio::promise<void>
   recv_transfer_bytes(std::span<std::uint8_t> bytes,
                       std::uint32_t timeout_ms, std::size_t &read_len,
                       cardio::cancellation cancellation) {
@@ -577,27 +660,7 @@ private:
         throw xyzm_async_io_error("serial transfer is not connected");
       }
       cancellation.throw_if_cancellation_requested();
-      if (timeout_ms == 0 ||
-          monotonic_milliseconds() - start_ms >= timeout_ms) {
-        throw xyzm_async_timeout_error("serial transfer receive timeout");
-      }
-
-      const std::uint64_t elapsed = monotonic_milliseconds() - start_ms;
-      const std::uint64_t remaining =
-          elapsed >= timeout_ms ? 1 : timeout_ms - elapsed;
-      const std::uint64_t delay_ms = std::min<std::uint64_t>(10, remaining);
-      cardio::cancellation_source combined =
-          transfer_cancel_source.has_value()
-              ? cardio::cancellations::any(
-                    cancellation,
-                    transfer_cancel_source->get_cancellation())
-              : cardio::cancellations::any(cancellation);
-      try {
-        co_await cardio::promises::delay(delay_ms,
-                                         combined.get_cancellation());
-      } catch (const cardio::canceled_exception &) {
-        throw xyzm_async_cancelled_error("serial transfer cancelled");
-      }
+      co_await wait_transfer_input_async(timeout_ms, start_ms, cancellation);
     }
 
     read_len = std::min(bytes.size(), transfer_incoming.size());
@@ -688,6 +751,7 @@ public:
   ~TerminalSerialSession() override {
     stop();
     close_fd_noexcept(&serial_fd);
+    close_fd_noexcept(&transfer_input_event_fd);
   }
 
   bool start() override {
@@ -699,6 +763,13 @@ public:
     }
 
     stopping = false;
+    try {
+      transfer_input_event_fd = open_event_fd();
+    } catch (const std::exception &error) {
+      std::cerr << "Warning: failed to initialize serial session: "
+                << error.what() << '\n';
+      return false;
+    }
     terminal_io.connect_user_input(
         [this](std::span<const unsigned char> bytes) {
           send_user_input(bytes);
