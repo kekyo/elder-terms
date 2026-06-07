@@ -220,6 +220,7 @@ private:
   std::optional<cardio::promise<void>> transfer_task;
   int socket_fd = -1;
   int transfer_input_event_fd = -1;
+  int binary_negotiation_event_fd = -1;
   bool started = false;
   bool stopping = false;
   bool writing = false;
@@ -273,7 +274,14 @@ private:
   }
 
   void handle_received(std::span<const unsigned char> bytes) {
+    const bool was_binary_ready =
+        protocol.is_binary_enabled() || protocol.is_binary_rejected();
     TelnetProtocolResult result = protocol.receive(bytes);
+    const bool is_binary_ready =
+        protocol.is_binary_enabled() || protocol.is_binary_rejected();
+    if (!was_binary_ready && is_binary_ready) {
+      notify_event_fd_noexcept(binary_negotiation_event_fd);
+    }
     if (transfer_active) {
       append_transfer_input(result.terminal_data);
     } else {
@@ -401,6 +409,46 @@ private:
       (void)transfer_cancel_source->cancel();
     }
     notify_event_fd_noexcept(transfer_input_event_fd);
+    notify_event_fd_noexcept(binary_negotiation_event_fd);
+  }
+
+  cardio::promise<void>
+  wait_binary_state_change_async(std::uint64_t start_ms,
+                                 cardio::cancellation cancellation) {
+    if (monotonic_milliseconds() - start_ms >= telnet_binary_timeout_ms) {
+      throw xyzm_async_timeout_error("TELNET BINARY negotiation timeout");
+    }
+
+    const std::uint64_t elapsed = monotonic_milliseconds() - start_ms;
+    const std::uint64_t remaining =
+        elapsed >= telnet_binary_timeout_ms
+            ? 1
+            : telnet_binary_timeout_ms - elapsed;
+    cardio::cancellation_source timeout_source =
+        cardio::cancellations::timeout(remaining);
+    cardio::cancellation_source combined =
+        transfer_cancel_source.has_value()
+            ? cardio::cancellations::any(
+                  cancellation, transfer_cancel_source->get_cancellation(),
+                  timeout_source.get_cancellation())
+            : cardio::cancellations::any(cancellation,
+                                         timeout_source.get_cancellation());
+
+    drain_event_fd_noexcept(binary_negotiation_event_fd);
+    try {
+      co_await cardio::from_fd(binary_negotiation_event_fd,
+                               cardio::fd_event::read,
+                               combined.get_cancellation());
+      drain_event_fd_noexcept(binary_negotiation_event_fd);
+    } catch (const cardio::canceled_exception &) {
+      if (cancellation.is_cancellation_requested() ||
+          (transfer_cancel_source.has_value() &&
+           transfer_cancel_source->get_cancellation()
+               .is_cancellation_requested())) {
+        throw xyzm_async_cancelled_error("TELNET transfer cancelled");
+      }
+      throw xyzm_async_timeout_error("TELNET BINARY negotiation timeout");
+    }
   }
 
   cardio::promise<void>
@@ -418,24 +466,7 @@ private:
         throw xyzm_async_timeout_error("TELNET BINARY negotiation timeout");
       }
 
-      const std::uint64_t elapsed = monotonic_milliseconds() - start_ms;
-      const std::uint64_t remaining =
-          elapsed >= telnet_binary_timeout_ms
-              ? 1
-              : telnet_binary_timeout_ms - elapsed;
-      cardio::cancellation_source combined =
-          transfer_cancel_source.has_value()
-              ? cardio::cancellations::any(
-                    cancellation,
-                    transfer_cancel_source->get_cancellation())
-              : cardio::cancellations::any(cancellation);
-      try {
-        co_await cardio::promises::delay(
-            std::min<std::uint64_t>(10, remaining),
-            combined.get_cancellation());
-      } catch (const cardio::canceled_exception &) {
-        throw xyzm_async_cancelled_error("TELNET transfer cancelled");
-      }
+      co_await wait_binary_state_change_async(start_ms, cancellation);
     }
   }
 
@@ -615,6 +646,7 @@ public:
     stop();
     close_socket_noexcept(&socket_fd);
     close_socket_noexcept(&transfer_input_event_fd);
+    close_socket_noexcept(&binary_negotiation_event_fd);
   }
 
   bool start() override {
@@ -628,6 +660,7 @@ public:
     try {
       io.emplace(64);
       transfer_input_event_fd = open_event_fd();
+      binary_negotiation_event_fd = open_event_fd();
       set_current_window_size();
       vte_terminal_set_delete_binding(VTE_TERMINAL(terminal),
                                       VTE_ERASE_ASCII_DELETE);
