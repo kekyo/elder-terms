@@ -28,6 +28,26 @@ static bool path_is_existing_directory(const std::filesystem::path &path) {
   return std::filesystem::is_directory(path, error) && !error;
 }
 
+static bool path_is_under_root(const std::filesystem::path &path,
+                               const std::filesystem::path &root) {
+  const std::string normalized_path = path.lexically_normal().string();
+  const std::string normalized_root = root.lexically_normal().string();
+  return normalized_path == normalized_root ||
+         starts_with(normalized_path, normalized_root + "/");
+}
+
+static bool selector_can_use_udev_events(
+    const std::string &selector,
+    const SerialDeviceEventMonitorOptions &options) {
+  if (!contains_slash(selector)) {
+    return true;
+  }
+
+  const std::filesystem::path selector_path(selector);
+  return selector_path.is_absolute() &&
+         path_is_under_root(selector_path, options.dev_root);
+}
+
 static void remove_source(guint *source_id) {
   if (*source_id != 0) {
     g_source_remove(*source_id);
@@ -284,7 +304,14 @@ public:
   }
 
   bool has_event_sources() const {
-    return running && (udev_watch_id != 0 || !file_monitors.empty());
+    if (!running) {
+      return false;
+    }
+    if (!file_monitors.empty()) {
+      return true;
+    }
+    return udev_watch_id != 0 && selector_can_use_udev_events(selector,
+                                                              options);
   }
 
 #ifdef ELDER_TERMS_ENABLE_TEST_DOUBLES
