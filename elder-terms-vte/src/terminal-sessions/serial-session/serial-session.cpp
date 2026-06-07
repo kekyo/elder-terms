@@ -215,6 +215,11 @@ private:
     remove_source(&reconnect_poll_id);
   }
 
+  bool device_monitor_has_event_sources() const {
+    return device_event_monitor != nullptr &&
+           device_event_monitor->has_event_sources();
+  }
+
   void start_reconnect_poll() {
     if (stopping || serial_fd >= 0 || reconnect_poll_id != 0) {
       return;
@@ -239,18 +244,21 @@ private:
     }
 
     if (!connect_if_available()) {
-      start_reconnect_poll();
+      if (!device_monitor_has_event_sources()) {
+        start_reconnect_poll();
+      }
     }
   }
 
-  void start_device_monitor() {
+  bool start_device_monitor() {
     if (stopping || serial_fd >= 0 || device_event_monitor != nullptr) {
-      return;
+      return device_monitor_has_event_sources();
     }
 
     device_event_monitor = std::make_unique<SerialDeviceEventMonitor>(
         settings.device, [this]() { handle_device_event(); });
     device_event_monitor->start();
+    return device_monitor_has_event_sources();
   }
 
   void handle_device_connection_lost() {
@@ -267,9 +275,11 @@ private:
     notify_serial_line_state({});
     notify_connected_state(false);
     schedule_disconnected_notification();
-    start_device_monitor();
+    const bool has_event_sources = start_device_monitor();
     if (!connect_if_available()) {
-      start_reconnect_poll();
+      if (!has_event_sources) {
+        start_reconnect_poll();
+      }
     }
   }
 
@@ -476,11 +486,11 @@ private:
       return false;
     }
 
-    start_device_monitor();
+    const bool has_event_sources = start_device_monitor();
     if (connect_if_available()) {
       return false;
     }
-    return true;
+    return !has_event_sources;
   }
 
   static gboolean on_read_ready(gint, GIOCondition condition,
@@ -801,9 +811,11 @@ public:
         });
     started = true;
 
-    start_device_monitor();
+    const bool has_event_sources = start_device_monitor();
     if (!connect_if_available()) {
-      start_reconnect_poll();
+      if (!has_event_sources) {
+        start_reconnect_poll();
+      }
       schedule_disconnected_notification();
     }
 
@@ -855,9 +867,11 @@ public:
     }
 
     if (started) {
-      start_device_monitor();
+      const bool has_event_sources = start_device_monitor();
       if (!connect_if_available()) {
-        start_reconnect_poll();
+        if (!has_event_sources) {
+          start_reconnect_poll();
+        }
       }
     }
   }

@@ -68,6 +68,13 @@ public:
    */
   void stop();
 
+  /**
+   * Returns whether at least one event source is active.
+   *
+   * @returns True when udev or filesystem events can wake the monitor.
+   */
+  bool has_event_sources() const;
+
 #ifdef ELDER_TERMS_ENABLE_TEST_DOUBLES
   /**
    * Injects one device event for tests.

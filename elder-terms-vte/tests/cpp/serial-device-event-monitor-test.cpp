@@ -47,6 +47,16 @@ static void test_event_burst_is_coalesced() {
               "serial device event burst should coalesce to one callback");
 }
 
+static void test_disabled_system_sources_report_no_event_sources() {
+  int callback_count = 0;
+  elder_terms::SerialDeviceEventMonitor monitor = create_monitor(&callback_count);
+  monitor.start();
+
+  expect_true(!monitor.has_event_sources(),
+              "disabled serial device monitor should report no event sources");
+  monitor.stop();
+}
+
 static void test_stopped_monitor_does_not_emit_pending_callback() {
   int callback_count = 0;
   elder_terms::SerialDeviceEventMonitor monitor = create_monitor(&callback_count);
@@ -79,6 +89,8 @@ int main() {
   try {
     elder_terms_serial_device_event_monitor_test::
         test_event_burst_is_coalesced();
+    elder_terms_serial_device_event_monitor_test::
+        test_disabled_system_sources_report_no_event_sources();
     elder_terms_serial_device_event_monitor_test::
         test_stopped_monitor_does_not_emit_pending_callback();
     elder_terms_serial_device_event_monitor_test::

@@ -283,6 +283,10 @@ public:
     stop_udev_monitor();
   }
 
+  bool has_event_sources() const {
+    return running && (udev_watch_id != 0 || !file_monitors.empty());
+  }
+
 #ifdef ELDER_TERMS_ENABLE_TEST_DOUBLES
   void notify_device_event_for_test() {
     schedule_callback();
@@ -312,6 +316,10 @@ void SerialDeviceEventMonitor::start() {
 
 void SerialDeviceEventMonitor::stop() {
   impl->stop();
+}
+
+bool SerialDeviceEventMonitor::has_event_sources() const {
+  return impl->has_event_sources();
 }
 
 #ifdef ELDER_TERMS_ENABLE_TEST_DOUBLES
