@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <sys/eventfd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
@@ -155,6 +156,44 @@ static void close_socket_noexcept(int *fd) {
   }
 }
 
+static int open_event_fd() {
+  const int fd = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+  if (fd < 0) {
+    throw std::system_error(errno, std::generic_category(),
+                            "eventfd failed");
+  }
+  return fd;
+}
+
+static void notify_event_fd_noexcept(int fd) {
+  if (fd < 0) {
+    return;
+  }
+
+  while (::eventfd_write(fd, 1) < 0) {
+    if (errno == EINTR) {
+      continue;
+    }
+    return;
+  }
+}
+
+static void drain_event_fd_noexcept(int fd) {
+  if (fd < 0) {
+    return;
+  }
+
+  eventfd_t value = 0;
+  while (::eventfd_read(fd, &value) < 0) {
+    if (errno == EINTR) {
+      continue;
+    }
+    return;
+  }
+  while (::eventfd_read(fd, &value) == 0) {
+  }
+}
+
 static void notify_session_ended(const TerminalSessionCallbacks &callbacks) {
   if (callbacks.ended) {
     callbacks.ended();
@@ -180,6 +219,7 @@ private:
   std::optional<cardio::promise<void>> write_task;
   std::optional<cardio::promise<void>> transfer_task;
   int socket_fd = -1;
+  int transfer_input_event_fd = -1;
   bool started = false;
   bool stopping = false;
   bool writing = false;
@@ -203,8 +243,12 @@ private:
   }
 
   void append_transfer_input(const TelnetBytes &bytes) {
+    if (bytes.empty()) {
+      return;
+    }
     transfer_incoming.insert(transfer_incoming.end(), bytes.begin(),
                              bytes.end());
+    notify_event_fd_noexcept(transfer_input_event_fd);
   }
 
   void notify_activity(ActivityIndicatorId indicator) {
@@ -356,6 +400,7 @@ private:
     if (transfer_cancel_source.has_value()) {
       (void)transfer_cancel_source->cancel();
     }
+    notify_event_fd_noexcept(transfer_input_event_fd);
   }
 
   cardio::promise<void>
@@ -435,6 +480,44 @@ private:
   }
 
   cardio::promise<void>
+  wait_transfer_input_async(std::uint32_t timeout_ms,
+                            std::uint64_t start_ms,
+                            cardio::cancellation cancellation) {
+    if (timeout_ms == 0 ||
+        monotonic_milliseconds() - start_ms >= timeout_ms) {
+      throw xyzm_async_timeout_error("TELNET transfer receive timeout");
+    }
+
+    const std::uint64_t elapsed = monotonic_milliseconds() - start_ms;
+    const std::uint64_t remaining =
+        elapsed >= timeout_ms ? 1 : timeout_ms - elapsed;
+    cardio::cancellation_source timeout_source =
+        cardio::cancellations::timeout(static_cast<std::uint32_t>(remaining));
+    cardio::cancellation_source combined =
+        transfer_cancel_source.has_value()
+            ? cardio::cancellations::any(
+                  cancellation, transfer_cancel_source->get_cancellation(),
+                  timeout_source.get_cancellation())
+            : cardio::cancellations::any(cancellation,
+                                         timeout_source.get_cancellation());
+
+    drain_event_fd_noexcept(transfer_input_event_fd);
+    try {
+      co_await cardio::from_fd(transfer_input_event_fd, cardio::fd_event::read,
+                               combined.get_cancellation());
+      drain_event_fd_noexcept(transfer_input_event_fd);
+    } catch (const cardio::canceled_exception &) {
+      if (cancellation.is_cancellation_requested() ||
+          (transfer_cancel_source.has_value() &&
+           transfer_cancel_source->get_cancellation()
+               .is_cancellation_requested())) {
+        throw xyzm_async_cancelled_error("TELNET transfer cancelled");
+      }
+      throw xyzm_async_timeout_error("TELNET transfer receive timeout");
+    }
+  }
+
+  cardio::promise<void>
   recv_transfer_bytes(std::span<std::uint8_t> bytes,
                       std::uint32_t timeout_ms, std::size_t &read_len,
                       cardio::cancellation cancellation) {
@@ -449,26 +532,7 @@ private:
         throw xyzm_async_io_error("TELNET transfer is not connected");
       }
       cancellation.throw_if_cancellation_requested();
-      if (timeout_ms == 0 ||
-          monotonic_milliseconds() - start_ms >= timeout_ms) {
-        throw xyzm_async_timeout_error("TELNET transfer receive timeout");
-      }
-
-      const std::uint64_t elapsed = monotonic_milliseconds() - start_ms;
-      const std::uint64_t remaining =
-          elapsed >= timeout_ms ? 1 : timeout_ms - elapsed;
-      cardio::cancellation_source combined =
-          transfer_cancel_source.has_value()
-              ? cardio::cancellations::any(
-                    cancellation,
-                    transfer_cancel_source->get_cancellation())
-              : cardio::cancellations::any(cancellation);
-      try {
-        co_await cardio::promises::delay(std::min<std::uint64_t>(10, remaining),
-                                         combined.get_cancellation());
-      } catch (const cardio::canceled_exception &) {
-        throw xyzm_async_cancelled_error("TELNET transfer cancelled");
-      }
+      co_await wait_transfer_input_async(timeout_ms, start_ms, cancellation);
     }
 
     read_len = std::min(bytes.size(), transfer_incoming.size());
@@ -550,6 +614,7 @@ public:
   ~TerminalTelnetSession() override {
     stop();
     close_socket_noexcept(&socket_fd);
+    close_socket_noexcept(&transfer_input_event_fd);
   }
 
   bool start() override {
@@ -562,6 +627,7 @@ public:
 
     try {
       io.emplace(64);
+      transfer_input_event_fd = open_event_fd();
       set_current_window_size();
       vte_terminal_set_delete_binding(VTE_TERMINAL(terminal),
                                       VTE_ERASE_ASCII_DELETE);
