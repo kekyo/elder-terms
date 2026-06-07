@@ -548,6 +548,42 @@ private:
   }
 
   cardio::promise<void>
+  wait_transfer_write_ready_async(std::uint32_t timeout_ms,
+                                  std::uint64_t start_ms,
+                                  cardio::cancellation cancellation) {
+    if (timeout_ms == 0 ||
+        monotonic_milliseconds() - start_ms >= timeout_ms) {
+      throw xyzm_async_timeout_error("serial transfer send timeout");
+    }
+
+    const std::uint64_t elapsed = monotonic_milliseconds() - start_ms;
+    const std::uint64_t remaining =
+        elapsed >= timeout_ms ? 1 : timeout_ms - elapsed;
+    cardio::cancellation_source timeout_source =
+        cardio::cancellations::timeout(remaining);
+    cardio::cancellation_source combined =
+        transfer_cancel_source.has_value()
+            ? cardio::cancellations::any(
+                  cancellation, transfer_cancel_source->get_cancellation(),
+                  timeout_source.get_cancellation())
+            : cardio::cancellations::any(cancellation,
+                                         timeout_source.get_cancellation());
+
+    try {
+      co_await cardio::from_fd(serial_fd, cardio::fd_event::write,
+                               combined.get_cancellation());
+    } catch (const cardio::canceled_exception &) {
+      if (cancellation.is_cancellation_requested() ||
+          (transfer_cancel_source.has_value() &&
+           transfer_cancel_source->get_cancellation()
+               .is_cancellation_requested())) {
+        throw xyzm_async_cancelled_error("serial transfer cancelled");
+      }
+      throw xyzm_async_timeout_error("serial transfer send timeout");
+    }
+  }
+
+  cardio::promise<void>
   send_transfer_bytes(std::span<const std::uint8_t> bytes,
                       std::uint32_t timeout_ms, std::size_t &written_len,
                       cardio::cancellation cancellation) {
@@ -590,19 +626,8 @@ private:
             std::strerror(errno));
       }
 
-      if (timeout_ms == 0 ||
-          monotonic_milliseconds() - start_ms >= timeout_ms) {
-        throw xyzm_async_timeout_error("serial transfer send timeout");
-      }
-      const std::uint64_t elapsed = monotonic_milliseconds() - start_ms;
-      const std::uint64_t remaining =
-          elapsed >= timeout_ms ? 1 : timeout_ms - elapsed;
-      try {
-        co_await cardio::promises::delay(
-            std::min<std::uint64_t>(10, remaining), cancellation);
-      } catch (const cardio::canceled_exception &) {
-        throw xyzm_async_cancelled_error("serial transfer cancelled");
-      }
+      co_await wait_transfer_write_ready_async(timeout_ms, start_ms,
+                                               cancellation);
     }
   }
 
