@@ -80,6 +80,15 @@ bool start_terminal_session_transfer(TerminalSessionState *state,
                                      TerminalTransferRequest request);
 
 /**
+ * Enables or disables ZMODEM auto-start detection on the active backend.
+ *
+ * @param state Session state created by create_terminal_session.
+ * @param enabled True when remote ZMODEM preambles should auto-start transfers.
+ */
+void set_terminal_session_zmodem_autostart(TerminalSessionState *state,
+                                           bool enabled);
+
+/**
  * Returns the title for a terminal session state.
  *
  * @param state Session state created by create_terminal_session.

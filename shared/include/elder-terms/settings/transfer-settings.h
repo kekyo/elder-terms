@@ -15,6 +15,13 @@ namespace elder_terms {
 SettingKey transfer_base_path_setting_key();
 
 /**
+ * Returns the ZMODEM auto-start setting key.
+ *
+ * @returns Setting key for [transfer] zmodem_autostart.
+ */
+SettingKey transfer_zmodem_autostart_setting_key();
+
+/**
  * Returns transfer setting definitions.
  *
  * @returns Setting definitions for the transfer section.
@@ -29,5 +36,14 @@ std::vector<SettingDefinition> transfer_setting_definitions();
  * used.
  */
 std::string transfer_base_path(const SettingsStore &store);
+
+/**
+ * Reads the effective ZMODEM auto-start setting.
+ *
+ * @param store Source settings store.
+ * @returns Explicit configured value, or true only for Serial connections when
+ * [transfer] zmodem_autostart is omitted.
+ */
+bool transfer_zmodem_autostart(const SettingsStore &store);
 
 } // namespace elder_terms

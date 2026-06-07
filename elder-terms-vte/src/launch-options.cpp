@@ -46,9 +46,9 @@ LaunchOptions parse_launch_options(int *argc, char **argv) {
     static constexpr const char transfer_source_uri_option[] =
         "--test-transfer-source-uri=";
     if (argument.rfind(transfer_source_uri_option, 0) == 0) {
-      options.test.transfer_source_uri =
+      options.test.transfer_source_uris.push_back(
           argument.substr(std::char_traits<char>::length(
-              transfer_source_uri_option));
+              transfer_source_uri_option)));
       ++index;
       continue;
     }

@@ -14,6 +14,9 @@ namespace elder_terms {
 static constexpr char local_connection_type[] = "local";
 static constexpr char telnet_connection_type[] = "telnet";
 static constexpr char serial_connection_type[] = "serial";
+static constexpr char zmodem_autostart_default[] = "default";
+static constexpr char zmodem_autostart_enabled[] = "enabled";
+static constexpr char zmodem_autostart_disabled[] = "disabled";
 
 struct ConnectionSettingsPage {
   const char *connection_type = nullptr;
@@ -42,6 +45,8 @@ struct SettingsWidgetState {
   GtkWidget *serial_stop_bit_combo = nullptr;
   GtkWidget *serial_flow_control_combo = nullptr;
   GtkWidget *serial_carrier_detect_combo = nullptr;
+  GtkWidget *transfer_base_path_entry = nullptr;
+  GtkWidget *transfer_zmodem_autostart_combo = nullptr;
   GtkWidget *apply_button = nullptr;
   GtkWidget *save_button = nullptr;
   GtkWidget *cancel_button = nullptr;
@@ -123,6 +128,17 @@ static std::string active_combo_id(GtkWidget *combo,
 static std::string connection_type_value(const SettingsStore &store) {
   return setting_string_value_or_default(store, general_type_setting_key(),
                                          local_connection_type);
+}
+
+static const char *zmodem_autostart_choice_id(const SettingsStore &store) {
+  const bool configured = setting_boolean_value_or_default(
+      store, transfer_zmodem_autostart_setting_key(), false);
+  if (!setting_has_explicit_value(store,
+                                  transfer_zmodem_autostart_setting_key()) &&
+      !configured) {
+    return zmodem_autostart_default;
+  }
+  return configured ? zmodem_autostart_enabled : zmodem_autostart_disabled;
 }
 
 static void update_connection_pages(SettingsWidgetState *state) {
@@ -266,6 +282,29 @@ static void update_serial_carrier_detect_from_widget(
       SettingValue{active_combo_id(state->serial_carrier_detect_combo, "cd")});
 }
 
+static void update_transfer_base_path_from_widget(
+    SettingsWidgetState *state) {
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->transfer_base_path_entry));
+  set_setting_value(&state->draft_store, transfer_base_path_setting_key(),
+                    SettingValue{std::string(text == nullptr ? "" : text)});
+}
+
+static void update_transfer_zmodem_autostart_from_widget(
+    SettingsWidgetState *state) {
+  const std::string choice = active_combo_id(
+      state->transfer_zmodem_autostart_combo, zmodem_autostart_default);
+  if (choice == zmodem_autostart_default) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 transfer_zmodem_autostart_setting_key());
+    return;
+  }
+
+  set_explicit_setting_value(
+      &state->draft_store, transfer_zmodem_autostart_setting_key(),
+      SettingValue{choice == zmodem_autostart_enabled});
+}
+
 static void sync_widgets_from_draft(SettingsWidgetState *state) {
   const TerminalDisplaySettings display =
       terminal_display_settings(state->draft_store);
@@ -340,6 +379,15 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
         GTK_COMBO_BOX(state->serial_carrier_detect_combo),
         carrier_detect.c_str());
   }
+  if (state->transfer_base_path_entry != nullptr) {
+    gtk_entry_set_text(GTK_ENTRY(state->transfer_base_path_entry),
+                       transfer_base_path(state->draft_store).c_str());
+  }
+  if (state->transfer_zmodem_autostart_combo != nullptr) {
+    gtk_combo_box_set_active_id(
+        GTK_COMBO_BOX(state->transfer_zmodem_autostart_combo),
+        zmodem_autostart_choice_id(state->draft_store));
+  }
   if (state->notebook != nullptr) {
     update_connection_pages(state);
   }
@@ -360,6 +408,8 @@ static void sync_draft_from_widgets(SettingsWidgetState *state) {
   update_serial_stop_bit_from_widget(state);
   update_serial_flow_control_from_widget(state);
   update_serial_carrier_detect_from_widget(state);
+  update_transfer_base_path_from_widget(state);
+  update_transfer_zmodem_autostart_from_widget(state);
 }
 
 static void on_general_type_changed(GtkComboBox *, gpointer data) {
@@ -430,6 +480,17 @@ static void on_serial_flow_control_changed(GtkComboBox *, gpointer data) {
 static void on_serial_carrier_detect_changed(GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_serial_carrier_detect_from_widget(state);
+}
+
+static void on_transfer_base_path_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  update_transfer_base_path_from_widget(state);
+}
+
+static void on_transfer_zmodem_autostart_changed(GtkComboBox *,
+                                                 gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  update_transfer_zmodem_autostart_from_widget(state);
 }
 
 static void on_apply_clicked(GtkButton *, gpointer data) {
@@ -639,6 +700,37 @@ static GtkWidget *create_serial_page(SettingsWidgetState *state) {
   return page;
 }
 
+static GtkWidget *create_transfer_page(SettingsWidgetState *state) {
+  GtkWidget *page = create_page_grid("settings_transfer_page");
+
+  state->transfer_base_path_entry = gtk_entry_new();
+  assign_accessible_id(state->transfer_base_path_entry,
+                       "settings_transfer_base_path_entry");
+  gtk_entry_set_text(GTK_ENTRY(state->transfer_base_path_entry),
+                     transfer_base_path(state->draft_store).c_str());
+  g_signal_connect(state->transfer_base_path_entry, "changed",
+                   G_CALLBACK(on_transfer_base_path_changed), state);
+  attach_row(page, 0, "base_path", state->transfer_base_path_entry);
+
+  state->transfer_zmodem_autostart_combo =
+      create_combo_box("settings_transfer_zmodem_autostart_combo");
+  append_combo_option(state->transfer_zmodem_autostart_combo,
+                      zmodem_autostart_default, "Default");
+  append_combo_option(state->transfer_zmodem_autostart_combo,
+                      zmodem_autostart_enabled, "Enabled");
+  append_combo_option(state->transfer_zmodem_autostart_combo,
+                      zmodem_autostart_disabled, "Disabled");
+  gtk_combo_box_set_active_id(
+      GTK_COMBO_BOX(state->transfer_zmodem_autostart_combo),
+      zmodem_autostart_choice_id(state->draft_store));
+  g_signal_connect(state->transfer_zmodem_autostart_combo, "changed",
+                   G_CALLBACK(on_transfer_zmodem_autostart_changed), state);
+  attach_row(page, 1, "zmodem_autostart",
+             state->transfer_zmodem_autostart_combo);
+
+  return page;
+}
+
 static GtkWidget *create_button_box(SettingsWidgetState *state) {
   GtkWidget *button_box = gtk_button_box_new(GTK_ORIENTATION_HORIZONTAL);
   assign_accessible_id(button_box, "settings_action_row");
@@ -731,6 +823,11 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       .page = serial_page,
       .tab_label = serial_tab,
   });
+
+  GtkWidget *transfer_page = create_transfer_page(state);
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), transfer_page,
+                           create_tab_button(state, transfer_page, "Transfer",
+                                             "settings_transfer_tab"));
 
   gtk_box_pack_start(GTK_BOX(state->root), create_button_box(state), FALSE,
                      FALSE, 0);

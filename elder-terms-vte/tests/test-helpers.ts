@@ -115,6 +115,19 @@ export interface TestEvidence {
    */
   readonly log: (message: string, details?: unknown) => Promise<void>;
   /**
+   * Saves binary data as a test artifact.
+   *
+   * @param label Artifact label.
+   * @param data Binary data to save.
+   * @param extension Filename extension without the leading dot.
+   * @returns Saved artifact path.
+   */
+  readonly saveBinaryEvidence: (
+    label: string,
+    data: Buffer,
+    extension: string
+  ) => Promise<string>;
+  /**
    * Compares a capture with an expected image and saves comparison evidence.
    *
    * @param capture Actual capture.
@@ -290,6 +303,7 @@ const writeSystemEventLogs = async (
  */
 export const createTestEvidence = (context: TestContext): TestEvidence => {
   const directory = createTestDirectory(context);
+  const artifactsDirectory = join(directory, 'artifacts');
   const capturesDirectory = join(directory, 'captures');
   const outputsDirectory = join(directory, 'outputs');
   const testLogPath = join(directory, 'test.log');
@@ -307,6 +321,7 @@ export const createTestEvidence = (context: TestContext): TestEvidence => {
   const systemOutputText = new Map<string, string>();
   const ready = mkdir(outputsDirectory, { recursive: true }).then(async () => {
     await Promise.all([
+      mkdir(artifactsDirectory, { recursive: true }),
       mkdir(capturesDirectory, { recursive: true }),
       mkdir(join(directory, 'comparisons'), { recursive: true }),
     ]);
@@ -355,6 +370,28 @@ export const createTestEvidence = (context: TestContext): TestEvidence => {
       visibleBounds: resolvedCapture.visibleBounds,
     });
     return resolvedCapture;
+  };
+
+  const saveBinaryEvidence = async (
+    label: string,
+    data: Buffer,
+    extension: string
+  ): Promise<string> => {
+    await ready;
+    const safeLabel = createPerEvidenceUniqueName(artifactLabels, label);
+    const safeExtension = sanitizePathSegment(extension);
+    const artifactPath = join(
+      artifactsDirectory,
+      `${safeLabel}.${safeExtension}`
+    );
+    await writeFile(artifactPath, data);
+    await log('binary evidence saved', {
+      byteLength: data.length,
+      label,
+      path: artifactPath,
+      sha256: createHash('sha256').update(data).digest('hex'),
+    });
+    return artifactPath;
   };
 
   const writeComparisonResult = async (
@@ -516,6 +553,7 @@ export const createTestEvidence = (context: TestContext): TestEvidence => {
     log,
     recordAppOutputEvent,
     recordSystemOutputEvent,
+    saveBinaryEvidence,
     release,
   };
 };

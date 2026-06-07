@@ -17,8 +17,11 @@ import {
   waitForActivityIndicatorImageState,
 } from './activity-indicator-test-helpers';
 import {
+  expectDisconnectedNoticeHidden,
+  expectDisconnectedNoticeRenderedUndimmedAtTerminalTopRight,
+  expectDisconnectedNoticeVisibleAtTerminalTopRight,
+  expectMainWindowTitle,
   runGtkTest,
-  terminalForegroundLuminanceStats,
   withTemporaryDirectory,
 } from './gtk-test-helpers';
 import { expectElementKind } from './test-helpers';
@@ -113,6 +116,8 @@ const hasReceivedHex = (
   helper.lines.some(
     (line) => line.startsWith('RX ') && line.includes(expectedHex)
   );
+
+const zmodemZrqinitPreamble = (): string => `**\x18B00000000000000`;
 
 const focusTerminal = async (app: GtkApp): Promise<void> => {
   const terminal = await app.getById('terminal_view');
@@ -249,6 +254,146 @@ describe.concurrent('elder-terms-vte serial session', () => {
     });
   });
 
+  it('exits when an active serial session window is closed', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const helper = await startSerialPtyHelper();
+      try {
+        const configPath = join(directory, 'serial.ini');
+        const serialDevicePath = join(directory, 'ttyELDERTERMS0');
+        await symlink(helper.slavePath, serialDevicePath);
+        await writeFile(
+          configPath,
+          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+          'utf8'
+        );
+
+        await runGtkTest(context, ['-c', configPath], async (app, evidence) => {
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
+          const closeButton = expectElementKind(
+            await app.getByPath('main_window.0.0.3'),
+            'button'
+          );
+          await closeButton.click();
+
+          const output = await waitForResult(
+            async () => {
+              const currentOutput = await app.output();
+              expect(currentOutput.exitCode).toBe(0);
+              expect(currentOutput.exitSignal).toBeNull();
+              return currentOutput;
+            },
+            {
+              message: 'app should exit after closing an active serial window',
+              timeoutMs: 5_000,
+            }
+          );
+          await evidence.log('active serial window close exited app', {
+            exitCode: output.exitCode,
+            exitSignal: output.exitSignal,
+          });
+        });
+      } finally {
+        await helper.close();
+      }
+    });
+  });
+
+  it('exits when an initially disconnected serial session window is closed', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'serial.ini');
+      const serialDevicePath = join(directory, 'ttyELDERTERMS0');
+      await writeFile(
+        configPath,
+        `[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+        'utf8'
+      );
+
+      await runGtkTest(context, ['-c', configPath], async (app, evidence) => {
+        await toPass(
+          async () => {
+            expect((await app.output()).stderr).toContain(
+              'serial device not found'
+            );
+          },
+          {
+            message: 'serial session should report the missing device',
+            timeoutMs: 5_000,
+          }
+        );
+        await waitForActivityIndicatorImageState(app, 'conn', 'off');
+
+        const closeButton = expectElementKind(
+          await app.getByPath('main_window.0.0.3'),
+          'button'
+        );
+        await closeButton.click();
+
+        const output = await waitForResult(
+          async () => {
+            const currentOutput = await app.output();
+            expect(currentOutput.exitCode).toBe(0);
+            expect(currentOutput.exitSignal).toBeNull();
+            return currentOutput;
+          },
+          {
+            message:
+              'app should exit after closing an initially disconnected serial window',
+            timeoutMs: 5_000,
+          }
+        );
+        await evidence.log('initially disconnected serial close exited app', {
+          exitCode: output.exitCode,
+          exitSignal: output.exitSignal,
+        });
+      });
+    });
+  });
+
+  it('auto-starts ZMODEM receive from a serial preamble by default', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const helper = await startSerialPtyHelper();
+      try {
+        const configPath = join(directory, 'serial.ini');
+        const serialDevicePath = join(directory, 'ttyELDERTERMS0');
+        await symlink(helper.slavePath, serialDevicePath);
+        await writeFile(
+          configPath,
+          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+          'utf8'
+        );
+
+        await runGtkTest(context, ['-c', configPath], async (app) => {
+          await toPass(
+            async () => {
+              expect((await app.output()).stderr).toContain(
+                'serial carrier detection unavailable'
+              );
+            },
+            {
+              message: 'serial session should start against the PTY',
+              timeoutMs: 5_000,
+            }
+          );
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
+          helper.writeCommand(`TX ${zmodemZrqinitPreamble()}`);
+
+          await toPass(
+            async () => {
+              expect(hasReceivedHex(helper, '2a2a18423031')).toBe(true);
+            },
+            {
+              message:
+                'serial session should answer auto-start ZRQINIT with ZRINIT',
+              timeoutMs: 7_000,
+            }
+          );
+        });
+      } finally {
+        await helper.close();
+      }
+    });
+  });
+
   it('reconnects when a missing serial device appears with auto_close disabled', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'serial.ini');
@@ -287,6 +432,37 @@ describe.concurrent('elder-terms-vte serial session', () => {
     });
   });
 
+  it('renders the initially disconnected serial notice above terminal dimming', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'serial.ini');
+      const serialDevicePath = join(directory, 'ttyELDERTERMS0');
+      await writeFile(
+        configPath,
+        `[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+        'utf8'
+      );
+
+      await runGtkTest(context, ['-c', configPath], async (app, evidence) => {
+        await toPass(
+          async () => {
+            expect((await app.output()).stderr).toContain(
+              'serial device not found'
+            );
+          },
+          {
+            message: 'serial session should report the missing device',
+            timeoutMs: 5_000,
+          }
+        );
+        await waitForActivityIndicatorImageState(app, 'conn', 'off');
+        await expectDisconnectedNoticeRenderedUndimmedAtTerminalTopRight(
+          app,
+          evidence
+        );
+      });
+    });
+  });
+
   it('reconnects after a serial device is lost and restored with auto_close disabled', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'serial.ini');
@@ -309,27 +485,11 @@ describe.concurrent('elder-terms-vte serial session', () => {
             throw new Error('first serial PTY helper is not running');
           }
 
-          const terminal = await app.getById('terminal_view');
+          const connectedTitle = `elder-terms: serial: ${serialDevicePath}:9600:n81n`;
           await pressKeyUntilReceived(app, activeFirstHelper, 'a', '61');
           await waitForActivityIndicatorImageState(app, 'conn', 'on');
-          activeFirstHelper.writeCommand(
-            `TX ${'SERIAL_CONN_DIM_MARKER '.repeat(60)}`
-          );
-          const connectedCapture = await waitForResult(
-            async () => {
-              const currentCapture = await terminal.capture();
-              expect(
-                terminalForegroundLuminanceStats(currentCapture).count
-              ).toBeGreaterThan(400);
-              return currentCapture;
-            },
-            {
-              message: 'connected serial terminal should render visible output',
-              timeoutMs: 5_000,
-            }
-          );
-          const connectedStats =
-            terminalForegroundLuminanceStats(connectedCapture);
+          await expectMainWindowTitle(app, connectedTitle);
+          await expectDisconnectedNoticeHidden(app);
 
           await firstHelper?.close();
           await rm(serialDevicePath, { force: true });
@@ -347,57 +507,18 @@ describe.concurrent('elder-terms-vte serial session', () => {
             }
           );
           await waitForActivityIndicatorImageState(app, 'conn', 'off');
-          const disconnectedCapture = await waitForResult(
-            async () => {
-              const currentCapture = await terminal.capture();
-              const disconnectedStats =
-                terminalForegroundLuminanceStats(currentCapture);
-              expect(disconnectedStats.count).toBeGreaterThan(400);
-              expect(disconnectedStats.contrast).toBeLessThan(
-                connectedStats.contrast * 0.85
-              );
-              return currentCapture;
-            },
-            {
-              message: 'disconnected serial terminal should be dimmed',
-              timeoutMs: 5_000,
-            }
-          );
-          const disconnectedStats =
-            terminalForegroundLuminanceStats(disconnectedCapture);
+          await expectMainWindowTitle(app, `${connectedTitle} (Disconnected)`);
+          await expectDisconnectedNoticeVisibleAtTerminalTopRight(app);
 
           secondHelper = await startSerialPtyHelper();
           await symlink(secondHelper.slavePath, serialDevicePath);
           await pressKeyUntilReceived(app, secondHelper, 'b', '62');
           await waitForActivityIndicatorImageState(app, 'conn', 'on');
-          const restoredCapture = await waitForResult(
-            async () => {
-              const currentCapture = await terminal.capture();
-              const restoredStats =
-                terminalForegroundLuminanceStats(currentCapture);
-              expect(restoredStats.count).toBeGreaterThan(400);
-              expect(restoredStats.contrast).toBeGreaterThan(
-                disconnectedStats.contrast * 1.1
-              );
-              return currentCapture;
-            },
-            {
-              message: 'reconnected serial terminal should restore brightness',
-              timeoutMs: 5_000,
-            }
-          );
-          await evidence.captureEvidence(
-            'serial terminal connected',
-            async () => connectedCapture
-          );
-          await evidence.captureEvidence(
-            'serial terminal disconnected',
-            async () => disconnectedCapture
-          );
-          await evidence.captureEvidence(
-            'serial terminal restored',
-            async () => restoredCapture
-          );
+          await expectMainWindowTitle(app, connectedTitle);
+          await expectDisconnectedNoticeHidden(app);
+          await evidence.log('serial CONN tracked device lifetime', {
+            title: connectedTitle,
+          });
         });
       } finally {
         await firstHelper?.close();

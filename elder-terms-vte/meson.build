@@ -13,6 +13,7 @@ gestament_include_dir = run_command(
 cardio_include_dir = meson.current_source_dir() / '../../cardio/include'
 libxyzm_root_dir = meson.current_source_dir() / '../../libxyzm'
 libxyzm_include_dir = libxyzm_root_dir / 'include'
+libxyzm_static_library = libxyzm_root_dir / 'build/libxyzm.a'
 libxyzm_async_static_library = libxyzm_root_dir / 'build/libxyzm_async.a'
 
 telnet_protocol_source = 'src/terminal-sessions/telnet-session/telnet-protocol.cpp'
@@ -23,6 +24,7 @@ elder_terms_sources = [
   'src/main-window.cpp',
   'src/terminal-transfer.cpp',
   'src/terminal-transfer-runner.cpp',
+  'src/terminal-zmodem-auto-start.cpp',
   'src/terminal-sessions/local-session/local-session.cpp',
   'src/terminal-sessions/serial-session/serial-device-event-monitor.cpp',
   'src/terminal-sessions/serial-session/serial-device-resolver.cpp',
@@ -104,8 +106,84 @@ terminal_transfer_runner_test = executable(
   ],
 )
 
-test('terminal-transfer-runner-test', terminal_transfer_runner_test,
-  timeout: 90)
+test('terminal-transfer-runner-unit-test', terminal_transfer_runner_test,
+  args: [
+    '--unit',
+  ])
+
+terminal_zmodem_auto_start_test = executable(
+  'terminal-zmodem-auto-start-test',
+  [
+    'tests/cpp/terminal-zmodem-auto-start-test.cpp',
+    'src/terminal-transfer.cpp',
+    'src/terminal-zmodem-auto-start.cpp',
+  ],
+)
+
+test('terminal-zmodem-auto-start-test', terminal_zmodem_auto_start_test)
+
+terminal_transfer_test_protocols = ['xmodem', 'ymodem', 'zmodem']
+terminal_transfer_test_directions = ['send', 'receive']
+terminal_transfer_test_delays = ['250', '1000', '3000']
+terminal_transfer_option_cases = [
+  ['xmodem', 'send', 'xmodem-128'],
+  ['xmodem', 'send', 'xmodem-1k'],
+  ['xmodem', 'receive', 'xmodem-checksum'],
+  ['xmodem', 'receive', 'xmodem-crc'],
+  ['ymodem', 'receive', 'ymodem-g'],
+]
+
+foreach protocol : terminal_transfer_test_protocols
+  foreach direction : terminal_transfer_test_directions
+    foreach delay : terminal_transfer_test_delays
+      test(
+        'terminal-transfer-runner-' + protocol + '-' + direction + '-' +
+          delay + 'ms',
+        terminal_transfer_runner_test,
+        args: [
+          '--transfer-case',
+          protocol,
+          direction,
+          delay,
+        ],
+        timeout: 45,
+      )
+    endforeach
+  endforeach
+endforeach
+
+foreach option_case : terminal_transfer_option_cases
+  foreach delay : terminal_transfer_test_delays
+    test(
+      'terminal-transfer-runner-' + option_case[2] + '-' +
+        option_case[1] + '-' + delay + 'ms',
+      terminal_transfer_runner_test,
+      args: [
+        '--transfer-case',
+        option_case[0],
+        option_case[1],
+        delay,
+        option_case[2],
+      ],
+      timeout: 45,
+    )
+  endforeach
+endforeach
+
+foreach direction : terminal_transfer_test_directions
+  test(
+    'terminal-transfer-runner-zmodem-resume-' + direction,
+    terminal_transfer_runner_test,
+    args: [
+      '--transfer-case',
+      'zmodem',
+      direction,
+      '250',
+      'zmodem-resume',
+    ],
+    timeout: 45,
+  )
+endforeach
 
 serial_device_resolver_test = executable(
   'serial-device-resolver-test',
@@ -169,6 +247,17 @@ test('serial-line-monitor-test', serial_line_monitor_test)
 executable(
   'serial-pty-helper',
   'tests/cpp/serial-pty-helper.cpp',
+)
+
+executable(
+  'xyzm-pause-peer',
+  'tests/cpp/xyzm-pause-peer.cpp',
+  cpp_args: [
+    '-I' + libxyzm_include_dir,
+  ],
+  link_args: [
+    libxyzm_static_library,
+  ],
 )
 
 configure_file(

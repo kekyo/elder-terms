@@ -7,8 +7,12 @@ import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import {
+  assertTerminalCaptureMatches,
+  assertDisconnectedNoticeMatches,
+  expectDisconnectedNoticeHidden,
+  expectMainWindowTitle,
+  localTerminalDisconnectedDimPath,
   runGtkTest,
-  terminalForegroundLuminanceStats,
   withTemporaryDirectory,
 } from './gtk-test-helpers';
 
@@ -18,6 +22,11 @@ const { PNG } = require('pngjs') as typeof import('pngjs');
 interface ExitingShellFixture {
   readonly markerPath: string;
   readonly shellPath: string;
+}
+
+interface TriggeredOutputShellFixture {
+  readonly shellPath: string;
+  readonly triggerPath: string;
 }
 
 const shellQuote = (value: string): string =>
@@ -65,7 +74,7 @@ const createOutputShellFixture = async (directory: string): Promise<string> => {
   const output = 'LOCAL_OUTPUT_MARKER '.repeat(40);
   await writeFile(
     shellPath,
-    `#!/bin/sh\nprintf '%s\\n' ${shellQuote(output)}\nexit 0\n`,
+    `#!/bin/sh\nprintf '%s\\n' ${shellQuote(output)}\nsleep 1\nexit 0\n`,
     'utf8'
   );
   await chmod(shellPath, 0o755);
@@ -74,15 +83,19 @@ const createOutputShellFixture = async (directory: string): Promise<string> => {
 
 const createRepeatingOutputShellFixture = async (
   directory: string
-): Promise<string> => {
+): Promise<TriggeredOutputShellFixture> => {
+  const triggerPath = join(directory, 'repeating-output-trigger.txt');
   const shellPath = join(directory, 'repeating-output-shell.sh');
   await writeFile(
     shellPath,
-    `#!/bin/sh\ni=0\nwhile [ "$i" -lt 10 ]; do\n  printf 'LOCAL_BLINK_MARKER %s\\n' "$i"\n  i=$((i + 1))\n  sleep 0.05\ndone\nsleep 1\nexit 0\n`,
+    `#!/bin/sh\nwhile [ ! -f ${shellQuote(triggerPath)} ]; do\n  sleep 0.02\ndone\ni=0\nwhile [ "$i" -lt 200 ]; do\n  printf 'LOCAL_BLINK_MARKER %s\\n' "$i"\n  i=$((i + 1))\n  sleep 0.03\ndone\nsleep 1\nexit 0\n`,
     'utf8'
   );
   await chmod(shellPath, 0o755);
-  return shellPath;
+  return {
+    shellPath,
+    triggerPath,
+  };
 };
 
 const createInputShellFixture = async (
@@ -276,42 +289,15 @@ describe.concurrent('elder-terms-vte local session', () => {
         context,
         ['-c', configPath],
         async (app, evidence) => {
-          const terminal = await app.getById('terminal_view');
+          const connectedTitle = 'elder-terms: local terminal';
           await waitForActivityIndicatorImageState(app, 'conn', 'on');
-          const connectedCapture = await waitForResult(
-            async () => {
-              const currentCapture = await terminal.capture();
-              expect(
-                terminalForegroundLuminanceStats(currentCapture).count
-              ).toBeGreaterThan(400);
-              return currentCapture;
-            },
-            {
-              message: 'connected local terminal should render visible output',
-              timeoutMs: 5_000,
-            }
-          );
-          const connectedStats =
-            terminalForegroundLuminanceStats(connectedCapture);
+          await expectMainWindowTitle(app, connectedTitle);
+          await expectDisconnectedNoticeHidden(app);
 
           await waitForShellExit(shell.markerPath);
           await waitForActivityIndicatorImageState(app, 'conn', 'off');
-          const disconnectedCapture = await waitForResult(
-            async () => {
-              const currentCapture = await terminal.capture();
-              const disconnectedStats =
-                terminalForegroundLuminanceStats(currentCapture);
-              expect(disconnectedStats.count).toBeGreaterThan(400);
-              expect(disconnectedStats.contrast).toBeLessThan(
-                connectedStats.contrast * 0.85
-              );
-              return currentCapture;
-            },
-            {
-              message: 'disconnected local terminal should be dimmed',
-              timeoutMs: 5_000,
-            }
-          );
+          await expectMainWindowTitle(app, `${connectedTitle} (Disconnected)`);
+          await assertDisconnectedNoticeMatches(app, evidence);
           await focusTerminal(app);
           await app.input.pressKey('z');
           await delay(300);
@@ -320,21 +306,40 @@ describe.concurrent('elder-terms-vte local session', () => {
           const output = await app.output();
           expect(output.exitCode).toBeNull();
           expect(output.exitSignal).toBeNull();
-          await evidence.captureEvidence(
-            'local terminal connected',
-            async () => connectedCapture
-          );
-          await evidence.captureEvidence(
-            'local terminal disconnected',
-            async () => disconnectedCapture
-          );
           await evidence.log('local CONN tracked shell lifetime', {
             exitCode: output.exitCode,
             exitSignal: output.exitSignal,
-            connectedLuminance: connectedStats,
-            disconnectedLuminance:
-              terminalForegroundLuminanceStats(disconnectedCapture),
           });
+        },
+        {
+          env: {
+            SHELL: shell.shellPath,
+          },
+        }
+      );
+    });
+  });
+
+  it('dims the terminal image after the local shell disconnects', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const shell = await createDelayedExitShellFixture(directory);
+      const configPath = join(directory, 'auto-close-disabled.ini');
+      await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
+
+      await runGtkTest(
+        context,
+        ['-c', configPath],
+        async (app, evidence) => {
+          const terminal = await app.getById('terminal_view');
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
+          await waitForShellExit(shell.markerPath);
+          await waitForActivityIndicatorImageState(app, 'conn', 'off');
+          await assertTerminalCaptureMatches(
+            terminal,
+            'local-terminal-disconnected-dim',
+            localTerminalDisconnectedDimPath,
+            evidence
+          );
         },
         {
           env: {
@@ -383,7 +388,7 @@ describe.concurrent('elder-terms-vte local session', () => {
 
   it('blinks RD when local shell output is read from the PTY', async (context) => {
     await withTemporaryDirectory(async (directory) => {
-      const shellPath = await createRepeatingOutputShellFixture(directory);
+      const shell = await createRepeatingOutputShellFixture(directory);
       const configPath = join(directory, 'auto-close-disabled.ini');
       await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
 
@@ -391,13 +396,14 @@ describe.concurrent('elder-terms-vte local session', () => {
         context,
         ['-c', configPath],
         async (app) => {
+          await writeFile(shell.triggerPath, 'start', 'utf8');
           await waitForActivityIndicatorImageState(app, 'rd', 'on');
           await delay(1_000);
           await waitForActivityIndicatorImageState(app, 'rd', 'off');
         },
         {
           env: {
-            SHELL: shellPath,
+            SHELL: shell.shellPath,
           },
         }
       );

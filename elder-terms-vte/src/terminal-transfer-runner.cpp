@@ -7,6 +7,7 @@
 #include <deque>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -21,6 +22,7 @@ static constexpr std::uint32_t transfer_block_timeout_ms = 5000;
 static constexpr std::uint32_t transfer_retry_limit = 8;
 static constexpr std::uint8_t transfer_pad_byte = 0x1a;
 static constexpr const char *fallback_receive_name = "received.bin";
+static constexpr std::uint64_t transfer_eta_minimum_elapsed_ms = 1000;
 
 struct GObjectDeleter {
   void operator()(void *object) const {
@@ -41,16 +43,67 @@ using GCharPtr = std::unique_ptr<char, GFreeDeleter>;
 
 struct TransferProgressState {
   TerminalTransferStatusCallback status;
+  TerminalTransferProgressCallback progress;
+  xyzm_async_now_ms_cb now_ms;
+  TerminalTransferProtocol protocol = TerminalTransferProtocol::zmodem;
   TerminalTransferDirection direction = TerminalTransferDirection::send;
   std::string file_name = fallback_receive_name;
   std::optional<std::uint64_t> total_bytes;
   std::uint64_t transferred_bytes = 0;
+  std::uint64_t eta_baseline_transferred_bytes = 0;
+  std::optional<std::uint64_t> eta_baseline_time_ms;
+
+  void reset_eta_baseline(std::uint64_t transferred) {
+    eta_baseline_transferred_bytes = transferred;
+    eta_baseline_time_ms = now_ms ? std::optional<std::uint64_t>(now_ms())
+                                  : std::nullopt;
+  }
+
+  std::optional<std::uint64_t> eta_seconds() const {
+    if (protocol == TerminalTransferProtocol::xmodem ||
+        !total_bytes.has_value() || *total_bytes == 0) {
+      return std::nullopt;
+    }
+    if (transferred_bytes >= *total_bytes) {
+      return 0;
+    }
+    if (!eta_baseline_time_ms.has_value() || !now_ms) {
+      return std::nullopt;
+    }
+
+    const std::uint64_t now = now_ms();
+    if (now < *eta_baseline_time_ms) {
+      return std::nullopt;
+    }
+    return estimate_transfer_eta_seconds(eta_baseline_transferred_bytes,
+                                         transferred_bytes, *total_bytes,
+                                         now - *eta_baseline_time_ms);
+  }
 
   void publish() const {
     if (status) {
       status(format_transfer_status(file_name, transferred_bytes,
-                                    total_bytes));
+                                    total_bytes, eta_seconds()));
     }
+    if (!progress) {
+      return;
+    }
+    if (protocol == TerminalTransferProtocol::xmodem ||
+        !total_bytes.has_value() || *total_bytes == 0) {
+      progress(TerminalTransferProgress{
+          .mode = TerminalTransferProgressMode::indeterminate,
+          .fraction = std::nullopt,
+      });
+      return;
+    }
+    const double fraction =
+        std::clamp(static_cast<double>(transferred_bytes) /
+                       static_cast<double>(*total_bytes),
+                   0.0, 1.0);
+    progress(TerminalTransferProgress{
+        .mode = TerminalTransferProgressMode::determinate,
+        .fraction = fraction,
+    });
   }
 };
 
@@ -240,6 +293,46 @@ static std::uint64_t clamped_percent(std::uint64_t transferred,
   return percent > 100 ? 100 : percent;
 }
 
+static std::string format_eta_duration(std::uint64_t eta_seconds) {
+  const std::uint64_t minutes = eta_seconds / 60;
+  const std::uint64_t seconds = eta_seconds % 60;
+
+  char buffer[64];
+  std::snprintf(buffer, sizeof(buffer), "%02llu:%02llu",
+                static_cast<unsigned long long>(minutes),
+                static_cast<unsigned long long>(seconds));
+  return buffer;
+}
+
+std::optional<std::uint64_t> estimate_transfer_eta_seconds(
+    std::uint64_t baseline_transferred_bytes,
+    std::uint64_t transferred_bytes, std::uint64_t total_bytes,
+    std::uint64_t elapsed_ms) {
+  if (total_bytes == 0) {
+    return std::nullopt;
+  }
+  if (transferred_bytes >= total_bytes) {
+    return 0;
+  }
+  if (elapsed_ms < transfer_eta_minimum_elapsed_ms ||
+      transferred_bytes <= baseline_transferred_bytes) {
+    return std::nullopt;
+  }
+
+  const std::uint64_t progressed_bytes =
+      transferred_bytes - baseline_transferred_bytes;
+  const std::uint64_t remaining_bytes = total_bytes - transferred_bytes;
+  const long double estimated_seconds =
+      std::ceil((static_cast<long double>(remaining_bytes) *
+                 static_cast<long double>(elapsed_ms)) /
+                (static_cast<long double>(progressed_bytes) * 1000.0L));
+  if (estimated_seconds >=
+      static_cast<long double>(std::numeric_limits<std::uint64_t>::max())) {
+    return std::numeric_limits<std::uint64_t>::max();
+  }
+  return static_cast<std::uint64_t>(estimated_seconds);
+}
+
 std::string sanitize_transfer_file_name(const std::string &name,
                                         const std::string &fallback) {
   const std::size_t separator = name.find_last_of("/\\");
@@ -260,7 +353,8 @@ std::string sanitize_transfer_file_name(const std::string &name,
 
 std::string format_transfer_status(
     const std::string &file_name, std::uint64_t transferred_bytes,
-    std::optional<std::uint64_t> total_bytes) {
+    std::optional<std::uint64_t> total_bytes,
+    std::optional<std::uint64_t> eta_seconds) {
   std::string result = file_name.empty() ? fallback_receive_name : file_name;
   result += " ";
   result += format_byte_count(transferred_bytes);
@@ -269,7 +363,12 @@ std::string format_transfer_status(
     result += format_byte_count(*total_bytes);
     result += " (";
     result += std::to_string(clamped_percent(transferred_bytes, *total_bytes));
-    result += "%)";
+    result += "%";
+    if (eta_seconds.has_value()) {
+      result += ", ETA ";
+      result += format_eta_duration(*eta_seconds);
+    }
+    result += ")";
   }
   return result;
 }
@@ -288,6 +387,7 @@ static void update_progress_file(TransferProgressState *state,
   }
   state->file_name = next_name;
   state->total_bytes = info.size_bytes;
+  state->reset_eta_baseline(state->transferred_bytes);
   state->publish();
 }
 
@@ -308,24 +408,29 @@ make_transfer_observer(TransferProgressState *progress) {
     if (event.kind == XYZM_TRANSFER_EVENT_FILE_STARTED &&
         event.file_info.has_value()) {
       update_progress_file(progress, event.file_info->get());
-      return;
-    }
-    if (event.kind == XYZM_TRANSFER_EVENT_PROGRESS) {
-      update_progress_delta(progress, event.payload_delta);
+    } else if (event.kind == XYZM_TRANSFER_EVENT_PROGRESS &&
+               progress != nullptr && event.payload_delta != 0) {
+      progress->publish();
     }
   };
   return observer;
 }
 
-static xyzm_async_link_ops_t
-make_link_ops(TerminalTransferTransport *transport) {
+static xyzm_async_link_ops_t make_link_ops(TerminalTransferTransport *transport,
+                                           TransferProgressState *progress) {
   xyzm_async_link_ops_t link;
-  link.send = [transport](std::span<const std::uint8_t> bytes,
-                          std::uint32_t timeout_ms, std::size_t &written_len,
-                          cardio::cancellation cancellation)
+  link.send = [transport, progress](std::span<const std::uint8_t> bytes,
+                                    std::uint32_t timeout_ms,
+                                    std::size_t &written_len,
+                                    cardio::cancellation cancellation)
       -> cardio::promise<void> {
     co_await transport->send(bytes, timeout_ms, written_len,
                              std::move(cancellation));
+    if (progress != nullptr &&
+        progress->direction == TerminalTransferDirection::send &&
+        progress->total_bytes.has_value() && written_len > 0) {
+      progress->publish();
+    }
     co_return;
   };
   link.recv = [transport](std::span<std::uint8_t> bytes,
@@ -387,6 +492,7 @@ static xyzm_async_source_ops_t make_source_ops(SendSourceState *state) {
     if (read_len == 0) {
       co_return xyzm_async_status_t::end;
     }
+    update_progress_delta(state->progress, read_len);
     co_return xyzm_async_status_t::ok;
   };
   source.seek = [state](std::uint64_t offset,
@@ -410,7 +516,12 @@ static xyzm_async_source_ops_t make_source_ops(SendSourceState *state) {
       throw xyzm_async_io_error(message);
     }
     if (state->progress != nullptr) {
+      const std::uint64_t previous_transferred =
+          state->progress->transferred_bytes;
       state->progress->transferred_bytes = offset;
+      if (previous_transferred == 0 && offset > 0) {
+        state->progress->reset_eta_baseline(offset);
+      }
       state->progress->publish();
     }
     co_return;
@@ -472,6 +583,7 @@ static xyzm_async_sink_ops_t make_sink_ops(ReceiveSinkState *state) {
       state->progress->file_name = file_name;
       state->progress->total_bytes = info.size_bytes;
       state->progress->transferred_bytes = resume_offset;
+      state->progress->reset_eta_baseline(resume_offset);
       state->progress->publish();
     }
     co_return;
@@ -495,6 +607,7 @@ static xyzm_async_sink_ops_t make_sink_ops(ReceiveSinkState *state) {
       remaining = remaining.subspan(written);
       cancellation.throw_if_cancellation_requested();
     }
+    update_progress_delta(state->progress, bytes.size());
     co_return;
   };
   sink.end = [state](const xyzm_async_file_info_t &, std::exception_ptr error,
@@ -556,16 +669,6 @@ static xyzm_ymodem_opts_t default_ymodem_send_opts() {
   };
 }
 
-static xyzm_ymodem_opts_t default_ymodem_receive_opts() {
-  return {
-      .handshake_timeout_ms = transfer_handshake_timeout_ms,
-      .block_timeout_ms = transfer_block_timeout_ms,
-      .retry_limit = transfer_retry_limit,
-      .pad_byte = transfer_pad_byte,
-      .variant = XYZM_YMODEM_VARIANT_STANDARD,
-  };
-}
-
 static xyzm_zmodem_opts_t default_zmodem_opts() {
   return {
       .handshake_timeout_ms = transfer_handshake_timeout_ms,
@@ -578,6 +681,105 @@ static xyzm_zmodem_opts_t default_zmodem_opts() {
   };
 }
 
+static xyzm_xmodem_packet_size_t to_libxyzm_xmodem_packet_size(
+    TerminalTransferXmodemPacketSize packet_size) {
+  if (packet_size == TerminalTransferXmodemPacketSize::bytes_128) {
+    return XYZM_XMODEM_PACKET_SIZE_128;
+  }
+  if (packet_size == TerminalTransferXmodemPacketSize::bytes_1024) {
+    return XYZM_XMODEM_PACKET_SIZE_1K;
+  }
+  throw xyzm_async_argument_error("unknown XMODEM packet size");
+}
+
+static xyzm_xmodem_checksum_mode_t to_libxyzm_xmodem_send_checksum_mode(
+    TerminalTransferXmodemChecksumMode checksum_mode) {
+  if (checksum_mode == TerminalTransferXmodemChecksumMode::automatic) {
+    return XYZM_XMODEM_CHECKSUM_MODE_AUTO;
+  }
+  if (checksum_mode == TerminalTransferXmodemChecksumMode::checksum) {
+    return XYZM_XMODEM_CHECKSUM_MODE_CHECKSUM;
+  }
+  if (checksum_mode == TerminalTransferXmodemChecksumMode::crc) {
+    return XYZM_XMODEM_CHECKSUM_MODE_CRC;
+  }
+  throw xyzm_async_argument_error("unknown XMODEM checksum mode");
+}
+
+static xyzm_xmodem_checksum_mode_t to_libxyzm_xmodem_receive_checksum_mode(
+    TerminalTransferXmodemChecksumMode checksum_mode) {
+  if (checksum_mode == TerminalTransferXmodemChecksumMode::automatic ||
+      checksum_mode == TerminalTransferXmodemChecksumMode::crc) {
+    return XYZM_XMODEM_CHECKSUM_MODE_CRC;
+  }
+  if (checksum_mode == TerminalTransferXmodemChecksumMode::checksum) {
+    return XYZM_XMODEM_CHECKSUM_MODE_CHECKSUM;
+  }
+  throw xyzm_async_argument_error("unknown XMODEM checksum mode");
+}
+
+static xyzm_ymodem_variant_t to_libxyzm_ymodem_send_variant(
+    TerminalTransferYmodemVariant variant) {
+  if (variant == TerminalTransferYmodemVariant::automatic) {
+    return XYZM_YMODEM_VARIANT_AUTO;
+  }
+  if (variant == TerminalTransferYmodemVariant::standard) {
+    return XYZM_YMODEM_VARIANT_STANDARD;
+  }
+  if (variant == TerminalTransferYmodemVariant::g) {
+    return XYZM_YMODEM_VARIANT_G;
+  }
+  throw xyzm_async_argument_error("unknown YMODEM variant");
+}
+
+static xyzm_ymodem_variant_t to_libxyzm_ymodem_receive_variant(
+    TerminalTransferYmodemVariant variant) {
+  if (variant == TerminalTransferYmodemVariant::automatic ||
+      variant == TerminalTransferYmodemVariant::standard) {
+    return XYZM_YMODEM_VARIANT_STANDARD;
+  }
+  if (variant == TerminalTransferYmodemVariant::g) {
+    return XYZM_YMODEM_VARIANT_G;
+  }
+  throw xyzm_async_argument_error("unknown YMODEM variant");
+}
+
+xyzm_xmodem_send_opts_t terminal_transfer_xmodem_send_options(
+    const TerminalTransferRequest &request) {
+  xyzm_xmodem_send_opts_t options = default_xmodem_send_opts();
+  options.checksum_mode =
+      to_libxyzm_xmodem_send_checksum_mode(
+          request.options.xmodem_checksum_mode);
+  options.packet_size =
+      to_libxyzm_xmodem_packet_size(request.options.xmodem_packet_size);
+  return options;
+}
+
+xyzm_xmodem_receive_opts_t terminal_transfer_xmodem_receive_options(
+    const TerminalTransferRequest &request) {
+  xyzm_xmodem_receive_opts_t options = default_xmodem_receive_opts();
+  options.checksum_mode =
+      to_libxyzm_xmodem_receive_checksum_mode(
+          request.options.xmodem_checksum_mode);
+  return options;
+}
+
+xyzm_ymodem_opts_t terminal_transfer_ymodem_send_options(
+    const TerminalTransferRequest &request) {
+  xyzm_ymodem_opts_t options = default_ymodem_send_opts();
+  options.variant = to_libxyzm_ymodem_send_variant(
+      request.options.ymodem_variant);
+  return options;
+}
+
+xyzm_ymodem_opts_t terminal_transfer_ymodem_receive_options(
+    const TerminalTransferRequest &request) {
+  xyzm_ymodem_opts_t options = default_ymodem_send_opts();
+  options.variant = to_libxyzm_ymodem_receive_variant(
+      request.options.ymodem_variant);
+  return options;
+}
+
 static cardio::promise<void>
 run_send_async(const TerminalTransferRequest &request,
                xyzm_async_link_ops_t *link,
@@ -587,14 +789,16 @@ run_send_async(const TerminalTransferRequest &request,
                cardio::cancellation cancellation) {
   xyzm_async_source_ops_t source = make_source_ops(source_state);
   if (request.protocol == TerminalTransferProtocol::xmodem) {
-    xyzm_xmodem_send_opts_t options = default_xmodem_send_opts();
+    xyzm_xmodem_send_opts_t options =
+        terminal_transfer_xmodem_send_options(request);
     xyzm_xmodem_send_async_request_t lib_request{link, &source, &options,
                                                  observer};
     co_await xyzm_xmodem_send_async(&lib_request, report, cancellation);
     co_return;
   }
   if (request.protocol == TerminalTransferProtocol::ymodem) {
-    xyzm_ymodem_opts_t options = default_ymodem_send_opts();
+    xyzm_ymodem_opts_t options =
+        terminal_transfer_ymodem_send_options(request);
     xyzm_ymodem_send_async_request_t lib_request{link, &source, &options,
                                                  observer};
     co_await xyzm_ymodem_send_batch_async(&lib_request, report,
@@ -617,14 +821,16 @@ run_receive_async(const TerminalTransferRequest &request,
                   cardio::cancellation cancellation) {
   xyzm_async_sink_ops_t sink = make_sink_ops(sink_state);
   if (request.protocol == TerminalTransferProtocol::xmodem) {
-    xyzm_xmodem_receive_opts_t options = default_xmodem_receive_opts();
+    xyzm_xmodem_receive_opts_t options =
+        terminal_transfer_xmodem_receive_options(request);
     xyzm_xmodem_receive_async_request_t lib_request{link, &sink, &options,
                                                     observer};
     co_await xyzm_xmodem_receive_async(&lib_request, report, cancellation);
     co_return;
   }
   if (request.protocol == TerminalTransferProtocol::ymodem) {
-    xyzm_ymodem_opts_t options = default_ymodem_receive_opts();
+    xyzm_ymodem_opts_t options =
+        terminal_transfer_ymodem_receive_options(request);
     xyzm_ymodem_receive_async_request_t lib_request{link, &sink, &options,
                                                     observer};
     co_await xyzm_ymodem_receive_batch_async(&lib_request, report,
@@ -653,10 +859,15 @@ run_terminal_transfer_async(TerminalTransferRequest request,
 
   TransferProgressState progress{
       .status = request.status,
+      .progress = request.progress,
+      .now_ms = transport.now_ms,
+      .protocol = request.protocol,
       .direction = request.direction,
       .file_name = fallback_receive_name,
       .total_bytes = std::nullopt,
       .transferred_bytes = 0,
+      .eta_baseline_transferred_bytes = 0,
+      .eta_baseline_time_ms = std::nullopt,
   };
   if (request.status) {
     request.status(std::string("Starting ") +
@@ -665,8 +876,14 @@ run_terminal_transfer_async(TerminalTransferRequest request,
                         ? " send"
                         : " receive"));
   }
+  if (request.progress) {
+    request.progress(TerminalTransferProgress{
+        .mode = TerminalTransferProgressMode::indeterminate,
+        .fraction = std::nullopt,
+    });
+  }
 
-  xyzm_async_link_ops_t link = make_link_ops(&transport);
+  xyzm_async_link_ops_t link = make_link_ops(&transport, &progress);
   xyzm_async_transfer_observer_t observer = make_transfer_observer(&progress);
   xyzm_async_transfer_report_t report{};
 

@@ -42,6 +42,7 @@ struct TransferMenuAction {
       elder_terms::TerminalTransferProtocol::zmodem;
   elder_terms::TerminalTransferDirection direction =
       elder_terms::TerminalTransferDirection::send;
+  elder_terms::TerminalTransferOptions options;
 };
 
 static void close_settings_dialog(ApplicationState *state);
@@ -60,6 +61,15 @@ static void update_application_terminal_presentation(
   elder_terms::set_main_window_transfer_button_sensitive(
       state->main_window,
       state->connection_active && !state->transfer_active);
+}
+
+static void set_application_transfer_progress_visible(ApplicationState *state,
+                                                      bool active) {
+  if (state == nullptr) {
+    return;
+  }
+  elder_terms::set_main_window_transfer_progress_visible(state->main_window,
+                                                         active);
 }
 
 static void set_application_transfer_active(ApplicationState *state,
@@ -85,8 +95,7 @@ static void set_application_indicator_state(
 
   if (indicator == elder_terms::ActivityIndicatorId::conn) {
     state->connection_active = active;
-    elder_terms::set_main_window_indicator_state(state->main_window,
-                                                 indicator, active);
+    elder_terms::set_main_window_connection_active(state->main_window, active);
     update_application_terminal_presentation(state);
     return;
   }
@@ -112,6 +121,8 @@ static void restore_terminal_focus(ApplicationState *state) {
 static void on_main_window_destroy(GtkWidget *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
   state->window = nullptr;
+  elder_terms::set_main_window_transfer_progress_visible(state->main_window,
+                                                         false);
   elder_terms::deactivate_main_window_activity_indicators(state->main_window);
   close_settings_dialog(state);
   elder_terms::stop_terminal_session(state->session_state);
@@ -178,6 +189,9 @@ static void apply_runtime_settings(ApplicationState *state,
       state->main_window, connection_profile.kind);
   elder_terms::apply_terminal_session_connection_profile(
       state->session_state, connection_profile);
+  elder_terms::set_terminal_session_zmodem_autostart(
+      state->session_state,
+      elder_terms::transfer_zmodem_autostart(state->settings_store));
   elder_terms::set_main_window_transfer_button_visible(
       state->main_window,
       elder_terms::terminal_session_supports_transfer(state->session_state));
@@ -315,8 +329,8 @@ static void set_transfer_dialog_initial_folder(ApplicationState *state,
 static std::vector<std::string> choose_transfer_files(
     ApplicationState *state, elder_terms::TerminalTransferProtocol protocol) {
   std::vector<std::string> uris;
-  if (state->test_options.transfer_source_uri.has_value()) {
-    uris.push_back(*state->test_options.transfer_source_uri);
+  if (!state->test_options.transfer_source_uris.empty()) {
+    uris = state->test_options.transfer_source_uris;
     return uris;
   }
 
@@ -360,14 +374,21 @@ static bool start_transfer_request(ApplicationState *state,
       .direction = action.direction,
       .base_path = elder_terms::transfer_base_path(state->settings_store),
       .source_file_uris = std::move(source_uris),
+      .options = action.options,
       .active =
           [state](bool active) {
             set_application_transfer_active(state, active);
+            set_application_transfer_progress_visible(state, active);
           },
       .status =
           [state](const std::string &status) {
             elder_terms::set_main_window_status_text(state->main_window,
                                                      status);
+          },
+      .progress =
+          [state](elder_terms::TerminalTransferProgress progress) {
+            elder_terms::set_main_window_transfer_progress(state->main_window,
+                                                           progress);
           },
       .finished =
           [state](bool) {
@@ -402,15 +423,62 @@ static void on_transfer_menu_item_activate(GtkMenuItem *item,
   }
 }
 
+static void start_zmodem_auto_transfer(
+    ApplicationState *state,
+    elder_terms::TerminalTransferDirection direction) {
+  if (state == nullptr || !state->connection_active || state->transfer_active ||
+      !elder_terms::transfer_zmodem_autostart(state->settings_store)) {
+    return;
+  }
+
+  TransferMenuAction action{
+      .protocol = elder_terms::TerminalTransferProtocol::zmodem,
+      .direction = direction,
+      .options = elder_terms::TerminalTransferOptions{},
+  };
+
+  std::vector<std::string> source_uris;
+  if (direction == elder_terms::TerminalTransferDirection::send) {
+    source_uris = choose_transfer_files(
+        state, elder_terms::TerminalTransferProtocol::zmodem);
+    if (source_uris.empty()) {
+      return;
+    }
+  }
+
+  if (!start_transfer_request(state, action, std::move(source_uris))) {
+    elder_terms::set_main_window_status_text(state->main_window,
+                                             "Transfer unavailable");
+  }
+}
+
+static elder_terms::TerminalTransferOptions make_xmodem_transfer_options(
+    elder_terms::TerminalTransferXmodemPacketSize packet_size,
+    elder_terms::TerminalTransferXmodemChecksumMode checksum_mode) {
+  elder_terms::TerminalTransferOptions options;
+  options.xmodem_packet_size = packet_size;
+  options.xmodem_checksum_mode = checksum_mode;
+  return options;
+}
+
+static elder_terms::TerminalTransferOptions make_ymodem_transfer_options(
+    elder_terms::TerminalTransferYmodemVariant variant) {
+  elder_terms::TerminalTransferOptions options;
+  options.ymodem_variant = variant;
+  return options;
+}
+
 static GtkWidget *create_transfer_menu_item(
     ApplicationState *state, const char *id, const char *label,
     elder_terms::TerminalTransferProtocol protocol,
-    elder_terms::TerminalTransferDirection direction) {
+    elder_terms::TerminalTransferDirection direction,
+    elder_terms::TerminalTransferOptions options) {
   GtkWidget *item = gtk_menu_item_new_with_label(label);
   gestament_gtk_assign_accessible_id(item, id);
   auto *action = new TransferMenuAction{
       .protocol = protocol,
       .direction = direction,
+      .options = options,
   };
   g_object_set_data_full(G_OBJECT(item), "elder-terms-transfer-action",
                          action,
@@ -424,43 +492,81 @@ static GtkWidget *create_transfer_menu_item(
 
 static void install_transfer_menu(ApplicationState *state) {
   GtkWidget *menu = gtk_menu_new();
+
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
           state, "transfer_zmodem_send_item", "ZMODEM (send)",
           elder_terms::TerminalTransferProtocol::zmodem,
-          elder_terms::TerminalTransferDirection::send));
+          elder_terms::TerminalTransferDirection::send,
+          elder_terms::TerminalTransferOptions{}));
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
           state, "transfer_ymodem_send_item", "YMODEM (send)",
           elder_terms::TerminalTransferProtocol::ymodem,
-          elder_terms::TerminalTransferDirection::send));
+          elder_terms::TerminalTransferDirection::send,
+          elder_terms::TerminalTransferOptions{}));
+  gtk_menu_shell_append(
+      GTK_MENU_SHELL(menu),
+      create_transfer_menu_item(
+          state, "transfer_xmodem_1k_send_item", "XMODEM 1K (send)",
+          elder_terms::TerminalTransferProtocol::xmodem,
+          elder_terms::TerminalTransferDirection::send,
+          make_xmodem_transfer_options(
+              elder_terms::TerminalTransferXmodemPacketSize::bytes_1024,
+              elder_terms::TerminalTransferXmodemChecksumMode::automatic)));
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
           state, "transfer_xmodem_send_item", "XMODEM (send)",
           elder_terms::TerminalTransferProtocol::xmodem,
-          elder_terms::TerminalTransferDirection::send));
+          elder_terms::TerminalTransferDirection::send,
+          make_xmodem_transfer_options(
+              elder_terms::TerminalTransferXmodemPacketSize::bytes_128,
+              elder_terms::TerminalTransferXmodemChecksumMode::automatic)));
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), gtk_separator_menu_item_new());
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
           state, "transfer_zmodem_receive_item", "ZMODEM (receive)",
           elder_terms::TerminalTransferProtocol::zmodem,
-          elder_terms::TerminalTransferDirection::receive));
+          elder_terms::TerminalTransferDirection::receive,
+          elder_terms::TerminalTransferOptions{}));
+  gtk_menu_shell_append(
+      GTK_MENU_SHELL(menu),
+      create_transfer_menu_item(
+          state, "transfer_ymodem_g_receive_item", "YMODEM-g (receive)",
+          elder_terms::TerminalTransferProtocol::ymodem,
+          elder_terms::TerminalTransferDirection::receive,
+          make_ymodem_transfer_options(
+              elder_terms::TerminalTransferYmodemVariant::g)));
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
           state, "transfer_ymodem_receive_item", "YMODEM (receive)",
           elder_terms::TerminalTransferProtocol::ymodem,
-          elder_terms::TerminalTransferDirection::receive));
+          elder_terms::TerminalTransferDirection::receive,
+          make_ymodem_transfer_options(
+              elder_terms::TerminalTransferYmodemVariant::standard)));
+  gtk_menu_shell_append(
+      GTK_MENU_SHELL(menu),
+      create_transfer_menu_item(
+          state, "transfer_xmodem_crc_receive_item", "XMODEM CRC (receive)",
+          elder_terms::TerminalTransferProtocol::xmodem,
+          elder_terms::TerminalTransferDirection::receive,
+          make_xmodem_transfer_options(
+              elder_terms::TerminalTransferXmodemPacketSize::bytes_128,
+              elder_terms::TerminalTransferXmodemChecksumMode::crc)));
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
           state, "transfer_xmodem_receive_item", "XMODEM (receive)",
           elder_terms::TerminalTransferProtocol::xmodem,
-          elder_terms::TerminalTransferDirection::receive));
+          elder_terms::TerminalTransferDirection::receive,
+          make_xmodem_transfer_options(
+              elder_terms::TerminalTransferXmodemPacketSize::bytes_128,
+              elder_terms::TerminalTransferXmodemChecksumMode::checksum)));
   gtk_widget_show_all(menu);
   gtk_menu_button_set_popup(GTK_MENU_BUTTON(state->main_window->transfer_button),
                             menu);
@@ -544,7 +650,14 @@ int main(int argc, char **argv) {
           [&app_state](elder_terms::ActivityIndicatorId indicator, bool active) {
             set_application_indicator_state(&app_state, indicator, active);
           },
+      .zmodem_auto_start =
+          [&app_state](elder_terms::TerminalTransferDirection direction) {
+            start_zmodem_auto_transfer(&app_state, direction);
+          },
     });
+  elder_terms::set_terminal_session_zmodem_autostart(
+      app_state.session_state,
+      elder_terms::transfer_zmodem_autostart(app_state.settings_store));
   install_transfer_menu(&app_state);
   elder_terms::set_main_window_transfer_button_visible(
       &*main_window,
@@ -587,7 +700,11 @@ int main(int argc, char **argv) {
       std::cerr << "Warning: failed to start terminal session" << '\n';
     }
   }
-  if (session_started && app_state.auto_close) {
+  if (launch_options.test.fixture) {
+    set_application_indicator_state(&app_state,
+                                    elder_terms::ActivityIndicatorId::conn,
+                                    true);
+  } else if (session_started && app_state.auto_close) {
     set_application_indicator_state(&app_state,
                                     elder_terms::ActivityIndicatorId::conn,
                                     true);

@@ -11,6 +11,9 @@ static constexpr unsigned char telnet_wont = 252;
 static constexpr unsigned char telnet_do = 253;
 static constexpr unsigned char telnet_dont = 254;
 static constexpr unsigned char telnet_iac = 255;
+static constexpr unsigned char telnet_nul = 0;
+static constexpr unsigned char telnet_lf = 10;
+static constexpr unsigned char telnet_cr = 13;
 static constexpr unsigned char telnet_option_binary = 0;
 static constexpr unsigned char telnet_option_echo = 1;
 static constexpr unsigned char telnet_option_suppress_go_ahead = 3;
@@ -26,6 +29,50 @@ static void append_escaped_byte(TelnetBytes *bytes, unsigned char value) {
 static TelnetBytes negotiation_response(unsigned char command,
                                         unsigned char option) {
   return TelnetBytes{telnet_iac, command, option};
+}
+
+void TelnetProtocol::handle_data_byte(unsigned char byte,
+                                      TelnetProtocolResult *result) {
+  if (byte == telnet_iac) {
+    state = ParseState::command;
+    return;
+  }
+
+  if (remote_binary_enabled) {
+    result->terminal_data.push_back(byte);
+    return;
+  }
+
+  if (byte == telnet_cr) {
+    state = ParseState::data_cr;
+    return;
+  }
+
+  if (byte == telnet_nul) {
+    return;
+  }
+
+  result->terminal_data.push_back(byte);
+}
+
+void TelnetProtocol::handle_data_cr_byte(unsigned char byte,
+                                         TelnetProtocolResult *result) {
+  if (byte == telnet_lf) {
+    result->terminal_data.push_back(telnet_cr);
+    result->terminal_data.push_back(telnet_lf);
+    state = ParseState::data;
+    return;
+  }
+
+  if (byte == telnet_nul) {
+    result->terminal_data.push_back(telnet_cr);
+    state = ParseState::data;
+    return;
+  }
+
+  result->terminal_data.push_back(telnet_cr);
+  state = ParseState::data;
+  handle_data_byte(byte, result);
 }
 
 void TelnetProtocol::handle_negotiation(unsigned char option,
@@ -125,11 +172,11 @@ TelnetProtocol::receive(std::span<const unsigned char> bytes) {
   for (unsigned char byte : bytes) {
     switch (state) {
     case ParseState::data:
-      if (byte == telnet_iac) {
-        state = ParseState::command;
-      } else {
-        result.terminal_data.push_back(byte);
-      }
+      handle_data_byte(byte, &result);
+      break;
+
+    case ParseState::data_cr:
+      handle_data_cr_byte(byte, &result);
       break;
 
     case ParseState::command:

@@ -32,6 +32,8 @@ struct FixtureOptions {
   gint64 serial_stop_bit = 1;
   std::string serial_flow_control = "none";
   std::string serial_carrier_detect = "cd";
+  std::string transfer_base_path;
+  std::string zmodem_autostart = "default";
 };
 
 struct FixtureState {
@@ -94,6 +96,12 @@ static FixtureOptions parse_options(int argc, char **argv) {
     } else if (starts_with(argument, "--serial-carrier-detect=")) {
       options.serial_carrier_detect =
           option_value(argument, "--serial-carrier-detect=");
+    } else if (starts_with(argument, "--transfer-base-path=")) {
+      options.transfer_base_path =
+          option_value(argument, "--transfer-base-path=");
+    } else if (starts_with(argument, "--zmodem-autostart=")) {
+      options.zmodem_autostart =
+          option_value(argument, "--zmodem-autostart=");
     }
   }
   return options;
@@ -165,6 +173,20 @@ static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
   elder_terms::set_setting_value(
       &store, elder_terms::serial_carrier_detect_setting_key(),
       elder_terms::SettingValue{options.serial_carrier_detect});
+  elder_terms::set_setting_value(
+      &store, elder_terms::transfer_base_path_setting_key(),
+      elder_terms::SettingValue{options.transfer_base_path});
+  if (options.zmodem_autostart == "enabled" ||
+      options.zmodem_autostart == "true") {
+    elder_terms::set_explicit_setting_value(
+        &store, elder_terms::transfer_zmodem_autostart_setting_key(),
+        elder_terms::SettingValue{true});
+  } else if (options.zmodem_autostart == "disabled" ||
+             options.zmodem_autostart == "false") {
+    elder_terms::set_explicit_setting_value(
+        &store, elder_terms::transfer_zmodem_autostart_setting_key(),
+        elder_terms::SettingValue{false});
+  }
   return store;
 }
 
@@ -204,6 +226,8 @@ static void select_initial_page(GtkWidget *window,
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 2);
   } else if (page == "serial") {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 3);
+  } else if (page == "transfer") {
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 4);
   } else {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 0);
   }
@@ -218,6 +242,18 @@ static std::string connection_type_name(
     return "serial";
   }
   return "local";
+}
+
+static std::string zmodem_autostart_name(
+    const elder_terms::SettingsStore &store) {
+  const bool configured = elder_terms::setting_boolean_value_or_default(
+      store, elder_terms::transfer_zmodem_autostart_setting_key(), false);
+  if (!elder_terms::setting_has_explicit_value(
+          store, elder_terms::transfer_zmodem_autostart_setting_key()) &&
+      !configured) {
+    return "default";
+  }
+  return configured ? "enabled" : "disabled";
 }
 
 static void print_store(const char *prefix,
@@ -249,6 +285,8 @@ static void print_store(const char *prefix,
             << " serial_carrier_detect="
             << elder_terms::serial_carrier_detect_to_string(
                    serial.carrier_detect)
+            << " transfer_base_path=" << elder_terms::transfer_base_path(store)
+            << " zmodem_autostart=" << zmodem_autostart_name(store)
             << '\n';
   std::cout.flush();
 }

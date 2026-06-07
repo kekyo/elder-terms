@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { GtkApp, GtkToggleButtonElement } from 'gestament';
+import type { GtkApp, GtkCapture, GtkToggleButtonElement } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import {
@@ -21,9 +21,12 @@ import {
 const transferMenuItems = [
   ['transfer_zmodem_send_item', 'ZMODEM (send)'],
   ['transfer_ymodem_send_item', 'YMODEM (send)'],
+  ['transfer_xmodem_1k_send_item', 'XMODEM 1K (send)'],
   ['transfer_xmodem_send_item', 'XMODEM (send)'],
   ['transfer_zmodem_receive_item', 'ZMODEM (receive)'],
+  ['transfer_ymodem_g_receive_item', 'YMODEM-g (receive)'],
   ['transfer_ymodem_receive_item', 'YMODEM (receive)'],
+  ['transfer_xmodem_crc_receive_item', 'XMODEM CRC (receive)'],
   ['transfer_xmodem_receive_item', 'XMODEM (receive)'],
 ] as const;
 
@@ -131,6 +134,23 @@ const expectTransferButtonSensitive = async (
     },
     {
       message: 'transfer button should be sensitive',
+      timeoutMs: 5_000,
+    }
+  );
+};
+
+const expectTransferButtonInsensitive = async (
+  button: GtkToggleButtonElement
+): Promise<void> => {
+  await waitForResult(
+    async () => {
+      const info = await button.info();
+      expect(info.states).not.toContain('enabled');
+      expect(info.states).not.toContain('sensitive');
+      return info;
+    },
+    {
+      message: 'transfer button should be insensitive',
       timeoutMs: 5_000,
     }
   );
@@ -461,8 +481,9 @@ describe.concurrent('elder-terms-vte main window', () => {
           await expectTransferButtonSensitive(transferButton);
           await transferButton.click();
 
+          const menuCaptures: GtkCapture[] = [];
           for (const [id, label] of transferMenuItems) {
-            await waitForResult(
+            const item = await waitForResult(
               async () => {
                 const item = expectElementKind(
                   await app.getById(id),
@@ -479,7 +500,79 @@ describe.concurrent('elder-terms-vte main window', () => {
                 timeoutMs: 5_000,
               }
             );
+            menuCaptures.push(await item.capture());
           }
+
+          for (let index = 1; index < menuCaptures.length; index += 1) {
+            expect(menuCaptures[index].bounds.y).toBeGreaterThan(
+              menuCaptures[index - 1].bounds.y
+            );
+          }
+        });
+      } finally {
+        acceptedSocket?.destroy();
+        await closeServer(server);
+      }
+    });
+  });
+
+  it('disables the transfer menu button after TELNET disconnects', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      let acceptedSocket: Socket | undefined;
+      let acceptedSocketClosed = false;
+      const server = createServer((socket) => {
+        acceptedSocket = socket;
+        socket.on('close', () => {
+          acceptedSocketClosed = true;
+        });
+        socket.write('connected\r\n');
+      });
+
+      try {
+        const port = await listenOnLocalhost(server);
+        const configPath = join(directory, 'telnet.ini');
+        await writeFile(
+          configPath,
+          `[general]\ntype=telnet\n\n[terminal]\nauto_close=false\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
+          'utf8'
+        );
+
+        await runGtkTest(context, ['-c', configPath], async (app) => {
+          await waitForResult(
+            async () => {
+              expect(acceptedSocket).not.toBeUndefined();
+              return acceptedSocket;
+            },
+            {
+              message: 'TELNET server should accept a client connection',
+              timeoutMs: 5_000,
+            }
+          );
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
+
+          const transferButton =
+            await expectTransferButtonVisibleLeftOfSettings(app);
+          await expectTransferButtonSensitive(transferButton);
+
+          acceptedSocket?.end();
+          await waitForResult(
+            async () => {
+              expect(acceptedSocketClosed).toBe(true);
+            },
+            {
+              message: 'TELNET server socket should close',
+              timeoutMs: 5_000,
+            }
+          );
+          await waitForActivityIndicatorImageState(app, 'conn', 'off');
+          await expectTransferButtonInsensitive(transferButton);
+
+          await expect(transferButton.click()).rejects.toThrow();
+          const item = expectElementKind(
+            await app.getById('transfer_zmodem_send_item'),
+            'menuItem'
+          );
+          expect((await item.info()).states).not.toContain('showing');
         });
       } finally {
         acceptedSocket?.destroy();
@@ -618,7 +711,6 @@ describe.concurrent('elder-terms-vte main window', () => {
 
   it('exits when the main window is closed', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app, evidence) => {
-      await waitForActivityIndicatorImageState(app, 'conn', 'off');
       const closeButton = expectElementKind(
         await app.getByPath('main_window.0.0.3'),
         'button'

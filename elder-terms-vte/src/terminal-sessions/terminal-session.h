@@ -78,6 +78,16 @@ public:
   }
 
   /**
+   * Enables or disables ZMODEM auto-start detection.
+   *
+   * @param enabled True when remote ZMODEM preambles should auto-start
+   * transfers.
+   */
+  virtual void set_zmodem_autostart(bool enabled) {
+    (void)enabled;
+  }
+
+  /**
    * Applies runtime-editable connection settings.
    *
    * @param profile Updated connection profile.

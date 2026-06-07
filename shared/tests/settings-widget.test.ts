@@ -42,8 +42,10 @@ interface AppliedStore {
   readonly serial_flow_control: string;
   readonly serial_parity: string;
   readonly serial_stop_bit: string;
+  readonly transfer_base_path: string;
   readonly type: string;
   readonly width: string;
+  readonly zmodem_autostart: string;
   readonly zoom: string;
 }
 
@@ -86,6 +88,13 @@ const showSerialPage = async (app: GtkApp): Promise<void> => {
   await waitForResult(async () => {
     const device = await app.getById('settings_serial_device_entry');
     expect((await device.info()).states).toContain('showing');
+  });
+};
+
+const showTransferPage = async (app: GtkApp): Promise<void> => {
+  await waitForResult(async () => {
+    const basePath = await app.getById('settings_transfer_base_path_entry');
+    expect((await basePath.info()).states).toContain('showing');
   });
 };
 
@@ -559,6 +568,50 @@ describe.concurrent('shared settings widget', () => {
         expect(store.serial_stop_bit).toBe('1');
         expect(store.serial_flow_control).toBe('hard');
         expect(store.serial_carrier_detect).toBe('cts');
+      }
+    );
+  });
+
+  it('shows Transfer controls and applies transfer edits', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=transfer',
+        '--transfer-base-path=file:///tmp/elder-terms-transfer',
+        '--zmodem-autostart=disabled',
+      ],
+      async ({ app }) => {
+        await showTransferPage(app);
+
+        const basePath = expectElementKind(
+          await app.getById('settings_transfer_base_path_entry'),
+          'entry'
+        );
+        const zmodemAutostart = expectElementKind(
+          await app.getById('settings_transfer_zmodem_autostart_combo'),
+          'comboBox'
+        );
+        expect(await basePath.text()).toBe('file:///tmp/elder-terms-transfer');
+        await expectSelectedComboValue(
+          app,
+          'settings_transfer_zmodem_autostart_combo',
+          'Disabled'
+        );
+        await expectSensitive(basePath);
+        await expectSensitive(zmodemAutostart);
+
+        await basePath.setText('file:///tmp/elder-terms-downloads');
+        await zmodemAutostart.selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+
+        const store = await waitForAppliedStore(app);
+        expect(store.transfer_base_path).toBe(
+          'file:///tmp/elder-terms-downloads'
+        );
+        expect(store.zmodem_autostart).toBe('enabled');
       }
     );
   });

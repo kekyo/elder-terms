@@ -126,7 +126,8 @@ SettingsSaveResult save_settings(const SettingsStore &store,
 
   GKeyFile *key_file = g_key_file_new();
   for (const SettingEntry &entry : store.entries) {
-    if (entry.value != entry.definition.default_value) {
+    if (entry.value != entry.definition.default_value ||
+        (entry.definition.save_when_loaded && entry.loaded)) {
       set_key_file_value(key_file, entry);
     }
   }

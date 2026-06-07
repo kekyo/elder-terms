@@ -7,13 +7,14 @@ import { expect, type TestContext } from 'vitest';
 import {
   createGtkAppLauncher,
   type GtkApp,
+  type GtkAppOutputEvent,
   type GtkAppLauncherOptions,
   type GtkCapture,
   type GtkWidgetElement,
   type GtkWindowElement,
   type GtkWindowResizeHints,
 } from 'gestament';
-import { waitForResult } from 'gestament/testing';
+import { toPass, waitForResult } from 'gestament/testing';
 import type { PNG as PngImage } from 'pngjs';
 import {
   createTestEvidence,
@@ -26,6 +27,11 @@ const { PNG } = require('pngjs') as typeof import('pngjs');
 
 const appPath = fileURLToPath(
   new URL('../../.build/elder-terms-vte/elder-terms-vte', import.meta.url)
+);
+
+/** Test-only synchronous XYZMODEM peer used by transfer progress notice tests. */
+export const xyzmPausePeerPath = fileURLToPath(
+  new URL('../../.build/elder-terms-vte/xyzm-pause-peer', import.meta.url)
 );
 
 /** Expected terminal columns for the default app launch. */
@@ -54,6 +60,74 @@ export const terminalTextGrid81x25Path = fileURLToPath(
 export const terminalTextGrid80x24FontScale11Path = fileURLToPath(
   new URL(
     './fixtures/terminal-text-grid-80x24-font-scale-1.1.png',
+    import.meta.url
+  )
+);
+
+/** Expected disconnected notice PNG. */
+export const disconnectedNoticePath = fileURLToPath(
+  new URL('./fixtures/disconnected-notice.png', import.meta.url)
+);
+
+/** Expected disconnected notice PNG rendered on the terminal surface. */
+export const disconnectedNoticeOnTerminalPath = fileURLToPath(
+  new URL('./fixtures/disconnected-notice-on-terminal.png', import.meta.url)
+);
+
+/** Expected dimmed local terminal PNG after disconnection. */
+export const localTerminalDisconnectedDimPath = fileURLToPath(
+  new URL('./fixtures/local-terminal-disconnected-dim.png', import.meta.url)
+);
+
+/** Expected dimmed terminal PNG while a transfer is active. */
+export const transferTerminalDimPath = fileURLToPath(
+  new URL('./fixtures/transfer-terminal-dim.png', import.meta.url)
+);
+
+/** Expected transfer progress notice PNG for XMODEM receive. */
+export const transferProgressNoticeXmodemReceivePath = fileURLToPath(
+  new URL(
+    './fixtures/transfer-progress-notice-xmodem-receive.png',
+    import.meta.url
+  )
+);
+
+/** Expected transfer progress notice PNG for XMODEM send. */
+export const transferProgressNoticeXmodemSendPath = fileURLToPath(
+  new URL(
+    './fixtures/transfer-progress-notice-xmodem-send.png',
+    import.meta.url
+  )
+);
+
+/** Expected transfer progress notice PNG for YMODEM receive. */
+export const transferProgressNoticeYmodemReceivePath = fileURLToPath(
+  new URL(
+    './fixtures/transfer-progress-notice-ymodem-receive.png',
+    import.meta.url
+  )
+);
+
+/** Expected transfer progress notice PNG for YMODEM send. */
+export const transferProgressNoticeYmodemSendPath = fileURLToPath(
+  new URL(
+    './fixtures/transfer-progress-notice-ymodem-send.png',
+    import.meta.url
+  )
+);
+
+/** Expected transfer progress notice PNG for ZMODEM receive. */
+export const transferProgressNoticeZmodemReceivePath = fileURLToPath(
+  new URL(
+    './fixtures/transfer-progress-notice-zmodem-receive.png',
+    import.meta.url
+  )
+);
+
+/** Expected transfer progress notice PNG for ZMODEM send. */
+export const transferProgressNoticeZmodemSendPath = fileURLToPath(
+  new URL(
+    './fixtures/transfer-progress-notice-zmodem-send.png',
     import.meta.url
   )
 );
@@ -138,70 +212,62 @@ export interface TerminalGridSize {
 }
 
 /**
+ * Current transfer progress bar value normalized from AT-SPI metadata.
+ */
+export interface TransferProgressBarValue {
+  /** Raw current value returned by value(). */
+  readonly rawValue: number;
+  /** Raw current value returned by valueInfo(). */
+  readonly infoValue: number;
+  /** Minimum value reported by AT-SPI. */
+  readonly minimum: number;
+  /** Maximum value reported by AT-SPI. */
+  readonly maximum: number;
+  /** Current value normalized to 0.0 through 1.0. */
+  readonly normalized: number;
+}
+
+/**
  * Launch options forwarded by runGtkTest.
  */
 export interface RunGtkTestOptions {
   /** Environment overrides passed to the launched GTK app. */
   readonly env?: GtkAppLauncherOptions['env'];
+  /** Additional output callback invoked for launched GTK app stdout/stderr. */
+  readonly onOutput?: (event: GtkAppOutputEvent) => void;
 }
 
 const readPng = (capture: GtkCapture): PngImage => PNG.sync.read(capture.image);
 
-/**
- * Foreground luminance summary for a terminal capture.
- */
-export interface TerminalForegroundLuminanceStats {
-  /** Mean luminance of pixels different from the capture background. */
-  readonly average: number;
-  /** Mean luminance distance between foreground pixels and the background. */
-  readonly contrast: number;
-  /** Number of pixels considered foreground. */
-  readonly count: number;
-}
+const cropPng = (
+  image: PngImage,
+  rect: {
+    readonly height: number;
+    readonly width: number;
+    readonly x: number;
+    readonly y: number;
+  }
+): PngImage => {
+  const startX = Math.max(0, Math.floor(rect.x));
+  const startY = Math.max(0, Math.floor(rect.y));
+  const width = Math.min(image.width - startX, Math.ceil(rect.width));
+  const height = Math.min(image.height - startY, Math.ceil(rect.height));
+  const cropped = new PNG({ width, height }) as PngImage;
 
-/**
- * Measures foreground luminance relative to the terminal background.
- *
- * @param capture Captured terminal widget image.
- * @returns Foreground pixel count and average luminance.
- */
-export const terminalForegroundLuminanceStats = (
-  capture: GtkCapture
-): TerminalForegroundLuminanceStats => {
-  const image = readPng(capture);
-  const backgroundRed = image.data[0];
-  const backgroundGreen = image.data[1];
-  const backgroundBlue = image.data[2];
-  const backgroundAlpha = image.data[3];
-  const backgroundLuminance =
-    0.2126 * backgroundRed + 0.7152 * backgroundGreen + 0.0722 * backgroundBlue;
-  let count = 0;
-  let contrast = 0;
-  let total = 0;
-
-  for (let offset = 0; offset < image.data.length; offset += 4) {
-    const red = image.data[offset];
-    const green = image.data[offset + 1];
-    const blue = image.data[offset + 2];
-    const alpha = image.data[offset + 3];
-    const distance =
-      Math.abs(red - backgroundRed) +
-      Math.abs(green - backgroundGreen) +
-      Math.abs(blue - backgroundBlue) +
-      Math.abs(alpha - backgroundAlpha);
-    if (alpha > 0 && distance > 24) {
-      const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-      total += luminance;
-      contrast += Math.abs(luminance - backgroundLuminance);
-      ++count;
+  for (let y = 0; y < height; ++y) {
+    for (let x = 0; x < width; ++x) {
+      const sourceOffset = ((startY + y) * image.width + startX + x) * 4;
+      const targetOffset = (y * width + x) * 4;
+      image.data.copy(
+        cropped.data,
+        targetOffset,
+        sourceOffset,
+        sourceOffset + 4
+      );
     }
   }
 
-  return {
-    average: count === 0 ? 0 : total / count,
-    contrast: count === 0 ? 0 : contrast / count,
-    count,
-  };
+  return cropped;
 };
 
 /**
@@ -219,6 +285,327 @@ export const withTemporaryDirectory = async (
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
+};
+
+/**
+ * Asserts the X11 title of the main application window.
+ *
+ * @param app Running GTK app.
+ * @param expectedTitle Expected window title.
+ */
+export const expectMainWindowTitle = async (
+  app: GtkApp,
+  expectedTitle: string
+): Promise<void> => {
+  const mainWindow = expectElementKind(
+    await app.getById('main_window'),
+    'window'
+  );
+  await toPass(
+    async () => {
+      expect((await mainWindow.x11Info()).title).toBe(expectedTitle);
+    },
+    {
+      message: `main window title should be ${expectedTitle}`,
+      timeoutMs: 5_000,
+    }
+  );
+};
+
+/**
+ * Asserts the terminal-surface disconnected notice is hidden.
+ *
+ * @param app Running GTK app.
+ */
+export const expectDisconnectedNoticeHidden = async (
+  app: GtkApp
+): Promise<void> => {
+  const notice = await app.getById('disconnected_notice');
+  await waitForResult(
+    async () => {
+      const info = await notice.info();
+      expect(info.states).not.toContain('showing');
+      expect(info.states).not.toContain('visible');
+    },
+    {
+      message: 'disconnected notice should be hidden',
+      timeoutMs: 5_000,
+    }
+  );
+};
+
+/**
+ * Asserts the disconnected notice is visible at the terminal top-right edge.
+ *
+ * @param app Running GTK app.
+ */
+export const expectDisconnectedNoticeVisibleAtTerminalTopRight = async (
+  app: GtkApp
+): Promise<void> => {
+  const terminal = await app.getById('terminal_view');
+  const notice = await app.getById('disconnected_notice');
+  const label = expectElementKind(
+    await app.getById('disconnected_notice_label'),
+    'label'
+  );
+
+  expect(await label.text()).toBe('Disconnected');
+
+  const { noticeCapture, terminalCapture } = await waitForResult(
+    async () => {
+      const info = await notice.info();
+      expect(info.states).toContain('showing');
+      expect(info.states).toContain('visible');
+      return {
+        noticeCapture: await notice.capture(),
+        terminalCapture: await terminal.capture(),
+      };
+    },
+    {
+      message: 'disconnected notice should be visible',
+      timeoutMs: 5_000,
+    }
+  );
+
+  const terminalRight = terminalCapture.bounds.x + terminalCapture.bounds.width;
+  const noticeRight = noticeCapture.bounds.x + noticeCapture.bounds.width;
+  const rightGap = terminalRight - noticeRight;
+  const topGap = noticeCapture.bounds.y - terminalCapture.bounds.y;
+
+  expect(noticeCapture.bounds.x).toBeGreaterThanOrEqual(
+    terminalCapture.bounds.x
+  );
+  expect(noticeCapture.bounds.y).toBeGreaterThanOrEqual(
+    terminalCapture.bounds.y
+  );
+  expect(noticeRight).toBeLessThanOrEqual(terminalRight);
+  expect(
+    noticeCapture.bounds.y + noticeCapture.bounds.height
+  ).toBeLessThanOrEqual(
+    terminalCapture.bounds.y + terminalCapture.bounds.height
+  );
+  expect(rightGap).toBeGreaterThanOrEqual(0);
+  expect(rightGap).toBeLessThanOrEqual(16);
+  expect(topGap).toBeLessThanOrEqual(16);
+};
+
+/**
+ * Asserts the terminal-surface transfer progress notice is hidden.
+ *
+ * @param app Running GTK app.
+ */
+export const expectTransferProgressNoticeHidden = async (
+  app: GtkApp
+): Promise<void> => {
+  const notice = await app.getById('transfer_progress_notice');
+  await waitForResult(
+    async () => {
+      const info = await notice.info();
+      expect(info.states).not.toContain('showing');
+      expect(info.states).not.toContain('visible');
+    },
+    {
+      message: 'transfer progress notice should be hidden',
+      timeoutMs: 5_000,
+    }
+  );
+};
+
+/**
+ * Asserts the transfer progress notice is visible at the terminal top-right edge.
+ *
+ * @param app Running GTK app.
+ */
+export const expectTransferProgressNoticeVisibleAtTerminalTopRight = async (
+  app: GtkApp
+): Promise<void> => {
+  const terminal = await app.getById('terminal_view');
+  const notice = await app.getById('transfer_progress_notice');
+  const label = expectElementKind(
+    await app.getById('transfer_progress_notice_label'),
+    'label'
+  );
+  expectElementKind(await app.getById('transfer_progress_bar'), 'progressBar');
+
+  expect(await label.text()).toBe('Transferring...');
+
+  const { noticeCapture, terminalCapture } = await waitForResult(
+    async () => {
+      const noticeInfo = await notice.info();
+      expect(noticeInfo.states).toContain('showing');
+      expect(noticeInfo.states).toContain('visible');
+      return {
+        noticeCapture: await notice.capture(),
+        terminalCapture: await terminal.capture(),
+      };
+    },
+    {
+      message: 'transfer progress notice should be visible',
+      timeoutMs: 5_000,
+    }
+  );
+
+  const terminalRight = terminalCapture.bounds.x + terminalCapture.bounds.width;
+  const noticeRight = noticeCapture.bounds.x + noticeCapture.bounds.width;
+  const rightGap = terminalRight - noticeRight;
+  const topGap = noticeCapture.bounds.y - terminalCapture.bounds.y;
+
+  expect(noticeCapture.bounds.x).toBeGreaterThanOrEqual(
+    terminalCapture.bounds.x
+  );
+  expect(noticeCapture.bounds.y).toBeGreaterThanOrEqual(
+    terminalCapture.bounds.y
+  );
+  expect(noticeRight).toBeLessThanOrEqual(terminalRight);
+  expect(
+    noticeCapture.bounds.y + noticeCapture.bounds.height
+  ).toBeLessThanOrEqual(
+    terminalCapture.bounds.y + terminalCapture.bounds.height
+  );
+  expect(rightGap).toBeGreaterThanOrEqual(0);
+  expect(rightGap).toBeLessThanOrEqual(16);
+  expect(topGap).toBeLessThanOrEqual(16);
+};
+
+/**
+ * Reads the transfer progress bar value normalized to 0.0 through 1.0.
+ *
+ * @param app Running GTK app.
+ * @returns Progress bar value details.
+ */
+export const readTransferProgressBarValue = async (
+  app: GtkApp
+): Promise<TransferProgressBarValue> => {
+  const progress = expectElementKind(
+    await app.getById('transfer_progress_bar'),
+    'progressBar'
+  );
+  const rawValue = await progress.value();
+  const info = await progress.valueInfo();
+  const range = info.maximum - info.minimum;
+  const normalized =
+    range <= 0
+      ? 0
+      : Math.min(1, Math.max(0, (info.value - info.minimum) / range));
+
+  return {
+    rawValue,
+    infoValue: info.value,
+    minimum: info.minimum,
+    maximum: info.maximum,
+    normalized,
+  };
+};
+
+/**
+ * Asserts the transfer progress notice visual matches its fixture image.
+ *
+ * @param app Running GTK app.
+ * @param evidence Test evidence writer.
+ * @param name Evidence and comparison name.
+ * @param masterImagePath Expected PNG path.
+ * @param options Pixel comparison options.
+ */
+export const assertTransferProgressNoticeMatches = async (
+  app: GtkApp,
+  evidence: TestEvidence,
+  name: string,
+  masterImagePath: string,
+  options?: Parameters<TestEvidence['expectCaptureToLookSimilar']>[3]
+): Promise<void> => {
+  await expectTransferProgressNoticeVisibleAtTerminalTopRight(app);
+
+  const notice = await app.getById('transfer_progress_notice');
+  const capture = await evidence.captureEvidence(name, async () =>
+    notice.capture()
+  );
+  await evidence.expectCaptureToLookSimilar(
+    capture,
+    name,
+    masterImagePath,
+    options
+  );
+};
+
+/**
+ * Asserts the disconnected notice is rendered above terminal dimming.
+ *
+ * @param app Running GTK app.
+ */
+export const expectDisconnectedNoticeRenderedUndimmedAtTerminalTopRight =
+  async (app: GtkApp, evidence: TestEvidence): Promise<void> => {
+    await expectDisconnectedNoticeVisibleAtTerminalTopRight(app);
+
+    const terminalOverlay = await app.getById('terminal_overlay');
+    const notice = await app.getById('disconnected_notice');
+    const { noticeCapture, terminalOverlayCapture } = await waitForResult(
+      async () => {
+        const info = await notice.info();
+        expect(info.states).toContain('showing');
+        expect(info.states).toContain('visible');
+        return {
+          noticeCapture: await notice.capture(),
+          terminalOverlayCapture: await terminalOverlay.capture(),
+        };
+      },
+      {
+        message: 'disconnected notice should be rendered on terminal surface',
+        timeoutMs: 5_000,
+      }
+    );
+
+    const renderedNoticePng = cropPng(readPng(terminalOverlayCapture), {
+      x: noticeCapture.bounds.x - terminalOverlayCapture.bounds.x,
+      y: noticeCapture.bounds.y - terminalOverlayCapture.bounds.y,
+      width: noticeCapture.bounds.width,
+      height: noticeCapture.bounds.height,
+    });
+    const renderedNoticeCapture: GtkCapture = {
+      ...noticeCapture,
+      image: PNG.sync.write(renderedNoticePng),
+    };
+    const savedCapture = await evidence.captureEvidence(
+      'disconnected-notice-rendered-on-terminal',
+      async () => renderedNoticeCapture
+    );
+
+    await evidence.expectCaptureToLookSimilar(
+      savedCapture,
+      'disconnected-notice-rendered-on-terminal',
+      disconnectedNoticeOnTerminalPath,
+      {
+        maxDiffPixels: 0,
+        threshold: 0.01,
+      }
+    );
+  };
+
+/**
+ * Asserts the disconnected notice visual matches its fixture image.
+ *
+ * @param app Running GTK app.
+ * @param evidence Test evidence writer.
+ */
+export const assertDisconnectedNoticeMatches = async (
+  app: GtkApp,
+  evidence: TestEvidence
+): Promise<void> => {
+  await expectDisconnectedNoticeVisibleAtTerminalTopRight(app);
+
+  const notice = await app.getById('disconnected_notice');
+  const capture = await evidence.captureEvidence(
+    'disconnected-notice',
+    async () => notice.capture()
+  );
+  await evidence.expectCaptureToLookSimilar(
+    capture,
+    'disconnected-notice',
+    disconnectedNoticePath,
+    {
+      maxDiffPixels: 0,
+      threshold: 0.01,
+    }
+  );
 };
 
 /**
@@ -248,7 +635,10 @@ export const runGtkTest = async (
   try {
     await evidence.log('launching app', { appPath, args });
     const app = await launcher.launch(args, {
-      onOutput: evidence.recordAppOutputEvent,
+      onOutput: (event) => {
+        evidence.recordAppOutputEvent(event);
+        options?.onOutput?.(event);
+      },
     });
     apps.push(app);
     await body(app, evidence);
@@ -273,33 +663,32 @@ const readPngFile = async (path: string): Promise<PngImage> =>
   PNG.sync.read(await readFile(path));
 
 /**
- * Asserts that a terminal capture exactly matches an expected fixture image.
+ * Asserts that a terminal capture matches an expected fixture image.
  *
  * @param terminal Terminal widget to capture.
  * @param name Evidence and comparison name.
  * @param masterImagePath Expected PNG path.
  * @param evidence Test evidence writer.
+ * @param options Pixel comparison options.
  * @returns Promise resolved after the comparison passes.
  */
-export const assertTerminalTextGridMatches = async (
+export const assertTerminalCaptureMatches = async (
   terminal: GtkWidgetElement,
   name: string,
   masterImagePath: string,
-  evidence: TestEvidence
+  evidence: TestEvidence,
+  options?: Parameters<TestEvidence['expectCaptureToLookSimilar']>[3]
 ): Promise<void> => {
-  const expectedPng = await readPngFile(masterImagePath);
   const capture = await waitForResult(async () => {
     const currentCapture = await terminal.capture();
-    const currentPng = readPng(currentCapture);
     expect(currentCapture.clipped).toBe(false);
-    expect(currentPng.width).toBe(expectedPng.width);
-    expect(currentPng.height).toBe(expectedPng.height);
     return currentCapture;
   });
   const savedCapture = await evidence.captureEvidence(
     name,
     async () => capture
   );
+  const expectedPng = await readPngFile(masterImagePath);
   const savedPng = readPng(savedCapture);
 
   expect(savedCapture.clipped).toBe(false);
@@ -313,8 +702,27 @@ export const assertTerminalTextGridMatches = async (
     {
       maxDiffPixels: 0,
       threshold: 0.01,
+      ...options,
     }
   );
+};
+
+/**
+ * Asserts that a terminal text-grid capture exactly matches its fixture image.
+ *
+ * @param terminal Terminal widget to capture.
+ * @param name Evidence and comparison name.
+ * @param masterImagePath Expected PNG path.
+ * @param evidence Test evidence writer.
+ * @returns Promise resolved after the comparison passes.
+ */
+export const assertTerminalTextGridMatches = async (
+  terminal: GtkWidgetElement,
+  name: string,
+  masterImagePath: string,
+  evidence: TestEvidence
+): Promise<void> => {
+  await assertTerminalCaptureMatches(terminal, name, masterImagePath, evidence);
 };
 
 /**

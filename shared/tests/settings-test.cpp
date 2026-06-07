@@ -32,6 +32,7 @@ using elder_terms::serial_device_setting_key;
 using elder_terms::serial_flow_control_setting_key;
 using elder_terms::serial_parity_setting_key;
 using elder_terms::serial_stop_bit_setting_key;
+using elder_terms::set_explicit_setting_value;
 using elder_terms::set_setting_value;
 using elder_terms::SettingsLoadOptions;
 using elder_terms::SettingsLoadResult;
@@ -52,6 +53,8 @@ using elder_terms::terminal_width_setting_key;
 using elder_terms::terminal_zoom_setting_key;
 using elder_terms::transfer_base_path;
 using elder_terms::transfer_base_path_setting_key;
+using elder_terms::transfer_zmodem_autostart;
+using elder_terms::transfer_zmodem_autostart_setting_key;
 
 static bool warnings_contain(const std::vector<std::string> &warnings,
                              const std::string &text) {
@@ -108,6 +111,8 @@ static void test_default_settings() {
               "default terminal auto-close should be enabled");
   expect_true(transfer_base_path(store).empty(),
               "default transfer base path should be empty");
+  expect_true(!transfer_zmodem_autostart(store),
+              "default local transfer ZMODEM auto-start should be disabled");
 
   const TerminalConnectionProfile profile = terminal_connection_profile(store);
   expect_true(profile.kind == TerminalConnectionKind::local_shell,
@@ -134,6 +139,44 @@ static void test_transfer_base_path_setting() {
   expect_true(transfer_base_path(result.store) ==
                   "file:///tmp/elder-terms-transfer",
               "transfer base_path should come from the configuration file");
+}
+
+static void test_transfer_zmodem_autostart_setting() {
+  SettingsStore local_store =
+      create_default_settings(default_terminal_display_settings(1.0));
+  expect_true(!transfer_zmodem_autostart(local_store),
+              "implicit local ZMODEM auto-start should be disabled");
+
+  set_setting_value(&local_store, general_type_setting_key(),
+                    elder_terms::SettingValue{std::string("serial")});
+  expect_true(transfer_zmodem_autostart(local_store),
+              "implicit serial ZMODEM auto-start should be enabled");
+
+  set_explicit_setting_value(
+      &local_store, transfer_zmodem_autostart_setting_key(),
+      elder_terms::SettingValue{false});
+  expect_true(!transfer_zmodem_autostart(local_store),
+              "explicit false should disable serial ZMODEM auto-start");
+
+  const std::filesystem::path path =
+      temporary_config_path("transfer-zmodem-autostart");
+  write_config(path,
+               "[general]\n"
+               "type=telnet\n"
+               "\n"
+               "[transfer]\n"
+               "zmodem_autostart=true\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  expect_true(transfer_zmodem_autostart(result.store),
+              "explicit true should enable TELNET ZMODEM auto-start");
 }
 
 static void test_telnet_profile() {
@@ -388,6 +431,11 @@ static void test_public_setting_keys() {
               "transfer base_path key should use the transfer section");
   expect_true(transfer_base_path_setting_key().name == "base_path",
               "transfer base_path key should use the base_path name");
+  expect_true(transfer_zmodem_autostart_setting_key().section == "transfer",
+              "transfer zmodem_autostart key should use the transfer section");
+  expect_true(transfer_zmodem_autostart_setting_key().name ==
+                  "zmodem_autostart",
+              "transfer zmodem_autostart key should use the requested name");
 }
 
 static void test_save_settings_omits_default_values() {
@@ -442,6 +490,46 @@ static void test_save_settings_omits_default_values() {
               "saved settings should omit default terminal zoom");
   expect_true(content.find("port=") == std::string::npos,
               "saved settings should omit default TELNET port");
+}
+
+static void test_save_explicit_zmodem_autostart() {
+  const std::filesystem::path false_path =
+      temporary_config_path("save-zmodem-autostart-false");
+  SettingsStore false_store =
+      create_default_settings(default_terminal_display_settings(1.0));
+  set_explicit_setting_value(
+      &false_store, transfer_zmodem_autostart_setting_key(),
+      elder_terms::SettingValue{false});
+
+  const SettingsSaveResult false_result =
+      save_settings(false_store, false_path);
+  expect_true(false_result.saved,
+              "explicit false ZMODEM auto-start save should succeed");
+  const std::string false_content = read_config(false_path);
+  remove_config(false_path);
+
+  expect_true(false_content.find("[transfer]") != std::string::npos,
+              "saved settings should include explicit transfer section");
+  expect_true(false_content.find("zmodem_autostart=false") !=
+                  std::string::npos,
+              "saved settings should include explicit false ZMODEM auto-start");
+
+  const std::filesystem::path true_path =
+      temporary_config_path("save-zmodem-autostart-true");
+  SettingsStore true_store =
+      create_default_settings(default_terminal_display_settings(1.0));
+  set_explicit_setting_value(
+      &true_store, transfer_zmodem_autostart_setting_key(),
+      elder_terms::SettingValue{true});
+
+  const SettingsSaveResult true_result = save_settings(true_store, true_path);
+  expect_true(true_result.saved,
+              "explicit true ZMODEM auto-start save should succeed");
+  const std::string true_content = read_config(true_path);
+  remove_config(true_path);
+
+  expect_true(true_content.find("zmodem_autostart=true") != std::string::npos,
+              "saved settings should include explicit true ZMODEM auto-start");
 }
 
 static void test_save_serial_settings_omits_default_values() {
@@ -511,11 +599,13 @@ int main() {
     elder_terms_settings_test::test_telnet_profile();
     elder_terms_settings_test::test_serial_profile();
     elder_terms_settings_test::test_transfer_base_path_setting();
+    elder_terms_settings_test::test_transfer_zmodem_autostart_setting();
     elder_terms_settings_test::test_invalid_values_fall_back_to_defaults();
     elder_terms_settings_test::test_invalid_serial_values_fall_back_to_defaults();
     elder_terms_settings_test::test_public_setting_keys();
     elder_terms_settings_test::test_save_settings_omits_default_values();
     elder_terms_settings_test::test_save_serial_settings_omits_default_values();
+    elder_terms_settings_test::test_save_explicit_zmodem_autostart();
     elder_terms_settings_test::test_save_settings_writes_empty_file_for_defaults();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';

@@ -198,6 +198,48 @@ bool set_setting_value(SettingsStore *store, const SettingKey &key,
   return true;
 }
 
+bool set_explicit_setting_value(SettingsStore *store, const SettingKey &key,
+                                SettingValue value) {
+  SettingEntry *entry = find_entry(store, key);
+  if (entry == nullptr ||
+      value.index() != entry->definition.default_value.index()) {
+    return false;
+  }
+
+  std::string reason;
+  if (!validate_setting_definition(entry->definition, value, &reason)) {
+    return false;
+  }
+
+  if (entry->value != value || !entry->loaded) {
+    entry->value = std::move(value);
+    entry->loaded = true;
+    entry->dirty = true;
+  }
+  return true;
+}
+
+bool clear_explicit_setting_value(SettingsStore *store,
+                                  const SettingKey &key) {
+  SettingEntry *entry = find_entry(store, key);
+  if (entry == nullptr) {
+    return false;
+  }
+
+  if (entry->value != entry->definition.default_value || entry->loaded) {
+    entry->value = entry->definition.default_value;
+    entry->loaded = false;
+    entry->dirty = true;
+  }
+  return true;
+}
+
+bool setting_has_explicit_value(const SettingsStore &store,
+                                const SettingKey &key) {
+  const SettingEntry *entry = find_entry(store, key);
+  return entry != nullptr && entry->loaded;
+}
+
 bool setting_is_dirty(const SettingsStore &store, const SettingKey &key) {
   const SettingEntry *entry = find_entry(store, key);
   return entry != nullptr && entry->dirty;

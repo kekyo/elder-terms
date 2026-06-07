@@ -28,6 +28,7 @@ class TelnetProtocol {
 private:
   enum class ParseState {
     data,
+    data_cr,
     command,
     negotiation,
     suboption,
@@ -46,6 +47,8 @@ private:
   bool binary_rejected = false;
   TelnetBytes suboption_bytes;
 
+  void handle_data_byte(unsigned char byte, TelnetProtocolResult *result);
+  void handle_data_cr_byte(unsigned char byte, TelnetProtocolResult *result);
   void handle_negotiation(unsigned char option, TelnetProtocolResult *result);
   void handle_suboption();
 

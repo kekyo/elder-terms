@@ -1,17 +1,15 @@
 #include "serial-session.h"
 
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/eventfd.h>
-#include <sys/ioctl.h>
 #include <unistd.h>
 
-#include <glib-unix.h>
+#include <cardio.h>
 
 #include <algorithm>
-#include <atomic>
 #include <array>
 #include <cerrno>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -21,14 +19,15 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <system_error>
-#include <thread>
 #include <utility>
 #include <variant>
 #include <vector>
 
 #include "../terminal-view-io.h"
 #include "../../terminal-transfer-runner.h"
+#include "../../terminal-zmodem-auto-start.h"
 #include "serial-device-resolver.h"
 #include "serial-device-event-monitor.h"
 #include "serial-line-monitor.h"
@@ -81,11 +80,23 @@ static void drain_event_fd_noexcept(int fd) {
   }
 }
 
-static void remove_source(guint *source_id) {
-  if (*source_id != 0) {
-    g_source_remove(*source_id);
-    *source_id = 0;
+static bool consume_event_fd_noexcept(int fd) {
+  if (fd < 0) {
+    return false;
   }
+
+  bool consumed = false;
+  eventfd_t value = 0;
+  while (::eventfd_read(fd, &value) < 0) {
+    if (errno == EINTR) {
+      continue;
+    }
+    return consumed;
+  }
+  consumed = true;
+  while (::eventfd_read(fd, &value) == 0) {
+  }
+  return consumed;
 }
 
 static void notify_session_ended(const TerminalSessionCallbacks &callbacks) {
@@ -115,85 +126,31 @@ static bool selected_carrier_signal_is_high(SerialLineSignals signals,
   return signals.cd;
 }
 
-static constexpr std::uint64_t transfer_start_control_retention_ms = 5000;
-static constexpr std::size_t transfer_start_control_max_bytes = 16;
-
-struct TimedTransferStartByte {
-  unsigned char value = 0;
-  std::uint64_t timestamp_ms = 0;
-};
-
-static bool is_transfer_start_control_byte(unsigned char value) {
-  return value == 0x15 || value == 'C' || value == 'G';
+static bool fd_events_indicate_connection_lost(cardio::fd_event events) {
+  return ((events & cardio::fd_event::error) != cardio::fd_event::none) ||
+         ((events & cardio::fd_event::hangup) != cardio::fd_event::none);
 }
 
-static bool
-is_transfer_start_control_chunk(std::span<const unsigned char> bytes) {
-  if (bytes.empty() || bytes.size() > transfer_start_control_max_bytes) {
-    return false;
-  }
-  return std::all_of(bytes.begin(), bytes.end(),
-                     is_transfer_start_control_byte);
-}
-
-static void prune_transfer_start_controls(
-    std::deque<TimedTransferStartByte> *controls,
-    std::uint64_t now_ms) {
-  while (!controls->empty() &&
-         now_ms - controls->front().timestamp_ms >
-             transfer_start_control_retention_ms) {
-    controls->pop_front();
-  }
-}
-
-static bool should_consume_transfer_start_controls(
-    const TerminalTransferRequest &request) {
-  return request.direction == TerminalTransferDirection::send &&
-         (request.protocol == TerminalTransferProtocol::xmodem ||
-          request.protocol == TerminalTransferProtocol::ymodem);
+static cardio::promise<short>
+wait_serial_modem_line_change_async(cardio::io_uring &io, int fd,
+                                    cardio::cancellation cancellation) {
+  return io.submit<short>(
+      [fd](::io_uring_sqe *sqe) {
+        ::io_uring_prep_poll_add(
+            sqe, fd, POLLPRI | POLLERR | POLLHUP | POLLNVAL);
+      },
+      [](cardio::io_uring_completion completion) {
+        if (completion.result < 0) {
+          throw std::system_error(-completion.result,
+                                  std::generic_category(),
+                                  "serial modem-line poll failed");
+        }
+        return static_cast<short>(completion.result);
+      },
+      std::move(cancellation));
 }
 
 class TerminalSerialSession;
-
-static int carrier_wait_mask() {
-  return TIOCM_CTS | TIOCM_DSR | TIOCM_CAR | TIOCM_RNG;
-}
-
-enum class CarrierWaitNotificationKind {
-  changed,
-  unavailable,
-};
-
-struct CarrierWaitState {
-  TerminalSerialSession *session = nullptr;
-  GMainContext *context = nullptr;
-  std::atomic<int> fd{-1};
-  std::atomic<bool> active{true};
-
-  explicit CarrierWaitState(TerminalSerialSession *session, int fd)
-      : session(session),
-        context(g_main_context_ref(g_main_context_default())),
-        fd(fd) {
-  }
-
-  ~CarrierWaitState() {
-    if (context != nullptr) {
-      g_main_context_unref(context);
-    }
-  }
-};
-
-struct CarrierWaitNotification {
-  std::shared_ptr<CarrierWaitState> state;
-  CarrierWaitNotificationKind kind = CarrierWaitNotificationKind::changed;
-};
-
-static void close_atomic_fd_noexcept(std::atomic<int> *fd) {
-  const int current = fd->exchange(-1);
-  if (current >= 0) {
-    (void)::close(current);
-  }
-}
 
 class TerminalSerialSession final : public TerminalSession {
 private:
@@ -201,53 +158,34 @@ private:
   SerialConnectionSettings settings;
   TerminalSessionCallbacks callbacks;
   SerialCarrierTracker carrier_tracker;
+  std::optional<cardio::io_uring> io;
+  cardio::cancellation_source stop_source;
+  std::optional<cardio::cancellation_source> connection_cancel_source;
   std::deque<std::vector<unsigned char>> outgoing;
   std::unique_ptr<SerialDeviceEventMonitor> device_event_monitor;
-  std::shared_ptr<CarrierWaitState> carrier_wait_state;
-  std::jthread carrier_wait_thread;
   std::optional<cardio::cancellation_source> transfer_cancel_source;
+  std::optional<cardio::promise<void>> connection_task;
+  std::optional<cardio::promise<void>> read_task;
+  std::optional<cardio::promise<void>> write_task;
+  std::optional<cardio::promise<void>> carrier_task;
+  std::optional<cardio::promise<void>> ended_task;
   std::optional<cardio::promise<void>> transfer_task;
   int serial_fd = -1;
+  int device_event_fd = -1;
   int transfer_input_event_fd = -1;
-  guint read_watch_id = 0;
-  guint write_watch_id = 0;
-  guint carrier_poll_id = 0;
-  guint reconnect_poll_id = 0;
-  guint ended_idle_id = 0;
   bool started = false;
   bool stopping = false;
+  bool connection_loop_running = false;
+  bool ended_notification_pending = false;
+  bool writing = false;
   bool line_warning_reported = false;
   bool connection_warning_reported = false;
   bool disconnected_reported = false;
   bool carrier_disconnected = false;
   bool transfer_active = false;
+  bool zmodem_autostart_enabled = false;
   std::deque<unsigned char> transfer_incoming;
-  std::deque<TimedTransferStartByte> pending_transfer_start_controls;
-
-  void stop_carrier_wait() {
-    if (carrier_wait_state != nullptr) {
-      carrier_wait_state->active = false;
-      close_atomic_fd_noexcept(&carrier_wait_state->fd);
-      carrier_wait_state.reset();
-    }
-    if (carrier_wait_thread.joinable()) {
-      carrier_wait_thread.request_stop();
-      carrier_wait_thread = std::jthread();
-    }
-  }
-
-  void remove_connection_sources() {
-    remove_source(&read_watch_id);
-    remove_source(&write_watch_id);
-    remove_source(&carrier_poll_id);
-    stop_carrier_wait();
-  }
-
-  void remove_sources() {
-    remove_connection_sources();
-    remove_source(&reconnect_poll_id);
-    remove_source(&ended_idle_id);
-  }
+  TerminalZmodemAutoStartDetectorState zmodem_auto_start_detector;
 
   void feed_terminal(const unsigned char *data, std::size_t size) {
     terminal_io.feed(std::span<const unsigned char>(data, size));
@@ -261,34 +199,23 @@ private:
     notify_event_fd_noexcept(transfer_input_event_fd);
   }
 
-  void remember_transfer_start_controls(const unsigned char *data,
-                                        std::size_t size) {
-    if (!is_transfer_start_control_chunk(
-            std::span<const unsigned char>(data, size))) {
-      return;
+  bool handle_zmodem_auto_start(std::span<const unsigned char> bytes) {
+    if (!zmodem_autostart_enabled || !callbacks.zmodem_auto_start ||
+        bytes.empty()) {
+      return false;
     }
 
-    const std::uint64_t now_ms = monotonic_milliseconds();
-    prune_transfer_start_controls(&pending_transfer_start_controls, now_ms);
-    for (std::size_t index = 0; index < size; ++index) {
-      pending_transfer_start_controls.push_back(TimedTransferStartByte{
-          .value = data[index],
-          .timestamp_ms = now_ms,
-      });
+    const std::string_view payload(
+        reinterpret_cast<const char *>(bytes.data()), bytes.size());
+    const std::optional<TerminalTransferDirection> direction =
+        feed_terminal_zmodem_auto_start_detector(&zmodem_auto_start_detector,
+                                                 payload);
+    if (!direction.has_value()) {
+      return false;
     }
-    while (pending_transfer_start_controls.size() >
-           transfer_start_control_max_bytes) {
-      pending_transfer_start_controls.pop_front();
-    }
-  }
 
-  void consume_pending_transfer_start_controls() {
-    const std::uint64_t now_ms = monotonic_milliseconds();
-    prune_transfer_start_controls(&pending_transfer_start_controls, now_ms);
-    for (const TimedTransferStartByte &byte : pending_transfer_start_controls) {
-      transfer_incoming.push_back(byte.value);
-    }
-    pending_transfer_start_controls.clear();
+    callbacks.zmodem_auto_start(*direction);
+    return true;
   }
 
   void notify_activity(ActivityIndicatorId indicator) {
@@ -313,35 +240,52 @@ private:
     notify_indicator_state(ActivityIndicatorId::conn, active);
   }
 
+  cardio::promise<void> notify_session_ended_async() {
+    try {
+      co_await cardio::promises::delay(1, stop_source.get_cancellation());
+    } catch (const cardio::canceled_exception &) {
+      co_return;
+    }
+
+    ended_notification_pending = false;
+    if (!stopping) {
+      notify_session_ended(callbacks);
+    }
+  }
+
   void schedule_disconnected_notification() {
     if (disconnected_reported || stopping) {
       return;
     }
 
     disconnected_reported = true;
-    if (ended_idle_id == 0) {
-      ended_idle_id = g_idle_add(TerminalSerialSession::on_session_ended_idle,
-                                 this);
+    if (!ended_notification_pending) {
+      ended_notification_pending = true;
+      ended_task.reset();
+      ended_task.emplace(notify_session_ended_async());
+    }
+  }
+
+  void cancel_connection_noexcept() {
+    if (connection_cancel_source.has_value()) {
+      (void)connection_cancel_source->cancel();
     }
   }
 
   void start_writer() {
-    if (stopping || serial_fd < 0 || write_watch_id != 0 || outgoing.empty()) {
+    if (stopping || serial_fd < 0 || writing || outgoing.empty() ||
+        !connection_cancel_source.has_value()) {
       return;
     }
 
-    write_watch_id = g_unix_fd_add(
-        serial_fd,
-        static_cast<GIOCondition>(G_IO_OUT | G_IO_ERR | G_IO_HUP | G_IO_NVAL),
-        TerminalSerialSession::on_write_ready, this);
+    writing = true;
+    write_task.reset();
+    write_task.emplace(write_loop_async(
+        serial_fd, connection_cancel_source->get_cancellation()));
   }
 
   void stop_device_monitor() {
     device_event_monitor.reset();
-  }
-
-  void stop_reconnect_poll() {
-    remove_source(&reconnect_poll_id);
   }
 
   bool device_monitor_has_event_sources() const {
@@ -349,131 +293,13 @@ private:
            device_event_monitor->has_event_sources();
   }
 
-  void start_reconnect_poll() {
-    if (stopping || serial_fd >= 0 || reconnect_poll_id != 0) {
-      return;
-    }
-
-    reconnect_poll_id =
-        g_timeout_add(250, TerminalSerialSession::on_reconnect_poll, this);
-  }
-
-  void start_carrier_poll() {
-    if (stopping || serial_fd < 0 || carrier_poll_id != 0) {
-      return;
-    }
-
-    carrier_poll_id = g_timeout_add(100,
-                                    TerminalSerialSession::on_carrier_poll,
-                                    this);
-  }
-
-  static gboolean on_carrier_wait_notification(gpointer user_data) {
-    std::unique_ptr<CarrierWaitNotification> notification(
-        static_cast<CarrierWaitNotification *>(user_data));
-    if (!notification->state->active) {
-      return G_SOURCE_REMOVE;
-    }
-
-    TerminalSerialSession *session = notification->state->session;
-    if (session == nullptr || session->stopping || session->serial_fd < 0) {
-      return G_SOURCE_REMOVE;
-    }
-
-    if (notification->kind == CarrierWaitNotificationKind::changed) {
-      (void)session->handle_carrier_poll();
-    } else {
-      session->start_carrier_poll();
-    }
-    return G_SOURCE_REMOVE;
-  }
-
-  static void schedule_carrier_wait_notification(
-      const std::shared_ptr<CarrierWaitState> &state,
-      CarrierWaitNotificationKind kind) {
-    auto *notification = new CarrierWaitNotification{
-        .state = state,
-        .kind = kind,
-    };
-    g_main_context_invoke(state->context,
-                          TerminalSerialSession::on_carrier_wait_notification,
-                          notification);
-  }
-
-  bool start_carrier_wait() {
-    if (stopping || serial_fd < 0 || carrier_wait_state != nullptr) {
-      return carrier_wait_state != nullptr;
-    }
-
-    const int wait_fd = ::dup(serial_fd);
-    if (wait_fd < 0) {
-      return false;
-    }
-
-    auto state = std::make_shared<CarrierWaitState>(this, wait_fd);
-    try {
-      carrier_wait_thread = std::jthread(
-          [state](std::stop_token stop_token) {
-            while (!stop_token.stop_requested() && state->active) {
-              int mask = carrier_wait_mask();
-              const int fd = state->fd.load();
-              if (fd < 0) {
-                break;
-              }
-
-              if (::ioctl(fd, TIOCMIWAIT, &mask) == 0) {
-                schedule_carrier_wait_notification(
-                    state, CarrierWaitNotificationKind::changed);
-                continue;
-              }
-              if (errno == EINTR) {
-                continue;
-              }
-
-              schedule_carrier_wait_notification(
-                  state, CarrierWaitNotificationKind::unavailable);
-              break;
-            }
-            close_atomic_fd_noexcept(&state->fd);
-          });
-    } catch (...) {
-      state->active = false;
-      close_atomic_fd_noexcept(&state->fd);
-      return false;
-    }
-
-    carrier_wait_state = std::move(state);
-    return true;
-  }
-
-  void start_carrier_monitor() {
-    if (!handle_carrier_poll()) {
-      return;
-    }
-    if (!start_carrier_wait()) {
-      start_carrier_poll();
-    }
-  }
-
-  bool connect_if_available() {
-    const bool connected = attempt_connect();
-    if (connected) {
-      stop_device_monitor();
-      stop_reconnect_poll();
-    }
-    return connected;
-  }
-
   void handle_device_event() {
     if (stopping || serial_fd >= 0) {
       return;
     }
 
-    if (!connect_if_available()) {
-      if (!device_monitor_has_event_sources()) {
-        start_reconnect_poll();
-      }
-    }
+    notify_event_fd_noexcept(device_event_fd);
+    start_connection_loop();
   }
 
   bool start_device_monitor() {
@@ -487,26 +313,23 @@ private:
     return device_monitor_has_event_sources();
   }
 
-  void handle_device_connection_lost() {
-    if (stopping) {
+  void handle_device_connection_lost(int expected_fd) {
+    if (stopping || (expected_fd >= 0 && serial_fd != expected_fd)) {
       return;
     }
 
     cancel_transfer_noexcept();
-    remove_connection_sources();
+    cancel_connection_noexcept();
     outgoing.clear();
     close_fd_noexcept(&serial_fd);
+    connection_cancel_source.reset();
+    writing = false;
     carrier_tracker = SerialCarrierTracker(settings.carrier_detect);
     carrier_disconnected = false;
     notify_serial_line_state({});
     notify_connected_state(false);
     schedule_disconnected_notification();
-    const bool has_event_sources = start_device_monitor();
-    if (!connect_if_available()) {
-      if (!has_event_sources) {
-        start_reconnect_poll();
-      }
-    }
+    start_connection_loop();
   }
 
   void handle_carrier_disconnected() {
@@ -531,9 +354,81 @@ private:
     notify_connected_state(true);
   }
 
-  bool attempt_connect() {
+  enum class CarrierCheckResult {
+    supported,
+    unavailable,
+    connection_lost,
+  };
+
+  CarrierCheckResult check_carrier_state(int fd) {
+    if (stopping || serial_fd != fd) {
+      return CarrierCheckResult::connection_lost;
+    }
+
+    try {
+      const SerialLineSignals signals = read_serial_line_signals(fd);
+      notify_serial_line_state(signals);
+      if (selected_carrier_signal_is_high(signals, settings.carrier_detect)) {
+        handle_carrier_connected();
+      }
+      if (carrier_tracker.update(signals) ==
+          SerialCarrierEvent::disconnected) {
+        handle_carrier_disconnected();
+      }
+      return CarrierCheckResult::supported;
+    } catch (const std::system_error &error) {
+      if (serial_line_error_indicates_connection_lost(error)) {
+        std::cerr << "Warning: serial carrier detection failed: "
+                  << error.what() << '\n';
+        notify_serial_line_state({});
+        handle_device_connection_lost(fd);
+        return CarrierCheckResult::connection_lost;
+      }
+
+      notify_serial_line_state({});
+      if (!line_warning_reported) {
+        std::cerr << "Warning: serial carrier detection unavailable: "
+                  << error.what() << '\n';
+        line_warning_reported = true;
+      }
+      return CarrierCheckResult::unavailable;
+    } catch (const std::exception &error) {
+      notify_serial_line_state({});
+      if (!line_warning_reported) {
+        std::cerr << "Warning: serial carrier detection unavailable: "
+                  << error.what() << '\n';
+        line_warning_reported = true;
+      }
+      return CarrierCheckResult::unavailable;
+    }
+  }
+
+  void start_carrier_monitor(int fd) {
+    if (stopping || serial_fd != fd || !connection_cancel_source.has_value() ||
+        !io.has_value()) {
+      return;
+    }
+
+    carrier_task.reset();
+    if (check_carrier_state(fd) != CarrierCheckResult::supported) {
+      return;
+    }
+
+    carrier_task.emplace(carrier_loop_async(
+        fd, connection_cancel_source->get_cancellation()));
+  }
+
+  void start_connection_tasks(int fd) {
+    connection_cancel_source.emplace();
+    read_task.reset();
+    read_task.emplace(read_loop_async(
+        fd, connection_cancel_source->get_cancellation()));
+    start_carrier_monitor(fd);
+  }
+
+  cardio::promise<bool> attempt_connect_async() {
     if (stopping || serial_fd >= 0) {
-      return serial_fd >= 0;
+      co_return serial_fd >= 0;
     }
 
     const SerialDeviceResolveResult resolve_result =
@@ -545,70 +440,113 @@ private:
         }
         connection_warning_reported = true;
       }
-      return false;
+      co_return false;
     }
 
+    int opened_fd = -1;
     try {
-      serial_fd = ::open(resolve_result.path.c_str(),
-                         O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
-      if (serial_fd < 0) {
-        throw std::system_error(errno, std::generic_category(),
-                                "serial open failed");
+      opened_fd = co_await cardio::io_urings::open(
+          *io, resolve_result.path, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC,
+          0, stop_source.get_cancellation());
+      if (stopping) {
+        close_fd_noexcept(&opened_fd);
+        co_return false;
       }
 
-      configure_serial_port(serial_fd, settings);
-      read_watch_id = g_unix_fd_add(
-          serial_fd,
-          static_cast<GIOCondition>(G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL),
-          TerminalSerialSession::on_read_ready, this);
+      configure_serial_port(opened_fd, settings);
+      serial_fd = opened_fd;
+      opened_fd = -1;
       carrier_tracker = SerialCarrierTracker(settings.carrier_detect);
       line_warning_reported = false;
       connection_warning_reported = false;
       disconnected_reported = false;
       carrier_disconnected = false;
       notify_connected_state(true);
-      start_carrier_monitor();
+      stop_device_monitor();
+      start_connection_tasks(serial_fd);
       start_writer();
-      return true;
+      co_return true;
+    } catch (const cardio::canceled_exception &) {
+      close_fd_noexcept(&opened_fd);
+      co_return false;
     } catch (const std::exception &error) {
       if (!connection_warning_reported) {
         std::cerr << "Warning: failed to initialize serial session: "
                   << error.what() << '\n';
         connection_warning_reported = true;
       }
-      close_fd_noexcept(&serial_fd);
-      return false;
+      close_fd_noexcept(&opened_fd);
+      co_return false;
     }
   }
 
-  bool handle_read_ready(GIOCondition condition) {
-    if ((condition & (G_IO_ERR | G_IO_HUP | G_IO_NVAL)) != 0) {
-      handle_device_connection_lost();
-      return false;
+  cardio::promise<void> connection_loop_async() {
+    try {
+      while (!stopping && serial_fd < 0) {
+        (void)start_device_monitor();
+        const bool connected = co_await attempt_connect_async();
+        if (connected || stopping || serial_fd >= 0) {
+          break;
+        }
+
+        schedule_disconnected_notification();
+        if (!device_monitor_has_event_sources()) {
+          break;
+        }
+        if (consume_event_fd_noexcept(device_event_fd)) {
+          continue;
+        }
+        co_await cardio::from_fd(device_event_fd, cardio::fd_event::read,
+                                 stop_source.get_cancellation());
+        (void)consume_event_fd_noexcept(device_event_fd);
+      }
+    } catch (const cardio::canceled_exception &) {
+    } catch (const std::exception &error) {
+      if (!stopping) {
+        std::cerr << "Warning: serial connection task failed: "
+                  << error.what() << '\n';
+      }
     }
 
-    if ((condition & G_IO_IN) == 0) {
-      return !stopping;
+    connection_loop_running = false;
+  }
+
+  void start_connection_loop() {
+    if (stopping || serial_fd >= 0 || connection_loop_running ||
+        !io.has_value()) {
+      return;
     }
 
+    connection_loop_running = true;
+    connection_task.reset();
+    connection_task.emplace(connection_loop_async());
+  }
+
+  bool drain_serial_reads(int fd) {
     std::array<unsigned char, 4096> buffer{};
     while (!stopping) {
-      const ssize_t read_size =
-          ::read(serial_fd, buffer.data(), buffer.size());
+      if (serial_fd != fd) {
+        return false;
+      }
+
+      const ssize_t read_size = ::read(fd, buffer.data(), buffer.size());
       if (read_size > 0) {
         notify_activity(ActivityIndicatorId::rd);
         if (transfer_active) {
           append_transfer_input(buffer.data(),
                                 static_cast<std::size_t>(read_size));
         } else {
-          remember_transfer_start_controls(
+          const std::span<const unsigned char> bytes(
               buffer.data(), static_cast<std::size_t>(read_size));
+          if (handle_zmodem_auto_start(bytes)) {
+            continue;
+          }
           feed_terminal(buffer.data(), static_cast<std::size_t>(read_size));
         }
         continue;
       }
       if (read_size == 0) {
-        return true;
+        return false;
       }
       if (errno == EINTR) {
         continue;
@@ -619,168 +557,128 @@ private:
 
       std::cerr << "Warning: serial read failed: " << std::strerror(errno)
                 << '\n';
-      handle_device_connection_lost();
       return false;
     }
 
     return false;
   }
 
-  bool handle_write_ready(GIOCondition condition) {
-    if ((condition & (G_IO_ERR | G_IO_HUP | G_IO_NVAL)) != 0) {
-      handle_device_connection_lost();
-      return false;
+  cardio::promise<void>
+  read_loop_async(int fd, cardio::cancellation cancellation) {
+    bool connection_lost = false;
+    try {
+      while (!stopping && serial_fd == fd) {
+        const cardio::fd_event events =
+            co_await cardio::from_fd(fd, cardio::fd_event::read,
+                                     cancellation);
+        if (fd_events_indicate_connection_lost(events)) {
+          connection_lost = true;
+          break;
+        }
+        if ((events & cardio::fd_event::read) == cardio::fd_event::none) {
+          continue;
+        }
+        if (!drain_serial_reads(fd)) {
+          connection_lost = true;
+          break;
+        }
+      }
+    } catch (const cardio::canceled_exception &) {
+    } catch (const std::exception &error) {
+      if (!stopping) {
+        std::cerr << "Warning: serial read failed: " << error.what() << '\n';
+        connection_lost = true;
+      }
     }
 
-    while (!stopping && serial_fd >= 0 && !outgoing.empty()) {
-      std::vector<unsigned char> &chunk = outgoing.front();
-      if (chunk.empty()) {
-        outgoing.pop_front();
-        continue;
-      }
-
-      const ssize_t written = ::write(serial_fd, chunk.data(), chunk.size());
-      if (written > 0) {
-        notify_activity(ActivityIndicatorId::sd);
-        chunk.erase(chunk.begin(),
-                    chunk.begin() + static_cast<std::size_t>(written));
-        continue;
-      }
-      if (written == 0) {
-        break;
-      }
-      if (errno == EINTR) {
-        continue;
-      }
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        return true;
-      }
-
-      std::cerr << "Warning: serial write failed: " << std::strerror(errno)
-                << '\n';
-      handle_device_connection_lost();
-      return false;
+    if (connection_lost && !stopping) {
+      handle_device_connection_lost(fd);
     }
-
-    return !outgoing.empty() && !stopping;
   }
 
-  bool handle_carrier_poll() {
-    if (stopping || serial_fd < 0) {
-      return false;
+  cardio::promise<void>
+  write_loop_async(int fd, cardio::cancellation cancellation) {
+    bool connection_lost = false;
+    try {
+      while (!stopping && serial_fd == fd && !outgoing.empty()) {
+        std::vector<unsigned char> chunk = std::move(outgoing.front());
+        outgoing.pop_front();
+        std::size_t offset = 0;
+        while (!stopping && serial_fd == fd && offset < chunk.size()) {
+          const ssize_t written =
+              ::write(fd, chunk.data() + offset, chunk.size() - offset);
+          if (written > 0) {
+            notify_activity(ActivityIndicatorId::sd);
+            offset += static_cast<std::size_t>(written);
+            continue;
+          }
+          if (written == 0) {
+            throw std::runtime_error("serial write made no progress");
+          }
+          if (errno == EINTR) {
+            continue;
+          }
+          if (errno != EAGAIN && errno != EWOULDBLOCK) {
+            std::cerr << "Warning: serial write failed: "
+                      << std::strerror(errno) << '\n';
+            connection_lost = true;
+            break;
+          }
+
+          const cardio::fd_event events =
+              co_await cardio::from_fd(fd, cardio::fd_event::write,
+                                       cancellation);
+          if (fd_events_indicate_connection_lost(events)) {
+            connection_lost = true;
+            break;
+          }
+        }
+        if (connection_lost) {
+          break;
+        }
+      }
+    } catch (const cardio::canceled_exception &) {
+    } catch (const std::exception &error) {
+      if (!stopping) {
+        std::cerr << "Warning: serial write failed: " << error.what() << '\n';
+        connection_lost = true;
+      }
     }
 
+    writing = false;
+    if (connection_lost && !stopping) {
+      handle_device_connection_lost(fd);
+      co_return;
+    }
+    if (!stopping && serial_fd == fd && !outgoing.empty()) {
+      start_writer();
+    }
+  }
+
+  cardio::promise<void>
+  carrier_loop_async(int fd, cardio::cancellation cancellation) {
     try {
-      const SerialLineSignals signals = read_serial_line_signals(serial_fd);
-      notify_serial_line_state(signals);
-      if (selected_carrier_signal_is_high(signals, settings.carrier_detect)) {
-        handle_carrier_connected();
+      while (!stopping && serial_fd == fd) {
+        const short events =
+            co_await wait_serial_modem_line_change_async(
+                *io, fd, cancellation);
+        if ((events & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+          handle_device_connection_lost(fd);
+          co_return;
+        }
+        const CarrierCheckResult result = check_carrier_state(fd);
+        if (result != CarrierCheckResult::supported) {
+          co_return;
+        }
       }
-      if (carrier_tracker.update(signals) ==
-          SerialCarrierEvent::disconnected) {
-        handle_carrier_disconnected();
-      }
-    } catch (const std::system_error &error) {
-      if (serial_line_error_indicates_connection_lost(error)) {
+    } catch (const cardio::canceled_exception &) {
+    } catch (const std::exception &error) {
+      if (!stopping && serial_fd == fd) {
         std::cerr << "Warning: serial carrier detection failed: "
                   << error.what() << '\n';
-        notify_serial_line_state({});
-        handle_device_connection_lost();
-        return false;
-      }
-
-      notify_serial_line_state({});
-      if (!line_warning_reported) {
-        std::cerr << "Warning: serial carrier detection unavailable: "
-                  << error.what() << '\n';
-        line_warning_reported = true;
-      }
-    } catch (const std::exception &error) {
-      notify_serial_line_state({});
-      if (!line_warning_reported) {
-        std::cerr << "Warning: serial carrier detection unavailable: "
-                  << error.what() << '\n';
-        line_warning_reported = true;
+        handle_device_connection_lost(fd);
       }
     }
-
-    return true;
-  }
-
-  bool handle_reconnect_poll() {
-    if (stopping || serial_fd >= 0) {
-      return false;
-    }
-
-    const bool has_event_sources = start_device_monitor();
-    if (connect_if_available()) {
-      return false;
-    }
-    return !has_event_sources;
-  }
-
-  static gboolean on_read_ready(gint, GIOCondition condition,
-                                gpointer user_data) {
-    auto *self = static_cast<TerminalSerialSession *>(user_data);
-    const bool keep = self->handle_read_ready(condition);
-    if (!keep) {
-      self->read_watch_id = 0;
-    }
-    return keep ? G_SOURCE_CONTINUE : G_SOURCE_REMOVE;
-  }
-
-  static gboolean on_write_ready(gint, GIOCondition condition,
-                                 gpointer user_data) {
-    auto *self = static_cast<TerminalSerialSession *>(user_data);
-    const bool keep = self->handle_write_ready(condition);
-    if (!keep) {
-      self->write_watch_id = 0;
-    }
-    return keep ? G_SOURCE_CONTINUE : G_SOURCE_REMOVE;
-  }
-
-  static gboolean on_carrier_poll(gpointer user_data) {
-    auto *self = static_cast<TerminalSerialSession *>(user_data);
-    const bool keep = self->handle_carrier_poll();
-    if (!keep) {
-      self->carrier_poll_id = 0;
-    }
-    return keep ? G_SOURCE_CONTINUE : G_SOURCE_REMOVE;
-  }
-
-  static gboolean on_reconnect_poll(gpointer user_data) {
-    auto *self = static_cast<TerminalSerialSession *>(user_data);
-    const bool keep = self->handle_reconnect_poll();
-    if (!keep) {
-      self->reconnect_poll_id = 0;
-    }
-    return keep ? G_SOURCE_CONTINUE : G_SOURCE_REMOVE;
-  }
-
-  static gboolean on_session_ended_idle(gpointer user_data) {
-    auto *self = static_cast<TerminalSerialSession *>(user_data);
-    self->ended_idle_id = 0;
-    if (!self->stopping) {
-      notify_session_ended(self->callbacks);
-    }
-    return G_SOURCE_REMOVE;
-  }
-
-  void send_user_input(std::span<const unsigned char> bytes) {
-    if (bytes.empty() || stopping || serial_fd < 0 ||
-        carrier_disconnected || transfer_active) {
-      return;
-    }
-
-    outgoing.emplace_back(bytes.begin(), bytes.end());
-    start_writer();
-  }
-
-  void cancel_transfer_noexcept() {
-    if (transfer_cancel_source.has_value()) {
-      (void)transfer_cancel_source->cancel();
-    }
-    notify_event_fd_noexcept(transfer_input_event_fd);
   }
 
   cardio::promise<void>
@@ -817,6 +715,13 @@ private:
       }
       throw xyzm_async_timeout_error("serial transfer send timeout");
     }
+  }
+
+  void cancel_transfer_noexcept() {
+    if (transfer_cancel_source.has_value()) {
+      (void)transfer_cancel_source->cancel();
+    }
+    notify_event_fd_noexcept(transfer_input_event_fd);
   }
 
   cardio::promise<void>
@@ -931,6 +836,16 @@ private:
     }
   }
 
+  void send_user_input(std::span<const unsigned char> bytes) {
+    if (bytes.empty() || stopping || serial_fd < 0 ||
+        carrier_disconnected || transfer_active) {
+      return;
+    }
+
+    outgoing.emplace_back(bytes.begin(), bytes.end());
+    start_writer();
+  }
+
   void finish_transfer(const TerminalTransferRequest &request,
                        bool succeeded) {
     transfer_active = false;
@@ -1012,6 +927,7 @@ public:
   ~TerminalSerialSession() override {
     stop();
     close_fd_noexcept(&serial_fd);
+    close_fd_noexcept(&device_event_fd);
     close_fd_noexcept(&transfer_input_event_fd);
   }
 
@@ -1025,10 +941,15 @@ public:
 
     stopping = false;
     try {
+      io.emplace(64);
+      device_event_fd = open_event_fd();
       transfer_input_event_fd = open_event_fd();
     } catch (const std::exception &error) {
       std::cerr << "Warning: failed to initialize serial session: "
                 << error.what() << '\n';
+      close_fd_noexcept(&device_event_fd);
+      close_fd_noexcept(&transfer_input_event_fd);
+      io.reset();
       return false;
     }
     terminal_io.connect_user_input(
@@ -1036,14 +957,7 @@ public:
           send_user_input(bytes);
         });
     started = true;
-
-    const bool has_event_sources = start_device_monitor();
-    if (!connect_if_available()) {
-      if (!has_event_sources) {
-        start_reconnect_poll();
-      }
-      schedule_disconnected_notification();
-    }
+    start_connection_loop();
 
     return true;
   }
@@ -1055,10 +969,14 @@ public:
 
     stopping = true;
     cancel_transfer_noexcept();
+    cancel_connection_noexcept();
+    (void)stop_source.cancel();
+    notify_event_fd_noexcept(device_event_fd);
     terminal_io.disconnect_user_input();
-    remove_sources();
     stop_device_monitor();
+    ended_notification_pending = false;
     outgoing.clear();
+    transfer_incoming.clear();
     close_fd_noexcept(&serial_fd);
   }
 
@@ -1079,6 +997,9 @@ public:
 
     if (settings.carrier_detect != previous_carrier_detect) {
       carrier_tracker = SerialCarrierTracker(settings.carrier_detect);
+      if (serial_fd >= 0) {
+        start_carrier_monitor(serial_fd);
+      }
     }
 
     if (serial_fd >= 0) {
@@ -1087,18 +1008,13 @@ public:
       } catch (const std::exception &error) {
         std::cerr << "Warning: failed to apply serial settings: "
                   << error.what() << '\n';
-        handle_device_connection_lost();
+        handle_device_connection_lost(serial_fd);
       }
       return;
     }
 
     if (started) {
-      const bool has_event_sources = start_device_monitor();
-      if (!connect_if_available()) {
-        if (!has_event_sources) {
-          start_reconnect_poll();
-        }
-      }
+      start_connection_loop();
     }
   }
 
@@ -1115,6 +1031,15 @@ public:
     return transfer_active;
   }
 
+  void set_zmodem_autostart(bool enabled) override {
+    if (zmodem_autostart_enabled == enabled) {
+      return;
+    }
+
+    zmodem_autostart_enabled = enabled;
+    zmodem_auto_start_detector = {};
+  }
+
   bool start_transfer(TerminalTransferRequest request) override {
     if (!started || stopping || transfer_active || serial_fd < 0 ||
         carrier_disconnected) {
@@ -1127,11 +1052,6 @@ public:
 
     transfer_cancel_source.emplace();
     transfer_incoming.clear();
-    if (should_consume_transfer_start_controls(request)) {
-      consume_pending_transfer_start_controls();
-    } else {
-      pending_transfer_start_controls.clear();
-    }
     transfer_active = true;
     terminal_io.disconnect_user_input();
     outgoing.clear();

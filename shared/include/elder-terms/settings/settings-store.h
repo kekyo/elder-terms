@@ -46,6 +46,9 @@ struct SettingDefinition {
   SettingValue default_value;
   /** Optional semantic validation applied after parsing. */
   SettingValueValidator validate = nullptr;
+  /** True when an explicit loaded value should be saved even if it matches the
+   * default. */
+  bool save_when_loaded = false;
 };
 
 /**
@@ -56,7 +59,7 @@ struct SettingEntry {
   SettingDefinition definition;
   /** Current value, initialized from default_value. */
   SettingValue value;
-  /** True when the value came from a configuration file. */
+  /** True when the value came from a configuration file or explicit override. */
   bool loaded = false;
   /** True after the value is changed in memory. */
   bool dirty = false;
@@ -165,6 +168,38 @@ bool setting_boolean_value_or_default(const SettingsStore &store,
  */
 bool set_setting_value(
   SettingsStore *store, const SettingKey &key, SettingValue value);
+
+/**
+ * Updates a setting as an explicit override and marks it dirty when the
+ * persisted state changes.
+ *
+ * @param store Target settings store.
+ * @param key Setting key.
+ * @param value New explicit value.
+ * @returns True when the key exists and the value was accepted.
+ */
+bool set_explicit_setting_value(
+  SettingsStore *store, const SettingKey &key, SettingValue value);
+
+/**
+ * Clears a setting's explicit override and restores its registered default.
+ *
+ * @param store Target settings store.
+ * @param key Setting key.
+ * @returns True when the key exists.
+ */
+bool clear_explicit_setting_value(SettingsStore *store,
+                                  const SettingKey &key);
+
+/**
+ * Checks whether one setting has an explicit loaded or in-memory override.
+ *
+ * @param store Source settings store.
+ * @param key Setting key.
+ * @returns True when the setting is explicit rather than implicit default.
+ */
+bool setting_has_explicit_value(const SettingsStore &store,
+                                const SettingKey &key);
 
 /**
  * Checks whether one setting has unsaved changes.

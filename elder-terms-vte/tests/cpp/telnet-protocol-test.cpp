@@ -62,6 +62,78 @@ static void iac_escaped_data_passes_to_terminal() {
                "IAC IAC should produce one terminal IAC byte");
 }
 
+static void nvt_cr_lf_passes_to_terminal() {
+  TelnetProtocol protocol;
+  const TelnetProtocolResult result =
+      receive_bytes(&protocol, {'a', 13, 10, 'b'});
+
+  expect_bytes(result.terminal_data, {'a', 13, 10, 'b'},
+               "NVT CR LF should remain terminal CR LF");
+}
+
+static void nvt_cr_nul_normalizes_to_cr() {
+  TelnetProtocol protocol;
+  const TelnetProtocolResult result =
+      receive_bytes(&protocol, {'a', 13, 0, 'b'});
+
+  expect_bytes(result.terminal_data, {'a', 13, 'b'},
+               "NVT CR NUL should become terminal CR");
+}
+
+static void nvt_standalone_nul_is_dropped() {
+  TelnetProtocol protocol;
+  const TelnetProtocolResult result =
+      receive_bytes(&protocol, {'a', 0, 'b'});
+
+  expect_bytes(result.terminal_data, {'a', 'b'},
+               "NVT standalone NUL should not reach terminal data");
+}
+
+static void nvt_cr_nul_split_across_receives_normalizes_to_cr() {
+  TelnetProtocol protocol;
+  const TelnetProtocolResult first = receive_bytes(&protocol, {'a', 13});
+  const TelnetProtocolResult second = receive_bytes(&protocol, {0, 'b'});
+
+  expect_bytes(first.terminal_data, {'a'},
+               "NVT CR at receive boundary should wait for the next byte");
+  expect_bytes(second.terminal_data, {13, 'b'},
+               "NVT split CR NUL should become terminal CR");
+}
+
+static void nvt_cr_lf_split_across_receives_passes_to_terminal() {
+  TelnetProtocol protocol;
+  const TelnetProtocolResult first = receive_bytes(&protocol, {'a', 13});
+  const TelnetProtocolResult second = receive_bytes(&protocol, {10, 'b'});
+
+  expect_bytes(first.terminal_data, {'a'},
+               "NVT CR at receive boundary should not be flushed early");
+  expect_bytes(second.terminal_data, {13, 10, 'b'},
+               "NVT split CR LF should remain terminal CR LF");
+}
+
+static void nvt_cr_before_regular_byte_preserves_both_bytes() {
+  TelnetProtocol protocol;
+  const TelnetProtocolResult result =
+      receive_bytes(&protocol, {'a', 13, 'x'});
+
+  expect_bytes(result.terminal_data, {'a', 13, 'x'},
+               "NVT CR before a regular byte should preserve both bytes");
+}
+
+static void pending_nvt_cr_flushes_before_command() {
+  TelnetProtocol protocol;
+  const TelnetProtocolResult first = receive_bytes(&protocol, {13});
+  const TelnetProtocolResult second =
+      receive_bytes(&protocol, {255, 251, 1, 'x'});
+
+  expect_bytes(first.terminal_data, {},
+               "NVT CR should remain pending before the next receive");
+  expect_bytes(second.terminal_data, {13, 'x'},
+               "Pending NVT CR before TELNET command should reach terminal");
+  expect_response(second, 0, {255, 253, 1},
+                  "TELNET command after pending NVT CR should be handled");
+}
+
 static void do_naws_enables_and_sends_window_size() {
   TelnetProtocol protocol;
   protocol.set_window_size(80, 24);
@@ -151,6 +223,19 @@ static void binary_negotiation_rejects_dont_or_wont() {
   }
 }
 
+static void remote_binary_receive_preserves_nvt_bytes() {
+  TelnetProtocol protocol;
+  const TelnetProtocolResult negotiation =
+      receive_bytes(&protocol, {255, 251, 0});
+  const TelnetProtocolResult result =
+      receive_bytes(&protocol, {'a', 13, 0, 'b', 0, 13, 10});
+
+  expect_response(negotiation, 0, {255, 253, 0},
+                  "WILL BINARY should enable remote binary data");
+  expect_bytes(result.terminal_data, {'a', 13, 0, 'b', 0, 13, 10},
+               "Remote BINARY data should not be NVT-normalized");
+}
+
 static void user_input_escapes_iac() {
   TelnetProtocol protocol;
   const TelnetBytes input{'a', 255, 'b'};
@@ -176,12 +261,20 @@ int main() {
   try {
     elder_terms::plain_data_passes_to_terminal();
     elder_terms::iac_escaped_data_passes_to_terminal();
+    elder_terms::nvt_cr_lf_passes_to_terminal();
+    elder_terms::nvt_cr_nul_normalizes_to_cr();
+    elder_terms::nvt_standalone_nul_is_dropped();
+    elder_terms::nvt_cr_nul_split_across_receives_normalizes_to_cr();
+    elder_terms::nvt_cr_lf_split_across_receives_passes_to_terminal();
+    elder_terms::nvt_cr_before_regular_byte_preserves_both_bytes();
+    elder_terms::pending_nvt_cr_flushes_before_command();
     elder_terms::do_naws_enables_and_sends_window_size();
     elder_terms::naws_escapes_iac_sized_fields();
     elder_terms::supported_will_options_are_accepted();
     elder_terms::unsupported_options_are_rejected();
     elder_terms::binary_negotiation_request_enables_both_directions();
     elder_terms::binary_negotiation_rejects_dont_or_wont();
+    elder_terms::remote_binary_receive_preserves_nvt_bytes();
     elder_terms::user_input_escapes_iac();
     elder_terms::user_input_preserves_ascii_del();
   } catch (const std::exception &error) {

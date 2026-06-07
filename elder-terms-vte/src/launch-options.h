@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace elder_terms {
 
@@ -14,8 +15,8 @@ struct TestOptions {
   bool fixture = false;
   /** True when transfer dialogs should report their current folder URI. */
   bool transfer_dialog_probe = false;
-  /** Optional source file URI used instead of opening the send file dialog. */
-  std::optional<std::string> transfer_source_uri;
+  /** Source file URIs used instead of opening the send file dialog. */
+  std::vector<std::string> transfer_source_uris;
 };
 
 /**

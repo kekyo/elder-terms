@@ -116,6 +116,15 @@ bool start_terminal_session_transfer(TerminalSessionState *state,
   return state->session->start_transfer(std::move(request));
 }
 
+void set_terminal_session_zmodem_autostart(TerminalSessionState *state,
+                                           bool enabled) {
+  if (state == nullptr || state->session == nullptr) {
+    return;
+  }
+
+  state->session->set_zmodem_autostart(enabled);
+}
+
 std::string terminal_session_title(const TerminalSessionState *state) {
   if (state == nullptr || state->session == nullptr) {
     return application_title;

@@ -10,6 +10,7 @@
 
 #include "activity-indicator.h"
 #include "activity-indicator-id.h"
+#include "terminal-transfer.h"
 
 namespace elder_terms {
 
@@ -31,8 +32,26 @@ struct MainWindow {
   GtkWidget *root_box = nullptr;
   /** Scroller surrounding the terminal and scrollbar. */
   GtkWidget *terminal_scroller = nullptr;
+  /** Overlay stacking disconnected status on top of the terminal. */
+  GtkWidget *terminal_overlay = nullptr;
   /** VTE terminal widget. */
   GtkWidget *terminal = nullptr;
+  /** Overlay used to dim the terminal without changing the VTE background. */
+  GtkWidget *terminal_dim_overlay = nullptr;
+  /** Inline disconnected notice shown on the terminal surface. */
+  GtkWidget *disconnected_notice = nullptr;
+  /** Background layer inside the inline disconnected notice. */
+  GtkWidget *disconnected_notice_background = nullptr;
+  /** Label inside the inline disconnected notice. */
+  GtkWidget *disconnected_notice_label = nullptr;
+  /** Inline transfer progress notice shown on the terminal surface. */
+  GtkWidget *transfer_progress_notice = nullptr;
+  /** Background layer inside the inline transfer progress notice. */
+  GtkWidget *transfer_progress_notice_background = nullptr;
+  /** Label inside the inline transfer progress notice. */
+  GtkWidget *transfer_progress_notice_label = nullptr;
+  /** Progress bar inside the inline transfer progress notice. */
+  GtkWidget *transfer_progress_bar = nullptr;
   /** Scrollbar bound to the terminal vadjustment. */
   GtkWidget *terminal_scrollbar = nullptr;
   /** Status bar container. */
@@ -55,6 +74,12 @@ struct MainWindow {
   GdkPixbuf *indicator_off_icon = nullptr;
   /** Activity indicator runtime states. */
   std::array<ActivityIndicatorWidget, activity_indicator_count()> indicators{};
+  /** Active transfer progress pulse timeout, or 0 when not pulsing. */
+  guint transfer_progress_pulse_source = 0;
+  /** Title without transient connection-state suffixes. */
+  std::string base_title = "elder-terms-vte";
+  /** True while the backend connection is currently active. */
+  bool connection_active = true;
 };
 
 /**
@@ -101,6 +126,24 @@ void set_main_window_connection_active(MainWindow *main_window,
  */
 void set_main_window_terminal_interactive(MainWindow *main_window,
                                           bool interactive);
+
+/**
+ * Updates transfer progress notice visibility.
+ *
+ * @param main_window Main window containing the terminal overlay.
+ * @param visible True when the transfer progress notice should be shown.
+ */
+void set_main_window_transfer_progress_visible(MainWindow *main_window,
+                                               bool visible);
+
+/**
+ * Updates the transfer progress bar mode and value.
+ *
+ * @param main_window Main window containing the transfer progress bar.
+ * @param progress Transfer progress presentation state.
+ */
+void set_main_window_transfer_progress(MainWindow *main_window,
+                                       TerminalTransferProgress progress);
 
 /**
  * Updates transfer button visibility.

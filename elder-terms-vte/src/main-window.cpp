@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -11,8 +12,34 @@
 namespace elder_terms {
 
 static constexpr int indicator_icon_pixel_size = 18;
-static constexpr double connected_terminal_opacity = 1.0;
-static constexpr double disconnected_terminal_opacity = 0.65;
+static constexpr guint transfer_progress_pulse_period_ms = 120;
+static constexpr const char *disconnected_title_suffix = " (Disconnected)";
+static constexpr const char *terminal_dim_overlay_style_class =
+    "terminal-dim-overlay";
+static constexpr const char *disconnected_notice_background_style_class =
+    "disconnected-notice-background";
+static constexpr const char *disconnected_notice_label_style_class =
+    "disconnected-notice-label";
+static constexpr const char *transfer_progress_notice_background_style_class =
+    "transfer-progress-notice-background";
+static constexpr const char *transfer_progress_notice_label_style_class =
+    "transfer-progress-notice-label";
+static constexpr const char *main_window_css =
+    ".terminal-dim-overlay {"
+    "  background-color: rgba(0, 0, 0, 0.35);"
+    "}"
+    ".disconnected-notice-background {"
+    "  background-color: rgba(64, 64, 64, 0.8);"
+    "}"
+    ".disconnected-notice-label {"
+    "  color: #ffff00;"
+    "}"
+    ".transfer-progress-notice-background {"
+    "  background-color: rgba(64, 64, 64, 0.8);"
+    "}"
+    ".transfer-progress-notice-label {"
+    "  color: #ffff00;"
+    "}";
 static constexpr const char *indicator_on_icon_file_name = "green-on.png";
 static constexpr const char *indicator_off_icon_file_name = "green-off.png";
 
@@ -46,7 +73,16 @@ static bool main_window_has_required_widgets(const MainWindow &main_window) {
          main_window.transfer_button != nullptr &&
          main_window.root_box != nullptr &&
          main_window.terminal_scroller != nullptr &&
+         main_window.terminal_overlay != nullptr &&
          main_window.terminal != nullptr &&
+         main_window.terminal_dim_overlay != nullptr &&
+         main_window.disconnected_notice != nullptr &&
+         main_window.disconnected_notice_background != nullptr &&
+         main_window.disconnected_notice_label != nullptr &&
+         main_window.transfer_progress_notice != nullptr &&
+         main_window.transfer_progress_notice_background != nullptr &&
+         main_window.transfer_progress_notice_label != nullptr &&
+         main_window.transfer_progress_bar != nullptr &&
          main_window.terminal_scrollbar != nullptr &&
          main_window.status_bar != nullptr &&
          main_window.status_label != nullptr &&
@@ -170,6 +206,131 @@ static bool load_indicator_images(MainWindow *main_window) {
   return true;
 }
 
+static void apply_main_window_style(MainWindow *main_window) {
+  GtkCssProvider *provider = gtk_css_provider_new();
+  gtk_css_provider_load_from_data(provider, main_window_css, -1, nullptr);
+
+  GtkStyleContext *dim_context =
+      gtk_widget_get_style_context(main_window->terminal_dim_overlay);
+  gtk_style_context_add_class(dim_context, terminal_dim_overlay_style_class);
+  gtk_style_context_add_provider(dim_context, GTK_STYLE_PROVIDER(provider),
+                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+  GtkStyleContext *notice_context = gtk_widget_get_style_context(
+      main_window->disconnected_notice_background);
+  gtk_style_context_add_class(notice_context,
+                              disconnected_notice_background_style_class);
+  gtk_style_context_add_provider(notice_context, GTK_STYLE_PROVIDER(provider),
+                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+  GtkStyleContext *notice_label_context =
+      gtk_widget_get_style_context(main_window->disconnected_notice_label);
+  gtk_style_context_add_class(notice_label_context,
+                              disconnected_notice_label_style_class);
+  gtk_style_context_add_provider(notice_label_context,
+                                 GTK_STYLE_PROVIDER(provider),
+                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+  GtkStyleContext *transfer_notice_context = gtk_widget_get_style_context(
+      main_window->transfer_progress_notice_background);
+  gtk_style_context_add_class(
+      transfer_notice_context, transfer_progress_notice_background_style_class);
+  gtk_style_context_add_provider(transfer_notice_context,
+                                 GTK_STYLE_PROVIDER(provider),
+                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+  GtkStyleContext *transfer_notice_label_context = gtk_widget_get_style_context(
+      main_window->transfer_progress_notice_label);
+  gtk_style_context_add_class(transfer_notice_label_context,
+                              transfer_progress_notice_label_style_class);
+  gtk_style_context_add_provider(transfer_notice_label_context,
+                                 GTK_STYLE_PROVIDER(provider),
+                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+  g_object_unref(provider);
+}
+
+static std::string display_title(const MainWindow &main_window) {
+  if (main_window.connection_active) {
+    return main_window.base_title;
+  }
+
+  return main_window.base_title + disconnected_title_suffix;
+}
+
+static void apply_main_window_title(MainWindow *main_window) {
+  const std::string title = display_title(*main_window);
+  if (main_window->window != nullptr) {
+    gtk_window_set_title(GTK_WINDOW(main_window->window), title.c_str());
+  }
+  if (main_window->header_bar != nullptr) {
+    gtk_header_bar_set_title(GTK_HEADER_BAR(main_window->header_bar),
+                             title.c_str());
+  }
+}
+
+static void set_main_window_disconnected_notice_visible(
+    MainWindow *main_window, bool visible) {
+  if (main_window == nullptr || main_window->disconnected_notice == nullptr) {
+    return;
+  }
+
+  gtk_widget_set_no_show_all(main_window->disconnected_notice, !visible);
+  gtk_widget_set_visible(main_window->disconnected_notice, visible);
+  if (visible) {
+    gtk_widget_show_all(main_window->disconnected_notice);
+  }
+}
+
+static void set_main_window_terminal_dim_visible(MainWindow *main_window,
+                                                 bool visible) {
+  if (main_window == nullptr || main_window->terminal_dim_overlay == nullptr) {
+    return;
+  }
+
+  gtk_widget_set_no_show_all(main_window->terminal_dim_overlay, !visible);
+  gtk_widget_set_visible(main_window->terminal_dim_overlay, visible);
+  if (visible) {
+    gtk_widget_show_all(main_window->terminal_dim_overlay);
+  }
+}
+
+static void stop_main_window_transfer_progress_pulse(MainWindow *main_window) {
+  if (main_window == nullptr ||
+      main_window->transfer_progress_pulse_source == 0) {
+    return;
+  }
+
+  g_source_remove(main_window->transfer_progress_pulse_source);
+  main_window->transfer_progress_pulse_source = 0;
+}
+
+static gboolean pulse_main_window_transfer_progress(gpointer data) {
+  auto *main_window = static_cast<MainWindow *>(data);
+  if (main_window == nullptr || main_window->transfer_progress_bar == nullptr ||
+      main_window->transfer_progress_notice == nullptr ||
+      !gtk_widget_get_visible(main_window->transfer_progress_notice)) {
+    if (main_window != nullptr) {
+      main_window->transfer_progress_pulse_source = 0;
+    }
+    return G_SOURCE_REMOVE;
+  }
+
+  gtk_progress_bar_pulse(GTK_PROGRESS_BAR(main_window->transfer_progress_bar));
+  return G_SOURCE_CONTINUE;
+}
+
+static void start_main_window_transfer_progress_pulse(MainWindow *main_window) {
+  if (main_window == nullptr ||
+      main_window->transfer_progress_pulse_source != 0) {
+    return;
+  }
+
+  main_window->transfer_progress_pulse_source =
+      g_timeout_add(transfer_progress_pulse_period_ms,
+                    pulse_main_window_transfer_progress, main_window);
+}
+
 std::optional<MainWindow> load_main_window() {
   MainWindow main_window;
   GError *error = nullptr;
@@ -197,8 +358,26 @@ std::optional<MainWindow> load_main_window() {
   main_window.root_box = required_widget(main_window.builder, "root_box");
   main_window.terminal_scroller =
       required_widget(main_window.builder, "terminal_scroller");
+  main_window.terminal_overlay =
+      required_widget(main_window.builder, "terminal_overlay");
   main_window.terminal =
       required_widget(main_window.builder, "terminal_view");
+  main_window.terminal_dim_overlay =
+      required_widget(main_window.builder, "terminal_dim_overlay");
+  main_window.disconnected_notice =
+      required_widget(main_window.builder, "disconnected_notice");
+  main_window.disconnected_notice_background =
+      required_widget(main_window.builder, "disconnected_notice_background");
+  main_window.disconnected_notice_label =
+      required_widget(main_window.builder, "disconnected_notice_label");
+  main_window.transfer_progress_notice =
+      required_widget(main_window.builder, "transfer_progress_notice");
+  main_window.transfer_progress_notice_background =
+      required_widget(main_window.builder, "transfer_progress_notice_background");
+  main_window.transfer_progress_notice_label =
+      required_widget(main_window.builder, "transfer_progress_notice_label");
+  main_window.transfer_progress_bar =
+      required_widget(main_window.builder, "transfer_progress_bar");
   main_window.terminal_scrollbar =
       required_widget(main_window.builder, "terminal_scrollbar");
   main_window.status_bar = required_widget(main_window.builder, "status_bar");
@@ -210,6 +389,7 @@ std::optional<MainWindow> load_main_window() {
     release_main_window(&main_window);
     return std::nullopt;
   }
+  apply_main_window_style(&main_window);
   create_activity_indicator_widgets(&main_window);
   if (!load_indicator_images(&main_window)) {
     release_main_window(&main_window);
@@ -259,7 +439,10 @@ void set_main_window_connection_active(MainWindow *main_window,
 
   set_main_window_indicator_state(main_window, ActivityIndicatorId::conn,
                                   connected);
+  main_window->connection_active = connected;
   set_main_window_terminal_interactive(main_window, connected);
+  set_main_window_disconnected_notice_visible(main_window, !connected);
+  apply_main_window_title(main_window);
 }
 
 void set_main_window_terminal_interactive(MainWindow *main_window,
@@ -273,9 +456,56 @@ void set_main_window_terminal_interactive(MainWindow *main_window,
 
   vte_terminal_set_input_enabled(VTE_TERMINAL(main_window->terminal),
                                  interactive);
-  gtk_widget_set_opacity(main_window->terminal,
-                         interactive ? connected_terminal_opacity
-                                     : disconnected_terminal_opacity);
+  set_main_window_terminal_dim_visible(main_window, !interactive);
+}
+
+void set_main_window_transfer_progress_visible(MainWindow *main_window,
+                                               bool visible) {
+  if (main_window == nullptr ||
+      main_window->transfer_progress_notice == nullptr) {
+    return;
+  }
+
+  if (!visible) {
+    stop_main_window_transfer_progress_pulse(main_window);
+  }
+
+  gtk_widget_set_no_show_all(main_window->transfer_progress_notice, !visible);
+  gtk_widget_set_visible(main_window->transfer_progress_notice, visible);
+  if (visible) {
+    gtk_widget_show_all(main_window->transfer_progress_notice);
+    set_main_window_transfer_progress(
+        main_window, TerminalTransferProgress{
+                         .mode = TerminalTransferProgressMode::indeterminate,
+                         .fraction = std::nullopt,
+                     });
+  }
+}
+
+void set_main_window_transfer_progress(MainWindow *main_window,
+                                       TerminalTransferProgress progress) {
+  if (main_window == nullptr ||
+      main_window->transfer_progress_bar == nullptr) {
+    return;
+  }
+  const bool notice_visible =
+      main_window->transfer_progress_notice != nullptr &&
+      gtk_widget_get_visible(main_window->transfer_progress_notice);
+
+  if (progress.mode == TerminalTransferProgressMode::determinate) {
+    stop_main_window_transfer_progress_pulse(main_window);
+    const double fraction =
+        std::clamp(progress.fraction.value_or(0.0), 0.0, 1.0);
+    gtk_progress_bar_set_fraction(
+        GTK_PROGRESS_BAR(main_window->transfer_progress_bar), fraction);
+    return;
+  }
+
+  gtk_progress_bar_set_fraction(
+      GTK_PROGRESS_BAR(main_window->transfer_progress_bar), 0.0);
+  if (notice_visible) {
+    start_main_window_transfer_progress_pulse(main_window);
+  }
 }
 
 void set_main_window_transfer_button_visible(MainWindow *main_window,
@@ -311,13 +541,8 @@ void set_main_window_title(MainWindow *main_window, const std::string &title) {
     return;
   }
 
-  if (main_window->window != nullptr) {
-    gtk_window_set_title(GTK_WINDOW(main_window->window), title.c_str());
-  }
-  if (main_window->header_bar != nullptr) {
-    gtk_header_bar_set_title(GTK_HEADER_BAR(main_window->header_bar),
-                             title.c_str());
-  }
+  main_window->base_title = title;
+  apply_main_window_title(main_window);
 }
 
 void set_main_window_activity_indicator_connection_kind(
@@ -366,6 +591,7 @@ void release_main_window(MainWindow *main_window) {
     return;
   }
 
+  stop_main_window_transfer_progress_pulse(main_window);
   deactivate_main_window_activity_indicators(main_window);
   g_clear_object(&main_window->indicator_on_icon);
   g_clear_object(&main_window->indicator_off_icon);
