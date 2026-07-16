@@ -10,11 +10,32 @@ gestament_include_dir = run_command(
   ['gestament-config', '--includedir'],
   check: true,
 ).stdout().strip()
-cardio_include_dir = meson.current_source_dir() / '../../cardio/include'
-libxyzm_root_dir = meson.current_source_dir() / '../../libxyzm'
+make_program = find_program('make')
+cardio_root_dir = meson.project_source_root() / 'deps/cardio'
+cardio_include_dir = cardio_root_dir / 'include'
+libxyzm_root_dir = meson.project_source_root() / 'deps/libxyzm'
 libxyzm_include_dir = libxyzm_root_dir / 'include'
-libxyzm_static_library = libxyzm_root_dir / 'build/libxyzm.a'
-libxyzm_async_static_library = libxyzm_root_dir / 'build/libxyzm_async.a'
+libxyzm_build_dir = meson.current_build_dir()
+libxyzm_static_libraries = custom_target(
+  'libxyzm-static-libraries',
+  output: [
+    'libxyzm.a',
+    'libxyzm_async.a',
+  ],
+  command: [
+    make_program,
+    '-C',
+    libxyzm_root_dir,
+    'CARDIO_DIR=' + cardio_root_dir,
+    'BUILD_DIR=' + libxyzm_build_dir,
+    libxyzm_build_dir / 'libxyzm.a',
+    libxyzm_build_dir / 'libxyzm_async.a',
+  ],
+  build_by_default: true,
+  build_always_stale: true,
+)
+libxyzm_static_library = libxyzm_static_libraries[0]
+libxyzm_async_static_library = libxyzm_static_libraries[1]
 
 telnet_protocol_source = 'src/terminal-sessions/telnet-session/telnet-protocol.cpp'
 elder_terms_sources = [
@@ -57,7 +78,7 @@ executable(
     libudev_dep,
     vte_dep,
   ],
-  link_args: [
+  link_with: [
     libxyzm_async_static_library,
   ],
 )
@@ -101,7 +122,7 @@ terminal_transfer_runner_test = executable(
   dependencies: [
     gio_dep,
   ],
-  link_args: [
+  link_with: [
     libxyzm_async_static_library,
   ],
 )
@@ -255,7 +276,7 @@ executable(
   cpp_args: [
     '-I' + libxyzm_include_dir,
   ],
-  link_args: [
+  link_with: [
     libxyzm_static_library,
   ],
 )

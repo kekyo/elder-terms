@@ -14,15 +14,15 @@
       "includePath": [
         "${workspaceFolder}/elder-terms-vte/src",
         "${workspaceFolder}/node_modules/gestament/include",
-        "${workspaceFolder}/../cardio/include",
-        "${workspaceFolder}/../libxyzm/include"
+        "${workspaceFolder}/deps/cardio/include",
+        "${workspaceFolder}/deps/libxyzm/include"
       ],
       "browse": {
         "path": [
           "${workspaceFolder}/elder-terms-vte/src",
           "${workspaceFolder}/node_modules/gestament/include",
-          "${workspaceFolder}/../cardio/include",
-          "${workspaceFolder}/../libxyzm/include"
+          "${workspaceFolder}/deps/cardio/include",
+          "${workspaceFolder}/deps/libxyzm/include"
         ],
         "limitSymbolsToIncludedHeaders": true
       }
