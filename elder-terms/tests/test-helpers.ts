@@ -25,6 +25,14 @@ export interface LauncherGtkTestContext {
   readonly connections: string;
 }
 
+/** Options for launching the GTK application under test. */
+export interface LauncherGtkTestOptions {
+  /** Additional command-line arguments. */
+  readonly args: readonly string[];
+  /** Additional environment variables. */
+  readonly env: Readonly<Record<string, string>>;
+}
+
 /**
  * Asserts that an element has the expected gestament kind.
  *
@@ -46,11 +54,13 @@ export const expectElementKind = <Kind extends GtkWidgetKind>(
  * @param _context Vitest context reserved for evidence integration.
  * @param prepare Creates test profiles before launch.
  * @param body Test body.
+ * @param options Additional process options.
  */
 export const runLauncherGtkTest = async (
   _context: TestContext,
   prepare: (connections: string) => Promise<void>,
-  body: (context: LauncherGtkTestContext) => Promise<void>
+  body: (context: LauncherGtkTestContext) => Promise<void>,
+  options: LauncherGtkTestOptions | undefined = undefined
 ): Promise<void> => {
   const directory = await mkdtemp(join(tmpdir(), 'elder-terms-gtk-'));
   const configHome = join(directory, 'config');
@@ -62,10 +72,11 @@ export const runLauncherGtkTest = async (
     appPath,
     env: {
       XDG_CONFIG_HOME: configHome,
+      ...options?.env,
     },
     xvfbTrayHost: false,
   });
-  const app = await launcher.launch([]);
+  const app = await launcher.launch([...(options?.args ?? [])]);
   try {
     await body({ app, configHome, connections });
   } finally {

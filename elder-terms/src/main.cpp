@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <optional>
@@ -7,8 +8,13 @@
 
 #include <gdk/gdkkeysyms.h>
 #include <gestament/gtk.h>
+#include <gio/gio.h>
+#include <glib/gstdio.h>
 #include <gtk/gtk.h>
 
+#include <unistd.h>
+
+#include <cardio.h>
 #include <elder-terms/settings-widget.h>
 #include <elder-terms/settings.h>
 
@@ -36,7 +42,16 @@ struct ConnectionRow {
   std::filesystem::path path;
 };
 
+struct ApplicationState;
+
+struct ChildLaunch {
+  ApplicationState *application = nullptr;
+  GSubprocess *process = nullptr;
+  std::filesystem::path temporary_startup_path;
+};
+
 struct ApplicationState {
+  cardio::dispatcher_group_glib *dispatcher_group = nullptr;
   elder_terms::LauncherMainWindow *main_window = nullptr;
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
   std::filesystem::path connection_directory;
@@ -51,6 +66,13 @@ struct ApplicationState {
   bool suppress_selection = false;
   GtkWidget *confirmation_dialog = nullptr;
   PendingAction pending_action;
+  GFileMonitor *connection_monitor = nullptr;
+  guint monitor_refresh_source = 0;
+  bool monitor_reload_selected = false;
+  std::optional<std::filesystem::path> monitor_renamed_path;
+  std::string vte_executable;
+  std::vector<ChildLaunch *> child_launches;
+  bool shutting_down = false;
 };
 
 enum ConnectionColumns {
@@ -64,6 +86,7 @@ static void update_action_sensitivity(ApplicationState *state);
 static void begin_new_connection(ApplicationState *state);
 static void select_existing_connection(
     ApplicationState *state, const std::filesystem::path &path);
+static void launch_selected_connection(ApplicationState *state);
 
 static void print_warnings(const std::vector<std::string> &warnings) {
   for (const std::string &warning : warnings) {
@@ -217,6 +240,15 @@ static void populate_profile_rows(ApplicationState *state) {
   state->suppress_selection = false;
 }
 
+static void append_new_profile_row(ApplicationState *state) {
+  GtkTreeIter iterator;
+  gtk_list_store_append(state->main_window->connection_store, &iterator);
+  gtk_list_store_set(state->main_window->connection_store, &iterator,
+                     connection_name_column, state->draft_name.c_str(),
+                     connection_path_column, "", connection_is_new_column,
+                     TRUE, -1);
+}
+
 static void show_empty_details(ApplicationState *state) {
   state->has_selection = false;
   state->current_is_new = false;
@@ -299,16 +331,9 @@ static void begin_new_connection(ApplicationState *state) {
   state->name_error.clear();
   state->name_dirty = true;
 
-  GtkTreeIter iterator;
-  gtk_list_store_append(state->main_window->connection_store, &iterator);
-  gtk_list_store_set(state->main_window->connection_store, &iterator,
-                     connection_name_column, state->draft_name.c_str(),
-                     connection_path_column, "", connection_is_new_column,
-                     TRUE, -1);
+  append_new_profile_row(state);
   state->suppress_selection = true;
-  GtkTreeSelection *selection = gtk_tree_view_get_selection(
-      GTK_TREE_VIEW(state->main_window->connection_list));
-  gtk_tree_selection_select_iter(selection, &iterator);
+  select_matching_row(state, std::nullopt, true);
   state->suppress_selection = false;
 
   elder_terms::SettingsStore store = elder_terms::create_default_settings(
@@ -330,6 +355,282 @@ static void select_existing_connection(
   if (!found || !load_existing_connection(state, path)) {
     show_empty_details(state);
   }
+}
+
+static std::optional<std::filesystem::path> file_path(GFile *file) {
+  if (file == nullptr) {
+    return std::nullopt;
+  }
+  gchar *path = g_file_get_path(file);
+  if (path == nullptr) {
+    return std::nullopt;
+  }
+  std::filesystem::path result(path);
+  g_free(path);
+  return result;
+}
+
+static bool monitor_path_matches_selected(ApplicationState *state,
+                                          GFile *file) {
+  const auto path = file_path(file);
+  return state->selected_path.has_value() && path.has_value() &&
+         state->selected_path.value() == path.value();
+}
+
+static void preserve_current_editor_after_list_refresh(ApplicationState *state) {
+  populate_profile_rows(state);
+  state->suppress_selection = true;
+  bool selected = false;
+  if (state->has_selection && state->current_is_new) {
+    append_new_profile_row(state);
+    selected = select_matching_row(state, std::nullopt, true);
+  } else if (state->has_selection && state->selected_path.has_value()) {
+    selected = select_matching_row(state, state->selected_path, false);
+  }
+  state->suppress_selection = false;
+  if (state->has_selection && !selected) {
+    show_empty_details(state);
+  }
+}
+
+static gboolean refresh_connections_from_monitor(gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  state->monitor_refresh_source = 0;
+  if (state->shutting_down) {
+    return G_SOURCE_REMOVE;
+  }
+
+  if (state->monitor_reload_selected && state->has_selection &&
+      !state->current_is_new) {
+    const auto path = state->monitor_renamed_path.has_value()
+                          ? state->monitor_renamed_path
+                          : state->selected_path;
+    state->monitor_reload_selected = false;
+    state->monitor_renamed_path.reset();
+    std::error_code path_error;
+    if (path.has_value() &&
+        std::filesystem::is_regular_file(path.value(), path_error) &&
+        !path_error) {
+      select_existing_connection(state, path.value());
+    } else {
+      populate_profile_rows(state);
+      show_empty_details(state);
+    }
+    return G_SOURCE_REMOVE;
+  }
+
+  state->monitor_reload_selected = false;
+  state->monitor_renamed_path.reset();
+  preserve_current_editor_after_list_refresh(state);
+  return G_SOURCE_REMOVE;
+}
+
+static void on_connection_directory_changed(GFileMonitor *, GFile *file,
+                                            GFile *other_file,
+                                            GFileMonitorEvent event,
+                                            gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state->shutting_down) {
+    return;
+  }
+
+  const bool file_is_selected = monitor_path_matches_selected(state, file);
+  const bool other_is_selected =
+      monitor_path_matches_selected(state, other_file);
+  if (file_is_selected || other_is_selected) {
+    state->monitor_reload_selected = true;
+  }
+  if (file_is_selected && event == G_FILE_MONITOR_EVENT_RENAMED) {
+    state->monitor_renamed_path = file_path(other_file);
+  }
+  if (state->monitor_refresh_source == 0) {
+    state->monitor_refresh_source =
+        g_idle_add(refresh_connections_from_monitor, state);
+  }
+}
+
+static void start_connection_monitor(ApplicationState *state) {
+  std::error_code directory_error;
+  std::filesystem::create_directories(state->connection_directory,
+                                      directory_error);
+  if (directory_error) {
+    show_error(state, "Failed to monitor connections",
+               {directory_error.message()});
+    return;
+  }
+
+  GFile *directory =
+      g_file_new_for_path(state->connection_directory.c_str());
+  GError *error = nullptr;
+  state->connection_monitor = g_file_monitor_directory(
+      directory, G_FILE_MONITOR_WATCH_MOVES, nullptr, &error);
+  g_object_unref(directory);
+  if (state->connection_monitor == nullptr) {
+    const std::string message =
+        error == nullptr ? "Unknown file monitor error" : error->message;
+    if (error != nullptr) {
+      g_error_free(error);
+    }
+    show_error(state, "Failed to monitor connections", {message});
+    return;
+  }
+  g_signal_connect(state->connection_monitor, "changed",
+                   G_CALLBACK(on_connection_directory_changed), state);
+}
+
+static bool executable_file(const std::filesystem::path &path) {
+  std::error_code error;
+  return std::filesystem::is_regular_file(path, error) && !error &&
+         access(path.c_str(), X_OK) == 0;
+}
+
+static std::string resolve_vte_executable(const char *launcher_argv0) {
+  const char *override_path = g_getenv("ELDER_TERMS_VTE_PATH");
+  if (override_path != nullptr && override_path[0] != '\0') {
+    return override_path;
+  }
+
+  std::error_code error;
+  const std::filesystem::path launcher_path =
+      std::filesystem::absolute(launcher_argv0, error);
+  if (!error) {
+    const std::filesystem::path launcher_directory =
+        launcher_path.parent_path();
+    const std::vector<std::filesystem::path> candidates = {
+        launcher_directory / "elder-terms-vte",
+        launcher_directory.parent_path() / "elder-terms-vte" /
+            "elder-terms-vte",
+    };
+    for (const auto &candidate : candidates) {
+      if (executable_file(candidate)) {
+        return candidate.string();
+      }
+    }
+  }
+
+  gchar *program = g_find_program_in_path("elder-terms-vte");
+  if (program == nullptr) {
+    return {};
+  }
+  std::string result(program);
+  g_free(program);
+  return result;
+}
+
+static std::optional<std::filesystem::path>
+create_temporary_startup_profile(ApplicationState *state,
+                                 std::vector<std::string> *warnings) {
+  gchar *temporary_path = nullptr;
+  GError *error = nullptr;
+  const int descriptor = g_file_open_tmp("elder-terms-startup-XXXXXX",
+                                         &temporary_path, &error);
+  if (descriptor == -1) {
+    warnings->push_back(error == nullptr ? "Failed to create startup profile"
+                                         : error->message);
+    if (error != nullptr) {
+      g_error_free(error);
+    }
+    return std::nullopt;
+  }
+  close(descriptor);
+
+  const std::filesystem::path path(temporary_path);
+  g_free(temporary_path);
+  const elder_terms::SettingsSaveResult result = elder_terms::save_settings(
+      elder_terms::settings_widget_draft_store(state->settings_widget), path);
+  warnings->insert(warnings->end(), result.warnings.begin(),
+                   result.warnings.end());
+  if (!result.saved) {
+    g_remove(path.c_str());
+    return std::nullopt;
+  }
+  return path;
+}
+
+static void on_child_finished(GObject *source, GAsyncResult *result,
+                              gpointer user_data) {
+  auto *launch = static_cast<ChildLaunch *>(user_data);
+  GError *error = nullptr;
+  if (!g_subprocess_wait_finish(G_SUBPROCESS(source), result, &error)) {
+    if (error != nullptr) {
+      std::cerr << error->message << '\n';
+      g_error_free(error);
+    }
+  }
+  if (!launch->temporary_startup_path.empty()) {
+    g_remove(launch->temporary_startup_path.c_str());
+  }
+  if (launch->application != nullptr) {
+    auto &launches = launch->application->child_launches;
+    launches.erase(std::remove(launches.begin(), launches.end(), launch),
+                   launches.end());
+  }
+  g_object_unref(launch->process);
+  delete launch;
+}
+
+static void launch_selected_connection(ApplicationState *state) {
+  if (!editor_is_valid(state)) {
+    return;
+  }
+  if (state->vte_executable.empty()) {
+    show_error(state, "Failed to start elder-terms-vte",
+               {"elder-terms-vte executable was not found"});
+    return;
+  }
+
+  std::vector<std::string> arguments = {state->vte_executable};
+  if (!state->current_is_new && state->selected_path.has_value()) {
+    arguments.emplace_back("-c");
+    arguments.push_back(state->selected_path->string());
+  }
+
+  std::filesystem::path temporary_startup_path;
+  if (state->current_is_new ||
+      elder_terms::settings_widget_is_dirty(state->settings_widget)) {
+    std::vector<std::string> warnings;
+    const auto startup_path =
+        create_temporary_startup_profile(state, &warnings);
+    print_warnings(warnings);
+    if (!startup_path.has_value()) {
+      show_error(state, "Failed to start elder-terms-vte", warnings);
+      return;
+    }
+    temporary_startup_path = startup_path.value();
+    arguments.emplace_back("-s");
+    arguments.push_back(temporary_startup_path.string());
+  }
+
+  std::vector<const gchar *> argv;
+  argv.reserve(arguments.size() + 1);
+  for (const std::string &argument : arguments) {
+    argv.push_back(argument.c_str());
+  }
+  argv.push_back(nullptr);
+
+  GError *error = nullptr;
+  GSubprocess *process =
+      g_subprocess_newv(argv.data(), G_SUBPROCESS_FLAGS_NONE, &error);
+  if (process == nullptr) {
+    if (!temporary_startup_path.empty()) {
+      g_remove(temporary_startup_path.c_str());
+    }
+    const std::string message =
+        error == nullptr ? "Unknown process launch error" : error->message;
+    if (error != nullptr) {
+      g_error_free(error);
+    }
+    show_error(state, "Failed to start elder-terms-vte", {message});
+    return;
+  }
+
+  auto *launch = new ChildLaunch{
+      .application = state,
+      .process = process,
+      .temporary_startup_path = temporary_startup_path,
+  };
+  state->child_launches.push_back(launch);
+  g_subprocess_wait_async(process, nullptr, on_child_finished, launch);
 }
 
 static void perform_pending_action(ApplicationState *state,
@@ -466,6 +767,13 @@ static gboolean on_rename_accelerator(GtkAccelGroup *, GObject *, guint,
   return TRUE;
 }
 
+static gboolean on_close_accelerator(GtkAccelGroup *, GObject *, guint,
+                                     GdkModifierType, gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  gtk_window_close(GTK_WINDOW(state->main_window->window));
+  return TRUE;
+}
+
 static void on_new_clicked(GtkButton *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
   if (editor_is_dirty(state)) {
@@ -500,6 +808,16 @@ static void on_apply_clicked(GtkButton *, gpointer user_data) {
   select_existing_connection(state, result.path);
 }
 
+static void on_connect_clicked(GtkButton *, gpointer user_data) {
+  launch_selected_connection(static_cast<ApplicationState *>(user_data));
+}
+
+static void on_connection_row_activated(GtkTreeView *, GtkTreePath *,
+                                        GtkTreeViewColumn *,
+                                        gpointer user_data) {
+  launch_selected_connection(static_cast<ApplicationState *>(user_data));
+}
+
 static gboolean on_window_delete(GtkWidget *, GdkEvent *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
   if (!editor_is_dirty(state)) {
@@ -515,23 +833,43 @@ static gboolean on_window_delete(GtkWidget *, GdkEvent *, gpointer user_data) {
 
 static void on_window_destroy(GtkWidget *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
+  state->shutting_down = true;
+  if (state->monitor_refresh_source != 0) {
+    g_source_remove(state->monitor_refresh_source);
+    state->monitor_refresh_source = 0;
+  }
+  if (state->connection_monitor != nullptr) {
+    g_file_monitor_cancel(state->connection_monitor);
+    g_object_unref(state->connection_monitor);
+    state->connection_monitor = nullptr;
+  }
+  for (ChildLaunch *launch : state->child_launches) {
+    launch->application = nullptr;
+    if (!launch->temporary_startup_path.empty()) {
+      g_remove(launch->temporary_startup_path.c_str());
+      launch->temporary_startup_path.clear();
+    }
+  }
   if (state->settings_widget != nullptr) {
     elder_terms::destroy_settings_widget(state->settings_widget);
     state->settings_widget = nullptr;
   }
-  gtk_main_quit();
+  state->dispatcher_group->shutdown();
 }
 
 } // namespace
 
 int main(int argc, char **argv) {
   gtk_init(&argc, &argv);
+  cardio::dispatcher_group_glib dispatcher_group;
+  cardio::dispatcher_host_glib dispatcher(dispatcher_group);
   auto main_window = elder_terms::load_launcher_main_window();
   if (!main_window.has_value()) {
     return 1;
   }
 
   ApplicationState state;
+  state.dispatcher_group = &dispatcher_group;
   state.main_window = &*main_window;
   state.connection_directory = elder_terms::default_connection_directory();
   elder_terms::SettingsWidgetCallbacks callbacks;
@@ -565,22 +903,32 @@ int main(int argc, char **argv) {
                    G_CALLBACK(on_new_clicked), &state);
   g_signal_connect(main_window->apply_button, "clicked",
                    G_CALLBACK(on_apply_clicked), &state);
+  g_signal_connect(main_window->connect_button, "clicked",
+                   G_CALLBACK(on_connect_clicked), &state);
+  g_signal_connect(main_window->connection_list, "row-activated",
+                   G_CALLBACK(on_connection_row_activated), &state);
   g_signal_connect(main_window->window, "delete-event",
                    G_CALLBACK(on_window_delete), &state);
   g_signal_connect(main_window->window, "destroy",
                    G_CALLBACK(on_window_destroy), &state);
 
-  GtkAccelGroup *rename_accelerator = gtk_accel_group_new();
+  GtkAccelGroup *application_accelerators = gtk_accel_group_new();
   GClosure *rename_closure =
       g_cclosure_new(G_CALLBACK(on_rename_accelerator), &state, nullptr);
-  gtk_accel_group_connect(rename_accelerator, GDK_KEY_F2,
+  gtk_accel_group_connect(application_accelerators, GDK_KEY_F2,
                           static_cast<GdkModifierType>(0), GTK_ACCEL_VISIBLE,
                           rename_closure);
+  GClosure *close_closure =
+      g_cclosure_new(G_CALLBACK(on_close_accelerator), &state, nullptr);
+  gtk_accel_group_connect(application_accelerators, GDK_KEY_w,
+                          GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE, close_closure);
   gtk_window_add_accel_group(GTK_WINDOW(main_window->window),
-                             rename_accelerator);
-  g_object_unref(rename_accelerator);
+                             application_accelerators);
+  g_object_unref(application_accelerators);
 
   populate_profile_rows(&state);
+  state.vte_executable = resolve_vte_executable(argv[0]);
+  start_connection_monitor(&state);
   show_empty_details(&state);
   gtk_widget_show_all(main_window->window);
   state.suppress_selection = true;
@@ -590,7 +938,7 @@ int main(int argc, char **argv) {
   gtk_stack_set_visible_child_name(GTK_STACK(main_window->details_stack),
                                    "empty");
   update_action_sensitivity(&state);
-  gtk_main();
+  dispatcher.park();
   elder_terms::destroy_launcher_main_window(&*main_window);
   return 0;
 }

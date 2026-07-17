@@ -1,4 +1,12 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { GtkApp, GtkWidgetElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
@@ -33,6 +41,43 @@ const selectConnectionRow = async (
   throw new Error(`Connection list has unexpected kind ${element.kind}`);
 };
 
+const doubleClickConnectionRow = async (
+  app: GtkApp,
+  element: GtkWidgetElement,
+  row: number
+): Promise<void> => {
+  await selectConnectionRow(app, element, row);
+  if (element.kind !== 'table') {
+    throw new Error('Double-click test requires a GTK table connection list');
+  }
+  const cell = await element.cellAt(row, 0);
+  const bounds = (await cell?.capture())?.bounds;
+  expect(bounds).toBeDefined();
+  if (bounds === undefined) {
+    return;
+  }
+  await app.input.moveMouseTo(
+    Math.round(bounds.x + bounds.width / 2),
+    Math.round(bounds.y + bounds.height / 2)
+  );
+  for (let click = 0; click < 2; click += 1) {
+    await app.input.setMouseButton('left', true);
+    await app.input.setMouseButton('left', false);
+  }
+};
+
+const connectionRowCount = async (
+  element: GtkWidgetElement
+): Promise<number> => {
+  if (element.kind === 'table') {
+    return element.getRowCount();
+  }
+  if (element.kind === 'tree') {
+    return element.getChildCount();
+  }
+  throw new Error(`Connection list has unexpected kind ${element.kind}`);
+};
+
 const expectSensitive = async (element: GtkWidgetElement): Promise<void> => {
   expect((await element.info()).states).toContain('sensitive');
 };
@@ -45,6 +90,42 @@ const prepareProfiles = async (connections: string): Promise<void> => {
   await writeFile(join(connections, 'Alpha.ini'), '[terminal]\nwidth=88\n');
   await writeFile(join(connections, 'Beta.ini'), '[terminal]\nwidth=99\n');
 };
+
+interface FakeVteContext {
+  readonly executable: string;
+  readonly capture: string;
+  readonly release: () => Promise<void>;
+}
+
+const createFakeVte = async (): Promise<FakeVteContext> => {
+  const directory = await mkdtemp(join(tmpdir(), 'elder-terms-fake-vte-'));
+  const executable = join(directory, 'fake-vte.mjs');
+  const capture = join(directory, 'capture.json');
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node
+import { readFile, writeFile } from 'node:fs/promises';
+const args = process.argv.slice(2);
+const startupIndex = args.indexOf('-s');
+const startupContent = startupIndex < 0 ? null : await readFile(args[startupIndex + 1], 'utf8');
+await writeFile(process.env.ELDER_TERMS_TEST_CAPTURE, JSON.stringify({ args, startupContent }));
+`
+  );
+  await chmod(executable, 0o755);
+  return {
+    executable,
+    capture,
+    release: async () => rm(directory, { recursive: true, force: true }),
+  };
+};
+
+interface LaunchCapture {
+  readonly args: readonly string[];
+  readonly startupContent: string | null;
+}
+
+const readLaunchCapture = async (path: string): Promise<LaunchCapture> =>
+  JSON.parse(await readFile(path, 'utf8')) as LaunchCapture;
 
 describe('elder-terms main window', () => {
   it('starts unselected in a resizable split layout', async (context) => {
@@ -157,5 +238,243 @@ describe('elder-terms main window', () => {
         });
       }
     );
+  });
+
+  it('confirms before changing selection or closing with unsaved edits', async (context) => {
+    await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
+      const list = await app.getById('connection_list');
+      await selectConnectionRow(app, list, 0);
+      const width = expectElementKind(
+        await app.getById('settings_terminal_width_spin'),
+        'spinButton'
+      );
+      await waitForResult(async () => {
+        expect(await width.value()).toBe(88);
+      });
+      const apply = expectElementKind(
+        await app.getById('apply_button'),
+        'button'
+      );
+      await width.setValue(96);
+      await expectSensitive(apply);
+
+      await selectConnectionRow(app, list, 1);
+      await waitForResult(
+        async () => {
+          expect(await app.getWindowCount()).toBe(2);
+        },
+        { message: 'selection change should show discard confirmation' }
+      );
+      await expectElementKind(
+        await app.getById('cancel_discard_button'),
+        'button'
+      ).click();
+      expect(await width.value()).toBe(96);
+
+      await selectConnectionRow(app, list, 1);
+      await expectElementKind(
+        await app.getById('discard_changes_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        expect(await width.value()).toBe(99);
+      });
+      await width.setValue(97);
+      await expectSensitive(apply);
+
+      const window = expectElementKind(
+        await app.getById('main_window'),
+        'window'
+      );
+      await window.activate();
+      await app.input.setModifier('control', true);
+      try {
+        await app.input.pressKey('w');
+      } finally {
+        await app.input.setModifier('control', false);
+      }
+      await waitForResult(
+        async () => {
+          expect(await app.getWindowCount()).toBe(2);
+        },
+        { message: 'window close should show discard confirmation' }
+      );
+      await expectElementKind(
+        await app.getById('cancel_discard_button'),
+        'button'
+      ).click();
+      expect(await width.value()).toBe(97);
+    });
+  });
+
+  it('reloads the selected profile and connection list after external changes', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app, connections }) => {
+        const list = await app.getById('connection_list');
+        await selectConnectionRow(app, list, 0);
+        const width = expectElementKind(
+          await app.getById('settings_terminal_width_spin'),
+          'spinButton'
+        );
+        const apply = expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        );
+        await waitForResult(async () => {
+          expect(await width.value()).toBe(88);
+        });
+
+        await width.setValue(91);
+        await expectSensitive(apply);
+        await writeFile(
+          join(connections, 'Alpha.ini'),
+          '[terminal]\nwidth=95\n'
+        );
+        await waitForResult(async () => {
+          expect(await width.value()).toBe(95);
+          await expectInsensitive(apply);
+        });
+
+        await writeFile(
+          join(connections, 'Gamma.ini'),
+          '[terminal]\nwidth=101\n'
+        );
+        await waitForResult(async () => {
+          expect(await connectionRowCount(list)).toBe(3);
+        });
+        await rm(join(connections, 'Beta.ini'));
+        await waitForResult(async () => {
+          expect(await connectionRowCount(list)).toBe(2);
+        });
+        await rename(
+          join(connections, 'Alpha.ini'),
+          join(connections, 'Renamed.ini')
+        );
+        await waitForResult(async () => {
+          expect(await connectionRowCount(list)).toBe(2);
+          expect(await width.value()).toBe(95);
+        });
+      }
+    );
+  });
+
+  it('connects a saved profile by double-clicking its row', async (context) => {
+    const fakeVte = await createFakeVte();
+    try {
+      await runLauncherGtkTest(
+        context,
+        prepareProfiles,
+        async ({ app, connections }) => {
+          const list = await app.getById('connection_list');
+          await doubleClickConnectionRow(app, list, 0);
+          await waitForResult(async () => {
+            const capture = await readLaunchCapture(fakeVte.capture);
+            expect(capture.args).toEqual([
+              '-c',
+              join(connections, 'Alpha.ini'),
+            ]);
+            expect(capture.startupContent).toBeNull();
+          });
+        },
+        {
+          args: [],
+          env: {
+            ELDER_TERMS_TEST_CAPTURE: fakeVte.capture,
+            ELDER_TERMS_VTE_PATH: fakeVte.executable,
+          },
+        }
+      );
+    } finally {
+      await fakeVte.release();
+    }
+  });
+
+  it('connects with dirty settings without saving the profile', async (context) => {
+    const fakeVte = await createFakeVte();
+    try {
+      await runLauncherGtkTest(
+        context,
+        prepareProfiles,
+        async ({ app, connections }) => {
+          const list = await app.getById('connection_list');
+          await selectConnectionRow(app, list, 0);
+          const width = expectElementKind(
+            await app.getById('settings_terminal_width_spin'),
+            'spinButton'
+          );
+          await waitForResult(async () => {
+            expect(await width.value()).toBe(88);
+          });
+          await width.setValue(93);
+          await expectElementKind(
+            await app.getById('connect_button'),
+            'button'
+          ).click();
+
+          await waitForResult(async () => {
+            const capture = await readLaunchCapture(fakeVte.capture);
+            expect(capture.args[0]).toBe('-c');
+            expect(capture.args[1]).toBe(join(connections, 'Alpha.ini'));
+            expect(capture.args[2]).toBe('-s');
+            expect(capture.args[3]).toMatch(/elder-terms-startup-/u);
+            expect(capture.startupContent).toContain('width=93');
+          });
+          expect(
+            await readFile(join(connections, 'Alpha.ini'), 'utf8')
+          ).toContain('width=88');
+        },
+        {
+          args: [],
+          env: {
+            ELDER_TERMS_TEST_CAPTURE: fakeVte.capture,
+            ELDER_TERMS_VTE_PATH: fakeVte.executable,
+          },
+        }
+      );
+    } finally {
+      await fakeVte.release();
+    }
+  });
+
+  it('connects a new draft using only a temporary startup profile', async (context) => {
+    const fakeVte = await createFakeVte();
+    try {
+      await runLauncherGtkTest(
+        context,
+        prepareProfiles,
+        async ({ app }) => {
+          await expectElementKind(
+            await app.getById('new_button'),
+            'button'
+          ).click();
+          const width = expectElementKind(
+            await app.getById('settings_terminal_width_spin'),
+            'spinButton'
+          );
+          await width.setValue(94);
+          await expectElementKind(
+            await app.getById('connect_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            const capture = await readLaunchCapture(fakeVte.capture);
+            expect(capture.args[0]).toBe('-s');
+            expect(capture.args).toHaveLength(2);
+            expect(capture.startupContent).toContain('width=94');
+          });
+        },
+        {
+          args: [],
+          env: {
+            ELDER_TERMS_TEST_CAPTURE: fakeVte.capture,
+            ELDER_TERMS_VTE_PATH: fakeVte.executable,
+          },
+        }
+      );
+    } finally {
+      await fakeVte.release();
+    }
   });
 });

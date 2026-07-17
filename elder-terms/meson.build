@@ -1,6 +1,9 @@
 elder_terms_launcher_include_dir = include_directories('src')
 elder_terms_launcher_gtk_dep = dependency('gtk+-3.0')
 elder_terms_launcher_gio_dep = dependency('gio-2.0')
+elder_terms_launcher_cardio_include_dir = (
+  meson.project_source_root() / 'deps/cardio/include'
+)
 elder_terms_launcher_gestament_config = find_program('npx')
 elder_terms_launcher_gestament_include_dir = run_command(
   elder_terms_launcher_gestament_config,
@@ -17,6 +20,9 @@ elder_terms_launcher = executable(
   ],
   cpp_args: [
     '-I' + elder_terms_launcher_gestament_include_dir,
+    '-I' + elder_terms_launcher_cardio_include_dir,
+    '-DCARDIO_WITH_GLIB=1',
+    '-DCARDIO_WITH_GIO=1',
   ],
   include_directories: elder_terms_launcher_include_dir,
   dependencies: [
