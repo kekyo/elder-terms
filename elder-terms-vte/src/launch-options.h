@@ -13,6 +13,8 @@ namespace elder_terms {
 struct TestOptions {
   /** True when the app should render deterministic terminal fixture text. */
   bool fixture = false;
+  /** True when blink activity indicators should stay lit until reset. */
+  bool latch_activity_indicators = false;
   /** True when transfer dialogs should report their current folder URI. */
   bool transfer_dialog_probe = false;
   /** Source file URIs used instead of opening the send file dialog. */

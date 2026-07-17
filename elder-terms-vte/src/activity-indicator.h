@@ -46,6 +46,8 @@ struct ActivityIndicatorWidget {
   ActivityIndicatorBlinkState blink_state;
   /** Current steady-mode state. */
   bool steady_active = false;
+  /** True when test activity should remain lit until an explicit reset. */
+  bool latch_activity = false;
 };
 
 /**
@@ -91,6 +93,17 @@ void initialize_activity_indicator_widget(ActivityIndicatorWidget *indicator,
  * @param indicator Widget state to update.
  */
 void note_activity_indicator_widget(ActivityIndicatorWidget *indicator);
+
+/**
+ * Controls whether blink activity remains lit until an explicit reset.
+ *
+ * @param indicator Widget state to update.
+ * @param latch True to suppress the blink timer after activity.
+ * @remarks This is intended for deterministic GTK integration tests. Normal
+ * runtime behavior leaves this disabled and retains the fixed 150ms blink.
+ */
+void set_activity_indicator_widget_latched(ActivityIndicatorWidget *indicator,
+                                           bool latch);
 
 /**
  * Sets the explicit lit/dark state for a steady activity indicator.

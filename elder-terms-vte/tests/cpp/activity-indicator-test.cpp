@@ -174,6 +174,27 @@ static bool steady_widget_state_does_not_start_a_blink_timer() {
                 "explicit steady off should clear blink state");
 }
 
+static bool latched_widget_activity_stays_lit_until_reset() {
+  ActivityIndicatorWidget indicator;
+  initialize_activity_indicator_widget(
+      &indicator, nullptr, nullptr, nullptr, ActivityIndicatorMode::blink);
+  set_activity_indicator_widget_latched(&indicator, true);
+  note_activity_indicator_widget(&indicator);
+
+  if (!expect(indicator.latch_activity && indicator.blink_state.active &&
+                  indicator.blink_state.running &&
+                  indicator.blink_timeout_id == 0,
+              "latched activity should stay active without a timer")) {
+    return false;
+  }
+
+  reset_activity_indicator_widget(&indicator);
+  return expect(indicator.latch_activity && !indicator.blink_state.active &&
+                    !indicator.blink_state.running &&
+                    indicator.blink_timeout_id == 0,
+                "reset should clear activity without disabling the latch");
+}
+
 } // namespace elder_terms
 
 int main() {
@@ -184,6 +205,9 @@ int main() {
     return 1;
   }
   if (!elder_terms::steady_widget_state_does_not_start_a_blink_timer()) {
+    return 1;
+  }
+  if (!elder_terms::latched_widget_activity_stays_lit_until_reset()) {
     return 1;
   }
 

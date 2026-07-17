@@ -190,6 +190,16 @@ void set_main_window_activity_indicator_connection_kind(
     MainWindow *main_window, TerminalConnectionKind kind);
 
 /**
+ * Controls whether blink activity indicators stay lit until reset.
+ *
+ * @param main_window Main window containing the indicator widgets.
+ * @param latch True to latch RD and SD activity for integration tests.
+ * @remarks Normal runtime behavior keeps this disabled.
+ */
+void set_main_window_activity_indicators_latched(MainWindow *main_window,
+                                                 bool latch);
+
+/**
  * Stops activity indicators and clears their non-owning widget references.
  *
  * @param main_window Main window containing the indicator widgets.

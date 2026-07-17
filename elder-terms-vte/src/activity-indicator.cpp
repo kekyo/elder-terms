@@ -109,13 +109,25 @@ void note_activity_indicator_widget(ActivityIndicatorWidget *indicator) {
 
   note_activity_indicator_blink(indicator->blink_state);
   set_indicator_active(indicator, indicator->blink_state.active);
-  if (indicator->blink_timeout_id != 0) {
+  if (indicator->latch_activity || indicator->blink_timeout_id != 0) {
     return;
   }
 
   indicator->blink_timeout_id =
       g_timeout_add(activity_indicator_blink_period_ms(),
                     on_activity_indicator_timeout, indicator);
+}
+
+void set_activity_indicator_widget_latched(ActivityIndicatorWidget *indicator,
+                                           bool latch) {
+  if (indicator == nullptr) {
+    return;
+  }
+
+  indicator->latch_activity = latch;
+  if (latch) {
+    stop_activity_indicator_timer(indicator);
+  }
 }
 
 void set_activity_indicator_widget_active(ActivityIndicatorWidget *indicator,
@@ -146,6 +158,7 @@ void release_activity_indicator_widget(ActivityIndicatorWidget *indicator) {
   stop_activity_indicator_timer(indicator);
   indicator->blink_state = {};
   indicator->steady_active = false;
+  indicator->latch_activity = false;
   indicator->image = nullptr;
   indicator->on_icon = nullptr;
   indicator->off_icon = nullptr;

@@ -105,7 +105,7 @@ const createInputShellFixture = async (
   const shellPath = join(directory, 'input-shell.sh');
   await writeFile(
     shellPath,
-    `#!/bin/sh\ndd bs=1 count=1 of=${shellQuote(markerPath)} 2>/dev/null\nexit 0\n`,
+    `#!/bin/sh\nIFS= read -r input\nprintf '%s' "$input" > ${shellQuote(markerPath)}\nexit 0\n`,
     'utf8'
   );
   await chmod(shellPath, 0o755);
@@ -156,6 +156,23 @@ const waitForFileText = async (
     },
     {
       message: `file should contain ${expectedText}`,
+      timeoutMs: 5_000,
+    }
+  );
+};
+
+const waitForRepeatedCharacter = async (
+  path: string,
+  character: string
+): Promise<void> => {
+  await toPass(
+    async () => {
+      expect(await readFile(path, 'utf8')).toMatch(
+        new RegExp(`^${character}+$`)
+      );
+    },
+    {
+      message: `file should contain one or more ${character} characters`,
       timeoutMs: 5_000,
     }
   );
@@ -338,7 +355,11 @@ describe.concurrent('elder-terms-vte local session', () => {
             terminal,
             'local-terminal-disconnected-dim',
             localTerminalDisconnectedDimPath,
-            evidence
+            evidence,
+            {
+              // The disconnected VTE cursor may be captured in either blink phase.
+              maxDiffPixels: 160,
+            }
           );
         },
         {
@@ -418,13 +439,12 @@ describe.concurrent('elder-terms-vte local session', () => {
 
       await runGtkTest(
         context,
-        ['-c', configPath],
+        ['-c', configPath, '--test-latch-activity-indicators'],
         async (app) => {
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
           await pressKeyUntilSdIndicatorOn(app, 'a');
-          await delay(500);
-          await waitForActivityIndicatorImageState(app, 'sd', 'off');
           await app.input.pressKey('Return');
-          await waitForFileText(shell.markerPath, 'a');
+          await waitForRepeatedCharacter(shell.markerPath, 'a');
         },
         {
           env: {

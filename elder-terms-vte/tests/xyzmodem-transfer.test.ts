@@ -42,6 +42,9 @@ interface TransferFixture {
   readonly markerPath: string;
   readonly payload: Buffer;
   readonly payloadPath: string;
+  readonly peerReleasePath?: string;
+  readonly peerStatusPath?: string;
+  readonly peerStderrPath?: string;
   readonly sourceUri: string | undefined;
   readonly transferBasePath: string;
 }
@@ -657,14 +660,23 @@ const writeLoginScript = async (
   markerPath: string,
   command: readonly string[]
 ): Promise<void> => {
+  const releasePath = `${markerPath}.release`;
+  await createFifo(markerPath);
+  await createFifo(releasePath);
   await writeFile(
     path,
     [
       '#!/bin/sh',
       `cd ${shellQuote(remoteDirectory)} || exit 1`,
       'stty raw -echo -ixon -ixoff -icanon min 1 time 0 2>/dev/null || true',
-      `while [ ! -f ${shellQuote(markerPath)} ]; do sleep 0.02; done`,
-      `exec ${command.map(shellQuote).join(' ')} 2>lrzsz.stderr`,
+      `cat ${shellQuote(markerPath)} >/dev/null || exit 1`,
+      `${command.map(shellQuote).join(' ')} 2>lrzsz.stderr`,
+      'status=$?',
+      `printf '%s\\n' "$status" >lrzsz.status`,
+      `if [ "$status" -eq 0 ]; then cat ${shellQuote(
+        releasePath
+      )} >/dev/null || exit 1; fi`,
+      'exit "$status"',
       '',
     ].join('\n'),
     'utf8'
@@ -700,6 +712,7 @@ const writeTransferDimLoginScript = async (
   command: readonly string[]
 ): Promise<void> => {
   const markerText = 'TRANSFER_DIM_MARKER '.repeat(60);
+  await createFifo(markerPath);
   await writeFile(
     path,
     [
@@ -707,7 +720,7 @@ const writeTransferDimLoginScript = async (
       `cd ${shellQuote(remoteDirectory)} || exit 1`,
       `printf '%s\\n' ${shellQuote(markerText)}`,
       'stty raw -echo -ixon -ixoff -icanon min 1 time 0 2>/dev/null || true',
-      `while [ ! -f ${shellQuote(markerPath)} ]; do sleep 0.02; done`,
+      `cat ${shellQuote(markerPath)} >/dev/null || exit 1`,
       `exec ${command.map(shellQuote).join(' ')} 2>lrzsz.stderr`,
       '',
     ].join('\n'),
@@ -721,6 +734,7 @@ const writeYmodemPostRbLoginScript = async (
   remoteDirectory: string,
   markerPath: string
 ): Promise<void> => {
+  await createFifo(markerPath);
   await writeFile(
     path,
     [
@@ -728,7 +742,7 @@ const writeYmodemPostRbLoginScript = async (
       `cd ${shellQuote(remoteDirectory)} || exit 1`,
       'rm -f post-rb-input.bin post-rb-capture.marker lrzsz.stderr',
       'stty raw -echo -ixon -ixoff -icanon min 1 time 0 2>/dev/null || true',
-      `while [ ! -f ${shellQuote(markerPath)} ]; do sleep 0.02; done`,
+      `cat ${shellQuote(markerPath)} >/dev/null || exit 1`,
       '/usr/bin/rb --ymodem -b -q -y 2>lrzsz.stderr',
       'stty raw -echo -ixon -ixoff -icanon min 0 time 5 2>/dev/null || true',
       'dd bs=1 count=256 of=post-rb-input.bin 2>/dev/null || :',
@@ -792,6 +806,9 @@ const createTransferFixture = async (
   const configPath = join(directory, 'telnet.ini');
   const markerPath = join(directory, 'start-transfer.marker');
   const loginScriptPath = join(directory, 'login.sh');
+  const peerStatusPath = join(remoteDirectory, 'lrzsz.status');
+  const peerStderrPath = join(remoteDirectory, 'lrzsz.stderr');
+  const peerReleasePath = `${markerPath}.release`;
 
   if (transferCase.direction === 'send') {
     const sourcePath = join(localDirectory, 'payload.bin');
@@ -813,6 +830,9 @@ const createTransferFixture = async (
       markerPath,
       payload,
       payloadPath: sourcePath,
+      peerReleasePath,
+      peerStatusPath,
+      peerStderrPath,
       sourceUri: pathToFileURL(sourcePath).href,
       transferBasePath: receiveDirectory,
     };
@@ -834,6 +854,9 @@ const createTransferFixture = async (
     markerPath,
     payload,
     payloadPath: remotePayloadPath,
+    peerReleasePath,
+    peerStatusPath,
+    peerStderrPath,
     sourceUri: undefined,
     transferBasePath: receiveDirectory,
   };
@@ -929,6 +952,9 @@ const createTransferProgressPeerFixture = async (
     resumePath,
     '--max-link-chunk',
     '1024',
+    ...(transferCase.protocol === 'zmodem'
+      ? ['--pause-after-source-bytes', String(Math.floor(payload.length / 2))]
+      : []),
     ...transferProgressPeerLinkPaceArgs(transferCase),
   ] as const;
   await writeFile(remotePayloadPath, payload);
@@ -1377,6 +1403,36 @@ const readOptionalTextFile = async (path: string): Promise<string> => {
   }
 };
 
+const saveTransferPeerFailureEvidence = async (
+  evidence: TestEvidence,
+  fixture: TransferFixture,
+  error: unknown
+): Promise<void> => {
+  const stderr =
+    fixture.peerStderrPath === undefined
+      ? 'peer stderr path unavailable'
+      : await readOptionalTextFile(fixture.peerStderrPath);
+  const status =
+    fixture.peerStatusPath === undefined
+      ? 'peer status path unavailable'
+      : await readOptionalTextFile(fixture.peerStatusPath);
+  await evidence.saveBinaryEvidence(
+    'transfer-peer-stderr',
+    Buffer.from(stderr, 'utf8'),
+    'log'
+  );
+  await evidence.log('XYZMODEM peer failure evidence', {
+    error,
+    status,
+  });
+};
+
+const releaseTransferPeer = async (fixture: TransferFixture): Promise<void> => {
+  if (fixture.peerReleasePath !== undefined) {
+    await writeFile(fixture.peerReleasePath, 'release', 'utf8');
+  }
+};
+
 const pauseTransferAtProgressForCapture = async (
   app: GtkApp,
   evidence: TestEvidence,
@@ -1384,6 +1440,44 @@ const pauseTransferAtProgressForCapture = async (
   fixture: TransferProgressPeerFixture
 ): Promise<void> => {
   const { transferCase } = noticeCase;
+  if (
+    transferCase.protocol === 'zmodem' &&
+    transferCase.direction === 'receive'
+  ) {
+    let peerPaused = false;
+    try {
+      await expectTransferProgressNoticeVisibleAtTerminalTopRight(app);
+      await waitForFileExists(fixture.pausedPath, 10_000);
+      peerPaused = true;
+      const pausedProgress = await waitForTransferProgressRange(
+        app,
+        0.45,
+        0.55,
+        5_000
+      );
+      await evidence.log('transfer progress automatic pause value', {
+        pausedProgress,
+        transferCase: transferCase.label,
+      });
+      await expectTransferEtaStatus(app, transferCase);
+      await assertTransferProgressNoticeMatches(
+        app,
+        evidence,
+        `transfer-progress-notice-${transferCase.protocol}-${transferCase.direction}`,
+        noticeCase.fixturePath,
+        {
+          maxDiffPixels: noticeCase.maxDiffPixels,
+          threshold: 0.03,
+        }
+      );
+    } finally {
+      if (peerPaused) {
+        await resumeTransferProgressPeer(fixture);
+      }
+    }
+    return;
+  }
+
   if (transferCase.protocol === 'zmodem' && transferCase.direction === 'send') {
     await expectTransferProgressNoticeVisibleAtTerminalTopRight(app);
     const liveProgress = await waitForTransferProgressRange(
@@ -1615,16 +1709,27 @@ describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
                       await activateTransfer(app, transferCase);
                     } else {
                       await activateTransfer(app, transferCase);
+                      await expectTransferButtonInsensitive(app);
                       await delay(startDelayMs);
                       await writeFile(fixture.markerPath, 'start', 'utf8');
                     }
 
-                    await waitForFileBytes(
-                      fixture.expectedPath,
-                      fixture.payload,
-                      transferCase.protocol,
-                      sizeCase.timeoutMs
-                    );
+                    try {
+                      await waitForFileBytes(
+                        fixture.expectedPath,
+                        fixture.payload,
+                        transferCase.protocol,
+                        sizeCase.timeoutMs
+                      );
+                    } catch (error) {
+                      await saveTransferPeerFailureEvidence(
+                        evidence,
+                        fixture,
+                        error
+                      );
+                      throw error;
+                    }
+                    await releaseTransferPeer(fixture);
                     const elapsedMs = performance.now() - startedAtMs;
                     const adjustedElapsedMs = Math.max(
                       0,

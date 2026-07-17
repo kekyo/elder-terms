@@ -37,6 +37,12 @@ LaunchOptions parse_launch_options(int *argc, char **argv) {
       continue;
     }
 
+    if (argument == "--test-latch-activity-indicators") {
+      options.test.latch_activity_indicators = true;
+      ++index;
+      continue;
+    }
+
     if (argument == "--test-transfer-dialog-probe") {
       options.test.transfer_dialog_probe = true;
       ++index;

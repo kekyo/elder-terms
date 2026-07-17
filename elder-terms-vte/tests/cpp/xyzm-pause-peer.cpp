@@ -46,6 +46,7 @@ struct Options {
   std::filesystem::path pause_request_file;
   std::filesystem::path paused_file;
   std::filesystem::path resume_file;
+  std::size_t pause_after_source_bytes = 0;
   uint32_t link_pace_ms = 0;
   std::size_t link_pace_every = 1;
   std::size_t max_link_chunk = 0;
@@ -70,11 +71,13 @@ struct SourceState {
   PauseControl *pause = nullptr;
   std::filesystem::path source_path;
   std::string source_name;
+  std::size_t pause_after_bytes = 0;
   bool used = false;
 };
 
 struct SourceFileState {
   int fd = -1;
+  std::size_t bytes_read = 0;
 };
 
 struct SinkState {
@@ -171,14 +174,11 @@ static xyzm_status_t wait_for_resume_file(const std::filesystem::path &path) {
   return XYZM_STATUS_OK;
 }
 
-static xyzm_status_t maybe_pause(PauseControl *pause) {
+static xyzm_status_t pause_now(PauseControl *pause) {
   if (pause == nullptr) {
     return XYZM_STATUS_OK;
   }
   if (pause->paused) {
-    return XYZM_STATUS_OK;
-  }
-  if (!file_exists(pause->pause_request_file)) {
     return XYZM_STATUS_OK;
   }
 
@@ -194,6 +194,14 @@ static xyzm_status_t maybe_pause(PauseControl *pause) {
     std::cerr << "xyzm-pause-peer resumed" << '\n';
   }
   return resume_status;
+}
+
+static xyzm_status_t maybe_pause(PauseControl *pause) {
+  if (pause == nullptr || pause->paused ||
+      !file_exists(pause->pause_request_file)) {
+    return XYZM_STATUS_OK;
+  }
+  return pause_now(pause);
 }
 
 static uint64_t monotonic_now_ms(void *) {
@@ -359,7 +367,7 @@ static xyzm_status_t source_next(void *opaque, xyzm_file_info_t *info,
     return XYZM_STATUS_IO_ERROR;
   }
 
-  auto *file_state = new SourceFileState{.fd = fd};
+  auto *file_state = new SourceFileState{.fd = fd, .bytes_read = 0};
   state->used = true;
   *info = xyzm_file_info_t{
       .valid_mask = XYZM_FILE_INFO_NAME | XYZM_FILE_INFO_SIZE,
@@ -383,7 +391,21 @@ static xyzm_status_t source_read(void *opaque, void *file_opaque,
     return pause_status;
   }
 
-  const ssize_t read_size = ::read(file_state->fd, buf, capacity);
+  if (state->pause_after_bytes > 0 &&
+      file_state->bytes_read >= state->pause_after_bytes) {
+    const xyzm_status_t threshold_pause_status = pause_now(state->pause);
+    if (threshold_pause_status != XYZM_STATUS_OK) {
+      return threshold_pause_status;
+    }
+  }
+
+  size_t read_capacity = capacity;
+  if (state->pause_after_bytes > file_state->bytes_read) {
+    read_capacity = std::min(
+        read_capacity, state->pause_after_bytes - file_state->bytes_read);
+  }
+
+  const ssize_t read_size = ::read(file_state->fd, buf, read_capacity);
   if (read_size < 0) {
     return XYZM_STATUS_IO_ERROR;
   }
@@ -392,6 +414,7 @@ static xyzm_status_t source_read(void *opaque, void *file_opaque,
   }
 
   *read_len = static_cast<size_t>(read_size);
+  file_state->bytes_read += *read_len;
   return maybe_pause(state->pause);
 }
 
@@ -400,6 +423,7 @@ static xyzm_status_t source_seek(void *, void *file_opaque, uint64_t offset) {
   if (::lseek(file_state->fd, static_cast<off_t>(offset), SEEK_SET) < 0) {
     return XYZM_STATUS_IO_ERROR;
   }
+  file_state->bytes_read = static_cast<std::size_t>(offset);
   return XYZM_STATUS_OK;
 }
 
@@ -671,6 +695,18 @@ static std::optional<Options> parse_options(int argc, char **argv) {
       options.resume_file = value;
       continue;
     }
+    if (argument == "--pause-after-source-bytes") {
+      if (!read_option_value(&index, argc, argv,
+                             "--pause-after-source-bytes", &value) ||
+          !parse_size(value, &options.pause_after_source_bytes) ||
+          options.pause_after_source_bytes == 0) {
+        std::cerr
+            << "--pause-after-source-bytes requires a positive integer"
+            << '\n';
+        return std::nullopt;
+      }
+      continue;
+    }
     if (argument == "--max-link-chunk") {
       if (!read_option_value(&index, argc, argv, "--max-link-chunk", &value) ||
           !parse_size(value, &options.max_link_chunk) ||
@@ -733,6 +769,7 @@ static xyzm_status_t run_send(const Options &options,
       .pause = pause,
       .source_path = options.source_path,
       .source_name = options.source_path.filename().string(),
+      .pause_after_bytes = options.pause_after_source_bytes,
       .used = false,
   };
   xyzm_source_ops_t source{

@@ -219,35 +219,35 @@ describe.concurrent('elder-terms-vte serial session', () => {
           'utf8'
         );
 
-        await runGtkTest(context, ['-c', configPath], async (app) => {
-          await toPass(
-            async () => {
-              expect((await app.output()).stderr).toContain(
-                'serial carrier detection unavailable'
-              );
-            },
-            {
-              message: 'serial session should start against the PTY',
-              timeoutMs: 5_000,
-            }
-          );
-          await expectSerialActivityIndicatorsVisibleInitialState(app);
-          await toPass(
-            async () => {
-              helper.writeCommand('TX serial-output');
-              await waitForActivityIndicatorImageState(app, 'rd', 'on', 400);
-            },
-            {
-              message: 'RD indicator should light after serial input',
-              timeoutMs: 7_000,
-            }
-          );
-          await delay(500);
-          await waitForActivityIndicatorImageState(app, 'rd', 'off');
-          await pressKeyUntilReceivedAndSdIndicatorOn(app, helper, 'a', '61');
-          await delay(500);
-          await waitForActivityIndicatorImageState(app, 'sd', 'off');
-        });
+        await runGtkTest(
+          context,
+          ['-c', configPath, '--test-latch-activity-indicators'],
+          async (app) => {
+            await toPass(
+              async () => {
+                expect((await app.output()).stderr).toContain(
+                  'serial carrier detection unavailable'
+                );
+              },
+              {
+                message: 'serial session should start against the PTY',
+                timeoutMs: 5_000,
+              }
+            );
+            await expectSerialActivityIndicatorsVisibleInitialState(app);
+            await toPass(
+              async () => {
+                helper.writeCommand('TX serial-output');
+                await waitForActivityIndicatorImageState(app, 'rd', 'on', 400);
+              },
+              {
+                message: 'RD indicator should light after serial input',
+                timeoutMs: 7_000,
+              }
+            );
+            await pressKeyUntilReceivedAndSdIndicatorOn(app, helper, 'a', '61');
+          }
+        );
       } finally {
         await helper.close();
       }

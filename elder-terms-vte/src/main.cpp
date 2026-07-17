@@ -586,6 +586,8 @@ int main(int argc, char **argv) {
   if (!main_window.has_value()) {
     return 1;
   }
+  elder_terms::set_main_window_activity_indicators_latched(
+      &*main_window, launch_options.test.latch_activity_indicators);
 
   auto vte_terminal = VTE_TERMINAL(main_window->terminal);
   const auto default_zoom =

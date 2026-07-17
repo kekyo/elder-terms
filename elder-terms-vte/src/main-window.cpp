@@ -572,6 +572,19 @@ void set_main_window_activity_indicator_connection_kind(
   }
 }
 
+void set_main_window_activity_indicators_latched(MainWindow *main_window,
+                                                 bool latch) {
+  if (main_window == nullptr) {
+    return;
+  }
+
+  for (ActivityIndicatorWidget &indicator : main_window->indicators) {
+    if (indicator.mode == ActivityIndicatorMode::blink) {
+      set_activity_indicator_widget_latched(&indicator, latch);
+    }
+  }
+}
+
 void deactivate_main_window_activity_indicators(MainWindow *main_window) {
   if (main_window == nullptr) {
     return;
