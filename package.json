@@ -4,6 +4,7 @@
   "private": true,
   "workspaces": [
     "shared",
+    "elder-terms",
     "elder-terms-vte"
   ],
   "scripts": {

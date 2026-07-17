@@ -1,0 +1,596 @@
+#include <filesystem>
+#include <iostream>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include <gdk/gdkkeysyms.h>
+#include <gestament/gtk.h>
+#include <gtk/gtk.h>
+
+#include <elder-terms/settings-widget.h>
+#include <elder-terms/settings.h>
+
+#include "connection-repository.h"
+#include "main-window.h"
+
+namespace {
+
+enum class PendingActionKind {
+  none,
+  select,
+  new_connection,
+  close,
+};
+
+struct PendingAction {
+  PendingActionKind kind = PendingActionKind::none;
+  std::filesystem::path path;
+};
+
+struct ConnectionRow {
+  bool valid = false;
+  bool is_new = false;
+  std::string name;
+  std::filesystem::path path;
+};
+
+struct ApplicationState {
+  elder_terms::LauncherMainWindow *main_window = nullptr;
+  elder_terms::SettingsWidgetState *settings_widget = nullptr;
+  std::filesystem::path connection_directory;
+  std::vector<elder_terms::ConnectionProfile> profiles;
+  std::optional<std::filesystem::path> selected_path;
+  std::string persisted_name;
+  std::string draft_name;
+  std::string name_error;
+  bool has_selection = false;
+  bool current_is_new = false;
+  bool name_dirty = false;
+  bool suppress_selection = false;
+  GtkWidget *confirmation_dialog = nullptr;
+  PendingAction pending_action;
+};
+
+enum ConnectionColumns {
+  connection_name_column = 0,
+  connection_path_column = 1,
+  connection_is_new_column = 2,
+  connection_column_count = 3,
+};
+
+static void update_action_sensitivity(ApplicationState *state);
+static void begin_new_connection(ApplicationState *state);
+static void select_existing_connection(
+    ApplicationState *state, const std::filesystem::path &path);
+
+static void print_warnings(const std::vector<std::string> &warnings) {
+  for (const std::string &warning : warnings) {
+    std::cerr << warning << '\n';
+  }
+}
+
+static void on_notice_response(GtkDialog *dialog, gint, gpointer) {
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+}
+
+static void show_error(ApplicationState *state, const std::string &summary,
+                       const std::vector<std::string> &details) {
+  print_warnings(details);
+  std::string secondary;
+  if (!details.empty()) {
+    secondary = details.front();
+  }
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(state->main_window->window),
+      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
+                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s", summary.c_str());
+  gestament_gtk_assign_accessible_id(dialog, "operation_error_dialog");
+  if (!secondary.empty()) {
+    gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), "%s",
+                                             secondary.c_str());
+  }
+  g_signal_connect(dialog, "response", G_CALLBACK(on_notice_response), nullptr);
+  gtk_widget_show(dialog);
+}
+
+static bool editor_is_dirty(const ApplicationState *state) {
+  return state->has_selection &&
+         (state->current_is_new || state->name_dirty ||
+          elder_terms::settings_widget_is_dirty(state->settings_widget));
+}
+
+static bool editor_is_valid(const ApplicationState *state) {
+  return state->has_selection && state->name_error.empty() &&
+         elder_terms::settings_widget_is_valid(state->settings_widget);
+}
+
+static void update_action_sensitivity(ApplicationState *state) {
+  const bool valid = editor_is_valid(state);
+  gtk_widget_set_sensitive(state->main_window->apply_button,
+                           valid && editor_is_dirty(state));
+  gtk_widget_set_sensitive(state->main_window->connect_button, valid);
+  gtk_widget_set_tooltip_text(
+      state->main_window->connection_list,
+      state->name_error.empty() ? nullptr : state->name_error.c_str());
+}
+
+static ConnectionRow selected_row(ApplicationState *state) {
+  GtkTreeSelection *selection = gtk_tree_view_get_selection(
+      GTK_TREE_VIEW(state->main_window->connection_list));
+  GtkTreeModel *model = nullptr;
+  GtkTreeIter iterator;
+  if (!gtk_tree_selection_get_selected(selection, &model, &iterator)) {
+    return {};
+  }
+
+  gchar *name = nullptr;
+  gchar *path = nullptr;
+  gboolean is_new = FALSE;
+  gtk_tree_model_get(model, &iterator, connection_name_column, &name,
+                     connection_path_column, &path,
+                     connection_is_new_column, &is_new, -1);
+  ConnectionRow result{
+      .valid = true,
+      .is_new = is_new != FALSE,
+      .name = name == nullptr ? std::string() : std::string(name),
+      .path = path == nullptr ? std::filesystem::path()
+                             : std::filesystem::path(path),
+  };
+  g_free(name);
+  g_free(path);
+  return result;
+}
+
+static bool row_matches_current(const ApplicationState *state,
+                                const ConnectionRow &row) {
+  if (!state->has_selection || !row.valid ||
+      state->current_is_new != row.is_new) {
+    return false;
+  }
+  return row.is_new ? true
+                    : state->selected_path.has_value() &&
+                          state->selected_path.value() == row.path;
+}
+
+static bool select_matching_row(ApplicationState *state,
+                                const std::optional<std::filesystem::path> &path,
+                                bool select_new) {
+  GtkTreeModel *model = GTK_TREE_MODEL(state->main_window->connection_store);
+  GtkTreeIter iterator;
+  if (!gtk_tree_model_get_iter_first(model, &iterator)) {
+    return false;
+  }
+  do {
+    gchar *row_path = nullptr;
+    gboolean is_new = FALSE;
+    gtk_tree_model_get(model, &iterator, connection_path_column, &row_path,
+                       connection_is_new_column, &is_new, -1);
+    const bool matches =
+        select_new ? is_new != FALSE
+                   : is_new == FALSE && path.has_value() &&
+                         row_path != nullptr && path.value() == row_path;
+    g_free(row_path);
+    if (!matches) {
+      continue;
+    }
+    GtkTreeSelection *selection = gtk_tree_view_get_selection(
+        GTK_TREE_VIEW(state->main_window->connection_list));
+    gtk_tree_selection_select_iter(selection, &iterator);
+    GtkTreePath *tree_path = gtk_tree_model_get_path(model, &iterator);
+    gtk_tree_view_scroll_to_cell(
+        GTK_TREE_VIEW(state->main_window->connection_list), tree_path, nullptr,
+        FALSE, 0.0F, 0.0F);
+    gtk_tree_path_free(tree_path);
+    return true;
+  } while (gtk_tree_model_iter_next(model, &iterator));
+  return false;
+}
+
+static void restore_current_selection(ApplicationState *state) {
+  state->suppress_selection = true;
+  GtkTreeSelection *selection = gtk_tree_view_get_selection(
+      GTK_TREE_VIEW(state->main_window->connection_list));
+  if (!state->has_selection) {
+    gtk_tree_selection_unselect_all(selection);
+  } else {
+    select_matching_row(state, state->selected_path, state->current_is_new);
+  }
+  state->suppress_selection = false;
+}
+
+static void populate_profile_rows(ApplicationState *state) {
+  state->profiles = elder_terms::list_connection_profiles(
+      state->connection_directory);
+  state->suppress_selection = true;
+  gtk_list_store_clear(state->main_window->connection_store);
+  for (const elder_terms::ConnectionProfile &profile : state->profiles) {
+    GtkTreeIter iterator;
+    gtk_list_store_append(state->main_window->connection_store, &iterator);
+    gtk_list_store_set(state->main_window->connection_store, &iterator,
+                       connection_name_column, profile.name.c_str(),
+                       connection_path_column, profile.path.c_str(),
+                       connection_is_new_column, FALSE, -1);
+  }
+  state->suppress_selection = false;
+}
+
+static void show_empty_details(ApplicationState *state) {
+  state->has_selection = false;
+  state->current_is_new = false;
+  state->selected_path.reset();
+  state->persisted_name.clear();
+  state->draft_name.clear();
+  state->name_error.clear();
+  state->name_dirty = false;
+  gtk_stack_set_visible_child_name(GTK_STACK(state->main_window->details_stack),
+                                   "empty");
+  update_action_sensitivity(state);
+}
+
+static bool load_existing_connection(ApplicationState *state,
+                                     const std::filesystem::path &path) {
+  const elder_terms::SettingsLoadResult result =
+      elder_terms::load_connection_profile(path);
+  print_warnings(result.warnings);
+  if (!result.loaded) {
+    show_error(state, "Failed to load connection", result.warnings);
+    return false;
+  }
+
+  state->has_selection = true;
+  state->current_is_new = false;
+  state->selected_path = path;
+  state->persisted_name = path.stem().string();
+  state->draft_name = state->persisted_name;
+  state->name_error.clear();
+  state->name_dirty = false;
+  elder_terms::update_settings_widget_store(state->settings_widget,
+                                             result.store);
+  gtk_stack_set_visible_child_name(GTK_STACK(state->main_window->details_stack),
+                                   "settings");
+  update_action_sensitivity(state);
+  return true;
+}
+
+static void start_name_editing(ApplicationState *state) {
+  GtkTreeSelection *selection = gtk_tree_view_get_selection(
+      GTK_TREE_VIEW(state->main_window->connection_list));
+  GtkTreeModel *model = nullptr;
+  GtkTreeIter iterator;
+  if (!gtk_tree_selection_get_selected(selection, &model, &iterator)) {
+    return;
+  }
+  GtkTreePath *path = gtk_tree_model_get_path(model, &iterator);
+  GtkTreeViewColumn *column = gtk_tree_view_get_column(
+      GTK_TREE_VIEW(state->main_window->connection_list), 0);
+  g_object_set(state->main_window->connection_name_renderer, "editable", TRUE,
+               nullptr);
+  gtk_widget_grab_focus(state->main_window->connection_list);
+  gtk_tree_view_set_cursor_on_cell(
+      GTK_TREE_VIEW(state->main_window->connection_list), path, column,
+      state->main_window->connection_name_renderer, TRUE);
+  gtk_tree_path_free(path);
+}
+
+static std::string next_new_connection_name(
+    const std::vector<elder_terms::ConnectionProfile> &profiles) {
+  for (int suffix = 1;; ++suffix) {
+    const std::string candidate =
+        suffix == 1 ? "New connection"
+                    : "New connection " + std::to_string(suffix);
+    const auto validation = elder_terms::validate_connection_name(
+        candidate, profiles, std::nullopt);
+    if (validation.valid) {
+      return candidate;
+    }
+  }
+}
+
+static void begin_new_connection(ApplicationState *state) {
+  populate_profile_rows(state);
+  state->has_selection = true;
+  state->current_is_new = true;
+  state->selected_path.reset();
+  state->persisted_name.clear();
+  state->draft_name = next_new_connection_name(state->profiles);
+  state->name_error.clear();
+  state->name_dirty = true;
+
+  GtkTreeIter iterator;
+  gtk_list_store_append(state->main_window->connection_store, &iterator);
+  gtk_list_store_set(state->main_window->connection_store, &iterator,
+                     connection_name_column, state->draft_name.c_str(),
+                     connection_path_column, "", connection_is_new_column,
+                     TRUE, -1);
+  state->suppress_selection = true;
+  GtkTreeSelection *selection = gtk_tree_view_get_selection(
+      GTK_TREE_VIEW(state->main_window->connection_list));
+  gtk_tree_selection_select_iter(selection, &iterator);
+  state->suppress_selection = false;
+
+  elder_terms::SettingsStore store = elder_terms::create_default_settings(
+      elder_terms::default_terminal_display_settings(1.0));
+  elder_terms::update_settings_widget_store(state->settings_widget,
+                                             std::move(store));
+  gtk_stack_set_visible_child_name(GTK_STACK(state->main_window->details_stack),
+                                   "settings");
+  update_action_sensitivity(state);
+  start_name_editing(state);
+}
+
+static void select_existing_connection(
+    ApplicationState *state, const std::filesystem::path &path) {
+  populate_profile_rows(state);
+  state->suppress_selection = true;
+  const bool found = select_matching_row(state, path, false);
+  state->suppress_selection = false;
+  if (!found || !load_existing_connection(state, path)) {
+    show_empty_details(state);
+  }
+}
+
+static void perform_pending_action(ApplicationState *state,
+                                   PendingAction action) {
+  if (action.kind == PendingActionKind::select) {
+    select_existing_connection(state, action.path);
+  } else if (action.kind == PendingActionKind::new_connection) {
+    begin_new_connection(state);
+  } else if (action.kind == PendingActionKind::close) {
+    gtk_widget_destroy(state->main_window->window);
+  }
+}
+
+static void on_confirmation_response(GtkDialog *dialog, gint response,
+                                     gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  const PendingAction action = state->pending_action;
+  state->pending_action = {};
+  state->confirmation_dialog = nullptr;
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+  if (response == GTK_RESPONSE_ACCEPT) {
+    perform_pending_action(state, action);
+  }
+}
+
+static void request_discard_confirmation(ApplicationState *state,
+                                         PendingAction action) {
+  if (state->confirmation_dialog != nullptr) {
+    gtk_window_present(GTK_WINDOW(state->confirmation_dialog));
+    return;
+  }
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(state->main_window->window),
+      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
+                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE, "%s", "Discard changes?");
+  gtk_message_dialog_format_secondary_text(
+      GTK_MESSAGE_DIALOG(dialog), "%s",
+      "The current connection has changes that have not been applied.");
+  GtkWidget *cancel = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), "Cancel", GTK_RESPONSE_CANCEL);
+  GtkWidget *discard = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), "Discard", GTK_RESPONSE_ACCEPT);
+  gestament_gtk_assign_accessible_id(dialog, "discard_changes_dialog");
+  gestament_gtk_assign_accessible_id(cancel, "cancel_discard_button");
+  gestament_gtk_assign_accessible_id(discard, "discard_changes_button");
+  state->pending_action = std::move(action);
+  state->confirmation_dialog = dialog;
+  g_signal_connect(dialog, "response", G_CALLBACK(on_confirmation_response),
+                   state);
+  gtk_widget_show_all(dialog);
+}
+
+static void on_connection_selection_changed(GtkTreeSelection *,
+                                            gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state->suppress_selection) {
+    return;
+  }
+  const ConnectionRow row = selected_row(state);
+  if (!row.valid || row_matches_current(state, row)) {
+    return;
+  }
+  if (editor_is_dirty(state)) {
+    restore_current_selection(state);
+    request_discard_confirmation(
+        state, PendingAction{
+                   .kind = PendingActionKind::select,
+                   .path = row.path,
+               });
+    return;
+  }
+  if (!load_existing_connection(state, row.path)) {
+    restore_current_selection(state);
+  }
+}
+
+static void on_name_edited(GtkCellRendererText *, gchar *path_text,
+                           gchar *new_text, gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  g_object_set(state->main_window->connection_name_renderer, "editable", FALSE,
+               nullptr);
+  GtkTreePath *path = gtk_tree_path_new_from_string(path_text);
+  GtkTreeIter iterator;
+  if (path == nullptr ||
+      !gtk_tree_model_get_iter(GTK_TREE_MODEL(state->main_window->connection_store),
+                               &iterator, path)) {
+    if (path != nullptr) {
+      gtk_tree_path_free(path);
+    }
+    return;
+  }
+  gtk_tree_path_free(path);
+
+  const auto validation = elder_terms::validate_connection_name(
+      new_text == nullptr ? std::string() : std::string(new_text),
+      state->profiles, state->selected_path);
+  state->draft_name = validation.name;
+  state->name_error = validation.valid ? std::string() : validation.error;
+  state->name_dirty =
+      state->current_is_new || state->draft_name != state->persisted_name;
+  gtk_list_store_set(state->main_window->connection_store, &iterator,
+                     connection_name_column, state->draft_name.c_str(), -1);
+  update_action_sensitivity(state);
+}
+
+static void on_name_editing_canceled(GtkCellRenderer *, gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  g_object_set(state->main_window->connection_name_renderer, "editable", FALSE,
+               nullptr);
+}
+
+static void on_name_editing_started(GtkCellRenderer *,
+                                    GtkCellEditable *editable, gchar *,
+                                    gpointer) {
+  if (GTK_IS_WIDGET(editable)) {
+    gestament_gtk_assign_accessible_id(GTK_WIDGET(editable),
+                                       "connection_name_editor");
+  }
+}
+
+static gboolean on_connection_list_key_press(GtkWidget *, GdkEventKey *event,
+                                             gpointer user_data) {
+  if (event->keyval != GDK_KEY_F2) {
+    return FALSE;
+  }
+  start_name_editing(static_cast<ApplicationState *>(user_data));
+  return TRUE;
+}
+
+static gboolean on_rename_accelerator(GtkAccelGroup *, GObject *, guint,
+                                      GdkModifierType, gpointer user_data) {
+  start_name_editing(static_cast<ApplicationState *>(user_data));
+  return TRUE;
+}
+
+static void on_new_clicked(GtkButton *, gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (editor_is_dirty(state)) {
+    request_discard_confirmation(
+        state, PendingAction{
+                   .kind = PendingActionKind::new_connection,
+                   .path = {},
+               });
+    return;
+  }
+  begin_new_connection(state);
+}
+
+static void on_apply_clicked(GtkButton *, gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  const auto validation = elder_terms::validate_connection_name(
+      state->draft_name, state->profiles, state->selected_path);
+  if (!validation.valid ||
+      !elder_terms::settings_widget_is_valid(state->settings_widget)) {
+    update_action_sensitivity(state);
+    return;
+  }
+  const elder_terms::ConnectionSaveResult result =
+      elder_terms::save_connection_profile(
+          state->connection_directory, state->selected_path, validation.name,
+          elder_terms::settings_widget_draft_store(state->settings_widget));
+  print_warnings(result.warnings);
+  if (!result.saved) {
+    show_error(state, "Failed to save connection", result.warnings);
+    return;
+  }
+  select_existing_connection(state, result.path);
+}
+
+static gboolean on_window_delete(GtkWidget *, GdkEvent *, gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (!editor_is_dirty(state)) {
+    return FALSE;
+  }
+  request_discard_confirmation(
+      state, PendingAction{
+                 .kind = PendingActionKind::close,
+                 .path = {},
+             });
+  return TRUE;
+}
+
+static void on_window_destroy(GtkWidget *, gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state->settings_widget != nullptr) {
+    elder_terms::destroy_settings_widget(state->settings_widget);
+    state->settings_widget = nullptr;
+  }
+  gtk_main_quit();
+}
+
+} // namespace
+
+int main(int argc, char **argv) {
+  gtk_init(&argc, &argv);
+  auto main_window = elder_terms::load_launcher_main_window();
+  if (!main_window.has_value()) {
+    return 1;
+  }
+
+  ApplicationState state;
+  state.main_window = &*main_window;
+  state.connection_directory = elder_terms::default_connection_directory();
+  elder_terms::SettingsWidgetCallbacks callbacks;
+  callbacks.changed = [&state]() { update_action_sensitivity(&state); };
+  state.settings_widget = elder_terms::create_settings_widget({
+      .store = elder_terms::create_default_settings(
+          elder_terms::default_terminal_display_settings(1.0)),
+      .is_runtime = false,
+      .show_actions = false,
+      .callbacks = std::move(callbacks),
+  });
+  gtk_container_add(
+      GTK_CONTAINER(main_window->settings_container),
+      elder_terms::settings_widget_root(state.settings_widget));
+
+  GtkTreeSelection *selection = gtk_tree_view_get_selection(
+      GTK_TREE_VIEW(main_window->connection_list));
+  g_signal_connect(selection, "changed",
+                   G_CALLBACK(on_connection_selection_changed), &state);
+  g_signal_connect(main_window->connection_name_renderer, "edited",
+                   G_CALLBACK(on_name_edited), &state);
+  g_signal_connect(main_window->connection_name_renderer, "editing-canceled",
+                   G_CALLBACK(on_name_editing_canceled), &state);
+  g_signal_connect(main_window->connection_name_renderer, "editing-started",
+                   G_CALLBACK(on_name_editing_started), &state);
+  g_signal_connect(main_window->connection_list, "key-press-event",
+                   G_CALLBACK(on_connection_list_key_press), &state);
+  g_signal_connect(main_window->window, "key-press-event",
+                   G_CALLBACK(on_connection_list_key_press), &state);
+  g_signal_connect(main_window->new_button, "clicked",
+                   G_CALLBACK(on_new_clicked), &state);
+  g_signal_connect(main_window->apply_button, "clicked",
+                   G_CALLBACK(on_apply_clicked), &state);
+  g_signal_connect(main_window->window, "delete-event",
+                   G_CALLBACK(on_window_delete), &state);
+  g_signal_connect(main_window->window, "destroy",
+                   G_CALLBACK(on_window_destroy), &state);
+
+  GtkAccelGroup *rename_accelerator = gtk_accel_group_new();
+  GClosure *rename_closure =
+      g_cclosure_new(G_CALLBACK(on_rename_accelerator), &state, nullptr);
+  gtk_accel_group_connect(rename_accelerator, GDK_KEY_F2,
+                          static_cast<GdkModifierType>(0), GTK_ACCEL_VISIBLE,
+                          rename_closure);
+  gtk_window_add_accel_group(GTK_WINDOW(main_window->window),
+                             rename_accelerator);
+  g_object_unref(rename_accelerator);
+
+  populate_profile_rows(&state);
+  show_empty_details(&state);
+  gtk_widget_show_all(main_window->window);
+  state.suppress_selection = true;
+  gtk_tree_selection_unselect_all(selection);
+  state.suppress_selection = false;
+  show_empty_details(&state);
+  gtk_stack_set_visible_child_name(GTK_STACK(main_window->details_stack),
+                                   "empty");
+  update_action_sensitivity(&state);
+  gtk_main();
+  elder_terms::destroy_launcher_main_window(&*main_window);
+  return 0;
+}
