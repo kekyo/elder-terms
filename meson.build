@@ -10,4 +10,5 @@ project(
 )
 
 subdir('shared')
+subdir('elder-terms')
 subdir('elder-terms-vte')
