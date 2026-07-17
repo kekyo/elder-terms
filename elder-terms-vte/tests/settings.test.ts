@@ -13,6 +13,7 @@ import {
   expectFixtureVteGridSize,
   expectWindowCellSize,
   moveMouseToTerminalCenter,
+  pressKeyWithModifiers,
   readTerminalGridLayout,
   readWindowCellLayout,
   runGtkTest,
@@ -729,6 +730,52 @@ describe.concurrent('elder-terms-vte settings', () => {
           'spinButton'
         ).value()
       ).toBeCloseTo(1.1);
+    });
+  });
+
+  it('applies edited terminal key bindings at runtime', async (context) => {
+    await runGtkTest(context, ['--test-fixture'], async (app) => {
+      const initialLayout = await waitForResult(async () => {
+        const layout = await readWindowCellLayout(app);
+        expectWindowCellSize(layout, defaultColumns, defaultRows);
+        return layout;
+      });
+
+      await openSettingsDialog(app);
+      await showTerminalSettingsPage(app);
+      await expectElementKind(
+        await app.getById('settings_terminal_zoom_in_key_entry'),
+        'entry'
+      ).setText('alt+Up');
+      await expectElementKind(
+        await app.getById('settings_terminal_zoom_out_key_entry'),
+        'entry'
+      ).setText('alt+Down');
+      await expectElementKind(
+        await app.getById('settings_apply_button'),
+        'button'
+      ).click();
+      await expectSettingsDialogClosed(app);
+      await expectTerminalFocused(app);
+
+      await pressKeyWithModifiers(app, ['alt'], 'Up');
+      await waitForResult(async () => {
+        const layout = await readWindowCellLayout(app);
+        expect(layout.hints.widthIncrement).not.toBe(
+          initialLayout.hints.widthIncrement
+        );
+      });
+
+      await pressKeyWithModifiers(app, ['alt'], 'Down');
+      await waitForResult(async () => {
+        const layout = await readWindowCellLayout(app);
+        expect(layout.hints.widthIncrement).toBe(
+          initialLayout.hints.widthIncrement
+        );
+        expect(layout.hints.heightIncrement).toBe(
+          initialLayout.hints.heightIncrement
+        );
+      });
     });
   });
 

@@ -47,6 +47,8 @@ interface AppliedStore {
   readonly width: string;
   readonly zmodem_autostart: string;
   readonly zoom: string;
+  readonly zoom_in_key: string;
+  readonly zoom_out_key: string;
 }
 
 interface SettingVisualCase {
@@ -261,6 +263,18 @@ describe.concurrent('shared settings widget', () => {
               'spinButton'
             ).value()
           ).toBe(80);
+          expect(
+            await expectElementKind(
+              await app.getById('settings_terminal_zoom_in_key_entry'),
+              'entry'
+            ).text()
+          ).toBe('ctrl+plus');
+          expect(
+            await expectElementKind(
+              await app.getById('settings_terminal_zoom_out_key_entry'),
+              'entry'
+            ).text()
+          ).toBe('ctrl+minus');
         },
         differsFrom: undefined,
         fixtureName: 'settings-widget-terminal-page-default',
@@ -836,10 +850,20 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_terminal_auto_close_check'),
           'checkbox'
         );
+        const zoomInKey = expectElementKind(
+          await app.getById('settings_terminal_zoom_in_key_entry'),
+          'entry'
+        );
+        const zoomOutKey = expectElementKind(
+          await app.getById('settings_terminal_zoom_out_key_entry'),
+          'entry'
+        );
         expect(await width.value()).toBe(88);
         expect(await height.value()).toBe(31);
         expect(await zoom.value()).toBe(1.25);
         expect(await autoClose.isChecked()).toBe(false);
+        expect(await zoomInKey.text()).toBe('ctrl+plus');
+        expect(await zoomOutKey.text()).toBe('ctrl+minus');
 
         const terminalPageCapture = await (
           await app.getById('settings_terminal_page')
@@ -887,6 +911,8 @@ describe.concurrent('shared settings widget', () => {
         await height.setValue(25);
         await zoom.setValue(1.1);
         await autoClose.toggle();
+        await zoomInKey.setText('alt+Up');
+        await zoomOutKey.setText('');
         await expectElementKind(
           await app.getById('settings_apply_button'),
           'button'
@@ -897,6 +923,51 @@ describe.concurrent('shared settings widget', () => {
         expect(store.height).toBe('25');
         expect(Number(store.zoom)).toBeCloseTo(1.1);
         expect(store.auto_close).toBe('true');
+        expect(store.zoom_in_key).toBe('alt+Up');
+        expect(store.zoom_out_key).toBe('');
+      }
+    );
+  });
+
+  it('blocks applying invalid or conflicting terminal key bindings', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal', '--save'],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        const zoomInKey = expectElementKind(
+          await app.getById('settings_terminal_zoom_in_key_entry'),
+          'entry'
+        );
+        const zoomOutKey = expectElementKind(
+          await app.getById('settings_terminal_zoom_out_key_entry'),
+          'entry'
+        );
+        const apply = await app.getById('settings_apply_button');
+        const save = await app.getById('settings_save_button');
+
+        await zoomInKey.setText('ctrl++plus');
+        await waitForResult(async () => {
+          await expectInsensitive(apply);
+          await expectInsensitive(save);
+        });
+
+        await zoomInKey.setText('alt+F1');
+        await zoomOutKey.setText('ALT-f1');
+        await waitForResult(async () => {
+          await expectInsensitive(apply);
+          await expectInsensitive(save);
+        });
+
+        await zoomOutKey.setText('alt+F2');
+        await waitForResult(async () => {
+          await expectSensitive(apply);
+          await expectSensitive(save);
+        });
+        await expectElementKind(apply, 'button').click();
+        const store = await waitForAppliedStore(app);
+        expect(store.zoom_in_key).toBe('alt+F1');
+        expect(store.zoom_out_key).toBe('alt+F2');
       }
     );
   });

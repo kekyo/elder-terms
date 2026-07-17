@@ -7,6 +7,7 @@
 
 #include <atk/atk.h>
 
+#include <elder-terms/key-binding-input-widget.h>
 #include <elder-terms/settings/general-settings.h>
 
 namespace elder_terms {
@@ -36,6 +37,8 @@ struct SettingsWidgetState {
   GtkWidget *terminal_height_spin = nullptr;
   GtkWidget *terminal_zoom_spin = nullptr;
   GtkWidget *terminal_auto_close_check = nullptr;
+  KeyBindingInputWidgetState *terminal_zoom_in_key_input = nullptr;
+  KeyBindingInputWidgetState *terminal_zoom_out_key_input = nullptr;
   GtkWidget *telnet_address_entry = nullptr;
   GtkWidget *telnet_port_spin = nullptr;
   GtkWidget *serial_device_entry = nullptr;
@@ -221,6 +224,73 @@ static void update_terminal_auto_close_from_widget(
                        state->terminal_auto_close_check)) != FALSE});
 }
 
+static bool terminal_key_binding_inputs_conflict(
+    SettingsWidgetState *state) {
+  const KeyBindingParseResult zoom_in = parse_key_binding(
+      key_binding_input_widget_text(state->terminal_zoom_in_key_input));
+  const KeyBindingParseResult zoom_out = parse_key_binding(
+      key_binding_input_widget_text(state->terminal_zoom_out_key_input));
+  return zoom_in.error.empty() && zoom_out.error.empty() &&
+         zoom_in.binding.has_value() && zoom_out.binding.has_value() &&
+         key_bindings_equal(*zoom_in.binding, *zoom_out.binding);
+}
+
+static bool terminal_key_binding_inputs_valid(SettingsWidgetState *state) {
+  return key_binding_input_widget_is_valid(
+             state->terminal_zoom_in_key_input) &&
+         key_binding_input_widget_is_valid(
+             state->terminal_zoom_out_key_input);
+}
+
+static void update_action_sensitivity(SettingsWidgetState *state) {
+  const gboolean sensitive =
+      terminal_key_binding_inputs_valid(state) ? TRUE : FALSE;
+  if (state->apply_button != nullptr) {
+    gtk_widget_set_sensitive(state->apply_button, sensitive);
+  }
+  if (state->save_button != nullptr) {
+    gtk_widget_set_sensitive(state->save_button, sensitive);
+  }
+}
+
+static void update_terminal_key_binding_validation(
+    SettingsWidgetState *state) {
+  constexpr char conflict_error[] =
+      "Zoom in and zoom out must use different key bindings";
+  const bool conflict = terminal_key_binding_inputs_conflict(state);
+  set_key_binding_input_widget_external_error(
+      state->terminal_zoom_in_key_input,
+      conflict ? conflict_error : std::string());
+  set_key_binding_input_widget_external_error(
+      state->terminal_zoom_out_key_input,
+      conflict ? conflict_error : std::string());
+  update_action_sensitivity(state);
+}
+
+static void update_terminal_zoom_in_key_from_widget(
+    SettingsWidgetState *state) {
+  if (!key_binding_input_widget_is_valid(
+          state->terminal_zoom_in_key_input)) {
+    return;
+  }
+  set_setting_value(
+      &state->draft_store, terminal_zoom_in_key_setting_key(),
+      SettingValue{
+          key_binding_input_widget_text(state->terminal_zoom_in_key_input)});
+}
+
+static void update_terminal_zoom_out_key_from_widget(
+    SettingsWidgetState *state) {
+  if (!key_binding_input_widget_is_valid(
+          state->terminal_zoom_out_key_input)) {
+    return;
+  }
+  set_setting_value(
+      &state->draft_store, terminal_zoom_out_key_setting_key(),
+      SettingValue{
+          key_binding_input_widget_text(state->terminal_zoom_out_key_input)});
+}
+
 static void update_telnet_address_from_widget(SettingsWidgetState *state) {
   const char *text =
       gtk_entry_get_text(GTK_ENTRY(state->telnet_address_entry));
@@ -335,6 +405,15 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
         GTK_TOGGLE_BUTTON(state->terminal_auto_close_check),
         terminal_auto_close(state->draft_store) ? TRUE : FALSE);
   }
+  if (state->terminal_zoom_in_key_input != nullptr) {
+    set_key_binding_input_widget_text(state->terminal_zoom_in_key_input,
+                                      terminal_zoom_in_key(state->draft_store));
+  }
+  if (state->terminal_zoom_out_key_input != nullptr) {
+    set_key_binding_input_widget_text(
+        state->terminal_zoom_out_key_input,
+        terminal_zoom_out_key(state->draft_store));
+  }
   if (state->telnet_address_entry != nullptr) {
     gtk_entry_set_text(GTK_ENTRY(state->telnet_address_entry),
                        telnet.address.c_str());
@@ -399,6 +478,8 @@ static void sync_draft_from_widgets(SettingsWidgetState *state) {
   update_terminal_height_from_widget(state);
   update_terminal_zoom_from_widget(state);
   update_terminal_auto_close_from_widget(state);
+  update_terminal_zoom_in_key_from_widget(state);
+  update_terminal_zoom_out_key_from_widget(state);
   update_telnet_address_from_widget(state);
   update_telnet_port_from_widget(state);
   update_serial_device_from_widget(state);
@@ -435,6 +516,15 @@ static void on_terminal_zoom_changed(GtkSpinButton *, gpointer data) {
 static void on_terminal_auto_close_toggled(GtkToggleButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_terminal_auto_close_from_widget(state);
+}
+
+static void on_terminal_key_binding_changed(SettingsWidgetState *state) {
+  update_terminal_key_binding_validation(state);
+  if (!terminal_key_binding_inputs_valid(state)) {
+    return;
+  }
+  update_terminal_zoom_in_key_from_widget(state);
+  update_terminal_zoom_out_key_from_widget(state);
 }
 
 static void on_telnet_address_changed(GtkEditable *, gpointer data) {
@@ -577,6 +667,24 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   g_signal_connect(state->terminal_auto_close_check, "toggled",
                    G_CALLBACK(on_terminal_auto_close_toggled), state);
   attach_row(page, 3, "auto_close", state->terminal_auto_close_check);
+
+  state->terminal_zoom_in_key_input = create_key_binding_input_widget({
+      .text = terminal_zoom_in_key(state->draft_store),
+      .accessible_id = "settings_terminal_zoom_in_key_entry",
+      .changed = [state]() { on_terminal_key_binding_changed(state); },
+  });
+  attach_row(page, 4, "zoom_in_key",
+             key_binding_input_widget_root(
+                 state->terminal_zoom_in_key_input));
+
+  state->terminal_zoom_out_key_input = create_key_binding_input_widget({
+      .text = terminal_zoom_out_key(state->draft_store),
+      .accessible_id = "settings_terminal_zoom_out_key_entry",
+      .changed = [state]() { on_terminal_key_binding_changed(state); },
+  });
+  attach_row(page, 5, "zoom_out_key",
+             key_binding_input_widget_root(
+                 state->terminal_zoom_out_key_input));
 
   return page;
 }
@@ -831,6 +939,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   gtk_box_pack_start(GTK_BOX(state->root), create_button_box(state), FALSE,
                      FALSE, 0);
+  update_terminal_key_binding_validation(state);
   update_connection_pages(state);
 
   return state;
@@ -856,6 +965,8 @@ void destroy_settings_widget(SettingsWidgetState *state) {
     return;
   }
 
+  destroy_key_binding_input_widget(state->terminal_zoom_in_key_input);
+  destroy_key_binding_input_widget(state->terminal_zoom_out_key_input);
   if (state->root != nullptr && gtk_widget_get_parent(state->root) == nullptr) {
     gtk_widget_destroy(state->root);
   }

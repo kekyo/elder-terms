@@ -22,6 +22,8 @@ struct FixtureOptions {
   glong height = 24;
   gdouble zoom = 1.0;
   bool auto_close = true;
+  std::string zoom_in_key = "ctrl+plus";
+  std::string zoom_out_key = "ctrl+minus";
   std::string page = "general";
   std::string telnet_address = "127.0.0.1";
   gint64 telnet_port = 23;
@@ -72,6 +74,10 @@ static FixtureOptions parse_options(int argc, char **argv) {
       options.zoom = std::stod(option_value(argument, "--zoom="));
     } else if (starts_with(argument, "--auto-close=")) {
       options.auto_close = parse_bool(option_value(argument, "--auto-close="));
+    } else if (starts_with(argument, "--zoom-in-key=")) {
+      options.zoom_in_key = option_value(argument, "--zoom-in-key=");
+    } else if (starts_with(argument, "--zoom-out-key=")) {
+      options.zoom_out_key = option_value(argument, "--zoom-out-key=");
     } else if (starts_with(argument, "--page=")) {
       options.page = option_value(argument, "--page=");
     } else if (starts_with(argument, "--telnet-address=")) {
@@ -146,6 +152,12 @@ static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
   elder_terms::set_setting_value(
       &store, elder_terms::terminal_auto_close_setting_key(),
       elder_terms::SettingValue{options.auto_close});
+  elder_terms::set_setting_value(
+      &store, elder_terms::terminal_zoom_in_key_setting_key(),
+      elder_terms::SettingValue{options.zoom_in_key});
+  elder_terms::set_setting_value(
+      &store, elder_terms::terminal_zoom_out_key_setting_key(),
+      elder_terms::SettingValue{options.zoom_out_key});
   elder_terms::set_setting_value(
       &store, elder_terms::telnet_address_setting_key(),
       elder_terms::SettingValue{options.telnet_address});
@@ -271,6 +283,10 @@ static void print_store(const char *prefix,
             << " zoom=" << display.zoom
             << " auto_close="
             << (elder_terms::terminal_auto_close(store) ? "true" : "false")
+            << " zoom_in_key="
+            << elder_terms::terminal_zoom_in_key(store)
+            << " zoom_out_key="
+            << elder_terms::terminal_zoom_out_key(store)
             << " telnet_address=" << telnet.address
             << " telnet_port=" << telnet.port
             << " serial_device=" << serial.device
