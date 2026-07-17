@@ -141,7 +141,7 @@
               <object class="GtkButton" id="connect_button">
                 <property name="visible">True</property>
                 <property name="sensitive">False</property>
-                <property name="label">Connect</property>
+                <property name="label">Launch</property>
               </object>
             </child>
           </object>

@@ -181,6 +181,7 @@ describe('elder-terms main window', () => {
       const connect = await app.getById('connect_button');
 
       expect(['table', 'tree']).toContain(list.kind);
+      expect((await connect.info()).name).toBe('Launch');
       await expectInsensitive(apply);
       await expectInsensitive(connect);
       const before = await window.bounds();
