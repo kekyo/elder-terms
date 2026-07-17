@@ -1,13 +1,16 @@
 import {
   chmod,
+  mkdir,
   mkdtemp,
   readFile,
   rename,
   rm,
+  symlink,
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { GtkApp, GtkWidgetElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { describe, expect, it } from 'vitest';
@@ -113,6 +116,42 @@ await writeFile(process.env.ELDER_TERMS_TEST_CAPTURE, JSON.stringify({ args, sta
   );
   await chmod(executable, 0o755);
   return {
+    executable,
+    capture,
+    release: async () => rm(directory, { recursive: true, force: true }),
+  };
+};
+
+interface SiblingVteLayout extends FakeVteContext {
+  readonly launcher: string;
+}
+
+const createSiblingVteLayout = async (): Promise<SiblingVteLayout> => {
+  const directory = await mkdtemp(join(tmpdir(), 'elder-terms-sibling-vte-'));
+  const launcherDirectory = join(directory, 'elder-terms');
+  const vteDirectory = join(directory, 'elder-terms-vte');
+  await Promise.all([
+    mkdir(launcherDirectory, { recursive: true }),
+    mkdir(vteDirectory, { recursive: true }),
+  ]);
+  await symlink(
+    fileURLToPath(
+      new URL('../../.build/elder-terms/elder-terms', import.meta.url)
+    ),
+    join(launcherDirectory, 'elder-terms')
+  );
+  const executable = join(vteDirectory, 'elder-terms-vte');
+  const capture = join(directory, 'capture.json');
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node
+import { writeFile } from 'node:fs/promises';
+await writeFile(process.env.ELDER_TERMS_TEST_CAPTURE, JSON.stringify({ args: process.argv.slice(2), startupContent: null }));
+`
+  );
+  await chmod(executable, 0o755);
+  return {
+    launcher: `${launcherDirectory}/./elder-terms`,
     executable,
     capture,
     release: async () => rm(directory, { recursive: true, force: true }),
@@ -388,6 +427,40 @@ describe('elder-terms main window', () => {
       );
     } finally {
       await fakeVte.release();
+    }
+  });
+
+  it('finds the sibling VTE when launched through a dot path', async (context) => {
+    const layout = await createSiblingVteLayout();
+    try {
+      await runLauncherGtkTest(
+        context,
+        prepareProfiles,
+        async ({ app, connections }) => {
+          const list = await app.getById('connection_list');
+          await selectConnectionRow(app, list, 0);
+          await expectElementKind(
+            await app.getById('connect_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            const capture = await readLaunchCapture(layout.capture);
+            expect(capture.args).toEqual([
+              '-c',
+              join(connections, 'Alpha.ini'),
+            ]);
+          });
+        },
+        {
+          appPath: layout.launcher,
+          args: [],
+          env: {
+            ELDER_TERMS_TEST_CAPTURE: layout.capture,
+          },
+        }
+      );
+    } finally {
+      await layout.release();
     }
   });
 

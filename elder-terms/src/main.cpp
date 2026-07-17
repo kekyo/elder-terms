@@ -492,7 +492,7 @@ static std::string resolve_vte_executable(const char *launcher_argv0) {
 
   std::error_code error;
   const std::filesystem::path launcher_path =
-      std::filesystem::absolute(launcher_argv0, error);
+      std::filesystem::absolute(launcher_argv0, error).lexically_normal();
   if (!error) {
     const std::filesystem::path launcher_directory =
         launcher_path.parent_path();

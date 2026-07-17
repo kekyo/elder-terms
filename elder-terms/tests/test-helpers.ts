@@ -11,7 +11,7 @@ import {
   type GtkWidgetKind,
 } from 'gestament';
 
-const appPath = fileURLToPath(
+const defaultAppPath = fileURLToPath(
   new URL('../../.build/elder-terms/elder-terms', import.meta.url)
 );
 
@@ -27,6 +27,8 @@ export interface LauncherGtkTestContext {
 
 /** Options for launching the GTK application under test. */
 export interface LauncherGtkTestOptions {
+  /** Launcher executable path. */
+  readonly appPath?: string;
   /** Additional command-line arguments. */
   readonly args: readonly string[];
   /** Additional environment variables. */
@@ -69,7 +71,7 @@ export const runLauncherGtkTest = async (
   await prepare(connections);
 
   const launcher = createGtkAppLauncher({
-    appPath,
+    appPath: options?.appPath ?? defaultAppPath,
     env: {
       XDG_CONFIG_HOME: configHome,
       ...options?.env,
