@@ -10,6 +10,8 @@ import {
   type GtkAppOutputEvent,
   type GtkAppLauncherOptions,
   type GtkCapture,
+  type GtkKeyboardModifier,
+  type GtkKeyInput,
   type GtkWidgetElement,
   type GtkWindowElement,
   type GtkWindowResizeHints,
@@ -999,5 +1001,30 @@ export const scrollWheelBurstWithControl = async (
     }
   } finally {
     await app.input.setModifier('control', false);
+  }
+};
+
+/**
+ * Sends one key while holding an exact set of keyboard modifiers.
+ *
+ * @param app Running GTK app.
+ * @param modifiers Modifiers held for the key event.
+ * @param key X11 keysym sent to the app.
+ * @returns Promise resolved after the key event and modifier releases.
+ */
+export const pressKeyWithModifiers = async (
+  app: GtkApp,
+  modifiers: readonly GtkKeyboardModifier[],
+  key: GtkKeyInput
+): Promise<void> => {
+  for (const modifier of modifiers) {
+    await app.input.setModifier(modifier, true);
+  }
+  try {
+    await app.input.pressKey(key);
+  } finally {
+    for (const modifier of [...modifiers].reverse()) {
+      await app.input.setModifier(modifier, false);
+    }
   }
 };

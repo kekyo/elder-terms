@@ -202,6 +202,9 @@ static void apply_runtime_settings(ApplicationState *state,
   elder_terms::apply_terminal_display_settings(
       state->layout_state,
       elder_terms::terminal_display_settings(state->settings_store));
+  elder_terms::apply_terminal_key_bindings(
+      state->layout_state,
+      elder_terms::terminal_key_bindings(state->settings_store));
 }
 
 static bool save_runtime_settings(
@@ -622,6 +625,8 @@ int main(int argc, char **argv) {
 
   const auto terminal_display_settings =
     elder_terms::terminal_display_settings(app_state.settings_store);
+  const auto terminal_key_bindings =
+    elder_terms::terminal_key_bindings(app_state.settings_store);
   const auto connection_profile =
     elder_terms::terminal_connection_profile(app_state.settings_store);
   elder_terms::set_main_window_activity_indicator_connection_kind(
@@ -672,6 +677,7 @@ int main(int argc, char **argv) {
 
   app_state.layout_state = elder_terms::create_terminal_layout(
     *main_window, launch_options.test, terminal_display_settings,
+    terminal_key_bindings,
     {
       .grid_size_changed = [&app_state](glong columns, glong rows) {
         elder_terms::resize_terminal_session(

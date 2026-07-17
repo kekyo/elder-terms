@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <utility>
 
 #include "terminal-layout.h"
 
@@ -37,6 +38,7 @@ struct TerminalLayoutState {
   GtkWidget *status_label = nullptr;
   TestOptions options;
   TerminalLayoutCallbacks callbacks;
+  TerminalKeyBindings key_bindings;
   GdkGeometry hints = {};
   GdkWindowState window_state = static_cast<GdkWindowState>(0);
   glong desired_columns = default_columns;
@@ -516,6 +518,25 @@ static gboolean on_terminal_scroll_event(GtkWidget *, GdkEventScroll *event,
   return handled_vertical_scroll ? GDK_EVENT_STOP : GDK_EVENT_PROPAGATE;
 }
 
+static gboolean on_terminal_key_press_event(GtkWidget *, GdkEventKey *event,
+                                             gpointer data) {
+  TerminalLayoutState *state = static_cast<TerminalLayoutState *>(data);
+  const auto modifiers = static_cast<GdkModifierType>(event->state);
+  if (state->key_bindings.zoom_in.has_value() &&
+      key_binding_matches(*state->key_bindings.zoom_in, event->keyval,
+                          modifiers)) {
+    queue_font_scale_update(state, 1);
+    return GDK_EVENT_STOP;
+  }
+  if (state->key_bindings.zoom_out.has_value() &&
+      key_binding_matches(*state->key_bindings.zoom_out, event->keyval,
+                          modifiers)) {
+    queue_font_scale_update(state, -1);
+    return GDK_EVENT_STOP;
+  }
+  return GDK_EVENT_PROPAGATE;
+}
+
 static void on_terminal_resize_window(VteTerminal *, guint columns, guint rows,
                                       gpointer data) {
   TerminalLayoutState *state = static_cast<TerminalLayoutState *>(data);
@@ -736,6 +757,7 @@ static gboolean feed_fixture_idle(gpointer data) {
 TerminalLayoutState *
 create_terminal_layout(const MainWindow &main_window, TestOptions options,
                        TerminalDisplaySettings terminal_display_settings,
+                       TerminalKeyBindings terminal_key_bindings,
                        TerminalLayoutCallbacks callbacks) {
   auto *state = new TerminalLayoutState();
   state->window = main_window.window;
@@ -747,6 +769,7 @@ create_terminal_layout(const MainWindow &main_window, TestOptions options,
   state->status_label = main_window.status_label;
   state->options = options;
   state->callbacks = callbacks;
+  state->key_bindings = std::move(terminal_key_bindings);
   state->desired_columns = terminal_display_settings.width;
   state->desired_rows = terminal_display_settings.height;
 
@@ -754,7 +777,8 @@ create_terminal_layout(const MainWindow &main_window, TestOptions options,
       gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(state->terminal));
   gtk_range_set_adjustment(GTK_RANGE(state->terminal_scrollbar), adjustment);
   gtk_widget_add_events(state->terminal,
-                        GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
+                        GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK |
+                            GDK_KEY_PRESS_MASK);
 
   return state;
 }
@@ -788,6 +812,8 @@ void connect_terminal_layout_signals(TerminalLayoutState *state) {
                    G_CALLBACK(on_terminal_font_metrics_changed), state);
   g_signal_connect(state->terminal, "scroll-event",
                    G_CALLBACK(on_terminal_scroll_event), state);
+  g_signal_connect(state->terminal, "key-press-event",
+                   G_CALLBACK(on_terminal_key_press_event), state);
   g_signal_connect(state->terminal, "resize-window",
                    G_CALLBACK(on_terminal_resize_window), state);
 }
@@ -832,6 +858,15 @@ void apply_terminal_display_settings(
   ensure_terminal_grid_size(state, state->desired_columns,
                             state->desired_rows);
   update_window_size(state);
+}
+
+void apply_terminal_key_bindings(
+    TerminalLayoutState *state,
+    TerminalKeyBindings terminal_key_bindings) {
+  if (state == nullptr) {
+    return;
+  }
+  state->key_bindings = std::move(terminal_key_bindings);
 }
 
 void destroy_terminal_layout(TerminalLayoutState *state) {

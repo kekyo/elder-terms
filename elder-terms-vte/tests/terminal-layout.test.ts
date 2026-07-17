@@ -1,4 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
 import {
@@ -9,6 +11,7 @@ import {
   expectFixtureVteGridSize,
   expectWindowCellSize,
   moveMouseToTerminalCenter,
+  pressKeyWithModifiers,
   rapidFontZoomBurstSteps,
   readTerminalGridLayout,
   readWindowCellLayout,
@@ -19,6 +22,7 @@ import {
   terminalTextGrid80x24FontScale11Path,
   terminalTextGrid80x24Path,
   terminalTextGrid81x25Path,
+  withTemporaryDirectory,
 } from './gtk-test-helpers';
 
 describe.concurrent('elder-terms-vte terminal layout', () => {
@@ -316,6 +320,99 @@ describe.concurrent('elder-terms-vte terminal layout', () => {
         evidence,
         currentLayout,
         'repeated-font-zoom-steps-layout'
+      );
+    });
+  });
+
+  it('zooms with the default Ctrl+minus binding and keeps the VTE grid size', async (context) => {
+    await runGtkTest(context, ['--test-fixture'], async (app, evidence) => {
+      const initialLayout = await waitForResult(async () => {
+        const layout = await readTerminalGridLayout(app);
+        expectWindowCellSize(layout, defaultColumns, defaultRows);
+        await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+        return layout;
+      });
+
+      await pressKeyWithModifiers(app, ['control'], 'minus');
+      const zoomedLayout = await waitForResult(async () => {
+        const layout = await readTerminalGridLayout(app);
+        expect(layout.hints.widthIncrement).not.toBe(
+          initialLayout.hints.widthIncrement
+        );
+        expectWindowCellSize(layout, defaultColumns, defaultRows);
+        await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+        return layout;
+      });
+
+      await moveMouseToTerminalCenter(app, zoomedLayout);
+      await scrollWheelWithControl(app, -1);
+      const restoredLayout = await waitForResult(async () => {
+        const layout = await readTerminalGridLayout(app);
+        expect(layout.hints.widthIncrement).toBe(
+          initialLayout.hints.widthIncrement
+        );
+        expect(layout.hints.heightIncrement).toBe(
+          initialLayout.hints.heightIncrement
+        );
+        expectWindowCellSize(layout, defaultColumns, defaultRows);
+        return layout;
+      });
+      await saveTerminalGridLayoutEvidence(
+        evidence,
+        restoredLayout,
+        'keyboard-font-zoom-restored-layout'
+      );
+    });
+  });
+
+  it('requires configured keyboard modifiers to match exactly', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'strict-key-bindings.ini');
+      await writeFile(
+        configPath,
+        '[terminal]\nzoom_in_key=shift+plus\nzoom_out_key=ctrl+shift+underscore\n',
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app) => {
+          const initialLayout = await waitForResult(async () => {
+            const layout = await readWindowCellLayout(app);
+            expectWindowCellSize(layout, defaultColumns, defaultRows);
+            return layout;
+          });
+
+          await pressKeyWithModifiers(app, ['control', 'shift'], 'plus');
+          await delay(100);
+          const unmatchedLayout = await readWindowCellLayout(app);
+          expect(unmatchedLayout.hints.widthIncrement).toBe(
+            initialLayout.hints.widthIncrement
+          );
+          expect(unmatchedLayout.hints.heightIncrement).toBe(
+            initialLayout.hints.heightIncrement
+          );
+
+          await pressKeyWithModifiers(app, ['shift'], 'plus');
+          await waitForResult(async () => {
+            const layout = await readWindowCellLayout(app);
+            expect(layout.hints.widthIncrement).not.toBe(
+              initialLayout.hints.widthIncrement
+            );
+          });
+
+          await pressKeyWithModifiers(app, ['control', 'shift'], 'underscore');
+          await waitForResult(async () => {
+            const layout = await readWindowCellLayout(app);
+            expect(layout.hints.widthIncrement).toBe(
+              initialLayout.hints.widthIncrement
+            );
+            expect(layout.hints.heightIncrement).toBe(
+              initialLayout.hints.heightIncrement
+            );
+          });
+        }
       );
     });
   });

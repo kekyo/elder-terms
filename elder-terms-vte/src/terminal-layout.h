@@ -47,12 +47,14 @@ struct TerminalLayoutCallbacks {
  * @param main_window Loaded main window widgets.
  * @param options Test harness options.
  * @param terminal_display_settings Initial terminal display settings.
+ * @param terminal_key_bindings Initial terminal action key bindings.
  * @param callbacks Optional layout callbacks.
  * @returns New layout state owned by the caller.
  */
 TerminalLayoutState *
 create_terminal_layout(const MainWindow &main_window, TestOptions options,
                        TerminalDisplaySettings terminal_display_settings,
+                       TerminalKeyBindings terminal_key_bindings,
                        TerminalLayoutCallbacks callbacks);
 
 /**
@@ -78,6 +80,16 @@ void start_terminal_layout(TerminalLayoutState *state);
 void apply_terminal_display_settings(
     TerminalLayoutState *state,
     TerminalDisplaySettings terminal_display_settings);
+
+/**
+ * Applies terminal action key bindings to the live layout.
+ *
+ * @param state Layout state created by create_terminal_layout.
+ * @param terminal_key_bindings New terminal action key bindings.
+ */
+void apply_terminal_key_bindings(
+    TerminalLayoutState *state,
+    TerminalKeyBindings terminal_key_bindings);
 
 /**
  * Releases pending layout timers and deletes layout state.
