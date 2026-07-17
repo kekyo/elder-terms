@@ -61,6 +61,8 @@ struct SettingsLoadOptions {
 struct SettingsLoadResult {
   /** Loaded store, with defaults applied for missing or invalid values. */
   SettingsStore store;
+  /** True when every requested INI file was read successfully. */
+  bool loaded = true;
   /** Non-fatal warnings encountered while loading. */
   std::vector<std::string> warnings;
 };

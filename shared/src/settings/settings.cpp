@@ -48,7 +48,7 @@ static void set_key_file_value(GKeyFile *key_file, const SettingEntry &entry) {
                          std::get<bool>(entry.value) ? TRUE : FALSE);
 }
 
-static void load_settings_file(SettingsStore *store,
+static bool load_settings_file(SettingsStore *store,
                                const std::filesystem::path &path,
                                std::vector<std::string> *warnings) {
   std::error_code exists_error;
@@ -56,7 +56,7 @@ static void load_settings_file(SettingsStore *store,
   if (!exists && !exists_error) {
     warnings->push_back("Warning: configuration file not found: " +
                         path_string(path));
-    return;
+    return false;
   }
 
   GError *error = nullptr;
@@ -68,11 +68,12 @@ static void load_settings_file(SettingsStore *store,
                         glib_error_message(error));
     g_clear_error(&error);
     g_key_file_unref(key_file);
-    return;
+    return false;
   }
 
   load_settings_store_from_key_file(store, key_file, warnings);
   g_key_file_unref(key_file);
+  return true;
 }
 
 static void resolve_terminal_key_binding_conflict(
@@ -104,16 +105,21 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_zoom)
   SettingsLoadResult result{
       .store = create_default_settings(
           default_terminal_display_settings(default_terminal_zoom)),
+      .loaded = true,
       .warnings = {},
   };
 
   if (options.config_path.has_value()) {
-    load_settings_file(&result.store, options.config_path.value(),
-                       &result.warnings);
+    result.loaded = load_settings_file(&result.store,
+                                       options.config_path.value(),
+                                       &result.warnings) &&
+                    result.loaded;
   }
   if (options.startup_config_path.has_value()) {
-    load_settings_file(&result.store, options.startup_config_path.value(),
-                       &result.warnings);
+    result.loaded = load_settings_file(&result.store,
+                                       options.startup_config_path.value(),
+                                       &result.warnings) &&
+                    result.loaded;
   }
 
   resolve_terminal_key_binding_conflict(&result.store, &result.warnings);

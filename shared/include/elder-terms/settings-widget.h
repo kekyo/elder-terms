@@ -27,6 +27,11 @@ using SettingsWidgetApplyCallback =
 using SettingsWidgetCancelCallback = std::function<void()>;
 
 /**
+ * Called after the settings draft or its validation state changes.
+ */
+using SettingsWidgetChangedCallback = std::function<void()>;
+
+/**
  * Called when the user saves settings from the widget.
  *
  * @param store Draft settings after applying the current widget values.
@@ -45,6 +50,8 @@ struct SettingsWidgetCallbacks {
   SettingsWidgetSaveCallback save;
   /** Receives cancel requests. */
   SettingsWidgetCancelCallback cancel;
+  /** Receives draft and validation state changes. */
+  SettingsWidgetChangedCallback changed;
 };
 
 /**
@@ -55,6 +62,8 @@ struct SettingsWidgetOptions {
   SettingsStore store;
   /** True when editing settings for an already-running session. */
   bool is_runtime = false;
+  /** True when the widget should render its built-in action buttons. */
+  bool show_actions = true;
   /** Optional callbacks emitted by the widget. */
   SettingsWidgetCallbacks callbacks;
 };
@@ -78,6 +87,30 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options);
  */
 void update_settings_widget_store(SettingsWidgetState *state,
                                   SettingsStore store);
+
+/**
+ * Returns a copy of the current settings draft.
+ *
+ * @param state Settings widget state.
+ * @returns Current draft, or an empty store when state is null.
+ */
+SettingsStore settings_widget_draft_store(const SettingsWidgetState *state);
+
+/**
+ * Checks whether the current draft contains a user edit.
+ *
+ * @param state Settings widget state.
+ * @returns True when at least one draft setting is dirty.
+ */
+bool settings_widget_is_dirty(const SettingsWidgetState *state);
+
+/**
+ * Checks whether all editor inputs can be applied.
+ *
+ * @param state Settings widget state.
+ * @returns True when the current inputs are valid.
+ */
+bool settings_widget_is_valid(const SettingsWidgetState *state);
 
 /**
  * Returns the root GTK widget for insertion into a container.

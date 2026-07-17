@@ -182,7 +182,37 @@ const waitForAppliedStore = async (app: GtkApp): Promise<AppliedStore> =>
     return parseAppliedStore(line as string);
   });
 
+const waitForChangedState = async (
+  app: GtkApp,
+  expected: string
+): Promise<void> => {
+  await waitForResult(async () => {
+    expect((await app.output()).stdout).toContain(expected);
+  });
+};
+
 describe.concurrent('shared settings widget', () => {
+  it('exposes launcher draft state without its internal action row', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--hide-actions', '--page=terminal'],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        await expect(app.getById('settings_action_row')).rejects.toThrow();
+
+        const width = expectElementKind(
+          await app.getById('settings_terminal_width_spin'),
+          'spinButton'
+        );
+        await width.setValue(91);
+        await waitForChangedState(
+          app,
+          'CHANGED dirty=true valid=true width=91'
+        );
+      }
+    );
+  });
+
   it('matches General visual fixtures for connection type and runtime state', async (context) => {
     const cases: readonly SettingVisualCase[] = [
       {

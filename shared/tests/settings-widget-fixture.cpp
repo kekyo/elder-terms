@@ -17,6 +17,7 @@ namespace elder_terms_settings_widget_fixture {
 struct FixtureOptions {
   bool is_runtime = false;
   bool has_save = false;
+  bool show_actions = true;
   std::string type = "local";
   glong width = 80;
   glong height = 24;
@@ -64,6 +65,8 @@ static FixtureOptions parse_options(int argc, char **argv) {
       options.is_runtime = true;
     } else if (argument == "--save") {
       options.has_save = true;
+    } else if (argument == "--hide-actions") {
+      options.show_actions = false;
     } else if (starts_with(argument, "--type=")) {
       options.type = option_value(argument, "--type=");
     } else if (starts_with(argument, "--width=")) {
@@ -348,10 +351,29 @@ int main(int argc, char **argv) {
           std::cout << "CANCELLED\n";
           std::cout.flush();
         };
+    callbacks.changed = [&state]() {
+      const elder_terms::SettingsStore draft =
+          elder_terms::settings_widget_draft_store(state.settings_widget);
+      const elder_terms::TerminalDisplaySettings display =
+          elder_terms::terminal_display_settings(draft);
+      std::cout << "CHANGED dirty="
+                << (elder_terms::settings_widget_is_dirty(
+                        state.settings_widget)
+                        ? "true"
+                        : "false")
+                << " valid="
+                << (elder_terms::settings_widget_is_valid(
+                        state.settings_widget)
+                        ? "true"
+                        : "false")
+                << " width=" << display.width << '\n';
+      std::cout.flush();
+    };
 
     elder_terms::SettingsWidgetOptions widget_options{
         .store = elder_terms_settings_widget_fixture::create_store(options),
         .is_runtime = options.is_runtime,
+        .show_actions = options.show_actions,
         .callbacks = std::move(callbacks),
     };
     state.settings_widget =

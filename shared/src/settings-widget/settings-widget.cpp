@@ -29,6 +29,8 @@ struct SettingsWidgetState {
   SettingsStore applied_store;
   SettingsStore draft_store;
   bool is_runtime = false;
+  bool show_actions = true;
+  bool synchronizing = false;
   SettingsWidgetCallbacks callbacks;
   GtkWidget *root = nullptr;
   GtkWidget *notebook = nullptr;
@@ -235,11 +237,18 @@ static bool terminal_key_binding_inputs_conflict(
          key_bindings_equal(*zoom_in.binding, *zoom_out.binding);
 }
 
-static bool terminal_key_binding_inputs_valid(SettingsWidgetState *state) {
+static bool terminal_key_binding_inputs_valid(
+    const SettingsWidgetState *state) {
   return key_binding_input_widget_is_valid(
              state->terminal_zoom_in_key_input) &&
          key_binding_input_widget_is_valid(
              state->terminal_zoom_out_key_input);
+}
+
+static void notify_changed(SettingsWidgetState *state) {
+  if (!state->synchronizing && state->callbacks.changed) {
+    state->callbacks.changed();
+  }
 }
 
 static void update_action_sensitivity(SettingsWidgetState *state) {
@@ -496,91 +505,109 @@ static void sync_draft_from_widgets(SettingsWidgetState *state) {
 static void on_general_type_changed(GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_general_type_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_terminal_width_changed(GtkSpinButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_terminal_width_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_terminal_height_changed(GtkSpinButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_terminal_height_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_terminal_zoom_changed(GtkSpinButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_terminal_zoom_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_terminal_auto_close_toggled(GtkToggleButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_terminal_auto_close_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_terminal_key_binding_changed(SettingsWidgetState *state) {
   update_terminal_key_binding_validation(state);
   if (!terminal_key_binding_inputs_valid(state)) {
+    notify_changed(state);
     return;
   }
   update_terminal_zoom_in_key_from_widget(state);
   update_terminal_zoom_out_key_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_telnet_address_changed(GtkEditable *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_telnet_address_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_telnet_port_changed(GtkSpinButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_telnet_port_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_serial_device_changed(GtkEditable *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_serial_device_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_serial_baudrate_changed(GtkSpinButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_serial_baudrate_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_serial_bits_changed(GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_serial_bits_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_serial_parity_changed(GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_serial_parity_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_serial_stop_bit_changed(GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_serial_stop_bit_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_serial_flow_control_changed(GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_serial_flow_control_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_serial_carrier_detect_changed(GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_serial_carrier_detect_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_transfer_base_path_changed(GtkEditable *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_transfer_base_path_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_transfer_zmodem_autostart_changed(GtkComboBox *,
                                                  gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_transfer_zmodem_autostart_from_widget(state);
+  notify_changed(state);
 }
 
 static void on_apply_clicked(GtkButton *, gpointer data) {
@@ -881,6 +908,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   state->applied_store = options.store;
   state->draft_store = std::move(options.store);
   state->is_runtime = options.is_runtime;
+  state->show_actions = options.show_actions;
   state->callbacks = std::move(options.callbacks);
 
   state->root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -937,8 +965,10 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
                            create_tab_button(state, transfer_page, "Transfer",
                                              "settings_transfer_tab"));
 
-  gtk_box_pack_start(GTK_BOX(state->root), create_button_box(state), FALSE,
-                     FALSE, 0);
+  if (state->show_actions) {
+    gtk_box_pack_start(GTK_BOX(state->root), create_button_box(state), FALSE,
+                       FALSE, 0);
+  }
   update_terminal_key_binding_validation(state);
   update_connection_pages(state);
 
@@ -953,7 +983,23 @@ void update_settings_widget_store(SettingsWidgetState *state,
 
   state->applied_store = store;
   state->draft_store = std::move(store);
+  state->synchronizing = true;
   sync_widgets_from_draft(state);
+  update_terminal_key_binding_validation(state);
+  state->synchronizing = false;
+  notify_changed(state);
+}
+
+SettingsStore settings_widget_draft_store(const SettingsWidgetState *state) {
+  return state == nullptr ? SettingsStore{} : state->draft_store;
+}
+
+bool settings_widget_is_dirty(const SettingsWidgetState *state) {
+  return state != nullptr && settings_store_is_dirty(state->draft_store);
+}
+
+bool settings_widget_is_valid(const SettingsWidgetState *state) {
+  return state != nullptr && terminal_key_binding_inputs_valid(state);
 }
 
 GtkWidget *settings_widget_root(SettingsWidgetState *state) {

@@ -743,6 +743,34 @@ static void test_save_settings_writes_empty_file_for_defaults() {
   expect_true(content.empty(), "default-only settings should save an empty INI");
 }
 
+static void test_load_settings_reports_file_read_status() {
+  const std::filesystem::path missing =
+      temporary_config_path("missing-load-status");
+  const SettingsLoadResult missing_result = load_settings(
+      SettingsLoadOptions{
+          .config_path = missing,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  expect_true(!missing_result.loaded,
+              "missing requested settings should report load failure");
+
+  const std::filesystem::path valid =
+      temporary_config_path("valid-load-status");
+  write_config(valid, "[terminal]\nwidth=91\n");
+  const SettingsLoadResult valid_result = load_settings(
+      SettingsLoadOptions{
+          .config_path = valid,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(valid);
+  expect_true(valid_result.loaded,
+              "readable requested settings should report success");
+  expect_true(terminal_display_settings(valid_result.store).width == 91,
+              "successfully loaded settings should retain their value");
+}
+
 } // namespace elder_terms_settings_test
 
 int main() {
@@ -761,6 +789,7 @@ int main() {
     elder_terms_settings_test::test_save_serial_settings_omits_default_values();
     elder_terms_settings_test::test_save_explicit_zmodem_autostart();
     elder_terms_settings_test::test_save_settings_writes_empty_file_for_defaults();
+    elder_terms_settings_test::test_load_settings_reports_file_read_status();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;
