@@ -75,6 +75,19 @@ static void load_settings_file(SettingsStore *store,
   g_key_file_unref(key_file);
 }
 
+static void resolve_terminal_key_binding_conflict(
+    SettingsStore *store, std::vector<std::string> *warnings) {
+  if (!terminal_key_bindings_conflict(*store)) {
+    return;
+  }
+
+  warnings->push_back(
+      "Warning: conflicting terminal key bindings [terminal] zoom_in_key "
+      "and [terminal] zoom_out_key; using defaults");
+  clear_explicit_setting_value(store, terminal_zoom_in_key_setting_key());
+  clear_explicit_setting_value(store, terminal_zoom_out_key_setting_key());
+}
+
 SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults) {
   std::vector<SettingDefinition> definitions;
   append_definitions(&definitions, general_setting_definitions());
@@ -102,6 +115,8 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_zoom)
     load_settings_file(&result.store, options.startup_config_path.value(),
                        &result.warnings);
   }
+
+  resolve_terminal_key_binding_conflict(&result.store, &result.warnings);
 
   if (general_settings_select_telnet_connection(result.store)) {
     append_telnet_connection_warnings(result.store, &result.warnings);

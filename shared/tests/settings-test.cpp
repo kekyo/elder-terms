@@ -17,6 +17,8 @@ namespace elder_terms_settings_test {
 using elder_terms::create_default_settings;
 using elder_terms::default_terminal_display_settings;
 using elder_terms::general_type_setting_key;
+using elder_terms::key_binding_matches;
+using elder_terms::parse_key_binding;
 using elder_terms::load_settings;
 using elder_terms::LocalShellConnectionSettings;
 using elder_terms::save_settings;
@@ -51,6 +53,9 @@ using elder_terms::terminal_display_settings;
 using elder_terms::terminal_height_setting_key;
 using elder_terms::terminal_width_setting_key;
 using elder_terms::terminal_zoom_setting_key;
+using elder_terms::terminal_key_bindings;
+using elder_terms::terminal_zoom_in_key_setting_key;
+using elder_terms::terminal_zoom_out_key_setting_key;
 using elder_terms::transfer_base_path;
 using elder_terms::transfer_base_path_setting_key;
 using elder_terms::transfer_zmodem_autostart;
@@ -109,6 +114,17 @@ static void test_default_settings() {
   expect_true(display.zoom == 1.2, "default terminal zoom should be retained");
   expect_true(terminal_auto_close(store),
               "default terminal auto-close should be enabled");
+  const auto key_bindings = terminal_key_bindings(store);
+  expect_true(key_bindings.zoom_in.has_value(),
+              "default terminal zoom-in key should be enabled");
+  expect_true(key_bindings.zoom_out.has_value(),
+              "default terminal zoom-out key should be enabled");
+  expect_true(key_binding_matches(*key_bindings.zoom_in, GDK_KEY_plus,
+                                  GDK_CONTROL_MASK),
+              "default terminal zoom-in key should be Ctrl+plus");
+  expect_true(key_binding_matches(*key_bindings.zoom_out, GDK_KEY_minus,
+                                  GDK_CONTROL_MASK),
+              "default terminal zoom-out key should be Ctrl+minus");
   expect_true(transfer_base_path(store).empty(),
               "default transfer base path should be empty");
   expect_true(!transfer_zmodem_autostart(store),
@@ -120,6 +136,130 @@ static void test_default_settings() {
   expect_true(std::holds_alternative<LocalShellConnectionSettings>(
                   profile.settings),
               "default connection settings should be local shell settings");
+}
+
+static void test_key_binding_parser_uses_exact_modifiers() {
+  const auto parsed = parse_key_binding(" CTRL - shift+PLUS ");
+  expect_true(parsed.error.empty(),
+              "mixed separators and case should parse");
+  expect_true(parsed.binding.has_value(),
+              "non-empty key binding should be enabled");
+  expect_true(key_binding_matches(*parsed.binding, GDK_KEY_plus,
+                                  static_cast<GdkModifierType>(
+                                      GDK_CONTROL_MASK | GDK_SHIFT_MASK)),
+              "configured modifiers should match exactly");
+  expect_true(!key_binding_matches(*parsed.binding, GDK_KEY_plus,
+                                   GDK_SHIFT_MASK),
+              "missing Ctrl should not match");
+  expect_true(!key_binding_matches(*parsed.binding, GDK_KEY_plus,
+                                   static_cast<GdkModifierType>(
+                                       GDK_CONTROL_MASK | GDK_SHIFT_MASK |
+                                       GDK_MOD1_MASK)),
+              "an additional Alt modifier should not match");
+  expect_true(key_binding_matches(
+                  *parsed.binding, GDK_KEY_plus,
+                  static_cast<GdkModifierType>(GDK_CONTROL_MASK |
+                                               GDK_SHIFT_MASK |
+                                               GDK_LOCK_MASK)),
+              "lock state should not count as a hotkey modifier");
+
+  const auto all_modifiers =
+      parse_key_binding("super-alt-shift-ctrl-F1");
+  expect_true(all_modifiers.error.empty() &&
+                  all_modifiers.binding.has_value(),
+              "all supported modifiers and case-insensitive F1 should parse");
+  expect_true(
+      key_binding_matches(
+          *all_modifiers.binding, GDK_KEY_F1,
+          static_cast<GdkModifierType>(
+              GDK_SUPER_MASK | GDK_MOD1_MASK | GDK_SHIFT_MASK |
+              GDK_CONTROL_MASK)),
+      "all configured modifiers should match");
+
+  const auto disabled = parse_key_binding("   ");
+  expect_true(disabled.error.empty() && !disabled.binding.has_value(),
+              "an empty key binding should disable the action");
+
+  for (const std::string &invalid : {
+           std::string("ctrl++plus"), std::string("ctrl+ctrl+plus"),
+           std::string("ctrl+unknown_key_name"), std::string("ctrl"),
+           std::string("plus+ctrl")}) {
+    expect_true(!parse_key_binding(invalid).error.empty(),
+                "invalid key binding should report a validation error: " +
+                    invalid);
+  }
+}
+
+static void test_terminal_key_binding_configuration() {
+  const std::filesystem::path custom_path =
+      temporary_config_path("terminal-key-bindings");
+  write_config(custom_path,
+               "[terminal]\n"
+               "zoom_in_key=alt+Up\n"
+               "zoom_out_key=\n");
+  const SettingsLoadResult custom = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{custom_path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(custom_path);
+
+  const auto custom_bindings = terminal_key_bindings(custom.store);
+  expect_true(custom_bindings.zoom_in.has_value() &&
+                  key_binding_matches(*custom_bindings.zoom_in, GDK_KEY_Up,
+                                      GDK_MOD1_MASK),
+              "configured terminal zoom-in key should be loaded");
+  expect_true(!custom_bindings.zoom_out.has_value(),
+              "empty terminal zoom-out key should disable the action");
+
+  const std::filesystem::path invalid_path =
+      temporary_config_path("terminal-key-bindings-invalid");
+  write_config(invalid_path,
+               "[terminal]\n"
+               "zoom_in_key=ctrl++plus\n"
+               "zoom_out_key=ctrl+minus\n");
+  const SettingsLoadResult invalid = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{invalid_path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(invalid_path);
+  expect_true(warnings_contain(
+                  invalid.warnings,
+                  "invalid configuration value [terminal] zoom_in_key"),
+              "invalid terminal key binding should emit a warning");
+  const auto invalid_bindings = terminal_key_bindings(invalid.store);
+  expect_true(invalid_bindings.zoom_in.has_value() &&
+                  key_binding_matches(*invalid_bindings.zoom_in,
+                                      GDK_KEY_plus, GDK_CONTROL_MASK),
+              "invalid terminal key binding should use its default");
+
+  const std::filesystem::path conflict_path =
+      temporary_config_path("terminal-key-bindings-conflict");
+  write_config(conflict_path,
+               "[terminal]\n"
+               "zoom_in_key=alt+F1\n"
+               "zoom_out_key=ALT-f1\n");
+  const SettingsLoadResult conflict = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{conflict_path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(conflict_path);
+  expect_true(warnings_contain(conflict.warnings,
+                               "conflicting terminal key bindings"),
+              "conflicting terminal key bindings should emit a warning");
+  const auto conflict_bindings = terminal_key_bindings(conflict.store);
+  expect_true(conflict_bindings.zoom_in.has_value() &&
+                  conflict_bindings.zoom_out.has_value() &&
+                  key_binding_matches(*conflict_bindings.zoom_in,
+                                      GDK_KEY_plus, GDK_CONTROL_MASK) &&
+                  key_binding_matches(*conflict_bindings.zoom_out,
+                                      GDK_KEY_minus, GDK_CONTROL_MASK),
+              "conflicting terminal key bindings should both use defaults");
 }
 
 static void test_transfer_base_path_setting() {
@@ -405,6 +545,12 @@ static void test_public_setting_keys() {
               "terminal zoom key should use the zoom name");
   expect_true(terminal_auto_close_setting_key().name == "auto_close",
               "terminal auto_close key should use the auto_close name");
+  expect_true(terminal_zoom_in_key_setting_key().section == "terminal" &&
+                  terminal_zoom_in_key_setting_key().name == "zoom_in_key",
+              "terminal zoom-in key should use [terminal] zoom_in_key");
+  expect_true(terminal_zoom_out_key_setting_key().section == "terminal" &&
+                  terminal_zoom_out_key_setting_key().name == "zoom_out_key",
+              "terminal zoom-out key should use [terminal] zoom_out_key");
   expect_true(telnet_address_setting_key().section == "telnet",
               "TELNET address key should use the telnet section");
   expect_true(telnet_address_setting_key().name == "address",
@@ -452,6 +598,8 @@ static void test_save_settings_omits_default_values() {
                     elder_terms::SettingValue{gdouble{1.0}});
   set_setting_value(&store, terminal_auto_close_setting_key(),
                     elder_terms::SettingValue{false});
+  set_setting_value(&store, terminal_zoom_in_key_setting_key(),
+                    elder_terms::SettingValue{std::string("alt+Up")});
   set_setting_value(&store, telnet_address_setting_key(),
                     elder_terms::SettingValue{std::string("host.example")});
   set_setting_value(&store, telnet_port_setting_key(),
@@ -475,6 +623,8 @@ static void test_save_settings_omits_default_values() {
               "saved settings should include non-default terminal width");
   expect_true(content.find("auto_close=false") != std::string::npos,
               "saved settings should include non-default auto-close");
+  expect_true(content.find("zoom_in_key=alt+Up") != std::string::npos,
+              "saved settings should include non-default zoom-in key");
   expect_true(content.find("[telnet]") != std::string::npos,
               "saved settings should include non-default TELNET section");
   expect_true(content.find("address=host.example") != std::string::npos,
@@ -488,6 +638,8 @@ static void test_save_settings_omits_default_values() {
               "saved settings should omit default terminal height");
   expect_true(content.find("zoom=") == std::string::npos,
               "saved settings should omit default terminal zoom");
+  expect_true(content.find("zoom_out_key=") == std::string::npos,
+              "saved settings should omit default zoom-out key");
   expect_true(content.find("port=") == std::string::npos,
               "saved settings should omit default TELNET port");
 }
@@ -596,6 +748,8 @@ static void test_save_settings_writes_empty_file_for_defaults() {
 int main() {
   try {
     elder_terms_settings_test::test_default_settings();
+    elder_terms_settings_test::test_key_binding_parser_uses_exact_modifiers();
+    elder_terms_settings_test::test_terminal_key_binding_configuration();
     elder_terms_settings_test::test_telnet_profile();
     elder_terms_settings_test::test_serial_profile();
     elder_terms_settings_test::test_transfer_base_path_setting();

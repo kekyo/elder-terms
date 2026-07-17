@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include <elder-terms/key-binding.h>
 #include <elder-terms/settings/settings-store.h>
 
 namespace elder_terms {
@@ -16,6 +17,16 @@ struct TerminalDisplaySettings {
   glong height;
   /** Initial VTE font scale. */
   gdouble zoom;
+};
+
+/**
+ * Keyboard bindings for terminal display actions.
+ */
+struct TerminalKeyBindings {
+  /** Zoom-in binding, or no value when the action is disabled. */
+  std::optional<KeyBinding> zoom_in;
+  /** Zoom-out binding, or no value when the action is disabled. */
+  std::optional<KeyBinding> zoom_out;
 };
 
 /**
@@ -55,6 +66,20 @@ SettingKey terminal_zoom_setting_key();
 SettingKey terminal_auto_close_setting_key();
 
 /**
+ * Returns the setting key for [terminal] zoom_in_key.
+ *
+ * @returns Setting key for the terminal zoom-in binding.
+ */
+SettingKey terminal_zoom_in_key_setting_key();
+
+/**
+ * Returns the setting key for [terminal] zoom_out_key.
+ *
+ * @returns Setting key for the terminal zoom-out binding.
+ */
+SettingKey terminal_zoom_out_key_setting_key();
+
+/**
  * Returns terminal setting definitions.
  *
  * @param terminal_defaults Default terminal display settings.
@@ -78,5 +103,37 @@ TerminalDisplaySettings terminal_display_settings(const SettingsStore &store);
  * @returns True when the app should exit after the active session ends.
  */
 bool terminal_auto_close(const SettingsStore &store);
+
+/**
+ * Extracts the raw terminal zoom-in binding text from a store.
+ *
+ * @param store Source settings store.
+ * @returns Configured binding text, or the built-in default.
+ */
+std::string terminal_zoom_in_key(const SettingsStore &store);
+
+/**
+ * Extracts the raw terminal zoom-out binding text from a store.
+ *
+ * @param store Source settings store.
+ * @returns Configured binding text, or the built-in default.
+ */
+std::string terminal_zoom_out_key(const SettingsStore &store);
+
+/**
+ * Extracts parsed terminal keyboard bindings from a store.
+ *
+ * @param store Source settings store containing validated values.
+ * @returns Parsed zoom-in and zoom-out bindings.
+ */
+TerminalKeyBindings terminal_key_bindings(const SettingsStore &store);
+
+/**
+ * Checks whether both terminal zoom actions use the same enabled binding.
+ *
+ * @param store Source settings store containing individually valid values.
+ * @returns True when the two enabled bindings conflict.
+ */
+bool terminal_key_bindings_conflict(const SettingsStore &store);
 
 } // namespace elder_terms

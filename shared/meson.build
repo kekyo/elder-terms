@@ -1,8 +1,11 @@
 elder_terms_shared_glib_dep = dependency('glib-2.0')
 elder_terms_shared_gtk_dep = dependency('gtk+-3.0')
+elder_terms_shared_xkbcommon_dep = dependency('xkbcommon')
 elder_terms_shared_include_dir = include_directories('include')
 
 elder_terms_shared_sources = [
+  'src/key-binding.cpp',
+  'src/key-binding-input-widget.cpp',
   'src/settings/general-settings.cpp',
   'src/settings/local-session-settings.cpp',
   'src/settings/serial-settings.cpp',
@@ -21,6 +24,7 @@ elder_terms_shared_library = static_library(
   dependencies: [
     elder_terms_shared_glib_dep,
     elder_terms_shared_gtk_dep,
+    elder_terms_shared_xkbcommon_dep,
   ],
 )
 
@@ -30,6 +34,7 @@ elder_terms_shared_dep = declare_dependency(
   dependencies: [
     elder_terms_shared_glib_dep,
     elder_terms_shared_gtk_dep,
+    elder_terms_shared_xkbcommon_dep,
   ],
 )
 
