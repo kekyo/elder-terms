@@ -3,12 +3,28 @@
 #include <vte/vte.h>
 
 #include <cstddef>
+#include <iostream>
+#include <memory>
+#include <system_error>
 #include <utility>
 
 namespace elder_terms {
 
-TerminalViewIo::TerminalViewIo(GtkWidget *terminal)
-    : terminal(terminal) {
+static VteEraseBinding
+backspace_binding(TerminalBackspaceCode backspace_code) {
+  return backspace_code == TerminalBackspaceCode::bs
+             ? VTE_ERASE_ASCII_BACKSPACE
+             : VTE_ERASE_ASCII_DELETE;
+}
+
+TerminalViewIo::TerminalViewIo(
+    GtkWidget *terminal, const TerminalTextSettings &text_settings)
+    : terminal(terminal),
+      text_codec(std::make_unique<TerminalTextCodec>(text_settings)) {
+  vte_terminal_set_backspace_binding(
+      VTE_TERMINAL(terminal), backspace_binding(text_settings.backspace_code));
+  vte_terminal_set_delete_binding(VTE_TERMINAL(terminal),
+                                  VTE_ERASE_ASCII_DELETE);
 }
 
 TerminalViewIo::~TerminalViewIo() {
@@ -20,8 +36,18 @@ void TerminalViewIo::on_terminal_commit(VteTerminal *, const gchar *text,
   auto *self = static_cast<TerminalViewIo *>(user_data);
   if (self->input_callback && text != nullptr && size != 0) {
     const auto *data = reinterpret_cast<const unsigned char *>(text);
-    self->input_callback(
+    const TerminalTextConversionResult conversion = self->text_codec->encode(
         std::span<const unsigned char>(data, static_cast<std::size_t>(size)));
+    if (conversion.used_replacement && !self->encode_warning_reported) {
+      std::cerr << "Warning: terminal input contained text that is not "
+                   "representable in the selected encoding"
+                << '\n';
+      self->encode_warning_reported = true;
+    }
+    if (!conversion.bytes.empty()) {
+      self->input_callback(std::span<const unsigned char>(
+          conversion.bytes.data(), conversion.bytes.size()));
+    }
   }
 }
 
@@ -30,9 +56,37 @@ void TerminalViewIo::feed(std::span<const unsigned char> bytes) {
     return;
   }
 
-  vte_terminal_feed(VTE_TERMINAL(terminal),
-                    reinterpret_cast<const char *>(bytes.data()),
-                    static_cast<gssize>(bytes.size()));
+  const TerminalTextConversionResult conversion = text_codec->decode(bytes);
+  if (conversion.used_replacement && !decode_warning_reported) {
+    std::cerr << "Warning: terminal output contained invalid bytes for the "
+                 "selected encoding"
+              << '\n';
+    decode_warning_reported = true;
+  }
+  if (!conversion.bytes.empty()) {
+    vte_terminal_feed(VTE_TERMINAL(terminal),
+                      reinterpret_cast<const char *>(conversion.bytes.data()),
+                      static_cast<gssize>(conversion.bytes.size()));
+  }
+}
+
+bool TerminalViewIo::apply_text_settings(
+    const TerminalTextSettings &settings) {
+  try {
+    auto next_codec = std::make_unique<TerminalTextCodec>(settings);
+    vte_terminal_set_backspace_binding(
+        VTE_TERMINAL(terminal), backspace_binding(settings.backspace_code));
+    vte_terminal_set_delete_binding(VTE_TERMINAL(terminal),
+                                    VTE_ERASE_ASCII_DELETE);
+    text_codec = std::move(next_codec);
+    decode_warning_reported = false;
+    encode_warning_reported = false;
+    return true;
+  } catch (const std::system_error &error) {
+    std::cerr << "Warning: failed to apply terminal text settings: "
+              << error.what() << '\n';
+    return false;
+  }
 }
 
 TerminalViewGridSize TerminalViewIo::grid_size() const {

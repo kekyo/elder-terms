@@ -376,8 +376,9 @@ private:
 public:
   TerminalLocalShellSession(GtkWidget *terminal,
                             LocalShellConnectionSettings settings,
+                            TerminalTextSettings text_settings,
                             TerminalSessionCallbacks callbacks)
-      : terminal_io(terminal),
+      : terminal_io(terminal, text_settings),
         settings(std::move(settings)),
         callbacks(callbacks) {
   }
@@ -440,14 +441,21 @@ public:
   std::string title() const override {
     return "local terminal";
   }
+
+  void apply_connection_profile(
+      const TerminalConnectionProfile &profile) override {
+    (void)terminal_io.apply_text_settings(profile.text_settings);
+  }
 };
 
 std::unique_ptr<TerminalSession>
 create_terminal_local_shell_session(GtkWidget *terminal,
                                     LocalShellConnectionSettings settings,
+                                    TerminalTextSettings text_settings,
                                     TerminalSessionCallbacks callbacks) {
   return std::make_unique<TerminalLocalShellSession>(terminal,
                                                      std::move(settings),
+                                                     std::move(text_settings),
                                                      callbacks);
 }
 

@@ -26,21 +26,25 @@ struct TerminalSessionState {
 
 struct TerminalSessionBackendCreator {
   GtkWidget *terminal = nullptr;
+  TerminalTextSettings text_settings;
   TerminalSessionCallbacks callbacks;
 
   std::unique_ptr<TerminalSession>
   operator()(const LocalShellConnectionSettings &settings) const {
-    return create_terminal_local_shell_session(terminal, settings, callbacks);
+    return create_terminal_local_shell_session(terminal, settings,
+                                               text_settings, callbacks);
   }
 
   std::unique_ptr<TerminalSession>
   operator()(const TelnetConnectionSettings &settings) const {
-    return create_terminal_telnet_session(terminal, settings, callbacks);
+    return create_terminal_telnet_session(terminal, settings, text_settings,
+                                          callbacks);
   }
 
   std::unique_ptr<TerminalSession>
   operator()(const SerialConnectionSettings &settings) const {
-    return create_terminal_serial_session(terminal, settings, callbacks);
+    return create_terminal_serial_session(terminal, settings, text_settings,
+                                          callbacks);
   }
 };
 
@@ -50,6 +54,7 @@ create_backend(GtkWidget *terminal, const TerminalConnectionProfile &profile,
   return std::visit(
       TerminalSessionBackendCreator{
           .terminal = terminal,
+          .text_settings = profile.text_settings,
           .callbacks = callbacks,
       },
       profile.settings);

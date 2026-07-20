@@ -917,8 +917,9 @@ private:
 
 public:
   TerminalSerialSession(GtkWidget *terminal, SerialConnectionSettings settings,
+                        TerminalTextSettings text_settings,
                         TerminalSessionCallbacks callbacks)
-      : terminal_io(terminal),
+      : terminal_io(terminal, text_settings),
         settings(std::move(settings)),
         callbacks(callbacks),
         carrier_tracker(this->settings.carrier_detect) {
@@ -987,6 +988,8 @@ public:
     if (updated_settings == nullptr) {
       return;
     }
+
+    (void)terminal_io.apply_text_settings(profile.text_settings);
 
     const std::string current_device = settings.device;
     const SerialCarrierDetect previous_carrier_detect =
@@ -1094,8 +1097,10 @@ public:
 std::unique_ptr<TerminalSession>
 create_terminal_serial_session(GtkWidget *terminal,
                                SerialConnectionSettings settings,
+                               TerminalTextSettings text_settings,
                                TerminalSessionCallbacks callbacks) {
   return std::make_unique<TerminalSerialSession>(terminal, std::move(settings),
+                                                 std::move(text_settings),
                                                  callbacks);
 }
 

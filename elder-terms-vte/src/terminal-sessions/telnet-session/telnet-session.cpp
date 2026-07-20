@@ -209,7 +209,6 @@ static std::uint64_t monotonic_milliseconds() {
 
 class TerminalTelnetSession final : public TerminalSession {
 private:
-  GtkWidget *terminal = nullptr;
   TerminalViewIo terminal_io;
   TelnetConnectionSettings settings;
   TerminalSessionCallbacks callbacks;
@@ -661,9 +660,9 @@ private:
 
 public:
   TerminalTelnetSession(GtkWidget *terminal, TelnetConnectionSettings settings,
+                        TerminalTextSettings text_settings,
                         TerminalSessionCallbacks callbacks)
-      : terminal(terminal),
-        terminal_io(terminal),
+      : terminal_io(terminal, text_settings),
         settings(std::move(settings)),
         callbacks(callbacks) {
   }
@@ -688,8 +687,6 @@ public:
       transfer_input_event_fd = open_event_fd();
       binary_negotiation_event_fd = open_event_fd();
       set_current_window_size();
-      vte_terminal_set_delete_binding(VTE_TERMINAL(terminal),
-                                      VTE_ERASE_ASCII_DELETE);
       terminal_io.connect_user_input(
           [this](std::span<const unsigned char> bytes) {
             send_user_input(bytes);
@@ -724,6 +721,11 @@ public:
     if (protocol.is_naws_enabled()) {
       enqueue_bytes(protocol.encode_naws());
     }
+  }
+
+  void apply_connection_profile(
+      const TerminalConnectionProfile &profile) override {
+    (void)terminal_io.apply_text_settings(profile.text_settings);
   }
 
   bool supports_transfer() const override {
@@ -797,9 +799,11 @@ public:
 std::unique_ptr<TerminalSession>
 create_terminal_telnet_session(GtkWidget *terminal,
                                TelnetConnectionSettings settings,
+                               TerminalTextSettings text_settings,
                                TerminalSessionCallbacks callbacks) {
   return std::make_unique<TerminalTelnetSession>(terminal,
                                                  std::move(settings),
+                                                 std::move(text_settings),
                                                  callbacks);
 }
 

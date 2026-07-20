@@ -29,6 +29,12 @@ interface TriggeredOutputShellFixture {
   readonly triggerPath: string;
 }
 
+interface RawInputShellFixture {
+  readonly markerPath: string;
+  readonly readyPath: string;
+  readonly shellPath: string;
+}
+
 const shellQuote = (value: string): string =>
   `'${value.split("'").join("'\\''")}'`;
 
@@ -112,6 +118,28 @@ const createInputShellFixture = async (
 
   return {
     markerPath,
+    shellPath,
+  };
+};
+
+const createRawInputShellFixture = async (
+  directory: string
+): Promise<RawInputShellFixture> => {
+  const markerPath = join(directory, 'shell-raw-input.bin');
+  const readyPath = join(directory, 'shell-raw-input-ready.txt');
+  const shellPath = join(directory, 'raw-input-shell.sh');
+  await writeFile(
+    shellPath,
+    `#!/bin/sh\nstty raw -echo\nprintf ready > ${shellQuote(
+      readyPath
+    )}\ndd bs=1 count=1 of=${shellQuote(markerPath)} 2>/dev/null\nexit 0\n`,
+    'utf8'
+  );
+  await chmod(shellPath, 0o755);
+
+  return {
+    markerPath,
+    readyPath,
     shellPath,
   };
 };
@@ -445,6 +473,46 @@ describe.concurrent('elder-terms-vte local session', () => {
           await pressKeyUntilSdIndicatorOn(app, 'a');
           await app.input.pressKey('Return');
           await waitForRepeatedCharacter(shell.markerPath, 'a');
+        },
+        {
+          env: {
+            SHELL: shell.shellPath,
+          },
+        }
+      );
+    });
+  });
+
+  it('applies the local terminal backspace setting', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const shell = await createRawInputShellFixture(directory);
+      const configPath = join(directory, 'terminal-text.ini');
+      await writeFile(
+        configPath,
+        '[terminal]\nauto_close=false\nbackspace_code=bs\n',
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        ['-c', configPath],
+        async (app) => {
+          await waitForFileText(shell.readyPath, 'ready');
+          await focusTerminal(app);
+          await app.input.pressKey('BackSpace');
+
+          await toPass(
+            async () => {
+              expect(
+                Array.from((await readFile(shell.markerPath)).values())
+              ).toEqual([0x08]);
+            },
+            {
+              message:
+                'local shell should receive the configured ASCII BS code',
+              timeoutMs: 5_000,
+            }
+          );
         },
         {
           env: {

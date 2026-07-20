@@ -254,6 +254,32 @@ describe.concurrent('elder-terms-vte serial session', () => {
     });
   });
 
+  it('applies serial terminal backspace and ADM3 cursor settings', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const helper = await startSerialPtyHelper();
+      try {
+        const configPath = join(directory, 'serial.ini');
+        const serialDevicePath = join(directory, 'ttyELDERTERMS0');
+        await symlink(helper.slavePath, serialDevicePath);
+        await writeFile(
+          configPath,
+          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\nbackspace_code=del\ncursor_key_mode=adm3\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+          'utf8'
+        );
+
+        await runGtkTest(context, ['-c', configPath], async (app) => {
+          await pressKeyUntilReceived(app, helper, 'BackSpace', '7f');
+          await pressKeyUntilReceived(app, helper, 'Up', '1e');
+          await pressKeyUntilReceived(app, helper, 'Down', '1f');
+          await pressKeyUntilReceived(app, helper, 'Right', '1c');
+          await pressKeyUntilReceived(app, helper, 'Left', '1d');
+        });
+      } finally {
+        await helper.close();
+      }
+    });
+  });
+
   it('exits when an active serial session window is closed', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const helper = await startSerialPtyHelper();

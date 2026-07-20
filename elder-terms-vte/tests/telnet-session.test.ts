@@ -17,6 +17,7 @@ const telnetWill = 251;
 const telnetDo = 253;
 const telnetIac = 255;
 const telnetNaws = 31;
+const asciiBs = 8;
 const asciiDel = 127;
 const xtermDeleteSequence = [0x1b, 0x5b, 0x33, 0x7e];
 
@@ -175,7 +176,7 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
     });
   });
 
-  it('sends the Delete key as ASCII DEL instead of an xterm delete sequence', async (context) => {
+  it('sends the default Backspace as BS and Delete as ASCII DEL', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const receivedChunks: Buffer[] = [];
       let acceptedSocket: Socket | undefined;
@@ -209,6 +210,21 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
             },
             {
               message: 'TELNET server should accept a client connection',
+              timeoutMs: 5_000,
+            }
+          );
+
+          const backspaceBaselineLength = receivedBytes(receivedChunks).length;
+          await app.input.pressKey('BackSpace');
+          await toPass(
+            async () => {
+              const newData = receivedBytes(receivedChunks).slice(
+                backspaceBaselineLength
+              );
+              expect(newData).toContain(asciiBs);
+            },
+            {
+              message: 'TELNET client should send Backspace as ASCII BS',
               timeoutMs: 5_000,
             }
           );

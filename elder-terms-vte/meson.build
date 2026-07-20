@@ -54,6 +54,7 @@ elder_terms_sources = [
   'src/terminal-sessions/serial-session/serial-termios.cpp',
   telnet_protocol_source,
   'src/terminal-sessions/telnet-session/telnet-session.cpp',
+  'src/terminal-sessions/terminal-text-codec.cpp',
   'src/terminal-sessions/terminal-view-io.cpp',
   'src/terminal-layout.cpp',
   'src/terminal-session.cpp',
@@ -92,6 +93,19 @@ telnet_protocol_test = executable(
 )
 
 test('telnet-protocol-test', telnet_protocol_test)
+
+terminal_text_codec_test = executable(
+  'terminal-text-codec-test',
+  [
+    'tests/cpp/terminal-text-codec-test.cpp',
+    'src/terminal-sessions/terminal-text-codec.cpp',
+  ],
+  dependencies: [
+    elder_terms_shared_dep,
+  ],
+)
+
+test('terminal-text-codec-test', terminal_text_codec_test)
 
 activity_indicator_test = executable(
   'activity-indicator-test',
