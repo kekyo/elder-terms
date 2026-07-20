@@ -23,8 +23,9 @@ enum class TerminalLogMode {
 struct TerminalLogSettings {
   /** True when a log file should be open while the backend is connected. */
   bool enabled = false;
-  /** Directory beneath which formatted log paths are created. */
-  std::string base_directory = ".";
+  /** Directory beneath which formatted log paths are created; a leading
+   * `$HOME` is expanded when the file is opened. */
+  std::string base_directory = "$HOME/logs/";
   /** Relative path format evaluated for each connection. */
   std::string file_name_format = "{YYYYMMDD}_{hhmmss}_{fff}.txt";
   /** Received byte representation written to the log. */

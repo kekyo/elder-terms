@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 #include <deque>
 #include <filesystem>
@@ -69,6 +70,25 @@ static std::string format_number(int value, int width) {
   return std::string(buffer.data(), static_cast<std::size_t>(written));
 }
 
+static std::filesystem::path
+expanded_log_base_directory(const std::string &configured) {
+  static constexpr std::string_view home_variable = "$HOME";
+  if (configured != home_variable && !configured.starts_with("$HOME/")) {
+    return configured.empty() ? std::filesystem::path(".")
+                              : std::filesystem::path(configured);
+  }
+
+  const char *home = std::getenv("HOME");
+  if (home == nullptr || home[0] == '\0') {
+    throw std::runtime_error(
+        "HOME is not set for terminal log base directory");
+  }
+  if (configured == home_variable) {
+    return std::filesystem::path(home);
+  }
+  return std::filesystem::path(home) / configured.substr(6);
+}
+
 static std::filesystem::path formatted_log_path(
     const TerminalLogSettings &settings,
     std::chrono::system_clock::time_point now) {
@@ -103,10 +123,8 @@ static std::filesystem::path formatted_log_path(
   relative = replace_all(std::move(relative), "{fff}",
                          format_number(millisecond, 3));
 
-  const std::filesystem::path base = settings.base_directory.empty()
-                                         ? std::filesystem::path(".")
-                                         : std::filesystem::path(
-                                               settings.base_directory);
+  const std::filesystem::path base =
+      expanded_log_base_directory(settings.base_directory);
   return (base / std::filesystem::path(relative)).lexically_normal();
 }
 

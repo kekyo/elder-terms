@@ -12,7 +12,7 @@ static constexpr char log_base_directory_key[] = "base_directory";
 static constexpr char log_file_name_format_key[] = "file_name_format";
 static constexpr char log_mode_key[] = "mode";
 static constexpr bool default_log_enabled = false;
-static constexpr char default_log_base_directory[] = ".";
+static constexpr char default_log_base_directory[] = "$HOME/logs/";
 static constexpr char default_log_file_name_format[] =
     "{YYYYMMDD}_{hhmmss}_{fff}.txt";
 static constexpr char default_log_mode[] = "raw";

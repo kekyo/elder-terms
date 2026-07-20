@@ -151,8 +151,8 @@ static void test_default_settings() {
   const TerminalLogSettings log = terminal_log_settings(store);
   expect_true(!log.enabled,
               "terminal logging should be disabled by default");
-  expect_true(log.base_directory == ".",
-              "default terminal log base directory should be current directory");
+  expect_true(log.base_directory == "$HOME/logs/",
+              "default terminal log base directory should use HOME/logs");
   expect_true(log.file_name_format ==
                   "{YYYYMMDD}_{hhmmss}_{fff}.txt",
               "default terminal log file name format should include milliseconds");

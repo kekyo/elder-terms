@@ -431,7 +431,7 @@ describe.concurrent('shared settings widget', () => {
             await app.getById('settings_log_base_directory_entry'),
             'entry'
           ).text()
-        ).toBe('.');
+        ).toBe('$HOME/logs/');
         expect(
           await expectElementKind(
             await app.getById('settings_log_file_name_format_entry'),
