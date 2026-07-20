@@ -7,7 +7,6 @@
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
-#include <cstdlib>
 #include <ctime>
 #include <deque>
 #include <filesystem>
@@ -19,6 +18,8 @@
 #include <system_error>
 #include <utility>
 #include <vector>
+
+#include <glib.h>
 
 namespace elder_terms {
 
@@ -73,20 +74,47 @@ static std::string format_number(int value, int width) {
 static std::filesystem::path
 expanded_log_base_directory(const std::string &configured) {
   static constexpr std::string_view home_variable = "$HOME";
-  if (configured != home_variable && !configured.starts_with("$HOME/")) {
-    return configured.empty() ? std::filesystem::path(".")
-                              : std::filesystem::path(configured);
+  static constexpr std::string_view documents_variable = "{XDG_DOCUMENTS}";
+  const auto uses_variable = [&configured](std::string_view variable) {
+    return configured == variable ||
+           (configured.starts_with(variable) &&
+            configured.size() > variable.size() &&
+            configured[variable.size()] == '/');
+  };
+  const auto append_suffix = [&configured](
+                                 const std::filesystem::path &base,
+                                 std::string_view variable) {
+    const std::string_view suffix(configured.data() + variable.size(),
+                                  configured.size() - variable.size());
+    const std::size_t relative_start = suffix.find_first_not_of('/');
+    return relative_start == std::string_view::npos
+               ? base
+               : base / suffix.substr(relative_start);
+  };
+  const auto home_directory = []() {
+    const char *home = g_get_home_dir();
+    if (home == nullptr || home[0] == '\0') {
+      throw std::runtime_error(
+          "failed to resolve the user home for terminal logging");
+    }
+    return std::filesystem::path(home);
+  };
+
+  if (uses_variable(documents_variable)) {
+    const char *documents =
+        g_get_user_special_dir(G_USER_DIRECTORY_DOCUMENTS);
+    const std::filesystem::path base =
+        documents != nullptr && documents[0] != '\0'
+            ? std::filesystem::path(documents)
+            : home_directory();
+    return append_suffix(base, documents_variable);
   }
 
-  const char *home = std::getenv("HOME");
-  if (home == nullptr || home[0] == '\0') {
-    throw std::runtime_error(
-        "HOME is not set for terminal log base directory");
+  if (uses_variable(home_variable)) {
+    return append_suffix(home_directory(), home_variable);
   }
-  if (configured == home_variable) {
-    return std::filesystem::path(home);
-  }
-  return std::filesystem::path(home) / configured.substr(6);
+  return configured.empty() ? std::filesystem::path(".")
+                            : std::filesystem::path(configured);
 }
 
 static std::filesystem::path formatted_log_path(

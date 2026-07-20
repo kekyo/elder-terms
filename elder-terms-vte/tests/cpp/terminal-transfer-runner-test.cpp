@@ -948,23 +948,26 @@ static void resolve_default_base_path_from_xdg_download_dir() {
       ("elder-terms-transfer-runner-test-" +
        std::to_string(static_cast<long long>(::getpid())) + "-" +
        std::to_string(static_cast<long long>(g_get_monotonic_time())));
-  const auto home = root / "home";
+  const auto home = std::filesystem::path(g_get_home_dir());
   const auto config_home = root / "config";
-  const auto downloads = home / "XDG Downloads";
+  const auto downloads = root / "XDG Downloads";
 
   try {
     std::filesystem::create_directories(downloads);
     std::filesystem::create_directories(config_home);
-    {
-      std::ofstream user_dirs(config_home / "user-dirs.dirs");
-      user_dirs << "XDG_DOWNLOAD_DIR=\"$HOME/XDG Downloads\"\n";
-    }
 
     {
-      ScopedEnvironment home_env("HOME", home.string());
       ScopedEnvironment config_env("XDG_CONFIG_HOME", config_home.string());
       g_reload_user_special_dirs_cache();
 
+      expect_equal(resolve_transfer_base_path_uri(""), file_uri_for_path(home),
+                   "missing XDG Downloads should fall back to HOME");
+
+      {
+        std::ofstream user_dirs(config_home / "user-dirs.dirs");
+        user_dirs << "XDG_DOWNLOAD_DIR=\"" << downloads.string() << "\"\n";
+      }
+      g_reload_user_special_dirs_cache();
       expect_equal(resolve_transfer_base_path_uri(""),
                    file_uri_for_path(downloads),
                    "empty transfer base path should use XDG Downloads");
@@ -1068,8 +1071,8 @@ static void run_unit_cases() {
   sanitize_received_file_names();
   format_progress_status();
   estimate_progress_eta();
-  resolve_base_path_as_path_or_uri();
   resolve_default_base_path_from_xdg_download_dir();
+  resolve_base_path_as_path_or_uri();
   transfer_request_options_map_to_libxyzm();
 }
 

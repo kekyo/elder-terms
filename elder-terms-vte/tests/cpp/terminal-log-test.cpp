@@ -1,7 +1,6 @@
 #include "../../src/terminal-log.h"
 
 #include <chrono>
-#include <cstdlib>
 #include <ctime>
 #include <exception>
 #include <filesystem>
@@ -9,14 +8,40 @@
 #include <functional>
 #include <iostream>
 #include <iterator>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include <glib.h>
 #include <unistd.h>
 
 namespace elder_terms_terminal_log_test {
+
+class ScopedEnvironment {
+public:
+  ScopedEnvironment(const char *name, const std::string &value)
+      : name_(name) {
+    const char *old_value = g_getenv(name);
+    if (old_value != nullptr) {
+      old_value_ = old_value;
+    }
+    g_setenv(name, value.c_str(), TRUE);
+  }
+
+  ~ScopedEnvironment() {
+    if (old_value_.has_value()) {
+      g_setenv(name_.c_str(), old_value_->c_str(), TRUE);
+    } else {
+      g_unsetenv(name_.c_str());
+    }
+  }
+
+private:
+  std::string name_;
+  std::optional<std::string> old_value_;
+};
 
 static void expect_true(bool condition, const std::string &message) {
   if (!condition) {
@@ -84,6 +109,80 @@ static void run_until_terminal_log_stops(
   task.unsafe_result();
   if (async_error) {
     std::rethrow_exception(async_error);
+  }
+}
+
+static void write_single_raw_log(const std::string &base_directory,
+                                 const std::string &file_name,
+                                 const std::string &content) {
+  elder_terms::TerminalLogState *log = elder_terms::create_terminal_log({
+      .settings = elder_terms::TerminalLogSettings{
+          .enabled = true,
+          .base_directory = base_directory,
+          .file_name_format = file_name,
+          .mode = elder_terms::TerminalLogMode::raw,
+      },
+      .now = nullptr,
+      .active = nullptr,
+      .warning = nullptr,
+  });
+
+  run_until_terminal_log_stops(log, [&]() {
+    elder_terms::set_terminal_log_connection_active(log, true);
+    elder_terms::write_terminal_log(log, bytes(content), bytes("unused"));
+    elder_terms::set_terminal_log_connection_active(log, false);
+  });
+  elder_terms::destroy_terminal_log(log);
+}
+
+static void test_user_directory_base_paths_are_expanded() {
+  const std::filesystem::path root = temporary_directory("user-directories");
+  const std::filesystem::path config_home = root / "config";
+  const std::filesystem::path documents = root / "XDG Documents";
+  const std::filesystem::path home(g_get_home_dir());
+  const std::filesystem::path home_log_directory =
+      home / root.filename();
+
+  try {
+    std::filesystem::create_directories(config_home);
+    std::filesystem::create_directories(documents);
+    {
+      ScopedEnvironment config_env("XDG_CONFIG_HOME", config_home.string());
+      g_reload_user_special_dirs_cache();
+
+      write_single_raw_log("{XDG_DOCUMENTS}/" + root.filename().string(),
+                           "documents-fallback.log", "fallback");
+      expect_true(read_file(home_log_directory / "documents-fallback.log") ==
+                      "fallback",
+                  "missing XDG Documents should fall back to the user home");
+
+      {
+        std::ofstream user_dirs(config_home / "user-dirs.dirs");
+        user_dirs << "XDG_DOCUMENTS_DIR=\"" << documents.string()
+                  << "\"\n";
+      }
+      g_reload_user_special_dirs_cache();
+      write_single_raw_log("{XDG_DOCUMENTS}/logs", "documents.log",
+                           "documents");
+      expect_true(read_file(documents / "logs" / "documents.log") ==
+                      "documents",
+                  "XDG Documents token should resolve to the configured "
+                  "directory");
+
+      write_single_raw_log("$HOME/" + root.filename().string(), "home.log",
+                           "home");
+      expect_true(read_file(home_log_directory / "home.log") == "home",
+                  "$HOME token should resolve to the user home");
+    }
+
+    g_reload_user_special_dirs_cache();
+    std::filesystem::remove_all(home_log_directory);
+    std::filesystem::remove_all(root);
+  } catch (...) {
+    g_reload_user_special_dirs_cache();
+    std::filesystem::remove_all(home_log_directory);
+    std::filesystem::remove_all(root);
+    throw;
   }
 }
 
@@ -183,52 +282,6 @@ static void test_disabled_logging_creates_no_file() {
   std::filesystem::remove_all(root);
 }
 
-static void test_home_base_directory_is_expanded() {
-  const char *home = std::getenv("HOME");
-  expect_true(home != nullptr && home[0] != '\0',
-              "terminal log test requires HOME");
-  const std::filesystem::path unique_name =
-      temporary_directory("home-expansion").filename();
-  const std::filesystem::path root =
-      std::filesystem::path(home) / unique_name;
-  const std::filesystem::path literal_root =
-      std::filesystem::current_path() / "$HOME" / unique_name;
-
-  elder_terms::TerminalLogState *log = elder_terms::create_terminal_log({
-      .settings = elder_terms::TerminalLogSettings{
-          .enabled = true,
-          .base_directory = "$HOME/" + unique_name.string(),
-          .file_name_format = "expanded.log",
-          .mode = elder_terms::TerminalLogMode::raw,
-      },
-      .now = nullptr,
-      .active = nullptr,
-      .warning = nullptr,
-  });
-
-  run_until_terminal_log_stops(log, [&]() {
-    elder_terms::set_terminal_log_connection_active(log, true);
-    elder_terms::write_terminal_log(log, bytes("expanded-home"),
-                                    bytes("unused"));
-    elder_terms::set_terminal_log_connection_active(log, false);
-  });
-  elder_terms::destroy_terminal_log(log);
-
-  const bool expanded_file_exists =
-      std::filesystem::exists(root / "expanded.log");
-  const std::string content =
-      expanded_file_exists ? read_file(root / "expanded.log") : std::string{};
-  const bool literal_file_exists =
-      std::filesystem::exists(literal_root / "expanded.log");
-  std::filesystem::remove_all(root);
-  std::filesystem::remove_all(literal_root);
-
-  expect_true(expanded_file_exists && content == "expanded-home",
-              "$HOME base directory should resolve beneath the user home");
-  expect_true(!literal_file_exists,
-              "$HOME base directory should not be treated literally");
-}
-
 static void test_open_failure_warns_and_stops_safely() {
   const std::filesystem::path root = temporary_directory("open-failure");
   std::filesystem::create_directories(root);
@@ -279,9 +332,10 @@ static void test_open_failure_warns_and_stops_safely() {
 int main() {
   try {
     elder_terms_terminal_log_test::
+        test_user_directory_base_paths_are_expanded();
+    elder_terms_terminal_log_test::
         test_connection_boundaries_reopen_formatted_paths_and_modes();
     elder_terms_terminal_log_test::test_disabled_logging_creates_no_file();
-    elder_terms_terminal_log_test::test_home_base_directory_is_expanded();
     elder_terms_terminal_log_test::test_open_failure_warns_and_stops_safely();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';

@@ -23,9 +23,11 @@ enum class TerminalLogMode {
 struct TerminalLogSettings {
   /** True when a log file should be open while the backend is connected. */
   bool enabled = false;
-  /** Directory beneath which formatted log paths are created; a leading
-   * `$HOME` is expanded when the file is opened. */
-  std::string base_directory = "$HOME/logs/";
+  /** Directory beneath which formatted log paths are created. A leading
+   * `{XDG_DOCUMENTS}` resolves to the XDG Documents directory, falling back
+   * to the user home directory, and a leading `$HOME` resolves directly to
+   * the user home directory. */
+  std::string base_directory = "{XDG_DOCUMENTS}/logs/";
   /** Relative path format evaluated for each connection. */
   std::string file_name_format = "{YYYYMMDD}_{hhmmss}_{fff}.txt";
   /** Received byte representation written to the log. */

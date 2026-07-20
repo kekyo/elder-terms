@@ -160,8 +160,7 @@ static GObjectPtr<GFile> make_file_from_path_or_uri(const std::string &text) {
       return GObjectPtr<GFile>(g_file_new_for_path(downloads));
     }
 
-    GCharPtr current_directory(g_get_current_dir());
-    return GObjectPtr<GFile>(g_file_new_for_path(current_directory.get()));
+    return GObjectPtr<GFile>(g_file_new_for_path(g_get_home_dir()));
   }
 
   if (has_uri_scheme(text)) {
