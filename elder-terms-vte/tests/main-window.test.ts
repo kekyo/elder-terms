@@ -526,6 +526,9 @@ describe.concurrent('elder-terms-vte main window', () => {
       });
 
       await app.input.pressKey('Escape');
+      await waitForResult(async () => {
+        expect((await copyItem.info()).states).not.toContain('showing');
+      });
       await selectTerminalCells(app, bounds, 5);
 
       await openTerminalContextMenu(
@@ -547,12 +550,15 @@ describe.concurrent('elder-terms-vte main window', () => {
 
   it('copies selected terminal text while the VTE is read-only', async (context) => {
     await withTemporaryDirectory(async (directory) => {
+      const readyPath = join(directory, 'read-only-shell-ready.txt');
       const markerPath = join(directory, 'read-only-shell-exited.txt');
+      const releasePath = join(directory, 'read-only-shell-release');
       const shellPath = join(directory, 'read-only-shell.sh');
       const configPath = join(directory, 'read-only-terminal.ini');
+      await execFileAsync('mkfifo', [releasePath]);
       await writeFile(
         shellPath,
-        `#!/bin/sh\nprintf READ_ONLY_COPY\nprintf exited > ${shellQuote(markerPath)}\nexit 0\n`,
+        `#!/bin/sh\nprintf READ_ONLY_COPY\nprintf ready > ${shellQuote(readyPath)}\nIFS= read -r release < ${shellQuote(releasePath)}\nprintf exited > ${shellQuote(markerPath)}\nexit 0\n`,
         'utf8'
       );
       await chmod(shellPath, 0o755);
@@ -563,14 +569,9 @@ describe.concurrent('elder-terms-vte main window', () => {
         ['-c', configPath],
         async (app) => {
           await waitForResult(async () => {
-            expect(await readFile(markerPath, 'utf8')).toBe('exited');
+            expect(await readFile(readyPath, 'utf8')).toBe('ready');
           });
-          await waitForActivityIndicatorImageState(app, 'conn', 'off');
-          await waitForResult(async () => {
-            expect(
-              (await (await app.getById('disconnected_notice')).info()).states
-            ).toContain('showing');
-          });
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
 
           const layout = await waitForResult(async () =>
             readTerminalGridLayout(app)
@@ -592,6 +593,33 @@ describe.concurrent('elder-terms-vte main window', () => {
             expect(info.states).toContain('enabled');
             expect(info.states).toContain('sensitive');
             return item;
+          });
+          await app.input.pressKey('Escape');
+          await waitForResult(async () => {
+            expect((await copyItem.info()).states).not.toContain('showing');
+          });
+
+          await writeFile(releasePath, 'exit\n', 'utf8');
+          await waitForResult(async () => {
+            expect(await readFile(markerPath, 'utf8')).toBe('exited');
+          });
+          await waitForActivityIndicatorImageState(app, 'conn', 'off');
+          await waitForResult(async () => {
+            expect(
+              (await (await app.getById('disconnected_notice')).info()).states
+            ).toContain('showing');
+          });
+
+          await openTerminalContextMenu(
+            app,
+            bounds.x + (bounds.width / defaultColumns) * 15.5,
+            bounds.y + bounds.height / defaultRows / 2
+          );
+          await waitForResult(async () => {
+            const info = await copyItem.info();
+            expect(info.states).toContain('showing');
+            expect(info.states).toContain('enabled');
+            expect(info.states).toContain('sensitive');
           });
           await copyItem.click();
 

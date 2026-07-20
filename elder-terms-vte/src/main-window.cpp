@@ -42,6 +42,69 @@ static constexpr const char *main_window_css =
     "}";
 static constexpr const char *indicator_on_icon_file_name = "green-on.png";
 static constexpr const char *indicator_off_icon_file_name = "green-off.png";
+static constexpr const char *terminal_context_copy_item_id =
+    "terminal_context_copy_item";
+static constexpr const char *terminal_context_menu_state_key =
+    "terminal-context-menu-state";
+
+struct TerminalContextMenuState {
+  VteTerminal *terminal = nullptr;
+  GtkWidget *menu = nullptr;
+  GtkWidget *copy_item = nullptr;
+};
+
+static void on_terminal_context_copy_activate(GtkMenuItem *, gpointer data) {
+  auto *terminal = VTE_TERMINAL(data);
+  vte_terminal_copy_clipboard_format(terminal, VTE_FORMAT_TEXT);
+}
+
+static gboolean on_terminal_button_press(GtkWidget *, GdkEventButton *event,
+                                         gpointer data) {
+  if (event->type != GDK_BUTTON_PRESS ||
+      event->button != GDK_BUTTON_SECONDARY) {
+    return GDK_EVENT_PROPAGATE;
+  }
+
+  auto *state = static_cast<TerminalContextMenuState *>(data);
+  gtk_widget_set_sensitive(
+      state->copy_item, vte_terminal_get_has_selection(state->terminal));
+  gtk_menu_popup_at_pointer(
+      GTK_MENU(state->menu), reinterpret_cast<GdkEvent *>(event));
+  return GDK_EVENT_STOP;
+}
+
+static void destroy_terminal_context_menu_state(gpointer data) {
+  auto *state = static_cast<TerminalContextMenuState *>(data);
+  gtk_widget_destroy(state->menu);
+  g_object_unref(state->menu);
+  delete state;
+}
+
+static void install_terminal_context_menu(GtkWidget *terminal_widget,
+                                          GtkWidget *terminal_overlay) {
+  auto *state = new TerminalContextMenuState();
+  state->terminal = VTE_TERMINAL(terminal_widget);
+  state->menu = gtk_menu_new();
+  g_object_ref_sink(state->menu);
+  state->copy_item = gtk_menu_item_new_with_label("Copy");
+  gestament_gtk_assign_accessible_id(state->copy_item,
+                                     terminal_context_copy_item_id);
+  gtk_menu_shell_append(GTK_MENU_SHELL(state->menu), state->copy_item);
+  gtk_widget_show_all(state->menu);
+
+  g_signal_connect(state->copy_item, "activate",
+                   G_CALLBACK(on_terminal_context_copy_activate),
+                   terminal_widget);
+  gtk_widget_add_events(terminal_widget, GDK_BUTTON_PRESS_MASK);
+  g_signal_connect(terminal_widget, "button-press-event",
+                   G_CALLBACK(on_terminal_button_press), state);
+  gtk_widget_add_events(terminal_overlay, GDK_BUTTON_PRESS_MASK);
+  g_signal_connect(terminal_overlay, "button-press-event",
+                   G_CALLBACK(on_terminal_button_press), state);
+  g_object_set_data_full(G_OBJECT(terminal_overlay),
+                         terminal_context_menu_state_key, state,
+                         destroy_terminal_context_menu_state);
+}
 
 static std::filesystem::path executable_directory() {
   const std::filesystem::path executable_path =
@@ -389,6 +452,8 @@ std::optional<MainWindow> load_main_window() {
     release_main_window(&main_window);
     return std::nullopt;
   }
+  install_terminal_context_menu(main_window.terminal,
+                                main_window.terminal_overlay);
   apply_main_window_style(&main_window);
   create_activity_indicator_widgets(&main_window);
   if (!load_indicator_images(&main_window)) {
