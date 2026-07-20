@@ -533,6 +533,7 @@ private:
       if (read_size > 0) {
         notify_activity(ActivityIndicatorId::rd);
         if (transfer_active) {
+          // Modem protocol bytes must remain outside the terminal text codec.
           append_transfer_input(buffer.data(),
                                 static_cast<std::size_t>(read_size));
         } else {

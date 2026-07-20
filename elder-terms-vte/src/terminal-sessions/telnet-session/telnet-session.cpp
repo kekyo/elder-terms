@@ -306,6 +306,7 @@ private:
       notify_event_fd_noexcept(binary_negotiation_event_fd);
     }
     if (transfer_active) {
+      // Modem protocol bytes must remain outside the terminal text codec.
       append_transfer_input(result.terminal_data);
     } else {
       if (!handle_zmodem_auto_start(result.terminal_data)) {
