@@ -43,6 +43,7 @@ elder_terms_sources = [
   'src/launch-options.cpp',
   'src/main.cpp',
   'src/main-window.cpp',
+  'src/terminal-log.cpp',
   'src/terminal-transfer.cpp',
   'src/terminal-transfer-runner.cpp',
   'src/terminal-zmodem-auto-start.cpp',
@@ -162,6 +163,27 @@ terminal_zmodem_auto_start_test = executable(
 )
 
 test('terminal-zmodem-auto-start-test', terminal_zmodem_auto_start_test)
+
+terminal_log_test = executable(
+  'terminal-log-test',
+  [
+    'tests/cpp/terminal-log-test.cpp',
+    'src/terminal-log.cpp',
+  ],
+  cpp_args: [
+    '-I' + cardio_include_dir,
+    '-DCARDIO_WITH_GLIB=1',
+    '-DCARDIO_WITH_GIO=1',
+    '-DCARDIO_WITH_LINUX_IO_URING=1',
+  ],
+  dependencies: [
+    elder_terms_shared_dep,
+    gio_dep,
+    liburing_dep,
+  ],
+)
+
+test('terminal-log-test', terminal_log_test)
 
 terminal_transfer_test_protocols = ['xmodem', 'ymodem', 'zmodem']
 terminal_transfer_test_directions = ['send', 'receive']
