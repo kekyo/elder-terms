@@ -252,6 +252,53 @@ describe.concurrent('elder-terms-vte settings', () => {
     });
   });
 
+  it('blocks terminal input while runtime settings are open and restores it after closing', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const markerPath = join(directory, 'shell-input.txt');
+      const shellPath = join(directory, 'input-shell.sh');
+      const configPath = join(directory, 'auto-close-disabled.ini');
+      await writeFile(
+        shellPath,
+        `#!/bin/sh\nIFS= read -r input\nprintf '%s' "$input" > ${shellQuote(markerPath)}\nexit 0\n`,
+        'utf8'
+      );
+      await chmod(shellPath, 0o755);
+      await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
+
+      await runGtkTest(
+        context,
+        ['-c', configPath],
+        async (app) => {
+          await openSettingsDialog(app);
+
+          const mainWindow = expectElementKind(
+            await app.getById('main_window'),
+            'window'
+          );
+          await mainWindow.activate();
+          await app.input.pressKey('x');
+          await app.input.pressKey('Return');
+
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
+          await expectSettingsDialogClosed(app);
+          await expectTerminalFocused(app);
+          await app.input.pressKey('b');
+          await app.input.pressKey('Return');
+
+          await expectFileContent(markerPath, 'b');
+        },
+        {
+          env: {
+            SHELL: shellPath,
+          },
+        }
+      );
+    });
+  });
+
   it('uses the configured terminal grid size from an INI file', async (context) => {
     await runGtkTest(
       context,

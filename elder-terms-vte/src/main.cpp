@@ -57,7 +57,8 @@ static void update_application_terminal_presentation(
 
   elder_terms::set_main_window_terminal_interactive(
       state->main_window,
-      state->connection_active && !state->transfer_active);
+      state->connection_active && !state->transfer_active &&
+          state->settings_dialog == nullptr);
   elder_terms::set_main_window_transfer_button_sensitive(
       state->main_window,
       state->connection_active && !state->transfer_active);
@@ -140,6 +141,7 @@ static void on_settings_dialog_destroy(GtkWidget *, gpointer user_data) {
     state->settings_widget = nullptr;
   }
   state->settings_dialog = nullptr;
+  update_application_terminal_presentation(state);
   restore_terminal_focus(state);
 }
 
@@ -288,6 +290,7 @@ static void open_settings_dialog(ApplicationState *state) {
 
   state->settings_dialog = dialog;
   g_signal_connect(dialog, "destroy", G_CALLBACK(on_settings_dialog_destroy), state);
+  update_application_terminal_presentation(state);
   gtk_widget_show_all(dialog);
 }
 
