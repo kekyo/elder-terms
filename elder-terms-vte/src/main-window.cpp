@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 
+#include <gdk/gdk.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gestament/gtk.h>
 #include <vte/vte.h>
@@ -104,6 +105,33 @@ static void install_terminal_context_menu(GtkWidget *terminal_widget,
   g_object_set_data_full(G_OBJECT(terminal_overlay),
                          terminal_context_menu_state_key, state,
                          destroy_terminal_context_menu_state);
+}
+
+static void set_terminal_dim_overlay_window_pass_through(GtkWidget *widget) {
+  GdkWindow *window = gtk_widget_get_window(widget);
+  if (window != nullptr) {
+    gdk_window_set_pass_through(window, TRUE);
+  }
+}
+
+static void on_terminal_dim_overlay_realize(GtkWidget *widget, gpointer) {
+  // GtkEventBox owns an input window, so make that window transparent to
+  // pointer events in addition to the GtkOverlay child property.
+  set_terminal_dim_overlay_window_pass_through(widget);
+}
+
+static void install_terminal_dim_overlay_input_pass_through(
+    GtkWidget *terminal_dim_overlay) {
+  GtkWidget *terminal_surface_overlay =
+      gtk_widget_get_parent(terminal_dim_overlay);
+  if (terminal_surface_overlay != nullptr &&
+      GTK_IS_OVERLAY(terminal_surface_overlay)) {
+    gtk_overlay_set_overlay_pass_through(GTK_OVERLAY(terminal_surface_overlay),
+                                         terminal_dim_overlay, TRUE);
+  }
+  g_signal_connect(terminal_dim_overlay, "realize",
+                   G_CALLBACK(on_terminal_dim_overlay_realize), nullptr);
+  set_terminal_dim_overlay_window_pass_through(terminal_dim_overlay);
 }
 
 static std::filesystem::path executable_directory() {
@@ -454,6 +482,8 @@ std::optional<MainWindow> load_main_window() {
   }
   install_terminal_context_menu(main_window.terminal,
                                 main_window.terminal_overlay);
+  install_terminal_dim_overlay_input_pass_through(
+      main_window.terminal_dim_overlay);
   apply_main_window_style(&main_window);
   create_activity_indicator_widgets(&main_window);
   if (!load_indicator_images(&main_window)) {
