@@ -110,6 +110,7 @@ static void resolve_terminal_key_binding_conflict(
 SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults) {
   std::vector<SettingDefinition> definitions;
   append_definitions(&definitions, general_setting_definitions());
+  append_definitions(&definitions, terminal_log_setting_definitions());
   append_definitions(&definitions, terminal_setting_definitions(terminal_defaults));
   append_definitions(&definitions, local_shell_connection_setting_definitions());
   append_definitions(&definitions, telnet_connection_setting_definitions());

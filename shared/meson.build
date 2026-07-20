@@ -8,6 +8,7 @@ elder_terms_shared_sources = [
   'src/key-binding-input-widget.cpp',
   'src/settings/general-settings.cpp',
   'src/settings/local-session-settings.cpp',
+  'src/settings/log-settings.cpp',
   'src/settings/serial-settings.cpp',
   'src/settings/settings.cpp',
   'src/settings/settings-store.cpp',

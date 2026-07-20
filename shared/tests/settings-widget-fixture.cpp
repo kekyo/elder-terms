@@ -40,6 +40,10 @@ struct FixtureOptions {
   std::string serial_carrier_detect = "cd";
   std::string transfer_base_path;
   std::string zmodem_autostart = "default";
+  bool log_enabled = false;
+  std::string log_base_directory = ".";
+  std::string log_file_name_format = "{YYYYMMDD}_{hhmmss}_{fff}.txt";
+  std::string log_mode = "raw";
 };
 
 struct FixtureState {
@@ -120,6 +124,17 @@ static FixtureOptions parse_options(int argc, char **argv) {
     } else if (starts_with(argument, "--zmodem-autostart=")) {
       options.zmodem_autostart =
           option_value(argument, "--zmodem-autostart=");
+    } else if (starts_with(argument, "--log-enabled=")) {
+      options.log_enabled =
+          parse_bool(option_value(argument, "--log-enabled="));
+    } else if (starts_with(argument, "--log-base-directory=")) {
+      options.log_base_directory =
+          option_value(argument, "--log-base-directory=");
+    } else if (starts_with(argument, "--log-file-name-format=")) {
+      options.log_file_name_format =
+          option_value(argument, "--log-file-name-format=");
+    } else if (starts_with(argument, "--log-mode=")) {
+      options.log_mode = option_value(argument, "--log-mode=");
     }
   }
   return options;
@@ -226,6 +241,18 @@ static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
         &store, elder_terms::transfer_zmodem_autostart_setting_key(),
         elder_terms::SettingValue{false});
   }
+  elder_terms::set_setting_value(
+      &store, elder_terms::terminal_log_enabled_setting_key(),
+      elder_terms::SettingValue{options.log_enabled});
+  elder_terms::set_setting_value(
+      &store, elder_terms::terminal_log_base_directory_setting_key(),
+      elder_terms::SettingValue{options.log_base_directory});
+  elder_terms::set_setting_value(
+      &store, elder_terms::terminal_log_file_name_format_setting_key(),
+      elder_terms::SettingValue{options.log_file_name_format});
+  elder_terms::set_setting_value(
+      &store, elder_terms::terminal_log_mode_setting_key(),
+      elder_terms::SettingValue{options.log_mode});
   return store;
 }
 
@@ -267,6 +294,8 @@ static void select_initial_page(GtkWidget *window,
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 3);
   } else if (page == "transfer") {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 4);
+  } else if (page == "logging") {
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 5);
   } else {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 0);
   }
@@ -295,6 +324,11 @@ static std::string zmodem_autostart_name(
   return configured ? "enabled" : "disabled";
 }
 
+static const char *terminal_log_mode_name(
+    elder_terms::TerminalLogMode mode) {
+  return mode == elder_terms::TerminalLogMode::cooked ? "cooked" : "raw";
+}
+
 static void print_store(const char *prefix,
                         const elder_terms::SettingsStore &store) {
   const elder_terms::TerminalDisplaySettings display =
@@ -305,6 +339,8 @@ static void print_store(const char *prefix,
       elder_terms::telnet_connection_settings(store);
   const elder_terms::SerialConnectionSettings serial =
       elder_terms::serial_connection_settings(store);
+  const elder_terms::TerminalLogSettings log =
+      elder_terms::terminal_log_settings(store);
   std::cout << prefix << " type=" << connection_type_name(profile)
             << " width=" << display.width << " height=" << display.height
             << " zoom=" << display.zoom
@@ -337,6 +373,10 @@ static void print_store(const char *prefix,
                    serial.carrier_detect)
             << " transfer_base_path=" << elder_terms::transfer_base_path(store)
             << " zmodem_autostart=" << zmodem_autostart_name(store)
+            << " log_enabled=" << (log.enabled ? "true" : "false")
+            << " log_base_directory=" << log.base_directory
+            << " log_file_name_format=" << log.file_name_format
+            << " log_mode=" << terminal_log_mode_name(log.mode)
             << '\n';
   std::cout.flush();
 }

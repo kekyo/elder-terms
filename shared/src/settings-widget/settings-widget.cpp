@@ -24,6 +24,8 @@ static constexpr char terminal_backspace_bs[] = "bs";
 static constexpr char terminal_backspace_del[] = "del";
 static constexpr char terminal_cursor_normal[] = "normal";
 static constexpr char terminal_cursor_adm3[] = "adm3";
+static constexpr char terminal_log_raw[] = "raw";
+static constexpr char terminal_log_cooked[] = "cooked";
 
 struct ConnectionSettingsPage {
   const char *connection_type = nullptr;
@@ -63,6 +65,11 @@ struct SettingsWidgetState {
   GtkWidget *serial_carrier_detect_combo = nullptr;
   GtkWidget *transfer_base_path_entry = nullptr;
   GtkWidget *transfer_zmodem_autostart_combo = nullptr;
+  GtkWidget *log_enabled_check = nullptr;
+  GtkWidget *log_base_directory_entry = nullptr;
+  GtkWidget *log_file_name_format_entry = nullptr;
+  GtkWidget *log_mode_combo = nullptr;
+  bool log_file_name_format_valid = true;
   GtkWidget *apply_button = nullptr;
   GtkWidget *save_button = nullptr;
   GtkWidget *cancel_button = nullptr;
@@ -519,9 +526,10 @@ static bool terminal_key_binding_inputs_valid(
              state->terminal_zoom_out_key_input);
 }
 
-static bool terminal_inputs_valid(const SettingsWidgetState *state) {
+static bool settings_inputs_valid(const SettingsWidgetState *state) {
   return state->terminal_encoding_valid &&
-         terminal_key_binding_inputs_valid(state);
+         terminal_key_binding_inputs_valid(state) &&
+         state->log_file_name_format_valid;
 }
 
 static void notify_changed(SettingsWidgetState *state) {
@@ -531,7 +539,7 @@ static void notify_changed(SettingsWidgetState *state) {
 }
 
 static void update_action_sensitivity(SettingsWidgetState *state) {
-  const gboolean sensitive = terminal_inputs_valid(state) ? TRUE : FALSE;
+  const gboolean sensitive = settings_inputs_valid(state) ? TRUE : FALSE;
   if (state->apply_button != nullptr) {
     gtk_widget_set_sensitive(state->apply_button, sensitive);
   }
@@ -662,6 +670,56 @@ static void update_transfer_zmodem_autostart_from_widget(
       SettingValue{choice == zmodem_autostart_enabled});
 }
 
+static void update_log_enabled_from_widget(SettingsWidgetState *state) {
+  set_setting_value(
+      &state->draft_store, terminal_log_enabled_setting_key(),
+      SettingValue{gtk_toggle_button_get_active(
+                       GTK_TOGGLE_BUTTON(state->log_enabled_check)) != FALSE});
+}
+
+static void update_log_base_directory_from_widget(
+    SettingsWidgetState *state) {
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->log_base_directory_entry));
+  set_setting_value(&state->draft_store,
+                    terminal_log_base_directory_setting_key(),
+                    SettingValue{std::string(text == nullptr ? "" : text)});
+}
+
+static void set_log_file_name_format_validation(
+    SettingsWidgetState *state, bool valid, const std::string &reason) {
+  state->log_file_name_format_valid = valid;
+  gtk_entry_set_icon_from_icon_name(
+      GTK_ENTRY(state->log_file_name_format_entry), GTK_ENTRY_ICON_SECONDARY,
+      valid ? nullptr : "dialog-error-symbolic");
+  gtk_entry_set_icon_tooltip_text(
+      GTK_ENTRY(state->log_file_name_format_entry), GTK_ENTRY_ICON_SECONDARY,
+      valid ? nullptr : reason.c_str());
+}
+
+static void update_log_file_name_format_from_widget(
+    SettingsWidgetState *state) {
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->log_file_name_format_entry));
+  const std::string format = text == nullptr ? "" : text;
+  std::string reason;
+  if (!terminal_log_file_name_format_is_valid(format, &reason)) {
+    set_log_file_name_format_validation(state, false, reason);
+    return;
+  }
+
+  set_log_file_name_format_validation(state, true, {});
+  set_setting_value(&state->draft_store,
+                    terminal_log_file_name_format_setting_key(),
+                    SettingValue{format});
+}
+
+static void update_log_mode_from_widget(SettingsWidgetState *state) {
+  set_setting_value(
+      &state->draft_store, terminal_log_mode_setting_key(),
+      SettingValue{active_combo_id(state->log_mode_combo, terminal_log_raw)});
+}
+
 static void sync_widgets_from_draft(SettingsWidgetState *state) {
   const TerminalDisplaySettings display =
       terminal_display_settings(state->draft_store);
@@ -669,6 +727,7 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
       telnet_connection_settings(state->draft_store);
   const SerialConnectionSettings serial =
       serial_connection_settings(state->draft_store);
+  const TerminalLogSettings log = terminal_log_settings(state->draft_store);
 
   if (state->general_type_combo != nullptr) {
     gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->general_type_combo),
@@ -755,6 +814,23 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
         GTK_COMBO_BOX(state->transfer_zmodem_autostart_combo),
         zmodem_autostart_choice_id(state->draft_store));
   }
+  if (state->log_enabled_check != nullptr) {
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->log_enabled_check),
+                                 log.enabled ? TRUE : FALSE);
+  }
+  if (state->log_base_directory_entry != nullptr) {
+    gtk_entry_set_text(GTK_ENTRY(state->log_base_directory_entry),
+                       log.base_directory.c_str());
+  }
+  if (state->log_file_name_format_entry != nullptr) {
+    gtk_entry_set_text(GTK_ENTRY(state->log_file_name_format_entry),
+                       log.file_name_format.c_str());
+    set_log_file_name_format_validation(state, true, {});
+  }
+  if (state->log_mode_combo != nullptr) {
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->log_mode_combo),
+                                terminal_log_mode_to_string(log.mode));
+  }
   if (state->notebook != nullptr) {
     update_connection_pages(state);
   }
@@ -782,6 +858,10 @@ static void sync_draft_from_widgets(SettingsWidgetState *state) {
   update_serial_carrier_detect_from_widget(state);
   update_transfer_base_path_from_widget(state);
   update_transfer_zmodem_autostart_from_widget(state);
+  update_log_enabled_from_widget(state);
+  update_log_base_directory_from_widget(state);
+  update_log_file_name_format_from_widget(state);
+  update_log_mode_from_widget(state);
 }
 
 static void on_general_type_changed(GtkComboBox *, gpointer data) {
@@ -917,6 +997,34 @@ static void on_transfer_zmodem_autostart_changed(GtkComboBox *,
                                                  gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_transfer_zmodem_autostart_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_log_enabled_toggled(GtkToggleButton *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  update_log_enabled_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_log_base_directory_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  update_log_base_directory_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_log_file_name_format_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_log_file_name_format_from_widget(state);
+  update_action_sensitivity(state);
+  notify_changed(state);
+}
+
+static void on_log_mode_changed(GtkComboBox *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  update_log_mode_from_widget(state);
   notify_changed(state);
 }
 
@@ -1198,6 +1306,51 @@ static GtkWidget *create_transfer_page(SettingsWidgetState *state) {
   return page;
 }
 
+static GtkWidget *create_logging_page(SettingsWidgetState *state) {
+  GtkWidget *page = create_page_grid("settings_logging_page");
+  const TerminalLogSettings settings =
+      terminal_log_settings(state->draft_store);
+
+  state->log_enabled_check = gtk_check_button_new_with_label("enabled");
+  assign_accessible_id(state->log_enabled_check,
+                       "settings_log_enabled_check");
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->log_enabled_check),
+                               settings.enabled ? TRUE : FALSE);
+  g_signal_connect(state->log_enabled_check, "toggled",
+                   G_CALLBACK(on_log_enabled_toggled), state);
+  attach_row(page, 0, "enabled", state->log_enabled_check);
+
+  state->log_base_directory_entry = gtk_entry_new();
+  assign_accessible_id(state->log_base_directory_entry,
+                       "settings_log_base_directory_entry");
+  gtk_entry_set_text(GTK_ENTRY(state->log_base_directory_entry),
+                     settings.base_directory.c_str());
+  g_signal_connect(state->log_base_directory_entry, "changed",
+                   G_CALLBACK(on_log_base_directory_changed), state);
+  attach_row(page, 1, "base_directory", state->log_base_directory_entry);
+
+  state->log_file_name_format_entry = gtk_entry_new();
+  assign_accessible_id(state->log_file_name_format_entry,
+                       "settings_log_file_name_format_entry");
+  gtk_entry_set_text(GTK_ENTRY(state->log_file_name_format_entry),
+                     settings.file_name_format.c_str());
+  g_signal_connect(state->log_file_name_format_entry, "changed",
+                   G_CALLBACK(on_log_file_name_format_changed), state);
+  attach_row(page, 2, "file_name_format",
+             state->log_file_name_format_entry);
+
+  state->log_mode_combo = create_combo_box("settings_log_mode_combo");
+  append_combo_option(state->log_mode_combo, terminal_log_raw, "Raw");
+  append_combo_option(state->log_mode_combo, terminal_log_cooked, "Cooked");
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->log_mode_combo),
+                              terminal_log_mode_to_string(settings.mode));
+  g_signal_connect(state->log_mode_combo, "changed",
+                   G_CALLBACK(on_log_mode_changed), state);
+  attach_row(page, 3, "mode", state->log_mode_combo);
+
+  return page;
+}
+
 static GtkWidget *create_button_box(SettingsWidgetState *state) {
   GtkWidget *button_box = gtk_button_box_new(GTK_ORIENTATION_HORIZONTAL);
   assign_accessible_id(button_box, "settings_action_row");
@@ -1297,6 +1450,11 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
                            create_tab_button(state, transfer_page, "Transfer",
                                              "settings_transfer_tab"));
 
+  GtkWidget *logging_page = create_logging_page(state);
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), logging_page,
+                           create_tab_button(state, logging_page, "Logging",
+                                             "settings_logging_tab"));
+
   if (state->show_actions) {
     gtk_box_pack_start(GTK_BOX(state->root), create_button_box(state), FALSE,
                        FALSE, 0);
@@ -1331,7 +1489,7 @@ bool settings_widget_is_dirty(const SettingsWidgetState *state) {
 }
 
 bool settings_widget_is_valid(const SettingsWidgetState *state) {
-  return state != nullptr && terminal_inputs_valid(state);
+  return state != nullptr && settings_inputs_valid(state);
 }
 
 GtkWidget *settings_widget_root(SettingsWidgetState *state) {

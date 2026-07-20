@@ -8,6 +8,7 @@
 
 #include <elder-terms/settings/general-settings.h>
 #include <elder-terms/settings/local-session-settings.h>
+#include <elder-terms/settings/log-settings.h>
 #include <elder-terms/settings/serial-settings.h>
 #include <elder-terms/settings/settings-store.h>
 #include <elder-terms/settings/telnet-settings.h>

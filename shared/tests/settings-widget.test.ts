@@ -36,6 +36,10 @@ interface AppliedStore {
   readonly cursor_key_mode: string;
   readonly encoding: string;
   readonly height: string;
+  readonly log_base_directory: string;
+  readonly log_enabled: string;
+  readonly log_file_name_format: string;
+  readonly log_mode: string;
   readonly telnet_address: string;
   readonly telnet_port: string;
   readonly serial_baudrate: string;
@@ -100,6 +104,13 @@ const showTransferPage = async (app: GtkApp): Promise<void> => {
   await waitForResult(async () => {
     const basePath = await app.getById('settings_transfer_base_path_entry');
     expect((await basePath.info()).states).toContain('showing');
+  });
+};
+
+const showLoggingPage = async (app: GtkApp): Promise<void> => {
+  await waitForResult(async () => {
+    const enabled = await app.getById('settings_log_enabled_check');
+    expect((await enabled.info()).states).toContain('showing');
   });
 };
 
@@ -405,6 +416,47 @@ describe.concurrent('shared settings widget', () => {
     }
   });
 
+  it('matches the default Logging visual fixture', async (context) => {
+    const testCase: SettingVisualCase = {
+      args: ['--page=logging'],
+      assert: async (app) => {
+        expect(
+          await expectElementKind(
+            await app.getById('settings_log_enabled_check'),
+            'checkbox'
+          ).isChecked()
+        ).toBe(false);
+        expect(
+          await expectElementKind(
+            await app.getById('settings_log_base_directory_entry'),
+            'entry'
+          ).text()
+        ).toBe('.');
+        expect(
+          await expectElementKind(
+            await app.getById('settings_log_file_name_format_entry'),
+            'entry'
+          ).text()
+        ).toBe('{YYYYMMDD}_{hhmmss}_{fff}.txt');
+        await expectSelectedComboValue(app, 'settings_log_mode_combo', 'Raw');
+      },
+      differsFrom: undefined,
+      fixtureName: 'settings-widget-logging-page-default',
+      pageId: 'settings_logging_page',
+      prepare: showLoggingPage,
+    };
+
+    await runSharedGtkTest(
+      context,
+      testCase.args,
+      async ({ app, directory }) => {
+        await testCase.prepare(app);
+        await testCase.assert(app);
+        await expectPageVisualFixture(app, testCase, directory);
+      }
+    );
+  });
+
   it('matches TELNET visual fixtures for each TELNET setting and runtime state', async (context) => {
     const cases: readonly SettingVisualCase[] = [
       {
@@ -675,6 +727,73 @@ describe.concurrent('shared settings widget', () => {
           'file:///tmp/elder-terms-downloads'
         );
         expect(store.zmodem_autostart).toBe('enabled');
+      }
+    );
+  });
+
+  it('shows Logging controls, validates the format, and applies edits', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=logging',
+        '--log-enabled=true',
+        '--log-base-directory=/tmp/elder-terms-log',
+        '--log-file-name-format={YYYYMMDD}/{hhmmss}_{fff}.txt',
+        '--log-mode=cooked',
+        '--save',
+      ],
+      async ({ app }) => {
+        await showLoggingPage(app);
+
+        const enabled = expectElementKind(
+          await app.getById('settings_log_enabled_check'),
+          'checkbox'
+        );
+        const baseDirectory = expectElementKind(
+          await app.getById('settings_log_base_directory_entry'),
+          'entry'
+        );
+        const fileNameFormat = expectElementKind(
+          await app.getById('settings_log_file_name_format_entry'),
+          'entry'
+        );
+        const mode = expectElementKind(
+          await app.getById('settings_log_mode_combo'),
+          'comboBox'
+        );
+        const apply = await app.getById('settings_apply_button');
+        const save = await app.getById('settings_save_button');
+
+        expect(await enabled.isChecked()).toBe(true);
+        expect(await baseDirectory.text()).toBe('/tmp/elder-terms-log');
+        expect(await fileNameFormat.text()).toBe(
+          '{YYYYMMDD}/{hhmmss}_{fff}.txt'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_log_mode_combo',
+          'Cooked'
+        );
+
+        await fileNameFormat.setText('../outside.log');
+        await waitForChangedState(app, 'CHANGED dirty=true valid=false');
+        await expectInsensitive(apply);
+        await expectInsensitive(save);
+
+        await fileNameFormat.setText('{YYYYMMDD}/session.txt');
+        await baseDirectory.setText('/tmp/elder-terms-updated-log');
+        await enabled.toggle();
+        await mode.selectChildAt(0);
+        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
+        await expectSensitive(apply);
+        await expectSensitive(save);
+        await expectElementKind(apply, 'button').click();
+
+        const store = await waitForAppliedStore(app);
+        expect(store.log_enabled).toBe('false');
+        expect(store.log_base_directory).toBe('/tmp/elder-terms-updated-log');
+        expect(store.log_file_name_format).toBe('{YYYYMMDD}/session.txt');
+        expect(store.log_mode).toBe('raw');
       }
     );
   });

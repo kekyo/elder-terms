@@ -24,6 +24,14 @@ using elder_terms::key_binding_matches;
 using elder_terms::parse_key_binding;
 using elder_terms::load_settings;
 using elder_terms::LocalShellConnectionSettings;
+using elder_terms::terminal_log_base_directory_setting_key;
+using elder_terms::terminal_log_enabled_setting_key;
+using elder_terms::terminal_log_file_name_format_is_valid;
+using elder_terms::terminal_log_file_name_format_setting_key;
+using elder_terms::TerminalLogMode;
+using elder_terms::TerminalLogSettings;
+using elder_terms::terminal_log_mode_setting_key;
+using elder_terms::terminal_log_settings;
 using elder_terms::save_settings;
 using elder_terms::SerialCarrierDetect;
 using elder_terms::SerialConnectionSettings;
@@ -140,6 +148,16 @@ static void test_default_settings() {
               "default transfer base path should be empty");
   expect_true(!transfer_zmodem_autostart(store),
               "default local transfer ZMODEM auto-start should be disabled");
+  const TerminalLogSettings log = terminal_log_settings(store);
+  expect_true(!log.enabled,
+              "terminal logging should be disabled by default");
+  expect_true(log.base_directory == ".",
+              "default terminal log base directory should be current directory");
+  expect_true(log.file_name_format ==
+                  "{YYYYMMDD}_{hhmmss}_{fff}.txt",
+              "default terminal log file name format should include milliseconds");
+  expect_true(log.mode == TerminalLogMode::raw,
+              "default terminal log mode should preserve raw bytes");
 
   const TerminalConnectionProfile profile = terminal_connection_profile(store);
   expect_true(profile.kind == TerminalConnectionKind::local_shell,
@@ -155,6 +173,86 @@ static void test_default_settings() {
   expect_true(profile.text_settings.cursor_key_mode ==
                   TerminalCursorKeyMode::normal,
               "default local cursor keys should use normal sequences");
+}
+
+static void test_terminal_log_settings() {
+  const std::filesystem::path path = temporary_config_path("terminal-log");
+  write_config(path,
+               "[log]\n"
+               "enabled=true\n"
+               "base_directory=/tmp/elder-terms-logs\n"
+               "file_name_format={YYYYMMDD}/{hhmmss}_{fff}.txt\n"
+               "mode=cooked\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  const TerminalLogSettings settings = terminal_log_settings(result.store);
+  expect_true(settings.enabled,
+              "configured terminal logging should be enabled");
+  expect_true(settings.base_directory == "/tmp/elder-terms-logs",
+              "terminal log base directory should come from configuration");
+  expect_true(settings.file_name_format ==
+                  "{YYYYMMDD}/{hhmmss}_{fff}.txt",
+              "terminal log file name format should come from configuration");
+  expect_true(settings.mode == TerminalLogMode::cooked,
+              "configured cooked terminal log mode should be retained");
+}
+
+static void test_terminal_log_file_name_format_validation() {
+  std::string reason;
+  expect_true(terminal_log_file_name_format_is_valid(
+                  "{YYYYMMDD}/{hhmmss}_{fff}.txt", &reason),
+              "nested terminal log file name format should be valid");
+  expect_true(terminal_log_file_name_format_is_valid("session.log", &reason),
+              "literal terminal log file name should be valid");
+  expect_true(!terminal_log_file_name_format_is_valid("/tmp/session.log",
+                                                       &reason),
+              "absolute terminal log file name format should be invalid");
+  expect_true(!terminal_log_file_name_format_is_valid("../session.log",
+                                                       &reason),
+              "parent traversal in terminal log format should be invalid");
+  expect_true(!terminal_log_file_name_format_is_valid("{unknown}.log",
+                                                       &reason),
+              "unknown terminal log placeholder should be invalid");
+  expect_true(!terminal_log_file_name_format_is_valid("{YYYYMMDD}/", &reason),
+              "terminal log format ending in a directory should be invalid");
+}
+
+static void test_invalid_terminal_log_values_fall_back_to_defaults() {
+  const std::filesystem::path path =
+      temporary_config_path("invalid-terminal-log");
+  write_config(path,
+               "[log]\n"
+               "file_name_format=../{YYYYMMDD}.txt\n"
+               "mode=formatted\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  const TerminalLogSettings settings = terminal_log_settings(result.store);
+  expect_true(settings.file_name_format ==
+                  "{YYYYMMDD}_{hhmmss}_{fff}.txt",
+              "invalid terminal log format should use the default");
+  expect_true(settings.mode == TerminalLogMode::raw,
+              "invalid terminal log mode should use raw mode");
+  expect_true(warnings_contain(
+                  result.warnings,
+                  "invalid configuration value [log] file_name_format"),
+              "invalid terminal log format should emit a warning");
+  expect_true(warnings_contain(result.warnings,
+                               "invalid configuration value [log] mode"),
+              "invalid terminal log mode should emit a warning");
 }
 
 static void test_terminal_text_defaults_follow_connection_type() {
@@ -736,6 +834,55 @@ static void test_public_setting_keys() {
   expect_true(transfer_zmodem_autostart_setting_key().name ==
                   "zmodem_autostart",
               "transfer zmodem_autostart key should use the requested name");
+  expect_true(terminal_log_enabled_setting_key().section == "log" &&
+                  terminal_log_enabled_setting_key().name == "enabled",
+              "terminal log enabled key should use [log] enabled");
+  expect_true(terminal_log_base_directory_setting_key().section == "log" &&
+                  terminal_log_base_directory_setting_key().name ==
+                      "base_directory",
+              "terminal log base directory key should use [log] base_directory");
+  expect_true(terminal_log_file_name_format_setting_key().section == "log" &&
+                  terminal_log_file_name_format_setting_key().name ==
+                      "file_name_format",
+              "terminal log format key should use [log] file_name_format");
+  expect_true(terminal_log_mode_setting_key().section == "log" &&
+                  terminal_log_mode_setting_key().name == "mode",
+              "terminal log mode key should use [log] mode");
+}
+
+static void test_save_terminal_log_settings() {
+  const std::filesystem::path path =
+      temporary_config_path("save-terminal-log");
+  SettingsStore store =
+      create_default_settings(default_terminal_display_settings(1.0));
+  set_setting_value(&store, terminal_log_enabled_setting_key(),
+                    elder_terms::SettingValue{true});
+  set_setting_value(
+      &store, terminal_log_base_directory_setting_key(),
+      elder_terms::SettingValue{std::string("/var/log/elder-terms")});
+  set_setting_value(
+      &store, terminal_log_file_name_format_setting_key(),
+      elder_terms::SettingValue{std::string("{YYYYMMDD}/session.txt")});
+  set_setting_value(&store, terminal_log_mode_setting_key(),
+                    elder_terms::SettingValue{std::string("cooked")});
+
+  const SettingsSaveResult result = save_settings(store, path);
+  expect_true(result.saved, "terminal log settings save should succeed");
+  const std::string content = read_config(path);
+  remove_config(path);
+
+  expect_true(content.find("[log]") != std::string::npos,
+              "saved settings should include non-default log section");
+  expect_true(content.find("enabled=true") != std::string::npos,
+              "saved settings should include enabled terminal logging");
+  expect_true(content.find("base_directory=/var/log/elder-terms") !=
+                  std::string::npos,
+              "saved settings should include terminal log base directory");
+  expect_true(content.find("file_name_format={YYYYMMDD}/session.txt") !=
+                  std::string::npos,
+              "saved settings should include terminal log file name format");
+  expect_true(content.find("mode=cooked") != std::string::npos,
+              "saved settings should include cooked terminal log mode");
 }
 
 static void test_save_settings_omits_default_values() {
@@ -978,6 +1125,8 @@ int main() {
     elder_terms_settings_test::test_terminal_text_defaults_follow_connection_type();
     elder_terms_settings_test::test_terminal_text_explicit_settings_override_connection_defaults();
     elder_terms_settings_test::test_terminal_encoding_choices_are_supported();
+    elder_terms_settings_test::test_terminal_log_settings();
+    elder_terms_settings_test::test_terminal_log_file_name_format_validation();
     elder_terms_settings_test::test_key_binding_parser_uses_exact_modifiers();
     elder_terms_settings_test::test_terminal_key_binding_configuration();
     elder_terms_settings_test::test_telnet_profile();
@@ -986,12 +1135,14 @@ int main() {
     elder_terms_settings_test::test_transfer_zmodem_autostart_setting();
     elder_terms_settings_test::test_invalid_values_fall_back_to_defaults();
     elder_terms_settings_test::test_invalid_terminal_text_values_fall_back_to_type_defaults();
+    elder_terms_settings_test::test_invalid_terminal_log_values_fall_back_to_defaults();
     elder_terms_settings_test::test_invalid_serial_values_fall_back_to_defaults();
     elder_terms_settings_test::test_public_setting_keys();
     elder_terms_settings_test::test_save_settings_omits_default_values();
     elder_terms_settings_test::test_save_serial_settings_omits_default_values();
     elder_terms_settings_test::test_save_explicit_zmodem_autostart();
     elder_terms_settings_test::test_save_explicit_terminal_text_defaults();
+    elder_terms_settings_test::test_save_terminal_log_settings();
     elder_terms_settings_test::test_save_settings_writes_empty_file_for_defaults();
     elder_terms_settings_test::test_load_settings_reports_file_read_status();
   } catch (const std::exception &error) {
