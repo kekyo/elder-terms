@@ -227,18 +227,19 @@ const openTerminalContextMenu = async (
 const selectTerminalCells = async (
   app: GtkApp,
   bounds: GtkCapture['bounds'],
-  cellCount: number
+  cellCount: number,
+  row: number
 ): Promise<void> => {
   const cellWidth = bounds.width / defaultColumns;
   const cellHeight = bounds.height / defaultRows;
   await app.input.moveMouseTo(
     Math.trunc(bounds.x + cellWidth / 4),
-    Math.trunc(bounds.y + cellHeight / 2)
+    Math.trunc(bounds.y + cellHeight * (row + 0.5))
   );
   await app.input.setMouseButton('left', true);
   await app.input.moveMouseTo(
     Math.trunc(bounds.x + cellWidth * (cellCount - 0.25)),
-    Math.trunc(bounds.y + cellHeight / 2)
+    Math.trunc(bounds.y + cellHeight * (row + 0.5))
   );
   await app.input.setMouseButton('left', false);
 };
@@ -529,7 +530,7 @@ describe.concurrent('elder-terms-vte main window', () => {
       await waitForResult(async () => {
         expect((await copyItem.info()).states).not.toContain('showing');
       });
-      await selectTerminalCells(app, bounds, 5);
+      await selectTerminalCells(app, bounds, 5, 0);
 
       await openTerminalContextMenu(
         app,
@@ -558,7 +559,7 @@ describe.concurrent('elder-terms-vte main window', () => {
       await execFileAsync('mkfifo', [releasePath]);
       await writeFile(
         shellPath,
-        `#!/bin/sh\nprintf READ_ONLY_COPY\nprintf ready > ${shellQuote(readyPath)}\nIFS= read -r release < ${shellQuote(releasePath)}\nprintf exited > ${shellQuote(markerPath)}\nexit 0\n`,
+        `#!/bin/sh\nline=0\nwhile [ "$line" -lt 40 ]; do\n  printf 'SCROLL_LINE_%02d\\n' "$line"\n  line=$((line + 1))\ndone\nprintf READ_ONLY_COPY\nprintf ready > ${shellQuote(readyPath)}\nIFS= read -r release < ${shellQuote(releasePath)}\nprintf exited > ${shellQuote(markerPath)}\nexit 0\n`,
         'utf8'
       );
       await chmod(shellPath, 0o755);
@@ -573,31 +574,17 @@ describe.concurrent('elder-terms-vte main window', () => {
           });
           await waitForActivityIndicatorImageState(app, 'conn', 'on');
 
+          const terminalScrollbar = expectElementKind(
+            await app.getById('terminal_scrollbar'),
+            'scrollbar'
+          );
+          await waitForResult(async () => {
+            expect(await terminalScrollbar.value()).toBeGreaterThan(0);
+          });
           const layout = await waitForResult(async () =>
             readTerminalGridLayout(app)
           );
           const { bounds } = layout.terminalCapture;
-          await selectTerminalCells(app, bounds, 'READ_ONLY_COPY'.length);
-          await openTerminalContextMenu(
-            app,
-            bounds.x + (bounds.width / defaultColumns) * 15.5,
-            bounds.y + bounds.height / defaultRows / 2
-          );
-          const copyItem = await waitForResult(async () => {
-            const item = expectElementKind(
-              await app.getById('terminal_context_copy_item'),
-              'menuItem'
-            );
-            const info = await item.info();
-            expect(info.states).toContain('showing');
-            expect(info.states).toContain('enabled');
-            expect(info.states).toContain('sensitive');
-            return item;
-          });
-          await app.input.pressKey('Escape');
-          await waitForResult(async () => {
-            expect((await copyItem.info()).states).not.toContain('showing');
-          });
 
           await writeFile(releasePath, 'exit\n', 'utf8');
           await waitForResult(async () => {
@@ -610,20 +597,42 @@ describe.concurrent('elder-terms-vte main window', () => {
             ).toContain('showing');
           });
 
+          await selectTerminalCells(
+            app,
+            bounds,
+            'READ_ONLY_COPY'.length,
+            defaultRows - 1
+          );
           await openTerminalContextMenu(
             app,
             bounds.x + (bounds.width / defaultColumns) * 15.5,
-            bounds.y + bounds.height / defaultRows / 2
+            bounds.y + (bounds.height / defaultRows) * (defaultRows - 0.5)
           );
-          await waitForResult(async () => {
-            const info = await copyItem.info();
+          const copyItem = await waitForResult(async () => {
+            const item = expectElementKind(
+              await app.getById('terminal_context_copy_item'),
+              'menuItem'
+            );
+            const info = await item.info();
             expect(info.states).toContain('showing');
             expect(info.states).toContain('enabled');
             expect(info.states).toContain('sensitive');
+            return item;
           });
           await copyItem.click();
-
           expect(await readClipboardText(app)).toBe('READ_ONLY_COPY');
+
+          const initialScrollValue = await terminalScrollbar.value();
+          await app.input.moveMouseTo(
+            Math.trunc(bounds.x + bounds.width / 2),
+            Math.trunc(bounds.y + bounds.height / 2)
+          );
+          await app.input.scrollWheel(0, -5);
+          await waitForResult(async () => {
+            const scrollValue = await terminalScrollbar.value();
+            expect(scrollValue).toBeLessThan(initialScrollValue);
+            return scrollValue;
+          });
         },
         {
           env: {
