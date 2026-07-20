@@ -1,7 +1,9 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 import type { GtkApp, GtkCapture, GtkToggleButtonElement } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
@@ -14,9 +16,16 @@ import { expectElementKind } from './test-helpers';
 import {
   defaultColumns,
   defaultRows,
+  expectFixtureVteGridSize,
+  readTerminalGridLayout,
   runGtkTest,
   withTemporaryDirectory,
 } from './gtk-test-helpers';
+
+const execFileAsync = promisify(execFile);
+const clipboardReadHelperPath = fileURLToPath(
+  new URL('../../.build/elder-terms-vte/clipboard-read-helper', import.meta.url)
+);
 
 const transferMenuItems = [
   ['transfer_zmodem_send_item', 'ZMODEM (send)'],
@@ -32,6 +41,9 @@ const transferMenuItems = [
 
 const transferDialogProbePrefix =
   'ELDER_TERMS_TRANSFER_DIALOG_CURRENT_FOLDER_URI=';
+
+const shellQuote = (value: string): string =>
+  `'${value.split("'").join("'\\''")}'`;
 
 const listenOnLocalhost = async (server: Server): Promise<number> =>
   new Promise<number>((resolve, reject) => {
@@ -201,6 +213,43 @@ const waitForTransferDialogFolderUri = async (
       timeoutMs: 5_000,
     }
   );
+
+const openTerminalContextMenu = async (
+  app: GtkApp,
+  x: number,
+  y: number
+): Promise<void> => {
+  await app.input.moveMouseTo(Math.trunc(x), Math.trunc(y));
+  await app.input.setMouseButton('right', true);
+  await app.input.setMouseButton('right', false);
+};
+
+const selectTerminalCells = async (
+  app: GtkApp,
+  bounds: GtkCapture['bounds'],
+  cellCount: number
+): Promise<void> => {
+  const cellWidth = bounds.width / defaultColumns;
+  const cellHeight = bounds.height / defaultRows;
+  await app.input.moveMouseTo(
+    Math.trunc(bounds.x + cellWidth / 4),
+    Math.trunc(bounds.y + cellHeight / 2)
+  );
+  await app.input.setMouseButton('left', true);
+  await app.input.moveMouseTo(
+    Math.trunc(bounds.x + cellWidth * (cellCount - 0.25)),
+    Math.trunc(bounds.y + cellHeight / 2)
+  );
+  await app.input.setMouseButton('left', false);
+};
+
+const readClipboardText = async (app: GtkApp): Promise<string> => {
+  const result = await execFileAsync(clipboardReadHelperPath, [], {
+    encoding: 'utf8',
+    env: await app.environment(),
+  });
+  return result.stdout.toString();
+};
 
 describe.concurrent('elder-terms-vte main window', () => {
   it('shows a terminal layout constrained to whole VTE cells', async (context) => {
@@ -443,6 +492,117 @@ describe.concurrent('elder-terms-vte main window', () => {
       await runGtkTest(context, ['-c', configPath], async (app) => {
         await expectTransferButtonVisibleLeftOfSettings(app);
       });
+    });
+  });
+
+  it('copies selected terminal text from the right-click menu', async (context) => {
+    await runGtkTest(context, ['--test-fixture'], async (app) => {
+      const layout = await waitForResult(async () =>
+        readTerminalGridLayout(app)
+      );
+      await waitForResult(async () =>
+        expectFixtureVteGridSize(app, defaultColumns, defaultRows)
+      );
+      const { bounds } = layout.terminalCapture;
+      const cellWidth = bounds.width / defaultColumns;
+      const cellHeight = bounds.height / defaultRows;
+
+      await openTerminalContextMenu(
+        app,
+        bounds.x + cellWidth / 2,
+        bounds.y + cellHeight / 2
+      );
+      const copyItem = await waitForResult(async () => {
+        const item = expectElementKind(
+          await app.getById('terminal_context_copy_item'),
+          'menuItem'
+        );
+        const info = await item.info();
+        expect(info.name).toBe('Copy');
+        expect(info.states).toContain('showing');
+        expect(info.states).not.toContain('enabled');
+        expect(info.states).not.toContain('sensitive');
+        return item;
+      });
+
+      await app.input.pressKey('Escape');
+      await selectTerminalCells(app, bounds, 5);
+
+      await openTerminalContextMenu(
+        app,
+        bounds.x + cellWidth * 6.5,
+        bounds.y + cellHeight / 2
+      );
+      await waitForResult(async () => {
+        const info = await copyItem.info();
+        expect(info.states).toContain('showing');
+        expect(info.states).toContain('enabled');
+        expect(info.states).toContain('sensitive');
+      });
+      await copyItem.click();
+
+      expect(await readClipboardText(app)).toBe('!\"#$%');
+    });
+  });
+
+  it('copies selected terminal text while the VTE is read-only', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const markerPath = join(directory, 'read-only-shell-exited.txt');
+      const shellPath = join(directory, 'read-only-shell.sh');
+      const configPath = join(directory, 'read-only-terminal.ini');
+      await writeFile(
+        shellPath,
+        `#!/bin/sh\nprintf READ_ONLY_COPY\nprintf exited > ${shellQuote(markerPath)}\nexit 0\n`,
+        'utf8'
+      );
+      await chmod(shellPath, 0o755);
+      await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
+
+      await runGtkTest(
+        context,
+        ['-c', configPath],
+        async (app) => {
+          await waitForResult(async () => {
+            expect(await readFile(markerPath, 'utf8')).toBe('exited');
+          });
+          await waitForActivityIndicatorImageState(app, 'conn', 'off');
+          await waitForResult(async () => {
+            expect(
+              (await (await app.getById('disconnected_notice')).info()).states
+            ).toContain('showing');
+          });
+
+          const layout = await waitForResult(async () =>
+            readTerminalGridLayout(app)
+          );
+          const { bounds } = layout.terminalCapture;
+          await selectTerminalCells(app, bounds, 'READ_ONLY_COPY'.length);
+          await openTerminalContextMenu(
+            app,
+            bounds.x + (bounds.width / defaultColumns) * 15.5,
+            bounds.y + bounds.height / defaultRows / 2
+          );
+          const copyItem = await waitForResult(async () => {
+            const item = expectElementKind(
+              await app.getById('terminal_context_copy_item'),
+              'menuItem'
+            );
+            const info = await item.info();
+            expect(info.states).toContain('showing');
+            expect(info.states).toContain('enabled');
+            expect(info.states).toContain('sensitive');
+            return item;
+          });
+          await copyItem.click();
+
+          expect(await readClipboardText(app)).toBe('READ_ONLY_COPY');
+        },
+        {
+          env: {
+            SHELL: shellPath,
+          },
+        }
+      );
     });
   });
 

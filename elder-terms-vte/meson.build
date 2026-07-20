@@ -84,6 +84,12 @@ executable(
   ],
 )
 
+executable(
+  'clipboard-read-helper',
+  'tests/cpp/clipboard-read-helper.cpp',
+  dependencies: [gtk_dep],
+)
+
 telnet_protocol_test = executable(
   'telnet-protocol-test',
   [
