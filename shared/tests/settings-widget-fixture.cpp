@@ -23,6 +23,9 @@ struct FixtureOptions {
   glong height = 24;
   gdouble zoom = 1.0;
   bool auto_close = true;
+  std::string encoding = "default";
+  std::string backspace_code = "default";
+  std::string cursor_key_mode = "default";
   std::string zoom_in_key = "ctrl+plus";
   std::string zoom_out_key = "ctrl+minus";
   std::string page = "general";
@@ -77,6 +80,12 @@ static FixtureOptions parse_options(int argc, char **argv) {
       options.zoom = std::stod(option_value(argument, "--zoom="));
     } else if (starts_with(argument, "--auto-close=")) {
       options.auto_close = parse_bool(option_value(argument, "--auto-close="));
+    } else if (starts_with(argument, "--encoding=")) {
+      options.encoding = option_value(argument, "--encoding=");
+    } else if (starts_with(argument, "--backspace-code=")) {
+      options.backspace_code = option_value(argument, "--backspace-code=");
+    } else if (starts_with(argument, "--cursor-key-mode=")) {
+      options.cursor_key_mode = option_value(argument, "--cursor-key-mode=");
     } else if (starts_with(argument, "--zoom-in-key=")) {
       options.zoom_in_key = option_value(argument, "--zoom-in-key=");
     } else if (starts_with(argument, "--zoom-out-key=")) {
@@ -155,6 +164,21 @@ static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
   elder_terms::set_setting_value(
       &store, elder_terms::terminal_auto_close_setting_key(),
       elder_terms::SettingValue{options.auto_close});
+  if (options.encoding != "default") {
+    elder_terms::set_explicit_setting_value(
+        &store, elder_terms::terminal_encoding_setting_key(),
+        elder_terms::SettingValue{options.encoding});
+  }
+  if (options.backspace_code != "default") {
+    elder_terms::set_explicit_setting_value(
+        &store, elder_terms::terminal_backspace_code_setting_key(),
+        elder_terms::SettingValue{options.backspace_code});
+  }
+  if (options.cursor_key_mode != "default") {
+    elder_terms::set_explicit_setting_value(
+        &store, elder_terms::terminal_cursor_key_mode_setting_key(),
+        elder_terms::SettingValue{options.cursor_key_mode});
+  }
   elder_terms::set_setting_value(
       &store, elder_terms::terminal_zoom_in_key_setting_key(),
       elder_terms::SettingValue{options.zoom_in_key});
@@ -284,6 +308,13 @@ static void print_store(const char *prefix,
   std::cout << prefix << " type=" << connection_type_name(profile)
             << " width=" << display.width << " height=" << display.height
             << " zoom=" << display.zoom
+            << " encoding=" << profile.text_settings.encoding
+            << " backspace_code="
+            << elder_terms::terminal_backspace_code_to_string(
+                   profile.text_settings.backspace_code)
+            << " cursor_key_mode="
+            << elder_terms::terminal_cursor_key_mode_to_string(
+                   profile.text_settings.cursor_key_mode)
             << " auto_close="
             << (elder_terms::terminal_auto_close(store) ? "true" : "false")
             << " zoom_in_key="

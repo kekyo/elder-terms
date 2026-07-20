@@ -1,6 +1,7 @@
 #include <elder-terms/settings-widget.h>
 
 #include <algorithm>
+#include <cctype>
 #include <string>
 #include <utility>
 #include <vector>
@@ -18,6 +19,11 @@ static constexpr char serial_connection_type[] = "serial";
 static constexpr char zmodem_autostart_default[] = "default";
 static constexpr char zmodem_autostart_enabled[] = "enabled";
 static constexpr char zmodem_autostart_disabled[] = "disabled";
+static constexpr char terminal_text_default[] = "default";
+static constexpr char terminal_backspace_bs[] = "bs";
+static constexpr char terminal_backspace_del[] = "del";
+static constexpr char terminal_cursor_normal[] = "normal";
+static constexpr char terminal_cursor_adm3[] = "adm3";
 
 struct ConnectionSettingsPage {
   const char *connection_type = nullptr;
@@ -39,6 +45,11 @@ struct SettingsWidgetState {
   GtkWidget *terminal_height_spin = nullptr;
   GtkWidget *terminal_zoom_spin = nullptr;
   GtkWidget *terminal_auto_close_check = nullptr;
+  GtkWidget *terminal_encoding_combo = nullptr;
+  GtkWidget *terminal_encoding_entry = nullptr;
+  GtkWidget *terminal_backspace_code_combo = nullptr;
+  GtkWidget *terminal_cursor_key_mode_combo = nullptr;
+  bool terminal_encoding_valid = true;
   KeyBindingInputWidgetState *terminal_zoom_in_key_input = nullptr;
   KeyBindingInputWidgetState *terminal_zoom_out_key_input = nullptr;
   GtkWidget *telnet_address_entry = nullptr;
@@ -119,6 +130,19 @@ static GtkWidget *create_combo_box(const char *id) {
   return combo;
 }
 
+static GtkWidget *create_editable_combo_box(const char *combo_id,
+                                            const char *entry_id,
+                                            GtkWidget **entry) {
+  GtkWidget *combo = gtk_combo_box_text_new_with_entry();
+  assign_accessible_id(combo, combo_id);
+  GtkWidget *child = gtk_bin_get_child(GTK_BIN(combo));
+  if (child != nullptr) {
+    assign_accessible_id(child, entry_id);
+  }
+  *entry = child;
+  return combo;
+}
+
 static void append_combo_option(GtkWidget *combo, const char *id,
                                 const char *label) {
   gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo), id, label);
@@ -135,6 +159,42 @@ static std::string connection_type_value(const SettingsStore &store) {
                                          local_connection_type);
 }
 
+static TerminalConnectionKind
+connection_kind_value(const SettingsStore &store) {
+  const std::string type = connection_type_value(store);
+  if (type == telnet_connection_type) {
+    return TerminalConnectionKind::telnet;
+  }
+  if (type == serial_connection_type) {
+    return TerminalConnectionKind::serial;
+  }
+  return TerminalConnectionKind::local_shell;
+}
+
+static std::string trim_ascii_whitespace(const std::string &value) {
+  const auto first = std::find_if_not(
+      value.begin(), value.end(),
+      [](unsigned char character) { return std::isspace(character) != 0; });
+  const auto last = std::find_if_not(
+                        value.rbegin(), value.rend(),
+                        [](unsigned char character) {
+                          return std::isspace(character) != 0;
+                        })
+                        .base();
+  if (first >= last) {
+    return {};
+  }
+  return std::string(first, last);
+}
+
+static std::string lower_ascii(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char character) {
+                   return static_cast<char>(std::tolower(character));
+                 });
+  return value;
+}
+
 static const char *zmodem_autostart_choice_id(const SettingsStore &store) {
   const bool configured = setting_boolean_value_or_default(
       store, transfer_zmodem_autostart_setting_key(), false);
@@ -144,6 +204,136 @@ static const char *zmodem_autostart_choice_id(const SettingsStore &store) {
     return zmodem_autostart_default;
   }
   return configured ? zmodem_autostart_enabled : zmodem_autostart_disabled;
+}
+
+static std::string terminal_backspace_default_label(
+    const TerminalTextSettings &defaults) {
+  return defaults.backspace_code == TerminalBackspaceCode::bs
+             ? "Default (BS)"
+             : "Default (DEL)";
+}
+
+static std::string terminal_cursor_default_label(
+    const TerminalTextSettings &defaults) {
+  return defaults.cursor_key_mode == TerminalCursorKeyMode::adm3
+             ? "Default (ADM3)"
+             : "Default (Normal)";
+}
+
+static void populate_terminal_encoding_combo(SettingsWidgetState *state,
+                                             const TerminalTextSettings &defaults) {
+  if (state->terminal_encoding_combo == nullptr) {
+    return;
+  }
+
+  gtk_combo_box_text_remove_all(
+      GTK_COMBO_BOX_TEXT(state->terminal_encoding_combo));
+  const std::string default_label = "Default (" + defaults.encoding + ")";
+  append_combo_option(state->terminal_encoding_combo, terminal_text_default,
+                      default_label.c_str());
+
+  const std::vector<std::string> choices = terminal_encoding_choices();
+  for (const std::string &choice : choices) {
+    append_combo_option(state->terminal_encoding_combo, choice.c_str(),
+                        choice.c_str());
+  }
+
+  if (!setting_has_explicit_value(state->draft_store,
+                                  terminal_encoding_setting_key())) {
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->terminal_encoding_combo),
+                                terminal_text_default);
+    return;
+  }
+
+  const std::string configured = trim_ascii_whitespace(
+      setting_string_value_or_default(state->draft_store,
+                                      terminal_encoding_setting_key(),
+                                      defaults.encoding));
+  const std::string configured_key = lower_ascii(configured);
+  const auto matching =
+      std::find_if(choices.begin(), choices.end(),
+                   [&configured_key](const std::string &choice) {
+                     return lower_ascii(choice) == configured_key;
+                   });
+  if (matching != choices.end()) {
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->terminal_encoding_combo),
+                                matching->c_str());
+    return;
+  }
+
+  append_combo_option(state->terminal_encoding_combo, configured.c_str(),
+                      configured.c_str());
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->terminal_encoding_combo),
+                              configured.c_str());
+}
+
+static void populate_terminal_special_code_combos(
+    SettingsWidgetState *state, const TerminalTextSettings &defaults) {
+  if (state->terminal_backspace_code_combo != nullptr) {
+    gtk_combo_box_text_remove_all(
+        GTK_COMBO_BOX_TEXT(state->terminal_backspace_code_combo));
+    const std::string default_label =
+        terminal_backspace_default_label(defaults);
+    append_combo_option(state->terminal_backspace_code_combo,
+                        terminal_text_default, default_label.c_str());
+    append_combo_option(state->terminal_backspace_code_combo,
+                        terminal_backspace_bs, "BS");
+    append_combo_option(state->terminal_backspace_code_combo,
+                        terminal_backspace_del, "DEL");
+    const char *active = terminal_text_default;
+    if (setting_has_explicit_value(
+            state->draft_store, terminal_backspace_code_setting_key())) {
+      active = setting_string_value_or_default(
+                   state->draft_store, terminal_backspace_code_setting_key(),
+                   terminal_backspace_code_to_string(defaults.backspace_code)) ==
+                       terminal_backspace_bs
+                   ? terminal_backspace_bs
+                   : terminal_backspace_del;
+    }
+    gtk_combo_box_set_active_id(
+        GTK_COMBO_BOX(state->terminal_backspace_code_combo), active);
+  }
+
+  if (state->terminal_cursor_key_mode_combo != nullptr) {
+    gtk_combo_box_text_remove_all(
+        GTK_COMBO_BOX_TEXT(state->terminal_cursor_key_mode_combo));
+    const std::string default_label = terminal_cursor_default_label(defaults);
+    append_combo_option(state->terminal_cursor_key_mode_combo,
+                        terminal_text_default, default_label.c_str());
+    append_combo_option(state->terminal_cursor_key_mode_combo,
+                        terminal_cursor_normal, "Normal");
+    append_combo_option(state->terminal_cursor_key_mode_combo,
+                        terminal_cursor_adm3, "ADM3");
+    const char *active = terminal_text_default;
+    if (setting_has_explicit_value(
+            state->draft_store, terminal_cursor_key_mode_setting_key())) {
+      active = setting_string_value_or_default(
+                   state->draft_store, terminal_cursor_key_mode_setting_key(),
+                   terminal_cursor_key_mode_to_string(
+                       defaults.cursor_key_mode)) == terminal_cursor_adm3
+                   ? terminal_cursor_adm3
+                   : terminal_cursor_normal;
+    }
+    gtk_combo_box_set_active_id(
+        GTK_COMBO_BOX(state->terminal_cursor_key_mode_combo), active);
+  }
+}
+
+static void sync_terminal_text_widgets(SettingsWidgetState *state) {
+  const bool previous_synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  const TerminalTextSettings defaults =
+      default_terminal_text_settings(connection_kind_value(state->draft_store));
+  populate_terminal_encoding_combo(state, defaults);
+  populate_terminal_special_code_combos(state, defaults);
+  state->terminal_encoding_valid = true;
+  if (state->terminal_encoding_entry != nullptr) {
+    gtk_entry_set_icon_from_icon_name(GTK_ENTRY(state->terminal_encoding_entry),
+                                      GTK_ENTRY_ICON_SECONDARY, nullptr);
+    gtk_entry_set_icon_tooltip_text(GTK_ENTRY(state->terminal_encoding_entry),
+                                    GTK_ENTRY_ICON_SECONDARY, nullptr);
+  }
+  state->synchronizing = previous_synchronizing;
 }
 
 static void update_connection_pages(SettingsWidgetState *state) {
@@ -196,6 +386,7 @@ static void update_general_type_from_widget(SettingsWidgetState *state) {
   set_setting_value(&state->draft_store, general_type_setting_key(),
                     SettingValue{type});
   update_connection_pages(state);
+  sync_terminal_text_widgets(state);
 }
 
 static void update_terminal_width_from_widget(SettingsWidgetState *state) {
@@ -226,6 +417,89 @@ static void update_terminal_auto_close_from_widget(
                        state->terminal_auto_close_check)) != FALSE});
 }
 
+static void set_terminal_encoding_validation(
+    SettingsWidgetState *state, bool valid, const std::string &reason) {
+  state->terminal_encoding_valid = valid;
+  if (state->terminal_encoding_entry == nullptr) {
+    return;
+  }
+  gtk_entry_set_icon_from_icon_name(
+      GTK_ENTRY(state->terminal_encoding_entry), GTK_ENTRY_ICON_SECONDARY,
+      valid ? nullptr : "dialog-error-symbolic");
+  gtk_entry_set_icon_tooltip_text(
+      GTK_ENTRY(state->terminal_encoding_entry), GTK_ENTRY_ICON_SECONDARY,
+      valid ? nullptr : reason.c_str());
+}
+
+static void update_terminal_encoding_from_widget(SettingsWidgetState *state) {
+  if (state->terminal_encoding_combo == nullptr ||
+      state->terminal_encoding_entry == nullptr) {
+    return;
+  }
+
+  const char *active_id = gtk_combo_box_get_active_id(
+      GTK_COMBO_BOX(state->terminal_encoding_combo));
+  const char *entry_text =
+      gtk_entry_get_text(GTK_ENTRY(state->terminal_encoding_entry));
+  const std::string entered = entry_text == nullptr ? "" : entry_text;
+  const TerminalTextSettings defaults =
+      default_terminal_text_settings(connection_kind_value(state->draft_store));
+  const std::string default_label = "Default (" + defaults.encoding + ")";
+  if (active_id != nullptr &&
+      std::string(active_id) == terminal_text_default &&
+      entered == default_label) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 terminal_encoding_setting_key());
+    set_terminal_encoding_validation(state, true, {});
+    return;
+  }
+
+  std::string encoding = trim_ascii_whitespace(entered);
+  if (active_id != nullptr &&
+      std::string(active_id) != terminal_text_default &&
+      entered == active_id) {
+    encoding = active_id;
+  }
+  std::string reason;
+  if (!terminal_encoding_name_is_valid(encoding, &reason)) {
+    set_terminal_encoding_validation(state, false, reason);
+    return;
+  }
+
+  set_terminal_encoding_validation(state, true, {});
+  set_explicit_setting_value(&state->draft_store,
+                             terminal_encoding_setting_key(),
+                             SettingValue{std::move(encoding)});
+}
+
+static void update_terminal_backspace_code_from_widget(
+    SettingsWidgetState *state) {
+  const std::string choice = active_combo_id(
+      state->terminal_backspace_code_combo, terminal_text_default);
+  if (choice == terminal_text_default) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 terminal_backspace_code_setting_key());
+    return;
+  }
+  set_explicit_setting_value(&state->draft_store,
+                             terminal_backspace_code_setting_key(),
+                             SettingValue{choice});
+}
+
+static void update_terminal_cursor_key_mode_from_widget(
+    SettingsWidgetState *state) {
+  const std::string choice = active_combo_id(
+      state->terminal_cursor_key_mode_combo, terminal_text_default);
+  if (choice == terminal_text_default) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 terminal_cursor_key_mode_setting_key());
+    return;
+  }
+  set_explicit_setting_value(&state->draft_store,
+                             terminal_cursor_key_mode_setting_key(),
+                             SettingValue{choice});
+}
+
 static bool terminal_key_binding_inputs_conflict(
     SettingsWidgetState *state) {
   const KeyBindingParseResult zoom_in = parse_key_binding(
@@ -245,6 +519,11 @@ static bool terminal_key_binding_inputs_valid(
              state->terminal_zoom_out_key_input);
 }
 
+static bool terminal_inputs_valid(const SettingsWidgetState *state) {
+  return state->terminal_encoding_valid &&
+         terminal_key_binding_inputs_valid(state);
+}
+
 static void notify_changed(SettingsWidgetState *state) {
   if (!state->synchronizing && state->callbacks.changed) {
     state->callbacks.changed();
@@ -252,8 +531,7 @@ static void notify_changed(SettingsWidgetState *state) {
 }
 
 static void update_action_sensitivity(SettingsWidgetState *state) {
-  const gboolean sensitive =
-      terminal_key_binding_inputs_valid(state) ? TRUE : FALSE;
+  const gboolean sensitive = terminal_inputs_valid(state) ? TRUE : FALSE;
   if (state->apply_button != nullptr) {
     gtk_widget_set_sensitive(state->apply_button, sensitive);
   }
@@ -397,6 +675,7 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
                                 connection_type_value(state->draft_store)
                                     .c_str());
   }
+  sync_terminal_text_widgets(state);
   if (state->terminal_width_spin != nullptr) {
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(state->terminal_width_spin),
                               static_cast<double>(display.width));
@@ -483,6 +762,9 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
 
 static void sync_draft_from_widgets(SettingsWidgetState *state) {
   update_general_type_from_widget(state);
+  update_terminal_encoding_from_widget(state);
+  update_terminal_backspace_code_from_widget(state);
+  update_terminal_cursor_key_mode_from_widget(state);
   update_terminal_width_from_widget(state);
   update_terminal_height_from_widget(state);
   update_terminal_zoom_from_widget(state);
@@ -529,6 +811,34 @@ static void on_terminal_zoom_changed(GtkSpinButton *, gpointer data) {
 static void on_terminal_auto_close_toggled(GtkToggleButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_terminal_auto_close_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_terminal_encoding_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_terminal_encoding_from_widget(state);
+  update_action_sensitivity(state);
+  notify_changed(state);
+}
+
+static void on_terminal_backspace_code_changed(GtkComboBox *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_terminal_backspace_code_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_terminal_cursor_key_mode_changed(GtkComboBox *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_terminal_cursor_key_mode_from_widget(state);
   notify_changed(state);
 }
 
@@ -660,13 +970,35 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   const TerminalDisplaySettings display =
       terminal_display_settings(state->draft_store);
 
+  state->terminal_encoding_combo = create_editable_combo_box(
+      "settings_terminal_encoding_combo", "settings_terminal_encoding_entry",
+      &state->terminal_encoding_entry);
+  state->terminal_backspace_code_combo =
+      create_combo_box("settings_terminal_backspace_code_combo");
+  state->terminal_cursor_key_mode_combo =
+      create_combo_box("settings_terminal_cursor_key_mode_combo");
+  sync_terminal_text_widgets(state);
+  if (state->terminal_encoding_entry != nullptr) {
+    g_signal_connect(state->terminal_encoding_entry, "changed",
+                     G_CALLBACK(on_terminal_encoding_changed), state);
+  }
+  g_signal_connect(state->terminal_backspace_code_combo, "changed",
+                   G_CALLBACK(on_terminal_backspace_code_changed), state);
+  g_signal_connect(state->terminal_cursor_key_mode_combo, "changed",
+                   G_CALLBACK(on_terminal_cursor_key_mode_changed), state);
+  attach_row(page, 0, "encoding", state->terminal_encoding_combo);
+  attach_row(page, 1, "backspace_code",
+             state->terminal_backspace_code_combo);
+  attach_row(page, 2, "cursor_key_mode",
+             state->terminal_cursor_key_mode_combo);
+
   state->terminal_width_spin =
       create_spin_button(1.0, 1000.0, 1.0, 0, "settings_terminal_width_spin");
   gtk_spin_button_set_value(GTK_SPIN_BUTTON(state->terminal_width_spin),
                             static_cast<double>(display.width));
   g_signal_connect(state->terminal_width_spin, "value-changed",
                    G_CALLBACK(on_terminal_width_changed), state);
-  attach_row(page, 0, "width", state->terminal_width_spin);
+  attach_row(page, 3, "width", state->terminal_width_spin);
 
   state->terminal_height_spin =
       create_spin_button(1.0, 1000.0, 1.0, 0, "settings_terminal_height_spin");
@@ -674,7 +1006,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                             static_cast<double>(display.height));
   g_signal_connect(state->terminal_height_spin, "value-changed",
                    G_CALLBACK(on_terminal_height_changed), state);
-  attach_row(page, 1, "height", state->terminal_height_spin);
+  attach_row(page, 4, "height", state->terminal_height_spin);
 
   state->terminal_zoom_spin =
       create_spin_button(0.1, 5.0, 0.1, 2, "settings_terminal_zoom_spin");
@@ -682,7 +1014,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                             display.zoom);
   g_signal_connect(state->terminal_zoom_spin, "value-changed",
                    G_CALLBACK(on_terminal_zoom_changed), state);
-  attach_row(page, 2, "zoom", state->terminal_zoom_spin);
+  attach_row(page, 5, "zoom", state->terminal_zoom_spin);
 
   state->terminal_auto_close_check =
       gtk_check_button_new_with_label("enabled");
@@ -693,14 +1025,14 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
       terminal_auto_close(state->draft_store) ? TRUE : FALSE);
   g_signal_connect(state->terminal_auto_close_check, "toggled",
                    G_CALLBACK(on_terminal_auto_close_toggled), state);
-  attach_row(page, 3, "auto_close", state->terminal_auto_close_check);
+  attach_row(page, 6, "auto_close", state->terminal_auto_close_check);
 
   state->terminal_zoom_in_key_input = create_key_binding_input_widget({
       .text = terminal_zoom_in_key(state->draft_store),
       .accessible_id = "settings_terminal_zoom_in_key_entry",
       .changed = [state]() { on_terminal_key_binding_changed(state); },
   });
-  attach_row(page, 4, "zoom_in_key",
+  attach_row(page, 7, "zoom_in_key",
              key_binding_input_widget_root(
                  state->terminal_zoom_in_key_input));
 
@@ -709,7 +1041,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
       .accessible_id = "settings_terminal_zoom_out_key_entry",
       .changed = [state]() { on_terminal_key_binding_changed(state); },
   });
-  attach_row(page, 5, "zoom_out_key",
+  attach_row(page, 8, "zoom_out_key",
              key_binding_input_widget_root(
                  state->terminal_zoom_out_key_input));
 
@@ -999,7 +1331,7 @@ bool settings_widget_is_dirty(const SettingsWidgetState *state) {
 }
 
 bool settings_widget_is_valid(const SettingsWidgetState *state) {
-  return state != nullptr && terminal_key_binding_inputs_valid(state);
+  return state != nullptr && terminal_inputs_valid(state);
 }
 
 GtkWidget *settings_widget_root(SettingsWidgetState *state) {

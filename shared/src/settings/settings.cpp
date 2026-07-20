@@ -1,5 +1,7 @@
 #include <elder-terms/settings.h>
 
+#include <algorithm>
+#include <cctype>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -24,6 +26,22 @@ static std::string glib_error_message(GError *error) {
 
 static std::string path_string(const std::filesystem::path &path) {
   return path.empty() ? std::string("<empty>") : path.string();
+}
+
+static std::string trim_ascii_whitespace(std::string value) {
+  const auto first = std::find_if_not(
+      value.begin(), value.end(),
+      [](unsigned char character) { return std::isspace(character) != 0; });
+  const auto last = std::find_if_not(
+                        value.rbegin(), value.rend(),
+                        [](unsigned char character) {
+                          return std::isspace(character) != 0;
+                        })
+                        .base();
+  if (first >= last) {
+    return {};
+  }
+  return std::string(first, last);
 }
 
 static void set_key_file_value(GKeyFile *key_file, const SettingEntry &entry) {
@@ -183,12 +201,62 @@ SettingsSaveResult save_settings(const SettingsStore &store,
   return result;
 }
 
+const char *terminal_backspace_code_to_string(TerminalBackspaceCode code) {
+  return code == TerminalBackspaceCode::bs ? "bs" : "del";
+}
+
+const char *terminal_cursor_key_mode_to_string(TerminalCursorKeyMode mode) {
+  return mode == TerminalCursorKeyMode::adm3 ? "adm3" : "normal";
+}
+
+TerminalTextSettings
+default_terminal_text_settings(TerminalConnectionKind kind) {
+  TerminalTextSettings settings;
+  if (kind == TerminalConnectionKind::telnet ||
+      kind == TerminalConnectionKind::serial) {
+    settings.backspace_code = TerminalBackspaceCode::bs;
+  }
+  if (kind == TerminalConnectionKind::serial) {
+    settings.cursor_key_mode = TerminalCursorKeyMode::adm3;
+  }
+  return settings;
+}
+
+TerminalTextSettings terminal_text_settings(const SettingsStore &store,
+                                            TerminalConnectionKind kind) {
+  TerminalTextSettings settings = default_terminal_text_settings(kind);
+  if (setting_has_explicit_value(store, terminal_encoding_setting_key())) {
+    settings.encoding = trim_ascii_whitespace(setting_string_value_or_default(
+        store, terminal_encoding_setting_key(), settings.encoding));
+  }
+  if (setting_has_explicit_value(store,
+                                 terminal_backspace_code_setting_key())) {
+    const std::string configured = setting_string_value_or_default(
+        store, terminal_backspace_code_setting_key(),
+        terminal_backspace_code_to_string(settings.backspace_code));
+    settings.backspace_code = configured == "bs" ? TerminalBackspaceCode::bs
+                                                  : TerminalBackspaceCode::del;
+  }
+  if (setting_has_explicit_value(store,
+                                 terminal_cursor_key_mode_setting_key())) {
+    const std::string configured = setting_string_value_or_default(
+        store, terminal_cursor_key_mode_setting_key(),
+        terminal_cursor_key_mode_to_string(settings.cursor_key_mode));
+    settings.cursor_key_mode = configured == "adm3"
+                                   ? TerminalCursorKeyMode::adm3
+                                   : TerminalCursorKeyMode::normal;
+  }
+  return settings;
+}
+
 TerminalConnectionProfile
 terminal_connection_profile(const SettingsStore &store) {
   if (general_settings_select_telnet_connection(store)) {
     return {
         .kind = TerminalConnectionKind::telnet,
         .settings = telnet_connection_settings(store),
+        .text_settings =
+            terminal_text_settings(store, TerminalConnectionKind::telnet),
     };
   }
 
@@ -196,12 +264,16 @@ terminal_connection_profile(const SettingsStore &store) {
     return {
         .kind = TerminalConnectionKind::serial,
         .settings = serial_connection_settings(store),
+        .text_settings =
+            terminal_text_settings(store, TerminalConnectionKind::serial),
     };
   }
 
   return {
       .kind = TerminalConnectionKind::local_shell,
       .settings = LocalShellConnectionSettings{},
+      .text_settings =
+          terminal_text_settings(store, TerminalConnectionKind::local_shell),
   };
 }
 

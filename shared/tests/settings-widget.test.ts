@@ -32,6 +32,9 @@ const actionRowFixturePath = fileURLToPath(
 
 interface AppliedStore {
   readonly auto_close: string;
+  readonly backspace_code: string;
+  readonly cursor_key_mode: string;
+  readonly encoding: string;
   readonly height: string;
   readonly telnet_address: string;
   readonly telnet_port: string;
@@ -287,6 +290,22 @@ describe.concurrent('shared settings widget', () => {
       {
         args: ['--page=terminal'],
         assert: async (app) => {
+          expect(
+            await expectElementKind(
+              await app.getById('settings_terminal_encoding_entry'),
+              'entry'
+            ).text()
+          ).toBe('Default (UTF-8)');
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_backspace_code_combo',
+            'Default (DEL)'
+          );
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_cursor_key_mode_combo',
+            'Default (Normal)'
+          );
           expect(
             await expectElementKind(
               await app.getById('settings_terminal_width_spin'),
@@ -955,6 +974,80 @@ describe.concurrent('shared settings widget', () => {
         expect(store.auto_close).toBe('true');
         expect(store.zoom_in_key).toBe('alt+Up');
         expect(store.zoom_out_key).toBe('');
+      }
+    );
+  });
+
+  it('applies terminal encoding and special-code selections', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal', '--type=serial', '--save'],
+      async ({ app }) => {
+        await showTerminalPage(app);
+
+        const encoding = expectElementKind(
+          await app.getById('settings_terminal_encoding_entry'),
+          'entry'
+        );
+        const backspace = expectElementKind(
+          await app.getById('settings_terminal_backspace_code_combo'),
+          'comboBox'
+        );
+        const cursorKeys = expectElementKind(
+          await app.getById('settings_terminal_cursor_key_mode_combo'),
+          'comboBox'
+        );
+        expect(await encoding.text()).toBe('Default (UTF-8)');
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_backspace_code_combo',
+          'Default (BS)'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_cursor_key_mode_combo',
+          'Default (ADM3)'
+        );
+
+        await encoding.setText('CP932');
+        await backspace.selectChildAt(2);
+        await cursorKeys.selectChildAt(1);
+        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+
+        const store = await waitForAppliedStore(app);
+        expect(store.encoding).toBe('CP932');
+        expect(store.backspace_code).toBe('del');
+        expect(store.cursor_key_mode).toBe('normal');
+      }
+    );
+  });
+
+  it('blocks applying an invalid terminal encoding', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal', '--save'],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        const encoding = expectElementKind(
+          await app.getById('settings_terminal_encoding_entry'),
+          'entry'
+        );
+        const apply = await app.getById('settings_apply_button');
+        const save = await app.getById('settings_save_button');
+
+        await encoding.setText('elder-terms-invalid-encoding');
+        await waitForChangedState(app, 'CHANGED dirty=true valid=false');
+        await expectInsensitive(apply);
+        await expectInsensitive(save);
+
+        await encoding.setText('CP932');
+        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
+        await expectSensitive(apply);
+        await expectSensitive(save);
       }
     );
   });

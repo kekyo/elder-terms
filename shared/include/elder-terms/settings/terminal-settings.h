@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include <elder-terms/key-binding.h>
@@ -78,6 +79,46 @@ SettingKey terminal_zoom_in_key_setting_key();
  * @returns Setting key for the terminal zoom-out binding.
  */
 SettingKey terminal_zoom_out_key_setting_key();
+
+/**
+ * Returns the setting key for [terminal] encoding.
+ *
+ * @returns Setting key for the terminal wire character encoding.
+ */
+SettingKey terminal_encoding_setting_key();
+
+/**
+ * Returns the setting key for [terminal] backspace_code.
+ *
+ * @returns Setting key for the Backspace send code.
+ */
+SettingKey terminal_backspace_code_setting_key();
+
+/**
+ * Returns the setting key for [terminal] cursor_key_mode.
+ *
+ * @returns Setting key for cursor-key sequence handling.
+ */
+SettingKey terminal_cursor_key_mode_setting_key();
+
+/**
+ * Checks whether iconv can convert between one encoding and UTF-8 in both
+ * directions.
+ *
+ * @param encoding Candidate iconv encoding name. Surrounding whitespace is
+ * ignored.
+ * @param reason Receives a human-readable validation failure reason.
+ * @returns True when both conversion directions can be opened.
+ */
+bool terminal_encoding_name_is_valid(const std::string &encoding,
+                                     std::string *reason);
+
+/**
+ * Returns supported representative terminal encoding choices.
+ *
+ * @returns Process-local choices filtered through bidirectional iconv checks.
+ */
+std::vector<std::string> terminal_encoding_choices();
 
 /**
  * Returns terminal setting definitions.

@@ -1,5 +1,6 @@
 #include <elder-terms/settings.h>
 
+#include <algorithm>
 #include <chrono>
 #include <exception>
 #include <filesystem>
@@ -15,6 +16,8 @@
 namespace elder_terms_settings_test {
 
 using elder_terms::create_default_settings;
+using elder_terms::clear_explicit_setting_value;
+using elder_terms::default_terminal_text_settings;
 using elder_terms::default_terminal_display_settings;
 using elder_terms::general_type_setting_key;
 using elder_terms::key_binding_matches;
@@ -44,12 +47,20 @@ using elder_terms::TelnetConnectionSettings;
 using elder_terms::telnet_address_setting_key;
 using elder_terms::telnet_port_setting_key;
 using elder_terms::terminal_auto_close_setting_key;
+using elder_terms::TerminalBackspaceCode;
 using elder_terms::TerminalConnectionKind;
 using elder_terms::TerminalConnectionProfile;
+using elder_terms::TerminalCursorKeyMode;
 using elder_terms::TerminalDisplaySettings;
+using elder_terms::TerminalTextSettings;
 using elder_terms::terminal_auto_close;
+using elder_terms::terminal_backspace_code_setting_key;
 using elder_terms::terminal_connection_profile;
+using elder_terms::terminal_cursor_key_mode_setting_key;
 using elder_terms::terminal_display_settings;
+using elder_terms::terminal_encoding_choices;
+using elder_terms::terminal_encoding_name_is_valid;
+using elder_terms::terminal_encoding_setting_key;
 using elder_terms::terminal_height_setting_key;
 using elder_terms::terminal_width_setting_key;
 using elder_terms::terminal_zoom_setting_key;
@@ -136,6 +147,138 @@ static void test_default_settings() {
   expect_true(std::holds_alternative<LocalShellConnectionSettings>(
                   profile.settings),
               "default connection settings should be local shell settings");
+  expect_true(profile.text_settings.encoding == "UTF-8",
+              "default local terminal encoding should be UTF-8");
+  expect_true(profile.text_settings.backspace_code ==
+                  TerminalBackspaceCode::del,
+              "default local Backspace should send DEL");
+  expect_true(profile.text_settings.cursor_key_mode ==
+                  TerminalCursorKeyMode::normal,
+              "default local cursor keys should use normal sequences");
+}
+
+static void test_terminal_text_defaults_follow_connection_type() {
+  const TerminalTextSettings local =
+      default_terminal_text_settings(TerminalConnectionKind::local_shell);
+  expect_true(local.encoding == "UTF-8" &&
+                  local.backspace_code == TerminalBackspaceCode::del &&
+                  local.cursor_key_mode == TerminalCursorKeyMode::normal,
+              "local terminal text defaults should match gtk-oldtype");
+
+  const TerminalTextSettings telnet =
+      default_terminal_text_settings(TerminalConnectionKind::telnet);
+  expect_true(telnet.encoding == "UTF-8" &&
+                  telnet.backspace_code == TerminalBackspaceCode::bs &&
+                  telnet.cursor_key_mode == TerminalCursorKeyMode::normal,
+              "TELNET terminal text defaults should match gtk-oldtype");
+
+  const TerminalTextSettings serial =
+      default_terminal_text_settings(TerminalConnectionKind::serial);
+  expect_true(serial.encoding == "UTF-8" &&
+                  serial.backspace_code == TerminalBackspaceCode::bs &&
+                  serial.cursor_key_mode == TerminalCursorKeyMode::adm3,
+              "serial terminal text defaults should match gtk-oldtype");
+}
+
+static void test_terminal_text_explicit_settings_override_connection_defaults() {
+  SettingsStore store =
+      create_default_settings(default_terminal_display_settings(1.0));
+  set_setting_value(&store, general_type_setting_key(),
+                    elder_terms::SettingValue{std::string("serial")});
+  set_explicit_setting_value(
+      &store, terminal_encoding_setting_key(),
+      elder_terms::SettingValue{std::string("CP932")});
+  set_explicit_setting_value(
+      &store, terminal_backspace_code_setting_key(),
+      elder_terms::SettingValue{std::string("del")});
+  set_explicit_setting_value(
+      &store, terminal_cursor_key_mode_setting_key(),
+      elder_terms::SettingValue{std::string("normal")});
+
+  TerminalConnectionProfile profile = terminal_connection_profile(store);
+  expect_true(profile.text_settings.encoding == "CP932",
+              "explicit terminal encoding should override serial default");
+  expect_true(profile.text_settings.backspace_code ==
+                  TerminalBackspaceCode::del,
+              "explicit Backspace code should override serial default");
+  expect_true(profile.text_settings.cursor_key_mode ==
+                  TerminalCursorKeyMode::normal,
+              "explicit cursor-key mode should override serial default");
+
+  clear_explicit_setting_value(&store, terminal_encoding_setting_key());
+  clear_explicit_setting_value(&store,
+                               terminal_backspace_code_setting_key());
+  clear_explicit_setting_value(&store,
+                               terminal_cursor_key_mode_setting_key());
+  profile = terminal_connection_profile(store);
+  expect_true(profile.text_settings.encoding == "UTF-8" &&
+                  profile.text_settings.backspace_code ==
+                      TerminalBackspaceCode::bs &&
+                  profile.text_settings.cursor_key_mode ==
+                      TerminalCursorKeyMode::adm3,
+              "clearing terminal text overrides should restore serial defaults");
+}
+
+static void test_terminal_encoding_choices_are_supported() {
+  const std::vector<std::string> choices = terminal_encoding_choices();
+  expect_true(!choices.empty(),
+              "terminal encoding choices should not be empty");
+  expect_true(std::find(choices.begin(), choices.end(), "UTF-8") !=
+                  choices.end(),
+              "terminal encoding choices should include UTF-8");
+  for (const std::string &choice : choices) {
+    std::string reason;
+    expect_true(terminal_encoding_name_is_valid(choice, &reason),
+                "every terminal encoding choice should be usable: " +
+                    choice + " " + reason);
+  }
+
+  std::string reason;
+  expect_true(terminal_encoding_name_is_valid("  CP932  ", &reason),
+              "encoding validation should accept a supported trimmed alias");
+  expect_true(!terminal_encoding_name_is_valid(
+                  "elder-terms-invalid-encoding", &reason),
+              "encoding validation should reject an unknown iconv name");
+}
+
+static void test_invalid_terminal_text_values_fall_back_to_type_defaults() {
+  const std::filesystem::path path =
+      temporary_config_path("invalid-terminal-text");
+  write_config(path,
+               "[general]\n"
+               "type=serial\n"
+               "\n"
+               "[terminal]\n"
+               "encoding=elder-terms-invalid-encoding\n"
+               "backspace_code=invalid\n"
+               "cursor_key_mode=invalid\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  const TerminalTextSettings text =
+      terminal_connection_profile(result.store).text_settings;
+  expect_true(text.encoding == "UTF-8" &&
+                  text.backspace_code == TerminalBackspaceCode::bs &&
+                  text.cursor_key_mode == TerminalCursorKeyMode::adm3,
+              "invalid terminal text values should use serial defaults");
+  expect_true(warnings_contain(
+                  result.warnings,
+                  "invalid configuration value [terminal] encoding"),
+              "invalid terminal encoding should emit a warning");
+  expect_true(warnings_contain(
+                  result.warnings,
+                  "invalid configuration value [terminal] backspace_code"),
+              "invalid Backspace code should emit a warning");
+  expect_true(warnings_contain(
+                  result.warnings,
+                  "invalid configuration value [terminal] cursor_key_mode"),
+              "invalid cursor-key mode should emit a warning");
 }
 
 static void test_key_binding_parser_uses_exact_modifiers() {
@@ -551,6 +694,17 @@ static void test_public_setting_keys() {
   expect_true(terminal_zoom_out_key_setting_key().section == "terminal" &&
                   terminal_zoom_out_key_setting_key().name == "zoom_out_key",
               "terminal zoom-out key should use [terminal] zoom_out_key");
+  expect_true(terminal_encoding_setting_key().section == "terminal" &&
+                  terminal_encoding_setting_key().name == "encoding",
+              "terminal encoding key should use [terminal] encoding");
+  expect_true(terminal_backspace_code_setting_key().section == "terminal" &&
+                  terminal_backspace_code_setting_key().name ==
+                      "backspace_code",
+              "Backspace code key should use [terminal] backspace_code");
+  expect_true(terminal_cursor_key_mode_setting_key().section == "terminal" &&
+                  terminal_cursor_key_mode_setting_key().name ==
+                      "cursor_key_mode",
+              "cursor-key mode key should use [terminal] cursor_key_mode");
   expect_true(telnet_address_setting_key().section == "telnet",
               "TELNET address key should use the telnet section");
   expect_true(telnet_address_setting_key().name == "address",
@@ -684,6 +838,51 @@ static void test_save_explicit_zmodem_autostart() {
               "saved settings should include explicit true ZMODEM auto-start");
 }
 
+static void test_save_explicit_terminal_text_defaults() {
+  const std::filesystem::path path =
+      temporary_config_path("save-terminal-text-defaults");
+  SettingsStore store =
+      create_default_settings(default_terminal_display_settings(1.0));
+  set_explicit_setting_value(
+      &store, terminal_encoding_setting_key(),
+      elder_terms::SettingValue{std::string("UTF-8")});
+  set_explicit_setting_value(
+      &store, terminal_backspace_code_setting_key(),
+      elder_terms::SettingValue{std::string("del")});
+  set_explicit_setting_value(
+      &store, terminal_cursor_key_mode_setting_key(),
+      elder_terms::SettingValue{std::string("normal")});
+
+  const SettingsSaveResult result = save_settings(store, path);
+  expect_true(result.saved,
+              "explicit terminal text default save should succeed");
+  const std::string content = read_config(path);
+
+  expect_true(content.find("encoding=UTF-8") != std::string::npos,
+              "explicit UTF-8 should be persisted");
+  expect_true(content.find("backspace_code=del") != std::string::npos,
+              "explicit local Backspace default should be persisted");
+  expect_true(content.find("cursor_key_mode=normal") != std::string::npos,
+              "explicit local cursor-key default should be persisted");
+
+  const SettingsLoadResult loaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+  SettingsStore changed_type = loaded.store;
+  set_setting_value(&changed_type, general_type_setting_key(),
+                    elder_terms::SettingValue{std::string("serial")});
+  const TerminalTextSettings text =
+      terminal_connection_profile(changed_type).text_settings;
+  expect_true(text.encoding == "UTF-8" &&
+                  text.backspace_code == TerminalBackspaceCode::del &&
+                  text.cursor_key_mode == TerminalCursorKeyMode::normal,
+              "loaded explicit values should remain explicit after type change");
+}
+
 static void test_save_serial_settings_omits_default_values() {
   const std::filesystem::path path = temporary_config_path("save-serial-values");
   SettingsStore store =
@@ -776,6 +975,9 @@ static void test_load_settings_reports_file_read_status() {
 int main() {
   try {
     elder_terms_settings_test::test_default_settings();
+    elder_terms_settings_test::test_terminal_text_defaults_follow_connection_type();
+    elder_terms_settings_test::test_terminal_text_explicit_settings_override_connection_defaults();
+    elder_terms_settings_test::test_terminal_encoding_choices_are_supported();
     elder_terms_settings_test::test_key_binding_parser_uses_exact_modifiers();
     elder_terms_settings_test::test_terminal_key_binding_configuration();
     elder_terms_settings_test::test_telnet_profile();
@@ -783,11 +985,13 @@ int main() {
     elder_terms_settings_test::test_transfer_base_path_setting();
     elder_terms_settings_test::test_transfer_zmodem_autostart_setting();
     elder_terms_settings_test::test_invalid_values_fall_back_to_defaults();
+    elder_terms_settings_test::test_invalid_terminal_text_values_fall_back_to_type_defaults();
     elder_terms_settings_test::test_invalid_serial_values_fall_back_to_defaults();
     elder_terms_settings_test::test_public_setting_keys();
     elder_terms_settings_test::test_save_settings_omits_default_values();
     elder_terms_settings_test::test_save_serial_settings_omits_default_values();
     elder_terms_settings_test::test_save_explicit_zmodem_autostart();
+    elder_terms_settings_test::test_save_explicit_terminal_text_defaults();
     elder_terms_settings_test::test_save_settings_writes_empty_file_for_defaults();
     elder_terms_settings_test::test_load_settings_reports_file_read_status();
   } catch (const std::exception &error) {

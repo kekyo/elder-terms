@@ -29,6 +29,39 @@ enum class TerminalConnectionKind {
 };
 
 /**
+ * Code emitted when the user presses Backspace.
+ */
+enum class TerminalBackspaceCode {
+  /** ASCII BS (0x08). */
+  bs,
+  /** ASCII DEL (0x7f). */
+  del,
+};
+
+/**
+ * Controls outbound cursor-key sequence handling.
+ */
+enum class TerminalCursorKeyMode {
+  /** Preserve VTE cursor-key escape sequences. */
+  normal,
+  /** Rewrite cursor-key sequences to ADM3 one-byte codes. */
+  adm3,
+};
+
+/**
+ * Effective character encoding and special-code settings for a terminal
+ * session.
+ */
+struct TerminalTextSettings {
+  /** iconv encoding used on the backend byte stream. */
+  std::string encoding = "UTF-8";
+  /** Code emitted by the Backspace key. */
+  TerminalBackspaceCode backspace_code = TerminalBackspaceCode::del;
+  /** Outbound cursor-key handling mode. */
+  TerminalCursorKeyMode cursor_key_mode = TerminalCursorKeyMode::normal;
+};
+
+/**
  * Backend-specific terminal connection settings.
  */
 using TerminalConnectionSettings =
@@ -43,7 +76,44 @@ struct TerminalConnectionProfile {
   TerminalConnectionKind kind = TerminalConnectionKind::local_shell;
   /** Backend-specific settings. */
   TerminalConnectionSettings settings = LocalShellConnectionSettings{};
+  /** Effective terminal character encoding and special-code settings. */
+  TerminalTextSettings text_settings{};
 };
+
+/**
+ * Returns the INI value for a Backspace code.
+ *
+ * @param code Backspace code.
+ * @returns Stable setting value.
+ */
+const char *terminal_backspace_code_to_string(TerminalBackspaceCode code);
+
+/**
+ * Returns the INI value for a cursor-key mode.
+ *
+ * @param mode Cursor-key mode.
+ * @returns Stable setting value.
+ */
+const char *terminal_cursor_key_mode_to_string(TerminalCursorKeyMode mode);
+
+/**
+ * Returns built-in terminal text defaults for a connection kind.
+ *
+ * @param kind Connection backend kind.
+ * @returns Connection-specific terminal text defaults.
+ */
+TerminalTextSettings
+default_terminal_text_settings(TerminalConnectionKind kind);
+
+/**
+ * Resolves terminal text settings for a connection kind.
+ *
+ * @param store Source settings store.
+ * @param kind Connection backend kind used for implicit defaults.
+ * @returns Effective terminal text settings.
+ */
+TerminalTextSettings terminal_text_settings(const SettingsStore &store,
+                                            TerminalConnectionKind kind);
 
 /**
  * Paths used to build the initial settings store.
