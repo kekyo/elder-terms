@@ -920,7 +920,7 @@ public:
   TerminalSerialSession(GtkWidget *terminal, SerialConnectionSettings settings,
                         TerminalTextSettings text_settings,
                         TerminalSessionCallbacks callbacks)
-      : terminal_io(terminal, text_settings),
+      : terminal_io(terminal, text_settings, callbacks.output),
         settings(std::move(settings)),
         callbacks(callbacks),
         carrier_tracker(this->settings.carrier_detect) {

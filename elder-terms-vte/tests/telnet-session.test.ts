@@ -371,4 +371,63 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
       }
     });
   });
+
+  it('records cooked terminal output only while the TELNET connection is active', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      let acceptedSocket: Socket | undefined;
+      const terminalText = 'terminal log text';
+      const server = createServer((socket) => {
+        acceptedSocket = socket;
+        socket.write(`${terminalText}\r\n`);
+      });
+
+      try {
+        const port = await listenOnLocalhost(server);
+        const configPath = join(directory, 'telnet.ini');
+        const logPath = join(directory, 'logs', 'cooked.txt');
+        const configTemplate = await readFile(
+          telnetLocalhostConfigPath,
+          'utf8'
+        );
+        await writeFile(
+          configPath,
+          `${configTemplate.replace(
+            '${port}',
+            String(port)
+          )}\n[terminal]\nauto_close=false\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
+          'utf8'
+        );
+
+        await runGtkTest(context, ['-c', configPath], async (app) => {
+          await toPass(
+            async () => {
+              expect(acceptedSocket).not.toBeUndefined();
+            },
+            {
+              message: 'TELNET server should accept a logging client',
+              timeoutMs: 5_000,
+            }
+          );
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
+          await waitForActivityIndicatorImageState(app, 'log', 'on');
+
+          acceptedSocket?.end();
+          await waitForActivityIndicatorImageState(app, 'conn', 'off');
+          await waitForActivityIndicatorImageState(app, 'log', 'off');
+          await toPass(
+            async () => {
+              expect(await readFile(logPath, 'utf8')).toContain(terminalText);
+            },
+            {
+              message: 'closed cooked log should contain terminal output',
+              timeoutMs: 5_000,
+            }
+          );
+        });
+      } finally {
+        acceptedSocket?.destroy();
+        await closeServer(server);
+      }
+    });
+  });
 });

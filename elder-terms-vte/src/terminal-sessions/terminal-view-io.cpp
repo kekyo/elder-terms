@@ -18,9 +18,11 @@ backspace_binding(TerminalBackspaceCode backspace_code) {
 }
 
 TerminalViewIo::TerminalViewIo(
-    GtkWidget *terminal, const TerminalTextSettings &text_settings)
+    GtkWidget *terminal, const TerminalTextSettings &text_settings,
+    TerminalViewOutputCallback output_callback)
     : terminal(terminal),
-      text_codec(std::make_unique<TerminalTextCodec>(text_settings)) {
+      text_codec(std::make_unique<TerminalTextCodec>(text_settings)),
+      output_callback(std::move(output_callback)) {
   vte_terminal_set_backspace_binding(
       VTE_TERMINAL(terminal), backspace_binding(text_settings.backspace_code));
   vte_terminal_set_delete_binding(VTE_TERMINAL(terminal),
@@ -62,6 +64,11 @@ void TerminalViewIo::feed(std::span<const unsigned char> bytes) {
                  "selected encoding"
               << '\n';
     decode_warning_reported = true;
+  }
+  if (output_callback) {
+    output_callback(
+        bytes, std::span<const unsigned char>(conversion.bytes.data(),
+                                              conversion.bytes.size()));
   }
   if (!conversion.bytes.empty()) {
     vte_terminal_feed(VTE_TERMINAL(terminal),

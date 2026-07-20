@@ -17,6 +17,7 @@
 #include "launch-options.h"
 #include "main-window.h"
 #include "terminal-layout.h"
+#include "terminal-log.h"
 #include "terminal-transfer-runner.h"
 #include "terminal-session.h"
 
@@ -24,7 +25,9 @@ struct ApplicationState {
   elder_terms::MainWindow *main_window = nullptr;
   elder_terms::TerminalSessionState *session_state = nullptr;
   elder_terms::TerminalLayoutState *layout_state = nullptr;
+  elder_terms::TerminalLogState *log_state = nullptr;
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
+  std::optional<cardio::promise<void>> shutdown_task;
   elder_terms::SettingsStore settings_store;
   std::optional<std::filesystem::path> config_path;
   elder_terms::TestOptions test_options;
@@ -48,6 +51,12 @@ struct TransferMenuAction {
 static void close_settings_dialog(ApplicationState *state);
 static void schedule_settings_dialog_close(ApplicationState *state);
 static void restore_terminal_focus(ApplicationState *state);
+
+static cardio::promise<void>
+stop_application_async(ApplicationState *state) {
+  co_await elder_terms::stop_terminal_log_async(state->log_state);
+  state->dispatcher_group->shutdown();
+}
 
 static void update_application_terminal_presentation(
     ApplicationState *state) {
@@ -126,8 +135,11 @@ static void on_main_window_destroy(GtkWidget *, gpointer user_data) {
                                                          false);
   elder_terms::deactivate_main_window_activity_indicators(state->main_window);
   close_settings_dialog(state);
+  elder_terms::set_terminal_log_connection_active(state->log_state, false);
   elder_terms::stop_terminal_session(state->session_state);
-  state->dispatcher_group->shutdown();
+  if (!state->shutdown_task.has_value()) {
+    state->shutdown_task.emplace(stop_application_async(state));
+  }
 }
 
 static void on_settings_dialog_destroy(GtkWidget *, gpointer user_data) {
@@ -184,6 +196,9 @@ static void schedule_settings_dialog_close(ApplicationState *state) {
 static void apply_runtime_settings(ApplicationState *state,
                                    const elder_terms::SettingsStore &store) {
   state->settings_store = store;
+  elder_terms::apply_terminal_log_settings(
+      state->log_state,
+      elder_terms::terminal_log_settings(state->settings_store));
   state->auto_close = elder_terms::terminal_auto_close(state->settings_store);
   const auto connection_profile =
       elder_terms::terminal_connection_profile(state->settings_store);
@@ -613,7 +628,9 @@ int main(int argc, char **argv) {
       .main_window = &*main_window,
       .session_state = nullptr,
       .layout_state = nullptr,
+      .log_state = nullptr,
       .dispatcher_group = &dispatcher_group,
+      .shutdown_task = std::nullopt,
       .settings_store = settings_result.store,
       .config_path = launch_options.config_path,
       .test_options = launch_options.test,
@@ -625,6 +642,16 @@ int main(int argc, char **argv) {
       .settings_dialog_close_idle_id = 0,
       .settings_widget = nullptr,
   };
+
+  app_state.log_state = elder_terms::create_terminal_log({
+      .settings = elder_terms::terminal_log_settings(app_state.settings_store),
+      .now = {},
+      .active = [&app_state](bool active) {
+        set_application_indicator_state(
+            &app_state, elder_terms::ActivityIndicatorId::log, active);
+      },
+      .warning = {},
+  });
 
   const auto terminal_display_settings =
     elder_terms::terminal_display_settings(app_state.settings_store);
@@ -645,6 +672,8 @@ int main(int argc, char **argv) {
     connection_profile,
     {
       .ended = [&app_state]() {
+        elder_terms::set_terminal_log_connection_active(app_state.log_state,
+                                                        false);
         if (!app_state.auto_close) {
           set_application_indicator_state(
               &app_state, elder_terms::ActivityIndicatorId::conn, false);
@@ -658,7 +687,17 @@ int main(int argc, char **argv) {
       },
       .indicator_state =
           [&app_state](elder_terms::ActivityIndicatorId indicator, bool active) {
+            if (indicator == elder_terms::ActivityIndicatorId::conn) {
+              elder_terms::set_terminal_log_connection_active(
+                  app_state.log_state, active);
+            }
             set_application_indicator_state(&app_state, indicator, active);
+          },
+      .output =
+          [&app_state](std::span<const unsigned char> raw_bytes,
+                       std::span<const unsigned char> cooked_bytes) {
+            elder_terms::write_terminal_log(app_state.log_state, raw_bytes,
+                                            cooked_bytes);
           },
       .zmodem_auto_start =
           [&app_state](elder_terms::TerminalTransferDirection direction) {
@@ -730,6 +769,8 @@ int main(int argc, char **argv) {
 
   elder_terms::destroy_terminal_layout(app_state.layout_state);
   elder_terms::destroy_terminal_session(app_state.session_state);
+  app_state.shutdown_task.reset();
+  elder_terms::destroy_terminal_log(app_state.log_state);
   elder_terms::release_main_window(&*main_window);
 
   return 0;

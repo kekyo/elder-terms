@@ -14,6 +14,7 @@ const { PNG } = require('pngjs') as typeof import('pngjs');
  */
 export type ActivityIndicatorId =
   | 'conn'
+  | 'log'
   | 'sd'
   | 'rd'
   | 'rts'
@@ -28,6 +29,7 @@ export type ActivityIndicatorId =
  */
 export const nonSerialActivityIndicatorIds = [
   'conn',
+  'log',
   'sd',
   'rd',
 ] as const satisfies readonly ActivityIndicatorId[];
@@ -37,6 +39,7 @@ export const nonSerialActivityIndicatorIds = [
  */
 export const serialActivityIndicatorIds = [
   'conn',
+  'log',
   'sd',
   'rd',
   'rts',
@@ -52,6 +55,7 @@ export const serialActivityIndicatorIds = [
  */
 export const activityIndicatorLabels: Record<ActivityIndicatorId, string> = {
   conn: 'CONN',
+  log: 'LOG',
   sd: 'SD',
   rd: 'RD',
   rts: 'RTS',

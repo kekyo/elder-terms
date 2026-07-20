@@ -663,7 +663,7 @@ public:
   TerminalTelnetSession(GtkWidget *terminal, TelnetConnectionSettings settings,
                         TerminalTextSettings text_settings,
                         TerminalSessionCallbacks callbacks)
-      : terminal_io(terminal, text_settings),
+      : terminal_io(terminal, text_settings, callbacks.output),
         settings(std::move(settings)),
         callbacks(callbacks) {
   }

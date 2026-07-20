@@ -273,13 +273,19 @@ describe.concurrent('elder-terms-vte main window', () => {
       );
       const activityIndicatorBar = await app.getById('activity_indicator_bar');
       const connIndicatorBox = await app.getById('conn_indicator_box');
+      const logIndicatorBox = await app.getById('log_indicator_box');
       const sdIndicatorBox = await app.getById('sd_indicator_box');
       const rdIndicatorBox = await app.getById('rd_indicator_box');
       const connIndicatorImage = await app.getById('conn_indicator_image');
+      const logIndicatorImage = await app.getById('log_indicator_image');
       const sdIndicatorImage = await app.getById('sd_indicator_image');
       const rdIndicatorImage = await app.getById('rd_indicator_image');
       const connIndicatorLabel = expectElementKind(
         await app.getById('conn_indicator_label'),
+        'label'
+      );
+      const logIndicatorLabel = expectElementKind(
+        await app.getById('log_indicator_label'),
         'label'
       );
       const sdIndicatorLabel = expectElementKind(
@@ -294,6 +300,7 @@ describe.concurrent('elder-terms-vte main window', () => {
       await expectTransferButtonHidden(app);
       expect(await statusLabel.text()).toBe('Terminal');
       expect(await connIndicatorLabel.text()).toBe('CONN');
+      expect(await logIndicatorLabel.text()).toBe('LOG');
       expect(await sdIndicatorLabel.text()).toBe('SD');
       expect(await rdIndicatorLabel.text()).toBe('RD');
 
@@ -306,12 +313,15 @@ describe.concurrent('elder-terms-vte main window', () => {
         statusLabelCapture,
         activityIndicatorBarCapture,
         connIndicatorBoxCapture,
+        logIndicatorBoxCapture,
         sdIndicatorBoxCapture,
         rdIndicatorBoxCapture,
         connIndicatorImageCapture,
+        logIndicatorImageCapture,
         sdIndicatorImageCapture,
         rdIndicatorImageCapture,
         connIndicatorLabelCapture,
+        logIndicatorLabelCapture,
         sdIndicatorLabelCapture,
         rdIndicatorLabelCapture,
         hints,
@@ -334,6 +344,9 @@ describe.concurrent('elder-terms-vte main window', () => {
         evidence.captureEvidence('conn-indicator-box', async () =>
           connIndicatorBox.capture()
         ),
+        evidence.captureEvidence('log-indicator-box', async () =>
+          logIndicatorBox.capture()
+        ),
         evidence.captureEvidence('sd-indicator-box', async () =>
           sdIndicatorBox.capture()
         ),
@@ -343,6 +356,9 @@ describe.concurrent('elder-terms-vte main window', () => {
         evidence.captureEvidence('conn-indicator-image', async () =>
           connIndicatorImage.capture()
         ),
+        evidence.captureEvidence('log-indicator-image', async () =>
+          logIndicatorImage.capture()
+        ),
         evidence.captureEvidence('sd-indicator-image', async () =>
           sdIndicatorImage.capture()
         ),
@@ -351,6 +367,9 @@ describe.concurrent('elder-terms-vte main window', () => {
         ),
         evidence.captureEvidence('conn-indicator-label', async () =>
           connIndicatorLabel.capture()
+        ),
+        evidence.captureEvidence('log-indicator-label', async () =>
+          logIndicatorLabel.capture()
         ),
         evidence.captureEvidence('sd-indicator-label', async () =>
           sdIndicatorLabel.capture()
@@ -433,6 +452,9 @@ describe.concurrent('elder-terms-vte main window', () => {
             activityIndicatorBarCapture.bounds.width)
       ).toBeLessThanOrEqual(8);
       expect(connIndicatorBoxCapture.bounds.x).toBeLessThan(
+        logIndicatorBoxCapture.bounds.x
+      );
+      expect(logIndicatorBoxCapture.bounds.x).toBeLessThan(
         sdIndicatorBoxCapture.bounds.x
       );
       expect(sdIndicatorBoxCapture.bounds.x).toBeLessThan(
@@ -440,6 +462,9 @@ describe.concurrent('elder-terms-vte main window', () => {
       );
       expect(
         connIndicatorBoxCapture.bounds.x + connIndicatorBoxCapture.bounds.width
+      ).toBeLessThanOrEqual(logIndicatorBoxCapture.bounds.x);
+      expect(
+        logIndicatorBoxCapture.bounds.x + logIndicatorBoxCapture.bounds.width
       ).toBeLessThanOrEqual(sdIndicatorBoxCapture.bounds.x);
       expect(
         sdIndicatorBoxCapture.bounds.x + sdIndicatorBoxCapture.bounds.width
@@ -448,6 +473,12 @@ describe.concurrent('elder-terms-vte main window', () => {
         activityIndicatorIconSize
       );
       expect(connIndicatorImageCapture.bounds.height).toBe(
+        activityIndicatorIconSize
+      );
+      expect(logIndicatorImageCapture.bounds.width).toBe(
+        activityIndicatorIconSize
+      );
+      expect(logIndicatorImageCapture.bounds.height).toBe(
         activityIndicatorIconSize
       );
       expect(sdIndicatorImageCapture.bounds.width).toBe(
@@ -465,6 +496,9 @@ describe.concurrent('elder-terms-vte main window', () => {
       expect(connIndicatorImageCapture.bounds.y).toBeLessThan(
         connIndicatorLabelCapture.bounds.y
       );
+      expect(logIndicatorImageCapture.bounds.y).toBeLessThan(
+        logIndicatorLabelCapture.bounds.y
+      );
       expect(sdIndicatorImageCapture.bounds.y).toBeLessThan(
         sdIndicatorLabelCapture.bounds.y
       );
@@ -472,6 +506,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         rdIndicatorLabelCapture.bounds.y
       );
       await expectActivityIndicatorImageState(connIndicatorImageCapture, 'on');
+      await expectActivityIndicatorImageState(logIndicatorImageCapture, 'off');
       await expectActivityIndicatorImageState(sdIndicatorImageCapture, 'off');
       await expectActivityIndicatorImageState(rdIndicatorImageCapture, 'off');
       await evidence.log('terminal layout verified', {

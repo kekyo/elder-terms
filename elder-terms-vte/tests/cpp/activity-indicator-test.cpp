@@ -109,22 +109,27 @@ static bool blink_state_matches_predecessor_sequence() {
 }
 
 static bool indicator_labels_are_stable() {
-  return expect(activity_indicator_count() == 9,
-                "activity indicator count should include CONN and serial lines") &&
+  return expect(activity_indicator_count() == 10,
+                "activity indicator count should include CONN, LOG, and serial lines") &&
          expect(std::string_view(activity_indicator_label(
                     ActivityIndicatorId::conn)) == "CONN",
                 "CONN label should stay stable") &&
          expect(activity_indicator_index(ActivityIndicatorId::conn) == 0,
                 "CONN should be the first activity indicator") &&
          expect(std::string_view(activity_indicator_label(
+                    ActivityIndicatorId::log)) == "LOG",
+                "LOG label should stay stable") &&
+         expect(activity_indicator_index(ActivityIndicatorId::log) == 1,
+                "LOG should be shown after CONN") &&
+         expect(std::string_view(activity_indicator_label(
                     ActivityIndicatorId::sd)) == "SD",
                 "SD label should stay stable") &&
-         expect(activity_indicator_index(ActivityIndicatorId::sd) == 1,
-                "SD should be shown after CONN") &&
+         expect(activity_indicator_index(ActivityIndicatorId::sd) == 2,
+                "SD should be shown after LOG") &&
          expect(std::string_view(activity_indicator_label(
                     ActivityIndicatorId::rd)) == "RD",
                 "RD label should stay stable") &&
-         expect(activity_indicator_index(ActivityIndicatorId::rd) == 2,
+         expect(activity_indicator_index(ActivityIndicatorId::rd) == 3,
                 "RD should be shown after SD") &&
          expect(std::string_view(activity_indicator_label(
                     ActivityIndicatorId::rts)) == "RTS",
@@ -146,6 +151,8 @@ static bool indicator_labels_are_stable() {
                 "RI label should stay stable") &&
          expect(!activity_indicator_is_serial_line(ActivityIndicatorId::conn),
                 "CONN should not be a serial-only indicator") &&
+         expect(!activity_indicator_is_serial_line(ActivityIndicatorId::log),
+                "LOG should not be a serial-only indicator") &&
          expect(!activity_indicator_is_serial_line(ActivityIndicatorId::sd),
                 "SD should not be a serial-only indicator") &&
          expect(activity_indicator_is_serial_line(ActivityIndicatorId::rts),

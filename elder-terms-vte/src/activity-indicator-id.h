@@ -11,6 +11,8 @@ namespace elder_terms {
 enum class ActivityIndicatorId {
   /** Backend connection state. */
   conn,
+  /** Terminal stream logging state. */
+  log,
   /** Sent data. */
   sd,
   /** Received data. */
@@ -30,12 +32,12 @@ enum class ActivityIndicatorId {
 };
 
 /** Ordered activity indicators as displayed in the status bar. */
-inline constexpr std::array<ActivityIndicatorId, 9> activity_indicator_ids{
-    ActivityIndicatorId::conn, ActivityIndicatorId::sd,
-    ActivityIndicatorId::rd,   ActivityIndicatorId::rts,
-    ActivityIndicatorId::cts,  ActivityIndicatorId::dtr,
-    ActivityIndicatorId::dsr,  ActivityIndicatorId::cd,
-    ActivityIndicatorId::ri,
+inline constexpr std::array<ActivityIndicatorId, 10> activity_indicator_ids{
+    ActivityIndicatorId::conn, ActivityIndicatorId::log,
+    ActivityIndicatorId::sd,   ActivityIndicatorId::rd,
+    ActivityIndicatorId::rts,  ActivityIndicatorId::cts,
+    ActivityIndicatorId::dtr,  ActivityIndicatorId::dsr,
+    ActivityIndicatorId::cd,   ActivityIndicatorId::ri,
 };
 
 /**
@@ -69,22 +71,24 @@ constexpr std::size_t activity_indicator_index(ActivityIndicatorId indicator) {
   switch (indicator) {
   case ActivityIndicatorId::conn:
     return 0;
-  case ActivityIndicatorId::sd:
+  case ActivityIndicatorId::log:
     return 1;
-  case ActivityIndicatorId::rd:
+  case ActivityIndicatorId::sd:
     return 2;
-  case ActivityIndicatorId::rts:
+  case ActivityIndicatorId::rd:
     return 3;
-  case ActivityIndicatorId::cts:
+  case ActivityIndicatorId::rts:
     return 4;
-  case ActivityIndicatorId::dtr:
+  case ActivityIndicatorId::cts:
     return 5;
-  case ActivityIndicatorId::dsr:
+  case ActivityIndicatorId::dtr:
     return 6;
-  case ActivityIndicatorId::cd:
+  case ActivityIndicatorId::dsr:
     return 7;
-  case ActivityIndicatorId::ri:
+  case ActivityIndicatorId::cd:
     return 8;
+  case ActivityIndicatorId::ri:
+    return 9;
   }
   return 0;
 }
@@ -99,6 +103,8 @@ constexpr const char *activity_indicator_token(ActivityIndicatorId indicator) {
   switch (indicator) {
   case ActivityIndicatorId::conn:
     return "conn";
+  case ActivityIndicatorId::log:
+    return "log";
   case ActivityIndicatorId::sd:
     return "sd";
   case ActivityIndicatorId::rd:
@@ -129,6 +135,8 @@ constexpr const char *activity_indicator_label(ActivityIndicatorId indicator) {
   switch (indicator) {
   case ActivityIndicatorId::conn:
     return "CONN";
+  case ActivityIndicatorId::log:
+    return "LOG";
   case ActivityIndicatorId::sd:
     return "SD";
   case ActivityIndicatorId::rd:
@@ -158,6 +166,7 @@ constexpr const char *activity_indicator_label(ActivityIndicatorId indicator) {
 constexpr bool activity_indicator_is_serial_line(
     ActivityIndicatorId indicator) {
   return indicator != ActivityIndicatorId::conn &&
+         indicator != ActivityIndicatorId::log &&
          indicator != ActivityIndicatorId::sd &&
          indicator != ActivityIndicatorId::rd;
 }

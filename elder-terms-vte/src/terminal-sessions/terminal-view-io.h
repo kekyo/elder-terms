@@ -30,6 +30,13 @@ using TerminalViewInputCallback =
     std::function<void(std::span<const unsigned char>)>;
 
 /**
+ * Callback invoked with backend output before and after text conversion.
+ */
+using TerminalViewOutputCallback = std::function<void(
+    std::span<const unsigned char> raw_bytes,
+    std::span<const unsigned char> cooked_bytes)>;
+
+/**
  * Synchronous adapter for VTE terminal input and output.
  *
  * @remarks
@@ -41,6 +48,7 @@ private:
   GtkWidget *terminal = nullptr;
   std::unique_ptr<TerminalTextCodec> text_codec;
   TerminalViewInputCallback input_callback;
+  TerminalViewOutputCallback output_callback;
   gulong commit_handler_id = 0;
   bool decode_warning_reported = false;
   bool encode_warning_reported = false;
@@ -54,9 +62,11 @@ public:
    *
    * @param terminal VTE terminal widget.
    * @param text_settings Effective text conversion and special-code settings.
+   * @param output_callback Callback receiving raw and cooked terminal output.
    */
   TerminalViewIo(GtkWidget *terminal,
-                 const TerminalTextSettings &text_settings);
+                 const TerminalTextSettings &text_settings,
+                 TerminalViewOutputCallback output_callback);
 
   /**
    * Disconnects the owned VTE signal connection.
