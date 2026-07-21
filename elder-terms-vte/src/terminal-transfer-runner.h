@@ -68,7 +68,8 @@ std::optional<std::uint64_t> estimate_transfer_eta_seconds(
  * Resolves a configured transfer base path through GIO and returns its URI.
  *
  * @param base_path Configured path or URI. An empty value selects the XDG
- * Downloads directory, falling back to the user home directory.
+ * Downloads directory, falling back to the Downloads directory beneath the
+ * user home directory.
  * @returns GIO URI for the resolved base directory.
  */
 std::string resolve_transfer_base_path_uri(const std::string &base_path);

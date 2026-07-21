@@ -960,8 +960,9 @@ static void resolve_default_base_path_from_xdg_download_dir() {
       ScopedEnvironment config_env("XDG_CONFIG_HOME", config_home.string());
       g_reload_user_special_dirs_cache();
 
-      expect_equal(resolve_transfer_base_path_uri(""), file_uri_for_path(home),
-                   "missing XDG Downloads should fall back to HOME");
+      expect_equal(resolve_transfer_base_path_uri(""),
+                   file_uri_for_path(home / "Downloads"),
+                   "missing XDG Downloads should fall back to HOME/Downloads");
 
       {
         std::ofstream user_dirs(config_home / "user-dirs.dirs");
