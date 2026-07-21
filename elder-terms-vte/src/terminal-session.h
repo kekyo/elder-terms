@@ -7,6 +7,7 @@
 #include <elder-terms/settings.h>
 
 #include "terminal-session-callbacks.h"
+#include "terminal-text-send.h"
 #include "terminal-transfer.h"
 
 namespace elder_terms {
@@ -62,6 +63,14 @@ void resize_terminal_session(TerminalSessionState *state, glong columns,
 bool terminal_session_supports_transfer(const TerminalSessionState *state);
 
 /**
+ * Returns whether the active backend supports text file sending.
+ *
+ * @param state Session state created by create_terminal_session.
+ * @returns True when text sends can be requested.
+ */
+bool terminal_session_supports_text_send(const TerminalSessionState *state);
+
+/**
  * Returns whether the active backend is transferring a file.
  *
  * @param state Session state created by create_terminal_session.
@@ -78,6 +87,16 @@ bool terminal_session_transfer_in_progress(const TerminalSessionState *state);
  */
 bool start_terminal_session_transfer(TerminalSessionState *state,
                                      TerminalTransferRequest request);
+
+/**
+ * Starts one text file send on the active backend.
+ *
+ * @param state Session state created by create_terminal_session.
+ * @param request Text send request.
+ * @returns True when the request was accepted.
+ */
+bool start_terminal_session_text_send(TerminalSessionState *state,
+                                      TerminalTextSendRequest request);
 
 /**
  * Enables or disables ZMODEM auto-start detection on the active backend.

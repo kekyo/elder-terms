@@ -104,6 +104,14 @@ bool terminal_session_supports_transfer(const TerminalSessionState *state) {
   return state->session->supports_transfer();
 }
 
+bool terminal_session_supports_text_send(const TerminalSessionState *state) {
+  if (state == nullptr || state->session == nullptr) {
+    return false;
+  }
+
+  return state->session->supports_text_send();
+}
+
 bool terminal_session_transfer_in_progress(const TerminalSessionState *state) {
   if (state == nullptr || state->session == nullptr) {
     return false;
@@ -119,6 +127,15 @@ bool start_terminal_session_transfer(TerminalSessionState *state,
   }
 
   return state->session->start_transfer(std::move(request));
+}
+
+bool start_terminal_session_text_send(TerminalSessionState *state,
+                                      TerminalTextSendRequest request) {
+  if (state == nullptr || state->session == nullptr) {
+    return false;
+  }
+
+  return state->session->start_text_send(std::move(request));
 }
 
 void set_terminal_session_zmodem_autostart(TerminalSessionState *state,

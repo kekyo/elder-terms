@@ -25,9 +25,10 @@
 #include <variant>
 #include <vector>
 
-#include "../terminal-view-io.h"
+#include "../../terminal-text-send-runner.h"
 #include "../../terminal-transfer-runner.h"
 #include "../../terminal-zmodem-auto-start.h"
+#include "../terminal-view-io.h"
 #include "serial-device-resolver.h"
 #include "serial-device-event-monitor.h"
 #include "serial-line-monitor.h"
@@ -160,16 +161,19 @@ private:
   SerialCarrierTracker carrier_tracker;
   std::optional<cardio::io_uring> io;
   cardio::cancellation_source stop_source;
+  cardio::primitives::mutex backend_write_mutex;
   std::optional<cardio::cancellation_source> connection_cancel_source;
   std::deque<std::vector<unsigned char>> outgoing;
   std::unique_ptr<SerialDeviceEventMonitor> device_event_monitor;
   std::optional<cardio::cancellation_source> transfer_cancel_source;
+  std::optional<cardio::cancellation_source> text_send_cancel_source;
   std::optional<cardio::promise<void>> connection_task;
   std::optional<cardio::promise<void>> read_task;
   std::optional<cardio::promise<void>> write_task;
   std::optional<cardio::promise<void>> carrier_task;
   std::optional<cardio::promise<void>> ended_task;
   std::optional<cardio::promise<void>> transfer_task;
+  std::optional<cardio::promise<void>> text_send_task;
   int serial_fd = -1;
   int device_event_fd = -1;
   int transfer_input_event_fd = -1;
@@ -183,6 +187,7 @@ private:
   bool disconnected_reported = false;
   bool carrier_disconnected = false;
   bool transfer_active = false;
+  bool text_send_active = false;
   bool zmodem_autostart_enabled = false;
   std::deque<unsigned char> transfer_incoming;
   TerminalZmodemAutoStartDetectorState zmodem_auto_start_detector;
@@ -200,8 +205,8 @@ private:
   }
 
   bool handle_zmodem_auto_start(std::span<const unsigned char> bytes) {
-    if (!zmodem_autostart_enabled || !callbacks.zmodem_auto_start ||
-        bytes.empty()) {
+    if (text_send_active || !zmodem_autostart_enabled ||
+        !callbacks.zmodem_auto_start || bytes.empty()) {
       return false;
     }
 
@@ -319,6 +324,7 @@ private:
     }
 
     cancel_transfer_noexcept();
+    cancel_text_send_noexcept();
     cancel_connection_noexcept();
     outgoing.clear();
     close_fd_noexcept(&serial_fd);
@@ -338,6 +344,7 @@ private:
     }
 
     cancel_transfer_noexcept();
+    cancel_text_send_noexcept();
     outgoing.clear();
     carrier_disconnected = true;
     notify_connected_state(false);
@@ -604,6 +611,8 @@ private:
       while (!stopping && serial_fd == fd && !outgoing.empty()) {
         std::vector<unsigned char> chunk = std::move(outgoing.front());
         outgoing.pop_front();
+        auto write_lock_promise = backend_write_mutex.lock(cancellation);
+        auto write_lock = std::move(co_await write_lock_promise);
         std::size_t offset = 0;
         while (!stopping && serial_fd == fd && offset < chunk.size()) {
           const ssize_t written =
@@ -725,6 +734,12 @@ private:
     notify_event_fd_noexcept(transfer_input_event_fd);
   }
 
+  void cancel_text_send_noexcept() {
+    if (text_send_cancel_source.has_value()) {
+      (void)text_send_cancel_source->cancel();
+    }
+  }
+
   cardio::promise<void>
   send_transfer_bytes(std::span<const std::uint8_t> bytes,
                       std::uint32_t timeout_ms, std::size_t &written_len,
@@ -740,6 +755,8 @@ private:
     }
 
     written_len = 0;
+    auto write_lock_promise = backend_write_mutex.lock(cancellation);
+    auto write_lock = std::move(co_await write_lock_promise);
     const std::uint64_t start_ms = monotonic_milliseconds();
     while (written_len < bytes.size()) {
       if (!transfer_active || stopping || serial_fd < 0 ||
@@ -839,7 +856,7 @@ private:
 
   void send_user_input(std::span<const unsigned char> bytes) {
     if (bytes.empty() || stopping || serial_fd < 0 ||
-        carrier_disconnected || transfer_active) {
+        carrier_disconnected || transfer_active || text_send_active) {
       return;
     }
 
@@ -895,6 +912,100 @@ private:
     }
 
     finish_transfer(request, succeeded);
+  }
+
+  cardio::promise<void>
+  send_text_bytes(std::span<const unsigned char> bytes,
+                  cardio::cancellation cancellation) {
+    if (!text_send_active || stopping || serial_fd < 0 ||
+        carrier_disconnected) {
+      throw std::runtime_error("serial text send is not connected");
+    }
+    auto write_lock_promise = backend_write_mutex.lock(cancellation);
+    auto write_lock = std::move(co_await write_lock_promise);
+    std::size_t offset = 0;
+    while (offset < bytes.size()) {
+      cancellation.throw_if_cancellation_requested();
+      if (!text_send_active || stopping || serial_fd < 0 ||
+          carrier_disconnected) {
+        throw std::runtime_error("serial text send is not connected");
+      }
+      const ssize_t written =
+          ::write(serial_fd, bytes.data() + offset, bytes.size() - offset);
+      if (written > 0) {
+        notify_activity(ActivityIndicatorId::sd);
+        offset += static_cast<std::size_t>(written);
+        continue;
+      }
+      if (written == 0) {
+        throw std::runtime_error("serial text send write made no progress");
+      }
+      if (errno == EINTR) {
+        continue;
+      }
+      if (errno != EAGAIN && errno != EWOULDBLOCK) {
+        throw std::runtime_error(std::string("serial text send failed: ") +
+                                 std::strerror(errno));
+      }
+      const cardio::fd_event events = co_await cardio::from_fd(
+          serial_fd, cardio::fd_event::write, cancellation);
+      if (fd_events_indicate_connection_lost(events)) {
+        throw std::runtime_error("serial text send connection was lost");
+      }
+    }
+  }
+
+  static cardio::promise<void>
+  delay_text_send_async(std::uint64_t delay_us,
+                        cardio::cancellation cancellation) {
+    const std::uint64_t delay_ms =
+        delay_us / 1000 + (delay_us % 1000 == 0 ? 0 : 1);
+    co_await cardio::promises::delay(delay_ms, std::move(cancellation));
+  }
+
+  void finish_text_send(const TerminalTextSendRequest &request,
+                        bool succeeded) {
+    text_send_active = false;
+    text_send_cancel_source.reset();
+    if (request.status) {
+      request.status(succeeded ? "Terminal" : "Text send failed");
+    }
+    if (!stopping && serial_fd >= 0 && !carrier_disconnected &&
+        !transfer_active) {
+      terminal_io.connect_user_input(
+          [this](std::span<const unsigned char> bytes) {
+            send_user_input(bytes);
+          });
+    }
+    if (request.active) {
+      request.active(false);
+    }
+    if (request.finished) {
+      request.finished(succeeded);
+    }
+  }
+
+  cardio::promise<void>
+  text_send_loop_async(TerminalTextSendRequest request,
+                       TerminalTextSendTransport transport) {
+    bool succeeded = false;
+    try {
+      TerminalTextSendRequest run_request = request;
+      co_await run_terminal_text_send_async(
+          std::move(run_request), std::move(transport),
+          text_send_cancel_source->get_cancellation());
+      succeeded = true;
+    } catch (const cardio::canceled_exception &) {
+      if (!stopping) {
+        std::cerr << "Warning: serial text send cancelled" << '\n';
+      }
+    } catch (const std::exception &error) {
+      if (!stopping) {
+        std::cerr << "Warning: serial text send failed: " << error.what()
+                  << '\n';
+      }
+    }
+    finish_text_send(request, succeeded);
   }
 
   static char flow_control_title_code(SerialFlowControl flow_control) {
@@ -971,6 +1082,7 @@ public:
 
     stopping = true;
     cancel_transfer_noexcept();
+    cancel_text_send_noexcept();
     cancel_connection_noexcept();
     (void)stop_source.cancel();
     notify_event_fd_noexcept(device_event_fd);
@@ -1031,8 +1143,12 @@ public:
     return true;
   }
 
+  bool supports_text_send() const override {
+    return true;
+  }
+
   bool transfer_in_progress() const override {
-    return transfer_active;
+    return transfer_active || text_send_active;
   }
 
   void set_zmodem_autostart(bool enabled) override {
@@ -1045,8 +1161,8 @@ public:
   }
 
   bool start_transfer(TerminalTransferRequest request) override {
-    if (!started || stopping || transfer_active || serial_fd < 0 ||
-        carrier_disconnected) {
+    if (!started || stopping || transfer_active || text_send_active ||
+        serial_fd < 0 || carrier_disconnected) {
       return false;
     }
     if (request.direction == TerminalTransferDirection::send &&
@@ -1081,6 +1197,37 @@ public:
     transfer_task.reset();
     transfer_task.emplace(
         transfer_loop_async(std::move(request), std::move(transport)));
+    return true;
+  }
+
+  bool start_text_send(TerminalTextSendRequest request) override {
+    if (!started || stopping || transfer_active || text_send_active ||
+        serial_fd < 0 || carrier_disconnected ||
+        request.source_file_uri.empty()) {
+      return false;
+    }
+
+    text_send_cancel_source.emplace();
+    text_send_active = true;
+    zmodem_auto_start_detector = {};
+    terminal_io.disconnect_user_input();
+    if (request.active) {
+      request.active(true);
+    }
+    TerminalTextSendTransport transport{
+        .send =
+            [this](std::span<const unsigned char> bytes,
+                   cardio::cancellation cancellation) {
+              return send_text_bytes(bytes, std::move(cancellation));
+            },
+        .now_us = []() {
+          return static_cast<std::uint64_t>(g_get_monotonic_time());
+        },
+        .delay = delay_text_send_async,
+    };
+    text_send_task.reset();
+    text_send_task.emplace(
+        text_send_loop_async(std::move(request), std::move(transport)));
     return true;
   }
 

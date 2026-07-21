@@ -28,6 +28,7 @@ const clipboardReadHelperPath = fileURLToPath(
 );
 
 const transferMenuItems = [
+  ['transfer_text_send_item', 'Text (Send)'],
   ['transfer_zmodem_send_item', 'ZMODEM (send)'],
   ['transfer_ymodem_send_item', 'YMODEM (send)'],
   ['transfer_xmodem_1k_send_item', 'XMODEM 1K (send)'],
@@ -95,13 +96,6 @@ const writeXdgDownloadDirectory = async (
     'utf8'
   );
   return { configHome, downloads, home };
-};
-
-const expectTransferButtonHidden = async (app: GtkApp): Promise<void> => {
-  const transferButton = await app.getById('transfer_button');
-  const info = await transferButton.info();
-  expect(info.states).not.toContain('showing');
-  expect(info.states).not.toContain('visible');
 };
 
 const expectTransferButtonVisibleLeftOfSettings = async (
@@ -297,7 +291,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         'label'
       );
 
-      await expectTransferButtonHidden(app);
+      await expectTransferButtonVisibleLeftOfSettings(app);
       expect(await statusLabel.text()).toBe('Terminal');
       expect(await connIndicatorLabel.text()).toBe('CONN');
       expect(await logIndicatorLabel.text()).toBe('LOG');

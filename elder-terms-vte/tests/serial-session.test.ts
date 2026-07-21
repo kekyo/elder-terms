@@ -1,9 +1,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
-import { rm, symlink, writeFile } from 'node:fs/promises';
+import { readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { GtkApp } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
@@ -25,6 +25,11 @@ import {
   withTemporaryDirectory,
 } from './gtk-test-helpers';
 import { expectElementKind } from './test-helpers';
+import {
+  activateTextSend,
+  expectTextSendActive,
+  expectTextSendFinished,
+} from './text-send-test-helpers';
 
 const helperPath = fileURLToPath(
   new URL('../../.build/elder-terms-vte/serial-pty-helper', import.meta.url)
@@ -116,6 +121,12 @@ const hasReceivedHex = (
   helper.lines.some(
     (line) => line.startsWith('RX ') && line.includes(expectedHex)
   );
+
+const allReceivedHex = (helper: SerialPtyHelper): string =>
+  helper.lines
+    .filter((line) => line.startsWith('RX '))
+    .map((line) => line.slice('RX '.length))
+    .join('');
 
 const zmodemZrqinitPreamble = (): string => `**\x18B00000000000000`;
 
@@ -549,6 +560,51 @@ describe.concurrent('elder-terms-vte serial session', () => {
       } finally {
         await firstHelper?.close();
         await secondHelper?.close();
+      }
+    });
+  });
+
+  it('sends encoded text read-only while serial output remains active', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const helper = await startSerialPtyHelper();
+      try {
+        const sourcePath = join(directory, 'send.txt');
+        const configPath = join(directory, 'serial.ini');
+        const serialDevicePath = join(directory, 'ttyELDERTERMS0');
+        const logPath = join(directory, 'logs', 'cooked.txt');
+        await symlink(helper.slavePath, serialDevicePath);
+        await writeFile(sourcePath, '日本\x1b[A', 'utf8');
+        await writeFile(
+          configPath,
+          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\nencoding=SHIFT-JIS\ncursor_key_mode=adm3\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
+          'utf8'
+        );
+
+        await runGtkTest(
+          context,
+          [
+            '-c',
+            configPath,
+            `--test-transfer-source-uri=${pathToFileURL(sourcePath).href}`,
+          ],
+          async (app) => {
+            await waitForActivityIndicatorImageState(app, 'conn', 'on');
+            const button = await activateTextSend(app);
+            await expectTextSendActive(button);
+            helper.writeCommand('TX SERIAL_DURING_TEXT_SEND');
+            await app.input.pressKey('x');
+            await expectTextSendFinished(app, button);
+
+            await toPass(async () => {
+              expect(allReceivedHex(helper)).toBe('93fa967b1b5b41');
+              expect(await readFile(logPath, 'utf8')).toContain(
+                'SERIAL_DURING_TEXT_SEND'
+              );
+            });
+          }
+        );
+      } finally {
+        await helper.close();
       }
     });
   });

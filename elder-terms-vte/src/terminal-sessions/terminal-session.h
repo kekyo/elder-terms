@@ -7,6 +7,7 @@
 #include <elder-terms/settings.h>
 
 #include "../terminal-session-callbacks.h"
+#include "../terminal-text-send.h"
 #include "../terminal-transfer.h"
 
 namespace elder_terms {
@@ -58,6 +59,15 @@ public:
   }
 
   /**
+   * Returns whether this backend can send finite text files.
+   *
+   * @returns True when text send operations are supported.
+   */
+  virtual bool supports_text_send() const {
+    return false;
+  }
+
+  /**
    * Returns whether a transfer is currently active.
    *
    * @returns True while a transfer task is active.
@@ -73,6 +83,17 @@ public:
    * @returns True when the request was accepted.
    */
   virtual bool start_transfer(TerminalTransferRequest request) {
+    (void)request;
+    return false;
+  }
+
+  /**
+   * Starts one text file send request.
+   *
+   * @param request Text send request.
+   * @returns True when the request was accepted.
+   */
+  virtual bool start_text_send(TerminalTextSendRequest request) {
     (void)request;
     return false;
   }

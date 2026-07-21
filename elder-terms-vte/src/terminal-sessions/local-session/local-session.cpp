@@ -20,6 +20,7 @@
 
 #include "local-session.h"
 
+#include "../../terminal-text-send-runner.h"
 #include "../terminal-view-io.h"
 
 namespace elder_terms {
@@ -83,9 +84,12 @@ private:
   std::shared_ptr<LocalShellSpawnState> spawn_state;
   std::optional<cardio::io_uring> io;
   cardio::cancellation_source stop_source;
+  cardio::primitives::mutex backend_write_mutex;
   std::deque<std::vector<unsigned char>> outgoing;
+  std::optional<cardio::cancellation_source> text_send_cancel_source;
   std::optional<cardio::promise<void>> read_task;
   std::optional<cardio::promise<void>> write_task;
+  std::optional<cardio::promise<void>> text_send_task;
   VtePty *pty = nullptr;
   GPid child_pid = 0;
   int pty_fd = -1;
@@ -94,6 +98,7 @@ private:
   bool stopping = false;
   bool cleaned_up = false;
   bool writing = false;
+  bool text_send_active = false;
   bool ended_notified = false;
 
   void deactivate_spawn_callback() {
@@ -158,6 +163,9 @@ private:
     deactivate_spawn_callback();
     terminal_io.disconnect_user_input();
     outgoing.clear();
+    if (text_send_cancel_source.has_value()) {
+      (void)text_send_cancel_source->cancel();
+    }
     (void)stop_source.cancel();
     remove_child_watch();
     terminate_child();
@@ -347,12 +355,16 @@ private:
       while (!stopping && pty_fd >= 0 && !outgoing.empty()) {
         std::vector<unsigned char> chunk = std::move(outgoing.front());
         outgoing.pop_front();
+        auto write_lock_promise =
+            backend_write_mutex.lock(stop_source.get_cancellation());
+        auto write_lock = std::move(co_await write_lock_promise);
         std::size_t offset = 0;
         while (!stopping && offset < chunk.size()) {
           std::span<const unsigned char> remaining(chunk.data() + offset,
                                                    chunk.size() - offset);
           const std::size_t written = co_await cardio::io_urings::write(
-              *io, pty_fd, std::as_bytes(remaining));
+              *io, pty_fd, std::as_bytes(remaining),
+              stop_source.get_cancellation());
           if (written == 0) {
             throw std::runtime_error("local PTY write made no progress");
           }
@@ -371,6 +383,84 @@ private:
     if (!stopping && pty_fd >= 0 && !outgoing.empty()) {
       start_writer();
     }
+  }
+
+  cardio::promise<void>
+  send_text_bytes(std::span<const unsigned char> bytes,
+                  cardio::cancellation cancellation) {
+    if (!text_send_active || stopping || pty_fd < 0 || !io.has_value()) {
+      throw std::runtime_error("local text send is not connected");
+    }
+    auto write_lock_promise = backend_write_mutex.lock(cancellation);
+    auto write_lock = std::move(co_await write_lock_promise);
+    std::size_t offset = 0;
+    while (offset < bytes.size()) {
+      cancellation.throw_if_cancellation_requested();
+      if (!text_send_active || stopping || pty_fd < 0 || !io.has_value()) {
+        throw std::runtime_error("local text send is not connected");
+      }
+      const std::span<const unsigned char> remaining(bytes.data() + offset,
+                                                      bytes.size() - offset);
+      const std::size_t written = co_await cardio::io_urings::write(
+          *io, pty_fd, std::as_bytes(remaining), cancellation);
+      if (written == 0) {
+        throw std::runtime_error("local text send write made no progress");
+      }
+      notify_activity(ActivityIndicatorId::sd);
+      offset += written;
+    }
+  }
+
+  static cardio::promise<void>
+  delay_text_send_async(std::uint64_t delay_us,
+                        cardio::cancellation cancellation) {
+    const std::uint64_t delay_ms =
+        delay_us / 1000 + (delay_us % 1000 == 0 ? 0 : 1);
+    co_await cardio::promises::delay(delay_ms, std::move(cancellation));
+  }
+
+  void finish_text_send(const TerminalTextSendRequest &request,
+                        bool succeeded) {
+    text_send_active = false;
+    text_send_cancel_source.reset();
+    if (request.status) {
+      request.status(succeeded ? "Terminal" : "Text send failed");
+    }
+    if (!stopping && pty_fd >= 0) {
+      terminal_io.connect_user_input(
+          [this](std::span<const unsigned char> bytes) {
+            send_user_input(bytes);
+          });
+    }
+    if (request.active) {
+      request.active(false);
+    }
+    if (request.finished) {
+      request.finished(succeeded);
+    }
+  }
+
+  cardio::promise<void>
+  text_send_loop_async(TerminalTextSendRequest request,
+                       TerminalTextSendTransport transport) {
+    bool succeeded = false;
+    try {
+      TerminalTextSendRequest run_request = request;
+      co_await run_terminal_text_send_async(
+          std::move(run_request), std::move(transport),
+          text_send_cancel_source->get_cancellation());
+      succeeded = true;
+    } catch (const cardio::canceled_exception &) {
+      if (!stopping) {
+        std::cerr << "Warning: local text send cancelled" << '\n';
+      }
+    } catch (const std::exception &error) {
+      if (!stopping) {
+        std::cerr << "Warning: local text send failed: " << error.what()
+                  << '\n';
+      }
+    }
+    finish_text_send(request, succeeded);
   }
 
 public:
@@ -445,6 +535,43 @@ public:
   void apply_connection_profile(
       const TerminalConnectionProfile &profile) override {
     (void)terminal_io.apply_text_settings(profile.text_settings);
+  }
+
+  bool supports_text_send() const override {
+    return true;
+  }
+
+  bool transfer_in_progress() const override {
+    return text_send_active;
+  }
+
+  bool start_text_send(TerminalTextSendRequest request) override {
+    if (!started || stopping || text_send_active || pty_fd < 0 ||
+        request.source_file_uri.empty()) {
+      return false;
+    }
+
+    text_send_cancel_source.emplace();
+    text_send_active = true;
+    terminal_io.disconnect_user_input();
+    if (request.active) {
+      request.active(true);
+    }
+    TerminalTextSendTransport transport{
+        .send =
+            [this](std::span<const unsigned char> bytes,
+                   cardio::cancellation cancellation) {
+              return send_text_bytes(bytes, std::move(cancellation));
+            },
+        .now_us = []() {
+          return static_cast<std::uint64_t>(g_get_monotonic_time());
+        },
+        .delay = delay_text_send_async,
+    };
+    text_send_task.reset();
+    text_send_task.emplace(
+        text_send_loop_async(std::move(request), std::move(transport)));
+    return true;
   }
 };
 

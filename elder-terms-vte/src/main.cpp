@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <optional>
@@ -211,7 +212,9 @@ static void apply_runtime_settings(ApplicationState *state,
       elder_terms::transfer_zmodem_autostart(state->settings_store));
   elder_terms::set_main_window_transfer_button_visible(
       state->main_window,
-      elder_terms::terminal_session_supports_transfer(state->session_state));
+      elder_terms::terminal_session_supports_transfer(state->session_state) ||
+          elder_terms::terminal_session_supports_text_send(
+              state->session_state));
   update_application_terminal_presentation(state);
   const std::string title =
       elder_terms::terminal_session_title(state->session_state);
@@ -348,7 +351,7 @@ static void set_transfer_dialog_initial_folder(ApplicationState *state,
 }
 
 static std::vector<std::string> choose_transfer_files(
-    ApplicationState *state, elder_terms::TerminalTransferProtocol protocol) {
+    ApplicationState *state, bool select_multiple) {
   std::vector<std::string> uris;
   if (!state->test_options.transfer_source_uris.empty()) {
     uris = state->test_options.transfer_source_uris;
@@ -360,9 +363,7 @@ static std::vector<std::string> choose_transfer_files(
       "Open", "Cancel");
   GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
   gtk_file_chooser_set_local_only(chooser, FALSE);
-  gtk_file_chooser_set_select_multiple(
-      chooser,
-      protocol != elder_terms::TerminalTransferProtocol::xmodem);
+  gtk_file_chooser_set_select_multiple(chooser, select_multiple);
   set_transfer_dialog_initial_folder(state, chooser);
   if (state->test_options.transfer_dialog_probe) {
     schedule_transfer_dialog_probe(chooser);
@@ -432,7 +433,9 @@ static void on_transfer_menu_item_activate(GtkMenuItem *item,
 
   std::vector<std::string> source_uris;
   if (action->direction == elder_terms::TerminalTransferDirection::send) {
-    source_uris = choose_transfer_files(state, action->protocol);
+    source_uris = choose_transfer_files(
+        state,
+        action->protocol != elder_terms::TerminalTransferProtocol::xmodem);
     if (source_uris.empty()) {
       return;
     }
@@ -460,8 +463,7 @@ static void start_zmodem_auto_transfer(
 
   std::vector<std::string> source_uris;
   if (direction == elder_terms::TerminalTransferDirection::send) {
-    source_uris = choose_transfer_files(
-        state, elder_terms::TerminalTransferProtocol::zmodem);
+    source_uris = choose_transfer_files(state, true);
     if (source_uris.empty()) {
       return;
     }
@@ -511,8 +513,80 @@ static GtkWidget *create_transfer_menu_item(
   return item;
 }
 
+static bool start_text_send_request(ApplicationState *state,
+                                    std::string source_uri) {
+  const elder_terms::TerminalConnectionProfile profile =
+      elder_terms::terminal_connection_profile(state->settings_store);
+  elder_terms::TerminalTextSendRequest request{
+      .source_file_uri = std::move(source_uri),
+      .text_settings = profile.text_settings,
+      .bytes_per_second = static_cast<std::uint64_t>(
+          elder_terms::transfer_text_send_bytes_per_second(
+              state->settings_store)),
+      .active =
+          [state](bool active) {
+            set_application_transfer_active(state, active);
+            set_application_transfer_progress_visible(state, active);
+          },
+      .status =
+          [state](const std::string &status) {
+            elder_terms::set_main_window_status_text(state->main_window,
+                                                     status);
+          },
+      .progress =
+          [state](elder_terms::TerminalTransferProgress progress) {
+            elder_terms::set_main_window_transfer_progress(state->main_window,
+                                                           progress);
+          },
+      .finished = [state](bool) { restore_terminal_focus(state); },
+  };
+  return elder_terms::start_terminal_session_text_send(state->session_state,
+                                                       std::move(request));
+}
+
+static void on_text_send_menu_item_activate(GtkMenuItem *,
+                                            gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state == nullptr) {
+    return;
+  }
+  std::vector<std::string> source_uris = choose_transfer_files(state, false);
+  if (source_uris.empty()) {
+    return;
+  }
+  if (!start_text_send_request(state, std::move(source_uris.front()))) {
+    elder_terms::set_main_window_status_text(state->main_window,
+                                             "Text send unavailable");
+  }
+}
+
+static GtkWidget *create_text_send_menu_item(ApplicationState *state) {
+  GtkWidget *item = gtk_menu_item_new_with_label("Text (Send)");
+  gestament_gtk_assign_accessible_id(item, "transfer_text_send_item");
+  g_signal_connect(item, "activate",
+                   G_CALLBACK(on_text_send_menu_item_activate), state);
+  return item;
+}
+
 static void install_transfer_menu(ApplicationState *state) {
   GtkWidget *menu = gtk_menu_new();
+
+  if (elder_terms::terminal_session_supports_text_send(state->session_state)) {
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu),
+                          create_text_send_menu_item(state));
+  }
+
+  if (!elder_terms::terminal_session_supports_transfer(state->session_state)) {
+    gtk_widget_show_all(menu);
+    gtk_menu_button_set_popup(
+        GTK_MENU_BUTTON(state->main_window->transfer_button), menu);
+    return;
+  }
+
+  if (elder_terms::terminal_session_supports_text_send(state->session_state)) {
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu),
+                          gtk_separator_menu_item_new());
+  }
 
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
@@ -711,7 +785,9 @@ int main(int argc, char **argv) {
   elder_terms::set_main_window_transfer_button_visible(
       &*main_window,
       elder_terms::terminal_session_supports_transfer(
-          app_state.session_state));
+          app_state.session_state) ||
+          elder_terms::terminal_session_supports_text_send(
+              app_state.session_state));
   update_application_terminal_presentation(&app_state);
   const std::string title =
       elder_terms::terminal_session_title(app_state.session_state);

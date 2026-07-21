@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
@@ -10,6 +11,11 @@ import {
   telnetLocalhostConfigPath,
   withTemporaryDirectory,
 } from './gtk-test-helpers';
+import {
+  activateTextSend,
+  expectTextSendActive,
+  expectTextSendFinished,
+} from './text-send-test-helpers';
 
 const telnetSe = 240;
 const telnetSb = 250;
@@ -574,6 +580,76 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
             }
           );
         });
+      } finally {
+        acceptedSocket?.destroy();
+        await closeServer(server);
+      }
+    });
+  });
+
+  it('sends encoded text read-only while TELNET output remains active', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const receivedChunks: Buffer[] = [];
+      let acceptedSocket: Socket | undefined;
+      const server = createServer((socket) => {
+        acceptedSocket = socket;
+        socket.on('data', (chunk) => {
+          receivedChunks.push(Buffer.from(chunk));
+        });
+        socket.write('connected\r\n');
+      });
+
+      try {
+        const port = await listenOnLocalhost(server);
+        const sourcePath = join(directory, 'send.txt');
+        const configPath = join(directory, 'telnet.ini');
+        const logPath = join(directory, 'logs', 'cooked.txt');
+        await writeFile(sourcePath, 'AÿB0123456789', 'utf8');
+        await writeFile(
+          configPath,
+          `[general]\ntype=telnet\n\n[terminal]\nauto_close=false\nencoding=ISO-8859-1\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
+          'utf8'
+        );
+
+        await runGtkTest(
+          context,
+          [
+            '-c',
+            configPath,
+            `--test-transfer-source-uri=${pathToFileURL(sourcePath).href}`,
+          ],
+          async (app) => {
+            await toPass(async () => {
+              expect(acceptedSocket).not.toBeUndefined();
+            });
+            await delay(200);
+            const baseline = Buffer.concat(receivedChunks).length;
+            const button = await activateTextSend(app);
+            await expectTextSendActive(button);
+            acceptedSocket?.write('TELNET_DURING_TEXT_SEND');
+            await app.input.pressKey('x');
+            await expectTextSendFinished(app, button);
+
+            await toPass(async () => {
+              const sent = Array.from(
+                Buffer.concat(receivedChunks).subarray(baseline).values()
+              );
+              expect(
+                hasSubsequence(
+                  sent,
+                  [
+                    0x41, 0xff, 0xff, 0x42, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35,
+                    0x36, 0x37, 0x38, 0x39,
+                  ]
+                )
+              ).toBe(true);
+              expect(sent).not.toContain(0x78);
+              expect(await readFile(logPath, 'utf8')).toContain(
+                'TELNET_DURING_TEXT_SEND'
+              );
+            });
+          }
+        );
       } finally {
         acceptedSocket?.destroy();
         await closeServer(server);

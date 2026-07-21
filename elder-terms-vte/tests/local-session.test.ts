@@ -1,6 +1,7 @@
 import { chmod, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { GtkApp, GtkCapture } from 'gestament';
 import { describe, expect, it } from 'vitest';
@@ -15,6 +16,11 @@ import {
   runGtkTest,
   withTemporaryDirectory,
 } from './gtk-test-helpers';
+import {
+  activateTextSend,
+  expectTextSendActive,
+  expectTextSendFinished,
+} from './text-send-test-helpers';
 
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
@@ -542,6 +548,70 @@ describe.concurrent('elder-terms-vte local session', () => {
         {
           env: {
             SHELL: shell.shellPath,
+          },
+        }
+      );
+    });
+  });
+
+  it('sends encoded text read-only while local output remains active', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const sourcePath = join(directory, 'send.txt');
+      const receivedPath = join(directory, 'received.bin');
+      const readyPath = join(directory, 'ready.txt');
+      const shellPath = join(directory, 'text-send-shell.sh');
+      const logPath = join(directory, 'logs', 'cooked.txt');
+      const configPath = join(directory, 'text-send.ini');
+      const sourceText = '日本\x1b[A0123456789';
+      await writeFile(sourcePath, sourceText, 'utf8');
+      await writeFile(
+        shellPath,
+        `#!/bin/sh\nstty raw -echo\nprintf ready > ${shellQuote(
+          readyPath
+        )}\ndd bs=1 count=1 of=${shellQuote(
+          receivedPath
+        )} 2>/dev/null\nprintf LOCAL_DURING_TEXT_SEND\ndd bs=1 count=16 of=${shellQuote(
+          receivedPath
+        )} oflag=append conv=notrunc 2>/dev/null\nsleep 1\nexit 0\n`,
+        'utf8'
+      );
+      await chmod(shellPath, 0o755);
+      await writeFile(
+        configPath,
+        `[terminal]\nauto_close=false\nencoding=SHIFT-JIS\ncursor_key_mode=adm3\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        [
+          '-c',
+          configPath,
+          `--test-transfer-source-uri=${pathToFileURL(sourcePath).href}`,
+        ],
+        async (app) => {
+          await waitForFileText(readyPath, 'ready');
+          const button = await activateTextSend(app);
+          await expectTextSendActive(button);
+          await focusTerminal(app);
+          await app.input.pressKey('x');
+          await expectTextSendFinished(app, button);
+
+          await toPass(async () => {
+            expect(Array.from((await readFile(receivedPath)).values())).toEqual(
+              [
+                0x93, 0xfa, 0x96, 0x7b, 0x1b, 0x5b, 0x41, 0x30, 0x31, 0x32,
+                0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
+              ]
+            );
+            expect(await readFile(logPath, 'utf8')).toContain(
+              'LOCAL_DURING_TEXT_SEND'
+            );
+          });
+        },
+        {
+          env: {
+            SHELL: shellPath,
           },
         }
       );
