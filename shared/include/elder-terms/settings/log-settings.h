@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include <elder-terms/export.h>
 #include <elder-terms/settings/settings-store.h>
 
 namespace elder_terms {
@@ -42,28 +43,28 @@ struct TerminalLogSettings {
  *
  * @returns Setting key for terminal logging enablement.
  */
-SettingKey terminal_log_enabled_setting_key();
+ELDER_TERMS_API SettingKey terminal_log_enabled_setting_key();
 
 /**
  * Returns the setting key for [log] base_directory.
  *
  * @returns Setting key for the terminal log base directory.
  */
-SettingKey terminal_log_base_directory_setting_key();
+ELDER_TERMS_API SettingKey terminal_log_base_directory_setting_key();
 
 /**
  * Returns the setting key for [log] file_name_format.
  *
  * @returns Setting key for the relative log path format.
  */
-SettingKey terminal_log_file_name_format_setting_key();
+ELDER_TERMS_API SettingKey terminal_log_file_name_format_setting_key();
 
 /**
  * Returns the setting key for [log] mode.
  *
  * @returns Setting key for the raw/cooked log mode.
  */
-SettingKey terminal_log_mode_setting_key();
+ELDER_TERMS_API SettingKey terminal_log_mode_setting_key();
 
 /**
  * Validates a relative terminal log path format.
@@ -74,8 +75,9 @@ SettingKey terminal_log_mode_setting_key();
  * @returns True when the format resolves beneath the configured base
  * directory and names a file.
  */
-bool terminal_log_file_name_format_is_valid(const std::string &format,
-                                            std::string *reason);
+ELDER_TERMS_API bool
+terminal_log_file_name_format_is_valid(const std::string &format,
+                                       std::string *reason);
 
 /**
  * Returns the INI value for a terminal log mode.
@@ -83,14 +85,16 @@ bool terminal_log_file_name_format_is_valid(const std::string &format,
  * @param mode Terminal log mode.
  * @returns Stable setting value.
  */
-const char *terminal_log_mode_to_string(TerminalLogMode mode);
+ELDER_TERMS_API const char *
+terminal_log_mode_to_string(TerminalLogMode mode);
 
 /**
  * Returns terminal log setting definitions.
  *
  * @returns Setting definitions for the log INI section.
  */
-std::vector<SettingDefinition> terminal_log_setting_definitions();
+ELDER_TERMS_API std::vector<SettingDefinition>
+terminal_log_setting_definitions();
 
 /**
  * Extracts terminal log settings from a store.
@@ -98,6 +102,7 @@ std::vector<SettingDefinition> terminal_log_setting_definitions();
  * @param store Source settings store.
  * @returns Effective terminal log settings.
  */
-TerminalLogSettings terminal_log_settings(const SettingsStore &store);
+ELDER_TERMS_API TerminalLogSettings
+terminal_log_settings(const SettingsStore &store);
 
 } // namespace elder_terms

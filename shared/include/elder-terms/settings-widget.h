@@ -4,6 +4,7 @@
 
 #include <gtk/gtk.h>
 
+#include <elder-terms/export.h>
 #include <elder-terms/settings.h>
 
 namespace elder_terms {
@@ -74,7 +75,8 @@ struct SettingsWidgetOptions {
  * @param options Initial settings and callback behavior.
  * @returns New settings widget state owned by the caller.
  */
-SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options);
+ELDER_TERMS_API SettingsWidgetState *
+create_settings_widget(SettingsWidgetOptions options);
 
 /**
  * Replaces the widget state with externally updated settings.
@@ -85,8 +87,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options);
  * @remarks This is intended for runtime editors whose backing application
  * state can change while the editor is open.
  */
-void update_settings_widget_store(SettingsWidgetState *state,
-                                  SettingsStore store);
+ELDER_TERMS_API void update_settings_widget_store(SettingsWidgetState *state,
+                                                   SettingsStore store);
 
 /**
  * Returns a copy of the current settings draft.
@@ -94,7 +96,8 @@ void update_settings_widget_store(SettingsWidgetState *state,
  * @param state Settings widget state.
  * @returns Current draft, or an empty store when state is null.
  */
-SettingsStore settings_widget_draft_store(const SettingsWidgetState *state);
+ELDER_TERMS_API SettingsStore
+settings_widget_draft_store(const SettingsWidgetState *state);
 
 /**
  * Checks whether the current draft contains a user edit.
@@ -102,7 +105,8 @@ SettingsStore settings_widget_draft_store(const SettingsWidgetState *state);
  * @param state Settings widget state.
  * @returns True when at least one draft setting is dirty.
  */
-bool settings_widget_is_dirty(const SettingsWidgetState *state);
+ELDER_TERMS_API bool
+settings_widget_is_dirty(const SettingsWidgetState *state);
 
 /**
  * Checks whether all editor inputs can be applied.
@@ -110,7 +114,8 @@ bool settings_widget_is_dirty(const SettingsWidgetState *state);
  * @param state Settings widget state.
  * @returns True when the current inputs are valid.
  */
-bool settings_widget_is_valid(const SettingsWidgetState *state);
+ELDER_TERMS_API bool
+settings_widget_is_valid(const SettingsWidgetState *state);
 
 /**
  * Returns the root GTK widget for insertion into a container.
@@ -118,7 +123,7 @@ bool settings_widget_is_valid(const SettingsWidgetState *state);
  * @param state Settings widget state.
  * @returns Root GtkBox widget, or nullptr when state is null.
  */
-GtkWidget *settings_widget_root(SettingsWidgetState *state);
+ELDER_TERMS_API GtkWidget *settings_widget_root(SettingsWidgetState *state);
 
 /**
  * Releases settings widget state.
@@ -129,6 +134,6 @@ GtkWidget *settings_widget_root(SettingsWidgetState *state);
  * container owns the GTK widget lifetime. Destroy that container before
  * releasing the state, or release the state from the container destroy handler.
  */
-void destroy_settings_widget(SettingsWidgetState *state);
+ELDER_TERMS_API void destroy_settings_widget(SettingsWidgetState *state);
 
 } // namespace elder_terms

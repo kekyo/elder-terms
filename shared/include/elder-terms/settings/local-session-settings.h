@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include <elder-terms/export.h>
 #include <elder-terms/settings/settings-store.h>
 
 namespace elder_terms {
@@ -16,6 +17,7 @@ struct LocalShellConnectionSettings {};
  *
  * @returns Empty definitions because local shell currently has no INI keys.
  */
-std::vector<SettingDefinition> local_shell_connection_setting_definitions();
+ELDER_TERMS_API std::vector<SettingDefinition>
+local_shell_connection_setting_definitions();
 
 } // namespace elder_terms

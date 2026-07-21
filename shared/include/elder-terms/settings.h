@@ -6,6 +6,7 @@
 #include <variant>
 #include <vector>
 
+#include <elder-terms/export.h>
 #include <elder-terms/settings/general-settings.h>
 #include <elder-terms/settings/local-session-settings.h>
 #include <elder-terms/settings/log-settings.h>
@@ -87,7 +88,8 @@ struct TerminalConnectionProfile {
  * @param code Backspace code.
  * @returns Stable setting value.
  */
-const char *terminal_backspace_code_to_string(TerminalBackspaceCode code);
+ELDER_TERMS_API const char *
+terminal_backspace_code_to_string(TerminalBackspaceCode code);
 
 /**
  * Returns the INI value for a cursor-key mode.
@@ -95,7 +97,8 @@ const char *terminal_backspace_code_to_string(TerminalBackspaceCode code);
  * @param mode Cursor-key mode.
  * @returns Stable setting value.
  */
-const char *terminal_cursor_key_mode_to_string(TerminalCursorKeyMode mode);
+ELDER_TERMS_API const char *
+terminal_cursor_key_mode_to_string(TerminalCursorKeyMode mode);
 
 /**
  * Returns built-in terminal text defaults for a connection kind.
@@ -103,7 +106,7 @@ const char *terminal_cursor_key_mode_to_string(TerminalCursorKeyMode mode);
  * @param kind Connection backend kind.
  * @returns Connection-specific terminal text defaults.
  */
-TerminalTextSettings
+ELDER_TERMS_API TerminalTextSettings
 default_terminal_text_settings(TerminalConnectionKind kind);
 
 /**
@@ -113,8 +116,9 @@ default_terminal_text_settings(TerminalConnectionKind kind);
  * @param kind Connection backend kind used for implicit defaults.
  * @returns Effective terminal text settings.
  */
-TerminalTextSettings terminal_text_settings(const SettingsStore &store,
-                                            TerminalConnectionKind kind);
+ELDER_TERMS_API TerminalTextSettings
+terminal_text_settings(const SettingsStore &store,
+                       TerminalConnectionKind kind);
 
 /**
  * Paths used to build the initial settings store.
@@ -154,7 +158,8 @@ struct SettingsSaveResult {
  * @param terminal_defaults Default terminal display settings.
  * @returns Settings store containing all registered keys.
  */
-SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults);
+ELDER_TERMS_API SettingsStore
+create_default_settings(TerminalDisplaySettings terminal_defaults);
 
 /**
  * Loads settings from optional INI files.
@@ -163,8 +168,9 @@ SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults)
  * @param default_terminal_zoom VTE's runtime default font scale.
  * @returns Loaded settings and non-fatal warnings.
  */
-SettingsLoadResult load_settings(const SettingsLoadOptions &options,
-                                 gdouble default_terminal_zoom);
+ELDER_TERMS_API SettingsLoadResult
+load_settings(const SettingsLoadOptions &options,
+              gdouble default_terminal_zoom);
 
 /**
  * Saves settings to an INI file.
@@ -175,8 +181,9 @@ SettingsLoadResult load_settings(const SettingsLoadOptions &options,
  *
  * @remarks Values equal to their registered defaults are omitted.
  */
-SettingsSaveResult save_settings(const SettingsStore &store,
-                                 const std::filesystem::path &config_path);
+ELDER_TERMS_API SettingsSaveResult
+save_settings(const SettingsStore &store,
+              const std::filesystem::path &config_path);
 
 /**
  * Extracts the terminal connection profile from a store.
@@ -184,6 +191,7 @@ SettingsSaveResult save_settings(const SettingsStore &store,
  * @param store Source settings store.
  * @returns Terminal connection profile.
  */
-TerminalConnectionProfile terminal_connection_profile(const SettingsStore &store);
+ELDER_TERMS_API TerminalConnectionProfile
+terminal_connection_profile(const SettingsStore &store);
 
 } // namespace elder_terms

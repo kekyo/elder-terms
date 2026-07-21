@@ -5,6 +5,8 @@
 
 #include <gdk/gdk.h>
 
+#include <elder-terms/export.h>
+
 namespace elder_terms {
 
 /**
@@ -37,7 +39,8 @@ struct KeyBindingParseResult {
  * @remarks Supported modifiers are Ctrl, Shift, Alt, and Super. Tokens are
  * matched case-insensitively and may be separated with mixed separators.
  */
-KeyBindingParseResult parse_key_binding(const std::string &text);
+ELDER_TERMS_API KeyBindingParseResult
+parse_key_binding(const std::string &text);
 
 /**
  * Checks whether two parsed keyboard bindings are identical.
@@ -46,7 +49,8 @@ KeyBindingParseResult parse_key_binding(const std::string &text);
  * @param right Second binding.
  * @returns True when key and exact modifier set are equal.
  */
-bool key_bindings_equal(const KeyBinding &left, const KeyBinding &right);
+ELDER_TERMS_API bool key_bindings_equal(const KeyBinding &left,
+                                        const KeyBinding &right);
 
 /**
  * Checks a key event against one parsed keyboard binding.
@@ -59,7 +63,8 @@ bool key_bindings_equal(const KeyBinding &left, const KeyBinding &right);
  * @remarks Lock and pointer-button state is ignored. Keyboard-layout-consumed
  * modifiers remain part of the exact comparison.
  */
-bool key_binding_matches(const KeyBinding &binding, guint keyval,
-                         GdkModifierType modifiers);
+ELDER_TERMS_API bool key_binding_matches(const KeyBinding &binding,
+                                         guint keyval,
+                                         GdkModifierType modifiers);
 
 } // namespace elder_terms

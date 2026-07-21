@@ -6,6 +6,8 @@
 
 #include <glib.h>
 
+#include <elder-terms/export.h>
+
 namespace elder_terms {
 
 /**
@@ -80,7 +82,8 @@ struct SettingsStore {
  * @param name INI key name.
  * @returns Setting key value.
  */
-SettingKey make_setting_key(std::string section, std::string name);
+ELDER_TERMS_API SettingKey make_setting_key(std::string section,
+                                           std::string name);
 
 /**
  * Creates a settings store initialized with definition defaults.
@@ -88,7 +91,8 @@ SettingKey make_setting_key(std::string section, std::string name);
  * @param definitions Registered setting definitions.
  * @returns Settings store containing all registered keys.
  */
-SettingsStore create_settings_store(std::vector<SettingDefinition> definitions);
+ELDER_TERMS_API SettingsStore
+create_settings_store(std::vector<SettingDefinition> definitions);
 
 /**
  * Loads all registered keys from a parsed GLib key file.
@@ -97,9 +101,9 @@ SettingsStore create_settings_store(std::vector<SettingDefinition> definitions);
  * @param key_file Parsed INI file.
  * @param warnings Non-fatal warning sink.
  */
-void load_settings_store_from_key_file(SettingsStore *store,
-                                       GKeyFile *key_file,
-                                       std::vector<std::string> *warnings);
+ELDER_TERMS_API void
+load_settings_store_from_key_file(SettingsStore *store, GKeyFile *key_file,
+                                  std::vector<std::string> *warnings);
 
 /**
  * Returns the value for a setting, or fallback when the key is not registered.
@@ -109,7 +113,7 @@ void load_settings_store_from_key_file(SettingsStore *store,
  * @param fallback Value returned when key is absent.
  * @returns Current or fallback value.
  */
-SettingValue setting_value_or_default(
+ELDER_TERMS_API SettingValue setting_value_or_default(
   const SettingsStore &store, const SettingKey &key, SettingValue fallback);
 
 /**
@@ -120,7 +124,7 @@ SettingValue setting_value_or_default(
  * @param fallback Value returned when key is absent.
  * @returns Current or fallback value.
  */
-std::string setting_string_value_or_default(
+ELDER_TERMS_API std::string setting_string_value_or_default(
   const SettingsStore &store, const SettingKey &key, std::string fallback);
 
 /**
@@ -131,9 +135,9 @@ std::string setting_string_value_or_default(
  * @param fallback Value returned when key is absent.
  * @returns Current or fallback value.
  */
-gint64 setting_integer_value_or_default(const SettingsStore &store,
-                                        const SettingKey &key,
-                                        gint64 fallback);
+ELDER_TERMS_API gint64
+setting_integer_value_or_default(const SettingsStore &store,
+                                 const SettingKey &key, gint64 fallback);
 
 /**
  * Returns a floating-point setting value, or fallback when the key is not registered.
@@ -143,9 +147,9 @@ gint64 setting_integer_value_or_default(const SettingsStore &store,
  * @param fallback Value returned when key is absent.
  * @returns Current or fallback value.
  */
-gdouble setting_double_value_or_default(const SettingsStore &store,
-                                        const SettingKey &key,
-                                        gdouble fallback);
+ELDER_TERMS_API gdouble
+setting_double_value_or_default(const SettingsStore &store,
+                                const SettingKey &key, gdouble fallback);
 
 /**
  * Returns a boolean setting value, or fallback when the key is not registered.
@@ -155,8 +159,9 @@ gdouble setting_double_value_or_default(const SettingsStore &store,
  * @param fallback Value returned when key is absent.
  * @returns Current or fallback value.
  */
-bool setting_boolean_value_or_default(const SettingsStore &store,
-                                      const SettingKey &key, bool fallback);
+ELDER_TERMS_API bool
+setting_boolean_value_or_default(const SettingsStore &store,
+                                 const SettingKey &key, bool fallback);
 
 /**
  * Updates a setting and marks it dirty when the value changes.
@@ -166,7 +171,7 @@ bool setting_boolean_value_or_default(const SettingsStore &store,
  * @param value New value.
  * @returns True when the key exists and the value was accepted.
  */
-bool set_setting_value(
+ELDER_TERMS_API bool set_setting_value(
   SettingsStore *store, const SettingKey &key, SettingValue value);
 
 /**
@@ -178,7 +183,7 @@ bool set_setting_value(
  * @param value New explicit value.
  * @returns True when the key exists and the value was accepted.
  */
-bool set_explicit_setting_value(
+ELDER_TERMS_API bool set_explicit_setting_value(
   SettingsStore *store, const SettingKey &key, SettingValue value);
 
 /**
@@ -188,8 +193,8 @@ bool set_explicit_setting_value(
  * @param key Setting key.
  * @returns True when the key exists.
  */
-bool clear_explicit_setting_value(SettingsStore *store,
-                                  const SettingKey &key);
+ELDER_TERMS_API bool clear_explicit_setting_value(SettingsStore *store,
+                                                  const SettingKey &key);
 
 /**
  * Checks whether one setting has an explicit loaded or in-memory override.
@@ -198,8 +203,9 @@ bool clear_explicit_setting_value(SettingsStore *store,
  * @param key Setting key.
  * @returns True when the setting is explicit rather than implicit default.
  */
-bool setting_has_explicit_value(const SettingsStore &store,
-                                const SettingKey &key);
+ELDER_TERMS_API bool
+setting_has_explicit_value(const SettingsStore &store,
+                           const SettingKey &key);
 
 /**
  * Checks whether one setting has unsaved changes.
@@ -208,7 +214,8 @@ bool setting_has_explicit_value(const SettingsStore &store,
  * @param key Setting key.
  * @returns True when the setting is dirty.
  */
-bool setting_is_dirty(const SettingsStore &store, const SettingKey &key);
+ELDER_TERMS_API bool setting_is_dirty(const SettingsStore &store,
+                                      const SettingKey &key);
 
 /**
  * Checks whether any setting has unsaved changes.
@@ -216,6 +223,6 @@ bool setting_is_dirty(const SettingsStore &store, const SettingKey &key);
  * @param store Source settings store.
  * @returns True when at least one setting is dirty.
  */
-bool settings_store_is_dirty(const SettingsStore &store);
+ELDER_TERMS_API bool settings_store_is_dirty(const SettingsStore &store);
 
 } // namespace elder_terms
