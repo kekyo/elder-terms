@@ -44,6 +44,7 @@ elder_terms_sources = [
   'src/main.cpp',
   'src/main-window.cpp',
   'src/terminal-log.cpp',
+  'src/terminal-text-send-runner.cpp',
   'src/terminal-transfer.cpp',
   'src/terminal-transfer-runner.cpp',
   'src/terminal-zmodem-auto-start.cpp',
@@ -113,6 +114,26 @@ terminal_text_codec_test = executable(
 )
 
 test('terminal-text-codec-test', terminal_text_codec_test)
+
+terminal_text_send_runner_test = executable(
+  'terminal-text-send-runner-test',
+  [
+    'tests/cpp/terminal-text-send-runner-test.cpp',
+    'src/terminal-text-send-runner.cpp',
+    'src/terminal-sessions/terminal-text-codec.cpp',
+  ],
+  cpp_args: [
+    '-I' + cardio_include_dir,
+    '-DCARDIO_WITH_GLIB=1',
+    '-DCARDIO_WITH_GIO=1',
+  ],
+  dependencies: [
+    elder_terms_dep,
+    gio_dep,
+  ],
+)
+
+test('terminal-text-send-runner-test', terminal_text_send_runner_test)
 
 activity_indicator_test = executable(
   'activity-indicator-test',
