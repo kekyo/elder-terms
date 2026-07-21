@@ -6,6 +6,7 @@
 #include <array>
 #include <cerrno>
 #include <cstddef>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -22,6 +23,7 @@ private:
   iconv_t converter = reinterpret_cast<iconv_t>(-1);
   std::string pending;
   TerminalTextConversionDirection direction;
+  bool finished = false;
 
   static std::size_t utf8_character_size(const std::string &input) {
     if (input.empty()) {
@@ -108,6 +110,9 @@ public:
 
   TerminalTextConversionResult
   convert(std::span<const unsigned char> bytes) {
+    if (finished) {
+      throw std::logic_error("terminal text conversion is already finished");
+    }
     if (!bytes.empty()) {
       pending.append(reinterpret_cast<const char *>(bytes.data()),
                      bytes.size());
@@ -160,6 +165,42 @@ public:
       }
       throw std::system_error(errno, std::generic_category(),
                               "terminal iconv conversion failed");
+    }
+    return conversion;
+  }
+
+  TerminalTextConversionResult finish() {
+    TerminalTextConversionResult conversion = convert({});
+    finished = true;
+
+    if (!pending.empty()) {
+      conversion.used_replacement = true;
+      pending.clear();
+      if (direction == TerminalTextConversionDirection::backend_to_utf8) {
+        conversion.bytes.insert(conversion.bytes.end(), {0xef, 0xbf, 0xbd});
+        reset_to_initial_state();
+      } else {
+        append_encoded_question_mark(&conversion.bytes);
+      }
+    }
+
+    while (true) {
+      std::array<char, 32> buffer{};
+      char *output = buffer.data();
+      std::size_t output_size = buffer.size();
+      errno = 0;
+      const std::size_t result =
+          iconv(converter, nullptr, nullptr, &output, &output_size);
+      append_output(&conversion.bytes, buffer.data(),
+                    buffer.size() - output_size);
+      if (result != static_cast<std::size_t>(-1)) {
+        break;
+      }
+      if (errno == E2BIG) {
+        continue;
+      }
+      throw std::system_error(errno, std::generic_category(),
+                              "failed to finish terminal iconv conversion");
     }
     return conversion;
   }
@@ -249,17 +290,41 @@ public:
 class TerminalTextCodec::Impl {
 public:
   TerminalStreamConverter decoder;
-  TerminalStreamConverter encoder;
+  TerminalTextEncoder encoder;
   TerminalCursorKeyMapper cursor_key_mapper;
 
   explicit Impl(const TerminalTextSettings &settings)
       : decoder(settings.encoding, "UTF-8",
                 TerminalTextConversionDirection::backend_to_utf8),
-        encoder("UTF-8", settings.encoding,
-                TerminalTextConversionDirection::utf8_to_backend),
+        encoder(settings),
         cursor_key_mapper(settings.cursor_key_mode) {
   }
 };
+
+class TerminalTextEncoder::Impl {
+public:
+  TerminalStreamConverter encoder;
+
+  explicit Impl(const TerminalTextSettings &settings)
+      : encoder("UTF-8", settings.encoding,
+                TerminalTextConversionDirection::utf8_to_backend) {
+  }
+};
+
+TerminalTextEncoder::TerminalTextEncoder(const TerminalTextSettings &settings)
+    : impl(std::make_unique<Impl>(settings)) {
+}
+
+TerminalTextEncoder::~TerminalTextEncoder() = default;
+
+TerminalTextConversionResult
+TerminalTextEncoder::encode(std::span<const unsigned char> bytes) {
+  return impl->encoder.convert(bytes);
+}
+
+TerminalTextConversionResult TerminalTextEncoder::finish() {
+  return impl->encoder.finish();
+}
 
 TerminalTextCodec::TerminalTextCodec(const TerminalTextSettings &settings)
     : impl(std::make_unique<Impl>(settings)) {
@@ -276,7 +341,7 @@ TerminalTextConversionResult
 TerminalTextCodec::encode(std::span<const unsigned char> bytes) {
   const std::vector<unsigned char> mapped =
       impl->cursor_key_mapper.transform(bytes);
-  return impl->encoder.convert(
+  return impl->encoder.encode(
       std::span<const unsigned char>(mapped.data(), mapped.size()));
 }
 

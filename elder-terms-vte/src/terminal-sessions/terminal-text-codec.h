@@ -19,6 +19,51 @@ struct TerminalTextConversionResult {
 };
 
 /**
+ * Stateful encoder for a finite UTF-8 text source.
+ *
+ * @remarks Text is encoded with the configured character encoding. Terminal
+ * key mappings are intentionally not applied. Call finish() once the complete
+ * source has been supplied so pending input and stateful encodings are
+ * finalized.
+ */
+class TerminalTextEncoder {
+private:
+  class Impl;
+  std::unique_ptr<Impl> impl;
+
+public:
+  /**
+   * Creates a finite text encoder.
+   *
+   * @param settings Effective terminal text settings.
+   * @throws std::system_error When iconv cannot create the conversion.
+   */
+  explicit TerminalTextEncoder(const TerminalTextSettings &settings);
+
+  /** Releases the iconv conversion descriptor. */
+  ~TerminalTextEncoder();
+
+  TerminalTextEncoder(const TerminalTextEncoder &) = delete;
+  TerminalTextEncoder &operator=(const TerminalTextEncoder &) = delete;
+
+  /**
+   * Encodes one UTF-8 source chunk.
+   *
+   * @param bytes UTF-8 text bytes.
+   * @returns Converted backend bytes and replacement status.
+   */
+  TerminalTextConversionResult
+  encode(std::span<const unsigned char> bytes);
+
+  /**
+   * Finalizes the finite source and returns any remaining output.
+   *
+   * @returns Replacement and shift-state bytes emitted at end of input.
+   */
+  TerminalTextConversionResult finish();
+};
+
+/**
  * Stateful character and special-code converter at the VTE UTF-8 boundary.
  *
  * @remarks Backend input is decoded to UTF-8. VTE commit input is optionally

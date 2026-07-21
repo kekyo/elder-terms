@@ -24,6 +24,14 @@ encode(TerminalTextCodec *codec, std::initializer_list<unsigned char> bytes) {
       std::span<const unsigned char>(input.data(), input.size()));
 }
 
+static TerminalTextConversionResult
+encode(TerminalTextEncoder *encoder,
+       std::initializer_list<unsigned char> bytes) {
+  const TestBytes input(bytes);
+  return encoder->encode(
+      std::span<const unsigned char>(input.data(), input.size()));
+}
+
 static void expect_bytes(const TestBytes &actual,
                          std::initializer_list<unsigned char> expected,
                          const char *message) {
@@ -162,6 +170,62 @@ static void normal_and_unknown_cursor_sequences_pass_through() {
                "unknown escape sequences should pass through");
 }
 
+static void finite_text_encoding_uses_only_the_character_encoding() {
+  TerminalTextEncoder encoder({
+      .encoding = "SHIFT-JIS",
+      .backspace_code = TerminalBackspaceCode::bs,
+      .cursor_key_mode = TerminalCursorKeyMode::adm3,
+  });
+
+  const auto first = encode(&encoder, {0xe6, 0x97});
+  const auto second = encode(
+      &encoder, {0xa5, 0x1b, '[', 'A', 0xe6, 0x9c, 0xac});
+  const auto finished = encoder.finish();
+
+  expect_bytes(first.bytes, {},
+               "an incomplete UTF-8 character should remain pending");
+  expect_bytes(second.bytes,
+               {0x93, 0xfa, 0x1b, '[', 'A', 0x96, 0x7b},
+               "finite text should be encoded without cursor-key mapping");
+  expect_bytes(finished.bytes, {},
+               "a stateless encoding should have no final shift bytes");
+}
+
+static void finite_text_encoding_finishes_pending_input_and_shift_state() {
+  TerminalTextEncoder incomplete({
+      .encoding = "UTF-8",
+      .backspace_code = TerminalBackspaceCode::del,
+      .cursor_key_mode = TerminalCursorKeyMode::normal,
+  });
+  const auto pending = encode(&incomplete, {0xe6, 0x97});
+  const auto incomplete_finished = incomplete.finish();
+
+  expect_bytes(pending.bytes, {},
+               "incomplete UTF-8 should wait until finite input ends");
+  expect_bytes(incomplete_finished.bytes, {'?'},
+               "incomplete UTF-8 at EOF should use a question mark");
+  if (!incomplete_finished.used_replacement) {
+    throw std::runtime_error(
+        "incomplete UTF-8 at EOF should report replacement use");
+  }
+
+  TerminalTextEncoder stateful({
+      .encoding = "ISO-2022-JP",
+      .backspace_code = TerminalBackspaceCode::del,
+      .cursor_key_mode = TerminalCursorKeyMode::normal,
+  });
+  const auto encoded = encode(
+      &stateful,
+      {0xe6, 0x97, 0xa5, 0xe6, 0x9c, 0xac});
+  const auto stateful_finished = stateful.finish();
+
+  expect_bytes(encoded.bytes,
+               {0x1b, '$', 'B', 0x46, 0x7c, 0x4b, 0x5c},
+               "stateful finite text should enter the target shift state");
+  expect_bytes(stateful_finished.bytes, {0x1b, '(', 'B'},
+               "finite text should flush the final shift state");
+}
+
 } // namespace elder_terms
 
 int main() {
@@ -171,5 +235,7 @@ int main() {
   elder_terms::stateful_encoding_state_is_preserved_between_chunks();
   elder_terms::adm3_cursor_keys_use_gtk_oldtype_legacy_codes();
   elder_terms::normal_and_unknown_cursor_sequences_pass_through();
+  elder_terms::finite_text_encoding_uses_only_the_character_encoding();
+  elder_terms::finite_text_encoding_finishes_pending_input_and_shift_state();
   return 0;
 }
