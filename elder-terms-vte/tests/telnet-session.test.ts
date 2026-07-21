@@ -14,8 +14,11 @@ import {
 const telnetSe = 240;
 const telnetSb = 250;
 const telnetWill = 251;
+const telnetWont = 252;
 const telnetDo = 253;
+const telnetDont = 254;
 const telnetIac = 255;
+const telnetBinary = 0;
 const telnetNaws = 31;
 const asciiBs = 8;
 const asciiDel = 127;
@@ -72,10 +75,11 @@ const hasSubsequence = (
 };
 
 describe.concurrent('elder-terms-vte TELNET session', () => {
-  it('connects to a TELNET server, negotiates NAWS, and sends user input', async (context) => {
+  it('negotiates BINARY and NAWS after connecting, tolerates BINARY disable, and sends user input', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const receivedChunks: Buffer[] = [];
       let acceptedSocket: Socket | undefined;
+      let binaryAccepted = false;
       let negotiationInterval: ReturnType<typeof setInterval> | undefined;
       const stopNegotiationInterval = (): void => {
         if (negotiationInterval !== undefined) {
@@ -89,6 +93,24 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
           receivedChunks.push(
             typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk)
           );
+          const data = receivedBytes(receivedChunks);
+          if (
+            !binaryAccepted &&
+            hasSubsequence(data, [telnetIac, telnetWill, telnetBinary]) &&
+            hasSubsequence(data, [telnetIac, telnetDo, telnetBinary])
+          ) {
+            binaryAccepted = true;
+            socket.write(
+              Buffer.from([
+                telnetIac,
+                telnetDo,
+                telnetBinary,
+                telnetIac,
+                telnetWill,
+                telnetBinary,
+              ])
+            );
+          }
         });
         socket.on('close', stopNegotiationInterval);
         const writeNawsRequest = (): void => {
@@ -127,6 +149,13 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
             async () => {
               const data = receivedBytes(receivedChunks);
               expect(
+                hasSubsequence(data, [telnetIac, telnetWill, telnetBinary])
+              ).toBe(true);
+              expect(
+                hasSubsequence(data, [telnetIac, telnetDo, telnetBinary])
+              ).toBe(true);
+              expect(binaryAccepted).toBe(true);
+              expect(
                 hasSubsequence(data, [telnetIac, telnetWill, telnetNaws])
               ).toBe(true);
               expect(
@@ -144,7 +173,19 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
               ).toBe(true);
             },
             {
-              message: 'TELNET client should negotiate NAWS',
+              message: 'TELNET client should negotiate BINARY and NAWS',
+              timeoutMs: 5_000,
+            }
+          );
+
+          await toPass(
+            async () => {
+              expect((await app.output()).stderr).toContain(
+                'Info: TELNET BINARY negotiation succeeded after connection'
+              );
+            },
+            {
+              message: 'successful initial BINARY negotiation should be logged',
               timeoutMs: 5_000,
             }
           );
@@ -155,6 +196,35 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
           await delay(500);
           await waitForActivityIndicatorImageState(app, 'rd', 'off');
           await waitForActivityIndicatorImageState(app, 'sd', 'off');
+
+          const disableBaselineLength = receivedBytes(receivedChunks).length;
+          acceptedSocket?.write(
+            Buffer.from([
+              telnetIac,
+              telnetDont,
+              telnetBinary,
+              telnetIac,
+              telnetWont,
+              telnetBinary,
+            ])
+          );
+          await toPass(
+            async () => {
+              const newData = receivedBytes(receivedChunks).slice(
+                disableBaselineLength
+              );
+              expect(
+                hasSubsequence(newData, [telnetIac, telnetWont, telnetBinary])
+              ).toBe(true);
+              expect(
+                hasSubsequence(newData, [telnetIac, telnetDont, telnetBinary])
+              ).toBe(true);
+            },
+            {
+              message: 'TELNET client should tolerate BINARY disable',
+              timeoutMs: 5_000,
+            }
+          );
 
           await app.input.pressKey('a');
           await toPass(
@@ -170,6 +240,85 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
         });
       } finally {
         stopNegotiationInterval();
+        acceptedSocket?.destroy();
+        await closeServer(server);
+      }
+    });
+  });
+
+  it('continues the session without an error when initial BINARY negotiation is rejected', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const receivedChunks: Buffer[] = [];
+      let acceptedSocket: Socket | undefined;
+      let binaryRejected = false;
+      const server = createServer((socket) => {
+        acceptedSocket = socket;
+        socket.on('data', (chunk) => {
+          receivedChunks.push(
+            typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk)
+          );
+          const data = receivedBytes(receivedChunks);
+          if (
+            !binaryRejected &&
+            hasSubsequence(data, [telnetIac, telnetWill, telnetBinary]) &&
+            hasSubsequence(data, [telnetIac, telnetDo, telnetBinary])
+          ) {
+            binaryRejected = true;
+            socket.write(
+              Buffer.from([
+                telnetIac,
+                telnetDont,
+                telnetBinary,
+                telnetIac,
+                telnetWont,
+                telnetBinary,
+              ])
+            );
+          }
+        });
+        socket.write('connected\r\n');
+      });
+
+      try {
+        const port = await listenOnLocalhost(server);
+        const configPath = join(directory, 'telnet.ini');
+        const configTemplate = await readFile(
+          telnetLocalhostConfigPath,
+          'utf8'
+        );
+        await writeFile(
+          configPath,
+          configTemplate.replace('${port}', String(port)),
+          'utf8'
+        );
+
+        await runGtkTest(context, ['-c', configPath], async (app) => {
+          await toPass(
+            async () => {
+              expect(binaryRejected).toBe(true);
+            },
+            {
+              message: 'TELNET server should reject initial BINARY negotiation',
+              timeoutMs: 5_000,
+            }
+          );
+
+          const baselineLength = receivedBytes(receivedChunks).length;
+          await app.input.pressKey('b');
+          await toPass(
+            async () => {
+              const newData =
+                receivedBytes(receivedChunks).slice(baselineLength);
+              expect(newData).toContain('b'.charCodeAt(0));
+            },
+            {
+              message: 'TELNET client should continue after BINARY rejection',
+              timeoutMs: 5_000,
+            }
+          );
+          expect((await app.output()).stderr).not.toContain('Warning: TELNET');
+        });
+      } finally {
         acceptedSocket?.destroy();
         await closeServer(server);
       }
