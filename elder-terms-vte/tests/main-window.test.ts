@@ -754,6 +754,7 @@ describe.concurrent('elder-terms-vte main window', () => {
       let acceptedSocketClosed = false;
       const server = createServer((socket) => {
         acceptedSocket = socket;
+        socket.resume();
         socket.on('close', () => {
           acceptedSocketClosed = true;
         });

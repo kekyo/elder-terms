@@ -462,6 +462,7 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
       let acceptedSocketClosed = false;
       const server = createServer((socket) => {
         acceptedSocket = socket;
+        socket.resume();
         socket.on('close', () => {
           acceptedSocketClosed = true;
         });

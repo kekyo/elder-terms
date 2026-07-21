@@ -227,6 +227,7 @@ private:
   bool stopping = false;
   bool writing = false;
   bool transfer_active = false;
+  bool initial_binary_negotiation_pending = false;
   bool zmodem_autostart_enabled = false;
   std::deque<unsigned char> transfer_incoming;
   TerminalZmodemAutoStartDetectorState zmodem_auto_start_detector;
@@ -302,6 +303,16 @@ private:
     TelnetProtocolResult result = protocol.receive(bytes);
     const bool is_binary_ready =
         protocol.is_binary_enabled() || protocol.is_binary_rejected();
+    if (initial_binary_negotiation_pending) {
+      if (protocol.is_binary_enabled()) {
+        initial_binary_negotiation_pending = false;
+        std::clog
+            << "Info: TELNET BINARY negotiation succeeded after connection"
+            << '\n';
+      } else if (protocol.is_binary_rejected()) {
+        initial_binary_negotiation_pending = false;
+      }
+    }
     if (!was_binary_ready && is_binary_ready) {
       notify_event_fd_noexcept(binary_negotiation_event_fd);
     }
@@ -361,6 +372,10 @@ private:
       }
       notify_indicator_state(ActivityIndicatorId::conn, true);
 
+      initial_binary_negotiation_pending = true;
+      for (TelnetBytes &bytes : protocol.encode_enable_binary()) {
+        enqueue_bytes(std::move(bytes));
+      }
       start_writer();
       std::array<unsigned char, 4096> buffer{};
       while (!stopping) {
@@ -758,6 +773,7 @@ public:
     transfer_cancel_source.emplace();
     transfer_incoming.clear();
     transfer_active = true;
+    initial_binary_negotiation_pending = false;
     terminal_io.disconnect_user_input();
     outgoing.clear();
     if (request.active) {
