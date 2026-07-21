@@ -39,6 +39,7 @@ struct FixtureOptions {
   std::string serial_flow_control = "none";
   std::string serial_carrier_detect = "cd";
   std::string transfer_base_path;
+  gint64 text_send_bytes_per_second = 1024;
   std::string zmodem_autostart = "default";
   bool log_enabled = false;
   std::string log_base_directory = "{XDG_DOCUMENTS}/logs/";
@@ -121,6 +122,9 @@ static FixtureOptions parse_options(int argc, char **argv) {
     } else if (starts_with(argument, "--transfer-base-path=")) {
       options.transfer_base_path =
           option_value(argument, "--transfer-base-path=");
+    } else if (starts_with(argument, "--text-send-bytes-per-second=")) {
+      options.text_send_bytes_per_second =
+          std::stoll(option_value(argument, "--text-send-bytes-per-second="));
     } else if (starts_with(argument, "--zmodem-autostart=")) {
       options.zmodem_autostart =
           option_value(argument, "--zmodem-autostart=");
@@ -230,6 +234,9 @@ static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
   elder_terms::set_setting_value(
       &store, elder_terms::transfer_base_path_setting_key(),
       elder_terms::SettingValue{options.transfer_base_path});
+  elder_terms::set_setting_value(
+      &store, elder_terms::transfer_text_send_bytes_per_second_setting_key(),
+      elder_terms::SettingValue{options.text_send_bytes_per_second});
   if (options.zmodem_autostart == "enabled" ||
       options.zmodem_autostart == "true") {
     elder_terms::set_explicit_setting_value(
@@ -372,6 +379,8 @@ static void print_store(const char *prefix,
             << elder_terms::serial_carrier_detect_to_string(
                    serial.carrier_detect)
             << " transfer_base_path=" << elder_terms::transfer_base_path(store)
+            << " text_send_bytes_per_second="
+            << elder_terms::transfer_text_send_bytes_per_second(store)
             << " zmodem_autostart=" << zmodem_autostart_name(store)
             << " log_enabled=" << (log.enabled ? "true" : "false")
             << " log_base_directory=" << log.base_directory

@@ -77,6 +77,8 @@ using elder_terms::terminal_zoom_in_key_setting_key;
 using elder_terms::terminal_zoom_out_key_setting_key;
 using elder_terms::transfer_base_path;
 using elder_terms::transfer_base_path_setting_key;
+using elder_terms::transfer_text_send_bytes_per_second;
+using elder_terms::transfer_text_send_bytes_per_second_setting_key;
 using elder_terms::transfer_zmodem_autostart;
 using elder_terms::transfer_zmodem_autostart_setting_key;
 
@@ -146,6 +148,8 @@ static void test_default_settings() {
               "default terminal zoom-out key should be Ctrl+minus");
   expect_true(transfer_base_path(store).empty(),
               "default transfer base path should be empty");
+  expect_true(transfer_text_send_bytes_per_second(store) == 1024,
+              "default text send rate should be 1024 bytes per second");
   expect_true(!transfer_zmodem_autostart(store),
               "default local transfer ZMODEM auto-start should be disabled");
   const TerminalLogSettings log = terminal_log_settings(store);
@@ -523,6 +527,45 @@ static void test_transfer_base_path_setting() {
               "transfer base_path should come from the configuration file");
 }
 
+static void test_transfer_text_send_bytes_per_second_setting() {
+  const std::filesystem::path valid = temporary_config_path("text-send-rate");
+  write_config(valid,
+               "[transfer]\n"
+               "text_send_bytes_per_second=4096\n");
+
+  const SettingsLoadResult valid_result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{valid},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(valid);
+
+  expect_true(transfer_text_send_bytes_per_second(valid_result.store) == 4096,
+              "text send rate should come from the configuration file");
+
+  const std::filesystem::path invalid =
+      temporary_config_path("invalid-text-send-rate");
+  write_config(invalid,
+               "[transfer]\n"
+               "text_send_bytes_per_second=8000001\n");
+
+  const SettingsLoadResult invalid_result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{invalid},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(invalid);
+
+  expect_true(transfer_text_send_bytes_per_second(invalid_result.store) ==
+                  1024,
+              "out-of-range text send rate should use the default");
+  expect_true(warnings_contain(invalid_result.warnings,
+                               "text_send_bytes_per_second"),
+              "out-of-range text send rate should emit a warning");
+}
+
 static void test_transfer_zmodem_autostart_setting() {
   SettingsStore local_store =
       create_default_settings(default_terminal_display_settings(1.0));
@@ -830,6 +873,12 @@ static void test_public_setting_keys() {
               "transfer base_path key should use the transfer section");
   expect_true(transfer_base_path_setting_key().name == "base_path",
               "transfer base_path key should use the base_path name");
+  expect_true(
+      transfer_text_send_bytes_per_second_setting_key().section == "transfer",
+      "text send rate key should use the transfer section");
+  expect_true(transfer_text_send_bytes_per_second_setting_key().name ==
+                  "text_send_bytes_per_second",
+              "text send rate key should use the requested name");
   expect_true(transfer_zmodem_autostart_setting_key().section == "transfer",
               "transfer zmodem_autostart key should use the transfer section");
   expect_true(transfer_zmodem_autostart_setting_key().name ==
@@ -909,6 +958,8 @@ static void test_save_settings_omits_default_values() {
   set_setting_value(
       &store, transfer_base_path_setting_key(),
       elder_terms::SettingValue{std::string("file:///tmp/downloads")});
+  set_setting_value(&store, transfer_text_send_bytes_per_second_setting_key(),
+                    elder_terms::SettingValue{gint64{2048}});
 
   const SettingsSaveResult result = save_settings(store, path);
   expect_true(result.saved, "settings save should succeed");
@@ -936,6 +987,9 @@ static void test_save_settings_omits_default_values() {
   expect_true(content.find("base_path=file:///tmp/downloads") !=
                   std::string::npos,
               "saved settings should include non-default transfer base_path");
+  expect_true(content.find("text_send_bytes_per_second=2048") !=
+                  std::string::npos,
+              "saved settings should include non-default text send rate");
   expect_true(content.find("height=") == std::string::npos,
               "saved settings should omit default terminal height");
   expect_true(content.find("zoom=") == std::string::npos,
@@ -1133,6 +1187,7 @@ int main() {
     elder_terms_settings_test::test_telnet_profile();
     elder_terms_settings_test::test_serial_profile();
     elder_terms_settings_test::test_transfer_base_path_setting();
+    elder_terms_settings_test::test_transfer_text_send_bytes_per_second_setting();
     elder_terms_settings_test::test_transfer_zmodem_autostart_setting();
     elder_terms_settings_test::test_invalid_values_fall_back_to_defaults();
     elder_terms_settings_test::test_invalid_terminal_text_values_fall_back_to_type_defaults();

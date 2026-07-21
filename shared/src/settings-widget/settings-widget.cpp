@@ -64,6 +64,7 @@ struct SettingsWidgetState {
   GtkWidget *serial_flow_control_combo = nullptr;
   GtkWidget *serial_carrier_detect_combo = nullptr;
   GtkWidget *transfer_base_path_entry = nullptr;
+  GtkWidget *transfer_text_send_rate_spin = nullptr;
   GtkWidget *transfer_zmodem_autostart_combo = nullptr;
   GtkWidget *log_enabled_check = nullptr;
   GtkWidget *log_base_directory_entry = nullptr;
@@ -655,6 +656,14 @@ static void update_transfer_base_path_from_widget(
                     SettingValue{std::string(text == nullptr ? "" : text)});
 }
 
+static void update_transfer_text_send_rate_from_widget(
+    SettingsWidgetState *state) {
+  set_setting_value(
+      &state->draft_store, transfer_text_send_bytes_per_second_setting_key(),
+      SettingValue{static_cast<gint64>(gtk_spin_button_get_value_as_int(
+          GTK_SPIN_BUTTON(state->transfer_text_send_rate_spin)))});
+}
+
 static void update_transfer_zmodem_autostart_from_widget(
     SettingsWidgetState *state) {
   const std::string choice = active_combo_id(
@@ -809,6 +818,12 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
     gtk_entry_set_text(GTK_ENTRY(state->transfer_base_path_entry),
                        transfer_base_path(state->draft_store).c_str());
   }
+  if (state->transfer_text_send_rate_spin != nullptr) {
+    gtk_spin_button_set_value(
+        GTK_SPIN_BUTTON(state->transfer_text_send_rate_spin),
+        static_cast<double>(
+            transfer_text_send_bytes_per_second(state->draft_store)));
+  }
   if (state->transfer_zmodem_autostart_combo != nullptr) {
     gtk_combo_box_set_active_id(
         GTK_COMBO_BOX(state->transfer_zmodem_autostart_combo),
@@ -857,6 +872,7 @@ static void sync_draft_from_widgets(SettingsWidgetState *state) {
   update_serial_flow_control_from_widget(state);
   update_serial_carrier_detect_from_widget(state);
   update_transfer_base_path_from_widget(state);
+  update_transfer_text_send_rate_from_widget(state);
   update_transfer_zmodem_autostart_from_widget(state);
   update_log_enabled_from_widget(state);
   update_log_base_directory_from_widget(state);
@@ -990,6 +1006,13 @@ static void on_serial_carrier_detect_changed(GtkComboBox *, gpointer data) {
 static void on_transfer_base_path_changed(GtkEditable *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_transfer_base_path_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_transfer_text_send_rate_changed(GtkSpinButton *,
+                                               gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  update_transfer_text_send_rate_from_widget(state);
   notify_changed(state);
 }
 
@@ -1287,6 +1310,18 @@ static GtkWidget *create_transfer_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_transfer_base_path_changed), state);
   attach_row(page, 0, "base_path", state->transfer_base_path_entry);
 
+  state->transfer_text_send_rate_spin =
+      create_spin_button(1.0, 8000000.0, 1.0, 0,
+                         "settings_transfer_text_send_rate_spin");
+  gtk_spin_button_set_value(
+      GTK_SPIN_BUTTON(state->transfer_text_send_rate_spin),
+      static_cast<double>(
+          transfer_text_send_bytes_per_second(state->draft_store)));
+  g_signal_connect(state->transfer_text_send_rate_spin, "value-changed",
+                   G_CALLBACK(on_transfer_text_send_rate_changed), state);
+  attach_row(page, 1, "text_send_bytes_per_second",
+             state->transfer_text_send_rate_spin);
+
   state->transfer_zmodem_autostart_combo =
       create_combo_box("settings_transfer_zmodem_autostart_combo");
   append_combo_option(state->transfer_zmodem_autostart_combo,
@@ -1300,7 +1335,7 @@ static GtkWidget *create_transfer_page(SettingsWidgetState *state) {
       zmodem_autostart_choice_id(state->draft_store));
   g_signal_connect(state->transfer_zmodem_autostart_combo, "changed",
                    G_CALLBACK(on_transfer_zmodem_autostart_changed), state);
-  attach_row(page, 1, "zmodem_autostart",
+  attach_row(page, 2, "zmodem_autostart",
              state->transfer_zmodem_autostart_combo);
 
   return page;

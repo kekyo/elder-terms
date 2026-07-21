@@ -50,6 +50,7 @@ interface AppliedStore {
   readonly serial_parity: string;
   readonly serial_stop_bit: string;
   readonly transfer_base_path: string;
+  readonly text_send_bytes_per_second: string;
   readonly type: string;
   readonly width: string;
   readonly zmodem_autostart: string;
@@ -693,6 +694,7 @@ describe.concurrent('shared settings widget', () => {
       [
         '--page=transfer',
         '--transfer-base-path=file:///tmp/elder-terms-transfer',
+        '--text-send-bytes-per-second=4096',
         '--zmodem-autostart=disabled',
       ],
       async ({ app }) => {
@@ -706,16 +708,23 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_transfer_zmodem_autostart_combo'),
           'comboBox'
         );
+        const textSendRate = expectElementKind(
+          await app.getById('settings_transfer_text_send_rate_spin'),
+          'spinButton'
+        );
         expect(await basePath.text()).toBe('file:///tmp/elder-terms-transfer');
+        expect(await textSendRate.value()).toBe(4096);
         await expectSelectedComboValue(
           app,
           'settings_transfer_zmodem_autostart_combo',
           'Disabled'
         );
         await expectSensitive(basePath);
+        await expectSensitive(textSendRate);
         await expectSensitive(zmodemAutostart);
 
         await basePath.setText('file:///tmp/elder-terms-downloads');
+        await textSendRate.setValue(2048);
         await zmodemAutostart.selectChildAt(1);
         await expectElementKind(
           await app.getById('settings_apply_button'),
@@ -726,6 +735,7 @@ describe.concurrent('shared settings widget', () => {
         expect(store.transfer_base_path).toBe(
           'file:///tmp/elder-terms-downloads'
         );
+        expect(store.text_send_bytes_per_second).toBe('2048');
         expect(store.zmodem_autostart).toBe('enabled');
       }
     );

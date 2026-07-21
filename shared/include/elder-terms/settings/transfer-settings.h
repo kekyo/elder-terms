@@ -16,6 +16,14 @@ namespace elder_terms {
 ELDER_TERMS_API SettingKey transfer_base_path_setting_key();
 
 /**
+ * Returns the text send rate setting key.
+ *
+ * @returns Setting key for [transfer] text_send_bytes_per_second.
+ */
+ELDER_TERMS_API SettingKey
+transfer_text_send_bytes_per_second_setting_key();
+
+/**
  * Returns the ZMODEM auto-start setting key.
  *
  * @returns Setting key for [transfer] zmodem_autostart.
@@ -38,6 +46,15 @@ transfer_setting_definitions();
  * used.
  */
 ELDER_TERMS_API std::string transfer_base_path(const SettingsStore &store);
+
+/**
+ * Reads the configured text send rate.
+ *
+ * @param store Source settings store.
+ * @returns Configured text send rate in bytes per second.
+ */
+ELDER_TERMS_API gint64
+transfer_text_send_bytes_per_second(const SettingsStore &store);
 
 /**
  * Reads the effective ZMODEM auto-start setting.
