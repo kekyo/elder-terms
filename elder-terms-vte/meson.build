@@ -73,7 +73,7 @@ executable(
     '-DCARDIO_WITH_LINUX_IO_URING=1',
   ],
   dependencies: [
-    elder_terms_shared_dep,
+    elder_terms_dep,
     gio_dep,
     gtk_dep,
     liburing_dep,
@@ -108,7 +108,7 @@ terminal_text_codec_test = executable(
     'src/terminal-sessions/terminal-text-codec.cpp',
   ],
   dependencies: [
-    elder_terms_shared_dep,
+    elder_terms_dep,
   ],
 )
 
@@ -177,7 +177,7 @@ terminal_log_test = executable(
     '-DCARDIO_WITH_LINUX_IO_URING=1',
   ],
   dependencies: [
-    elder_terms_shared_dep,
+    elder_terms_dep,
     gio_dep,
     liburing_dep,
   ],
@@ -255,7 +255,7 @@ serial_device_resolver_test = executable(
     'src/terminal-sessions/serial-session/serial-device-resolver.cpp',
   ],
   dependencies: [
-    elder_terms_shared_dep,
+    elder_terms_dep,
   ],
 )
 
@@ -285,7 +285,7 @@ serial_termios_test = executable(
     'src/terminal-sessions/serial-session/serial-termios.cpp',
   ],
   dependencies: [
-    elder_terms_shared_dep,
+    elder_terms_dep,
   ],
 )
 
@@ -301,7 +301,7 @@ serial_line_monitor_test = executable(
     '-DELDER_TERMS_ENABLE_TEST_DOUBLES=1',
   ],
   dependencies: [
-    elder_terms_shared_dep,
+    elder_terms_dep,
   ],
 )
 

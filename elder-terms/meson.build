@@ -26,7 +26,7 @@ elder_terms_launcher = executable(
   ],
   include_directories: elder_terms_launcher_include_dir,
   dependencies: [
-    elder_terms_shared_dep,
+    elder_terms_dep,
     elder_terms_launcher_gio_dep,
     elder_terms_launcher_gtk_dep,
   ],
@@ -40,7 +40,7 @@ elder_terms_connection_repository_test = executable(
   ],
   include_directories: elder_terms_launcher_include_dir,
   dependencies: [
-    elder_terms_shared_dep,
+    elder_terms_dep,
   ],
 )
 
