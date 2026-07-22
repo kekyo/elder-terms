@@ -3,11 +3,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include <array>
 #include <cerrno>
-#include <chrono>
-#include <cstdio>
-#include <ctime>
 #include <deque>
 #include <filesystem>
 #include <iostream>
@@ -18,8 +14,6 @@
 #include <system_error>
 #include <utility>
 #include <vector>
-
-#include <glib.h>
 
 namespace elder_terms {
 
@@ -50,111 +44,6 @@ struct TerminalLogState {
   bool processing = false;
   bool stopping = false;
 };
-
-static std::string replace_all(std::string value, const std::string &needle,
-                               const std::string &replacement) {
-  std::size_t offset = 0;
-  while ((offset = value.find(needle, offset)) != std::string::npos) {
-    value.replace(offset, needle.size(), replacement);
-    offset += replacement.size();
-  }
-  return value;
-}
-
-static std::string format_number(int value, int width) {
-  std::array<char, 32> buffer{};
-  const int written =
-      std::snprintf(buffer.data(), buffer.size(), "%0*d", width, value);
-  if (written < 0 || static_cast<std::size_t>(written) >= buffer.size()) {
-    throw std::runtime_error("failed to format terminal log timestamp");
-  }
-  return std::string(buffer.data(), static_cast<std::size_t>(written));
-}
-
-static std::filesystem::path
-expanded_log_base_directory(const std::string &configured) {
-  static constexpr std::string_view home_variable = "$HOME";
-  static constexpr std::string_view documents_variable = "{XDG_DOCUMENTS}";
-  const auto uses_variable = [&configured](std::string_view variable) {
-    return configured == variable ||
-           (configured.starts_with(variable) &&
-            configured.size() > variable.size() &&
-            configured[variable.size()] == '/');
-  };
-  const auto append_suffix = [&configured](
-                                 const std::filesystem::path &base,
-                                 std::string_view variable) {
-    const std::string_view suffix(configured.data() + variable.size(),
-                                  configured.size() - variable.size());
-    const std::size_t relative_start = suffix.find_first_not_of('/');
-    return relative_start == std::string_view::npos
-               ? base
-               : base / suffix.substr(relative_start);
-  };
-  const auto home_directory = []() {
-    const char *home = g_get_home_dir();
-    if (home == nullptr || home[0] == '\0') {
-      throw std::runtime_error(
-          "failed to resolve the user home for terminal logging");
-    }
-    return std::filesystem::path(home);
-  };
-
-  if (uses_variable(documents_variable)) {
-    const char *documents =
-        g_get_user_special_dir(G_USER_DIRECTORY_DOCUMENTS);
-    const std::filesystem::path base =
-        documents != nullptr && documents[0] != '\0'
-            ? std::filesystem::path(documents)
-            : home_directory();
-    return append_suffix(base, documents_variable);
-  }
-
-  if (uses_variable(home_variable)) {
-    return append_suffix(home_directory(), home_variable);
-  }
-  return configured.empty() ? std::filesystem::path(".")
-                            : std::filesystem::path(configured);
-}
-
-static std::filesystem::path formatted_log_path(
-    const TerminalLogSettings &settings,
-    std::chrono::system_clock::time_point now) {
-  std::string reason;
-  if (!terminal_log_file_name_format_is_valid(settings.file_name_format,
-                                               &reason)) {
-    throw std::invalid_argument("invalid terminal log file name format: " +
-                                reason);
-  }
-
-  const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
-  std::tm local{};
-  if (::localtime_r(&seconds, &local) == nullptr) {
-    throw std::runtime_error("failed to resolve local terminal log time");
-  }
-  const auto elapsed_milliseconds =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          now.time_since_epoch())
-          .count();
-  const int millisecond = static_cast<int>(
-      (elapsed_milliseconds % 1000 + 1000) % 1000);
-
-  const std::string date = format_number(local.tm_year + 1900, 4) +
-                           format_number(local.tm_mon + 1, 2) +
-                           format_number(local.tm_mday, 2);
-  const std::string time = format_number(local.tm_hour, 2) +
-                           format_number(local.tm_min, 2) +
-                           format_number(local.tm_sec, 2);
-  std::string relative = replace_all(settings.file_name_format,
-                                     "{YYYYMMDD}", date);
-  relative = replace_all(std::move(relative), "{hhmmss}", time);
-  relative = replace_all(std::move(relative), "{fff}",
-                         format_number(millisecond, 3));
-
-  const std::filesystem::path base =
-      expanded_log_base_directory(settings.base_directory);
-  return (base / std::filesystem::path(relative)).lexically_normal();
-}
 
 static void notify_warning(TerminalLogState *state,
                            const std::string &warning) {
@@ -307,7 +196,7 @@ static void begin_connection_log(TerminalLogState *state) {
 
   try {
     const std::filesystem::path path =
-        formatted_log_path(state->settings, state->now());
+        resolve_terminal_log_path(state->settings, state->now());
     state->accepting = true;
     enqueue_log_command(state, TerminalLogCommand{
                                    .kind = TerminalLogCommandKind::open,

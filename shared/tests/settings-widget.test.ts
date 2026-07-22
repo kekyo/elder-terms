@@ -455,7 +455,7 @@ describe.concurrent('shared settings widget', () => {
             await app.getById('settings_log_base_directory_entry'),
             'entry'
           ).text()
-        ).toBe('{XDG_DOCUMENTS}/logs/');
+        ).toBe('{documents}/logs/');
         expect(
           await expectElementKind(
             await app.getById('settings_log_file_name_format_entry'),
@@ -771,7 +771,7 @@ describe.concurrent('shared settings widget', () => {
         '--page=logging',
         '--log-enabled=true',
         '--log-base-directory=/tmp/elder-terms-log',
-        '--log-file-name-format={YYYYMMDD}/{hhmmss}_{fff}.txt',
+        '--log-file-name-format={YYYY-MM-DD}/{hh:mm:ss}_{fff}.txt',
         '--log-mode=cooked',
         '--save',
       ],
@@ -800,7 +800,7 @@ describe.concurrent('shared settings widget', () => {
         expect(await enabled.isChecked()).toBe(true);
         expect(await baseDirectory.text()).toBe('/tmp/elder-terms-log');
         expect(await fileNameFormat.text()).toBe(
-          '{YYYYMMDD}/{hhmmss}_{fff}.txt'
+          '{YYYY-MM-DD}/{hh:mm:ss}_{fff}.txt'
         );
         await expectSelectedComboValue(
           app,
@@ -813,8 +813,10 @@ describe.concurrent('shared settings widget', () => {
         await expectInsensitive(apply);
         await expectInsensitive(save);
 
-        await fileNameFormat.setText('{YYYYMMDD}/session.txt');
-        await baseDirectory.setText('/tmp/elder-terms-updated-log');
+        await fileNameFormat.setText(
+          '{YYYY}-{MM}-{DD}/{name}_{hh}-{mm}-{ss}.txt'
+        );
+        await baseDirectory.setText('{documents}/elder-terms/{name}');
         await enabled.toggle();
         await mode.selectChildAt(0);
         await waitForChangedState(app, 'CHANGED dirty=true valid=true');
@@ -824,8 +826,10 @@ describe.concurrent('shared settings widget', () => {
 
         const store = await waitForAppliedStore(app);
         expect(store.log_enabled).toBe('false');
-        expect(store.log_base_directory).toBe('/tmp/elder-terms-updated-log');
-        expect(store.log_file_name_format).toBe('{YYYYMMDD}/session.txt');
+        expect(store.log_base_directory).toBe('{documents}/elder-terms/{name}');
+        expect(store.log_file_name_format).toBe(
+          '{YYYY}-{MM}-{DD}/{name}_{hh}-{mm}-{ss}.txt'
+        );
         expect(store.log_mode).toBe('raw');
       }
     );

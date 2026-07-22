@@ -1,5 +1,7 @@
 #pragma once
 
+#include <chrono>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -24,13 +26,17 @@ enum class TerminalLogMode {
 struct TerminalLogSettings {
   /** True when a log file should be open while the backend is connected. */
   bool enabled = false;
-  /** Directory beneath which formatted log paths are created. A leading
-   * `{XDG_DOCUMENTS}` resolves to the XDG Documents directory, falling back
-   * to the user home directory, and a leading `$HOME` resolves directly to
-   * the user home directory. */
-  std::string base_directory = "{XDG_DOCUMENTS}/logs/";
-  /** Relative path format evaluated for each connection. */
+  /** Directory format beneath which log paths are created. Named and temporal
+   * placeholders may appear anywhere. `{documents}` and `{downloads}` use
+   * their XDG user directories, falling back to `$HOME/Documents` and
+   * `$HOME/Downloads`; `{home}` uses the home directory; and `{name}` uses the
+   * sanitized connection name. */
+  std::string base_directory = "{documents}/logs/";
+  /** Path format evaluated for each connection using the same named and
+   * temporal placeholders as the base directory. */
   std::string file_name_format = "{YYYYMMDD}_{hhmmss}_{fff}.txt";
+  /** Effective connection name used by the `{name}` placeholder. */
+  std::string connection_name = "elder-terms";
   /** Received byte representation written to the log. */
   TerminalLogMode mode = TerminalLogMode::raw;
 
@@ -67,17 +73,34 @@ ELDER_TERMS_API SettingKey terminal_log_file_name_format_setting_key();
 ELDER_TERMS_API SettingKey terminal_log_mode_setting_key();
 
 /**
- * Validates a relative terminal log path format.
+ * Validates a terminal log file path format.
  *
- * @param format Candidate format containing optional `{YYYYMMDD}`, `{hhmmss}`,
- * and `{fff}` placeholders.
+ * @param format Candidate format containing `{documents}`, `{downloads}`,
+ * `{home}`, `{name}`, and the temporal fields `YYYY`, `MM`, `DD`, `hh`, `mm`,
+ * `ss`, and `fff`. Temporal fields may be placed in separate braces or
+ * combined with punctuation separators inside one pair of braces.
  * @param reason Receives a human-readable validation failure reason.
- * @returns True when the format resolves beneath the configured base
- * directory and names a file.
+ * @returns True when the format has valid placeholders, contains no parent
+ * directory traversal, and names a file.
  */
 ELDER_TERMS_API bool
 terminal_log_file_name_format_is_valid(const std::string &format,
                                        std::string *reason);
+
+/**
+ * Resolves an effective terminal log path.
+ *
+ * @param settings Effective terminal log settings.
+ * @param now Timestamp used by date and time placeholders.
+ * @returns Normalized path produced from the base and file name formats.
+ *
+ * @throws std::invalid_argument if the file name format is invalid.
+ * @throws std::runtime_error if the local time or user home cannot be
+ * resolved.
+ */
+ELDER_TERMS_API std::filesystem::path resolve_terminal_log_path(
+    const TerminalLogSettings &settings,
+    std::chrono::system_clock::time_point now);
 
 /**
  * Returns the INI value for a terminal log mode.

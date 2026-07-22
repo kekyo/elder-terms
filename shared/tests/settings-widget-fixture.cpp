@@ -42,7 +42,7 @@ struct FixtureOptions {
   gint64 text_send_bytes_per_second = 1024;
   std::string zmodem_autostart = "default";
   bool log_enabled = false;
-  std::string log_base_directory = "{XDG_DOCUMENTS}/logs/";
+  std::string log_base_directory = "{documents}/logs/";
   std::string log_file_name_format = "{YYYYMMDD}_{hhmmss}_{fff}.txt";
   std::string log_mode = "raw";
 };

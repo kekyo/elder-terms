@@ -112,17 +112,12 @@ static void run_until_terminal_log_stops(
   }
 }
 
-static void write_single_raw_log(const std::string &base_directory,
-                                 const std::string &file_name,
-                                 const std::string &content) {
+static void write_single_raw_log(elder_terms::TerminalLogSettings settings,
+                                 const std::string &content,
+                                 elder_terms::TerminalLogNowCallback now) {
   elder_terms::TerminalLogState *log = elder_terms::create_terminal_log({
-      .settings = elder_terms::TerminalLogSettings{
-          .enabled = true,
-          .base_directory = base_directory,
-          .file_name_format = file_name,
-          .mode = elder_terms::TerminalLogMode::raw,
-      },
-      .now = nullptr,
+      .settings = settings,
+      .now = now,
       .active = nullptr,
       .warning = nullptr,
   });
@@ -139,48 +134,232 @@ static void test_user_directory_base_paths_are_expanded() {
   const std::filesystem::path root = temporary_directory("user-directories");
   const std::filesystem::path config_home = root / "config";
   const std::filesystem::path documents = root / "XDG Documents";
+  const std::filesystem::path downloads = root / "XDG Downloads";
   const std::filesystem::path home(g_get_home_dir());
   const std::filesystem::path home_log_directory =
       home / root.filename();
+  const std::filesystem::path documents_fallback_directory =
+      home / "Documents" / root.filename();
+  const std::filesystem::path downloads_fallback_directory =
+      home / "Downloads" / root.filename();
 
   try {
     std::filesystem::create_directories(config_home);
     std::filesystem::create_directories(documents);
+    std::filesystem::create_directories(downloads);
     {
       ScopedEnvironment config_env("XDG_CONFIG_HOME", config_home.string());
       g_reload_user_special_dirs_cache();
 
-      write_single_raw_log("{XDG_DOCUMENTS}/" + root.filename().string(),
-                           "documents-fallback.log", "fallback");
-      expect_true(read_file(home_log_directory / "documents-fallback.log") ==
-                      "fallback",
-                  "missing XDG Documents should fall back to the user home");
+      write_single_raw_log(
+          elder_terms::TerminalLogSettings{
+              .enabled = true,
+              .base_directory =
+                  "{documents}/" + root.filename().string(),
+              .file_name_format = "documents-fallback.log",
+              .connection_name = "fixture",
+              .mode = elder_terms::TerminalLogMode::raw,
+          },
+          "documents fallback", nullptr);
+      expect_true(
+          read_file(documents_fallback_directory /
+                    "documents-fallback.log") == "documents fallback",
+          "missing XDG Documents should fall back to $HOME/Documents");
+
+      write_single_raw_log(
+          elder_terms::TerminalLogSettings{
+              .enabled = true,
+              .base_directory =
+                  "{downloads}/" + root.filename().string(),
+              .file_name_format = "downloads-fallback.log",
+              .connection_name = "fixture",
+              .mode = elder_terms::TerminalLogMode::raw,
+          },
+          "downloads fallback", nullptr);
+      expect_true(
+          read_file(downloads_fallback_directory /
+                    "downloads-fallback.log") == "downloads fallback",
+          "missing XDG Downloads should fall back to $HOME/Downloads");
 
       {
         std::ofstream user_dirs(config_home / "user-dirs.dirs");
         user_dirs << "XDG_DOCUMENTS_DIR=\"" << documents.string()
+                  << "\"\n"
+                  << "XDG_DOWNLOAD_DIR=\"" << downloads.string()
                   << "\"\n";
       }
       g_reload_user_special_dirs_cache();
-      write_single_raw_log("{XDG_DOCUMENTS}/logs", "documents.log",
-                           "documents");
+      write_single_raw_log(
+          elder_terms::TerminalLogSettings{
+              .enabled = true,
+              .base_directory = "{documents}/logs",
+              .file_name_format = "documents.log",
+              .connection_name = "fixture",
+              .mode = elder_terms::TerminalLogMode::raw,
+          },
+          "documents", nullptr);
       expect_true(read_file(documents / "logs" / "documents.log") ==
                       "documents",
                   "XDG Documents token should resolve to the configured "
                   "directory");
 
-      write_single_raw_log("$HOME/" + root.filename().string(), "home.log",
-                           "home");
+      write_single_raw_log(
+          elder_terms::TerminalLogSettings{
+              .enabled = true,
+              .base_directory = "{downloads}/logs",
+              .file_name_format = "downloads.log",
+              .connection_name = "fixture",
+              .mode = elder_terms::TerminalLogMode::raw,
+          },
+          "downloads", nullptr);
+      expect_true(read_file(downloads / "logs" / "downloads.log") ==
+                      "downloads",
+                  "XDG Downloads token should resolve to the configured "
+                  "directory");
+
+      write_single_raw_log(
+          elder_terms::TerminalLogSettings{
+              .enabled = true,
+              .base_directory = "{home}/" + root.filename().string(),
+              .file_name_format = "home.log",
+              .connection_name = "fixture",
+              .mode = elder_terms::TerminalLogMode::raw,
+          },
+          "home", nullptr);
       expect_true(read_file(home_log_directory / "home.log") == "home",
-                  "$HOME token should resolve to the user home");
+                  "home token should resolve to the user home");
+
+      write_single_raw_log(
+          elder_terms::TerminalLogSettings{
+              .enabled = true,
+              .base_directory = root.string(),
+              .file_name_format =
+                  "{documents}/logs/documents-from-format.log",
+              .connection_name = "fixture",
+              .mode = elder_terms::TerminalLogMode::raw,
+          },
+          "documents format", nullptr);
+      expect_true(
+          read_file(documents / "logs" / "documents-from-format.log") ==
+              "documents format",
+          "XDG Documents token should be usable in the file name format");
+
+      write_single_raw_log(
+          elder_terms::TerminalLogSettings{
+              .enabled = true,
+              .base_directory = root.string(),
+              .file_name_format =
+                  "{downloads}/logs/downloads-from-format.log",
+              .connection_name = "fixture",
+              .mode = elder_terms::TerminalLogMode::raw,
+          },
+          "downloads format", nullptr);
+      expect_true(
+          read_file(downloads / "logs" / "downloads-from-format.log") ==
+              "downloads format",
+          "XDG Downloads token should be usable in the file name format");
+
+      write_single_raw_log(
+          elder_terms::TerminalLogSettings{
+              .enabled = true,
+              .base_directory = root.string(),
+              .file_name_format =
+                  "{home}/" + root.filename().string() +
+                  "/home-from-format.log",
+              .connection_name = "fixture",
+              .mode = elder_terms::TerminalLogMode::raw,
+          },
+          "home format", nullptr);
+      expect_true(read_file(home_log_directory / "home-from-format.log") ==
+                      "home format",
+                  "home token should be usable in the file name format");
     }
 
     g_reload_user_special_dirs_cache();
     std::filesystem::remove_all(home_log_directory);
+    std::filesystem::remove_all(documents_fallback_directory);
+    std::filesystem::remove_all(downloads_fallback_directory);
     std::filesystem::remove_all(root);
   } catch (...) {
     g_reload_user_special_dirs_cache();
     std::filesystem::remove_all(home_log_directory);
+    std::filesystem::remove_all(documents_fallback_directory);
+    std::filesystem::remove_all(downloads_fallback_directory);
+    std::filesystem::remove_all(root);
+    throw;
+  }
+}
+
+static void test_connection_name_path_placeholder_is_sanitized_once() {
+  const std::filesystem::path root = temporary_directory("connection-name");
+  std::filesystem::create_directories(root);
+
+  try {
+    write_single_raw_log(
+        elder_terms::TerminalLogSettings{
+            .enabled = true,
+            .base_directory = root.string(),
+            .file_name_format = "{name}/session.log",
+            .connection_name = "Tokyo/../Lab",
+            .mode = elder_terms::TerminalLogMode::raw,
+        },
+        "slash", nullptr);
+    expect_true(read_file(root / "Tokyo_.._Lab" / "session.log") == "slash",
+                "slashes in a connection name should not create path "
+                "components");
+
+    write_single_raw_log(
+        elder_terms::TerminalLogSettings{
+            .enabled = true,
+            .base_directory = root.string() + "/{name}",
+            .file_name_format = "session.log",
+            .connection_name = "..",
+            .mode = elder_terms::TerminalLogMode::raw,
+        },
+        "dot", nullptr);
+    expect_true(read_file(root / "__" / "session.log") == "dot",
+                "a dot-only connection name should not traverse the log "
+                "directory");
+
+    write_single_raw_log(
+        elder_terms::TerminalLogSettings{
+            .enabled = true,
+            .base_directory = root.string(),
+            .file_name_format = "{name}.log",
+            .connection_name = "literal-{YYYY}",
+            .mode = elder_terms::TerminalLogMode::raw,
+        },
+        "literal", nullptr);
+    expect_true(read_file(root / "literal-{YYYY}.log") == "literal",
+                "placeholders introduced by a connection name should not be "
+                "expanded recursively");
+
+    write_single_raw_log(
+        elder_terms::TerminalLogSettings{
+            .enabled = true,
+            .base_directory = root.string(),
+            .file_name_format = "{name}.log",
+            .connection_name = std::string("A\0B", 3),
+            .mode = elder_terms::TerminalLogMode::raw,
+        },
+        "nul", nullptr);
+    expect_true(read_file(root / "A_B.log") == "nul",
+                "NUL bytes in a connection name should be sanitized");
+
+    write_single_raw_log(
+        elder_terms::TerminalLogSettings{
+            .enabled = true,
+            .base_directory = root.string(),
+            .file_name_format = "{name}.log",
+            .connection_name = "",
+            .mode = elder_terms::TerminalLogMode::raw,
+        },
+        "empty", nullptr);
+    expect_true(read_file(root / "_.log") == "empty",
+                "an empty connection name should produce a safe file name");
+
+    std::filesystem::remove_all(root);
+  } catch (...) {
     std::filesystem::remove_all(root);
     throw;
   }
@@ -199,8 +378,9 @@ static void test_connection_boundaries_reopen_formatted_paths_and_modes() {
 
   elder_terms::TerminalLogSettings settings{
       .enabled = true,
-      .base_directory = root.string(),
-      .file_name_format = "{YYYYMMDD}/{hhmmss}_{fff}.txt",
+      .base_directory = root.string() + "/{YYYY/MM/DD}",
+      .file_name_format = "{hh}-{mm}-{ss}_{fff}.txt",
+      .connection_name = "fixture",
       .mode = elder_terms::TerminalLogMode::raw,
   };
   elder_terms::TerminalLogState *log = elder_terms::create_terminal_log({
@@ -221,6 +401,8 @@ static void test_connection_boundaries_reopen_formatted_paths_and_modes() {
     elder_terms::set_terminal_log_connection_active(log, false);
 
     settings.mode = elder_terms::TerminalLogMode::cooked;
+    settings.base_directory = root.string() + "/{YYYY}-{MM}-{DD}";
+    settings.file_name_format = "{YYYY-MM-DD}/{hh:mm:ss}_{fff}.txt";
     elder_terms::apply_terminal_log_settings(log, settings);
     elder_terms::set_terminal_log_connection_active(log, true);
     elder_terms::write_terminal_log(log, bytes("raw-second"),
@@ -233,12 +415,16 @@ static void test_connection_boundaries_reopen_formatted_paths_and_modes() {
               "successful terminal logging should not emit warnings");
   expect_true(active_states == std::vector<bool>({true, false, true, false}),
               "LOG activity should follow both opened connection files");
-  expect_true(read_file(root / "20260720" / "123456_123.txt") ==
+  expect_true(read_file(root / "2026" / "07" / "20" /
+                        "12-34-56_123.txt") ==
                   "raw-first",
-              "raw mode should preserve backend bytes in the first log");
-  expect_true(read_file(root / "20260720" / "123501_456.txt") ==
+              "raw mode should expand split time tokens and date separators "
+              "inside the base placeholder");
+  expect_true(read_file(root / "2026-07-20" / "2026-07-20" /
+                        "12:35:01_456.txt") ==
                   "cooked-second",
-              "cooked mode should write converted text in the reopened log");
+              "cooked mode should expand split base tokens and separators "
+              "inside file placeholders");
 
   std::filesystem::remove_all(root);
 }
@@ -379,6 +565,8 @@ int main() {
   try {
     elder_terms_terminal_log_test::
         test_user_directory_base_paths_are_expanded();
+    elder_terms_terminal_log_test::
+        test_connection_name_path_placeholder_is_sanitized_once();
     elder_terms_terminal_log_test::
         test_connection_boundaries_reopen_formatted_paths_and_modes();
     elder_terms_terminal_log_test::

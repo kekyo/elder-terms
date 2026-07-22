@@ -156,7 +156,7 @@ static void test_default_settings() {
   const TerminalLogSettings log = terminal_log_settings(store);
   expect_true(!log.enabled,
               "terminal logging should be disabled by default");
-  expect_true(log.base_directory == "{XDG_DOCUMENTS}/logs/",
+  expect_true(log.base_directory == "{documents}/logs/",
               "default terminal log base directory should use XDG "
               "Documents/logs");
   expect_true(log.file_name_format ==
@@ -164,6 +164,9 @@ static void test_default_settings() {
               "default terminal log file name format should include milliseconds");
   expect_true(log.mode == TerminalLogMode::raw,
               "default terminal log mode should preserve raw bytes");
+  expect_true(log.connection_name == "elder-terms",
+              "default terminal log settings should retain the effective "
+              "connection name");
 
   const TerminalConnectionProfile profile = terminal_connection_profile(store);
   expect_true(profile.name == "elder-terms",
@@ -253,10 +256,13 @@ static void test_connection_name_settings() {
 static void test_terminal_log_settings() {
   const std::filesystem::path path = temporary_config_path("terminal-log");
   write_config(path,
+               "[general]\n"
+               "name=Tokyo / Lab\n"
+               "\n"
                "[log]\n"
                "enabled=true\n"
                "base_directory=/tmp/elder-terms-logs\n"
-               "file_name_format={YYYYMMDD}/{hhmmss}_{fff}.txt\n"
+               "file_name_format={YYYY-MM-DD}/{hh:mm:ss}_{fff}.txt\n"
                "mode=cooked\n");
 
   const SettingsLoadResult result = load_settings(
@@ -273,10 +279,13 @@ static void test_terminal_log_settings() {
   expect_true(settings.base_directory == "/tmp/elder-terms-logs",
               "terminal log base directory should come from configuration");
   expect_true(settings.file_name_format ==
-                  "{YYYYMMDD}/{hhmmss}_{fff}.txt",
+                  "{YYYY-MM-DD}/{hh:mm:ss}_{fff}.txt",
               "terminal log file name format should come from configuration");
   expect_true(settings.mode == TerminalLogMode::cooked,
               "configured cooked terminal log mode should be retained");
+  expect_true(settings.connection_name == "Tokyo / Lab",
+              "terminal log settings should retain the effective connection "
+              "name for path formatting");
 }
 
 static void test_terminal_log_file_name_format_validation() {
@@ -284,6 +293,21 @@ static void test_terminal_log_file_name_format_validation() {
   expect_true(terminal_log_file_name_format_is_valid(
                   "{YYYYMMDD}/{hhmmss}_{fff}.txt", &reason),
               "nested terminal log file name format should be valid");
+  expect_true(terminal_log_file_name_format_is_valid(
+                  "{YYYY}-{MM}-{DD}/{hh}-{mm}-{ss}_{fff}.txt", &reason),
+              "separate terminal log date and time placeholders should be "
+              "valid");
+  expect_true(terminal_log_file_name_format_is_valid(
+                  "{YYYY-MM-DD}/{hh:mm:ss}_{fff}.txt", &reason),
+              "date and time separators inside placeholders should be valid");
+  expect_true(terminal_log_file_name_format_is_valid(
+                  "{YYYY/MM/DD}/{hhmmss}.txt", &reason),
+              "directory separators inside a date placeholder should be "
+              "valid");
+  expect_true(terminal_log_file_name_format_is_valid(
+                  "{documents}/{downloads}/{home}/{name}/{YYYY}.txt", &reason),
+              "named path placeholders should be valid in a file name "
+              "format");
   expect_true(terminal_log_file_name_format_is_valid("session.log", &reason),
               "literal terminal log file name should be valid");
   expect_true(!terminal_log_file_name_format_is_valid("/tmp/session.log",
@@ -295,6 +319,20 @@ static void test_terminal_log_file_name_format_validation() {
   expect_true(!terminal_log_file_name_format_is_valid("{unknown}.log",
                                                        &reason),
               "unknown terminal log placeholder should be invalid");
+  expect_true(!terminal_log_file_name_format_is_valid("{YYYYfooMM}.log",
+                                                       &reason),
+              "unknown text inside a temporal placeholder should be invalid");
+  expect_true(!terminal_log_file_name_format_is_valid("{YYYY.log", &reason),
+              "an unmatched opening brace should be invalid");
+  expect_true(!terminal_log_file_name_format_is_valid("YYYY}.log", &reason),
+              "an unmatched closing brace should be invalid");
+  expect_true(!terminal_log_file_name_format_is_valid(
+                  "{YYYY/../DD}.log", &reason),
+              "parent traversal introduced inside a temporal placeholder "
+              "should be invalid");
+  expect_true(!terminal_log_file_name_format_is_valid("{YYYY/}", &reason),
+              "a temporal placeholder ending in a directory should be "
+              "invalid");
   expect_true(!terminal_log_file_name_format_is_valid("{YYYYMMDD}/", &reason),
               "terminal log format ending in a directory should be invalid");
 }
