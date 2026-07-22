@@ -243,6 +243,52 @@ static void test_connection_boundaries_reopen_formatted_paths_and_modes() {
   std::filesystem::remove_all(root);
 }
 
+static void test_settings_toggle_logging_while_connected() {
+  const std::filesystem::path root = temporary_directory("runtime-toggle");
+  std::filesystem::create_directories(root);
+  std::vector<bool> active_states;
+  std::vector<std::string> warnings;
+  elder_terms::TerminalLogSettings settings{
+      .enabled = false,
+      .base_directory = root.string(),
+      .file_name_format = "runtime.log",
+      .mode = elder_terms::TerminalLogMode::raw,
+  };
+  elder_terms::TerminalLogState *log = elder_terms::create_terminal_log({
+      .settings = settings,
+      .now = []() { return std::chrono::system_clock::now(); },
+      .active = [&active_states](bool active) {
+        active_states.push_back(active);
+      },
+      .warning = [&warnings](const std::string &warning) {
+        warnings.push_back(warning);
+      },
+  });
+
+  run_until_terminal_log_stops(log, [&]() {
+    elder_terms::set_terminal_log_connection_active(log, true);
+    elder_terms::write_terminal_log(log, bytes("before"), bytes("unused"));
+
+    settings.enabled = true;
+    elder_terms::apply_terminal_log_settings(log, settings);
+    elder_terms::write_terminal_log(log, bytes("recorded"), bytes("unused"));
+
+    settings.enabled = false;
+    elder_terms::apply_terminal_log_settings(log, settings);
+    elder_terms::write_terminal_log(log, bytes("after"), bytes("unused"));
+  });
+  elder_terms::destroy_terminal_log(log);
+
+  expect_true(warnings.empty(),
+              "runtime logging toggles should not emit warnings");
+  expect_true(active_states == std::vector<bool>({true, false}),
+              "runtime logging toggles should open and close the log");
+  expect_true(read_file(root / "runtime.log") == "recorded",
+              "only output received while runtime logging is enabled should "
+              "be recorded");
+  std::filesystem::remove_all(root);
+}
+
 static void test_disabled_logging_creates_no_file() {
   const std::filesystem::path root = temporary_directory("disabled");
   std::filesystem::create_directories(root);
@@ -335,6 +381,8 @@ int main() {
         test_user_directory_base_paths_are_expanded();
     elder_terms_terminal_log_test::
         test_connection_boundaries_reopen_formatted_paths_and_modes();
+    elder_terms_terminal_log_test::
+        test_settings_toggle_logging_while_connected();
     elder_terms_terminal_log_test::test_disabled_logging_creates_no_file();
     elder_terms_terminal_log_test::test_open_failure_warns_and_stops_safely();
   } catch (const std::exception &error) {
