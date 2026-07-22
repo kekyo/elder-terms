@@ -28,6 +28,7 @@ const clipboardReadHelperPath = fileURLToPath(
 );
 
 const transferMenuItems = [
+  ['transfer_log_enabled_item', 'Log recording'],
   ['transfer_text_send_item', 'Text (Send)'],
   ['transfer_zmodem_send_item', 'ZMODEM (send)'],
   ['transfer_ymodem_send_item', 'YMODEM (send)'],

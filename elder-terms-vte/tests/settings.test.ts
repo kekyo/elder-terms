@@ -1,10 +1,11 @@
 import { chmod, readFile, writeFile } from 'node:fs/promises';
-import { createServer, type Server } from 'node:net';
+import { createServer, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { GtkApp, GtkWidgetElement } from 'gestament';
+import type { GtkApp, GtkMenuItemElement, GtkWidgetElement } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
+import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import { expectElementKind } from './test-helpers';
 import {
   assertTerminalTextGridMatches,
@@ -113,6 +114,66 @@ const showTerminalSettingsPage = async (app: GtkApp): Promise<void> => {
     'Terminal',
     'settings_terminal_auto_close_check'
   );
+};
+
+const showLoggingSettingsPage = async (app: GtkApp): Promise<void> => {
+  const notebook = expectElementKind(
+    await app.getById('settings_notebook'),
+    'tabList'
+  );
+  const childCount = await notebook.getChildCount();
+  for (let index = 0; index < childCount; ++index) {
+    const tab = await notebook.childAt(index);
+    if (tab === undefined || (await tab.info()).name !== 'Logging') {
+      continue;
+    }
+
+    await tab.click();
+    await toPass(async () => {
+      const enabled = await app.getById('settings_log_enabled_check');
+      expect((await enabled.info()).states).toContain('showing');
+    });
+    return;
+  }
+
+  throw new Error('Settings notebook tab was not found: Logging');
+};
+
+const openLogRecordingMenuItem = async (app: GtkApp) => {
+  const transferButton = expectElementKind(
+    await app.getById('transfer_button'),
+    'toggleButton'
+  );
+  await toPass(async () => {
+    const info = await transferButton.info();
+    expect(info.states).toContain('showing');
+    expect(info.states).toContain('sensitive');
+  });
+  await transferButton.click();
+
+  return waitForResult(async () => {
+    const item = expectElementKind(
+      await app.getById('transfer_log_enabled_item'),
+      'menuItem'
+    );
+    const info = await item.info();
+    expect(info.name).toBe('Log recording');
+    expect(info.states).toContain('showing');
+    return item;
+  });
+};
+
+const toggleLogRecordingMenuItem = async (
+  app: GtkApp,
+  item: GtkMenuItemElement
+): Promise<void> => {
+  await item.click();
+  if ((await item.info()).states.includes('showing')) {
+    await app.input.pressKey('Escape');
+  }
+  await toPass(async () => {
+    expect((await item.info()).states).not.toContain('showing');
+  });
 };
 
 const showTelnetSettingsPage = async (app: GtkApp): Promise<void> => {
@@ -666,6 +727,103 @@ describe.concurrent('elder-terms-vte settings', () => {
           );
         }
       );
+    });
+  });
+
+  it('toggles runtime logging from the transfer menu without implicitly saving it', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      let acceptedSocket: Socket | undefined;
+      const server = createServer((socket) => {
+        acceptedSocket = socket;
+      });
+
+      try {
+        const port = await listenOnLocalhost(server);
+        const configPath = join(directory, 'runtime-log.ini');
+        const logPath = join(directory, 'logs', 'runtime.txt');
+        const initialConfig = `[general]\ntype=telnet\n\n[terminal]\nauto_close=false\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n\n[log]\nenabled=false\nbase_directory=${directory}\nfile_name_format=logs/runtime.txt\nmode=cooked\n`;
+        await writeFile(configPath, initialConfig, 'utf8');
+
+        await runGtkTest(context, ['-c', configPath], async (app) => {
+          await toPass(
+            async () => {
+              expect(acceptedSocket).not.toBeUndefined();
+            },
+            {
+              message: 'TELNET server should accept a logging client',
+              timeoutMs: 5_000,
+            }
+          );
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
+          await waitForActivityIndicatorImageState(app, 'log', 'off');
+
+          let logItem = await openLogRecordingMenuItem(app);
+          expect((await logItem.info()).states).not.toContain('checked');
+          await toggleLogRecordingMenuItem(app, logItem);
+          await waitForActivityIndicatorImageState(app, 'log', 'on');
+          await expectFileContent(configPath, initialConfig);
+
+          acceptedSocket?.write('MENU_LOGGED\r\n');
+          await toPass(
+            async () => {
+              expect(await readFile(logPath, 'utf8')).toContain('MENU_LOGGED');
+            },
+            {
+              message: 'menu-enabled logging should record TELNET output',
+              timeoutMs: 5_000,
+            }
+          );
+
+          await openSettingsDialog(app);
+          await showLoggingSettingsPage(app);
+          const logEnabled = expectElementKind(
+            await app.getById('settings_log_enabled_check'),
+            'checkbox'
+          );
+          expect(await logEnabled.isChecked()).toBe(true);
+          await logEnabled.toggle();
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await expectSettingsDialogClosed(app);
+          await waitForActivityIndicatorImageState(app, 'log', 'off');
+          const savedConfig = await readFile(configPath, 'utf8');
+          expect(savedConfig).not.toContain('enabled=true');
+
+          await openSettingsDialog(app);
+          await showLoggingSettingsPage(app);
+          const appliedLogEnabled = expectElementKind(
+            await app.getById('settings_log_enabled_check'),
+            'checkbox'
+          );
+          expect(await appliedLogEnabled.isChecked()).toBe(false);
+          await appliedLogEnabled.toggle();
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          await expectSettingsDialogClosed(app);
+          await waitForActivityIndicatorImageState(app, 'log', 'on');
+
+          logItem = await openLogRecordingMenuItem(app);
+          expect((await logItem.info()).states).toContain('checked');
+          await toggleLogRecordingMenuItem(app, logItem);
+          await waitForActivityIndicatorImageState(app, 'log', 'off');
+          await expectFileContent(configPath, savedConfig);
+
+          acceptedSocket?.end('MENU_NOT_LOGGED\r\n');
+          await waitForActivityIndicatorImageState(app, 'conn', 'off');
+          await toPass(async () => {
+            const log = await readFile(logPath, 'utf8');
+            expect(log).toContain('MENU_LOGGED');
+            expect(log).not.toContain('MENU_NOT_LOGGED');
+          });
+        });
+      } finally {
+        acceptedSocket?.destroy();
+        await closeServer(server);
+      }
     });
   });
 

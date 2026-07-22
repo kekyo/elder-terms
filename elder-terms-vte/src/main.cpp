@@ -39,6 +39,7 @@ struct ApplicationState {
   GtkWidget *settings_dialog = nullptr;
   guint settings_dialog_close_idle_id = 0;
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
+  GtkWidget *log_enabled_menu_item = nullptr;
 };
 
 struct TransferMenuAction {
@@ -197,9 +198,18 @@ static void schedule_settings_dialog_close(ApplicationState *state) {
 static void apply_runtime_settings(ApplicationState *state,
                                    const elder_terms::SettingsStore &store) {
   state->settings_store = store;
+  const elder_terms::TerminalLogSettings log_settings =
+      elder_terms::terminal_log_settings(state->settings_store);
   elder_terms::apply_terminal_log_settings(
-      state->log_state,
-      elder_terms::terminal_log_settings(state->settings_store));
+      state->log_state, log_settings);
+  if (state->log_enabled_menu_item != nullptr &&
+      (gtk_check_menu_item_get_active(
+           GTK_CHECK_MENU_ITEM(state->log_enabled_menu_item)) != FALSE) !=
+          log_settings.enabled) {
+    gtk_check_menu_item_set_active(
+        GTK_CHECK_MENU_ITEM(state->log_enabled_menu_item),
+        log_settings.enabled ? TRUE : FALSE);
+  }
   state->auto_close = elder_terms::terminal_auto_close(state->settings_store);
   const auto connection_profile =
       elder_terms::terminal_connection_profile(state->settings_store);
@@ -568,8 +578,42 @@ static GtkWidget *create_text_send_menu_item(ApplicationState *state) {
   return item;
 }
 
+static void on_log_enabled_menu_item_toggled(GtkCheckMenuItem *item,
+                                             gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state == nullptr) {
+    return;
+  }
+
+  elder_terms::set_setting_value(
+      &state->settings_store, elder_terms::terminal_log_enabled_setting_key(),
+      elder_terms::SettingValue{
+          gtk_check_menu_item_get_active(item) != FALSE});
+  elder_terms::apply_terminal_log_settings(
+      state->log_state,
+      elder_terms::terminal_log_settings(state->settings_store));
+}
+
+static GtkWidget *create_log_enabled_menu_item(ApplicationState *state) {
+  GtkWidget *item = gtk_check_menu_item_new_with_label("Log recording");
+  gestament_gtk_assign_accessible_id(item, "transfer_log_enabled_item");
+  gtk_check_menu_item_set_active(
+      GTK_CHECK_MENU_ITEM(item),
+      elder_terms::terminal_log_settings(state->settings_store).enabled ? TRUE
+                                                                       : FALSE);
+  g_signal_connect(item, "toggled",
+                   G_CALLBACK(on_log_enabled_menu_item_toggled), state);
+  state->log_enabled_menu_item = item;
+  return item;
+}
+
 static void install_transfer_menu(ApplicationState *state) {
   GtkWidget *menu = gtk_menu_new();
+
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu),
+                        create_log_enabled_menu_item(state));
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu),
+                        gtk_separator_menu_item_new());
 
   if (elder_terms::terminal_session_supports_text_send(state->session_state)) {
     gtk_menu_shell_append(GTK_MENU_SHELL(menu),
@@ -715,6 +759,7 @@ int main(int argc, char **argv) {
       .settings_dialog = nullptr,
       .settings_dialog_close_idle_id = 0,
       .settings_widget = nullptr,
+      .log_enabled_menu_item = nullptr,
   };
 
   app_state.log_state = elder_terms::create_terminal_log({
