@@ -340,7 +340,8 @@ describe.concurrent('elder-terms-vte local session', () => {
         context,
         ['-c', configPath],
         async (app, evidence) => {
-          const connectedTitle = 'elder-terms: local terminal';
+          const connectedTitle =
+            'elder-terms: auto-close-disabled (local terminal)';
           await waitForActivityIndicatorImageState(app, 'conn', 'on');
           await expectMainWindowTitle(app, connectedTitle);
           await expectDisconnectedNoticeHidden(app);

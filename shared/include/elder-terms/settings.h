@@ -74,6 +74,8 @@ using TerminalConnectionSettings =
  * Describes how the terminal session should connect to a backend.
  */
 struct TerminalConnectionProfile {
+  /** Effective user-visible connection name. */
+  std::string name = "elder-terms";
   /** Selected connection backend. */
   TerminalConnectionKind kind = TerminalConnectionKind::local_shell;
   /** Backend-specific settings. */
@@ -156,10 +158,13 @@ struct SettingsSaveResult {
  * Creates a settings store initialized with application defaults.
  *
  * @param terminal_defaults Default terminal display settings.
+ * @param default_connection_name Connection name used when [general] name is
+ * absent or blank.
  * @returns Settings store containing all registered keys.
  */
 ELDER_TERMS_API SettingsStore
-create_default_settings(TerminalDisplaySettings terminal_defaults);
+create_default_settings(TerminalDisplaySettings terminal_defaults,
+                        std::string default_connection_name);
 
 /**
  * Loads settings from optional INI files.

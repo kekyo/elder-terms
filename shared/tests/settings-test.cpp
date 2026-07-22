@@ -128,7 +128,8 @@ static void remove_config(const std::filesystem::path &path) {
 
 static void test_default_settings() {
   const SettingsStore store =
-      create_default_settings(default_terminal_display_settings(1.2));
+      create_default_settings(default_terminal_display_settings(1.2),
+                              "elder-terms");
   const TerminalDisplaySettings display = terminal_display_settings(store);
   expect_true(display.width == 80, "default terminal width should be 80");
   expect_true(display.height == 24, "default terminal height should be 24");
@@ -165,6 +166,8 @@ static void test_default_settings() {
               "default terminal log mode should preserve raw bytes");
 
   const TerminalConnectionProfile profile = terminal_connection_profile(store);
+  expect_true(profile.name == "elder-terms",
+              "default connection profile should retain its effective name");
   expect_true(profile.kind == TerminalConnectionKind::local_shell,
               "default connection should be local shell");
   expect_true(std::holds_alternative<LocalShellConnectionSettings>(
@@ -178,6 +181,73 @@ static void test_default_settings() {
   expect_true(profile.text_settings.cursor_key_mode ==
                   TerminalCursorKeyMode::normal,
               "default local cursor keys should use normal sequences");
+}
+
+static void test_connection_name_settings() {
+  const auto connection_name = [](const SettingsStore &store) {
+    return elder_terms::general_connection_name(store);
+  };
+
+  const SettingsStore defaults =
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
+  expect_true(connection_name(defaults) == "elder-terms",
+              "settings without an INI path should use the application name");
+
+  const std::filesystem::path explicit_path =
+      temporary_config_path("explicit-connection-name");
+  write_config(explicit_path, "[general]\nname=Tokyo / Lab\n");
+  const SettingsLoadResult explicit_result = load_settings(
+      SettingsLoadOptions{
+          .config_path = explicit_path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(explicit_path);
+  expect_true(connection_name(explicit_result.store) == "Tokyo / Lab",
+              "an explicit general name should be retained without path-name "
+              "restrictions");
+
+  const std::filesystem::path fallback_path =
+      temporary_config_path("fallback-connection-name");
+  write_config(fallback_path, "[general]\ntype=local\n");
+  const SettingsLoadResult fallback_result = load_settings(
+      SettingsLoadOptions{
+          .config_path = fallback_path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(fallback_path);
+  expect_true(connection_name(fallback_result.store) ==
+                  fallback_path.stem().string(),
+              "a missing general name should use the persistent INI stem");
+
+  const std::filesystem::path empty_path =
+      temporary_config_path("empty-connection-name");
+  write_config(empty_path, "[general]\nname=   \n");
+  const SettingsLoadResult empty_result = load_settings(
+      SettingsLoadOptions{
+          .config_path = empty_path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(empty_path);
+  expect_true(connection_name(empty_result.store) == empty_path.stem().string(),
+              "an empty general name should use the persistent INI stem");
+
+  const std::filesystem::path startup_path =
+      temporary_config_path("startup-connection-name");
+  write_config(startup_path, "[general]\ntype=local\n");
+  const SettingsLoadResult startup_result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::nullopt,
+          .startup_config_path = startup_path,
+      },
+      1.0);
+  remove_config(startup_path);
+  expect_true(connection_name(startup_result.store) ==
+                  startup_path.stem().string(),
+              "a startup-only configuration should use its INI stem");
 }
 
 static void test_terminal_log_settings() {
@@ -285,7 +355,8 @@ static void test_terminal_text_defaults_follow_connection_type() {
 
 static void test_terminal_text_explicit_settings_override_connection_defaults() {
   SettingsStore store =
-      create_default_settings(default_terminal_display_settings(1.0));
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
   set_setting_value(&store, general_type_setting_key(),
                     elder_terms::SettingValue{std::string("serial")});
   set_explicit_setting_value(
@@ -568,7 +639,8 @@ static void test_transfer_text_send_bytes_per_second_setting() {
 
 static void test_transfer_zmodem_autostart_setting() {
   SettingsStore local_store =
-      create_default_settings(default_terminal_display_settings(1.0));
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
   expect_true(!transfer_zmodem_autostart(local_store),
               "implicit local ZMODEM auto-start should be disabled");
 
@@ -816,6 +888,9 @@ static void test_invalid_serial_values_fall_back_to_defaults() {
 }
 
 static void test_public_setting_keys() {
+  expect_true(elder_terms::general_name_setting_key().section == "general" &&
+                  elder_terms::general_name_setting_key().name == "name",
+              "general name key should use [general] name");
   expect_true(general_type_setting_key().section == "general",
               "general type key should use the general section");
   expect_true(general_type_setting_key().name == "type",
@@ -904,7 +979,8 @@ static void test_save_terminal_log_settings() {
   const std::filesystem::path path =
       temporary_config_path("save-terminal-log");
   SettingsStore store =
-      create_default_settings(default_terminal_display_settings(1.0));
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
   set_setting_value(&store, terminal_log_enabled_setting_key(),
                     elder_terms::SettingValue{true});
   set_setting_value(
@@ -938,7 +1014,8 @@ static void test_save_terminal_log_settings() {
 static void test_save_settings_omits_default_values() {
   const std::filesystem::path path = temporary_config_path("save-values");
   SettingsStore store =
-      create_default_settings(default_terminal_display_settings(1.0));
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
   set_setting_value(&store, general_type_setting_key(),
                     elder_terms::SettingValue{std::string("telnet")});
   set_setting_value(&store, terminal_width_setting_key(),
@@ -1004,7 +1081,8 @@ static void test_save_explicit_zmodem_autostart() {
   const std::filesystem::path false_path =
       temporary_config_path("save-zmodem-autostart-false");
   SettingsStore false_store =
-      create_default_settings(default_terminal_display_settings(1.0));
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
   set_explicit_setting_value(
       &false_store, transfer_zmodem_autostart_setting_key(),
       elder_terms::SettingValue{false});
@@ -1025,7 +1103,8 @@ static void test_save_explicit_zmodem_autostart() {
   const std::filesystem::path true_path =
       temporary_config_path("save-zmodem-autostart-true");
   SettingsStore true_store =
-      create_default_settings(default_terminal_display_settings(1.0));
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
   set_explicit_setting_value(
       &true_store, transfer_zmodem_autostart_setting_key(),
       elder_terms::SettingValue{true});
@@ -1044,7 +1123,8 @@ static void test_save_explicit_terminal_text_defaults() {
   const std::filesystem::path path =
       temporary_config_path("save-terminal-text-defaults");
   SettingsStore store =
-      create_default_settings(default_terminal_display_settings(1.0));
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
   set_explicit_setting_value(
       &store, terminal_encoding_setting_key(),
       elder_terms::SettingValue{std::string("UTF-8")});
@@ -1088,7 +1168,8 @@ static void test_save_explicit_terminal_text_defaults() {
 static void test_save_serial_settings_omits_default_values() {
   const std::filesystem::path path = temporary_config_path("save-serial-values");
   SettingsStore store =
-      create_default_settings(default_terminal_display_settings(1.0));
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
   set_setting_value(&store, general_type_setting_key(),
                     elder_terms::SettingValue{std::string("serial")});
   set_setting_value(&store, serial_device_setting_key(),
@@ -1134,7 +1215,8 @@ static void test_save_serial_settings_omits_default_values() {
 static void test_save_settings_writes_empty_file_for_defaults() {
   const std::filesystem::path path = temporary_config_path("save-defaults");
   const SettingsStore store =
-      create_default_settings(default_terminal_display_settings(1.0));
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
 
   const SettingsSaveResult result = save_settings(store, path);
   expect_true(result.saved, "default settings save should succeed");
@@ -1177,6 +1259,7 @@ static void test_load_settings_reports_file_read_status() {
 int main() {
   try {
     elder_terms_settings_test::test_default_settings();
+    elder_terms_settings_test::test_connection_name_settings();
     elder_terms_settings_test::test_terminal_text_defaults_follow_connection_type();
     elder_terms_settings_test::test_terminal_text_explicit_settings_override_connection_defaults();
     elder_terms_settings_test::test_terminal_encoding_choices_are_supported();

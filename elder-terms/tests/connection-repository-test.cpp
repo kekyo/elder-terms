@@ -94,7 +94,7 @@ static void test_validates_and_normalizes_profile_names() {
 static void test_saves_loads_and_renames_profiles() {
   const std::filesystem::path directory = temporary_directory();
   elder_terms::SettingsStore store = elder_terms::create_default_settings(
-      elder_terms::default_terminal_display_settings(1.0));
+      elder_terms::default_terminal_display_settings(1.0), "elder-terms");
   elder_terms::set_setting_value(
       &store, elder_terms::terminal_width_setting_key(),
       elder_terms::SettingValue{static_cast<gint64>(91)});
@@ -126,7 +126,7 @@ static void test_rejects_save_name_collisions() {
   write_file(directory / "Existing.ini", "[terminal]\nwidth=88\n");
   const elder_terms::SettingsStore store =
       elder_terms::create_default_settings(
-          elder_terms::default_terminal_display_settings(1.0));
+          elder_terms::default_terminal_display_settings(1.0), "elder-terms");
 
   const auto result = elder_terms::save_connection_profile(
       directory, std::nullopt, "Existing", store);

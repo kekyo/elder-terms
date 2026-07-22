@@ -42,6 +42,7 @@ struct SettingsWidgetState {
   SettingsWidgetCallbacks callbacks;
   GtkWidget *root = nullptr;
   GtkWidget *notebook = nullptr;
+  GtkWidget *general_name_entry = nullptr;
   GtkWidget *general_type_combo = nullptr;
   GtkWidget *terminal_width_spin = nullptr;
   GtkWidget *terminal_height_spin = nullptr;
@@ -359,6 +360,31 @@ static void update_connection_pages(SettingsWidgetState *state) {
   if (current_child != nullptr && !gtk_widget_get_visible(current_child)) {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(state->notebook), 0);
   }
+}
+
+static bool ascii_blank(const std::string &value) {
+  return std::all_of(value.begin(), value.end(), [](unsigned char character) {
+    return g_ascii_isspace(character) != FALSE;
+  });
+}
+
+static void update_general_name_from_widget(SettingsWidgetState *state) {
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->general_name_entry));
+  const std::string name = text == nullptr ? "" : text;
+  if (ascii_blank(name)) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 general_name_setting_key());
+    return;
+  }
+
+  if (!setting_has_explicit_value(state->draft_store,
+                                  general_name_setting_key()) &&
+      name == general_connection_name(state->draft_store)) {
+    return;
+  }
+  set_explicit_setting_value(&state->draft_store,
+                             general_name_setting_key(), SettingValue{name});
 }
 
 static void on_tab_button_clicked(GtkButton *button, gpointer data) {
@@ -738,6 +764,10 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
       serial_connection_settings(state->draft_store);
   const TerminalLogSettings log = terminal_log_settings(state->draft_store);
 
+  if (state->general_name_entry != nullptr) {
+    gtk_entry_set_text(GTK_ENTRY(state->general_name_entry),
+                       general_connection_name(state->draft_store).c_str());
+  }
   if (state->general_type_combo != nullptr) {
     gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->general_type_combo),
                                 connection_type_value(state->draft_store)
@@ -852,6 +882,7 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
 }
 
 static void sync_draft_from_widgets(SettingsWidgetState *state) {
+  update_general_name_from_widget(state);
   update_general_type_from_widget(state);
   update_terminal_encoding_from_widget(state);
   update_terminal_backspace_code_from_widget(state);
@@ -884,6 +915,32 @@ static void on_general_type_changed(GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_general_type_from_widget(state);
   notify_changed(state);
+}
+
+static void on_general_name_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_general_name_from_widget(state);
+  notify_changed(state);
+}
+
+static gboolean on_general_name_focus_out(GtkWidget *, GdkEventFocus *,
+                                          gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->general_name_entry));
+  if (text != nullptr && !ascii_blank(text)) {
+    return FALSE;
+  }
+
+  const bool previous_synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  gtk_entry_set_text(GTK_ENTRY(state->general_name_entry),
+                     general_connection_name(state->draft_store).c_str());
+  state->synchronizing = previous_synchronizing;
+  return FALSE;
 }
 
 static void on_terminal_width_changed(GtkSpinButton *, gpointer data) {
@@ -1078,6 +1135,17 @@ static void on_cancel_clicked(GtkButton *, gpointer data) {
 
 static GtkWidget *create_general_page(SettingsWidgetState *state) {
   GtkWidget *page = create_page_grid("settings_general_page");
+  state->general_name_entry = gtk_entry_new();
+  assign_accessible_id(state->general_name_entry,
+                       "settings_general_name_entry");
+  gtk_entry_set_text(GTK_ENTRY(state->general_name_entry),
+                     general_connection_name(state->draft_store).c_str());
+  g_signal_connect(state->general_name_entry, "changed",
+                   G_CALLBACK(on_general_name_changed), state);
+  g_signal_connect(state->general_name_entry, "focus-out-event",
+                   G_CALLBACK(on_general_name_focus_out), state);
+  attach_row(page, 0, "name", state->general_name_entry);
+
   state->general_type_combo =
       create_combo_box("settings_general_type_combo");
   append_combo_option(state->general_type_combo, local_connection_type,
@@ -1092,7 +1160,7 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
                            state->is_runtime ? FALSE : TRUE);
   g_signal_connect(state->general_type_combo, "changed",
                    G_CALLBACK(on_general_type_changed), state);
-  attach_row(page, 0, "type", state->general_type_combo);
+  attach_row(page, 1, "type", state->general_type_combo);
   return page;
 }
 
@@ -1513,6 +1581,43 @@ void update_settings_widget_store(SettingsWidgetState *state,
   update_terminal_key_binding_validation(state);
   state->synchronizing = false;
   notify_changed(state);
+}
+
+static void update_default_connection_name(SettingsStore *store,
+                                           const std::string &name) {
+  const SettingKey key = general_name_setting_key();
+  for (SettingEntry &entry : store->entries) {
+    if (entry.definition.key.section != key.section ||
+        entry.definition.key.name != key.name) {
+      continue;
+    }
+    entry.definition.default_value = SettingValue{name};
+    if (!entry.loaded) {
+      entry.value = SettingValue{name};
+    }
+    return;
+  }
+}
+
+void settings_widget_set_default_connection_name(
+    SettingsWidgetState *state, std::string default_connection_name) {
+  if (state == nullptr || ascii_blank(default_connection_name)) {
+    return;
+  }
+
+  update_default_connection_name(&state->applied_store,
+                                 default_connection_name);
+  update_default_connection_name(&state->draft_store,
+                                 default_connection_name);
+  if (state->general_name_entry == nullptr) {
+    return;
+  }
+
+  const bool previous_synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  gtk_entry_set_text(GTK_ENTRY(state->general_name_entry),
+                     general_connection_name(state->draft_store).c_str());
+  state->synchronizing = previous_synchronizing;
 }
 
 SettingsStore settings_widget_draft_store(const SettingsWidgetState *state) {

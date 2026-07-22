@@ -295,9 +295,33 @@ const expectMainWindowTitle = async (
 };
 
 describe.concurrent('elder-terms-vte settings', () => {
+  it('shows an explicit connection name with the backend title', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'named.ini');
+      await writeFile(
+        configPath,
+        '[general]\nname=Tokyo / Lab\ntype=local\n',
+        'utf8'
+      );
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app) => {
+          await expectMainWindowTitle(
+            app,
+            'elder-terms: Tokyo / Lab (local terminal)'
+          );
+        }
+      );
+    });
+  });
+
   it('shows the local terminal connection in the main window title', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
-      await expectMainWindowTitle(app, 'elder-terms: local terminal');
+      await expectMainWindowTitle(
+        app,
+        'elder-terms: elder-terms (local terminal)'
+      );
     });
   });
 
@@ -605,7 +629,10 @@ describe.concurrent('elder-terms-vte settings', () => {
           return currentLayout;
         });
         expectWindowCellSize(layout, defaultColumns, defaultRows);
-        await expectMainWindowTitle(app, 'elder-terms: telnet: (unknown)');
+        await expectMainWindowTitle(
+          app,
+          'elder-terms: telnet-missing-address (telnet: (unknown))'
+        );
 
         const output = await app.output();
         expect(output.stderr).toContain(
@@ -676,7 +703,10 @@ describe.concurrent('elder-terms-vte settings', () => {
             return currentLayout;
           });
           expectWindowCellSize(layout, defaultColumns, defaultRows);
-          await expectMainWindowTitle(app, 'elder-terms: serial: (unknown)');
+          await expectMainWindowTitle(
+            app,
+            'elder-terms: serial-missing-device (serial: (unknown))'
+          );
 
           const output = await app.output();
           expect(output.stderr).toContain(
@@ -1006,7 +1036,7 @@ describe.concurrent('elder-terms-vte settings', () => {
           async (app) => {
             await expectMainWindowTitle(
               app,
-              `elder-terms: telnet: 127.0.0.1:${port}`
+              `elder-terms: telnet (telnet: 127.0.0.1:${port})`
             );
             await openSettingsDialog(app);
 
@@ -1048,7 +1078,7 @@ describe.concurrent('elder-terms-vte settings', () => {
         async (app) => {
           await expectMainWindowTitle(
             app,
-            'elder-terms: serial: /dev/ttyUSB1:115200:n81n'
+            'elder-terms: serial (serial: /dev/ttyUSB1:115200:n81n)'
           );
         }
       );
@@ -1070,7 +1100,7 @@ describe.concurrent('elder-terms-vte settings', () => {
         async (app) => {
           await expectMainWindowTitle(
             app,
-            'elder-terms: serial: /dev/ttyUSB0:115200:e72x'
+            'elder-terms: serial (serial: /dev/ttyUSB0:115200:e72x)'
           );
           await openSettingsDialog(app);
 
@@ -1183,7 +1213,7 @@ describe.concurrent('elder-terms-vte settings', () => {
         async (app) => {
           await expectMainWindowTitle(
             app,
-            'elder-terms: serial: /dev/ttyUSB1:115200:n81n'
+            'elder-terms: serial-apply-title (serial: /dev/ttyUSB1:115200:n81n)'
           );
           await openSettingsDialog(app);
           await showSerialSettingsPage(app);
@@ -1216,7 +1246,7 @@ describe.concurrent('elder-terms-vte settings', () => {
 
           await expectMainWindowTitle(
             app,
-            'elder-terms: serial: /dev/ttyUSB1:57600:o52h'
+            'elder-terms: serial-apply-title (serial: /dev/ttyUSB1:57600:o52h)'
           );
         }
       );

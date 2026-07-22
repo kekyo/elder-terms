@@ -91,6 +91,17 @@ ELDER_TERMS_API void update_settings_widget_store(SettingsWidgetState *state,
                                                    SettingsStore store);
 
 /**
+ * Updates the path-derived connection name used by an unset General name.
+ *
+ * @param state Settings widget state.
+ * @param default_connection_name New fallback connection name.
+ *
+ * @remarks Explicit General name edits are preserved.
+ */
+ELDER_TERMS_API void settings_widget_set_default_connection_name(
+    SettingsWidgetState *state, std::string default_connection_name);
+
+/**
  * Returns a copy of the current settings draft.
  *
  * @param state Settings widget state.

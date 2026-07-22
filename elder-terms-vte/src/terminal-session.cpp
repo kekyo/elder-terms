@@ -13,8 +13,10 @@ namespace elder_terms {
 
 static constexpr const char *application_title = "elder-terms";
 
-static std::string application_window_title(const std::string &session_title) {
-  return std::string(application_title) + ": " + session_title;
+static std::string application_window_title(const std::string &connection_name,
+                                            const std::string &session_title) {
+  return std::string(application_title) + ": " + connection_name + " (" +
+         session_title + ")";
 }
 
 struct TerminalSessionState {
@@ -152,7 +154,8 @@ std::string terminal_session_title(const TerminalSessionState *state) {
     return application_title;
   }
 
-  return application_window_title(state->session->title());
+  return application_window_title(state->profile.name,
+                                  state->session->title());
 }
 
 void apply_terminal_session_connection_profile(

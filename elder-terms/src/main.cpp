@@ -337,7 +337,7 @@ static void begin_new_connection(ApplicationState *state) {
   state->suppress_selection = false;
 
   elder_terms::SettingsStore store = elder_terms::create_default_settings(
-      elder_terms::default_terminal_display_settings(1.0));
+      elder_terms::default_terminal_display_settings(1.0), state->draft_name);
   elder_terms::update_settings_widget_store(state->settings_widget,
                                              std::move(store));
   gtk_stack_set_visible_child_name(GTK_STACK(state->main_window->details_stack),
@@ -536,8 +536,14 @@ create_temporary_startup_profile(ApplicationState *state,
 
   const std::filesystem::path path(temporary_path);
   g_free(temporary_path);
+  elder_terms::SettingsStore startup_store =
+      elder_terms::settings_widget_draft_store(state->settings_widget);
+  elder_terms::set_explicit_setting_value(
+      &startup_store, elder_terms::general_name_setting_key(),
+      elder_terms::SettingValue{
+          elder_terms::general_connection_name(startup_store)});
   const elder_terms::SettingsSaveResult result = elder_terms::save_settings(
-      elder_terms::settings_widget_draft_store(state->settings_widget), path);
+      startup_store, path);
   warnings->insert(warnings->end(), result.warnings.begin(),
                    result.warnings.end());
   if (!result.saved) {
@@ -732,6 +738,10 @@ static void on_name_edited(GtkCellRendererText *, gchar *path_text,
   state->name_error = validation.valid ? std::string() : validation.error;
   state->name_dirty =
       state->current_is_new || state->draft_name != state->persisted_name;
+  if (validation.valid) {
+    elder_terms::settings_widget_set_default_connection_name(
+        state->settings_widget, state->draft_name);
+  }
   gtk_list_store_set(state->main_window->connection_store, &iterator,
                      connection_name_column, state->draft_name.c_str(), -1);
   update_action_sensitivity(state);
@@ -876,7 +886,8 @@ int main(int argc, char **argv) {
   callbacks.changed = [&state]() { update_action_sensitivity(&state); };
   state.settings_widget = elder_terms::create_settings_widget({
       .store = elder_terms::create_default_settings(
-          elder_terms::default_terminal_display_settings(1.0)),
+          elder_terms::default_terminal_display_settings(1.0),
+          "elder-terms"),
       .is_runtime = false,
       .show_actions = false,
       .callbacks = std::move(callbacks),

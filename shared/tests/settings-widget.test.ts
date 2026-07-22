@@ -31,6 +31,7 @@ const actionRowFixturePath = fileURLToPath(
 );
 
 interface AppliedStore {
+  readonly name: string;
   readonly auto_close: string;
   readonly backspace_code: string;
   readonly cursor_key_mode: string;
@@ -233,6 +234,12 @@ describe.concurrent('shared settings widget', () => {
       {
         args: ['--page=terminal'],
         assert: async (app) => {
+          expect(
+            await expectElementKind(
+              await app.getById('settings_general_name_entry'),
+              'entry'
+            ).text()
+          ).toBe('fixture');
           await expectSelectedConnectionType(app, 'Local');
           await expectSensitive(
             await app.getById('settings_general_type_combo')
@@ -295,6 +302,22 @@ describe.concurrent('shared settings widget', () => {
         }
       );
     }
+  });
+
+  it('edits the explicit connection name shown on General', async (context) => {
+    await runSharedGtkTest(context, [], async ({ app }) => {
+      const name = expectElementKind(
+        await app.getById('settings_general_name_entry'),
+        'entry'
+      );
+      expect(await name.text()).toBe('fixture');
+      await name.setText('Tokyo/Lab');
+      await expectElementKind(
+        await app.getById('settings_apply_button'),
+        'button'
+      ).click();
+      expect((await waitForAppliedStore(app)).name).toBe('Tokyo/Lab');
+    });
   });
 
   it('matches Terminal visual fixtures for each terminal setting value', async (context) => {

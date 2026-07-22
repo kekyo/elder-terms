@@ -168,7 +168,8 @@ static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
               .width = 80,
               .height = 24,
               .zoom = 1.0,
-          });
+          },
+          "fixture");
   elder_terms::set_setting_value(
       &store, elder_terms::general_type_setting_key(),
       elder_terms::SettingValue{options.type});
@@ -349,6 +350,7 @@ static void print_store(const char *prefix,
   const elder_terms::TerminalLogSettings log =
       elder_terms::terminal_log_settings(store);
   std::cout << prefix << " type=" << connection_type_name(profile)
+            << " name=" << elder_terms::general_connection_name(store)
             << " width=" << display.width << " height=" << display.height
             << " zoom=" << display.zoom
             << " encoding=" << profile.text_settings.encoding

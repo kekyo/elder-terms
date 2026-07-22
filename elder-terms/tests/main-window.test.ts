@@ -536,6 +536,9 @@ describe('elder-terms main window', () => {
             const capture = await readLaunchCapture(fakeVte.capture);
             expect(capture.args[0]).toBe('-s');
             expect(capture.args).toHaveLength(2);
+            expect(capture.startupContent).toContain(
+              '[general]\nname=New connection'
+            );
             expect(capture.startupContent).toContain('width=94');
           });
         },

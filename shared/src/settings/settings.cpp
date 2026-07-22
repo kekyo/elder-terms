@@ -28,6 +28,23 @@ static std::string path_string(const std::filesystem::path &path) {
   return path.empty() ? std::string("<empty>") : path.string();
 }
 
+static std::string connection_name_from_path(
+    const std::optional<std::filesystem::path> &path) {
+  if (!path.has_value()) {
+    return {};
+  }
+  return path->stem().string();
+}
+
+static std::string
+default_connection_name(const SettingsLoadOptions &options) {
+  std::string name = connection_name_from_path(options.config_path);
+  if (name.empty()) {
+    name = connection_name_from_path(options.startup_config_path);
+  }
+  return name.empty() ? std::string("elder-terms") : name;
+}
+
 static std::string trim_ascii_whitespace(std::string value) {
   const auto first = std::find_if_not(
       value.begin(), value.end(),
@@ -107,9 +124,12 @@ static void resolve_terminal_key_binding_conflict(
   clear_explicit_setting_value(store, terminal_zoom_out_key_setting_key());
 }
 
-SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults) {
+SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
+                                      std::string default_connection_name) {
   std::vector<SettingDefinition> definitions;
-  append_definitions(&definitions, general_setting_definitions());
+  append_definitions(
+      &definitions,
+      general_setting_definitions(std::move(default_connection_name)));
   append_definitions(&definitions, terminal_log_setting_definitions());
   append_definitions(&definitions, terminal_setting_definitions(terminal_defaults));
   append_definitions(&definitions, local_shell_connection_setting_definitions());
@@ -123,7 +143,8 @@ SettingsLoadResult
 load_settings(const SettingsLoadOptions &options, gdouble default_terminal_zoom) {
   SettingsLoadResult result{
       .store = create_default_settings(
-          default_terminal_display_settings(default_terminal_zoom)),
+          default_terminal_display_settings(default_terminal_zoom),
+          default_connection_name(options)),
       .loaded = true,
       .warnings = {},
   };
@@ -254,6 +275,7 @@ TerminalConnectionProfile
 terminal_connection_profile(const SettingsStore &store) {
   if (general_settings_select_telnet_connection(store)) {
     return {
+        .name = general_connection_name(store),
         .kind = TerminalConnectionKind::telnet,
         .settings = telnet_connection_settings(store),
         .text_settings =
@@ -263,6 +285,7 @@ terminal_connection_profile(const SettingsStore &store) {
 
   if (general_settings_select_serial_connection(store)) {
     return {
+        .name = general_connection_name(store),
         .kind = TerminalConnectionKind::serial,
         .settings = serial_connection_settings(store),
         .text_settings =
@@ -271,6 +294,7 @@ terminal_connection_profile(const SettingsStore &store) {
   }
 
   return {
+      .name = general_connection_name(store),
       .kind = TerminalConnectionKind::local_shell,
       .settings = LocalShellConnectionSettings{},
       .text_settings =
