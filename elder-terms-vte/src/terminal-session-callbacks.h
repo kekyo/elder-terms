@@ -3,8 +3,11 @@
 #include <functional>
 #include <span>
 
+#include <cardio.h>
+
 #include "activity-indicator-id.h"
 #include "terminal-connection-phase.h"
+#include "terminal-sessions/ssh-session/ssh-user-prompt.h"
 #include "terminal-transfer.h"
 
 namespace elder_terms {
@@ -47,6 +50,13 @@ using TerminalSessionZmodemAutoStartCallback =
     std::function<void(TerminalTransferDirection direction)>;
 
 /**
+ * Callback invoked when SSH requires a host-key or authentication response.
+ */
+using TerminalSessionSshPromptCallback = std::function<
+    cardio::promise<SshUserPromptResponse>(
+        const SshUserPrompt &prompt, cardio::cancellation cancellation)>;
+
+/**
  * Optional callbacks emitted by terminal session backends.
  */
 struct TerminalSessionCallbacks {
@@ -62,6 +72,8 @@ struct TerminalSessionCallbacks {
   TerminalSessionOutputCallback output;
   /** Called when a valid ZMODEM auto-start preamble is detected. */
   TerminalSessionZmodemAutoStartCallback zmodem_auto_start;
+  /** Collects all SSH user responses through the terminal overlay. */
+  TerminalSessionSshPromptCallback ssh_prompt;
 };
 
 } // namespace elder_terms

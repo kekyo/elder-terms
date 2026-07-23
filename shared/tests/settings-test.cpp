@@ -51,6 +51,13 @@ using elder_terms::SettingsLoadOptions;
 using elder_terms::SettingsLoadResult;
 using elder_terms::SettingsSaveResult;
 using elder_terms::SettingsStore;
+using elder_terms::SshConnectionSettings;
+using elder_terms::ssh_address_setting_key;
+using elder_terms::ssh_connection_settings;
+using elder_terms::ssh_identity_file_setting_key;
+using elder_terms::ssh_port_setting_key;
+using elder_terms::ssh_terminal_type_setting_key;
+using elder_terms::ssh_username_setting_key;
 using elder_terms::TelnetConnectionSettings;
 using elder_terms::telnet_address_setting_key;
 using elder_terms::telnet_port_setting_key;
@@ -172,6 +179,16 @@ static void test_default_settings() {
       elder_terms::telnet_connection_settings(store);
   expect_true(telnet.terminal_type == "xterm-256color",
               "default TELNET terminal type should match gtk-oldtype");
+  const SshConnectionSettings ssh = ssh_connection_settings(store);
+  expect_true(ssh.address.empty(),
+              "default SSH address should be empty");
+  expect_true(ssh.port == 22, "default SSH port should be 22");
+  expect_true(ssh.username.empty(),
+              "default SSH username should defer to the local user");
+  expect_true(ssh.identity_file.empty(),
+              "default SSH identity should use automatic discovery");
+  expect_true(ssh.terminal_type == "xterm-256color",
+              "default SSH terminal type should be xterm-256color");
 
   const TerminalConnectionProfile profile = terminal_connection_profile(store);
   expect_true(profile.name == "elder-terms",
@@ -394,6 +411,13 @@ static void test_terminal_text_defaults_follow_connection_type() {
                   serial.backspace_code == TerminalBackspaceCode::bs &&
                   serial.cursor_key_mode == TerminalCursorKeyMode::adm3,
               "serial terminal text defaults should match gtk-oldtype");
+
+  const TerminalTextSettings ssh =
+      default_terminal_text_settings(TerminalConnectionKind::ssh);
+  expect_true(ssh.encoding == "UTF-8" &&
+                  ssh.backspace_code == TerminalBackspaceCode::del &&
+                  ssh.cursor_key_mode == TerminalCursorKeyMode::normal,
+              "SSH terminal text defaults should use DEL and normal keys");
 }
 
 static void test_terminal_text_explicit_settings_override_connection_defaults() {
@@ -766,6 +790,101 @@ static void test_telnet_profile() {
               "TELNET terminal type should come from the configuration file");
 }
 
+static void test_ssh_profile() {
+  const std::filesystem::path path = temporary_config_path("ssh-profile");
+  write_config(path,
+               "[general]\n"
+               "type=ssh\n"
+               "\n"
+               "[terminal]\n"
+               "backspace_code=bs\n"
+               "\n"
+               "[ssh]\n"
+               "address=ssh.example.test\n"
+               "port=2222\n"
+               "username=alice\n"
+               "identity_file=~/.ssh/id_test\n"
+               "terminal_type=vt220\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  const TerminalConnectionProfile profile =
+      terminal_connection_profile(result.store);
+  expect_true(profile.kind == TerminalConnectionKind::ssh,
+              "configured connection should be SSH");
+  const auto *settings =
+      std::get_if<SshConnectionSettings>(&profile.settings);
+  expect_true(settings != nullptr,
+              "configured connection settings should be SSH settings");
+  expect_true(settings->address == "ssh.example.test",
+              "SSH address should come from the configuration file");
+  expect_true(settings->port == 2222,
+              "SSH port should come from the configuration file");
+  expect_true(settings->username == "alice",
+              "SSH username should come from the configuration file");
+  expect_true(settings->identity_file == "~/.ssh/id_test",
+              "SSH identity should come from the configuration file");
+  expect_true(settings->terminal_type == "vt220",
+              "SSH terminal type should come from the configuration file");
+  expect_true(profile.text_settings.backspace_code ==
+                  TerminalBackspaceCode::bs,
+              "an explicit Backspace setting should override SSH DEL");
+}
+
+static void test_invalid_ssh_values_fall_back_and_warn() {
+  const std::filesystem::path path =
+      temporary_config_path("invalid-ssh-values");
+  write_config(path,
+               "[general]\n"
+               "type=ssh\n"
+               "\n"
+               "[ssh]\n"
+               "address=   \n"
+               "port=70000\n"
+               "terminal_type=   \n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  const TerminalConnectionProfile profile =
+      terminal_connection_profile(result.store);
+  const auto *settings =
+      std::get_if<SshConnectionSettings>(&profile.settings);
+  expect_true(settings != nullptr,
+              "invalid SSH values should retain the SSH profile");
+  expect_true(settings->address.empty(),
+              "blank SSH address should normalize to empty");
+  expect_true(settings->port == 22,
+              "invalid SSH port should fall back to 22");
+  expect_true(settings->terminal_type == "xterm-256color",
+              "blank SSH terminal type should use the default");
+  expect_true(profile.text_settings.backspace_code ==
+                  TerminalBackspaceCode::del,
+              "SSH should use DEL when Backspace is not explicit");
+  expect_true(warnings_contain(
+                  result.warnings,
+                  "missing required configuration value [ssh] address"),
+              "blank SSH address should emit a warning");
+  expect_true(warnings_contain(result.warnings,
+                               "invalid configuration value [ssh] port"),
+              "invalid SSH port should emit a warning");
+  expect_true(
+      warnings_contain(result.warnings,
+                       "invalid configuration value [ssh] terminal_type"),
+      "blank SSH terminal type should emit a warning");
+}
+
 static void test_serial_profile() {
   const std::filesystem::path path = temporary_config_path("serial-profile");
   write_config(path,
@@ -998,6 +1117,21 @@ static void test_public_setting_keys() {
                   telnet_terminal_type_setting_key().name ==
                       "terminal_type",
               "TELNET terminal type key should use [telnet] terminal_type");
+  expect_true(ssh_address_setting_key().section == "ssh" &&
+                  ssh_address_setting_key().name == "address",
+              "SSH address key should use [ssh] address");
+  expect_true(ssh_port_setting_key().section == "ssh" &&
+                  ssh_port_setting_key().name == "port",
+              "SSH port key should use [ssh] port");
+  expect_true(ssh_username_setting_key().section == "ssh" &&
+                  ssh_username_setting_key().name == "username",
+              "SSH username key should use [ssh] username");
+  expect_true(ssh_identity_file_setting_key().section == "ssh" &&
+                  ssh_identity_file_setting_key().name == "identity_file",
+              "SSH identity key should use [ssh] identity_file");
+  expect_true(ssh_terminal_type_setting_key().section == "ssh" &&
+                  ssh_terminal_type_setting_key().name == "terminal_type",
+              "SSH terminal type key should use [ssh] terminal_type");
   expect_true(serial_device_setting_key().section == "serial",
               "serial device key should use the serial section");
   expect_true(serial_device_setting_key().name == "device",
@@ -1286,6 +1420,48 @@ static void test_save_serial_settings_omits_default_values() {
               "saved settings should include non-default serial carrier detect");
 }
 
+static void test_save_ssh_settings_omits_default_values() {
+  const std::filesystem::path path = temporary_config_path("save-ssh-values");
+  SettingsStore store =
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
+  set_setting_value(&store, general_type_setting_key(),
+                    elder_terms::SettingValue{std::string("ssh")});
+  set_setting_value(&store, ssh_address_setting_key(),
+                    elder_terms::SettingValue{
+                        std::string("ssh.example.test")});
+  set_setting_value(&store, ssh_port_setting_key(),
+                    elder_terms::SettingValue{gint64{22}});
+  set_setting_value(&store, ssh_username_setting_key(),
+                    elder_terms::SettingValue{std::string("alice")});
+  set_setting_value(
+      &store, ssh_identity_file_setting_key(),
+      elder_terms::SettingValue{std::string("~/.ssh/id_ed25519")});
+  set_setting_value(&store, ssh_terminal_type_setting_key(),
+                    elder_terms::SettingValue{std::string("vt220")});
+
+  const SettingsSaveResult result = save_settings(store, path);
+  expect_true(result.saved, "SSH settings save should succeed");
+  const std::string content = read_config(path);
+  remove_config(path);
+
+  expect_true(content.find("type=ssh") != std::string::npos,
+              "saved settings should include the SSH type");
+  expect_true(content.find("[ssh]") != std::string::npos,
+              "saved settings should include the SSH section");
+  expect_true(content.find("address=ssh.example.test") != std::string::npos,
+              "saved settings should include the SSH address");
+  expect_true(content.find("username=alice") != std::string::npos,
+              "saved settings should include the SSH username");
+  expect_true(content.find("identity_file=~/.ssh/id_ed25519") !=
+                  std::string::npos,
+              "saved settings should include the SSH identity");
+  expect_true(content.find("terminal_type=vt220") != std::string::npos,
+              "saved settings should include the SSH terminal type");
+  expect_true(content.find("port=") == std::string::npos,
+              "saved settings should omit the default SSH port");
+}
+
 static void test_save_settings_writes_empty_file_for_defaults() {
   const std::filesystem::path path = temporary_config_path("save-defaults");
   const SettingsStore store =
@@ -1342,6 +1518,7 @@ int main() {
     elder_terms_settings_test::test_key_binding_parser_uses_exact_modifiers();
     elder_terms_settings_test::test_terminal_key_binding_configuration();
     elder_terms_settings_test::test_telnet_profile();
+    elder_terms_settings_test::test_ssh_profile();
     elder_terms_settings_test::test_serial_profile();
     elder_terms_settings_test::test_transfer_base_path_setting();
     elder_terms_settings_test::test_transfer_text_send_bytes_per_second_setting();
@@ -1350,9 +1527,11 @@ int main() {
     elder_terms_settings_test::test_invalid_terminal_text_values_fall_back_to_type_defaults();
     elder_terms_settings_test::test_invalid_terminal_log_values_fall_back_to_defaults();
     elder_terms_settings_test::test_invalid_serial_values_fall_back_to_defaults();
+    elder_terms_settings_test::test_invalid_ssh_values_fall_back_and_warn();
     elder_terms_settings_test::test_public_setting_keys();
     elder_terms_settings_test::test_save_settings_omits_default_values();
     elder_terms_settings_test::test_save_serial_settings_omits_default_values();
+    elder_terms_settings_test::test_save_ssh_settings_omits_default_values();
     elder_terms_settings_test::test_save_explicit_zmodem_autostart();
     elder_terms_settings_test::test_save_explicit_terminal_text_defaults();
     elder_terms_settings_test::test_save_terminal_log_settings();

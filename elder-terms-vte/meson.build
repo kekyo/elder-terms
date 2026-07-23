@@ -2,6 +2,7 @@ gtk_dep = dependency('gtk+-3.0')
 gio_dep = dependency('gio-2.0')
 liburing_dep = dependency('liburing')
 libudev_dep = dependency('libudev')
+libssh_dep = dependency('libssh')
 vte_dep = dependency('vte-2.91')
 
 gestament_config = find_program('npx')
@@ -56,6 +57,8 @@ elder_terms_sources = [
   'src/terminal-sessions/serial-session/serial-line-monitor.cpp',
   'src/terminal-sessions/serial-session/serial-session.cpp',
   'src/terminal-sessions/serial-session/serial-termios.cpp',
+  'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
+  'src/terminal-sessions/ssh-session/ssh-session.cpp',
   'src/terminal-sessions/tcp-connector.cpp',
   telnet_protocol_source,
   'src/terminal-sessions/telnet-session/telnet-session.cpp',
@@ -81,6 +84,7 @@ executable(
     gio_dep,
     gtk_dep,
     liburing_dep,
+    libssh_dep,
     libudev_dep,
     vte_dep,
   ],
@@ -168,6 +172,30 @@ terminal_connection_phase_test = executable(
 )
 
 test('terminal-connection-phase-test', terminal_connection_phase_test)
+
+ssh_channel_connection_test = executable(
+  'ssh-channel-connection-test',
+  [
+    'tests/cpp/ssh-channel-connection-test.cpp',
+    'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
+    'src/terminal-sessions/tcp-connector.cpp',
+  ],
+  cpp_args: [
+    '-I' + cardio_include_dir,
+    '-DCARDIO_WITH_GLIB=1',
+    '-DCARDIO_WITH_GIO=1',
+    '-DCARDIO_WITH_LINUX_IO_URING=1',
+  ],
+  dependencies: [
+    elder_terms_dep,
+    gio_dep,
+    libssh_dep,
+    liburing_dep,
+  ],
+)
+
+test('ssh-channel-connection-test', ssh_channel_connection_test,
+  timeout: 60)
 
 terminal_transfer_runner_test = executable(
   'terminal-transfer-runner-test',

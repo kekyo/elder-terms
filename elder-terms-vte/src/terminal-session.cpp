@@ -7,6 +7,7 @@
 #include "terminal-sessions/terminal-session.h"
 #include "terminal-sessions/local-session/local-session.h"
 #include "terminal-sessions/serial-session/serial-session.h"
+#include "terminal-sessions/ssh-session/ssh-session.h"
 #include "terminal-sessions/telnet-session/telnet-session.h"
 
 namespace elder_terms {
@@ -47,6 +48,12 @@ struct TerminalSessionBackendCreator {
   operator()(const SerialConnectionSettings &settings) const {
     return create_terminal_serial_session(terminal, settings, text_settings,
                                           callbacks);
+  }
+
+  std::unique_ptr<TerminalSession>
+  operator()(const SshConnectionSettings &settings) const {
+    return create_terminal_ssh_session(terminal, settings, text_settings,
+                                       callbacks);
   }
 };
 

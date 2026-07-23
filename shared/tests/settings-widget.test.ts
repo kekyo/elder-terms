@@ -47,6 +47,11 @@ interface AppliedStore {
   readonly log_enabled: string;
   readonly log_file_name_format: string;
   readonly log_mode: string;
+  readonly ssh_address: string;
+  readonly ssh_identity_file: string;
+  readonly ssh_port: string;
+  readonly ssh_terminal_type: string;
+  readonly ssh_username: string;
   readonly telnet_address: string;
   readonly telnet_port: string;
   readonly telnet_terminal_type: string;
@@ -98,6 +103,13 @@ const showTerminalPage = async (app: GtkApp): Promise<void> => {
 const showTelnetPage = async (app: GtkApp): Promise<void> => {
   await waitForResult(async () => {
     const address = await app.getById('settings_telnet_address_entry');
+    expect((await address.info()).states).toContain('showing');
+  });
+};
+
+const showSshPage = async (app: GtkApp): Promise<void> => {
+  await waitForResult(async () => {
+    const address = await app.getById('settings_ssh_address_entry');
     expect((await address.info()).states).toContain('showing');
   });
 };
@@ -167,6 +179,25 @@ const visibleSettingsTabNames = async (app: GtkApp): Promise<string[]> => {
     }
   }
   return names;
+};
+
+const selectSettingsTab = async (
+  app: GtkApp,
+  expectedName: string
+): Promise<void> => {
+  const notebook = expectElementKind(
+    await app.getById('settings_notebook'),
+    'tabList'
+  );
+  const childCount = await notebook.getChildCount();
+  for (let index = 0; index < childCount; ++index) {
+    const tab = await notebook.childAt(index);
+    if (tab !== undefined && (await tab.info()).name === expectedName) {
+      await notebook.selectChildAt(index);
+      return;
+    }
+  }
+  throw new Error(`settings tab was not found: ${expectedName}`);
 };
 
 const expectPageVisualFixture = async (
@@ -311,6 +342,10 @@ describe.concurrent('shared settings widget', () => {
       {
         args: ['--type=serial'] as const,
         expected: ['General', 'Serial', 'Terminal', 'Transfer', 'Logging'],
+      },
+      {
+        args: ['--type=ssh'] as const,
+        expected: ['General', 'SSH', 'Terminal', 'Transfer', 'Logging'],
       },
     ] as const;
 
@@ -795,6 +830,144 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
+  it('matches SSH visual fixtures for editable and runtime settings', async (context) => {
+    const cases: readonly SettingVisualCase[] = [
+      {
+        args: ['--page=ssh', '--type=ssh'],
+        assert: async (app) => {
+          const address = expectElementKind(
+            await app.getById('settings_ssh_address_entry'),
+            'entry'
+          );
+          const port = expectElementKind(
+            await app.getById('settings_ssh_port_spin'),
+            'spinButton'
+          );
+          const username = expectElementKind(
+            await app.getById('settings_ssh_username_entry'),
+            'entry'
+          );
+          const identity = expectElementKind(
+            await app.getById('settings_ssh_identity_file_entry'),
+            'entry'
+          );
+          const terminalType = expectElementKind(
+            await app.getById('settings_ssh_terminal_type_entry'),
+            'entry'
+          );
+          expect(await address.text()).toBe('ssh.example.test');
+          expect(await port.value()).toBe(22);
+          expect(await username.text()).toBe('');
+          expect(await identity.text()).toBe('');
+          expect(await terminalType.text()).toBe('xterm-256color');
+          await expectSensitive(address);
+          await expectSensitive(port);
+          await expectSensitive(username);
+          await expectSensitive(identity);
+          await expectSensitive(terminalType);
+        },
+        differsFrom: undefined,
+        fixtureName: 'settings-widget-ssh-page-default-editable',
+        pageId: 'settings_ssh_page',
+        prepare: showSshPage,
+      },
+      {
+        args: ['--page=ssh', '--runtime', '--type=ssh'],
+        assert: async (app) => {
+          await expectInsensitive(
+            await app.getById('settings_ssh_address_entry')
+          );
+          await expectInsensitive(await app.getById('settings_ssh_port_spin'));
+          await expectInsensitive(
+            await app.getById('settings_ssh_username_entry')
+          );
+          await expectInsensitive(
+            await app.getById('settings_ssh_identity_file_entry')
+          );
+          await expectInsensitive(
+            await app.getById('settings_ssh_terminal_type_entry')
+          );
+        },
+        differsFrom: 'settings-widget-ssh-page-default-editable',
+        fixtureName: 'settings-widget-ssh-page-runtime',
+        pageId: 'settings_ssh_page',
+        prepare: showSshPage,
+      },
+    ];
+
+    for (const testCase of cases) {
+      await runSharedGtkTest(
+        context,
+        testCase.args,
+        async ({ app, directory }) => {
+          await testCase.prepare(app);
+          await testCase.assert(app);
+          await expectPageVisualFixture(app, testCase, directory);
+        }
+      );
+    }
+  });
+
+  it('applies SSH edits and resets a blank terminal type', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ssh',
+        '--type=ssh',
+        '--ssh-address=before.example',
+        '--ssh-port=22',
+        '--ssh-terminal-type=vt220',
+      ],
+      async ({ app }) => {
+        await showSshPage(app);
+        const address = expectElementKind(
+          await app.getById('settings_ssh_address_entry'),
+          'entry'
+        );
+        const port = expectElementKind(
+          await app.getById('settings_ssh_port_spin'),
+          'spinButton'
+        );
+        const username = expectElementKind(
+          await app.getById('settings_ssh_username_entry'),
+          'entry'
+        );
+        const identity = expectElementKind(
+          await app.getById('settings_ssh_identity_file_entry'),
+          'entry'
+        );
+        const terminalType = expectElementKind(
+          await app.getById('settings_ssh_terminal_type_entry'),
+          'entry'
+        );
+
+        await address.setText('after.example');
+        await port.setValue(2222);
+        await username.setText('alice');
+        await identity.setText('~/.ssh/id_test');
+        await clickWidget(app, terminalType);
+        await terminalType.setText('   ');
+        await clickWidget(app, address);
+        await waitForResult(async () => {
+          expect(await terminalType.text()).toBe('xterm-256color');
+        });
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+
+        const store = await waitForAppliedStore(app);
+        expect(store.type).toBe('ssh');
+        expect(store.ssh_address).toBe('after.example');
+        expect(store.ssh_port).toBe('2222');
+        expect(store.ssh_username).toBe('alice');
+        expect(store.ssh_identity_file).toBe('~/.ssh/id_test');
+        expect(store.ssh_terminal_type).toBe('xterm-256color');
+        expect(store.backspace_code).toBe('del');
+      }
+    );
+  });
+
   it('shows Serial controls in editable mode and applies serial edits', async (context) => {
     await runSharedGtkTest(
       context,
@@ -1068,6 +1241,39 @@ describe.concurrent('shared settings widget', () => {
 
       const store = await waitForAppliedStore(app);
       expect(store.type).toBe('serial');
+    });
+  });
+
+  it('updates General and SSH state with a DEL default', async (context) => {
+    await runSharedGtkTest(context, [], async ({ app }) => {
+      const combo = expectElementKind(
+        await app.getById('settings_general_type_combo'),
+        'comboBox'
+      );
+      await expectSensitive(combo);
+
+      const sshPage = await app.getById('settings_ssh_page');
+      expect((await sshPage.info()).states).not.toContain('visible');
+
+      await combo.selectChildAt(3);
+      await waitForResult(async () => {
+        expect((await sshPage.info()).states).toContain('visible');
+      });
+      await selectSettingsTab(app, 'Terminal');
+      await showTerminalPage(app);
+      await expectSelectedComboValue(
+        app,
+        'settings_terminal_backspace_code_combo',
+        'Default (DEL)'
+      );
+      await expectElementKind(
+        await app.getById('settings_apply_button'),
+        'button'
+      ).click();
+
+      const store = await waitForAppliedStore(app);
+      expect(store.type).toBe('ssh');
+      expect(store.backspace_code).toBe('del');
     });
   });
 

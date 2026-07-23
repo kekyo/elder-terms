@@ -16,6 +16,7 @@ namespace elder_terms {
 static constexpr char local_connection_type[] = "local";
 static constexpr char telnet_connection_type[] = "telnet";
 static constexpr char serial_connection_type[] = "serial";
+static constexpr char ssh_connection_type[] = "ssh";
 static constexpr char zmodem_autostart_default[] = "default";
 static constexpr char zmodem_autostart_enabled[] = "enabled";
 static constexpr char zmodem_autostart_disabled[] = "disabled";
@@ -58,6 +59,11 @@ struct SettingsWidgetState {
   GtkWidget *telnet_address_entry = nullptr;
   GtkWidget *telnet_port_spin = nullptr;
   GtkWidget *telnet_terminal_type_entry = nullptr;
+  GtkWidget *ssh_address_entry = nullptr;
+  GtkWidget *ssh_port_spin = nullptr;
+  GtkWidget *ssh_username_entry = nullptr;
+  GtkWidget *ssh_identity_file_entry = nullptr;
+  GtkWidget *ssh_terminal_type_entry = nullptr;
   GtkWidget *serial_device_entry = nullptr;
   GtkWidget *serial_baudrate_spin = nullptr;
   GtkWidget *serial_bits_combo = nullptr;
@@ -174,6 +180,9 @@ connection_kind_value(const SettingsStore &store) {
   const std::string type = connection_type_value(store);
   if (type == telnet_connection_type) {
     return TerminalConnectionKind::telnet;
+  }
+  if (type == ssh_connection_type) {
+    return TerminalConnectionKind::ssh;
   }
   if (type == serial_connection_type) {
     return TerminalConnectionKind::serial;
@@ -649,6 +658,54 @@ static void update_telnet_terminal_type_from_widget(
                              SettingValue{terminal_type});
 }
 
+static void update_ssh_address_from_widget(SettingsWidgetState *state) {
+  const char *text = gtk_entry_get_text(GTK_ENTRY(state->ssh_address_entry));
+  set_setting_value(&state->draft_store, ssh_address_setting_key(),
+                    SettingValue{std::string(text == nullptr ? "" : text)});
+}
+
+static void update_ssh_port_from_widget(SettingsWidgetState *state) {
+  set_setting_value(
+      &state->draft_store, ssh_port_setting_key(),
+      SettingValue{static_cast<gint64>(gtk_spin_button_get_value_as_int(
+          GTK_SPIN_BUTTON(state->ssh_port_spin)))});
+}
+
+static void update_ssh_username_from_widget(SettingsWidgetState *state) {
+  const char *text = gtk_entry_get_text(GTK_ENTRY(state->ssh_username_entry));
+  set_setting_value(&state->draft_store, ssh_username_setting_key(),
+                    SettingValue{std::string(text == nullptr ? "" : text)});
+}
+
+static void update_ssh_identity_file_from_widget(
+    SettingsWidgetState *state) {
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->ssh_identity_file_entry));
+  set_setting_value(&state->draft_store, ssh_identity_file_setting_key(),
+                    SettingValue{std::string(text == nullptr ? "" : text)});
+}
+
+static void update_ssh_terminal_type_from_widget(
+    SettingsWidgetState *state) {
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->ssh_terminal_type_entry));
+  const std::string terminal_type = text == nullptr ? "" : text;
+  if (ascii_blank(terminal_type)) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 ssh_terminal_type_setting_key());
+    return;
+  }
+  if (!setting_has_explicit_value(state->draft_store,
+                                  ssh_terminal_type_setting_key()) &&
+      terminal_type ==
+          ssh_connection_settings(state->draft_store).terminal_type) {
+    return;
+  }
+  set_explicit_setting_value(&state->draft_store,
+                             ssh_terminal_type_setting_key(),
+                             SettingValue{terminal_type});
+}
+
 static void update_serial_device_from_widget(SettingsWidgetState *state) {
   const char *text = gtk_entry_get_text(GTK_ENTRY(state->serial_device_entry));
   set_setting_value(&state->draft_store, serial_device_setting_key(),
@@ -782,6 +839,8 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
       terminal_display_settings(state->draft_store);
   const TelnetConnectionSettings telnet =
       telnet_connection_settings(state->draft_store);
+  const SshConnectionSettings ssh =
+      ssh_connection_settings(state->draft_store);
   const SerialConnectionSettings serial =
       serial_connection_settings(state->draft_store);
   const TerminalLogSettings log = terminal_log_settings(state->draft_store);
@@ -833,6 +892,26 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
   if (state->telnet_terminal_type_entry != nullptr) {
     gtk_entry_set_text(GTK_ENTRY(state->telnet_terminal_type_entry),
                        telnet.terminal_type.c_str());
+  }
+  if (state->ssh_address_entry != nullptr) {
+    gtk_entry_set_text(GTK_ENTRY(state->ssh_address_entry),
+                       ssh.address.c_str());
+  }
+  if (state->ssh_port_spin != nullptr) {
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(state->ssh_port_spin),
+                              static_cast<double>(ssh.port));
+  }
+  if (state->ssh_username_entry != nullptr) {
+    gtk_entry_set_text(GTK_ENTRY(state->ssh_username_entry),
+                       ssh.username.c_str());
+  }
+  if (state->ssh_identity_file_entry != nullptr) {
+    gtk_entry_set_text(GTK_ENTRY(state->ssh_identity_file_entry),
+                       ssh.identity_file.c_str());
+  }
+  if (state->ssh_terminal_type_entry != nullptr) {
+    gtk_entry_set_text(GTK_ENTRY(state->ssh_terminal_type_entry),
+                       ssh.terminal_type.c_str());
   }
   if (state->serial_device_entry != nullptr) {
     gtk_entry_set_text(GTK_ENTRY(state->serial_device_entry),
@@ -922,6 +1001,11 @@ static void sync_draft_from_widgets(SettingsWidgetState *state) {
   update_telnet_address_from_widget(state);
   update_telnet_port_from_widget(state);
   update_telnet_terminal_type_from_widget(state);
+  update_ssh_address_from_widget(state);
+  update_ssh_port_from_widget(state);
+  update_ssh_username_from_widget(state);
+  update_ssh_identity_file_from_widget(state);
+  update_ssh_terminal_type_from_widget(state);
   update_serial_device_from_widget(state);
   update_serial_baudrate_from_widget(state);
   update_serial_bits_from_widget(state);
@@ -1074,6 +1158,58 @@ static gboolean on_telnet_terminal_type_focus_out(GtkWidget *,
   return FALSE;
 }
 
+static void on_ssh_address_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  update_ssh_address_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_ssh_port_changed(GtkSpinButton *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  update_ssh_port_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_ssh_username_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  update_ssh_username_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_ssh_identity_file_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  update_ssh_identity_file_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_ssh_terminal_type_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_ssh_terminal_type_from_widget(state);
+  notify_changed(state);
+}
+
+static gboolean on_ssh_terminal_type_focus_out(GtkWidget *, GdkEventFocus *,
+                                               gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->ssh_terminal_type_entry));
+  if (text != nullptr && !ascii_blank(text)) {
+    return FALSE;
+  }
+
+  const bool previous_synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  const SshConnectionSettings settings =
+      ssh_connection_settings(state->draft_store);
+  gtk_entry_set_text(GTK_ENTRY(state->ssh_terminal_type_entry),
+                     settings.terminal_type.c_str());
+  state->synchronizing = previous_synchronizing;
+  return FALSE;
+}
+
 static void on_serial_device_changed(GtkEditable *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_serial_device_from_widget(state);
@@ -1210,6 +1346,7 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
                       "TELNET");
   append_combo_option(state->general_type_combo, serial_connection_type,
                       "Serial");
+  append_combo_option(state->general_type_combo, ssh_connection_type, "SSH");
   gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->general_type_combo),
                               connection_type_value(state->draft_store).c_str());
   gtk_widget_set_sensitive(state->general_type_combo,
@@ -1342,6 +1479,66 @@ static GtkWidget *create_telnet_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_telnet_terminal_type_focus_out), state);
   attach_row(page, 2, "terminal_type",
              state->telnet_terminal_type_entry);
+
+  return page;
+}
+
+static GtkWidget *create_ssh_page(SettingsWidgetState *state) {
+  GtkWidget *page = create_page_grid("settings_ssh_page");
+  const SshConnectionSettings settings =
+      ssh_connection_settings(state->draft_store);
+  const gboolean sensitive = state->is_runtime ? FALSE : TRUE;
+
+  state->ssh_address_entry = gtk_entry_new();
+  assign_accessible_id(state->ssh_address_entry,
+                       "settings_ssh_address_entry");
+  gtk_entry_set_text(GTK_ENTRY(state->ssh_address_entry),
+                     settings.address.c_str());
+  gtk_widget_set_sensitive(state->ssh_address_entry, sensitive);
+  g_signal_connect(state->ssh_address_entry, "changed",
+                   G_CALLBACK(on_ssh_address_changed), state);
+  attach_row(page, 0, "address", state->ssh_address_entry);
+
+  state->ssh_port_spin =
+      create_spin_button(1.0, 65535.0, 1.0, 0, "settings_ssh_port_spin");
+  gtk_spin_button_set_value(GTK_SPIN_BUTTON(state->ssh_port_spin),
+                            static_cast<double>(settings.port));
+  gtk_widget_set_sensitive(state->ssh_port_spin, sensitive);
+  g_signal_connect(state->ssh_port_spin, "value-changed",
+                   G_CALLBACK(on_ssh_port_changed), state);
+  attach_row(page, 1, "port", state->ssh_port_spin);
+
+  state->ssh_username_entry = gtk_entry_new();
+  assign_accessible_id(state->ssh_username_entry,
+                       "settings_ssh_username_entry");
+  gtk_entry_set_text(GTK_ENTRY(state->ssh_username_entry),
+                     settings.username.c_str());
+  gtk_widget_set_sensitive(state->ssh_username_entry, sensitive);
+  g_signal_connect(state->ssh_username_entry, "changed",
+                   G_CALLBACK(on_ssh_username_changed), state);
+  attach_row(page, 2, "username", state->ssh_username_entry);
+
+  state->ssh_identity_file_entry = gtk_entry_new();
+  assign_accessible_id(state->ssh_identity_file_entry,
+                       "settings_ssh_identity_file_entry");
+  gtk_entry_set_text(GTK_ENTRY(state->ssh_identity_file_entry),
+                     settings.identity_file.c_str());
+  gtk_widget_set_sensitive(state->ssh_identity_file_entry, sensitive);
+  g_signal_connect(state->ssh_identity_file_entry, "changed",
+                   G_CALLBACK(on_ssh_identity_file_changed), state);
+  attach_row(page, 3, "identity_file", state->ssh_identity_file_entry);
+
+  state->ssh_terminal_type_entry = gtk_entry_new();
+  assign_accessible_id(state->ssh_terminal_type_entry,
+                       "settings_ssh_terminal_type_entry");
+  gtk_entry_set_text(GTK_ENTRY(state->ssh_terminal_type_entry),
+                     settings.terminal_type.c_str());
+  gtk_widget_set_sensitive(state->ssh_terminal_type_entry, sensitive);
+  g_signal_connect(state->ssh_terminal_type_entry, "changed",
+                   G_CALLBACK(on_ssh_terminal_type_changed), state);
+  g_signal_connect(state->ssh_terminal_type_entry, "focus-out-event",
+                   G_CALLBACK(on_ssh_terminal_type_focus_out), state);
+  attach_row(page, 4, "terminal_type", state->ssh_terminal_type_entry);
 
   return page;
 }
@@ -1611,6 +1808,20 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       .connection_type = serial_connection_type,
       .page = serial_page,
       .tab_label = serial_tab,
+  });
+
+  GtkWidget *ssh_page = create_ssh_page(state);
+  GtkWidget *ssh_tab =
+      create_tab_button(state, ssh_page, "SSH", "settings_ssh_tab");
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), ssh_page, ssh_tab);
+  gtk_widget_show_all(ssh_page);
+  gtk_widget_show_all(ssh_tab);
+  gtk_widget_set_no_show_all(ssh_page, TRUE);
+  gtk_widget_set_no_show_all(ssh_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_type = ssh_connection_type,
+      .page = ssh_page,
+      .tab_label = ssh_tab,
   });
 
   GtkWidget *terminal_page = create_terminal_page(state);

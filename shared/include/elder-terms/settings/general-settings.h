@@ -52,6 +52,15 @@ ELDER_TERMS_API bool
 general_settings_select_telnet_connection(const SettingsStore &store);
 
 /**
+ * Checks whether the loaded general settings select the SSH backend.
+ *
+ * @param store Source settings store.
+ * @returns True when [general] type is ssh.
+ */
+ELDER_TERMS_API bool
+general_settings_select_ssh_connection(const SettingsStore &store);
+
+/**
  * Checks whether the loaded general settings select the serial backend.
  *
  * @param store Source settings store.

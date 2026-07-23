@@ -12,6 +12,7 @@
 #include <elder-terms/settings/log-settings.h>
 #include <elder-terms/settings/serial-settings.h>
 #include <elder-terms/settings/settings-store.h>
+#include <elder-terms/settings/ssh-settings.h>
 #include <elder-terms/settings/telnet-settings.h>
 #include <elder-terms/settings/terminal-settings.h>
 #include <elder-terms/settings/transfer-settings.h>
@@ -26,6 +27,8 @@ enum class TerminalConnectionKind {
   local_shell,
   /** Connects to a remote TELNET server. */
   telnet,
+  /** Connects to a remote SSH server. */
+  ssh,
   /** Connects to a serial device. */
   serial,
 };
@@ -67,8 +70,8 @@ struct TerminalTextSettings {
  * Backend-specific terminal connection settings.
  */
 using TerminalConnectionSettings =
-  std::variant<LocalShellConnectionSettings, TelnetConnectionSettings,
-               SerialConnectionSettings>;
+    std::variant<LocalShellConnectionSettings, TelnetConnectionSettings,
+                 SshConnectionSettings, SerialConnectionSettings>;
 
 /**
  * Describes how the terminal session should connect to a backend.

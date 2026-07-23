@@ -10,6 +10,7 @@ static constexpr char general_name_key[] = "name";
 static constexpr char general_type_key[] = "type";
 static constexpr char local_connection_type[] = "local";
 static constexpr char telnet_connection_type[] = "telnet";
+static constexpr char ssh_connection_type[] = "ssh";
 static constexpr char serial_connection_type[] = "serial";
 
 static bool validate_connection_type(const SettingValue &value,
@@ -17,8 +18,9 @@ static bool validate_connection_type(const SettingValue &value,
   const auto *text = std::get_if<std::string>(&value);
   if (text == nullptr ||
       (*text != local_connection_type && *text != telnet_connection_type &&
+       *text != ssh_connection_type &&
        *text != serial_connection_type)) {
-    *reason = "must be local, telnet, or serial";
+    *reason = "must be local, telnet, ssh, or serial";
     return false;
   }
   return true;
@@ -94,6 +96,12 @@ bool general_settings_select_serial_connection(const SettingsStore &store) {
   return setting_string_value_or_default(store, general_type_setting_key(),
                                          local_connection_type) ==
          serial_connection_type;
+}
+
+bool general_settings_select_ssh_connection(const SettingsStore &store) {
+  return setting_string_value_or_default(store, general_type_setting_key(),
+                                         local_connection_type) ==
+         ssh_connection_type;
 }
 
 } // namespace elder_terms

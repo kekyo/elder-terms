@@ -32,6 +32,11 @@ struct FixtureOptions {
   std::string telnet_address = "127.0.0.1";
   gint64 telnet_port = 23;
   std::string telnet_terminal_type = "xterm-256color";
+  std::string ssh_address = "ssh.example.test";
+  gint64 ssh_port = 22;
+  std::string ssh_username;
+  std::string ssh_identity_file;
+  std::string ssh_terminal_type = "xterm-256color";
   std::string serial_device = "/dev/ttyUSB0";
   gint64 serial_baudrate = 115200;
   gint64 serial_bits = 8;
@@ -105,6 +110,18 @@ static FixtureOptions parse_options(int argc, char **argv) {
     } else if (starts_with(argument, "--telnet-terminal-type=")) {
       options.telnet_terminal_type =
           option_value(argument, "--telnet-terminal-type=");
+    } else if (starts_with(argument, "--ssh-address=")) {
+      options.ssh_address = option_value(argument, "--ssh-address=");
+    } else if (starts_with(argument, "--ssh-port=")) {
+      options.ssh_port = std::stoll(option_value(argument, "--ssh-port="));
+    } else if (starts_with(argument, "--ssh-username=")) {
+      options.ssh_username = option_value(argument, "--ssh-username=");
+    } else if (starts_with(argument, "--ssh-identity-file=")) {
+      options.ssh_identity_file =
+          option_value(argument, "--ssh-identity-file=");
+    } else if (starts_with(argument, "--ssh-terminal-type=")) {
+      options.ssh_terminal_type =
+          option_value(argument, "--ssh-terminal-type=");
     } else if (starts_with(argument, "--serial-device=")) {
       options.serial_device = option_value(argument, "--serial-device=");
     } else if (starts_with(argument, "--serial-baudrate=")) {
@@ -219,6 +236,21 @@ static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
       &store, elder_terms::telnet_terminal_type_setting_key(),
       elder_terms::SettingValue{options.telnet_terminal_type});
   elder_terms::set_setting_value(
+      &store, elder_terms::ssh_address_setting_key(),
+      elder_terms::SettingValue{options.ssh_address});
+  elder_terms::set_setting_value(
+      &store, elder_terms::ssh_port_setting_key(),
+      elder_terms::SettingValue{options.ssh_port});
+  elder_terms::set_setting_value(
+      &store, elder_terms::ssh_username_setting_key(),
+      elder_terms::SettingValue{options.ssh_username});
+  elder_terms::set_setting_value(
+      &store, elder_terms::ssh_identity_file_setting_key(),
+      elder_terms::SettingValue{options.ssh_identity_file});
+  elder_terms::set_setting_value(
+      &store, elder_terms::ssh_terminal_type_setting_key(),
+      elder_terms::SettingValue{options.ssh_terminal_type});
+  elder_terms::set_setting_value(
       &store, elder_terms::serial_device_setting_key(),
       elder_terms::SettingValue{options.serial_device});
   elder_terms::set_setting_value(
@@ -302,15 +334,17 @@ static void select_initial_page(GtkWidget *window,
   }
 
   if (page == "terminal") {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 3);
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 4);
   } else if (page == "telnet") {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 1);
   } else if (page == "serial") {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 2);
+  } else if (page == "ssh") {
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 3);
   } else if (page == "transfer") {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 4);
-  } else if (page == "logging") {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 5);
+  } else if (page == "logging") {
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 6);
   } else {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 0);
   }
@@ -320,6 +354,9 @@ static std::string connection_type_name(
     const elder_terms::TerminalConnectionProfile &profile) {
   if (profile.kind == elder_terms::TerminalConnectionKind::telnet) {
     return "telnet";
+  }
+  if (profile.kind == elder_terms::TerminalConnectionKind::ssh) {
+    return "ssh";
   }
   if (profile.kind == elder_terms::TerminalConnectionKind::serial) {
     return "serial";
@@ -352,6 +389,8 @@ static void print_store(const char *prefix,
       elder_terms::terminal_connection_profile(store);
   const elder_terms::TelnetConnectionSettings telnet =
       elder_terms::telnet_connection_settings(store);
+  const elder_terms::SshConnectionSettings ssh =
+      elder_terms::ssh_connection_settings(store);
   const elder_terms::SerialConnectionSettings serial =
       elder_terms::serial_connection_settings(store);
   const elder_terms::TerminalLogSettings log =
@@ -376,6 +415,11 @@ static void print_store(const char *prefix,
             << " telnet_address=" << telnet.address
             << " telnet_port=" << telnet.port
             << " telnet_terminal_type=" << telnet.terminal_type
+            << " ssh_address=" << ssh.address
+            << " ssh_port=" << ssh.port
+            << " ssh_username=" << ssh.username
+            << " ssh_identity_file=" << ssh.identity_file
+            << " ssh_terminal_type=" << ssh.terminal_type
             << " serial_device=" << serial.device
             << " serial_baudrate=" << serial.baudrate
             << " serial_bits=" << serial.bits
