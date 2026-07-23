@@ -76,7 +76,7 @@ export const runLauncherGtkTest = async (
       XDG_CONFIG_HOME: configHome,
       ...options?.env,
     },
-    xvfbTrayHost: false,
+    xvfbTrayHost: true,
   });
   const app = await launcher.launch([...(options?.args ?? [])]);
   try {

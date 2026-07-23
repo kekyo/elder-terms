@@ -101,7 +101,7 @@ export const runSharedGtkTest = async (
 
   const launcher = createGtkAppLauncher({
     appPath,
-    xvfbTrayHost: false,
+    xvfbTrayHost: true,
   });
   const app = await launcher.launch(args);
   try {

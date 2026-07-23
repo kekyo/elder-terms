@@ -630,7 +630,12 @@ export const runGtkTest = async (
     appPath,
     env: options?.env,
     onSystemOutput: evidence.recordSystemOutputEvent,
-    xvfbTrayHost: false,
+    xvfbPool: {
+      maxIdlePerKey: 8,
+      maxIdleTotal: 8,
+      type: 'xvfb',
+    },
+    xvfbTrayHost: true,
   });
   const apps: GtkApp[] = [];
 
