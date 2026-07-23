@@ -554,6 +554,14 @@ static bool start_text_send_request(ApplicationState *state,
                                                        std::move(request));
 }
 
+static bool can_paste_terminal_text(const ApplicationState *state) {
+  return state != nullptr && state->window != nullptr &&
+         state->connection_active && !state->transfer_active &&
+         state->settings_dialog == nullptr &&
+         elder_terms::terminal_session_supports_text_send(
+             state->session_state);
+}
+
 static void on_text_send_menu_item_activate(GtkMenuItem *,
                                             gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
@@ -827,6 +835,25 @@ int main(int argc, char **argv) {
             start_zmodem_auto_transfer(&app_state, direction);
           },
     });
+  elder_terms::set_main_window_terminal_paste_callbacks(
+      &*main_window,
+      {
+          .can_paste =
+              [&app_state]() {
+                return can_paste_terminal_text(&app_state);
+              },
+          .paste =
+              [&app_state](std::string utf8_text) {
+                if (!start_text_send_request(
+                        &app_state,
+                        elder_terms::TerminalTextSendBufferSource{
+                            .utf8_text = std::move(utf8_text),
+                        })) {
+                  elder_terms::set_main_window_status_text(
+                      app_state.main_window, "Text send unavailable");
+                }
+              },
+      });
   elder_terms::set_terminal_session_zmodem_autostart(
       app_state.session_state,
       elder_terms::transfer_zmodem_autostart(app_state.settings_store));

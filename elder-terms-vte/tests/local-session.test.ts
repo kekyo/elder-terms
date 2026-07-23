@@ -8,6 +8,10 @@ import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import {
+  activateTerminalPaste,
+  startClipboardTextProvider,
+} from './clipboard-test-helpers';
+import {
   assertTerminalCaptureMatches,
   assertDisconnectedNoticeMatches,
   expectDisconnectedNoticeHidden,
@@ -607,6 +611,69 @@ describe.concurrent('elder-terms-vte local session', () => {
             );
             expect(await readFile(logPath, 'utf8')).toContain(
               'LOCAL_DURING_TEXT_SEND'
+            );
+          });
+        },
+        {
+          env: {
+            SHELL: shellPath,
+          },
+        }
+      );
+    });
+  });
+
+  it('pastes encoded clipboard text read-only at the configured rate', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const receivedPath = join(directory, 'pasted.bin');
+      const readyPath = join(directory, 'paste-ready.txt');
+      const shellPath = join(directory, 'paste-shell.sh');
+      const logPath = join(directory, 'logs', 'cooked.txt');
+      const configPath = join(directory, 'paste.ini');
+      const clipboardText = '日本😀0123456789';
+      await writeFile(
+        shellPath,
+        `#!/bin/sh\nstty raw -echo\nprintf ready > ${shellQuote(
+          readyPath
+        )}\ndd bs=1 count=1 of=${shellQuote(
+          receivedPath
+        )} 2>/dev/null\nprintf LOCAL_DURING_PASTE\ndd bs=1 count=14 of=${shellQuote(
+          receivedPath
+        )} oflag=append conv=notrunc 2>/dev/null\nsleep 1\nexit 0\n`,
+        'utf8'
+      );
+      await chmod(shellPath, 0o755);
+      await writeFile(
+        configPath,
+        `[terminal]\nauto_close=false\nencoding=SHIFT-JIS\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        ['-c', configPath],
+        async (app) => {
+          await waitForFileText(readyPath, 'ready');
+          const provider = await startClipboardTextProvider(app, clipboardText);
+          try {
+            const button = await activateTerminalPaste(app);
+            await expectTextSendActive(button);
+            await focusTerminal(app);
+            await app.input.pressKey('x');
+            await expectTextSendFinished(app, button);
+          } finally {
+            await provider.close();
+          }
+
+          await toPass(async () => {
+            expect(Array.from((await readFile(receivedPath)).values())).toEqual(
+              [
+                0x93, 0xfa, 0x96, 0x7b, 0x3f, 0x30, 0x31, 0x32, 0x33, 0x34,
+                0x35, 0x36, 0x37, 0x38, 0x39,
+              ]
+            );
+            expect(await readFile(logPath, 'utf8')).toContain(
+              'LOCAL_DURING_PASTE'
             );
           });
         },

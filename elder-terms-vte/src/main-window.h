@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <functional>
 #include <optional>
 #include <string>
 
@@ -13,6 +14,16 @@
 #include "terminal-transfer.h"
 
 namespace elder_terms {
+
+/**
+ * Handles terminal context-menu Paste availability and selected text.
+ */
+struct MainWindowTerminalPasteCallbacks {
+  /** Returns whether the current application state can start a text send. */
+  std::function<bool()> can_paste;
+  /** Receives non-empty UTF-8 text selected from the clipboard. */
+  std::function<void(std::string utf8_text)> paste;
+};
 
 /**
  * Holds the GTK builder and required widgets from main-window.ui.
@@ -88,6 +99,15 @@ struct MainWindow {
  * @returns Loaded window widgets, or std::nullopt after logging an error.
  */
 std::optional<MainWindow> load_main_window();
+
+/**
+ * Configures Paste handling for the terminal context menu.
+ *
+ * @param main_window Main window containing the terminal context menu.
+ * @param callbacks Paste availability and text callbacks.
+ */
+void set_main_window_terminal_paste_callbacks(
+    MainWindow *main_window, MainWindowTerminalPasteCallbacks callbacks);
 
 /**
  * Records activity against one status-bar activity indicator.

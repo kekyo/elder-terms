@@ -12,6 +12,7 @@ import {
   expectActivityIndicatorImageState,
   waitForActivityIndicatorImageState,
 } from './activity-indicator-test-helpers';
+import { startClipboardTextProvider } from './clipboard-test-helpers';
 import { expectElementKind } from './test-helpers';
 import {
   defaultColumns,
@@ -523,6 +524,51 @@ describe.concurrent('elder-terms-vte main window', () => {
       await runGtkTest(context, ['-c', configPath], async (app) => {
         await expectTransferButtonVisibleLeftOfSettings(app);
       });
+    });
+  });
+
+  it('enables Paste only when the clipboard provides text', async (context) => {
+    await runGtkTest(context, ['--test-fixture'], async (app) => {
+      const layout = await waitForResult(async () =>
+        readTerminalGridLayout(app)
+      );
+      const { bounds } = layout.terminalCapture;
+
+      await openTerminalContextMenu(
+        app,
+        bounds.x + bounds.width / 2,
+        bounds.y + bounds.height / 2
+      );
+      const pasteItem = await waitForResult(async () => {
+        const item = expectElementKind(
+          await app.getById('terminal_context_paste_item'),
+          'menuItem'
+        );
+        const info = await item.info();
+        expect(info.name).toBe('Paste');
+        expect(info.states).toContain('showing');
+        expect(info.states).not.toContain('enabled');
+        expect(info.states).not.toContain('sensitive');
+        return item;
+      });
+
+      await app.input.pressKey('Escape');
+      const provider = await startClipboardTextProvider(app, 'clipboard text');
+      try {
+        await openTerminalContextMenu(
+          app,
+          bounds.x + bounds.width / 2,
+          bounds.y + bounds.height / 2
+        );
+        await waitForResult(async () => {
+          const info = await pasteItem.info();
+          expect(info.states).toContain('showing');
+          expect(info.states).toContain('enabled');
+          expect(info.states).toContain('sensitive');
+        });
+      } finally {
+        await provider.close();
+      }
     });
   });
 
