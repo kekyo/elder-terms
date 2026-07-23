@@ -149,6 +149,26 @@ const expectSelectedComboValue = async (
   expect((await selected?.info())?.name).toBe(expectedName);
 };
 
+const visibleSettingsTabNames = async (app: GtkApp): Promise<string[]> => {
+  const notebook = expectElementKind(
+    await app.getById('settings_notebook'),
+    'tabList'
+  );
+  const names: string[] = [];
+  const childCount = await notebook.getChildCount();
+  for (let index = 0; index < childCount; ++index) {
+    const tab = await notebook.childAt(index);
+    if (tab === undefined) {
+      continue;
+    }
+    const info = await tab.info();
+    if (info.states.includes('showing')) {
+      names.push(info.name);
+    }
+  }
+  return names;
+};
+
 const expectPageVisualFixture = async (
   app: GtkApp,
   testCase: SettingVisualCase,
@@ -278,6 +298,29 @@ const clearKeyBinding = async (
 };
 
 describe.concurrent('shared settings widget', () => {
+  it('orders connection settings before Terminal when available', async (context) => {
+    const cases = [
+      {
+        args: [] as const,
+        expected: ['General', 'Terminal', 'Transfer', 'Logging'],
+      },
+      {
+        args: ['--type=telnet'] as const,
+        expected: ['General', 'TELNET', 'Terminal', 'Transfer', 'Logging'],
+      },
+      {
+        args: ['--type=serial'] as const,
+        expected: ['General', 'Serial', 'Terminal', 'Transfer', 'Logging'],
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      await runSharedGtkTest(context, testCase.args, async ({ app }) => {
+        expect(await visibleSettingsTabNames(app)).toEqual(testCase.expected);
+      });
+    }
+  });
+
   it('exposes launcher draft state without its internal action row', async (context) => {
     await runSharedGtkTest(
       context,
