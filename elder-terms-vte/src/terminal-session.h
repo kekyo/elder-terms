@@ -18,16 +18,26 @@ namespace elder_terms {
 struct TerminalSessionState;
 
 /**
+ * Optional backend overrides supplied when a terminal session is created.
+ */
+struct TerminalSessionOptions {
+  /** Explicit SSH known_hosts file, or empty to use the libssh default. */
+  std::string ssh_known_hosts_file;
+};
+
+/**
  * Creates a terminal session from a connection profile.
  *
  * @param terminal VTE terminal widget used by the session.
  * @param profile Selected connection profile.
  * @param callbacks Optional callbacks emitted by the session.
+ * @param options Optional backend overrides.
  * @returns New terminal session state owned by the caller.
  */
 TerminalSessionState *
 create_terminal_session(GtkWidget *terminal, TerminalConnectionProfile profile,
-                        TerminalSessionCallbacks callbacks);
+                        TerminalSessionCallbacks callbacks,
+                        TerminalSessionOptions options);
 
 /**
  * Starts the configured terminal session backend.

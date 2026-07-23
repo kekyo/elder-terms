@@ -3,11 +3,12 @@ import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
 import { constants } from 'node:fs';
 import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { userInfo } from 'node:os';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { GtkApp, GtkToggleButtonElement } from 'gestament';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, type TestContext } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import { expectElementKind, type TestEvidence } from './test-helpers';
@@ -28,6 +29,7 @@ import {
   transferTerminalDimPath,
   withTemporaryDirectory,
   xyzmPausePeerPath,
+  type RunGtkTestOptions,
   type TransferProgressBarValue,
 } from './gtk-test-helpers';
 
@@ -42,6 +44,7 @@ interface TransferFixture {
   readonly markerPath: string;
   readonly payload: Buffer;
   readonly payloadPath: string;
+  readonly peerReadyPath: string | undefined;
   readonly peerReleasePath?: string;
   readonly peerStatusPath?: string;
   readonly peerStderrPath?: string;
@@ -70,6 +73,7 @@ interface BatchTransferFixture {
   readonly files: readonly BatchTransferFileFixture[];
   readonly loginScriptPath: string;
   readonly markerPath: string;
+  readonly peerReadyPath: string;
   readonly sourceUris: readonly string[];
   readonly transferBasePath: string;
 }
@@ -96,11 +100,20 @@ interface TransferConnectionStartOptions {
 
 interface TransferConnection {
   readonly close: () => Promise<void>;
+  readonly diagnostics: () => string;
+  readonly gtkTestOptions: RunGtkTestOptions | undefined;
+  readonly launchArguments: readonly string[];
   readonly port: number;
+  readonly writeConfig: (
+    path: string,
+    transferBasePath: string,
+    zmodemAutostart: boolean | undefined
+  ) => Promise<void>;
 }
 
 interface TransferConnectionCase {
   readonly name: string;
+  readonly runSequentially: boolean;
   readonly start: (
     options: TransferConnectionStartOptions
   ) => Promise<TransferConnection>;
@@ -228,6 +241,8 @@ const requiredCommands = [
   '/usr/bin/sz',
   '/usr/bin/sb',
   '/usr/bin/sx',
+  '/usr/bin/ssh-keygen',
+  '/usr/sbin/sshd',
 ] as const;
 
 const shellQuote = (value: string): string =>
@@ -513,7 +528,7 @@ const waitForSocatListening = async (
       return port;
     },
     {
-      message: 'socat should start listening for telnetd connections',
+      message: 'socat should start listening for transfer connections',
       timeoutMs: 5_000,
     }
   );
@@ -547,6 +562,28 @@ const stopProcessGroup = async (child: ChildProcess): Promise<void> => {
   }
 };
 
+const runCommand = async (
+  command: string,
+  args: readonly string[]
+): Promise<void> => {
+  const child = spawn(command, [...args], {
+    stdio: ['ignore', 'ignore', 'pipe'],
+  });
+  let stderr = '';
+  child.stderr?.on('data', (chunk: Buffer) => {
+    stderr += chunk.toString('utf8');
+  });
+  const [code, signal] = (await once(child, 'exit')) as [
+    number | null,
+    string | null,
+  ];
+  if (code !== 0) {
+    throw new Error(
+      `${command} failed: code=${code} signal=${signal} stderr=${stderr}`
+    );
+  }
+};
+
 const startSocatGnuTelnetd = async (
   options: TransferConnectionStartOptions
 ): Promise<TransferConnection> => {
@@ -577,14 +614,162 @@ const startSocatGnuTelnetd = async (
     close: async (): Promise<void> => {
       await stopProcessGroup(child);
     },
+    diagnostics: () => stderr,
+    gtkTestOptions: undefined,
+    launchArguments: [],
     port,
+    writeConfig: async (
+      path,
+      transferBasePath,
+      zmodemAutostart
+    ): Promise<void> => {
+      await writeTelnetConfig(path, port, transferBasePath, zmodemAutostart);
+    },
+  };
+};
+
+const startSocatOpenSshd = async (
+  options: TransferConnectionStartOptions
+): Promise<TransferConnection> => {
+  const root = join(dirname(options.loginScriptPath), 'sshd');
+  const clientHome = join(root, 'client-home');
+  const clientSshDirectory = join(clientHome, '.ssh');
+  const hostKeyPath = join(root, 'ssh_host_ed25519_key');
+  const clientKeyPath = join(root, 'client_ed25519_key');
+  const authorizedKeysPath = join(root, 'authorized_keys');
+  const sshdConfigPath = join(root, 'sshd_config');
+  const isolatedKnownHostsPath = join(clientSshDirectory, 'known_hosts');
+  const username = userInfo().username;
+
+  await mkdir(clientSshDirectory, {
+    mode: 0o700,
+    recursive: true,
+  });
+  await Promise.all([
+    runCommand('/usr/bin/ssh-keygen', [
+      '-q',
+      '-t',
+      'ed25519',
+      '-N',
+      '',
+      '-f',
+      hostKeyPath,
+    ]),
+    runCommand('/usr/bin/ssh-keygen', [
+      '-q',
+      '-t',
+      'ed25519',
+      '-N',
+      '',
+      '-f',
+      clientKeyPath,
+    ]),
+  ]);
+
+  await writeFile(authorizedKeysPath, await readFile(`${clientKeyPath}.pub`), {
+    mode: 0o600,
+  });
+  await writeFile(
+    sshdConfigPath,
+    [
+      `HostKey ${hostKeyPath}`,
+      'PidFile none',
+      `AuthorizedKeysFile ${authorizedKeysPath}`,
+      'AuthenticationMethods publickey',
+      'PubkeyAuthentication yes',
+      'PasswordAuthentication no',
+      'KbdInteractiveAuthentication no',
+      'ChallengeResponseAuthentication no',
+      'UsePAM no',
+      'PermitRootLogin no',
+      `AllowUsers ${username}`,
+      'LogLevel VERBOSE',
+      'PrintMotd no',
+      'PrintLastLog no',
+      'AllowTcpForwarding no',
+      'X11Forwarding no',
+      'PermitTTY yes',
+      'StrictModes no',
+      'UseDNS no',
+      `ForceCommand ${options.loginScriptPath}`,
+      '',
+    ].join('\n'),
+    'utf8'
+  );
+
+  const sshdCommand = `/usr/sbin/sshd -i -e -f ${shellQuote(sshdConfigPath)}`;
+  const child = spawn(
+    '/usr/bin/socat',
+    [
+      '-d',
+      '-d',
+      'TCP-LISTEN:0,bind=127.0.0.1,reuseaddr,fork',
+      `EXEC:${sshdCommand}`,
+    ],
+    {
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  );
+  let stderr = '';
+  child.stderr?.on('data', (chunk: Buffer) => {
+    stderr += chunk.toString('utf8');
+  });
+  const port = await waitForSocatListening(child, () => stderr);
+  const hostPublicKey = (await readFile(`${hostKeyPath}.pub`, 'utf8')).trim();
+  await writeFile(
+    isolatedKnownHostsPath,
+    `[127.0.0.1]:${port} ${hostPublicKey}\n`,
+    {
+      mode: 0o600,
+    }
+  );
+
+  return {
+    close: async (): Promise<void> => {
+      await stopProcessGroup(child);
+    },
+    diagnostics: () => stderr,
+    gtkTestOptions: {
+      env: {
+        HOME: clientHome,
+        SSH_AUTH_SOCK: '',
+      },
+    },
+    launchArguments: [`--test-ssh-known-hosts-file=${isolatedKnownHostsPath}`],
+    port,
+    writeConfig: async (
+      path,
+      transferBasePath,
+      zmodemAutostart
+    ): Promise<void> => {
+      await writeSshConfig(
+        path,
+        port,
+        username,
+        clientKeyPath,
+        transferBasePath,
+        zmodemAutostart
+      );
+    },
   };
 };
 
 const connectionCases: readonly TransferConnectionCase[] = [
   {
     name: 'telnetd',
+    runSequentially: false,
     start: startSocatGnuTelnetd,
+  },
+  {
+    name: 'sshd',
+    /*
+     * Each SSH case owns an OpenSSH daemon, PTY, VTE process, and X server.
+     * Keep those end-to-end cases isolated from one another while retaining
+     * the same protocol, delay, and size matrix as TELNET.
+     */
+    runSequentially: true,
+    start: startSocatOpenSshd,
   },
 ];
 
@@ -660,6 +845,7 @@ const writeLoginScript = async (
   markerPath: string,
   command: readonly string[]
 ): Promise<void> => {
+  const readyPath = `${markerPath}.ready`;
   const releasePath = `${markerPath}.release`;
   await createFifo(markerPath);
   await createFifo(releasePath);
@@ -668,7 +854,8 @@ const writeLoginScript = async (
     [
       '#!/bin/sh',
       `cd ${shellQuote(remoteDirectory)} || exit 1`,
-      'stty raw -echo -ixon -ixoff -icanon min 1 time 0 2>/dev/null || true',
+      'stty raw -echo -ixon -ixoff -icanon min 1 time 0 2>/dev/null || exit 1',
+      `: > ${shellQuote(readyPath)}`,
       `cat ${shellQuote(markerPath)} >/dev/null || exit 1`,
       `${command.map(shellQuote).join(' ')} 2>lrzsz.stderr`,
       'status=$?',
@@ -791,6 +978,47 @@ const writeTelnetConfig = async (
   );
 };
 
+const writeSshConfig = async (
+  path: string,
+  port: number,
+  username: string,
+  identityFile: string,
+  transferBasePath: string,
+  zmodemAutostart: boolean | undefined
+): Promise<void> => {
+  const transferLines = [`base_path=${transferBasePath}`];
+  if (zmodemAutostart !== undefined) {
+    transferLines.push(
+      `zmodem_autostart=${zmodemAutostart ? 'true' : 'false'}`
+    );
+  }
+  await writeFile(
+    path,
+    [
+      '[general]',
+      'type=ssh',
+      '',
+      '[terminal]',
+      'auto_close=false',
+      'encoding=SHIFT-JIS',
+      'backspace_code=del',
+      'cursor_key_mode=adm3',
+      '',
+      '[ssh]',
+      'address=127.0.0.1',
+      `port=${port}`,
+      `username=${username}`,
+      `identity_file=${identityFile}`,
+      'terminal_type=xterm-256color',
+      '',
+      '[transfer]',
+      ...transferLines,
+      '',
+    ].join('\n'),
+    'utf8'
+  );
+};
+
 const createTransferFixture = async (
   directory: string,
   transferCase: TransferMenuCase,
@@ -811,6 +1039,7 @@ const createTransferFixture = async (
   const loginScriptPath = join(directory, 'login.sh');
   const peerStatusPath = join(remoteDirectory, 'lrzsz.status');
   const peerStderrPath = join(remoteDirectory, 'lrzsz.stderr');
+  const peerReadyPath = `${markerPath}.ready`;
   const peerReleasePath = `${markerPath}.release`;
 
   if (transferCase.direction === 'send') {
@@ -833,6 +1062,7 @@ const createTransferFixture = async (
       markerPath,
       payload,
       payloadPath: sourcePath,
+      peerReadyPath,
       peerReleasePath,
       peerStatusPath,
       peerStderrPath,
@@ -857,6 +1087,7 @@ const createTransferFixture = async (
     markerPath,
     payload,
     payloadPath: remotePayloadPath,
+    peerReadyPath,
     peerReleasePath,
     peerStatusPath,
     peerStderrPath,
@@ -928,6 +1159,7 @@ const createTransferProgressPeerFixture = async (
       markerPath,
       payload,
       payloadPath: sourcePath,
+      peerReadyPath: undefined,
       peerStderrPath,
       sourceUri: pathToFileURL(sourcePath).href,
       transferBasePath: receiveDirectory,
@@ -978,6 +1210,7 @@ const createTransferProgressPeerFixture = async (
     markerPath,
     payload,
     payloadPath: remotePayloadPath,
+    peerReadyPath: undefined,
     peerStderrPath,
     sourceUri: undefined,
     transferBasePath: receiveDirectory,
@@ -1020,6 +1253,7 @@ const createTransferDimFixture = async (
     markerPath,
     payload,
     payloadPath: remotePayloadPath,
+    peerReadyPath: undefined,
     sourceUri: undefined,
     transferBasePath: receiveDirectory,
   };
@@ -1057,6 +1291,7 @@ const createYmodemPostRbFixture = async (
     markerPath,
     payload,
     payloadPath: sourcePath,
+    peerReadyPath: undefined,
     postRbCaptureMarkerPath: join(remoteDirectory, 'post-rb-capture.marker'),
     postRbInputPath: join(remoteDirectory, 'post-rb-input.bin'),
     sourceUri: pathToFileURL(sourcePath).href,
@@ -1080,6 +1315,7 @@ const createBatchTransferFixture = async (
   const configPath = join(directory, 'telnet.ini');
   const markerPath = join(directory, 'start-transfer.marker');
   const loginScriptPath = join(directory, 'login.sh');
+  const peerReadyPath = `${markerPath}.ready`;
   const fileNames = batchTransferFileCases.map((fileCase) => fileCase.name);
   const command = lrzszBatchCommand(transferCase, fileNames);
 
@@ -1110,6 +1346,7 @@ const createBatchTransferFixture = async (
       files,
       loginScriptPath,
       markerPath,
+      peerReadyPath,
       sourceUris: files.map((file) => file.sourceUri),
       transferBasePath: receiveDirectory,
     };
@@ -1136,6 +1373,7 @@ const createBatchTransferFixture = async (
     files,
     loginScriptPath,
     markerPath,
+    peerReadyPath,
     sourceUris: [],
     transferBasePath: receiveDirectory,
   };
@@ -1158,6 +1396,9 @@ const createZmodemResumeFixture = async (
   const configPath = join(directory, 'telnet.ini');
   const markerPath = join(directory, 'start-transfer.marker');
   const loginScriptPath = join(directory, 'login.sh');
+  const peerStatusPath = join(remoteDirectory, 'lrzsz.status');
+  const peerStderrPath = join(remoteDirectory, 'lrzsz.stderr');
+  const peerReadyPath = `${markerPath}.ready`;
 
   if (transferCase.direction === 'send') {
     const sourcePath = join(localDirectory, 'payload.bin');
@@ -1183,6 +1424,9 @@ const createZmodemResumeFixture = async (
       partialPath: undefined,
       payload,
       payloadPath: sourcePath,
+      peerReadyPath,
+      peerStatusPath,
+      peerStderrPath,
       resumeOffset: zmodemResumeOffset,
       sourceUri: pathToFileURL(sourcePath).href,
       transferBasePath: receiveDirectory,
@@ -1208,6 +1452,9 @@ const createZmodemResumeFixture = async (
     partialPath,
     payload,
     payloadPath: remotePayloadPath,
+    peerReadyPath,
+    peerStatusPath,
+    peerStderrPath,
     resumeOffset: zmodemResumeOffset,
     sourceUri: undefined,
     transferBasePath: receiveDirectory,
@@ -1221,6 +1468,44 @@ const startConnection = async (
   connectionCase.start({
     loginScriptPath: fixture.loginScriptPath,
   });
+
+const registerConnectionTest = (
+  connectionCase: TransferConnectionCase,
+  name: string,
+  handler: (context: TestContext) => Promise<void>,
+  timeout: number
+): void => {
+  it(
+    name,
+    {
+      concurrent: !connectionCase.runSequentially,
+      timeout,
+    },
+    handler
+  );
+};
+
+const waitForTransferConnection = async (
+  app: GtkApp,
+  evidence: TestEvidence,
+  connection: TransferConnection,
+  peerReadyPath: string | undefined
+): Promise<void> => {
+  try {
+    await waitForActivityIndicatorImageState(app, 'conn', 'on');
+    if (peerReadyPath !== undefined) {
+      await waitForFileExists(peerReadyPath, 10_000);
+    }
+  } catch (error) {
+    const promptPanel = await app.getById('ssh_prompt_panel');
+    await evidence.log('transfer connection failed', {
+      error,
+      promptStates: (await promptPanel.info()).states,
+      serverDiagnostics: connection.diagnostics(),
+    });
+    throw error;
+  }
+};
 
 const expectTransferButtonSensitive = async (
   button: GtkToggleButtonElement
@@ -1589,9 +1874,8 @@ describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
         const fixture = await createTransferDimFixture(directory);
         const connection = await startConnection(connectionCases[0], fixture);
         try {
-          await writeTelnetConfig(
+          await connection.writeConfig(
             fixture.configPath,
-            connection.port,
             fixture.transferBasePath,
             undefined
           );
@@ -1643,7 +1927,8 @@ describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
         for (const sizeCase of transferSizeCasesByProtocol[
           transferCase.protocol
         ]) {
-          it(
+          registerConnectionTest(
+            connectionCase,
             `${connectionCase.name} ${transferCase.label} ${sizeCase.label} starts after ${startDelayMs}ms`,
             async (context) => {
               await expectRequiredCommands();
@@ -1658,98 +1943,109 @@ describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
                   fixture
                 );
                 try {
-                  await writeTelnetConfig(
+                  await connection.writeConfig(
                     fixture.configPath,
-                    connection.port,
                     fixture.transferBasePath,
                     undefined
                   );
                   const args = [
+                    ...connection.launchArguments,
                     '-c',
                     fixture.configPath,
                     ...transferSourceUriArgs(
                       fixture.sourceUri === undefined ? [] : [fixture.sourceUri]
                     ),
                   ];
-                  await runGtkTest(context, args, async (app, evidence) => {
-                    const payloadBytes = await readFile(fixture.payloadPath);
-                    const payloadEvidencePath =
-                      await evidence.saveBinaryEvidence(
-                        'transfer-payload',
-                        payloadBytes,
-                        'bin'
-                      );
-                    expect(
-                      Buffer.compare(
-                        await readFile(payloadEvidencePath),
-                        payloadBytes
-                      )
-                    ).toBe(0);
-                    await evidence.log('XYZMODEM e2e case', {
-                      command: fixture.command,
-                      connection: connectionCase.name,
-                      direction: transferCase.direction,
-                      payloadEvidencePath,
-                      protocol: transferCase.protocol,
-                      transferCase: transferCase.label,
-                      size: sizeCase.label,
-                      sizeBytes: sizeCase.byteLength,
-                      startDelayMs,
-                    });
-                    await waitForActivityIndicatorImageState(app, 'conn', 'on');
-
-                    const startedAtMs = performance.now();
-                    if (
-                      transferCase.menuItemId ===
-                      'transfer_ymodem_g_receive_item'
-                    ) {
-                      await writeFile(fixture.markerPath, 'start', 'utf8');
-                      await delay(startDelayMs);
-                      await activateTransfer(app, transferCase);
-                    } else if (transferCase.direction === 'send') {
-                      await writeFile(fixture.markerPath, 'start', 'utf8');
-                      await delay(startDelayMs);
-                      await activateTransfer(app, transferCase);
-                    } else {
-                      await activateTransfer(app, transferCase);
-                      await expectTransferButtonInsensitive(app);
-                      await delay(startDelayMs);
-                      await writeFile(fixture.markerPath, 'start', 'utf8');
-                    }
-
-                    try {
-                      await waitForFileBytes(
-                        fixture.expectedPath,
-                        fixture.payload,
-                        transferCase.protocol,
-                        sizeCase.timeoutMs
-                      );
-                    } catch (error) {
-                      await saveTransferPeerFailureEvidence(
+                  await runGtkTest(
+                    context,
+                    args,
+                    async (app, evidence) => {
+                      const payloadBytes = await readFile(fixture.payloadPath);
+                      const payloadEvidencePath =
+                        await evidence.saveBinaryEvidence(
+                          'transfer-payload',
+                          payloadBytes,
+                          'bin'
+                        );
+                      expect(
+                        Buffer.compare(
+                          await readFile(payloadEvidencePath),
+                          payloadBytes
+                        )
+                      ).toBe(0);
+                      await evidence.log('XYZMODEM e2e case', {
+                        command: fixture.command,
+                        connection: connectionCase.name,
+                        direction: transferCase.direction,
+                        payloadEvidencePath,
+                        protocol: transferCase.protocol,
+                        transferCase: transferCase.label,
+                        size: sizeCase.label,
+                        sizeBytes: sizeCase.byteLength,
+                        startDelayMs,
+                      });
+                      await waitForTransferConnection(
+                        app,
                         evidence,
-                        fixture,
-                        error
+                        connection,
+                        fixture.peerReadyPath
                       );
-                      throw error;
-                    }
-                    await releaseTransferPeer(fixture);
-                    const elapsedMs = performance.now() - startedAtMs;
-                    const adjustedElapsedMs = Math.max(
-                      0,
-                      elapsedMs - startDelayMs
-                    );
-                    await evidence.log('XYZMODEM e2e result', {
-                      adjustedElapsedMs,
-                      elapsedMs,
-                    });
-                    if (
-                      transferCase.menuItemId === 'transfer_xmodem_1k_send_item'
-                    ) {
-                      expect(adjustedElapsedMs).toBeLessThan(
-                        maxXmodemSendAdjustedDurationMs
+
+                      const startedAtMs = performance.now();
+                      if (
+                        transferCase.menuItemId ===
+                        'transfer_ymodem_g_receive_item'
+                      ) {
+                        await writeFile(fixture.markerPath, 'start', 'utf8');
+                        await delay(startDelayMs);
+                        await activateTransfer(app, transferCase);
+                      } else if (transferCase.direction === 'send') {
+                        await writeFile(fixture.markerPath, 'start', 'utf8');
+                        await delay(startDelayMs);
+                        await activateTransfer(app, transferCase);
+                      } else {
+                        await activateTransfer(app, transferCase);
+                        await expectTransferButtonInsensitive(app);
+                        await delay(startDelayMs);
+                        await writeFile(fixture.markerPath, 'start', 'utf8');
+                      }
+
+                      try {
+                        await waitForFileBytes(
+                          fixture.expectedPath,
+                          fixture.payload,
+                          transferCase.protocol,
+                          sizeCase.timeoutMs
+                        );
+                      } catch (error) {
+                        await saveTransferPeerFailureEvidence(
+                          evidence,
+                          fixture,
+                          error
+                        );
+                        throw error;
+                      }
+                      await releaseTransferPeer(fixture);
+                      const elapsedMs = performance.now() - startedAtMs;
+                      const adjustedElapsedMs = Math.max(
+                        0,
+                        elapsedMs - startDelayMs
                       );
-                    }
-                  });
+                      await evidence.log('XYZMODEM e2e result', {
+                        adjustedElapsedMs,
+                        elapsedMs,
+                      });
+                      if (
+                        transferCase.menuItemId ===
+                        'transfer_xmodem_1k_send_item'
+                      ) {
+                        expect(adjustedElapsedMs).toBeLessThan(
+                          maxXmodemSendAdjustedDurationMs
+                        );
+                      }
+                    },
+                    connection.gtkTestOptions
+                  );
                 } finally {
                   await connection.close();
                 }
@@ -1764,7 +2060,8 @@ describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
 
   for (const connectionCase of connectionCases) {
     for (const transferCase of zmodemResumeMenuCases) {
-      it(
+      registerConnectionTest(
+        connectionCase,
         `${connectionCase.name} ${transferCase.label} resumes from ${zmodemResumeOffset} bytes`,
         async (context) => {
           await expectRequiredCommands();
@@ -1775,55 +2072,78 @@ describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
             );
             const connection = await startConnection(connectionCase, fixture);
             try {
-              await writeTelnetConfig(
+              await connection.writeConfig(
                 fixture.configPath,
-                connection.port,
                 fixture.transferBasePath,
                 undefined
               );
               const args = [
+                ...connection.launchArguments,
                 '-c',
                 fixture.configPath,
                 ...transferSourceUriArgs(
                   fixture.sourceUri === undefined ? [] : [fixture.sourceUri]
                 ),
               ];
-              await runGtkTest(context, args, async (app, evidence) => {
-                const payloadEvidencePath = await evidence.saveBinaryEvidence(
-                  'zmodem-resume-expected-payload',
-                  fixture.payload,
-                  'bin'
-                );
-                await evidence.log('ZMODEM resume e2e case', {
-                  command: fixture.command,
-                  connection: connectionCase.name,
-                  direction: transferCase.direction,
-                  payloadEvidencePath,
-                  resumeOffset: fixture.resumeOffset,
-                  transferCase: transferCase.label,
-                });
-                await waitForActivityIndicatorImageState(app, 'conn', 'on');
+              await runGtkTest(
+                context,
+                args,
+                async (app, evidence) => {
+                  const payloadEvidencePath = await evidence.saveBinaryEvidence(
+                    'zmodem-resume-expected-payload',
+                    fixture.payload,
+                    'bin'
+                  );
+                  await evidence.log('ZMODEM resume e2e case', {
+                    command: fixture.command,
+                    connection: connectionCase.name,
+                    direction: transferCase.direction,
+                    payloadEvidencePath,
+                    resumeOffset: fixture.resumeOffset,
+                    transferCase: transferCase.label,
+                  });
+                  await waitForTransferConnection(
+                    app,
+                    evidence,
+                    connection,
+                    fixture.peerReadyPath
+                  );
 
-                if (transferCase.direction === 'send') {
-                  await writeFile(fixture.markerPath, 'start', 'utf8');
-                  await delay(zmodemResumeStartDelayMs);
-                  await activateTransfer(app, transferCase);
-                } else {
-                  await activateTransfer(app, transferCase);
-                  await delay(zmodemResumeStartDelayMs);
-                  await writeFile(fixture.markerPath, 'start', 'utf8');
-                }
+                  if (transferCase.direction === 'send') {
+                    await writeFile(fixture.markerPath, 'start', 'utf8');
+                    await delay(zmodemResumeStartDelayMs);
+                    await activateTransfer(app, transferCase);
+                  } else {
+                    await activateTransfer(app, transferCase);
+                    await expectTransferButtonInsensitive(app);
+                    await delay(zmodemResumeStartDelayMs);
+                    await writeFile(fixture.markerPath, 'start', 'utf8');
+                  }
 
-                await waitForFileBytes(
-                  fixture.expectedPath,
-                  fixture.payload,
-                  'zmodem',
-                  zmodemResumeSizeCase.timeoutMs
-                );
-                if (fixture.partialPath !== undefined) {
-                  await expectFileMissing(fixture.partialPath);
-                }
-              });
+                  try {
+                    await waitForFileBytes(
+                      fixture.expectedPath,
+                      fixture.payload,
+                      'zmodem',
+                      zmodemResumeSizeCase.timeoutMs
+                    );
+                  } catch (error) {
+                    await saveTransferPeerFailureEvidence(
+                      evidence,
+                      fixture,
+                      error
+                    );
+                    await evidence.log('transfer server failure evidence', {
+                      serverDiagnostics: connection.diagnostics(),
+                    });
+                    throw error;
+                  }
+                  if (fixture.partialPath !== undefined) {
+                    await expectFileMissing(fixture.partialPath);
+                  }
+                },
+                connection.gtkTestOptions
+              );
             } finally {
               await connection.close();
             }
@@ -1836,7 +2156,8 @@ describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
 
   for (const connectionCase of connectionCases) {
     for (const transferCase of batchTransferMenuCases) {
-      it(
+      registerConnectionTest(
+        connectionCase,
         `${connectionCase.name} ${transferCase.label} transfers 3 files starts after ${batchTransferStartDelayMs}ms`,
         async (context) => {
           await expectRequiredCommands();
@@ -1847,70 +2168,80 @@ describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
             );
             const connection = await startConnection(connectionCase, fixture);
             try {
-              await writeTelnetConfig(
+              await connection.writeConfig(
                 fixture.configPath,
-                connection.port,
                 fixture.transferBasePath,
                 undefined
               );
               const args = [
+                ...connection.launchArguments,
                 '-c',
                 fixture.configPath,
                 ...transferSourceUriArgs(fixture.sourceUris),
               ];
-              await runGtkTest(context, args, async (app, evidence) => {
-                const payloadEvidencePaths = await Promise.all(
-                  fixture.files.map(async (file) =>
-                    evidence.saveBinaryEvidence(
-                      `transfer-batch-payload-${file.name}`,
-                      await readFile(file.payloadPath),
-                      'bin'
+              await runGtkTest(
+                context,
+                args,
+                async (app, evidence) => {
+                  const payloadEvidencePaths = await Promise.all(
+                    fixture.files.map(async (file) =>
+                      evidence.saveBinaryEvidence(
+                        `transfer-batch-payload-${file.name}`,
+                        await readFile(file.payloadPath),
+                        'bin'
+                      )
                     )
-                  )
-                );
-                await evidence.log('XYZMODEM batch e2e case', {
-                  command: fixture.command,
-                  connection: connectionCase.name,
-                  direction: transferCase.direction,
-                  files: fixture.files.map((file, index) => ({
-                    name: file.name,
-                    payloadEvidencePath: payloadEvidencePaths[index],
-                    sizeBytes: file.payload.length,
-                  })),
-                  protocol: transferCase.protocol,
-                  startDelayMs: batchTransferStartDelayMs,
-                  transferCase: transferCase.label,
-                });
-                await waitForActivityIndicatorImageState(app, 'conn', 'on');
+                  );
+                  await evidence.log('XYZMODEM batch e2e case', {
+                    command: fixture.command,
+                    connection: connectionCase.name,
+                    direction: transferCase.direction,
+                    files: fixture.files.map((file, index) => ({
+                      name: file.name,
+                      payloadEvidencePath: payloadEvidencePaths[index],
+                      sizeBytes: file.payload.length,
+                    })),
+                    protocol: transferCase.protocol,
+                    startDelayMs: batchTransferStartDelayMs,
+                    transferCase: transferCase.label,
+                  });
+                  await waitForTransferConnection(
+                    app,
+                    evidence,
+                    connection,
+                    fixture.peerReadyPath
+                  );
 
-                const startedAtMs = performance.now();
-                if (
-                  transferCase.direction === 'send' ||
-                  transferCase.menuItemId === 'transfer_ymodem_g_receive_item'
-                ) {
-                  await writeFile(fixture.markerPath, 'start', 'utf8');
-                  await delay(batchTransferStartDelayMs);
-                  await activateTransfer(app, transferCase);
-                } else {
-                  await activateTransfer(app, transferCase);
-                  await delay(batchTransferStartDelayMs);
-                  await writeFile(fixture.markerPath, 'start', 'utf8');
-                }
+                  const startedAtMs = performance.now();
+                  if (
+                    transferCase.direction === 'send' ||
+                    transferCase.menuItemId === 'transfer_ymodem_g_receive_item'
+                  ) {
+                    await writeFile(fixture.markerPath, 'start', 'utf8');
+                    await delay(batchTransferStartDelayMs);
+                    await activateTransfer(app, transferCase);
+                  } else {
+                    await activateTransfer(app, transferCase);
+                    await delay(batchTransferStartDelayMs);
+                    await writeFile(fixture.markerPath, 'start', 'utf8');
+                  }
 
-                await waitForBatchFileBytes(
-                  fixture.files,
-                  transferCase.protocol,
-                  batchTransferTimeoutMs
-                );
-                const elapsedMs = performance.now() - startedAtMs;
-                await evidence.log('XYZMODEM batch e2e result', {
-                  adjustedElapsedMs: Math.max(
-                    0,
-                    elapsedMs - batchTransferStartDelayMs
-                  ),
-                  elapsedMs,
-                });
-              });
+                  await waitForBatchFileBytes(
+                    fixture.files,
+                    transferCase.protocol,
+                    batchTransferTimeoutMs
+                  );
+                  const elapsedMs = performance.now() - startedAtMs;
+                  await evidence.log('XYZMODEM batch e2e result', {
+                    adjustedElapsedMs: Math.max(
+                      0,
+                      elapsedMs - batchTransferStartDelayMs
+                    ),
+                    elapsedMs,
+                  });
+                },
+                connection.gtkTestOptions
+              );
             } finally {
               await connection.close();
             }
@@ -1929,9 +2260,8 @@ describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
         const fixture = await createYmodemPostRbFixture(directory);
         const connection = await startConnection(connectionCases[0], fixture);
         try {
-          await writeTelnetConfig(
+          await connection.writeConfig(
             fixture.configPath,
-            connection.port,
             fixture.transferBasePath,
             undefined
           );
@@ -2003,9 +2333,8 @@ describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
         );
         const connection = await startConnection(connectionCases[0], fixture);
         try {
-          await writeTelnetConfig(
+          await connection.writeConfig(
             fixture.configPath,
-            connection.port,
             fixture.transferBasePath,
             true
           );
@@ -2039,9 +2368,8 @@ describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
         );
         const connection = await startConnection(connectionCases[0], fixture);
         try {
-          await writeTelnetConfig(
+          await connection.writeConfig(
             fixture.configPath,
-            connection.port,
             fixture.transferBasePath,
             true
           );
@@ -2086,9 +2414,8 @@ describe('elder-terms-vte XYZMODEM transfer progress notice e2e', () => {
           );
           const connection = await startConnection(connectionCases[0], fixture);
           try {
-            await writeTelnetConfig(
+            await connection.writeConfig(
               fixture.configPath,
-              connection.port,
               fixture.transferBasePath,
               undefined
             );

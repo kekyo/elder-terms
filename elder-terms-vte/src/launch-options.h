@@ -19,6 +19,8 @@ struct TestOptions {
   bool transfer_dialog_probe = false;
   /** Optional deterministic SSH prompt rendered by the GTK test fixture. */
   std::optional<std::string> ssh_prompt;
+  /** Explicit SSH known_hosts file used by connection integration tests. */
+  std::string ssh_known_hosts_file;
   /** Source file URIs used instead of opening the send file dialog. */
   std::vector<std::string> transfer_source_uris;
 };

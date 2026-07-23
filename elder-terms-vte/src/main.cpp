@@ -893,6 +893,10 @@ int main(int argc, char **argv) {
             return elder_terms::prompt_main_window_ssh_async(
                 app_state.main_window, prompt, std::move(cancellation));
           },
+    },
+    {
+      .ssh_known_hosts_file =
+          app_state.test_options.ssh_known_hosts_file,
     });
   elder_terms::set_main_window_terminal_paste_callbacks(
       &*main_window,

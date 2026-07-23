@@ -74,6 +74,7 @@ private:
   TerminalViewIo terminal_io;
   SshConnectionSettings settings;
   TerminalSessionCallbacks callbacks;
+  SshChannelConnectionOptions connection_options;
   cardio::cancellation_source stop_source;
   cardio::primitives::mutex backend_write_mutex;
   std::unique_ptr<SshChannelConnection> connection;
@@ -219,10 +220,7 @@ private:
     bool natural_end = false;
     try {
       auto connect_promise = SshChannelConnection::connect_async(
-          settings, columns, rows, callbacks,
-          SshChannelConnectionOptions{
-              .known_hosts_file = {},
-          },
+          settings, columns, rows, callbacks, connection_options,
           stop_source.get_cancellation());
       connection = std::move(co_await connect_promise);
       if (stopping) {
@@ -540,9 +538,11 @@ private:
 public:
   TerminalSshSession(GtkWidget *terminal, SshConnectionSettings settings,
                      TerminalTextSettings text_settings,
-                     TerminalSessionCallbacks callbacks)
+                     TerminalSessionCallbacks callbacks,
+                     SshChannelConnectionOptions connection_options)
       : terminal_io(terminal, text_settings, callbacks.output),
-        settings(std::move(settings)), callbacks(std::move(callbacks)) {
+        settings(std::move(settings)), callbacks(std::move(callbacks)),
+        connection_options(std::move(connection_options)) {
     const TerminalViewGridSize size = terminal_io.grid_size();
     if (size.columns > 0) {
       columns = size.columns;
@@ -719,10 +719,11 @@ std::unique_ptr<TerminalSession>
 create_terminal_ssh_session(GtkWidget *terminal,
                             SshConnectionSettings settings,
                             TerminalTextSettings text_settings,
-                            TerminalSessionCallbacks callbacks) {
+                            TerminalSessionCallbacks callbacks,
+                            SshChannelConnectionOptions connection_options) {
   return std::make_unique<TerminalSshSession>(
       terminal, std::move(settings), std::move(text_settings),
-      std::move(callbacks));
+      std::move(callbacks), std::move(connection_options));
 }
 
 } // namespace elder_terms

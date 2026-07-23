@@ -31,6 +31,7 @@ struct TerminalSessionBackendCreator {
   GtkWidget *terminal = nullptr;
   TerminalTextSettings text_settings;
   TerminalSessionCallbacks callbacks;
+  TerminalSessionOptions options;
 
   std::unique_ptr<TerminalSession>
   operator()(const LocalShellConnectionSettings &settings) const {
@@ -53,30 +54,38 @@ struct TerminalSessionBackendCreator {
   std::unique_ptr<TerminalSession>
   operator()(const SshConnectionSettings &settings) const {
     return create_terminal_ssh_session(terminal, settings, text_settings,
-                                       callbacks);
+                                       callbacks,
+                                       SshChannelConnectionOptions{
+                                           .known_hosts_file =
+                                               options.ssh_known_hosts_file,
+                                       });
   }
 };
 
 static std::unique_ptr<TerminalSession>
 create_backend(GtkWidget *terminal, const TerminalConnectionProfile &profile,
-               TerminalSessionCallbacks callbacks) {
+               TerminalSessionCallbacks callbacks,
+               TerminalSessionOptions options) {
   return std::visit(
       TerminalSessionBackendCreator{
           .terminal = terminal,
           .text_settings = profile.text_settings,
           .callbacks = callbacks,
+          .options = std::move(options),
       },
       profile.settings);
 }
 
 TerminalSessionState *
 create_terminal_session(GtkWidget *terminal, TerminalConnectionProfile profile,
-                        TerminalSessionCallbacks callbacks) {
+                        TerminalSessionCallbacks callbacks,
+                        TerminalSessionOptions options) {
   auto *state = new TerminalSessionState();
   state->terminal = terminal;
   state->profile = std::move(profile);
   state->callbacks = callbacks;
-  state->session = create_backend(terminal, state->profile, state->callbacks);
+  state->session = create_backend(terminal, state->profile, state->callbacks,
+                                  std::move(options));
   return state;
 }
 
