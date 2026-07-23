@@ -302,11 +302,11 @@ static void select_initial_page(GtkWidget *window,
   }
 
   if (page == "terminal") {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 1);
-  } else if (page == "telnet") {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 2);
-  } else if (page == "serial") {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 3);
+  } else if (page == "telnet") {
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 1);
+  } else if (page == "serial") {
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 2);
   } else if (page == "transfer") {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 4);
   } else if (page == "logging") {

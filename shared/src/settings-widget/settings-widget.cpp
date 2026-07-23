@@ -1583,11 +1583,6 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
                            create_tab_button(state, general_page, "General",
                                              "settings_general_tab"));
 
-  GtkWidget *terminal_page = create_terminal_page(state);
-  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), terminal_page,
-                           create_tab_button(state, terminal_page, "Terminal",
-                                             "settings_terminal_tab"));
-
   GtkWidget *telnet_page = create_telnet_page(state);
   GtkWidget *telnet_tab =
       create_tab_button(state, telnet_page, "TELNET", "settings_telnet_tab");
@@ -1617,6 +1612,11 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       .page = serial_page,
       .tab_label = serial_tab,
   });
+
+  GtkWidget *terminal_page = create_terminal_page(state);
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), terminal_page,
+                           create_tab_button(state, terminal_page, "Terminal",
+                                             "settings_terminal_tab"));
 
   GtkWidget *transfer_page = create_transfer_page(state);
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), transfer_page,
