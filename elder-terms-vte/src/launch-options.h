@@ -17,6 +17,8 @@ struct TestOptions {
   bool latch_activity_indicators = false;
   /** True when transfer dialogs should report their current folder URI. */
   bool transfer_dialog_probe = false;
+  /** Optional deterministic SSH prompt rendered by the GTK test fixture. */
+  std::optional<std::string> ssh_prompt;
   /** Source file URIs used instead of opening the send file dialog. */
   std::vector<std::string> transfer_source_uris;
 };

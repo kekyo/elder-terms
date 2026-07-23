@@ -187,6 +187,90 @@
 	                    <property name="pass-through">True</property>
 	                  </packing>
 	                </child>
+                <child type="overlay">
+                  <object class="GtkFrame" id="ssh_prompt_panel">
+                    <property name="visible">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="width-request">380</property>
+                    <property name="shadow-type">out</property>
+                    <child>
+                      <object class="GtkEventBox" id="ssh_prompt_background">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="visible-window">True</property>
+                        <child>
+                          <object class="GtkBox" id="ssh_prompt_content">
+                            <property name="visible">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">10</property>
+                            <property name="margin-start">16</property>
+                            <property name="margin-end">16</property>
+                            <property name="margin-top">14</property>
+                            <property name="margin-bottom">14</property>
+                            <child>
+                              <object class="GtkLabel" id="ssh_prompt_title_label">
+                                <property name="visible">True</property>
+                                <property name="can-focus">False</property>
+                                <property name="label">SSH Authentication</property>
+                                <property name="xalign">0</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="ssh_prompt_message_label">
+                                <property name="visible">True</property>
+                                <property name="can-focus">False</property>
+                                <property name="label">Password:</property>
+                                <property name="xalign">0</property>
+                                <property name="wrap">True</property>
+                                <property name="max-width-chars">56</property>
+                                <property name="selectable">True</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkEntry" id="ssh_prompt_entry">
+                                <property name="visible">False</property>
+                                <property name="no-show-all">True</property>
+                                <property name="can-focus">True</property>
+                                <property name="visibility">False</property>
+                                <property name="activates-default">True</property>
+                                <property name="hexpand">True</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButtonBox" id="ssh_prompt_actions">
+                                <property name="visible">True</property>
+                                <property name="can-focus">False</property>
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">8</property>
+                                <property name="layout-style">end</property>
+                                <child>
+                                  <object class="GtkButton" id="ssh_prompt_cancel_button">
+                                    <property name="visible">True</property>
+                                    <property name="can-focus">True</property>
+                                    <property name="label">Cancel</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="ssh_prompt_accept_button">
+                                    <property name="visible">True</property>
+                                    <property name="can-focus">True</property>
+                                    <property name="can-default">True</property>
+                                    <property name="receives-default">True</property>
+                                    <property name="label">OK</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
 	              </object>
 	              <packing>
                 <property name="expand">True</property>

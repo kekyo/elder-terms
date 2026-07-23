@@ -49,6 +49,15 @@ LaunchOptions parse_launch_options(int *argc, char **argv) {
       continue;
     }
 
+    static constexpr const char ssh_prompt_option[] =
+        "--test-ssh-prompt=";
+    if (argument.rfind(ssh_prompt_option, 0) == 0) {
+      options.test.ssh_prompt =
+          argument.substr(std::char_traits<char>::length(ssh_prompt_option));
+      ++index;
+      continue;
+    }
+
     static constexpr const char transfer_source_uri_option[] =
         "--test-transfer-source-uri=";
     if (argument.rfind(transfer_source_uri_option, 0) == 0) {

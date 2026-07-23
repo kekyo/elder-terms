@@ -29,6 +29,7 @@ struct ApplicationState {
   elder_terms::TerminalLogState *log_state = nullptr;
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
   std::optional<cardio::promise<void>> shutdown_task;
+  std::optional<cardio::promise<void>> ssh_prompt_fixture_task;
   elder_terms::SettingsStore settings_store;
   std::optional<std::filesystem::path> config_path;
   elder_terms::TestOptions test_options;
@@ -55,6 +56,40 @@ struct TransferMenuAction {
 static void close_settings_dialog(ApplicationState *state);
 static void schedule_settings_dialog_close(ApplicationState *state);
 static void restore_terminal_focus(ApplicationState *state);
+
+static cardio::promise<void>
+run_ssh_prompt_fixture_async(ApplicationState *state,
+                             const std::string &fixture) {
+  elder_terms::SshUserPrompt prompt;
+  if (fixture == "host-key") {
+    prompt = {
+        .kind = elder_terms::SshUserPromptKind::host_key,
+        .title = "SSH Host Key",
+        .message =
+            "Unknown SSH host key for fixture.example:22\n"
+            "Key type: ssh-ed25519\n"
+            "Fingerprint: SHA256:fixture-host-key\n"
+            "Accept and save this host key?",
+        .input_required = false,
+        .echo = false,
+    };
+  } else {
+    prompt = {
+        .kind = elder_terms::SshUserPromptKind::password,
+        .title = "SSH Authentication",
+        .message = "Password:",
+        .input_required = true,
+        .echo = false,
+    };
+  }
+
+  const elder_terms::SshUserPromptResponse response =
+      co_await elder_terms::prompt_main_window_ssh_async(
+          state->main_window, prompt, {});
+  elder_terms::set_main_window_status_text(
+      state->main_window,
+      response.accepted ? "SSH prompt accepted" : "SSH prompt cancelled");
+}
 
 static cardio::promise<void>
 stop_application_async(ApplicationState *state) {
@@ -149,6 +184,7 @@ static void restore_terminal_focus(ApplicationState *state) {
 static void on_main_window_destroy(GtkWidget *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
   state->window = nullptr;
+  elder_terms::cancel_main_window_ssh_prompt(state->main_window);
   elder_terms::set_main_window_transfer_progress_visible(state->main_window,
                                                          false);
   elder_terms::deactivate_main_window_activity_indicators(state->main_window);
@@ -777,6 +813,7 @@ int main(int argc, char **argv) {
       .log_state = nullptr,
       .dispatcher_group = &dispatcher_group,
       .shutdown_task = std::nullopt,
+      .ssh_prompt_fixture_task = std::nullopt,
       .settings_store = settings_result.store,
       .config_path = launch_options.config_path,
       .test_options = launch_options.test,
@@ -848,6 +885,13 @@ int main(int argc, char **argv) {
       .zmodem_auto_start =
           [&app_state](elder_terms::TerminalTransferDirection direction) {
             start_zmodem_auto_transfer(&app_state, direction);
+          },
+      .ssh_prompt =
+          [&app_state](
+              const elder_terms::SshUserPrompt &prompt,
+              cardio::cancellation cancellation) {
+            return elder_terms::prompt_main_window_ssh_async(
+                app_state.main_window, prompt, std::move(cancellation));
           },
     });
   elder_terms::set_main_window_terminal_paste_callbacks(
@@ -931,9 +975,15 @@ int main(int argc, char **argv) {
   gtk_widget_show_all(main_window->window);
 
   elder_terms::start_terminal_layout(app_state.layout_state);
+  if (launch_options.test.ssh_prompt.has_value()) {
+    app_state.ssh_prompt_fixture_task.emplace(
+        run_ssh_prompt_fixture_async(
+            &app_state, *launch_options.test.ssh_prompt));
+  }
 
   dispatcher.park();
 
+  app_state.ssh_prompt_fixture_task.reset();
   elder_terms::destroy_terminal_layout(app_state.layout_state);
   elder_terms::destroy_terminal_session(app_state.session_state);
   app_state.shutdown_task.reset();

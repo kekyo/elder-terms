@@ -2,19 +2,25 @@
 
 #include <array>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 
 #include <gtk/gtk.h>
+
+#include <cardio.h>
 
 #include <elder-terms/settings.h>
 
 #include "activity-indicator.h"
 #include "activity-indicator-id.h"
 #include "terminal-connection-phase.h"
+#include "terminal-sessions/ssh-session/ssh-user-prompt.h"
 #include "terminal-transfer.h"
 
 namespace elder_terms {
+
+struct MainWindowSshPromptState;
 
 /**
  * Handles terminal context-menu Paste availability and selected text.
@@ -50,6 +56,20 @@ struct MainWindow {
   GtkWidget *terminal = nullptr;
   /** Overlay used to dim the terminal without changing the VTE background. */
   GtkWidget *terminal_dim_overlay = nullptr;
+  /** Inline panel used for every SSH host-key and authentication prompt. */
+  GtkWidget *ssh_prompt_panel = nullptr;
+  /** Opaque background layer inside the SSH prompt panel. */
+  GtkWidget *ssh_prompt_background = nullptr;
+  /** Heading inside the SSH prompt panel. */
+  GtkWidget *ssh_prompt_title_label = nullptr;
+  /** Question text inside the SSH prompt panel. */
+  GtkWidget *ssh_prompt_message_label = nullptr;
+  /** Maskable response entry inside the SSH prompt panel. */
+  GtkWidget *ssh_prompt_entry = nullptr;
+  /** Button that rejects the active SSH prompt. */
+  GtkWidget *ssh_prompt_cancel_button = nullptr;
+  /** Button that accepts the active SSH prompt. */
+  GtkWidget *ssh_prompt_accept_button = nullptr;
   /** Inline disconnected notice shown on the terminal surface. */
   GtkWidget *disconnected_notice = nullptr;
   /** Background layer inside the inline disconnected notice. */
@@ -95,6 +115,8 @@ struct MainWindow {
   /** Current backend connection lifecycle phase. */
   TerminalSessionConnectionPhase connection_phase =
       TerminalSessionConnectionPhase::disconnected;
+  /** Stable controller for SSH prompt signals and pending responses. */
+  std::shared_ptr<MainWindowSshPromptState> ssh_prompt_state;
 };
 
 /**
@@ -150,6 +172,25 @@ void set_main_window_connection_phase(MainWindow *main_window,
  */
 void set_main_window_terminal_interactive(MainWindow *main_window,
                                           bool interactive);
+
+/**
+ * Displays one SSH question as an overlay on the dimmed VTE surface.
+ *
+ * @param main_window Main window containing the terminal overlay.
+ * @param prompt Host-key or authentication question to display.
+ * @param cancellation Cancellation signal owned by the SSH session.
+ * @returns User response, or a rejected response after cancellation.
+ */
+cardio::promise<SshUserPromptResponse> prompt_main_window_ssh_async(
+    MainWindow *main_window, const SshUserPrompt &prompt,
+    cardio::cancellation cancellation);
+
+/**
+ * Rejects and hides any active SSH prompt.
+ *
+ * @param main_window Main window containing the terminal overlay.
+ */
+void cancel_main_window_ssh_prompt(MainWindow *main_window);
 
 /**
  * Updates transfer progress notice visibility.
