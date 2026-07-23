@@ -25,7 +25,10 @@ const telnetDo = 253;
 const telnetDont = 254;
 const telnetIac = 255;
 const telnetBinary = 0;
+const telnetTerminalType = 24;
 const telnetNaws = 31;
+const telnetTerminalTypeIs = 0;
+const telnetTerminalTypeSend = 1;
 const asciiBs = 8;
 const asciiDel = 127;
 const xtermDeleteSequence = [0x1b, 0x5b, 0x33, 0x7e];
@@ -323,6 +326,87 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
             }
           );
           expect((await app.output()).stderr).not.toContain('Warning: TELNET');
+        });
+      } finally {
+        acceptedSocket?.destroy();
+        await closeServer(server);
+      }
+    });
+  });
+
+  it('reports the configured terminal type when the server requests it', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const receivedChunks: Buffer[] = [];
+      let acceptedSocket: Socket | undefined;
+      let terminalTypeRequested = false;
+      const server = createServer((socket) => {
+        acceptedSocket = socket;
+        socket.on('data', (chunk) => {
+          receivedChunks.push(Buffer.from(chunk));
+          const data = receivedBytes(receivedChunks);
+          if (
+            !terminalTypeRequested &&
+            hasSubsequence(data, [telnetIac, telnetWill, telnetTerminalType])
+          ) {
+            terminalTypeRequested = true;
+            socket.write(
+              Buffer.from([
+                telnetIac,
+                telnetSb,
+                telnetTerminalType,
+                telnetTerminalTypeSend,
+                telnetIac,
+                telnetSe,
+              ])
+            );
+          }
+        });
+        socket.write(Buffer.from([telnetIac, telnetDo, telnetTerminalType]));
+      });
+
+      try {
+        const port = await listenOnLocalhost(server);
+        const configPath = join(directory, 'telnet.ini');
+        const configTemplate = await readFile(
+          telnetLocalhostConfigPath,
+          'utf8'
+        );
+        await writeFile(
+          configPath,
+          `${configTemplate.replace(
+            '${port}',
+            String(port)
+          )}\nterminal_type=vt220\n`,
+          'utf8'
+        );
+
+        await runGtkTest(context, ['-c', configPath], async () => {
+          await toPass(
+            async () => {
+              const data = receivedBytes(receivedChunks);
+              expect(terminalTypeRequested).toBe(true);
+              expect(
+                hasSubsequence(data, [
+                  telnetIac,
+                  telnetSb,
+                  telnetTerminalType,
+                  telnetTerminalTypeIs,
+                  'v'.charCodeAt(0),
+                  't'.charCodeAt(0),
+                  '2'.charCodeAt(0),
+                  '2'.charCodeAt(0),
+                  '0'.charCodeAt(0),
+                  telnetIac,
+                  telnetSe,
+                ])
+              ).toBe(true);
+            },
+            {
+              message:
+                'TELNET client should report its configured terminal type',
+              timeoutMs: 5_000,
+            }
+          );
         });
       } finally {
         acceptedSocket?.destroy();

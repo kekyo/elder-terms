@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <utility>
 
 #include "telnet-protocol.h"
 
@@ -17,7 +18,10 @@ static constexpr unsigned char telnet_cr = 13;
 static constexpr unsigned char telnet_option_binary = 0;
 static constexpr unsigned char telnet_option_echo = 1;
 static constexpr unsigned char telnet_option_suppress_go_ahead = 3;
+static constexpr unsigned char telnet_option_terminal_type = 24;
 static constexpr unsigned char telnet_option_naws = 31;
+static constexpr unsigned char telnet_terminal_type_is = 0;
+static constexpr unsigned char telnet_terminal_type_send = 1;
 
 static void append_escaped_byte(TelnetBytes *bytes, unsigned char value) {
   bytes->push_back(value);
@@ -29,6 +33,10 @@ static void append_escaped_byte(TelnetBytes *bytes, unsigned char value) {
 static TelnetBytes negotiation_response(unsigned char command,
                                         unsigned char option) {
   return TelnetBytes{telnet_iac, command, option};
+}
+
+TelnetProtocol::TelnetProtocol(std::string terminal_type)
+    : terminal_type(std::move(terminal_type)) {
 }
 
 void TelnetProtocol::handle_data_byte(unsigned char byte,
@@ -87,6 +95,14 @@ void TelnetProtocol::handle_negotiation(unsigned char option,
       local_binary_requested = false;
       return;
     }
+    if (option == telnet_option_terminal_type) {
+      if (!terminal_type_enabled) {
+        result->responses.push_back(
+            negotiation_response(telnet_will, telnet_option_terminal_type));
+      }
+      terminal_type_enabled = true;
+      return;
+    }
     if (option == telnet_option_naws) {
       if (!naws_enabled) {
         result->responses.push_back(
@@ -110,6 +126,9 @@ void TelnetProtocol::handle_negotiation(unsigned char option,
     }
     if (option == telnet_option_naws) {
       naws_enabled = false;
+    }
+    if (option == telnet_option_terminal_type) {
+      terminal_type_enabled = false;
     }
     result->responses.push_back(negotiation_response(telnet_wont, option));
     return;
@@ -144,7 +163,20 @@ void TelnetProtocol::handle_negotiation(unsigned char option,
   }
 }
 
-void TelnetProtocol::handle_suboption() {
+void TelnetProtocol::handle_suboption(TelnetProtocolResult *result) {
+  if (terminal_type_enabled && suboption_bytes.size() >= 2 &&
+      suboption_bytes[0] == telnet_option_terminal_type &&
+      suboption_bytes[1] == telnet_terminal_type_send) {
+    TelnetBytes response{telnet_iac, telnet_sb, telnet_option_terminal_type,
+                         telnet_terminal_type_is};
+    response.reserve(response.size() + terminal_type.size() + 2);
+    for (unsigned char byte : terminal_type) {
+      append_escaped_byte(&response, byte);
+    }
+    response.push_back(telnet_iac);
+    response.push_back(telnet_se);
+    result->responses.push_back(std::move(response));
+  }
   suboption_bytes.clear();
 }
 
@@ -213,7 +245,7 @@ TelnetProtocol::receive(std::span<const unsigned char> bytes) {
         suboption_bytes.push_back(telnet_iac);
         state = ParseState::suboption;
       } else if (byte == telnet_se) {
-        handle_suboption();
+        handle_suboption(&result);
         state = ParseState::data;
       } else {
         state = ParseState::data;

@@ -5,6 +5,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace elder_terms {
 
@@ -43,7 +44,7 @@ static void expect_response(const TelnetProtocolResult &result,
 }
 
 static void plain_data_passes_to_terminal() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const TelnetProtocolResult result = receive_bytes(&protocol, {'h', 'i'});
 
   expect_bytes(result.terminal_data, {'h', 'i'},
@@ -54,7 +55,7 @@ static void plain_data_passes_to_terminal() {
 }
 
 static void iac_escaped_data_passes_to_terminal() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   (void)receive_bytes(&protocol, {255});
   const TelnetProtocolResult result = receive_bytes(&protocol, {255});
 
@@ -63,7 +64,7 @@ static void iac_escaped_data_passes_to_terminal() {
 }
 
 static void nvt_cr_lf_passes_to_terminal() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const TelnetProtocolResult result =
       receive_bytes(&protocol, {'a', 13, 10, 'b'});
 
@@ -72,7 +73,7 @@ static void nvt_cr_lf_passes_to_terminal() {
 }
 
 static void nvt_cr_nul_normalizes_to_cr() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const TelnetProtocolResult result =
       receive_bytes(&protocol, {'a', 13, 0, 'b'});
 
@@ -81,7 +82,7 @@ static void nvt_cr_nul_normalizes_to_cr() {
 }
 
 static void nvt_standalone_nul_is_dropped() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const TelnetProtocolResult result =
       receive_bytes(&protocol, {'a', 0, 'b'});
 
@@ -90,7 +91,7 @@ static void nvt_standalone_nul_is_dropped() {
 }
 
 static void nvt_cr_nul_split_across_receives_normalizes_to_cr() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const TelnetProtocolResult first = receive_bytes(&protocol, {'a', 13});
   const TelnetProtocolResult second = receive_bytes(&protocol, {0, 'b'});
 
@@ -101,7 +102,7 @@ static void nvt_cr_nul_split_across_receives_normalizes_to_cr() {
 }
 
 static void nvt_cr_lf_split_across_receives_passes_to_terminal() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const TelnetProtocolResult first = receive_bytes(&protocol, {'a', 13});
   const TelnetProtocolResult second = receive_bytes(&protocol, {10, 'b'});
 
@@ -112,7 +113,7 @@ static void nvt_cr_lf_split_across_receives_passes_to_terminal() {
 }
 
 static void nvt_cr_before_regular_byte_preserves_both_bytes() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const TelnetProtocolResult result =
       receive_bytes(&protocol, {'a', 13, 'x'});
 
@@ -121,7 +122,7 @@ static void nvt_cr_before_regular_byte_preserves_both_bytes() {
 }
 
 static void pending_nvt_cr_flushes_before_command() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const TelnetProtocolResult first = receive_bytes(&protocol, {13});
   const TelnetProtocolResult second =
       receive_bytes(&protocol, {255, 251, 1, 'x'});
@@ -135,7 +136,7 @@ static void pending_nvt_cr_flushes_before_command() {
 }
 
 static void do_naws_enables_and_sends_window_size() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   protocol.set_window_size(80, 24);
   const TelnetProtocolResult result = receive_bytes(&protocol, {255, 253, 31});
 
@@ -151,7 +152,7 @@ static void do_naws_enables_and_sends_window_size() {
 }
 
 static void naws_escapes_iac_sized_fields() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   protocol.set_window_size(255, 255);
   const TelnetBytes response = protocol.encode_naws();
 
@@ -160,7 +161,7 @@ static void naws_escapes_iac_sized_fields() {
 }
 
 static void supported_will_options_are_accepted() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const TelnetProtocolResult echo = receive_bytes(&protocol, {255, 251, 1});
   const TelnetProtocolResult suppress_go_ahead =
       receive_bytes(&protocol, {255, 251, 3});
@@ -171,7 +172,7 @@ static void supported_will_options_are_accepted() {
 }
 
 static void unsupported_options_are_rejected() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const TelnetProtocolResult do_option = receive_bytes(&protocol, {255, 253, 42});
   const TelnetProtocolResult will_option =
       receive_bytes(&protocol, {255, 251, 42});
@@ -183,7 +184,7 @@ static void unsupported_options_are_rejected() {
 }
 
 static void binary_negotiation_request_enables_both_directions() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const std::vector<TelnetBytes> requests = protocol.encode_enable_binary();
 
   if (requests.size() != 2) {
@@ -208,14 +209,14 @@ static void binary_negotiation_request_enables_both_directions() {
 }
 
 static void binary_negotiation_rejects_dont_or_wont() {
-  TelnetProtocol dont_protocol;
+  TelnetProtocol dont_protocol("xterm-256color");
   (void)dont_protocol.encode_enable_binary();
   (void)receive_bytes(&dont_protocol, {255, 254, 0});
   if (!dont_protocol.is_binary_rejected()) {
     throw std::runtime_error("DONT BINARY should reject requested BINARY");
   }
 
-  TelnetProtocol wont_protocol;
+  TelnetProtocol wont_protocol("xterm-256color");
   (void)wont_protocol.encode_enable_binary();
   (void)receive_bytes(&wont_protocol, {255, 252, 0});
   if (!wont_protocol.is_binary_rejected()) {
@@ -224,7 +225,7 @@ static void binary_negotiation_rejects_dont_or_wont() {
 }
 
 static void remote_binary_receive_preserves_nvt_bytes() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const TelnetProtocolResult negotiation =
       receive_bytes(&protocol, {255, 251, 0});
   const TelnetProtocolResult result =
@@ -237,7 +238,7 @@ static void remote_binary_receive_preserves_nvt_bytes() {
 }
 
 static void user_input_escapes_iac() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const TelnetBytes input{'a', 255, 'b'};
   const TelnetBytes encoded = protocol.encode_user_input(
       std::span<const unsigned char>(input.data(), input.size()));
@@ -247,12 +248,67 @@ static void user_input_escapes_iac() {
 }
 
 static void user_input_preserves_ascii_del() {
-  TelnetProtocol protocol;
+  TelnetProtocol protocol("xterm-256color");
   const TelnetBytes input{127};
   const TelnetBytes encoded = protocol.encode_user_input(
       std::span<const unsigned char>(input.data(), input.size()));
 
   expect_bytes(encoded, {127}, "User input should preserve ASCII DEL");
+}
+
+static void terminal_type_negotiation_reports_configured_type() {
+  TelnetProtocol protocol("vt220");
+  const TelnetProtocolResult negotiation =
+      receive_bytes(&protocol, {255, 253, 24});
+
+  expect_response(negotiation, 0, {255, 251, 24},
+                  "DO TERMINAL-TYPE should send WILL TERMINAL-TYPE");
+
+  const TelnetProtocolResult first =
+      receive_bytes(&protocol, {255, 250, 24});
+  const TelnetProtocolResult second = receive_bytes(&protocol, {1, 255});
+  const TelnetProtocolResult third = receive_bytes(&protocol, {240});
+  if (!first.responses.empty() || !second.responses.empty()) {
+    throw std::runtime_error(
+        "Split TERMINAL-TYPE SEND should wait for IAC SE");
+  }
+  expect_response(third, 0,
+                  {255, 250, 24, 0, 'v', 't', '2', '2', '0', 255, 240},
+                  "TERMINAL-TYPE SEND should report the configured type");
+}
+
+static void terminal_type_send_requires_active_negotiation() {
+  TelnetProtocol protocol("vt220");
+  const TelnetProtocolResult before_enable =
+      receive_bytes(&protocol, {255, 250, 24, 1, 255, 240});
+  if (!before_enable.responses.empty()) {
+    throw std::runtime_error(
+        "TERMINAL-TYPE SEND before DO should not produce a response");
+  }
+
+  (void)receive_bytes(&protocol, {255, 253, 24});
+  const TelnetProtocolResult disabled =
+      receive_bytes(&protocol, {255, 254, 24});
+  expect_response(disabled, 0, {255, 252, 24},
+                  "DONT TERMINAL-TYPE should send WONT TERMINAL-TYPE");
+
+  const TelnetProtocolResult after_disable =
+      receive_bytes(&protocol, {255, 250, 24, 1, 255, 240});
+  if (!after_disable.responses.empty()) {
+    throw std::runtime_error(
+        "TERMINAL-TYPE SEND after DONT should not produce a response");
+  }
+}
+
+static void terminal_type_response_escapes_iac() {
+  std::string terminal_type{'v', 't', static_cast<char>(255)};
+  TelnetProtocol protocol(std::move(terminal_type));
+  (void)receive_bytes(&protocol, {255, 253, 24});
+  const TelnetProtocolResult result =
+      receive_bytes(&protocol, {255, 250, 24, 1, 255, 240});
+
+  expect_response(result, 0, {255, 250, 24, 0, 'v', 't', 255, 255, 255, 240},
+                  "TERMINAL-TYPE data should escape IAC bytes");
 }
 
 } // namespace elder_terms
@@ -277,6 +333,9 @@ int main() {
     elder_terms::remote_binary_receive_preserves_nvt_bytes();
     elder_terms::user_input_escapes_iac();
     elder_terms::user_input_preserves_ascii_del();
+    elder_terms::terminal_type_negotiation_reports_configured_type();
+    elder_terms::terminal_type_send_requires_active_negotiation();
+    elder_terms::terminal_type_response_escapes_iac();
   } catch (const std::exception &error) {
     std::cerr << "telnet-protocol-test: FAIL: " << error.what() << '\n';
     return 1;

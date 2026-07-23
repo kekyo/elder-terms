@@ -777,7 +777,8 @@ public:
                         TerminalSessionCallbacks callbacks)
       : terminal_io(terminal, text_settings, callbacks.output),
         settings(std::move(settings)),
-        callbacks(callbacks) {
+        callbacks(callbacks),
+        protocol(this->settings.terminal_type) {
   }
 
   ~TerminalTelnetSession() override {

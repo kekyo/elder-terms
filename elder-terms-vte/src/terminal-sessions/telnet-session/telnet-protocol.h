@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace elder_terms {
@@ -45,14 +46,23 @@ private:
   bool local_binary_requested = false;
   bool remote_binary_requested = false;
   bool binary_rejected = false;
+  std::string terminal_type;
+  bool terminal_type_enabled = false;
   TelnetBytes suboption_bytes;
 
   void handle_data_byte(unsigned char byte, TelnetProtocolResult *result);
   void handle_data_cr_byte(unsigned char byte, TelnetProtocolResult *result);
   void handle_negotiation(unsigned char option, TelnetProtocolResult *result);
-  void handle_suboption();
+  void handle_suboption(TelnetProtocolResult *result);
 
 public:
+  /**
+   * Creates a TELNET protocol parser with the terminal type to report.
+   *
+   * @param terminal_type Terminal type returned for TERMINAL-TYPE SEND.
+   */
+  explicit TelnetProtocol(std::string terminal_type);
+
   /**
    * Updates the window size used for NAWS responses.
    *
