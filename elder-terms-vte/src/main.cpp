@@ -524,11 +524,11 @@ static GtkWidget *create_transfer_menu_item(
 }
 
 static bool start_text_send_request(ApplicationState *state,
-                                    std::string source_uri) {
+                                    elder_terms::TerminalTextSendSource source) {
   const elder_terms::TerminalConnectionProfile profile =
       elder_terms::terminal_connection_profile(state->settings_store);
   elder_terms::TerminalTextSendRequest request{
-      .source_file_uri = std::move(source_uri),
+      .source = std::move(source),
       .text_settings = profile.text_settings,
       .bytes_per_second = static_cast<std::uint64_t>(
           elder_terms::transfer_text_send_bytes_per_second(
@@ -564,7 +564,11 @@ static void on_text_send_menu_item_activate(GtkMenuItem *,
   if (source_uris.empty()) {
     return;
   }
-  if (!start_text_send_request(state, std::move(source_uris.front()))) {
+  if (!start_text_send_request(
+          state,
+          elder_terms::TerminalTextSendFileSource{
+              .uri = std::move(source_uris.front()),
+          })) {
     elder_terms::set_main_window_status_text(state->main_window,
                                              "Text send unavailable");
   }

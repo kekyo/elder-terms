@@ -909,7 +909,8 @@ public:
 
   bool start_text_send(TerminalTextSendRequest request) override {
     if (!started || stopping || transfer_active || text_send_active ||
-        socket_fd < 0 || request.source_file_uri.empty()) {
+        socket_fd < 0 ||
+        !terminal_text_send_source_is_valid(request.source)) {
       return false;
     }
 

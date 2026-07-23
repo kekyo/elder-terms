@@ -110,7 +110,32 @@ static TerminalTextSendRequest
 make_request(const std::filesystem::path &path, const std::string &encoding,
              std::uint64_t bytes_per_second) {
   return TerminalTextSendRequest{
-      .source_file_uri = file_uri(path),
+      .source =
+          TerminalTextSendFileSource{
+              .uri = file_uri(path),
+          },
+      .text_settings =
+          TerminalTextSettings{
+              .encoding = encoding,
+              .backspace_code = TerminalBackspaceCode::del,
+              .cursor_key_mode = TerminalCursorKeyMode::adm3,
+          },
+      .bytes_per_second = bytes_per_second,
+      .active = nullptr,
+      .status = nullptr,
+      .progress = nullptr,
+      .finished = nullptr,
+  };
+}
+
+static TerminalTextSendRequest
+make_buffer_request(std::string utf8_text, const std::string &encoding,
+                    std::uint64_t bytes_per_second) {
+  return TerminalTextSendRequest{
+      .source =
+          TerminalTextSendBufferSource{
+              .utf8_text = std::move(utf8_text),
+          },
       .text_settings =
           TerminalTextSettings{
               .encoding = encoding,
@@ -208,11 +233,53 @@ static void encodes_text_and_reports_source_progress_and_replacements() {
               "text send progress should finish at the source file size");
 }
 
+static void
+encodes_and_throttles_buffered_text_with_progress_and_replacements() {
+  FakeTextTransportState state;
+  std::vector<std::string> statuses;
+  std::vector<TerminalTransferProgress> progress;
+  TerminalTextSendRequest request =
+      make_buffer_request("日本😀01234", "SHIFT-JIS", 20);
+  request.status = [&statuses](const std::string &status) {
+    statuses.push_back(status);
+  };
+  request.progress = [&progress](TerminalTransferProgress update) {
+    progress.push_back(update);
+  };
+
+  run_text_send(std::move(request), make_transport(&state));
+
+  expect_true(join_chunks(state.chunks) ==
+                  std::vector<unsigned char>{
+                      0x93, 0xfa, 0x96, 0x7b, '?',
+                      '0',  '1',  '2',  '3',  '4'},
+              "buffered text should use the configured terminal encoding");
+  expect_true(state.send_times_us ==
+                  std::vector<std::uint64_t>{
+                      0, 100000, 200000, 300000, 400000},
+              "buffered text should use the configured byte rate");
+  expect_true(state.delays_us ==
+                  std::vector<std::uint64_t>{
+                      100000, 100000, 100000, 100000},
+              "buffered text should asynchronously delay between chunks");
+  expect_true(std::count(statuses.begin(), statuses.end(),
+                         "Text contained characters that were replaced") == 1,
+              "buffered lossy conversion should report one warning");
+  expect_true(!progress.empty() &&
+                  progress.back().mode ==
+                      TerminalTransferProgressMode::determinate &&
+                  progress.back().fraction.has_value() &&
+                  *progress.back().fraction == 1.0,
+              "buffered text progress should finish at its UTF-8 byte size");
+}
+
 } // namespace elder_terms
 
 int main() {
   elder_terms::throttles_encoded_payload_in_bounded_chunks();
   elder_terms::backend_backpressure_satisfies_the_rate_delay();
   elder_terms::encodes_text_and_reports_source_progress_and_replacements();
+  elder_terms::
+      encodes_and_throttles_buffered_text_with_progress_and_replacements();
   return 0;
 }

@@ -44,6 +44,7 @@ elder_terms_sources = [
   'src/main.cpp',
   'src/main-window.cpp',
   'src/terminal-log.cpp',
+  'src/terminal-text-send.cpp',
   'src/terminal-text-send-runner.cpp',
   'src/terminal-transfer.cpp',
   'src/terminal-transfer-runner.cpp',
@@ -119,6 +120,7 @@ terminal_text_send_runner_test = executable(
   'terminal-text-send-runner-test',
   [
     'tests/cpp/terminal-text-send-runner-test.cpp',
+    'src/terminal-text-send.cpp',
     'src/terminal-text-send-runner.cpp',
     'src/terminal-sessions/terminal-text-codec.cpp',
   ],

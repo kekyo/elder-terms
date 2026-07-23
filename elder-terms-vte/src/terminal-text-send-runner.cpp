@@ -32,14 +32,16 @@ struct GObjectDeleter {
   }
 };
 
-struct GFreeDeleter {
-  void operator()(void *value) const {
-    g_free(value);
+struct GBytesDeleter {
+  void operator()(GBytes *bytes) const {
+    if (bytes != nullptr) {
+      g_bytes_unref(bytes);
+    }
   }
 };
 
 template <typename T> using GObjectPtr = std::unique_ptr<T, GObjectDeleter>;
-using GCharPtr = std::unique_ptr<char, GFreeDeleter>;
+using GBytesPtr = std::unique_ptr<GBytes, GBytesDeleter>;
 
 static std::optional<std::uint64_t> source_size(GFileInfo *info) {
   if (info == nullptr ||
@@ -153,8 +155,8 @@ cardio::promise<void>
 run_terminal_text_send_async(TerminalTextSendRequest request,
                              TerminalTextSendTransport transport,
                              cardio::cancellation cancellation) {
-  if (request.source_file_uri.empty()) {
-    throw std::invalid_argument("text send source URI is empty");
+  if (!terminal_text_send_source_is_valid(request.source)) {
+    throw std::invalid_argument("text send source is empty");
   }
   if (request.bytes_per_second == 0) {
     throw std::invalid_argument("text send rate must be positive");
@@ -164,16 +166,31 @@ run_terminal_text_send_async(TerminalTextSendRequest request,
   }
 
   cancellation.throw_if_cancellation_requested();
-  GObjectPtr<GFile> file(g_file_new_for_uri(request.source_file_uri.c_str()));
-  GObjectPtr<GFileInfo> info(co_await cardio::gio::query_info(
-      file.get(),
-      G_FILE_ATTRIBUTE_STANDARD_NAME "," G_FILE_ATTRIBUTE_STANDARD_SIZE,
-      G_FILE_QUERY_INFO_NONE, G_PRIORITY_DEFAULT));
-  cancellation.throw_if_cancellation_requested();
-  const std::optional<std::uint64_t> total_size = source_size(info.get());
-  GObjectPtr<GFileInputStream> stream(
-      co_await cardio::gio::read(file.get(), G_PRIORITY_DEFAULT));
-  cancellation.throw_if_cancellation_requested();
+  GObjectPtr<GInputStream> stream;
+  GBytesPtr buffered_bytes;
+  std::optional<std::uint64_t> total_size;
+  if (const auto *file_source =
+          std::get_if<TerminalTextSendFileSource>(&request.source)) {
+    GObjectPtr<GFile> file(g_file_new_for_uri(file_source->uri.c_str()));
+    GObjectPtr<GFileInfo> info(co_await cardio::gio::query_info(
+        file.get(),
+        G_FILE_ATTRIBUTE_STANDARD_NAME "," G_FILE_ATTRIBUTE_STANDARD_SIZE,
+        G_FILE_QUERY_INFO_NONE, G_PRIORITY_DEFAULT));
+    cancellation.throw_if_cancellation_requested();
+    total_size = source_size(info.get());
+    stream.reset(G_INPUT_STREAM(
+        co_await cardio::gio::read(file.get(), G_PRIORITY_DEFAULT)));
+    cancellation.throw_if_cancellation_requested();
+  } else {
+    const auto &buffer_source =
+        std::get<TerminalTextSendBufferSource>(request.source);
+    buffered_bytes.reset(g_bytes_new(buffer_source.utf8_text.data(),
+                                     buffer_source.utf8_text.size()));
+    stream.reset(
+        g_memory_input_stream_new_from_bytes(buffered_bytes.get()));
+    total_size =
+        static_cast<std::uint64_t>(buffer_source.utf8_text.size());
+  }
 
   TerminalTextEncoder encoder(request.text_settings);
   std::array<std::byte, text_source_read_size> buffer{};
@@ -185,7 +202,7 @@ run_terminal_text_send_async(TerminalTextSendRequest request,
 
   while (true) {
     const std::size_t read_size = co_await cardio::gio::read(
-        G_INPUT_STREAM(stream.get()),
+        stream.get(),
         std::span<std::byte>(buffer.data(), buffer.size()), cancellation,
         G_PRIORITY_DEFAULT);
     if (read_size == 0) {
