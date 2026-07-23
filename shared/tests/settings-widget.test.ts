@@ -49,6 +49,7 @@ interface AppliedStore {
   readonly log_mode: string;
   readonly telnet_address: string;
   readonly telnet_port: string;
+  readonly telnet_terminal_type: string;
   readonly serial_baudrate: string;
   readonly serial_bits: string;
   readonly serial_carrier_detect: string;
@@ -563,10 +564,16 @@ describe.concurrent('shared settings widget', () => {
             await app.getById('settings_telnet_port_spin'),
             'spinButton'
           );
+          const terminalType = expectElementKind(
+            await app.getById('settings_telnet_terminal_type_entry'),
+            'entry'
+          );
           expect(await address.text()).toBe('127.0.0.1');
           expect(await port.value()).toBe(23);
+          expect(await terminalType.text()).toBe('xterm-256color');
           await expectSensitive(address);
           await expectSensitive(port);
+          await expectSensitive(terminalType);
         },
         differsFrom: undefined,
         fixtureName: 'settings-widget-telnet-page-default-editable',
@@ -608,6 +615,25 @@ describe.concurrent('shared settings widget', () => {
         prepare: showTelnetPage,
       },
       {
+        args: [
+          '--page=telnet',
+          '--type=telnet',
+          '--telnet-terminal-type=vt220',
+        ],
+        assert: async (app) => {
+          expect(
+            await expectElementKind(
+              await app.getById('settings_telnet_terminal_type_entry'),
+              'entry'
+            ).text()
+          ).toBe('vt220');
+        },
+        differsFrom: 'settings-widget-telnet-page-default-editable',
+        fixtureName: 'settings-widget-telnet-terminal-type-vt220',
+        pageId: 'settings_telnet_page',
+        prepare: showTelnetPage,
+      },
+      {
         args: ['--page=telnet', '--runtime', '--type=telnet'],
         assert: async (app) => {
           await expectInsensitive(
@@ -615,6 +641,9 @@ describe.concurrent('shared settings widget', () => {
           );
           await expectInsensitive(
             await app.getById('settings_telnet_port_spin')
+          );
+          await expectInsensitive(
+            await app.getById('settings_telnet_terminal_type_entry')
           );
         },
         differsFrom: 'settings-widget-telnet-page-default-editable',
@@ -645,6 +674,7 @@ describe.concurrent('shared settings widget', () => {
         '--type=telnet',
         '--telnet-address=example.test',
         '--telnet-port=2323',
+        '--telnet-terminal-type=vt220',
       ],
       async ({ app, directory }) => {
         await showTelnetPage(app);
@@ -657,10 +687,24 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_telnet_port_spin'),
           'spinButton'
         );
+        const terminalType = expectElementKind(
+          await app.getById('settings_telnet_terminal_type_entry'),
+          'entry'
+        );
         expect(await address.text()).toBe('example.test');
         expect(await port.value()).toBe(2323);
+        expect(await terminalType.text()).toBe('vt220');
         await expectSensitive(address);
         await expectSensitive(port);
+        await expectSensitive(terminalType);
+
+        await terminalType.setText('ansi');
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        const store = await waitForAppliedStore(app);
+        expect(store.telnet_terminal_type).toBe('ansi');
 
         const capture = await (
           await app.getById('settings_telnet_page')
@@ -674,6 +718,36 @@ describe.concurrent('shared settings widget', () => {
           directory,
           { maxDiffPixels: 0, threshold: 0.01 }
         );
+      }
+    );
+  });
+
+  it('resets a blank TELNET terminal type to the built-in default', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=telnet', '--type=telnet', '--telnet-terminal-type=vt220'],
+      async ({ app }) => {
+        await showTelnetPage(app);
+        const terminalType = expectElementKind(
+          await app.getById('settings_telnet_terminal_type_entry'),
+          'entry'
+        );
+        await clickWidget(app, terminalType);
+        await terminalType.setText('   ');
+        await clickWidget(
+          app,
+          await app.getById('settings_telnet_address_entry')
+        );
+        await waitForResult(async () => {
+          expect(await terminalType.text()).toBe('xterm-256color');
+        });
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+
+        const store = await waitForAppliedStore(app);
+        expect(store.telnet_terminal_type).toBe('xterm-256color');
       }
     );
   });
@@ -969,6 +1043,7 @@ describe.concurrent('shared settings widget', () => {
         '--type=telnet',
         '--telnet-address=runtime.example',
         '--telnet-port=10023',
+        '--telnet-terminal-type=vt220',
       ],
       async ({ app }) => {
         await expectInsensitive(
@@ -984,10 +1059,16 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_telnet_port_spin'),
           'spinButton'
         );
+        const terminalType = expectElementKind(
+          await app.getById('settings_telnet_terminal_type_entry'),
+          'entry'
+        );
         expect(await address.text()).toBe('runtime.example');
         expect(await port.value()).toBe(10023);
+        expect(await terminalType.text()).toBe('vt220');
         await expectInsensitive(address);
         await expectInsensitive(port);
+        await expectInsensitive(terminalType);
       }
     );
   });

@@ -18,6 +18,8 @@ struct TelnetConnectionSettings {
   std::string address;
   /** TELNET server TCP port. */
   gint64 port;
+  /** Terminal type reported through TELNET TERMINAL-TYPE negotiation. */
+  std::string terminal_type;
 };
 
 /**
@@ -41,6 +43,13 @@ ELDER_TERMS_API SettingKey telnet_address_setting_key();
  * @returns Setting key for TELNET server port.
  */
 ELDER_TERMS_API SettingKey telnet_port_setting_key();
+
+/**
+ * Returns the setting key for [telnet] terminal_type.
+ *
+ * @returns Setting key for the TELNET terminal type.
+ */
+ELDER_TERMS_API SettingKey telnet_terminal_type_setting_key();
 
 /**
  * Extracts TELNET connection settings from a store.

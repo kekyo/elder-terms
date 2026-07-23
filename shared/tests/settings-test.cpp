@@ -54,6 +54,7 @@ using elder_terms::SettingsStore;
 using elder_terms::TelnetConnectionSettings;
 using elder_terms::telnet_address_setting_key;
 using elder_terms::telnet_port_setting_key;
+using elder_terms::telnet_terminal_type_setting_key;
 using elder_terms::terminal_auto_close_setting_key;
 using elder_terms::TerminalBackspaceCode;
 using elder_terms::TerminalConnectionKind;
@@ -167,6 +168,10 @@ static void test_default_settings() {
   expect_true(log.connection_name == "elder-terms",
               "default terminal log settings should retain the effective "
               "connection name");
+  const TelnetConnectionSettings telnet =
+      elder_terms::telnet_connection_settings(store);
+  expect_true(telnet.terminal_type == "xterm-256color",
+              "default TELNET terminal type should match gtk-oldtype");
 
   const TerminalConnectionProfile profile = terminal_connection_profile(store);
   expect_true(profile.name == "elder-terms",
@@ -734,7 +739,8 @@ static void test_telnet_profile() {
                "\n"
                "[telnet]\n"
                "address=127.0.0.1\n"
-               "port=2323\n");
+               "port=2323\n"
+               "terminal_type=vt220\n");
 
   const SettingsLoadResult result = load_settings(
       SettingsLoadOptions{
@@ -756,6 +762,8 @@ static void test_telnet_profile() {
               "TELNET address should come from the configuration file");
   expect_true(settings->port == 2323,
               "TELNET port should come from the configuration file");
+  expect_true(settings->terminal_type == "vt220",
+              "TELNET terminal type should come from the configuration file");
 }
 
 static void test_serial_profile() {
@@ -819,7 +827,8 @@ static void test_invalid_values_fall_back_to_defaults() {
                "\n"
                "[telnet]\n"
                "address=127.0.0.1\n"
-               "port=70000\n");
+               "port=70000\n"
+               "terminal_type=   \n");
 
   const SettingsLoadResult result = load_settings(
       SettingsLoadOptions{
@@ -848,6 +857,8 @@ static void test_invalid_values_fall_back_to_defaults() {
               "TELNET profile should still be selected after invalid port");
   expect_true(settings->port == 23,
               "invalid TELNET port should fall back to default");
+  expect_true(settings->terminal_type == "xterm-256color",
+              "blank TELNET terminal type should fall back to default");
 
   expect_true(warnings_contain(result.warnings,
                                "invalid configuration value [terminal] width"),
@@ -865,6 +876,11 @@ static void test_invalid_values_fall_back_to_defaults() {
   expect_true(warnings_contain(result.warnings,
                                "invalid configuration value [telnet] port"),
               "invalid TELNET port should emit a warning");
+  expect_true(
+      warnings_contain(
+          result.warnings,
+          "invalid configuration value [telnet] terminal_type"),
+      "blank TELNET terminal type should emit a warning");
 }
 
 static void test_invalid_serial_values_fall_back_to_defaults() {
@@ -978,6 +994,10 @@ static void test_public_setting_keys() {
               "TELNET address key should use the address name");
   expect_true(telnet_port_setting_key().name == "port",
               "TELNET port key should use the port name");
+  expect_true(telnet_terminal_type_setting_key().section == "telnet" &&
+                  telnet_terminal_type_setting_key().name ==
+                      "terminal_type",
+              "TELNET terminal type key should use [telnet] terminal_type");
   expect_true(serial_device_setting_key().section == "serial",
               "serial device key should use the serial section");
   expect_true(serial_device_setting_key().name == "device",
@@ -1082,6 +1102,8 @@ static void test_save_settings_omits_default_values() {
                     elder_terms::SettingValue{std::string("host.example")});
   set_setting_value(&store, telnet_port_setting_key(),
                     elder_terms::SettingValue{gint64{23}});
+  set_setting_value(&store, telnet_terminal_type_setting_key(),
+                    elder_terms::SettingValue{std::string("vt220")});
   set_setting_value(
       &store, transfer_base_path_setting_key(),
       elder_terms::SettingValue{std::string("file:///tmp/downloads")});
@@ -1109,6 +1131,8 @@ static void test_save_settings_omits_default_values() {
               "saved settings should include non-default TELNET section");
   expect_true(content.find("address=host.example") != std::string::npos,
               "saved settings should include non-default TELNET address");
+  expect_true(content.find("terminal_type=vt220") != std::string::npos,
+              "saved settings should include non-default TELNET terminal type");
   expect_true(content.find("[transfer]") != std::string::npos,
               "saved settings should include non-default transfer section");
   expect_true(content.find("base_path=file:///tmp/downloads") !=

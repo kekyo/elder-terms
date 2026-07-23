@@ -7,9 +7,11 @@
 namespace elder_terms {
 
 static constexpr gint64 default_telnet_port = 23;
+static constexpr char default_telnet_terminal_type[] = "xterm-256color";
 static constexpr char telnet_section[] = "telnet";
 static constexpr char telnet_address_key[] = "address";
 static constexpr char telnet_port_key[] = "port";
+static constexpr char telnet_terminal_type_key[] = "terminal_type";
 
 static bool string_is_blank(const std::string &value) {
   return std::all_of(value.begin(), value.end(), [](unsigned char character) {
@@ -21,6 +23,16 @@ static bool validate_port(const SettingValue &value, std::string *reason) {
   const auto *integer = std::get_if<gint64>(&value);
   if (integer == nullptr || *integer <= 0 || *integer > 65535) {
     *reason = "must be an integer between 1 and 65535";
+    return false;
+  }
+  return true;
+}
+
+static bool validate_terminal_type(const SettingValue &value,
+                                   std::string *reason) {
+  const auto *text = std::get_if<std::string>(&value);
+  if (text == nullptr || string_is_blank(*text)) {
+    *reason = "must not be blank";
     return false;
   }
   return true;
@@ -38,6 +50,10 @@ SettingKey telnet_port_setting_key() {
   return telnet_key(telnet_port_key);
 }
 
+SettingKey telnet_terminal_type_setting_key() {
+  return telnet_key(telnet_terminal_type_key);
+}
+
 std::vector<SettingDefinition> telnet_connection_setting_definitions() {
   return {
       {
@@ -49,6 +65,12 @@ std::vector<SettingDefinition> telnet_connection_setting_definitions() {
           .key = telnet_port_setting_key(),
           .default_value = SettingValue{default_telnet_port},
           .validate = validate_port,
+      },
+      {
+          .key = telnet_terminal_type_setting_key(),
+          .default_value =
+              SettingValue{std::string(default_telnet_terminal_type)},
+          .validate = validate_terminal_type,
       },
   };
 }
@@ -64,6 +86,9 @@ TelnetConnectionSettings telnet_connection_settings(const SettingsStore &store) 
       .address = std::move(address),
       .port = setting_integer_value_or_default(
           store, telnet_port_setting_key(), default_telnet_port),
+      .terminal_type = setting_string_value_or_default(
+          store, telnet_terminal_type_setting_key(),
+          default_telnet_terminal_type),
   };
 }
 

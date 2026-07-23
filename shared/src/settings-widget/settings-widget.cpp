@@ -57,6 +57,7 @@ struct SettingsWidgetState {
   KeyBindingInputWidgetState *terminal_zoom_out_key_input = nullptr;
   GtkWidget *telnet_address_entry = nullptr;
   GtkWidget *telnet_port_spin = nullptr;
+  GtkWidget *telnet_terminal_type_entry = nullptr;
   GtkWidget *serial_device_entry = nullptr;
   GtkWidget *serial_baudrate_spin = nullptr;
   GtkWidget *serial_bits_combo = nullptr;
@@ -627,6 +628,27 @@ static void update_telnet_port_from_widget(SettingsWidgetState *state) {
           GTK_SPIN_BUTTON(state->telnet_port_spin)))});
 }
 
+static void update_telnet_terminal_type_from_widget(
+    SettingsWidgetState *state) {
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->telnet_terminal_type_entry));
+  const std::string terminal_type = text == nullptr ? "" : text;
+  if (ascii_blank(terminal_type)) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 telnet_terminal_type_setting_key());
+    return;
+  }
+  if (!setting_has_explicit_value(state->draft_store,
+                                  telnet_terminal_type_setting_key()) &&
+      terminal_type ==
+          telnet_connection_settings(state->draft_store).terminal_type) {
+    return;
+  }
+  set_explicit_setting_value(&state->draft_store,
+                             telnet_terminal_type_setting_key(),
+                             SettingValue{terminal_type});
+}
+
 static void update_serial_device_from_widget(SettingsWidgetState *state) {
   const char *text = gtk_entry_get_text(GTK_ENTRY(state->serial_device_entry));
   set_setting_value(&state->draft_store, serial_device_setting_key(),
@@ -808,6 +830,10 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(state->telnet_port_spin),
                               static_cast<double>(telnet.port));
   }
+  if (state->telnet_terminal_type_entry != nullptr) {
+    gtk_entry_set_text(GTK_ENTRY(state->telnet_terminal_type_entry),
+                       telnet.terminal_type.c_str());
+  }
   if (state->serial_device_entry != nullptr) {
     gtk_entry_set_text(GTK_ENTRY(state->serial_device_entry),
                        serial.device.c_str());
@@ -895,6 +921,7 @@ static void sync_draft_from_widgets(SettingsWidgetState *state) {
   update_terminal_zoom_out_key_from_widget(state);
   update_telnet_address_from_widget(state);
   update_telnet_port_from_widget(state);
+  update_telnet_terminal_type_from_widget(state);
   update_serial_device_from_widget(state);
   update_serial_baudrate_from_widget(state);
   update_serial_bits_from_widget(state);
@@ -1016,6 +1043,35 @@ static void on_telnet_port_changed(GtkSpinButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_telnet_port_from_widget(state);
   notify_changed(state);
+}
+
+static void on_telnet_terminal_type_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_telnet_terminal_type_from_widget(state);
+  notify_changed(state);
+}
+
+static gboolean on_telnet_terminal_type_focus_out(GtkWidget *,
+                                                  GdkEventFocus *,
+                                                  gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->telnet_terminal_type_entry));
+  if (text != nullptr && !ascii_blank(text)) {
+    return FALSE;
+  }
+
+  const bool previous_synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  const TelnetConnectionSettings settings =
+      telnet_connection_settings(state->draft_store);
+  gtk_entry_set_text(GTK_ENTRY(state->telnet_terminal_type_entry),
+                     settings.terminal_type.c_str());
+  state->synchronizing = previous_synchronizing;
+  return FALSE;
 }
 
 static void on_serial_device_changed(GtkEditable *, gpointer data) {
@@ -1272,6 +1328,20 @@ static GtkWidget *create_telnet_page(SettingsWidgetState *state) {
   g_signal_connect(state->telnet_port_spin, "value-changed",
                    G_CALLBACK(on_telnet_port_changed), state);
   attach_row(page, 1, "port", state->telnet_port_spin);
+
+  state->telnet_terminal_type_entry = gtk_entry_new();
+  assign_accessible_id(state->telnet_terminal_type_entry,
+                       "settings_telnet_terminal_type_entry");
+  gtk_entry_set_text(GTK_ENTRY(state->telnet_terminal_type_entry),
+                     settings.terminal_type.c_str());
+  gtk_widget_set_sensitive(state->telnet_terminal_type_entry,
+                           state->is_runtime ? FALSE : TRUE);
+  g_signal_connect(state->telnet_terminal_type_entry, "changed",
+                   G_CALLBACK(on_telnet_terminal_type_changed), state);
+  g_signal_connect(state->telnet_terminal_type_entry, "focus-out-event",
+                   G_CALLBACK(on_telnet_terminal_type_focus_out), state);
+  attach_row(page, 2, "terminal_type",
+             state->telnet_terminal_type_entry);
 
   return page;
 }

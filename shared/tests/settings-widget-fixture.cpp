@@ -31,6 +31,7 @@ struct FixtureOptions {
   std::string page = "general";
   std::string telnet_address = "127.0.0.1";
   gint64 telnet_port = 23;
+  std::string telnet_terminal_type = "xterm-256color";
   std::string serial_device = "/dev/ttyUSB0";
   gint64 serial_baudrate = 115200;
   gint64 serial_bits = 8;
@@ -101,6 +102,9 @@ static FixtureOptions parse_options(int argc, char **argv) {
       options.telnet_address = option_value(argument, "--telnet-address=");
     } else if (starts_with(argument, "--telnet-port=")) {
       options.telnet_port = std::stoll(option_value(argument, "--telnet-port="));
+    } else if (starts_with(argument, "--telnet-terminal-type=")) {
+      options.telnet_terminal_type =
+          option_value(argument, "--telnet-terminal-type=");
     } else if (starts_with(argument, "--serial-device=")) {
       options.serial_device = option_value(argument, "--serial-device=");
     } else if (starts_with(argument, "--serial-baudrate=")) {
@@ -211,6 +215,9 @@ static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
   elder_terms::set_setting_value(
       &store, elder_terms::telnet_port_setting_key(),
       elder_terms::SettingValue{options.telnet_port});
+  elder_terms::set_setting_value(
+      &store, elder_terms::telnet_terminal_type_setting_key(),
+      elder_terms::SettingValue{options.telnet_terminal_type});
   elder_terms::set_setting_value(
       &store, elder_terms::serial_device_setting_key(),
       elder_terms::SettingValue{options.serial_device});
@@ -368,6 +375,7 @@ static void print_store(const char *prefix,
             << elder_terms::terminal_zoom_out_key(store)
             << " telnet_address=" << telnet.address
             << " telnet_port=" << telnet.port
+            << " telnet_terminal_type=" << telnet.terminal_type
             << " serial_device=" << serial.device
             << " serial_baudrate=" << serial.baudrate
             << " serial_bits=" << serial.bits
