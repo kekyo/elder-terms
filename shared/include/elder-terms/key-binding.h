@@ -58,10 +58,13 @@ ELDER_TERMS_API bool key_bindings_equal(const KeyBinding &left,
  * @param binding Expected key and modifiers.
  * @param keyval GDK key value from the event.
  * @param modifiers Raw modifier state from the event.
- * @returns True only when the key and supported modifier set match exactly.
+ * @returns True only when the case-normalized key and supported modifier set
+ * match exactly.
  *
  * @remarks Lock and pointer-button state is ignored. Keyboard-layout-consumed
- * modifiers remain part of the exact comparison.
+ * modifiers remain part of the exact comparison. Alphabetic key values are
+ * compared case-insensitively so Shift and Caps Lock do not prevent the
+ * corresponding lowercase binding from matching.
  */
 ELDER_TERMS_API bool key_binding_matches(const KeyBinding &binding,
                                          guint keyval,

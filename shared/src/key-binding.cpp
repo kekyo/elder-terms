@@ -119,7 +119,8 @@ bool key_bindings_equal(const KeyBinding &left, const KeyBinding &right) {
 
 bool key_binding_matches(const KeyBinding &binding, guint keyval,
                          GdkModifierType modifiers) {
-  return binding.keyval == keyval &&
+  return gdk_keyval_to_lower(binding.keyval) ==
+             gdk_keyval_to_lower(keyval) &&
          binding.modifiers ==
              static_cast<GdkModifierType>(modifiers & supported_modifier_mask);
 }

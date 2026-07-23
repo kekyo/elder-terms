@@ -518,6 +518,18 @@ static void test_key_binding_parser_uses_exact_modifiers() {
                                                GDK_LOCK_MASK)),
               "lock state should not count as a hotkey modifier");
 
+  const auto alphabetic = parse_key_binding("shift+x");
+  expect_true(alphabetic.error.empty() && alphabetic.binding.has_value(),
+              "an alphabetic key binding should parse");
+  expect_true(key_binding_matches(
+                  *alphabetic.binding, GDK_KEY_X,
+                  static_cast<GdkModifierType>(GDK_SHIFT_MASK |
+                                               GDK_LOCK_MASK)),
+              "an uppercase event key should match a lowercase binding");
+  expect_true(!key_binding_matches(*alphabetic.binding, GDK_KEY_X,
+                                   static_cast<GdkModifierType>(0)),
+              "alphabetic key normalization should preserve exact modifiers");
+
   const auto all_modifiers =
       parse_key_binding("super-alt-shift-ctrl-F1");
   expect_true(all_modifiers.error.empty() &&
