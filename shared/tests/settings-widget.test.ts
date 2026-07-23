@@ -1,5 +1,11 @@
 import { fileURLToPath } from 'node:url';
-import type { GtkApp, GtkWidgetElement } from 'gestament';
+import type {
+  GtkApp,
+  GtkEntryElement,
+  GtkKeyboardModifier,
+  GtkKeyInput,
+  GtkWidgetElement,
+} from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import {
@@ -204,6 +210,69 @@ const waitForChangedState = async (
 ): Promise<void> => {
   await waitForResult(async () => {
     expect((await app.output()).stdout).toContain(expected);
+  });
+};
+
+const clickWidget = async (
+  app: GtkApp,
+  widget: GtkWidgetElement
+): Promise<void> => {
+  const { bounds } = await widget.capture();
+  await app.input.moveMouseTo(
+    Math.trunc(bounds.x + bounds.width / 2),
+    Math.trunc(bounds.y + bounds.height / 2)
+  );
+  await app.input.setMouseButton('left', true);
+  await app.input.setMouseButton('left', false);
+  await waitForResult(async () => {
+    expect((await widget.info()).states).toContain('focused');
+  });
+};
+
+const expectEntryText = async (
+  entry: GtkEntryElement,
+  expected: string
+): Promise<void> => {
+  await waitForResult(async () => {
+    expect(await entry.text()).toBe(expected);
+  });
+};
+
+const captureKeyBinding = async (
+  app: GtkApp,
+  entry: GtkEntryElement,
+  modifiers: readonly GtkKeyboardModifier[],
+  key: GtkKeyInput
+): Promise<void> => {
+  await clickWidget(app, entry);
+  for (const modifier of modifiers) {
+    await app.input.setModifier(modifier, true);
+  }
+  try {
+    await app.input.pressKey(key);
+  } finally {
+    for (const modifier of [...modifiers].reverse()) {
+      await app.input.setModifier(modifier, false);
+    }
+  }
+};
+
+const clearKeyBinding = async (
+  app: GtkApp,
+  entry: GtkEntryElement,
+  blurTarget: GtkWidgetElement
+): Promise<void> => {
+  await waitForResult(async () => {
+    await clickWidget(app, entry);
+    const { bounds } = await entry.capture();
+    await app.input.moveMouseTo(
+      Math.trunc(bounds.x + bounds.width - 18),
+      Math.trunc(bounds.y + bounds.height / 2)
+    );
+    await app.input.setMouseButton('left', true);
+    await app.input.setMouseButton('left', false);
+    await clickWidget(app, blurTarget);
+    expect(await entry.text()).toBe('');
   });
 };
 
@@ -1116,8 +1185,8 @@ describe.concurrent('shared settings widget', () => {
         await height.setValue(25);
         await zoom.setValue(1.1);
         await autoClose.toggle();
-        await zoomInKey.setText('alt+Up');
-        await zoomOutKey.setText('');
+        await captureKeyBinding(app, zoomInKey, ['alt'], 'Up');
+        await clearKeyBinding(app, zoomOutKey, width);
         await expectElementKind(
           await app.getById('settings_apply_button'),
           'button'
@@ -1208,7 +1277,95 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
-  it('blocks applying invalid or conflicting terminal key bindings', async (context) => {
+  it('captures terminal key bindings with live modifier state', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal', '--save'],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        const zoomInKey = expectElementKind(
+          await app.getById('settings_terminal_zoom_in_key_entry'),
+          'entry'
+        );
+        const width = expectElementKind(
+          await app.getById('settings_terminal_width_spin'),
+          'spinButton'
+        );
+
+        expect(await zoomInKey.text()).toBe('ctrl+plus');
+        expect((await zoomInKey.info()).states).not.toContain('editable');
+        await clickWidget(app, zoomInKey);
+        await expectEntryText(zoomInKey, '');
+        await clickWidget(app, width);
+        await expectEntryText(zoomInKey, 'ctrl+plus');
+        expect((await app.output()).stdout).not.toContain('CHANGED');
+
+        await clickWidget(app, zoomInKey);
+        await app.input.setModifier('control', true);
+        try {
+          await expectEntryText(zoomInKey, 'ctrl');
+          await app.input.setModifier('shift', true);
+          try {
+            await expectEntryText(zoomInKey, 'ctrl+shift');
+          } finally {
+            await app.input.setModifier('shift', false);
+          }
+          await expectEntryText(zoomInKey, 'ctrl');
+        } finally {
+          await app.input.setModifier('control', false);
+        }
+        await expectEntryText(zoomInKey, '');
+        expect((await app.output()).stdout).not.toContain('CHANGED');
+
+        await app.input.pressKey('x');
+        await expectEntryText(zoomInKey, 'x');
+        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
+
+        await app.input.setModifier('control', true);
+        try {
+          await app.input.setModifier('shift', true);
+          try {
+            await app.input.pressKey('x');
+            await expectEntryText(zoomInKey, 'ctrl+shift+x');
+          } finally {
+            await app.input.setModifier('shift', false);
+          }
+          await expectEntryText(zoomInKey, 'ctrl+shift+x');
+        } finally {
+          await app.input.setModifier('control', false);
+        }
+        await expectEntryText(zoomInKey, 'ctrl+shift+x');
+        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
+
+        await app.input.pressKey('Tab');
+        await expectEntryText(zoomInKey, 'Tab');
+        await app.input.pressKey('Escape');
+        await expectEntryText(zoomInKey, 'Escape');
+        await app.input.pressKey('BackSpace');
+        await expectEntryText(zoomInKey, 'BackSpace');
+
+        await app.input.setModifier('control', true);
+        try {
+          await expectEntryText(zoomInKey, 'ctrl');
+          await clickWidget(app, width);
+          await expectEntryText(zoomInKey, 'BackSpace');
+        } finally {
+          await app.input.setModifier('control', false);
+        }
+
+        await clearKeyBinding(app, zoomInKey, width);
+        await expectEntryText(zoomInKey, '');
+
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        expect((await waitForAppliedStore(app)).zoom_in_key).toBe('');
+      }
+    );
+  });
+
+  it('blocks applying conflicting terminal key bindings', async (context) => {
     await runSharedGtkTest(
       context,
       ['--page=terminal', '--save'],
@@ -1225,20 +1382,17 @@ describe.concurrent('shared settings widget', () => {
         const apply = await app.getById('settings_apply_button');
         const save = await app.getById('settings_save_button');
 
-        await zoomInKey.setText('ctrl++plus');
+        await captureKeyBinding(app, zoomInKey, ['alt'], 'F1');
+        await expectEntryText(zoomInKey, 'alt+F1');
+        await captureKeyBinding(app, zoomOutKey, ['alt'], 'F1');
+        await expectEntryText(zoomOutKey, 'alt+F1');
         await waitForResult(async () => {
           await expectInsensitive(apply);
           await expectInsensitive(save);
         });
 
-        await zoomInKey.setText('alt+F1');
-        await zoomOutKey.setText('ALT-f1');
-        await waitForResult(async () => {
-          await expectInsensitive(apply);
-          await expectInsensitive(save);
-        });
-
-        await zoomOutKey.setText('alt+F2');
+        await captureKeyBinding(app, zoomOutKey, ['alt'], 'F2');
+        await expectEntryText(zoomOutKey, 'alt+F2');
         await waitForResult(async () => {
           await expectSensitive(apply);
           await expectSensitive(save);

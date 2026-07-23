@@ -2,7 +2,14 @@ import { chmod, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { GtkApp, GtkMenuItemElement, GtkWidgetElement } from 'gestament';
+import type {
+  GtkApp,
+  GtkEntryElement,
+  GtkKeyboardModifier,
+  GtkKeyInput,
+  GtkMenuItemElement,
+  GtkWidgetElement,
+} from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
@@ -76,6 +83,41 @@ const openSettingsDialog = async (app: GtkApp): Promise<void> => {
     expectElementKind(await app.getById('settings_dialog'), 'window');
     expectElementKind(await app.getById('settings_widget_root'), 'container');
   });
+};
+
+const focusEntry = async (
+  app: GtkApp,
+  entry: GtkEntryElement
+): Promise<void> => {
+  const { bounds } = await entry.capture();
+  await app.input.moveMouseTo(
+    Math.trunc(bounds.x + bounds.width / 2),
+    Math.trunc(bounds.y + bounds.height / 2)
+  );
+  await app.input.setMouseButton('left', true);
+  await app.input.setMouseButton('left', false);
+  await toPass(async () => {
+    expect((await entry.info()).states).toContain('focused');
+  });
+};
+
+const captureKeyBinding = async (
+  app: GtkApp,
+  entry: GtkEntryElement,
+  modifiers: readonly GtkKeyboardModifier[],
+  key: GtkKeyInput
+): Promise<void> => {
+  await focusEntry(app, entry);
+  for (const modifier of modifiers) {
+    await app.input.setModifier(modifier, true);
+  }
+  try {
+    await app.input.pressKey(key);
+  } finally {
+    for (const modifier of [...modifiers].reverse()) {
+      await app.input.setModifier(modifier, false);
+    }
+  }
 };
 
 const expectSettingsDialogClosed = async (app: GtkApp): Promise<void> => {
@@ -978,14 +1020,16 @@ describe.concurrent('elder-terms-vte settings', () => {
 
       await openSettingsDialog(app);
       await showTerminalSettingsPage(app);
-      await expectElementKind(
+      const zoomInKey = expectElementKind(
         await app.getById('settings_terminal_zoom_in_key_entry'),
         'entry'
-      ).setText('alt+Up');
-      await expectElementKind(
+      );
+      const zoomOutKey = expectElementKind(
         await app.getById('settings_terminal_zoom_out_key_entry'),
         'entry'
-      ).setText('alt+Down');
+      );
+      await captureKeyBinding(app, zoomInKey, ['alt'], 'Up');
+      await captureKeyBinding(app, zoomOutKey, ['alt'], 'Down');
       await expectElementKind(
         await app.getById('settings_apply_button'),
         'button'

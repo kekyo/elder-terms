@@ -15,7 +15,9 @@ namespace elder_terms {
 struct KeyBindingInputWidgetState;
 
 /**
- * Called when key-binding input text or validity changes.
+ * Called when confirmed key-binding text or validity changes.
+ *
+ * @remarks Pressed modifier previews do not invoke this callback.
  */
 using KeyBindingInputChangedCallback = std::function<void()>;
 
@@ -23,7 +25,7 @@ using KeyBindingInputChangedCallback = std::function<void()>;
  * Options used to create a key-binding input widget.
  */
 struct KeyBindingInputWidgetOptions {
-  /** Initial binding text. */
+  /** Initial confirmed binding text. */
   std::string text;
   /** Stable accessible identifier assigned to the entry. */
   std::string accessible_id;
@@ -32,10 +34,14 @@ struct KeyBindingInputWidgetOptions {
 };
 
 /**
- * Creates a validated key-binding input widget.
+ * Creates a validated key-binding input widget that captures key events.
  *
  * @param options Initial text, accessible identifier, and callback.
  * @returns New widget state owned by the caller.
+ *
+ * @remarks Focusing the entry starts an empty capture presentation while
+ * retaining the confirmed text. Modifier presses are displayed immediately,
+ * and a non-modifier key confirms the complete binding.
  */
 ELDER_TERMS_API KeyBindingInputWidgetState *
 create_key_binding_input_widget(KeyBindingInputWidgetOptions options);
@@ -50,29 +56,34 @@ ELDER_TERMS_API GtkWidget *
 key_binding_input_widget_root(KeyBindingInputWidgetState *state);
 
 /**
- * Replaces the current key-binding text and validates it.
+ * Replaces the confirmed key-binding text and validates it.
  *
  * @param state Widget state.
  * @param text New binding text.
+ *
+ * @remarks Any pending modifier preview is cancelled. A focused widget returns
+ * to its empty capture presentation after updating the confirmed text.
  */
 ELDER_TERMS_API void
 set_key_binding_input_widget_text(KeyBindingInputWidgetState *state,
                                   const std::string &text);
 
 /**
- * Returns the current key-binding text.
+ * Returns the confirmed key-binding text.
  *
  * @param state Widget state.
- * @returns Current entry text, or an empty string when state is null.
+ * @returns Confirmed text, or an empty string when state is null. Transient
+ * modifier text shown in the entry is not returned.
  */
 ELDER_TERMS_API std::string key_binding_input_widget_text(
     const KeyBindingInputWidgetState *state);
 
 /**
- * Checks whether the current text has valid key-binding syntax.
+ * Checks whether the confirmed text has valid key-binding syntax.
  *
  * @param state Widget state.
- * @returns True when the text is valid, including an empty disabled binding.
+ * @returns True when the confirmed text is valid, including an empty disabled
+ * binding.
  */
 ELDER_TERMS_API bool key_binding_input_widget_is_valid(
     const KeyBindingInputWidgetState *state);
