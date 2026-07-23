@@ -11,6 +11,7 @@
 
 #include "activity-indicator.h"
 #include "activity-indicator-id.h"
+#include "terminal-connection-phase.h"
 #include "terminal-transfer.h"
 
 namespace elder_terms {
@@ -90,7 +91,10 @@ struct MainWindow {
   /** Title without transient connection-state suffixes. */
   std::string base_title = "elder-terms-vte";
   /** True while the backend connection is currently active. */
-  bool connection_active = true;
+  bool connection_active = false;
+  /** Current backend connection lifecycle phase. */
+  TerminalSessionConnectionPhase connection_phase =
+      TerminalSessionConnectionPhase::disconnected;
 };
 
 /**
@@ -130,13 +134,13 @@ void set_main_window_indicator_state(MainWindow *main_window,
                                      bool active);
 
 /**
- * Updates the terminal connected/read-only presentation.
+ * Updates the terminal presentation for a backend connection phase.
  *
  * @param main_window Main window containing the VTE terminal.
- * @param connected True when the backend is connected.
+ * @param phase Current backend connection phase.
  */
-void set_main_window_connection_active(MainWindow *main_window,
-                                       bool connected);
+void set_main_window_connection_phase(MainWindow *main_window,
+                                      TerminalSessionConnectionPhase phase);
 
 /**
  * Updates only the terminal interactive/read-only presentation.

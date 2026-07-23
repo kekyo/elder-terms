@@ -1,8 +1,6 @@
 #include <unistd.h>
 #include <sys/eventfd.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
-
 #include <cardio.h>
 #include <vte/vte.h>
 
@@ -11,7 +9,6 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <deque>
 #include <iostream>
 #include <memory>
@@ -28,18 +25,13 @@
 #include "../../terminal-text-send-runner.h"
 #include "../../terminal-transfer-runner.h"
 #include "../../terminal-zmodem-auto-start.h"
+#include "../tcp-connector.h"
 #include "../terminal-view-io.h"
 #include "telnet-protocol.h"
 
 namespace elder_terms {
 
 static constexpr std::uint32_t telnet_binary_timeout_ms = 5000;
-
-struct ResolvedSocketAddress {
-  sockaddr_storage storage{};
-  socklen_t length = 0;
-  int family = AF_UNSPEC;
-};
 
 static std::uint16_t clamp_terminal_dimension(glong value) {
   if (value <= 0) {
@@ -49,108 +41,6 @@ static std::uint16_t clamp_terminal_dimension(glong value) {
     return 65535;
   }
   return static_cast<std::uint16_t>(value);
-}
-
-static ResolvedSocketAddress make_socket_address(GInetAddress *address,
-                                                 std::uint16_t port) {
-  if (address == nullptr) {
-    throw std::runtime_error("TELNET resolver returned an empty address");
-  }
-
-  const GSocketFamily family = g_inet_address_get_family(address);
-  const guint8 *bytes = g_inet_address_to_bytes(address);
-  ResolvedSocketAddress result;
-  if (family == G_SOCKET_FAMILY_IPV4) {
-    sockaddr_in native_address{};
-    native_address.sin_family = AF_INET;
-    native_address.sin_port = htons(port);
-    std::memcpy(&native_address.sin_addr, bytes, sizeof(native_address.sin_addr));
-    std::memcpy(&result.storage, &native_address, sizeof(native_address));
-    result.length = sizeof(native_address);
-    result.family = AF_INET;
-    return result;
-  }
-
-  if (family == G_SOCKET_FAMILY_IPV6) {
-    sockaddr_in6 native_address{};
-    native_address.sin6_family = AF_INET6;
-    native_address.sin6_port = htons(port);
-    std::memcpy(&native_address.sin6_addr, bytes,
-                sizeof(native_address.sin6_addr));
-    std::memcpy(&result.storage, &native_address, sizeof(native_address));
-    result.length = sizeof(native_address);
-    result.family = AF_INET6;
-    return result;
-  }
-
-  throw std::runtime_error("TELNET resolver returned an unsupported address");
-}
-
-static cardio::promise<ResolvedSocketAddress>
-resolve_address_async(std::string address, std::uint16_t port,
-                      cardio::cancellation cancellation) {
-  auto resolver =
-      std::shared_ptr<GResolver>(g_resolver_get_default(), g_object_unref);
-  auto address_holder = std::make_shared<std::string>(std::move(address));
-  GList *raw_addresses = co_await cardio::gio::submit<GList *>(
-      [resolver, address_holder](GCancellable *cancellable,
-                                 GAsyncReadyCallback callback,
-                                 gpointer user_data) {
-        g_resolver_lookup_by_name_async(resolver.get(), address_holder->c_str(),
-                                        cancellable, callback, user_data);
-      },
-      [resolver](GObject *object, GAsyncResult *result, GError **error) {
-        (void)resolver;
-        return g_resolver_lookup_by_name_finish(G_RESOLVER(object), result,
-                                                error);
-      },
-      std::move(cancellation));
-
-  auto addresses = std::unique_ptr<GList, decltype(&g_resolver_free_addresses)>(
-      raw_addresses, g_resolver_free_addresses);
-  if (addresses == nullptr) {
-    throw std::runtime_error("TELNET resolver returned no addresses");
-  }
-
-  co_return make_socket_address(G_INET_ADDRESS(addresses->data), port);
-}
-
-static cardio::promise<int>
-open_socket_async(cardio::io_uring &io, int family,
-                  cardio::cancellation cancellation) {
-  return io.submit<int>(
-      [family](::io_uring_sqe *sqe) {
-        ::io_uring_prep_socket(sqe, family, SOCK_STREAM | SOCK_CLOEXEC, 0, 0);
-      },
-      [](cardio::io_uring_completion completion) {
-        if (completion.result < 0) {
-          throw std::system_error(-completion.result, std::generic_category(),
-                                  "TELNET socket failed");
-        }
-        return completion.result;
-      },
-      std::move(cancellation));
-}
-
-static cardio::promise<void>
-connect_socket_async(cardio::io_uring &io, int fd,
-                     const ResolvedSocketAddress &address,
-                     cardio::cancellation cancellation) {
-  auto storage = std::make_shared<sockaddr_storage>(address.storage);
-  const socklen_t length = address.length;
-  return io.submit<void>(
-      [fd, storage, length](::io_uring_sqe *sqe) {
-        ::io_uring_prep_connect(
-            sqe, fd, reinterpret_cast<const sockaddr *>(storage.get()), length);
-      },
-      [storage](cardio::io_uring_completion completion) {
-        (void)storage;
-        if (completion.result < 0) {
-          throw std::system_error(-completion.result, std::generic_category(),
-                                  "TELNET connect failed");
-        }
-      },
-      std::move(cancellation));
 }
 
 static void close_socket_noexcept(int *fd) {
@@ -287,9 +177,9 @@ private:
     }
   }
 
-  void notify_indicator_state(ActivityIndicatorId indicator, bool active) {
-    if (callbacks.indicator_state) {
-      callbacks.indicator_state(indicator, active);
+  void notify_connection_phase(TerminalSessionConnectionPhase phase) {
+    if (callbacks.connection_phase) {
+      callbacks.connection_phase(phase);
     }
   }
 
@@ -356,26 +246,16 @@ private:
   }
 
   cardio::promise<void> read_loop_async() {
-    bool connection_opened = false;
     bool natural_end = false;
     try {
       set_current_window_size();
       const auto port = static_cast<std::uint16_t>(settings.port);
-      ResolvedSocketAddress address = co_await resolve_address_async(
-          settings.address, port, stop_source.get_cancellation());
+      socket_fd = co_await connect_tcp_socket_async(
+          *io, settings.address, port, stop_source.get_cancellation());
       if (stopping) {
         co_return;
       }
-
-      socket_fd = co_await open_socket_async(
-          *io, address.family, stop_source.get_cancellation());
-      co_await connect_socket_async(*io, socket_fd, address,
-                                    stop_source.get_cancellation());
-      connection_opened = true;
-      if (stopping) {
-        co_return;
-      }
-      notify_indicator_state(ActivityIndicatorId::conn, true);
+      notify_connection_phase(TerminalSessionConnectionPhase::connected);
 
       initial_binary_negotiation_pending = true;
       for (TelnetBytes &bytes : protocol.encode_enable_binary()) {
@@ -400,8 +280,8 @@ private:
       if (!stopping) {
         std::cerr << "Warning: TELNET session failed: " << error.what()
                   << '\n';
+        natural_end = true;
       }
-      natural_end = connection_opened;
     }
 
     const bool should_notify_session_ended = natural_end && !stopping;
@@ -411,10 +291,8 @@ private:
     terminal_io.disconnect_user_input();
     outgoing.clear();
     co_await close_current_socket_async();
-    if (connection_opened) {
-      notify_indicator_state(ActivityIndicatorId::conn, false);
-    }
     if (should_notify_session_ended) {
+      notify_connection_phase(TerminalSessionConnectionPhase::disconnected);
       notify_session_ended(callbacks);
     }
   }
@@ -796,6 +674,7 @@ public:
       return false;
     }
 
+    notify_connection_phase(TerminalSessionConnectionPhase::connecting);
     try {
       io.emplace(64);
       transfer_input_event_fd = open_event_fd();
@@ -812,6 +691,7 @@ public:
       std::cerr << "Warning: failed to initialize TELNET session: "
                 << error.what() << '\n';
       stop();
+      notify_connection_phase(TerminalSessionConnectionPhase::disconnected);
       return false;
     }
   }

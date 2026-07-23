@@ -4,6 +4,7 @@
 #include <span>
 
 #include "activity-indicator-id.h"
+#include "terminal-connection-phase.h"
 #include "terminal-transfer.h"
 
 namespace elder_terms {
@@ -24,6 +25,12 @@ using TerminalSessionActivityCallback =
  */
 using TerminalSessionIndicatorStateCallback =
     std::function<void(ActivityIndicatorId indicator, bool active)>;
+
+/**
+ * Callback invoked when the backend connection lifecycle phase changes.
+ */
+using TerminalSessionConnectionPhaseCallback =
+    std::function<void(TerminalSessionConnectionPhase phase)>;
 
 /**
  * Callback invoked with normal received terminal output before and after text
@@ -49,6 +56,8 @@ struct TerminalSessionCallbacks {
   TerminalSessionActivityCallback activity;
   /** Called when a connection or serial modem-line state changes. */
   TerminalSessionIndicatorStateCallback indicator_state;
+  /** Called when the backend connection lifecycle phase changes. */
+  TerminalSessionConnectionPhaseCallback connection_phase;
   /** Called with normal terminal output, excluding active file transfers. */
   TerminalSessionOutputCallback output;
   /** Called when a valid ZMODEM auto-start preamble is detected. */

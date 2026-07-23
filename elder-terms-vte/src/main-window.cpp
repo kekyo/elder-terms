@@ -458,7 +458,8 @@ static void apply_main_window_style(MainWindow *main_window) {
 }
 
 static std::string display_title(const MainWindow &main_window) {
-  if (main_window.connection_active) {
+  if (main_window.connection_phase !=
+      TerminalSessionConnectionPhase::disconnected) {
     return main_window.base_title;
   }
 
@@ -608,7 +609,8 @@ std::optional<MainWindow> load_main_window() {
   }
   set_main_window_activity_indicator_connection_kind(
       &main_window, TerminalConnectionKind::local_shell);
-  set_main_window_connection_active(&main_window, false);
+  set_main_window_connection_phase(
+      &main_window, TerminalSessionConnectionPhase::disconnected);
   set_main_window_transfer_button_visible(&main_window, false);
 
   return main_window;
@@ -656,17 +658,22 @@ void set_main_window_indicator_state(MainWindow *main_window,
                                        active);
 }
 
-void set_main_window_connection_active(MainWindow *main_window,
-                                       bool connected) {
+void set_main_window_connection_phase(MainWindow *main_window,
+                                      TerminalSessionConnectionPhase phase) {
   if (main_window == nullptr) {
     return;
   }
 
+  const TerminalConnectionPresentation presentation =
+      terminal_connection_presentation(phase);
   set_main_window_indicator_state(main_window, ActivityIndicatorId::conn,
-                                  connected);
-  main_window->connection_active = connected;
-  set_main_window_terminal_interactive(main_window, connected);
-  set_main_window_disconnected_notice_visible(main_window, !connected);
+                                  presentation.connection_active);
+  main_window->connection_phase = phase;
+  main_window->connection_active = presentation.connection_active;
+  set_main_window_terminal_interactive(main_window,
+                                       presentation.terminal_interactive);
+  set_main_window_disconnected_notice_visible(
+      main_window, presentation.disconnected_notice_visible);
   apply_main_window_title(main_window);
 }
 

@@ -235,6 +235,12 @@ private:
     }
   }
 
+  void notify_connection_phase(TerminalSessionConnectionPhase phase) {
+    if (callbacks.connection_phase) {
+      callbacks.connection_phase(phase);
+    }
+  }
+
   void notify_serial_line_state(SerialLineSignals signals) {
     for (ActivityIndicatorState state : serial_line_indicator_states(signals)) {
       notify_indicator_state(state.indicator, state.active);
@@ -242,7 +248,9 @@ private:
   }
 
   void notify_connected_state(bool active) {
-    notify_indicator_state(ActivityIndicatorId::conn, active);
+    notify_connection_phase(
+        active ? TerminalSessionConnectionPhase::connected
+               : TerminalSessionConnectionPhase::disconnected);
   }
 
   cardio::promise<void> notify_session_ended_async() {
@@ -1052,6 +1060,7 @@ public:
       return false;
     }
 
+    notify_connection_phase(TerminalSessionConnectionPhase::connecting);
     stopping = false;
     try {
       io.emplace(64);
@@ -1063,6 +1072,7 @@ public:
       close_fd_noexcept(&device_event_fd);
       close_fd_noexcept(&transfer_input_event_fd);
       io.reset();
+      notify_connection_phase(TerminalSessionConnectionPhase::disconnected);
       return false;
     }
     terminal_io.connect_user_input(

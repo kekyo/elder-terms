@@ -138,7 +138,7 @@ private:
     }
 
     ended_notified = true;
-    notify_indicator_state(ActivityIndicatorId::conn, false);
+    notify_connection_phase(TerminalSessionConnectionPhase::disconnected);
     notify_session_ended(callbacks);
   }
 
@@ -148,9 +148,9 @@ private:
     }
   }
 
-  void notify_indicator_state(ActivityIndicatorId indicator, bool active) {
-    if (callbacks.indicator_state) {
-      callbacks.indicator_state(indicator, active);
+  void notify_connection_phase(TerminalSessionConnectionPhase phase) {
+    if (callbacks.connection_phase) {
+      callbacks.connection_phase(phase);
     }
   }
 
@@ -261,7 +261,7 @@ private:
       }
       clear_gerror(&error);
       if (!stopping) {
-        stop();
+        finish_naturally();
       }
       return;
     }
@@ -276,7 +276,7 @@ private:
     child_watch_id =
         g_child_watch_add(child_pid, TerminalLocalShellSession::on_child_exited,
                           this);
-    notify_indicator_state(ActivityIndicatorId::conn, true);
+    notify_connection_phase(TerminalSessionConnectionPhase::connected);
   }
 
   static void finish_inactive_spawn(GObject *source_object,
@@ -482,6 +482,7 @@ public:
       return true;
     }
 
+    notify_connection_phase(TerminalSessionConnectionPhase::connecting);
     try {
       io.emplace(64);
       create_pty();
@@ -511,6 +512,7 @@ public:
       std::cerr << "Warning: failed to initialize local shell session: "
                 << error.what() << '\n';
       stop();
+      notify_connection_phase(TerminalSessionConnectionPhase::disconnected);
       return false;
     }
   }

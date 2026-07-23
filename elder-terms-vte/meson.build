@@ -43,6 +43,7 @@ elder_terms_sources = [
   'src/launch-options.cpp',
   'src/main.cpp',
   'src/main-window.cpp',
+  'src/terminal-connection-phase.cpp',
   'src/terminal-log.cpp',
   'src/terminal-text-send.cpp',
   'src/terminal-text-send-runner.cpp',
@@ -55,6 +56,7 @@ elder_terms_sources = [
   'src/terminal-sessions/serial-session/serial-line-monitor.cpp',
   'src/terminal-sessions/serial-session/serial-session.cpp',
   'src/terminal-sessions/serial-session/serial-termios.cpp',
+  'src/terminal-sessions/tcp-connector.cpp',
   telnet_protocol_source,
   'src/terminal-sessions/telnet-session/telnet-session.cpp',
   'src/terminal-sessions/terminal-text-codec.cpp',
@@ -155,6 +157,17 @@ activity_indicator_test = executable(
 )
 
 test('activity-indicator-test', activity_indicator_test)
+
+terminal_connection_phase_test = executable(
+  'terminal-connection-phase-test',
+  [
+    'tests/cpp/terminal-connection-phase-test.cpp',
+    'src/terminal-connection-phase.cpp',
+  ],
+  include_directories: include_directories('src'),
+)
+
+test('terminal-connection-phase-test', terminal_connection_phase_test)
 
 terminal_transfer_runner_test = executable(
   'terminal-transfer-runner-test',

@@ -33,6 +33,8 @@ struct ApplicationState {
   std::optional<std::filesystem::path> config_path;
   elder_terms::TestOptions test_options;
   bool auto_close = true;
+  elder_terms::TerminalSessionConnectionPhase connection_phase =
+      elder_terms::TerminalSessionConnectionPhase::disconnected;
   bool connection_active = false;
   bool transfer_active = false;
   GtkWidget *window = nullptr;
@@ -94,21 +96,35 @@ static void set_application_transfer_active(ApplicationState *state,
   update_application_terminal_presentation(state);
 }
 
-static void set_application_indicator_state(
-    ApplicationState *state, elder_terms::ActivityIndicatorId indicator, bool active) {
+static void set_application_connection_phase(
+    ApplicationState *state,
+    elder_terms::TerminalSessionConnectionPhase phase) {
   if (state == nullptr) {
     return;
   }
 
-  if (indicator == elder_terms::ActivityIndicatorId::conn &&
-      state->auto_close && !active) {
+  const elder_terms::TerminalConnectionPresentation presentation =
+      elder_terms::terminal_connection_presentation(phase);
+  state->connection_phase = phase;
+  state->connection_active = presentation.connection_active;
+  elder_terms::set_main_window_connection_phase(state->main_window, phase);
+  elder_terms::set_terminal_log_connection_active(
+      state->log_state, presentation.connection_active);
+  update_application_terminal_presentation(state);
+}
+
+static void set_application_indicator_state(
+    ApplicationState *state, elder_terms::ActivityIndicatorId indicator,
+    bool active) {
+  if (state == nullptr) {
     return;
   }
 
   if (indicator == elder_terms::ActivityIndicatorId::conn) {
-    state->connection_active = active;
-    elder_terms::set_main_window_connection_active(state->main_window, active);
-    update_application_terminal_presentation(state);
+    set_application_connection_phase(
+        state, active
+                   ? elder_terms::TerminalSessionConnectionPhase::connected
+                   : elder_terms::TerminalSessionConnectionPhase::disconnected);
     return;
   }
 
@@ -765,6 +781,8 @@ int main(int argc, char **argv) {
       .config_path = launch_options.config_path,
       .test_options = launch_options.test,
       .auto_close = elder_terms::terminal_auto_close(settings_result.store),
+      .connection_phase =
+          elder_terms::TerminalSessionConnectionPhase::disconnected,
       .connection_active = false,
       .transfer_active = false,
       .window = main_window->window,
@@ -803,12 +821,9 @@ int main(int argc, char **argv) {
     connection_profile,
     {
       .ended = [&app_state]() {
-        elder_terms::set_terminal_log_connection_active(app_state.log_state,
-                                                        false);
-        if (!app_state.auto_close) {
-          set_application_indicator_state(
-              &app_state, elder_terms::ActivityIndicatorId::conn, false);
-        }
+        set_application_connection_phase(
+            &app_state,
+            elder_terms::TerminalSessionConnectionPhase::disconnected);
         if (app_state.auto_close && app_state.window != nullptr) {
           gtk_widget_destroy(app_state.window);
         }
@@ -818,11 +833,11 @@ int main(int argc, char **argv) {
       },
       .indicator_state =
           [&app_state](elder_terms::ActivityIndicatorId indicator, bool active) {
-            if (indicator == elder_terms::ActivityIndicatorId::conn) {
-              elder_terms::set_terminal_log_connection_active(
-                  app_state.log_state, active);
-            }
             set_application_indicator_state(&app_state, indicator, active);
+          },
+      .connection_phase =
+          [&app_state](elder_terms::TerminalSessionConnectionPhase phase) {
+            set_application_connection_phase(&app_state, phase);
           },
       .output =
           [&app_state](std::span<const unsigned char> raw_bytes,
@@ -906,10 +921,10 @@ int main(int argc, char **argv) {
     set_application_indicator_state(&app_state,
                                     elder_terms::ActivityIndicatorId::conn,
                                     true);
-  } else if (session_started && app_state.auto_close) {
-    set_application_indicator_state(&app_state,
-                                    elder_terms::ActivityIndicatorId::conn,
-                                    true);
+  } else if (!session_started) {
+    set_application_connection_phase(
+        &app_state,
+        elder_terms::TerminalSessionConnectionPhase::disconnected);
   }
 
   gtk_widget_grab_focus(main_window->terminal);
