@@ -2,6 +2,7 @@
 
 #include <gtk/gtk.h>
 
+#include <memory>
 #include <string>
 
 #include <elder-terms/settings.h>
@@ -11,6 +12,8 @@
 #include "terminal-transfer.h"
 
 namespace elder_terms {
+
+class AuthenticatedSshTransport;
 
 /**
  * Opaque state for one terminal connection session.
@@ -124,6 +127,16 @@ bool cancel_terminal_session_transfer(TerminalSessionState *state);
  */
 void set_terminal_session_zmodem_autostart(TerminalSessionState *state,
                                            bool enabled);
+
+/**
+ * Returns the authenticated transport shared by an active SSH session.
+ *
+ * @param state Session state created by create_terminal_session.
+ * @returns Shared authenticated SSH transport, or null when unavailable.
+ */
+std::shared_ptr<AuthenticatedSshTransport>
+terminal_session_authenticated_ssh_transport(
+    const TerminalSessionState *state);
 
 /**
  * Returns the title for a terminal session state.

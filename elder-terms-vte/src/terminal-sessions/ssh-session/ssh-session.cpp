@@ -646,6 +646,14 @@ public:
     zmodem_auto_start_detector = {};
   }
 
+  std::shared_ptr<AuthenticatedSshTransport>
+  authenticated_ssh_transport() const override {
+    if (!started || stopping || !connected || connection == nullptr) {
+      return nullptr;
+    }
+    return connection->authenticated_transport();
+  }
+
   bool start_transfer(TerminalTransferRequest request) override {
     if (!started || stopping || !connected || connection == nullptr ||
         transfer_active || text_send_active) {

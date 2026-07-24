@@ -113,7 +113,7 @@ public:
   authenticated_transport() const;
 
   /**
-   * Closes the channel and underlying libssh session.
+   * Closes this shell channel and releases its authenticated transport share.
    */
   void close();
 };

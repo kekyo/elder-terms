@@ -1,6 +1,8 @@
 #include <cstdint>
+#include <exception>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -17,10 +19,15 @@
 
 #include "launch-options.h"
 #include "main-window.h"
+#include "sftp/sftp-client.h"
+#include "sftp/sftp-fixture-client.h"
+#include "sftp/sftp-paths.h"
+#include "sftp/sftp-window.h"
 #include "terminal-layout.h"
 #include "terminal-log.h"
 #include "terminal-transfer-runner.h"
 #include "terminal-session.h"
+#include "terminal-sessions/ssh-session/authenticated-ssh-transport.h"
 
 struct ApplicationState {
   elder_terms::MainWindow *main_window = nullptr;
@@ -30,6 +37,12 @@ struct ApplicationState {
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
   std::optional<cardio::promise<void>> shutdown_task;
   std::optional<cardio::promise<void>> ssh_prompt_fixture_task;
+  std::optional<cardio::promise<void>> sftp_open_task;
+  std::optional<cardio::promise<void>> sftp_connection_check_task;
+  std::optional<cardio::cancellation_source> sftp_cancel_source;
+  std::shared_ptr<elder_terms::AuthenticatedSshTransport> sftp_transport;
+  std::shared_ptr<elder_terms::SftpClient> sftp_client;
+  std::shared_ptr<elder_terms::SftpWindow> sftp_window;
   elder_terms::SettingsStore settings_store;
   std::optional<std::filesystem::path> config_path;
   elder_terms::TestOptions test_options;
@@ -38,6 +51,9 @@ struct ApplicationState {
       elder_terms::TerminalSessionConnectionPhase::disconnected;
   bool connection_active = false;
   bool transfer_active = false;
+  bool sftp_opening = false;
+  bool sftp_connection_check_active = false;
+  bool terminal_shutdown_complete = false;
   GtkWidget *window = nullptr;
   GtkWidget *settings_dialog = nullptr;
   guint settings_dialog_close_idle_id = 0;
@@ -56,6 +72,16 @@ struct TransferMenuAction {
 static void close_settings_dialog(ApplicationState *state);
 static void schedule_settings_dialog_close(ApplicationState *state);
 static void restore_terminal_focus(ApplicationState *state);
+static void start_shared_sftp_connection_check(ApplicationState *state);
+
+static void maybe_shutdown_application(ApplicationState *state) {
+  if (state == nullptr || !state->terminal_shutdown_complete ||
+      state->window != nullptr || state->sftp_window != nullptr ||
+      state->sftp_opening) {
+    return;
+  }
+  state->dispatcher_group->shutdown();
+}
 
 static cardio::promise<void>
 run_ssh_prompt_fixture_async(ApplicationState *state,
@@ -94,7 +120,59 @@ run_ssh_prompt_fixture_async(ApplicationState *state,
 static cardio::promise<void>
 stop_application_async(ApplicationState *state) {
   co_await elder_terms::stop_terminal_log_async(state->log_state);
-  state->dispatcher_group->shutdown();
+  state->terminal_shutdown_complete = true;
+  maybe_shutdown_application(state);
+}
+
+static cardio::promise<void> check_shared_sftp_connection_async(
+    ApplicationState *state,
+    std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport,
+    cardio::cancellation cancellation) {
+  bool available = false;
+  try {
+    available =
+        co_await transport->is_connected_async(std::move(cancellation));
+  } catch (const cardio::canceled_exception &) {
+    state->sftp_connection_check_active = false;
+    co_return;
+  } catch (const std::exception &error) {
+    std::cerr << "Warning: failed to check shared SFTP connection: "
+              << error.what() << '\n';
+  }
+
+  if (state->sftp_transport == transport &&
+      state->sftp_window != nullptr) {
+    elder_terms::set_sftp_window_connection_available(
+        state->sftp_window, available);
+  }
+  state->sftp_connection_check_active = false;
+}
+
+static void start_shared_sftp_connection_check(
+    ApplicationState *state) {
+  if (state == nullptr || state->sftp_window == nullptr ||
+      state->sftp_connection_check_active) {
+    return;
+  }
+  if (state->test_options.fixture) {
+    elder_terms::set_sftp_window_connection_available(
+        state->sftp_window,
+        !state->test_options.shared_sftp_disconnected);
+    return;
+  }
+  if (state->sftp_transport == nullptr ||
+      !state->sftp_cancel_source.has_value()) {
+    elder_terms::set_sftp_window_connection_available(
+        state->sftp_window, false);
+    return;
+  }
+
+  state->sftp_connection_check_active = true;
+  state->sftp_connection_check_task.reset();
+  state->sftp_connection_check_task.emplace(
+      check_shared_sftp_connection_async(
+          state, state->sftp_transport,
+          state->sftp_cancel_source->get_cancellation()));
 }
 
 static void update_application_terminal_presentation(
@@ -146,6 +224,10 @@ static void set_application_connection_phase(
   elder_terms::set_terminal_log_connection_active(
       state->log_state, presentation.connection_active);
   update_application_terminal_presentation(state);
+  if (phase ==
+      elder_terms::TerminalSessionConnectionPhase::disconnected) {
+    start_shared_sftp_connection_check(state);
+  }
 }
 
 static void set_application_indicator_state(
@@ -648,6 +730,127 @@ static GtkWidget *create_text_send_menu_item(ApplicationState *state) {
   return item;
 }
 
+static void on_shared_sftp_window_closed(ApplicationState *state) {
+  if (state == nullptr) {
+    return;
+  }
+  if (state->sftp_cancel_source.has_value()) {
+    (void)state->sftp_cancel_source->cancel();
+    state->sftp_cancel_source.reset();
+  }
+  state->sftp_connection_check_active = false;
+  state->sftp_window.reset();
+  state->sftp_client.reset();
+  state->sftp_transport.reset();
+  maybe_shutdown_application(state);
+}
+
+static cardio::promise<void> open_shared_sftp_window_async(
+    ApplicationState *state,
+    std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport,
+    cardio::cancellation cancellation) {
+  try {
+    std::shared_ptr<elder_terms::SftpClient> client;
+    if (state->test_options.fixture) {
+      client = elder_terms::create_sftp_fixture_client(
+          state->test_options.sftp_pause_transfer);
+    } else {
+      client = co_await elder_terms::open_sftp_client_async(
+          transport, cancellation);
+    }
+    cancellation.throw_if_cancellation_requested();
+
+    const elder_terms::SftpConnectionSettings settings =
+        elder_terms::sftp_connection_settings(state->settings_store);
+    state->sftp_transport = std::move(transport);
+    state->sftp_client = std::move(client);
+    state->sftp_window = elder_terms::create_sftp_window(
+        {
+            .connection_name =
+                elder_terms::general_connection_name(
+                    state->settings_store),
+            .local_directory =
+                elder_terms::resolve_sftp_local_directory(
+                    state->settings_store, settings),
+            .remote_directory = settings.remote_directory,
+            .client = state->sftp_client,
+            .closed =
+                [state]() {
+                  on_shared_sftp_window_closed(state);
+                },
+        });
+    state->sftp_opening = false;
+    elder_terms::show_sftp_window(state->sftp_window);
+    if (state->test_options.shared_sftp_disconnected ||
+        state->connection_phase ==
+            elder_terms::TerminalSessionConnectionPhase::disconnected) {
+      start_shared_sftp_connection_check(state);
+    }
+    co_return;
+  } catch (const cardio::canceled_exception &) {
+  } catch (const std::exception &error) {
+    std::cerr << "Warning: failed to open shared SFTP window: "
+              << error.what() << '\n';
+    if (state->window != nullptr) {
+      elder_terms::set_main_window_status_text(
+          state->main_window, "SFTP unavailable");
+    }
+  }
+
+  state->sftp_opening = false;
+  state->sftp_client.reset();
+  state->sftp_transport.reset();
+  maybe_shutdown_application(state);
+}
+
+static void on_sftp_menu_item_activate(GtkMenuItem *,
+                                       gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state == nullptr) {
+    return;
+  }
+  if (state->sftp_window != nullptr) {
+    elder_terms::present_sftp_window(state->sftp_window);
+    return;
+  }
+  if (state->sftp_opening || !state->connection_active) {
+    return;
+  }
+
+  std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport;
+  if (!state->test_options.fixture) {
+    transport =
+        elder_terms::terminal_session_authenticated_ssh_transport(
+            state->session_state);
+    if (transport == nullptr) {
+      elder_terms::set_main_window_status_text(
+          state->main_window, "SFTP unavailable");
+      return;
+    }
+  }
+
+  if (state->sftp_cancel_source.has_value()) {
+    (void)state->sftp_cancel_source->cancel();
+    state->sftp_cancel_source.reset();
+  }
+  state->sftp_cancel_source.emplace();
+  state->sftp_transport = transport;
+  state->sftp_opening = true;
+  state->sftp_open_task.reset();
+  state->sftp_open_task.emplace(
+      open_shared_sftp_window_async(
+          state, std::move(transport),
+          state->sftp_cancel_source->get_cancellation()));
+}
+
+static GtkWidget *create_sftp_menu_item(ApplicationState *state) {
+  GtkWidget *item = gtk_menu_item_new_with_label("SFTP");
+  gestament_gtk_assign_accessible_id(item, "transfer_sftp_item");
+  g_signal_connect(item, "activate",
+                   G_CALLBACK(on_sftp_menu_item_activate), state);
+  return item;
+}
+
 static void on_log_enabled_menu_item_toggled(GtkCheckMenuItem *item,
                                              gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
@@ -684,6 +887,12 @@ static void install_transfer_menu(ApplicationState *state) {
                         create_log_enabled_menu_item(state));
   gtk_menu_shell_append(GTK_MENU_SHELL(menu),
                         gtk_separator_menu_item_new());
+
+  if (elder_terms::general_settings_select_ssh_connection(
+          state->settings_store)) {
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu),
+                          create_sftp_menu_item(state));
+  }
 
   if (elder_terms::terminal_session_supports_text_send(state->session_state)) {
     gtk_menu_shell_append(GTK_MENU_SHELL(menu),
@@ -830,6 +1039,12 @@ int main(int argc, char **argv) {
       .dispatcher_group = &dispatcher_group,
       .shutdown_task = std::nullopt,
       .ssh_prompt_fixture_task = std::nullopt,
+      .sftp_open_task = std::nullopt,
+      .sftp_connection_check_task = std::nullopt,
+      .sftp_cancel_source = std::nullopt,
+      .sftp_transport = nullptr,
+      .sftp_client = nullptr,
+      .sftp_window = nullptr,
       .settings_store = settings_result.store,
       .config_path = launch_options.config_path,
       .test_options = launch_options.test,
@@ -838,6 +1053,9 @@ int main(int argc, char **argv) {
           elder_terms::TerminalSessionConnectionPhase::disconnected,
       .connection_active = false,
       .transfer_active = false,
+      .sftp_opening = false,
+      .sftp_connection_check_active = false,
+      .terminal_shutdown_complete = false,
       .window = main_window->window,
       .settings_dialog = nullptr,
       .settings_dialog_close_idle_id = 0,
@@ -1006,6 +1224,15 @@ int main(int argc, char **argv) {
 
   dispatcher.park();
 
+  if (app_state.sftp_cancel_source.has_value()) {
+    (void)app_state.sftp_cancel_source->cancel();
+  }
+  app_state.sftp_connection_check_task.reset();
+  app_state.sftp_open_task.reset();
+  app_state.sftp_window.reset();
+  app_state.sftp_client.reset();
+  app_state.sftp_transport.reset();
+  app_state.sftp_cancel_source.reset();
   app_state.ssh_prompt_fixture_task.reset();
   elder_terms::destroy_terminal_layout(app_state.layout_state);
   elder_terms::destroy_terminal_session(app_state.session_state);

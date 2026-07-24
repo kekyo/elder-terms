@@ -2,6 +2,7 @@
 
 #include <glib.h>
 
+#include <memory>
 #include <string>
 
 #include <elder-terms/settings.h>
@@ -11,6 +12,8 @@
 #include "../terminal-transfer.h"
 
 namespace elder_terms {
+
+class AuthenticatedSshTransport;
 
 /**
  * Abstract terminal connection session backend.
@@ -115,6 +118,17 @@ public:
    */
   virtual void set_zmodem_autostart(bool enabled) {
     (void)enabled;
+  }
+
+  /**
+   * Returns the authenticated SSH transport owned by this backend.
+   *
+   * @returns Shared authenticated transport, or null for non-SSH and
+   * disconnected sessions.
+   */
+  virtual std::shared_ptr<AuthenticatedSshTransport>
+  authenticated_ssh_transport() const {
+    return nullptr;
   }
 
   /**

@@ -173,6 +173,16 @@ void set_terminal_session_zmodem_autostart(TerminalSessionState *state,
   state->session->set_zmodem_autostart(enabled);
 }
 
+std::shared_ptr<AuthenticatedSshTransport>
+terminal_session_authenticated_ssh_transport(
+    const TerminalSessionState *state) {
+  if (state == nullptr || state->session == nullptr) {
+    return nullptr;
+  }
+
+  return state->session->authenticated_ssh_transport();
+}
+
 std::string terminal_session_title(const TerminalSessionState *state) {
   if (state == nullptr || state->session == nullptr) {
     return application_title;

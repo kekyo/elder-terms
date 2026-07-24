@@ -25,6 +25,8 @@ struct TestOptions {
   std::vector<std::string> transfer_source_uris;
   /** True when the SFTP fixture should pause remote writes until cancelled. */
   bool sftp_pause_transfer = false;
+  /** True when an integrated fixture SFTP window starts disconnected. */
+  bool shared_sftp_disconnected = false;
 };
 
 /**

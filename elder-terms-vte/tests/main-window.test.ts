@@ -789,6 +789,197 @@ describe.concurrent('elder-terms-vte main window', () => {
     });
   });
 
+  it('opens one SFTP window from SSH and keeps it after the terminal closes', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const localDirectory = join(directory, 'local');
+      const configPath = join(directory, 'ssh.ini');
+      await mkdir(localDirectory, { recursive: true });
+      await writeFile(join(localDirectory, 'hello.txt'), 'hello from local\n');
+      await writeFile(
+        configPath,
+        [
+          '[general]',
+          'name=Shared SSH fixture',
+          'type=ssh',
+          '',
+          '[terminal]',
+          'auto_close=false',
+          '',
+          '[ssh]',
+          'address=fixture.example',
+          '',
+          '[sftp]',
+          `local_directory=${localDirectory}`,
+          'remote_directory=/remote',
+          '',
+        ].join('\n'),
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app, evidence) => {
+          const mainWindow = expectElementKind(
+            await app.getById('main_window'),
+            'window'
+          );
+          const transferButton =
+            await expectTransferButtonVisibleLeftOfSettings(app);
+          await expectTransferButtonSensitive(transferButton);
+          await transferButton.click();
+          const sftpItem = await waitForResult(
+            async () => {
+              const item = expectElementKind(
+                await app.getById('transfer_sftp_item'),
+                'menuItem'
+              );
+              const info = await item.info();
+              expect(info.name).toBe('SFTP');
+              expect(info.states).toContain('showing');
+              return item;
+            },
+            {
+              message: 'SFTP transfer menu item should be visible for SSH',
+              timeoutMs: 5_000,
+            }
+          );
+          await evidence.captureEvidence('ssh-transfer-sftp-menu', async () =>
+            app.capture()
+          );
+          await sftpItem.click();
+
+          await waitForResult(async () => {
+            expect(await app.getWindowCount()).toBe(2);
+            expect(
+              await expectElementKind(
+                await app.getById('sftp_remote_path_entry'),
+                'entry'
+              ).text()
+            ).toBe('/remote');
+          });
+          const terminal = await app.getById('terminal_view');
+          expect((await terminal.info()).states).toContain('sensitive');
+          await evidence.captureEvidence(
+            'ssh-and-shared-sftp-windows',
+            async () => app.capture()
+          );
+
+          await mainWindow.activate();
+          await transferButton.click();
+          await sftpItem.click();
+          await waitForResult(async () => {
+            expect(await app.getWindowCount()).toBe(2);
+          });
+
+          await mainWindow.activate();
+          await expectElementKind(
+            await app.getByPath('main_window.0.0.3'),
+            'button'
+          ).click();
+          await waitForResult(
+            async () => {
+              expect(await app.getWindowCount()).toBe(1);
+              expect(
+                (await (await app.getById('sftp_window')).info()).states
+              ).toContain('showing');
+            },
+            {
+              message: 'SFTP window should remain after the SSH window closes',
+              timeoutMs: 5_000,
+            }
+          );
+
+          const sftpWindow = expectElementKind(
+            await app.getById('sftp_window'),
+            'window'
+          );
+          await sftpWindow.activate();
+          await expectElementKind(
+            await app.getByPath('sftp_window.0.0.3'),
+            'button'
+          ).click();
+          await waitForResult(
+            async () => {
+              const output = await app.output();
+              expect(output.exitCode).toBe(0);
+              return output;
+            },
+            {
+              message: 'app should exit after the remaining SFTP window closes',
+              timeoutMs: 5_000,
+            }
+          );
+        }
+      );
+    });
+  });
+
+  it('keeps local SFTP browsing available when shared SSH disconnects', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const localDirectory = join(directory, 'local');
+      const configPath = join(directory, 'ssh.ini');
+      await mkdir(localDirectory, { recursive: true });
+      await writeFile(
+        configPath,
+        [
+          '[general]',
+          'name=Disconnected SSH fixture',
+          'type=ssh',
+          '',
+          '[ssh]',
+          'address=fixture.example',
+          '',
+          '[sftp]',
+          `local_directory=${localDirectory}`,
+          'remote_directory=/remote',
+          '',
+        ].join('\n'),
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        ['--test-fixture', '--test-shared-sftp-disconnected', '-c', configPath],
+        async (app) => {
+          const transferButton =
+            await expectTransferButtonVisibleLeftOfSettings(app);
+          await transferButton.click();
+          await expectElementKind(
+            await app.getById('transfer_sftp_item'),
+            'menuItem'
+          ).click();
+
+          const localPath = expectElementKind(
+            await app.getById('sftp_local_path_entry'),
+            'entry'
+          );
+          const remotePath = expectElementKind(
+            await app.getById('sftp_remote_path_entry'),
+            'entry'
+          );
+          const status = expectElementKind(
+            await app.getById('sftp_status_label'),
+            'label'
+          );
+          await waitForResult(
+            async () => {
+              expect((await localPath.info()).states).toContain('sensitive');
+              expect((await remotePath.info()).states).not.toContain(
+                'sensitive'
+              );
+              expect(await status.text()).toBe('Disconnected');
+            },
+            {
+              message: 'shared disconnect should only disable remote SFTP',
+              timeoutMs: 5_000,
+            }
+          );
+        }
+      );
+    });
+  });
+
   it('disables the transfer menu button after TELNET disconnects', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       let acceptedSocket: Socket | undefined;
