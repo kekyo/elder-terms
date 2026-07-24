@@ -12,6 +12,7 @@ static constexpr char local_connection_type[] = "local";
 static constexpr char telnet_connection_type[] = "telnet";
 static constexpr char ssh_connection_type[] = "ssh";
 static constexpr char serial_connection_type[] = "serial";
+static constexpr char sftp_connection_type[] = "sftp";
 
 static bool validate_connection_type(const SettingValue &value,
                                      std::string *reason) {
@@ -19,8 +20,8 @@ static bool validate_connection_type(const SettingValue &value,
   if (text == nullptr ||
       (*text != local_connection_type && *text != telnet_connection_type &&
        *text != ssh_connection_type &&
-       *text != serial_connection_type)) {
-    *reason = "must be local, telnet, ssh, or serial";
+       *text != serial_connection_type && *text != sftp_connection_type)) {
+    *reason = "must be local, telnet, ssh, serial, or sftp";
     return false;
   }
   return true;
@@ -86,22 +87,38 @@ std::string general_connection_name(const SettingsStore &store) {
                                                        : *fallback;
 }
 
+ConnectionKind general_connection_kind(const SettingsStore &store) {
+  const std::string configured = setting_string_value_or_default(
+      store, general_type_setting_key(), local_connection_type);
+  if (configured == telnet_connection_type) {
+    return ConnectionKind::telnet;
+  }
+  if (configured == ssh_connection_type) {
+    return ConnectionKind::ssh;
+  }
+  if (configured == serial_connection_type) {
+    return ConnectionKind::serial;
+  }
+  if (configured == sftp_connection_type) {
+    return ConnectionKind::sftp;
+  }
+  return ConnectionKind::local_shell;
+}
+
 bool general_settings_select_telnet_connection(const SettingsStore &store) {
-  return setting_string_value_or_default(store, general_type_setting_key(),
-                                         local_connection_type) ==
-         telnet_connection_type;
+  return general_connection_kind(store) == ConnectionKind::telnet;
 }
 
 bool general_settings_select_serial_connection(const SettingsStore &store) {
-  return setting_string_value_or_default(store, general_type_setting_key(),
-                                         local_connection_type) ==
-         serial_connection_type;
+  return general_connection_kind(store) == ConnectionKind::serial;
 }
 
 bool general_settings_select_ssh_connection(const SettingsStore &store) {
-  return setting_string_value_or_default(store, general_type_setting_key(),
-                                         local_connection_type) ==
-         ssh_connection_type;
+  return general_connection_kind(store) == ConnectionKind::ssh;
+}
+
+bool general_settings_select_sftp_connection(const SettingsStore &store) {
+  return general_connection_kind(store) == ConnectionKind::sftp;
 }
 
 } // namespace elder_terms

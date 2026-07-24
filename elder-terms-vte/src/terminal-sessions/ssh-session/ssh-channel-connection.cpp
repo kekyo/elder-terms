@@ -253,8 +253,8 @@ host_key_prompt(ssh_session session, const SshConnectionSettings &settings,
   }
 
   std::string message =
-      "Unknown SSH host key for " + settings.address + ":" +
-      std::to_string(settings.port) + "\nKey type: " + key_type +
+      "Unknown SSH host key for " + settings.endpoint.address + ":" +
+      std::to_string(settings.endpoint.port) + "\nKey type: " + key_type +
       "\nFingerprint: " + fingerprint;
   if (status == SSH_KNOWN_HOSTS_NOT_FOUND) {
     message += "\nThe known_hosts file does not exist and will be created.";
@@ -308,11 +308,12 @@ authenticate_private_key_async(ssh_session session,
                                const SshConnectionSettings &settings,
                                const TerminalSessionCallbacks &callbacks,
                                cardio::cancellation cancellation) {
-  if (settings.identity_file.empty()) {
+  if (settings.endpoint.identity_file.empty()) {
     co_return SSH_AUTH_DENIED;
   }
 
-  const std::string path = expanded_identity_path(settings.identity_file);
+  const std::string path =
+      expanded_identity_path(settings.endpoint.identity_file);
   std::error_code filesystem_error;
   if (!std::filesystem::is_regular_file(path, filesystem_error)) {
     co_return SSH_AUTH_DENIED;
@@ -332,7 +333,7 @@ authenticate_private_key_async(ssh_session session,
                 .kind = SshUserPromptKind::private_key_passphrase,
                 .title = "SSH Key Passphrase",
                 .message =
-                    "Passphrase for " + settings.identity_file +
+                    "Passphrase for " + settings.endpoint.identity_file +
                     " (attempt " + std::to_string(attempt) + " of " +
                     std::to_string(maximum_passphrase_attempts) + "):",
                 .input_required = true,
@@ -367,7 +368,7 @@ authenticate_password_async(ssh_session session,
   constexpr unsigned int maximum_attempts = 3;
   const std::string username = effective_username(session);
   for (unsigned int attempt = 1; attempt <= maximum_attempts; ++attempt) {
-    std::string target = settings.address;
+    std::string target = settings.endpoint.address;
     if (!username.empty()) {
       target = username + "@" + target;
     }
@@ -511,7 +512,7 @@ authenticate_session_async(ssh_session session,
   }
 
   if ((methods & SSH_AUTH_METHOD_PUBLICKEY) != 0 &&
-      !settings.identity_file.empty()) {
+      !settings.endpoint.identity_file.empty()) {
     result = co_await authenticate_private_key_async(
         session, settings, callbacks, cancellation);
     if (result == SSH_AUTH_SUCCESS) {
@@ -692,7 +693,8 @@ SshChannelConnection::connect_async(
     cardio::cancellation cancellation) {
   cardio::io_uring io(64);
   int socket_fd = co_await connect_tcp_socket_async(
-      io, settings.address, static_cast<std::uint16_t>(settings.port),
+      io, settings.endpoint.address,
+      static_cast<std::uint16_t>(settings.endpoint.port),
       cancellation);
 
   auto connection_impl = std::make_unique<Impl>();
@@ -704,19 +706,20 @@ SshChannelConnection::connect_async(
   ssh_session session = connection_impl->session;
   try {
     if (ssh_options_set(session, SSH_OPTIONS_HOST,
-                        settings.address.c_str()) != SSH_OK) {
+                        settings.endpoint.address.c_str()) != SSH_OK) {
       throw ssh_failure(session, "Failed to set SSH host");
     }
     if (ssh_options_parse_config(session, nullptr) != SSH_OK) {
       throw ssh_failure(session, "Failed to parse SSH configuration");
     }
-    const unsigned int port = static_cast<unsigned int>(settings.port);
+    const unsigned int port =
+        static_cast<unsigned int>(settings.endpoint.port);
     if (ssh_options_set(session, SSH_OPTIONS_HOST,
-                        settings.address.c_str()) != SSH_OK ||
+                        settings.endpoint.address.c_str()) != SSH_OK ||
         ssh_options_set(session, SSH_OPTIONS_PORT, &port) != SSH_OK ||
-        (!settings.username.empty() &&
+        (!settings.endpoint.username.empty() &&
          ssh_options_set(session, SSH_OPTIONS_USER,
-                         settings.username.c_str()) != SSH_OK)) {
+                         settings.endpoint.username.c_str()) != SSH_OK)) {
       throw ssh_failure(session, "Failed to configure SSH endpoint");
     }
     if (!options.known_hosts_file.empty() &&

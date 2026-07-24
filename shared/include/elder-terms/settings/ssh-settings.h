@@ -11,9 +11,9 @@
 namespace elder_terms {
 
 /**
- * Settings for the SSH connection backend.
+ * SSH server endpoint and login settings shared by SSH-based protocols.
  */
-struct SshConnectionSettings {
+struct SshEndpointSettings {
   /** SSH server address or hostname. */
   std::string address;
   /** SSH server TCP port. */
@@ -22,6 +22,14 @@ struct SshConnectionSettings {
   std::string username;
   /** Preferred private-key identity, or empty for automatic discovery. */
   std::string identity_file;
+};
+
+/**
+ * Settings for the SSH terminal connection backend.
+ */
+struct SshConnectionSettings {
+  /** SSH server endpoint and login settings. */
+  SshEndpointSettings endpoint;
   /** Terminal type sent with the remote PTY request. */
   std::string terminal_type;
 };
@@ -68,6 +76,15 @@ ELDER_TERMS_API SettingKey ssh_identity_file_setting_key();
  * @returns Setting key for the SSH remote PTY terminal type.
  */
 ELDER_TERMS_API SettingKey ssh_terminal_type_setting_key();
+
+/**
+ * Extracts the shared SSH endpoint settings from a store.
+ *
+ * @param store Source settings store.
+ * @returns Typed SSH endpoint settings.
+ */
+ELDER_TERMS_API SshEndpointSettings
+ssh_endpoint_settings(const SettingsStore &store);
 
 /**
  * Extracts SSH connection settings from a store.

@@ -37,6 +37,8 @@ struct FixtureOptions {
   std::string ssh_username;
   std::string ssh_identity_file;
   std::string ssh_terminal_type = "xterm-256color";
+  std::string sftp_local_directory;
+  std::string sftp_remote_directory = ".";
   std::string serial_device = "/dev/ttyUSB0";
   gint64 serial_baudrate = 115200;
   gint64 serial_bits = 8;
@@ -122,6 +124,12 @@ static FixtureOptions parse_options(int argc, char **argv) {
     } else if (starts_with(argument, "--ssh-terminal-type=")) {
       options.ssh_terminal_type =
           option_value(argument, "--ssh-terminal-type=");
+    } else if (starts_with(argument, "--sftp-local-directory=")) {
+      options.sftp_local_directory =
+          option_value(argument, "--sftp-local-directory=");
+    } else if (starts_with(argument, "--sftp-remote-directory=")) {
+      options.sftp_remote_directory =
+          option_value(argument, "--sftp-remote-directory=");
     } else if (starts_with(argument, "--serial-device=")) {
       options.serial_device = option_value(argument, "--serial-device=");
     } else if (starts_with(argument, "--serial-baudrate=")) {
@@ -251,6 +259,12 @@ static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
       &store, elder_terms::ssh_terminal_type_setting_key(),
       elder_terms::SettingValue{options.ssh_terminal_type});
   elder_terms::set_setting_value(
+      &store, elder_terms::sftp_local_directory_setting_key(),
+      elder_terms::SettingValue{options.sftp_local_directory});
+  elder_terms::set_setting_value(
+      &store, elder_terms::sftp_remote_directory_setting_key(),
+      elder_terms::SettingValue{options.sftp_remote_directory});
+  elder_terms::set_setting_value(
       &store, elder_terms::serial_device_setting_key(),
       elder_terms::SettingValue{options.serial_device});
   elder_terms::set_setting_value(
@@ -334,32 +348,37 @@ static void select_initial_page(GtkWidget *window,
   }
 
   if (page == "terminal") {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 4);
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 5);
   } else if (page == "telnet") {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 1);
   } else if (page == "serial") {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 2);
   } else if (page == "ssh") {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 3);
+  } else if (page == "sftp") {
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 4);
   } else if (page == "transfer") {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 5);
-  } else if (page == "logging") {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 6);
+  } else if (page == "logging") {
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 7);
   } else {
     gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 0);
   }
 }
 
-static std::string connection_type_name(
-    const elder_terms::TerminalConnectionProfile &profile) {
-  if (profile.kind == elder_terms::TerminalConnectionKind::telnet) {
+static std::string
+connection_type_name(elder_terms::ConnectionKind kind) {
+  if (kind == elder_terms::ConnectionKind::telnet) {
     return "telnet";
   }
-  if (profile.kind == elder_terms::TerminalConnectionKind::ssh) {
+  if (kind == elder_terms::ConnectionKind::ssh) {
     return "ssh";
   }
-  if (profile.kind == elder_terms::TerminalConnectionKind::serial) {
+  if (kind == elder_terms::ConnectionKind::serial) {
     return "serial";
+  }
+  if (kind == elder_terms::ConnectionKind::sftp) {
+    return "sftp";
   }
   return "local";
 }
@@ -385,27 +404,37 @@ static void print_store(const char *prefix,
                         const elder_terms::SettingsStore &store) {
   const elder_terms::TerminalDisplaySettings display =
       elder_terms::terminal_display_settings(store);
-  const elder_terms::TerminalConnectionProfile profile =
+  const std::optional<elder_terms::TerminalConnectionProfile> profile =
       elder_terms::terminal_connection_profile(store);
+  const elder_terms::TerminalTextSettings text_settings =
+      profile.has_value()
+          ? profile->text_settings
+          : elder_terms::default_terminal_text_settings(
+                elder_terms::TerminalConnectionKind::local_shell);
   const elder_terms::TelnetConnectionSettings telnet =
       elder_terms::telnet_connection_settings(store);
   const elder_terms::SshConnectionSettings ssh =
       elder_terms::ssh_connection_settings(store);
+  const elder_terms::SftpConnectionSettings sftp =
+      elder_terms::sftp_connection_settings(store);
   const elder_terms::SerialConnectionSettings serial =
       elder_terms::serial_connection_settings(store);
   const elder_terms::TerminalLogSettings log =
       elder_terms::terminal_log_settings(store);
-  std::cout << prefix << " type=" << connection_type_name(profile)
+  std::cout << prefix
+            << " type="
+            << connection_type_name(
+                   elder_terms::general_connection_kind(store))
             << " name=" << elder_terms::general_connection_name(store)
             << " width=" << display.width << " height=" << display.height
             << " zoom=" << display.zoom
-            << " encoding=" << profile.text_settings.encoding
+            << " encoding=" << text_settings.encoding
             << " backspace_code="
             << elder_terms::terminal_backspace_code_to_string(
-                   profile.text_settings.backspace_code)
+                   text_settings.backspace_code)
             << " cursor_key_mode="
             << elder_terms::terminal_cursor_key_mode_to_string(
-                   profile.text_settings.cursor_key_mode)
+                   text_settings.cursor_key_mode)
             << " auto_close="
             << (elder_terms::terminal_auto_close(store) ? "true" : "false")
             << " zoom_in_key="
@@ -415,11 +444,13 @@ static void print_store(const char *prefix,
             << " telnet_address=" << telnet.address
             << " telnet_port=" << telnet.port
             << " telnet_terminal_type=" << telnet.terminal_type
-            << " ssh_address=" << ssh.address
-            << " ssh_port=" << ssh.port
-            << " ssh_username=" << ssh.username
-            << " ssh_identity_file=" << ssh.identity_file
+            << " ssh_address=" << ssh.endpoint.address
+            << " ssh_port=" << ssh.endpoint.port
+            << " ssh_username=" << ssh.endpoint.username
+            << " ssh_identity_file=" << ssh.endpoint.identity_file
             << " ssh_terminal_type=" << ssh.terminal_type
+            << " sftp_local_directory=" << sftp.local_directory
+            << " sftp_remote_directory=" << sftp.remote_directory
             << " serial_device=" << serial.device
             << " serial_baudrate=" << serial.baudrate
             << " serial_bits=" << serial.bits

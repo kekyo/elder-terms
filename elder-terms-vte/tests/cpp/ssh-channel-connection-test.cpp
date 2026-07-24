@@ -632,10 +632,13 @@ static void run_client_case(const ServerOptions &server_options,
           },
       };
       elder_terms::SshConnectionSettings settings{
-          .address = "127.0.0.1",
-          .port = server.port,
-          .username = server_options.username,
-          .identity_file = client_case.identity_file.string(),
+          .endpoint =
+              {
+                  .address = "127.0.0.1",
+                  .port = server.port,
+                  .username = server_options.username,
+                  .identity_file = client_case.identity_file.string(),
+              },
           .terminal_type = server_options.terminal_type,
       };
       auto connect_promise =

@@ -52,6 +52,8 @@ interface AppliedStore {
   readonly ssh_port: string;
   readonly ssh_terminal_type: string;
   readonly ssh_username: string;
+  readonly sftp_local_directory: string;
+  readonly sftp_remote_directory: string;
   readonly telnet_address: string;
   readonly telnet_port: string;
   readonly telnet_terminal_type: string;
@@ -111,6 +113,15 @@ const showSshPage = async (app: GtkApp): Promise<void> => {
   await waitForResult(async () => {
     const address = await app.getById('settings_ssh_address_entry');
     expect((await address.info()).states).toContain('showing');
+  });
+};
+
+const showSftpPage = async (app: GtkApp): Promise<void> => {
+  await waitForResult(async () => {
+    const localDirectory = await app.getById(
+      'settings_sftp_local_directory_entry'
+    );
+    expect((await localDirectory.info()).states).toContain('showing');
   });
 };
 
@@ -346,6 +357,10 @@ describe.concurrent('shared settings widget', () => {
       {
         args: ['--type=ssh'] as const,
         expected: ['General', 'SSH', 'Terminal', 'Transfer', 'Logging'],
+      },
+      {
+        args: ['--type=sftp'] as const,
+        expected: ['General', 'SSH', 'SFTP'],
       },
     ] as const;
 
@@ -964,6 +979,53 @@ describe.concurrent('shared settings widget', () => {
         expect(store.ssh_identity_file).toBe('~/.ssh/id_test');
         expect(store.ssh_terminal_type).toBe('xterm-256color');
         expect(store.backspace_code).toBe('del');
+      }
+    );
+  });
+
+  it('shows shared SSH endpoint and applies SFTP directory edits', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=sftp',
+        '--type=sftp',
+        '--sftp-local-directory=/home/alice/uploads',
+        '--sftp-remote-directory=/srv/incoming',
+      ],
+      async ({ app }) => {
+        await showSftpPage(app);
+        const localDirectory = expectElementKind(
+          await app.getById('settings_sftp_local_directory_entry'),
+          'entry'
+        );
+        const remoteDirectory = expectElementKind(
+          await app.getById('settings_sftp_remote_directory_entry'),
+          'entry'
+        );
+        expect(await localDirectory.text()).toBe('/home/alice/uploads');
+        expect(await remoteDirectory.text()).toBe('/srv/incoming');
+        await expectSensitive(localDirectory);
+        await expectSensitive(remoteDirectory);
+
+        await selectSettingsTab(app, 'SSH');
+        await showSshPage(app);
+        expect(
+          (await (await app.getById('settings_ssh_terminal_type_entry')).info())
+            .states
+        ).not.toContain('showing');
+
+        await selectSettingsTab(app, 'SFTP');
+        await localDirectory.setText('/home/alice/outgoing');
+        await remoteDirectory.setText('/opt/drop');
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+
+        const store = await waitForAppliedStore(app);
+        expect(store.type).toBe('sftp');
+        expect(store.sftp_local_directory).toBe('/home/alice/outgoing');
+        expect(store.sftp_remote_directory).toBe('/opt/drop');
       }
     );
   });

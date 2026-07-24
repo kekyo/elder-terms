@@ -106,6 +106,15 @@ static void expect_true(bool condition, const std::string &message) {
   }
 }
 
+static TerminalConnectionProfile
+required_terminal_connection_profile(const SettingsStore &store) {
+  const std::optional<TerminalConnectionProfile> profile =
+      terminal_connection_profile(store);
+  expect_true(profile.has_value(),
+              "terminal settings should produce a terminal profile");
+  return profile.value();
+}
+
 static std::filesystem::path temporary_config_path(const std::string &name) {
   const auto timestamp =
       std::chrono::steady_clock::now().time_since_epoch().count();
@@ -180,17 +189,27 @@ static void test_default_settings() {
   expect_true(telnet.terminal_type == "xterm-256color",
               "default TELNET terminal type should match gtk-oldtype");
   const SshConnectionSettings ssh = ssh_connection_settings(store);
-  expect_true(ssh.address.empty(),
+  expect_true(ssh.endpoint.address.empty(),
               "default SSH address should be empty");
-  expect_true(ssh.port == 22, "default SSH port should be 22");
-  expect_true(ssh.username.empty(),
+  expect_true(ssh.endpoint.port == 22, "default SSH port should be 22");
+  expect_true(ssh.endpoint.username.empty(),
               "default SSH username should defer to the local user");
-  expect_true(ssh.identity_file.empty(),
+  expect_true(ssh.endpoint.identity_file.empty(),
               "default SSH identity should use automatic discovery");
   expect_true(ssh.terminal_type == "xterm-256color",
               "default SSH terminal type should be xterm-256color");
+  const elder_terms::SftpConnectionSettings sftp =
+      elder_terms::sftp_connection_settings(store);
+  expect_true(sftp.local_directory.empty(),
+              "default SFTP local directory should use a runtime fallback");
+  expect_true(sftp.remote_directory == ".",
+              "default SFTP remote directory should use the login directory");
+  expect_true(elder_terms::general_connection_kind(store) ==
+                  elder_terms::ConnectionKind::local_shell,
+              "default general connection kind should be local shell");
 
-  const TerminalConnectionProfile profile = terminal_connection_profile(store);
+  const TerminalConnectionProfile profile =
+      required_terminal_connection_profile(store);
   expect_true(profile.name == "elder-terms",
               "default connection profile should retain its effective name");
   expect_true(profile.kind == TerminalConnectionKind::local_shell,
@@ -436,7 +455,8 @@ static void test_terminal_text_explicit_settings_override_connection_defaults() 
       &store, terminal_cursor_key_mode_setting_key(),
       elder_terms::SettingValue{std::string("normal")});
 
-  TerminalConnectionProfile profile = terminal_connection_profile(store);
+  TerminalConnectionProfile profile =
+      required_terminal_connection_profile(store);
   expect_true(profile.text_settings.encoding == "CP932",
               "explicit terminal encoding should override serial default");
   expect_true(profile.text_settings.backspace_code ==
@@ -451,7 +471,7 @@ static void test_terminal_text_explicit_settings_override_connection_defaults() 
                                terminal_backspace_code_setting_key());
   clear_explicit_setting_value(&store,
                                terminal_cursor_key_mode_setting_key());
-  profile = terminal_connection_profile(store);
+  profile = required_terminal_connection_profile(store);
   expect_true(profile.text_settings.encoding == "UTF-8" &&
                   profile.text_settings.backspace_code ==
                       TerminalBackspaceCode::bs &&
@@ -503,7 +523,7 @@ static void test_invalid_terminal_text_values_fall_back_to_type_defaults() {
   remove_config(path);
 
   const TerminalTextSettings text =
-      terminal_connection_profile(result.store).text_settings;
+      required_terminal_connection_profile(result.store).text_settings;
   expect_true(text.encoding == "UTF-8" &&
                   text.backspace_code == TerminalBackspaceCode::bs &&
                   text.cursor_key_mode == TerminalCursorKeyMode::adm3,
@@ -775,7 +795,7 @@ static void test_telnet_profile() {
   remove_config(path);
 
   const TerminalConnectionProfile profile =
-      terminal_connection_profile(result.store);
+      required_terminal_connection_profile(result.store);
   expect_true(profile.kind == TerminalConnectionKind::telnet,
               "configured connection should be TELNET");
   const auto *settings =
@@ -815,26 +835,96 @@ static void test_ssh_profile() {
   remove_config(path);
 
   const TerminalConnectionProfile profile =
-      terminal_connection_profile(result.store);
+      required_terminal_connection_profile(result.store);
   expect_true(profile.kind == TerminalConnectionKind::ssh,
               "configured connection should be SSH");
   const auto *settings =
       std::get_if<SshConnectionSettings>(&profile.settings);
   expect_true(settings != nullptr,
               "configured connection settings should be SSH settings");
-  expect_true(settings->address == "ssh.example.test",
+  expect_true(settings->endpoint.address == "ssh.example.test",
               "SSH address should come from the configuration file");
-  expect_true(settings->port == 2222,
+  expect_true(settings->endpoint.port == 2222,
               "SSH port should come from the configuration file");
-  expect_true(settings->username == "alice",
+  expect_true(settings->endpoint.username == "alice",
               "SSH username should come from the configuration file");
-  expect_true(settings->identity_file == "~/.ssh/id_test",
+  expect_true(settings->endpoint.identity_file == "~/.ssh/id_test",
               "SSH identity should come from the configuration file");
   expect_true(settings->terminal_type == "vt220",
               "SSH terminal type should come from the configuration file");
   expect_true(profile.text_settings.backspace_code ==
                   TerminalBackspaceCode::bs,
               "an explicit Backspace setting should override SSH DEL");
+}
+
+static void test_sftp_profile_uses_ssh_endpoint_without_terminal_profile() {
+  const std::filesystem::path path = temporary_config_path("sftp-profile");
+  write_config(path,
+               "[general]\n"
+               "type=sftp\n"
+               "\n"
+               "[ssh]\n"
+               "address=sftp.example.test\n"
+               "port=2222\n"
+               "username=alice\n"
+               "identity_file=~/.ssh/id_sftp_test\n"
+               "\n"
+               "[sftp]\n"
+               "local_directory=/home/alice/uploads\n"
+               "remote_directory=/srv/incoming\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  expect_true(elder_terms::general_connection_kind(result.store) ==
+                  elder_terms::ConnectionKind::sftp,
+              "configured connection should be SFTP");
+  expect_true(
+      elder_terms::general_settings_select_sftp_connection(result.store),
+      "SFTP selector should recognize the configured connection");
+  expect_true(!terminal_connection_profile(result.store).has_value(),
+              "SFTP should not produce a VTE terminal connection profile");
+
+  const elder_terms::SftpConnectionSettings settings =
+      elder_terms::sftp_connection_settings(result.store);
+  expect_true(settings.endpoint.address == "sftp.example.test",
+              "SFTP should reuse the configured SSH address");
+  expect_true(settings.endpoint.port == 2222,
+              "SFTP should reuse the configured SSH port");
+  expect_true(settings.endpoint.username == "alice",
+              "SFTP should reuse the configured SSH username");
+  expect_true(settings.endpoint.identity_file == "~/.ssh/id_sftp_test",
+              "SFTP should reuse the configured SSH identity");
+  expect_true(settings.local_directory == "/home/alice/uploads",
+              "SFTP local directory should come from the SFTP section");
+  expect_true(settings.remote_directory == "/srv/incoming",
+              "SFTP remote directory should come from the SFTP section");
+}
+
+static void test_sftp_missing_ssh_address_warns() {
+  const std::filesystem::path path =
+      temporary_config_path("sftp-missing-address");
+  write_config(path,
+               "[general]\n"
+               "type=sftp\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  expect_true(warnings_contain(
+                  result.warnings,
+                  "missing required configuration value [ssh] address"),
+              "SFTP without an SSH address should emit a warning");
 }
 
 static void test_invalid_ssh_values_fall_back_and_warn() {
@@ -858,14 +948,14 @@ static void test_invalid_ssh_values_fall_back_and_warn() {
   remove_config(path);
 
   const TerminalConnectionProfile profile =
-      terminal_connection_profile(result.store);
+      required_terminal_connection_profile(result.store);
   const auto *settings =
       std::get_if<SshConnectionSettings>(&profile.settings);
   expect_true(settings != nullptr,
               "invalid SSH values should retain the SSH profile");
-  expect_true(settings->address.empty(),
+  expect_true(settings->endpoint.address.empty(),
               "blank SSH address should normalize to empty");
-  expect_true(settings->port == 22,
+  expect_true(settings->endpoint.port == 22,
               "invalid SSH port should fall back to 22");
   expect_true(settings->terminal_type == "xterm-256color",
               "blank SSH terminal type should use the default");
@@ -909,7 +999,7 @@ static void test_serial_profile() {
   remove_config(path);
 
   const TerminalConnectionProfile profile =
-      terminal_connection_profile(result.store);
+      required_terminal_connection_profile(result.store);
   expect_true(profile.kind == TerminalConnectionKind::serial,
               "configured connection should be serial");
   const auto *settings =
@@ -969,7 +1059,7 @@ static void test_invalid_values_fall_back_to_defaults() {
               "invalid terminal auto-close should fall back to default");
 
   const TerminalConnectionProfile profile =
-      terminal_connection_profile(result.store);
+      required_terminal_connection_profile(result.store);
   const auto *settings =
       std::get_if<TelnetConnectionSettings>(&profile.settings);
   expect_true(settings != nullptr,
@@ -1026,7 +1116,7 @@ static void test_invalid_serial_values_fall_back_to_defaults() {
   remove_config(path);
 
   const TerminalConnectionProfile profile =
-      terminal_connection_profile(result.store);
+      required_terminal_connection_profile(result.store);
   const auto *settings =
       std::get_if<SerialConnectionSettings>(&profile.settings);
   expect_true(settings != nullptr,
@@ -1132,6 +1222,16 @@ static void test_public_setting_keys() {
   expect_true(ssh_terminal_type_setting_key().section == "ssh" &&
                   ssh_terminal_type_setting_key().name == "terminal_type",
               "SSH terminal type key should use [ssh] terminal_type");
+  expect_true(
+      elder_terms::sftp_local_directory_setting_key().section == "sftp" &&
+          elder_terms::sftp_local_directory_setting_key().name ==
+              "local_directory",
+      "SFTP local directory key should use [sftp] local_directory");
+  expect_true(
+      elder_terms::sftp_remote_directory_setting_key().section == "sftp" &&
+          elder_terms::sftp_remote_directory_setting_key().name ==
+              "remote_directory",
+      "SFTP remote directory key should use [sftp] remote_directory");
   expect_true(serial_device_setting_key().section == "serial",
               "serial device key should use the serial section");
   expect_true(serial_device_setting_key().name == "device",
@@ -1366,7 +1466,7 @@ static void test_save_explicit_terminal_text_defaults() {
   set_setting_value(&changed_type, general_type_setting_key(),
                     elder_terms::SettingValue{std::string("serial")});
   const TerminalTextSettings text =
-      terminal_connection_profile(changed_type).text_settings;
+      required_terminal_connection_profile(changed_type).text_settings;
   expect_true(text.encoding == "UTF-8" &&
                   text.backspace_code == TerminalBackspaceCode::del &&
                   text.cursor_key_mode == TerminalCursorKeyMode::normal,
@@ -1462,6 +1562,38 @@ static void test_save_ssh_settings_omits_default_values() {
               "saved settings should omit the default SSH port");
 }
 
+static void test_save_sftp_settings_omits_default_values() {
+  const std::filesystem::path path =
+      temporary_config_path("save-sftp-values");
+  SettingsStore store =
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
+  set_setting_value(&store, general_type_setting_key(),
+                    elder_terms::SettingValue{std::string("sftp")});
+  set_setting_value(
+      &store, elder_terms::sftp_local_directory_setting_key(),
+      elder_terms::SettingValue{std::string("/home/alice/uploads")});
+  set_setting_value(
+      &store, elder_terms::sftp_remote_directory_setting_key(),
+      elder_terms::SettingValue{std::string("/srv/incoming")});
+
+  const SettingsSaveResult result = save_settings(store, path);
+  expect_true(result.saved, "SFTP settings save should succeed");
+  const std::string content = read_config(path);
+  remove_config(path);
+
+  expect_true(content.find("type=sftp") != std::string::npos,
+              "saved settings should include the SFTP type");
+  expect_true(content.find("[sftp]") != std::string::npos,
+              "saved settings should include the SFTP section");
+  expect_true(content.find("local_directory=/home/alice/uploads") !=
+                  std::string::npos,
+              "saved settings should include the SFTP local directory");
+  expect_true(content.find("remote_directory=/srv/incoming") !=
+                  std::string::npos,
+              "saved settings should include the SFTP remote directory");
+}
+
 static void test_save_settings_writes_empty_file_for_defaults() {
   const std::filesystem::path path = temporary_config_path("save-defaults");
   const SettingsStore store =
@@ -1519,6 +1651,9 @@ int main() {
     elder_terms_settings_test::test_terminal_key_binding_configuration();
     elder_terms_settings_test::test_telnet_profile();
     elder_terms_settings_test::test_ssh_profile();
+    elder_terms_settings_test::
+        test_sftp_profile_uses_ssh_endpoint_without_terminal_profile();
+    elder_terms_settings_test::test_sftp_missing_ssh_address_warns();
     elder_terms_settings_test::test_serial_profile();
     elder_terms_settings_test::test_transfer_base_path_setting();
     elder_terms_settings_test::test_transfer_text_send_bytes_per_second_setting();
@@ -1532,6 +1667,7 @@ int main() {
     elder_terms_settings_test::test_save_settings_omits_default_values();
     elder_terms_settings_test::test_save_serial_settings_omits_default_values();
     elder_terms_settings_test::test_save_ssh_settings_omits_default_values();
+    elder_terms_settings_test::test_save_sftp_settings_omits_default_values();
     elder_terms_settings_test::test_save_explicit_zmodem_autostart();
     elder_terms_settings_test::test_save_explicit_terminal_text_defaults();
     elder_terms_settings_test::test_save_terminal_log_settings();

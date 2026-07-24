@@ -17,6 +17,7 @@ static constexpr char local_connection_type[] = "local";
 static constexpr char telnet_connection_type[] = "telnet";
 static constexpr char serial_connection_type[] = "serial";
 static constexpr char ssh_connection_type[] = "ssh";
+static constexpr char sftp_connection_type[] = "sftp";
 static constexpr char zmodem_autostart_default[] = "default";
 static constexpr char zmodem_autostart_enabled[] = "enabled";
 static constexpr char zmodem_autostart_disabled[] = "disabled";
@@ -29,7 +30,7 @@ static constexpr char terminal_log_raw[] = "raw";
 static constexpr char terminal_log_cooked[] = "cooked";
 
 struct ConnectionSettingsPage {
-  const char *connection_type = nullptr;
+  std::vector<const char *> connection_types;
   GtkWidget *page = nullptr;
   GtkWidget *tab_label = nullptr;
 };
@@ -63,7 +64,10 @@ struct SettingsWidgetState {
   GtkWidget *ssh_port_spin = nullptr;
   GtkWidget *ssh_username_entry = nullptr;
   GtkWidget *ssh_identity_file_entry = nullptr;
+  GtkWidget *ssh_terminal_type_label = nullptr;
   GtkWidget *ssh_terminal_type_entry = nullptr;
+  GtkWidget *sftp_local_directory_entry = nullptr;
+  GtkWidget *sftp_remote_directory_entry = nullptr;
   GtkWidget *serial_device_entry = nullptr;
   GtkWidget *serial_baudrate_spin = nullptr;
   GtkWidget *serial_bits_combo = nullptr;
@@ -121,13 +125,14 @@ static GtkWidget *create_row_label(const char *text) {
   return label;
 }
 
-static void attach_row(GtkWidget *grid, int row, const char *label_text,
-                       GtkWidget *control) {
+static GtkWidget *attach_row(GtkWidget *grid, int row,
+                             const char *label_text, GtkWidget *control) {
   GtkWidget *label = create_row_label(label_text);
   gtk_grid_attach(GTK_GRID(grid), label, 0, row, 1, 1);
   gtk_widget_set_hexpand(control, true);
   gtk_widget_set_halign(control, GTK_ALIGN_FILL);
   gtk_grid_attach(GTK_GRID(grid), control, 1, row, 1, 1);
+  return label;
 }
 
 static GtkWidget *create_spin_button(double minimum, double maximum,
@@ -182,6 +187,9 @@ connection_kind_value(const SettingsStore &store) {
     return TerminalConnectionKind::telnet;
   }
   if (type == ssh_connection_type) {
+    return TerminalConnectionKind::ssh;
+  }
+  if (type == sftp_connection_type) {
     return TerminalConnectionKind::ssh;
   }
   if (type == serial_connection_type) {
@@ -358,9 +366,23 @@ static void sync_terminal_text_widgets(SettingsWidgetState *state) {
 static void update_connection_pages(SettingsWidgetState *state) {
   const std::string active_type = connection_type_value(state->draft_store);
   for (const ConnectionSettingsPage &page : state->connection_pages) {
-    const bool visible = active_type == page.connection_type;
+    const bool visible =
+        std::any_of(page.connection_types.begin(),
+                    page.connection_types.end(),
+                    [&active_type](const char *connection_type) {
+                      return active_type == connection_type;
+                    });
     gtk_widget_set_visible(page.page, visible);
     gtk_widget_set_visible(page.tab_label, visible);
+  }
+  const bool terminal_type_visible = active_type == ssh_connection_type;
+  if (state->ssh_terminal_type_label != nullptr) {
+    gtk_widget_set_visible(state->ssh_terminal_type_label,
+                           terminal_type_visible);
+  }
+  if (state->ssh_terminal_type_entry != nullptr) {
+    gtk_widget_set_visible(state->ssh_terminal_type_entry,
+                           terminal_type_visible);
   }
 
   const gint current_page = gtk_notebook_get_current_page(GTK_NOTEBOOK(
@@ -706,6 +728,24 @@ static void update_ssh_terminal_type_from_widget(
                              SettingValue{terminal_type});
 }
 
+static void update_sftp_local_directory_from_widget(
+    SettingsWidgetState *state) {
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->sftp_local_directory_entry));
+  set_setting_value(
+      &state->draft_store, sftp_local_directory_setting_key(),
+      SettingValue{std::string(text == nullptr ? "" : text)});
+}
+
+static void update_sftp_remote_directory_from_widget(
+    SettingsWidgetState *state) {
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->sftp_remote_directory_entry));
+  set_setting_value(
+      &state->draft_store, sftp_remote_directory_setting_key(),
+      SettingValue{std::string(text == nullptr ? "" : text)});
+}
+
 static void update_serial_device_from_widget(SettingsWidgetState *state) {
   const char *text = gtk_entry_get_text(GTK_ENTRY(state->serial_device_entry));
   set_setting_value(&state->draft_store, serial_device_setting_key(),
@@ -841,6 +881,8 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
       telnet_connection_settings(state->draft_store);
   const SshConnectionSettings ssh =
       ssh_connection_settings(state->draft_store);
+  const SftpConnectionSettings sftp =
+      sftp_connection_settings(state->draft_store);
   const SerialConnectionSettings serial =
       serial_connection_settings(state->draft_store);
   const TerminalLogSettings log = terminal_log_settings(state->draft_store);
@@ -895,23 +937,31 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
   }
   if (state->ssh_address_entry != nullptr) {
     gtk_entry_set_text(GTK_ENTRY(state->ssh_address_entry),
-                       ssh.address.c_str());
+                       ssh.endpoint.address.c_str());
   }
   if (state->ssh_port_spin != nullptr) {
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(state->ssh_port_spin),
-                              static_cast<double>(ssh.port));
+                              static_cast<double>(ssh.endpoint.port));
   }
   if (state->ssh_username_entry != nullptr) {
     gtk_entry_set_text(GTK_ENTRY(state->ssh_username_entry),
-                       ssh.username.c_str());
+                       ssh.endpoint.username.c_str());
   }
   if (state->ssh_identity_file_entry != nullptr) {
     gtk_entry_set_text(GTK_ENTRY(state->ssh_identity_file_entry),
-                       ssh.identity_file.c_str());
+                       ssh.endpoint.identity_file.c_str());
   }
   if (state->ssh_terminal_type_entry != nullptr) {
     gtk_entry_set_text(GTK_ENTRY(state->ssh_terminal_type_entry),
                        ssh.terminal_type.c_str());
+  }
+  if (state->sftp_local_directory_entry != nullptr) {
+    gtk_entry_set_text(GTK_ENTRY(state->sftp_local_directory_entry),
+                       sftp.local_directory.c_str());
+  }
+  if (state->sftp_remote_directory_entry != nullptr) {
+    gtk_entry_set_text(GTK_ENTRY(state->sftp_remote_directory_entry),
+                       sftp.remote_directory.c_str());
   }
   if (state->serial_device_entry != nullptr) {
     gtk_entry_set_text(GTK_ENTRY(state->serial_device_entry),
@@ -1006,6 +1056,8 @@ static void sync_draft_from_widgets(SettingsWidgetState *state) {
   update_ssh_username_from_widget(state);
   update_ssh_identity_file_from_widget(state);
   update_ssh_terminal_type_from_widget(state);
+  update_sftp_local_directory_from_widget(state);
+  update_sftp_remote_directory_from_widget(state);
   update_serial_device_from_widget(state);
   update_serial_baudrate_from_widget(state);
   update_serial_bits_from_widget(state);
@@ -1210,6 +1262,18 @@ static gboolean on_ssh_terminal_type_focus_out(GtkWidget *, GdkEventFocus *,
   return FALSE;
 }
 
+static void on_sftp_local_directory_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  update_sftp_local_directory_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_sftp_remote_directory_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  update_sftp_remote_directory_from_widget(state);
+  notify_changed(state);
+}
+
 static void on_serial_device_changed(GtkEditable *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   update_serial_device_from_widget(state);
@@ -1347,6 +1411,7 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
   append_combo_option(state->general_type_combo, serial_connection_type,
                       "Serial");
   append_combo_option(state->general_type_combo, ssh_connection_type, "SSH");
+  append_combo_option(state->general_type_combo, sftp_connection_type, "SFTP");
   gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->general_type_combo),
                               connection_type_value(state->draft_store).c_str());
   gtk_widget_set_sensitive(state->general_type_combo,
@@ -1493,7 +1558,7 @@ static GtkWidget *create_ssh_page(SettingsWidgetState *state) {
   assign_accessible_id(state->ssh_address_entry,
                        "settings_ssh_address_entry");
   gtk_entry_set_text(GTK_ENTRY(state->ssh_address_entry),
-                     settings.address.c_str());
+                     settings.endpoint.address.c_str());
   gtk_widget_set_sensitive(state->ssh_address_entry, sensitive);
   g_signal_connect(state->ssh_address_entry, "changed",
                    G_CALLBACK(on_ssh_address_changed), state);
@@ -1502,7 +1567,7 @@ static GtkWidget *create_ssh_page(SettingsWidgetState *state) {
   state->ssh_port_spin =
       create_spin_button(1.0, 65535.0, 1.0, 0, "settings_ssh_port_spin");
   gtk_spin_button_set_value(GTK_SPIN_BUTTON(state->ssh_port_spin),
-                            static_cast<double>(settings.port));
+                            static_cast<double>(settings.endpoint.port));
   gtk_widget_set_sensitive(state->ssh_port_spin, sensitive);
   g_signal_connect(state->ssh_port_spin, "value-changed",
                    G_CALLBACK(on_ssh_port_changed), state);
@@ -1512,7 +1577,7 @@ static GtkWidget *create_ssh_page(SettingsWidgetState *state) {
   assign_accessible_id(state->ssh_username_entry,
                        "settings_ssh_username_entry");
   gtk_entry_set_text(GTK_ENTRY(state->ssh_username_entry),
-                     settings.username.c_str());
+                     settings.endpoint.username.c_str());
   gtk_widget_set_sensitive(state->ssh_username_entry, sensitive);
   g_signal_connect(state->ssh_username_entry, "changed",
                    G_CALLBACK(on_ssh_username_changed), state);
@@ -1522,7 +1587,7 @@ static GtkWidget *create_ssh_page(SettingsWidgetState *state) {
   assign_accessible_id(state->ssh_identity_file_entry,
                        "settings_ssh_identity_file_entry");
   gtk_entry_set_text(GTK_ENTRY(state->ssh_identity_file_entry),
-                     settings.identity_file.c_str());
+                     settings.endpoint.identity_file.c_str());
   gtk_widget_set_sensitive(state->ssh_identity_file_entry, sensitive);
   g_signal_connect(state->ssh_identity_file_entry, "changed",
                    G_CALLBACK(on_ssh_identity_file_changed), state);
@@ -1538,7 +1603,38 @@ static GtkWidget *create_ssh_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_ssh_terminal_type_changed), state);
   g_signal_connect(state->ssh_terminal_type_entry, "focus-out-event",
                    G_CALLBACK(on_ssh_terminal_type_focus_out), state);
-  attach_row(page, 4, "terminal_type", state->ssh_terminal_type_entry);
+  state->ssh_terminal_type_label =
+      attach_row(page, 4, "terminal_type", state->ssh_terminal_type_entry);
+  gtk_widget_set_no_show_all(state->ssh_terminal_type_label, TRUE);
+  gtk_widget_set_no_show_all(state->ssh_terminal_type_entry, TRUE);
+
+  return page;
+}
+
+static GtkWidget *create_sftp_page(SettingsWidgetState *state) {
+  GtkWidget *page = create_page_grid("settings_sftp_page");
+  const SftpConnectionSettings settings =
+      sftp_connection_settings(state->draft_store);
+
+  state->sftp_local_directory_entry = gtk_entry_new();
+  assign_accessible_id(state->sftp_local_directory_entry,
+                       "settings_sftp_local_directory_entry");
+  gtk_entry_set_text(GTK_ENTRY(state->sftp_local_directory_entry),
+                     settings.local_directory.c_str());
+  g_signal_connect(state->sftp_local_directory_entry, "changed",
+                   G_CALLBACK(on_sftp_local_directory_changed), state);
+  attach_row(page, 0, "local_directory",
+             state->sftp_local_directory_entry);
+
+  state->sftp_remote_directory_entry = gtk_entry_new();
+  assign_accessible_id(state->sftp_remote_directory_entry,
+                       "settings_sftp_remote_directory_entry");
+  gtk_entry_set_text(GTK_ENTRY(state->sftp_remote_directory_entry),
+                     settings.remote_directory.c_str());
+  g_signal_connect(state->sftp_remote_directory_entry, "changed",
+                   G_CALLBACK(on_sftp_remote_directory_changed), state);
+  attach_row(page, 1, "remote_directory",
+             state->sftp_remote_directory_entry);
 
   return page;
 }
@@ -1790,7 +1886,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_widget_set_no_show_all(telnet_page, TRUE);
   gtk_widget_set_no_show_all(telnet_tab, TRUE);
   state->connection_pages.push_back({
-      .connection_type = telnet_connection_type,
+      .connection_types = {telnet_connection_type},
       .page = telnet_page,
       .tab_label = telnet_tab,
   });
@@ -1805,7 +1901,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_widget_set_no_show_all(serial_page, TRUE);
   gtk_widget_set_no_show_all(serial_tab, TRUE);
   state->connection_pages.push_back({
-      .connection_type = serial_connection_type,
+      .connection_types = {serial_connection_type},
       .page = serial_page,
       .tab_label = serial_tab,
   });
@@ -1819,25 +1915,72 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_widget_set_no_show_all(ssh_page, TRUE);
   gtk_widget_set_no_show_all(ssh_tab, TRUE);
   state->connection_pages.push_back({
-      .connection_type = ssh_connection_type,
+      .connection_types = {ssh_connection_type, sftp_connection_type},
       .page = ssh_page,
       .tab_label = ssh_tab,
   });
 
+  GtkWidget *sftp_page = create_sftp_page(state);
+  GtkWidget *sftp_tab =
+      create_tab_button(state, sftp_page, "SFTP", "settings_sftp_tab");
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), sftp_page, sftp_tab);
+  gtk_widget_show_all(sftp_page);
+  gtk_widget_show_all(sftp_tab);
+  gtk_widget_set_no_show_all(sftp_page, TRUE);
+  gtk_widget_set_no_show_all(sftp_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {sftp_connection_type},
+      .page = sftp_page,
+      .tab_label = sftp_tab,
+  });
+
   GtkWidget *terminal_page = create_terminal_page(state);
+  GtkWidget *terminal_tab = create_tab_button(
+      state, terminal_page, "Terminal", "settings_terminal_tab");
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), terminal_page,
-                           create_tab_button(state, terminal_page, "Terminal",
-                                             "settings_terminal_tab"));
+                           terminal_tab);
+  gtk_widget_show_all(terminal_page);
+  gtk_widget_show_all(terminal_tab);
+  gtk_widget_set_no_show_all(terminal_page, TRUE);
+  gtk_widget_set_no_show_all(terminal_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {local_connection_type, telnet_connection_type,
+                           serial_connection_type, ssh_connection_type},
+      .page = terminal_page,
+      .tab_label = terminal_tab,
+  });
 
   GtkWidget *transfer_page = create_transfer_page(state);
+  GtkWidget *transfer_tab = create_tab_button(
+      state, transfer_page, "Transfer", "settings_transfer_tab");
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), transfer_page,
-                           create_tab_button(state, transfer_page, "Transfer",
-                                             "settings_transfer_tab"));
+                           transfer_tab);
+  gtk_widget_show_all(transfer_page);
+  gtk_widget_show_all(transfer_tab);
+  gtk_widget_set_no_show_all(transfer_page, TRUE);
+  gtk_widget_set_no_show_all(transfer_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {local_connection_type, telnet_connection_type,
+                           serial_connection_type, ssh_connection_type},
+      .page = transfer_page,
+      .tab_label = transfer_tab,
+  });
 
   GtkWidget *logging_page = create_logging_page(state);
+  GtkWidget *logging_tab = create_tab_button(
+      state, logging_page, "Logging", "settings_logging_tab");
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), logging_page,
-                           create_tab_button(state, logging_page, "Logging",
-                                             "settings_logging_tab"));
+                           logging_tab);
+  gtk_widget_show_all(logging_page);
+  gtk_widget_show_all(logging_tab);
+  gtk_widget_set_no_show_all(logging_page, TRUE);
+  gtk_widget_set_no_show_all(logging_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {local_connection_type, telnet_connection_type,
+                           serial_connection_type, ssh_connection_type},
+      .page = logging_page,
+      .tab_label = logging_tab,
+  });
 
   if (state->show_actions) {
     gtk_box_pack_start(GTK_BOX(state->root), create_button_box(state), FALSE,

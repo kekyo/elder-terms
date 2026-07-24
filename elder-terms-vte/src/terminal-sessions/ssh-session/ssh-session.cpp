@@ -561,7 +561,7 @@ public:
     if (started) {
       return true;
     }
-    if (settings.address.empty()) {
+    if (settings.endpoint.address.empty()) {
       return false;
     }
     notify_connection_phase(TerminalSessionConnectionPhase::connecting);
@@ -606,13 +606,13 @@ public:
   }
 
   std::string title() const override {
-    if (settings.address.empty()) {
+    if (settings.endpoint.address.empty()) {
       return "ssh: (unknown)";
     }
-    std::string endpoint = settings.address + ":" +
-                           std::to_string(settings.port);
-    if (!settings.username.empty()) {
-      endpoint = settings.username + "@" + endpoint;
+    std::string endpoint = settings.endpoint.address + ":" +
+                           std::to_string(settings.endpoint.port);
+    if (!settings.endpoint.username.empty()) {
+      endpoint = settings.endpoint.username + "@" + endpoint;
     }
     return "ssh: " + endpoint;
   }

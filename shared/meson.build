@@ -13,6 +13,7 @@ elder_terms_shared_sources = [
   'src/settings/serial-settings.cpp',
   'src/settings/settings.cpp',
   'src/settings/settings-store.cpp',
+  'src/settings/sftp-settings.cpp',
   'src/settings/ssh-settings.cpp',
   'src/settings/telnet-settings.cpp',
   'src/settings/terminal-settings.cpp',

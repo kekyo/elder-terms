@@ -135,6 +135,7 @@ SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
   append_definitions(&definitions, local_shell_connection_setting_definitions());
   append_definitions(&definitions, telnet_connection_setting_definitions());
   append_definitions(&definitions, ssh_connection_setting_definitions());
+  append_definitions(&definitions, sftp_connection_setting_definitions());
   append_definitions(&definitions, serial_connection_setting_definitions());
   append_definitions(&definitions, transfer_setting_definitions());
   return create_settings_store(std::move(definitions));
@@ -168,7 +169,8 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_zoom)
   if (general_settings_select_telnet_connection(result.store)) {
     append_telnet_connection_warnings(result.store, &result.warnings);
   }
-  if (general_settings_select_ssh_connection(result.store)) {
+  if (general_settings_select_ssh_connection(result.store) ||
+      general_settings_select_sftp_connection(result.store)) {
     append_ssh_connection_warnings(result.store, &result.warnings);
   }
   if (general_settings_select_serial_connection(result.store)) {
@@ -275,10 +277,14 @@ TerminalTextSettings terminal_text_settings(const SettingsStore &store,
   return settings;
 }
 
-TerminalConnectionProfile
+std::optional<TerminalConnectionProfile>
 terminal_connection_profile(const SettingsStore &store) {
+  if (general_settings_select_sftp_connection(store)) {
+    return std::nullopt;
+  }
+
   if (general_settings_select_telnet_connection(store)) {
-    return {
+    return TerminalConnectionProfile{
         .name = general_connection_name(store),
         .kind = TerminalConnectionKind::telnet,
         .settings = telnet_connection_settings(store),
@@ -288,7 +294,7 @@ terminal_connection_profile(const SettingsStore &store) {
   }
 
   if (general_settings_select_serial_connection(store)) {
-    return {
+    return TerminalConnectionProfile{
         .name = general_connection_name(store),
         .kind = TerminalConnectionKind::serial,
         .settings = serial_connection_settings(store),
@@ -298,7 +304,7 @@ terminal_connection_profile(const SettingsStore &store) {
   }
 
   if (general_settings_select_ssh_connection(store)) {
-    return {
+    return TerminalConnectionProfile{
         .name = general_connection_name(store),
         .kind = TerminalConnectionKind::ssh,
         .settings = ssh_connection_settings(store),
@@ -307,7 +313,7 @@ terminal_connection_profile(const SettingsStore &store) {
     };
   }
 
-  return {
+  return TerminalConnectionProfile{
       .name = general_connection_name(store),
       .kind = TerminalConnectionKind::local_shell,
       .settings = LocalShellConnectionSettings{},

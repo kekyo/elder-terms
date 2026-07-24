@@ -265,10 +265,13 @@ static void apply_runtime_settings(ApplicationState *state,
   state->auto_close = elder_terms::terminal_auto_close(state->settings_store);
   const auto connection_profile =
       elder_terms::terminal_connection_profile(state->settings_store);
+  if (!connection_profile.has_value()) {
+    return;
+  }
   elder_terms::set_main_window_activity_indicator_connection_kind(
-      state->main_window, connection_profile.kind);
+      state->main_window, connection_profile->kind);
   elder_terms::apply_terminal_session_connection_profile(
-      state->session_state, connection_profile);
+      state->session_state, connection_profile.value());
   elder_terms::set_terminal_session_zmodem_autostart(
       state->session_state,
       elder_terms::transfer_zmodem_autostart(state->settings_store));
@@ -577,11 +580,14 @@ static GtkWidget *create_transfer_menu_item(
 
 static bool start_text_send_request(ApplicationState *state,
                                     elder_terms::TerminalTextSendSource source) {
-  const elder_terms::TerminalConnectionProfile profile =
+  const std::optional<elder_terms::TerminalConnectionProfile> profile =
       elder_terms::terminal_connection_profile(state->settings_store);
+  if (!profile.has_value()) {
+    return false;
+  }
   elder_terms::TerminalTextSendRequest request{
       .source = std::move(source),
-      .text_settings = profile.text_settings,
+      .text_settings = profile->text_settings,
       .bytes_per_second = static_cast<std::uint64_t>(
           elder_terms::transfer_text_send_bytes_per_second(
               state->settings_store)),
@@ -806,6 +812,16 @@ int main(int argc, char **argv) {
     std::cerr << warning << '\n';
   }
 
+  const std::optional<elder_terms::TerminalConnectionProfile>
+      connection_profile =
+          elder_terms::terminal_connection_profile(settings_result.store);
+  if (!connection_profile.has_value()) {
+    std::cerr << "Error: configured connection type is not a terminal "
+                 "connection\n";
+    gtk_widget_destroy(main_window->window);
+    return 1;
+  }
+
   ApplicationState app_state{
       .main_window = &*main_window,
       .session_state = nullptr,
@@ -843,10 +859,8 @@ int main(int argc, char **argv) {
     elder_terms::terminal_display_settings(app_state.settings_store);
   const auto terminal_key_bindings =
     elder_terms::terminal_key_bindings(app_state.settings_store);
-  const auto connection_profile =
-    elder_terms::terminal_connection_profile(app_state.settings_store);
   elder_terms::set_main_window_activity_indicator_connection_kind(
-      &*main_window, connection_profile.kind);
+      &*main_window, connection_profile->kind);
 
   vte_terminal_set_font_scale(
     vte_terminal, terminal_display_settings.zoom);
@@ -855,7 +869,7 @@ int main(int argc, char **argv) {
 
   app_state.session_state = elder_terms::create_terminal_session(
     main_window->terminal,
-    connection_profile,
+    connection_profile.value(),
     {
       .ended = [&app_state]() {
         set_application_connection_phase(

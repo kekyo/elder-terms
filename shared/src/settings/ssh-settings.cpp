@@ -95,7 +95,7 @@ std::vector<SettingDefinition> ssh_connection_setting_definitions() {
   };
 }
 
-SshConnectionSettings ssh_connection_settings(const SettingsStore &store) {
+SshEndpointSettings ssh_endpoint_settings(const SettingsStore &store) {
   std::string address = setting_string_value_or_default(
       store, ssh_address_setting_key(), std::string());
   if (string_is_blank(address)) {
@@ -118,6 +118,12 @@ SshConnectionSettings ssh_connection_settings(const SettingsStore &store) {
           store, ssh_port_setting_key(), default_ssh_port),
       .username = std::move(username),
       .identity_file = std::move(identity_file),
+  };
+}
+
+SshConnectionSettings ssh_connection_settings(const SettingsStore &store) {
+  return {
+      .endpoint = ssh_endpoint_settings(store),
       .terminal_type = setting_string_value_or_default(
           store, ssh_terminal_type_setting_key(),
           default_ssh_terminal_type),

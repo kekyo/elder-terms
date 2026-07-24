@@ -12,6 +12,7 @@
 #include <elder-terms/settings/log-settings.h>
 #include <elder-terms/settings/serial-settings.h>
 #include <elder-terms/settings/settings-store.h>
+#include <elder-terms/settings/sftp-settings.h>
 #include <elder-terms/settings/ssh-settings.h>
 #include <elder-terms/settings/telnet-settings.h>
 #include <elder-terms/settings/terminal-settings.h>
@@ -197,9 +198,10 @@ save_settings(const SettingsStore &store,
  * Extracts the terminal connection profile from a store.
  *
  * @param store Source settings store.
- * @returns Terminal connection profile.
+ * @returns Terminal connection profile, or no value for a non-terminal
+ * connection type.
  */
-ELDER_TERMS_API TerminalConnectionProfile
+ELDER_TERMS_API std::optional<TerminalConnectionProfile>
 terminal_connection_profile(const SettingsStore &store);
 
 } // namespace elder_terms
