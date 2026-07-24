@@ -9,18 +9,14 @@
 #include <elder-terms/settings.h>
 
 #include "../../terminal-session-callbacks.h"
+#include "authenticated-ssh-transport.h"
 
 namespace elder_terms {
 
 /**
  * Connection-layer options that do not belong to a saved SSH profile.
  */
-struct SshChannelConnectionOptions {
-  /**
-   * Explicit known_hosts file, or an empty string to use libssh defaults.
-   */
-  std::string known_hosts_file;
-};
+using SshChannelConnectionOptions = AuthenticatedSshTransportOptions;
 
 /**
  * Direct nonblocking libssh connection containing one interactive shell
@@ -61,6 +57,23 @@ public:
       cardio::cancellation cancellation);
 
   /**
+   * Opens an interactive shell on an existing authenticated transport.
+   *
+   * @param transport Shared authenticated SSH transport.
+   * @param terminal_type Terminal type sent with the remote PTY request.
+   * @param columns Initial remote PTY width.
+   * @param rows Initial remote PTY height.
+   * @param callbacks Session callbacks used for connection phase reporting.
+   * @param cancellation Operation cancellation signal.
+   * @returns Connected shell channel.
+   */
+  static cardio::promise<std::unique_ptr<SshChannelConnection>> open_async(
+      std::shared_ptr<AuthenticatedSshTransport> transport,
+      std::string terminal_type, glong columns, glong rows,
+      const TerminalSessionCallbacks &callbacks,
+      cardio::cancellation cancellation);
+
+  /**
    * Reads available stdout or stderr bytes from the remote channel.
    *
    * @param buffer Destination buffer.
@@ -90,6 +103,14 @@ public:
    */
   cardio::promise<void> resize_async(glong columns, glong rows,
                                      cardio::cancellation cancellation);
+
+  /**
+   * Returns the authenticated transport shared by this shell channel.
+   *
+   * @returns Shared authenticated SSH transport.
+   */
+  std::shared_ptr<AuthenticatedSshTransport>
+  authenticated_transport() const;
 
   /**
    * Closes the channel and underlying libssh session.

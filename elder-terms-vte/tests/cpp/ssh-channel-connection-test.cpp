@@ -2,6 +2,7 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <signal.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -69,7 +70,7 @@ struct ServerState {
   bool shell_requested = false;
   bool window_changed = false;
   bool payload_echoed = false;
-  bool done = false;
+  bool release_requested = false;
   std::string username;
   std::string password;
   std::string keyboard_interactive_answer;
@@ -84,6 +85,7 @@ struct ServerState {
 struct ChildServer {
   pid_t pid = -1;
   int port = 0;
+  int release_fd = -1;
 };
 
 struct ClientCase {
@@ -291,13 +293,20 @@ static int on_channel_data(ssh_session, ssh_channel channel, void *data,
   if (state->payload_echoed) {
     (void)ssh_channel_send_eof(channel);
   }
-  state->done = true;
   return static_cast<int>(size);
 }
 
-static void on_channel_close(ssh_session, ssh_channel, void *userdata) {
+static int on_release_requested(socket_t fd, int revents, void *userdata) {
   auto *state = static_cast<ServerState *>(userdata);
-  state->done = true;
+  if ((revents & POLLIN) == 0) {
+    return 0;
+  }
+  unsigned char value = 0;
+  const ssize_t read_size = ::read(fd, &value, sizeof(value));
+  if (read_size == static_cast<ssize_t>(sizeof(value))) {
+    state->release_requested = true;
+  }
+  return 0;
 }
 
 static int on_pty_request(ssh_session, ssh_channel, const char *term,
@@ -333,7 +342,6 @@ static ssh_channel on_channel_open(ssh_session session, void *userdata) {
   }
   state->channel_callbacks.userdata = state;
   state->channel_callbacks.channel_data_function = on_channel_data;
-  state->channel_callbacks.channel_close_function = on_channel_close;
   state->channel_callbacks.channel_pty_request_function = on_pty_request;
   state->channel_callbacks.channel_shell_request_function = on_shell_request;
   state->channel_callbacks.channel_pty_window_change_function =
@@ -404,7 +412,8 @@ static int validate_server_state(const ServerState &state) {
   return 22;
 }
 
-static int run_server_process(const ServerOptions &options, int port_fd) {
+static int run_server_process(const ServerOptions &options, int port_fd,
+                              int release_fd) {
   ::alarm(8);
   ServerState state;
   state.options = options;
@@ -503,13 +512,25 @@ static int run_server_process(const ServerOptions &options, int port_fd) {
     ssh_key_free(state.authorized_key);
     return 17;
   }
-  while (!state.done) {
+  if (ssh_event_add_fd(event, release_fd, POLLIN, on_release_requested,
+                       &state) != SSH_OK) {
+    ssh_event_remove_session(event, session);
+    ssh_event_free(event);
+    ssh_disconnect(session);
+    ssh_free(session);
+    ssh_bind_free(bind);
+    ssh_key_free(state.authorized_key);
+    return 23;
+  }
+  while (!state.release_requested && ssh_is_connected(session) != 0) {
     if (ssh_event_dopoll(event, -1) == SSH_ERROR) {
       break;
     }
   }
 
-  const int validation_result = validate_server_state(state);
+  const int validation_result =
+      state.release_requested ? validate_server_state(state) : 24;
+  ssh_event_remove_fd(event, release_fd);
   ssh_event_remove_session(event, session);
   ssh_event_free(event);
   if (state.channel != nullptr) {
@@ -525,27 +546,40 @@ static int run_server_process(const ServerOptions &options, int port_fd) {
 
 static ChildServer start_server(const ServerOptions &options) {
   int port_pipe[2] = {-1, -1};
+  int release_pipe[2] = {-1, -1};
   if (::pipe(port_pipe) != 0) {
     throw std::runtime_error("failed to create SSH server port pipe");
+  }
+  if (::pipe(release_pipe) != 0) {
+    (void)::close(port_pipe[0]);
+    (void)::close(port_pipe[1]);
+    throw std::runtime_error("failed to create SSH server release pipe");
   }
   const pid_t pid = ::fork();
   if (pid < 0) {
     (void)::close(port_pipe[0]);
     (void)::close(port_pipe[1]);
+    (void)::close(release_pipe[0]);
+    (void)::close(release_pipe[1]);
     throw std::runtime_error("failed to fork SSH test server");
   }
   if (pid == 0) {
     (void)::close(port_pipe[0]);
-    const int result = run_server_process(options, port_pipe[1]);
+    (void)::close(release_pipe[1]);
+    const int result =
+        run_server_process(options, port_pipe[1], release_pipe[0]);
     (void)::close(port_pipe[1]);
+    (void)::close(release_pipe[0]);
     ::_exit(result);
   }
 
   (void)::close(port_pipe[1]);
+  (void)::close(release_pipe[0]);
   int port = 0;
   const bool received = read_all_fd(port_pipe[0], &port, sizeof(port));
   (void)::close(port_pipe[0]);
   if (!received || port <= 0) {
+    (void)::close(release_pipe[1]);
     int status = 0;
     while (::waitpid(pid, &status, 0) < 0 && errno == EINTR) {
     }
@@ -554,10 +588,15 @@ static ChildServer start_server(const ServerOptions &options) {
   return ChildServer{
       .pid = pid,
       .port = port,
+      .release_fd = release_pipe[1],
   };
 }
 
 static int wait_for_server(ChildServer *server) {
+  if (server->release_fd >= 0) {
+    (void)::close(server->release_fd);
+    server->release_fd = -1;
+  }
   int status = 0;
   pid_t result = -1;
   do {
@@ -673,7 +712,26 @@ static void run_client_case(const ServerOptions &server_options,
       }
       expect_true(echoed == server_options.payload,
                   "SSH channel did not return the echoed payload");
+      std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport =
+          connection->authenticated_transport();
+      expect_true(transport != nullptr,
+                  "SSH channel should expose its authenticated transport");
       connection->close();
+      connection.reset();
+      expect_true(
+          co_await transport->is_connected_async(
+              cancellation_source.get_cancellation()),
+          "authenticated transport should outlive its shell channel");
+      expect_true(
+          transport.use_count() == 1,
+          "authenticated transport retained unexpected owners: " +
+              std::to_string(transport.use_count()));
+      const unsigned char release = 1;
+      expect_true(write_all_fd(server.release_fd, &release, sizeof(release)),
+                  "failed to release the SSH test server");
+      (void)::close(server.release_fd);
+      server.release_fd = -1;
+      transport.reset();
     } catch (...) {
       async_error = std::current_exception();
     }
