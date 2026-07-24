@@ -1,9 +1,11 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 
 #include <cardio.h>
+#include <libssh/libssh.h>
 
 #include <elder-terms/settings.h>
 
@@ -12,6 +14,7 @@
 namespace elder_terms {
 
 class SshChannelConnection;
+class LibsshSftpClient;
 
 /**
  * Connection-layer options that do not belong to a saved SSH profile.
@@ -30,6 +33,7 @@ class AuthenticatedSshTransport
     : public std::enable_shared_from_this<AuthenticatedSshTransport> {
 private:
   friend class SshChannelConnection;
+  friend class LibsshSftpClient;
   template <typename Operation>
   friend cardio::promise<void> await_transport_ok_async(
       const std::shared_ptr<AuthenticatedSshTransport> &transport,
@@ -43,6 +47,14 @@ private:
   std::unique_ptr<Impl> impl;
 
   explicit AuthenticatedSshTransport(std::unique_ptr<Impl> impl);
+
+  cardio::promise<void> execute_serialized_async(
+      std::function<void(ssh_session)> operation,
+      cardio::cancellation cancellation);
+  bool enqueue_serialized(
+      std::function<void(ssh_session)> operation) noexcept;
+  bool try_begin_sftp_transfer() noexcept;
+  void end_sftp_transfer() noexcept;
 
 public:
   /**

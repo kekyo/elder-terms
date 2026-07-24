@@ -44,6 +44,8 @@ elder_terms_sources = [
   'src/launch-options.cpp',
   'src/main.cpp',
   'src/main-window.cpp',
+  'src/sftp/sftp-client.cpp',
+  'src/sftp/sftp-transfer-engine.cpp',
   'src/terminal-connection-phase.cpp',
   'src/terminal-log.cpp',
   'src/terminal-text-send.cpp',
@@ -177,6 +179,7 @@ ssh_channel_connection_test = executable(
   'ssh-channel-connection-test',
   [
     'tests/cpp/ssh-channel-connection-test.cpp',
+    'src/sftp/sftp-client.cpp',
     'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
     'src/terminal-sessions/tcp-connector.cpp',
   ],
@@ -196,6 +199,24 @@ ssh_channel_connection_test = executable(
 
 test('ssh-channel-connection-test', ssh_channel_connection_test,
   timeout: 60)
+
+sftp_transfer_engine_test = executable(
+  'sftp-transfer-engine-test',
+  [
+    'tests/cpp/sftp-transfer-engine-test.cpp',
+    'src/sftp/sftp-transfer-engine.cpp',
+  ],
+  cpp_args: [
+    '-I' + cardio_include_dir,
+    '-DCARDIO_WITH_GLIB=1',
+    '-DCARDIO_WITH_GIO=1',
+  ],
+  dependencies: [
+    gio_dep,
+  ],
+)
+
+test('sftp-transfer-engine-test', sftp_transfer_engine_test)
 
 terminal_transfer_runner_test = executable(
   'terminal-transfer-runner-test',

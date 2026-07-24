@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cerrno>
 #include <cstdint>
 #include <cstring>
@@ -593,6 +594,7 @@ struct AuthenticatedSshTransport::Impl {
   std::deque<std::function<void()>> commands;
   std::vector<ssh_channel> channels;
   std::thread worker;
+  std::atomic_bool sftp_transfer_active = false;
   bool stopping = false;
 
   ~Impl() {
@@ -990,6 +992,59 @@ cardio::promise<bool> AuthenticatedSshTransport::is_connected_async(
 const SshEndpointSettings &
 AuthenticatedSshTransport::endpoint_settings() const noexcept {
   return impl->endpoint;
+}
+
+cardio::promise<void>
+AuthenticatedSshTransport::execute_serialized_async(
+    std::function<void(ssh_session)> operation,
+    cardio::cancellation cancellation) {
+  cancellation.throw_if_cancellation_requested();
+  const std::shared_ptr<AuthenticatedSshTransport> owner =
+      shared_from_this();
+  (void)co_await impl->execute_async<bool>(
+      [owner, operation = std::move(operation)]() {
+        if (owner->impl->session == nullptr) {
+          throw std::runtime_error("SSH transport is closed");
+        }
+        operation(owner->impl->session);
+        return true;
+      },
+      true, {});
+  cancellation.throw_if_cancellation_requested();
+}
+
+bool AuthenticatedSshTransport::enqueue_serialized(
+    std::function<void(ssh_session)> operation) noexcept {
+  if (impl == nullptr) {
+    return false;
+  }
+  try {
+    return impl->enqueue(
+        [this, operation = std::move(operation)]() {
+          try {
+            if (impl->session != nullptr) {
+              operation(impl->session);
+            }
+          } catch (...) {
+          }
+          notify_ssh_event_fd(impl->wakeup_fd);
+        });
+  } catch (...) {
+    return false;
+  }
+}
+
+bool AuthenticatedSshTransport::try_begin_sftp_transfer() noexcept {
+  bool expected = false;
+  return impl != nullptr &&
+         impl->sftp_transfer_active.compare_exchange_strong(
+             expected, true, std::memory_order_acq_rel);
+}
+
+void AuthenticatedSshTransport::end_sftp_transfer() noexcept {
+  if (impl != nullptr) {
+    impl->sftp_transfer_active.store(false, std::memory_order_release);
+  }
 }
 
 struct SshChannelConnection::Impl {

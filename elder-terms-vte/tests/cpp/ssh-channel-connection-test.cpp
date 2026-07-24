@@ -1,4 +1,5 @@
 #include "../../src/terminal-sessions/ssh-session/ssh-channel-connection.h"
+#include "../../src/sftp/sftp-client.h"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -10,8 +11,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
@@ -52,13 +55,22 @@ struct ServerOptions {
   int resized_columns = 101;
   int resized_rows = 37;
   std::string payload = "SSH integration payload";
+  std::filesystem::path sftp_root;
 };
 
 struct ServerState {
   ServerOptions options;
   ssh_key authorized_key = nullptr;
   ssh_channel channel = nullptr;
+  ssh_channel sftp_channel = nullptr;
   ssh_channel_callbacks_struct channel_callbacks{};
+  ssh_channel_callbacks_struct sftp_channel_callbacks{};
+  ssh_event event = nullptr;
+  pid_t sftp_server_pid = -1;
+  int sftp_server_input_fd = -1;
+  int sftp_server_output_fd = -1;
+  bool sftp_requested = false;
+  bool sftp_started = false;
   bool none_requested = false;
   bool password_requested = false;
   bool password_accepted = false;
@@ -296,6 +308,151 @@ static int on_channel_data(ssh_session, ssh_channel channel, void *data,
   return static_cast<int>(size);
 }
 
+static void close_server_fd(int *fd) {
+  if (*fd >= 0) {
+    (void)::close(*fd);
+    *fd = -1;
+  }
+}
+
+static void stop_sftp_server(ServerState *state) {
+  close_server_fd(&state->sftp_server_input_fd);
+  if (state->event != nullptr &&
+      state->sftp_server_output_fd >= 0) {
+    ssh_event_remove_fd(state->event, state->sftp_server_output_fd);
+  }
+  close_server_fd(&state->sftp_server_output_fd);
+  if (state->sftp_server_pid < 0) {
+    return;
+  }
+
+  int status = 0;
+  pid_t result = ::waitpid(state->sftp_server_pid, &status, WNOHANG);
+  if (result == 0) {
+    (void)::kill(state->sftp_server_pid, SIGTERM);
+    do {
+      result = ::waitpid(state->sftp_server_pid, &status, 0);
+    } while (result < 0 && errno == EINTR);
+  }
+  state->sftp_server_pid = -1;
+}
+
+static int on_sftp_server_output(socket_t fd, int revents,
+                                 void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  if ((revents & (POLLIN | POLLHUP | POLLERR)) == 0 ||
+      state->sftp_channel == nullptr) {
+    return 0;
+  }
+
+  std::array<unsigned char, 32768> buffer{};
+  const ssize_t size = ::read(fd, buffer.data(), buffer.size());
+  if (size == 0) {
+    if (state->event != nullptr) {
+      ssh_event_remove_fd(state->event, fd);
+    }
+    close_server_fd(&state->sftp_server_output_fd);
+    (void)ssh_channel_send_eof(state->sftp_channel);
+    return 0;
+  }
+  if (size < 0) {
+    return errno == EINTR || errno == EAGAIN ? 0 : -1;
+  }
+
+  std::size_t offset = 0;
+  while (offset < static_cast<std::size_t>(size)) {
+    const int written = ssh_channel_write(
+        state->sftp_channel, buffer.data() + offset,
+        static_cast<std::uint32_t>(
+            static_cast<std::size_t>(size) - offset));
+    if (written <= 0) {
+      return -1;
+    }
+    offset += static_cast<std::size_t>(written);
+  }
+  return 0;
+}
+
+static bool start_sftp_server(ServerState *state) {
+  int input_pipe[2] = {-1, -1};
+  int output_pipe[2] = {-1, -1};
+  if (::pipe(input_pipe) != 0) {
+    return false;
+  }
+  if (::pipe(output_pipe) != 0) {
+    close_server_fd(&input_pipe[0]);
+    close_server_fd(&input_pipe[1]);
+    return false;
+  }
+
+  const pid_t pid = ::fork();
+  if (pid < 0) {
+    close_server_fd(&input_pipe[0]);
+    close_server_fd(&input_pipe[1]);
+    close_server_fd(&output_pipe[0]);
+    close_server_fd(&output_pipe[1]);
+    return false;
+  }
+  if (pid == 0) {
+    (void)::dup2(input_pipe[0], STDIN_FILENO);
+    (void)::dup2(output_pipe[1], STDOUT_FILENO);
+    close_server_fd(&input_pipe[0]);
+    close_server_fd(&input_pipe[1]);
+    close_server_fd(&output_pipe[0]);
+    close_server_fd(&output_pipe[1]);
+    ::execl("/usr/lib/openssh/sftp-server", "sftp-server", "-d",
+            state->options.sftp_root.c_str(), nullptr);
+    ::_exit(127);
+  }
+
+  close_server_fd(&input_pipe[0]);
+  close_server_fd(&output_pipe[1]);
+  state->sftp_server_pid = pid;
+  state->sftp_server_input_fd = input_pipe[1];
+  state->sftp_server_output_fd = output_pipe[0];
+  if (state->event == nullptr ||
+      ssh_event_add_fd(state->event, state->sftp_server_output_fd,
+                       POLLIN | POLLHUP | POLLERR,
+                       on_sftp_server_output, state) != SSH_OK) {
+    stop_sftp_server(state);
+    return false;
+  }
+  state->sftp_started = true;
+  return true;
+}
+
+static int on_sftp_channel_data(ssh_session, ssh_channel, void *data,
+                                std::uint32_t size, int is_stderr,
+                                void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  if (is_stderr != 0 || data == nullptr || size == 0) {
+    return static_cast<int>(size);
+  }
+  if (state->sftp_server_input_fd < 0 ||
+      !write_all_fd(state->sftp_server_input_fd, data, size)) {
+    return -1;
+  }
+  return static_cast<int>(size);
+}
+
+static void on_sftp_channel_eof(ssh_session, ssh_channel,
+                                void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  close_server_fd(&state->sftp_server_input_fd);
+}
+
+static int on_sftp_subsystem_request(ssh_session, ssh_channel,
+                                     const char *subsystem,
+                                     void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  state->sftp_requested =
+      subsystem != nullptr && std::string(subsystem) == "sftp";
+  if (!state->sftp_requested || state->options.sftp_root.empty()) {
+    return 1;
+  }
+  return start_sftp_server(state) ? 0 : 1;
+}
+
 static int on_release_requested(socket_t fd, int revents, void *userdata) {
   auto *state = static_cast<ServerState *>(userdata);
   if ((revents & POLLIN) == 0) {
@@ -336,10 +493,32 @@ static int on_window_change(ssh_session, ssh_channel, int columns, int rows,
 
 static ssh_channel on_channel_open(ssh_session session, void *userdata) {
   auto *state = static_cast<ServerState *>(userdata);
-  state->channel = ssh_channel_new(session);
-  if (state->channel == nullptr) {
+  ssh_channel channel = ssh_channel_new(session);
+  if (channel == nullptr) {
     return nullptr;
   }
+  if (state->channel != nullptr) {
+    state->sftp_channel = channel;
+    state->sftp_channel_callbacks.userdata = state;
+    state->sftp_channel_callbacks.channel_data_function =
+        on_sftp_channel_data;
+    state->sftp_channel_callbacks.channel_eof_function =
+        on_sftp_channel_eof;
+    state->sftp_channel_callbacks.channel_close_function =
+        on_sftp_channel_eof;
+    state->sftp_channel_callbacks.channel_subsystem_request_function =
+        on_sftp_subsystem_request;
+    ssh_callbacks_init(&state->sftp_channel_callbacks);
+    if (ssh_set_channel_callbacks(
+            channel, &state->sftp_channel_callbacks) != SSH_OK) {
+      ssh_channel_free(channel);
+      state->sftp_channel = nullptr;
+      return nullptr;
+    }
+    return channel;
+  }
+
+  state->channel = channel;
   state->channel_callbacks.userdata = state;
   state->channel_callbacks.channel_data_function = on_channel_data;
   state->channel_callbacks.channel_pty_request_function = on_pty_request;
@@ -395,6 +574,10 @@ static int validate_server_state(const ServerState &state) {
       state.payload != state.options.payload || !state.payload_echoed) {
     return 18;
   }
+  if (!state.options.sftp_root.empty() &&
+      (!state.sftp_requested || !state.sftp_started)) {
+    return 34;
+  }
 
   switch (state.options.auth_mode) {
   case ServerAuthMode::none:
@@ -429,6 +612,7 @@ static int run_server_process(const ServerOptions &options, int port_fd,
     return 11;
   }
   const char *address = "127.0.0.1";
+  const char *server_banner = "SSH-2.0-OpenSSH_9.6";
   int port = 0;
   if (ssh_bind_options_set(bind, SSH_BIND_OPTIONS_BINDADDR, address) !=
           SSH_OK ||
@@ -436,6 +620,8 @@ static int run_server_process(const ServerOptions &options, int port_fd,
           SSH_OK ||
       ssh_bind_options_set(bind, SSH_BIND_OPTIONS_HOSTKEY,
                            options.host_key_path.c_str()) != SSH_OK ||
+      ssh_bind_options_set(bind, SSH_BIND_OPTIONS_BANNER,
+                           server_banner) != SSH_OK ||
       ssh_bind_listen(bind) != SSH_OK) {
     ssh_bind_free(bind);
     ssh_key_free(state.authorized_key);
@@ -522,6 +708,7 @@ static int run_server_process(const ServerOptions &options, int port_fd,
     ssh_key_free(state.authorized_key);
     return 23;
   }
+  state.event = event;
   while (!state.release_requested && ssh_is_connected(session) != 0) {
     if (ssh_event_dopoll(event, -1) == SSH_ERROR) {
       break;
@@ -530,12 +717,18 @@ static int run_server_process(const ServerOptions &options, int port_fd,
 
   const int validation_result =
       state.release_requested ? validate_server_state(state) : 24;
+  stop_sftp_server(&state);
+  state.event = nullptr;
   ssh_event_remove_fd(event, release_fd);
   ssh_event_remove_session(event, session);
   ssh_event_free(event);
   if (state.channel != nullptr) {
     ssh_channel_free(state.channel);
     state.channel = nullptr;
+  }
+  if (state.sftp_channel != nullptr) {
+    ssh_channel_free(state.sftp_channel);
+    state.sftp_channel = nullptr;
   }
   ssh_disconnect(session);
   ssh_free(session);
@@ -621,6 +814,105 @@ static gboolean cancel_client_timeout(gpointer data) {
 static std::span<const unsigned char> bytes(const std::string &value) {
   return std::span<const unsigned char>(
       reinterpret_cast<const unsigned char *>(value.data()), value.size());
+}
+
+static std::span<const std::byte> byte_span(const std::string &value) {
+  return std::span<const std::byte>(
+      reinterpret_cast<const std::byte *>(value.data()), value.size());
+}
+
+static cardio::promise<void>
+exercise_sftp_client_async(
+    const std::shared_ptr<elder_terms::AuthenticatedSshTransport>
+        &transport,
+    cardio::cancellation cancellation) {
+  std::shared_ptr<elder_terms::SftpClient> client =
+      co_await elder_terms::open_sftp_client_async(transport,
+                                                   cancellation);
+  expect_true(client != nullptr, "SFTP client was not created");
+  const std::string canonical =
+      co_await client->canonicalize_path_async(".", cancellation);
+  expect_true(!canonical.empty() && canonical.front() == '/',
+              "SFTP root was not canonicalized");
+
+  const std::vector<elder_terms::SftpFileAttributes> entries =
+      co_await client->list_directory_async(".", cancellation);
+  const auto server_file = std::find_if(
+      entries.begin(), entries.end(),
+      [](const elder_terms::SftpFileAttributes &entry) {
+        return entry.name == "server.txt" &&
+               entry.type == elder_terms::SftpFileType::regular;
+      });
+  const auto server_link = std::find_if(
+      entries.begin(), entries.end(),
+      [](const elder_terms::SftpFileAttributes &entry) {
+        return entry.name == "server-link" &&
+               entry.type == elder_terms::SftpFileType::symbolic_link;
+      });
+  expect_true(server_file != entries.end() &&
+                  server_link != entries.end(),
+              "SFTP directory listing lost file types");
+  expect_true(
+      co_await client->read_link_async("server-link", cancellation) ==
+          "server.txt",
+      "SFTP symbolic-link target did not match");
+
+  std::unique_ptr<elder_terms::SftpFileReader> reader =
+      std::move(co_await client->open_read_async("server.txt",
+                                                 cancellation));
+  std::array<std::byte, 128> buffer{};
+  const std::size_t read_size =
+      co_await reader->read_async(buffer, cancellation);
+  co_await reader->close_async(cancellation);
+  reader.reset();
+  expect_true(
+      std::string(reinterpret_cast<const char *>(buffer.data()),
+                  read_size) == "SFTP server payload",
+      "SFTP file read did not return server content");
+
+  const std::string uploaded_content = "SFTP uploaded payload";
+  std::unique_ptr<elder_terms::SftpFileWriter> writer =
+      std::move(co_await client->open_write_async("uploaded.txt", 0600,
+                                                  cancellation));
+  co_await writer->write_all_async(byte_span(uploaded_content),
+                                   cancellation);
+  co_await writer->close_async(cancellation);
+  writer.reset();
+  co_await client->set_attributes_async(
+      "uploaded.txt", 0640, 1'700'002'000, 1'700'002'123,
+      cancellation);
+  const std::optional<elder_terms::SftpFileAttributes> uploaded =
+      co_await client->lstat_async("uploaded.txt", cancellation);
+  expect_true(uploaded.has_value() &&
+                  uploaded->type == elder_terms::SftpFileType::regular &&
+                  uploaded->size == uploaded_content.size() &&
+                  (uploaded->permissions & 0777U) == 0640U &&
+                  uploaded->modification_time_unix_seconds ==
+                      1'700'002'123,
+              "SFTP write or metadata update did not persist");
+
+  co_await client->rename_async("uploaded.txt", "renamed.txt",
+                                cancellation);
+  co_await client->make_symbolic_link_async(
+      "renamed.txt", "created-link", cancellation);
+  expect_true(
+      co_await client->read_link_async("created-link", cancellation) ==
+          "renamed.txt",
+      "SFTP symbolic-link creation did not persist");
+  co_await client->remove_file_async("created-link", cancellation);
+  co_await client->remove_file_async("renamed.txt", cancellation);
+  co_await client->make_directory_async("created-directory", 0750,
+                                        cancellation);
+  co_await client->remove_directory_async("created-directory",
+                                          cancellation);
+  expect_true(
+      !(co_await client->lstat_async("missing.txt", cancellation))
+           .has_value(),
+      "SFTP lstat should distinguish a missing item");
+  expect_true(client->try_begin_transfer() &&
+                  !client->try_begin_transfer(),
+              "SFTP client did not enforce one bulk transfer");
+  client->end_transfer();
 }
 
 static void run_client_case(const ServerOptions &server_options,
@@ -726,6 +1018,13 @@ static void run_client_case(const ServerOptions &server_options,
           transport.use_count() == 1,
           "authenticated transport retained unexpected owners: " +
               std::to_string(transport.use_count()));
+      if (!server_options.sftp_root.empty()) {
+        co_await exercise_sftp_client_async(
+            transport, cancellation_source.get_cancellation());
+        expect_true(
+            transport.use_count() == 1,
+            "SFTP client retained the authenticated transport after close");
+      }
       const unsigned char release = 1;
       expect_true(write_all_fd(server.release_fd, &release, sizeof(release)),
                   "failed to release the SSH test server");
@@ -826,6 +1125,15 @@ static void test_supported_authentication_and_shell_channel() {
       });
 
   options.auth_mode = ServerAuthMode::password;
+  options.sftp_root = root / "sftp-root";
+  std::filesystem::create_directories(options.sftp_root);
+  {
+    std::ofstream file(options.sftp_root / "server.txt",
+                       std::ios::binary);
+    file << "SFTP server payload";
+  }
+  std::filesystem::create_symlink(
+      "server.txt", options.sftp_root / "server-link");
   run_client_case(
       options,
       ClientCase{
@@ -840,6 +1148,7 @@ static void test_supported_authentication_and_shell_channel() {
       });
 
   options.auth_mode = ServerAuthMode::public_key;
+  options.sftp_root.clear();
   options.authorized_key_path = plain_public_key;
   run_client_case(
       options,
