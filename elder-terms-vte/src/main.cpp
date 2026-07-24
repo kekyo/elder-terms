@@ -931,6 +931,11 @@ int main(int argc, char **argv) {
                 }
               },
       });
+  elder_terms::set_main_window_transfer_cancel_callback(
+      &*main_window, [&app_state]() {
+        return elder_terms::cancel_terminal_session_transfer(
+            app_state.session_state);
+      });
   elder_terms::set_terminal_session_zmodem_autostart(
       app_state.session_state,
       elder_terms::transfer_zmodem_autostart(app_state.settings_store));

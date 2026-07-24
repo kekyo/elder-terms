@@ -13,9 +13,11 @@ import { waitForResult } from 'gestament/testing';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import { expectElementKind, type TestEvidence } from './test-helpers';
 import {
+  activateTransferCancel,
   assertTerminalCaptureMatches,
   assertTransferProgressNoticeMatches,
   expectDisconnectedNoticeHidden,
+  expectTransferCancelVisible,
   expectTransferProgressNoticeHidden,
   expectTransferProgressNoticeVisibleAtTerminalTopRight,
   readTransferProgressBarValue,
@@ -425,6 +427,27 @@ const transferProgressNoticeCases: readonly TransferProgressNoticeCase[] = [
       menuItemId: 'transfer_xmodem_crc_receive_item',
       protocol: 'xmodem',
     },
+  },
+];
+
+const transferCancellationCases: readonly TransferMenuCase[] = [
+  {
+    direction: 'send',
+    label: 'zmodem send cancellation',
+    menuItemId: 'transfer_zmodem_send_item',
+    protocol: 'zmodem',
+  },
+  {
+    direction: 'send',
+    label: 'ymodem send cancellation',
+    menuItemId: 'transfer_ymodem_send_item',
+    protocol: 'ymodem',
+  },
+  {
+    direction: 'send',
+    label: 'xmodem send cancellation',
+    menuItemId: 'transfer_xmodem_send_item',
+    protocol: 'xmodem',
   },
 ];
 
@@ -2444,6 +2467,7 @@ describe('elder-terms-vte XYZMODEM transfer progress notice e2e', () => {
                 await expectTransferProgressNoticeVisibleAtTerminalTopRight(
                   app
                 );
+                await expectTransferCancelVisible(app);
                 await delay(transferProgressNoticeStartDelayMs);
                 if (transferCase.protocol === 'xmodem') {
                   await requestTransferProgressPeerPause(fixture);
@@ -2455,6 +2479,7 @@ describe('elder-terms-vte XYZMODEM transfer progress notice e2e', () => {
                 await expectTransferProgressNoticeVisibleAtTerminalTopRight(
                   app
                 );
+                await expectTransferCancelVisible(app);
                 await delay(transferProgressNoticeStartDelayMs);
                 if (transferCase.protocol === 'xmodem') {
                   await requestTransferProgressPeerPause(fixture);
@@ -2493,3 +2518,63 @@ describe('elder-terms-vte XYZMODEM transfer progress notice e2e', () => {
     );
   }
 });
+
+describe.concurrent(
+  'elder-terms-vte XYZMODEM transfer cancellation e2e',
+  () => {
+    for (const transferCase of transferCancellationCases) {
+      it(`cancels ${transferCase.label} from the progress overlay`, async (context) => {
+        await expectTransferProgressPeerAvailable();
+        await withTemporaryDirectory(async (directory) => {
+          const fixture = await createTransferProgressPeerFixture(
+            directory,
+            transferCase,
+            {
+              byteLength: 1024,
+              label: '1KB',
+              timeoutMs: 30_000,
+            }
+          );
+          const connection = await startConnection(connectionCases[0], fixture);
+          try {
+            await connection.writeConfig(
+              fixture.configPath,
+              fixture.transferBasePath,
+              undefined
+            );
+            const args = [
+              '-c',
+              fixture.configPath,
+              ...transferSourceUriArgs(
+                fixture.sourceUri === undefined ? [] : [fixture.sourceUri]
+              ),
+            ];
+            await runGtkTest(context, args, async (app, evidence) => {
+              await waitForTransferConnection(
+                app,
+                evidence,
+                connection,
+                fixture.peerReadyPath
+              );
+              await activateTransfer(app, transferCase);
+              await expectTransferButtonInsensitive(app);
+              await expectTransferProgressNoticeVisibleAtTerminalTopRight(app);
+
+              await activateTransferCancel(app);
+
+              await expectTransferProgressNoticeHidden(app);
+              const transferButton = expectElementKind(
+                await app.getById('transfer_button'),
+                'toggleButton'
+              );
+              await expectTransferButtonSensitive(transferButton);
+              await expectFileMissing(fixture.expectedPath);
+            });
+          } finally {
+            await connection.close();
+          }
+        });
+      }, 60_000);
+    }
+  }
+);

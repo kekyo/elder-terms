@@ -99,6 +99,15 @@ public:
   }
 
   /**
+   * Requests cancellation of the active file transfer or text send.
+   *
+   * @returns True when an active operation accepted the cancellation request.
+   */
+  virtual bool cancel_transfer() {
+    return false;
+  }
+
+  /**
    * Enables or disables ZMODEM auto-start detection.
    *
    * @param enabled True when remote ZMODEM preambles should auto-start

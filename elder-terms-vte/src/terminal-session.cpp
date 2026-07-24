@@ -156,6 +156,14 @@ bool start_terminal_session_text_send(TerminalSessionState *state,
   return state->session->start_text_send(std::move(request));
 }
 
+bool cancel_terminal_session_transfer(TerminalSessionState *state) {
+  if (state == nullptr || state->session == nullptr) {
+    return false;
+  }
+
+  return state->session->cancel_transfer();
+}
+
 void set_terminal_session_zmodem_autostart(TerminalSessionState *state,
                                            bool enabled) {
   if (state == nullptr || state->session == nullptr) {

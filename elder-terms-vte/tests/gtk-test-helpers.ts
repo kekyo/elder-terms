@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, type TestContext } from 'vitest';
 import {
   createGtkAppLauncher,
+  type GtkButtonElement,
   type GtkApp,
   type GtkAppOutputEvent,
   type GtkAppLauncherOptions,
@@ -467,6 +468,44 @@ export const expectTransferProgressNoticeVisibleAtTerminalTopRight = async (
   expect(rightGap).toBeGreaterThanOrEqual(0);
   expect(rightGap).toBeLessThanOrEqual(16);
   expect(topGap).toBeLessThanOrEqual(16);
+};
+
+/**
+ * Waits for the cancel action exposed by the visible transfer overlay.
+ *
+ * @param app Running GTK app.
+ * @returns Visible and actionable cancel button.
+ */
+export const expectTransferCancelVisible = async (
+  app: GtkApp
+): Promise<GtkButtonElement> => {
+  const cancelButton = expectElementKind(
+    await app.getById('transfer_cancel_button'),
+    'button'
+  );
+  await waitForResult(
+    async () => {
+      const info = await cancelButton.info();
+      expect(info.name).toBe('Cancel');
+      expect(info.states).toContain('sensitive');
+      expect(info.states).toContain('showing');
+    },
+    {
+      message: 'transfer cancel button should be actionable',
+      timeoutMs: 5_000,
+    }
+  );
+  return cancelButton;
+};
+
+/**
+ * Activates the cancel action exposed by the visible transfer overlay.
+ *
+ * @param app Running GTK app.
+ */
+export const activateTransferCancel = async (app: GtkApp): Promise<void> => {
+  const cancelButton = await expectTransferCancelVisible(app);
+  await cancelButton.click();
 };
 
 /**

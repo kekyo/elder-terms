@@ -22,6 +22,7 @@ import {
 } from './gtk-test-helpers';
 import {
   activateTextSend,
+  cancelTextSend,
   expectTextSendActive,
   expectTextSendFinished,
 } from './text-send-test-helpers';
@@ -35,6 +36,7 @@ interface ExitingShellFixture {
 }
 
 interface TriggeredOutputShellFixture {
+  readonly finishedPath: string;
   readonly shellPath: string;
   readonly triggerPath: string;
 }
@@ -101,14 +103,18 @@ const createRepeatingOutputShellFixture = async (
   directory: string
 ): Promise<TriggeredOutputShellFixture> => {
   const triggerPath = join(directory, 'repeating-output-trigger.txt');
+  const finishedPath = join(directory, 'repeating-output-finished.txt');
   const shellPath = join(directory, 'repeating-output-shell.sh');
   await writeFile(
     shellPath,
-    `#!/bin/sh\nwhile [ ! -f ${shellQuote(triggerPath)} ]; do\n  sleep 0.02\ndone\ni=0\nwhile [ "$i" -lt 200 ]; do\n  printf 'LOCAL_BLINK_MARKER %s\\n' "$i"\n  i=$((i + 1))\n  sleep 0.03\ndone\nsleep 1\nexit 0\n`,
+    `#!/bin/sh\nwhile [ ! -f ${shellQuote(triggerPath)} ]; do\n  sleep 0.02\ndone\ni=0\nwhile [ "$i" -lt 50 ]; do\n  printf 'LOCAL_BLINK_MARKER %s\\n' "$i"\n  i=$((i + 1))\n  sleep 0.03\ndone\nprintf finished > ${shellQuote(
+      finishedPath
+    )}\nsleep 1\nexit 0\n`,
     'utf8'
   );
   await chmod(shellPath, 0o755);
   return {
+    finishedPath,
     shellPath,
     triggerPath,
   };
@@ -458,7 +464,7 @@ describe.concurrent('elder-terms-vte local session', () => {
         async (app) => {
           await writeFile(shell.triggerPath, 'start', 'utf8');
           await waitForActivityIndicatorImageState(app, 'rd', 'on');
-          await delay(1_000);
+          await waitForFileText(shell.finishedPath, 'finished');
           await waitForActivityIndicatorImageState(app, 'rd', 'off');
         },
         {
@@ -612,6 +618,62 @@ describe.concurrent('elder-terms-vte local session', () => {
             expect(await readFile(logPath, 'utf8')).toContain(
               'LOCAL_DURING_TEXT_SEND'
             );
+          });
+        },
+        {
+          env: {
+            SHELL: shellPath,
+          },
+        }
+      );
+    });
+  });
+
+  it('cancels an active text send and restores terminal input', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const sourcePath = join(directory, 'send.txt');
+      const receivedPath = join(directory, 'received.bin');
+      const readyPath = join(directory, 'ready.txt');
+      const shellPath = join(directory, 'text-send-cancel-shell.sh');
+      const configPath = join(directory, 'text-send-cancel.ini');
+      await writeFile(sourcePath, '0123456789', 'utf8');
+      await writeFile(
+        shellPath,
+        `#!/bin/sh\nstty raw -echo\nprintf ready > ${shellQuote(
+          readyPath
+        )}\ndd bs=1 count=2 of=${shellQuote(
+          receivedPath
+        )} 2>/dev/null\nexit 0\n`,
+        'utf8'
+      );
+      await chmod(shellPath, 0o755);
+      await writeFile(
+        configPath,
+        '[terminal]\nauto_close=false\n\n[transfer]\ntext_send_bytes_per_second=1\n',
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        [
+          '-c',
+          configPath,
+          `--test-transfer-source-uri=${pathToFileURL(sourcePath).href}`,
+        ],
+        async (app) => {
+          await waitForFileText(readyPath, 'ready');
+          const button = await activateTextSend(app);
+          await expectTextSendActive(button);
+          await toPass(async () => {
+            expect((await readFile(receivedPath)).length).toBe(1);
+          });
+
+          await cancelTextSend(app, button);
+          await focusTerminal(app);
+          await app.input.pressKey('x');
+
+          await toPass(async () => {
+            expect(await readFile(receivedPath, 'utf8')).toBe('0x');
           });
         },
         {

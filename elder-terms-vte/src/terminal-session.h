@@ -109,6 +109,14 @@ bool start_terminal_session_text_send(TerminalSessionState *state,
                                       TerminalTextSendRequest request);
 
 /**
+ * Requests cancellation of the active file transfer or text send.
+ *
+ * @param state Session state created by create_terminal_session.
+ * @returns True when an active operation accepted the cancellation request.
+ */
+bool cancel_terminal_session_transfer(TerminalSessionState *state);
+
+/**
  * Enables or disables ZMODEM auto-start detection on the active backend.
  *
  * @param state Session state created by create_terminal_session.

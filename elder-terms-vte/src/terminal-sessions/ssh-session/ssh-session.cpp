@@ -119,7 +119,7 @@ private:
     }
   }
 
-  void cancel_transfer() {
+  void cancel_modem_transfer_noexcept() {
     if (transfer_cancel_source.has_value()) {
       (void)transfer_cancel_source->cancel();
     }
@@ -259,7 +259,7 @@ private:
     const bool should_notify_ended = natural_end && !stopping;
     stopping = true;
     connected = false;
-    cancel_transfer();
+    cancel_modem_transfer_noexcept();
     cancel_text_send();
     terminal_io.disconnect_user_input();
     outgoing.clear();
@@ -585,7 +585,7 @@ public:
     }
     stopping = true;
     connected = false;
-    cancel_transfer();
+    cancel_modem_transfer_noexcept();
     cancel_text_send();
     terminal_io.disconnect_user_input();
     outgoing.clear();
@@ -627,6 +627,15 @@ public:
 
   bool transfer_in_progress() const override {
     return transfer_active || text_send_active;
+  }
+
+  bool cancel_transfer() override {
+    if (!transfer_active && !text_send_active) {
+      return false;
+    }
+    cancel_modem_transfer_noexcept();
+    cancel_text_send();
+    return true;
   }
 
   void set_zmodem_autostart(bool enabled) override {

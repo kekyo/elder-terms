@@ -21,6 +21,14 @@
 namespace elder_terms {
 
 struct MainWindowSshPromptState;
+struct MainWindowTransferProgressState;
+
+/**
+ * Requests cancellation of the currently visible transfer.
+ *
+ * @returns True when an active transfer accepted the cancellation request.
+ */
+using MainWindowTransferCancelCallback = std::function<bool()>;
 
 /**
  * Handles terminal context-menu Paste availability and selected text.
@@ -76,6 +84,8 @@ struct MainWindow {
   GtkWidget *disconnected_notice_background = nullptr;
   /** Label inside the inline disconnected notice. */
   GtkWidget *disconnected_notice_label = nullptr;
+  /** Overlay container for transfer progress and cancellation controls. */
+  GtkWidget *transfer_progress_overlay = nullptr;
   /** Inline transfer progress notice shown on the terminal surface. */
   GtkWidget *transfer_progress_notice = nullptr;
   /** Background layer inside the inline transfer progress notice. */
@@ -84,6 +94,8 @@ struct MainWindow {
   GtkWidget *transfer_progress_notice_label = nullptr;
   /** Progress bar inside the inline transfer progress notice. */
   GtkWidget *transfer_progress_bar = nullptr;
+  /** Button that requests cancellation of the active transfer. */
+  GtkWidget *transfer_cancel_button = nullptr;
   /** Scrollbar bound to the terminal vadjustment. */
   GtkWidget *terminal_scrollbar = nullptr;
   /** Status bar container. */
@@ -117,6 +129,8 @@ struct MainWindow {
       TerminalSessionConnectionPhase::disconnected;
   /** Stable controller for SSH prompt signals and pending responses. */
   std::shared_ptr<MainWindowSshPromptState> ssh_prompt_state;
+  /** Stable controller for transfer progress actions. */
+  std::shared_ptr<MainWindowTransferProgressState> transfer_progress_state;
 };
 
 /**
@@ -209,6 +223,15 @@ void set_main_window_transfer_progress_visible(MainWindow *main_window,
  */
 void set_main_window_transfer_progress(MainWindow *main_window,
                                        TerminalTransferProgress progress);
+
+/**
+ * Configures the action invoked by the transfer progress Cancel button.
+ *
+ * @param main_window Main window containing the transfer progress overlay.
+ * @param callback Callback that requests cancellation of the active transfer.
+ */
+void set_main_window_transfer_cancel_callback(
+    MainWindow *main_window, MainWindowTransferCancelCallback callback);
 
 /**
  * Updates transfer button visibility.

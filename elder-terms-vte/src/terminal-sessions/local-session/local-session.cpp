@@ -547,6 +547,14 @@ public:
     return text_send_active;
   }
 
+  bool cancel_transfer() override {
+    if (!text_send_active || !text_send_cancel_source.has_value()) {
+      return false;
+    }
+    (void)text_send_cancel_source->cancel();
+    return true;
+  }
+
   bool start_text_send(TerminalTextSendRequest request) override {
     if (!started || stopping || text_send_active || pty_fd < 0 ||
         !terminal_text_send_source_is_valid(request.source)) {

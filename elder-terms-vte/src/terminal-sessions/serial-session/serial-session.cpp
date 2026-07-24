@@ -331,7 +331,7 @@ private:
       return;
     }
 
-    cancel_transfer_noexcept();
+    cancel_modem_transfer_noexcept();
     cancel_text_send_noexcept();
     cancel_connection_noexcept();
     outgoing.clear();
@@ -351,7 +351,7 @@ private:
       return;
     }
 
-    cancel_transfer_noexcept();
+    cancel_modem_transfer_noexcept();
     cancel_text_send_noexcept();
     outgoing.clear();
     carrier_disconnected = true;
@@ -735,7 +735,7 @@ private:
     }
   }
 
-  void cancel_transfer_noexcept() {
+  void cancel_modem_transfer_noexcept() {
     if (transfer_cancel_source.has_value()) {
       (void)transfer_cancel_source->cancel();
     }
@@ -1091,7 +1091,7 @@ public:
     }
 
     stopping = true;
-    cancel_transfer_noexcept();
+    cancel_modem_transfer_noexcept();
     cancel_text_send_noexcept();
     cancel_connection_noexcept();
     (void)stop_source.cancel();
@@ -1159,6 +1159,15 @@ public:
 
   bool transfer_in_progress() const override {
     return transfer_active || text_send_active;
+  }
+
+  bool cancel_transfer() override {
+    if (!transfer_active && !text_send_active) {
+      return false;
+    }
+    cancel_modem_transfer_noexcept();
+    cancel_text_send_noexcept();
+    return true;
   }
 
   void set_zmodem_autostart(bool enabled) override {

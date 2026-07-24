@@ -286,7 +286,7 @@ private:
 
     const bool should_notify_session_ended = natural_end && !stopping;
     stopping = true;
-    cancel_transfer_noexcept();
+    cancel_modem_transfer_noexcept();
     cancel_text_send_noexcept();
     terminal_io.disconnect_user_input();
     outgoing.clear();
@@ -323,7 +323,7 @@ private:
       if (!stopping) {
         std::cerr << "Warning: TELNET write failed: " << error.what() << '\n';
       }
-      cancel_transfer_noexcept();
+      cancel_modem_transfer_noexcept();
       shutdown_socket_noexcept();
     }
 
@@ -333,7 +333,7 @@ private:
     }
   }
 
-  void cancel_transfer_noexcept() {
+  void cancel_modem_transfer_noexcept() {
     if (transfer_cancel_source.has_value()) {
       (void)transfer_cancel_source->cancel();
     }
@@ -702,7 +702,7 @@ public:
     }
 
     stopping = true;
-    cancel_transfer_noexcept();
+    cancel_modem_transfer_noexcept();
     cancel_text_send_noexcept();
     terminal_io.disconnect_user_input();
     outgoing.clear();
@@ -733,6 +733,15 @@ public:
 
   bool transfer_in_progress() const override {
     return transfer_active || text_send_active;
+  }
+
+  bool cancel_transfer() override {
+    if (!transfer_active && !text_send_active) {
+      return false;
+    }
+    cancel_modem_transfer_noexcept();
+    cancel_text_send_noexcept();
+    return true;
   }
 
   void set_zmodem_autostart(bool enabled) override {

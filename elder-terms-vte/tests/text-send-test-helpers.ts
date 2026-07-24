@@ -2,6 +2,10 @@ import type { GtkApp, GtkToggleButtonElement } from 'gestament';
 import { expect } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import { expectElementKind } from './test-helpers';
+import {
+  activateTransferCancel,
+  expectTransferProgressNoticeHidden,
+} from './gtk-test-helpers';
 
 /**
  * Activates the Text (Send) transfer menu item.
@@ -67,5 +71,29 @@ export const expectTextSendFinished = async (
     );
     expect(info.states).toContain('sensitive');
     expect(await status.text()).toBe('Terminal');
+  });
+};
+
+/**
+ * Cancels an active text send and waits for the terminal presentation to
+ * become available again.
+ *
+ * @param app Running terminal application.
+ * @param button Transfer menu button restored after cancellation.
+ */
+export const cancelTextSend = async (
+  app: GtkApp,
+  button: GtkToggleButtonElement
+): Promise<void> => {
+  await activateTransferCancel(app);
+  await expectTransferProgressNoticeHidden(app);
+  await waitForResult(async () => {
+    const info = await button.info();
+    const status = expectElementKind(
+      await app.getById('status_label'),
+      'label'
+    );
+    expect(info.states).toContain('sensitive');
+    expect(await status.text()).toBe('Text send failed');
   });
 };

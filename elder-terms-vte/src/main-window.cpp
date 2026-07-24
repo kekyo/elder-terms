@@ -111,6 +111,11 @@ struct MainWindowSshPromptState {
   std::shared_ptr<MainWindowSshPromptRequest> request;
 };
 
+struct MainWindowTransferProgressState {
+  GtkWidget *cancel_button = nullptr;
+  MainWindowTransferCancelCallback cancel;
+};
+
 static void on_terminal_context_copy_activate(GtkMenuItem *, gpointer data) {
   auto *terminal = VTE_TERMINAL(data);
   vte_terminal_copy_clipboard_format(terminal, VTE_FORMAT_TEXT);
@@ -324,10 +329,12 @@ static bool main_window_has_required_widgets(const MainWindow &main_window) {
          main_window.disconnected_notice != nullptr &&
          main_window.disconnected_notice_background != nullptr &&
          main_window.disconnected_notice_label != nullptr &&
+         main_window.transfer_progress_overlay != nullptr &&
          main_window.transfer_progress_notice != nullptr &&
          main_window.transfer_progress_notice_background != nullptr &&
          main_window.transfer_progress_notice_label != nullptr &&
          main_window.transfer_progress_bar != nullptr &&
+         main_window.transfer_cancel_button != nullptr &&
          main_window.terminal_scrollbar != nullptr &&
          main_window.status_bar != nullptr &&
          main_window.status_label != nullptr &&
@@ -614,6 +621,16 @@ static void on_ssh_prompt_entry_activated(GtkEntry *, gpointer data) {
   on_ssh_prompt_accept_clicked(nullptr, data);
 }
 
+static void on_transfer_cancel_clicked(GtkButton *, gpointer data) {
+  auto *state = static_cast<MainWindowTransferProgressState *>(data);
+  if (state == nullptr || !state->cancel) {
+    return;
+  }
+  if (state->cancel() && state->cancel_button != nullptr) {
+    gtk_widget_set_sensitive(state->cancel_button, FALSE);
+  }
+}
+
 static void stop_main_window_transfer_progress_pulse(MainWindow *main_window) {
   if (main_window == nullptr ||
       main_window->transfer_progress_pulse_source == 0) {
@@ -703,6 +720,8 @@ std::optional<MainWindow> load_main_window() {
       required_widget(main_window.builder, "disconnected_notice_background");
   main_window.disconnected_notice_label =
       required_widget(main_window.builder, "disconnected_notice_label");
+  main_window.transfer_progress_overlay =
+      required_widget(main_window.builder, "transfer_progress_overlay");
   main_window.transfer_progress_notice =
       required_widget(main_window.builder, "transfer_progress_notice");
   main_window.transfer_progress_notice_background =
@@ -711,6 +730,8 @@ std::optional<MainWindow> load_main_window() {
       required_widget(main_window.builder, "transfer_progress_notice_label");
   main_window.transfer_progress_bar =
       required_widget(main_window.builder, "transfer_progress_bar");
+  main_window.transfer_cancel_button =
+      required_widget(main_window.builder, "transfer_cancel_button");
   main_window.terminal_scrollbar =
       required_widget(main_window.builder, "terminal_scrollbar");
   main_window.status_bar = required_widget(main_window.builder, "status_bar");
@@ -744,6 +765,15 @@ std::optional<MainWindow> load_main_window() {
   g_signal_connect(main_window.ssh_prompt_entry, "activate",
                    G_CALLBACK(on_ssh_prompt_entry_activated),
                    main_window.ssh_prompt_state.get());
+  main_window.transfer_progress_state =
+      std::make_shared<MainWindowTransferProgressState>(
+          MainWindowTransferProgressState{
+              .cancel_button = main_window.transfer_cancel_button,
+              .cancel = {},
+          });
+  g_signal_connect(main_window.transfer_cancel_button, "clicked",
+                   G_CALLBACK(on_transfer_cancel_clicked),
+                   main_window.transfer_progress_state.get());
   apply_main_window_style(&main_window);
   create_activity_indicator_widgets(&main_window);
   if (!load_indicator_images(&main_window)) {
@@ -902,6 +932,7 @@ void cancel_main_window_ssh_prompt(MainWindow *main_window) {
 void set_main_window_transfer_progress_visible(MainWindow *main_window,
                                                bool visible) {
   if (main_window == nullptr ||
+      main_window->transfer_progress_overlay == nullptr ||
       main_window->transfer_progress_notice == nullptr) {
     return;
   }
@@ -910,16 +941,29 @@ void set_main_window_transfer_progress_visible(MainWindow *main_window,
     stop_main_window_transfer_progress_pulse(main_window);
   }
 
+  gtk_widget_set_no_show_all(main_window->transfer_progress_overlay, !visible);
+  gtk_widget_set_visible(main_window->transfer_progress_overlay, visible);
   gtk_widget_set_no_show_all(main_window->transfer_progress_notice, !visible);
   gtk_widget_set_visible(main_window->transfer_progress_notice, visible);
   if (visible) {
-    gtk_widget_show_all(main_window->transfer_progress_notice);
+    if (main_window->transfer_cancel_button != nullptr) {
+      gtk_widget_set_sensitive(main_window->transfer_cancel_button, TRUE);
+    }
+    gtk_widget_show_all(main_window->transfer_progress_overlay);
     set_main_window_transfer_progress(
         main_window, TerminalTransferProgress{
                          .mode = TerminalTransferProgressMode::indeterminate,
                          .fraction = std::nullopt,
                      });
   }
+}
+
+void set_main_window_transfer_cancel_callback(
+    MainWindow *main_window, MainWindowTransferCancelCallback callback) {
+  if (main_window == nullptr || main_window->transfer_progress_state == nullptr) {
+    return;
+  }
+  main_window->transfer_progress_state->cancel = std::move(callback);
 }
 
 void set_main_window_transfer_progress(MainWindow *main_window,
