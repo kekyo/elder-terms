@@ -71,6 +71,7 @@ struct ApplicationState {
   bool monitor_reload_selected = false;
   std::optional<std::filesystem::path> monitor_renamed_path;
   std::string vte_executable;
+  std::string sftp_executable;
   std::vector<ChildLaunch *> child_launches;
   bool shutting_down = false;
 };
@@ -484,8 +485,10 @@ static bool executable_file(const std::filesystem::path &path) {
          access(path.c_str(), X_OK) == 0;
 }
 
-static std::string resolve_vte_executable(const char *launcher_argv0) {
-  const char *override_path = g_getenv("ELDER_TERMS_VTE_PATH");
+static std::string resolve_child_executable(
+    const char *launcher_argv0, const char *environment_name,
+    const char *executable_name) {
+  const char *override_path = g_getenv(environment_name);
   if (override_path != nullptr && override_path[0] != '\0') {
     return override_path;
   }
@@ -497,9 +500,9 @@ static std::string resolve_vte_executable(const char *launcher_argv0) {
     const std::filesystem::path launcher_directory =
         launcher_path.parent_path();
     const std::vector<std::filesystem::path> candidates = {
-        launcher_directory / "elder-terms-vte",
+        launcher_directory / executable_name,
         launcher_directory.parent_path() / "elder-terms-vte" /
-            "elder-terms-vte",
+            executable_name,
     };
     for (const auto &candidate : candidates) {
       if (executable_file(candidate)) {
@@ -508,7 +511,7 @@ static std::string resolve_vte_executable(const char *launcher_argv0) {
     }
   }
 
-  gchar *program = g_find_program_in_path("elder-terms-vte");
+  gchar *program = g_find_program_in_path(executable_name);
   if (program == nullptr) {
     return {};
   }
@@ -579,13 +582,25 @@ static void launch_selected_connection(ApplicationState *state) {
   if (!editor_is_valid(state)) {
     return;
   }
-  if (state->vte_executable.empty()) {
-    show_error(state, "Failed to start elder-terms-vte",
-               {"elder-terms-vte executable was not found"});
+  const elder_terms::SettingsStore &draft_store =
+      elder_terms::settings_widget_draft_store(state->settings_widget);
+  const bool sftp =
+      elder_terms::general_connection_kind(draft_store) ==
+      elder_terms::ConnectionKind::sftp;
+  const std::string &executable =
+      sftp ? state->sftp_executable : state->vte_executable;
+  const char *executable_name =
+      sftp ? "elder-terms-sftp" : "elder-terms-vte";
+  const std::string error_summary =
+      std::string("Failed to start ") + executable_name;
+  if (executable.empty()) {
+    show_error(state, error_summary,
+               {std::string(executable_name) +
+                " executable was not found"});
     return;
   }
 
-  std::vector<std::string> arguments = {state->vte_executable};
+  std::vector<std::string> arguments = {executable};
   if (!state->current_is_new && state->selected_path.has_value()) {
     arguments.emplace_back("-c");
     arguments.push_back(state->selected_path->string());
@@ -599,7 +614,7 @@ static void launch_selected_connection(ApplicationState *state) {
         create_temporary_startup_profile(state, &warnings);
     print_warnings(warnings);
     if (!startup_path.has_value()) {
-      show_error(state, "Failed to start elder-terms-vte", warnings);
+      show_error(state, error_summary, warnings);
       return;
     }
     temporary_startup_path = startup_path.value();
@@ -626,7 +641,7 @@ static void launch_selected_connection(ApplicationState *state) {
     if (error != nullptr) {
       g_error_free(error);
     }
-    show_error(state, "Failed to start elder-terms-vte", {message});
+    show_error(state, error_summary, {message});
     return;
   }
 
@@ -938,7 +953,10 @@ int main(int argc, char **argv) {
   g_object_unref(application_accelerators);
 
   populate_profile_rows(&state);
-  state.vte_executable = resolve_vte_executable(argv[0]);
+  state.vte_executable = resolve_child_executable(
+      argv[0], "ELDER_TERMS_VTE_PATH", "elder-terms-vte");
+  state.sftp_executable = resolve_child_executable(
+      argv[0], "ELDER_TERMS_SFTP_PATH", "elder-terms-sftp");
   start_connection_monitor(&state);
   show_empty_details(&state);
   gtk_widget_show_all(main_window->window);

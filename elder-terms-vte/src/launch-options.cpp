@@ -49,6 +49,12 @@ LaunchOptions parse_launch_options(int *argc, char **argv) {
       continue;
     }
 
+    if (argument == "--test-sftp-pause-transfer") {
+      options.test.sftp_pause_transfer = true;
+      ++index;
+      continue;
+    }
+
     static constexpr const char ssh_prompt_option[] =
         "--test-ssh-prompt=";
     if (argument.rfind(ssh_prompt_option, 0) == 0) {

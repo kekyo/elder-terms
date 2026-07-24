@@ -46,6 +46,7 @@ elder_terms_sources = [
   'src/main-window.cpp',
   'src/sftp/sftp-client.cpp',
   'src/sftp/sftp-transfer-engine.cpp',
+  'src/sftp/sftp-window.cpp',
   'src/terminal-connection-phase.cpp',
   'src/terminal-log.cpp',
   'src/terminal-text-send.cpp',
@@ -92,6 +93,34 @@ executable(
   ],
   link_with: [
     libxyzm_async_static_library,
+  ],
+)
+
+executable(
+  'elder-terms-sftp',
+  [
+    'src/launch-options.cpp',
+    'src/sftp/sftp-client.cpp',
+    'src/sftp/sftp-fixture-client.cpp',
+    'src/sftp/sftp-main.cpp',
+    'src/sftp/sftp-transfer-engine.cpp',
+    'src/sftp/sftp-window.cpp',
+    'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
+    'src/terminal-sessions/tcp-connector.cpp',
+  ],
+  cpp_args: [
+    '-I' + gestament_include_dir,
+    '-I' + cardio_include_dir,
+    '-DCARDIO_WITH_GLIB=1',
+    '-DCARDIO_WITH_GIO=1',
+    '-DCARDIO_WITH_LINUX_IO_URING=1',
+  ],
+  dependencies: [
+    elder_terms_dep,
+    gio_dep,
+    gtk_dep,
+    liburing_dep,
+    libssh_dep,
   ],
 )
 

@@ -23,6 +23,8 @@ struct TestOptions {
   std::string ssh_known_hosts_file;
   /** Source file URIs used instead of opening the send file dialog. */
   std::vector<std::string> transfer_source_uris;
+  /** True when the SFTP fixture should pause remote writes until cancelled. */
+  bool sftp_pause_transfer = false;
 };
 
 /**

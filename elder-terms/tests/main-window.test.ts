@@ -100,10 +100,15 @@ interface FakeVteContext {
   readonly release: () => Promise<void>;
 }
 
-const createFakeVte = async (): Promise<FakeVteContext> => {
+const createFakeVte = async (
+  hardcodedCapture = false
+): Promise<FakeVteContext> => {
   const directory = await mkdtemp(join(tmpdir(), 'elder-terms-fake-vte-'));
   const executable = join(directory, 'fake-vte.mjs');
   const capture = join(directory, 'capture.json');
+  const captureExpression = hardcodedCapture
+    ? JSON.stringify(capture)
+    : 'process.env.ELDER_TERMS_TEST_CAPTURE';
   await writeFile(
     executable,
     `#!/usr/bin/env node
@@ -111,7 +116,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 const args = process.argv.slice(2);
 const startupIndex = args.indexOf('-s');
 const startupContent = startupIndex < 0 ? null : await readFile(args[startupIndex + 1], 'utf8');
-await writeFile(process.env.ELDER_TERMS_TEST_CAPTURE, JSON.stringify({ args, startupContent }));
+await writeFile(${captureExpression}, JSON.stringify({ args, startupContent }));
 `
   );
   await chmod(executable, 0o755);
@@ -428,6 +433,52 @@ describe('elder-terms main window', () => {
       );
     } finally {
       await fakeVte.release();
+    }
+  });
+
+  it('routes an SFTP profile to the dedicated SFTP application', async (context) => {
+    const fakeVte = await createFakeVte();
+    const fakeSftp = await createFakeVte(true);
+    try {
+      await runLauncherGtkTest(
+        context,
+        async (connections) => {
+          await writeFile(
+            join(connections, 'Files.ini'),
+            [
+              '[general]',
+              'type=sftp',
+              '',
+              '[ssh]',
+              'address=files.example',
+              '',
+            ].join('\n')
+          );
+        },
+        async ({ app, connections }) => {
+          const list = await app.getById('connection_list');
+          await doubleClickConnectionRow(app, list, 0);
+          await waitForResult(async () => {
+            const capture = await readLaunchCapture(fakeSftp.capture);
+            expect(capture.args).toEqual([
+              '-c',
+              join(connections, 'Files.ini'),
+            ]);
+            expect(capture.startupContent).toBeNull();
+          });
+          await expect(readFile(fakeVte.capture, 'utf8')).rejects.toThrow();
+        },
+        {
+          args: [],
+          env: {
+            ELDER_TERMS_SFTP_PATH: fakeSftp.executable,
+            ELDER_TERMS_TEST_CAPTURE: fakeSftp.capture,
+            ELDER_TERMS_VTE_PATH: fakeVte.executable,
+          },
+        }
+      );
+    } finally {
+      await Promise.all([fakeSftp.release(), fakeVte.release()]);
     }
   });
 
