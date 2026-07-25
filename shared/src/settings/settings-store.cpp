@@ -16,6 +16,7 @@ static std::string setting_label(const SettingKey &key) {
 static SettingEntry make_entry(SettingDefinition definition) {
   SettingEntry entry;
   entry.definition = std::move(definition);
+  entry.fallback_value = entry.definition.default_value;
   entry.value = entry.definition.default_value;
   return entry;
 }
@@ -51,7 +52,7 @@ static void warn_invalid_value(std::vector<std::string> *warnings,
                                const std::string &reason) {
   warnings->push_back("Warning: invalid configuration value " +
                       setting_label(key) + ": " + reason +
-                      "; using default");
+                      "; using fallback");
 }
 
 static bool validate_setting_definition(const SettingDefinition &definition,
@@ -151,6 +152,33 @@ SettingValue setting_value_or_default(const SettingsStore &store,
   return entry->value;
 }
 
+SettingValue setting_fallback_value(const SettingsStore &store,
+                                    const SettingKey &key,
+                                    SettingValue fallback) {
+  const SettingEntry *entry = find_entry(store, key);
+  if (entry == nullptr) {
+    return fallback;
+  }
+  return entry->fallback_value;
+}
+
+SettingValueSource setting_value_source(const SettingsStore &store,
+                                        const SettingKey &key) {
+  const SettingEntry *entry = find_entry(store, key);
+  if (entry == nullptr) {
+    return SettingValueSource::built_in;
+  }
+  return entry->loaded ? SettingValueSource::override
+                       : entry->fallback_source;
+}
+
+SettingValueSource setting_fallback_source(const SettingsStore &store,
+                                           const SettingKey &key) {
+  const SettingEntry *entry = find_entry(store, key);
+  return entry == nullptr ? SettingValueSource::built_in
+                          : entry->fallback_source;
+}
+
 std::string setting_string_value_or_default(const SettingsStore &store,
                                             const SettingKey &key,
                                             std::string fallback) {
@@ -193,6 +221,7 @@ bool set_setting_value(SettingsStore *store, const SettingKey &key,
 
   if (entry->value != value) {
     entry->value = std::move(value);
+    entry->loaded = entry->value != entry->fallback_value;
     entry->dirty = true;
   }
   return true;
@@ -226,8 +255,8 @@ bool clear_explicit_setting_value(SettingsStore *store,
     return false;
   }
 
-  if (entry->value != entry->definition.default_value || entry->loaded) {
-    entry->value = entry->definition.default_value;
+  if (entry->value != entry->fallback_value || entry->loaded) {
+    entry->value = entry->fallback_value;
     entry->loaded = false;
     entry->dirty = true;
   }
@@ -238,6 +267,41 @@ bool setting_has_explicit_value(const SettingsStore &store,
                                 const SettingKey &key) {
   const SettingEntry *entry = find_entry(store, key);
   return entry != nullptr && entry->loaded;
+}
+
+bool setting_has_configured_value(const SettingsStore &store,
+                                  const SettingKey &key) {
+  return setting_value_source(store, key) != SettingValueSource::built_in;
+}
+
+void rebase_settings_store_fallbacks(SettingsStore *store,
+                                     const SettingsStore &fallbacks) {
+  for (SettingEntry &entry : store->entries) {
+    if (entry.definition.key.section == "general" &&
+        entry.definition.key.name == "name") {
+      continue;
+    }
+
+    const SettingEntry *fallback_entry =
+        find_entry(fallbacks, entry.definition.key);
+    if (fallback_entry == nullptr ||
+        fallback_entry->value.index() !=
+            entry.definition.default_value.index()) {
+      continue;
+    }
+
+    const bool has_override = entry.loaded;
+    const bool was_dirty = entry.dirty;
+    entry.fallback_value = fallback_entry->value;
+    entry.fallback_source =
+        setting_has_configured_value(fallbacks, entry.definition.key)
+            ? SettingValueSource::global
+            : SettingValueSource::built_in;
+    if (!has_override) {
+      entry.value = entry.fallback_value;
+    }
+    entry.dirty = was_dirty;
+  }
 }
 
 bool setting_is_dirty(const SettingsStore &store, const SettingKey &key) {

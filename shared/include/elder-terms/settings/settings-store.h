@@ -29,6 +29,18 @@ struct SettingKey {
 using SettingValue = std::variant<gint64, gdouble, std::string, bool>;
 
 /**
+ * Identifies the active source for a setting value.
+ */
+enum class SettingValueSource {
+  /** Value comes from the compiled-in setting definition. */
+  built_in,
+  /** Value comes from global.ini. */
+  global,
+  /** Value is an explicit connection, startup, or in-memory override. */
+  override,
+};
+
+/**
  * Validates one loaded or updated setting value.
  *
  * @param value Candidate setting value.
@@ -48,9 +60,6 @@ struct SettingDefinition {
   SettingValue default_value;
   /** Optional semantic validation applied after parsing. */
   SettingValueValidator validate = nullptr;
-  /** True when an explicit loaded value should be saved even if it matches the
-   * default. */
-  bool save_when_loaded = false;
 };
 
 /**
@@ -59,9 +68,14 @@ struct SettingDefinition {
 struct SettingEntry {
   /** Setting schema. */
   SettingDefinition definition;
-  /** Current value, initialized from default_value. */
+  /** Value used when no explicit override is present. */
+  SettingValue fallback_value;
+  /** Source of fallback_value. */
+  SettingValueSource fallback_source = SettingValueSource::built_in;
+  /** Current effective value, initialized from fallback_value. */
   SettingValue value;
-  /** True when the value came from a configuration file or explicit override. */
+  /** True when value is an explicit connection, startup, or in-memory
+   * override. */
   bool loaded = false;
   /** True after the value is changed in memory. */
   bool dirty = false;
@@ -117,6 +131,37 @@ ELDER_TERMS_API SettingValue setting_value_or_default(
   const SettingsStore &store, const SettingKey &key, SettingValue fallback);
 
 /**
+ * Returns the inherited fallback for a setting.
+ *
+ * @param store Source settings store.
+ * @param key Setting key.
+ * @param fallback Value returned when key is not registered.
+ * @returns Registered fallback or the caller-provided fallback.
+ */
+ELDER_TERMS_API SettingValue setting_fallback_value(
+    const SettingsStore &store, const SettingKey &key, SettingValue fallback);
+
+/**
+ * Returns the active source for a setting.
+ *
+ * @param store Source settings store.
+ * @param key Setting key.
+ * @returns Override, global, or built-in source.
+ */
+ELDER_TERMS_API SettingValueSource
+setting_value_source(const SettingsStore &store, const SettingKey &key);
+
+/**
+ * Returns the source used after an explicit override is cleared.
+ *
+ * @param store Source settings store.
+ * @param key Setting key.
+ * @returns Global or built-in fallback source.
+ */
+ELDER_TERMS_API SettingValueSource
+setting_fallback_source(const SettingsStore &store, const SettingKey &key);
+
+/**
  * Returns a string setting value, or fallback when the key is not registered.
  *
  * @param store Source settings store.
@@ -170,6 +215,10 @@ setting_boolean_value_or_default(const SettingsStore &store,
  * @param key Setting key.
  * @param value New value.
  * @returns True when the key exists and the value was accepted.
+ *
+ * @remarks A changed value equal to its inherited fallback becomes
+ * non-explicit. Use set_explicit_setting_value() to persist an override equal
+ * to its fallback.
  */
 ELDER_TERMS_API bool set_setting_value(
   SettingsStore *store, const SettingKey &key, SettingValue value);
@@ -187,7 +236,7 @@ ELDER_TERMS_API bool set_explicit_setting_value(
   SettingsStore *store, const SettingKey &key, SettingValue value);
 
 /**
- * Clears a setting's explicit override and restores its registered default.
+ * Clears a setting's explicit override and restores its inherited fallback.
  *
  * @param store Target settings store.
  * @param key Setting key.
@@ -201,11 +250,35 @@ ELDER_TERMS_API bool clear_explicit_setting_value(SettingsStore *store,
  *
  * @param store Source settings store.
  * @param key Setting key.
- * @returns True when the setting is explicit rather than implicit default.
+ * @returns True when the setting is explicit rather than inherited.
  */
 ELDER_TERMS_API bool
 setting_has_explicit_value(const SettingsStore &store,
                            const SettingKey &key);
+
+/**
+ * Checks whether a setting is configured outside the compiled-in defaults.
+ *
+ * @param store Source settings store.
+ * @param key Setting key.
+ * @returns True for a global value or explicit override.
+ */
+ELDER_TERMS_API bool
+setting_has_configured_value(const SettingsStore &store,
+                             const SettingKey &key);
+
+/**
+ * Replaces inherited fallbacks while preserving explicit values and dirtiness.
+ *
+ * @param store Draft settings store to update.
+ * @param fallbacks Store whose effective values become the new fallbacks.
+ *
+ * @remarks Any configured value in fallbacks is treated as a global fallback.
+ * The connection-specific [general] name setting is never rebased.
+ */
+ELDER_TERMS_API void
+rebase_settings_store_fallbacks(SettingsStore *store,
+                                const SettingsStore &fallbacks);
 
 /**
  * Checks whether one setting has unsaved changes.

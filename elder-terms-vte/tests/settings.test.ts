@@ -537,7 +537,7 @@ describe.concurrent('elder-terms-vte settings', () => {
             const config = await readFile(configPath, 'utf8');
             expect(config).toContain('width=82');
             expect(config).toContain('height=26');
-            expect(config).not.toContain('zoom=');
+            expect(config).toContain('zoom=1');
             expect(config).not.toContain('unknown=');
             expect(await readFile(startupConfigPath, 'utf8')).toBe(
               startupConfig

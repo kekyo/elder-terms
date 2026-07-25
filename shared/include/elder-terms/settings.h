@@ -134,6 +134,8 @@ struct SettingsLoadOptions {
   std::optional<std::filesystem::path> config_path;
   /** Optional read-only startup INI path passed with -s. */
   std::optional<std::filesystem::path> startup_config_path;
+  /** Optional global defaults INI path. Missing files are ignored. */
+  std::optional<std::filesystem::path> global_config_path = std::nullopt;
 };
 
 /**
@@ -142,7 +144,8 @@ struct SettingsLoadOptions {
 struct SettingsLoadResult {
   /** Loaded store, with defaults applied for missing or invalid values. */
   SettingsStore store;
-  /** True when every requested INI file was read successfully. */
+  /** True when every requested connection and startup INI file was read
+   * successfully. */
   bool loaded = true;
   /** Non-fatal warnings encountered while loading. */
   std::vector<std::string> warnings;
@@ -171,9 +174,17 @@ create_default_settings(TerminalDisplaySettings terminal_defaults,
                         std::string default_connection_name);
 
 /**
+ * Returns the standard path for global defaults.
+ *
+ * @returns $XDG_CONFIG_HOME/elder-terms/global.ini using GLib's resolved
+ * user configuration directory.
+ */
+ELDER_TERMS_API std::filesystem::path default_global_config_path();
+
+/**
  * Loads settings from optional INI files.
  *
- * @param options Persistent and startup configuration paths.
+ * @param options Global, persistent, and startup configuration paths.
  * @param default_terminal_zoom VTE's runtime default font scale.
  * @returns Loaded settings and non-fatal warnings.
  */
@@ -182,17 +193,45 @@ load_settings(const SettingsLoadOptions &options,
               gdouble default_terminal_zoom);
 
 /**
+ * Loads global defaults for editing.
+ *
+ * @param global_config_path Global defaults INI path.
+ * @param default_terminal_zoom VTE's runtime default font scale.
+ * @returns Store whose global keys are represented as explicit overrides.
+ *
+ * @remarks A missing global file produces an empty, editable defaults store.
+ * The [general] name key is ignored.
+ */
+ELDER_TERMS_API SettingsLoadResult
+load_global_settings(const std::filesystem::path &global_config_path,
+                     gdouble default_terminal_zoom);
+
+/**
  * Saves settings to an INI file.
  *
  * @param store Settings to serialize.
  * @param config_path Target INI path.
  * @returns Save status and warnings.
  *
- * @remarks Values equal to their registered defaults are omitted.
+ * @remarks Only inherited values are omitted. Explicit overrides are saved
+ * even when equal to their fallback.
  */
 ELDER_TERMS_API SettingsSaveResult
 save_settings(const SettingsStore &store,
               const std::filesystem::path &config_path);
+
+/**
+ * Saves explicit global defaults to an INI file.
+ *
+ * @param store Editable global settings store.
+ * @param global_config_path Target global.ini path.
+ * @returns Save status and warnings.
+ *
+ * @remarks The [general] name key is always excluded.
+ */
+ELDER_TERMS_API SettingsSaveResult
+save_global_settings(const SettingsStore &store,
+                     const std::filesystem::path &global_config_path);
 
 /**
  * Extracts the terminal connection profile from a store.

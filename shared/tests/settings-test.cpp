@@ -17,11 +17,13 @@ namespace elder_terms_settings_test {
 
 using elder_terms::create_default_settings;
 using elder_terms::clear_explicit_setting_value;
+using elder_terms::default_global_config_path;
 using elder_terms::default_terminal_text_settings;
 using elder_terms::default_terminal_display_settings;
 using elder_terms::general_type_setting_key;
 using elder_terms::key_binding_matches;
 using elder_terms::parse_key_binding;
+using elder_terms::load_global_settings;
 using elder_terms::load_settings;
 using elder_terms::LocalShellConnectionSettings;
 using elder_terms::terminal_log_base_directory_setting_key;
@@ -33,6 +35,7 @@ using elder_terms::TerminalLogSettings;
 using elder_terms::terminal_log_mode_setting_key;
 using elder_terms::terminal_log_settings;
 using elder_terms::save_settings;
+using elder_terms::save_global_settings;
 using elder_terms::SerialCarrierDetect;
 using elder_terms::SerialConnectionSettings;
 using elder_terms::SerialFlowControl;
@@ -51,6 +54,7 @@ using elder_terms::SettingsLoadOptions;
 using elder_terms::SettingsLoadResult;
 using elder_terms::SettingsSaveResult;
 using elder_terms::SettingsStore;
+using elder_terms::SettingValueSource;
 using elder_terms::SshConnectionSettings;
 using elder_terms::ssh_address_setting_key;
 using elder_terms::ssh_connection_settings;
@@ -89,6 +93,13 @@ using elder_terms::transfer_text_send_bytes_per_second;
 using elder_terms::transfer_text_send_bytes_per_second_setting_key;
 using elder_terms::transfer_zmodem_autostart;
 using elder_terms::transfer_zmodem_autostart_setting_key;
+using elder_terms::rebase_settings_store_fallbacks;
+using elder_terms::setting_fallback_source;
+using elder_terms::setting_fallback_value;
+using elder_terms::setting_has_configured_value;
+using elder_terms::setting_has_explicit_value;
+using elder_terms::setting_is_dirty;
+using elder_terms::setting_value_source;
 
 static bool warnings_contain(const std::vector<std::string> &warnings,
                              const std::string &text) {
@@ -1473,6 +1484,25 @@ static void test_save_explicit_terminal_text_defaults() {
               "loaded explicit values should remain explicit after type change");
 }
 
+static void test_save_explicit_value_equal_to_built_in() {
+  const std::filesystem::path path =
+      temporary_config_path("save-explicit-built-in");
+  SettingsStore store =
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
+  set_explicit_setting_value(
+      &store, terminal_zoom_setting_key(),
+      elder_terms::SettingValue{gdouble{1.0}});
+
+  const SettingsSaveResult result = save_settings(store, path);
+  expect_true(result.saved,
+              "saving an explicit built-in value should succeed");
+  const std::string content = read_config(path);
+  remove_config(path);
+  expect_true(content.find("zoom=1") != std::string::npos,
+              "an explicit value equal to built-in should be persisted");
+}
+
 static void test_save_serial_settings_omits_default_values() {
   const std::filesystem::path path = temporary_config_path("save-serial-values");
   SettingsStore store =
@@ -1636,6 +1666,441 @@ static void test_load_settings_reports_file_read_status() {
               "successfully loaded settings should retain their value");
 }
 
+static void test_global_settings_layer_priority_and_sources() {
+  const std::filesystem::path global_path =
+      temporary_config_path("global-layer");
+  const std::filesystem::path config_path =
+      temporary_config_path("connection-layer");
+  const std::filesystem::path startup_path =
+      temporary_config_path("startup-layer");
+  write_config(global_path,
+               "[general]\n"
+               "name=Ignored global name\n"
+               "type=serial\n"
+               "\n"
+               "[terminal]\n"
+               "width=90\n"
+               "height=30\n"
+               "backspace_code=del\n"
+               "\n"
+               "[transfer]\n"
+               "zmodem_autostart=false\n");
+  write_config(config_path,
+               "[terminal]\n"
+               "width=100\n"
+               "zoom=1.25\n");
+  write_config(startup_path,
+               "[terminal]\n"
+               "width=110\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = config_path,
+          .startup_config_path = startup_path,
+          .global_config_path = global_path,
+      },
+      1.0);
+  remove_config(global_path);
+  remove_config(config_path);
+  remove_config(startup_path);
+
+  const TerminalDisplaySettings display =
+      terminal_display_settings(result.store);
+  expect_true(display.width == 110,
+              "startup settings should override connection and global values");
+  expect_true(display.height == 30,
+              "global settings should override built-in values");
+  expect_true(display.zoom == 1.25,
+              "connection settings should override built-in values");
+  expect_true(setting_value_source(result.store,
+                                   terminal_width_setting_key()) ==
+                  SettingValueSource::override,
+              "startup and connection values should be reported as overrides");
+  expect_true(setting_fallback_source(result.store,
+                                      terminal_width_setting_key()) ==
+                  SettingValueSource::global,
+              "an override should retain its global fallback source");
+  expect_true(std::get<gint64>(setting_fallback_value(
+                  result.store, terminal_width_setting_key(),
+                  elder_terms::SettingValue{gint64{0}})) == 90,
+              "an override should retain its global fallback value");
+  expect_true(setting_value_source(result.store,
+                                   terminal_height_setting_key()) ==
+                  SettingValueSource::global,
+              "a global value should report the global source");
+  expect_true(!setting_has_explicit_value(result.store,
+                                          terminal_height_setting_key()),
+              "a global fallback should not become a connection override");
+  expect_true(setting_has_configured_value(result.store,
+                                           terminal_height_setting_key()),
+              "a global fallback should count as a configured value");
+  expect_true(elder_terms::general_connection_name(result.store) ==
+                  config_path.stem().string(),
+              "global [general] name should not replace the connection name");
+  expect_true(setting_value_source(result.store,
+                                   elder_terms::general_name_setting_key()) ==
+                  SettingValueSource::built_in,
+              "global [general] name should remain excluded");
+
+  const TerminalConnectionProfile profile =
+      required_terminal_connection_profile(result.store);
+  expect_true(profile.kind == TerminalConnectionKind::serial,
+              "global connection type should select the serial profile");
+  expect_true(profile.text_settings.backspace_code ==
+                  TerminalBackspaceCode::del,
+              "global terminal text settings should override type defaults");
+  expect_true(!elder_terms::transfer_zmodem_autostart(result.store),
+              "an explicit global false should override serial ZMODEM default");
+}
+
+static void test_invalid_layer_values_use_the_next_fallback() {
+  const std::filesystem::path global_path =
+      temporary_config_path("invalid-global-layer");
+  const std::filesystem::path config_path =
+      temporary_config_path("invalid-connection-layer");
+  write_config(global_path,
+               "[terminal]\n"
+               "width=90\n"
+               "height=-1\n");
+  write_config(config_path,
+               "[terminal]\n"
+               "width=invalid\n"
+               "height=31\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = config_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  remove_config(global_path);
+  remove_config(config_path);
+
+  const TerminalDisplaySettings display =
+      terminal_display_settings(result.store);
+  expect_true(display.width == 90,
+              "an invalid connection value should use the global fallback");
+  expect_true(display.height == 31,
+              "a valid connection value should override an invalid global "
+              "value");
+  expect_true(setting_value_source(result.store,
+                                   terminal_width_setting_key()) ==
+                  SettingValueSource::global,
+              "an invalid override should leave the global source active");
+  expect_true(setting_fallback_source(result.store,
+                                      terminal_height_setting_key()) ==
+                  SettingValueSource::built_in,
+              "an invalid global value should retain the built-in fallback");
+  expect_true(
+      warnings_contain(result.warnings,
+                       "invalid configuration value [terminal] width"),
+      "an invalid connection value should emit a warning");
+  expect_true(
+      warnings_contain(result.warnings,
+                       "invalid configuration value [terminal] height"),
+      "an invalid global value should emit a warning");
+}
+
+static void test_global_settings_do_not_flatten_into_connection_files() {
+  const std::filesystem::path global_path =
+      temporary_config_path("save-global-fallback");
+  const std::filesystem::path connection_path =
+      temporary_config_path("save-global-connection");
+  write_config(global_path,
+               "[terminal]\n"
+               "width=90\n");
+
+  SettingsLoadResult loaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::nullopt,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  remove_config(global_path);
+
+  const SettingsSaveResult inherited_result =
+      save_settings(loaded.store, connection_path);
+  expect_true(inherited_result.saved,
+              "saving inherited settings should succeed");
+  expect_true(read_config(connection_path).empty(),
+              "global fallback values should not be flattened into a "
+              "connection file");
+
+  expect_true(
+      set_explicit_setting_value(
+          &loaded.store, terminal_width_setting_key(),
+          elder_terms::SettingValue{gint64{90}}),
+      "an explicit value equal to the global fallback should be accepted");
+  const SettingsSaveResult explicit_result =
+      save_settings(loaded.store, connection_path);
+  expect_true(explicit_result.saved,
+              "saving an explicit value equal to fallback should succeed");
+  expect_true(read_config(connection_path).find("width=90") !=
+                  std::string::npos,
+              "an explicit value equal to its fallback should be persisted");
+
+  clear_explicit_setting_value(&loaded.store, terminal_width_setting_key());
+  const SettingsSaveResult cleared_result =
+      save_settings(loaded.store, connection_path);
+  expect_true(cleared_result.saved,
+              "saving after clearing an override should succeed");
+  expect_true(read_config(connection_path).empty(),
+              "clearing an override should restore non-flattened persistence");
+  remove_config(connection_path);
+}
+
+static void test_global_settings_editor_excludes_connection_name() {
+  const std::filesystem::path path =
+      temporary_config_path("global-editor");
+  write_config(path,
+               "[general]\n"
+               "name=Ignored global name\n"
+               "type=ssh\n"
+               "\n"
+               "[terminal]\n"
+               "width=92\n");
+
+  SettingsLoadResult result = load_global_settings(path, 1.0);
+  expect_true(result.loaded, "a readable global settings file should load");
+  expect_true(elder_terms::general_connection_name(result.store) ==
+                  "elder-terms",
+              "the global editor should always ignore [general] name");
+  expect_true(setting_value_source(result.store,
+                                   terminal_width_setting_key()) ==
+                  SettingValueSource::override,
+              "global editor values should be editable overrides");
+  expect_true(setting_has_explicit_value(result.store,
+                                         terminal_width_setting_key()),
+              "global editor values should retain explicit persistence");
+
+  const SettingsSaveResult save_result =
+      save_global_settings(result.store, path);
+  expect_true(save_result.saved, "saving global settings should succeed");
+  const std::string content = read_config(path);
+  remove_config(path);
+  expect_true(content.find("name=") == std::string::npos,
+              "global settings should never persist [general] name");
+  expect_true(content.find("type=ssh") != std::string::npos,
+              "global settings should persist other general defaults");
+  expect_true(content.find("width=92") != std::string::npos,
+              "global settings should persist explicit defaults");
+}
+
+static void test_rebase_preserves_draft_overrides_and_dirty_state() {
+  const std::filesystem::path first_global_path =
+      temporary_config_path("rebase-first-global");
+  const std::filesystem::path second_global_path =
+      temporary_config_path("rebase-second-global");
+  const std::filesystem::path connection_path =
+      temporary_config_path("rebase-connection-name");
+  write_config(first_global_path,
+               "[terminal]\n"
+               "width=90\n"
+               "height=30\n");
+  write_config(second_global_path,
+               "[terminal]\n"
+               "width=95\n"
+               "height=40\n");
+  write_config(connection_path, "[general]\ntype=local\n");
+
+  SettingsLoadResult draft = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = first_global_path,
+      },
+      1.0);
+  const SettingsLoadResult next_fallbacks = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::nullopt,
+          .startup_config_path = std::nullopt,
+          .global_config_path = second_global_path,
+      },
+      1.0);
+  remove_config(first_global_path);
+  remove_config(second_global_path);
+  remove_config(connection_path);
+
+  set_explicit_setting_value(
+      &draft.store, terminal_width_setting_key(),
+      elder_terms::SettingValue{gint64{100}});
+  expect_true(setting_is_dirty(draft.store, terminal_width_setting_key()),
+              "edited draft override should start dirty");
+  expect_true(!setting_is_dirty(draft.store, terminal_height_setting_key()),
+              "inherited draft field should start clean");
+
+  rebase_settings_store_fallbacks(&draft.store, next_fallbacks.store);
+
+  const TerminalDisplaySettings display =
+      terminal_display_settings(draft.store);
+  expect_true(display.width == 100,
+              "rebase should preserve an explicit draft override");
+  expect_true(display.height == 40,
+              "rebase should update an inherited draft value");
+  expect_true(std::get<gint64>(setting_fallback_value(
+                  draft.store, terminal_width_setting_key(),
+                  elder_terms::SettingValue{gint64{0}})) == 95,
+              "rebase should update the fallback behind an override");
+  expect_true(setting_is_dirty(draft.store, terminal_width_setting_key()),
+              "rebase should preserve override dirty state");
+  expect_true(!setting_is_dirty(draft.store, terminal_height_setting_key()),
+              "fallback-only rebase should not dirty an inherited field");
+  expect_true(elder_terms::general_connection_name(draft.store) ==
+                  connection_path.stem().string(),
+              "rebase should preserve the connection-specific fallback name");
+  expect_true(elder_terms::general_connection_kind(draft.store) ==
+                  elder_terms::ConnectionKind::local_shell &&
+                  setting_value_source(draft.store,
+                                       general_type_setting_key()) ==
+                      SettingValueSource::override &&
+                  !setting_is_dirty(draft.store, general_type_setting_key()),
+              "rebase should preserve a clean loaded connection override");
+}
+
+static void test_key_binding_conflicts_are_resolved_per_layer() {
+  const std::filesystem::path invalid_global_path =
+      temporary_config_path("conflicting-global-bindings");
+  write_config(invalid_global_path,
+               "[terminal]\n"
+               "zoom_in_key=ctrl+plus\n"
+               "zoom_out_key=ctrl+plus\n");
+  const SettingsLoadResult invalid_global = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::nullopt,
+          .startup_config_path = std::nullopt,
+          .global_config_path = invalid_global_path,
+      },
+      1.0);
+  remove_config(invalid_global_path);
+  expect_true(setting_value_source(invalid_global.store,
+                                   terminal_zoom_in_key_setting_key()) ==
+                  SettingValueSource::built_in &&
+                  setting_value_source(
+                      invalid_global.store,
+                      terminal_zoom_out_key_setting_key()) ==
+                      SettingValueSource::built_in,
+              "a conflicting global pair should fall back to built-ins");
+
+  const std::filesystem::path valid_global_path =
+      temporary_config_path("valid-global-bindings");
+  const std::filesystem::path invalid_connection_path =
+      temporary_config_path("conflicting-connection-bindings");
+  write_config(valid_global_path,
+               "[terminal]\n"
+               "zoom_in_key=alt+Up\n"
+               "zoom_out_key=alt+Down\n");
+  write_config(invalid_connection_path,
+               "[terminal]\n"
+               "zoom_in_key=ctrl+Left\n"
+               "zoom_out_key=ctrl+Left\n");
+  const SettingsLoadResult invalid_connection = load_settings(
+      SettingsLoadOptions{
+          .config_path = invalid_connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = valid_global_path,
+      },
+      1.0);
+  expect_true(elder_terms::terminal_zoom_in_key(invalid_connection.store) ==
+                  "alt+Up" &&
+                  elder_terms::terminal_zoom_out_key(
+                      invalid_connection.store) == "alt+Down",
+              "a conflicting connection pair should fall back to the valid "
+              "global pair");
+  expect_true(setting_value_source(
+                  invalid_connection.store,
+                  terminal_zoom_in_key_setting_key()) ==
+                  SettingValueSource::global &&
+                  setting_value_source(
+                      invalid_connection.store,
+                      terminal_zoom_out_key_setting_key()) ==
+                      SettingValueSource::global,
+              "clearing a conflicting override should retain global sources");
+
+  const std::filesystem::path valid_connection_path =
+      temporary_config_path("valid-connection-bindings");
+  const std::filesystem::path invalid_startup_path =
+      temporary_config_path("conflicting-startup-bindings");
+  write_config(valid_connection_path,
+               "[terminal]\n"
+               "zoom_in_key=ctrl+Left\n"
+               "zoom_out_key=ctrl+Right\n");
+  write_config(invalid_startup_path,
+               "[terminal]\n"
+               "zoom_in_key=shift+Up\n"
+               "zoom_out_key=shift+Up\n");
+  const SettingsLoadResult invalid_startup = load_settings(
+      SettingsLoadOptions{
+          .config_path = valid_connection_path,
+          .startup_config_path = invalid_startup_path,
+          .global_config_path = valid_global_path,
+      },
+      1.0);
+  remove_config(valid_global_path);
+  remove_config(invalid_connection_path);
+  remove_config(valid_connection_path);
+  remove_config(invalid_startup_path);
+  expect_true(elder_terms::terminal_zoom_in_key(invalid_startup.store) ==
+                  "ctrl+Left" &&
+                  elder_terms::terminal_zoom_out_key(invalid_startup.store) ==
+                      "ctrl+Right",
+              "a conflicting startup pair should restore the connection "
+              "layer");
+  expect_true(setting_value_source(
+                  invalid_startup.store,
+                  terminal_zoom_in_key_setting_key()) ==
+                  SettingValueSource::override &&
+                  setting_value_source(
+                      invalid_startup.store,
+                      terminal_zoom_out_key_setting_key()) ==
+                      SettingValueSource::override,
+              "restored connection bindings should remain explicit "
+              "overrides");
+}
+
+static void test_missing_global_settings_are_optional() {
+  const std::filesystem::path missing =
+      temporary_config_path("missing-global");
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::nullopt,
+          .startup_config_path = std::nullopt,
+          .global_config_path = missing,
+      },
+      1.0);
+  expect_true(result.loaded,
+              "a missing optional global file should not fail settings load");
+  expect_true(result.warnings.empty(),
+              "a missing optional global file should not emit a warning");
+
+  const std::filesystem::path default_path = default_global_config_path();
+  expect_true(default_path.filename() == "global.ini" &&
+                  default_path.parent_path().filename() == "elder-terms",
+              "the default global path should be elder-terms/global.ini");
+}
+
+static void test_save_empty_global_settings_creates_parent_directory() {
+  const std::filesystem::path root =
+      temporary_config_path("global-parent-directory");
+  const std::filesystem::path path =
+      root / "elder-terms" / "global.ini";
+  const SettingsStore store =
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
+
+  const SettingsSaveResult result = save_global_settings(store, path);
+  expect_true(result.saved,
+              "saving empty global defaults should create missing parents");
+  expect_true(std::filesystem::is_regular_file(path),
+              "empty global defaults should leave a global.ini file");
+  expect_true(read_config(path).empty(),
+              "fully inherited global defaults should save an empty file");
+
+  std::error_code remove_error;
+  std::filesystem::remove_all(root, remove_error);
+}
+
 } // namespace elder_terms_settings_test
 
 int main() {
@@ -1670,9 +2135,18 @@ int main() {
     elder_terms_settings_test::test_save_sftp_settings_omits_default_values();
     elder_terms_settings_test::test_save_explicit_zmodem_autostart();
     elder_terms_settings_test::test_save_explicit_terminal_text_defaults();
+    elder_terms_settings_test::test_save_explicit_value_equal_to_built_in();
     elder_terms_settings_test::test_save_terminal_log_settings();
     elder_terms_settings_test::test_save_settings_writes_empty_file_for_defaults();
     elder_terms_settings_test::test_load_settings_reports_file_read_status();
+    elder_terms_settings_test::test_global_settings_layer_priority_and_sources();
+    elder_terms_settings_test::test_invalid_layer_values_use_the_next_fallback();
+    elder_terms_settings_test::test_global_settings_do_not_flatten_into_connection_files();
+    elder_terms_settings_test::test_global_settings_editor_excludes_connection_name();
+    elder_terms_settings_test::test_rebase_preserves_draft_overrides_and_dirty_state();
+    elder_terms_settings_test::test_key_binding_conflicts_are_resolved_per_layer();
+    elder_terms_settings_test::test_missing_global_settings_are_optional();
+    elder_terms_settings_test::test_save_empty_global_settings_creates_parent_directory();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

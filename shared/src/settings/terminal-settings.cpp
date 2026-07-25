@@ -245,21 +245,18 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .default_value =
               SettingValue{std::string(default_terminal_encoding)},
           .validate = validate_terminal_encoding,
-          .save_when_loaded = true,
       },
       {
           .key = terminal_backspace_code_setting_key(),
           .default_value =
               SettingValue{std::string(default_terminal_backspace_code)},
           .validate = validate_terminal_backspace_code,
-          .save_when_loaded = true,
       },
       {
           .key = terminal_cursor_key_mode_setting_key(),
           .default_value =
               SettingValue{std::string(default_terminal_cursor_key_mode)},
           .validate = validate_terminal_cursor_key_mode,
-          .save_when_loaded = true,
       },
   };
 }

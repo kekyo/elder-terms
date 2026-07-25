@@ -2016,6 +2016,7 @@ static void update_default_connection_name(SettingsStore *store,
       continue;
     }
     entry.definition.default_value = SettingValue{name};
+    entry.fallback_value = SettingValue{name};
     if (!entry.loaded) {
       entry.value = SettingValue{name};
     }

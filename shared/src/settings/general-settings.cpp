@@ -60,7 +60,6 @@ general_setting_definitions(std::string default_connection_name) {
           .default_value =
               SettingValue{std::move(default_connection_name)},
           .validate = nullptr,
-          .save_when_loaded = true,
       },
       {
           .key = general_type_setting_key(),

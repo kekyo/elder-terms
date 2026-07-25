@@ -52,7 +52,6 @@ std::vector<SettingDefinition> transfer_setting_definitions() {
           .key = transfer_zmodem_autostart_setting_key(),
           .default_value = SettingValue{false},
           .validate = nullptr,
-          .save_when_loaded = true,
       },
   };
 }
@@ -71,8 +70,8 @@ gint64 transfer_text_send_bytes_per_second(const SettingsStore &store) {
 bool transfer_zmodem_autostart(const SettingsStore &store) {
   const bool configured = setting_boolean_value_or_default(
       store, transfer_zmodem_autostart_setting_key(), false);
-  if (setting_has_explicit_value(store,
-                                 transfer_zmodem_autostart_setting_key())) {
+  if (setting_has_configured_value(
+          store, transfer_zmodem_autostart_setting_key())) {
     return configured;
   }
   if (configured) {
