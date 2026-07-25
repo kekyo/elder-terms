@@ -377,7 +377,8 @@ const captureKeyBinding = async (
 const clearKeyBinding = async (
   app: GtkApp,
   entry: GtkEntryElement,
-  blurTarget: GtkWidgetElement
+  blurTarget: GtkWidgetElement,
+  resetButtonId: string
 ): Promise<void> => {
   await waitForResult(async () => {
     await clickWidget(app, entry);
@@ -390,6 +391,9 @@ const clearKeyBinding = async (
     await app.input.setMouseButton('left', false);
     await clickWidget(app, blurTarget);
     expect(await entry.text()).toBe('');
+    await expectSensitive(
+      expectElementKind(await app.getById(resetButtonId), 'button')
+    );
   });
 };
 
@@ -1689,7 +1693,12 @@ describe.concurrent('shared settings widget', () => {
         await setNumericEntryValue(zoom, 1.1);
         await autoClose.selectChildAt(1);
         await captureKeyBinding(app, zoomInKey, ['alt'], 'Up');
-        await clearKeyBinding(app, zoomOutKey, width);
+        await clearKeyBinding(
+          app,
+          zoomOutKey,
+          width,
+          'settings_terminal_zoom_out_key_reset_button'
+        );
         await waitForEntryPlaceholder(
           app,
           'settings_terminal_zoom_out_key_entry',
@@ -1871,7 +1880,12 @@ describe.concurrent('shared settings widget', () => {
           await app.input.setModifier('control', false);
         }
 
-        await clearKeyBinding(app, zoomInKey, width);
+        await clearKeyBinding(
+          app,
+          zoomInKey,
+          width,
+          'settings_terminal_zoom_in_key_reset_button'
+        );
         await expectEntryText(zoomInKey, '');
         await waitForEntryPlaceholder(
           app,
