@@ -30,6 +30,8 @@ struct LauncherMainWindow {
   GtkWidget *settings_container = nullptr;
   /** Creates a new connection draft. */
   GtkWidget *new_button = nullptr;
+  /** Opens the global defaults editor. */
+  GtkWidget *global_defaults_button = nullptr;
   /** Persists the selected connection draft. */
   GtkWidget *apply_button = nullptr;
   /** Launches the selected connection. */

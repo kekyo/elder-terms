@@ -134,6 +134,7 @@ SettingsLoadResult load_connection_profile(const std::filesystem::path &path) {
       SettingsLoadOptions{
           .config_path = path,
           .startup_config_path = std::nullopt,
+          .global_config_path = default_global_config_path(),
       },
       default_terminal_zoom);
 }

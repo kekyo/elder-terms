@@ -60,6 +60,8 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
       .details_stack = required_widget(builder, "details_stack"),
       .settings_container = required_widget(builder, "settings_container"),
       .new_button = required_widget(builder, "new_button"),
+      .global_defaults_button =
+          required_widget(builder, "global_defaults_button"),
       .apply_button = required_widget(builder, "apply_button"),
       .connect_button = required_widget(builder, "connect_button"),
   };
@@ -68,8 +70,9 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
       result.connection_list == nullptr || result.connection_store == nullptr ||
       result.connection_name_renderer == nullptr ||
       result.details_stack == nullptr || result.settings_container == nullptr ||
-      result.new_button == nullptr || result.apply_button == nullptr ||
-      result.connect_button == nullptr) {
+      result.new_button == nullptr ||
+      result.global_defaults_button == nullptr ||
+      result.apply_button == nullptr || result.connect_button == nullptr) {
     g_object_unref(builder);
     return std::nullopt;
   }

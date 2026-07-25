@@ -89,6 +89,89 @@ const expectInsensitive = async (element: GtkWidgetElement): Promise<void> => {
   expect((await element.info()).states).not.toContain('sensitive');
 };
 
+const waitForWindowCount = async (
+  app: GtkApp,
+  expected: number
+): Promise<void> => {
+  await waitForResult(async () => {
+    expect(await app.getWindowCount()).toBe(expected);
+  });
+};
+
+const openGlobalDefaults = async (app: GtkApp): Promise<GtkWidgetElement> => {
+  await expectElementKind(
+    await app.getById('global_defaults_button'),
+    'button'
+  ).click();
+  await waitForWindowCount(app, 2);
+  const dialog = expectElementKind(
+    await app.getById('global_defaults_dialog'),
+    'window'
+  );
+  expect((await dialog.info()).states).toContain('modal');
+  return dialog;
+};
+
+const visibleSettingsTabNames = async (
+  app: GtkApp,
+  idPrefix: string
+): Promise<string[]> => {
+  const notebook = expectElementKind(
+    await app.getById(`${idPrefix}_notebook`),
+    'tabList'
+  );
+  const names: string[] = [];
+  const childCount = await notebook.getChildCount();
+  for (let index = 0; index < childCount; index += 1) {
+    const tab = await notebook.childAt(index);
+    if (tab !== undefined) {
+      const info = await tab.info();
+      if (info.states.includes('showing')) {
+        names.push(info.name);
+      }
+    }
+  }
+  return names;
+};
+
+const selectSettingsTab = async (
+  app: GtkApp,
+  idPrefix: string,
+  expectedName: string
+): Promise<void> => {
+  const notebook = expectElementKind(
+    await app.getById(`${idPrefix}_notebook`),
+    'tabList'
+  );
+  const childCount = await notebook.getChildCount();
+  for (let index = 0; index < childCount; index += 1) {
+    const tab = await notebook.childAt(index);
+    if (tab !== undefined && (await tab.info()).name === expectedName) {
+      await notebook.selectChildAt(index);
+      return;
+    }
+  }
+  throw new Error(`Settings tab was not found: ${expectedName}`);
+};
+
+const expectSelectedComboValue = async (
+  app: GtkApp,
+  id: string,
+  expectedName: string
+): Promise<void> => {
+  await waitForResult(async () => {
+    const combo = expectElementKind(await app.getById(id), 'comboBox');
+    const selected = await combo.selectedChildAt(0);
+    expect(selected).toBeDefined();
+    expect((await selected?.info())?.name).toBe(expectedName);
+  });
+};
+
+const iniValueLines = (content: string): string[] =>
+  content
+    .split('\n')
+    .filter((line) => line.length > 0 && !line.startsWith('['));
+
 const prepareProfiles = async (connections: string): Promise<void> => {
   await writeFile(join(connections, 'Alpha.ini'), '[terminal]\nwidth=88\n');
   await writeFile(join(connections, 'Beta.ini'), '[terminal]\nwidth=99\n');
@@ -198,6 +281,366 @@ describe('elder-terms main window', () => {
         (await right.capture()).bounds.x
       );
     });
+  });
+
+  it('opens a modal all-backend global defaults editor and cancels without saving', async (context) => {
+    const originalGlobal =
+      '# keep this file unchanged on cancel\n[terminal]\nwidth=91\n';
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await prepareProfiles(connections);
+        await writeFile(join(connections, '..', 'global.ini'), originalGlobal);
+      },
+      async ({ app, configHome }) => {
+        const newButton = expectElementKind(
+          await app.getById('new_button'),
+          'button'
+        );
+        const globalButton = expectElementKind(
+          await app.getById('global_defaults_button'),
+          'button'
+        );
+        const applyButton = expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        );
+        const launchButton = expectElementKind(
+          await app.getById('connect_button'),
+          'button'
+        );
+        expect((await globalButton.info()).name).toBe('Global defaults');
+
+        await waitForResult(async () => {
+          const [newCapture, globalCapture, applyCapture, launchCapture] =
+            await Promise.all([
+              newButton.capture(),
+              globalButton.capture(),
+              applyButton.capture(),
+              launchButton.capture(),
+            ]);
+          const newBounds = newCapture.bounds;
+          const globalBounds = globalCapture.bounds;
+          const applyBounds = applyCapture.bounds;
+          const launchBounds = launchCapture.bounds;
+          const newToGlobalGap =
+            globalBounds.x - (newBounds.x + newBounds.width);
+          const globalToApplyGap =
+            applyBounds.x - (globalBounds.x + globalBounds.width);
+          expect(newBounds.x + newBounds.width).toBeLessThanOrEqual(
+            globalBounds.x
+          );
+          expect(globalBounds.x + globalBounds.width).toBeLessThan(
+            applyBounds.x
+          );
+          expect(applyBounds.x + applyBounds.width).toBeLessThanOrEqual(
+            launchBounds.x
+          );
+          expect(globalToApplyGap).toBeGreaterThan(newToGlobalGap);
+        });
+
+        await openGlobalDefaults(app);
+        expectElementKind(
+          await app.getById('global_settings_widget_root'),
+          'container'
+        );
+        await waitForResult(async () => {
+          expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual(
+            [
+              'General',
+              'TELNET',
+              'Serial',
+              'SSH',
+              'SFTP',
+              'Terminal',
+              'Transfer',
+              'Logging',
+            ]
+          );
+        });
+        expect(
+          await app.findById('global_settings_general_name_entry')
+        ).toBeUndefined();
+
+        await selectSettingsTab(app, 'global_settings', 'Terminal');
+        const width = expectElementKind(
+          await app.getById('global_settings_terminal_width_entry'),
+          'entry'
+        );
+        expect(Number(await width.text())).toBe(91);
+        await width.setText('92');
+        await expectElementKind(
+          await app.getById('global_defaults_cancel_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+
+        const globalPath = join(configHome, 'elder-terms', 'global.ini');
+        expect(await readFile(globalPath, 'utf8')).toBe(originalGlobal);
+
+        await openGlobalDefaults(app);
+        await selectSettingsTab(app, 'global_settings', 'Terminal');
+        const reopenedWidth = expectElementKind(
+          await app.getById('global_settings_terminal_width_entry'),
+          'entry'
+        );
+        expect(Number(await reopenedWidth.text())).toBe(91);
+        await expectElementKind(
+          await app.getById('global_defaults_cancel_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+      }
+    );
+  });
+
+  it('validates, normalizes, reopens, and fully clears global defaults', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await prepareProfiles(connections);
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          [
+            '# obsolete comment',
+            '[terminal]',
+            'width=90',
+            'unknown=obsolete',
+            '',
+            '[transfer]',
+            'base_path=file:///tmp/original',
+            '',
+          ].join('\n')
+        );
+      },
+      async ({ app, configHome }) => {
+        const globalPath = join(configHome, 'elder-terms', 'global.ini');
+        await openGlobalDefaults(app);
+        await selectSettingsTab(app, 'global_settings', 'Terminal');
+        const width = expectElementKind(
+          await app.getById('global_settings_terminal_width_entry'),
+          'entry'
+        );
+        const save = expectElementKind(
+          await app.getById('global_defaults_save_button'),
+          'button'
+        );
+        expect(Number(await width.text())).toBe(90);
+
+        await width.setText('0');
+        await waitForResult(async () => {
+          await expectInsensitive(save);
+        });
+        await width.setText('96');
+        await waitForResult(async () => {
+          await expectSensitive(save);
+        });
+        await save.click();
+        await waitForWindowCount(app, 1);
+
+        const normalized = await waitForResult(async () => {
+          const content = await readFile(globalPath, 'utf8');
+          expect(iniValueLines(content)).toEqual([
+            'width=96',
+            'base_path=file:///tmp/original',
+          ]);
+          return content;
+        });
+        expect(normalized).not.toContain('# obsolete comment');
+        expect(normalized).not.toContain('unknown=obsolete');
+
+        await openGlobalDefaults(app);
+        await selectSettingsTab(app, 'global_settings', 'Terminal');
+        const reopenedWidth = expectElementKind(
+          await app.getById('global_settings_terminal_width_entry'),
+          'entry'
+        );
+        expect(Number(await reopenedWidth.text())).toBe(96);
+        await reopenedWidth.setText('');
+
+        await selectSettingsTab(app, 'global_settings', 'Transfer');
+        const basePath = expectElementKind(
+          await app.getById('global_settings_transfer_base_path_entry'),
+          'entry'
+        );
+        expect(await basePath.text()).toBe('file:///tmp/original');
+        await basePath.setText('');
+        const clearSave = expectElementKind(
+          await app.getById('global_defaults_save_button'),
+          'button'
+        );
+        await waitForResult(async () => {
+          await expectSensitive(clearSave);
+        });
+        await clearSave.click();
+        await waitForWindowCount(app, 1);
+        await waitForResult(async () => {
+          expect(await readFile(globalPath, 'utf8')).toBe('');
+        });
+      }
+    );
+  });
+
+  it('keeps the global defaults draft open when saving fails', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await prepareProfiles(connections);
+        await mkdir(join(connections, '..', 'global.ini'));
+      },
+      async ({ app }) => {
+        await openGlobalDefaults(app);
+        await selectSettingsTab(app, 'global_settings', 'Terminal');
+        const width = expectElementKind(
+          await app.getById('global_settings_terminal_width_entry'),
+          'entry'
+        );
+        const save = expectElementKind(
+          await app.getById('global_defaults_save_button'),
+          'button'
+        );
+        await width.setText('95');
+        await waitForResult(async () => {
+          await expectSensitive(save);
+        });
+        await save.click();
+
+        await waitForWindowCount(app, 3);
+        expectElementKind(
+          await app.getById('operation_error_dialog'),
+          'infoBar'
+        );
+        expectElementKind(
+          await app.getById('global_defaults_dialog'),
+          'window'
+        );
+        expect(await width.text()).toBe('95');
+        await expectSensitive(save);
+      }
+    );
+  });
+
+  it('rebases inherited settings without losing dirty connection overrides or flattening defaults', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await writeFile(
+          join(connections, 'Alpha.ini'),
+          '[general]\nname=Alpha\n\n[terminal]\nwidth=88\n'
+        );
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[terminal]\nwidth=80\nauto_close=false\n'
+        );
+      },
+      async ({ app, configHome, connections }) => {
+        const list = await app.getById('connection_list');
+        await selectConnectionRow(app, list, 0);
+        const name = expectElementKind(
+          await app.getById('settings_general_name_entry'),
+          'entry'
+        );
+        const width = expectElementKind(
+          await app.getById('settings_terminal_width_entry'),
+          'entry'
+        );
+        const apply = expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        );
+        await waitForResult(async () => {
+          expect(await name.text()).toBe('Alpha');
+          expect(Number(await width.text())).toBe(88);
+        });
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_auto_close_combo',
+          'Disabled (global)'
+        );
+
+        await name.setText('Dirty Alpha');
+        await width.setText('93');
+        await waitForResult(async () => {
+          await expectSensitive(apply);
+        });
+
+        await openGlobalDefaults(app);
+        await selectSettingsTab(app, 'global_settings', 'Terminal');
+        const globalWidth = expectElementKind(
+          await app.getById('global_settings_terminal_width_entry'),
+          'entry'
+        );
+        const globalAutoClose = expectElementKind(
+          await app.getById('global_settings_terminal_auto_close_combo'),
+          'comboBox'
+        );
+        expect(Number(await globalWidth.text())).toBe(80);
+        await expectSelectedComboValue(
+          app,
+          'global_settings_terminal_auto_close_combo',
+          'Disabled'
+        );
+        await globalWidth.setText('120');
+        await globalAutoClose.selectChildAt(1);
+        const globalSave = expectElementKind(
+          await app.getById('global_defaults_save_button'),
+          'button'
+        );
+        await waitForResult(async () => {
+          await expectSensitive(globalSave);
+        });
+        await globalSave.click();
+        await waitForWindowCount(app, 1);
+
+        expect(await name.text()).toBe('Dirty Alpha');
+        expect(Number(await width.text())).toBe(93);
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_auto_close_combo',
+          'Enabled (global)'
+        );
+        await expectSensitive(apply);
+
+        await apply.click();
+        const alphaContent = await waitForResult(async () => {
+          const content = await readFile(
+            join(connections, 'Alpha.ini'),
+            'utf8'
+          );
+          expect(content).toContain('name=Dirty Alpha');
+          expect(content).toContain('width=93');
+          return content;
+        });
+        expect(alphaContent).not.toContain('width=120');
+        expect(alphaContent).not.toContain('auto_close=');
+        const globalContent = await readFile(
+          join(configHome, 'elder-terms', 'global.ini'),
+          'utf8'
+        );
+        expect(globalContent).toContain('width=120');
+        expect(globalContent).toContain('auto_close=true');
+
+        await expectElementKind(
+          await app.getById('new_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(await width.text()).toBe('');
+        });
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_auto_close_combo',
+          'Enabled (global)'
+        );
+        await expectSensitive(apply);
+        await apply.click();
+        await waitForResult(async () => {
+          expect(
+            await readFile(join(connections, 'New connection.ini'), 'utf8')
+          ).toBe('');
+        });
+      }
+    );
   });
 
   it('loads, edits, and applies a selected connection', async (context) => {

@@ -121,6 +121,12 @@
               </object>
             </child>
             <child>
+              <object class="GtkButton" id="global_defaults_button">
+                <property name="visible">True</property>
+                <property name="label">Global defaults</property>
+              </object>
+            </child>
+            <child>
               <object class="GtkBox" id="action_spacer">
                 <property name="visible">True</property>
                 <property name="hexpand">True</property>
