@@ -26,6 +26,7 @@ struct KeyBindingInputWidgetState {
   std::set<guint> pressed_modifier_keys;
   KeyBindingInputDisplayMode display_mode =
       KeyBindingInputDisplayMode::confirmed;
+  bool empty_clear_enabled = false;
   bool focused = false;
 };
 
@@ -73,7 +74,8 @@ static void update_validation_presentation(
 
   gtk_style_context_remove_class(context, GTK_STYLE_CLASS_ERROR);
   const bool show_clear =
-      state->focused && !state->confirmed_text.empty();
+      state->focused &&
+      (!state->confirmed_text.empty() || state->empty_clear_enabled);
   gtk_entry_set_icon_from_icon_name(
       GTK_ENTRY(state->entry), GTK_ENTRY_ICON_SECONDARY,
       show_clear ? "edit-clear-symbolic" : nullptr);
@@ -280,6 +282,14 @@ static void on_entry_icon_press(GtkEntry *,
       !validation_error(state).empty()) {
     return;
   }
+  if (state->confirmed_text.empty() && state->empty_clear_enabled) {
+    state->empty_clear_enabled = false;
+    update_validation_presentation(state);
+    if (state->changed) {
+      state->changed();
+    }
+    return;
+  }
   commit_confirmed_text(state, {});
 }
 
@@ -329,6 +339,15 @@ void set_key_binding_input_widget_text(KeyBindingInputWidgetState *state,
     state->display_mode = KeyBindingInputDisplayMode::waiting;
     set_entry_presentation(state, {});
   }
+}
+
+void set_key_binding_input_widget_empty_clear_enabled(
+    KeyBindingInputWidgetState *state, bool enabled) {
+  if (state == nullptr) {
+    return;
+  }
+  state->empty_clear_enabled = enabled;
+  update_validation_presentation(state);
 }
 
 std::string key_binding_input_widget_text(

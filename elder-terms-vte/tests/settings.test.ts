@@ -154,7 +154,7 @@ const showTerminalSettingsPage = async (app: GtkApp): Promise<void> => {
   await selectSettingsNotebookTab(
     app,
     'Terminal',
-    'settings_terminal_auto_close_check'
+    'settings_terminal_auto_close_combo'
   );
 };
 
@@ -172,7 +172,7 @@ const showLoggingSettingsPage = async (app: GtkApp): Promise<void> => {
 
     await tab.click();
     await toPass(async () => {
-      const enabled = await app.getById('settings_log_enabled_check');
+      const enabled = await app.getById('settings_log_enabled_combo');
       expect((await enabled.info()).states).toContain('showing');
     });
     return;
@@ -286,6 +286,16 @@ const expectSelectedComboValue = async (
   const selected = await combo.selectedChildAt(0);
   expect(selected).toBeDefined();
   expect((await selected?.info())?.name).toBe(expectedName);
+};
+
+const numericEntryValue = async (entry: GtkEntryElement): Promise<number> =>
+  Number(await entry.text());
+
+const setNumericEntryValue = async (
+  entry: GtkEntryElement,
+  value: number
+): Promise<void> => {
+  await entry.setText(String(value));
 };
 
 const waitForShellExit = async (markerPath: string): Promise<void> => {
@@ -848,12 +858,15 @@ describe.concurrent('elder-terms-vte settings', () => {
 
           await openSettingsDialog(app);
           await showLoggingSettingsPage(app);
-          const logEnabled = expectElementKind(
-            await app.getById('settings_log_enabled_check'),
-            'checkbox'
+          await expectSelectedComboValue(
+            app,
+            'settings_log_enabled_combo',
+            'Enabled'
           );
-          expect(await logEnabled.isChecked()).toBe(true);
-          await logEnabled.toggle();
+          await expectElementKind(
+            await app.getById('settings_log_enabled_combo'),
+            'comboBox'
+          ).selectChildAt(2);
           await expectElementKind(
             await app.getById('settings_save_button'),
             'button'
@@ -861,16 +874,19 @@ describe.concurrent('elder-terms-vte settings', () => {
           await expectSettingsDialogClosed(app);
           await waitForActivityIndicatorImageState(app, 'log', 'off');
           const savedConfig = await readFile(configPath, 'utf8');
-          expect(savedConfig).not.toContain('enabled=true');
+          expect(savedConfig).toContain('enabled=false');
 
           await openSettingsDialog(app);
           await showLoggingSettingsPage(app);
-          const appliedLogEnabled = expectElementKind(
-            await app.getById('settings_log_enabled_check'),
-            'checkbox'
+          await expectSelectedComboValue(
+            app,
+            'settings_log_enabled_combo',
+            'Disabled'
           );
-          expect(await appliedLogEnabled.isChecked()).toBe(false);
-          await appliedLogEnabled.toggle();
+          await expectElementKind(
+            await app.getById('settings_log_enabled_combo'),
+            'comboBox'
+          ).selectChildAt(1);
           await expectElementKind(
             await app.getById('settings_apply_button'),
             'button'
@@ -903,32 +919,31 @@ describe.concurrent('elder-terms-vte settings', () => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
       await openSettingsDialog(app);
 
-      await expectSelectedConnectionType(app, 'Local');
+      await expectSelectedConnectionType(app, 'Local (built-in)');
       await showTerminalSettingsPage(app);
       expect(
         await expectElementKind(
-          await app.getById('settings_terminal_width_spin'),
-          'spinButton'
-        ).value()
-      ).toBe(defaultColumns);
+          await app.getById('settings_terminal_width_entry'),
+          'entry'
+        ).text()
+      ).toBe('');
       expect(
         await expectElementKind(
-          await app.getById('settings_terminal_height_spin'),
-          'spinButton'
-        ).value()
-      ).toBe(defaultRows);
+          await app.getById('settings_terminal_height_entry'),
+          'entry'
+        ).text()
+      ).toBe('');
       expect(
         await expectElementKind(
-          await app.getById('settings_terminal_zoom_spin'),
-          'spinButton'
-        ).value()
-      ).toBeCloseTo(1.0);
-      expect(
-        await expectElementKind(
-          await app.getById('settings_terminal_auto_close_check'),
-          'checkbox'
-        ).isChecked()
-      ).toBe(true);
+          await app.getById('settings_terminal_zoom_entry'),
+          'entry'
+        ).text()
+      ).toBe('');
+      await expectSelectedComboValue(
+        app,
+        'settings_terminal_auto_close_combo',
+        'Enabled (built-in)'
+      );
     });
   });
 
@@ -961,16 +976,20 @@ describe.concurrent('elder-terms-vte settings', () => {
 
       await toPass(async () => {
         expect(
-          await expectElementKind(
-            await app.getById('settings_terminal_width_spin'),
-            'spinButton'
-          ).value()
+          await numericEntryValue(
+            expectElementKind(
+              await app.getById('settings_terminal_width_entry'),
+              'entry'
+            )
+          )
         ).toBe(defaultColumns + 1);
         expect(
-          await expectElementKind(
-            await app.getById('settings_terminal_height_spin'),
-            'spinButton'
-          ).value()
+          await numericEntryValue(
+            expectElementKind(
+              await app.getById('settings_terminal_height_entry'),
+              'entry'
+            )
+          )
         ).toBe(defaultRows + 1);
       });
     });
@@ -1002,10 +1021,12 @@ describe.concurrent('elder-terms-vte settings', () => {
       await openSettingsDialog(app);
       await showTerminalSettingsPage(app);
       expect(
-        await expectElementKind(
-          await app.getById('settings_terminal_zoom_spin'),
-          'spinButton'
-        ).value()
+        await numericEntryValue(
+          expectElementKind(
+            await app.getById('settings_terminal_zoom_entry'),
+            'entry'
+          )
+        )
       ).toBeCloseTo(1.1);
     });
   });
@@ -1093,10 +1114,12 @@ describe.concurrent('elder-terms-vte settings', () => {
               ).text()
             ).toBe('127.0.0.1');
             expect(
-              await expectElementKind(
-                await app.getById('settings_telnet_port_spin'),
-                'spinButton'
-              ).value()
+              await numericEntryValue(
+                expectElementKind(
+                  await app.getById('settings_telnet_port_entry'),
+                  'entry'
+                )
+              )
             ).toBe(port);
             expect((await app.output()).stderr).toBe('');
           }
@@ -1155,8 +1178,8 @@ describe.concurrent('elder-terms-vte settings', () => {
             'entry'
           );
           const baudrate = expectElementKind(
-            await app.getById('settings_serial_baudrate_spin'),
-            'spinButton'
+            await app.getById('settings_serial_baudrate_entry'),
+            'entry'
           );
           const bits = expectElementKind(
             await app.getById('settings_serial_bits_combo'),
@@ -1179,7 +1202,7 @@ describe.concurrent('elder-terms-vte settings', () => {
             'comboBox'
           );
           expect(await device.text()).toBe('/dev/ttyUSB0');
-          expect(await baudrate.value()).toBe(115200);
+          expect(await numericEntryValue(baudrate)).toBe(115200);
           await expectSelectedComboValue(
             app,
             'settings_serial_bits_combo',
@@ -1214,12 +1237,12 @@ describe.concurrent('elder-terms-vte settings', () => {
           await expectSensitive(carrierDetect);
           expect((await app.output()).stderr).toBe('');
 
-          await baudrate.setValue(57600);
-          await bits.selectChildAt(0);
-          await parity.selectChildAt(2);
-          await stopBit.selectChildAt(1);
-          await flowControl.selectChildAt(2);
-          await carrierDetect.selectChildAt(1);
+          await setNumericEntryValue(baudrate, 57600);
+          await bits.selectChildAt(1);
+          await parity.selectChildAt(3);
+          await stopBit.selectChildAt(2);
+          await flowControl.selectChildAt(3);
+          await carrierDetect.selectChildAt(2);
           await expectElementKind(
             await app.getById('settings_save_button'),
             'button'
@@ -1263,25 +1286,25 @@ describe.concurrent('elder-terms-vte settings', () => {
           await showSerialSettingsPage(app);
 
           await expectElementKind(
-            await app.getById('settings_serial_baudrate_spin'),
-            'spinButton'
-          ).setValue(57600);
+            await app.getById('settings_serial_baudrate_entry'),
+            'entry'
+          ).setText('57600');
           await expectElementKind(
             await app.getById('settings_serial_bits_combo'),
             'comboBox'
-          ).selectChildAt(0);
+          ).selectChildAt(1);
           await expectElementKind(
             await app.getById('settings_serial_parity_combo'),
             'comboBox'
-          ).selectChildAt(2);
+          ).selectChildAt(3);
           await expectElementKind(
             await app.getById('settings_serial_stop_bit_combo'),
             'comboBox'
-          ).selectChildAt(1);
+          ).selectChildAt(2);
           await expectElementKind(
             await app.getById('settings_serial_flow_control_combo'),
             'comboBox'
-          ).selectChildAt(2);
+          ).selectChildAt(3);
           await expectElementKind(
             await app.getById('settings_apply_button'),
             'button'
@@ -1311,13 +1334,13 @@ describe.concurrent('elder-terms-vte settings', () => {
           await showTerminalSettingsPage(app);
 
           await expectElementKind(
-            await app.getById('settings_terminal_width_spin'),
-            'spinButton'
-          ).setValue(defaultColumns + 1);
+            await app.getById('settings_terminal_width_entry'),
+            'entry'
+          ).setText(String(defaultColumns + 1));
           await expectElementKind(
-            await app.getById('settings_terminal_height_spin'),
-            'spinButton'
-          ).setValue(defaultRows + 1);
+            await app.getById('settings_terminal_height_entry'),
+            'entry'
+          ).setText(String(defaultRows + 1));
           await expectElementKind(
             await app.getById('settings_cancel_button'),
             'button'
@@ -1341,9 +1364,9 @@ describe.concurrent('elder-terms-vte settings', () => {
       await showTerminalSettingsPage(app);
 
       await expectElementKind(
-        await app.getById('settings_terminal_zoom_spin'),
-        'spinButton'
-      ).setValue(1.1);
+        await app.getById('settings_terminal_zoom_entry'),
+        'entry'
+      ).setText('1.1');
       await expectElementKind(
         await app.getById('settings_cancel_button'),
         'button'
@@ -1384,13 +1407,20 @@ describe.concurrent('elder-terms-vte settings', () => {
           await openSettingsDialog(app);
           await showTerminalSettingsPage(app);
 
-          const autoClose = expectElementKind(
-            await app.getById('settings_terminal_auto_close_check'),
-            'checkbox'
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_auto_close_combo',
+            'Enabled (built-in)'
           );
-          expect(await autoClose.isChecked()).toBe(true);
-          await autoClose.toggle();
-          expect(await autoClose.isChecked()).toBe(false);
+          await expectElementKind(
+            await app.getById('settings_terminal_auto_close_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_auto_close_combo',
+            'Disabled'
+          );
           await expectElementKind(
             await app.getById('settings_cancel_button'),
             'button'
@@ -1426,15 +1456,15 @@ describe.concurrent('elder-terms-vte settings', () => {
           await showTerminalSettingsPage(app);
 
           const width = expectElementKind(
-            await app.getById('settings_terminal_width_spin'),
-            'spinButton'
+            await app.getById('settings_terminal_width_entry'),
+            'entry'
           );
           const height = expectElementKind(
-            await app.getById('settings_terminal_height_spin'),
-            'spinButton'
+            await app.getById('settings_terminal_height_entry'),
+            'entry'
           );
-          await width.setValue(defaultColumns + 1);
-          await height.setValue(defaultRows + 1);
+          await setNumericEntryValue(width, defaultColumns + 1);
+          await setNumericEntryValue(height, defaultRows + 1);
           await expectElementKind(
             await app.getById('settings_apply_button'),
             'button'
@@ -1470,15 +1500,15 @@ describe.concurrent('elder-terms-vte settings', () => {
           await showTerminalSettingsPage(app);
 
           const width = expectElementKind(
-            await app.getById('settings_terminal_width_spin'),
-            'spinButton'
+            await app.getById('settings_terminal_width_entry'),
+            'entry'
           );
           const height = expectElementKind(
-            await app.getById('settings_terminal_height_spin'),
-            'spinButton'
+            await app.getById('settings_terminal_height_entry'),
+            'entry'
           );
-          await width.setValue(defaultColumns + 1);
-          await height.setValue(defaultRows + 1);
+          await setNumericEntryValue(width, defaultColumns + 1);
+          await setNumericEntryValue(height, defaultRows + 1);
           await expectElementKind(
             await app.getById('settings_save_button'),
             'button'
@@ -1510,10 +1540,10 @@ describe.concurrent('elder-terms-vte settings', () => {
       await showTerminalSettingsPage(app);
 
       const zoom = expectElementKind(
-        await app.getById('settings_terminal_zoom_spin'),
-        'spinButton'
+        await app.getById('settings_terminal_zoom_entry'),
+        'entry'
       );
-      await zoom.setValue(1.1);
+      await setNumericEntryValue(zoom, 1.1);
       await expectElementKind(
         await app.getById('settings_apply_button'),
         'button'
@@ -1554,13 +1584,20 @@ describe.concurrent('elder-terms-vte settings', () => {
           await openSettingsDialog(app);
           await showTerminalSettingsPage(app);
 
-          const autoClose = expectElementKind(
-            await app.getById('settings_terminal_auto_close_check'),
-            'checkbox'
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_auto_close_combo',
+            'Enabled (built-in)'
           );
-          expect(await autoClose.isChecked()).toBe(true);
-          await autoClose.toggle();
-          expect(await autoClose.isChecked()).toBe(false);
+          await expectElementKind(
+            await app.getById('settings_terminal_auto_close_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_auto_close_combo',
+            'Disabled'
+          );
           await expectElementKind(
             await app.getById('settings_apply_button'),
             'button'

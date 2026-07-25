@@ -69,6 +69,19 @@ set_key_binding_input_widget_text(KeyBindingInputWidgetState *state,
                                   const std::string &text);
 
 /**
+ * Controls whether an empty confirmed value exposes the clear action.
+ *
+ * @param state Widget state.
+ * @param enabled True to let the clear action confirm an explicit empty
+ * binding.
+ *
+ * @remarks Settings editors use this while displaying a non-empty inherited
+ * binding as an empty entry.
+ */
+ELDER_TERMS_API void set_key_binding_input_widget_empty_clear_enabled(
+    KeyBindingInputWidgetState *state, bool enabled);
+
+/**
  * Returns the confirmed key-binding text.
  *
  * @param state Widget state.

@@ -3,8 +3,11 @@
 #include <cstdlib>
 #include <exception>
 #include <iostream>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <atk/atk.h>
 #include <gtk/gtk.h>
@@ -14,49 +17,27 @@
 
 namespace elder_terms_settings_widget_fixture {
 
+struct ConfigAssignment {
+  std::string section;
+  std::string key;
+  std::string value;
+};
+
 struct FixtureOptions {
   bool is_runtime = false;
   bool has_save = false;
   bool show_actions = true;
-  std::string type = "local";
-  glong width = 80;
-  glong height = 24;
-  gdouble zoom = 1.0;
-  bool auto_close = true;
-  std::string encoding = "default";
-  std::string backspace_code = "default";
-  std::string cursor_key_mode = "default";
-  std::string zoom_in_key = "ctrl+plus";
-  std::string zoom_out_key = "ctrl+minus";
+  bool global_mode = false;
   std::string page = "general";
-  std::string telnet_address = "127.0.0.1";
-  gint64 telnet_port = 23;
-  std::string telnet_terminal_type = "xterm-256color";
-  std::string ssh_address = "ssh.example.test";
-  gint64 ssh_port = 22;
-  std::string ssh_username;
-  std::string ssh_identity_file;
-  std::string ssh_terminal_type = "xterm-256color";
-  std::string sftp_local_directory;
-  std::string sftp_remote_directory = ".";
-  std::string serial_device = "/dev/ttyUSB0";
-  gint64 serial_baudrate = 115200;
-  gint64 serial_bits = 8;
-  std::string serial_parity = "n";
-  gint64 serial_stop_bit = 1;
-  std::string serial_flow_control = "none";
-  std::string serial_carrier_detect = "cd";
-  std::string transfer_base_path;
-  gint64 text_send_bytes_per_second = 1024;
-  std::string zmodem_autostart = "default";
-  bool log_enabled = false;
-  std::string log_base_directory = "{documents}/logs/";
-  std::string log_file_name_format = "{YYYYMMDD}_{hhmmss}_{fff}.txt";
-  std::string log_mode = "raw";
+  std::vector<ConfigAssignment> connection_assignments;
+  std::vector<ConfigAssignment> global_assignments;
+  std::vector<ConfigAssignment> rebase_global_assignments;
 };
 
 struct FixtureState {
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
+  std::optional<elder_terms::SettingsStore> rebase_store;
+  GtkWidget *window = nullptr;
 };
 
 static bool starts_with(const std::string &value, const std::string &prefix) {
@@ -68,9 +49,29 @@ static std::string option_value(const std::string &argument,
   return argument.substr(prefix.size());
 }
 
-static bool parse_bool(const std::string &value) {
-  return value == "1" || value == "true" || value == "yes" ||
-         value == "on";
+static ConfigAssignment parse_assignment(const std::string &argument) {
+  const std::size_t equals = argument.find('=');
+  const std::size_t period = argument.find('.');
+  if (period == std::string::npos || equals == std::string::npos ||
+      period == 0 || period + 1 >= equals) {
+    throw std::invalid_argument(
+        "setting assignment must use section.key=value: " + argument);
+  }
+  return {
+      .section = argument.substr(0, period),
+      .key = argument.substr(period + 1, equals - period - 1),
+      .value = argument.substr(equals + 1),
+  };
+}
+
+static void append_connection_assignment(
+    FixtureOptions *options, const char *section, const char *key,
+    const std::string &value) {
+  options->connection_assignments.push_back({
+      .section = section,
+      .key = key,
+      .value = value,
+  });
 }
 
 static FixtureOptions parse_options(int argc, char **argv) {
@@ -83,91 +84,150 @@ static FixtureOptions parse_options(int argc, char **argv) {
       options.has_save = true;
     } else if (argument == "--hide-actions") {
       options.show_actions = false;
+    } else if (argument == "--global-mode") {
+      options.global_mode = true;
+    } else if (starts_with(argument, "--global=")) {
+      options.global_assignments.push_back(
+          parse_assignment(option_value(argument, "--global=")));
+    } else if (starts_with(argument, "--rebase-global=")) {
+      options.rebase_global_assignments.push_back(
+          parse_assignment(option_value(argument, "--rebase-global=")));
     } else if (starts_with(argument, "--type=")) {
-      options.type = option_value(argument, "--type=");
+      append_connection_assignment(
+          &options, "general", "type", option_value(argument, "--type="));
     } else if (starts_with(argument, "--width=")) {
-      options.width = std::stol(option_value(argument, "--width="));
+      append_connection_assignment(
+          &options, "terminal", "width", option_value(argument, "--width="));
     } else if (starts_with(argument, "--height=")) {
-      options.height = std::stol(option_value(argument, "--height="));
+      append_connection_assignment(
+          &options, "terminal", "height", option_value(argument, "--height="));
     } else if (starts_with(argument, "--zoom=")) {
-      options.zoom = std::stod(option_value(argument, "--zoom="));
+      append_connection_assignment(
+          &options, "terminal", "zoom", option_value(argument, "--zoom="));
     } else if (starts_with(argument, "--auto-close=")) {
-      options.auto_close = parse_bool(option_value(argument, "--auto-close="));
+      append_connection_assignment(
+          &options, "terminal", "auto_close",
+          option_value(argument, "--auto-close="));
     } else if (starts_with(argument, "--encoding=")) {
-      options.encoding = option_value(argument, "--encoding=");
+      append_connection_assignment(
+          &options, "terminal", "encoding",
+          option_value(argument, "--encoding="));
     } else if (starts_with(argument, "--backspace-code=")) {
-      options.backspace_code = option_value(argument, "--backspace-code=");
+      append_connection_assignment(
+          &options, "terminal", "backspace_code",
+          option_value(argument, "--backspace-code="));
     } else if (starts_with(argument, "--cursor-key-mode=")) {
-      options.cursor_key_mode = option_value(argument, "--cursor-key-mode=");
+      append_connection_assignment(
+          &options, "terminal", "cursor_key_mode",
+          option_value(argument, "--cursor-key-mode="));
     } else if (starts_with(argument, "--zoom-in-key=")) {
-      options.zoom_in_key = option_value(argument, "--zoom-in-key=");
+      append_connection_assignment(
+          &options, "terminal", "zoom_in_key",
+          option_value(argument, "--zoom-in-key="));
     } else if (starts_with(argument, "--zoom-out-key=")) {
-      options.zoom_out_key = option_value(argument, "--zoom-out-key=");
+      append_connection_assignment(
+          &options, "terminal", "zoom_out_key",
+          option_value(argument, "--zoom-out-key="));
     } else if (starts_with(argument, "--page=")) {
       options.page = option_value(argument, "--page=");
     } else if (starts_with(argument, "--telnet-address=")) {
-      options.telnet_address = option_value(argument, "--telnet-address=");
+      append_connection_assignment(
+          &options, "telnet", "address",
+          option_value(argument, "--telnet-address="));
     } else if (starts_with(argument, "--telnet-port=")) {
-      options.telnet_port = std::stoll(option_value(argument, "--telnet-port="));
+      append_connection_assignment(
+          &options, "telnet", "port",
+          option_value(argument, "--telnet-port="));
     } else if (starts_with(argument, "--telnet-terminal-type=")) {
-      options.telnet_terminal_type =
-          option_value(argument, "--telnet-terminal-type=");
+      append_connection_assignment(
+          &options, "telnet", "terminal_type",
+          option_value(argument, "--telnet-terminal-type="));
     } else if (starts_with(argument, "--ssh-address=")) {
-      options.ssh_address = option_value(argument, "--ssh-address=");
+      append_connection_assignment(
+          &options, "ssh", "address",
+          option_value(argument, "--ssh-address="));
     } else if (starts_with(argument, "--ssh-port=")) {
-      options.ssh_port = std::stoll(option_value(argument, "--ssh-port="));
+      append_connection_assignment(
+          &options, "ssh", "port", option_value(argument, "--ssh-port="));
     } else if (starts_with(argument, "--ssh-username=")) {
-      options.ssh_username = option_value(argument, "--ssh-username=");
+      append_connection_assignment(
+          &options, "ssh", "username",
+          option_value(argument, "--ssh-username="));
     } else if (starts_with(argument, "--ssh-identity-file=")) {
-      options.ssh_identity_file =
-          option_value(argument, "--ssh-identity-file=");
+      append_connection_assignment(
+          &options, "ssh", "identity_file",
+          option_value(argument, "--ssh-identity-file="));
     } else if (starts_with(argument, "--ssh-terminal-type=")) {
-      options.ssh_terminal_type =
-          option_value(argument, "--ssh-terminal-type=");
+      append_connection_assignment(
+          &options, "ssh", "terminal_type",
+          option_value(argument, "--ssh-terminal-type="));
     } else if (starts_with(argument, "--sftp-local-directory=")) {
-      options.sftp_local_directory =
-          option_value(argument, "--sftp-local-directory=");
+      append_connection_assignment(
+          &options, "sftp", "local_directory",
+          option_value(argument, "--sftp-local-directory="));
     } else if (starts_with(argument, "--sftp-remote-directory=")) {
-      options.sftp_remote_directory =
-          option_value(argument, "--sftp-remote-directory=");
+      append_connection_assignment(
+          &options, "sftp", "remote_directory",
+          option_value(argument, "--sftp-remote-directory="));
     } else if (starts_with(argument, "--serial-device=")) {
-      options.serial_device = option_value(argument, "--serial-device=");
+      append_connection_assignment(
+          &options, "serial", "device",
+          option_value(argument, "--serial-device="));
     } else if (starts_with(argument, "--serial-baudrate=")) {
-      options.serial_baudrate =
-          std::stoll(option_value(argument, "--serial-baudrate="));
+      append_connection_assignment(
+          &options, "serial", "baudrate",
+          option_value(argument, "--serial-baudrate="));
     } else if (starts_with(argument, "--serial-bits=")) {
-      options.serial_bits = std::stoll(option_value(argument, "--serial-bits="));
+      append_connection_assignment(
+          &options, "serial", "bits",
+          option_value(argument, "--serial-bits="));
     } else if (starts_with(argument, "--serial-parity=")) {
-      options.serial_parity = option_value(argument, "--serial-parity=");
+      append_connection_assignment(
+          &options, "serial", "parity",
+          option_value(argument, "--serial-parity="));
     } else if (starts_with(argument, "--serial-stop-bit=")) {
-      options.serial_stop_bit =
-          std::stoll(option_value(argument, "--serial-stop-bit="));
+      append_connection_assignment(
+          &options, "serial", "stop_bit",
+          option_value(argument, "--serial-stop-bit="));
     } else if (starts_with(argument, "--serial-flow-control=")) {
-      options.serial_flow_control =
-          option_value(argument, "--serial-flow-control=");
+      append_connection_assignment(
+          &options, "serial", "flow_control",
+          option_value(argument, "--serial-flow-control="));
     } else if (starts_with(argument, "--serial-carrier-detect=")) {
-      options.serial_carrier_detect =
-          option_value(argument, "--serial-carrier-detect=");
+      append_connection_assignment(
+          &options, "serial", "carrier_detect",
+          option_value(argument, "--serial-carrier-detect="));
     } else if (starts_with(argument, "--transfer-base-path=")) {
-      options.transfer_base_path =
-          option_value(argument, "--transfer-base-path=");
+      append_connection_assignment(
+          &options, "transfer", "base_path",
+          option_value(argument, "--transfer-base-path="));
     } else if (starts_with(argument, "--text-send-bytes-per-second=")) {
-      options.text_send_bytes_per_second =
-          std::stoll(option_value(argument, "--text-send-bytes-per-second="));
+      append_connection_assignment(
+          &options, "transfer", "text_send_bytes_per_second",
+          option_value(argument, "--text-send-bytes-per-second="));
     } else if (starts_with(argument, "--zmodem-autostart=")) {
-      options.zmodem_autostart =
+      const std::string value =
           option_value(argument, "--zmodem-autostart=");
+      append_connection_assignment(
+          &options, "transfer", "zmodem_autostart",
+          value == "enabled" ? "true"
+                             : value == "disabled" ? "false" : value);
     } else if (starts_with(argument, "--log-enabled=")) {
-      options.log_enabled =
-          parse_bool(option_value(argument, "--log-enabled="));
+      append_connection_assignment(
+          &options, "log", "enabled",
+          option_value(argument, "--log-enabled="));
     } else if (starts_with(argument, "--log-base-directory=")) {
-      options.log_base_directory =
-          option_value(argument, "--log-base-directory=");
+      append_connection_assignment(
+          &options, "log", "base_directory",
+          option_value(argument, "--log-base-directory="));
     } else if (starts_with(argument, "--log-file-name-format=")) {
-      options.log_file_name_format =
-          option_value(argument, "--log-file-name-format=");
+      append_connection_assignment(
+          &options, "log", "file_name_format",
+          option_value(argument, "--log-file-name-format="));
     } else if (starts_with(argument, "--log-mode=")) {
-      options.log_mode = option_value(argument, "--log-mode=");
+      append_connection_assignment(
+          &options, "log", "mode",
+          option_value(argument, "--log-mode="));
     }
   }
   return options;
@@ -190,7 +250,23 @@ static void assign_accessible_id(GtkWidget *widget, const char *id) {
   }
 }
 
-static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
+static void load_assignments(
+    elder_terms::SettingsStore *store,
+    const std::vector<ConfigAssignment> &assignments) {
+  GKeyFile *key_file = g_key_file_new();
+  for (const ConfigAssignment &assignment : assignments) {
+    g_key_file_set_value(key_file, assignment.section.c_str(),
+                         assignment.key.c_str(), assignment.value.c_str());
+  }
+  std::vector<std::string> warnings;
+  elder_terms::load_settings_store_from_key_file(store, key_file, &warnings);
+  g_key_file_free(key_file);
+  if (!warnings.empty()) {
+    throw std::invalid_argument(warnings.front());
+  }
+}
+
+static elder_terms::SettingsStore create_default_store() {
   elder_terms::SettingsStore store =
       elder_terms::create_default_settings(
           elder_terms::TerminalDisplaySettings{
@@ -199,121 +275,30 @@ static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
               .zoom = 1.0,
           },
           "fixture");
-  elder_terms::set_setting_value(
-      &store, elder_terms::general_type_setting_key(),
-      elder_terms::SettingValue{options.type});
-  elder_terms::set_setting_value(
-      &store, elder_terms::terminal_width_setting_key(),
-      elder_terms::SettingValue{static_cast<gint64>(options.width)});
-  elder_terms::set_setting_value(
-      &store, elder_terms::terminal_height_setting_key(),
-      elder_terms::SettingValue{static_cast<gint64>(options.height)});
-  elder_terms::set_setting_value(&store, elder_terms::terminal_zoom_setting_key(),
-                                 elder_terms::SettingValue{options.zoom});
-  elder_terms::set_setting_value(
-      &store, elder_terms::terminal_auto_close_setting_key(),
-      elder_terms::SettingValue{options.auto_close});
-  if (options.encoding != "default") {
-    elder_terms::set_explicit_setting_value(
-        &store, elder_terms::terminal_encoding_setting_key(),
-        elder_terms::SettingValue{options.encoding});
-  }
-  if (options.backspace_code != "default") {
-    elder_terms::set_explicit_setting_value(
-        &store, elder_terms::terminal_backspace_code_setting_key(),
-        elder_terms::SettingValue{options.backspace_code});
-  }
-  if (options.cursor_key_mode != "default") {
-    elder_terms::set_explicit_setting_value(
-        &store, elder_terms::terminal_cursor_key_mode_setting_key(),
-        elder_terms::SettingValue{options.cursor_key_mode});
-  }
-  elder_terms::set_setting_value(
-      &store, elder_terms::terminal_zoom_in_key_setting_key(),
-      elder_terms::SettingValue{options.zoom_in_key});
-  elder_terms::set_setting_value(
-      &store, elder_terms::terminal_zoom_out_key_setting_key(),
-      elder_terms::SettingValue{options.zoom_out_key});
-  elder_terms::set_setting_value(
-      &store, elder_terms::telnet_address_setting_key(),
-      elder_terms::SettingValue{options.telnet_address});
-  elder_terms::set_setting_value(
-      &store, elder_terms::telnet_port_setting_key(),
-      elder_terms::SettingValue{options.telnet_port});
-  elder_terms::set_setting_value(
-      &store, elder_terms::telnet_terminal_type_setting_key(),
-      elder_terms::SettingValue{options.telnet_terminal_type});
-  elder_terms::set_setting_value(
-      &store, elder_terms::ssh_address_setting_key(),
-      elder_terms::SettingValue{options.ssh_address});
-  elder_terms::set_setting_value(
-      &store, elder_terms::ssh_port_setting_key(),
-      elder_terms::SettingValue{options.ssh_port});
-  elder_terms::set_setting_value(
-      &store, elder_terms::ssh_username_setting_key(),
-      elder_terms::SettingValue{options.ssh_username});
-  elder_terms::set_setting_value(
-      &store, elder_terms::ssh_identity_file_setting_key(),
-      elder_terms::SettingValue{options.ssh_identity_file});
-  elder_terms::set_setting_value(
-      &store, elder_terms::ssh_terminal_type_setting_key(),
-      elder_terms::SettingValue{options.ssh_terminal_type});
-  elder_terms::set_setting_value(
-      &store, elder_terms::sftp_local_directory_setting_key(),
-      elder_terms::SettingValue{options.sftp_local_directory});
-  elder_terms::set_setting_value(
-      &store, elder_terms::sftp_remote_directory_setting_key(),
-      elder_terms::SettingValue{options.sftp_remote_directory});
-  elder_terms::set_setting_value(
-      &store, elder_terms::serial_device_setting_key(),
-      elder_terms::SettingValue{options.serial_device});
-  elder_terms::set_setting_value(
-      &store, elder_terms::serial_baudrate_setting_key(),
-      elder_terms::SettingValue{options.serial_baudrate});
-  elder_terms::set_setting_value(
-      &store, elder_terms::serial_bits_setting_key(),
-      elder_terms::SettingValue{options.serial_bits});
-  elder_terms::set_setting_value(
-      &store, elder_terms::serial_parity_setting_key(),
-      elder_terms::SettingValue{options.serial_parity});
-  elder_terms::set_setting_value(
-      &store, elder_terms::serial_stop_bit_setting_key(),
-      elder_terms::SettingValue{options.serial_stop_bit});
-  elder_terms::set_setting_value(
-      &store, elder_terms::serial_flow_control_setting_key(),
-      elder_terms::SettingValue{options.serial_flow_control});
-  elder_terms::set_setting_value(
-      &store, elder_terms::serial_carrier_detect_setting_key(),
-      elder_terms::SettingValue{options.serial_carrier_detect});
-  elder_terms::set_setting_value(
-      &store, elder_terms::transfer_base_path_setting_key(),
-      elder_terms::SettingValue{options.transfer_base_path});
-  elder_terms::set_setting_value(
-      &store, elder_terms::transfer_text_send_bytes_per_second_setting_key(),
-      elder_terms::SettingValue{options.text_send_bytes_per_second});
-  if (options.zmodem_autostart == "enabled" ||
-      options.zmodem_autostart == "true") {
-    elder_terms::set_explicit_setting_value(
-        &store, elder_terms::transfer_zmodem_autostart_setting_key(),
-        elder_terms::SettingValue{true});
-  } else if (options.zmodem_autostart == "disabled" ||
-             options.zmodem_autostart == "false") {
-    elder_terms::set_explicit_setting_value(
-        &store, elder_terms::transfer_zmodem_autostart_setting_key(),
-        elder_terms::SettingValue{false});
-  }
-  elder_terms::set_setting_value(
-      &store, elder_terms::terminal_log_enabled_setting_key(),
-      elder_terms::SettingValue{options.log_enabled});
-  elder_terms::set_setting_value(
-      &store, elder_terms::terminal_log_base_directory_setting_key(),
-      elder_terms::SettingValue{options.log_base_directory});
-  elder_terms::set_setting_value(
-      &store, elder_terms::terminal_log_file_name_format_setting_key(),
-      elder_terms::SettingValue{options.log_file_name_format});
-  elder_terms::set_setting_value(
-      &store, elder_terms::terminal_log_mode_setting_key(),
-      elder_terms::SettingValue{options.log_mode});
+  return store;
+}
+
+static elder_terms::SettingsStore
+create_global_store(const std::vector<ConfigAssignment> &assignments) {
+  elder_terms::SettingsStore store = create_default_store();
+  load_assignments(&store, assignments);
+  return store;
+}
+
+static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
+  elder_terms::SettingsStore store = create_default_store();
+  const elder_terms::SettingsStore global_store =
+      create_global_store(options.global_assignments);
+  elder_terms::rebase_settings_store_fallbacks(&store, global_store);
+
+  std::vector<ConfigAssignment> connection_assignments =
+      options.connection_assignments;
+  connection_assignments.push_back({
+      .section = "general",
+      .key = "name",
+      .value = "fixture",
+  });
+  load_assignments(&store, connection_assignments);
   return store;
 }
 
@@ -387,12 +372,58 @@ static std::string zmodem_autostart_name(
     const elder_terms::SettingsStore &store) {
   const bool configured = elder_terms::setting_boolean_value_or_default(
       store, elder_terms::transfer_zmodem_autostart_setting_key(), false);
-  if (!elder_terms::setting_has_explicit_value(
+  if (!elder_terms::setting_has_configured_value(
           store, elder_terms::transfer_zmodem_autostart_setting_key()) &&
       !configured) {
     return "default";
   }
   return configured ? "enabled" : "disabled";
+}
+
+static const char *
+setting_source_name(elder_terms::SettingValueSource source) {
+  if (source == elder_terms::SettingValueSource::global) {
+    return "global";
+  }
+  if (source == elder_terms::SettingValueSource::override) {
+    return "override";
+  }
+  return "built-in";
+}
+
+static void print_setting_metadata(
+    const elder_terms::SettingsStore &store, const char *name,
+    const elder_terms::SettingKey &key) {
+  std::cout << ' ' << name << "_source="
+            << setting_source_name(elder_terms::setting_value_source(store, key))
+            << ' ' << name << "_explicit="
+            << (elder_terms::setting_has_explicit_value(store, key) ? "true"
+                                                                    : "false");
+}
+
+static void print_entry_placeholders(GtkWidget *widget) {
+  if (widget == nullptr) {
+    return;
+  }
+  if (GTK_IS_ENTRY(widget)) {
+    const char *id = gtk_widget_get_name(widget);
+    const char *placeholder =
+        gtk_entry_get_placeholder_text(GTK_ENTRY(widget));
+    if (id != nullptr &&
+        (starts_with(id, "settings_") ||
+         starts_with(id, "global_settings_"))) {
+      std::cout << "PLACEHOLDER " << id << '='
+                << (placeholder == nullptr ? "" : placeholder) << '\n';
+    }
+  }
+  if (!GTK_IS_CONTAINER(widget)) {
+    return;
+  }
+  GList *children = gtk_container_get_children(GTK_CONTAINER(widget));
+  for (GList *child = children; child != nullptr; child = child->next) {
+    print_entry_placeholders(GTK_WIDGET(child->data));
+  }
+  g_list_free(children);
 }
 
 static const char *terminal_log_mode_name(
@@ -422,6 +453,8 @@ static void print_store(const char *prefix,
   const elder_terms::TerminalLogSettings log =
       elder_terms::terminal_log_settings(store);
   std::cout << prefix
+            << " dirty="
+            << (elder_terms::settings_store_is_dirty(store) ? "true" : "false")
             << " type="
             << connection_type_name(
                    elder_terms::general_connection_kind(store))
@@ -470,8 +503,92 @@ static void print_store(const char *prefix,
             << " log_enabled=" << (log.enabled ? "true" : "false")
             << " log_base_directory=" << log.base_directory
             << " log_file_name_format=" << log.file_name_format
-            << " log_mode=" << terminal_log_mode_name(log.mode)
-            << '\n';
+            << " log_mode=" << terminal_log_mode_name(log.mode);
+  print_setting_metadata(store, "type",
+                         elder_terms::general_type_setting_key());
+  print_setting_metadata(store, "width",
+                         elder_terms::terminal_width_setting_key());
+  print_setting_metadata(store, "height",
+                         elder_terms::terminal_height_setting_key());
+  print_setting_metadata(store, "zoom",
+                         elder_terms::terminal_zoom_setting_key());
+  print_setting_metadata(store, "auto_close",
+                         elder_terms::terminal_auto_close_setting_key());
+  print_setting_metadata(store, "encoding",
+                         elder_terms::terminal_encoding_setting_key());
+  print_setting_metadata(store, "backspace_code",
+                         elder_terms::terminal_backspace_code_setting_key());
+  print_setting_metadata(store, "cursor_key_mode",
+                         elder_terms::terminal_cursor_key_mode_setting_key());
+  print_setting_metadata(store, "zoom_in_key",
+                         elder_terms::terminal_zoom_in_key_setting_key());
+  print_setting_metadata(store, "zoom_out_key",
+                         elder_terms::terminal_zoom_out_key_setting_key());
+  print_setting_metadata(store, "telnet_address",
+                         elder_terms::telnet_address_setting_key());
+  print_setting_metadata(store, "telnet_port",
+                         elder_terms::telnet_port_setting_key());
+  print_setting_metadata(store, "telnet_terminal_type",
+                         elder_terms::telnet_terminal_type_setting_key());
+  print_setting_metadata(store, "ssh_address",
+                         elder_terms::ssh_address_setting_key());
+  print_setting_metadata(store, "ssh_port",
+                         elder_terms::ssh_port_setting_key());
+  print_setting_metadata(store, "ssh_username",
+                         elder_terms::ssh_username_setting_key());
+  print_setting_metadata(store, "ssh_identity_file",
+                         elder_terms::ssh_identity_file_setting_key());
+  print_setting_metadata(store, "ssh_terminal_type",
+                         elder_terms::ssh_terminal_type_setting_key());
+  print_setting_metadata(store, "sftp_local_directory",
+                         elder_terms::sftp_local_directory_setting_key());
+  print_setting_metadata(store, "sftp_remote_directory",
+                         elder_terms::sftp_remote_directory_setting_key());
+  print_setting_metadata(store, "serial_device",
+                         elder_terms::serial_device_setting_key());
+  print_setting_metadata(store, "serial_baudrate",
+                         elder_terms::serial_baudrate_setting_key());
+  print_setting_metadata(store, "serial_bits",
+                         elder_terms::serial_bits_setting_key());
+  print_setting_metadata(store, "serial_parity",
+                         elder_terms::serial_parity_setting_key());
+  print_setting_metadata(store, "serial_stop_bit",
+                         elder_terms::serial_stop_bit_setting_key());
+  print_setting_metadata(store, "serial_flow_control",
+                         elder_terms::serial_flow_control_setting_key());
+  print_setting_metadata(store, "serial_carrier_detect",
+                         elder_terms::serial_carrier_detect_setting_key());
+  print_setting_metadata(store, "transfer_base_path",
+                         elder_terms::transfer_base_path_setting_key());
+  print_setting_metadata(
+      store, "text_send_bytes_per_second",
+      elder_terms::transfer_text_send_bytes_per_second_setting_key());
+  print_setting_metadata(
+      store, "zmodem_autostart",
+      elder_terms::transfer_zmodem_autostart_setting_key());
+  print_setting_metadata(store, "log_enabled",
+                         elder_terms::terminal_log_enabled_setting_key());
+  print_setting_metadata(store, "log_base_directory",
+                         elder_terms::terminal_log_base_directory_setting_key());
+  print_setting_metadata(
+      store, "log_file_name_format",
+      elder_terms::terminal_log_file_name_format_setting_key());
+  print_setting_metadata(store, "log_mode",
+                         elder_terms::terminal_log_mode_setting_key());
+  std::cout << '\n';
+  std::cout.flush();
+}
+
+static void on_rebase_clicked(GtkButton *, gpointer data) {
+  auto *state = static_cast<FixtureState *>(data);
+  if (state->settings_widget == nullptr || !state->rebase_store.has_value()) {
+    return;
+  }
+  elder_terms::settings_widget_rebase_fallbacks(
+      state->settings_widget, *state->rebase_store);
+  print_store("REBASED",
+              elder_terms::settings_widget_draft_store(state->settings_widget));
+  print_entry_placeholders(state->window);
   std::cout.flush();
 }
 
@@ -494,6 +611,7 @@ int main(int argc, char **argv) {
     elder_terms_settings_widget_fixture::FixtureState state;
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    state.window = window;
     elder_terms_settings_widget_fixture::assign_accessible_id(
         window, "settings_widget_test_window");
     gtk_window_set_title(GTK_WINDOW(window), "Settings Widget Fixture");
@@ -532,19 +650,51 @@ int main(int argc, char **argv) {
                         ? "true"
                         : "false")
                 << " width=" << display.width << '\n';
+      elder_terms_settings_widget_fixture::print_entry_placeholders(
+          state.window);
       std::cout.flush();
     };
 
+    elder_terms::SettingsStore store =
+        options.global_mode
+            ? elder_terms_settings_widget_fixture::create_global_store(
+                  options.global_assignments)
+            : elder_terms_settings_widget_fixture::create_store(options);
+    if (!options.rebase_global_assignments.empty()) {
+      state.rebase_store =
+          elder_terms_settings_widget_fixture::create_global_store(
+              options.rebase_global_assignments);
+    }
+
     elder_terms::SettingsWidgetOptions widget_options{
-        .store = elder_terms_settings_widget_fixture::create_store(options),
+        .store = std::move(store),
         .is_runtime = options.is_runtime,
         .show_actions = options.show_actions,
+        .mode = options.global_mode
+                    ? elder_terms::SettingsWidgetMode::global_defaults
+                    : elder_terms::SettingsWidgetMode::connection,
+        .id_prefix = options.global_mode ? "global_settings" : "settings",
         .callbacks = std::move(callbacks),
     };
     state.settings_widget =
         elder_terms::create_settings_widget(std::move(widget_options));
-    gtk_container_add(GTK_CONTAINER(window),
-                      elder_terms::settings_widget_root(state.settings_widget));
+    GtkWidget *contents = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_container_add(GTK_CONTAINER(window), contents);
+    gtk_box_pack_start(
+        GTK_BOX(contents),
+        elder_terms::settings_widget_root(state.settings_widget), TRUE, TRUE,
+        0);
+    if (state.rebase_store.has_value()) {
+      GtkWidget *rebase_button =
+          gtk_button_new_with_label("Rebase test fallbacks");
+      elder_terms_settings_widget_fixture::assign_accessible_id(
+          rebase_button, "rebase_fallbacks_button");
+      g_signal_connect(
+          rebase_button, "clicked",
+          G_CALLBACK(elder_terms_settings_widget_fixture::on_rebase_clicked),
+          &state);
+      gtk_box_pack_end(GTK_BOX(contents), rebase_button, FALSE, FALSE, 0);
+    }
     elder_terms_settings_widget_fixture::select_initial_page(window,
                                                              options.page);
     g_signal_connect(window, "destroy", G_CALLBACK(
@@ -557,6 +707,7 @@ int main(int argc, char **argv) {
     while (gtk_events_pending() != FALSE) {
       gtk_main_iteration_do(FALSE);
     }
+    elder_terms_settings_widget_fixture::print_entry_placeholders(window);
     std::cout << "READY\n";
     std::cout.flush();
     gtk_main();

@@ -15,6 +15,16 @@ namespace elder_terms {
 struct SettingsWidgetState;
 
 /**
+ * Selects the settings editor presentation.
+ */
+enum class SettingsWidgetMode {
+  /** Edits one connection while exposing inherited defaults. */
+  connection,
+  /** Edits global defaults without connection-specific fields. */
+  global_defaults,
+};
+
+/**
  * Called when the user applies settings from the widget.
  *
  * @param store Draft settings after applying the current widget values.
@@ -65,6 +75,10 @@ struct SettingsWidgetOptions {
   bool is_runtime = false;
   /** True when the widget should render its built-in action buttons. */
   bool show_actions = true;
+  /** Settings editor presentation. */
+  SettingsWidgetMode mode = SettingsWidgetMode::connection;
+  /** Prefix used to form stable accessible widget identifiers. */
+  std::string id_prefix = "settings";
   /** Optional callbacks emitted by the widget. */
   SettingsWidgetCallbacks callbacks;
 };
@@ -91,6 +105,19 @@ ELDER_TERMS_API void update_settings_widget_store(SettingsWidgetState *state,
                                                    SettingsStore store);
 
 /**
+ * Replaces inherited values while preserving connection overrides.
+ *
+ * @param state Settings widget state.
+ * @param fallbacks Updated global defaults store.
+ *
+ * @remarks Applied and draft stores are both rebased. Explicit values,
+ * dirtiness, and the connection-specific General name remain unchanged.
+ */
+ELDER_TERMS_API void
+settings_widget_rebase_fallbacks(SettingsWidgetState *state,
+                                 const SettingsStore &fallbacks);
+
+/**
  * Updates the path-derived connection name used by an unset General name.
  *
  * @param state Settings widget state.
@@ -114,7 +141,8 @@ settings_widget_draft_store(const SettingsWidgetState *state);
  * Checks whether the current draft contains a user edit.
  *
  * @param state Settings widget state.
- * @returns True when at least one draft setting is dirty.
+ * @returns True when at least one draft setting is dirty or an invalid raw
+ * input has not yet been resolved.
  */
 ELDER_TERMS_API bool
 settings_widget_is_dirty(const SettingsWidgetState *state);

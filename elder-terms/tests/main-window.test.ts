@@ -208,11 +208,11 @@ describe('elder-terms main window', () => {
         const list = await app.getById('connection_list');
         await selectConnectionRow(app, list, 0);
         const width = expectElementKind(
-          await app.getById('settings_terminal_width_spin'),
-          'spinButton'
+          await app.getById('settings_terminal_width_entry'),
+          'entry'
         );
         await waitForResult(async () => {
-          expect(await width.value()).toBe(88);
+          expect(Number(await width.text())).toBe(88);
         });
 
         const apply = expectElementKind(
@@ -220,7 +220,7 @@ describe('elder-terms main window', () => {
           'button'
         );
         await expectInsensitive(apply);
-        await width.setValue(91);
+        await width.setText('91');
         await expectSensitive(apply);
         await apply.click();
 
@@ -257,10 +257,10 @@ describe('elder-terms main window', () => {
         });
 
         const width = expectElementKind(
-          await app.getById('settings_terminal_width_spin'),
-          'spinButton'
+          await app.getById('settings_terminal_width_entry'),
+          'entry'
         );
-        await width.setValue(92);
+        await width.setText('92');
         await newButton.click();
         const dialog = expectElementKind(
           await app.getById('discard_changes_dialog'),
@@ -271,7 +271,7 @@ describe('elder-terms main window', () => {
           await app.getById('cancel_discard_button'),
           'button'
         ).click();
-        expect(await width.value()).toBe(92);
+        expect(Number(await width.text())).toBe(92);
 
         await newButton.click();
         await expectElementKind(
@@ -279,7 +279,7 @@ describe('elder-terms main window', () => {
           'button'
         ).click();
         await waitForResult(async () => {
-          expect(await width.value()).toBe(80);
+          expect(await width.text()).toBe('');
         });
       }
     );
@@ -290,17 +290,17 @@ describe('elder-terms main window', () => {
       const list = await app.getById('connection_list');
       await selectConnectionRow(app, list, 0);
       const width = expectElementKind(
-        await app.getById('settings_terminal_width_spin'),
-        'spinButton'
+        await app.getById('settings_terminal_width_entry'),
+        'entry'
       );
       await waitForResult(async () => {
-        expect(await width.value()).toBe(88);
+        expect(Number(await width.text())).toBe(88);
       });
       const apply = expectElementKind(
         await app.getById('apply_button'),
         'button'
       );
-      await width.setValue(96);
+      await width.setText('96');
       await expectSensitive(apply);
 
       await selectConnectionRow(app, list, 1);
@@ -314,17 +314,26 @@ describe('elder-terms main window', () => {
         await app.getById('cancel_discard_button'),
         'button'
       ).click();
-      expect(await width.value()).toBe(96);
+      await waitForResult(async () => {
+        expect(await app.getWindowCount()).toBe(1);
+      });
+      expect(Number(await width.text())).toBe(96);
 
       await selectConnectionRow(app, list, 1);
+      await waitForResult(
+        async () => {
+          expect(await app.getWindowCount()).toBe(2);
+        },
+        { message: 'selection change should show discard confirmation' }
+      );
       await expectElementKind(
         await app.getById('discard_changes_button'),
         'button'
       ).click();
       await waitForResult(async () => {
-        expect(await width.value()).toBe(99);
+        expect(Number(await width.text())).toBe(99);
       });
-      await width.setValue(97);
+      await width.setText('97');
       await expectSensitive(apply);
 
       const window = expectElementKind(
@@ -348,7 +357,7 @@ describe('elder-terms main window', () => {
         await app.getById('cancel_discard_button'),
         'button'
       ).click();
-      expect(await width.value()).toBe(97);
+      expect(Number(await width.text())).toBe(97);
     });
   });
 
@@ -360,25 +369,25 @@ describe('elder-terms main window', () => {
         const list = await app.getById('connection_list');
         await selectConnectionRow(app, list, 0);
         const width = expectElementKind(
-          await app.getById('settings_terminal_width_spin'),
-          'spinButton'
+          await app.getById('settings_terminal_width_entry'),
+          'entry'
         );
         const apply = expectElementKind(
           await app.getById('apply_button'),
           'button'
         );
         await waitForResult(async () => {
-          expect(await width.value()).toBe(88);
+          expect(Number(await width.text())).toBe(88);
         });
 
-        await width.setValue(91);
+        await width.setText('91');
         await expectSensitive(apply);
         await writeFile(
           join(connections, 'Alpha.ini'),
           '[terminal]\nwidth=95\n'
         );
         await waitForResult(async () => {
-          expect(await width.value()).toBe(95);
+          expect(Number(await width.text())).toBe(95);
           await expectInsensitive(apply);
         });
 
@@ -399,7 +408,7 @@ describe('elder-terms main window', () => {
         );
         await waitForResult(async () => {
           expect(await connectionRowCount(list)).toBe(2);
-          expect(await width.value()).toBe(95);
+          expect(Number(await width.text())).toBe(95);
         });
       }
     );
@@ -526,13 +535,13 @@ describe('elder-terms main window', () => {
           const list = await app.getById('connection_list');
           await selectConnectionRow(app, list, 0);
           const width = expectElementKind(
-            await app.getById('settings_terminal_width_spin'),
-            'spinButton'
+            await app.getById('settings_terminal_width_entry'),
+            'entry'
           );
           await waitForResult(async () => {
-            expect(await width.value()).toBe(88);
+            expect(Number(await width.text())).toBe(88);
           });
-          await width.setValue(93);
+          await width.setText('93');
           await expectElementKind(
             await app.getById('connect_button'),
             'button'
@@ -575,10 +584,10 @@ describe('elder-terms main window', () => {
             'button'
           ).click();
           const width = expectElementKind(
-            await app.getById('settings_terminal_width_spin'),
-            'spinButton'
+            await app.getById('settings_terminal_width_entry'),
+            'entry'
           );
-          await width.setValue(94);
+          await width.setText('94');
           await expectElementKind(
             await app.getById('connect_button'),
             'button'
