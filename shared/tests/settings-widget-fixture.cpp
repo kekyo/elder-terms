@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -280,7 +281,11 @@ static elder_terms::SettingsStore create_default_store() {
 
 static elder_terms::SettingsStore
 create_global_store(const std::vector<ConfigAssignment> &assignments) {
-  elder_terms::SettingsStore store = create_default_store();
+  const std::filesystem::path missing_path =
+      std::filesystem::temp_directory_path() /
+      "elder-terms-settings-widget-fixture-missing-global.ini";
+  elder_terms::SettingsStore store =
+      elder_terms::load_global_settings(missing_path, 1.0).store;
   load_assignments(&store, assignments);
   return store;
 }
@@ -503,7 +508,18 @@ static void print_store(const char *prefix,
             << " log_enabled=" << (log.enabled ? "true" : "false")
             << " log_base_directory=" << log.base_directory
             << " log_file_name_format=" << log.file_name_format
-            << " log_mode=" << terminal_log_mode_name(log.mode);
+            << " log_mode=" << terminal_log_mode_name(log.mode)
+            << " startup_mode="
+            << elder_terms::startup_mode_to_string(
+                   elder_terms::application_startup_mode(store))
+            << " open_application="
+            << elder_terms::application_open_hotkey_text(store);
+  print_setting_metadata(
+      store, "startup_mode",
+      elder_terms::application_startup_mode_setting_key());
+  print_setting_metadata(
+      store, "open_application",
+      elder_terms::application_open_hotkey_setting_key());
   print_setting_metadata(store, "type",
                          elder_terms::general_type_setting_key());
   print_setting_metadata(store, "width",

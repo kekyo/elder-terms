@@ -286,6 +286,19 @@ static SettingsSaveResult write_global_settings_key_file(
   };
 }
 
+static SettingsStore
+create_global_default_settings(TerminalDisplaySettings terminal_defaults) {
+  SettingsStore connection =
+      create_default_settings(std::move(terminal_defaults), "elder-terms");
+  std::vector<SettingDefinition> definitions;
+  definitions.reserve(connection.entries.size() + 2);
+  for (SettingEntry &entry : connection.entries) {
+    definitions.push_back(std::move(entry.definition));
+  }
+  append_definitions(&definitions, application_setting_definitions());
+  return create_settings_store(std::move(definitions));
+}
+
 SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
                                       std::string default_connection_name) {
   std::vector<SettingDefinition> definitions;
@@ -315,9 +328,8 @@ SettingsLoadResult
 load_global_settings(const std::filesystem::path &global_config_path,
                      gdouble default_terminal_zoom) {
   SettingsLoadResult result{
-      .store = create_default_settings(
-          default_terminal_display_settings(default_terminal_zoom),
-          "elder-terms"),
+      .store = create_global_default_settings(
+          default_terminal_display_settings(default_terminal_zoom)),
       .loaded = true,
       .warnings = {},
   };

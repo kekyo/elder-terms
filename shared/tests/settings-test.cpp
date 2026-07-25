@@ -17,6 +17,10 @@ namespace elder_terms_settings_test {
 
 using elder_terms::create_default_settings;
 using elder_terms::clear_explicit_setting_value;
+using elder_terms::application_open_hotkey;
+using elder_terms::application_open_hotkey_setting_key;
+using elder_terms::application_startup_mode;
+using elder_terms::application_startup_mode_setting_key;
 using elder_terms::default_global_config_path;
 using elder_terms::default_terminal_text_settings;
 using elder_terms::default_terminal_display_settings;
@@ -55,6 +59,7 @@ using elder_terms::SettingsLoadResult;
 using elder_terms::SettingsSaveResult;
 using elder_terms::SettingsStore;
 using elder_terms::SettingValueSource;
+using elder_terms::StartupMode;
 using elder_terms::SshConnectionSettings;
 using elder_terms::ssh_address_setting_key;
 using elder_terms::ssh_connection_settings;
@@ -1888,6 +1893,115 @@ static void test_global_settings_editor_excludes_connection_name() {
               "global settings should persist explicit defaults");
 }
 
+static void test_application_settings_are_global_only() {
+  const std::filesystem::path missing_path =
+      temporary_config_path("missing-application-settings");
+  remove_config(missing_path);
+  const SettingsLoadResult defaults = load_global_settings(missing_path, 1.0);
+  expect_true(application_startup_mode(defaults.store) == StartupMode::window,
+              "the built-in startup mode should preserve simple startup");
+  const auto default_hotkey = application_open_hotkey(defaults.store);
+  expect_true(default_hotkey.has_value() &&
+                  key_binding_matches(*default_hotkey, GDK_KEY_t,
+                                      static_cast<GdkModifierType>(
+                                          GDK_CONTROL_MASK | GDK_MOD1_MASK)),
+              "the built-in open-application hotkey should be Ctrl+Alt+T");
+
+  const std::filesystem::path global_path =
+      temporary_config_path("application-global");
+  write_config(global_path,
+               "[general]\n"
+               "startup_mode=tray\n"
+               "open_application=\n");
+  SettingsLoadResult global = load_global_settings(global_path, 1.0);
+  expect_true(application_startup_mode(global.store) == StartupMode::tray,
+              "global.ini should select tray-only startup");
+  expect_true(!application_open_hotkey(global.store).has_value(),
+              "an explicit empty global hotkey should disable registration");
+  expect_true(setting_has_explicit_value(
+                  global.store, application_startup_mode_setting_key()) &&
+                  setting_has_explicit_value(
+                      global.store, application_open_hotkey_setting_key()),
+              "application settings loaded from global.ini should remain "
+              "explicit");
+
+  expect_true(set_explicit_setting_value(
+                  &global.store, application_startup_mode_setting_key(),
+                  elder_terms::SettingValue{
+                      std::string("window_and_tray")}),
+              "the combined startup mode should be accepted");
+  expect_true(set_explicit_setting_value(
+                  &global.store, application_open_hotkey_setting_key(),
+                  elder_terms::SettingValue{
+                      std::string("ctrl+shift+y")}),
+              "a modified global hotkey should be accepted");
+  const SettingsSaveResult global_save =
+      save_global_settings(global.store, global_path);
+  expect_true(global_save.saved, "application global settings should save");
+  const std::string global_contents = read_config(global_path);
+  expect_true(global_contents.find("startup_mode=window_and_tray") !=
+                  std::string::npos &&
+                  global_contents.find("open_application=ctrl+shift+y") !=
+                      std::string::npos,
+              "global.ini should persist both application settings");
+  remove_config(global_path);
+
+  const std::filesystem::path invalid_path =
+      temporary_config_path("invalid-application-global");
+  write_config(invalid_path,
+               "[general]\n"
+               "startup_mode=background\n"
+               "open_application=t\n");
+  const SettingsLoadResult invalid = load_global_settings(invalid_path, 1.0);
+  remove_config(invalid_path);
+  expect_true(application_startup_mode(invalid.store) == StartupMode::window,
+              "an invalid startup mode should use the built-in default");
+  const auto invalid_hotkey = application_open_hotkey(invalid.store);
+  expect_true(invalid_hotkey.has_value() &&
+                  key_binding_matches(*invalid_hotkey, GDK_KEY_t,
+                                      static_cast<GdkModifierType>(
+                                          GDK_CONTROL_MASK | GDK_MOD1_MASK)),
+              "a modifier-free application hotkey should use the default");
+  expect_true(
+      warnings_contain(invalid.warnings,
+                       "invalid configuration value [general] startup_mode") &&
+          warnings_contain(
+              invalid.warnings,
+              "invalid configuration value [general] open_application"),
+      "invalid application settings should emit precise warnings");
+
+  const std::filesystem::path connection_path =
+      temporary_config_path("application-connection");
+  write_config(connection_path,
+               "[general]\n"
+               "name=Connection\n"
+               "startup_mode=tray\n"
+               "open_application=ctrl+shift+x\n");
+  SettingsLoadResult connection = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  expect_true(application_startup_mode(connection.store) ==
+                  StartupMode::window,
+              "connection files must not configure application startup");
+  const auto connection_hotkey = application_open_hotkey(connection.store);
+  expect_true(connection_hotkey.has_value() &&
+                  key_binding_matches(*connection_hotkey, GDK_KEY_t,
+                                      static_cast<GdkModifierType>(
+                                          GDK_CONTROL_MASK | GDK_MOD1_MASK)),
+              "connection files must not configure the application hotkey");
+  expect_true(save_settings(connection.store, connection_path).saved,
+              "a connection containing ignored application keys should save");
+  const std::string connection_contents = read_config(connection_path);
+  expect_true(connection_contents.find("startup_mode") == std::string::npos &&
+                  connection_contents.find("open_application") ==
+                      std::string::npos,
+              "connection saves must omit application-only settings");
+  remove_config(connection_path);
+}
+
 static void test_rebase_preserves_draft_overrides_and_dirty_state() {
   const std::filesystem::path first_global_path =
       temporary_config_path("rebase-first-global");
@@ -2143,6 +2257,7 @@ int main() {
     elder_terms_settings_test::test_invalid_layer_values_use_the_next_fallback();
     elder_terms_settings_test::test_global_settings_do_not_flatten_into_connection_files();
     elder_terms_settings_test::test_global_settings_editor_excludes_connection_name();
+    elder_terms_settings_test::test_application_settings_are_global_only();
     elder_terms_settings_test::test_rebase_preserves_draft_overrides_and_dirty_state();
     elder_terms_settings_test::test_key_binding_conflicts_are_resolved_per_layer();
     elder_terms_settings_test::test_missing_global_settings_are_optional();

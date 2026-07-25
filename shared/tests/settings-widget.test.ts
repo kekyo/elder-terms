@@ -48,11 +48,13 @@ interface AppliedStore {
   readonly log_enabled: string;
   readonly log_file_name_format: string;
   readonly log_mode: string;
+  readonly open_application: string;
   readonly ssh_address: string;
   readonly ssh_identity_file: string;
   readonly ssh_port: string;
   readonly ssh_terminal_type: string;
   readonly ssh_username: string;
+  readonly startup_mode: string;
   readonly sftp_local_directory: string;
   readonly sftp_remote_directory: string;
   readonly telnet_address: string;
@@ -2673,6 +2675,21 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('global_settings_general_type_combo'),
           'comboBox'
         );
+        await expectSelectedComboValue(
+          app,
+          'global_settings_general_startup_mode_combo',
+          'Simple startup (built-in)'
+        );
+        const openApplication = expectElementKind(
+          await app.getById('global_settings_general_open_application_entry'),
+          'entry'
+        );
+        expect(await openApplication.text()).toBe('');
+        await waitForEntryPlaceholder(
+          app,
+          'global_settings_general_open_application_entry',
+          'ctrl+alt+t (built-in)'
+        );
         await selectSettingsTab(app, 'SSH', 'global_settings');
         await waitForResult(async () => {
           expect(
@@ -2704,6 +2721,83 @@ describe.concurrent('shared settings widget', () => {
         expect(store.width_explicit).toBe('true');
         expect(store.height_source).toBe('built-in');
         expect(store.height_explicit).toBe('false');
+      }
+    );
+  });
+
+  it('edits global-only startup and application hotkey settings', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--global-mode', '--page=general'],
+      async ({ app }) => {
+        await expect(
+          app.getById('settings_general_startup_mode_combo')
+        ).rejects.toThrow();
+        const startupMode = expectElementKind(
+          await app.getById('global_settings_general_startup_mode_combo'),
+          'comboBox'
+        );
+        await startupMode.selectChildAt(3);
+        await expectSelectedComboValue(
+          app,
+          'global_settings_general_startup_mode_combo',
+          'System tray and main window'
+        );
+
+        const openApplication = expectElementKind(
+          await app.getById('global_settings_general_open_application_entry'),
+          'entry'
+        );
+        await captureKeyBinding(
+          app,
+          openApplication,
+          ['control', 'shift'],
+          'y'
+        );
+        await expectEntryText(openApplication, 'ctrl+shift+y');
+        await expectElementKind(
+          await app.getById('global_settings_apply_button'),
+          'button'
+        ).click();
+        const configured = await waitForAppliedStore(app);
+        expect(configured.startup_mode).toBe('window_and_tray');
+        expect(configured.open_application).toBe('ctrl+shift+y');
+        expect(configured.startup_mode_explicit).toBe('true');
+        expect(configured.open_application_explicit).toBe('true');
+      }
+    );
+
+    await runSharedGtkTest(
+      context,
+      ['--global-mode', '--page=general', '--global=general.open_application='],
+      async ({ app }) => {
+        const openApplication = expectElementKind(
+          await app.getById('global_settings_general_open_application_entry'),
+          'entry'
+        );
+        await waitForEntryPlaceholder(
+          app,
+          'global_settings_general_open_application_entry',
+          'Disabled'
+        );
+        await expectElementKind(
+          await app.getById(
+            'global_settings_general_open_application_reset_button'
+          ),
+          'button'
+        ).click();
+        await waitForEntryPlaceholder(
+          app,
+          'global_settings_general_open_application_entry',
+          'ctrl+alt+t (built-in)'
+        );
+        await expectElementKind(
+          await app.getById('global_settings_apply_button'),
+          'button'
+        ).click();
+        const reset = await waitForAppliedStore(app);
+        expect(reset.open_application).toBe('ctrl+alt+t');
+        expect(reset.open_application_explicit).toBe('false');
       }
     );
   });

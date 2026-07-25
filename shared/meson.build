@@ -7,6 +7,7 @@ elder_terms_symbol_map = meson.current_source_dir() / 'elder-terms.map'
 elder_terms_shared_sources = [
   'src/key-binding.cpp',
   'src/key-binding-input-widget.cpp',
+  'src/settings/application-settings.cpp',
   'src/settings/general-settings.cpp',
   'src/settings/local-session-settings.cpp',
   'src/settings/log-settings.cpp',
