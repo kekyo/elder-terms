@@ -2,6 +2,7 @@ elder_terms_launcher_include_dir = include_directories('src', '.')
 elder_terms_launcher_gtk_dep = dependency('gtk+-3.0')
 elder_terms_launcher_gio_dep = dependency('gio-2.0')
 elder_terms_launcher_gdk_pixbuf_dep = dependency('gdk-pixbuf-2.0')
+elder_terms_launcher_x11_dep = dependency('x11')
 elder_terms_launcher_cardio_include_dir = (
   meson.project_source_root() / 'deps/cardio/include'
 )
@@ -31,6 +32,7 @@ elder_terms_launcher = executable(
   'elder-terms',
   [
     'src/connection-repository.cpp',
+    'src/hotkey-backend.cpp',
     'src/main-window.cpp',
     'src/main.cpp',
     'src/tray-backend.cpp',
@@ -47,6 +49,7 @@ elder_terms_launcher = executable(
     elder_terms_launcher_gdk_pixbuf_dep,
     elder_terms_launcher_gio_dep,
     elder_terms_launcher_gtk_dep,
+    elder_terms_launcher_x11_dep,
   ],
 )
 
@@ -89,6 +92,31 @@ elder_terms_tray_backend_test = executable(
 test(
   'tray-backend-test',
   elder_terms_tray_backend_test,
+)
+
+elder_terms_hotkey_backend_test = executable(
+  'hotkey-backend-test',
+  [
+    'src/hotkey-backend.cpp',
+    'tests/hotkey-backend-test.cpp',
+  ],
+  include_directories: elder_terms_launcher_include_dir,
+  cpp_args: [
+    '-I' + elder_terms_launcher_cardio_include_dir,
+    '-DCARDIO_WITH_GLIB=1',
+    '-DCARDIO_WITH_GIO=1',
+  ],
+  dependencies: [
+    elder_terms_dep,
+    elder_terms_launcher_gio_dep,
+    elder_terms_launcher_gtk_dep,
+    elder_terms_launcher_x11_dep,
+  ],
+)
+
+test(
+  'hotkey-backend-test',
+  elder_terms_hotkey_backend_test,
 )
 
 configure_file(

@@ -21,6 +21,7 @@
 #include <elder-terms/settings.h>
 
 #include "connection-repository.h"
+#include "hotkey-backend.h"
 #include "main-window.h"
 #include "tray-backend.h"
 
@@ -60,6 +61,7 @@ struct ApplicationState {
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
   std::optional<elder_terms::LauncherMainWindow> main_window_storage;
   elder_terms::LauncherMainWindow *main_window = nullptr;
+  elder_terms::HotkeyBackendState *hotkey_backend = nullptr;
   elder_terms::TrayBackendState *tray_backend = nullptr;
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
   elder_terms::SettingsWidgetState *global_defaults_widget = nullptr;
@@ -113,7 +115,8 @@ static void select_existing_connection(
 static void launch_selected_connection(ApplicationState *state);
 static void present_main_window(
     ApplicationState *state,
-    std::optional<std::uint32_t> activation_time = std::nullopt);
+    std::optional<std::uint32_t> activation_time = std::nullopt,
+    std::optional<std::string> activation_token = std::nullopt);
 static void request_application_quit(ApplicationState *state);
 static void enable_connection_selection(ApplicationState *state);
 
@@ -233,6 +236,9 @@ static void on_global_defaults_dialog_response(GtkDialog *dialog,
     return;
   }
   print_warnings(result.warnings);
+  elder_terms::replace_hotkey(
+      state->hotkey_backend,
+      elder_terms::application_open_hotkey(store));
   elder_terms::settings_widget_rebase_fallbacks(state->settings_widget, store);
   update_action_sensitivity(state);
   gtk_widget_destroy(GTK_WIDGET(dialog));
@@ -1010,12 +1016,19 @@ static void on_connection_row_activated(GtkTreeView *, GtkTreePath *,
 
 static void present_main_window(
     ApplicationState *state,
-    std::optional<std::uint32_t> activation_time) {
+    std::optional<std::uint32_t> activation_time,
+    std::optional<std::string> activation_token) {
   if (state == nullptr || state->main_window == nullptr ||
       state->window_destroyed) {
     return;
   }
   state->hide_when_tray_available = false;
+  if (activation_token.has_value() &&
+      !activation_token->empty()) {
+    gtk_window_set_startup_id(
+        GTK_WINDOW(state->main_window->window),
+        activation_token->c_str());
+  }
   gtk_widget_show_all(state->main_window->window);
   enable_connection_selection(state);
   if (activation_time.has_value()) {
@@ -1246,6 +1259,18 @@ static void on_application_startup(GApplication *,
 
   g_application_hold(state->application);
   state->application_held = true;
+  state->hotkey_backend = elder_terms::create_hotkey_backend(
+      {
+          .application = state->application,
+          .dispatcher = state->dispatcher,
+          .activated =
+              [state](
+                  const elder_terms::HotkeyActivationContext &context) {
+                present_main_window(state, context.activation_time,
+                                    context.activation_token);
+              },
+      },
+      elder_terms::application_open_hotkey(global_settings.store));
   if (state->startup_mode == elder_terms::StartupMode::window) {
     return;
   }
@@ -1303,6 +1328,10 @@ static void on_application_shutdown(GApplication *,
                                     gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
   state->application_shutting_down = true;
+  if (state->hotkey_backend != nullptr) {
+    elder_terms::destroy_hotkey_backend(state->hotkey_backend);
+    state->hotkey_backend = nullptr;
+  }
   if (state->tray_backend != nullptr) {
     elder_terms::destroy_tray_backend(state->tray_backend);
     state->tray_backend = nullptr;
