@@ -32,52 +32,70 @@ const runSftpFixture = async (
   body: (fixture: SftpFixture) => Promise<void>
 ): Promise<void> => {
   const directory = await mkdtemp(join(tmpdir(), 'elder-terms-sftp-'));
-  const localDirectory = join(directory, 'local');
-  const configPath = join(directory, 'sftp.ini');
-  await mkdir(join(localDirectory, 'documents'), { recursive: true });
-  await writeFile(join(localDirectory, 'hello.txt'), 'hello from local\n');
-  await writeFile(
-    configPath,
-    [
-      '[general]',
-      'name=Fixture files',
-      'type=sftp',
-      '',
-      '[ssh]',
-      'address=fixture.example',
-      '',
-      '[sftp]',
-      `local_directory=${localDirectory}`,
-      'remote_directory=/remote',
-      '',
-    ].join('\n')
-  );
-
-  const evidence = createTestEvidence(context);
-  const launcher = createGtkAppLauncher({
-    appPath: sftpAppPath,
-    onSystemOutput: evidence.recordSystemOutputEvent,
-    xvfbTrayHost: true,
-  });
-  const args = ['--test-fixture', '-c', configPath];
-  if (pauseTransfer) {
-    args.unshift('--test-sftp-pause-transfer');
-  }
-  const apps: GtkApp[] = [];
   try {
-    const app = await launcher.launch(args, {
-      onOutput: evidence.recordAppOutputEvent,
-    });
-    apps.push(app);
-    await body({ app, evidence, localDirectory });
-  } finally {
+    const configHome = join(directory, 'xdg-config');
+    const globalConfigDirectory = join(configHome, 'elder-terms');
+    const globalConfigPath = join(globalConfigDirectory, 'global.ini');
+    const localDirectory = join(directory, 'local');
+    const configPath = join(directory, 'sftp.ini');
+    await mkdir(join(localDirectory, 'documents'), { recursive: true });
+    await mkdir(globalConfigDirectory, { recursive: true });
+    await writeFile(join(localDirectory, 'hello.txt'), 'hello from local\n');
+    await writeFile(
+      globalConfigPath,
+      [
+        '[sftp]',
+        `local_directory=${localDirectory}`,
+        'remote_directory=/remote',
+        '',
+      ].join('\n')
+    );
+    await writeFile(
+      configPath,
+      [
+        '[general]',
+        'name=Fixture files',
+        'type=sftp',
+        '',
+        '[ssh]',
+        'address=fixture.example',
+        '',
+      ].join('\n')
+    );
+
+    const evidence = createTestEvidence(context);
     try {
-      await evidence.flushOutputs(apps, launcher);
+      const launcher = createGtkAppLauncher({
+        appPath: sftpAppPath,
+        env: {
+          XDG_CONFIG_HOME: configHome,
+        },
+        onSystemOutput: evidence.recordSystemOutputEvent,
+        xvfbTrayHost: true,
+      });
+      const args = ['--test-fixture', '-c', configPath];
+      if (pauseTransfer) {
+        args.unshift('--test-sftp-pause-transfer');
+      }
+      const apps: GtkApp[] = [];
+      try {
+        const app = await launcher.launch(args, {
+          onOutput: evidence.recordAppOutputEvent,
+        });
+        apps.push(app);
+        await body({ app, evidence, localDirectory });
+      } finally {
+        try {
+          await evidence.flushOutputs(apps, launcher);
+        } finally {
+          await launcher.release();
+        }
+      }
     } finally {
-      await launcher.release();
       await evidence.release();
-      await rm(directory, { recursive: true, force: true });
     }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 };
 
@@ -130,7 +148,7 @@ const expectHidden = async (element: GtkWidgetElement): Promise<void> => {
 };
 
 describe('SFTP window', () => {
-  it('shows independent local and remote trees and navigates both panes', async (context) => {
+  it('inherits global directories and navigates independent local and remote trees', async (context) => {
     await runSftpFixture(
       context,
       false,

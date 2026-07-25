@@ -251,6 +251,7 @@ int main(int argc, char **argv) {
           {
               .config_path = launch_options.config_path,
               .startup_config_path = launch_options.startup_config_path,
+              .global_config_path = elder_terms::default_global_config_path(),
           },
           1.0);
   for (const std::string &warning : settings_result.warnings) {

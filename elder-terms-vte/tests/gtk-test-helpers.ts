@@ -234,7 +234,7 @@ export interface TransferProgressBarValue {
  * Launch options forwarded by runGtkTest.
  */
 export interface RunGtkTestOptions {
-  /** Environment overrides passed to the launched GTK app. */
+  /** Environment overrides, including the isolated XDG config home. */
   readonly env?: GtkAppLauncherOptions['env'];
   /** Additional output callback invoked for launched GTK app stdout/stderr. */
   readonly onOutput?: (event: GtkAppOutputEvent) => void;
@@ -652,6 +652,9 @@ export const assertDisconnectedNoticeMatches = async (
 /**
  * Launches the GTK app and records evidence for one Vitest test.
  *
+ * @remarks A temporary XDG config home isolates each launch unless overridden
+ * through `options.env`.
+ *
  * @param context Vitest test context.
  * @param args Application arguments.
  * @param body Test body receiving the app and evidence writer.
@@ -664,44 +667,54 @@ export const runGtkTest = async (
   body: (app: GtkApp, evidence: TestEvidence) => Promise<void>,
   options?: RunGtkTestOptions
 ): Promise<void> => {
-  const evidence = createTestEvidence(context);
-  const launcher = createGtkAppLauncher({
-    appPath,
-    env: options?.env,
-    onSystemOutput: evidence.recordSystemOutputEvent,
-    xvfbPool: {
-      maxIdlePerKey: 8,
-      maxIdleTotal: 8,
-      type: 'xvfb',
-    },
-    xvfbTrayHost: true,
-  });
-  const apps: GtkApp[] = [];
-
+  const configHome = await mkdtemp(
+    join(tmpdir(), 'elder-terms-vte-xdg-config-')
+  );
   try {
-    await evidence.log('launching app', { appPath, args });
-    const app = await launcher.launch(args, {
-      onOutput: (event) => {
-        evidence.recordAppOutputEvent(event);
-        options?.onOutput?.(event);
+    const evidence = createTestEvidence(context);
+    const launcher = createGtkAppLauncher({
+      appPath,
+      env: {
+        XDG_CONFIG_HOME: configHome,
+        ...options?.env,
       },
+      onSystemOutput: evidence.recordSystemOutputEvent,
+      xvfbPool: {
+        maxIdlePerKey: 8,
+        maxIdleTotal: 8,
+        type: 'xvfb',
+      },
+      xvfbTrayHost: true,
     });
-    apps.push(app);
-    await body(app, evidence);
-  } catch (error) {
-    await evidence.log('test error', { error });
-    throw error;
-  } finally {
+    const apps: GtkApp[] = [];
+
     try {
-      await evidence.flushOutputs(apps, launcher);
+      await evidence.log('launching app', { appPath, args });
+      const app = await launcher.launch(args, {
+        onOutput: (event) => {
+          evidence.recordAppOutputEvent(event);
+          options?.onOutput?.(event);
+        },
+      });
+      apps.push(app);
+      await body(app, evidence);
+    } catch (error) {
+      await evidence.log('test error', { error });
+      throw error;
     } finally {
       try {
-        await launcher.release();
+        await evidence.flushOutputs(apps, launcher);
       } finally {
-        await evidence.flushOutputs([], launcher);
-        await evidence.release();
+        try {
+          await launcher.release();
+        } finally {
+          await evidence.flushOutputs([], launcher);
+          await evidence.release();
+        }
       }
     }
+  } finally {
+    await rm(configHome, { force: true, recursive: true });
   }
 };
 

@@ -1013,6 +1013,7 @@ int main(int argc, char **argv) {
   const elder_terms::SettingsLoadOptions settings_load_options{
       .config_path = launch_options.config_path,
       .startup_config_path = launch_options.startup_config_path,
+      .global_config_path = elder_terms::default_global_config_path(),
   };
   const auto settings_result =
     elder_terms::load_settings(settings_load_options, default_zoom);

@@ -1,4 +1,4 @@
-import { chmod, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -554,6 +554,135 @@ describe.concurrent('elder-terms-vte settings', () => {
             );
           });
         }
+      );
+    });
+  });
+
+  it('applies standard global defaults before -c and -s settings', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configHome = join(directory, 'xdg-config');
+      const globalDirectory = join(configHome, 'elder-terms');
+      const globalConfigPath = join(globalDirectory, 'global.ini');
+      const configPath = join(directory, 'connection.ini');
+      const startupConfigPath = join(directory, 'startup.ini');
+      await mkdir(globalDirectory, { recursive: true });
+      await writeFile(
+        globalConfigPath,
+        '[terminal]\nwidth=83\nheight=27\nzoom=1.1\nbackspace_code=bs\n',
+        'utf8'
+      );
+      await writeFile(configPath, '[terminal]\nwidth=84\nzoom=1.2\n', 'utf8');
+      await writeFile(startupConfigPath, '[terminal]\nwidth=85\n', 'utf8');
+
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath, '-s', startupConfigPath],
+        async (app) => {
+          await waitForResult(async () => {
+            const layout = await readWindowCellLayout(app);
+            expectWindowCellSize(layout, 85, 27);
+            await expectFixtureVteGridSize(app, 85, 27);
+          });
+
+          await openSettingsDialog(app);
+          await showTerminalSettingsPage(app);
+          expect(
+            await expectElementKind(
+              await app.getById('settings_terminal_width_entry'),
+              'entry'
+            ).text()
+          ).toBe('85');
+          expect(
+            await expectElementKind(
+              await app.getById('settings_terminal_height_entry'),
+              'entry'
+            ).text()
+          ).toBe('');
+          expect(
+            await numericEntryValue(
+              expectElementKind(
+                await app.getById('settings_terminal_zoom_entry'),
+                'entry'
+              )
+            )
+          ).toBeCloseTo(1.2);
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_backspace_code_combo',
+            'BS (global)'
+          );
+        },
+        {
+          env: {
+            XDG_CONFIG_HOME: configHome,
+          },
+        }
+      );
+    });
+  });
+
+  it('saves runtime overrides without flattening inherited global defaults', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configHome = join(directory, 'xdg-config');
+      const globalDirectory = join(configHome, 'elder-terms');
+      const globalConfigPath = join(globalDirectory, 'global.ini');
+      const configPath = join(directory, 'connection.ini');
+      const startupConfigPath = join(directory, 'startup.ini');
+      const globalConfig = '[terminal]\nheight=29\nbackspace_code=bs\n';
+      const startupConfig = '[terminal]\nzoom=1.1\n';
+      await mkdir(globalDirectory, { recursive: true });
+      await writeFile(globalConfigPath, globalConfig, 'utf8');
+      await writeFile(configPath, '[terminal]\nwidth=81\n', 'utf8');
+      await writeFile(startupConfigPath, startupConfig, 'utf8');
+
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath, '-s', startupConfigPath],
+        async (app) => {
+          await waitForResult(async () => {
+            const layout = await readWindowCellLayout(app);
+            expectWindowCellSize(layout, 81, 29);
+            await expectFixtureVteGridSize(app, 81, 29);
+          });
+
+          await openSettingsDialog(app);
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await expectSettingsDialogClosed(app);
+
+          await toPass(async () => {
+            const savedConfig = await readFile(configPath, 'utf8');
+            expect(savedConfig).toContain('width=81');
+            expect(savedConfig).toContain('zoom=1.1');
+            expect(savedConfig).not.toContain('height=');
+            expect(savedConfig).not.toContain('backspace_code=');
+            expect(await readFile(globalConfigPath, 'utf8')).toBe(globalConfig);
+            expect(await readFile(startupConfigPath, 'utf8')).toBe(
+              startupConfig
+            );
+          });
+        },
+        {
+          env: {
+            XDG_CONFIG_HOME: configHome,
+          },
+        }
+      );
+    });
+  });
+
+  it('ignores a missing standard global defaults file without warning', async (context) => {
+    await runGtkTest(context, ['--test-fixture'], async (app) => {
+      await waitForResult(async () => {
+        const layout = await readWindowCellLayout(app);
+        expectWindowCellSize(layout, defaultColumns, defaultRows);
+        await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+      });
+
+      expect((await app.output()).stderr).not.toContain(
+        'Warning: configuration file not found:'
       );
     });
   });
