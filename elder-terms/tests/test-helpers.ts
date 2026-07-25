@@ -33,6 +33,8 @@ export interface LauncherGtkTestOptions {
   readonly args: readonly string[];
   /** Additional environment variables. */
   readonly env: Readonly<Record<string, string>>;
+  /** Whether the isolated Xvfb session provides a StatusNotifier tray host. */
+  readonly xvfbTrayHost?: boolean;
 }
 
 /**
@@ -76,7 +78,7 @@ export const runLauncherGtkTest = async (
       XDG_CONFIG_HOME: configHome,
       ...options?.env,
     },
-    xvfbTrayHost: true,
+    xvfbTrayHost: options?.xvfbTrayHost ?? true,
   });
   const app = await launcher.launch([...(options?.args ?? [])]);
   try {

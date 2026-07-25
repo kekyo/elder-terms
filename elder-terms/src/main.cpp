@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <optional>
@@ -15,11 +16,13 @@
 #include <unistd.h>
 
 #include <cardio.h>
+#include <elder-terms/settings/application-settings.h>
 #include <elder-terms/settings-widget.h>
 #include <elder-terms/settings.h>
 
 #include "connection-repository.h"
 #include "main-window.h"
+#include "tray-backend.h"
 
 namespace {
 
@@ -28,6 +31,7 @@ enum class PendingActionKind {
   select,
   new_connection,
   close,
+  quit,
 };
 
 struct PendingAction {
@@ -51,8 +55,12 @@ struct ChildLaunch {
 };
 
 struct ApplicationState {
+  GApplication *application = nullptr;
+  cardio::dispatcher *dispatcher = nullptr;
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
+  std::optional<elder_terms::LauncherMainWindow> main_window_storage;
   elder_terms::LauncherMainWindow *main_window = nullptr;
+  elder_terms::TrayBackendState *tray_backend = nullptr;
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
   elder_terms::SettingsWidgetState *global_defaults_widget = nullptr;
   std::filesystem::path connection_directory;
@@ -76,7 +84,18 @@ struct ApplicationState {
   std::optional<std::filesystem::path> monitor_renamed_path;
   std::string vte_executable;
   std::string sftp_executable;
+  std::string launcher_argv0;
   std::vector<ChildLaunch *> child_launches;
+  elder_terms::StartupMode startup_mode =
+      elder_terms::StartupMode::window;
+  bool application_held = false;
+  bool activated = false;
+  bool hide_when_tray_available = false;
+  bool tray_available = false;
+  bool quitting = false;
+  bool window_destroyed = false;
+  bool application_shutting_down = false;
+  bool startup_failed = false;
   bool shutting_down = false;
 };
 
@@ -92,6 +111,11 @@ static void begin_new_connection(ApplicationState *state);
 static void select_existing_connection(
     ApplicationState *state, const std::filesystem::path &path);
 static void launch_selected_connection(ApplicationState *state);
+static void present_main_window(
+    ApplicationState *state,
+    std::optional<std::uint32_t> activation_time = std::nullopt);
+static void request_application_quit(ApplicationState *state);
+static void enable_connection_selection(ApplicationState *state);
 
 static void print_warnings(const std::vector<std::string> &warnings) {
   for (const std::string &warning : warnings) {
@@ -800,6 +824,9 @@ static void perform_pending_action(ApplicationState *state,
     begin_new_connection(state);
   } else if (action.kind == PendingActionKind::close) {
     gtk_widget_destroy(state->main_window->window);
+  } else if (action.kind == PendingActionKind::quit) {
+    state->quitting = true;
+    gtk_widget_destroy(state->main_window->window);
   }
 }
 
@@ -981,8 +1008,65 @@ static void on_connection_row_activated(GtkTreeView *, GtkTreePath *,
   launch_selected_connection(static_cast<ApplicationState *>(user_data));
 }
 
+static void present_main_window(
+    ApplicationState *state,
+    std::optional<std::uint32_t> activation_time) {
+  if (state == nullptr || state->main_window == nullptr ||
+      state->window_destroyed) {
+    return;
+  }
+  state->hide_when_tray_available = false;
+  gtk_widget_show_all(state->main_window->window);
+  enable_connection_selection(state);
+  if (activation_time.has_value()) {
+    gtk_window_present_with_time(
+        GTK_WINDOW(state->main_window->window),
+        activation_time.value());
+  } else {
+    gtk_window_present(GTK_WINDOW(state->main_window->window));
+  }
+}
+
+static void release_application_hold(ApplicationState *state) {
+  if (state->application_held) {
+    g_application_release(G_APPLICATION(state->application));
+    state->application_held = false;
+  }
+}
+
+static void quit_application_loop(ApplicationState *state) {
+  release_application_hold(state);
+  g_application_quit(G_APPLICATION(state->application));
+}
+
+static void request_application_quit(ApplicationState *state) {
+  if (state == nullptr || state->quitting) {
+    return;
+  }
+  if (state->main_window == nullptr || state->window_destroyed) {
+    state->quitting = true;
+    quit_application_loop(state);
+    return;
+  }
+  if (editor_is_dirty(state)) {
+    present_main_window(state);
+    request_discard_confirmation(
+        state, PendingAction{
+                   .kind = PendingActionKind::quit,
+                   .path = {},
+               });
+    return;
+  }
+  state->quitting = true;
+  gtk_widget_destroy(state->main_window->window);
+}
+
 static gboolean on_window_delete(GtkWidget *, GdkEvent *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
+  if (state->tray_available && !state->quitting) {
+    gtk_widget_hide(state->main_window->window);
+    return TRUE;
+  }
   if (!editor_is_dirty(state)) {
     return FALSE;
   }
@@ -996,6 +1080,10 @@ static gboolean on_window_delete(GtkWidget *, GdkEvent *, gpointer user_data) {
 
 static void on_window_destroy(GtkWidget *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
+  if (state->window_destroyed) {
+    return;
+  }
+  state->window_destroyed = true;
   state->shutting_down = true;
   if (state->monitor_refresh_source != 0) {
     g_source_remove(state->monitor_refresh_source);
@@ -1018,28 +1106,24 @@ static void on_window_destroy(GtkWidget *, gpointer user_data) {
     elder_terms::destroy_settings_widget(state->settings_widget);
     state->settings_widget = nullptr;
   }
-  state->dispatcher_group->shutdown();
+  if (!state->application_shutting_down &&
+      (state->quitting || !state->tray_available)) {
+    quit_application_loop(state);
+  }
 }
 
-} // namespace
-
-int main(int argc, char **argv) {
-  gtk_init(&argc, &argv);
-  cardio::dispatcher_group_glib dispatcher_group;
-  cardio::dispatcher_host_glib dispatcher(dispatcher_group);
-  auto main_window = elder_terms::load_launcher_main_window();
-  if (!main_window.has_value()) {
-    return 1;
+static bool initialize_main_window(ApplicationState *state) {
+  state->main_window_storage =
+      elder_terms::load_launcher_main_window();
+  if (!state->main_window_storage.has_value()) {
+    return false;
   }
+  state->main_window = &state->main_window_storage.value();
+  elder_terms::LauncherMainWindow *main_window = state->main_window;
 
-  ApplicationState state;
-  state.dispatcher_group = &dispatcher_group;
-  state.main_window = &*main_window;
-  state.connection_directory = elder_terms::default_connection_directory();
-  state.global_config_path = elder_terms::default_global_config_path();
   elder_terms::SettingsWidgetCallbacks callbacks;
-  callbacks.changed = [&state]() { update_action_sensitivity(&state); };
-  state.settings_widget = elder_terms::create_settings_widget({
+  callbacks.changed = [state]() { update_action_sensitivity(state); };
+  state->settings_widget = elder_terms::create_settings_widget({
       .store = elder_terms::create_default_settings(
           elder_terms::default_terminal_display_settings(1.0),
           "elder-terms"),
@@ -1049,67 +1133,219 @@ int main(int argc, char **argv) {
   });
   gtk_container_add(
       GTK_CONTAINER(main_window->settings_container),
-      elder_terms::settings_widget_root(state.settings_widget));
+      elder_terms::settings_widget_root(state->settings_widget));
 
   GtkTreeSelection *selection = gtk_tree_view_get_selection(
       GTK_TREE_VIEW(main_window->connection_list));
+  gtk_tree_selection_set_mode(selection, GTK_SELECTION_NONE);
   g_signal_connect(selection, "changed",
-                   G_CALLBACK(on_connection_selection_changed), &state);
+                   G_CALLBACK(on_connection_selection_changed), state);
   g_signal_connect(main_window->connection_name_renderer, "edited",
-                   G_CALLBACK(on_name_edited), &state);
+                   G_CALLBACK(on_name_edited), state);
   g_signal_connect(main_window->connection_name_renderer, "editing-canceled",
-                   G_CALLBACK(on_name_editing_canceled), &state);
+                   G_CALLBACK(on_name_editing_canceled), state);
   g_signal_connect(main_window->connection_name_renderer, "editing-started",
-                   G_CALLBACK(on_name_editing_started), &state);
+                   G_CALLBACK(on_name_editing_started), state);
   g_signal_connect(main_window->connection_list, "key-press-event",
-                   G_CALLBACK(on_connection_list_key_press), &state);
+                   G_CALLBACK(on_connection_list_key_press), state);
   g_signal_connect(main_window->window, "key-press-event",
-                   G_CALLBACK(on_connection_list_key_press), &state);
+                   G_CALLBACK(on_connection_list_key_press), state);
   g_signal_connect(main_window->new_button, "clicked",
-                   G_CALLBACK(on_new_clicked), &state);
+                   G_CALLBACK(on_new_clicked), state);
   g_signal_connect(main_window->global_defaults_button, "clicked",
-                   G_CALLBACK(on_global_defaults_clicked), &state);
+                   G_CALLBACK(on_global_defaults_clicked), state);
   g_signal_connect(main_window->apply_button, "clicked",
-                   G_CALLBACK(on_apply_clicked), &state);
+                   G_CALLBACK(on_apply_clicked), state);
   g_signal_connect(main_window->connect_button, "clicked",
-                   G_CALLBACK(on_connect_clicked), &state);
+                   G_CALLBACK(on_connect_clicked), state);
   g_signal_connect(main_window->connection_list, "row-activated",
-                   G_CALLBACK(on_connection_row_activated), &state);
+                   G_CALLBACK(on_connection_row_activated), state);
   g_signal_connect(main_window->window, "delete-event",
-                   G_CALLBACK(on_window_delete), &state);
+                   G_CALLBACK(on_window_delete), state);
   g_signal_connect(main_window->window, "destroy",
-                   G_CALLBACK(on_window_destroy), &state);
+                   G_CALLBACK(on_window_destroy), state);
 
   GtkAccelGroup *application_accelerators = gtk_accel_group_new();
   GClosure *rename_closure =
-      g_cclosure_new(G_CALLBACK(on_rename_accelerator), &state, nullptr);
+      g_cclosure_new(G_CALLBACK(on_rename_accelerator), state, nullptr);
   gtk_accel_group_connect(application_accelerators, GDK_KEY_F2,
                           static_cast<GdkModifierType>(0), GTK_ACCEL_VISIBLE,
                           rename_closure);
   GClosure *close_closure =
-      g_cclosure_new(G_CALLBACK(on_close_accelerator), &state, nullptr);
+      g_cclosure_new(G_CALLBACK(on_close_accelerator), state, nullptr);
   gtk_accel_group_connect(application_accelerators, GDK_KEY_w,
                           GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE, close_closure);
   gtk_window_add_accel_group(GTK_WINDOW(main_window->window),
                              application_accelerators);
   g_object_unref(application_accelerators);
 
-  populate_profile_rows(&state);
-  state.vte_executable = resolve_child_executable(
-      argv[0], "ELDER_TERMS_VTE_PATH", "elder-terms-vte");
-  state.sftp_executable = resolve_child_executable(
-      argv[0], "ELDER_TERMS_SFTP_PATH", "elder-terms-sftp");
-  start_connection_monitor(&state);
-  show_empty_details(&state);
-  gtk_widget_show_all(main_window->window);
-  state.suppress_selection = true;
+  populate_profile_rows(state);
+  state->vte_executable = resolve_child_executable(
+      state->launcher_argv0.c_str(), "ELDER_TERMS_VTE_PATH",
+      "elder-terms-vte");
+  state->sftp_executable = resolve_child_executable(
+      state->launcher_argv0.c_str(), "ELDER_TERMS_SFTP_PATH",
+      "elder-terms-sftp");
+  start_connection_monitor(state);
+  show_empty_details(state);
+  state->suppress_selection = true;
   gtk_tree_selection_unselect_all(selection);
-  state.suppress_selection = false;
-  show_empty_details(&state);
+  state->suppress_selection = false;
+  show_empty_details(state);
   gtk_stack_set_visible_child_name(GTK_STACK(main_window->details_stack),
                                    "empty");
-  update_action_sensitivity(&state);
-  dispatcher.park();
-  elder_terms::destroy_launcher_main_window(&*main_window);
-  return 0;
+  update_action_sensitivity(state);
+  return true;
+}
+
+static void enable_connection_selection(ApplicationState *state) {
+  GtkTreeSelection *selection = gtk_tree_view_get_selection(
+      GTK_TREE_VIEW(state->main_window->connection_list));
+  if (gtk_tree_selection_get_mode(selection) != GTK_SELECTION_NONE) {
+    return;
+  }
+  state->suppress_selection = true;
+  gtk_tree_selection_set_mode(selection, GTK_SELECTION_SINGLE);
+  gtk_tree_selection_unselect_all(selection);
+  state->suppress_selection = false;
+  show_empty_details(state);
+}
+
+static void on_tray_availability_changed(ApplicationState *state,
+                                         bool available) {
+  if (state->application_shutting_down ||
+      state->window_destroyed) {
+    return;
+  }
+  state->tray_available = available;
+  if (available && state->hide_when_tray_available) {
+    gtk_widget_hide(state->main_window->window);
+  } else if (!available &&
+             state->startup_mode == elder_terms::StartupMode::tray) {
+    present_main_window(state);
+  }
+}
+
+static void on_application_startup(GApplication *,
+                                   gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  state->connection_directory =
+      elder_terms::default_connection_directory();
+  state->global_config_path =
+      elder_terms::default_global_config_path();
+  elder_terms::SettingsLoadResult global_settings =
+      elder_terms::load_global_settings(state->global_config_path, 1.0);
+  print_warnings(global_settings.warnings);
+  state->startup_mode =
+      elder_terms::application_startup_mode(global_settings.store);
+  if (!initialize_main_window(state)) {
+    state->startup_failed = true;
+    g_application_quit(G_APPLICATION(state->application));
+    return;
+  }
+
+  g_application_hold(state->application);
+  state->application_held = true;
+  if (state->startup_mode == elder_terms::StartupMode::window) {
+    return;
+  }
+  state->tray_backend = elder_terms::create_tray_backend({
+      .application = state->application,
+      .dispatcher = state->dispatcher,
+      .identifier = "elder-terms",
+      .title = "elder-terms",
+      .icon_name = "elder-terms",
+      .callbacks =
+          {
+              .activate =
+                  [state](
+                      const elder_terms::TrayActivationContext &context) {
+                    present_main_window(state,
+                                        context.activation_time);
+                  },
+              .quit = [state]() {
+                request_application_quit(state);
+              },
+              .availability_changed = [state](bool available) {
+                on_tray_availability_changed(state, available);
+              },
+          },
+  });
+}
+
+static void on_application_activate(GApplication *,
+                                    gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state->startup_failed || state->main_window == nullptr ||
+      state->window_destroyed) {
+    return;
+  }
+  if (state->activated) {
+    present_main_window(state);
+    return;
+  }
+  state->activated = true;
+  if (state->startup_mode == elder_terms::StartupMode::tray) {
+    state->hide_when_tray_available = true;
+    gtk_widget_show_all(state->main_window->window);
+    enable_connection_selection(state);
+    if (state->tray_available) {
+      gtk_widget_hide(state->main_window->window);
+    } else {
+      gtk_window_present(GTK_WINDOW(state->main_window->window));
+    }
+    return;
+  }
+  present_main_window(state);
+}
+
+static void on_application_shutdown(GApplication *,
+                                    gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  state->application_shutting_down = true;
+  if (state->tray_backend != nullptr) {
+    elder_terms::destroy_tray_backend(state->tray_backend);
+    state->tray_backend = nullptr;
+  }
+  if (state->main_window != nullptr && !state->window_destroyed) {
+    gtk_widget_destroy(state->main_window->window);
+  }
+  release_application_hold(state);
+  state->dispatcher_group->shutdown();
+}
+
+} // namespace
+
+int main(int argc, char **argv) {
+  gtk_init(&argc, &argv);
+  cardio::dispatcher_group_glib dispatcher_group;
+  cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);
+  GApplication *application = g_application_new(
+      elder_terms::launcher_application_id(),
+      G_APPLICATION_DEFAULT_FLAGS);
+
+  ApplicationState state;
+  state.application = application;
+  state.dispatcher = &dispatcher;
+  state.dispatcher_group = &dispatcher_group;
+  state.launcher_argv0 =
+      argc > 0 && argv[0] != nullptr ? argv[0] : "elder-terms";
+  g_signal_connect(application, "startup",
+                   G_CALLBACK(on_application_startup), &state);
+  g_signal_connect(application, "activate",
+                   G_CALLBACK(on_application_activate), &state);
+  g_signal_connect(application, "shutdown",
+                   G_CALLBACK(on_application_shutdown), &state);
+
+  const int result =
+      g_application_run(application, argc, argv);
+  if (!state.application_shutting_down) {
+    dispatcher_group.shutdown();
+  }
+  if (state.main_window_storage.has_value()) {
+    elder_terms::destroy_launcher_main_window(
+        &state.main_window_storage.value());
+  }
+  g_object_unref(application);
+  return state.startup_failed ? 1 : result;
 }
