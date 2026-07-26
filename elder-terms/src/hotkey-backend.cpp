@@ -4,7 +4,6 @@
 #include <array>
 #include <cctype>
 #include <cstdint>
-#include <cstring>
 #include <deque>
 #include <iostream>
 #include <limits>
@@ -30,7 +29,6 @@ static constexpr char portal_session_interface[] =
     "org.freedesktop.portal.Session";
 static constexpr char portal_shortcuts_interface[] =
     "org.freedesktop.portal.GlobalShortcuts";
-static constexpr char portal_shortcut_id[] = "open-application";
 static constexpr auto supported_modifier_mask =
     static_cast<GdkModifierType>(GDK_CONTROL_MASK | GDK_MOD1_MASK |
                                  GDK_SHIFT_MASK | GDK_SUPER_MASK);
@@ -42,6 +40,12 @@ enum class PortalRequestKind {
 
 struct HotkeyBackendImplementation;
 
+struct X11HotkeyGrab {
+  std::string action_id;
+  KeyCode keycode = 0;
+  unsigned int modifiers = 0;
+};
+
 struct PortalRequestContext {
   std::weak_ptr<HotkeyBackendImplementation> implementation;
   unsigned int generation;
@@ -50,15 +54,14 @@ struct PortalRequestContext {
 
 struct HotkeyBackendImplementation {
   HotkeyBackendOptions options;
-  std::optional<KeyBinding> binding;
+  std::vector<HotkeyAction> actions;
   HotkeyBackendKind kind = HotkeyBackendKind::none;
   GDBusConnection *connection = nullptr;
   std::optional<cardio::cancellation_source> cancellation_source;
   std::deque<cardio::promise<void>> tasks;
   Display *x11_display = nullptr;
   Window x11_root = 0;
-  KeyCode x11_keycode = 0;
-  unsigned int x11_modifiers = 0;
+  std::vector<X11HotkeyGrab> x11_grabs;
   std::vector<guint> portal_request_signal_ids;
   guint portal_activation_signal_id = 0;
   std::string portal_session_handle;
@@ -119,6 +122,20 @@ build_portal_shortcut_trigger(const KeyBinding &binding) {
   }
   trigger += key_name;
   return trigger;
+}
+
+std::optional<std::string>
+find_hotkey_action_id(const std::vector<HotkeyAction> &actions,
+                      guint keyval, GdkModifierType modifiers) {
+  const auto action = std::find_if(
+      actions.begin(), actions.end(),
+      [keyval, modifiers](const HotkeyAction &candidate) {
+        return key_binding_matches(candidate.binding, keyval,
+                                   modifiers);
+      });
+  return action == actions.end()
+             ? std::nullopt
+             : std::optional<std::string>(action->id);
 }
 
 static bool has_text(const char *value) {
@@ -184,39 +201,50 @@ static int on_x11_error(Display *, XErrorEvent *) {
   return 0;
 }
 
-static void ungrab_x11_binding(
+static constexpr std::array<unsigned int, 4> x11_lock_masks = {
+    0U,
+    LockMask,
+    Mod2Mask,
+    LockMask | Mod2Mask,
+};
+
+static void ungrab_x11_actions(
     HotkeyBackendImplementation *implementation) {
-  if (implementation->x11_display == nullptr ||
-      implementation->x11_keycode == 0) {
-    implementation->x11_keycode = 0;
-    implementation->x11_modifiers = 0;
+  if (implementation->x11_display == nullptr) {
+    implementation->x11_grabs.clear();
     return;
   }
-  static constexpr std::array<unsigned int, 4> lock_masks = {
-      0U,
-      LockMask,
-      Mod2Mask,
-      LockMask | Mod2Mask,
-  };
   x11_error_trapped = false;
   XErrorHandler previous_handler = XSetErrorHandler(on_x11_error);
-  for (const unsigned int lock_mask : lock_masks) {
-    XUngrabKey(
-        implementation->x11_display,
-        static_cast<int>(implementation->x11_keycode),
-        implementation->x11_modifiers | lock_mask,
-        implementation->x11_root);
+  for (const X11HotkeyGrab &grab : implementation->x11_grabs) {
+    for (const unsigned int lock_mask : x11_lock_masks) {
+      XUngrabKey(implementation->x11_display,
+                 static_cast<int>(grab.keycode),
+                 grab.modifiers | lock_mask,
+                 implementation->x11_root);
+    }
   }
   XSync(implementation->x11_display, False);
   XSetErrorHandler(previous_handler);
-  implementation->x11_keycode = 0;
-  implementation->x11_modifiers = 0;
+  implementation->x11_grabs.clear();
 }
 
-static bool grab_x11_binding(
+static bool x11_action_is_already_grabbed(
+    const HotkeyBackendImplementation *implementation,
+    KeyCode keycode, unsigned int modifiers) {
+  return std::any_of(
+      implementation->x11_grabs.begin(),
+      implementation->x11_grabs.end(),
+      [keycode, modifiers](const X11HotkeyGrab &grab) {
+        return grab.keycode == keycode &&
+               grab.modifiers == modifiers;
+      });
+}
+
+static bool grab_x11_action(
     HotkeyBackendImplementation *implementation,
-    const KeyBinding &binding) {
-  ungrab_x11_binding(implementation);
+    const HotkeyAction &action) {
+  const KeyBinding &binding = action.binding;
   if (implementation->x11_display == nullptr ||
       binding.modifiers == 0 ||
       (binding.modifiers & supported_modifier_mask) !=
@@ -232,16 +260,14 @@ static bool grab_x11_binding(
   }
   const unsigned int modifiers =
       x11_modifier_mask(binding.modifiers);
-  static constexpr std::array<unsigned int, 4> lock_masks = {
-      0U,
-      LockMask,
-      Mod2Mask,
-      LockMask | Mod2Mask,
-  };
+  if (x11_action_is_already_grabbed(
+          implementation, keycode, modifiers)) {
+    return true;
+  }
 
   x11_error_trapped = false;
   XErrorHandler previous_handler = XSetErrorHandler(on_x11_error);
-  for (const unsigned int lock_mask : lock_masks) {
+  for (const unsigned int lock_mask : x11_lock_masks) {
     XGrabKey(implementation->x11_display,
              static_cast<int>(keycode), modifiers | lock_mask,
              implementation->x11_root, True, GrabModeAsync,
@@ -252,7 +278,7 @@ static bool grab_x11_binding(
   if (x11_error_trapped) {
     x11_error_trapped = false;
     previous_handler = XSetErrorHandler(on_x11_error);
-    for (const unsigned int lock_mask : lock_masks) {
+    for (const unsigned int lock_mask : x11_lock_masks) {
       XUngrabKey(implementation->x11_display,
                  static_cast<int>(keycode), modifiers | lock_mask,
                  implementation->x11_root);
@@ -262,15 +288,28 @@ static bool grab_x11_binding(
     return false;
   }
 
-  implementation->x11_keycode = keycode;
-  implementation->x11_modifiers = modifiers;
+  implementation->x11_grabs.push_back({
+      .action_id = action.id,
+      .keycode = keycode,
+      .modifiers = modifiers,
+  });
   return true;
+}
+
+static void grab_x11_actions(
+    HotkeyBackendImplementation *implementation) {
+  ungrab_x11_actions(implementation);
+  for (const HotkeyAction &action : implementation->actions) {
+    if (!grab_x11_action(implementation, action)) {
+      std::cerr << "Failed to register X11 hotkey action "
+                << action.id << '\n';
+    }
+  }
 }
 
 static void process_x11_event(
     HotkeyBackendImplementation *implementation, const XEvent &event) {
-  if (implementation == nullptr || implementation->destroyed ||
-      implementation->x11_keycode == 0) {
+  if (implementation == nullptr || implementation->destroyed) {
     return;
   }
   if (event.type != KeyPress) {
@@ -279,16 +318,24 @@ static void process_x11_event(
   const unsigned int modifiers =
       event.xkey.state &
       (ControlMask | Mod1Mask | ShiftMask | Mod4Mask);
-  if (event.xkey.keycode != implementation->x11_keycode ||
-      modifiers != implementation->x11_modifiers) {
+  const auto grab = std::find_if(
+      implementation->x11_grabs.begin(),
+      implementation->x11_grabs.end(),
+      [&event, modifiers](const X11HotkeyGrab &candidate) {
+        return event.xkey.keycode == candidate.keycode &&
+               modifiers == candidate.modifiers;
+      });
+  if (grab == implementation->x11_grabs.end()) {
     return;
   }
   if (implementation->options.activated) {
-    implementation->options.activated({
-        .activation_time =
-            static_cast<std::uint32_t>(event.xkey.time),
-        .activation_token = std::nullopt,
-    });
+    implementation->options.activated(
+        grab->action_id,
+        {
+            .activation_time =
+                static_cast<std::uint32_t>(event.xkey.time),
+            .activation_token = std::nullopt,
+        });
   }
 }
 
@@ -305,11 +352,7 @@ static bool initialize_x11_backend(
   implementation->x11_root =
       DefaultRootWindow(implementation->x11_display);
   implementation->kind = HotkeyBackendKind::x11;
-  if (implementation->binding.has_value() &&
-      !grab_x11_binding(implementation.get(),
-                        implementation->binding.value())) {
-    std::cerr << "Failed to register the X11 application hotkey\n";
-  }
+  grab_x11_actions(implementation.get());
   implementation->tasks.emplace_back(
       run_x11_event_loop_async(implementation));
   return true;
@@ -317,7 +360,7 @@ static bool initialize_x11_backend(
 
 static void destroy_x11_backend(
     HotkeyBackendImplementation *implementation) {
-  ungrab_x11_binding(implementation);
+  ungrab_x11_actions(implementation);
   if (implementation->x11_display != nullptr) {
     XCloseDisplay(implementation->x11_display);
     implementation->x11_display = nullptr;
@@ -490,7 +533,7 @@ static void on_portal_activated(
       implementation->kind != HotkeyBackendKind::portal ||
       implementation->portal_bind_response_generation !=
           implementation->generation ||
-      !implementation->binding.has_value()) {
+      implementation->actions.empty()) {
     return;
   }
 
@@ -500,12 +543,20 @@ static void on_portal_activated(
   GVariant *options = nullptr;
   g_variant_get(parameters, "(&o&st@a{sv})", &session_handle,
                 &shortcut_id, &timestamp, &options);
-  const bool matches =
+  const bool session_matches =
       session_handle != nullptr &&
       implementation->portal_session_handle == session_handle &&
-      shortcut_id != nullptr &&
-      std::strcmp(shortcut_id, portal_shortcut_id) == 0;
-  if (!matches) {
+      shortcut_id != nullptr;
+  const auto action =
+      session_matches
+          ? std::find_if(
+                implementation->actions.begin(),
+                implementation->actions.end(),
+                [shortcut_id](const HotkeyAction &candidate) {
+                  return candidate.id == shortcut_id;
+                })
+          : implementation->actions.end();
+  if (action == implementation->actions.end()) {
     g_variant_unref(options);
     return;
   }
@@ -524,7 +575,7 @@ static void on_portal_activated(
   g_free(activation_token);
   g_variant_unref(options);
   if (implementation->options.activated) {
-    implementation->options.activated(context);
+    implementation->options.activated(action->id, context);
   }
 }
 
@@ -590,16 +641,15 @@ static void handle_portal_bind_response(
     return;
   }
 
-  bool accepted = false;
+  std::vector<std::string> accepted_ids;
   GVariantIter iterator;
   g_variant_iter_init(&iterator, shortcuts);
   gchar *shortcut_id = nullptr;
   GVariant *properties = nullptr;
   while (g_variant_iter_next(&iterator, "(s@a{sv})",
                              &shortcut_id, &properties)) {
-    if (shortcut_id != nullptr &&
-        std::strcmp(shortcut_id, portal_shortcut_id) == 0) {
-      accepted = true;
+    if (shortcut_id != nullptr) {
+      accepted_ids.emplace_back(shortcut_id);
     }
     g_free(shortcut_id);
     shortcut_id = nullptr;
@@ -607,10 +657,22 @@ static void handle_portal_bind_response(
     properties = nullptr;
   }
   g_variant_unref(shortcuts);
-  if (accepted) {
+  const bool all_accepted = std::all_of(
+      implementation->actions.begin(),
+      implementation->actions.end(),
+      [&accepted_ids](const HotkeyAction &action) {
+        if (!build_portal_shortcut_trigger(action.binding)
+                 .has_value()) {
+          return true;
+        }
+        return std::find(accepted_ids.begin(), accepted_ids.end(),
+                         action.id) != accepted_ids.end();
+      });
+  if (all_accepted && !accepted_ids.empty()) {
     implementation->portal_bind_response_generation = generation;
   } else {
-    std::cerr << "Global shortcuts portal rejected the hotkey\n";
+    std::cerr << "Global shortcuts portal rejected one or more "
+                 "hotkey actions\n";
   }
 }
 
@@ -673,7 +735,7 @@ static cardio::promise<void> create_portal_session_async(
   try {
     if (implementation->destroyed ||
         generation != implementation->generation ||
-        !implementation->binding.has_value()) {
+        implementation->actions.empty()) {
       co_return;
     }
     const std::string request_token =
@@ -729,30 +791,37 @@ static cardio::promise<void> bind_portal_shortcut_async(
     if (implementation->destroyed ||
         generation != implementation->generation ||
         implementation->portal_session_handle.empty() ||
-        !implementation->binding.has_value()) {
-      co_return;
-    }
-    const std::optional<std::string> trigger =
-        build_portal_shortcut_trigger(
-            implementation->binding.value());
-    if (!trigger.has_value()) {
+        implementation->actions.empty()) {
       co_return;
     }
 
-    GVariantBuilder properties;
-    g_variant_builder_init(&properties, G_VARIANT_TYPE("a{sv}"));
-    g_variant_builder_add(
-        &properties, "{sv}", "description",
-        g_variant_new_string("Open elder-terms"));
-    g_variant_builder_add(
-        &properties, "{sv}", "preferred_trigger",
-        g_variant_new_string(trigger->c_str()));
     GVariantBuilder shortcuts;
     g_variant_builder_init(&shortcuts,
                            G_VARIANT_TYPE("a(sa{sv})"));
-    g_variant_builder_add(
-        &shortcuts, "(s@a{sv})", portal_shortcut_id,
-        g_variant_builder_end(&properties));
+    bool has_shortcuts = false;
+    for (const HotkeyAction &action : implementation->actions) {
+      const std::optional<std::string> trigger =
+          build_portal_shortcut_trigger(action.binding);
+      if (!trigger.has_value()) {
+        continue;
+      }
+      GVariantBuilder properties;
+      g_variant_builder_init(&properties,
+                             G_VARIANT_TYPE("a{sv}"));
+      g_variant_builder_add(
+          &properties, "{sv}", "description",
+          g_variant_new_string(action.description.c_str()));
+      g_variant_builder_add(
+          &properties, "{sv}", "preferred_trigger",
+          g_variant_new_string(trigger->c_str()));
+      g_variant_builder_add(
+          &shortcuts, "(s@a{sv})", action.id.c_str(),
+          g_variant_builder_end(&properties));
+      has_shortcuts = true;
+    }
+    if (!has_shortcuts) {
+      co_return;
+    }
 
     const std::string request_token =
         portal_token("elder_terms_hotkeys_bind_", generation);
@@ -793,7 +862,7 @@ static cardio::promise<void> bind_portal_shortcut_async(
   } catch (const std::exception &error) {
     if (!implementation->destroyed &&
         generation == implementation->generation) {
-      std::cerr << "Failed to bind the application hotkey: "
+      std::cerr << "Failed to bind global hotkey actions: "
                 << error.what() << '\n';
     }
   }
@@ -802,7 +871,7 @@ static cardio::promise<void> bind_portal_shortcut_async(
 static void start_portal_registration(
     const std::shared_ptr<HotkeyBackendImplementation> &implementation) {
   clear_portal_backend(implementation.get());
-  if (!implementation->binding.has_value() ||
+  if (implementation->actions.empty() ||
       implementation->destroyed) {
     return;
   }
@@ -854,11 +923,11 @@ static cardio::promise<void> initialize_portal_or_fallback_async(
 
 HotkeyBackendState *
 create_hotkey_backend(HotkeyBackendOptions options,
-                      const std::optional<KeyBinding> &binding) {
+                      const std::vector<HotkeyAction> &actions) {
   auto implementation =
       std::make_shared<HotkeyBackendImplementation>();
   implementation->options = std::move(options);
-  implementation->binding = binding;
+  implementation->actions = actions;
   implementation->cancellation_source.emplace();
   implementation->connection = g_application_get_dbus_connection(
       implementation->options.application);
@@ -890,21 +959,18 @@ create_hotkey_backend(HotkeyBackendOptions options,
   return state;
 }
 
-void replace_hotkey(HotkeyBackendState *state,
-                    const std::optional<KeyBinding> &binding) {
+void replace_hotkey_actions(
+    HotkeyBackendState *state,
+    const std::vector<HotkeyAction> &actions) {
   if (state == nullptr || state->implementation->destroyed) {
     return;
   }
   const std::shared_ptr<HotkeyBackendImplementation> implementation =
       state->implementation;
   ++implementation->generation;
-  implementation->binding = binding;
+  implementation->actions = actions;
   if (implementation->kind == HotkeyBackendKind::x11) {
-    ungrab_x11_binding(implementation.get());
-    if (binding.has_value() &&
-        !grab_x11_binding(implementation.get(), binding.value())) {
-      std::cerr << "Failed to register the X11 application hotkey\n";
-    }
+    grab_x11_actions(implementation.get());
   } else if (implementation->kind ==
              HotkeyBackendKind::portal) {
     start_portal_registration(implementation);

@@ -3,6 +3,7 @@
 #include <iostream>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <gdk/gdk.h>
 
@@ -81,6 +82,49 @@ int main() {
           !elder_terms::build_portal_shortcut_trigger(unmodified)
                .has_value(),
           "unmodified keys should not become global shortcuts")) {
+    return 1;
+  }
+
+  const std::vector<elder_terms::HotkeyAction> actions = {
+      {
+          .id = "first",
+          .description = "First action",
+          .binding = ctrl_alt_t,
+      },
+      {
+          .id = "connection",
+          .description = "Open connection",
+          .binding = shift_f2,
+      },
+      {
+          .id = "duplicate",
+          .description = "Duplicate action",
+          .binding = ctrl_alt_t,
+      },
+  };
+  if (!expect(
+          elder_terms::find_hotkey_action_id(
+              actions, GDK_KEY_F2, GDK_SHIFT_MASK) ==
+              std::optional<std::string>("connection"),
+          "multiple hotkey actions should resolve by binding")) {
+    return 1;
+  }
+  if (!expect(
+          elder_terms::find_hotkey_action_id(
+              actions, GDK_KEY_t,
+              static_cast<GdkModifierType>(
+                  GDK_CONTROL_MASK | GDK_MOD1_MASK)) ==
+              std::optional<std::string>("first"),
+          "duplicate bindings should resolve to the first action")) {
+    return 1;
+  }
+  if (!expect(
+          !elder_terms::find_hotkey_action_id(
+               actions, GDK_KEY_F2,
+               static_cast<GdkModifierType>(
+                   GDK_SHIFT_MASK | GDK_CONTROL_MASK))
+               .has_value(),
+          "hotkey actions should require exact modifiers")) {
     return 1;
   }
 

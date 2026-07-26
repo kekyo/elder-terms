@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <cardio.h>
 #include <gio/gio.h>
@@ -13,7 +14,7 @@
 namespace elder_terms {
 
 /**
- * Identifies the runtime transport used for the application hotkey.
+ * Identifies the runtime transport used for global hotkey actions.
  */
 enum class HotkeyBackendKind {
   /** No global hotkey transport is available. */
@@ -46,12 +47,25 @@ struct HotkeyActivationContext {
   std::optional<std::string> activation_token;
 };
 
-/** Callback invoked when the application hotkey is activated. */
+/**
+ * Describes one desktop-wide hotkey action.
+ */
+struct HotkeyAction {
+  /** Stable identifier returned when the action is activated. */
+  std::string id;
+  /** User-visible description passed to registration backends. */
+  std::string description;
+  /** Key combination registered for the action. */
+  KeyBinding binding;
+};
+
+/** Callback invoked when a global hotkey action is activated. */
 using HotkeyActivationCallback =
-    std::function<void(const HotkeyActivationContext &)>;
+    std::function<void(const std::string &,
+                       const HotkeyActivationContext &)>;
 
 /**
- * Configures one application hotkey backend.
+ * Configures a global hotkey backend.
  */
 struct HotkeyBackendOptions {
   /** Registered application that owns the session-bus connection. */
@@ -62,7 +76,7 @@ struct HotkeyBackendOptions {
   HotkeyActivationCallback activated;
 };
 
-/** Opaque application hotkey backend state. */
+/** Opaque global hotkey backend state. */
 struct HotkeyBackendState;
 
 /**
@@ -85,24 +99,38 @@ std::optional<std::string>
 build_portal_shortcut_trigger(const KeyBinding &binding);
 
 /**
- * Creates and starts an application hotkey backend.
+ * Finds the first action matching a key event.
+ *
+ * @param actions Ordered hotkey actions.
+ * @param keyval GDK key value from the event.
+ * @param modifiers Raw modifier state from the event.
+ * @returns First matching action identifier, or no value.
+ */
+std::optional<std::string>
+find_hotkey_action_id(const std::vector<HotkeyAction> &actions,
+                      guint keyval, GdkModifierType modifiers);
+
+/**
+ * Creates and starts a global hotkey backend.
  *
  * @param options Application, dispatcher, and activation callback.
- * @param binding Initial hotkey, or no value when disabled.
+ * @param actions Initial ordered actions. An empty list disables
+ * registration.
  * @returns Opaque backend state.
  */
 HotkeyBackendState *
 create_hotkey_backend(HotkeyBackendOptions options,
-                      const std::optional<KeyBinding> &binding);
+                      const std::vector<HotkeyAction> &actions);
 
 /**
- * Replaces the active application hotkey.
+ * Replaces all active global hotkey actions.
  *
  * @param state Backend state.
- * @param binding New hotkey, or no value to disable it.
+ * @param actions New ordered actions, or an empty list to disable them.
  */
-void replace_hotkey(HotkeyBackendState *state,
-                    const std::optional<KeyBinding> &binding);
+void replace_hotkey_actions(
+    HotkeyBackendState *state,
+    const std::vector<HotkeyAction> &actions);
 
 /**
  * Stops hotkey registration and releases backend resources.

@@ -27,6 +27,9 @@
 
 namespace {
 
+static constexpr char open_application_hotkey_action_id[] =
+    "open-application";
+
 enum class PendingActionKind {
   none,
   select,
@@ -100,6 +103,20 @@ struct ApplicationState {
   bool startup_failed = false;
   bool shutting_down = false;
 };
+
+static std::vector<elder_terms::HotkeyAction>
+application_hotkey_actions(const elder_terms::SettingsStore &store) {
+  const std::optional<elder_terms::KeyBinding> binding =
+      elder_terms::application_open_hotkey(store);
+  if (!binding.has_value()) {
+    return {};
+  }
+  return {{
+      .id = open_application_hotkey_action_id,
+      .description = "Open elder-terms",
+      .binding = *binding,
+  }};
+}
 
 enum ConnectionColumns {
   connection_name_column = 0,
@@ -236,9 +253,9 @@ static void on_global_defaults_dialog_response(GtkDialog *dialog,
     return;
   }
   print_warnings(result.warnings);
-  elder_terms::replace_hotkey(
+  elder_terms::replace_hotkey_actions(
       state->hotkey_backend,
-      elder_terms::application_open_hotkey(store));
+      application_hotkey_actions(store));
   elder_terms::settings_widget_rebase_fallbacks(state->settings_widget, store);
   update_action_sensitivity(state);
   gtk_widget_destroy(GTK_WIDGET(dialog));
@@ -1269,12 +1286,16 @@ static void on_application_startup(GApplication *,
           .dispatcher = state->dispatcher,
           .activated =
               [state](
+                  const std::string &action_id,
                   const elder_terms::HotkeyActivationContext &context) {
+                if (action_id != open_application_hotkey_action_id) {
+                  return;
+                }
                 present_main_window(state, context.activation_time,
                                     context.activation_token);
               },
       },
-      elder_terms::application_open_hotkey(global_settings.store));
+      application_hotkey_actions(global_settings.store));
   if (state->startup_mode == elder_terms::StartupMode::window) {
     return;
   }
