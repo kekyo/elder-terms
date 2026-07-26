@@ -1,9 +1,11 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include <elder-terms/export.h>
+#include <elder-terms/key-binding.h>
 #include <elder-terms/settings/settings-store.h>
 
 namespace elder_terms {
@@ -25,7 +27,7 @@ enum class ConnectionKind {
 };
 
 /**
- * Returns application-wide setting definitions.
+ * Returns connection-specific general setting definitions.
  *
  * @param default_connection_name Connection name used when [general] name is
  * absent or blank.
@@ -49,6 +51,14 @@ ELDER_TERMS_API SettingKey general_name_setting_key();
 ELDER_TERMS_API SettingKey general_type_setting_key();
 
 /**
+ * Returns the setting key for [general] open_connection.
+ *
+ * @returns Setting key for the connection launch hotkey.
+ */
+ELDER_TERMS_API SettingKey
+general_open_connection_hotkey_setting_key();
+
+/**
  * Returns the effective connection name.
  *
  * @param store Source settings store.
@@ -67,6 +77,24 @@ general_connection_name(const SettingsStore &store);
  */
 ELDER_TERMS_API ConnectionKind
 general_connection_kind(const SettingsStore &store);
+
+/**
+ * Extracts the effective connection launch hotkey text.
+ *
+ * @param store Source connection settings store.
+ * @returns Configured key binding, or an empty string when disabled.
+ */
+ELDER_TERMS_API std::string
+general_open_connection_hotkey_text(const SettingsStore &store);
+
+/**
+ * Extracts the parsed connection launch hotkey.
+ *
+ * @param store Source connection settings store.
+ * @returns Parsed hotkey, or no value when disabled.
+ */
+ELDER_TERMS_API std::optional<KeyBinding>
+general_open_connection_hotkey(const SettingsStore &store);
 
 /**
  * Checks whether the loaded general settings select the TELNET backend.

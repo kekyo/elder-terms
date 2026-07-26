@@ -96,6 +96,10 @@ static FixtureOptions parse_options(int argc, char **argv) {
     } else if (starts_with(argument, "--type=")) {
       append_connection_assignment(
           &options, "general", "type", option_value(argument, "--type="));
+    } else if (starts_with(argument, "--open-connection=")) {
+      append_connection_assignment(
+          &options, "general", "open_connection",
+          option_value(argument, "--open-connection="));
     } else if (starts_with(argument, "--width=")) {
       append_connection_assignment(
           &options, "terminal", "width", option_value(argument, "--width="));
@@ -513,13 +517,18 @@ static void print_store(const char *prefix,
             << elder_terms::startup_mode_to_string(
                    elder_terms::application_startup_mode(store))
             << " open_application="
-            << elder_terms::application_open_hotkey_text(store);
+            << elder_terms::application_open_hotkey_text(store)
+            << " open_connection="
+            << elder_terms::general_open_connection_hotkey_text(store);
   print_setting_metadata(
       store, "startup_mode",
       elder_terms::application_startup_mode_setting_key());
   print_setting_metadata(
       store, "open_application",
       elder_terms::application_open_hotkey_setting_key());
+  print_setting_metadata(
+      store, "open_connection",
+      elder_terms::general_open_connection_hotkey_setting_key());
   print_setting_metadata(store, "type",
                          elder_terms::general_type_setting_key());
   print_setting_metadata(store, "width",

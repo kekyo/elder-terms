@@ -201,7 +201,7 @@ load_settings(const SettingsLoadOptions &options,
  * @returns Store whose global keys are represented as explicit overrides.
  *
  * @remarks A missing global file produces an empty, editable defaults store.
- * The [general] name key is ignored.
+ * The connection-specific [general] name and open_connection keys are ignored.
  */
 ELDER_TERMS_API SettingsLoadResult
 load_global_settings(const std::filesystem::path &global_config_path,

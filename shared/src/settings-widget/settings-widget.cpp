@@ -58,6 +58,8 @@ struct SettingsWidgetState {
   GtkWidget *notebook = nullptr;
   GtkWidget *general_name_entry = nullptr;
   GtkWidget *general_type_combo = nullptr;
+  KeyBindingInputWidgetState *general_open_connection_input = nullptr;
+  GtkWidget *general_open_connection_reset_button = nullptr;
   GtkWidget *general_startup_mode_combo = nullptr;
   KeyBindingInputWidgetState *general_open_application_input = nullptr;
   GtkWidget *general_open_application_reset_button = nullptr;
@@ -717,6 +719,25 @@ update_application_hotkey_from_widget(SettingsWidgetState *state) {
       SettingValue{text});
 }
 
+static void
+update_connection_hotkey_from_widget(SettingsWidgetState *state) {
+  const std::string text =
+      key_binding_input_widget_text(
+          state->general_open_connection_input);
+  std::string reason;
+  const bool valid = global_hotkey_text_is_valid(text, &reason);
+  set_key_binding_input_widget_external_error(
+      state->general_open_connection_input,
+      valid ? std::string() : reason);
+  if (!valid) {
+    return;
+  }
+  set_explicit_setting_value(
+      &state->draft_store,
+      general_open_connection_hotkey_setting_key(),
+      SettingValue{text});
+}
+
 static void update_terminal_width_from_widget(SettingsWidgetState *state) {
   const char *text =
       gtk_entry_get_text(GTK_ENTRY(state->terminal_width_entry));
@@ -956,6 +977,13 @@ static bool application_hotkey_input_valid(
              state->general_open_application_input);
 }
 
+static bool connection_hotkey_input_valid(
+    const SettingsWidgetState *state) {
+  return state->general_open_connection_input == nullptr ||
+         key_binding_input_widget_is_valid(
+             state->general_open_connection_input);
+}
+
 static bool settings_inputs_valid(const SettingsWidgetState *state) {
   return state->terminal_width_valid && state->terminal_height_valid &&
          state->terminal_zoom_valid && state->terminal_encoding_valid &&
@@ -963,6 +991,7 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
          state->serial_baudrate_valid &&
          state->transfer_text_send_rate_valid &&
          terminal_key_binding_inputs_valid(state) &&
+         connection_hotkey_input_valid(state) &&
          application_hotkey_input_valid(state) &&
          state->log_file_name_format_valid;
 }
@@ -1522,7 +1551,13 @@ static void sync_key_binding_widget(
     return;
   }
   const std::string placeholder =
-      setting_fallback_label(state->draft_store, key, effective_value);
+      effective_value.empty()
+          ? std::string("Disabled (") +
+                source_name(setting_fallback_source(
+                    state->draft_store, key)) +
+                ")"
+          : setting_fallback_label(state->draft_store, key,
+                                   effective_value);
   gtk_entry_set_placeholder_text(GTK_ENTRY(entry), placeholder.c_str());
 }
 
@@ -1560,6 +1595,17 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
   }
   if (state->general_startup_mode_combo != nullptr) {
     sync_application_startup_mode_combo(state);
+  }
+  if (state->general_open_connection_input != nullptr) {
+    sync_key_binding_widget(
+        state, state->general_open_connection_input,
+        general_open_connection_hotkey_setting_key(),
+        general_open_connection_hotkey_text(state->draft_store));
+    sync_key_binding_reset_button(
+        state, state->general_open_connection_reset_button,
+        general_open_connection_hotkey_setting_key());
+    set_key_binding_input_widget_external_error(
+        state->general_open_connection_input, {});
   }
   if (state->general_open_application_input != nullptr) {
     sync_key_binding_widget(
@@ -1908,6 +1954,51 @@ static void on_application_hotkey_reset_clicked(GtkButton *,
       application_open_hotkey_setting_key());
   set_key_binding_input_widget_external_error(
       state->general_open_application_input, {});
+  state->synchronizing = previous_synchronizing;
+  update_action_sensitivity(state);
+  notify_changed(state);
+}
+
+static void on_connection_hotkey_changed(SettingsWidgetState *state) {
+  if (state->synchronizing) {
+    return;
+  }
+  update_connection_hotkey_from_widget(state);
+  if (key_binding_input_widget_is_valid(
+          state->general_open_connection_input)) {
+    const std::string effective =
+        general_open_connection_hotkey_text(state->draft_store);
+    set_key_binding_input_widget_empty_clear_enabled(
+        state->general_open_connection_input, false);
+    gtk_entry_set_placeholder_text(
+        GTK_ENTRY(key_binding_input_widget_root(
+            state->general_open_connection_input)),
+        effective.empty() ? "Disabled" : "Press a key combination");
+    sync_key_binding_reset_button(
+        state, state->general_open_connection_reset_button,
+        general_open_connection_hotkey_setting_key());
+  }
+  update_action_sensitivity(state);
+  notify_changed(state);
+}
+
+static void on_connection_hotkey_reset_clicked(GtkButton *,
+                                               gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  clear_explicit_setting_value(
+      &state->draft_store,
+      general_open_connection_hotkey_setting_key());
+  const bool previous_synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  sync_key_binding_widget(
+      state, state->general_open_connection_input,
+      general_open_connection_hotkey_setting_key(),
+      general_open_connection_hotkey_text(state->draft_store));
+  sync_key_binding_reset_button(
+      state, state->general_open_connection_reset_button,
+      general_open_connection_hotkey_setting_key());
+  set_key_binding_input_widget_external_error(
+      state->general_open_connection_input, {});
   state->synchronizing = previous_synchronizing;
   update_action_sensitivity(state);
   notify_changed(state);
@@ -2377,6 +2468,40 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
   g_signal_connect(state->general_type_combo, "changed",
                    G_CALLBACK(on_general_type_changed), state);
   attach_row(page, row++, "type", state->general_type_combo);
+
+  if (state->mode == SettingsWidgetMode::connection &&
+      !state->is_runtime) {
+    const std::string hotkey_id =
+        widget_id(state, "general_open_connection_entry");
+    state->general_open_connection_input =
+        create_key_binding_input_widget({
+            .text = "",
+            .accessible_id = hotkey_id,
+            .changed = [state]() {
+              on_connection_hotkey_changed(state);
+            },
+        });
+    GtkWidget *hotkey_row =
+        gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_box_pack_start(
+        GTK_BOX(hotkey_row),
+        key_binding_input_widget_root(
+            state->general_open_connection_input),
+        TRUE, TRUE, 0);
+    state->general_open_connection_reset_button =
+        gtk_button_new_with_label("Reset");
+    const std::string reset_id =
+        widget_id(state, "general_open_connection_reset_button");
+    assign_accessible_id(state->general_open_connection_reset_button,
+                         reset_id.c_str());
+    g_signal_connect(
+        state->general_open_connection_reset_button, "clicked",
+        G_CALLBACK(on_connection_hotkey_reset_clicked), state);
+    gtk_box_pack_start(
+        GTK_BOX(hotkey_row),
+        state->general_open_connection_reset_button, FALSE, FALSE, 0);
+    attach_row(page, row++, "open_connection", hotkey_row);
+  }
 
   if (state->mode == SettingsWidgetMode::global_defaults) {
     const std::string startup_id =
@@ -3117,6 +3242,8 @@ void destroy_settings_widget(SettingsWidgetState *state) {
 
   destroy_key_binding_input_widget(state->terminal_zoom_in_key_input);
   destroy_key_binding_input_widget(state->terminal_zoom_out_key_input);
+  destroy_key_binding_input_widget(
+      state->general_open_connection_input);
   destroy_key_binding_input_widget(
       state->general_open_application_input);
   if (state->root != nullptr && gtk_widget_get_parent(state->root) == nullptr) {

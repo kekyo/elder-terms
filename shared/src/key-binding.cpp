@@ -113,6 +113,27 @@ KeyBindingParseResult parse_key_binding(const std::string &text) {
   };
 }
 
+bool global_hotkey_text_is_valid(const std::string &text,
+                                 std::string *reason) {
+  const KeyBindingParseResult parsed = parse_key_binding(text);
+  if (!parsed.error.empty()) {
+    if (reason != nullptr) {
+      *reason = parsed.error;
+    }
+    return false;
+  }
+  if (!parsed.binding.has_value()) {
+    return true;
+  }
+  if (parsed.binding->modifiers == 0) {
+    if (reason != nullptr) {
+      *reason = "must include Ctrl, Shift, Alt, or Super";
+    }
+    return false;
+  }
+  return true;
+}
+
 bool key_bindings_equal(const KeyBinding &left, const KeyBinding &right) {
   return left.keyval == right.keyval && left.modifiers == right.modifiers;
 }

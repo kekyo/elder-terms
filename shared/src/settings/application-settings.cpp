@@ -93,23 +93,7 @@ application_open_hotkey(const SettingsStore &store) {
 
 bool application_hotkey_text_is_valid(const std::string &text,
                                       std::string *reason) {
-  const KeyBindingParseResult parsed = parse_key_binding(text);
-  if (!parsed.error.empty()) {
-    if (reason != nullptr) {
-      *reason = parsed.error;
-    }
-    return false;
-  }
-  if (!parsed.binding.has_value()) {
-    return true;
-  }
-  if (parsed.binding->modifiers == 0) {
-    if (reason != nullptr) {
-      *reason = "must include Ctrl, Shift, Alt, or Super";
-    }
-    return false;
-  }
-  return true;
+  return global_hotkey_text_is_valid(text, reason);
 }
 
 } // namespace elder_terms

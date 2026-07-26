@@ -43,6 +43,18 @@ ELDER_TERMS_API KeyBindingParseResult
 parse_key_binding(const std::string &text);
 
 /**
+ * Validates a key binding suitable for desktop-wide registration.
+ *
+ * @param text Candidate binding text. An empty value disables the hotkey.
+ * @param reason Receives a human-readable reason when validation fails.
+ * @returns True for an empty value or a key binding with at least one
+ * supported modifier.
+ */
+ELDER_TERMS_API bool
+global_hotkey_text_is_valid(const std::string &text,
+                            std::string *reason);
+
+/**
  * Checks whether two parsed keyboard bindings are identical.
  *
  * @param left First binding.

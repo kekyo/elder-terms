@@ -87,7 +87,7 @@ static void set_key_file_value(GKeyFile *key_file, const SettingEntry &entry) {
 static bool load_settings_file(SettingsStore *store,
                                const std::filesystem::path &path,
                                bool missing_is_optional,
-                               bool exclude_connection_name,
+                               bool exclude_connection_settings,
                                std::vector<std::string> *warnings) {
   std::error_code exists_error;
   const bool exists = std::filesystem::exists(path, exists_error);
@@ -116,8 +116,10 @@ static bool load_settings_file(SettingsStore *store,
     return false;
   }
 
-  if (exclude_connection_name) {
+  if (exclude_connection_settings) {
     g_key_file_remove_key(key_file, "general", "name", nullptr);
+    g_key_file_remove_key(key_file, "general", "open_connection",
+                          nullptr);
   }
   load_settings_store_from_key_file(store, key_file, warnings);
   g_key_file_unref(key_file);
@@ -168,17 +170,25 @@ static void resolve_terminal_key_binding_conflict(
   restore_setting_entry(store, previous, terminal_zoom_out_key_setting_key());
 }
 
-static bool is_connection_name_entry(const SettingEntry &entry) {
-  return entry.definition.key.section == "general" &&
-         entry.definition.key.name == "name";
+static bool is_connection_only_key(const SettingKey &key) {
+  const SettingKey name = general_name_setting_key();
+  const SettingKey hotkey =
+      general_open_connection_hotkey_setting_key();
+  return (key.section == name.section && key.name == name.name) ||
+         (key.section == hotkey.section && key.name == hotkey.name);
+}
+
+static bool is_connection_only_entry(const SettingEntry &entry) {
+  return is_connection_only_key(entry.definition.key);
 }
 
 static GKeyFile *serialize_settings(const SettingsStore &store,
-                                    bool exclude_connection_name) {
+                                    bool exclude_connection_settings) {
   GKeyFile *key_file = g_key_file_new();
   for (const SettingEntry &entry : store.entries) {
     if (!entry.loaded ||
-        (exclude_connection_name && is_connection_name_entry(entry))) {
+        (exclude_connection_settings &&
+         is_connection_only_entry(entry))) {
       continue;
     }
     set_key_file_value(key_file, entry);
@@ -293,6 +303,9 @@ create_global_default_settings(TerminalDisplaySettings terminal_defaults) {
   std::vector<SettingDefinition> definitions;
   definitions.reserve(connection.entries.size() + 2);
   for (SettingEntry &entry : connection.entries) {
+    if (is_connection_only_entry(entry)) {
+      continue;
+    }
     definitions.push_back(std::move(entry.definition));
   }
   append_definitions(&definitions, application_setting_definitions());

@@ -24,6 +24,9 @@ using elder_terms::application_startup_mode_setting_key;
 using elder_terms::default_global_config_path;
 using elder_terms::default_terminal_text_settings;
 using elder_terms::default_terminal_display_settings;
+using elder_terms::general_open_connection_hotkey;
+using elder_terms::general_open_connection_hotkey_setting_key;
+using elder_terms::general_open_connection_hotkey_text;
 using elder_terms::general_type_setting_key;
 using elder_terms::key_binding_matches;
 using elder_terms::parse_key_binding;
@@ -2002,6 +2005,98 @@ static void test_application_settings_are_global_only() {
   remove_config(connection_path);
 }
 
+static void test_connection_open_hotkey_settings() {
+  const SettingsStore defaults = create_default_settings(
+      default_terminal_display_settings(1.0), "Connection");
+  expect_true(general_open_connection_hotkey_text(defaults).empty() &&
+                  !general_open_connection_hotkey(defaults).has_value(),
+              "connection hotkeys should be disabled by default");
+  expect_true(
+      general_open_connection_hotkey_setting_key().section == "general" &&
+          general_open_connection_hotkey_setting_key().name ==
+              "open_connection",
+      "the connection hotkey should use [general] open_connection");
+
+  const std::filesystem::path connection_path =
+      temporary_config_path("connection-open-hotkey");
+  write_config(connection_path,
+               "[general]\n"
+               "name=Connection\n"
+               "open_connection=ctrl+shift+y\n");
+  SettingsLoadResult connection = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  const auto configured = general_open_connection_hotkey(connection.store);
+  expect_true(
+      configured.has_value() &&
+          key_binding_matches(*configured, GDK_KEY_y,
+                              static_cast<GdkModifierType>(
+                                  GDK_CONTROL_MASK | GDK_SHIFT_MASK)),
+      "a connection file should configure its launch hotkey");
+  expect_true(setting_has_explicit_value(
+                  connection.store,
+                  general_open_connection_hotkey_setting_key()),
+              "a loaded connection hotkey should remain explicit");
+  expect_true(save_settings(connection.store, connection_path).saved,
+              "a connection hotkey should save");
+  expect_true(
+      read_config(connection_path).find(
+          "open_connection=ctrl+shift+y") != std::string::npos,
+      "a connection save should persist its launch hotkey");
+  remove_config(connection_path);
+
+  const std::filesystem::path invalid_path =
+      temporary_config_path("invalid-connection-open-hotkey");
+  write_config(invalid_path,
+               "[general]\n"
+               "open_connection=y\n");
+  const SettingsLoadResult invalid = load_settings(
+      SettingsLoadOptions{
+          .config_path = invalid_path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(invalid_path);
+  expect_true(!general_open_connection_hotkey(invalid.store).has_value(),
+              "a modifier-free connection hotkey should use the disabled "
+              "default");
+  expect_true(
+      warnings_contain(
+          invalid.warnings,
+          "invalid configuration value [general] open_connection"),
+      "an invalid connection hotkey should emit a precise warning");
+
+  const std::filesystem::path global_path =
+      temporary_config_path("connection-open-hotkey-global");
+  write_config(global_path,
+               "[general]\n"
+               "open_connection=ctrl+shift+g\n");
+  SettingsLoadResult global = load_global_settings(global_path, 1.0);
+  expect_true(!general_open_connection_hotkey(global.store).has_value(),
+              "the global settings editor should ignore connection "
+              "hotkeys");
+  expect_true(save_global_settings(global.store, global_path).saved,
+              "global settings should save after ignoring a connection "
+              "hotkey");
+  expect_true(read_config(global_path).find("open_connection") ==
+                  std::string::npos,
+              "global settings should never persist connection hotkeys");
+
+  const SettingsLoadResult inherited = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::nullopt,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  remove_config(global_path);
+  expect_true(!general_open_connection_hotkey(inherited.store).has_value(),
+              "connection hotkeys should never inherit from global.ini");
+}
+
 static void test_rebase_preserves_draft_overrides_and_dirty_state() {
   const std::filesystem::path first_global_path =
       temporary_config_path("rebase-first-global");
@@ -2258,6 +2353,7 @@ int main() {
     elder_terms_settings_test::test_global_settings_do_not_flatten_into_connection_files();
     elder_terms_settings_test::test_global_settings_editor_excludes_connection_name();
     elder_terms_settings_test::test_application_settings_are_global_only();
+    elder_terms_settings_test::test_connection_open_hotkey_settings();
     elder_terms_settings_test::test_rebase_preserves_draft_overrides_and_dirty_state();
     elder_terms_settings_test::test_key_binding_conflicts_are_resolved_per_layer();
     elder_terms_settings_test::test_missing_global_settings_are_optional();

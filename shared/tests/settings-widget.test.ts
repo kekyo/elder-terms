@@ -49,6 +49,7 @@ interface AppliedStore {
   readonly log_file_name_format: string;
   readonly log_mode: string;
   readonly open_application: string;
+  readonly open_connection: string;
   readonly ssh_address: string;
   readonly ssh_identity_file: string;
   readonly ssh_port: string;
@@ -96,6 +97,31 @@ const expectSensitive = async (element: GtkWidgetElement): Promise<void> => {
   const info = await element.info();
   expect(info.states).toContain('enabled');
   expect(info.states).toContain('sensitive');
+};
+
+const descendantAccessibleIds = async (
+  root: GtkWidgetElement
+): Promise<ReadonlySet<string>> => {
+  const ids = new Set<string>();
+  const pending = [root];
+  while (pending.length > 0) {
+    const element = pending.pop() as GtkWidgetElement;
+    const info = await element.info();
+    if (info.accessibleId.length > 0) {
+      ids.add(info.accessibleId);
+    }
+    if (!('getChildCount' in element) || !('childAt' in element)) {
+      continue;
+    }
+    const childCount = await element.getChildCount();
+    for (let index = 0; index < childCount; ++index) {
+      const child = await element.childAt(index);
+      if (child !== undefined) {
+        pending.push(child);
+      }
+    }
+  }
+  return ids;
 };
 
 const showTerminalPage = async (app: GtkApp): Promise<void> => {
@@ -467,6 +493,11 @@ describe.concurrent('shared settings widget', () => {
           await expectSensitive(
             await app.getById('settings_general_type_combo')
           );
+          await expectInheritedEntry(
+            app,
+            'settings_general_open_connection_entry',
+            'Disabled (built-in)'
+          );
         },
         differsFrom: undefined,
         fixtureName: 'settings-widget-general-type-local-editable',
@@ -479,6 +510,10 @@ describe.concurrent('shared settings widget', () => {
           await expectSelectedConnectionType(app, 'TELNET');
           await expectSensitive(
             await app.getById('settings_general_type_combo')
+          );
+          expectElementKind(
+            await app.getById('settings_general_open_connection_entry'),
+            'entry'
           );
         },
         differsFrom: 'settings-widget-general-type-local-editable',
@@ -493,6 +528,9 @@ describe.concurrent('shared settings widget', () => {
           await expectInsensitive(
             await app.getById('settings_general_type_combo')
           );
+          await expect(
+            app.getById('settings_general_open_connection_entry')
+          ).rejects.toThrow();
         },
         differsFrom: 'settings-widget-general-type-local-editable',
         fixtureName: 'settings-widget-general-type-local-runtime',
@@ -506,6 +544,9 @@ describe.concurrent('shared settings widget', () => {
           await expectInsensitive(
             await app.getById('settings_general_type_combo')
           );
+          await expect(
+            app.getById('settings_general_open_connection_entry')
+          ).rejects.toThrow();
         },
         differsFrom: 'settings-widget-general-type-telnet-editable',
         fixtureName: 'settings-widget-general-type-telnet-runtime',
@@ -541,6 +582,57 @@ describe.concurrent('shared settings widget', () => {
       ).click();
       expect((await waitForAppliedStore(app)).name).toBe('Tokyo/Lab');
     });
+  });
+
+  it('edits, validates, and resets the connection launch hotkey', async (context) => {
+    await runSharedGtkTest(context, ['--page=general'], async ({ app }) => {
+      const hotkey = expectElementKind(
+        await app.getById('settings_general_open_connection_entry'),
+        'entry'
+      );
+      await captureKeyBinding(app, hotkey, [], 'y');
+      await expectEntryText(hotkey, 'y');
+      await expectInsensitive(await app.getById('settings_apply_button'));
+
+      await captureKeyBinding(app, hotkey, ['control', 'shift'], 'y');
+      await expectEntryText(hotkey, 'ctrl+shift+y');
+      await expectSensitive(await app.getById('settings_apply_button'));
+      await expectElementKind(
+        await app.getById('settings_apply_button'),
+        'button'
+      ).click();
+      const configured = await waitForAppliedStore(app);
+      expect(configured.open_connection).toBe('ctrl+shift+y');
+      expect(configured.open_connection_explicit).toBe('true');
+    });
+
+    await runSharedGtkTest(
+      context,
+      ['--page=general', '--open-connection=ctrl+shift+x'],
+      async ({ app }) => {
+        const hotkey = expectElementKind(
+          await app.getById('settings_general_open_connection_entry'),
+          'entry'
+        );
+        expect(await hotkey.text()).toBe('ctrl+shift+x');
+        await expectElementKind(
+          await app.getById('settings_general_open_connection_reset_button'),
+          'button'
+        ).click();
+        await waitForEntryPlaceholder(
+          app,
+          'settings_general_open_connection_entry',
+          'Disabled (built-in)'
+        );
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        const reset = await waitForAppliedStore(app);
+        expect(reset.open_connection).toBe('');
+        expect(reset.open_connection_explicit).toBe('false');
+      }
+    );
   });
 
   it('matches Terminal visual fixtures for each terminal setting value', async (context) => {
@@ -2670,6 +2762,12 @@ describe.concurrent('shared settings widget', () => {
         await expect(
           app.getById('global_settings_general_name_entry')
         ).rejects.toThrow();
+        const generalIds = await descendantAccessibleIds(
+          await app.getById('global_settings_general_page')
+        );
+        expect(
+          generalIds.has('global_settings_general_open_connection_entry')
+        ).toBe(false);
         await expect(app.getById('settings_notebook')).rejects.toThrow();
         expectElementKind(
           await app.getById('global_settings_general_type_combo'),
