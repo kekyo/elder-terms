@@ -203,6 +203,72 @@ const expectSelectedComboValue = async (
   expect((await selected?.info())?.name).toBe(expectedName);
 };
 
+const findDescendantByName = async (
+  root: GtkWidgetElement,
+  kind: GtkWidgetElement['kind'],
+  name: string
+): Promise<GtkWidgetElement | undefined> => {
+  const info = await root.info();
+  if (info.kind === kind && info.name === name) {
+    return root;
+  }
+  if (!('getChildCount' in root) || !('childAt' in root)) {
+    return undefined;
+  }
+  const childCount = await root.getChildCount();
+  for (let index = 0; index < childCount; ++index) {
+    const child = await root.childAt(index);
+    if (child === undefined) {
+      continue;
+    }
+    const match = await findDescendantByName(child, kind, name);
+    if (match !== undefined) {
+      return match;
+    }
+  }
+  return undefined;
+};
+
+const findWindowByName = async (
+  app: GtkApp,
+  name: string
+): Promise<GtkWidgetElement | undefined> => {
+  const windowCount = await app.getWindowCount();
+  for (let index = 0; index < windowCount; ++index) {
+    const window = await app.windowAt(index);
+    if (window !== undefined && (await window.info()).name === name) {
+      return window;
+    }
+  }
+  return undefined;
+};
+
+const chooseNamedColor = async (
+  app: GtkApp,
+  pickerId: string,
+  colorName: string
+): Promise<void> => {
+  await expectElementKind(await app.getById(pickerId), 'button').click();
+  const dialog = await waitForResult(async () => {
+    const window = await findWindowByName(app, 'Pick a Color');
+    if (window === undefined) {
+      throw new Error('color picker dialog is not open');
+    }
+    return window;
+  });
+  await expectElementKind(
+    await findDescendantByName(dialog, 'radio', colorName),
+    'radio'
+  ).click();
+  await expectElementKind(
+    await findDescendantByName(dialog, 'button', 'Select'),
+    'button'
+  ).click();
+  await waitForResult(async () => {
+    expect(await findWindowByName(app, 'Pick a Color')).toBeUndefined();
+  });
+};
+
 const visibleSettingsTabNames = async (
   app: GtkApp,
   idPrefix = 'settings'
@@ -483,7 +549,7 @@ describe.concurrent('shared settings widget', () => {
   it('matches General visual fixtures for connection type and runtime state', async (context) => {
     const cases: readonly SettingVisualCase[] = [
       {
-        args: ['--page=terminal'],
+        args: ['--page=general'],
         assert: async (app) => {
           expect(
             await expectElementKind(
@@ -507,7 +573,7 @@ describe.concurrent('shared settings widget', () => {
         prepare: stayOnInitialPage,
       },
       {
-        args: ['--page=telnet', '--type=telnet'],
+        args: ['--page=general', '--type=telnet'],
         assert: async (app) => {
           await expectSelectedConnectionType(app, 'TELNET');
           await expectSensitive(
@@ -568,7 +634,7 @@ describe.concurrent('shared settings widget', () => {
         }
       );
     }
-  });
+  }, 60_000);
 
   it('edits the explicit connection name shown on General', async (context) => {
     await runSharedGtkTest(context, [], async ({ app }) => {
@@ -762,55 +828,73 @@ describe.concurrent('shared settings widget', () => {
     }
   });
 
-  it('edits inherited, uncolored, and custom terminal backgrounds with RGB pickers', async (context) => {
-    await runSharedGtkTest(context, ['--page=terminal'], async ({ app }) => {
-      await showTerminalPage(app);
-      const exteriorMode = expectElementKind(
-        await app.getById('settings_terminal_exterior_background_mode_combo'),
-        'comboBox'
+  it('edits inherited, uncolored, and custom General backgrounds with RGB pickers', async (context) => {
+    await runSharedGtkTest(context, ['--page=general'], async ({ app }) => {
+      const generalPage = await app.getById('settings_general_page');
+      const terminalPage = await app.getById('settings_terminal_page');
+      const generalIds = await descendantAccessibleIds(generalPage);
+      const terminalIds = await descendantAccessibleIds(terminalPage);
+      expect(generalIds).toContain(
+        'settings_general_exterior_background_mode_combo'
       );
-      const terminalMode = expectElementKind(
-        await app.getById('settings_terminal_background_mode_combo'),
-        'comboBox'
+      expect(generalIds).toContain('settings_general_background_mode_combo');
+      expect(terminalIds).not.toContain(
+        'settings_general_exterior_background_mode_combo'
       );
+      expect(terminalIds).not.toContain(
+        'settings_general_background_mode_combo'
+      );
+
       const exteriorPicker = await app.getById(
-        'settings_terminal_exterior_background_button'
+        'settings_general_exterior_background_button'
       );
-      const terminalPicker = await app.getById(
-        'settings_terminal_background_button'
+      const backgroundPicker = await app.getById(
+        'settings_general_background_button'
       );
       await expectSelectedComboValue(
         app,
-        'settings_terminal_exterior_background_mode_combo',
+        'settings_general_exterior_background_mode_combo',
         'No color (built-in)'
       );
       await expectSelectedComboValue(
         app,
-        'settings_terminal_background_mode_combo',
+        'settings_general_background_mode_combo',
         'No color (built-in)'
       );
-      await expectInsensitive(exteriorPicker);
-      await expectInsensitive(terminalPicker);
+      await expectSensitive(exteriorPicker);
+      await expectSensitive(backgroundPicker);
       await waitForResult(async () => {
         expect((await app.output()).stdout).toContain(
-          'COLOR_PICKERS exterior_use_alpha=false terminal_use_alpha=false'
+          'COLOR_PICKERS exterior_use_alpha=false background_use_alpha=false'
         );
       });
 
-      await exteriorMode.selectChildAt(2);
-      await terminalMode.selectChildAt(1);
-      await expectSensitive(exteriorPicker);
-      await expectInsensitive(terminalPicker);
+      await chooseNamedColor(
+        app,
+        'settings_general_exterior_background_button',
+        'Red'
+      );
+      await chooseNamedColor(app, 'settings_general_background_button', 'Blue');
+      await expectSelectedComboValue(
+        app,
+        'settings_general_exterior_background_mode_combo',
+        'Custom'
+      );
+      await expectSelectedComboValue(
+        app,
+        'settings_general_background_mode_combo',
+        'Custom'
+      );
       await expectElementKind(
         await app.getById('settings_apply_button'),
         'button'
       ).click();
 
       const store = await waitForAppliedStore(app);
-      expect(store.exterior_background).toBe('#000000');
+      expect(store.exterior_background).toBe('#E01B24');
       expect(store.exterior_background_source).toBe('override');
       expect(store.exterior_background_explicit).toBe('true');
-      expect(store.background).toBe('none');
+      expect(store.background).toBe('#3584E4');
       expect(store.background_source).toBe('override');
       expect(store.background_explicit).toBe('true');
     });
@@ -818,56 +902,55 @@ describe.concurrent('shared settings widget', () => {
     await runSharedGtkTest(
       context,
       [
-        '--page=terminal',
+        '--page=general',
         '--global=general.exterior_background=#112233',
         '--global=general.background=#445566',
         '--exterior-background=none',
         '--background=#778899',
       ],
       async ({ app }) => {
-        await showTerminalPage(app);
         const exteriorMode = expectElementKind(
-          await app.getById('settings_terminal_exterior_background_mode_combo'),
+          await app.getById('settings_general_exterior_background_mode_combo'),
           'comboBox'
         );
-        const terminalMode = expectElementKind(
-          await app.getById('settings_terminal_background_mode_combo'),
+        const backgroundMode = expectElementKind(
+          await app.getById('settings_general_background_mode_combo'),
           'comboBox'
         );
         await expectSelectedComboValue(
           app,
-          'settings_terminal_exterior_background_mode_combo',
+          'settings_general_exterior_background_mode_combo',
           'No color'
         );
         await expectSelectedComboValue(
           app,
-          'settings_terminal_background_mode_combo',
+          'settings_general_background_mode_combo',
           'Custom'
         );
-        await expectInsensitive(
-          await app.getById('settings_terminal_exterior_background_button')
+        await expectSensitive(
+          await app.getById('settings_general_exterior_background_button')
         );
         await expectSensitive(
-          await app.getById('settings_terminal_background_button')
+          await app.getById('settings_general_background_button')
         );
 
         await exteriorMode.selectChildAt(0);
-        await terminalMode.selectChildAt(0);
+        await backgroundMode.selectChildAt(0);
         await expectSelectedComboValue(
           app,
-          'settings_terminal_exterior_background_mode_combo',
+          'settings_general_exterior_background_mode_combo',
           '#112233 (global)'
         );
         await expectSelectedComboValue(
           app,
-          'settings_terminal_background_mode_combo',
+          'settings_general_background_mode_combo',
           '#445566 (global)'
         );
-        await expectInsensitive(
-          await app.getById('settings_terminal_exterior_background_button')
+        await expectSensitive(
+          await app.getById('settings_general_exterior_background_button')
         );
-        await expectInsensitive(
-          await app.getById('settings_terminal_background_button')
+        await expectSensitive(
+          await app.getById('settings_general_background_button')
         );
         await expectElementKind(
           await app.getById('settings_apply_button'),

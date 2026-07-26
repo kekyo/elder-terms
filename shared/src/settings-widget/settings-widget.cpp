@@ -33,8 +33,8 @@ static constexpr char terminal_cursor_normal[] = "normal";
 static constexpr char terminal_cursor_adm3[] = "adm3";
 static constexpr char terminal_log_raw[] = "raw";
 static constexpr char terminal_log_cooked[] = "cooked";
-static constexpr char terminal_color_none[] = "none";
-static constexpr char terminal_color_custom[] = "custom";
+static constexpr char general_color_none[] = "none";
+static constexpr char general_color_custom[] = "custom";
 static constexpr char inherit_choice[] = "inherit";
 static constexpr char boolean_enabled[] = "enabled";
 static constexpr char boolean_disabled[] = "disabled";
@@ -66,14 +66,14 @@ struct SettingsWidgetState {
   GtkWidget *general_startup_mode_combo = nullptr;
   KeyBindingInputWidgetState *general_open_application_input = nullptr;
   GtkWidget *general_open_application_reset_button = nullptr;
+  GtkWidget *general_exterior_background_mode_combo = nullptr;
+  GtkWidget *general_exterior_background_button = nullptr;
+  GtkWidget *general_background_mode_combo = nullptr;
+  GtkWidget *general_background_button = nullptr;
   GtkWidget *terminal_width_entry = nullptr;
   GtkWidget *terminal_height_entry = nullptr;
   GtkWidget *terminal_zoom_entry = nullptr;
   GtkWidget *terminal_auto_close_combo = nullptr;
-  GtkWidget *terminal_exterior_background_mode_combo = nullptr;
-  GtkWidget *terminal_exterior_background_button = nullptr;
-  GtkWidget *terminal_background_mode_combo = nullptr;
-  GtkWidget *terminal_background_button = nullptr;
   GtkWidget *terminal_encoding_combo = nullptr;
   GtkWidget *terminal_encoding_entry = nullptr;
   GtkWidget *terminal_backspace_code_combo = nullptr;
@@ -849,29 +849,29 @@ static void update_terminal_auto_close_from_widget(
       SettingValue{choice == boolean_enabled});
 }
 
-enum class TerminalColorField {
+enum class GeneralColorField {
   exterior_background,
-  terminal_background,
+  background,
 };
 
-static SettingKey terminal_color_setting_key(TerminalColorField field) {
-  return field == TerminalColorField::exterior_background
+static SettingKey general_color_setting_key(GeneralColorField field) {
+  return field == GeneralColorField::exterior_background
              ? general_exterior_background_setting_key()
              : general_background_setting_key();
 }
 
-static GtkWidget *terminal_color_mode_combo(
-    SettingsWidgetState *state, TerminalColorField field) {
-  return field == TerminalColorField::exterior_background
-             ? state->terminal_exterior_background_mode_combo
-             : state->terminal_background_mode_combo;
+static GtkWidget *general_color_mode_combo(
+    SettingsWidgetState *state, GeneralColorField field) {
+  return field == GeneralColorField::exterior_background
+             ? state->general_exterior_background_mode_combo
+             : state->general_background_mode_combo;
 }
 
-static GtkWidget *terminal_color_button(
-    SettingsWidgetState *state, TerminalColorField field) {
-  return field == TerminalColorField::exterior_background
-             ? state->terminal_exterior_background_button
-             : state->terminal_background_button;
+static GtkWidget *general_color_button(
+    SettingsWidgetState *state, GeneralColorField field) {
+  return field == GeneralColorField::exterior_background
+             ? state->general_exterior_background_button
+             : state->general_background_button;
 }
 
 static void set_color_button_rgb(
@@ -893,43 +893,40 @@ static std::string color_button_rgb(GtkWidget *button) {
   return stream.str();
 }
 
-static void update_terminal_color_mode_from_widget(
-    SettingsWidgetState *state, TerminalColorField field) {
-  GtkWidget *combo = terminal_color_mode_combo(state, field);
-  GtkWidget *button = terminal_color_button(state, field);
-  const SettingKey key = terminal_color_setting_key(field);
+static void update_general_color_mode_from_widget(
+    SettingsWidgetState *state, GeneralColorField field) {
+  GtkWidget *combo = general_color_mode_combo(state, field);
+  GtkWidget *button = general_color_button(state, field);
+  const SettingKey key = general_color_setting_key(field);
   const std::string choice = active_combo_id(combo, inherit_choice);
   if (choice == inherit_choice) {
     clear_explicit_setting_value(&state->draft_store, key);
     const GeneralColorSettings colors =
         general_color_settings(state->draft_store);
     set_color_button_rgb(
-        button, field == TerminalColorField::exterior_background
+        button, field == GeneralColorField::exterior_background
                     ? colors.exterior_background
                     : colors.background);
-  } else if (choice == terminal_color_none) {
+  } else if (choice == general_color_none) {
     set_explicit_setting_value(
         &state->draft_store, key,
-        SettingValue{std::string(terminal_color_none)});
+        SettingValue{std::string(general_color_none)});
   } else {
     set_explicit_setting_value(&state->draft_store, key,
                                SettingValue{color_button_rgb(button)});
   }
-  gtk_widget_set_sensitive(
-      button, choice == terminal_color_custom ? TRUE : FALSE);
 }
 
-static void update_terminal_color_from_picker(
-    SettingsWidgetState *state, TerminalColorField field) {
-  GtkWidget *combo = terminal_color_mode_combo(state, field);
-  GtkWidget *button = terminal_color_button(state, field);
+static void update_general_color_from_picker(
+    SettingsWidgetState *state, GeneralColorField field) {
+  GtkWidget *combo = general_color_mode_combo(state, field);
+  GtkWidget *button = general_color_button(state, field);
   const bool previous_synchronizing = state->synchronizing;
   state->synchronizing = true;
-  gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo), terminal_color_custom);
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo), general_color_custom);
   state->synchronizing = previous_synchronizing;
-  gtk_widget_set_sensitive(button, TRUE);
   set_explicit_setting_value(
-      &state->draft_store, terminal_color_setting_key(field),
+      &state->draft_store, general_color_setting_key(field),
       SettingValue{color_button_rgb(button)});
 }
 
@@ -1538,8 +1535,8 @@ static void populate_boolean_combo(GtkWidget *combo,
       effective_value ? boolean_enabled : boolean_disabled);
 }
 
-static std::string terminal_color_label(const std::string &value) {
-  return value == terminal_color_none ? "No color" : value;
+static std::string general_color_label(const std::string &value) {
+  return value == general_color_none ? "No color" : value;
 }
 
 static void set_color_button_rgb(
@@ -1555,36 +1552,31 @@ static void set_color_button_rgb(
   gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(button), &rgba);
 }
 
-static void sync_terminal_color_control(
-    SettingsWidgetState *state, TerminalColorField field,
+static void sync_general_color_control(
+    SettingsWidgetState *state, GeneralColorField field,
     const std::optional<RgbColor> &effective_color) {
-  GtkWidget *combo = terminal_color_mode_combo(state, field);
-  GtkWidget *button = terminal_color_button(state, field);
+  GtkWidget *combo = general_color_mode_combo(state, field);
+  GtkWidget *button = general_color_button(state, field);
   if (combo == nullptr || button == nullptr) {
     return;
   }
 
-  const SettingKey key = terminal_color_setting_key(field);
+  const SettingKey key = general_color_setting_key(field);
   const std::string effective = setting_string_value_or_default(
-      state->draft_store, key, terminal_color_none);
+      state->draft_store, key, general_color_none);
   const std::string fallback = std::get<std::string>(
       setting_fallback_value(state->draft_store, key,
-                             SettingValue{std::string(terminal_color_none)}));
+                             SettingValue{std::string(general_color_none)}));
   populate_inheritable_combo(
-      combo, state->draft_store, key, terminal_color_label(fallback),
+      combo, state->draft_store, key, general_color_label(fallback),
       {
-          {.id = terminal_color_none, .label = "No color"},
-          {.id = terminal_color_custom, .label = "Custom"},
+          {.id = general_color_none, .label = "No color"},
+          {.id = general_color_custom, .label = "Custom"},
       },
-      effective == terminal_color_none ? terminal_color_none
-                                       : terminal_color_custom);
+      effective == general_color_none ? general_color_none
+                                      : general_color_custom);
   set_color_button_rgb(button, effective_color);
-  gtk_widget_set_sensitive(
-      button,
-      setting_has_explicit_value(state->draft_store, key) &&
-              effective != terminal_color_none
-          ? TRUE
-          : FALSE);
+  gtk_widget_set_sensitive(button, TRUE);
 }
 
 static std::string connection_type_label(const std::string &type) {
@@ -1788,12 +1780,11 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
                            terminal_auto_close_setting_key(),
                            terminal_auto_close(state->draft_store));
   }
-  sync_terminal_color_control(
-      state, TerminalColorField::exterior_background,
+  sync_general_color_control(
+      state, GeneralColorField::exterior_background,
       colors.exterior_background);
-  sync_terminal_color_control(
-      state, TerminalColorField::terminal_background,
-      colors.background);
+  sync_general_color_control(state, GeneralColorField::background,
+                             colors.background);
   if (state->terminal_zoom_in_key_input != nullptr) {
     sync_key_binding_widget(
         state, state->terminal_zoom_in_key_input,
@@ -2191,47 +2182,46 @@ static void on_terminal_auto_close_changed(GtkComboBox *, gpointer data) {
   notify_changed(state);
 }
 
-static void on_terminal_exterior_background_mode_changed(
+static void on_general_exterior_background_mode_changed(
     GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) {
     return;
   }
-  update_terminal_color_mode_from_widget(
-      state, TerminalColorField::exterior_background);
+  update_general_color_mode_from_widget(
+      state, GeneralColorField::exterior_background);
   notify_changed(state);
 }
 
-static void on_terminal_background_mode_changed(GtkComboBox *,
-                                                gpointer data) {
+static void on_general_background_mode_changed(GtkComboBox *,
+                                               gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) {
     return;
   }
-  update_terminal_color_mode_from_widget(
-      state, TerminalColorField::terminal_background);
+  update_general_color_mode_from_widget(
+      state, GeneralColorField::background);
   notify_changed(state);
 }
 
-static void on_terminal_exterior_background_color_set(GtkColorButton *,
-                                                      gpointer data) {
+static void on_general_exterior_background_color_set(GtkColorButton *,
+                                                     gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) {
     return;
   }
-  update_terminal_color_from_picker(
-      state, TerminalColorField::exterior_background);
+  update_general_color_from_picker(
+      state, GeneralColorField::exterior_background);
   notify_changed(state);
 }
 
-static void on_terminal_background_color_set(GtkColorButton *,
-                                             gpointer data) {
+static void on_general_background_color_set(GtkColorButton *,
+                                            gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) {
     return;
   }
-  update_terminal_color_from_picker(
-      state, TerminalColorField::terminal_background);
+  update_general_color_from_picker(state, GeneralColorField::background);
   notify_changed(state);
 }
 
@@ -2734,8 +2724,62 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
     gtk_box_pack_start(
         GTK_BOX(hotkey_row),
         state->general_open_application_reset_button, FALSE, FALSE, 0);
-    attach_row(page, row, "open_application", hotkey_row);
+    attach_row(page, row++, "open_application", hotkey_row);
   }
+
+  GtkWidget *exterior_color_row =
+      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  const std::string exterior_mode_id =
+      widget_id(state, "general_exterior_background_mode_combo");
+  state->general_exterior_background_mode_combo =
+      create_combo_box(exterior_mode_id.c_str());
+  g_signal_connect(
+      state->general_exterior_background_mode_combo, "changed",
+      G_CALLBACK(on_general_exterior_background_mode_changed), state);
+  gtk_box_pack_start(
+      GTK_BOX(exterior_color_row),
+      state->general_exterior_background_mode_combo, TRUE, TRUE, 0);
+  state->general_exterior_background_button = gtk_color_button_new();
+  const std::string exterior_button_id =
+      widget_id(state, "general_exterior_background_button");
+  assign_accessible_id(state->general_exterior_background_button,
+                       exterior_button_id.c_str());
+  gtk_color_chooser_set_use_alpha(
+      GTK_COLOR_CHOOSER(state->general_exterior_background_button), FALSE);
+  set_color_button_rgb(state->general_exterior_background_button,
+                       std::nullopt);
+  g_signal_connect(
+      state->general_exterior_background_button, "color-set",
+      G_CALLBACK(on_general_exterior_background_color_set), state);
+  gtk_box_pack_start(
+      GTK_BOX(exterior_color_row),
+      state->general_exterior_background_button, FALSE, FALSE, 0);
+  attach_row(page, row++, "exterior_background", exterior_color_row);
+
+  GtkWidget *background_color_row =
+      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  const std::string background_mode_id =
+      widget_id(state, "general_background_mode_combo");
+  state->general_background_mode_combo =
+      create_combo_box(background_mode_id.c_str());
+  g_signal_connect(state->general_background_mode_combo, "changed",
+                   G_CALLBACK(on_general_background_mode_changed), state);
+  gtk_box_pack_start(GTK_BOX(background_color_row),
+                     state->general_background_mode_combo, TRUE, TRUE, 0);
+  state->general_background_button = gtk_color_button_new();
+  const std::string background_button_id =
+      widget_id(state, "general_background_button");
+  assign_accessible_id(state->general_background_button,
+                       background_button_id.c_str());
+  gtk_color_chooser_set_use_alpha(
+      GTK_COLOR_CHOOSER(state->general_background_button), FALSE);
+  set_color_button_rgb(state->general_background_button, std::nullopt);
+  g_signal_connect(state->general_background_button, "color-set",
+                   G_CALLBACK(on_general_background_color_set), state);
+  gtk_box_pack_start(GTK_BOX(background_color_row),
+                     state->general_background_button, FALSE, FALSE, 0);
+  attach_row(page, row, "background", background_color_row);
+
   return page;
 }
 
@@ -2852,60 +2896,6 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                      state->terminal_zoom_out_key_reset_button, FALSE, FALSE,
                      0);
   attach_row(page, 8, "zoom_out_key", zoom_out_row);
-
-  GtkWidget *exterior_color_row =
-      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  const std::string exterior_mode_id =
-      widget_id(state, "terminal_exterior_background_mode_combo");
-  state->terminal_exterior_background_mode_combo =
-      create_combo_box(exterior_mode_id.c_str());
-  g_signal_connect(
-      state->terminal_exterior_background_mode_combo, "changed",
-      G_CALLBACK(on_terminal_exterior_background_mode_changed), state);
-  gtk_box_pack_start(
-      GTK_BOX(exterior_color_row),
-      state->terminal_exterior_background_mode_combo, TRUE, TRUE, 0);
-  state->terminal_exterior_background_button =
-      gtk_color_button_new();
-  const std::string exterior_button_id =
-      widget_id(state, "terminal_exterior_background_button");
-  assign_accessible_id(state->terminal_exterior_background_button,
-                       exterior_button_id.c_str());
-  gtk_color_chooser_set_use_alpha(
-      GTK_COLOR_CHOOSER(state->terminal_exterior_background_button), FALSE);
-  set_color_button_rgb(state->terminal_exterior_background_button,
-                       std::nullopt);
-  g_signal_connect(
-      state->terminal_exterior_background_button, "color-set",
-      G_CALLBACK(on_terminal_exterior_background_color_set), state);
-  gtk_box_pack_start(
-      GTK_BOX(exterior_color_row),
-      state->terminal_exterior_background_button, FALSE, FALSE, 0);
-  attach_row(page, 9, "exterior_background", exterior_color_row);
-
-  GtkWidget *terminal_color_row =
-      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  const std::string terminal_mode_id =
-      widget_id(state, "terminal_background_mode_combo");
-  state->terminal_background_mode_combo =
-      create_combo_box(terminal_mode_id.c_str());
-  g_signal_connect(state->terminal_background_mode_combo, "changed",
-                   G_CALLBACK(on_terminal_background_mode_changed), state);
-  gtk_box_pack_start(GTK_BOX(terminal_color_row),
-                     state->terminal_background_mode_combo, TRUE, TRUE, 0);
-  state->terminal_background_button = gtk_color_button_new();
-  const std::string terminal_button_id =
-      widget_id(state, "terminal_background_button");
-  assign_accessible_id(state->terminal_background_button,
-                       terminal_button_id.c_str());
-  gtk_color_chooser_set_use_alpha(
-      GTK_COLOR_CHOOSER(state->terminal_background_button), FALSE);
-  set_color_button_rgb(state->terminal_background_button, std::nullopt);
-  g_signal_connect(state->terminal_background_button, "color-set",
-                   G_CALLBACK(on_terminal_background_color_set), state);
-  gtk_box_pack_start(GTK_BOX(terminal_color_row),
-                     state->terminal_background_button, FALSE, FALSE, 0);
-  attach_row(page, 10, "terminal_background", terminal_color_row);
 
   return page;
 }

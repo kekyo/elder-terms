@@ -387,11 +387,11 @@ static void print_color_picker_properties(GtkWidget *window,
                                           const std::string &id_prefix) {
   std::cout << "COLOR_PICKERS";
   print_color_picker_alpha(
-      window, id_prefix + "_terminal_exterior_background_button",
+      window, id_prefix + "_general_exterior_background_button",
       "exterior_use_alpha");
   print_color_picker_alpha(
-      window, id_prefix + "_terminal_background_button",
-      "terminal_use_alpha");
+      window, id_prefix + "_general_background_button",
+      "background_use_alpha");
   std::cout << '\n';
   std::cout.flush();
 }

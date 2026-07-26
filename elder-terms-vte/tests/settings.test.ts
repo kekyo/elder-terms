@@ -164,6 +164,14 @@ const showTerminalSettingsPage = async (app: GtkApp): Promise<void> => {
   );
 };
 
+const showGeneralSettingsPage = async (app: GtkApp): Promise<void> => {
+  await selectSettingsNotebookTab(
+    app,
+    'General',
+    'settings_general_background_mode_combo'
+  );
+};
+
 const showLoggingSettingsPage = async (app: GtkApp): Promise<void> => {
   const notebook = expectElementKind(
     await app.getById('settings_notebook'),
@@ -1012,25 +1020,25 @@ describe.concurrent('elder-terms-vte settings', () => {
           const initialPixels = await captureWindowBackgroundPixels(app);
 
           await openSettingsDialog(app);
-          await showTerminalSettingsPage(app);
+          await showGeneralSettingsPage(app);
           await expectSelectedComboValue(
             app,
-            'settings_terminal_exterior_background_mode_combo',
+            'settings_general_exterior_background_mode_combo',
             'No color'
           );
           await expectSelectedComboValue(
             app,
-            'settings_terminal_background_mode_combo',
+            'settings_general_background_mode_combo',
             'No color'
           );
           await expectElementKind(
             await app.getById(
-              'settings_terminal_exterior_background_mode_combo'
+              'settings_general_exterior_background_mode_combo'
             ),
             'comboBox'
           ).selectChildAt(0);
           await expectElementKind(
-            await app.getById('settings_terminal_background_mode_combo'),
+            await app.getById('settings_general_background_mode_combo'),
             'comboBox'
           ).selectChildAt(0);
           await expectElementKind(
@@ -1045,25 +1053,25 @@ describe.concurrent('elder-terms-vte settings', () => {
           });
 
           await openSettingsDialog(app);
-          await showTerminalSettingsPage(app);
+          await showGeneralSettingsPage(app);
           await expectSelectedComboValue(
             app,
-            'settings_terminal_exterior_background_mode_combo',
+            'settings_general_exterior_background_mode_combo',
             '#315273 (global)'
           );
           await expectSelectedComboValue(
             app,
-            'settings_terminal_background_mode_combo',
+            'settings_general_background_mode_combo',
             '#734A21 (global)'
           );
           await expectElementKind(
             await app.getById(
-              'settings_terminal_exterior_background_mode_combo'
+              'settings_general_exterior_background_mode_combo'
             ),
             'comboBox'
           ).selectChildAt(1);
           await expectElementKind(
-            await app.getById('settings_terminal_background_mode_combo'),
+            await app.getById('settings_general_background_mode_combo'),
             'comboBox'
           ).selectChildAt(1);
           await expectElementKind(
