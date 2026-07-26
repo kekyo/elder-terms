@@ -113,6 +113,14 @@ static FixtureOptions parse_options(int argc, char **argv) {
       append_connection_assignment(
           &options, "terminal", "auto_close",
           option_value(argument, "--auto-close="));
+    } else if (starts_with(argument, "--exterior-background=")) {
+      append_connection_assignment(
+          &options, "terminal", "exterior_background",
+          option_value(argument, "--exterior-background="));
+    } else if (starts_with(argument, "--terminal-background=")) {
+      append_connection_assignment(
+          &options, "terminal", "terminal_background",
+          option_value(argument, "--terminal-background="));
     } else if (starts_with(argument, "--encoding=")) {
       append_connection_assignment(
           &options, "terminal", "encoding",
@@ -334,6 +342,60 @@ static GtkWidget *find_notebook(GtkWidget *widget) {
   return nullptr;
 }
 
+static GtkWidget *find_widget_by_name(GtkWidget *widget,
+                                      const std::string &name) {
+  if (widget == nullptr) {
+    return nullptr;
+  }
+  const char *widget_name = gtk_widget_get_name(widget);
+  if (widget_name != nullptr && widget_name == name) {
+    return widget;
+  }
+  if (!GTK_IS_CONTAINER(widget)) {
+    return nullptr;
+  }
+
+  GList *children = gtk_container_get_children(GTK_CONTAINER(widget));
+  for (GList *child = children; child != nullptr; child = child->next) {
+    GtkWidget *match =
+        find_widget_by_name(GTK_WIDGET(child->data), name);
+    if (match != nullptr) {
+      g_list_free(children);
+      return match;
+    }
+  }
+  g_list_free(children);
+  return nullptr;
+}
+
+static void print_color_picker_alpha(GtkWidget *window,
+                                     const std::string &id,
+                                     const char *name) {
+  GtkWidget *widget = find_widget_by_name(window, id);
+  std::cout << ' ' << name << '=';
+  if (widget == nullptr || !GTK_IS_COLOR_CHOOSER(widget)) {
+    std::cout << "missing";
+    return;
+  }
+  std::cout << (gtk_color_chooser_get_use_alpha(
+                    GTK_COLOR_CHOOSER(widget)) != FALSE
+                    ? "true"
+                    : "false");
+}
+
+static void print_color_picker_properties(GtkWidget *window,
+                                          const std::string &id_prefix) {
+  std::cout << "COLOR_PICKERS";
+  print_color_picker_alpha(
+      window, id_prefix + "_terminal_exterior_background_button",
+      "exterior_use_alpha");
+  print_color_picker_alpha(
+      window, id_prefix + "_terminal_background_button",
+      "terminal_use_alpha");
+  std::cout << '\n';
+  std::cout.flush();
+}
+
 static void select_initial_page(GtkWidget *window,
                                 const std::string &page) {
   GtkWidget *notebook = find_notebook(window);
@@ -444,6 +506,14 @@ static void print_store(const char *prefix,
                         const elder_terms::SettingsStore &store) {
   const elder_terms::TerminalDisplaySettings display =
       elder_terms::terminal_display_settings(store);
+  const std::string exterior_background =
+      elder_terms::setting_string_value_or_default(
+          store,
+          elder_terms::terminal_exterior_background_setting_key(),
+          "none");
+  const std::string terminal_background =
+      elder_terms::setting_string_value_or_default(
+          store, elder_terms::terminal_background_setting_key(), "none");
   const std::optional<elder_terms::TerminalConnectionProfile> profile =
       elder_terms::terminal_connection_profile(store);
   const elder_terms::TerminalTextSettings text_settings =
@@ -479,6 +549,8 @@ static void print_store(const char *prefix,
                    text_settings.cursor_key_mode)
             << " auto_close="
             << (elder_terms::terminal_auto_close(store) ? "true" : "false")
+            << " exterior_background=" << exterior_background
+            << " terminal_background=" << terminal_background
             << " zoom_in_key="
             << elder_terms::terminal_zoom_in_key(store)
             << " zoom_out_key="
@@ -539,6 +611,11 @@ static void print_store(const char *prefix,
                          elder_terms::terminal_zoom_setting_key());
   print_setting_metadata(store, "auto_close",
                          elder_terms::terminal_auto_close_setting_key());
+  print_setting_metadata(
+      store, "exterior_background",
+      elder_terms::terminal_exterior_background_setting_key());
+  print_setting_metadata(store, "terminal_background",
+                         elder_terms::terminal_background_setting_key());
   print_setting_metadata(store, "encoding",
                          elder_terms::terminal_encoding_setting_key());
   print_setting_metadata(store, "backspace_code",
@@ -733,6 +810,8 @@ int main(int argc, char **argv) {
       gtk_main_iteration_do(FALSE);
     }
     elder_terms_settings_widget_fixture::print_entry_placeholders(window);
+    elder_terms_settings_widget_fixture::print_color_picker_properties(
+        window, options.global_mode ? "global_settings" : "settings");
     std::cout << "READY\n";
     std::cout.flush();
     gtk_main();

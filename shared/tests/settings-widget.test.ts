@@ -43,6 +43,7 @@ interface AppliedStore {
   readonly backspace_code: string;
   readonly cursor_key_mode: string;
   readonly encoding: string;
+  readonly exterior_background: string;
   readonly height: string;
   readonly log_base_directory: string;
   readonly log_enabled: string;
@@ -61,6 +62,7 @@ interface AppliedStore {
   readonly telnet_address: string;
   readonly telnet_port: string;
   readonly telnet_terminal_type: string;
+  readonly terminal_background: string;
   readonly serial_baudrate: string;
   readonly serial_bits: string;
   readonly serial_carrier_detect: string;
@@ -758,6 +760,129 @@ describe.concurrent('shared settings widget', () => {
         }
       );
     }
+  });
+
+  it('edits inherited, uncolored, and custom terminal backgrounds with RGB pickers', async (context) => {
+    await runSharedGtkTest(context, ['--page=terminal'], async ({ app }) => {
+      await showTerminalPage(app);
+      const exteriorMode = expectElementKind(
+        await app.getById('settings_terminal_exterior_background_mode_combo'),
+        'comboBox'
+      );
+      const terminalMode = expectElementKind(
+        await app.getById('settings_terminal_background_mode_combo'),
+        'comboBox'
+      );
+      const exteriorPicker = await app.getById(
+        'settings_terminal_exterior_background_button'
+      );
+      const terminalPicker = await app.getById(
+        'settings_terminal_background_button'
+      );
+      await expectSelectedComboValue(
+        app,
+        'settings_terminal_exterior_background_mode_combo',
+        'No color (built-in)'
+      );
+      await expectSelectedComboValue(
+        app,
+        'settings_terminal_background_mode_combo',
+        'No color (built-in)'
+      );
+      await expectInsensitive(exteriorPicker);
+      await expectInsensitive(terminalPicker);
+      await waitForResult(async () => {
+        expect((await app.output()).stdout).toContain(
+          'COLOR_PICKERS exterior_use_alpha=false terminal_use_alpha=false'
+        );
+      });
+
+      await exteriorMode.selectChildAt(2);
+      await terminalMode.selectChildAt(1);
+      await expectSensitive(exteriorPicker);
+      await expectInsensitive(terminalPicker);
+      await expectElementKind(
+        await app.getById('settings_apply_button'),
+        'button'
+      ).click();
+
+      const store = await waitForAppliedStore(app);
+      expect(store.exterior_background).toBe('#000000');
+      expect(store.exterior_background_source).toBe('override');
+      expect(store.exterior_background_explicit).toBe('true');
+      expect(store.terminal_background).toBe('none');
+      expect(store.terminal_background_source).toBe('override');
+      expect(store.terminal_background_explicit).toBe('true');
+    });
+
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=terminal',
+        '--global=terminal.exterior_background=#112233',
+        '--global=terminal.terminal_background=#445566',
+        '--exterior-background=none',
+        '--terminal-background=#778899',
+      ],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        const exteriorMode = expectElementKind(
+          await app.getById('settings_terminal_exterior_background_mode_combo'),
+          'comboBox'
+        );
+        const terminalMode = expectElementKind(
+          await app.getById('settings_terminal_background_mode_combo'),
+          'comboBox'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_exterior_background_mode_combo',
+          'No color'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_background_mode_combo',
+          'Custom'
+        );
+        await expectInsensitive(
+          await app.getById('settings_terminal_exterior_background_button')
+        );
+        await expectSensitive(
+          await app.getById('settings_terminal_background_button')
+        );
+
+        await exteriorMode.selectChildAt(0);
+        await terminalMode.selectChildAt(0);
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_exterior_background_mode_combo',
+          '#112233 (global)'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_background_mode_combo',
+          '#445566 (global)'
+        );
+        await expectInsensitive(
+          await app.getById('settings_terminal_exterior_background_button')
+        );
+        await expectInsensitive(
+          await app.getById('settings_terminal_background_button')
+        );
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+
+        const store = await waitForAppliedStore(app);
+        expect(store.exterior_background).toBe('#112233');
+        expect(store.exterior_background_source).toBe('global');
+        expect(store.exterior_background_explicit).toBe('false');
+        expect(store.terminal_background).toBe('#445566');
+        expect(store.terminal_background_source).toBe('global');
+        expect(store.terminal_background_explicit).toBe('false');
+      }
+    );
   });
 
   it('matches the default Logging visual fixture', async (context) => {
