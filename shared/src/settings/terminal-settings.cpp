@@ -18,6 +18,9 @@ static constexpr char terminal_width_key[] = "width";
 static constexpr char terminal_height_key[] = "height";
 static constexpr char terminal_zoom_key[] = "zoom";
 static constexpr char terminal_auto_close_key[] = "auto_close";
+static constexpr char terminal_exterior_background_key[] =
+    "exterior_background";
+static constexpr char terminal_background_key[] = "terminal_background";
 static constexpr char terminal_zoom_in_key_name[] = "zoom_in_key";
 static constexpr char terminal_zoom_out_key_name[] = "zoom_out_key";
 static constexpr char terminal_encoding_key[] = "encoding";
@@ -28,6 +31,7 @@ static constexpr char default_terminal_zoom_out_key[] = "ctrl+minus";
 static constexpr char default_terminal_encoding[] = "UTF-8";
 static constexpr char default_terminal_backspace_code[] = "del";
 static constexpr char default_terminal_cursor_key_mode[] = "normal";
+static constexpr char default_terminal_background[] = "none";
 
 static std::string trim_ascii_whitespace(const std::string &value) {
   const auto first = std::find_if_not(
@@ -88,6 +92,55 @@ static bool validate_key_binding(const SettingValue &value,
   return true;
 }
 
+static bool is_ascii_hex_digit(char character) {
+  return (character >= '0' && character <= '9') ||
+         (character >= 'a' && character <= 'f') ||
+         (character >= 'A' && character <= 'F');
+}
+
+static bool validate_terminal_color(const SettingValue &value,
+                                    std::string *reason) {
+  const auto *text = std::get_if<std::string>(&value);
+  if (text == nullptr) {
+    *reason = "must be a string";
+    return false;
+  }
+  if (*text == default_terminal_background) {
+    return true;
+  }
+  if (text->size() != 7 || text->front() != '#' ||
+      !std::all_of(text->begin() + 1, text->end(), is_ascii_hex_digit)) {
+    *reason = "must be none or an RGB color in #RRGGBB format";
+    return false;
+  }
+  return true;
+}
+
+static guint8 hex_nibble(char character) {
+  if (character >= '0' && character <= '9') {
+    return static_cast<guint8>(character - '0');
+  }
+  if (character >= 'a' && character <= 'f') {
+    return static_cast<guint8>(character - 'a' + 10);
+  }
+  return static_cast<guint8>(character - 'A' + 10);
+}
+
+static guint8 parse_hex_byte(char high, char low) {
+  return static_cast<guint8>((hex_nibble(high) << 4) | hex_nibble(low));
+}
+
+static std::optional<RgbColor> parse_terminal_color(const std::string &text) {
+  if (text == default_terminal_background) {
+    return std::nullopt;
+  }
+  return RgbColor{
+      .red = parse_hex_byte(text[1], text[2]),
+      .green = parse_hex_byte(text[3], text[4]),
+      .blue = parse_hex_byte(text[5], text[6]),
+  };
+}
+
 static bool validate_terminal_encoding(const SettingValue &value,
                                        std::string *reason) {
   const auto *text = std::get_if<std::string>(&value);
@@ -144,6 +197,14 @@ SettingKey terminal_zoom_setting_key() {
 
 SettingKey terminal_auto_close_setting_key() {
   return terminal_key(terminal_auto_close_key);
+}
+
+SettingKey terminal_exterior_background_setting_key() {
+  return terminal_key(terminal_exterior_background_key);
+}
+
+SettingKey terminal_background_setting_key() {
+  return terminal_key(terminal_background_key);
 }
 
 SettingKey terminal_zoom_in_key_setting_key() {
@@ -230,6 +291,18 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .validate = nullptr,
       },
       {
+          .key = terminal_exterior_background_setting_key(),
+          .default_value =
+              SettingValue{std::string(default_terminal_background)},
+          .validate = validate_terminal_color,
+      },
+      {
+          .key = terminal_background_setting_key(),
+          .default_value =
+              SettingValue{std::string(default_terminal_background)},
+          .validate = validate_terminal_color,
+      },
+      {
           .key = terminal_zoom_in_key_setting_key(),
           .default_value = SettingValue{std::string(default_terminal_zoom_in_key)},
           .validate = validate_key_binding,
@@ -269,6 +342,19 @@ TerminalDisplaySettings terminal_display_settings(const SettingsStore &store) {
           store, terminal_height_setting_key(), default_terminal_height)),
       .zoom = setting_double_value_or_default(
           store, terminal_zoom_setting_key(), gdouble{1.0}),
+  };
+}
+
+TerminalColorSettings terminal_color_settings(const SettingsStore &store) {
+  return {
+      .exterior_background = parse_terminal_color(
+          setting_string_value_or_default(
+              store, terminal_exterior_background_setting_key(),
+              default_terminal_background)),
+      .terminal_background = parse_terminal_color(
+          setting_string_value_or_default(
+              store, terminal_background_setting_key(),
+              default_terminal_background)),
   };
 }
 

@@ -79,17 +79,21 @@ using elder_terms::TerminalBackspaceCode;
 using elder_terms::TerminalConnectionKind;
 using elder_terms::TerminalConnectionProfile;
 using elder_terms::TerminalCursorKeyMode;
+using elder_terms::TerminalColorSettings;
 using elder_terms::TerminalDisplaySettings;
 using elder_terms::TerminalTextSettings;
 using elder_terms::terminal_auto_close;
 using elder_terms::terminal_backspace_code_setting_key;
+using elder_terms::terminal_color_settings;
 using elder_terms::terminal_connection_profile;
 using elder_terms::terminal_cursor_key_mode_setting_key;
 using elder_terms::terminal_display_settings;
 using elder_terms::terminal_encoding_choices;
 using elder_terms::terminal_encoding_name_is_valid;
 using elder_terms::terminal_encoding_setting_key;
+using elder_terms::terminal_exterior_background_setting_key;
 using elder_terms::terminal_height_setting_key;
+using elder_terms::terminal_background_setting_key;
 using elder_terms::terminal_width_setting_key;
 using elder_terms::terminal_zoom_setting_key;
 using elder_terms::terminal_key_bindings;
@@ -172,6 +176,11 @@ static void test_default_settings() {
   expect_true(display.zoom == 1.2, "default terminal zoom should be retained");
   expect_true(terminal_auto_close(store),
               "default terminal auto-close should be enabled");
+  const TerminalColorSettings colors = terminal_color_settings(store);
+  expect_true(!colors.exterior_background.has_value(),
+              "default exterior background should remain theme-controlled");
+  expect_true(!colors.terminal_background.has_value(),
+              "default terminal background should remain VTE-controlled");
   const auto key_bindings = terminal_key_bindings(store);
   expect_true(key_bindings.zoom_in.has_value(),
               "default terminal zoom-in key should be enabled");
@@ -244,6 +253,120 @@ static void test_default_settings() {
   expect_true(profile.text_settings.cursor_key_mode ==
                   TerminalCursorKeyMode::normal,
               "default local cursor keys should use normal sequences");
+}
+
+static void test_terminal_color_settings() {
+  const std::filesystem::path path =
+      temporary_config_path("terminal-colors");
+  write_config(path,
+               "[terminal]\n"
+               "exterior_background=#12aBcF\n"
+               "terminal_background=#001122\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  const TerminalColorSettings colors = terminal_color_settings(result.store);
+  expect_true(colors.exterior_background.has_value(),
+              "an RGB exterior color should be parsed");
+  expect_true(colors.exterior_background->red == 0x12 &&
+                  colors.exterior_background->green == 0xab &&
+                  colors.exterior_background->blue == 0xcf,
+              "the exterior color should retain all RGB channels");
+  expect_true(colors.terminal_background.has_value(),
+              "an RGB terminal color should be parsed");
+  expect_true(colors.terminal_background->red == 0x00 &&
+                  colors.terminal_background->green == 0x11 &&
+                  colors.terminal_background->blue == 0x22,
+              "the terminal color should retain all RGB channels");
+}
+
+static void test_terminal_color_none_overrides_global_colors() {
+  const std::filesystem::path global_path =
+      temporary_config_path("global-terminal-colors");
+  const std::filesystem::path config_path =
+      temporary_config_path("connection-terminal-colors");
+  write_config(global_path,
+               "[terminal]\n"
+               "exterior_background=#102030\n"
+               "terminal_background=#405060\n");
+  write_config(config_path,
+               "[terminal]\n"
+               "exterior_background=none\n"
+               "terminal_background=#708090\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = config_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  remove_config(global_path);
+  remove_config(config_path);
+
+  const TerminalColorSettings colors = terminal_color_settings(result.store);
+  expect_true(!colors.exterior_background.has_value(),
+              "an explicit none should suppress the inherited exterior color");
+  expect_true(colors.terminal_background.has_value() &&
+                  colors.terminal_background->red == 0x70 &&
+                  colors.terminal_background->green == 0x80 &&
+                  colors.terminal_background->blue == 0x90,
+              "a connection terminal color should override the global color");
+  expect_true(setting_value_source(
+                  result.store,
+                  terminal_exterior_background_setting_key()) ==
+                  SettingValueSource::override,
+              "an explicit none should remain a connection override");
+}
+
+static void test_invalid_terminal_colors_fall_back_and_warn() {
+  const std::filesystem::path global_path =
+      temporary_config_path("valid-global-terminal-colors");
+  const std::filesystem::path config_path =
+      temporary_config_path("invalid-connection-terminal-colors");
+  write_config(global_path,
+               "[terminal]\n"
+               "exterior_background=#112233\n");
+  write_config(config_path,
+               "[terminal]\n"
+               "exterior_background=#44556677\n"
+               "terminal_background=112233\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = config_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  remove_config(global_path);
+  remove_config(config_path);
+
+  const TerminalColorSettings colors = terminal_color_settings(result.store);
+  expect_true(colors.exterior_background.has_value() &&
+                  colors.exterior_background->red == 0x11 &&
+                  colors.exterior_background->green == 0x22 &&
+                  colors.exterior_background->blue == 0x33,
+              "an ARGB connection color should fall back to the global RGB "
+              "color");
+  expect_true(!colors.terminal_background.has_value(),
+              "an invalid terminal color should use the no-color default");
+  expect_true(
+      warnings_contain(
+          result.warnings,
+          "invalid configuration value [terminal] exterior_background"),
+      "an ARGB exterior color should emit a warning");
+  expect_true(
+      warnings_contain(
+          result.warnings,
+          "invalid configuration value [terminal] terminal_background"),
+      "a terminal color without # should emit a warning");
 }
 
 static void test_connection_name_settings() {
@@ -1216,6 +1339,16 @@ static void test_public_setting_keys() {
                   terminal_cursor_key_mode_setting_key().name ==
                       "cursor_key_mode",
               "cursor-key mode key should use [terminal] cursor_key_mode");
+  expect_true(
+      terminal_exterior_background_setting_key().section == "terminal" &&
+          terminal_exterior_background_setting_key().name ==
+              "exterior_background",
+      "exterior background key should use [terminal] exterior_background");
+  expect_true(
+      terminal_background_setting_key().section == "terminal" &&
+          terminal_background_setting_key().name ==
+              "terminal_background",
+      "terminal background key should use [terminal] terminal_background");
   expect_true(telnet_address_setting_key().section == "telnet",
               "TELNET address key should use the telnet section");
   expect_true(telnet_address_setting_key().name == "address",
@@ -1332,6 +1465,51 @@ static void test_save_terminal_log_settings() {
               "saved settings should include terminal log file name format");
   expect_true(content.find("mode=cooked") != std::string::npos,
               "saved settings should include cooked terminal log mode");
+}
+
+static void test_save_terminal_color_settings() {
+  const std::filesystem::path path =
+      temporary_config_path("save-terminal-colors");
+  SettingsStore store =
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
+  set_explicit_setting_value(
+      &store, terminal_exterior_background_setting_key(),
+      elder_terms::SettingValue{std::string("#A1B2C3")});
+  set_explicit_setting_value(
+      &store, terminal_background_setting_key(),
+      elder_terms::SettingValue{std::string("none")});
+
+  const SettingsSaveResult result = save_settings(store, path);
+  expect_true(result.saved, "terminal color settings save should succeed");
+  const std::string content = read_config(path);
+
+  expect_true(content.find("exterior_background=#A1B2C3") !=
+                  std::string::npos,
+              "saved settings should include the exterior RGB color");
+  expect_true(content.find("terminal_background=none") !=
+                  std::string::npos,
+              "saved settings should preserve an explicit no-color override");
+
+  const SettingsLoadResult loaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+  const TerminalColorSettings colors = terminal_color_settings(loaded.store);
+  expect_true(colors.exterior_background.has_value() &&
+                  colors.exterior_background->red == 0xa1 &&
+                  colors.exterior_background->green == 0xb2 &&
+                  colors.exterior_background->blue == 0xc3,
+              "a saved exterior RGB color should survive reloading");
+  expect_true(!colors.terminal_background.has_value(),
+              "a saved no-color override should survive reloading");
+  expect_true(setting_has_explicit_value(
+                  loaded.store,
+                  terminal_background_setting_key()),
+              "a reloaded no-color value should remain explicit");
 }
 
 static void test_save_settings_omits_default_values() {
@@ -2316,6 +2494,11 @@ int main() {
   try {
     elder_terms_settings_test::test_default_settings();
     elder_terms_settings_test::test_connection_name_settings();
+    elder_terms_settings_test::test_terminal_color_settings();
+    elder_terms_settings_test::
+        test_terminal_color_none_overrides_global_colors();
+    elder_terms_settings_test::
+        test_invalid_terminal_colors_fall_back_and_warn();
     elder_terms_settings_test::test_terminal_text_defaults_follow_connection_type();
     elder_terms_settings_test::test_terminal_text_explicit_settings_override_connection_defaults();
     elder_terms_settings_test::test_terminal_encoding_choices_are_supported();
@@ -2346,6 +2529,7 @@ int main() {
     elder_terms_settings_test::test_save_explicit_terminal_text_defaults();
     elder_terms_settings_test::test_save_explicit_value_equal_to_built_in();
     elder_terms_settings_test::test_save_terminal_log_settings();
+    elder_terms_settings_test::test_save_terminal_color_settings();
     elder_terms_settings_test::test_save_settings_writes_empty_file_for_defaults();
     elder_terms_settings_test::test_load_settings_reports_file_read_status();
     elder_terms_settings_test::test_global_settings_layer_priority_and_sources();

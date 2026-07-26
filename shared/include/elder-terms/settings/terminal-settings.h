@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,28 @@ struct TerminalDisplaySettings {
   glong height;
   /** Initial VTE font scale. */
   gdouble zoom;
+};
+
+/**
+ * An opaque RGB color.
+ */
+struct RgbColor {
+  /** Red channel. */
+  guint8 red;
+  /** Green channel. */
+  guint8 green;
+  /** Blue channel. */
+  guint8 blue;
+};
+
+/**
+ * Optional colors applied to a terminal connection window.
+ */
+struct TerminalColorSettings {
+  /** Shared title-bar and status-bar background, or no application color. */
+  std::optional<RgbColor> exterior_background;
+  /** VTE background, or no application color. */
+  std::optional<RgbColor> terminal_background;
 };
 
 /**
@@ -67,6 +90,20 @@ ELDER_TERMS_API SettingKey terminal_zoom_setting_key();
  * @returns Setting key for terminal auto-close behavior.
  */
 ELDER_TERMS_API SettingKey terminal_auto_close_setting_key();
+
+/**
+ * Returns the setting key for [terminal] exterior_background.
+ *
+ * @returns Setting key for the title-bar and status-bar background.
+ */
+ELDER_TERMS_API SettingKey terminal_exterior_background_setting_key();
+
+/**
+ * Returns the setting key for [terminal] terminal_background.
+ *
+ * @returns Setting key for the VTE background.
+ */
+ELDER_TERMS_API SettingKey terminal_background_setting_key();
 
 /**
  * Returns the setting key for [terminal] zoom_in_key.
@@ -139,6 +176,15 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults);
  */
 ELDER_TERMS_API TerminalDisplaySettings
 terminal_display_settings(const SettingsStore &store);
+
+/**
+ * Extracts terminal window colors from a store.
+ *
+ * @param store Source settings store.
+ * @returns Parsed RGB colors. A missing value denotes no application color.
+ */
+ELDER_TERMS_API TerminalColorSettings
+terminal_color_settings(const SettingsStore &store);
 
 /**
  * Extracts the terminal auto-close behavior from a store.
