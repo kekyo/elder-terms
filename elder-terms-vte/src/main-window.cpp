@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <utility>
 
@@ -458,6 +460,90 @@ static bool load_indicator_images(MainWindow *main_window) {
   return true;
 }
 
+static std::string rgb_color_css(const RgbColor &color) {
+  std::ostringstream stream;
+  stream << "* { background-image: none; background-color: #"
+         << std::uppercase << std::hex << std::setfill('0') << std::setw(2)
+         << static_cast<unsigned int>(color.red) << std::setw(2)
+         << static_cast<unsigned int>(color.green) << std::setw(2)
+         << static_cast<unsigned int>(color.blue) << "; }";
+  return stream.str();
+}
+
+static void clear_main_window_exterior_background(MainWindow *main_window) {
+  if (main_window->exterior_background_provider == nullptr) {
+    return;
+  }
+
+  GtkStyleProvider *provider =
+      GTK_STYLE_PROVIDER(main_window->exterior_background_provider);
+  if (main_window->header_bar != nullptr) {
+    gtk_style_context_remove_provider(
+        gtk_widget_get_style_context(main_window->header_bar), provider);
+  }
+  if (main_window->status_bar != nullptr) {
+    gtk_style_context_remove_provider(
+        gtk_widget_get_style_context(main_window->status_bar), provider);
+  }
+  g_clear_object(&main_window->exterior_background_provider);
+}
+
+static void set_main_window_exterior_background(
+    MainWindow *main_window, const std::optional<RgbColor> &color) {
+  clear_main_window_exterior_background(main_window);
+  if (!color.has_value() || main_window->header_bar == nullptr ||
+      main_window->status_bar == nullptr) {
+    return;
+  }
+
+  GtkCssProvider *provider = gtk_css_provider_new();
+  const std::string css = rgb_color_css(color.value());
+  GError *error = nullptr;
+  if (!gtk_css_provider_load_from_data(provider, css.c_str(), -1, &error)) {
+    std::cerr << "Failed to apply configured exterior background" << '\n';
+    if (error != nullptr) {
+      std::cerr << error->message << '\n';
+      g_clear_error(&error);
+    }
+    g_object_unref(provider);
+    return;
+  }
+
+  gtk_style_context_add_provider(
+      gtk_widget_get_style_context(main_window->header_bar),
+      GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  gtk_style_context_add_provider(
+      gtk_widget_get_style_context(main_window->status_bar),
+      GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  main_window->exterior_background_provider = provider;
+}
+
+static void set_main_window_terminal_background(
+    MainWindow *main_window, const std::optional<RgbColor> &color) {
+  if (main_window->terminal == nullptr) {
+    return;
+  }
+
+  VteTerminal *terminal = VTE_TERMINAL(main_window->terminal);
+  if (!color.has_value()) {
+    if (main_window->terminal_background_overridden) {
+      vte_terminal_set_default_colors(terminal);
+      main_window->terminal_background_overridden = false;
+    }
+    return;
+  }
+
+  static constexpr gdouble channel_maximum = 255.0;
+  const GdkRGBA background{
+      .red = static_cast<gdouble>(color->red) / channel_maximum,
+      .green = static_cast<gdouble>(color->green) / channel_maximum,
+      .blue = static_cast<gdouble>(color->blue) / channel_maximum,
+      .alpha = 1.0,
+  };
+  vte_terminal_set_color_background(terminal, &background);
+  main_window->terminal_background_overridden = true;
+}
+
 static void apply_main_window_style(MainWindow *main_window) {
   GtkCssProvider *provider = gtk_css_provider_new();
   gtk_css_provider_load_from_data(provider, main_window_css, -1, nullptr);
@@ -789,6 +875,18 @@ std::optional<MainWindow> load_main_window() {
   return main_window;
 }
 
+void set_main_window_colors(MainWindow *main_window,
+                            const TerminalColorSettings &settings) {
+  if (main_window == nullptr) {
+    return;
+  }
+
+  set_main_window_exterior_background(main_window,
+                                      settings.exterior_background);
+  set_main_window_terminal_background(main_window,
+                                      settings.terminal_background);
+}
+
 void set_main_window_terminal_paste_callbacks(
     MainWindow *main_window, MainWindowTerminalPasteCallbacks callbacks) {
   if (main_window == nullptr || main_window->terminal_overlay == nullptr) {
@@ -1091,6 +1189,7 @@ void release_main_window(MainWindow *main_window) {
   cancel_main_window_ssh_prompt(main_window);
   stop_main_window_transfer_progress_pulse(main_window);
   deactivate_main_window_activity_indicators(main_window);
+  clear_main_window_exterior_background(main_window);
   g_clear_object(&main_window->indicator_on_icon);
   g_clear_object(&main_window->indicator_off_icon);
   if (main_window->builder != nullptr) {

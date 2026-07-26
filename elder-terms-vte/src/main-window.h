@@ -104,6 +104,10 @@ struct MainWindow {
   GtkWidget *status_label = nullptr;
   /** Status bar activity indicator container. */
   GtkWidget *activity_indicator_bar = nullptr;
+  /** Provider applying the configured header-bar and status-bar background. */
+  GtkCssProvider *exterior_background_provider = nullptr;
+  /** True after overriding VTE's default background color. */
+  bool terminal_background_overridden = false;
   /** Activity indicator containers. */
   std::array<GtkWidget *, activity_indicator_count()> indicator_boxes{};
   /** Activity indicator images. */
@@ -139,6 +143,15 @@ struct MainWindow {
  * @returns Loaded window widgets, or std::nullopt after logging an error.
  */
 std::optional<MainWindow> load_main_window();
+
+/**
+ * Applies optional connection colors to the window and VTE.
+ *
+ * @param main_window Main window containing the exterior and terminal widgets.
+ * @param settings Effective optional RGB colors.
+ */
+void set_main_window_colors(MainWindow *main_window,
+                            const TerminalColorSettings &settings);
 
 /**
  * Configures Paste handling for the terminal context menu.

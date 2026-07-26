@@ -1,9 +1,11 @@
+import { createRequire } from 'node:module';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type {
   GtkApp,
+  GtkCapture,
   GtkEntryElement,
   GtkKeyboardModifier,
   GtkKeyInput,
@@ -12,6 +14,7 @@ import type {
 } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
+import type { PNG as PngImage } from 'pngjs';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import { expectElementKind } from './test-helpers';
 import {
@@ -37,6 +40,9 @@ import {
   telnetLocalhostConfigPath,
   withTemporaryDirectory,
 } from './gtk-test-helpers';
+
+const require = createRequire(import.meta.url);
+const { PNG } = require('pngjs') as typeof import('pngjs');
 
 const shellQuote = (value: string): string =>
   `'${value.split("'").join("'\\''")}'`;
@@ -331,6 +337,68 @@ const expectSensitive = async (element: GtkWidgetElement): Promise<void> => {
   const info = await element.info();
   expect(info.states).toContain('enabled');
   expect(info.states).toContain('sensitive');
+};
+
+type RgbPixel = readonly [red: number, green: number, blue: number];
+
+interface WindowBackgroundPixels {
+  readonly header: RgbPixel;
+  readonly status: RgbPixel;
+  readonly terminal: RgbPixel;
+}
+
+const capturePixel = (
+  capture: GtkCapture,
+  horizontalRatio: number,
+  verticalRatio: number
+): RgbPixel => {
+  const png = PNG.sync.read(capture.image) as PngImage;
+  const x = Math.min(
+    png.width - 1,
+    Math.max(0, Math.trunc(png.width * horizontalRatio))
+  );
+  const y = Math.min(
+    png.height - 1,
+    Math.max(0, Math.trunc(png.height * verticalRatio))
+  );
+  const offset = (y * png.width + x) * 4;
+  return [
+    png.data[offset] ?? 0,
+    png.data[offset + 1] ?? 0,
+    png.data[offset + 2] ?? 0,
+  ];
+};
+
+const captureWindowBackgroundPixels = async (
+  app: GtkApp
+): Promise<WindowBackgroundPixels> => {
+  const [header, status, terminal] = await Promise.all([
+    (await app.getById('header_bar')).capture(),
+    (await app.getById('status_bar')).capture(),
+    (await app.getById('terminal_view')).capture(),
+  ]);
+  return {
+    header: capturePixel(header, 0.08, 0.5),
+    status: capturePixel(status, 0.45, 0.5),
+    // The text-grid fixture paints every cell with an explicit ANSI black
+    // background, so sample VTE's one-pixel outer padding instead.
+    terminal: capturePixel(terminal, 0, 0.5),
+  };
+};
+
+const expectWindowBackgroundPixels = async (
+  app: GtkApp,
+  expected: WindowBackgroundPixels
+): Promise<void> => {
+  await toPass(
+    async () => {
+      expect(await captureWindowBackgroundPixels(app)).toEqual(expected);
+    },
+    {
+      message: 'window background colors should match the configured RGB',
+      timeoutMs: 5_000,
+    }
+  );
 };
 
 const expectMainWindowTitle = async (
@@ -897,6 +965,123 @@ describe.concurrent('elder-terms-vte settings', () => {
       );
     });
   });
+
+  it('applies configured exterior and terminal RGB backgrounds at startup', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'terminal-colors.ini');
+      await writeFile(
+        configPath,
+        '[terminal]\nauto_close=false\nexterior_background=#204060\nterminal_background=#604020\n',
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app) => {
+          await expectWindowBackgroundPixels(app, {
+            header: [0x20, 0x40, 0x60],
+            status: [0x20, 0x40, 0x60],
+            terminal: [0x60, 0x40, 0x20],
+          });
+        }
+      );
+    });
+  });
+
+  it('applies inherited RGB backgrounds at runtime and restores defaults with no color', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configHome = join(directory, 'xdg-config');
+      const globalDirectory = join(configHome, 'elder-terms');
+      const globalConfigPath = join(globalDirectory, 'global.ini');
+      const configPath = join(directory, 'connection.ini');
+      const initialConfig =
+        '[terminal]\nauto_close=false\nexterior_background=none\nterminal_background=none\n';
+      await mkdir(globalDirectory, { recursive: true });
+      await writeFile(
+        globalConfigPath,
+        '[terminal]\nexterior_background=#315273\nterminal_background=#734A21\n',
+        'utf8'
+      );
+      await writeFile(configPath, initialConfig, 'utf8');
+
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app) => {
+          const initialPixels = await captureWindowBackgroundPixels(app);
+
+          await openSettingsDialog(app);
+          await showTerminalSettingsPage(app);
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_exterior_background_mode_combo',
+            'No color'
+          );
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_background_mode_combo',
+            'No color'
+          );
+          await expectElementKind(
+            await app.getById(
+              'settings_terminal_exterior_background_mode_combo'
+            ),
+            'comboBox'
+          ).selectChildAt(0);
+          await expectElementKind(
+            await app.getById('settings_terminal_background_mode_combo'),
+            'comboBox'
+          ).selectChildAt(0);
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          await expectSettingsDialogClosed(app);
+          await expectWindowBackgroundPixels(app, {
+            header: [0x31, 0x52, 0x73],
+            status: [0x31, 0x52, 0x73],
+            terminal: [0x73, 0x4a, 0x21],
+          });
+
+          await openSettingsDialog(app);
+          await showTerminalSettingsPage(app);
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_exterior_background_mode_combo',
+            '#315273 (global)'
+          );
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_background_mode_combo',
+            '#734A21 (global)'
+          );
+          await expectElementKind(
+            await app.getById(
+              'settings_terminal_exterior_background_mode_combo'
+            ),
+            'comboBox'
+          ).selectChildAt(1);
+          await expectElementKind(
+            await app.getById('settings_terminal_background_mode_combo'),
+            'comboBox'
+          ).selectChildAt(1);
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          await expectSettingsDialogClosed(app);
+          await expectWindowBackgroundPixels(app, initialPixels);
+          await expectFileContent(configPath, initialConfig);
+        },
+        {
+          env: {
+            XDG_CONFIG_HOME: configHome,
+          },
+        }
+      );
+    });
+  }, 60_000);
 
   it('opens the runtime settings dialog from the header bar', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
