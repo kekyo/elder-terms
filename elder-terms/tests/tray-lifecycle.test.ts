@@ -113,7 +113,7 @@ describe('elder-terms tray lifecycle', () => {
       async (connections) => {
         await writeGlobalSettings(connections, 'tray');
       },
-      async ({ app }) => {
+      async ({ app, x11MapRecorder }) => {
         await waitForWindowCount(app, 0);
         const tray = await app.getTrayItem({ id: 'elder-terms' });
         expect(await tray.metadata()).toMatchObject({
@@ -123,9 +123,30 @@ describe('elder-terms tray lifecycle', () => {
           iconName: 'elder-terms',
           backend: 'status-notifier',
         });
+        expect(x11MapRecorder).toBeDefined();
+        await x11MapRecorder?.flush();
+        expect(
+          x11MapRecorder
+            ?.events()
+            .filter(
+              (event) =>
+                event.name === 'elder-terms' ||
+                event.instanceName === 'elder-terms'
+            )
+        ).toEqual([]);
 
         await tray.click();
         await waitForWindowCount(app, 1);
+        await x11MapRecorder?.flush();
+        expect(
+          x11MapRecorder
+            ?.events()
+            .some(
+              (event) =>
+                event.name === 'elder-terms' ||
+                event.instanceName === 'elder-terms'
+            )
+        ).toBe(true);
         await closeWindowWithAccelerator(app);
         await waitForWindowCount(app, 0);
 
@@ -155,6 +176,11 @@ describe('elder-terms tray lifecycle', () => {
           '0',
         ]);
         await waitForWindowCount(app, 1);
+      },
+      {
+        args: [],
+        env: {},
+        recordX11Maps: true,
       }
     );
   });

@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,6 +7,7 @@ import type { TestContext } from 'vitest';
 import {
   createGtkAppLauncher,
   type GtkApp,
+  type GtkAppEnvironment,
   type GtkElementOfKind,
   type GtkWidgetElement,
   type GtkWidgetKind,
@@ -14,6 +16,45 @@ import {
 const defaultAppPath = fileURLToPath(
   new URL('../../.build/elder-terms/elder-terms', import.meta.url)
 );
+const x11MapRecorderPath = fileURLToPath(
+  new URL('../../.build/elder-terms/x11-map-recorder', import.meta.url)
+);
+
+/** One top-level X11 window map observed during a launcher test. */
+export interface X11MapEvent {
+  /** X11 window identifier. */
+  readonly windowId: string;
+  /** Process identifier advertised by the window, or zero when unavailable. */
+  readonly processId: number;
+  /** Window manager title. */
+  readonly name: string;
+  /** Window manager instance name. */
+  readonly instanceName: string;
+  /** Window manager class name. */
+  readonly className: string;
+}
+
+/** Records top-level X11 window maps from before application launch. */
+export interface X11MapRecorder {
+  /**
+   * Flushes X11 events that precede this call into the recorder.
+   *
+   * @returns A promise completed after the recorder reaches the barrier.
+   */
+  readonly flush: () => Promise<void>;
+  /**
+   * Returns all map events observed so far.
+   *
+   * @returns A snapshot of recorded events.
+   */
+  readonly events: () => readonly X11MapEvent[];
+  /**
+   * Stops the recorder.
+   *
+   * @returns A promise completed after the helper exits.
+   */
+  readonly stop: () => Promise<void>;
+}
 
 /** Context passed to a launcher GTK integration test. */
 export interface LauncherGtkTestContext {
@@ -23,6 +64,8 @@ export interface LauncherGtkTestContext {
   readonly configHome: string;
   /** Isolated connection profile directory. */
   readonly connections: string;
+  /** X11 map recorder when requested by the test. */
+  readonly x11MapRecorder: X11MapRecorder | undefined;
 }
 
 /** Options for launching the GTK application under test. */
@@ -35,7 +78,148 @@ export interface LauncherGtkTestOptions {
   readonly env: Readonly<Record<string, string>>;
   /** Whether the isolated Xvfb session provides a StatusNotifier tray host. */
   readonly xvfbTrayHost?: boolean;
+  /** Whether to record top-level X11 window maps from before launch. */
+  readonly recordX11Maps?: boolean;
 }
+
+const parseX11MapEvent = (line: string): X11MapEvent | undefined => {
+  const [kind, windowId, processId, name, instanceName, className] =
+    line.split('\t');
+  if (
+    kind !== 'map' ||
+    windowId === undefined ||
+    processId === undefined ||
+    name === undefined ||
+    instanceName === undefined ||
+    className === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    windowId,
+    processId: Number(processId),
+    name,
+    instanceName,
+    className,
+  };
+};
+
+const startX11MapRecorder = async (
+  environment: GtkAppEnvironment
+): Promise<X11MapRecorder> => {
+  const child = spawn(x11MapRecorderPath, [], {
+    env: {
+      ...process.env,
+      ...environment,
+    },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const recordedEvents: X11MapEvent[] = [];
+  const barriers = new Map<
+    string,
+    {
+      readonly resolve: () => void;
+      readonly reject: (error: Error) => void;
+    }
+  >();
+  let nextBarrierId = 1;
+  let outputBuffer = '';
+  let errorOutput = '';
+  let ready = false;
+  let resolveReady: (() => void) | undefined;
+  let rejectReady: ((error: Error) => void) | undefined;
+  const readyPromise = new Promise<void>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk: string) => {
+    outputBuffer += chunk;
+    while (true) {
+      const newline = outputBuffer.indexOf('\n');
+      if (newline < 0) {
+        break;
+      }
+      const line = outputBuffer.slice(0, newline).trimEnd();
+      outputBuffer = outputBuffer.slice(newline + 1);
+      if (line === 'ready') {
+        ready = true;
+        resolveReady?.();
+        continue;
+      }
+      const event = parseX11MapEvent(line);
+      if (event !== undefined) {
+        recordedEvents.push(event);
+        continue;
+      }
+      if (line.startsWith('barrier ')) {
+        barriers.get(line)?.resolve();
+        barriers.delete(line);
+      }
+    }
+  });
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk: string) => {
+    errorOutput += chunk;
+  });
+  child.on('error', (error) => {
+    if (!ready) {
+      rejectReady?.(error);
+    }
+    for (const barrier of barriers.values()) {
+      barrier.reject(error);
+    }
+    barriers.clear();
+  });
+  child.on('exit', (code, signal) => {
+    const error = new Error(
+      `X11 map recorder exited unexpectedly: code=${String(code)}, signal=${String(signal)}, stderr=${errorOutput.trim()}`
+    );
+    if (!ready) {
+      rejectReady?.(error);
+    }
+    for (const barrier of barriers.values()) {
+      barrier.reject(error);
+    }
+    barriers.clear();
+  });
+
+  await readyPromise;
+  return {
+    flush: async () => {
+      const command = `barrier ${nextBarrierId}`;
+      nextBarrierId += 1;
+      const completed = new Promise<void>((resolve, reject) => {
+        barriers.set(command, { resolve, reject });
+      });
+      child.stdin.write(`${command}\n`);
+      await completed;
+    },
+    events: () => [...recordedEvents],
+    stop: async () => {
+      if (child.exitCode !== null || child.signalCode !== null) {
+        return;
+      }
+      const exited = new Promise<void>((resolve, reject) => {
+        child.once('error', reject);
+        child.once('exit', (code, signal) => {
+          if (code === 0) {
+            resolve();
+            return;
+          }
+          reject(
+            new Error(
+              `X11 map recorder failed to stop: code=${String(code)}, signal=${String(signal)}, stderr=${errorOutput.trim()}`
+            )
+          );
+        });
+      });
+      child.stdin.write('quit\n');
+      await exited;
+    },
+  };
+};
 
 /**
  * Asserts that an element has the expected gestament kind.
@@ -80,10 +264,15 @@ export const runLauncherGtkTest = async (
     },
     xvfbTrayHost: options?.xvfbTrayHost ?? true,
   });
-  const app = await launcher.launch([...(options?.args ?? [])]);
+  let x11MapRecorder: X11MapRecorder | undefined;
   try {
-    await body({ app, configHome, connections });
+    if (options?.recordX11Maps === true) {
+      x11MapRecorder = await startX11MapRecorder(await launcher.environment());
+    }
+    const app = await launcher.launch([...(options?.args ?? [])]);
+    await body({ app, configHome, connections, x11MapRecorder });
   } finally {
+    await x11MapRecorder?.stop();
     await launcher.release();
     await rm(directory, { recursive: true, force: true });
   }

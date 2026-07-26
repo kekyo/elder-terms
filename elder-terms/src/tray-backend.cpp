@@ -133,7 +133,8 @@ static constexpr char dbus_menu_xml[] = R"XML(
 struct TrayBackendImplementation {
   TrayBackendOptions options;
   TrayBackendKind kind = TrayBackendKind::none;
-  bool available = false;
+  TrayBackendAvailabilityState availability =
+      TrayBackendAvailabilityState::pending;
   bool destroyed = false;
   GDBusConnection *connection = nullptr;
   guint item_registration_id = 0;
@@ -392,15 +393,16 @@ build_menu_group_properties(const std::vector<int> &ids) {
   return g_variant_builder_end(&builder);
 }
 
-static void set_backend_available(TrayBackendImplementation *implementation,
-                                  bool available) {
+static void set_backend_availability(
+    TrayBackendImplementation *implementation,
+    TrayBackendAvailabilityState availability) {
   if (implementation == nullptr || implementation->destroyed ||
-      implementation->available == available) {
+      implementation->availability == availability) {
     return;
   }
-  implementation->available = available;
+  implementation->availability = availability;
   if (implementation->options.callbacks.availability_changed) {
-    implementation->options.callbacks.availability_changed(available);
+    implementation->options.callbacks.availability_changed(availability);
   }
 }
 
@@ -780,6 +782,24 @@ static bool can_use_xembed() {
   return display != nullptr && GDK_IS_X11_DISPLAY(display);
 }
 
+static bool xembed_tray_host_available() {
+  GdkDisplay *display = gdk_display_get_default();
+  if (display == nullptr || !GDK_IS_X11_DISPLAY(display)) {
+    return false;
+  }
+  GdkScreen *screen = gdk_display_get_default_screen(display);
+  if (screen == nullptr) {
+    return false;
+  }
+  const std::string selection_name =
+      "_NET_SYSTEM_TRAY_S" +
+      std::to_string(gdk_x11_screen_get_screen_number(screen));
+  const GdkAtom selection =
+      gdk_atom_intern(selection_name.c_str(), TRUE);
+  return selection != GDK_NONE &&
+         gdk_selection_owner_get_for_display(display, selection) != nullptr;
+}
+
 G_GNUC_BEGIN_IGNORE_DEPRECATIONS
 static void on_status_icon_activate(GtkStatusIcon *, gpointer user_data) {
   activate_backend(
@@ -809,9 +829,11 @@ static void on_status_icon_quit(GtkMenuItem *, gpointer user_data) {
 
 static void on_status_icon_embedded_changed(GObject *object, GParamSpec *,
                                             gpointer user_data) {
-  set_backend_available(
+  set_backend_availability(
       static_cast<TrayBackendImplementation *>(user_data),
-      gtk_status_icon_is_embedded(GTK_STATUS_ICON(object)) != FALSE);
+      gtk_status_icon_is_embedded(GTK_STATUS_ICON(object)) != FALSE
+          ? TrayBackendAvailabilityState::available
+          : TrayBackendAvailabilityState::unavailable);
 }
 
 static void create_xembed_backend(
@@ -852,9 +874,11 @@ static void create_xembed_backend(
       implementation->status_icon, "notify::embedded",
       G_CALLBACK(on_status_icon_embedded_changed), implementation);
   gtk_status_icon_set_visible(implementation->status_icon, TRUE);
-  set_backend_available(
+  set_backend_availability(
       implementation,
-      gtk_status_icon_is_embedded(implementation->status_icon) != FALSE);
+      xembed_tray_host_available()
+          ? TrayBackendAvailabilityState::available
+          : TrayBackendAvailabilityState::unavailable);
 }
 
 static void destroy_xembed_backend(
@@ -890,6 +914,8 @@ static void create_fallback_backend(
     create_xembed_backend(implementation);
   } else {
     implementation->kind = selected;
+    set_backend_availability(
+        implementation, TrayBackendAvailabilityState::unavailable);
   }
 }
 
@@ -921,7 +947,8 @@ static cardio::promise<void> initialize_backend_async(
     }
     implementation->kind =
         TrayBackendKind::status_notifier_item;
-    set_backend_available(implementation.get(), true);
+    set_backend_availability(
+        implementation.get(), TrayBackendAvailabilityState::available);
   } catch (const cardio::canceled_exception &) {
   } catch (const std::exception &error) {
     if (!implementation->destroyed) {
@@ -962,7 +989,8 @@ void destroy_tray_backend(TrayBackendState *state) {
   const std::shared_ptr<TrayBackendImplementation> implementation =
       state->implementation;
   implementation->destroyed = true;
-  implementation->available = false;
+  implementation->availability =
+      TrayBackendAvailabilityState::unavailable;
   if (implementation->cancellation_source.has_value()) {
     (void)implementation->cancellation_source->cancel();
   }
@@ -977,8 +1005,11 @@ TrayBackendKind tray_backend_kind(const TrayBackendState *state) {
                           : state->implementation->kind;
 }
 
-bool tray_backend_is_available(const TrayBackendState *state) {
-  return state != nullptr && state->implementation->available;
+TrayBackendAvailabilityState
+tray_backend_availability(const TrayBackendState *state) {
+  return state == nullptr
+             ? TrayBackendAvailabilityState::unavailable
+             : state->implementation->availability;
 }
 
 } // namespace elder_terms

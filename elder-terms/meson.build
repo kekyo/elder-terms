@@ -53,6 +53,14 @@ elder_terms_launcher = executable(
   ],
 )
 
+executable(
+  'x11-map-recorder',
+  'tests/x11-map-recorder.cpp',
+  dependencies: [
+    elder_terms_launcher_x11_dep,
+  ],
+)
+
 elder_terms_connection_repository_test = executable(
   'connection-repository-test',
   [

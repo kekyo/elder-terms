@@ -25,6 +25,18 @@ enum class TrayBackendKind {
 };
 
 /**
+ * Identifies whether tray discovery can retain a hidden application.
+ */
+enum class TrayBackendAvailabilityState {
+  /** Tray discovery or registration is still in progress. */
+  pending,
+  /** No current tray host can retain the application. */
+  unavailable,
+  /** A current tray host can retain the application. */
+  available,
+};
+
+/**
  * Describes the tray transports available in the current session.
  */
 struct TrayBackendAvailability {
@@ -62,8 +74,8 @@ struct TrayBackendCallbacks {
   std::function<void(const TrayActivationContext &)> activate;
   /** Requests an explicit application quit. */
   std::function<void()> quit;
-  /** Reports whether the tray can currently retain a hidden application. */
-  std::function<void(bool)> availability_changed;
+  /** Reports changes to tray discovery and host availability. */
+  std::function<void(TrayBackendAvailabilityState)> availability_changed;
 };
 
 /**
@@ -160,11 +172,12 @@ void destroy_tray_backend(TrayBackendState *state);
 TrayBackendKind tray_backend_kind(const TrayBackendState *state);
 
 /**
- * Reports whether the current tray can safely retain a hidden application.
+ * Returns the current tray discovery and host availability.
  *
  * @param state Backend state, or null.
- * @returns True after SNI registration or XEmbed embedding succeeds.
+ * @returns Current availability, or unavailable for a null state.
  */
-bool tray_backend_is_available(const TrayBackendState *state);
+TrayBackendAvailabilityState
+tray_backend_availability(const TrayBackendState *state);
 
 } // namespace elder_terms

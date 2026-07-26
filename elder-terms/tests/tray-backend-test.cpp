@@ -49,6 +49,12 @@ int main() {
           "no tray backend should be selected when no transport is available")) {
     return 1;
   }
+  if (!expect(
+          elder_terms::tray_backend_availability(nullptr) ==
+              elder_terms::TrayBackendAvailabilityState::unavailable,
+          "a missing tray backend should be unavailable")) {
+    return 1;
+  }
 
   const elder_terms::TrayActivationContext timed =
       elder_terms::build_tray_activation_context(1234U);

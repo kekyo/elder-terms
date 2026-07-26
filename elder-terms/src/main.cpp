@@ -90,10 +90,10 @@ struct ApplicationState {
   std::vector<ChildLaunch *> child_launches;
   elder_terms::StartupMode startup_mode =
       elder_terms::StartupMode::window;
+  elder_terms::TrayBackendAvailabilityState tray_availability =
+      elder_terms::TrayBackendAvailabilityState::pending;
   bool application_held = false;
   bool activated = false;
-  bool hide_when_tray_available = false;
-  bool tray_available = false;
   bool quitting = false;
   bool window_destroyed = false;
   bool application_shutting_down = false;
@@ -1022,7 +1022,6 @@ static void present_main_window(
       state->window_destroyed) {
     return;
   }
-  state->hide_when_tray_available = false;
   if (activation_token.has_value() &&
       !activation_token->empty()) {
     gtk_window_set_startup_id(
@@ -1076,7 +1075,9 @@ static void request_application_quit(ApplicationState *state) {
 
 static gboolean on_window_delete(GtkWidget *, GdkEvent *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
-  if (state->tray_available && !state->quitting) {
+  if (state->tray_availability ==
+          elder_terms::TrayBackendAvailabilityState::available &&
+      !state->quitting) {
     gtk_widget_hide(state->main_window->window);
     return TRUE;
   }
@@ -1120,7 +1121,9 @@ static void on_window_destroy(GtkWidget *, gpointer user_data) {
     state->settings_widget = nullptr;
   }
   if (!state->application_shutting_down &&
-      (state->quitting || !state->tray_available)) {
+      (state->quitting ||
+       state->tray_availability !=
+           elder_terms::TrayBackendAvailabilityState::available)) {
     quit_application_loop(state);
   }
 }
@@ -1225,16 +1228,17 @@ static void enable_connection_selection(ApplicationState *state) {
 }
 
 static void on_tray_availability_changed(ApplicationState *state,
-                                         bool available) {
+                                         elder_terms::TrayBackendAvailabilityState
+                                             availability) {
   if (state->application_shutting_down ||
       state->window_destroyed) {
     return;
   }
-  state->tray_available = available;
-  if (available && state->hide_when_tray_available) {
-    gtk_widget_hide(state->main_window->window);
-  } else if (!available &&
-             state->startup_mode == elder_terms::StartupMode::tray) {
+  state->tray_availability = availability;
+  if (availability ==
+          elder_terms::TrayBackendAvailabilityState::unavailable &&
+      state->activated &&
+      state->startup_mode == elder_terms::StartupMode::tray) {
     present_main_window(state);
   }
 }
@@ -1291,8 +1295,10 @@ static void on_application_startup(GApplication *,
               .quit = [state]() {
                 request_application_quit(state);
               },
-              .availability_changed = [state](bool available) {
-                on_tray_availability_changed(state, available);
+              .availability_changed =
+                  [state](elder_terms::TrayBackendAvailabilityState
+                              availability) {
+                on_tray_availability_changed(state, availability);
               },
           },
   });
@@ -1311,13 +1317,9 @@ static void on_application_activate(GApplication *,
   }
   state->activated = true;
   if (state->startup_mode == elder_terms::StartupMode::tray) {
-    state->hide_when_tray_available = true;
-    gtk_widget_show_all(state->main_window->window);
-    enable_connection_selection(state);
-    if (state->tray_available) {
-      gtk_widget_hide(state->main_window->window);
-    } else {
-      gtk_window_present(GTK_WINDOW(state->main_window->window));
+    if (state->tray_availability ==
+        elder_terms::TrayBackendAvailabilityState::unavailable) {
+      present_main_window(state);
     }
     return;
   }
