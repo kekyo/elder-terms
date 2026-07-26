@@ -971,7 +971,7 @@ describe.concurrent('elder-terms-vte settings', () => {
       const configPath = join(directory, 'terminal-colors.ini');
       await writeFile(
         configPath,
-        '[terminal]\nauto_close=false\nexterior_background=#204060\nterminal_background=#604020\n',
+        '[general]\nexterior_background=#204060\nbackground=#604020\n\n[terminal]\nauto_close=false\n',
         'utf8'
       );
 
@@ -996,11 +996,11 @@ describe.concurrent('elder-terms-vte settings', () => {
       const globalConfigPath = join(globalDirectory, 'global.ini');
       const configPath = join(directory, 'connection.ini');
       const initialConfig =
-        '[terminal]\nauto_close=false\nexterior_background=none\nterminal_background=none\n';
+        '[general]\nexterior_background=none\nbackground=none\n\n[terminal]\nauto_close=false\n';
       await mkdir(globalDirectory, { recursive: true });
       await writeFile(
         globalConfigPath,
-        '[terminal]\nexterior_background=#315273\nterminal_background=#734A21\n',
+        '[general]\nexterior_background=#315273\nbackground=#734A21\n',
         'utf8'
       );
       await writeFile(configPath, initialConfig, 'utf8');

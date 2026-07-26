@@ -41,6 +41,7 @@ interface AppliedStore {
   readonly name: string;
   readonly auto_close: string;
   readonly backspace_code: string;
+  readonly background: string;
   readonly cursor_key_mode: string;
   readonly encoding: string;
   readonly exterior_background: string;
@@ -62,7 +63,6 @@ interface AppliedStore {
   readonly telnet_address: string;
   readonly telnet_port: string;
   readonly telnet_terminal_type: string;
-  readonly terminal_background: string;
   readonly serial_baudrate: string;
   readonly serial_bits: string;
   readonly serial_carrier_detect: string;
@@ -810,19 +810,19 @@ describe.concurrent('shared settings widget', () => {
       expect(store.exterior_background).toBe('#000000');
       expect(store.exterior_background_source).toBe('override');
       expect(store.exterior_background_explicit).toBe('true');
-      expect(store.terminal_background).toBe('none');
-      expect(store.terminal_background_source).toBe('override');
-      expect(store.terminal_background_explicit).toBe('true');
+      expect(store.background).toBe('none');
+      expect(store.background_source).toBe('override');
+      expect(store.background_explicit).toBe('true');
     });
 
     await runSharedGtkTest(
       context,
       [
         '--page=terminal',
-        '--global=terminal.exterior_background=#112233',
-        '--global=terminal.terminal_background=#445566',
+        '--global=general.exterior_background=#112233',
+        '--global=general.background=#445566',
         '--exterior-background=none',
-        '--terminal-background=#778899',
+        '--background=#778899',
       ],
       async ({ app }) => {
         await showTerminalPage(app);
@@ -878,9 +878,9 @@ describe.concurrent('shared settings widget', () => {
         expect(store.exterior_background).toBe('#112233');
         expect(store.exterior_background_source).toBe('global');
         expect(store.exterior_background_explicit).toBe('false');
-        expect(store.terminal_background).toBe('#445566');
-        expect(store.terminal_background_source).toBe('global');
-        expect(store.terminal_background_explicit).toBe('false');
+        expect(store.background).toBe('#445566');
+        expect(store.background_source).toBe('global');
+        expect(store.background_explicit).toBe('false');
       }
     );
   });

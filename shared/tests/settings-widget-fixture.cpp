@@ -115,12 +115,12 @@ static FixtureOptions parse_options(int argc, char **argv) {
           option_value(argument, "--auto-close="));
     } else if (starts_with(argument, "--exterior-background=")) {
       append_connection_assignment(
-          &options, "terminal", "exterior_background",
+          &options, "general", "exterior_background",
           option_value(argument, "--exterior-background="));
-    } else if (starts_with(argument, "--terminal-background=")) {
+    } else if (starts_with(argument, "--background=")) {
       append_connection_assignment(
-          &options, "terminal", "terminal_background",
-          option_value(argument, "--terminal-background="));
+          &options, "general", "background",
+          option_value(argument, "--background="));
     } else if (starts_with(argument, "--encoding=")) {
       append_connection_assignment(
           &options, "terminal", "encoding",
@@ -509,11 +509,11 @@ static void print_store(const char *prefix,
   const std::string exterior_background =
       elder_terms::setting_string_value_or_default(
           store,
-          elder_terms::terminal_exterior_background_setting_key(),
+          elder_terms::general_exterior_background_setting_key(),
           "none");
-  const std::string terminal_background =
+  const std::string background =
       elder_terms::setting_string_value_or_default(
-          store, elder_terms::terminal_background_setting_key(), "none");
+          store, elder_terms::general_background_setting_key(), "none");
   const std::optional<elder_terms::TerminalConnectionProfile> profile =
       elder_terms::terminal_connection_profile(store);
   const elder_terms::TerminalTextSettings text_settings =
@@ -550,7 +550,7 @@ static void print_store(const char *prefix,
             << " auto_close="
             << (elder_terms::terminal_auto_close(store) ? "true" : "false")
             << " exterior_background=" << exterior_background
-            << " terminal_background=" << terminal_background
+            << " background=" << background
             << " zoom_in_key="
             << elder_terms::terminal_zoom_in_key(store)
             << " zoom_out_key="
@@ -613,9 +613,9 @@ static void print_store(const char *prefix,
                          elder_terms::terminal_auto_close_setting_key());
   print_setting_metadata(
       store, "exterior_background",
-      elder_terms::terminal_exterior_background_setting_key());
-  print_setting_metadata(store, "terminal_background",
-                         elder_terms::terminal_background_setting_key());
+      elder_terms::general_exterior_background_setting_key());
+  print_setting_metadata(store, "background",
+                         elder_terms::general_background_setting_key());
   print_setting_metadata(store, "encoding",
                          elder_terms::terminal_encoding_setting_key());
   print_setting_metadata(store, "backspace_code",

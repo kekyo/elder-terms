@@ -27,6 +27,28 @@ enum class ConnectionKind {
 };
 
 /**
+ * An opaque RGB color.
+ */
+struct RgbColor {
+  /** Red channel. */
+  guint8 red;
+  /** Green channel. */
+  guint8 green;
+  /** Blue channel. */
+  guint8 blue;
+};
+
+/**
+ * Optional colors applied to a connection window.
+ */
+struct GeneralColorSettings {
+  /** Shared title-bar and status-bar background, or no application color. */
+  std::optional<RgbColor> exterior_background;
+  /** Main content background, or no application color. */
+  std::optional<RgbColor> background;
+};
+
+/**
  * Returns connection-specific general setting definitions.
  *
  * @param default_connection_name Connection name used when [general] name is
@@ -57,6 +79,21 @@ ELDER_TERMS_API SettingKey general_type_setting_key();
  */
 ELDER_TERMS_API SettingKey
 general_open_connection_hotkey_setting_key();
+
+/**
+ * Returns the setting key for [general] exterior_background.
+ *
+ * @returns Setting key for the title-bar and status-bar background.
+ */
+ELDER_TERMS_API SettingKey
+general_exterior_background_setting_key();
+
+/**
+ * Returns the setting key for [general] background.
+ *
+ * @returns Setting key for the main content background.
+ */
+ELDER_TERMS_API SettingKey general_background_setting_key();
 
 /**
  * Returns the effective connection name.
@@ -95,6 +132,15 @@ general_open_connection_hotkey_text(const SettingsStore &store);
  */
 ELDER_TERMS_API std::optional<KeyBinding>
 general_open_connection_hotkey(const SettingsStore &store);
+
+/**
+ * Extracts connection window colors from a store.
+ *
+ * @param store Source settings store.
+ * @returns Parsed RGB colors. A missing value denotes no application color.
+ */
+ELDER_TERMS_API GeneralColorSettings
+general_color_settings(const SettingsStore &store);
 
 /**
  * Checks whether the loaded general settings select the TELNET backend.

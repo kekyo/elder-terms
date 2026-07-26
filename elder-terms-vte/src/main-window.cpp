@@ -876,7 +876,7 @@ std::optional<MainWindow> load_main_window() {
 }
 
 void set_main_window_colors(MainWindow *main_window,
-                            const TerminalColorSettings &settings) {
+                            const GeneralColorSettings &settings) {
   if (main_window == nullptr) {
     return;
   }
@@ -884,7 +884,7 @@ void set_main_window_colors(MainWindow *main_window,
   set_main_window_exterior_background(main_window,
                                       settings.exterior_background);
   set_main_window_terminal_background(main_window,
-                                      settings.terminal_background);
+                                      settings.background);
 }
 
 void set_main_window_terminal_paste_callbacks(

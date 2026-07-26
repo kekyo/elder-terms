@@ -334,7 +334,7 @@ static void apply_runtime_settings(ApplicationState *state,
   state->settings_store = store;
   elder_terms::set_main_window_colors(
       state->main_window,
-      elder_terms::terminal_color_settings(state->settings_store));
+      elder_terms::general_color_settings(state->settings_store));
   const elder_terms::TerminalLogSettings log_settings =
       elder_terms::terminal_log_settings(state->settings_store);
   elder_terms::apply_terminal_log_settings(
@@ -1036,7 +1036,7 @@ int main(int argc, char **argv) {
   }
   elder_terms::set_main_window_colors(
       &*main_window,
-      elder_terms::terminal_color_settings(settings_result.store));
+      elder_terms::general_color_settings(settings_result.store));
 
   ApplicationState app_state{
       .main_window = &*main_window,

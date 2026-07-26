@@ -151,7 +151,7 @@ std::optional<MainWindow> load_main_window();
  * @param settings Effective optional RGB colors.
  */
 void set_main_window_colors(MainWindow *main_window,
-                            const TerminalColorSettings &settings);
+                            const GeneralColorSettings &settings);
 
 /**
  * Configures Paste handling for the terminal context menu.

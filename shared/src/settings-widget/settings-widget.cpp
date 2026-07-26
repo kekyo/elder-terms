@@ -856,8 +856,8 @@ enum class TerminalColorField {
 
 static SettingKey terminal_color_setting_key(TerminalColorField field) {
   return field == TerminalColorField::exterior_background
-             ? terminal_exterior_background_setting_key()
-             : terminal_background_setting_key();
+             ? general_exterior_background_setting_key()
+             : general_background_setting_key();
 }
 
 static GtkWidget *terminal_color_mode_combo(
@@ -901,12 +901,12 @@ static void update_terminal_color_mode_from_widget(
   const std::string choice = active_combo_id(combo, inherit_choice);
   if (choice == inherit_choice) {
     clear_explicit_setting_value(&state->draft_store, key);
-    const TerminalColorSettings colors =
-        terminal_color_settings(state->draft_store);
+    const GeneralColorSettings colors =
+        general_color_settings(state->draft_store);
     set_color_button_rgb(
         button, field == TerminalColorField::exterior_background
                     ? colors.exterior_background
-                    : colors.terminal_background);
+                    : colors.background);
   } else if (choice == terminal_color_none) {
     set_explicit_setting_value(
         &state->draft_store, key,
@@ -1716,8 +1716,8 @@ static void sync_key_binding_reset_button(
 static void sync_widgets_from_draft(SettingsWidgetState *state) {
   const TerminalDisplaySettings display =
       terminal_display_settings(state->draft_store);
-  const TerminalColorSettings colors =
-      terminal_color_settings(state->draft_store);
+  const GeneralColorSettings colors =
+      general_color_settings(state->draft_store);
   const TelnetConnectionSettings telnet =
       telnet_connection_settings(state->draft_store);
   const SshConnectionSettings ssh =
@@ -1793,7 +1793,7 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
       colors.exterior_background);
   sync_terminal_color_control(
       state, TerminalColorField::terminal_background,
-      colors.terminal_background);
+      colors.background);
   if (state->terminal_zoom_in_key_input != nullptr) {
     sync_key_binding_widget(
         state, state->terminal_zoom_in_key_input,
