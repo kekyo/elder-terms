@@ -58,6 +58,13 @@ struct ChildLaunch {
   std::filesystem::path temporary_startup_path;
 };
 
+struct ConnectionHotkeyTarget {
+  std::string action_id;
+  std::string name;
+  std::filesystem::path path;
+  elder_terms::KeyBinding binding;
+};
+
 struct ApplicationState {
   GApplication *application = nullptr;
   cardio::dispatcher *dispatcher = nullptr;
@@ -91,6 +98,7 @@ struct ApplicationState {
   std::string sftp_executable;
   std::string launcher_argv0;
   std::vector<ChildLaunch *> child_launches;
+  std::vector<ConnectionHotkeyTarget> connection_hotkey_targets;
   elder_terms::StartupMode startup_mode =
       elder_terms::StartupMode::window;
   elder_terms::TrayBackendAvailabilityState tray_availability =
@@ -104,20 +112,6 @@ struct ApplicationState {
   bool shutting_down = false;
 };
 
-static std::vector<elder_terms::HotkeyAction>
-application_hotkey_actions(const elder_terms::SettingsStore &store) {
-  const std::optional<elder_terms::KeyBinding> binding =
-      elder_terms::application_open_hotkey(store);
-  if (!binding.has_value()) {
-    return {};
-  }
-  return {{
-      .id = open_application_hotkey_action_id,
-      .description = "Open elder-terms",
-      .binding = *binding,
-  }};
-}
-
 enum ConnectionColumns {
   connection_name_column = 0,
   connection_path_column = 1,
@@ -130,6 +124,13 @@ static void begin_new_connection(ApplicationState *state);
 static void select_existing_connection(
     ApplicationState *state, const std::filesystem::path &path);
 static void launch_selected_connection(ApplicationState *state);
+static void launch_saved_connection(
+    ApplicationState *state, const std::filesystem::path &path,
+    const std::optional<std::string> &activation_token);
+static void replace_registered_hotkeys(
+    ApplicationState *state,
+    const elder_terms::SettingsStore &global_store);
+static void reload_hotkey_actions(ApplicationState *state);
 static void present_main_window(
     ApplicationState *state,
     std::optional<std::uint32_t> activation_time = std::nullopt,
@@ -253,9 +254,7 @@ static void on_global_defaults_dialog_response(GtkDialog *dialog,
     return;
   }
   print_warnings(result.warnings);
-  elder_terms::replace_hotkey_actions(
-      state->hotkey_backend,
-      application_hotkey_actions(store));
+  replace_registered_hotkeys(state, store);
   elder_terms::settings_widget_rebase_fallbacks(state->settings_widget, store);
   update_action_sensitivity(state);
   gtk_widget_destroy(GTK_WIDGET(dialog));
@@ -419,6 +418,116 @@ static void populate_profile_rows(ApplicationState *state) {
                        connection_is_new_column, FALSE, -1);
   }
   state->suppress_selection = false;
+}
+
+static std::vector<elder_terms::HotkeyAction>
+build_registered_hotkey_actions(
+    ApplicationState *state,
+    const elder_terms::SettingsStore &global_store,
+    std::vector<std::string> *warnings) {
+  state->connection_hotkey_targets.clear();
+  std::vector<elder_terms::HotkeyAction> actions;
+  actions.reserve(state->profiles.size() + 1);
+
+  for (const elder_terms::ConnectionProfile &profile : state->profiles) {
+    const elder_terms::SettingsLoadResult loaded =
+        elder_terms::load_connection_profile(profile.path);
+    for (const std::string &warning : loaded.warnings) {
+      if (!loaded.loaded ||
+          warning.find("[general] open_connection") !=
+              std::string::npos) {
+        warnings->push_back(warning);
+      }
+    }
+    if (!loaded.loaded) {
+      continue;
+    }
+
+    const std::optional<elder_terms::KeyBinding> binding =
+        elder_terms::general_open_connection_hotkey(loaded.store);
+    if (!binding.has_value()) {
+      continue;
+    }
+    const auto duplicate = std::find_if(
+        state->connection_hotkey_targets.begin(),
+        state->connection_hotkey_targets.end(),
+        [&binding](const ConnectionHotkeyTarget &target) {
+          return elder_terms::key_bindings_equal(
+              target.binding, *binding);
+        });
+    if (duplicate != state->connection_hotkey_targets.end()) {
+      warnings->push_back(
+          "Warning: connection hotkey " +
+          elder_terms::general_open_connection_hotkey_text(
+              loaded.store) +
+          " is assigned to both " + duplicate->name + " and " +
+          profile.name + "; using " + duplicate->name);
+      continue;
+    }
+
+    const std::string action_id =
+        "open-connection-" +
+        std::to_string(state->connection_hotkey_targets.size());
+    state->connection_hotkey_targets.push_back({
+        .action_id = action_id,
+        .name = profile.name,
+        .path = profile.path,
+        .binding = *binding,
+    });
+    actions.push_back({
+        .id = action_id,
+        .description = "Open connection " + profile.name,
+        .binding = *binding,
+    });
+  }
+
+  const std::optional<elder_terms::KeyBinding> application_binding =
+      elder_terms::application_open_hotkey(global_store);
+  if (!application_binding.has_value()) {
+    return actions;
+  }
+  const auto collision = std::find_if(
+      state->connection_hotkey_targets.begin(),
+      state->connection_hotkey_targets.end(),
+      [&application_binding](const ConnectionHotkeyTarget &target) {
+        return elder_terms::key_bindings_equal(
+            target.binding, *application_binding);
+      });
+  if (collision != state->connection_hotkey_targets.end()) {
+    warnings->push_back(
+        "Warning: application hotkey " +
+        elder_terms::application_open_hotkey_text(global_store) +
+        " conflicts with connection " + collision->name +
+        "; using " + collision->name);
+    return actions;
+  }
+  actions.push_back({
+      .id = open_application_hotkey_action_id,
+      .description = "Open elder-terms",
+      .binding = *application_binding,
+  });
+  return actions;
+}
+
+static void replace_registered_hotkeys(
+    ApplicationState *state,
+    const elder_terms::SettingsStore &global_store) {
+  state->profiles = elder_terms::list_connection_profiles(
+      state->connection_directory);
+  std::vector<std::string> warnings;
+  const std::vector<elder_terms::HotkeyAction> actions =
+      build_registered_hotkey_actions(state, global_store, &warnings);
+  print_warnings(warnings);
+  if (state->hotkey_backend != nullptr) {
+    elder_terms::replace_hotkey_actions(state->hotkey_backend, actions);
+  }
+}
+
+static void reload_hotkey_actions(ApplicationState *state) {
+  const elder_terms::SettingsLoadResult global =
+      elder_terms::load_global_settings(state->global_config_path, 1.0);
+  print_warnings(global.warnings);
+  replace_registered_hotkeys(state, global.store);
 }
 
 static void append_new_profile_row(ApplicationState *state) {
@@ -602,12 +711,14 @@ static gboolean refresh_connections_from_monitor(gpointer user_data) {
       populate_profile_rows(state);
       show_empty_details(state);
     }
+    reload_hotkey_actions(state);
     return G_SOURCE_REMOVE;
   }
 
   state->monitor_reload_selected = false;
   state->monitor_renamed_path.reset();
   preserve_current_editor_after_list_refresh(state);
+  reload_hotkey_actions(state);
   return G_SOURCE_REMOVE;
 }
 
@@ -763,6 +874,65 @@ static void on_child_finished(GObject *source, GAsyncResult *result,
   delete launch;
 }
 
+static void launch_child_process(
+    ApplicationState *state, const std::string &executable,
+    const char *executable_name,
+    const std::vector<std::string> &arguments,
+    const std::filesystem::path &temporary_startup_path,
+    const std::optional<std::string> &activation_token) {
+  const std::string error_summary =
+      std::string("Failed to start ") + executable_name;
+  if (executable.empty()) {
+    if (!temporary_startup_path.empty()) {
+      g_remove(temporary_startup_path.c_str());
+    }
+    show_error(state, error_summary,
+               {std::string(executable_name) +
+                " executable was not found"});
+    return;
+  }
+
+  std::vector<const gchar *> argv;
+  argv.reserve(arguments.size() + 1);
+  for (const std::string &argument : arguments) {
+    argv.push_back(argument.c_str());
+  }
+  argv.push_back(nullptr);
+
+  GSubprocessLauncher *launcher =
+      g_subprocess_launcher_new(G_SUBPROCESS_FLAGS_NONE);
+  if (activation_token.has_value() &&
+      !activation_token->empty()) {
+    g_subprocess_launcher_setenv(
+        launcher, "XDG_ACTIVATION_TOKEN",
+        activation_token->c_str(), TRUE);
+  }
+  GError *error = nullptr;
+  GSubprocess *process =
+      g_subprocess_launcher_spawnv(launcher, argv.data(), &error);
+  g_object_unref(launcher);
+  if (process == nullptr) {
+    if (!temporary_startup_path.empty()) {
+      g_remove(temporary_startup_path.c_str());
+    }
+    const std::string message =
+        error == nullptr ? "Unknown process launch error" : error->message;
+    if (error != nullptr) {
+      g_error_free(error);
+    }
+    show_error(state, error_summary, {message});
+    return;
+  }
+
+  auto *launch = new ChildLaunch{
+      .application = state,
+      .process = process,
+      .temporary_startup_path = temporary_startup_path,
+  };
+  state->child_launches.push_back(launch);
+  g_subprocess_wait_async(process, nullptr, on_child_finished, launch);
+}
+
 static void launch_selected_connection(ApplicationState *state) {
   if (!editor_is_valid(state)) {
     return;
@@ -778,12 +948,6 @@ static void launch_selected_connection(ApplicationState *state) {
       sftp ? "elder-terms-sftp" : "elder-terms-vte";
   const std::string error_summary =
       std::string("Failed to start ") + executable_name;
-  if (executable.empty()) {
-    show_error(state, error_summary,
-               {std::string(executable_name) +
-                " executable was not found"});
-    return;
-  }
 
   std::vector<std::string> arguments = {executable};
   if (!state->current_is_new && state->selected_path.has_value()) {
@@ -807,36 +971,35 @@ static void launch_selected_connection(ApplicationState *state) {
     arguments.push_back(temporary_startup_path.string());
   }
 
-  std::vector<const gchar *> argv;
-  argv.reserve(arguments.size() + 1);
-  for (const std::string &argument : arguments) {
-    argv.push_back(argument.c_str());
-  }
-  argv.push_back(nullptr);
+  launch_child_process(state, executable, executable_name, arguments,
+                       temporary_startup_path, std::nullopt);
+}
 
-  GError *error = nullptr;
-  GSubprocess *process =
-      g_subprocess_newv(argv.data(), G_SUBPROCESS_FLAGS_NONE, &error);
-  if (process == nullptr) {
-    if (!temporary_startup_path.empty()) {
-      g_remove(temporary_startup_path.c_str());
-    }
-    const std::string message =
-        error == nullptr ? "Unknown process launch error" : error->message;
-    if (error != nullptr) {
-      g_error_free(error);
-    }
-    show_error(state, error_summary, {message});
+static void launch_saved_connection(
+    ApplicationState *state, const std::filesystem::path &path,
+    const std::optional<std::string> &activation_token) {
+  const elder_terms::SettingsLoadResult loaded =
+      elder_terms::load_connection_profile(path);
+  print_warnings(loaded.warnings);
+  if (!loaded.loaded) {
+    show_error(state, "Failed to load connection", loaded.warnings);
     return;
   }
 
-  auto *launch = new ChildLaunch{
-      .application = state,
-      .process = process,
-      .temporary_startup_path = temporary_startup_path,
+  const bool sftp =
+      elder_terms::general_connection_kind(loaded.store) ==
+      elder_terms::ConnectionKind::sftp;
+  const std::string &executable =
+      sftp ? state->sftp_executable : state->vte_executable;
+  const char *executable_name =
+      sftp ? "elder-terms-sftp" : "elder-terms-vte";
+  const std::vector<std::string> arguments = {
+      executable,
+      "-c",
+      path.string(),
   };
-  state->child_launches.push_back(launch);
-  g_subprocess_wait_async(process, nullptr, on_child_finished, launch);
+  launch_child_process(state, executable, executable_name, arguments, {},
+                       activation_token);
 }
 
 static void perform_pending_action(ApplicationState *state,
@@ -1019,6 +1182,7 @@ static void on_apply_clicked(GtkButton *, gpointer user_data) {
     return;
   }
   select_existing_connection(state, result.path);
+  reload_hotkey_actions(state);
 }
 
 static void on_connect_clicked(GtkButton *, gpointer user_data) {
@@ -1280,6 +1444,11 @@ static void on_application_startup(GApplication *,
 
   g_application_hold(state->application);
   state->application_held = true;
+  std::vector<std::string> hotkey_warnings;
+  const std::vector<elder_terms::HotkeyAction> hotkey_actions =
+      build_registered_hotkey_actions(
+          state, global_settings.store, &hotkey_warnings);
+  print_warnings(hotkey_warnings);
   state->hotkey_backend = elder_terms::create_hotkey_backend(
       {
           .application = state->application,
@@ -1289,13 +1458,26 @@ static void on_application_startup(GApplication *,
                   const std::string &action_id,
                   const elder_terms::HotkeyActivationContext &context) {
                 if (action_id != open_application_hotkey_action_id) {
+                  const auto target = std::find_if(
+                      state->connection_hotkey_targets.begin(),
+                      state->connection_hotkey_targets.end(),
+                      [&action_id](
+                          const ConnectionHotkeyTarget &candidate) {
+                        return candidate.action_id == action_id;
+                      });
+                  if (target !=
+                      state->connection_hotkey_targets.end()) {
+                    launch_saved_connection(
+                        state, target->path,
+                        context.activation_token);
+                  }
                   return;
                 }
                 present_main_window(state, context.activation_time,
                                     context.activation_token);
               },
       },
-      application_hotkey_actions(global_settings.store));
+      hotkey_actions);
   if (state->startup_mode == elder_terms::StartupMode::window) {
     return;
   }

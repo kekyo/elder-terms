@@ -1,4 +1,5 @@
-import { writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
   GtkApp,
@@ -24,6 +25,47 @@ const writeGlobalSettings = async (
     `[general]\nstartup_mode=tray\n${hotkey}`
   );
 };
+
+interface FakeChildContext {
+  readonly capture: string;
+  readonly executable: string;
+  readonly release: () => Promise<void>;
+}
+
+interface ChildCapture {
+  readonly activationToken: string | null;
+  readonly args: readonly string[];
+}
+
+const createFakeChild = async (): Promise<FakeChildContext> => {
+  const directory = await mkdtemp(join(tmpdir(), 'elder-terms-hotkey-child-'));
+  const executable = join(directory, 'fake-child.mjs');
+  const capture = join(directory, 'capture.json');
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node
+import { writeFile } from 'node:fs/promises';
+await writeFile(
+  ${JSON.stringify(capture)},
+  JSON.stringify({
+    activationToken: process.env.XDG_ACTIVATION_TOKEN ?? null,
+    args: process.argv.slice(2),
+  })
+);
+`
+  );
+  await chmod(executable, 0o755);
+  return {
+    capture,
+    executable,
+    release: async () => rm(directory, { recursive: true, force: true }),
+  };
+};
+
+const waitForChildCapture = async (path: string): Promise<ChildCapture> =>
+  waitForResult(
+    async () => JSON.parse(await readFile(path, 'utf8')) as ChildCapture
+  );
 
 const waitForWindowCount = async (
   app: GtkApp,
@@ -84,11 +126,36 @@ const closeWindowWithAccelerator = async (app: GtkApp): Promise<void> => {
   await pressShortcut(app, ['control'], 'w');
 };
 
-const selectGeneralSettingsTab = async (app: GtkApp): Promise<void> => {
-  const notebook = expectElementKind(
-    await app.getById('global_settings_notebook'),
-    'tabList'
-  );
+const selectConnection = async (app: GtkApp, row: number): Promise<void> => {
+  const list = await app.getById('connection_list');
+  if (list.kind === 'tree') {
+    await list.selectChildAt(row);
+    return;
+  }
+  if (list.kind === 'table') {
+    const cell = await list.cellAt(row, 0);
+    expect(cell).toBeDefined();
+    const capture = await cell?.capture();
+    expect(capture).toBeDefined();
+    if (capture === undefined) {
+      return;
+    }
+    await app.input.moveMouseTo(
+      Math.round(capture.bounds.x + capture.bounds.width / 2),
+      Math.round(capture.bounds.y + capture.bounds.height / 2)
+    );
+    await app.input.setMouseButton('left', true);
+    await app.input.setMouseButton('left', false);
+    return;
+  }
+  throw new Error(`Unexpected connection list kind: ${list.kind}`);
+};
+
+const selectGeneralSettingsTab = async (
+  app: GtkApp,
+  notebookId: string
+): Promise<void> => {
+  const notebook = expectElementKind(await app.getById(notebookId), 'tabList');
   const childCount = await notebook.getChildCount();
   for (let index = 0; index < childCount; index += 1) {
     const tab = await notebook.childAt(index);
@@ -163,7 +230,7 @@ describe('elder-terms application hotkey lifecycle', () => {
           'button'
         ).click();
         await waitForWindowCount(app, 2);
-        await selectGeneralSettingsTab(app);
+        await selectGeneralSettingsTab(app, 'global_settings_notebook');
 
         const entry = expectElementKind(
           await app.getById('global_settings_general_open_application_entry'),
@@ -187,5 +254,184 @@ describe('elder-terms application hotkey lifecycle', () => {
         await waitForWindowCount(app, 1);
       }
     );
+  });
+
+  it('launches saved terminal and SFTP connections while resident in the tray', async (context) => {
+    const fakeVte = await createFakeChild();
+    const fakeSftp = await createFakeChild();
+    try {
+      await runLauncherGtkTest(
+        context,
+        async (connections) => {
+          await writeGlobalSettings(connections, '');
+          await writeFile(
+            join(connections, 'Alpha.ini'),
+            '[general]\nopen_connection=ctrl+shift+y\n'
+          );
+          await writeFile(
+            join(connections, 'Files.ini'),
+            [
+              '[general]',
+              'type=sftp',
+              'open_connection=ctrl+shift+u',
+              '',
+              '[ssh]',
+              'address=files.example',
+              '',
+            ].join('\n')
+          );
+        },
+        async ({ app, connections }) => {
+          await waitForWindowCount(app, 0);
+          await pressShortcut(app, ['control', 'shift'], 'y');
+          expect(await waitForChildCapture(fakeVte.capture)).toEqual({
+            activationToken: null,
+            args: ['-c', join(connections, 'Alpha.ini')],
+          });
+          await pressShortcut(app, ['control', 'shift'], 'u');
+          expect(await waitForChildCapture(fakeSftp.capture)).toEqual({
+            activationToken: null,
+            args: ['-c', join(connections, 'Files.ini')],
+          });
+          expect(await app.getWindowCount()).toBe(0);
+        },
+        {
+          args: [],
+          env: {
+            ELDER_TERMS_SFTP_PATH: fakeSftp.executable,
+            ELDER_TERMS_VTE_PATH: fakeVte.executable,
+          },
+        }
+      );
+    } finally {
+      await Promise.all([fakeSftp.release(), fakeVte.release()]);
+    }
+  });
+
+  it('warns for duplicate connection hotkeys and launches the first profile', async (context) => {
+    const fakeVte = await createFakeChild();
+    try {
+      await runLauncherGtkTest(
+        context,
+        async (connections) => {
+          await writeGlobalSettings(connections, 'ctrl+alt+t');
+          const duplicate = '[general]\nopen_connection=ctrl+alt+t\n';
+          await writeFile(join(connections, 'Alpha.ini'), duplicate);
+          await writeFile(join(connections, 'Beta.ini'), duplicate);
+        },
+        async ({ app, connections }) => {
+          await waitForResult(async () => {
+            expect((await app.output()).stderr).toContain(
+              'Warning: connection hotkey ctrl+alt+t is assigned to both Alpha and Beta; using Alpha'
+            );
+          });
+          await pressShortcut(app, ['control', 'alt'], 't');
+          expect(await waitForChildCapture(fakeVte.capture)).toEqual({
+            activationToken: null,
+            args: ['-c', join(connections, 'Alpha.ini')],
+          });
+          expect(await app.getWindowCount()).toBe(0);
+        },
+        {
+          args: [],
+          env: {
+            ELDER_TERMS_VTE_PATH: fakeVte.executable,
+          },
+        }
+      );
+    } finally {
+      await fakeVte.release();
+    }
+  });
+
+  it('replaces connection hotkeys after external changes and saves', async (context) => {
+    const fakeVte = await createFakeChild();
+    try {
+      await runLauncherGtkTest(
+        context,
+        async (connections) => {
+          await writeGlobalSettings(connections, '');
+          await writeFile(
+            join(connections, 'Alpha.ini'),
+            '[general]\nopen_connection=ctrl+shift+y\n'
+          );
+          await writeFile(join(connections, 'Beta.ini'), '[general]\n');
+        },
+        async ({ app, connections }) => {
+          const tray = await app.getTrayItem({ id: 'elder-terms' });
+          await tray.click();
+          await waitForWindowCount(app, 1);
+          await selectConnection(app, 0);
+          const entry = expectElementKind(
+            await app.getById('settings_general_open_connection_entry'),
+            'entry'
+          );
+          await waitForResult(async () => {
+            expect(await entry.text()).toBe('ctrl+shift+y');
+          });
+
+          await writeFile(
+            join(connections, 'Alpha.ini'),
+            '[general]\nopen_connection=ctrl+shift+u\n'
+          );
+          await waitForResult(async () => {
+            expect(await entry.text()).toBe('ctrl+shift+u');
+          });
+          await closeWindowWithAccelerator(app);
+          await waitForWindowCount(app, 0);
+          await pressShortcut(app, ['control', 'shift'], 'u');
+          expect(await waitForChildCapture(fakeVte.capture)).toEqual({
+            activationToken: null,
+            args: ['-c', join(connections, 'Alpha.ini')],
+          });
+
+          await rm(fakeVte.capture, { force: true });
+          await tray.click();
+          await waitForWindowCount(app, 1);
+          await selectConnection(app, 1);
+          const alternateEntry = expectElementKind(
+            await app.getById('settings_general_open_connection_entry'),
+            'entry'
+          );
+          await waitForResult(async () => {
+            expect(await alternateEntry.text()).toBe('');
+          });
+          await selectConnection(app, 0);
+          const savedEntry = expectElementKind(
+            await app.getById('settings_general_open_connection_entry'),
+            'entry'
+          );
+          await waitForResult(async () => {
+            expect(await savedEntry.text()).toBe('ctrl+shift+u');
+          });
+          await selectGeneralSettingsTab(app, 'settings_notebook');
+          await captureShortcut(app, savedEntry, ['control', 'shift'], 'i');
+          await expectElementKind(
+            await app.getById('apply_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(
+              await readFile(join(connections, 'Alpha.ini'), 'utf8')
+            ).toContain('open_connection=ctrl+shift+i');
+          });
+          await closeWindowWithAccelerator(app);
+          await waitForWindowCount(app, 0);
+          await pressShortcut(app, ['control', 'shift'], 'i');
+          expect(await waitForChildCapture(fakeVte.capture)).toEqual({
+            activationToken: null,
+            args: ['-c', join(connections, 'Alpha.ini')],
+          });
+        },
+        {
+          args: [],
+          env: {
+            ELDER_TERMS_VTE_PATH: fakeVte.executable,
+          },
+        }
+      );
+    } finally {
+      await fakeVte.release();
+    }
   });
 });
