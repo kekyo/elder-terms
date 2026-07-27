@@ -71,6 +71,7 @@ elder_terms_sources = [
   'src/terminal-sessions/terminal-view-io.cpp',
   'src/terminal-layout.cpp',
   'src/terminal-session.cpp',
+  'src/widget-background.cpp',
 ]
 
 executable(
@@ -110,6 +111,7 @@ executable(
     'src/sftp/sftp-window.cpp',
     'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
     'src/terminal-sessions/tcp-connector.cpp',
+    'src/widget-background.cpp',
   ],
   cpp_args: [
     '-I' + gestament_include_dir,

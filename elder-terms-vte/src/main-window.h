@@ -104,6 +104,10 @@ struct MainWindow {
   GtkWidget *status_label = nullptr;
   /** Status bar activity indicator container. */
   GtkWidget *activity_indicator_bar = nullptr;
+  /** Open runtime settings dialog receiving the exterior background. */
+  GtkWidget *settings_dialog = nullptr;
+  /** Root of the open settings widget receiving the exterior background. */
+  GtkWidget *settings_widget_root = nullptr;
   /** Provider applying the configured header-bar and status-bar background. */
   GtkCssProvider *exterior_background_provider = nullptr;
   /** True after overriding VTE's default background color. */
@@ -152,6 +156,17 @@ std::optional<MainWindow> load_main_window();
  */
 void set_main_window_colors(MainWindow *main_window,
                             const GeneralColorSettings &settings);
+
+/**
+ * Registers the open runtime settings dialog for exterior color updates.
+ *
+ * @param main_window Main window owning the exterior color provider.
+ * @param dialog Open GtkDialog, or null after it is destroyed.
+ * @param settings_root Root settings widget, or null after it is destroyed.
+ */
+void set_main_window_settings_dialog(
+    MainWindow *main_window, GtkWidget *dialog,
+    GtkWidget *settings_root);
 
 /**
  * Configures Paste handling for the terminal context menu.

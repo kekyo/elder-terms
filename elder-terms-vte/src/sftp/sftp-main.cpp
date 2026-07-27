@@ -193,6 +193,8 @@ static void open_sftp_application_window(
               elder_terms::resolve_sftp_local_directory(
                   state->settings, state->connection),
           .remote_directory = state->connection.remote_directory,
+          .colors =
+              elder_terms::general_color_settings(state->settings),
           .client = state->client,
           .closed =
               [state]() {

@@ -1,0 +1,84 @@
+#include "widget-background.h"
+
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+namespace elder_terms {
+
+static std::string rgb_color_css(const RgbColor &color) {
+  std::ostringstream stream;
+  stream << "* { background-image: none; background-color: #"
+         << std::uppercase << std::hex << std::setfill('0') << std::setw(2)
+         << static_cast<unsigned int>(color.red) << std::setw(2)
+         << static_cast<unsigned int>(color.green) << std::setw(2)
+         << static_cast<unsigned int>(color.blue) << "; }";
+  return stream.str();
+}
+
+GtkCssProvider *create_widget_background_provider(
+    const RgbColor &color, const char *target_name) {
+  GtkCssProvider *provider = gtk_css_provider_new();
+  const std::string css = rgb_color_css(color);
+  GError *error = nullptr;
+  if (gtk_css_provider_load_from_data(provider, css.c_str(), -1, &error)) {
+    return provider;
+  }
+
+  std::cerr << "Failed to apply configured " << target_name
+            << " background" << '\n';
+  if (error != nullptr) {
+    std::cerr << error->message << '\n';
+    g_clear_error(&error);
+  }
+  g_object_unref(provider);
+  return nullptr;
+}
+
+static void add_widget_tree_background_provider_callback(
+    GtkWidget *widget, gpointer data) {
+  add_widget_tree_background_provider(
+      widget, GTK_CSS_PROVIDER(data));
+}
+
+void add_widget_tree_background_provider(
+    GtkWidget *widget, GtkCssProvider *provider) {
+  if (widget == nullptr || provider == nullptr) {
+    return;
+  }
+
+  gtk_style_context_add_provider(
+      gtk_widget_get_style_context(widget),
+      GTK_STYLE_PROVIDER(provider),
+      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  if (GTK_IS_CONTAINER(widget)) {
+    gtk_container_foreach(
+        GTK_CONTAINER(widget),
+        add_widget_tree_background_provider_callback, provider);
+  }
+}
+
+static void remove_widget_tree_background_provider_callback(
+    GtkWidget *widget, gpointer data) {
+  remove_widget_tree_background_provider(
+      widget, GTK_CSS_PROVIDER(data));
+}
+
+void remove_widget_tree_background_provider(
+    GtkWidget *widget, GtkCssProvider *provider) {
+  if (widget == nullptr || provider == nullptr) {
+    return;
+  }
+
+  gtk_style_context_remove_provider(
+      gtk_widget_get_style_context(widget),
+      GTK_STYLE_PROVIDER(provider));
+  if (GTK_IS_CONTAINER(widget)) {
+    gtk_container_foreach(
+        GTK_CONTAINER(widget),
+        remove_widget_tree_background_provider_callback, provider);
+  }
+}
+
+} // namespace elder_terms

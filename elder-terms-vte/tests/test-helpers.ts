@@ -586,3 +586,35 @@ export const expectElementKind = <Kind extends GtkWidgetKind>(
   expect(resolved.kind).toBe(kind);
   return resolved as GtkElementOfKind<Kind>;
 };
+
+/**
+ * Compares a capture with a committed elder-terms-vte fixture image.
+ *
+ * @remarks Set `ELDER_TERMS_UPDATE_VTE_FIXTURES=1` to replace the fixture
+ * with the current capture before comparing it.
+ *
+ * @param capture Actual GTK capture.
+ * @param name Comparison and evidence name.
+ * @param fixturePath Expected PNG path.
+ * @param evidence Test evidence writer.
+ * @returns Promise resolved after an exact visual comparison passes.
+ */
+export const expectCaptureToMatchFixture = async (
+  capture: GtkCapture,
+  name: string,
+  fixturePath: string,
+  evidence: TestEvidence
+): Promise<void> => {
+  if (process.env.ELDER_TERMS_UPDATE_VTE_FIXTURES === '1') {
+    await mkdir(dirname(fixturePath), { recursive: true });
+    await writeFile(fixturePath, capture.image);
+  }
+  if (!existsSync(fixturePath)) {
+    throw new Error(`missing VTE capture fixture: ${fixturePath}`);
+  }
+
+  await evidence.expectCaptureToLookSimilar(capture, name, fixturePath, {
+    maxDiffPixels: 0,
+    threshold: 0.01,
+  });
+};

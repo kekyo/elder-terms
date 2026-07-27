@@ -1,24 +1,41 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  utimes,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createGtkAppLauncher,
   type GtkApp,
+  type GtkCapture,
   type GtkTableElement,
   type GtkWidgetElement,
 } from 'gestament';
 import { waitForResult } from 'gestament/testing';
+import type { PNG as PngImage } from 'pngjs';
 import { describe, expect, it, type TestContext } from 'vitest';
 import {
   createTestEvidence,
+  expectCaptureToMatchFixture,
   expectElementKind,
   type TestEvidence,
 } from './test-helpers';
 
+const require = createRequire(import.meta.url);
+const { PNG } = require('pngjs') as typeof import('pngjs');
 const sftpAppPath = fileURLToPath(
   new URL('../../.build/elder-terms-vte/elder-terms-sftp', import.meta.url)
 );
+const sftpConnectionColorsFixturePath = fileURLToPath(
+  new URL('./fixtures/sftp-connection-colors.png', import.meta.url)
+);
+const stableLocalModificationTime = new Date('2020-01-02T03:04:00Z');
 
 interface SftpFixture {
   readonly app: GtkApp;
@@ -29,6 +46,7 @@ interface SftpFixture {
 const runSftpFixture = async (
   context: TestContext,
   pauseTransfer: boolean,
+  generalSettings: readonly string[],
   body: (fixture: SftpFixture) => Promise<void>
 ): Promise<void> => {
   const directory = await mkdtemp(join(tmpdir(), 'elder-terms-sftp-'));
@@ -41,6 +59,16 @@ const runSftpFixture = async (
     await mkdir(join(localDirectory, 'documents'), { recursive: true });
     await mkdir(globalConfigDirectory, { recursive: true });
     await writeFile(join(localDirectory, 'hello.txt'), 'hello from local\n');
+    await utimes(
+      join(localDirectory, 'documents'),
+      stableLocalModificationTime,
+      stableLocalModificationTime
+    );
+    await utimes(
+      join(localDirectory, 'hello.txt'),
+      stableLocalModificationTime,
+      stableLocalModificationTime
+    );
     await writeFile(
       globalConfigPath,
       [
@@ -56,6 +84,7 @@ const runSftpFixture = async (
         '[general]',
         'name=Fixture files',
         'type=sftp',
+        ...generalSettings,
         '',
         '[ssh]',
         'address=fixture.example',
@@ -147,11 +176,137 @@ const expectHidden = async (element: GtkWidgetElement): Promise<void> => {
   });
 };
 
+type RgbPixel = readonly [red: number, green: number, blue: number];
+
+const capturePixel = (
+  capture: GtkCapture,
+  horizontalRatio: number,
+  verticalRatio: number
+): RgbPixel => {
+  const png = PNG.sync.read(capture.image) as PngImage;
+  const x = Math.min(
+    png.width - 1,
+    Math.max(0, Math.trunc(png.width * horizontalRatio))
+  );
+  const y = Math.min(
+    png.height - 1,
+    Math.max(0, Math.trunc(png.height * verticalRatio))
+  );
+  const offset = (y * png.width + x) * 4;
+  return [
+    png.data[offset] ?? 0,
+    png.data[offset + 1] ?? 0,
+    png.data[offset + 2] ?? 0,
+  ];
+};
+
+const captureBorderSamples = (capture: GtkCapture): readonly RgbPixel[] => {
+  const png = PNG.sync.read(capture.image) as PngImage;
+  const readPixel = (x: number, y: number): RgbPixel => {
+    const offset = (y * png.width + x) * 4;
+    return [
+      png.data[offset] ?? 0,
+      png.data[offset + 1] ?? 0,
+      png.data[offset + 2] ?? 0,
+    ];
+  };
+  const centerX = Math.trunc(png.width / 2);
+  const centerY = Math.trunc(png.height / 2);
+  return [
+    readPixel(centerX, 0),
+    readPixel(centerX, 1),
+    readPixel(centerX, png.height - 2),
+    readPixel(centerX, png.height - 1),
+    readPixel(0, centerY),
+    readPixel(1, centerY),
+    readPixel(png.width - 2, centerY),
+    readPixel(png.width - 1, centerY),
+  ];
+};
+
 describe('SFTP window', () => {
+  it('applies configured exterior and browser RGB backgrounds', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      ['exterior_background=#7A2468', 'background=#183C58'],
+      async ({ app, evidence }) => {
+        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localPath = expectElementKind(
+          await app.getById('sftp_local_path_entry'),
+          'entry'
+        );
+        const remotePath = expectElementKind(
+          await app.getById('sftp_remote_path_entry'),
+          'entry'
+        );
+        await waitForResult(async () => {
+          expect(await findRow(localTree, 'hello.txt')).toBeGreaterThanOrEqual(
+            0
+          );
+        });
+        await localPath.setText('/fixture/local');
+
+        const header = await app.getById('sftp_header_bar');
+        const status = await app.getById('sftp_status_bar');
+        expect(capturePixel(await header.capture(), 0.08, 0.5)).toEqual([
+          0x7a, 0x24, 0x68,
+        ]);
+        expect(capturePixel(await status.capture(), 0.8, 0.5)).toEqual([
+          0x7a, 0x24, 0x68,
+        ]);
+        expect(capturePixel(await localTree.capture(), 0.5, 0.8)).toEqual([
+          0x18, 0x3c, 0x58,
+        ]);
+
+        const treeCapture = await localTree.capture();
+        await app.input.moveMouseTo(
+          Math.trunc(treeCapture.bounds.x + treeCapture.bounds.width / 2),
+          Math.trunc(treeCapture.bounds.y + treeCapture.bounds.height * 0.8)
+        );
+        await app.input.setMouseButton('left', true);
+        await app.input.setMouseButton('left', false);
+        await waitForResult(async () => {
+          expect((await localTree.info()).states).toContain('focused');
+        });
+        const statusCapture = await status.capture();
+        await app.input.moveMouseTo(
+          Math.trunc(statusCapture.bounds.x + statusCapture.bounds.width * 0.8),
+          Math.trunc(statusCapture.bounds.y + statusCapture.bounds.height / 2)
+        );
+        await waitForResult(async () => {
+          const [localPathCapture, remotePathCapture] = await Promise.all([
+            localPath.capture(),
+            remotePath.capture(),
+          ]);
+          expect(captureBorderSamples(remotePathCapture)).toEqual(
+            captureBorderSamples(localPathCapture)
+          );
+        });
+
+        const window = expectElementKind(
+          await app.getById('sftp_window'),
+          'window'
+        );
+        const capture = await evidence.captureEvidence(
+          'sftp-connection-colors',
+          async () => window.capture()
+        );
+        await expectCaptureToMatchFixture(
+          capture,
+          'sftp-connection-colors',
+          sftpConnectionColorsFixturePath,
+          evidence
+        );
+      }
+    );
+  });
+
   it('inherits global directories and navigates independent local and remote trees', async (context) => {
     await runSftpFixture(
       context,
       false,
+      [],
       async ({ app, evidence, localDirectory }) => {
         expect(await app.getWindowCount()).toBe(1);
         const window = expectElementKind(
@@ -206,59 +361,64 @@ describe('SFTP window', () => {
   });
 
   it('sends and receives selected items from the pane context menus', async (context) => {
-    await runSftpFixture(context, false, async ({ app, localDirectory }) => {
-      const localTree = expectTable(await app.getById('sftp_local_tree'));
-      const remoteTree = expectTable(await app.getById('sftp_remote_tree'));
-      await openContextMenu(
-        app,
-        localTree,
-        await findRow(localTree, 'hello.txt')
-      );
-      const send = expectElementKind(
-        await app.getById('sftp_send_item'),
-        'menuItem'
-      );
-      await expectShowing(send);
-      await send.click();
-      await waitForResult(async () => {
-        expect(
-          await expectElementKind(
-            await app.getById('sftp_status_label'),
-            'label'
-          ).text()
-        ).toBe('Sent 1 item');
-        expect(await findRow(remoteTree, 'hello.txt')).toBeGreaterThanOrEqual(
-          0
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      async ({ app, localDirectory }) => {
+        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const remoteTree = expectTable(await app.getById('sftp_remote_tree'));
+        await openContextMenu(
+          app,
+          localTree,
+          await findRow(localTree, 'hello.txt')
         );
-      });
+        const send = expectElementKind(
+          await app.getById('sftp_send_item'),
+          'menuItem'
+        );
+        await expectShowing(send);
+        await send.click();
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('sftp_status_label'),
+              'label'
+            ).text()
+          ).toBe('Sent 1 item');
+          expect(await findRow(remoteTree, 'hello.txt')).toBeGreaterThanOrEqual(
+            0
+          );
+        });
 
-      await openContextMenu(
-        app,
-        remoteTree,
-        await findRow(remoteTree, 'readme.txt')
-      );
-      const receive = expectElementKind(
-        await app.getById('sftp_receive_item'),
-        'menuItem'
-      );
-      await expectShowing(receive);
-      await receive.click();
-      await waitForResult(async () => {
-        expect(
-          await expectElementKind(
-            await app.getById('sftp_status_label'),
-            'label'
-          ).text()
-        ).toBe('Received 1 item');
-        expect(await readFile(join(localDirectory, 'readme.txt'), 'utf8')).toBe(
-          'hello from remote\n'
+        await openContextMenu(
+          app,
+          remoteTree,
+          await findRow(remoteTree, 'readme.txt')
         );
-      });
-    });
+        const receive = expectElementKind(
+          await app.getById('sftp_receive_item'),
+          'menuItem'
+        );
+        await expectShowing(receive);
+        await receive.click();
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('sftp_status_label'),
+              'label'
+            ).text()
+          ).toBe('Received 1 item');
+          expect(
+            await readFile(join(localDirectory, 'readme.txt'), 'utf8')
+          ).toBe('hello from remote\n');
+        });
+      }
+    );
   });
 
   it('dims both panes during transfer and cancels from the progress overlay', async (context) => {
-    await runSftpFixture(context, true, async ({ app }) => {
+    await runSftpFixture(context, true, [], async ({ app }) => {
       const localTree = expectTable(await app.getById('sftp_local_tree'));
       await openContextMenu(
         app,

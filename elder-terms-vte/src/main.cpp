@@ -284,6 +284,8 @@ static void on_settings_dialog_destroy(GtkWidget *, gpointer user_data) {
     g_source_remove(state->settings_dialog_close_idle_id);
     state->settings_dialog_close_idle_id = 0;
   }
+  elder_terms::set_main_window_settings_dialog(
+      state->main_window, nullptr, nullptr);
   if (state->settings_widget != nullptr) {
     elder_terms::destroy_settings_widget(state->settings_widget);
     state->settings_widget = nullptr;
@@ -332,9 +334,14 @@ static void schedule_settings_dialog_close(ApplicationState *state) {
 static void apply_runtime_settings(ApplicationState *state,
                                    const elder_terms::SettingsStore &store) {
   state->settings_store = store;
+  const elder_terms::GeneralColorSettings colors =
+      elder_terms::general_color_settings(state->settings_store);
   elder_terms::set_main_window_colors(
-      state->main_window,
-      elder_terms::general_color_settings(state->settings_store));
+      state->main_window, colors);
+  if (state->sftp_window != nullptr) {
+    elder_terms::set_sftp_window_colors(
+        state->sftp_window, colors);
+  }
   const elder_terms::TerminalLogSettings log_settings =
       elder_terms::terminal_log_settings(state->settings_store);
   elder_terms::apply_terminal_log_settings(
@@ -452,11 +459,15 @@ static void open_settings_dialog(ApplicationState *state) {
   };
   state->settings_widget =
       elder_terms::create_settings_widget(std::move(options));
+  GtkWidget *settings_root =
+      elder_terms::settings_widget_root(state->settings_widget);
   gtk_container_add(
       GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(dialog))),
-      elder_terms::settings_widget_root(state->settings_widget));
+      settings_root);
 
   state->settings_dialog = dialog;
+  elder_terms::set_main_window_settings_dialog(
+      state->main_window, dialog, settings_root);
   g_signal_connect(dialog, "destroy", G_CALLBACK(on_settings_dialog_destroy), state);
   update_application_terminal_presentation(state);
   gtk_widget_show_all(dialog);
@@ -776,6 +787,9 @@ static cardio::promise<void> open_shared_sftp_window_async(
                 elder_terms::resolve_sftp_local_directory(
                     state->settings_store, settings),
             .remote_directory = settings.remote_directory,
+            .colors =
+                elder_terms::general_color_settings(
+                    state->settings_store),
             .client = state->sftp_client,
             .closed =
                 [state]() {

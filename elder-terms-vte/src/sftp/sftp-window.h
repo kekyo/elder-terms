@@ -6,6 +6,8 @@
 
 #include <gtk/gtk.h>
 
+#include <elder-terms/settings.h>
+
 #include "sftp-client.h"
 
 namespace elder_terms {
@@ -20,6 +22,8 @@ struct SftpWindowOptions {
   std::string local_directory;
   /** Initial remote SFTP directory. */
   std::string remote_directory;
+  /** Initial exterior and browser background colors. */
+  GeneralColorSettings colors;
   /** Initialized SFTP subsystem used by browsing and transfers. */
   std::shared_ptr<SftpClient> client;
   /** Called asynchronously after the GTK window is destroyed. */
@@ -64,6 +68,16 @@ void show_sftp_window(const std::shared_ptr<SftpWindow> &window);
  */
 void set_sftp_window_connection_available(
     const std::shared_ptr<SftpWindow> &window, bool available);
+
+/**
+ * Applies optional exterior and browser backgrounds at runtime.
+ *
+ * @param window SFTP window state.
+ * @param settings Effective optional RGB colors.
+ */
+void set_sftp_window_colors(
+    const std::shared_ptr<SftpWindow> &window,
+    const GeneralColorSettings &settings);
 
 /**
  * Presents an existing SFTP window above other application windows.

@@ -1,9 +1,7 @@
 #include <algorithm>
 #include <filesystem>
-#include <iomanip>
 #include <iostream>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <utility>
 
@@ -13,6 +11,7 @@
 #include <vte/vte.h>
 
 #include "main-window.h"
+#include "widget-background.h"
 
 namespace elder_terms {
 
@@ -460,14 +459,41 @@ static bool load_indicator_images(MainWindow *main_window) {
   return true;
 }
 
-static std::string rgb_color_css(const RgbColor &color) {
-  std::ostringstream stream;
-  stream << "* { background-image: none; background-color: #"
-         << std::uppercase << std::hex << std::setfill('0') << std::setw(2)
-         << static_cast<unsigned int>(color.red) << std::setw(2)
-         << static_cast<unsigned int>(color.green) << std::setw(2)
-         << static_cast<unsigned int>(color.blue) << "; }";
-  return stream.str();
+static void remove_main_window_exterior_provider(
+    GtkWidget *widget, GtkCssProvider *provider) {
+  if (widget == nullptr || provider == nullptr) {
+    return;
+  }
+  gtk_style_context_remove_provider(
+      gtk_widget_get_style_context(widget),
+      GTK_STYLE_PROVIDER(provider));
+}
+
+static void add_main_window_exterior_provider(
+    GtkWidget *widget, GtkCssProvider *provider) {
+  if (widget == nullptr || provider == nullptr) {
+    return;
+  }
+  gtk_style_context_add_provider(
+      gtk_widget_get_style_context(widget),
+      GTK_STYLE_PROVIDER(provider),
+      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+}
+
+static void remove_main_window_settings_background(
+    MainWindow *main_window, GtkCssProvider *provider) {
+  remove_main_window_exterior_provider(
+      main_window->settings_dialog, provider);
+  remove_widget_tree_background_provider(
+      main_window->settings_widget_root, provider);
+}
+
+static void add_main_window_settings_background(
+    MainWindow *main_window, GtkCssProvider *provider) {
+  add_main_window_exterior_provider(
+      main_window->settings_dialog, provider);
+  add_widget_tree_background_provider(
+      main_window->settings_widget_root, provider);
 }
 
 static void clear_main_window_exterior_background(MainWindow *main_window) {
@@ -475,16 +501,17 @@ static void clear_main_window_exterior_background(MainWindow *main_window) {
     return;
   }
 
-  GtkStyleProvider *provider =
-      GTK_STYLE_PROVIDER(main_window->exterior_background_provider);
-  if (main_window->header_bar != nullptr) {
-    gtk_style_context_remove_provider(
-        gtk_widget_get_style_context(main_window->header_bar), provider);
-  }
-  if (main_window->status_bar != nullptr) {
-    gtk_style_context_remove_provider(
-        gtk_widget_get_style_context(main_window->status_bar), provider);
-  }
+  GtkCssProvider *provider =
+      main_window->exterior_background_provider;
+  remove_main_window_exterior_provider(
+      main_window->header_bar, provider);
+  remove_main_window_exterior_provider(
+      main_window->transfer_button, provider);
+  remove_main_window_exterior_provider(
+      main_window->settings_button, provider);
+  remove_main_window_exterior_provider(
+      main_window->status_bar, provider);
+  remove_main_window_settings_background(main_window, provider);
   g_clear_object(&main_window->exterior_background_provider);
 }
 
@@ -496,25 +523,22 @@ static void set_main_window_exterior_background(
     return;
   }
 
-  GtkCssProvider *provider = gtk_css_provider_new();
-  const std::string css = rgb_color_css(color.value());
-  GError *error = nullptr;
-  if (!gtk_css_provider_load_from_data(provider, css.c_str(), -1, &error)) {
-    std::cerr << "Failed to apply configured exterior background" << '\n';
-    if (error != nullptr) {
-      std::cerr << error->message << '\n';
-      g_clear_error(&error);
-    }
-    g_object_unref(provider);
+  GtkCssProvider *provider =
+      create_widget_background_provider(
+          color.value(), "exterior");
+  if (provider == nullptr) {
     return;
   }
 
-  gtk_style_context_add_provider(
-      gtk_widget_get_style_context(main_window->header_bar),
-      GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-  gtk_style_context_add_provider(
-      gtk_widget_get_style_context(main_window->status_bar),
-      GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  add_main_window_exterior_provider(
+      main_window->header_bar, provider);
+  add_main_window_exterior_provider(
+      main_window->transfer_button, provider);
+  add_main_window_exterior_provider(
+      main_window->settings_button, provider);
+  add_main_window_exterior_provider(
+      main_window->status_bar, provider);
+  add_main_window_settings_background(main_window, provider);
   main_window->exterior_background_provider = provider;
 }
 
@@ -885,6 +909,27 @@ void set_main_window_colors(MainWindow *main_window,
                                       settings.exterior_background);
   set_main_window_terminal_background(main_window,
                                       settings.background);
+}
+
+void set_main_window_settings_dialog(
+    MainWindow *main_window, GtkWidget *dialog,
+    GtkWidget *settings_root) {
+  if (main_window == nullptr) {
+    return;
+  }
+
+  if (main_window->exterior_background_provider != nullptr) {
+    remove_main_window_settings_background(
+        main_window,
+        main_window->exterior_background_provider);
+  }
+  main_window->settings_dialog = dialog;
+  main_window->settings_widget_root = settings_root;
+  if (main_window->exterior_background_provider != nullptr) {
+    add_main_window_settings_background(
+        main_window,
+        main_window->exterior_background_provider);
+  }
 }
 
 void set_main_window_terminal_paste_callbacks(

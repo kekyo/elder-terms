@@ -15,6 +15,7 @@
 #include <gio/gio.h>
 #include <gestament/gtk.h>
 
+#include "../widget-background.h"
 #include "sftp-transfer-engine.h"
 
 namespace elder_terms {
@@ -60,6 +61,7 @@ using SftpGObjectPtr =
 using SftpGCharPtr = std::unique_ptr<char, SftpGFreeDeleter>;
 
 struct SftpWindow;
+static void clear_sftp_window_colors(SftpWindow *window);
 
 struct SftpPaneState {
   SftpWindow *window = nullptr;
@@ -87,6 +89,7 @@ struct SftpChoiceDialogRequest {
 
 struct SftpWindow {
   GtkWidget *window = nullptr;
+  GtkWidget *header_bar = nullptr;
   GtkWidget *root_overlay = nullptr;
   GtkWidget *paned = nullptr;
   GtkWidget *dim_overlay = nullptr;
@@ -94,7 +97,10 @@ struct SftpWindow {
   GtkWidget *transfer_label = nullptr;
   GtkWidget *transfer_progress = nullptr;
   GtkWidget *transfer_cancel_button = nullptr;
+  GtkWidget *status_bar = nullptr;
   GtkWidget *status_label = nullptr;
+  GtkCssProvider *exterior_background_provider = nullptr;
+  GtkCssProvider *background_provider = nullptr;
   SftpPaneState local;
   SftpPaneState remote;
   std::shared_ptr<SftpClient> client;
@@ -118,8 +124,11 @@ struct SftpWindow {
       transfer_pulse_source = 0;
     }
     if (window != nullptr && !destroyed) {
+      clear_sftp_window_colors(this);
       gtk_widget_destroy(window);
     }
+    g_clear_object(&exterior_background_provider);
+    g_clear_object(&background_provider);
     if (local.store != nullptr) {
       g_object_unref(local.store);
       local.store = nullptr;
@@ -1123,6 +1132,12 @@ static void on_sftp_window_destroy(GtkWidget *, gpointer data) {
   }
   window->destroyed = true;
   window->window = nullptr;
+  window->header_bar = nullptr;
+  window->root_overlay = nullptr;
+  window->paned = nullptr;
+  window->status_bar = nullptr;
+  g_clear_object(&window->exterior_background_provider);
+  g_clear_object(&window->background_provider);
   (void)window->stop_source.cancel();
   if (window->transfer_cancel_source.has_value()) {
     (void)window->transfer_cancel_source->cancel();
@@ -1275,6 +1290,27 @@ static void apply_sftp_window_style(SftpWindow *window) {
   g_object_unref(provider);
 }
 
+static void clear_sftp_window_colors(SftpWindow *window) {
+  if (window == nullptr) {
+    return;
+  }
+
+  if (window->exterior_background_provider != nullptr) {
+    remove_widget_tree_background_provider(
+        window->header_bar,
+        window->exterior_background_provider);
+    remove_widget_tree_background_provider(
+        window->status_bar,
+        window->exterior_background_provider);
+    g_clear_object(&window->exterior_background_provider);
+  }
+  if (window->background_provider != nullptr) {
+    remove_widget_tree_background_provider(
+        window->paned, window->background_provider);
+    g_clear_object(&window->background_provider);
+  }
+}
+
 std::shared_ptr<SftpWindow>
 create_sftp_window(SftpWindowOptions options) {
   if (options.client == nullptr) {
@@ -1298,11 +1334,15 @@ create_sftp_window(SftpWindowOptions options) {
   gtk_window_set_title(GTK_WINDOW(state->window), title.c_str());
   gtk_window_set_default_size(GTK_WINDOW(state->window), 1040, 640);
 
-  GtkWidget *header = gtk_header_bar_new();
-  gtk_header_bar_set_title(GTK_HEADER_BAR(header), title.c_str());
+  state->header_bar = gtk_header_bar_new();
+  gestament_gtk_assign_accessible_id(
+      state->header_bar, "sftp_header_bar");
+  gtk_header_bar_set_title(
+      GTK_HEADER_BAR(state->header_bar), title.c_str());
   gtk_header_bar_set_show_close_button(
-      GTK_HEADER_BAR(header), TRUE);
-  gtk_window_set_titlebar(GTK_WINDOW(state->window), header);
+      GTK_HEADER_BAR(state->header_bar), TRUE);
+  gtk_window_set_titlebar(
+      GTK_WINDOW(state->window), state->header_bar);
 
   state->root_overlay = gtk_overlay_new();
   gtk_container_add(GTK_CONTAINER(state->window),
@@ -1325,16 +1365,20 @@ create_sftp_window(SftpWindowOptions options) {
   gtk_paned_pack2(GTK_PANED(state->paned), remote, TRUE, FALSE);
   gtk_paned_set_position(GTK_PANED(state->paned), 520);
 
-  GtkWidget *status_box =
+  state->status_bar =
       gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  gtk_container_set_border_width(GTK_CONTAINER(status_box), 6);
-  gtk_box_pack_start(GTK_BOX(content), status_box, FALSE, TRUE, 0);
+  gestament_gtk_assign_accessible_id(
+      state->status_bar, "sftp_status_bar");
+  gtk_container_set_border_width(
+      GTK_CONTAINER(state->status_bar), 6);
+  gtk_box_pack_start(
+      GTK_BOX(content), state->status_bar, FALSE, TRUE, 0);
   state->status_label = gtk_label_new("Ready");
   gestament_gtk_assign_accessible_id(
       state->status_label, "sftp_status_label");
   gtk_label_set_xalign(GTK_LABEL(state->status_label), 0.0F);
   gtk_box_pack_start(
-      GTK_BOX(status_box), state->status_label, TRUE, TRUE, 0);
+      GTK_BOX(state->status_bar), state->status_label, TRUE, TRUE, 0);
 
   state->dim_overlay = gtk_event_box_new();
   gestament_gtk_assign_accessible_id(
@@ -1384,6 +1428,7 @@ create_sftp_window(SftpWindowOptions options) {
                           state->transfer_overlay);
 
   apply_sftp_window_style(state.get());
+  set_sftp_window_colors(state, options.colors);
   g_signal_connect(
       state->transfer_cancel_button, "clicked",
       G_CALLBACK(on_sftp_transfer_cancel_clicked), state.get());
@@ -1429,6 +1474,35 @@ void set_sftp_window_connection_available(
     set_sftp_status(window.get(), "Disconnected");
   }
   update_sftp_sensitivity(window.get());
+}
+
+void set_sftp_window_colors(
+    const std::shared_ptr<SftpWindow> &window,
+    const GeneralColorSettings &settings) {
+  if (window == nullptr || window->destroyed) {
+    return;
+  }
+
+  clear_sftp_window_colors(window.get());
+  if (settings.exterior_background.has_value()) {
+    window->exterior_background_provider =
+        create_widget_background_provider(
+            settings.exterior_background.value(),
+            "SFTP exterior");
+    add_widget_tree_background_provider(
+        window->header_bar,
+        window->exterior_background_provider);
+    add_widget_tree_background_provider(
+        window->status_bar,
+        window->exterior_background_provider);
+  }
+  if (settings.background.has_value()) {
+    window->background_provider =
+        create_widget_background_provider(
+            settings.background.value(), "SFTP browser");
+    add_widget_tree_background_provider(
+        window->paned, window->background_provider);
+  }
 }
 
 void present_sftp_window(
