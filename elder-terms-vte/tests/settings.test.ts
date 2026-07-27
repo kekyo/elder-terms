@@ -1198,6 +1198,20 @@ describe.concurrent('elder-terms-vte settings', () => {
                 15
               );
             });
+            const actionRowCapture = await (
+              await app.getById('settings_action_row')
+            ).capture();
+            expect(capturePixel(actionRowCapture, 0.01, 0.5)).toEqual(exterior);
+            for (const buttonId of [
+              'settings_apply_button',
+              'settings_save_button',
+              'settings_cancel_button',
+            ]) {
+              const buttonCapture = await (
+                await app.getById(buttonId)
+              ).capture();
+              expect(capturePixel(buttonCapture, 0.15, 0.5)).toEqual(exterior);
+            }
             const settingsDialog = expectElementKind(
               await app.getById('settings_dialog'),
               'window'

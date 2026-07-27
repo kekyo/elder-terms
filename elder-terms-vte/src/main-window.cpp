@@ -521,7 +521,7 @@ static void update_settings_exterior_control_classes_callback(
   if (widget == nullptr || update == nullptr) {
     return;
   }
-  if (GTK_IS_COMBO_BOX(widget)) {
+  if (GTK_IS_COMBO_BOX(widget) || GTK_IS_BUTTON_BOX(widget)) {
     update_widget_style_class(
         widget, update->style_class, update->enabled);
     return;
