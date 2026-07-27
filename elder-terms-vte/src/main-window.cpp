@@ -30,6 +30,8 @@ static constexpr const char *transfer_progress_notice_label_style_class =
     "transfer-progress-notice-label";
 static constexpr const char *settings_exterior_background_style_class =
     "settings-exterior-background";
+static constexpr const char *settings_background_style_class =
+    "settings-background";
 static constexpr const char *ssh_prompt_background_style_class =
     "ssh-prompt-background";
 static constexpr const char *ssh_prompt_title_style_class =
@@ -482,66 +484,148 @@ static void add_main_window_exterior_provider(
       GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 }
 
-static void remove_settings_exterior_background_class(GtkWidget *widget) {
+static void update_widget_style_class(
+    GtkWidget *widget, const char *style_class, bool enabled) {
   if (widget == nullptr) {
     return;
   }
-  gtk_style_context_remove_class(
-      gtk_widget_get_style_context(widget),
-      settings_exterior_background_style_class);
+  GtkStyleContext *context = gtk_widget_get_style_context(widget);
+  if (enabled) {
+    gtk_style_context_add_class(context, style_class);
+  } else {
+    gtk_style_context_remove_class(context, style_class);
+  }
 }
 
-static void add_settings_exterior_background_class(GtkWidget *widget) {
-  if (widget == nullptr) {
+struct SettingsStyleClassUpdate {
+  const char *style_class = nullptr;
+  bool enabled = false;
+};
+
+static void update_settings_background_class(
+    MainWindow *main_window, bool enabled) {
+  if (main_window->settings_dialog == nullptr) {
     return;
   }
-  gtk_style_context_add_class(
-      gtk_widget_get_style_context(widget),
-      settings_exterior_background_style_class);
+
+  GtkWidget *dialog_body = gtk_bin_get_child(
+      GTK_BIN(main_window->settings_dialog));
+  update_widget_style_class(
+      dialog_body,
+      settings_background_style_class, enabled);
 }
 
-static void remove_main_window_settings_background(
-    MainWindow *main_window) {
-  GtkCssProvider *provider =
-      main_window->settings_exterior_background_provider;
+static void update_settings_exterior_control_classes_callback(
+    GtkWidget *widget, gpointer data) {
+  auto *update = static_cast<SettingsStyleClassUpdate *>(data);
+  if (widget == nullptr || update == nullptr) {
+    return;
+  }
+  if (GTK_IS_COMBO_BOX(widget)) {
+    update_widget_style_class(
+        widget, update->style_class, update->enabled);
+    return;
+  }
+  if (GTK_IS_CONTAINER(widget)) {
+    gtk_container_forall(
+        GTK_CONTAINER(widget),
+        update_settings_exterior_control_classes_callback, update);
+  }
+}
+
+static void update_settings_exterior_control_classes(
+    MainWindow *main_window, bool enabled) {
+  if (main_window->settings_dialog == nullptr) {
+    return;
+  }
+
+  GtkWidget *titlebar = gtk_window_get_titlebar(
+      GTK_WINDOW(main_window->settings_dialog));
+  update_widget_style_class(
+      titlebar, settings_exterior_background_style_class, enabled);
+  SettingsStyleClassUpdate update{
+      .style_class = settings_exterior_background_style_class,
+      .enabled = enabled,
+  };
+  update_settings_exterior_control_classes_callback(
+      main_window->settings_widget_root, &update);
+}
+
+static void remove_main_window_settings_provider(
+    MainWindow *main_window, GtkCssProvider *provider) {
   if (main_window->settings_dialog == nullptr || provider == nullptr) {
     return;
   }
-
   GdkScreen *screen =
       gtk_widget_get_screen(main_window->settings_dialog);
   if (screen != nullptr) {
     gtk_style_context_remove_provider_for_screen(
         screen, GTK_STYLE_PROVIDER(provider));
   }
-  remove_settings_exterior_background_class(
-      main_window->settings_widget_root);
-  remove_settings_exterior_background_class(
-      main_window->settings_dialog);
 }
 
-static void add_main_window_settings_background(MainWindow *main_window) {
-  GtkCssProvider *provider =
-      main_window->settings_exterior_background_provider;
+static void add_main_window_settings_provider(
+    MainWindow *main_window, GtkCssProvider *provider,
+    guint priority) {
   if (main_window->settings_dialog == nullptr || provider == nullptr) {
     return;
   }
-
-  add_settings_exterior_background_class(
-      main_window->settings_dialog);
-  add_settings_exterior_background_class(
-      main_window->settings_widget_root);
   GdkScreen *screen =
       gtk_widget_get_screen(main_window->settings_dialog);
   if (screen != nullptr) {
     gtk_style_context_add_provider_for_screen(
         screen, GTK_STYLE_PROVIDER(provider),
-        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+        priority);
   }
 }
 
+static void remove_main_window_settings_exterior_background(
+    MainWindow *main_window) {
+  GtkCssProvider *provider =
+      main_window->settings_exterior_background_provider;
+  if (provider == nullptr) {
+    return;
+  }
+  remove_main_window_settings_provider(main_window, provider);
+  update_settings_exterior_control_classes(main_window, false);
+}
+
+static void add_main_window_settings_exterior_background(
+    MainWindow *main_window) {
+  GtkCssProvider *provider =
+      main_window->settings_exterior_background_provider;
+  if (provider == nullptr) {
+    return;
+  }
+  update_settings_exterior_control_classes(main_window, true);
+  add_main_window_settings_provider(
+      main_window, provider,
+      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+}
+
+static void remove_main_window_settings_background(
+    MainWindow *main_window) {
+  GtkCssProvider *provider = main_window->settings_background_provider;
+  if (provider == nullptr) {
+    return;
+  }
+  remove_main_window_settings_provider(main_window, provider);
+  update_settings_background_class(main_window, false);
+}
+
+static void add_main_window_settings_background(MainWindow *main_window) {
+  GtkCssProvider *provider = main_window->settings_background_provider;
+  if (provider == nullptr) {
+    return;
+  }
+  update_settings_background_class(main_window, true);
+  add_main_window_settings_provider(
+      main_window, provider,
+      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+}
+
 static void clear_main_window_exterior_background(MainWindow *main_window) {
-  remove_main_window_settings_background(main_window);
+  remove_main_window_settings_exterior_background(main_window);
   GtkCssProvider *provider =
       main_window->exterior_background_provider;
   if (provider != nullptr) {
@@ -557,6 +641,12 @@ static void clear_main_window_exterior_background(MainWindow *main_window) {
   g_clear_object(&main_window->exterior_background_provider);
   g_clear_object(
       &main_window->settings_exterior_background_provider);
+}
+
+static void clear_main_window_settings_background(
+    MainWindow *main_window) {
+  remove_main_window_settings_background(main_window);
+  g_clear_object(&main_window->settings_background_provider);
 }
 
 static void set_main_window_exterior_background(
@@ -589,11 +679,26 @@ static void set_main_window_exterior_background(
       main_window->settings_button, provider);
   add_main_window_exterior_provider(
       main_window->status_bar, provider);
+  add_main_window_settings_exterior_background(main_window);
+}
+
+static void set_main_window_settings_background(
+    MainWindow *main_window, const std::optional<RgbColor> &color) {
+  clear_main_window_settings_background(main_window);
+  if (!color.has_value()) {
+    return;
+  }
+
+  main_window->settings_background_provider =
+      create_scoped_widget_background_provider(
+          color.value(), settings_background_style_class,
+          "settings");
   add_main_window_settings_background(main_window);
 }
 
 static void set_main_window_terminal_background(
     MainWindow *main_window, const std::optional<RgbColor> &color) {
+  set_main_window_settings_background(main_window, color);
   if (main_window->terminal == nullptr) {
     return;
   }
@@ -968,13 +1073,19 @@ void set_main_window_settings_dialog(
     return;
   }
 
-  if (main_window->settings_exterior_background_provider != nullptr) {
+  if (main_window->settings_background_provider != nullptr) {
     remove_main_window_settings_background(main_window);
+  }
+  if (main_window->settings_exterior_background_provider != nullptr) {
+    remove_main_window_settings_exterior_background(main_window);
   }
   main_window->settings_dialog = dialog;
   main_window->settings_widget_root = settings_root;
-  if (main_window->settings_exterior_background_provider != nullptr) {
+  if (main_window->settings_background_provider != nullptr) {
     add_main_window_settings_background(main_window);
+  }
+  if (main_window->settings_exterior_background_provider != nullptr) {
+    add_main_window_settings_exterior_background(main_window);
   }
 }
 
@@ -1044,6 +1155,7 @@ void set_main_window_terminal_interactive(MainWindow *main_window,
   if (main_window == nullptr) {
     return;
   }
+  main_window->terminal_interactive = interactive;
   if (main_window->terminal == nullptr) {
     return;
   }
@@ -1051,6 +1163,17 @@ void set_main_window_terminal_interactive(MainWindow *main_window,
   vte_terminal_set_input_enabled(VTE_TERMINAL(main_window->terminal),
                                  interactive);
   set_main_window_terminal_dim_visible(main_window, !interactive);
+}
+
+void focus_main_window_terminal_if_interactive(MainWindow *main_window) {
+  if (main_window == nullptr || !main_window->terminal_interactive ||
+      main_window->terminal == nullptr ||
+      !gtk_widget_get_visible(main_window->terminal) ||
+      !gtk_widget_get_mapped(main_window->terminal)) {
+    return;
+  }
+
+  gtk_widget_grab_focus(main_window->terminal);
 }
 
 cardio::promise<SshUserPromptResponse> prompt_main_window_ssh_async(
@@ -1281,6 +1404,7 @@ void release_main_window(MainWindow *main_window) {
   stop_main_window_transfer_progress_pulse(main_window);
   deactivate_main_window_activity_indicators(main_window);
   clear_main_window_exterior_background(main_window);
+  clear_main_window_settings_background(main_window);
   g_clear_object(&main_window->indicator_on_icon);
   g_clear_object(&main_window->indicator_off_icon);
   if (main_window->builder != nullptr) {

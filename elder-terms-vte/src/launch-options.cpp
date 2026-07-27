@@ -61,6 +61,12 @@ LaunchOptions parse_launch_options(int *argc, char **argv) {
       continue;
     }
 
+    if (argument == "--test-focus-transfer-on-sftp-open") {
+      options.test.focus_transfer_on_sftp_open = true;
+      ++index;
+      continue;
+    }
+
     static constexpr const char ssh_prompt_option[] =
         "--test-ssh-prompt=";
     if (argument.rfind(ssh_prompt_option, 0) == 0) {

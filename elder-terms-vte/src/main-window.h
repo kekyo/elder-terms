@@ -104,14 +104,16 @@ struct MainWindow {
   GtkWidget *status_label = nullptr;
   /** Status bar activity indicator container. */
   GtkWidget *activity_indicator_bar = nullptr;
-  /** Open runtime settings dialog receiving the exterior background. */
+  /** Open runtime settings dialog receiving connection backgrounds. */
   GtkWidget *settings_dialog = nullptr;
-  /** Root of the open settings widget receiving the exterior background. */
+  /** Root of the open settings widget receiving connection backgrounds. */
   GtkWidget *settings_widget_root = nullptr;
   /** Provider applying the configured header-bar and status-bar background. */
   GtkCssProvider *exterior_background_provider = nullptr;
-  /** Screen provider scoped to the open settings dialog and its popups. */
+  /** Screen provider scoped to Settings title and selection controls. */
   GtkCssProvider *settings_exterior_background_provider = nullptr;
+  /** Screen provider scoped to Settings content surfaces. */
+  GtkCssProvider *settings_background_provider = nullptr;
   /** True after overriding VTE's default background color. */
   bool terminal_background_overridden = false;
   /** Activity indicator containers. */
@@ -134,6 +136,8 @@ struct MainWindow {
   std::string base_title = "elder-terms-vte";
   /** True while the backend connection is currently active. */
   bool connection_active = false;
+  /** True when the VTE may accept input and own keyboard focus. */
+  bool terminal_interactive = false;
   /** Current backend connection lifecycle phase. */
   TerminalSessionConnectionPhase connection_phase =
       TerminalSessionConnectionPhase::disconnected;
@@ -160,9 +164,9 @@ void set_main_window_colors(MainWindow *main_window,
                             const GeneralColorSettings &settings);
 
 /**
- * Registers the open runtime settings dialog for exterior color updates.
+ * Registers the open runtime settings dialog for connection color updates.
  *
- * @param main_window Main window owning the exterior color provider.
+ * @param main_window Main window owning the connection color providers.
  * @param dialog Open GtkDialog, or null after it is destroyed.
  * @param settings_root Root settings widget, or null after it is destroyed.
  */
@@ -216,6 +220,14 @@ void set_main_window_connection_phase(MainWindow *main_window,
  */
 void set_main_window_terminal_interactive(MainWindow *main_window,
                                           bool interactive);
+
+/**
+ * Gives keyboard focus to VTE when its current presentation is interactive.
+ *
+ * @param main_window Main window containing the VTE terminal.
+ * @remarks Hidden, unmapped, and read-only terminal states are left unchanged.
+ */
+void focus_main_window_terminal_if_interactive(MainWindow *main_window);
 
 /**
  * Displays one SSH question as an overlay on the dimmed VTE surface.

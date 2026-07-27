@@ -27,6 +27,8 @@ struct TestOptions {
   bool sftp_pause_transfer = false;
   /** True when an integrated fixture SFTP window starts disconnected. */
   bool shared_sftp_disconnected = false;
+  /** True when opening fixture SFTP leaves main-window focus on Transfer. */
+  bool focus_transfer_on_sftp_open = false;
 };
 
 /**

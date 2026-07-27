@@ -1178,7 +1178,7 @@ describe.concurrent('elder-terms-vte settings', () => {
               await app.getById('settings_widget_root')
             ).capture();
             expect(capturePixel(settingsRootCapture, 0.01, 0.5)).toEqual(
-              exterior
+              background
             );
             await app.input.moveMouseTo(
               Math.trunc(
@@ -1193,8 +1193,9 @@ describe.concurrent('elder-terms-vte settings', () => {
             await toPass(async () => {
               expectRgbNear(
                 capturePixel(await generalTab.capture(), 0.9, 0.5),
-                exterior,
-                12
+                background,
+                // GTK brightens the active notebook tab by 15 RGB levels.
+                15
               );
             });
             const settingsDialog = expectElementKind(

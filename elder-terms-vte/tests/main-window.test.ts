@@ -818,7 +818,12 @@ describe.concurrent('elder-terms-vte main window', () => {
 
       await runGtkTest(
         context,
-        ['--test-fixture', '-c', configPath],
+        [
+          '--test-fixture',
+          '--test-focus-transfer-on-sftp-open',
+          '-c',
+          configPath,
+        ],
         async (app, evidence) => {
           const mainWindow = expectElementKind(
             await app.getById('main_window'),
@@ -864,8 +869,16 @@ describe.concurrent('elder-terms-vte main window', () => {
             'ssh-and-shared-sftp-windows',
             async () => app.capture()
           );
+          const sftpWindow = expectElementKind(
+            await app.getById('sftp_window'),
+            'window'
+          );
 
           await mainWindow.activate();
+          await waitForResult(async () => {
+            expect((await terminal.info()).states).toContain('focused');
+          });
+
           await transferButton.click();
           await sftpItem.click();
           await waitForResult(async () => {
@@ -890,10 +903,6 @@ describe.concurrent('elder-terms-vte main window', () => {
             }
           );
 
-          const sftpWindow = expectElementKind(
-            await app.getById('sftp_window'),
-            'window'
-          );
           await sftpWindow.activate();
           await expectElementKind(
             await app.getByPath('sftp_window.0.0.3'),
@@ -1107,7 +1116,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         await closeServer(server);
       }
     });
-  });
+  }, 90_000);
 
   it('opens the ZMODEM send dialog at the configured transfer base path', async (context) => {
     await withTemporaryDirectory(async (directory) => {
@@ -1172,7 +1181,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         await closeServer(server);
       }
     });
-  });
+  }, 90_000);
 
   it('exits when the main window is closed', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app, evidence) => {

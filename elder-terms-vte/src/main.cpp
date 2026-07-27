@@ -250,17 +250,27 @@ static void set_application_indicator_state(
 
 static void restore_terminal_focus(ApplicationState *state) {
   if (state == nullptr || state->window == nullptr ||
-      state->main_window == nullptr || state->main_window->terminal == nullptr) {
+      state->main_window == nullptr) {
     return;
   }
 
-  if (!gtk_widget_get_visible(state->window) ||
-      !gtk_widget_get_visible(state->main_window->terminal)) {
+  if (!gtk_widget_get_visible(state->window)) {
     return;
   }
 
   gtk_window_present(GTK_WINDOW(state->window));
-  gtk_widget_grab_focus(state->main_window->terminal);
+  elder_terms::focus_main_window_terminal_if_interactive(
+      state->main_window);
+}
+
+static gboolean on_main_window_focus_in(
+    GtkWidget *, GdkEventFocus *, gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state != nullptr) {
+    elder_terms::focus_main_window_terminal_if_interactive(
+        state->main_window);
+  }
+  return GDK_EVENT_PROPAGATE;
 }
 
 static void on_main_window_destroy(GtkWidget *, gpointer user_data) {
@@ -805,6 +815,11 @@ static cardio::promise<void> open_shared_sftp_window_async(
         });
     state->sftp_opening = false;
     elder_terms::show_sftp_window(state->sftp_window);
+    if (state->test_options.focus_transfer_on_sftp_open &&
+        state->window != nullptr) {
+      gtk_window_set_focus(
+          GTK_WINDOW(state->window), state->main_window->transfer_button);
+    }
     if (state->test_options.shared_sftp_disconnected ||
         state->connection_phase ==
             elder_terms::TerminalSessionConnectionPhase::disconnected) {
@@ -1218,6 +1233,9 @@ int main(int argc, char **argv) {
   g_signal_connect(
     main_window->window, "destroy",
     G_CALLBACK(on_main_window_destroy), &app_state);
+  g_signal_connect_after(
+    main_window->window, "focus-in-event",
+    G_CALLBACK(on_main_window_focus_in), &app_state);
   g_signal_connect(
     main_window->settings_button, "clicked",
     G_CALLBACK(on_settings_button_clicked), &app_state);
@@ -1240,8 +1258,9 @@ int main(int argc, char **argv) {
         elder_terms::TerminalSessionConnectionPhase::disconnected);
   }
 
-  gtk_widget_grab_focus(main_window->terminal);
   gtk_widget_show_all(main_window->window);
+  elder_terms::focus_main_window_terminal_if_interactive(
+      &*main_window);
 
   elder_terms::start_terminal_layout(app_state.layout_state);
   if (launch_options.test.ssh_prompt.has_value()) {
