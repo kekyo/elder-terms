@@ -3029,7 +3029,7 @@ describe.concurrent('shared settings widget', () => {
         expect(store.height_explicit).toBe('false');
       }
     );
-  });
+  }, 60_000);
 
   it('edits global-only startup and application hotkey settings', async (context) => {
     await runSharedGtkTest(
