@@ -1365,12 +1365,17 @@ create_sftp_window(SftpWindowOptions options) {
   gtk_paned_pack2(GTK_PANED(state->paned), remote, TRUE, FALSE);
   gtk_paned_set_position(GTK_PANED(state->paned), 520);
 
-  state->status_bar =
-      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  state->status_bar = gtk_event_box_new();
+  gtk_event_box_set_visible_window(
+      GTK_EVENT_BOX(state->status_bar), TRUE);
   gestament_gtk_assign_accessible_id(
       state->status_bar, "sftp_status_bar");
+  GtkWidget *status_content =
+      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_container_set_border_width(
-      GTK_CONTAINER(state->status_bar), 6);
+      GTK_CONTAINER(status_content), 6);
+  gtk_container_add(
+      GTK_CONTAINER(state->status_bar), status_content);
   gtk_box_pack_start(
       GTK_BOX(content), state->status_bar, FALSE, TRUE, 0);
   state->status_label = gtk_label_new("Ready");
@@ -1378,7 +1383,7 @@ create_sftp_window(SftpWindowOptions options) {
       state->status_label, "sftp_status_label");
   gtk_label_set_xalign(GTK_LABEL(state->status_label), 0.0F);
   gtk_box_pack_start(
-      GTK_BOX(state->status_bar), state->status_label, TRUE, TRUE, 0);
+      GTK_BOX(status_content), state->status_label, TRUE, TRUE, 0);
 
   state->dim_overlay = gtk_event_box_new();
   gestament_gtk_assign_accessible_id(

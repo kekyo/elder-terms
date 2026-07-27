@@ -12,6 +12,7 @@ import type {
   GtkKeyInput,
   GtkMenuItemElement,
   GtkWidgetElement,
+  GtkWindowElement,
 } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
@@ -52,6 +53,9 @@ const connectionColorsDefaultFixturePath = fileURLToPath(
 );
 const connectionColorsSettingsFixturePath = fileURLToPath(
   new URL('./fixtures/connection-colors-settings-dialog.png', import.meta.url)
+);
+const connectionColorsSettingsDropdownFixturePath = fileURLToPath(
+  new URL('./fixtures/connection-colors-settings-dropdown.png', import.meta.url)
 );
 
 const shellQuote = (value: string): string =>
@@ -289,6 +293,35 @@ const selectSettingsNotebookTab = async (
   throw new Error(`Settings notebook tab was not found: ${tabName}`);
 };
 
+const openComboBoxPopup = async (
+  app: GtkApp,
+  combo: GtkWidgetElement
+): Promise<GtkWindowElement> => {
+  const screenBounds = (await app.capture()).visibleBounds;
+  const initialWindowCount = await app.getWindowCount();
+  await expectElementKind(combo, 'comboBox').click();
+  return waitForResult(async () => {
+    const windowCount = await app.getWindowCount();
+    expect(windowCount).toBeGreaterThan(initialWindowCount);
+    for (let index = initialWindowCount; index < windowCount; ++index) {
+      const popup = await app.windowAt(index);
+      if (popup === undefined || popup.kind !== 'window') {
+        continue;
+      }
+      const bounds = await popup.bounds();
+      if (
+        bounds.x < screenBounds.x + screenBounds.width &&
+        bounds.x + bounds.width > screenBounds.x &&
+        bounds.y < screenBounds.y + screenBounds.height &&
+        bounds.y + bounds.height > screenBounds.y
+      ) {
+        return popup;
+      }
+    }
+    throw new Error('Visible ComboBox popup window was not exposed');
+  });
+};
+
 const expectSelectedConnectionType = async (
   app: GtkApp,
   expectedName: string
@@ -386,6 +419,58 @@ const capturePixel = (
     png.data[offset + 1] ?? 0,
     png.data[offset + 2] ?? 0,
   ];
+};
+
+const captureVisibleScreenRegion = async (
+  app: GtkApp,
+  element: GtkWindowElement
+): Promise<GtkCapture> => {
+  const [screen, elementBounds] = await Promise.all([
+    app.capture(),
+    element.bounds(),
+  ]);
+  const left = Math.max(elementBounds.x, screen.visibleBounds.x);
+  const top = Math.max(elementBounds.y, screen.visibleBounds.y);
+  const right = Math.min(
+    elementBounds.x + elementBounds.width,
+    screen.visibleBounds.x + screen.visibleBounds.width
+  );
+  const bottom = Math.min(
+    elementBounds.y + elementBounds.height,
+    screen.visibleBounds.y + screen.visibleBounds.height
+  );
+  if (right <= left || bottom <= top) {
+    throw new Error('Element does not intersect the captured screen');
+  }
+
+  const source = PNG.sync.read(screen.image) as PngImage;
+  const width = right - left;
+  const height = bottom - top;
+  const cropped = new PNG({ width, height }) as PngImage;
+  const sourceStartX = left - screen.visibleBounds.x;
+  const sourceStartY = top - screen.visibleBounds.y;
+  for (let y = 0; y < height; ++y) {
+    const sourceOffset = ((sourceStartY + y) * source.width + sourceStartX) * 4;
+    const targetOffset = y * width * 4;
+    source.data.copy(
+      cropped.data,
+      targetOffset,
+      sourceOffset,
+      sourceOffset + width * 4
+    );
+  }
+
+  const visibleBounds = { x: left, y: top, width, height };
+  return {
+    image: PNG.sync.write(cropped),
+    bounds: elementBounds,
+    visibleBounds,
+    clipped:
+      visibleBounds.x !== elementBounds.x ||
+      visibleBounds.y !== elementBounds.y ||
+      visibleBounds.width !== elementBounds.width ||
+      visibleBounds.height !== elementBounds.height,
+  };
 };
 
 const expectRgbNear = (
@@ -1126,6 +1211,45 @@ describe.concurrent('elder-terms-vte settings', () => {
               connectionColorsSettingsFixturePath,
               evidence
             );
+
+            const settingsHeader = await app.findById(
+              'settings_dialog_header_bar'
+            );
+            const settingsHeaderColor =
+              settingsHeader === undefined
+                ? undefined
+                : capturePixel(await settingsHeader.capture(), 0.1, 0.5);
+            const backgroundModeCombo = expectElementKind(
+              await app.getById('settings_general_background_mode_combo'),
+              'comboBox'
+            );
+            const backgroundModeComboColor = capturePixel(
+              await backgroundModeCombo.capture(),
+              0.5,
+              0.5
+            );
+            const dropdown = await openComboBoxPopup(app, backgroundModeCombo);
+            const dropdownCapture = await evidence.captureEvidence(
+              'connection-colors-settings-dropdown',
+              async () => captureVisibleScreenRegion(app, dropdown)
+            );
+            const dropdownColor = capturePixel(dropdownCapture, 0.8, 0.5);
+            expect({
+              settingsHeader: settingsHeaderColor,
+              backgroundModeCombo: backgroundModeComboColor,
+              dropdown: dropdownColor,
+            }).toEqual({
+              settingsHeader: exterior,
+              backgroundModeCombo: exterior,
+              dropdown: exterior,
+            });
+            await expectCaptureToMatchFixture(
+              dropdownCapture,
+              'connection-colors-settings-dropdown',
+              connectionColorsSettingsDropdownFixturePath,
+              evidence
+            );
+            await app.input.pressKey('Escape');
 
             await expectElementKind(
               await app.getById(

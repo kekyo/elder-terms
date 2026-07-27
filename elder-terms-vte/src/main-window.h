@@ -110,6 +110,8 @@ struct MainWindow {
   GtkWidget *settings_widget_root = nullptr;
   /** Provider applying the configured header-bar and status-bar background. */
   GtkCssProvider *exterior_background_provider = nullptr;
+  /** Screen provider scoped to the open settings dialog and its popups. */
+  GtkCssProvider *settings_exterior_background_provider = nullptr;
   /** True after overriding VTE's default background color. */
   bool terminal_background_overridden = false;
   /** Activity indicator containers. */

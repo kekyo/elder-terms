@@ -433,6 +433,13 @@ static void open_settings_dialog(ApplicationState *state) {
   GtkWidget *dialog = gtk_dialog_new();
   gestament_gtk_assign_accessible_id(dialog, "settings_dialog");
   gtk_window_set_title(GTK_WINDOW(dialog), "Settings");
+  GtkWidget *header_bar = gtk_header_bar_new();
+  gestament_gtk_assign_accessible_id(
+      header_bar, "settings_dialog_header_bar");
+  gtk_header_bar_set_title(GTK_HEADER_BAR(header_bar), "Settings");
+  gtk_header_bar_set_show_close_button(
+      GTK_HEADER_BAR(header_bar), TRUE);
+  gtk_window_set_titlebar(GTK_WINDOW(dialog), header_bar);
   gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(state->window));
   gtk_window_set_default_size(GTK_WINDOW(dialog), 720, 420);
 

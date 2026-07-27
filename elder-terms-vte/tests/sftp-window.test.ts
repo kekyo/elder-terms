@@ -252,7 +252,11 @@ describe('SFTP window', () => {
         expect(capturePixel(await header.capture(), 0.08, 0.5)).toEqual([
           0x7a, 0x24, 0x68,
         ]);
-        expect(capturePixel(await status.capture(), 0.8, 0.5)).toEqual([
+        const statusCapture = await status.capture();
+        expect(capturePixel(statusCapture, 0.8, 0.5)).toEqual([
+          0x7a, 0x24, 0x68,
+        ]);
+        expect(capturePixel(statusCapture, 0.5, 0.05)).toEqual([
           0x7a, 0x24, 0x68,
         ]);
         expect(capturePixel(await localTree.capture(), 0.5, 0.8)).toEqual([
@@ -269,7 +273,6 @@ describe('SFTP window', () => {
         await waitForResult(async () => {
           expect((await localTree.info()).states).toContain('focused');
         });
-        const statusCapture = await status.capture();
         await app.input.moveMouseTo(
           Math.trunc(statusCapture.bounds.x + statusCapture.bounds.width * 0.8),
           Math.trunc(statusCapture.bounds.y + statusCapture.bounds.height / 2)
@@ -292,6 +295,7 @@ describe('SFTP window', () => {
           'sftp-connection-colors',
           async () => window.capture()
         );
+        expect(capturePixel(capture, 0.5, 0.952)).toEqual([0x7a, 0x24, 0x68]);
         await expectCaptureToMatchFixture(
           capture,
           'sftp-connection-colors',
