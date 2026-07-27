@@ -73,6 +73,8 @@ static void close_settings_dialog(ApplicationState *state);
 static void schedule_settings_dialog_close(ApplicationState *state);
 static void restore_terminal_focus(ApplicationState *state);
 static void start_shared_sftp_connection_check(ApplicationState *state);
+static void update_application_terminal_presentation(
+    ApplicationState *state);
 
 static void maybe_shutdown_application(ApplicationState *state) {
   if (state == nullptr || !state->terminal_shutdown_complete ||
@@ -112,6 +114,10 @@ run_ssh_prompt_fixture_async(ApplicationState *state,
   const elder_terms::SshUserPromptResponse response =
       co_await elder_terms::prompt_main_window_ssh_async(
           state->main_window, prompt, {});
+  if (response.accepted &&
+      prompt.kind == elder_terms::SshUserPromptKind::password) {
+    update_application_terminal_presentation(state);
+  }
   elder_terms::set_main_window_status_text(
       state->main_window,
       response.accepted ? "SSH prompt accepted" : "SSH prompt cancelled");
@@ -181,10 +187,15 @@ static void update_application_terminal_presentation(
     return;
   }
 
-  elder_terms::set_main_window_terminal_interactive(
-      state->main_window,
+  const bool terminal_interactive =
       state->connection_active && !state->transfer_active &&
-          state->settings_dialog == nullptr);
+      state->settings_dialog == nullptr;
+  elder_terms::set_main_window_terminal_interactive(
+      state->main_window, terminal_interactive);
+  if (terminal_interactive) {
+    elder_terms::focus_main_window_terminal_if_interactive(
+        state->main_window);
+  }
   elder_terms::set_main_window_transfer_button_sensitive(
       state->main_window,
       state->connection_active && !state->transfer_active);

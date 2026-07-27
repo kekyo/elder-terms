@@ -86,7 +86,7 @@ describe.concurrent('SSH prompt overlay', () => {
     );
   });
 
-  it('collects a password in the same overlay and keeps VTE read-only afterward', async (context) => {
+  it('collects a password and restores VTE focus after authentication', async (context) => {
     await runGtkTest(
       context,
       ['--test-fixture', '--test-ssh-prompt=password'],
@@ -100,6 +100,7 @@ describe.concurrent('SSH prompt overlay', () => {
           'entry'
         );
         const dim = await app.getById('terminal_dim_overlay');
+        const terminal = await app.getById('terminal_view');
 
         await expectShowing(panel);
         await expectShowing(entry);
@@ -112,7 +113,7 @@ describe.concurrent('SSH prompt overlay', () => {
         ).click();
 
         await expectHidden(panel);
-        await expectShowing(dim);
+        await expectHidden(dim);
         await toPass(async () => {
           expect(
             await expectElementKind(
@@ -120,6 +121,9 @@ describe.concurrent('SSH prompt overlay', () => {
               'label'
             ).text()
           ).toBe('SSH prompt accepted');
+        });
+        await toPass(async () => {
+          expect((await terminal.info()).states).toContain('focused');
         });
       }
     );
