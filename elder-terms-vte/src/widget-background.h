@@ -38,6 +38,17 @@ void add_widget_tree_background_provider(
     GtkWidget *widget, GtkCssProvider *provider);
 
 /**
+ * Adds one background provider at an explicit priority to a widget tree.
+ *
+ * @param widget Root widget whose tree receives the provider.
+ * @param provider Background provider to add.
+ * @param priority GTK style provider priority used for every widget.
+ * @remarks Internal children are included so compound controls are painted.
+ */
+void add_widget_tree_background_provider_at_priority(
+    GtkWidget *widget, GtkCssProvider *provider, guint priority);
+
+/**
  * Removes one background provider from a widget and all GTK children.
  *
  * @param widget Root widget whose tree loses the provider.

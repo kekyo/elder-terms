@@ -3121,6 +3121,8 @@ static GtkWidget *create_logging_page(SettingsWidgetState *state) {
 }
 
 static GtkWidget *create_button_box(SettingsWidgetState *state) {
+  GtkWidget *panel =
+      gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   GtkWidget *button_box = gtk_button_box_new(GTK_ORIENTATION_HORIZONTAL);
   const std::string action_row_id = widget_id(state, "action_row");
   assign_accessible_id(button_box, action_row_id.c_str());
@@ -3158,7 +3160,9 @@ static GtkWidget *create_button_box(SettingsWidgetState *state) {
                    G_CALLBACK(on_cancel_clicked), state);
   gtk_container_add(GTK_CONTAINER(button_box), state->cancel_button);
 
-  return button_box;
+  gtk_box_pack_start(
+      GTK_BOX(panel), button_box, TRUE, TRUE, 0);
+  return panel;
 }
 
 SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {

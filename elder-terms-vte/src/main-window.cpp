@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -521,9 +522,15 @@ static void update_settings_exterior_control_classes_callback(
   if (widget == nullptr || update == nullptr) {
     return;
   }
-  if (GTK_IS_COMBO_BOX(widget) || GTK_IS_BUTTON_BOX(widget)) {
+  if (GTK_IS_COMBO_BOX(widget)) {
     update_widget_style_class(
         widget, update->style_class, update->enabled);
+    return;
+  }
+  if (GTK_IS_BUTTON_BOX(widget)) {
+    update_widget_style_class(
+        gtk_widget_get_parent(widget),
+        update->style_class, update->enabled);
     return;
   }
   if (GTK_IS_CONTAINER(widget)) {
@@ -649,6 +656,51 @@ static void clear_main_window_settings_background(
   g_clear_object(&main_window->settings_background_provider);
 }
 
+static std::array<GtkWidget *, 3>
+main_window_overlay_panels(MainWindow *main_window) {
+  return {
+      main_window->ssh_prompt_panel,
+      main_window->disconnected_notice,
+      main_window->transfer_progress_overlay,
+  };
+}
+
+static void clear_main_window_overlay_background(
+    MainWindow *main_window) {
+  GtkCssProvider *provider =
+      main_window->overlay_background_provider;
+  if (provider == nullptr) {
+    return;
+  }
+
+  for (GtkWidget *panel : main_window_overlay_panels(main_window)) {
+    remove_widget_tree_background_provider(panel, provider);
+  }
+  g_clear_object(&main_window->overlay_background_provider);
+}
+
+static void set_main_window_overlay_background(
+    MainWindow *main_window, const std::optional<RgbColor> &color) {
+  clear_main_window_overlay_background(main_window);
+  if (!color.has_value()) {
+    return;
+  }
+
+  GtkCssProvider *provider =
+      create_widget_background_provider(
+          color.value(), "terminal overlay");
+  if (provider == nullptr) {
+    return;
+  }
+
+  main_window->overlay_background_provider = provider;
+  for (GtkWidget *panel : main_window_overlay_panels(main_window)) {
+    add_widget_tree_background_provider_at_priority(
+        panel, provider,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+  }
+}
+
 static void set_main_window_exterior_background(
     MainWindow *main_window, const std::optional<RgbColor> &color) {
   clear_main_window_exterior_background(main_window);
@@ -699,6 +751,7 @@ static void set_main_window_settings_background(
 static void set_main_window_terminal_background(
     MainWindow *main_window, const std::optional<RgbColor> &color) {
   set_main_window_settings_background(main_window, color);
+  set_main_window_overlay_background(main_window, color);
   if (main_window->terminal == nullptr) {
     return;
   }
@@ -1405,6 +1458,7 @@ void release_main_window(MainWindow *main_window) {
   deactivate_main_window_activity_indicators(main_window);
   clear_main_window_exterior_background(main_window);
   clear_main_window_settings_background(main_window);
+  clear_main_window_overlay_background(main_window);
   g_clear_object(&main_window->indicator_on_icon);
   g_clear_object(&main_window->indicator_off_icon);
   if (main_window->builder != nullptr) {

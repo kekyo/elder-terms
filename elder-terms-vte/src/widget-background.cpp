@@ -51,14 +51,27 @@ GtkCssProvider *create_scoped_widget_background_provider(
       color, class_selector + ", " + class_selector + " *", target_name);
 }
 
-static void add_widget_tree_background_provider_callback(
-    GtkWidget *widget, gpointer data) {
-  add_widget_tree_background_provider(
-      widget, GTK_CSS_PROVIDER(data));
-}
-
 void add_widget_tree_background_provider(
     GtkWidget *widget, GtkCssProvider *provider) {
+  add_widget_tree_background_provider_at_priority(
+      widget, provider, GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+}
+
+struct WidgetTreeBackgroundProvider {
+  GtkCssProvider *provider = nullptr;
+  guint priority = GTK_STYLE_PROVIDER_PRIORITY_APPLICATION;
+};
+
+static void add_widget_tree_background_provider_callback(
+    GtkWidget *widget, gpointer data) {
+  auto *registration =
+      static_cast<WidgetTreeBackgroundProvider *>(data);
+  add_widget_tree_background_provider_at_priority(
+      widget, registration->provider, registration->priority);
+}
+
+void add_widget_tree_background_provider_at_priority(
+    GtkWidget *widget, GtkCssProvider *provider, guint priority) {
   if (widget == nullptr || provider == nullptr) {
     return;
   }
@@ -66,11 +79,15 @@ void add_widget_tree_background_provider(
   gtk_style_context_add_provider(
       gtk_widget_get_style_context(widget),
       GTK_STYLE_PROVIDER(provider),
-      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+      priority);
   if (GTK_IS_CONTAINER(widget)) {
+    WidgetTreeBackgroundProvider registration{
+        .provider = provider,
+        .priority = priority,
+    };
     gtk_container_forall(
         GTK_CONTAINER(widget),
-        add_widget_tree_background_provider_callback, provider);
+        add_widget_tree_background_provider_callback, &registration);
   }
 }
 

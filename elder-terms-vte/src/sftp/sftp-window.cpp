@@ -1307,6 +1307,9 @@ static void clear_sftp_window_colors(SftpWindow *window) {
   if (window->background_provider != nullptr) {
     remove_widget_tree_background_provider(
         window->paned, window->background_provider);
+    remove_widget_tree_background_provider(
+        window->transfer_overlay,
+        window->background_provider);
     g_clear_object(&window->background_provider);
   }
 }
@@ -1507,6 +1510,10 @@ void set_sftp_window_colors(
             settings.background.value(), "SFTP browser");
     add_widget_tree_background_provider(
         window->paned, window->background_provider);
+    add_widget_tree_background_provider_at_priority(
+        window->transfer_overlay,
+        window->background_provider,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
   }
 }
 

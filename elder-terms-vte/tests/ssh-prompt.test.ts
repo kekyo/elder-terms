@@ -1,8 +1,19 @@
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { GtkApp, GtkWidgetElement } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { toPass } from 'gestament/testing';
-import { expectElementKind } from './test-helpers';
-import { runGtkTest } from './gtk-test-helpers';
+import {
+  capturePixel,
+  expectCaptureToMatchFixture,
+  expectElementKind,
+} from './test-helpers';
+import { runGtkTest, withTemporaryDirectory } from './gtk-test-helpers';
+
+const connectionColorsSshPromptFixturePath = fileURLToPath(
+  new URL('./fixtures/connection-colors-ssh-prompt.png', import.meta.url)
+);
 
 const expectShowing = async (element: GtkWidgetElement): Promise<void> => {
   await toPass(async () => {
@@ -87,45 +98,92 @@ describe.concurrent('SSH prompt overlay', () => {
   });
 
   it('collects a password and restores VTE focus after authentication', async (context) => {
-    await runGtkTest(
-      context,
-      ['--test-fixture', '--test-ssh-prompt=password'],
-      async (app) => {
-        const panel = expectElementKind(
-          await app.getById('ssh_prompt_panel'),
-          'container'
-        );
-        const entry = expectElementKind(
-          await app.getById('ssh_prompt_entry'),
-          'entry'
-        );
-        const dim = await app.getById('terminal_dim_overlay');
-        const terminal = await app.getById('terminal_view');
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'colored-ssh-prompt.ini');
+      const background = [0x60, 0x40, 0x20] as const;
+      await writeFile(
+        configPath,
+        [
+          '[general]',
+          'type=local',
+          'background=#604020',
+          '',
+          '[terminal]',
+          'auto_close=false',
+          '',
+        ].join('\n'),
+        'utf8'
+      );
 
-        await expectShowing(panel);
-        await expectShowing(entry);
-        await expectShowing(dim);
-        await expectOnlyMainWindow(app);
-        await entry.setText('fixture-secret');
-        await expectElementKind(
-          await app.getById('ssh_prompt_accept_button'),
-          'button'
-        ).click();
+      await runGtkTest(
+        context,
+        ['--test-fixture', '--test-ssh-prompt=password', '-c', configPath],
+        async (app, evidence) => {
+          const panel = expectElementKind(
+            await app.getById('ssh_prompt_panel'),
+            'container'
+          );
+          const entry = expectElementKind(
+            await app.getById('ssh_prompt_entry'),
+            'entry'
+          );
+          const dim = await app.getById('terminal_dim_overlay');
+          const terminal = await app.getById('terminal_view');
 
-        await expectHidden(panel);
-        await expectHidden(dim);
-        await toPass(async () => {
-          expect(
-            await expectElementKind(
-              await app.getById('status_label'),
-              'label'
-            ).text()
-          ).toBe('SSH prompt accepted');
-        });
-        await toPass(async () => {
-          expect((await terminal.info()).states).toContain('focused');
-        });
-      }
-    );
+          await expectShowing(panel);
+          await expectShowing(entry);
+          await expectShowing(dim);
+          await expectOnlyMainWindow(app);
+          for (const [widgetId, horizontalRatio] of [
+            ['ssh_prompt_panel', 0.05],
+            ['ssh_prompt_background', 0.05],
+            ['ssh_prompt_title_label', 0.95],
+            ['ssh_prompt_message_label', 0.95],
+            ['ssh_prompt_entry', 0.1],
+            ['ssh_prompt_actions', 0.05],
+            ['ssh_prompt_cancel_button', 0.15],
+            ['ssh_prompt_accept_button', 0.15],
+          ] as const) {
+            expect(
+              capturePixel(
+                await (await app.getById(widgetId)).capture(),
+                horizontalRatio,
+                0.5
+              )
+            ).toEqual(background);
+          }
+          const promptCapture = await evidence.captureEvidence(
+            'connection-colors-ssh-prompt',
+            async () => panel.capture()
+          );
+          await expectCaptureToMatchFixture(
+            promptCapture,
+            'connection-colors-ssh-prompt',
+            connectionColorsSshPromptFixturePath,
+            evidence
+          );
+
+          await entry.setText('fixture-secret');
+          await expectElementKind(
+            await app.getById('ssh_prompt_accept_button'),
+            'button'
+          ).click();
+
+          await expectHidden(panel);
+          await expectHidden(dim);
+          await toPass(async () => {
+            expect(
+              await expectElementKind(
+                await app.getById('status_label'),
+                'label'
+              ).text()
+            ).toBe('SSH prompt accepted');
+          });
+          await toPass(async () => {
+            expect((await terminal.info()).states).toContain('focused');
+          });
+        }
+      );
+    });
   });
 });

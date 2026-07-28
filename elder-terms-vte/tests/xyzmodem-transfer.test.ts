@@ -5,13 +5,18 @@ import { constants } from 'node:fs';
 import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { GtkApp, GtkToggleButtonElement } from 'gestament';
 import { describe, expect, it, type TestContext } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
-import { expectElementKind, type TestEvidence } from './test-helpers';
+import {
+  capturePixel,
+  expectCaptureToMatchFixture,
+  expectElementKind,
+  type TestEvidence,
+} from './test-helpers';
 import {
   activateTransferCancel,
   assertTerminalCaptureMatches,
@@ -37,6 +42,10 @@ import {
 
 type TransferProtocol = 'xmodem' | 'ymodem' | 'zmodem';
 type TransferDirection = 'send' | 'receive';
+
+const connectionColorsTransferOverlayFixturePath = fileURLToPath(
+  new URL('./fixtures/connection-colors-transfer-overlay.png', import.meta.url)
+);
 
 interface TransferFixture {
   readonly command: readonly string[];
@@ -1032,7 +1041,7 @@ const writeSshConfig = async (
       `port=${port}`,
       `username=${username}`,
       `identity_file=${identityFile}`,
-      'terminal_type=xterm-256color',
+      'terminal_type=xterm',
       '',
       '[transfer]',
       ...transferLines,
@@ -1040,6 +1049,21 @@ const writeSshConfig = async (
     ].join('\n'),
     'utf8'
   );
+};
+
+const addBackgroundColorToConfig = async (
+  path: string,
+  color: string
+): Promise<void> => {
+  const current = await readFile(path, 'utf8');
+  const updated = current.replace(
+    '[general]\n',
+    `[general]\nbackground=${color}\n`
+  );
+  if (updated === current) {
+    throw new Error('Transfer configuration has no [general] section');
+  }
+  await writeFile(path, updated, 'utf8');
 };
 
 const createTransferFixture = async (
@@ -1194,6 +1218,10 @@ const createTransferProgressPeerFixture = async (
 
   const remoteName = 'remote.bin';
   const remotePayloadPath = join(remoteDirectory, remoteName);
+  const automaticPauseArgs =
+    transferCase.protocol === 'zmodem' || transferCase.protocol === 'xmodem'
+      ? ['--pause-after-source-bytes', String(Math.floor(payload.length / 2))]
+      : [];
   const command = [
     xyzmPausePeerPath,
     '--protocol',
@@ -1210,9 +1238,7 @@ const createTransferProgressPeerFixture = async (
     resumePath,
     '--max-link-chunk',
     '1024',
-    ...(transferCase.protocol === 'zmodem'
-      ? ['--pause-after-source-bytes', String(Math.floor(payload.length / 2))]
-      : []),
+    ...automaticPauseArgs,
     ...transferProgressPeerLinkPaceArgs(transferCase),
   ] as const;
   await writeFile(remotePayloadPath, payload);
@@ -1812,6 +1838,34 @@ const pauseTransferAtProgressForCapture = async (
         threshold: 0.03,
       }
     );
+    return;
+  }
+
+  if (
+    transferCase.protocol === 'xmodem' &&
+    transferCase.direction === 'receive'
+  ) {
+    try {
+      await expectTransferProgressNoticeVisibleAtTerminalTopRight(app);
+      // Pause after acknowledged data so the XMODEM handshake cannot expire
+      // while GTK captures the stable progress notice.
+      await waitForFileExists(fixture.pausedPath, 10_000);
+      await delay(100);
+      await expectTransferEtaStatus(app, transferCase);
+      await assertTransferProgressNoticeMatches(
+        app,
+        evidence,
+        `transfer-progress-notice-${transferCase.protocol}-${transferCase.direction}`,
+        noticeCase.fixturePath,
+        {
+          maxDiffPixels: noticeCase.maxDiffPixels,
+          maxDiffRatio: 0.03,
+          threshold: 0.08,
+        }
+      );
+    } finally {
+      await resumeTransferProgressPeer(fixture);
+    }
     return;
   }
 
@@ -2461,31 +2515,18 @@ describe('elder-terms-vte XYZMODEM transfer progress notice e2e', () => {
               await expectDisconnectedNoticeHidden(app);
               await expectTransferProgressNoticeHidden(app);
 
-              if (transferCase.direction === 'send') {
-                await activateTransfer(app, transferCase);
-                await expectTransferButtonInsensitive(app);
-                await expectTransferProgressNoticeVisibleAtTerminalTopRight(
-                  app
-                );
-                await expectTransferCancelVisible(app);
-                await delay(transferProgressNoticeStartDelayMs);
-                if (transferCase.protocol === 'xmodem') {
-                  await requestTransferProgressPeerPause(fixture);
-                }
-                await writeFile(fixture.markerPath, 'start', 'utf8');
-              } else {
-                await activateTransfer(app, transferCase);
-                await expectTransferButtonInsensitive(app);
-                await expectTransferProgressNoticeVisibleAtTerminalTopRight(
-                  app
-                );
-                await expectTransferCancelVisible(app);
-                await delay(transferProgressNoticeStartDelayMs);
-                if (transferCase.protocol === 'xmodem') {
-                  await requestTransferProgressPeerPause(fixture);
-                }
-                await writeFile(fixture.markerPath, 'start', 'utf8');
+              await activateTransfer(app, transferCase);
+              await expectTransferButtonInsensitive(app);
+              await expectTransferProgressNoticeVisibleAtTerminalTopRight(app);
+              await expectTransferCancelVisible(app);
+              await delay(transferProgressNoticeStartDelayMs);
+              if (
+                transferCase.protocol === 'xmodem' &&
+                transferCase.direction === 'send'
+              ) {
+                await requestTransferProgressPeerPause(fixture);
               }
+              await writeFile(fixture.markerPath, 'start', 'utf8');
 
               await pauseTransferAtProgressForCapture(
                 app,
@@ -2542,6 +2583,8 @@ describe.concurrent(
               fixture.transferBasePath,
               undefined
             );
+            const background = [0x60, 0x40, 0x20] as const;
+            await addBackgroundColorToConfig(fixture.configPath, '#604020');
             const args = [
               '-c',
               fixture.configPath,
@@ -2559,6 +2602,38 @@ describe.concurrent(
               await activateTransfer(app, transferCase);
               await expectTransferButtonInsensitive(app);
               await expectTransferProgressNoticeVisibleAtTerminalTopRight(app);
+              for (const [widgetId, horizontalRatio] of [
+                ['transfer_progress_notice', 0.05],
+                ['transfer_progress_notice_background', 0.05],
+                ['transfer_progress_notice_label', 0.95],
+                ['transfer_progress_bar', 0.05],
+                ['transfer_cancel_button', 0.15],
+              ] as const) {
+                expect(
+                  capturePixel(
+                    await (await app.getById(widgetId)).capture(),
+                    horizontalRatio,
+                    0.5
+                  )
+                ).toEqual(background);
+              }
+              if (transferCase.protocol === 'zmodem') {
+                const overlay = await app.getById('transfer_progress_overlay');
+                const overlayCapture = await evidence.captureEvidence(
+                  'connection-colors-transfer-overlay',
+                  async () => overlay.capture()
+                );
+                await expectCaptureToMatchFixture(
+                  overlayCapture,
+                  'connection-colors-transfer-overlay',
+                  connectionColorsTransferOverlayFixturePath,
+                  evidence,
+                  {
+                    maxDiffPixels: 800,
+                    threshold: 0.01,
+                  }
+                );
+              }
 
               await activateTransferCancel(app);
 

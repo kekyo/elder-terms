@@ -1,7 +1,7 @@
 import { chmod, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { GtkApp, GtkCapture } from 'gestament';
 import { describe, expect, it } from 'vitest';
@@ -13,13 +13,14 @@ import {
 } from './clipboard-test-helpers';
 import {
   assertTerminalCaptureMatches,
-  assertDisconnectedNoticeMatches,
   expectDisconnectedNoticeHidden,
+  expectDisconnectedNoticeVisibleAtTerminalTopRight,
   expectMainWindowTitle,
   localTerminalDisconnectedDimPath,
   runGtkTest,
   withTemporaryDirectory,
 } from './gtk-test-helpers';
+import { capturePixel, expectCaptureToMatchFixture } from './test-helpers';
 import {
   activateTextSend,
   cancelTextSend,
@@ -29,6 +30,12 @@ import {
 
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
+const connectionColorsDisconnectedNoticeFixturePath = fileURLToPath(
+  new URL(
+    './fixtures/connection-colors-disconnected-notice.png',
+    import.meta.url
+  )
+);
 
 interface ExitingShellFixture {
   readonly markerPath: string;
@@ -344,7 +351,19 @@ describe.concurrent('elder-terms-vte local session', () => {
     await withTemporaryDirectory(async (directory) => {
       const shell = await createDelayedExitShellFixture(directory);
       const configPath = join(directory, 'auto-close-disabled.ini');
-      await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
+      const background = [0x60, 0x40, 0x20] as const;
+      await writeFile(
+        configPath,
+        [
+          '[general]',
+          'background=#604020',
+          '',
+          '[terminal]',
+          'auto_close=false',
+          '',
+        ].join('\n'),
+        'utf8'
+      );
 
       await runGtkTest(
         context,
@@ -359,7 +378,30 @@ describe.concurrent('elder-terms-vte local session', () => {
           await waitForShellExit(shell.markerPath);
           await waitForActivityIndicatorImageState(app, 'conn', 'off');
           await expectMainWindowTitle(app, `${connectedTitle} (Disconnected)`);
-          await assertDisconnectedNoticeMatches(app, evidence);
+          await expectDisconnectedNoticeVisibleAtTerminalTopRight(app);
+          for (const [widgetId, horizontalRatio] of [
+            ['disconnected_notice', 0.05],
+            ['disconnected_notice_background', 0.05],
+            ['disconnected_notice_label', 0.95],
+          ] as const) {
+            expect(
+              capturePixel(
+                await (await app.getById(widgetId)).capture(),
+                horizontalRatio,
+                0.5
+              )
+            ).toEqual(background);
+          }
+          const noticeCapture = await evidence.captureEvidence(
+            'connection-colors-disconnected-notice',
+            async () => (await app.getById('disconnected_notice')).capture()
+          );
+          await expectCaptureToMatchFixture(
+            noticeCapture,
+            'connection-colors-disconnected-notice',
+            connectionColorsDisconnectedNoticeFixturePath,
+            evidence
+          );
           await focusTerminal(app);
           await app.input.pressKey('z');
           await delay(300);

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, type TestContext } from 'vitest';
@@ -20,8 +21,46 @@ import {
   type GtkCaptureLookSimilarOptions,
   type GtkCaptureLookSimilarResult,
 } from 'gestament/testing';
+import type { PNG as PngImage } from 'pngjs';
 
+const require = createRequire(import.meta.url);
+const { PNG } = require('pngjs') as typeof import('pngjs');
 const maxPathSegmentLength = 120;
+
+/**
+ * One opaque RGB pixel sampled from a GTK capture.
+ */
+export type RgbPixel = readonly [red: number, green: number, blue: number];
+
+/**
+ * Samples one RGB pixel from a GTK capture.
+ *
+ * @param capture GTK capture containing PNG image data.
+ * @param horizontalRatio Horizontal position from 0 at the left to 1 at the right.
+ * @param verticalRatio Vertical position from 0 at the top to 1 at the bottom.
+ * @returns Sampled opaque RGB channels.
+ */
+export const capturePixel = (
+  capture: GtkCapture,
+  horizontalRatio: number,
+  verticalRatio: number
+): RgbPixel => {
+  const png = PNG.sync.read(capture.image) as PngImage;
+  const x = Math.min(
+    png.width - 1,
+    Math.max(0, Math.trunc(png.width * horizontalRatio))
+  );
+  const y = Math.min(
+    png.height - 1,
+    Math.max(0, Math.trunc(png.height * verticalRatio))
+  );
+  const offset = (y * png.width + x) * 4;
+  return [
+    png.data[offset] ?? 0,
+    png.data[offset + 1] ?? 0,
+    png.data[offset + 2] ?? 0,
+  ];
+};
 
 /**
  * Converts a date into the test result timestamp directory format.
@@ -597,13 +636,15 @@ export const expectElementKind = <Kind extends GtkWidgetKind>(
  * @param name Comparison and evidence name.
  * @param fixturePath Expected PNG path.
  * @param evidence Test evidence writer.
- * @returns Promise resolved after an exact visual comparison passes.
+ * @param options Optional visual comparison tolerances.
+ * @returns Promise resolved after the visual comparison passes.
  */
 export const expectCaptureToMatchFixture = async (
   capture: GtkCapture,
   name: string,
   fixturePath: string,
-  evidence: TestEvidence
+  evidence: TestEvidence,
+  options?: GtkCaptureLookSimilarOptions
 ): Promise<void> => {
   if (process.env.ELDER_TERMS_UPDATE_VTE_FIXTURES === '1') {
     await mkdir(dirname(fixturePath), { recursive: true });
@@ -616,5 +657,6 @@ export const expectCaptureToMatchFixture = async (
   await evidence.expectCaptureToLookSimilar(capture, name, fixturePath, {
     maxDiffPixels: 0,
     threshold: 0.01,
+    ...options,
   });
 };

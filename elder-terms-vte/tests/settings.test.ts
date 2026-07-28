@@ -421,6 +421,17 @@ const capturePixel = (
   ];
 };
 
+const capturePixelAtScreenPosition = (
+  capture: GtkCapture,
+  screenX: number,
+  screenY: number
+): RgbPixel =>
+  capturePixel(
+    capture,
+    (screenX - capture.bounds.x) / capture.bounds.width,
+    (screenY - capture.bounds.y) / capture.bounds.height
+  );
+
 const captureVisibleScreenRegion = async (
   app: GtkApp,
   element: GtkWindowElement
@@ -1202,6 +1213,38 @@ describe.concurrent('elder-terms-vte settings', () => {
               await app.getById('settings_action_row')
             ).capture();
             expect(capturePixel(actionRowCapture, 0.01, 0.5)).toEqual(exterior);
+            const actionRowCenterX =
+              actionRowCapture.bounds.x + actionRowCapture.bounds.width / 2;
+            const actionRowCenterY =
+              actionRowCapture.bounds.y + actionRowCapture.bounds.height / 2;
+            const actionPanelBorderSamples = [
+              capturePixelAtScreenPosition(
+                settingsRootCapture,
+                actionRowCapture.bounds.x - 6,
+                actionRowCenterY
+              ),
+              capturePixelAtScreenPosition(
+                settingsRootCapture,
+                actionRowCapture.bounds.x + actionRowCapture.bounds.width + 6,
+                actionRowCenterY
+              ),
+              capturePixelAtScreenPosition(
+                settingsRootCapture,
+                actionRowCenterX,
+                actionRowCapture.bounds.y - 6
+              ),
+              capturePixelAtScreenPosition(
+                settingsRootCapture,
+                actionRowCenterX,
+                actionRowCapture.bounds.y + actionRowCapture.bounds.height + 6
+              ),
+            ];
+            expect(actionPanelBorderSamples).toEqual([
+              exterior,
+              exterior,
+              exterior,
+              exterior,
+            ]);
             for (const buttonId of [
               'settings_apply_button',
               'settings_save_button',
