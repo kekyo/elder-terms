@@ -27,6 +27,8 @@ const execFileAsync = promisify(execFile);
 const clipboardReadHelperPath = fileURLToPath(
   new URL('../../.build/elder-terms-vte/clipboard-read-helper', import.meta.url)
 );
+const statusBarPadding = 2;
+const activityIndicatorBarEndMargin = 6;
 
 const transferMenuItems = [
   ['transfer_log_enabled_item', 'Log recording'],
@@ -415,38 +417,38 @@ describe.concurrent('elder-terms-vte main window', () => {
         statusBarCapture.bounds.y + statusBarCapture.bounds.height
       ).toBeLessThanOrEqual(mainBounds.y + mainBounds.height);
 
-      expect(statusLabelCapture.bounds.x).toBeGreaterThanOrEqual(
-        statusBarCapture.bounds.x
+      expect(statusLabelCapture.bounds.x - statusBarCapture.bounds.x).toBe(
+        statusBarPadding
+      );
+      expect(statusLabelCapture.bounds.y - statusBarCapture.bounds.y).toBe(
+        statusBarPadding
       );
       expect(
-        statusLabelCapture.bounds.x - statusBarCapture.bounds.x
-      ).toBeLessThanOrEqual(16);
-      expect(statusLabelCapture.bounds.y).toBeGreaterThanOrEqual(
-        statusBarCapture.bounds.y
-      );
+        statusBarCapture.bounds.y +
+          statusBarCapture.bounds.height -
+          (statusLabelCapture.bounds.y + statusLabelCapture.bounds.height)
+      ).toBe(statusBarPadding);
       expect(
-        statusLabelCapture.bounds.y + statusLabelCapture.bounds.height
-      ).toBeLessThanOrEqual(
-        statusBarCapture.bounds.y + statusBarCapture.bounds.height
-      );
+        activityIndicatorBarCapture.bounds.y - statusBarCapture.bounds.y
+      ).toBe(statusBarPadding);
+      expect(
+        statusBarCapture.bounds.y +
+          statusBarCapture.bounds.height -
+          (activityIndicatorBarCapture.bounds.y +
+            activityIndicatorBarCapture.bounds.height)
+      ).toBe(statusBarPadding);
+      expect(
+        statusBarCapture.bounds.x +
+          statusBarCapture.bounds.width -
+          (activityIndicatorBarCapture.bounds.x +
+            activityIndicatorBarCapture.bounds.width)
+      ).toBe(statusBarPadding + activityIndicatorBarEndMargin);
       expect(
         statusLabelCapture.bounds.x + statusLabelCapture.bounds.width
       ).toBeLessThanOrEqual(activityIndicatorBarCapture.bounds.x);
       expect(activityIndicatorBarCapture.bounds.x).toBeGreaterThan(
         statusLabelCapture.bounds.x
       );
-      expect(
-        activityIndicatorBarCapture.bounds.x +
-          activityIndicatorBarCapture.bounds.width
-      ).toBeLessThanOrEqual(
-        statusBarCapture.bounds.x + statusBarCapture.bounds.width
-      );
-      expect(
-        statusBarCapture.bounds.x +
-          statusBarCapture.bounds.width -
-          (activityIndicatorBarCapture.bounds.x +
-            activityIndicatorBarCapture.bounds.width)
-      ).toBeLessThanOrEqual(8);
       expect(connIndicatorBoxCapture.bounds.x).toBeLessThan(
         logIndicatorBoxCapture.bounds.x
       );
