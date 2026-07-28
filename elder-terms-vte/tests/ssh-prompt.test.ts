@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { GtkApp, GtkWidgetElement } from 'gestament';
@@ -100,6 +100,14 @@ describe.concurrent('SSH prompt overlay', () => {
   it('collects a password and restores VTE focus after authentication', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'colored-ssh-prompt.ini');
+      const gtkConfigHome = join(directory, 'gtk-config');
+      const gtkSettingsDirectory = join(gtkConfigHome, 'gtk-3.0');
+      await mkdir(gtkSettingsDirectory, { recursive: true });
+      await writeFile(
+        join(gtkSettingsDirectory, 'settings.ini'),
+        '[Settings]\ngtk-cursor-blink=false\n',
+        'utf8'
+      );
       const background = [0x60, 0x40, 0x20] as const;
       await writeFile(
         configPath,
@@ -182,6 +190,11 @@ describe.concurrent('SSH prompt overlay', () => {
           await toPass(async () => {
             expect((await terminal.info()).states).toContain('focused');
           });
+        },
+        {
+          env: {
+            XDG_CONFIG_HOME: gtkConfigHome,
+          },
         }
       );
     });
