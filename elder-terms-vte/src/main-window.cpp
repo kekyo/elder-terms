@@ -33,6 +33,7 @@ static constexpr const char *settings_exterior_background_style_class =
     "settings-exterior-background";
 static constexpr const char *settings_background_style_class =
     "settings-background";
+static constexpr const char *gtk_color_button_style_class = "color";
 static constexpr const char *ssh_prompt_background_style_class =
     "ssh-prompt-background";
 static constexpr const char *ssh_prompt_title_style_class =
@@ -719,7 +720,7 @@ static void set_main_window_exterior_background(
   GtkCssProvider *settings_provider =
       create_scoped_widget_background_provider(
           color.value(), settings_exterior_background_style_class,
-          "settings exterior");
+          nullptr, "settings exterior");
   main_window->exterior_background_provider = provider;
   main_window->settings_exterior_background_provider =
       settings_provider;
@@ -744,6 +745,7 @@ static void set_main_window_settings_background(
   main_window->settings_background_provider =
       create_scoped_widget_background_provider(
           color.value(), settings_background_style_class,
+          gtk_color_button_style_class,
           "settings");
   add_main_window_settings_background(main_window);
 }

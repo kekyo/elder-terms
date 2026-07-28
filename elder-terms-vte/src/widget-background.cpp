@@ -18,11 +18,9 @@ static std::string rgb_color_css(const RgbColor &color,
   return stream.str();
 }
 
-static GtkCssProvider *create_background_provider(
-    const RgbColor &color, const std::string &selector,
-    const char *target_name) {
+static GtkCssProvider *create_css_provider(
+    const std::string &css, const char *target_name) {
   GtkCssProvider *provider = gtk_css_provider_new();
-  const std::string css = rgb_color_css(color, selector);
   GError *error = nullptr;
   if (gtk_css_provider_load_from_data(provider, css.c_str(), -1, &error)) {
     return provider;
@@ -38,6 +36,13 @@ static GtkCssProvider *create_background_provider(
   return nullptr;
 }
 
+static GtkCssProvider *create_background_provider(
+    const RgbColor &color, const std::string &selector,
+    const char *target_name) {
+  return create_css_provider(
+      rgb_color_css(color, selector), target_name);
+}
+
 GtkCssProvider *create_widget_background_provider(
     const RgbColor &color, const char *target_name) {
   return create_background_provider(color, "*", target_name);
@@ -45,10 +50,17 @@ GtkCssProvider *create_widget_background_provider(
 
 GtkCssProvider *create_scoped_widget_background_provider(
     const RgbColor &color, const char *style_class,
+    const char *transparent_descendants_style_class,
     const char *target_name) {
   const std::string class_selector = "." + std::string(style_class);
-  return create_background_provider(
-      color, class_selector + ", " + class_selector + " *", target_name);
+  std::string css = rgb_color_css(
+      color, class_selector + ", " + class_selector + " *");
+  if (transparent_descendants_style_class != nullptr) {
+    css += class_selector + " ." +
+           std::string(transparent_descendants_style_class) +
+           " * { background-color: transparent; }";
+  }
+  return create_css_provider(css, target_name);
 }
 
 void add_widget_tree_background_provider(

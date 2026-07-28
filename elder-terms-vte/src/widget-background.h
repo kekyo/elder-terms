@@ -21,11 +21,16 @@ GtkCssProvider *create_widget_background_provider(
  *
  * @param color RGB color to paint.
  * @param style_class Style class whose node and descendants are painted.
+ * @param transparent_descendants_style_class Style class whose descendants
+ * retain transparent CSS backgrounds for custom drawing, or null when every
+ * descendant should be painted.
  * @param target_name Diagnostic name used when CSS parsing fails.
  * @returns Owned provider, or null when the CSS could not be loaded.
  */
 GtkCssProvider *create_scoped_widget_background_provider(
-    const RgbColor &color, const char *style_class, const char *target_name);
+    const RgbColor &color, const char *style_class,
+    const char *transparent_descendants_style_class,
+    const char *target_name);
 
 /**
  * Adds one background provider to a widget and all GTK children.

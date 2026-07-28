@@ -1209,6 +1209,18 @@ describe.concurrent('elder-terms-vte settings', () => {
                 15
               );
             });
+            const exteriorColorButton = await app.getById(
+              'settings_general_exterior_background_button'
+            );
+            const backgroundColorButton = await app.getById(
+              'settings_general_background_button'
+            );
+            expect(
+              capturePixel(await exteriorColorButton.capture(), 0.5, 0.5)
+            ).toEqual(exterior);
+            expect(
+              capturePixel(await backgroundColorButton.capture(), 0.5, 0.5)
+            ).toEqual(background);
             const actionRowCapture = await (
               await app.getById('settings_action_row')
             ).capture();

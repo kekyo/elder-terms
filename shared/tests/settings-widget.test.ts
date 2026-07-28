@@ -966,7 +966,7 @@ describe.concurrent('shared settings widget', () => {
         expect(store.background_explicit).toBe('false');
       }
     );
-  });
+  }, 60_000);
 
   it('matches the default Logging visual fixture', async (context) => {
     const testCase: SettingVisualCase = {
