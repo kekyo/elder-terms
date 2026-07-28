@@ -424,7 +424,7 @@ private:
     text_send_active = false;
     text_send_cancel_source.reset();
     if (request.status) {
-      request.status(succeeded ? "Terminal" : "Text send failed");
+      request.status(succeeded ? connection_detail() : "Text send failed");
     }
     if (!stopping && pty_fd >= 0) {
       terminal_io.connect_user_input(
@@ -530,7 +530,7 @@ public:
     set_pty_size(columns, rows);
   }
 
-  std::string title() const override {
+  std::string connection_detail() const override {
     return "local terminal";
   }
 

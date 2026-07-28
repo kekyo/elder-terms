@@ -205,7 +205,7 @@ export interface WindowCellLayout {
 }
 
 /**
- * Terminal grid size reported by the fixture status label.
+ * Terminal grid size reported by the hidden fixture measurement label.
  */
 export interface TerminalGridSize {
   /** VTE column count. */
@@ -310,6 +310,31 @@ export const expectMainWindowTitle = async (
     },
     {
       message: `main window title should be ${expectedTitle}`,
+      timeoutMs: 5_000,
+    }
+  );
+};
+
+/**
+ * Asserts the text shown in the main-window status bar.
+ *
+ * @param app Running GTK app.
+ * @param expectedStatus Expected status text.
+ */
+export const expectMainWindowStatus = async (
+  app: GtkApp,
+  expectedStatus: string
+): Promise<void> => {
+  const statusLabel = expectElementKind(
+    await app.getById('status_label'),
+    'label'
+  );
+  await toPass(
+    async () => {
+      expect(await statusLabel.text()).toBe(expectedStatus);
+    },
+    {
+      message: `main window status should be ${expectedStatus}`,
       timeoutMs: 5_000,
     }
   );
@@ -807,7 +832,7 @@ export const expectWindowCellSize = (
 };
 
 /**
- * Reads the terminal grid size exposed by the fixture status label.
+ * Reads the terminal grid size exposed by the hidden fixture measurement label.
  *
  * @param app Running GTK app.
  * @returns Parsed terminal grid size.
@@ -815,11 +840,11 @@ export const expectWindowCellSize = (
 export const readFixtureVteGridSize = async (
   app: GtkApp
 ): Promise<TerminalGridSize> => {
-  const statusLabel = expectElementKind(
-    await app.getById('status_label'),
+  const gridSizeLabel = expectElementKind(
+    await app.getById('fixture_grid_size_label'),
     'label'
   );
-  const text = await statusLabel.text();
+  const text = await gridSizeLabel.text();
   const match = /^([0-9]+)x([0-9]+)$/.exec(text);
   expect(match).not.toBeNull();
 
@@ -830,7 +855,8 @@ export const readFixtureVteGridSize = async (
 };
 
 /**
- * Asserts the terminal grid size exposed by the fixture status label.
+ * Asserts the terminal grid size exposed by the hidden fixture measurement
+ * label.
  *
  * @param app Running GTK app.
  * @param columns Expected columns.

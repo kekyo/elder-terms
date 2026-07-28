@@ -24,6 +24,7 @@ import {
   defaultColumns,
   defaultRows,
   expectFixtureVteGridSize,
+  expectMainWindowStatus,
   expectWindowCellSize,
   moveMouseToTerminalCenter,
   pressKeyWithModifiers,
@@ -57,6 +58,7 @@ const connectionColorsSettingsFixturePath = fileURLToPath(
 const connectionColorsSettingsDropdownFixturePath = fileURLToPath(
   new URL('./fixtures/connection-colors-settings-dropdown.png', import.meta.url)
 );
+const connectionStatusTextMaskWidth = 200;
 
 const shellQuote = (value: string): string =>
   `'${value.split("'").join("'\\''")}'`;
@@ -543,8 +545,29 @@ const expectMainWindowTitle = async (
   });
 };
 
+const connectionStatusTextMask = async (
+  app: GtkApp,
+  windowCapture: GtkCapture
+): Promise<{
+  readonly height: number;
+  readonly width: number;
+  readonly x: number;
+  readonly y: number;
+}> => {
+  const statusCapture = await (await app.getById('status_label')).capture();
+  return {
+    x: statusCapture.visibleBounds.x - windowCapture.visibleBounds.x,
+    y: statusCapture.visibleBounds.y - windowCapture.visibleBounds.y,
+    width: Math.min(
+      connectionStatusTextMaskWidth,
+      statusCapture.visibleBounds.width
+    ),
+    height: statusCapture.visibleBounds.height,
+  };
+};
+
 describe.concurrent('elder-terms-vte settings', () => {
-  it('shows an explicit connection name with the backend title', async (context) => {
+  it('shows an explicit connection name with the backend status', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'named.ini');
       await writeFile(
@@ -556,20 +579,44 @@ describe.concurrent('elder-terms-vte settings', () => {
         context,
         ['--test-fixture', '-c', configPath],
         async (app) => {
-          await expectMainWindowTitle(
-            app,
-            'elder-terms: Tokyo / Lab (local terminal)'
-          );
+          await expectMainWindowTitle(app, 'elder-terms: Tokyo / Lab');
+          await expectMainWindowStatus(app, 'local terminal');
         }
       );
     });
   });
 
-  it('shows the local terminal connection in the main window title', async (context) => {
+  it('shows the local connection name and status', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
-      await expectMainWindowTitle(
-        app,
-        'elder-terms: elder-terms (local terminal)'
+      await expectMainWindowTitle(app, 'elder-terms: elder-terms');
+      await expectMainWindowStatus(app, 'local terminal');
+    });
+  });
+
+  it('shows the SSH connection name and endpoint in separate surfaces', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'storage.ad.kekyo.net.ini');
+      await writeFile(
+        configPath,
+        [
+          '[general]',
+          'name=storage.ad.kekyo.net',
+          'type=ssh',
+          '',
+          '[ssh]',
+          'address=storage.ad.kekyo.net',
+          '',
+        ].join('\n'),
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app) => {
+          await expectMainWindowTitle(app, 'elder-terms: storage.ad.kekyo.net');
+          await expectMainWindowStatus(app, 'ssh: storage.ad.kekyo.net:22');
+        }
       );
     });
   });
@@ -1007,10 +1054,8 @@ describe.concurrent('elder-terms-vte settings', () => {
           return currentLayout;
         });
         expectWindowCellSize(layout, defaultColumns, defaultRows);
-        await expectMainWindowTitle(
-          app,
-          'elder-terms: telnet-missing-address (telnet: (unknown))'
-        );
+        await expectMainWindowTitle(app, 'elder-terms: telnet-missing-address');
+        await expectMainWindowStatus(app, 'telnet: (unknown)');
 
         const output = await app.output();
         expect(output.stderr).toContain(
@@ -1083,8 +1128,9 @@ describe.concurrent('elder-terms-vte settings', () => {
           expectWindowCellSize(layout, defaultColumns, defaultRows);
           await expectMainWindowTitle(
             app,
-            'elder-terms: serial-missing-device (serial: (unknown))'
+            'elder-terms: serial-missing-device'
           );
+          await expectMainWindowStatus(app, 'serial: (unknown)');
 
           const output = await app.output();
           expect(output.stderr).toContain(
@@ -1180,7 +1226,12 @@ describe.concurrent('elder-terms-vte settings', () => {
               startupCapture,
               'connection-colors-custom-startup',
               connectionColorsCustomFixturePath,
-              evidence
+              evidence,
+              {
+                // The OS-assigned TELNET port is intentionally visible in the
+                // status bar and is asserted exactly outside the visual test.
+                masks: [await connectionStatusTextMask(app, startupCapture)],
+              }
             );
 
             await openSettingsDialog(app);
@@ -1350,7 +1401,10 @@ describe.concurrent('elder-terms-vte settings', () => {
               defaultCapture,
               'connection-colors-default-runtime',
               connectionColorsDefaultFixturePath,
-              evidence
+              evidence,
+              {
+                masks: [await connectionStatusTextMask(app, defaultCapture)],
+              }
             );
 
             await openSettingsDialog(app);
@@ -1383,7 +1437,10 @@ describe.concurrent('elder-terms-vte settings', () => {
               runtimeCapture,
               'connection-colors-custom-runtime',
               connectionColorsCustomFixturePath,
-              evidence
+              evidence,
+              {
+                masks: [await connectionStatusTextMask(app, runtimeCapture)],
+              }
             );
             await expectFileContent(configPath, initialConfig);
           },
@@ -1730,10 +1787,8 @@ describe.concurrent('elder-terms-vte settings', () => {
           context,
           ['--test-fixture', '-c', configPath],
           async (app) => {
-            await expectMainWindowTitle(
-              app,
-              `elder-terms: telnet (telnet: 127.0.0.1:${port})`
-            );
+            await expectMainWindowTitle(app, 'elder-terms: telnet');
+            await expectMainWindowStatus(app, `telnet: 127.0.0.1:${port}`);
             await openSettingsDialog(app);
 
             await expectSelectedConnectionType(app, 'TELNET');
@@ -1761,7 +1816,7 @@ describe.concurrent('elder-terms-vte settings', () => {
     });
   });
 
-  it('shows the configured serial connection in the main window title', async (context) => {
+  it('shows the configured serial connection name and status', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'serial.ini');
       await writeFile(
@@ -1774,10 +1829,8 @@ describe.concurrent('elder-terms-vte settings', () => {
         context,
         ['--test-fixture', '-c', configPath],
         async (app) => {
-          await expectMainWindowTitle(
-            app,
-            'elder-terms: serial (serial: /dev/ttyUSB1:115200:n81n)'
-          );
+          await expectMainWindowTitle(app, 'elder-terms: serial');
+          await expectMainWindowStatus(app, 'serial: /dev/ttyUSB1:115200:n81n');
         }
       );
     });
@@ -1796,10 +1849,8 @@ describe.concurrent('elder-terms-vte settings', () => {
         context,
         ['--test-fixture', '-c', configPath],
         async (app) => {
-          await expectMainWindowTitle(
-            app,
-            'elder-terms: serial (serial: /dev/ttyUSB0:115200:e72x)'
-          );
+          await expectMainWindowTitle(app, 'elder-terms: serial');
+          await expectMainWindowStatus(app, 'serial: /dev/ttyUSB0:115200:e72x');
           await openSettingsDialog(app);
 
           await expectSelectedConnectionType(app, 'Serial');
@@ -1896,7 +1947,7 @@ describe.concurrent('elder-terms-vte settings', () => {
     });
   });
 
-  it('updates the serial connection title when runtime settings are applied', async (context) => {
+  it('updates the serial connection status when runtime settings are applied', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'serial-apply-title.ini');
       await writeFile(
@@ -1909,10 +1960,8 @@ describe.concurrent('elder-terms-vte settings', () => {
         context,
         ['--test-fixture', '-c', configPath],
         async (app) => {
-          await expectMainWindowTitle(
-            app,
-            'elder-terms: serial-apply-title (serial: /dev/ttyUSB1:115200:n81n)'
-          );
+          await expectMainWindowTitle(app, 'elder-terms: serial-apply-title');
+          await expectMainWindowStatus(app, 'serial: /dev/ttyUSB1:115200:n81n');
           await openSettingsDialog(app);
           await showSerialSettingsPage(app);
 
@@ -1942,10 +1991,8 @@ describe.concurrent('elder-terms-vte settings', () => {
           ).click();
           await expectSettingsDialogClosed(app);
 
-          await expectMainWindowTitle(
-            app,
-            'elder-terms: serial-apply-title (serial: /dev/ttyUSB1:57600:o52h)'
-          );
+          await expectMainWindowTitle(app, 'elder-terms: serial-apply-title');
+          await expectMainWindowStatus(app, 'serial: /dev/ttyUSB1:57600:o52h');
         }
       );
     });

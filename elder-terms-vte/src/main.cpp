@@ -73,6 +73,7 @@ static void close_settings_dialog(ApplicationState *state);
 static void schedule_settings_dialog_close(ApplicationState *state);
 static void restore_terminal_focus(ApplicationState *state);
 static void start_shared_sftp_connection_check(ApplicationState *state);
+static void update_application_session_identity(ApplicationState *state);
 static void update_application_terminal_presentation(
     ApplicationState *state);
 
@@ -199,6 +200,19 @@ static void update_application_terminal_presentation(
   elder_terms::set_main_window_transfer_button_sensitive(
       state->main_window,
       state->connection_active && !state->transfer_active);
+}
+
+static void update_application_session_identity(ApplicationState *state) {
+  if (state == nullptr) {
+    return;
+  }
+
+  elder_terms::set_main_window_title(
+      state->main_window,
+      elder_terms::terminal_session_window_title(state->session_state));
+  elder_terms::set_main_window_status_text(
+      state->main_window,
+      elder_terms::terminal_session_connection_detail(state->session_state));
 }
 
 static void set_application_transfer_progress_visible(ApplicationState *state,
@@ -394,9 +408,7 @@ static void apply_runtime_settings(ApplicationState *state,
           elder_terms::terminal_session_supports_text_send(
               state->session_state));
   update_application_terminal_presentation(state);
-  const std::string title =
-      elder_terms::terminal_session_title(state->session_state);
-  elder_terms::set_main_window_title(state->main_window, title);
+  update_application_session_identity(state);
   elder_terms::apply_terminal_display_settings(
       state->layout_state,
       elder_terms::terminal_display_settings(state->settings_store));
@@ -1219,9 +1231,7 @@ int main(int argc, char **argv) {
           elder_terms::terminal_session_supports_text_send(
               app_state.session_state));
   update_application_terminal_presentation(&app_state);
-  const std::string title =
-      elder_terms::terminal_session_title(app_state.session_state);
-  elder_terms::set_main_window_title(&*main_window, title);
+  update_application_session_identity(&app_state);
 
   app_state.layout_state = elder_terms::create_terminal_layout(
     *main_window, launch_options.test, terminal_display_settings,

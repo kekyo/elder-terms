@@ -20,6 +20,7 @@ import {
   expectDisconnectedNoticeHidden,
   expectDisconnectedNoticeRenderedUndimmedAtTerminalTopRight,
   expectDisconnectedNoticeVisibleAtTerminalTopRight,
+  expectMainWindowStatus,
   expectMainWindowTitle,
   runGtkTest,
   withTemporaryDirectory,
@@ -522,10 +523,12 @@ describe.concurrent('elder-terms-vte serial session', () => {
             throw new Error('first serial PTY helper is not running');
           }
 
-          const connectedTitle = `elder-terms: serial (serial: ${serialDevicePath}:9600:n81n)`;
+          const connectedTitle = 'elder-terms: serial';
+          const connectionStatus = `serial: ${serialDevicePath}:9600:n81n`;
           await pressKeyUntilReceived(app, activeFirstHelper, 'a', '61');
           await waitForActivityIndicatorImageState(app, 'conn', 'on');
           await expectMainWindowTitle(app, connectedTitle);
+          await expectMainWindowStatus(app, connectionStatus);
           await expectDisconnectedNoticeHidden(app);
 
           await firstHelper?.close();
@@ -545,6 +548,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
           );
           await waitForActivityIndicatorImageState(app, 'conn', 'off');
           await expectMainWindowTitle(app, `${connectedTitle} (Disconnected)`);
+          await expectMainWindowStatus(app, connectionStatus);
           await expectDisconnectedNoticeVisibleAtTerminalTopRight(app);
 
           secondHelper = await startSerialPtyHelper();
@@ -552,6 +556,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
           await pressKeyUntilReceived(app, secondHelper, 'b', '62');
           await waitForActivityIndicatorImageState(app, 'conn', 'on');
           await expectMainWindowTitle(app, connectedTitle);
+          await expectMainWindowStatus(app, connectionStatus);
           await expectDisconnectedNoticeHidden(app);
           await evidence.log('serial CONN tracked device lifetime', {
             title: connectedTitle,
@@ -593,7 +598,11 @@ describe.concurrent('elder-terms-vte serial session', () => {
             await expectTextSendActive(button);
             helper.writeCommand('TX SERIAL_DURING_TEXT_SEND');
             await app.input.pressKey('x');
-            await expectTextSendFinished(app, button);
+            await expectTextSendFinished(
+              app,
+              button,
+              `serial: ${serialDevicePath}:9600:n81n`
+            );
 
             await toPass(async () => {
               expect(allReceivedHex(helper)).toBe('93fa967b1b5b41');

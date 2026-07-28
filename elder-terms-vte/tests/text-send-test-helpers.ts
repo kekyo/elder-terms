@@ -58,10 +58,12 @@ export const expectTextSendActive = async (
  *
  * @param app Running terminal application.
  * @param button Transfer menu button restored after the operation.
+ * @param expectedStatus Connection detail restored after the operation.
  */
 export const expectTextSendFinished = async (
   app: GtkApp,
-  button: GtkToggleButtonElement
+  button: GtkToggleButtonElement,
+  expectedStatus: string
 ): Promise<void> => {
   await waitForResult(async () => {
     const info = await button.info();
@@ -70,7 +72,7 @@ export const expectTextSendFinished = async (
       'label'
     );
     expect(info.states).toContain('sensitive');
-    expect(await status.text()).toBe('Terminal');
+    expect(await status.text()).toBe(expectedStatus);
   });
 };
 

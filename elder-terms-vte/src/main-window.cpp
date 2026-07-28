@@ -345,6 +345,7 @@ static bool main_window_has_required_widgets(const MainWindow &main_window) {
          main_window.terminal_scrollbar != nullptr &&
          main_window.status_bar != nullptr &&
          main_window.status_label != nullptr &&
+         main_window.fixture_grid_size_label != nullptr &&
          main_window.activity_indicator_bar != nullptr;
 }
 
@@ -1057,6 +1058,8 @@ std::optional<MainWindow> load_main_window() {
   main_window.status_bar = required_widget(main_window.builder, "status_bar");
   main_window.status_label =
       required_widget(main_window.builder, "status_label");
+  main_window.fixture_grid_size_label =
+      required_widget(main_window.builder, "fixture_grid_size_label");
   main_window.activity_indicator_bar =
       required_widget(main_window.builder, "activity_indicator_bar");
   if (!main_window_has_required_widgets(main_window)) {

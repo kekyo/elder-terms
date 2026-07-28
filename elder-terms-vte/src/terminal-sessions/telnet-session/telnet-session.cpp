@@ -516,7 +516,7 @@ private:
     transfer_incoming.clear();
     transfer_cancel_source.reset();
     if (request.status) {
-      request.status("Terminal");
+      request.status(connection_detail());
     }
     if (!stopping && socket_fd >= 0) {
       terminal_io.connect_user_input(
@@ -602,7 +602,7 @@ private:
     text_send_active = false;
     text_send_cancel_source.reset();
     if (request.status) {
-      request.status(succeeded ? "Terminal" : "Text send failed");
+      request.status(succeeded ? connection_detail() : "Text send failed");
     }
     if (!stopping && socket_fd >= 0 && !transfer_active) {
       terminal_io.connect_user_input(
@@ -828,7 +828,7 @@ public:
     return true;
   }
 
-  std::string title() const override {
+  std::string connection_detail() const override {
     if (settings.address.empty()) {
       return "telnet: (unknown)";
     }

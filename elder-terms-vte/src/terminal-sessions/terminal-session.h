@@ -46,11 +46,11 @@ public:
   virtual void resize(glong columns, glong rows) = 0;
 
   /**
-   * Returns the current backend-specific window title.
+   * Returns the current backend-specific connection detail.
    *
-   * @returns Window title describing the current session endpoint.
+   * @returns Status text describing the current session endpoint.
    */
-  virtual std::string title() const = 0;
+  virtual std::string connection_detail() const = 0;
 
   /**
    * Returns whether this backend can start X/Y/ZMODEM transfers.

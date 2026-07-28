@@ -712,7 +712,11 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
             await expectTextSendActive(button);
             acceptedSocket?.write('TELNET_DURING_TEXT_SEND');
             await app.input.pressKey('x');
-            await expectTextSendFinished(app, button);
+            await expectTextSendFinished(
+              app,
+              button,
+              `telnet: 127.0.0.1:${port}`
+            );
 
             await toPass(async () => {
               const sent = Array.from(

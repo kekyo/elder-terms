@@ -430,7 +430,7 @@ private:
     transfer_incoming.clear();
     transfer_cancel_source.reset();
     if (request.status) {
-      request.status(succeeded ? "Terminal" : "Transfer failed");
+      request.status(succeeded ? connection_detail() : "Transfer failed");
     }
     reconnect_user_input();
     if (request.active) {
@@ -494,7 +494,7 @@ private:
     text_send_active = false;
     text_send_cancel_source.reset();
     if (request.status) {
-      request.status(succeeded ? "Terminal" : "Text send failed");
+      request.status(succeeded ? connection_detail() : "Text send failed");
     }
     reconnect_user_input();
     if (request.active) {
@@ -605,7 +605,7 @@ public:
     }
   }
 
-  std::string title() const override {
+  std::string connection_detail() const override {
     if (settings.endpoint.address.empty()) {
       return "ssh: (unknown)";
     }

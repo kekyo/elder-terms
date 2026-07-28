@@ -35,7 +35,7 @@ struct TerminalLayoutState {
   GtkWidget *terminal = nullptr;
   GtkWidget *terminal_scrollbar = nullptr;
   GtkWidget *status_bar = nullptr;
-  GtkWidget *status_label = nullptr;
+  GtkWidget *fixture_grid_size_label = nullptr;
   TestOptions options;
   TerminalLayoutCallbacks callbacks;
   TerminalKeyBindings key_bindings;
@@ -207,7 +207,7 @@ static bool font_grid_is_locked(TerminalLayoutState *state) {
 }
 
 static void update_fixture_grid_status(TerminalLayoutState *state) {
-  if (!state->options.fixture || state->status_label == nullptr) {
+  if (!state->options.fixture || state->fixture_grid_size_label == nullptr) {
     return;
   }
 
@@ -220,7 +220,7 @@ static void update_fixture_grid_status(TerminalLayoutState *state) {
 
   const std::string label =
       std::to_string(columns) + "x" + std::to_string(rows);
-  gtk_label_set_text(GTK_LABEL(state->status_label), label.c_str());
+  gtk_label_set_text(GTK_LABEL(state->fixture_grid_size_label), label.c_str());
 }
 
 static void notify_terminal_grid_size_changed(TerminalLayoutState *state,
@@ -766,7 +766,7 @@ create_terminal_layout(const MainWindow &main_window, TestOptions options,
   state->terminal = main_window.terminal;
   state->terminal_scrollbar = main_window.terminal_scrollbar;
   state->status_bar = main_window.status_bar;
-  state->status_label = main_window.status_label;
+  state->fixture_grid_size_label = main_window.fixture_grid_size_label;
   state->options = options;
   state->callbacks = callbacks;
   state->key_bindings = std::move(terminal_key_bindings);

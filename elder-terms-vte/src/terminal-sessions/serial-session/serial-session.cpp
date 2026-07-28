@@ -878,7 +878,7 @@ private:
     transfer_incoming.clear();
     transfer_cancel_source.reset();
     if (request.status) {
-      request.status("Terminal");
+      request.status(connection_detail());
     }
     if (!stopping && serial_fd >= 0 && !carrier_disconnected) {
       terminal_io.connect_user_input(
@@ -976,7 +976,7 @@ private:
     text_send_active = false;
     text_send_cancel_source.reset();
     if (request.status) {
-      request.status(succeeded ? "Terminal" : "Text send failed");
+      request.status(succeeded ? connection_detail() : "Text send failed");
     }
     if (!stopping && serial_fd >= 0 && !carrier_disconnected &&
         !transfer_active) {
@@ -1250,7 +1250,7 @@ public:
     return true;
   }
 
-  std::string title() const override {
+  std::string connection_detail() const override {
     if (settings.device.empty()) {
       return "serial: (unknown)";
     }

@@ -102,6 +102,8 @@ struct MainWindow {
   GtkWidget *status_bar = nullptr;
   /** Status text label. */
   GtkWidget *status_label = nullptr;
+  /** Hidden fixture-only terminal grid-size label. */
+  GtkWidget *fixture_grid_size_label = nullptr;
   /** Status bar activity indicator container. */
   GtkWidget *activity_indicator_bar = nullptr;
   /** Open runtime settings dialog receiving connection backgrounds. */

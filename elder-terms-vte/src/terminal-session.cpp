@@ -14,10 +14,9 @@ namespace elder_terms {
 
 static constexpr const char *application_title = "elder-terms";
 
-static std::string application_window_title(const std::string &connection_name,
-                                            const std::string &session_title) {
-  return std::string(application_title) + ": " + connection_name + " (" +
-         session_title + ")";
+static std::string application_window_title(
+    const std::string &connection_name) {
+  return std::string(application_title) + ": " + connection_name;
 }
 
 struct TerminalSessionState {
@@ -183,13 +182,21 @@ terminal_session_authenticated_ssh_transport(
   return state->session->authenticated_ssh_transport();
 }
 
-std::string terminal_session_title(const TerminalSessionState *state) {
+std::string terminal_session_window_title(const TerminalSessionState *state) {
   if (state == nullptr || state->session == nullptr) {
     return application_title;
   }
 
-  return application_window_title(state->profile.name,
-                                  state->session->title());
+  return application_window_title(state->profile.name);
+}
+
+std::string
+terminal_session_connection_detail(const TerminalSessionState *state) {
+  if (state == nullptr || state->session == nullptr) {
+    return "Terminal";
+  }
+
+  return state->session->connection_detail();
 }
 
 void apply_terminal_session_connection_profile(

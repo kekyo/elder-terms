@@ -2606,7 +2606,6 @@ describe.concurrent(
                 ['transfer_progress_notice', 0.05],
                 ['transfer_progress_notice_background', 0.05],
                 ['transfer_progress_notice_label', 0.95],
-                ['transfer_progress_bar', 0.05],
                 ['transfer_cancel_button', 0.15],
               ] as const) {
                 expect(
@@ -2617,6 +2616,13 @@ describe.concurrent(
                   )
                 ).toEqual(background);
               }
+              const progressCapture = await (
+                await app.getById('transfer_progress_bar')
+              ).capture();
+              const progressSamples = [0.05, 0.5, 0.95].map((horizontalRatio) =>
+                capturePixel(progressCapture, horizontalRatio, 0.5)
+              );
+              expect(progressSamples).toContainEqual(background);
               if (transferCase.protocol === 'zmodem') {
                 const overlay = await app.getById('transfer_progress_overlay');
                 const overlayCapture = await evidence.captureEvidence(

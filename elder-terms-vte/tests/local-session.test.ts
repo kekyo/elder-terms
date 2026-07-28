@@ -15,6 +15,7 @@ import {
   assertTerminalCaptureMatches,
   expectDisconnectedNoticeHidden,
   expectDisconnectedNoticeVisibleAtTerminalTopRight,
+  expectMainWindowStatus,
   expectMainWindowTitle,
   localTerminalDisconnectedDimPath,
   runGtkTest,
@@ -369,15 +370,16 @@ describe.concurrent('elder-terms-vte local session', () => {
         context,
         ['-c', configPath],
         async (app, evidence) => {
-          const connectedTitle =
-            'elder-terms: auto-close-disabled (local terminal)';
+          const connectedTitle = 'elder-terms: auto-close-disabled';
           await waitForActivityIndicatorImageState(app, 'conn', 'on');
           await expectMainWindowTitle(app, connectedTitle);
+          await expectMainWindowStatus(app, 'local terminal');
           await expectDisconnectedNoticeHidden(app);
 
           await waitForShellExit(shell.markerPath);
           await waitForActivityIndicatorImageState(app, 'conn', 'off');
           await expectMainWindowTitle(app, `${connectedTitle} (Disconnected)`);
+          await expectMainWindowStatus(app, 'local terminal');
           await expectDisconnectedNoticeVisibleAtTerminalTopRight(app);
           for (const [widgetId, horizontalRatio] of [
             ['disconnected_notice', 0.05],
@@ -648,7 +650,7 @@ describe.concurrent('elder-terms-vte local session', () => {
           await expectTextSendActive(button);
           await focusTerminal(app);
           await app.input.pressKey('x');
-          await expectTextSendFinished(app, button);
+          await expectTextSendFinished(app, button, 'local terminal');
 
           await toPass(async () => {
             expect(Array.from((await readFile(receivedPath)).values())).toEqual(
@@ -764,7 +766,7 @@ describe.concurrent('elder-terms-vte local session', () => {
             await expectTextSendActive(button);
             await focusTerminal(app);
             await app.input.pressKey('x');
-            await expectTextSendFinished(app, button);
+            await expectTextSendFinished(app, button, 'local terminal');
           } finally {
             await provider.close();
           }

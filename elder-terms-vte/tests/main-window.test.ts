@@ -27,8 +27,8 @@ const execFileAsync = promisify(execFile);
 const clipboardReadHelperPath = fileURLToPath(
   new URL('../../.build/elder-terms-vte/clipboard-read-helper', import.meta.url)
 );
-const statusBarPadding = 2;
-const activityIndicatorBarEndMargin = 6;
+const statusBarHorizontalPadding = 8;
+const statusBarVerticalPadding = 2;
 
 const transferMenuItems = [
   ['transfer_log_enabled_item', 'Log recording'],
@@ -296,7 +296,7 @@ describe.concurrent('elder-terms-vte main window', () => {
       );
 
       await expectTransferButtonVisibleLeftOfSettings(app);
-      expect(await statusLabel.text()).toBe('Terminal');
+      expect(await statusLabel.text()).toBe('local terminal');
       expect(await connIndicatorLabel.text()).toBe('CONN');
       expect(await logIndicatorLabel.text()).toBe('LOG');
       expect(await sdIndicatorLabel.text()).toBe('SD');
@@ -418,31 +418,31 @@ describe.concurrent('elder-terms-vte main window', () => {
       ).toBeLessThanOrEqual(mainBounds.y + mainBounds.height);
 
       expect(statusLabelCapture.bounds.x - statusBarCapture.bounds.x).toBe(
-        statusBarPadding
+        statusBarHorizontalPadding
       );
       expect(statusLabelCapture.bounds.y - statusBarCapture.bounds.y).toBe(
-        statusBarPadding
+        statusBarVerticalPadding
       );
       expect(
         statusBarCapture.bounds.y +
           statusBarCapture.bounds.height -
           (statusLabelCapture.bounds.y + statusLabelCapture.bounds.height)
-      ).toBe(statusBarPadding);
+      ).toBe(statusBarVerticalPadding);
       expect(
         activityIndicatorBarCapture.bounds.y - statusBarCapture.bounds.y
-      ).toBe(statusBarPadding);
+      ).toBe(statusBarVerticalPadding);
       expect(
         statusBarCapture.bounds.y +
           statusBarCapture.bounds.height -
           (activityIndicatorBarCapture.bounds.y +
             activityIndicatorBarCapture.bounds.height)
-      ).toBe(statusBarPadding);
+      ).toBe(statusBarVerticalPadding);
       expect(
         statusBarCapture.bounds.x +
           statusBarCapture.bounds.width -
           (activityIndicatorBarCapture.bounds.x +
             activityIndicatorBarCapture.bounds.width)
-      ).toBe(statusBarPadding + activityIndicatorBarEndMargin);
+      ).toBe(statusBarHorizontalPadding);
       expect(
         statusLabelCapture.bounds.x + statusLabelCapture.bounds.width
       ).toBeLessThanOrEqual(activityIndicatorBarCapture.bounds.x);

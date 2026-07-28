@@ -139,13 +139,23 @@ terminal_session_authenticated_ssh_transport(
     const TerminalSessionState *state);
 
 /**
- * Returns the title for a terminal session state.
+ * Returns the window title for a terminal session state.
  *
  * @param state Session state created by create_terminal_session.
- * @returns Current backend title, or the application title when no backend
- * session exists.
+ * @returns Application and connection name, or the application title when no
+ * backend session exists.
  */
-std::string terminal_session_title(const TerminalSessionState *state);
+std::string terminal_session_window_title(const TerminalSessionState *state);
+
+/**
+ * Returns the backend-specific connection detail for a terminal session state.
+ *
+ * @param state Session state created by create_terminal_session.
+ * @returns Status text describing the current endpoint, or Terminal when no
+ * backend session exists.
+ */
+std::string
+terminal_session_connection_detail(const TerminalSessionState *state);
 
 /**
  * Applies runtime-editable connection settings to the current backend.
