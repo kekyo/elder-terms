@@ -49,6 +49,18 @@ export interface X11MapRecorder {
    */
   readonly events: () => readonly X11MapEvent[];
   /**
+   * Maps and focuses a competing top-level window.
+   *
+   * @returns A promise completed with the decimal X11 window identifier.
+   */
+  readonly focusCompetitor: () => Promise<string>;
+  /**
+   * Reads the top-level X11 window that currently owns input focus.
+   *
+   * @returns A promise completed with the decimal X11 window identifier.
+   */
+  readonly focusedWindow: () => Promise<string>;
+  /**
    * Stops the recorder.
    *
    * @returns A promise completed after the helper exits.
@@ -122,7 +134,15 @@ const startX11MapRecorder = async (
       readonly reject: (error: Error) => void;
     }
   >();
+  const requests = new Map<
+    string,
+    {
+      readonly resolve: (value: string) => void;
+      readonly reject: (error: Error) => void;
+    }
+  >();
   let nextBarrierId = 1;
+  let nextRequestId = 1;
   let outputBuffer = '';
   let errorOutput = '';
   let ready = false;
@@ -156,6 +176,16 @@ const startX11MapRecorder = async (
       if (line.startsWith('barrier ')) {
         barriers.get(line)?.resolve();
         barriers.delete(line);
+        continue;
+      }
+      const responseSeparator = line.indexOf('\t');
+      if (responseSeparator >= 0) {
+        const command = line.slice(0, responseSeparator);
+        const request = requests.get(command);
+        if (request !== undefined) {
+          request.resolve(line.slice(responseSeparator + 1));
+          requests.delete(command);
+        }
       }
     }
   });
@@ -171,6 +201,10 @@ const startX11MapRecorder = async (
       barrier.reject(error);
     }
     barriers.clear();
+    for (const request of requests.values()) {
+      request.reject(error);
+    }
+    requests.clear();
   });
   child.on('exit', (code, signal) => {
     const error = new Error(
@@ -183,9 +217,22 @@ const startX11MapRecorder = async (
       barrier.reject(error);
     }
     barriers.clear();
+    for (const request of requests.values()) {
+      request.reject(error);
+    }
+    requests.clear();
   });
 
   await readyPromise;
+  const request = async (name: string): Promise<string> => {
+    const command = `${name} ${nextRequestId}`;
+    nextRequestId += 1;
+    const completed = new Promise<string>((resolve, reject) => {
+      requests.set(command, { resolve, reject });
+    });
+    child.stdin.write(`${command}\n`);
+    return completed;
+  };
   return {
     flush: async () => {
       const command = `barrier ${nextBarrierId}`;
@@ -197,6 +244,8 @@ const startX11MapRecorder = async (
       await completed;
     },
     events: () => [...recordedEvents],
+    focusCompetitor: async () => request('focus-competitor'),
+    focusedWindow: async () => request('active-window'),
     stop: async () => {
       if (child.exitCode !== null || child.signalCode !== null) {
         return;

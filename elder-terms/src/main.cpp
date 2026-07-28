@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <gdk/gdkkeysyms.h>
+#include <gdk/gdkx.h>
 #include <gestament/gtk.h>
 #include <gio/gio.h>
 #include <glib/gstdio.h>
@@ -1195,6 +1196,29 @@ static void on_connection_row_activated(GtkTreeView *, GtkTreePath *,
   launch_selected_connection(static_cast<ApplicationState *>(user_data));
 }
 
+static std::optional<std::uint32_t> current_x11_server_time(
+    GtkWidget *widget) {
+  if (widget == nullptr || !gtk_widget_get_realized(widget)) {
+    return std::nullopt;
+  }
+  GdkWindow *window = gtk_widget_get_window(widget);
+  if (window == nullptr || !GDK_IS_X11_WINDOW(window)) {
+    return std::nullopt;
+  }
+
+  const GdkEventMask event_mask = gdk_window_get_events(window);
+  if ((event_mask & GDK_PROPERTY_CHANGE_MASK) == 0) {
+    gdk_window_set_events(
+        window,
+        static_cast<GdkEventMask>(
+            event_mask | GDK_PROPERTY_CHANGE_MASK));
+  }
+  const std::uint32_t timestamp = gdk_x11_get_server_time(window);
+  return timestamp == GDK_CURRENT_TIME
+             ? std::optional<std::uint32_t>()
+             : std::optional<std::uint32_t>(timestamp);
+}
+
 static void present_main_window(
     ApplicationState *state,
     std::optional<std::uint32_t> activation_time,
@@ -1211,6 +1235,13 @@ static void present_main_window(
   }
   gtk_widget_show_all(state->main_window->window);
   enable_connection_selection(state);
+  if (!activation_time.has_value()) {
+    // StatusNotifierItem activation does not carry an event timestamp. A
+    // fresh X server timestamp preserves the user-activation context needed
+    // by the window manager to grant focus.
+    activation_time =
+        current_x11_server_time(state->main_window->window);
+  }
   if (activation_time.has_value()) {
     gtk_window_present_with_time(
         GTK_WINDOW(state->main_window->window),

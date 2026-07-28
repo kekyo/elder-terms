@@ -150,6 +150,29 @@ describe('elder-terms tray lifecycle', () => {
         await closeWindowWithAccelerator(app);
         await waitForWindowCount(app, 0);
 
+        const competitorWindowId = await x11MapRecorder?.focusCompetitor();
+        expect(competitorWindowId).toBeDefined();
+        await waitForResult(async () => {
+          expect(await x11MapRecorder?.focusedWindow()).toBe(
+            competitorWindowId
+          );
+        });
+        await tray.click();
+        await tray.click();
+        await waitForWindowCount(app, 1);
+        const mainWindow = expectElementKind(
+          await app.getById('main_window'),
+          'window'
+        );
+        const mainWindowId = String(
+          Number.parseInt((await mainWindow.x11Info()).windowId, 16)
+        );
+        await waitForResult(async () => {
+          expect(await x11MapRecorder?.focusedWindow()).toBe(mainWindowId);
+        });
+        await closeWindowWithAccelerator(app);
+        await waitForWindowCount(app, 0);
+
         const busName = await statusNotifierBusName(app);
         const layout = await callSessionBus(app, [
           '--dest',
@@ -183,7 +206,7 @@ describe('elder-terms tray lifecycle', () => {
         recordX11Maps: true,
       }
     );
-  });
+  }, 60_000);
 
   it('keeps unsaved editor state while the tray window is hidden', async (context) => {
     await runLauncherGtkTest(

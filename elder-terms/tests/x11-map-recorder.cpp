@@ -82,6 +82,27 @@ static void drain_x11_events(Display *display, Atom process_id_atom) {
   }
 }
 
+static Window create_focus_competitor(Display *display, Window root) {
+  const Window window =
+      XCreateSimpleWindow(display, root, 80, 80, 320, 180, 1,
+                          BlackPixel(display, DefaultScreen(display)),
+                          WhitePixel(display, DefaultScreen(display)));
+  XStoreName(display, window, "elder-terms focus competitor");
+  XClassHint class_hint{
+      .res_name = const_cast<char *>("elder-terms-focus-competitor"),
+      .res_class = const_cast<char *>("ElderTermsFocusCompetitor"),
+  };
+  XSetClassHint(display, window, &class_hint);
+  return window;
+}
+
+static Window focused_window(Display *display) {
+  Window window = None;
+  int revert_to = RevertToNone;
+  XGetInputFocus(display, &window, &revert_to);
+  return window;
+}
+
 int main() {
   Display *display = XOpenDisplay(nullptr);
   if (display == nullptr) {
@@ -93,6 +114,7 @@ int main() {
   XSync(display, False);
   const Atom process_id_atom =
       XInternAtom(display, "_NET_WM_PID", False);
+  Window focus_competitor = None;
   std::cout << "ready" << std::endl;
 
   bool running = true;
@@ -131,10 +153,26 @@ int main() {
         XSync(display, False);
         drain_x11_events(display, process_id_atom);
         std::cout << command << std::endl;
+      } else if (command.starts_with("focus-competitor ")) {
+        if (focus_competitor == None) {
+          focus_competitor = create_focus_competitor(display, root);
+        }
+        XMapRaised(display, focus_competitor);
+        XSetInputFocus(display, focus_competitor, RevertToParent, CurrentTime);
+        XSync(display, False);
+        drain_x11_events(display, process_id_atom);
+        std::cout << command << '\t' << focus_competitor << std::endl;
+      } else if (command.starts_with("active-window ")) {
+        XSync(display, False);
+        std::cout << command << '\t' << focused_window(display)
+                  << std::endl;
       }
     }
   }
 
+  if (focus_competitor != None) {
+    XDestroyWindow(display, focus_competitor);
+  }
   XCloseDisplay(display);
   return 0;
 }
