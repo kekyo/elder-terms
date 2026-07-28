@@ -237,6 +237,7 @@ describe('SFTP window', () => {
       false,
       ['exterior_background=#7A2468', 'background=#183C58'],
       async ({ app, evidence }) => {
+        const componentBackground = [0x1f, 0x4d, 0x71] as const;
         const localTree = expectTable(await app.getById('sftp_local_tree'));
         const localPath = expectElementKind(
           await app.getById('sftp_local_path_entry'),
@@ -268,6 +269,16 @@ describe('SFTP window', () => {
         expect(capturePixel(await localTree.capture(), 0.5, 0.8)).toEqual([
           0x18, 0x3c, 0x58,
         ]);
+        expect(capturePixel(await localPath.capture(), 0.7, 0.5)).toEqual(
+          componentBackground
+        );
+        expect(
+          capturePixel(
+            await (await app.getById('sftp_local_refresh_button')).capture(),
+            0.15,
+            0.5
+          )
+        ).toEqual(componentBackground);
 
         const treeCapture = await localTree.capture();
         await app.input.moveMouseTo(
@@ -433,16 +444,22 @@ describe('SFTP window', () => {
       true,
       ['background=#183C58'],
       async ({ app, evidence }) => {
+        const background = [0x18, 0x3c, 0x58] as const;
+        const componentBackground = [0x1f, 0x4d, 0x71] as const;
         const localTree = expectTable(await app.getById('sftp_local_tree'));
         await openContextMenu(
           app,
           localTree,
           await findRow(localTree, 'hello.txt')
         );
-        await expectElementKind(
+        const sendItem = expectElementKind(
           await app.getById('sftp_send_item'),
           'menuItem'
-        ).click();
+        );
+        expect(capturePixel(await sendItem.capture(), 0.8, 0.5)).toEqual(
+          componentBackground
+        );
+        await sendItem.click();
 
         const overlay = await app.getById('sftp_transfer_overlay');
         const dim = await app.getById('sftp_dim_overlay');
@@ -450,6 +467,16 @@ describe('SFTP window', () => {
         await expectShowing(dim);
         for (const [widgetId, horizontalRatio] of [
           ['sftp_transfer_overlay', 0.05],
+        ] as const) {
+          expect(
+            capturePixel(
+              await (await app.getById(widgetId)).capture(),
+              horizontalRatio,
+              0.5
+            )
+          ).toEqual(background);
+        }
+        for (const [widgetId, horizontalRatio] of [
           ['sftp_transfer_progress', 0.05],
           ['sftp_transfer_cancel_button', 0.15],
         ] as const) {
@@ -459,7 +486,7 @@ describe('SFTP window', () => {
               horizontalRatio,
               0.5
             )
-          ).toEqual([0x18, 0x3c, 0x58]);
+          ).toEqual(componentBackground);
         }
         const overlayCapture = await evidence.captureEvidence(
           'sftp-connection-colors-transfer-overlay',

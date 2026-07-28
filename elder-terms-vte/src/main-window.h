@@ -118,6 +118,8 @@ struct MainWindow {
   GtkCssProvider *settings_background_provider = nullptr;
   /** Provider applying the configured background to terminal overlay panels. */
   GtkCssProvider *overlay_background_provider = nullptr;
+  /** Screen provider applying a derived background to interactive controls. */
+  GtkCssProvider *component_background_provider = nullptr;
   /** True after overriding VTE's default background color. */
   bool terminal_background_overridden = false;
   /** Activity indicator containers. */

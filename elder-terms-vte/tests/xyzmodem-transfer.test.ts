@@ -2584,6 +2584,7 @@ describe.concurrent(
               undefined
             );
             const background = [0x60, 0x40, 0x20] as const;
+            const componentBackground = [0x77, 0x4f, 0x28] as const;
             await addBackgroundColorToConfig(fixture.configPath, '#604020');
             const args = [
               '-c',
@@ -2606,7 +2607,6 @@ describe.concurrent(
                 ['transfer_progress_notice', 0.05],
                 ['transfer_progress_notice_background', 0.05],
                 ['transfer_progress_notice_label', 0.95],
-                ['transfer_cancel_button', 0.15],
               ] as const) {
                 expect(
                   capturePixel(
@@ -2616,13 +2616,20 @@ describe.concurrent(
                   )
                 ).toEqual(background);
               }
+              expect(
+                capturePixel(
+                  await (await app.getById('transfer_cancel_button')).capture(),
+                  0.15,
+                  0.5
+                )
+              ).toEqual(componentBackground);
               const progressCapture = await (
                 await app.getById('transfer_progress_bar')
               ).capture();
               const progressSamples = [0.05, 0.5, 0.95].map((horizontalRatio) =>
                 capturePixel(progressCapture, horizontalRatio, 0.5)
               );
-              expect(progressSamples).toContainEqual(background);
+              expect(progressSamples).toContainEqual(componentBackground);
               if (transferCase.protocol === 'zmodem') {
                 const overlay = await app.getById('transfer_progress_overlay');
                 const overlayCapture = await evidence.captureEvidence(

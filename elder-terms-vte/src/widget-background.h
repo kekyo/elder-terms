@@ -17,6 +17,18 @@ GtkCssProvider *create_widget_background_provider(
     const RgbColor &color, const char *target_name);
 
 /**
+ * Creates a CSS provider for interactive surfaces derived from a background.
+ *
+ * @param color RGB content background used as the derivation source.
+ * @param target_name Diagnostic name used when CSS parsing fails.
+ * @returns Owned provider, or null when the CSS could not be loaded.
+ * @remarks The derived color preserves hue and saturation while moving
+ * lightness eight percent toward the contrasting extreme.
+ */
+GtkCssProvider *create_widget_component_background_provider(
+    const RgbColor &color, const char *target_name);
+
+/**
  * Creates a screen-safe CSS provider scoped below one style class.
  *
  * @param color RGB color to paint.
@@ -30,6 +42,19 @@ GtkCssProvider *create_widget_background_provider(
 GtkCssProvider *create_scoped_widget_background_provider(
     const RgbColor &color, const char *style_class,
     const char *transparent_descendants_style_class,
+    const char *target_name);
+
+/**
+ * Creates a screen-safe CSS provider for one classed surface only.
+ *
+ * @param color RGB color to paint.
+ * @param style_class Style class whose own node is painted.
+ * @param target_name Diagnostic name used when CSS parsing fails.
+ * @returns Owned provider, or null when the CSS could not be loaded.
+ * @remarks Descendant controls retain their own component backgrounds.
+ */
+GtkCssProvider *create_scoped_widget_surface_background_provider(
+    const RgbColor &color, const char *style_class,
     const char *target_name);
 
 /**

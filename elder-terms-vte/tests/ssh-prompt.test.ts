@@ -109,6 +109,7 @@ describe.concurrent('SSH prompt overlay', () => {
         'utf8'
       );
       const background = [0x60, 0x40, 0x20] as const;
+      const componentBackground = [0x77, 0x4f, 0x28] as const;
       await writeFile(
         configPath,
         [
@@ -142,13 +143,22 @@ describe.concurrent('SSH prompt overlay', () => {
           await expectShowing(entry);
           await expectShowing(dim);
           await expectOnlyMainWindow(app);
+          for (const [widgetId, horizontalRatio, verticalRatio] of [
+            ['ssh_prompt_panel', 0.02, 0.5],
+            ['ssh_prompt_background', 0.02, 0.5],
+            ['ssh_prompt_title_label', 0.95, 0.5],
+            ['ssh_prompt_message_label', 0.95, 0.5],
+          ] as const) {
+            expect(
+              capturePixel(
+                await (await app.getById(widgetId)).capture(),
+                horizontalRatio,
+                verticalRatio
+              )
+            ).toEqual(background);
+          }
           for (const [widgetId, horizontalRatio] of [
-            ['ssh_prompt_panel', 0.05],
-            ['ssh_prompt_background', 0.05],
-            ['ssh_prompt_title_label', 0.95],
-            ['ssh_prompt_message_label', 0.95],
             ['ssh_prompt_entry', 0.1],
-            ['ssh_prompt_actions', 0.05],
             ['ssh_prompt_cancel_button', 0.15],
             ['ssh_prompt_accept_button', 0.15],
           ] as const) {
@@ -158,7 +168,7 @@ describe.concurrent('SSH prompt overlay', () => {
                 horizontalRatio,
                 0.5
               )
-            ).toEqual(background);
+            ).toEqual(componentBackground);
           }
           const promptCapture = await evidence.captureEvidence(
             'connection-colors-ssh-prompt',

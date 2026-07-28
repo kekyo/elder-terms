@@ -1155,6 +1155,7 @@ describe.concurrent('elder-terms-vte settings', () => {
       const configPath = join(directory, 'connection.ini');
       const exterior = [0x20, 0x40, 0x60] as const;
       const background = [0x60, 0x40, 0x20] as const;
+      const componentBackground = [0x77, 0x4f, 0x28] as const;
 
       try {
         const port = await listenOnLocalhost(server);
@@ -1209,10 +1210,10 @@ describe.concurrent('elder-terms-vte settings', () => {
             });
             expect(
               capturePixel(await transferButton.capture(), 0.15, 0.5)
-            ).toEqual(exterior);
+            ).toEqual(componentBackground);
             expect(
               capturePixel(await settingsButton.capture(), 0.15, 0.5)
-            ).toEqual(exterior);
+            ).toEqual(componentBackground);
 
             const mainWindow = expectElementKind(
               await app.getById('main_window'),
@@ -1256,7 +1257,7 @@ describe.concurrent('elder-terms-vte settings', () => {
               expectRgbNear(
                 capturePixel(await generalTab.capture(), 0.9, 0.5),
                 background,
-                // GTK brightens the active notebook tab by 15 RGB levels.
+                // Flat navigation tabs retain GTK's transparent treatment.
                 15
               );
             });
@@ -1316,7 +1317,9 @@ describe.concurrent('elder-terms-vte settings', () => {
               const buttonCapture = await (
                 await app.getById(buttonId)
               ).capture();
-              expect(capturePixel(buttonCapture, 0.15, 0.5)).toEqual(exterior);
+              expect(capturePixel(buttonCapture, 0.15, 0.5)).toEqual(
+                componentBackground
+              );
             }
             const settingsDialog = expectElementKind(
               await app.getById('settings_dialog'),
@@ -1361,8 +1364,8 @@ describe.concurrent('elder-terms-vte settings', () => {
               dropdown: dropdownColor,
             }).toEqual({
               settingsHeader: exterior,
-              backgroundModeCombo: exterior,
-              dropdown: exterior,
+              backgroundModeCombo: componentBackground,
+              dropdown: componentBackground,
             });
             await expectCaptureToMatchFixture(
               dropdownCapture,

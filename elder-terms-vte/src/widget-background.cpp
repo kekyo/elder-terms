@@ -1,11 +1,50 @@
 #include "widget-background.h"
 
+#include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
 
 namespace elder_terms {
+
+static constexpr double component_lightness_delta = 0.08;
+static constexpr char component_background_selectors[] =
+    "button, "
+    "button > box, "
+    "button > label, "
+    "button > image, "
+    "button > box > label, "
+    "button > box > image, "
+    "entry, "
+    "entry > image, "
+    "spinbutton, "
+    "spinbutton > entry, "
+    "combobox, "
+    "combobox > box, "
+    "combobox > box > button, "
+    "combobox > box > button > box, "
+    "combobox > box > button > box > arrow, "
+    "cellview, "
+    "window.popup, "
+    "window.popup *, "
+    "menu, "
+    "menu > menuitem, "
+    "menu > menuitem > box, "
+    "menu > menuitem > label, "
+    "menu > menuitem > box > label, "
+    "popover, "
+    "popover > contents, "
+    "popover modelbutton, "
+    "scrollbar > contents > trough > slider, "
+    "progressbar > trough, "
+    "scale > contents > trough, "
+    "scale > contents > trough > slider, "
+    "switch > slider, "
+    "tooltip.background, "
+    "tooltip.background > box, "
+    "tooltip.background > box > label";
 
 static std::string rgb_color_css(const RgbColor &color,
                                  const std::string &selector) {
@@ -43,9 +82,95 @@ static GtkCssProvider *create_background_provider(
       rgb_color_css(color, selector), target_name);
 }
 
+static guint8 normalized_color_channel(double value) {
+  return static_cast<guint8>(
+      std::lround(std::clamp(value, 0.0, 1.0) * 255.0));
+}
+
+static RgbColor derive_component_background(const RgbColor &color) {
+  static constexpr double channel_maximum = 255.0;
+  const double red =
+      static_cast<double>(color.red) / channel_maximum;
+  const double green =
+      static_cast<double>(color.green) / channel_maximum;
+  const double blue =
+      static_cast<double>(color.blue) / channel_maximum;
+  const double maximum = std::max(red, std::max(green, blue));
+  const double minimum = std::min(red, std::min(green, blue));
+  const double chroma = maximum - minimum;
+  const double lightness = (maximum + minimum) / 2.0;
+
+  double hue = 0.0;
+  double saturation = 0.0;
+  if (chroma > 0.0) {
+    saturation =
+        chroma / (1.0 - std::abs(2.0 * lightness - 1.0));
+    if (maximum == red) {
+      hue = 60.0 * std::fmod((green - blue) / chroma, 6.0);
+    } else if (maximum == green) {
+      hue = 60.0 * ((blue - red) / chroma + 2.0);
+    } else {
+      hue = 60.0 * ((red - green) / chroma + 4.0);
+    }
+    if (hue < 0.0) {
+      hue += 360.0;
+    }
+  }
+
+  const double component_lightness =
+      lightness <= 0.5
+          ? lightness +
+                (1.0 - lightness) * component_lightness_delta
+          : lightness * (1.0 - component_lightness_delta);
+  const double component_chroma =
+      (1.0 - std::abs(2.0 * component_lightness - 1.0)) *
+      saturation;
+  const double hue_sector = hue / 60.0;
+  const double secondary =
+      component_chroma *
+      (1.0 - std::abs(std::fmod(hue_sector, 2.0) - 1.0));
+  const double match = component_lightness - component_chroma / 2.0;
+
+  double component_red = 0.0;
+  double component_green = 0.0;
+  double component_blue = 0.0;
+  if (hue_sector < 1.0) {
+    component_red = component_chroma;
+    component_green = secondary;
+  } else if (hue_sector < 2.0) {
+    component_red = secondary;
+    component_green = component_chroma;
+  } else if (hue_sector < 3.0) {
+    component_green = component_chroma;
+    component_blue = secondary;
+  } else if (hue_sector < 4.0) {
+    component_green = secondary;
+    component_blue = component_chroma;
+  } else if (hue_sector < 5.0) {
+    component_red = secondary;
+    component_blue = component_chroma;
+  } else {
+    component_red = component_chroma;
+    component_blue = secondary;
+  }
+
+  return {
+      .red = normalized_color_channel(component_red + match),
+      .green = normalized_color_channel(component_green + match),
+      .blue = normalized_color_channel(component_blue + match),
+  };
+}
+
 GtkCssProvider *create_widget_background_provider(
     const RgbColor &color, const char *target_name) {
   return create_background_provider(color, "*", target_name);
+}
+
+GtkCssProvider *create_widget_component_background_provider(
+    const RgbColor &color, const char *target_name) {
+  return create_background_provider(
+      derive_component_background(color),
+      component_background_selectors, target_name);
 }
 
 GtkCssProvider *create_scoped_widget_background_provider(
@@ -61,6 +186,13 @@ GtkCssProvider *create_scoped_widget_background_provider(
            " * { background-color: transparent; }";
   }
   return create_css_provider(css, target_name);
+}
+
+GtkCssProvider *create_scoped_widget_surface_background_provider(
+    const RgbColor &color, const char *style_class,
+    const char *target_name) {
+  return create_background_provider(
+      color, "." + std::string(style_class), target_name);
 }
 
 void add_widget_tree_background_provider(

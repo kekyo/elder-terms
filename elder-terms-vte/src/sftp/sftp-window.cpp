@@ -101,6 +101,7 @@ struct SftpWindow {
   GtkWidget *status_label = nullptr;
   GtkCssProvider *exterior_background_provider = nullptr;
   GtkCssProvider *background_provider = nullptr;
+  GtkCssProvider *component_background_provider = nullptr;
   SftpPaneState local;
   SftpPaneState remote;
   std::shared_ptr<SftpClient> client;
@@ -129,6 +130,7 @@ struct SftpWindow {
     }
     g_clear_object(&exterior_background_provider);
     g_clear_object(&background_provider);
+    g_clear_object(&component_background_provider);
     if (local.store != nullptr) {
       g_object_unref(local.store);
       local.store = nullptr;
@@ -1130,14 +1132,13 @@ static void on_sftp_window_destroy(GtkWidget *, gpointer data) {
   if (window == nullptr || window->destroyed) {
     return;
   }
+  clear_sftp_window_colors(window);
   window->destroyed = true;
   window->window = nullptr;
   window->header_bar = nullptr;
   window->root_overlay = nullptr;
   window->paned = nullptr;
   window->status_bar = nullptr;
-  g_clear_object(&window->exterior_background_provider);
-  g_clear_object(&window->background_provider);
   (void)window->stop_source.cancel();
   if (window->transfer_cancel_source.has_value()) {
     (void)window->transfer_cancel_source->cancel();
@@ -1296,12 +1297,12 @@ static void clear_sftp_window_colors(SftpWindow *window) {
   }
 
   if (window->exterior_background_provider != nullptr) {
-    remove_widget_tree_background_provider(
-        window->header_bar,
-        window->exterior_background_provider);
-    remove_widget_tree_background_provider(
-        window->status_bar,
-        window->exterior_background_provider);
+    gtk_style_context_remove_provider(
+        gtk_widget_get_style_context(window->header_bar),
+        GTK_STYLE_PROVIDER(window->exterior_background_provider));
+    gtk_style_context_remove_provider(
+        gtk_widget_get_style_context(window->status_bar),
+        GTK_STYLE_PROVIDER(window->exterior_background_provider));
     g_clear_object(&window->exterior_background_provider);
   }
   if (window->background_provider != nullptr) {
@@ -1311,6 +1312,16 @@ static void clear_sftp_window_colors(SftpWindow *window) {
         window->transfer_overlay,
         window->background_provider);
     g_clear_object(&window->background_provider);
+  }
+  if (window->component_background_provider != nullptr) {
+    GdkScreen *screen = gtk_widget_get_screen(window->window);
+    if (screen != nullptr) {
+      gtk_style_context_remove_provider_for_screen(
+          screen,
+          GTK_STYLE_PROVIDER(
+              window->component_background_provider));
+    }
+    g_clear_object(&window->component_background_provider);
   }
 }
 
@@ -1497,12 +1508,14 @@ void set_sftp_window_colors(
         create_widget_background_provider(
             settings.exterior_background.value(),
             "SFTP exterior");
-    add_widget_tree_background_provider(
-        window->header_bar,
-        window->exterior_background_provider);
-    add_widget_tree_background_provider(
-        window->status_bar,
-        window->exterior_background_provider);
+    gtk_style_context_add_provider(
+        gtk_widget_get_style_context(window->header_bar),
+        GTK_STYLE_PROVIDER(window->exterior_background_provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    gtk_style_context_add_provider(
+        gtk_widget_get_style_context(window->status_bar),
+        GTK_STYLE_PROVIDER(window->exterior_background_provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
   }
   if (settings.background.has_value()) {
     window->background_provider =
@@ -1514,6 +1527,20 @@ void set_sftp_window_colors(
         window->transfer_overlay,
         window->background_provider,
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+    window->component_background_provider =
+        create_widget_component_background_provider(
+            settings.background.value(), "SFTP controls");
+    GdkScreen *screen = gtk_widget_get_screen(window->window);
+    if (window->component_background_provider != nullptr &&
+        screen != nullptr) {
+      gtk_style_context_add_provider_for_screen(
+          screen,
+          GTK_STYLE_PROVIDER(
+              window->component_background_provider),
+          GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
+    } else {
+      g_clear_object(&window->component_background_provider);
+    }
   }
 }
 
