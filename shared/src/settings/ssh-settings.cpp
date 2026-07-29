@@ -4,6 +4,8 @@
 #include <cctype>
 #include <utility>
 
+#include "terminal-type-settings.h"
+
 namespace elder_terms {
 
 static constexpr gint64 default_ssh_port = 22;
@@ -124,7 +126,7 @@ SshEndpointSettings ssh_endpoint_settings(const SettingsStore &store) {
 SshConnectionSettings ssh_connection_settings(const SettingsStore &store) {
   return {
       .endpoint = ssh_endpoint_settings(store),
-      .terminal_type = setting_string_value_or_default(
+      .terminal_type = resolve_terminal_type_setting(
           store, ssh_terminal_type_setting_key(),
           default_ssh_terminal_type),
   };

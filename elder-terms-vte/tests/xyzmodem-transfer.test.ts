@@ -886,6 +886,7 @@ const writeLoginScript = async (
     [
       '#!/bin/sh',
       `cd ${shellQuote(remoteDirectory)} || exit 1`,
+      'printf \'%s\\n\' "$TERM" >terminal-type.txt',
       'stty raw -echo -ixon -ixoff -icanon min 1 time 0 2>/dev/null || exit 1',
       `: > ${shellQuote(readyPath)}`,
       `cat ${shellQuote(markerPath)} >/dev/null || exit 1`,
@@ -1041,7 +1042,6 @@ const writeSshConfig = async (
       `port=${port}`,
       `username=${username}`,
       `identity_file=${identityFile}`,
-      'terminal_type=xterm',
       '',
       '[transfer]',
       ...transferLines,
@@ -1943,6 +1943,64 @@ const pauseTransferAtProgressForCapture = async (
 };
 
 describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
+  registerConnectionTest(
+    connectionCases[1],
+    'sshd receives xterm when an RGB background selects the built-in terminal type',
+    async (context) => {
+      await expectRequiredCommands();
+      await withTemporaryDirectory(async (directory) => {
+        const fixture = await createTransferFixture(
+          directory,
+          transferMenuCases[0],
+          transferSizeCasesByProtocol.zmodem[0]
+        );
+        const connection = await startConnection(connectionCases[1], fixture);
+        try {
+          await connection.writeConfig(
+            fixture.configPath,
+            fixture.transferBasePath,
+            undefined
+          );
+          await addBackgroundColorToConfig(fixture.configPath, '#604020');
+          await runGtkTest(
+            context,
+            [...connection.launchArguments, '-c', fixture.configPath],
+            async (app, evidence) => {
+              await waitForTransferConnection(
+                app,
+                evidence,
+                connection,
+                fixture.peerReadyPath
+              );
+              await waitForResult(
+                async () => {
+                  expect(
+                    (
+                      await readFile(
+                        join(directory, 'remote', 'terminal-type.txt'),
+                        'utf8'
+                      )
+                    ).trim()
+                  ).toBe('xterm');
+                },
+                {
+                  message:
+                    'the SSH PTY request should use the ' +
+                    'background-dependent terminal type',
+                  timeoutMs: 5_000,
+                }
+              );
+            },
+            connection.gtkTestOptions
+          );
+        } finally {
+          await connection.close();
+        }
+      });
+    },
+    60_000
+  );
+
   it(
     'dims the terminal image while a transfer is active',
     async (context) => {

@@ -325,6 +325,187 @@ static void test_general_color_none_overrides_global_colors() {
               "an explicit none should remain a connection override");
 }
 
+static void test_terminal_type_defaults_follow_background_color() {
+  SettingsStore store =
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
+  expect_true(
+      elder_terms::telnet_connection_settings(store).terminal_type ==
+          "xterm-256color" &&
+          ssh_connection_settings(store).terminal_type ==
+              "xterm-256color",
+      "terminal connections without a background should use "
+      "xterm-256color");
+
+  set_explicit_setting_value(
+      &store, general_background_setting_key(),
+      elder_terms::SettingValue{std::string("#102030")});
+  expect_true(
+      elder_terms::telnet_connection_settings(store).terminal_type ==
+          "xterm" &&
+          ssh_connection_settings(store).terminal_type == "xterm",
+      "terminal connections with an RGB background should use xterm");
+
+  set_explicit_setting_value(
+      &store, general_type_setting_key(),
+      elder_terms::SettingValue{std::string("telnet")});
+  TerminalConnectionProfile profile =
+      required_terminal_connection_profile(store);
+  const auto *telnet =
+      std::get_if<TelnetConnectionSettings>(&profile.settings);
+  expect_true(telnet != nullptr && telnet->terminal_type == "xterm",
+              "the TELNET connection profile should receive the "
+              "background-dependent terminal type");
+
+  set_explicit_setting_value(
+      &store, general_type_setting_key(),
+      elder_terms::SettingValue{std::string("ssh")});
+  profile = required_terminal_connection_profile(store);
+  const auto *ssh =
+      std::get_if<SshConnectionSettings>(&profile.settings);
+  expect_true(ssh != nullptr && ssh->terminal_type == "xterm",
+              "the SSH connection profile should receive the "
+              "background-dependent terminal type");
+
+  set_explicit_setting_value(
+      &store, general_background_setting_key(),
+      elder_terms::SettingValue{std::string("none")});
+  expect_true(
+      elder_terms::telnet_connection_settings(store).terminal_type ==
+          "xterm-256color" &&
+          ssh_connection_settings(store).terminal_type ==
+              "xterm-256color",
+      "changing the background to none should restore xterm-256color");
+
+  set_explicit_setting_value(
+      &store, general_background_setting_key(),
+      elder_terms::SettingValue{std::string("#405060")});
+  expect_true(
+      elder_terms::telnet_connection_settings(store).terminal_type ==
+          "xterm" &&
+          ssh_connection_settings(store).terminal_type == "xterm",
+      "changing the background back to RGB should restore xterm");
+
+  const std::filesystem::path save_path =
+      temporary_config_path("background-terminal-type-default");
+  const SettingsSaveResult save_result = save_settings(store, save_path);
+  const std::string saved = read_config(save_path);
+  remove_config(save_path);
+  expect_true(save_result.saved,
+              "background-dependent terminal defaults should remain "
+              "saveable");
+  expect_true(saved.find("terminal_type=") == std::string::npos,
+              "a background-dependent terminal default should not be "
+              "serialized as an explicit setting");
+}
+
+static void test_configured_terminal_types_override_background_default() {
+  const std::filesystem::path global_path =
+      temporary_config_path("global-terminal-type-default");
+  const std::filesystem::path connection_path =
+      temporary_config_path("connection-terminal-type-default");
+  write_config(global_path,
+               "[general]\n"
+               "background=#102030\n"
+               "\n"
+               "[telnet]\n"
+               "terminal_type=vt220\n"
+               "\n"
+               "[ssh]\n"
+               "terminal_type=ansi\n");
+  write_config(connection_path,
+               "[general]\n"
+               "type=telnet\n"
+               "background=#405060\n"
+               "\n"
+               "[telnet]\n"
+               "terminal_type=screen\n");
+
+  SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  expect_true(
+      elder_terms::telnet_connection_settings(result.store).terminal_type ==
+          "screen",
+      "an explicit TELNET terminal type should override the RGB background "
+      "default");
+  expect_true(
+      ssh_connection_settings(result.store).terminal_type == "ansi",
+      "a global SSH terminal type should override the RGB background "
+      "default");
+
+  write_config(connection_path,
+               "[general]\n"
+               "type=telnet\n"
+               "background=none\n");
+  result = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  remove_config(global_path);
+  remove_config(connection_path);
+
+  expect_true(
+      elder_terms::telnet_connection_settings(result.store).terminal_type ==
+          "vt220" &&
+          ssh_connection_settings(result.store).terminal_type == "ansi",
+      "configured terminal types should remain active when a connection "
+      "overrides a global RGB background with none");
+
+  const std::filesystem::path color_only_global_path =
+      temporary_config_path("global-background-terminal-type-default");
+  const std::filesystem::path no_color_connection_path =
+      temporary_config_path("connection-no-background-terminal-type-default");
+  write_config(color_only_global_path,
+               "[general]\n"
+               "background=#708090\n");
+  write_config(no_color_connection_path,
+               "[general]\n"
+               "type=ssh\n");
+  const SettingsLoadResult inherited_color = load_settings(
+      SettingsLoadOptions{
+          .config_path = no_color_connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = color_only_global_path,
+      },
+      1.0);
+  expect_true(
+      elder_terms::telnet_connection_settings(inherited_color.store)
+                  .terminal_type == "xterm" &&
+          ssh_connection_settings(inherited_color.store).terminal_type ==
+              "xterm",
+      "a global RGB background should select the xterm built-in default");
+
+  write_config(no_color_connection_path,
+               "[general]\n"
+               "type=ssh\n"
+               "background=none\n");
+  const SettingsLoadResult no_color = load_settings(
+      SettingsLoadOptions{
+          .config_path = no_color_connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = color_only_global_path,
+      },
+      1.0);
+  remove_config(color_only_global_path);
+  remove_config(no_color_connection_path);
+
+  expect_true(
+      elder_terms::telnet_connection_settings(no_color.store).terminal_type ==
+          "xterm-256color" &&
+          ssh_connection_settings(no_color.store).terminal_type ==
+              "xterm-256color",
+      "a connection background of none should suppress the global RGB "
+      "terminal type default");
+}
+
 static void test_invalid_general_colors_fall_back_and_warn() {
   const std::filesystem::path global_path =
       temporary_config_path("valid-global-general-colors");
@@ -2500,6 +2681,10 @@ int main() {
     elder_terms_settings_test::test_general_color_settings();
     elder_terms_settings_test::
         test_general_color_none_overrides_global_colors();
+    elder_terms_settings_test::
+        test_terminal_type_defaults_follow_background_color();
+    elder_terms_settings_test::
+        test_configured_terminal_types_override_background_default();
     elder_terms_settings_test::
         test_invalid_general_colors_fall_back_and_warn();
     elder_terms_settings_test::test_terminal_text_defaults_follow_connection_type();

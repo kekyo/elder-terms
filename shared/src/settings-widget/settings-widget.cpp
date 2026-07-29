@@ -1705,6 +1705,24 @@ static void sync_key_binding_reset_button(
   gtk_widget_set_tooltip_text(button, tooltip);
 }
 
+static void sync_terminal_type_entries(SettingsWidgetState *state) {
+  const bool previous_synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  if (state->telnet_terminal_type_entry != nullptr) {
+    sync_inheritable_entry(
+        state->telnet_terminal_type_entry, state->draft_store,
+        telnet_terminal_type_setting_key(),
+        telnet_connection_settings(state->draft_store).terminal_type);
+  }
+  if (state->ssh_terminal_type_entry != nullptr) {
+    sync_inheritable_entry(
+        state->ssh_terminal_type_entry, state->draft_store,
+        ssh_terminal_type_setting_key(),
+        ssh_connection_settings(state->draft_store).terminal_type);
+  }
+  state->synchronizing = previous_synchronizing;
+}
+
 static void sync_widgets_from_draft(SettingsWidgetState *state) {
   const TerminalDisplaySettings display =
       terminal_display_settings(state->draft_store);
@@ -1785,6 +1803,7 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
       colors.exterior_background);
   sync_general_color_control(state, GeneralColorField::background,
                              colors.background);
+  sync_terminal_type_entries(state);
   if (state->terminal_zoom_in_key_input != nullptr) {
     sync_key_binding_widget(
         state, state->terminal_zoom_in_key_input,
@@ -1814,12 +1833,6 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
     state->telnet_port_valid = true;
     set_entry_validation(state->telnet_port_entry, true, {});
   }
-  if (state->telnet_terminal_type_entry != nullptr) {
-    sync_inheritable_entry(state->telnet_terminal_type_entry,
-                           state->draft_store,
-                           telnet_terminal_type_setting_key(),
-                           telnet.terminal_type);
-  }
   if (state->ssh_address_entry != nullptr) {
     sync_inheritable_entry(state->ssh_address_entry, state->draft_store,
                            ssh_address_setting_key(), ssh.endpoint.address);
@@ -1841,12 +1854,6 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
                            state->draft_store,
                            ssh_identity_file_setting_key(),
                            ssh.endpoint.identity_file);
-  }
-  if (state->ssh_terminal_type_entry != nullptr) {
-    sync_inheritable_entry(state->ssh_terminal_type_entry,
-                           state->draft_store,
-                           ssh_terminal_type_setting_key(),
-                           ssh.terminal_type);
   }
   if (state->sftp_local_directory_entry != nullptr) {
     sync_inheritable_entry(state->sftp_local_directory_entry,
@@ -2201,6 +2208,7 @@ static void on_general_background_mode_changed(GtkComboBox *,
   }
   update_general_color_mode_from_widget(
       state, GeneralColorField::background);
+  sync_terminal_type_entries(state);
   notify_changed(state);
 }
 
@@ -2222,6 +2230,7 @@ static void on_general_background_color_set(GtkColorButton *,
     return;
   }
   update_general_color_from_picker(state, GeneralColorField::background);
+  sync_terminal_type_entries(state);
   notify_changed(state);
 }
 

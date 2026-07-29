@@ -861,6 +861,16 @@ describe.concurrent('shared settings widget', () => {
         'settings_general_background_mode_combo',
         'No color (built-in)'
       );
+      await waitForEntryPlaceholder(
+        app,
+        'settings_telnet_terminal_type_entry',
+        'xterm-256color (built-in)'
+      );
+      await waitForEntryPlaceholder(
+        app,
+        'settings_ssh_terminal_type_entry',
+        'xterm-256color (built-in)'
+      );
       await expectSensitive(exteriorPicker);
       await expectSensitive(backgroundPicker);
       await waitForResult(async () => {
@@ -885,6 +895,43 @@ describe.concurrent('shared settings widget', () => {
         'settings_general_background_mode_combo',
         'Custom'
       );
+      await waitForEntryPlaceholder(
+        app,
+        'settings_telnet_terminal_type_entry',
+        'xterm (built-in)'
+      );
+      await waitForEntryPlaceholder(
+        app,
+        'settings_ssh_terminal_type_entry',
+        'xterm (built-in)'
+      );
+
+      const backgroundMode = expectElementKind(
+        await app.getById('settings_general_background_mode_combo'),
+        'comboBox'
+      );
+      await backgroundMode.selectChildAt(1);
+      await waitForEntryPlaceholder(
+        app,
+        'settings_telnet_terminal_type_entry',
+        'xterm-256color (built-in)'
+      );
+      await waitForEntryPlaceholder(
+        app,
+        'settings_ssh_terminal_type_entry',
+        'xterm-256color (built-in)'
+      );
+      await backgroundMode.selectChildAt(2);
+      await waitForEntryPlaceholder(
+        app,
+        'settings_telnet_terminal_type_entry',
+        'xterm (built-in)'
+      );
+      await waitForEntryPlaceholder(
+        app,
+        'settings_ssh_terminal_type_entry',
+        'xterm (built-in)'
+      );
       await expectElementKind(
         await app.getById('settings_apply_button'),
         'button'
@@ -905,6 +952,8 @@ describe.concurrent('shared settings widget', () => {
         '--page=general',
         '--global=general.exterior_background=#112233',
         '--global=general.background=#445566',
+        '--global=telnet.terminal_type=vt220',
+        '--global=ssh.terminal_type=ansi',
         '--exterior-background=none',
         '--background=#778899',
       ],
@@ -932,6 +981,16 @@ describe.concurrent('shared settings widget', () => {
         );
         await expectSensitive(
           await app.getById('settings_general_background_button')
+        );
+        await waitForEntryPlaceholder(
+          app,
+          'settings_telnet_terminal_type_entry',
+          'vt220 (global)'
+        );
+        await waitForEntryPlaceholder(
+          app,
+          'settings_ssh_terminal_type_entry',
+          'ansi (global)'
         );
 
         await exteriorMode.selectChildAt(0);
@@ -964,9 +1023,51 @@ describe.concurrent('shared settings widget', () => {
         expect(store.background).toBe('#445566');
         expect(store.background_source).toBe('global');
         expect(store.background_explicit).toBe('false');
+        expect(store.telnet_terminal_type).toBe('vt220');
+        expect(store.telnet_terminal_type_explicit).toBe('false');
+        expect(store.ssh_terminal_type).toBe('ansi');
+        expect(store.ssh_terminal_type_explicit).toBe('false');
       }
     );
-  }, 60_000);
+
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=general',
+        '--telnet-terminal-type=screen',
+        '--ssh-terminal-type=vt100',
+      ],
+      async ({ app }) => {
+        await chooseNamedColor(
+          app,
+          'settings_general_background_button',
+          'Blue'
+        );
+        expect(
+          await expectElementKind(
+            await app.getById('settings_telnet_terminal_type_entry'),
+            'entry'
+          ).text()
+        ).toBe('screen');
+        expect(
+          await expectElementKind(
+            await app.getById('settings_ssh_terminal_type_entry'),
+            'entry'
+          ).text()
+        ).toBe('vt100');
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+
+        const store = await waitForAppliedStore(app);
+        expect(store.telnet_terminal_type).toBe('screen');
+        expect(store.telnet_terminal_type_explicit).toBe('true');
+        expect(store.ssh_terminal_type).toBe('vt100');
+        expect(store.ssh_terminal_type_explicit).toBe('true');
+      }
+    );
+  }, 90_000);
 
   it('matches the default Logging visual fixture', async (context) => {
     const testCase: SettingVisualCase = {

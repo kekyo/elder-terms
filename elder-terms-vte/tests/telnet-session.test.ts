@@ -334,7 +334,7 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
     });
   });
 
-  it('reports the configured terminal type when the server requests it', async (context) => {
+  it('reports xterm when an RGB background selects the built-in terminal type', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const receivedChunks: Buffer[] = [];
       let acceptedSocket: Socket | undefined;
@@ -373,10 +373,9 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
         );
         await writeFile(
           configPath,
-          `${configTemplate.replace(
-            '${port}',
-            String(port)
-          )}\nterminal_type=vt220\n`,
+          configTemplate
+            .replace('[general]\n', '[general]\nbackground=#604020\n')
+            .replace('${port}', String(port)),
           'utf8'
         );
 
@@ -391,11 +390,11 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
                   telnetSb,
                   telnetTerminalType,
                   telnetTerminalTypeIs,
-                  'v'.charCodeAt(0),
+                  'x'.charCodeAt(0),
                   't'.charCodeAt(0),
-                  '2'.charCodeAt(0),
-                  '2'.charCodeAt(0),
-                  '0'.charCodeAt(0),
+                  'e'.charCodeAt(0),
+                  'r'.charCodeAt(0),
+                  'm'.charCodeAt(0),
                   telnetIac,
                   telnetSe,
                 ])
@@ -403,7 +402,8 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
             },
             {
               message:
-                'TELNET client should report its configured terminal type',
+                'TELNET client should report the background-dependent ' +
+                'built-in terminal type',
               timeoutMs: 5_000,
             }
           );

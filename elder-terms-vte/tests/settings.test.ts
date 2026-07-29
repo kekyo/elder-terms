@@ -1172,7 +1172,6 @@ describe.concurrent('elder-terms-vte settings', () => {
           '[telnet]',
           'address=127.0.0.1',
           `port=${port}`,
-          'terminal_type=xterm',
           '',
         ].join('\n');
         await mkdir(globalDirectory, { recursive: true });
