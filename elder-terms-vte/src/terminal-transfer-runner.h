@@ -42,13 +42,27 @@ std::string sanitize_transfer_file_name(const std::string &name,
  * @param file_name Current file name.
  * @param transferred_bytes Bytes already transferred for the current file.
  * @param total_bytes Current file size when known.
+ * @param speed_bytes_per_second Current-file transfer speed when stable.
  * @param eta_seconds Remaining seconds when an ETA is stable.
  * @returns Status text suitable for the status bar.
  */
 std::string format_transfer_status(
     const std::string &file_name, std::uint64_t transferred_bytes,
     std::optional<std::uint64_t> total_bytes,
+    std::optional<std::uint64_t> speed_bytes_per_second,
     std::optional<std::uint64_t> eta_seconds);
+
+/**
+ * Estimates current-file transfer speed from observed progress.
+ *
+ * @param baseline_transferred_bytes Transferred bytes at the speed baseline.
+ * @param transferred_bytes Current transferred bytes for the current file.
+ * @param elapsed_ms Milliseconds elapsed since the speed baseline.
+ * @returns Bytes per second when enough progress has been observed.
+ */
+std::optional<std::uint64_t> estimate_transfer_speed_bytes_per_second(
+    std::uint64_t baseline_transferred_bytes,
+    std::uint64_t transferred_bytes, std::uint64_t elapsed_ms);
 
 /**
  * Estimates remaining transfer seconds from current-file progress.

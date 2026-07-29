@@ -1690,6 +1690,8 @@ const waitForTransferProgressRange = async (
   );
 
 const transferEtaStatusPattern = /\bETA [0-9]{2,}:[0-9]{2}\b/;
+const transferSpeedStatusPattern =
+  /\b(?:[0-9]+(?:\.[0-9]+)?)(?:B|KiB|MiB|GiB|TiB)\/s\b/;
 
 const readStatusBarText = async (app: GtkApp): Promise<string> => {
   const statusLabel = expectElementKind(
@@ -1699,7 +1701,7 @@ const readStatusBarText = async (app: GtkApp): Promise<string> => {
   return statusLabel.text();
 };
 
-const expectTransferEtaStatus = async (
+const expectTransferSpeedWithEtaStatus = async (
   app: GtkApp,
   transferCase: TransferMenuCase
 ): Promise<void> => {
@@ -1710,10 +1712,12 @@ const expectTransferEtaStatus = async (
 
   await waitForResult(
     async () => {
-      expect(await readStatusBarText(app)).toMatch(transferEtaStatusPattern);
+      const status = await readStatusBarText(app);
+      expect(status).toMatch(transferSpeedStatusPattern);
+      expect(status).toMatch(transferEtaStatusPattern);
     },
     {
-      message: `${transferCase.label} status should show ETA`,
+      message: `${transferCase.label} status should show speed and ETA`,
       intervalMs: 10,
       timeoutMs: 15_000,
     }
@@ -1796,7 +1800,7 @@ const pauseTransferAtProgressForCapture = async (
         pausedProgress,
         transferCase: transferCase.label,
       });
-      await expectTransferEtaStatus(app, transferCase);
+      await expectTransferSpeedWithEtaStatus(app, transferCase);
       await assertTransferProgressNoticeMatches(
         app,
         evidence,
@@ -1851,7 +1855,7 @@ const pauseTransferAtProgressForCapture = async (
       // while GTK captures the stable progress notice.
       await waitForFileExists(fixture.pausedPath, 10_000);
       await delay(100);
-      await expectTransferEtaStatus(app, transferCase);
+      await expectTransferSpeedWithEtaStatus(app, transferCase);
       await assertTransferProgressNoticeMatches(
         app,
         evidence,
@@ -1877,7 +1881,7 @@ const pauseTransferAtProgressForCapture = async (
       pauseRequested = true;
       await waitForFileExists(fixture.pausedPath, 10_000);
       await delay(100);
-      await expectTransferEtaStatus(app, transferCase);
+      await expectTransferSpeedWithEtaStatus(app, transferCase);
       await assertTransferProgressNoticeMatches(
         app,
         evidence,
@@ -1908,7 +1912,7 @@ const pauseTransferAtProgressForCapture = async (
     progressBeforePause,
     transferCase: transferCase.label,
   });
-  await expectTransferEtaStatus(app, transferCase);
+  await expectTransferSpeedWithEtaStatus(app, transferCase);
   let pauseRequested = false;
   try {
     await requestTransferProgressPeerPause(fixture);

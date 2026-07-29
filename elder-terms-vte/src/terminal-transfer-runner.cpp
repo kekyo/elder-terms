@@ -22,7 +22,7 @@ static constexpr std::uint32_t transfer_block_timeout_ms = 5000;
 static constexpr std::uint32_t transfer_retry_limit = 8;
 static constexpr std::uint8_t transfer_pad_byte = 0x1a;
 static constexpr const char *fallback_receive_name = "received.bin";
-static constexpr std::uint64_t transfer_eta_minimum_elapsed_ms = 1000;
+static constexpr std::uint64_t transfer_measurement_minimum_elapsed_ms = 1000;
 
 struct GObjectDeleter {
   void operator()(void *object) const {
@@ -50,16 +50,39 @@ struct TransferProgressState {
   std::string file_name = fallback_receive_name;
   std::optional<std::uint64_t> total_bytes;
   std::uint64_t transferred_bytes = 0;
-  std::uint64_t eta_baseline_transferred_bytes = 0;
-  std::optional<std::uint64_t> eta_baseline_time_ms;
+  std::uint64_t measurement_baseline_transferred_bytes = 0;
+  std::optional<std::uint64_t> measurement_baseline_time_ms;
 
-  void reset_eta_baseline(std::uint64_t transferred) {
-    eta_baseline_transferred_bytes = transferred;
-    eta_baseline_time_ms = now_ms ? std::optional<std::uint64_t>(now_ms())
-                                  : std::nullopt;
+  void reset_measurement_baseline(std::uint64_t transferred) {
+    measurement_baseline_transferred_bytes = transferred;
+    measurement_baseline_time_ms =
+        now_ms ? std::optional<std::uint64_t>(now_ms()) : std::nullopt;
   }
 
-  std::optional<std::uint64_t> eta_seconds() const {
+  std::optional<std::uint64_t> measurement_elapsed_ms() const {
+    if (!measurement_baseline_time_ms.has_value() || !now_ms) {
+      return std::nullopt;
+    }
+
+    const std::uint64_t now = now_ms();
+    if (now < *measurement_baseline_time_ms) {
+      return std::nullopt;
+    }
+    return now - *measurement_baseline_time_ms;
+  }
+
+  std::optional<std::uint64_t> speed_bytes_per_second(
+      const std::optional<std::uint64_t> &elapsed_ms) const {
+    if (!elapsed_ms.has_value()) {
+      return std::nullopt;
+    }
+    return estimate_transfer_speed_bytes_per_second(
+        measurement_baseline_transferred_bytes, transferred_bytes,
+        *elapsed_ms);
+  }
+
+  std::optional<std::uint64_t>
+  eta_seconds(const std::optional<std::uint64_t> &elapsed_ms) const {
     if (protocol == TerminalTransferProtocol::xmodem ||
         !total_bytes.has_value() || *total_bytes == 0) {
       return std::nullopt;
@@ -67,23 +90,22 @@ struct TransferProgressState {
     if (transferred_bytes >= *total_bytes) {
       return 0;
     }
-    if (!eta_baseline_time_ms.has_value() || !now_ms) {
+    if (!elapsed_ms.has_value()) {
       return std::nullopt;
     }
-
-    const std::uint64_t now = now_ms();
-    if (now < *eta_baseline_time_ms) {
-      return std::nullopt;
-    }
-    return estimate_transfer_eta_seconds(eta_baseline_transferred_bytes,
-                                         transferred_bytes, *total_bytes,
-                                         now - *eta_baseline_time_ms);
+    return estimate_transfer_eta_seconds(
+        measurement_baseline_transferred_bytes, transferred_bytes,
+        *total_bytes, *elapsed_ms);
   }
 
   void publish() const {
     if (status) {
+      const std::optional<std::uint64_t> elapsed_ms =
+          measurement_elapsed_ms();
       status(format_transfer_status(file_name, transferred_bytes,
-                                    total_bytes, eta_seconds()));
+                                    total_bytes,
+                                    speed_bytes_per_second(elapsed_ms),
+                                    eta_seconds(elapsed_ms)));
     }
     if (!progress) {
       return;
@@ -315,7 +337,7 @@ std::optional<std::uint64_t> estimate_transfer_eta_seconds(
   if (transferred_bytes >= total_bytes) {
     return 0;
   }
-  if (elapsed_ms < transfer_eta_minimum_elapsed_ms ||
+  if (elapsed_ms < transfer_measurement_minimum_elapsed_ms ||
       transferred_bytes <= baseline_transferred_bytes) {
     return std::nullopt;
   }
@@ -332,6 +354,27 @@ std::optional<std::uint64_t> estimate_transfer_eta_seconds(
     return std::numeric_limits<std::uint64_t>::max();
   }
   return static_cast<std::uint64_t>(estimated_seconds);
+}
+
+std::optional<std::uint64_t> estimate_transfer_speed_bytes_per_second(
+    std::uint64_t baseline_transferred_bytes,
+    std::uint64_t transferred_bytes, std::uint64_t elapsed_ms) {
+  if (elapsed_ms < transfer_measurement_minimum_elapsed_ms ||
+      transferred_bytes <= baseline_transferred_bytes) {
+    return std::nullopt;
+  }
+
+  const std::uint64_t progressed_bytes =
+      transferred_bytes - baseline_transferred_bytes;
+  const long double estimated_bytes_per_second =
+      (static_cast<long double>(progressed_bytes) * 1000.0L) /
+      static_cast<long double>(elapsed_ms);
+  if (estimated_bytes_per_second >=
+      static_cast<long double>(std::numeric_limits<std::uint64_t>::max())) {
+    return std::numeric_limits<std::uint64_t>::max();
+  }
+  return std::max<std::uint64_t>(
+      1, static_cast<std::uint64_t>(std::round(estimated_bytes_per_second)));
 }
 
 std::string sanitize_transfer_file_name(const std::string &name,
@@ -355,6 +398,7 @@ std::string sanitize_transfer_file_name(const std::string &name,
 std::string format_transfer_status(
     const std::string &file_name, std::uint64_t transferred_bytes,
     std::optional<std::uint64_t> total_bytes,
+    std::optional<std::uint64_t> speed_bytes_per_second,
     std::optional<std::uint64_t> eta_seconds) {
   std::string result = file_name.empty() ? fallback_receive_name : file_name;
   result += " ";
@@ -365,11 +409,20 @@ std::string format_transfer_status(
     result += " (";
     result += std::to_string(clamped_percent(transferred_bytes, *total_bytes));
     result += "%";
+    if (speed_bytes_per_second.has_value()) {
+      result += ", ";
+      result += format_byte_count(*speed_bytes_per_second);
+      result += "/s";
+    }
     if (eta_seconds.has_value()) {
       result += ", ETA ";
       result += format_eta_duration(*eta_seconds);
     }
     result += ")";
+  } else if (speed_bytes_per_second.has_value()) {
+    result += " (";
+    result += format_byte_count(*speed_bytes_per_second);
+    result += "/s)";
   }
   return result;
 }
@@ -388,7 +441,7 @@ static void update_progress_file(TransferProgressState *state,
   }
   state->file_name = next_name;
   state->total_bytes = info.size_bytes;
-  state->reset_eta_baseline(state->transferred_bytes);
+  state->reset_measurement_baseline(state->transferred_bytes);
   state->publish();
 }
 
@@ -521,7 +574,7 @@ static xyzm_async_source_ops_t make_source_ops(SendSourceState *state) {
           state->progress->transferred_bytes;
       state->progress->transferred_bytes = offset;
       if (previous_transferred == 0 && offset > 0) {
-        state->progress->reset_eta_baseline(offset);
+        state->progress->reset_measurement_baseline(offset);
       }
       state->progress->publish();
     }
@@ -584,7 +637,7 @@ static xyzm_async_sink_ops_t make_sink_ops(ReceiveSinkState *state) {
       state->progress->file_name = file_name;
       state->progress->total_bytes = info.size_bytes;
       state->progress->transferred_bytes = resume_offset;
-      state->progress->reset_eta_baseline(resume_offset);
+      state->progress->reset_measurement_baseline(resume_offset);
       state->progress->publish();
     }
     co_return;
@@ -867,8 +920,8 @@ run_terminal_transfer_async(TerminalTransferRequest request,
       .file_name = fallback_receive_name,
       .total_bytes = std::nullopt,
       .transferred_bytes = 0,
-      .eta_baseline_transferred_bytes = 0,
-      .eta_baseline_time_ms = std::nullopt,
+      .measurement_baseline_transferred_bytes = 0,
+      .measurement_baseline_time_ms = std::nullopt,
   };
   if (request.status) {
     request.status(std::string("Starting ") +

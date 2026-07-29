@@ -880,27 +880,51 @@ static void sanitize_received_file_names() {
 
 static void format_progress_status() {
   expect_equal(format_transfer_status("foobar.tar.gz", 650ULL * 1024ULL,
-                                      2560ULL * 1024ULL, std::nullopt),
+                                      2560ULL * 1024ULL, std::nullopt,
+                                      std::nullopt),
                "foobar.tar.gz 650KiB/2.5MiB (25%)",
                "progress should format known total bytes");
   expect_equal(format_transfer_status("stream.bin", 42, std::nullopt,
-                                      std::nullopt),
+                                      std::nullopt, std::nullopt),
                "stream.bin 42B",
                "progress should omit unknown total bytes");
-  expect_equal(format_transfer_status("", 0, 0, std::nullopt),
+  expect_equal(format_transfer_status("", 0, 0, std::nullopt, std::nullopt),
                "received.bin 0B/0B (0%)",
                "progress should use the receive fallback name");
+  expect_equal(format_transfer_status("stream.bin", 42, std::nullopt, 42,
+                                      std::nullopt),
+               "stream.bin 42B (42B/s)",
+               "progress should format speed without a known total");
   expect_equal(format_transfer_status("foobar.tar.gz", 650ULL * 1024ULL,
-                                      2560ULL * 1024ULL, 90),
-               "foobar.tar.gz 650KiB/2.5MiB (25%, ETA 01:30)",
-               "progress should format ETA inside the percent group");
+                                      2560ULL * 1024ULL, 640ULL * 1024ULL, 90),
+               "foobar.tar.gz 650KiB/2.5MiB (25%, 640KiB/s, ETA 01:30)",
+               "progress should format speed and ETA inside the percent group");
   expect_equal(format_transfer_status("done.bin", 2ULL * 1024ULL,
-                                      2ULL * 1024ULL, 0),
-               "done.bin 2KiB/2KiB (100%, ETA 00:00)",
-               "progress should format completed ETA");
-  expect_equal(format_transfer_status("long.bin", 1ULL, 2ULL, 75ULL * 60ULL + 3),
-               "long.bin 1B/2B (50%, ETA 75:03)",
+                                      2ULL * 1024ULL, 2ULL * 1024ULL, 0),
+               "done.bin 2KiB/2KiB (100%, 2KiB/s, ETA 00:00)",
+               "progress should format completed speed and ETA");
+  expect_equal(format_transfer_status("long.bin", 1ULL, 2ULL, 1ULL,
+                                      75ULL * 60ULL + 3),
+               "long.bin 1B/2B (50%, 1B/s, ETA 75:03)",
                "progress should keep ETA minutes beyond one hour");
+}
+
+static void estimate_progress_speed() {
+  expect_true(
+      !estimate_transfer_speed_bytes_per_second(0, 0, 1000).has_value(),
+      "speed should be omitted until bytes advance");
+  expect_true(
+      !estimate_transfer_speed_bytes_per_second(0, 100, 999).has_value(),
+      "speed should be omitted before the minimum elapsed time");
+  expect_true(estimate_transfer_speed_bytes_per_second(0, 100, 1000) ==
+                  std::optional<std::uint64_t>(100),
+              "speed should use bytes transferred over elapsed time");
+  expect_true(estimate_transfer_speed_bytes_per_second(1024, 2560, 1500) ==
+                  std::optional<std::uint64_t>(1024),
+              "speed should calculate from the current-file baseline");
+  expect_true(estimate_transfer_speed_bytes_per_second(1024, 1536, 1000) ==
+                  std::optional<std::uint64_t>(512),
+              "speed should calculate from the resume baseline");
 }
 
 static void estimate_progress_eta() {
@@ -1071,6 +1095,7 @@ static void transfer_request_options_map_to_libxyzm() {
 static void run_unit_cases() {
   sanitize_received_file_names();
   format_progress_status();
+  estimate_progress_speed();
   estimate_progress_eta();
   resolve_default_base_path_from_xdg_download_dir();
   resolve_base_path_as_path_or_uri();
