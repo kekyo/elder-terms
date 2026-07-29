@@ -1154,6 +1154,7 @@ describe.concurrent('elder-terms-vte settings', () => {
       const globalConfigPath = join(globalDirectory, 'global.ini');
       const configPath = join(directory, 'connection.ini');
       const exterior = [0x20, 0x40, 0x60] as const;
+      const exteriorComponentBackground = [0x24, 0x48, 0x6b] as const;
       const background = [0x60, 0x40, 0x20] as const;
       const componentBackground = [0x6b, 0x48, 0x24] as const;
 
@@ -1201,6 +1202,13 @@ describe.concurrent('elder-terms-vte settings', () => {
               status: exterior,
               terminal: background,
             });
+            expect(
+              capturePixel(
+                await (await app.getById('header_bar')).capture(),
+                0.89,
+                0.5
+              )
+            ).toEqual(exteriorComponentBackground);
 
             const transferButton = await app.getById('transfer_button');
             const settingsButton = await app.getById('settings_button');
@@ -1209,10 +1217,10 @@ describe.concurrent('elder-terms-vte settings', () => {
             });
             expect(
               capturePixel(await transferButton.capture(), 0.15, 0.5)
-            ).toEqual(componentBackground);
+            ).toEqual(exteriorComponentBackground);
             expect(
               capturePixel(await settingsButton.capture(), 0.15, 0.5)
-            ).toEqual(componentBackground);
+            ).toEqual(exteriorComponentBackground);
 
             const mainWindow = expectElementKind(
               await app.getById('main_window'),
@@ -1322,7 +1330,7 @@ describe.concurrent('elder-terms-vte settings', () => {
                 await app.getById(buttonId)
               ).capture();
               expect(capturePixel(buttonCapture, 0.15, 0.5)).toEqual(
-                componentBackground
+                exteriorComponentBackground
               );
             }
             const settingsDialog = expectElementKind(

@@ -237,6 +237,7 @@ describe('SFTP window', () => {
       false,
       ['exterior_background=#7A2468', 'background=#183C58'],
       async ({ app, evidence }) => {
+        const exteriorComponentBackground = [0x85, 0x27, 0x71] as const;
         const componentBackground = [0x1b, 0x45, 0x65] as const;
         const localTree = expectTable(await app.getById('sftp_local_tree'));
         const localPath = expectElementKind(
@@ -259,6 +260,9 @@ describe('SFTP window', () => {
         expect(capturePixel(await header.capture(), 0.08, 0.5)).toEqual([
           0x7a, 0x24, 0x68,
         ]);
+        expect(capturePixel(await header.capture(), 0.9, 0.5)).toEqual(
+          exteriorComponentBackground
+        );
         const statusCapture = await status.capture();
         expect(capturePixel(statusCapture, 0.8, 0.5)).toEqual([
           0x7a, 0x24, 0x68,

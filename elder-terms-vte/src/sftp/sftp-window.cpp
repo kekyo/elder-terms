@@ -29,6 +29,8 @@ static constexpr char local_browser_attributes[] =
     G_FILE_ATTRIBUTE_TIME_ACCESS ","
     G_FILE_ATTRIBUTE_TIME_MODIFIED;
 static constexpr guint transfer_progress_pulse_period_ms = 100;
+static constexpr const char *sftp_exterior_component_style_class =
+    "sftp-exterior-components";
 
 enum SftpTreeColumn {
   sftp_tree_name_column = 0,
@@ -100,8 +102,10 @@ struct SftpWindow {
   GtkWidget *status_bar = nullptr;
   GtkWidget *status_label = nullptr;
   GtkCssProvider *exterior_background_provider = nullptr;
+  GtkCssProvider *exterior_component_background_provider = nullptr;
   GtkCssProvider *background_provider = nullptr;
   GtkCssProvider *component_background_provider = nullptr;
+  GtkCssProvider *popup_component_background_provider = nullptr;
   SftpPaneState local;
   SftpPaneState remote;
   std::shared_ptr<SftpClient> client;
@@ -129,8 +133,10 @@ struct SftpWindow {
       gtk_widget_destroy(window);
     }
     g_clear_object(&exterior_background_provider);
+    g_clear_object(&exterior_component_background_provider);
     g_clear_object(&background_provider);
     g_clear_object(&component_background_provider);
+    g_clear_object(&popup_component_background_provider);
     if (local.store != nullptr) {
       g_object_unref(local.store);
       local.store = nullptr;
@@ -1305,6 +1311,23 @@ static void clear_sftp_window_colors(SftpWindow *window) {
         GTK_STYLE_PROVIDER(window->exterior_background_provider));
     g_clear_object(&window->exterior_background_provider);
   }
+  if (window->exterior_component_background_provider != nullptr) {
+    GdkScreen *screen = gtk_widget_get_screen(window->window);
+    if (screen != nullptr) {
+      gtk_style_context_remove_provider_for_screen(
+          screen,
+          GTK_STYLE_PROVIDER(
+              window->exterior_component_background_provider));
+    }
+    g_clear_object(
+        &window->exterior_component_background_provider);
+  }
+  gtk_style_context_remove_class(
+      gtk_widget_get_style_context(window->header_bar),
+      sftp_exterior_component_style_class);
+  gtk_style_context_remove_class(
+      gtk_widget_get_style_context(window->status_bar),
+      sftp_exterior_component_style_class);
   if (window->background_provider != nullptr) {
     remove_widget_tree_background_provider(
         window->paned, window->background_provider);
@@ -1314,14 +1337,23 @@ static void clear_sftp_window_colors(SftpWindow *window) {
     g_clear_object(&window->background_provider);
   }
   if (window->component_background_provider != nullptr) {
+    remove_widget_tree_background_provider(
+        window->paned, window->component_background_provider);
+    remove_widget_tree_background_provider(
+        window->transfer_overlay,
+        window->component_background_provider);
+    g_clear_object(&window->component_background_provider);
+  }
+  if (window->popup_component_background_provider != nullptr) {
     GdkScreen *screen = gtk_widget_get_screen(window->window);
     if (screen != nullptr) {
       gtk_style_context_remove_provider_for_screen(
           screen,
           GTK_STYLE_PROVIDER(
-              window->component_background_provider));
+              window->popup_component_background_provider));
     }
-    g_clear_object(&window->component_background_provider);
+    g_clear_object(
+        &window->popup_component_background_provider);
   }
 }
 
@@ -1516,6 +1548,29 @@ void set_sftp_window_colors(
         gtk_widget_get_style_context(window->status_bar),
         GTK_STYLE_PROVIDER(window->exterior_background_provider),
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    window->exterior_component_background_provider =
+        create_scoped_widget_component_background_provider(
+            settings.exterior_background.value(),
+            sftp_exterior_component_style_class,
+            "SFTP exterior controls");
+    GdkScreen *screen = gtk_widget_get_screen(window->window);
+    if (window->exterior_component_background_provider != nullptr &&
+        screen != nullptr) {
+      gtk_style_context_add_class(
+          gtk_widget_get_style_context(window->header_bar),
+          sftp_exterior_component_style_class);
+      gtk_style_context_add_class(
+          gtk_widget_get_style_context(window->status_bar),
+          sftp_exterior_component_style_class);
+      gtk_style_context_add_provider_for_screen(
+          screen,
+          GTK_STYLE_PROVIDER(
+              window->exterior_component_background_provider),
+          GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 3);
+    } else {
+      g_clear_object(
+          &window->exterior_component_background_provider);
+    }
   }
   if (settings.background.has_value()) {
     window->background_provider =
@@ -1530,16 +1585,27 @@ void set_sftp_window_colors(
     window->component_background_provider =
         create_widget_component_background_provider(
             settings.background.value(), "SFTP controls");
+    add_widget_tree_background_provider_at_priority(
+        window->paned, window->component_background_provider,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
+    add_widget_tree_background_provider_at_priority(
+        window->transfer_overlay,
+        window->component_background_provider,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
+    window->popup_component_background_provider =
+        create_widget_popup_component_background_provider(
+            settings.background.value(), "SFTP popups");
     GdkScreen *screen = gtk_widget_get_screen(window->window);
-    if (window->component_background_provider != nullptr &&
+    if (window->popup_component_background_provider != nullptr &&
         screen != nullptr) {
       gtk_style_context_add_provider_for_screen(
           screen,
           GTK_STYLE_PROVIDER(
-              window->component_background_provider),
+              window->popup_component_background_provider),
           GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
     } else {
-      g_clear_object(&window->component_background_provider);
+      g_clear_object(
+          &window->popup_component_background_provider);
     }
   }
 }

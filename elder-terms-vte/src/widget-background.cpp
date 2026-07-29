@@ -28,6 +28,12 @@ static constexpr char component_background_selectors[] =
     "combobox > box > button > box, "
     "combobox > box > button > box > arrow, "
     "cellview, "
+    "scrollbar > contents > trough > slider, "
+    "progressbar > trough, "
+    "scale > contents > trough, "
+    "scale > contents > trough > slider, "
+    "switch > slider";
+static constexpr char popup_component_background_selectors[] =
     "window.popup, "
     "window.popup *, "
     "menu, "
@@ -38,11 +44,6 @@ static constexpr char component_background_selectors[] =
     "popover, "
     "popover > contents, "
     "popover modelbutton, "
-    "scrollbar > contents > trough > slider, "
-    "progressbar > trough, "
-    "scale > contents > trough, "
-    "scale > contents > trough > slider, "
-    "switch > slider, "
     "tooltip.background, "
     "tooltip.background > box, "
     "tooltip.background > box > label";
@@ -81,6 +82,20 @@ static GtkCssProvider *create_background_provider(
     const char *target_name) {
   return create_css_provider(
       rgb_color_css(color, selector), target_name);
+}
+
+static std::string scoped_descendant_selectors(
+    const char *style_class, const char *selectors) {
+  const std::string prefix =
+      "." + std::string(style_class) + " ";
+  std::string scoped = prefix + selectors;
+  std::size_t separator = 0;
+  while ((separator = scoped.find(", ", separator)) !=
+         std::string::npos) {
+    scoped.replace(separator, 2, ", " + prefix);
+    separator += prefix.size() + 2;
+  }
+  return scoped;
 }
 
 static guint8 normalized_color_channel(double value) {
@@ -172,6 +187,23 @@ GtkCssProvider *create_widget_component_background_provider(
   return create_background_provider(
       derive_component_background(color),
       component_background_selectors, target_name);
+}
+
+GtkCssProvider *create_scoped_widget_component_background_provider(
+    const RgbColor &color, const char *style_class,
+    const char *target_name) {
+  return create_background_provider(
+      derive_component_background(color),
+      scoped_descendant_selectors(
+          style_class, component_background_selectors),
+      target_name);
+}
+
+GtkCssProvider *create_widget_popup_component_background_provider(
+    const RgbColor &color, const char *target_name) {
+  return create_background_provider(
+      derive_component_background(color),
+      popup_component_background_selectors, target_name);
 }
 
 GtkCssProvider *create_scoped_widget_background_provider(

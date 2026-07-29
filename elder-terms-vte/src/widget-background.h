@@ -29,6 +29,32 @@ GtkCssProvider *create_widget_component_background_provider(
     const RgbColor &color, const char *target_name);
 
 /**
+ * Creates a component provider scoped below one style class.
+ *
+ * @param color RGB surface background used as the derivation source.
+ * @param style_class Style class whose descendants receive component colors.
+ * @param target_name Diagnostic name used when CSS parsing fails.
+ * @returns Owned provider, or null when the CSS could not be loaded.
+ * @remarks The provider can be registered for a screen without affecting
+ * controls outside the classed surface, including children created later.
+ */
+GtkCssProvider *create_scoped_widget_component_background_provider(
+    const RgbColor &color, const char *style_class,
+    const char *target_name);
+
+/**
+ * Creates a screen provider for popup surfaces derived from a background.
+ *
+ * @param color RGB content background used as the derivation source.
+ * @param target_name Diagnostic name used when CSS parsing fails.
+ * @returns Owned provider, or null when the CSS could not be loaded.
+ * @remarks The derived color uses the same four-percent lightness adjustment
+ * as regular interactive controls.
+ */
+GtkCssProvider *create_widget_popup_component_background_provider(
+    const RgbColor &color, const char *target_name);
+
+/**
  * Creates a screen-safe CSS provider scoped below one style class.
  *
  * @param color RGB color to paint.
