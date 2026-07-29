@@ -109,7 +109,7 @@ describe.concurrent('SSH prompt overlay', () => {
         'utf8'
       );
       const background = [0x60, 0x40, 0x20] as const;
-      const componentBackground = [0x77, 0x4f, 0x28] as const;
+      const componentBackground = [0x6b, 0x48, 0x24] as const;
       await writeFile(
         configPath,
         [

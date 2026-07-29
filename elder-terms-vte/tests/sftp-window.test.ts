@@ -237,7 +237,7 @@ describe('SFTP window', () => {
       false,
       ['exterior_background=#7A2468', 'background=#183C58'],
       async ({ app, evidence }) => {
-        const componentBackground = [0x1f, 0x4d, 0x71] as const;
+        const componentBackground = [0x1b, 0x45, 0x65] as const;
         const localTree = expectTable(await app.getById('sftp_local_tree'));
         const localPath = expectElementKind(
           await app.getById('sftp_local_path_entry'),
@@ -445,7 +445,7 @@ describe('SFTP window', () => {
       ['background=#183C58'],
       async ({ app, evidence }) => {
         const background = [0x18, 0x3c, 0x58] as const;
-        const componentBackground = [0x1f, 0x4d, 0x71] as const;
+        const componentBackground = [0x1b, 0x45, 0x65] as const;
         const localTree = expectTable(await app.getById('sftp_local_tree'));
         await openContextMenu(
           app,

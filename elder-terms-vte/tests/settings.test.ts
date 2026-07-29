@@ -1155,7 +1155,7 @@ describe.concurrent('elder-terms-vte settings', () => {
       const configPath = join(directory, 'connection.ini');
       const exterior = [0x20, 0x40, 0x60] as const;
       const background = [0x60, 0x40, 0x20] as const;
-      const componentBackground = [0x77, 0x4f, 0x28] as const;
+      const componentBackground = [0x6b, 0x48, 0x24] as const;
 
       try {
         const port = await listenOnLocalhost(server);
@@ -1223,16 +1223,11 @@ describe.concurrent('elder-terms-vte settings', () => {
               'connection-colors-custom-startup',
               async () => mainWindow.capture()
             );
-            await expectCaptureToMatchFixture(
-              startupCapture,
-              'connection-colors-custom-startup',
-              connectionColorsCustomFixturePath,
-              evidence,
-              {
-                // The OS-assigned TELNET port is intentionally visible in the
-                // status bar and is asserted exactly outside the visual test.
-                masks: [await connectionStatusTextMask(app, startupCapture)],
-              }
+            // The OS-assigned TELNET port is intentionally visible in the
+            // status bar and is asserted exactly outside the visual test.
+            const startupStatusMask = await connectionStatusTextMask(
+              app,
+              startupCapture
             );
 
             await openSettingsDialog(app);
@@ -1254,13 +1249,23 @@ describe.concurrent('elder-terms-vte settings', () => {
               )
             );
             await toPass(async () => {
-              expectRgbNear(
-                capturePixel(await generalTab.capture(), 0.9, 0.5),
-                background,
-                // Flat navigation tabs retain GTK's transparent treatment.
-                15
-              );
+              expect(
+                capturePixel(await generalTab.capture(), 0.1, 0.5)
+              ).toEqual(componentBackground);
             });
+            const generalTabCapture = await generalTab.capture();
+            expect(capturePixel(generalTabCapture, 0.5, 0.15)).toEqual(
+              componentBackground
+            );
+            await expectCaptureToMatchFixture(
+              startupCapture,
+              'connection-colors-custom-startup',
+              connectionColorsCustomFixturePath,
+              evidence,
+              {
+                masks: [startupStatusMask],
+              }
+            );
             const exteriorColorButton = await app.getById(
               'settings_general_exterior_background_button'
             );
@@ -1329,6 +1334,31 @@ describe.concurrent('elder-terms-vte settings', () => {
               'connection-colors-settings-dialog',
               async () => settingsDialog.capture()
             );
+            const generalTabCenterX =
+              generalTabCapture.bounds.x + generalTabCapture.bounds.width / 2;
+            const generalTabCenterY =
+              generalTabCapture.bounds.y + generalTabCapture.bounds.height / 2;
+            expect([
+              capturePixelAtScreenPosition(
+                settingsDialogCapture,
+                generalTabCapture.bounds.x - 4,
+                generalTabCenterY
+              ),
+              capturePixelAtScreenPosition(
+                settingsDialogCapture,
+                generalTabCapture.bounds.x + generalTabCapture.bounds.width + 4,
+                generalTabCenterY
+              ),
+              capturePixelAtScreenPosition(
+                settingsDialogCapture,
+                generalTabCenterX,
+                generalTabCapture.bounds.y - 4
+              ),
+            ]).toEqual([
+              componentBackground,
+              componentBackground,
+              componentBackground,
+            ]);
             await expectCaptureToMatchFixture(
               settingsDialogCapture,
               'connection-colors-settings-dialog',

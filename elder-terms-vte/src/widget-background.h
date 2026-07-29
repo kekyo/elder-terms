@@ -23,7 +23,7 @@ GtkCssProvider *create_widget_background_provider(
  * @param target_name Diagnostic name used when CSS parsing fails.
  * @returns Owned provider, or null when the CSS could not be loaded.
  * @remarks The derived color preserves hue and saturation while moving
- * lightness eight percent toward the contrasting extreme.
+ * lightness four percent toward the contrasting extreme.
  */
 GtkCssProvider *create_widget_component_background_provider(
     const RgbColor &color, const char *target_name);

@@ -9,8 +9,9 @@
 
 namespace elder_terms {
 
-static constexpr double component_lightness_delta = 0.08;
+static constexpr double component_lightness_delta = 0.04;
 static constexpr char component_background_selectors[] =
+    "notebook > header > tabs > tab, "
     "button, "
     "button > box, "
     "button > label, "
