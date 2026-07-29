@@ -19,6 +19,7 @@ namespace elder_terms {
 static constexpr int indicator_icon_pixel_size = 18;
 static constexpr guint transfer_progress_pulse_period_ms = 120;
 static constexpr const char *disconnected_title_suffix = " (Disconnected)";
+static constexpr const char *disconnected_notice_text = "Disconnected";
 static constexpr const char *terminal_dim_overlay_style_class =
     "terminal-dim-overlay";
 static constexpr const char *disconnected_notice_background_style_class =
@@ -1314,6 +1315,11 @@ void set_main_window_connection_phase(MainWindow *main_window,
     return;
   }
 
+  if (phase != TerminalSessionConnectionPhase::disconnected &&
+      main_window->disconnected_notice_label != nullptr) {
+    gtk_label_set_text(GTK_LABEL(main_window->disconnected_notice_label),
+                       disconnected_notice_text);
+  }
   const TerminalConnectionPresentation presentation =
       terminal_connection_presentation(phase);
   set_main_window_indicator_state(main_window, ActivityIndicatorId::conn,
@@ -1325,6 +1331,20 @@ void set_main_window_connection_phase(MainWindow *main_window,
   set_main_window_disconnected_notice_visible(
       main_window, presentation.disconnected_notice_visible);
   apply_main_window_title(main_window);
+}
+
+void set_main_window_connection_failure(MainWindow *main_window,
+                                        const std::string &message) {
+  if (main_window == nullptr ||
+      main_window->disconnected_notice_label == nullptr) {
+    return;
+  }
+
+  const std::string text =
+      message.empty() ? "SSH connection failed"
+                      : "SSH connection failed:\n" + message;
+  gtk_label_set_text(GTK_LABEL(main_window->disconnected_notice_label),
+                     text.c_str());
 }
 
 void set_main_window_terminal_interactive(MainWindow *main_window,

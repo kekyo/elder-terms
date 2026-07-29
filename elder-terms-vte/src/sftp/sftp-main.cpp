@@ -214,6 +214,7 @@ start_sftp_application_async(SftpApplicationState *state) {
         .activity = {},
         .indicator_state = {},
         .connection_phase = {},
+        .failure = {},
         .output = {},
         .zmodem_auto_start = {},
         .ssh_prompt =

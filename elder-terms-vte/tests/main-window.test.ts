@@ -721,6 +721,63 @@ describe.concurrent('elder-terms-vte main window', () => {
     });
   });
 
+  it('keeps an SSH negotiation failure reason visible in the terminal overlay', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      let acceptedSocket: Socket | undefined;
+      const server = createServer((socket) => {
+        acceptedSocket = socket;
+        socket.resume();
+      });
+
+      try {
+        const port = await listenOnLocalhost(server);
+        const configPath = join(directory, 'ssh-negotiation-failure.ini');
+        await writeFile(
+          configPath,
+          `[general]\ntype=ssh\n\n[terminal]\nauto_close=true\n\n[ssh]\naddress=127.0.0.1\nport=${port}\n`,
+          'utf8'
+        );
+
+        await runGtkTest(context, ['-c', configPath], async (app) => {
+          const socket = await waitForResult(
+            async () => {
+              expect(acceptedSocket).not.toBeUndefined();
+              return acceptedSocket as Socket;
+            },
+            {
+              message: 'SSH test server should accept a client connection',
+              timeoutMs: 5_000,
+            }
+          );
+          socket.end('not-an-ssh-server\r\n');
+
+          const notice = await app.getById('disconnected_notice');
+          const label = expectElementKind(
+            await app.getById('disconnected_notice_label'),
+            'label'
+          );
+          await waitForResult(
+            async () => {
+              expect(await app.getWindowCount()).toBe(1);
+              expect((await notice.info()).states).toContain('showing');
+              expect(await label.text()).toMatch(
+                /^SSH connection failed:\nFailed to establish SSH transport:/
+              );
+            },
+            {
+              message:
+                'SSH negotiation failure reason should remain in the overlay',
+              timeoutMs: 5_000,
+            }
+          );
+        });
+      } finally {
+        acceptedSocket?.destroy();
+        await closeServer(server);
+      }
+    });
+  });
+
   it('shows the transfer menu for TELNET sessions', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       let acceptedSocket: Socket | undefined;

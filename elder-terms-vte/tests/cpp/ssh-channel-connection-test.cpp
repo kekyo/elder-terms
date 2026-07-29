@@ -942,6 +942,7 @@ static void run_client_case(const ServerOptions &server_options,
                   elder_terms::TerminalSessionConnectionPhase phase) {
                 phases.push_back(phase);
               },
+          .failure = {},
           .output = {},
           .zmodem_auto_start = {},
           .ssh_prompt =

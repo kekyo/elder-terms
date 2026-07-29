@@ -107,6 +107,12 @@ private:
     }
   }
 
+  void notify_failure(const std::string &message) {
+    if (callbacks.failure) {
+      callbacks.failure(message);
+    }
+  }
+
   void notify_activity(ActivityIndicatorId indicator) {
     if (callbacks.activity) {
       callbacks.activity(indicator);
@@ -252,6 +258,7 @@ private:
     } catch (const std::exception &error) {
       if (!stopping) {
         std::cerr << "Warning: SSH session failed: " << error.what() << '\n';
+        notify_failure(error.what());
         natural_end = true;
       }
     }
@@ -573,6 +580,7 @@ public:
     } catch (const std::exception &error) {
       std::cerr << "Warning: failed to initialize SSH session: "
                 << error.what() << '\n';
+      notify_failure(error.what());
       stop();
       notify_connection_phase(TerminalSessionConnectionPhase::disconnected);
       return false;

@@ -224,6 +224,15 @@ void set_main_window_connection_phase(MainWindow *main_window,
                                       TerminalSessionConnectionPhase phase);
 
 /**
+ * Sets the failure reason retained by the disconnected terminal overlay.
+ *
+ * @param main_window Main window containing the disconnected notice.
+ * @param message Backend failure reason.
+ */
+void set_main_window_connection_failure(MainWindow *main_window,
+                                        const std::string &message);
+
+/**
  * Updates only the terminal interactive/read-only presentation.
  *
  * @param main_window Main window containing the VTE terminal.

@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <span>
+#include <string>
 
 #include <cardio.h>
 
@@ -36,6 +37,11 @@ using TerminalSessionConnectionPhaseCallback =
     std::function<void(TerminalSessionConnectionPhase phase)>;
 
 /**
+ * Callback invoked when a backend session fails.
+ */
+using TerminalSessionFailureCallback = std::function<void(std::string message)>;
+
+/**
  * Callback invoked with normal received terminal output before and after text
  * conversion.
  */
@@ -68,6 +74,8 @@ struct TerminalSessionCallbacks {
   TerminalSessionIndicatorStateCallback indicator_state;
   /** Called when the backend connection lifecycle phase changes. */
   TerminalSessionConnectionPhaseCallback connection_phase;
+  /** Called with the reason when the backend session fails. */
+  TerminalSessionFailureCallback failure;
   /** Called with normal terminal output, excluding active file transfers. */
   TerminalSessionOutputCallback output;
   /** Called when a valid ZMODEM auto-start preamble is detected. */

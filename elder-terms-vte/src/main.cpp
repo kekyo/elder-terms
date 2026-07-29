@@ -50,6 +50,7 @@ struct ApplicationState {
   elder_terms::TerminalSessionConnectionPhase connection_phase =
       elder_terms::TerminalSessionConnectionPhase::disconnected;
   bool connection_active = false;
+  bool connection_failed = false;
   bool transfer_active = false;
   bool sftp_opening = false;
   bool sftp_connection_check_active = false;
@@ -241,6 +242,9 @@ static void set_application_connection_phase(
     return;
   }
 
+  if (phase == elder_terms::TerminalSessionConnectionPhase::connecting) {
+    state->connection_failed = false;
+  }
   const elder_terms::TerminalConnectionPresentation presentation =
       elder_terms::terminal_connection_presentation(phase);
   state->connection_phase = phase;
@@ -1118,6 +1122,7 @@ int main(int argc, char **argv) {
       .connection_phase =
           elder_terms::TerminalSessionConnectionPhase::disconnected,
       .connection_active = false,
+      .connection_failed = false,
       .transfer_active = false,
       .sftp_opening = false,
       .sftp_connection_check_active = false,
@@ -1159,7 +1164,8 @@ int main(int argc, char **argv) {
         set_application_connection_phase(
             &app_state,
             elder_terms::TerminalSessionConnectionPhase::disconnected);
-        if (app_state.auto_close && app_state.window != nullptr) {
+        if (app_state.auto_close && !app_state.connection_failed &&
+            app_state.window != nullptr) {
           gtk_widget_destroy(app_state.window);
         }
       },
@@ -1173,6 +1179,12 @@ int main(int argc, char **argv) {
       .connection_phase =
           [&app_state](elder_terms::TerminalSessionConnectionPhase phase) {
             set_application_connection_phase(&app_state, phase);
+          },
+      .failure =
+          [&app_state](std::string message) {
+            app_state.connection_failed = true;
+            elder_terms::set_main_window_connection_failure(
+                app_state.main_window, message);
           },
       .output =
           [&app_state](std::span<const unsigned char> raw_bytes,
