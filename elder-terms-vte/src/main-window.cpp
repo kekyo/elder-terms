@@ -1072,6 +1072,22 @@ static void on_transfer_cancel_clicked(GtkButton *, gpointer data) {
   }
 }
 
+static gboolean on_status_bar_button_press(GtkWidget *,
+                                           GdkEventButton *event,
+                                           gpointer data) {
+  if (event == nullptr || event->type != GDK_BUTTON_PRESS ||
+      event->button != GDK_BUTTON_PRIMARY || data == nullptr ||
+      !GTK_IS_WINDOW(data)) {
+    return GDK_EVENT_PROPAGATE;
+  }
+
+  gtk_window_begin_move_drag(
+      GTK_WINDOW(data), static_cast<gint>(event->button),
+      static_cast<gint>(event->x_root), static_cast<gint>(event->y_root),
+      event->time);
+  return GDK_EVENT_STOP;
+}
+
 static void stop_main_window_transfer_progress_pulse(MainWindow *main_window) {
   if (main_window == nullptr ||
       main_window->transfer_progress_pulse_source == 0) {
@@ -1217,6 +1233,10 @@ std::optional<MainWindow> load_main_window() {
   g_signal_connect(main_window.transfer_cancel_button, "clicked",
                    G_CALLBACK(on_transfer_cancel_clicked),
                    main_window.transfer_progress_state.get());
+  gtk_widget_add_events(main_window.status_bar, GDK_BUTTON_PRESS_MASK);
+  g_signal_connect(main_window.status_bar, "button-press-event",
+                   G_CALLBACK(on_status_bar_button_press),
+                   main_window.window);
   apply_main_window_style(&main_window);
   create_activity_indicator_widgets(&main_window);
   if (!load_indicator_images(&main_window)) {

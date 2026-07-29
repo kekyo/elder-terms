@@ -514,6 +514,42 @@ describe.concurrent('elder-terms-vte main window', () => {
     });
   });
 
+  it('moves the window when the VTE status bar is dragged', async (context) => {
+    await runGtkTest(context, ['--test-fixture'], async (app) => {
+      const mainWindow = expectElementKind(
+        await app.getById('main_window'),
+        'window'
+      );
+      const initialBounds = await mainWindow.moveTo(100, 100);
+      const statusCapture = await (await app.getById('status_bar')).capture();
+      const startX = Math.trunc(
+        statusCapture.bounds.x + statusCapture.bounds.width / 2
+      );
+      const startY = Math.trunc(
+        statusCapture.bounds.y + statusCapture.bounds.height / 2
+      );
+
+      await app.input.moveMouseTo(startX, startY);
+      await app.input.setMouseButton('left', true);
+      await app.input.moveMouseTo(startX + 120, startY + 80);
+      await app.input.setMouseButton('left', false);
+
+      await waitForResult(
+        async () => {
+          const movedBounds = await mainWindow.bounds();
+          expect(movedBounds.x).toBeGreaterThanOrEqual(initialBounds.x + 80);
+          expect(movedBounds.y).toBeGreaterThanOrEqual(initialBounds.y + 40);
+          expect(movedBounds.width).toBe(initialBounds.width);
+          expect(movedBounds.height).toBe(initialBounds.height);
+        },
+        {
+          message: 'status bar drag should move the VTE window',
+          timeoutMs: 5_000,
+        }
+      );
+    });
+  });
+
   it('shows the transfer button for serial sessions', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'serial.ini');
