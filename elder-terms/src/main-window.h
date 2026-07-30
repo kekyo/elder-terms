@@ -28,6 +28,8 @@ struct LauncherMainWindow {
   GtkWidget *details_stack = nullptr;
   /** Container receiving the shared settings widget. */
   GtkWidget *settings_container = nullptr;
+  /** Bottom action row that can move the launcher window. */
+  GtkWidget *action_row = nullptr;
   /** Creates a new connection draft. */
   GtkWidget *new_button = nullptr;
   /** Opens the global defaults editor. */

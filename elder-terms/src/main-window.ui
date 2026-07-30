@@ -106,48 +106,53 @@
           </packing>
         </child>
         <child>
-          <object class="GtkBox" id="action_row">
+          <object class="GtkEventBox" id="action_row">
             <property name="visible">True</property>
-            <property name="orientation">horizontal</property>
-            <property name="spacing">8</property>
-            <property name="margin-start">12</property>
-            <property name="margin-end">12</property>
-            <property name="margin-top">10</property>
-            <property name="margin-bottom">10</property>
             <child>
-              <object class="GtkButton" id="new_button">
+              <object class="GtkBox" id="action_row_content">
                 <property name="visible">True</property>
-                <property name="label">New</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkButton" id="global_defaults_button">
-                <property name="visible">True</property>
-                <property name="label">Global defaults</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkBox" id="action_spacer">
-                <property name="visible">True</property>
-                <property name="hexpand">True</property>
-              </object>
-              <packing>
-                <property name="expand">True</property>
-                <property name="fill">True</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkButton" id="apply_button">
-                <property name="visible">True</property>
-                <property name="sensitive">False</property>
-                <property name="label">Apply</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkButton" id="connect_button">
-                <property name="visible">True</property>
-                <property name="sensitive">False</property>
-                <property name="label">Launch</property>
+                <property name="orientation">horizontal</property>
+                <property name="spacing">8</property>
+                <property name="margin-start">12</property>
+                <property name="margin-end">12</property>
+                <property name="margin-top">10</property>
+                <property name="margin-bottom">10</property>
+                <child>
+                  <object class="GtkButton" id="new_button">
+                    <property name="visible">True</property>
+                    <property name="label">New</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="global_defaults_button">
+                    <property name="visible">True</property>
+                    <property name="label">Global defaults</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="action_spacer">
+                    <property name="visible">True</property>
+                    <property name="hexpand">True</property>
+                  </object>
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">True</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="apply_button">
+                    <property name="visible">True</property>
+                    <property name="sensitive">False</property>
+                    <property name="label">Apply</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="connect_button">
+                    <property name="visible">True</property>
+                    <property name="sensitive">False</property>
+                    <property name="label">Launch</property>
+                  </object>
+                </child>
               </object>
             </child>
           </object>

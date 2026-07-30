@@ -98,7 +98,7 @@ const waitForWindowCount = async (
   });
 };
 
-const openGlobalDefaults = async (app: GtkApp): Promise<GtkWidgetElement> => {
+const openGlobalDefaults = async (app: GtkApp) => {
   await expectElementKind(
     await app.getById('global_defaults_button'),
     'button'
@@ -108,7 +108,6 @@ const openGlobalDefaults = async (app: GtkApp): Promise<GtkWidgetElement> => {
     await app.getById('global_defaults_dialog'),
     'window'
   );
-  expect((await dialog.info()).states).toContain('modal');
   return dialog;
 };
 
@@ -265,6 +264,7 @@ describe('elder-terms main window', () => {
       const left = await app.getById('connection_scroller');
       const right = await app.getById('details_stack');
       const list = await app.getById('connection_list');
+      const actionRow = await app.getById('action_row');
       const apply = await app.getById('apply_button');
       const connect = await app.getById('connect_button');
 
@@ -272,18 +272,115 @@ describe('elder-terms main window', () => {
       expect((await connect.info()).name).toBe('Launch');
       await expectInsensitive(apply);
       await expectInsensitive(connect);
+      expect((await left.capture()).bounds.x).toBeLessThan(
+        (await right.capture()).bounds.x
+      );
+
+      const initialBounds = await window.moveTo(100, 100);
+      const actionCapture = await actionRow.capture();
+      const startX = Math.trunc(
+        actionCapture.bounds.x + actionCapture.bounds.width / 2
+      );
+      const startY = Math.trunc(
+        actionCapture.bounds.y + actionCapture.bounds.height / 2
+      );
+      await app.input.moveMouseTo(startX, startY);
+      await app.input.setMouseButton('left', true);
+      await app.input.moveMouseTo(startX + 120, startY + 80);
+      await app.input.setMouseButton('left', false);
+
+      await waitForResult(async () => {
+        const movedBounds = await window.bounds();
+        expect(movedBounds.x).toBeGreaterThanOrEqual(initialBounds.x + 80);
+        expect(movedBounds.y).toBeGreaterThanOrEqual(initialBounds.y + 30);
+        expect(movedBounds.width).toBe(initialBounds.width);
+        expect(movedBounds.height).toBe(initialBounds.height);
+      });
+
       const before = await window.bounds();
       await window.resizeTo(before.width + 120, before.height + 80);
       const after = await window.bounds();
       expect(after.width).toBeGreaterThan(before.width);
       expect(after.height).toBeGreaterThan(before.height);
-      expect((await left.capture()).bounds.x).toBeLessThan(
-        (await right.capture()).bounds.x
-      );
     });
   });
 
-  it('opens a modal all-backend global defaults editor and cancels without saving', async (context) => {
+  it('opens global defaults independently and disables its parent until closed', async (context) => {
+    await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
+      const mainWindow = expectElementKind(
+        await app.getById('main_window'),
+        'window'
+      );
+      const dialog = await openGlobalDefaults(app);
+
+      expect((await dialog.info()).states).not.toContain('modal');
+      await expectInsensitive(mainWindow);
+
+      await expectElementKind(
+        await app.getById('global_defaults_cancel_button'),
+        'button'
+      ).click();
+      await waitForWindowCount(app, 1);
+      await expectSensitive(mainWindow);
+    });
+  });
+
+  it('pads the global defaults action row and moves the dialog when dragged', async (context) => {
+    await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
+      const dialog = await openGlobalDefaults(app);
+      const actionRow = expectElementKind(
+        await app.getById('global_defaults_action_row'),
+        'container'
+      );
+      const cancel = expectElementKind(
+        await app.getById('global_defaults_cancel_button'),
+        'button'
+      );
+      const save = expectElementKind(
+        await app.getById('global_defaults_save_button'),
+        'button'
+      );
+      const initialBounds = await dialog.moveTo(200, 160);
+      const [actionCapture, cancelCapture, saveCapture] = await Promise.all([
+        actionRow.capture(),
+        cancel.capture(),
+        save.capture(),
+      ]);
+      const actionBounds = actionCapture.bounds;
+      const cancelBounds = cancelCapture.bounds;
+      const saveBounds = saveCapture.bounds;
+
+      expect(cancelBounds.y - actionBounds.y).toBeGreaterThanOrEqual(10);
+      expect(
+        actionBounds.y +
+          actionBounds.height -
+          (cancelBounds.y + cancelBounds.height)
+      ).toBeGreaterThanOrEqual(10);
+      expect(
+        actionBounds.x + actionBounds.width - (saveBounds.x + saveBounds.width)
+      ).toBeGreaterThanOrEqual(12);
+
+      const startX = Math.trunc(actionBounds.x + actionBounds.width / 4);
+      const startY = Math.trunc(actionBounds.y + actionBounds.height / 2);
+      await app.input.moveMouseTo(startX, startY);
+      await app.input.setMouseButton('left', true);
+      await app.input.moveMouseTo(startX + 120, startY + 80);
+      await app.input.setMouseButton('left', false);
+
+      await waitForResult(async () => {
+        const movedBounds = await dialog.bounds();
+        expect(movedBounds.x).toBeGreaterThanOrEqual(initialBounds.x + 80);
+        expect(movedBounds.y).toBeGreaterThanOrEqual(initialBounds.y + 40);
+        expect(movedBounds.width).toBe(initialBounds.width);
+        expect(movedBounds.height).toBe(initialBounds.height);
+      });
+
+      await cancel.click();
+      await waitForWindowCount(app, 1);
+    });
+  });
+
+  it('opens an all-backend global defaults editor and cancels without saving', async (context) => {
     const originalGlobal =
       '# keep this file unchanged on cancel\n[terminal]\nwidth=91\n';
     await runLauncherGtkTest(

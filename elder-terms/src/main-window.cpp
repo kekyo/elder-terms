@@ -59,6 +59,7 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
           builder, "connection_name_renderer", GTK_TYPE_CELL_RENDERER_TEXT)),
       .details_stack = required_widget(builder, "details_stack"),
       .settings_container = required_widget(builder, "settings_container"),
+      .action_row = required_widget(builder, "action_row"),
       .new_button = required_widget(builder, "new_button"),
       .global_defaults_button =
           required_widget(builder, "global_defaults_button"),
@@ -70,7 +71,7 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
       result.connection_list == nullptr || result.connection_store == nullptr ||
       result.connection_name_renderer == nullptr ||
       result.details_stack == nullptr || result.settings_container == nullptr ||
-      result.new_button == nullptr ||
+      result.action_row == nullptr || result.new_button == nullptr ||
       result.global_defaults_button == nullptr ||
       result.apply_button == nullptr || result.connect_button == nullptr) {
     g_object_unref(builder);

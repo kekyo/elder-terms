@@ -210,6 +210,22 @@ update_global_defaults_save_sensitivity(ApplicationState *state) {
   gtk_widget_set_sensitive(state->global_defaults_save_button, sensitive);
 }
 
+static gboolean on_window_drag_button_press(GtkWidget *,
+                                            GdkEventButton *event,
+                                            gpointer user_data) {
+  if (event == nullptr || event->type != GDK_BUTTON_PRESS ||
+      event->button != GDK_BUTTON_PRIMARY || user_data == nullptr ||
+      !GTK_IS_WINDOW(user_data)) {
+    return GDK_EVENT_PROPAGATE;
+  }
+
+  gtk_window_begin_move_drag(
+      GTK_WINDOW(user_data), static_cast<gint>(event->button),
+      static_cast<gint>(event->x_root), static_cast<gint>(event->y_root),
+      event->time);
+  return GDK_EVENT_STOP;
+}
+
 static void on_global_defaults_dialog_destroy(GtkWidget *,
                                               gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
@@ -218,6 +234,9 @@ static void on_global_defaults_dialog_destroy(GtkWidget *,
   if (state->global_defaults_widget != nullptr) {
     elder_terms::destroy_settings_widget(state->global_defaults_widget);
     state->global_defaults_widget = nullptr;
+  }
+  if (!state->window_destroyed && state->main_window != nullptr) {
+    gtk_widget_set_sensitive(state->main_window->window, TRUE);
   }
 }
 
@@ -261,6 +280,16 @@ static void on_global_defaults_dialog_response(GtkDialog *dialog,
   gtk_widget_destroy(GTK_WIDGET(dialog));
 }
 
+static void on_global_defaults_cancel_clicked(GtkButton *,
+                                              gpointer user_data) {
+  gtk_dialog_response(GTK_DIALOG(user_data), GTK_RESPONSE_CANCEL);
+}
+
+static void on_global_defaults_save_clicked(GtkButton *,
+                                            gpointer user_data) {
+  gtk_dialog_response(GTK_DIALOG(user_data), GTK_RESPONSE_ACCEPT);
+}
+
 static void open_global_defaults_dialog(ApplicationState *state) {
   if (state->global_defaults_dialog != nullptr) {
     gtk_window_present(GTK_WINDOW(state->global_defaults_dialog));
@@ -276,18 +305,31 @@ static void open_global_defaults_dialog(ApplicationState *state) {
   gtk_window_set_title(GTK_WINDOW(dialog), "Global defaults");
   gtk_window_set_transient_for(GTK_WINDOW(dialog),
                                GTK_WINDOW(state->main_window->window));
-  gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
+  gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
   gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
   gtk_window_set_default_size(GTK_WINDOW(dialog), 720, 420);
 
-  GtkWidget *cancel = gtk_dialog_add_button(
-      GTK_DIALOG(dialog), "Cancel", GTK_RESPONSE_CANCEL);
-  GtkWidget *save = gtk_dialog_add_button(
-      GTK_DIALOG(dialog), "Save", GTK_RESPONSE_ACCEPT);
+  GtkWidget *action_row = gtk_event_box_new();
+  gestament_gtk_assign_accessible_id(action_row,
+                                     "global_defaults_action_row");
+  GtkWidget *action_content = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_margin_start(action_content, 12);
+  gtk_widget_set_margin_end(action_content, 12);
+  gtk_widget_set_margin_top(action_content, 10);
+  gtk_widget_set_margin_bottom(action_content, 10);
+  gtk_container_add(GTK_CONTAINER(action_row), action_content);
+
+  GtkWidget *spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_hexpand(spacer, TRUE);
+  GtkWidget *cancel = gtk_button_new_with_label("Cancel");
+  GtkWidget *save = gtk_button_new_with_label("Save");
   gestament_gtk_assign_accessible_id(cancel,
                                      "global_defaults_cancel_button");
   gestament_gtk_assign_accessible_id(save, "global_defaults_save_button");
-  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_ACCEPT);
+  gtk_widget_set_can_default(save, TRUE);
+  gtk_box_pack_start(GTK_BOX(action_content), spacer, TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(action_content), cancel, FALSE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(action_content), save, FALSE, TRUE, 0);
 
   state->global_defaults_dialog = dialog;
   state->global_defaults_save_button = save;
@@ -307,13 +349,25 @@ static void open_global_defaults_dialog(ApplicationState *state) {
       GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(dialog))),
       elder_terms::settings_widget_root(state->global_defaults_widget), TRUE,
       TRUE, 0);
+  gtk_box_pack_start(
+      GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), action_row,
+      FALSE, TRUE, 0);
+  gtk_widget_grab_default(save);
 
+  g_signal_connect(cancel, "clicked",
+                   G_CALLBACK(on_global_defaults_cancel_clicked), dialog);
+  g_signal_connect(save, "clicked",
+                   G_CALLBACK(on_global_defaults_save_clicked), dialog);
   g_signal_connect(dialog, "response",
                    G_CALLBACK(on_global_defaults_dialog_response), state);
   g_signal_connect(dialog, "destroy",
                    G_CALLBACK(on_global_defaults_dialog_destroy), state);
+  g_signal_connect(action_row, "button-press-event",
+                   G_CALLBACK(on_window_drag_button_press), dialog);
   update_global_defaults_save_sensitivity(state);
+  gtk_widget_set_sensitive(state->main_window->window, FALSE);
   gtk_widget_show_all(dialog);
+  gtk_window_present(GTK_WINDOW(dialog));
 }
 
 static void on_global_defaults_clicked(GtkButton *, gpointer user_data) {
@@ -1382,6 +1436,9 @@ static bool initialize_main_window(ApplicationState *state) {
                    G_CALLBACK(on_new_clicked), state);
   g_signal_connect(main_window->global_defaults_button, "clicked",
                    G_CALLBACK(on_global_defaults_clicked), state);
+  g_signal_connect(main_window->action_row, "button-press-event",
+                   G_CALLBACK(on_window_drag_button_press),
+                   main_window->window);
   g_signal_connect(main_window->apply_button, "clicked",
                    G_CALLBACK(on_apply_clicked), state);
   g_signal_connect(main_window->connect_button, "clicked",
