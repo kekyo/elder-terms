@@ -230,15 +230,13 @@ static void append_dummy_row(GtkTreeStore *store,
       sftp_tree_loaded_column, TRUE, sftp_tree_dummy_column, TRUE, -1);
 }
 
-static void append_browser_row(
-    GtkTreeStore *store, GtkTreeIter *parent,
+static void set_browser_row(
+    GtkTreeStore *store, GtkTreeIter *iterator,
     const SftpFileAttributes &attributes) {
   const std::string size = file_size_text(attributes);
   const std::string modified = modification_time_text(attributes);
-  GtkTreeIter iterator;
-  gtk_tree_store_append(store, &iterator, parent);
   gtk_tree_store_set(
-      store, &iterator, sftp_tree_name_column,
+      store, iterator, sftp_tree_name_column,
       attributes.name.c_str(), sftp_tree_size_column, size.c_str(),
       sftp_tree_modified_column, modified.c_str(),
       sftp_tree_path_column, attributes.path.c_str(),
@@ -247,8 +245,16 @@ static void append_browser_row(
       attributes.type != SftpFileType::directory,
       sftp_tree_dummy_column, FALSE, -1);
   if (attributes.type == SftpFileType::directory) {
-    append_dummy_row(store, &iterator);
+    append_dummy_row(store, iterator);
   }
+}
+
+static void append_browser_row(
+    GtkTreeStore *store, GtkTreeIter *parent,
+    const SftpFileAttributes &attributes) {
+  GtkTreeIter iterator;
+  gtk_tree_store_append(store, &iterator, parent);
+  set_browser_row(store, &iterator, attributes);
 }
 
 static void append_browser_entries(
@@ -257,6 +263,31 @@ static void append_browser_entries(
   sort_browser_entries(&entries);
   for (const SftpFileAttributes &entry : entries) {
     append_browser_row(store, parent, entry);
+  }
+}
+
+static void replace_dummy_with_browser_entries(
+    GtkTreeStore *store, GtkTreeIter *parent,
+    std::vector<SftpFileAttributes> entries) {
+  sort_browser_entries(&entries);
+  GtkTreeIter dummy;
+  if (!gtk_tree_model_iter_children(
+          GTK_TREE_MODEL(store), &dummy, parent)) {
+    for (const SftpFileAttributes &entry : entries) {
+      append_browser_row(store, parent, entry);
+    }
+    return;
+  }
+  if (entries.empty()) {
+    gtk_tree_store_remove(store, &dummy);
+    return;
+  }
+
+  auto entry = entries.cbegin();
+  set_browser_row(store, &dummy, *entry);
+  ++entry;
+  for (; entry != entries.cend(); ++entry) {
+    append_browser_row(store, parent, *entry);
   }
 }
 
@@ -794,8 +825,7 @@ static cardio::promise<void> expand_sftp_directory_async(
     if (tree_path != nullptr &&
         gtk_tree_model_get_iter(
             GTK_TREE_MODEL(pane->store), &iterator, tree_path)) {
-      clear_tree_children(pane->store, &iterator);
-      append_browser_entries(
+      replace_dummy_with_browser_entries(
           pane->store, &iterator, std::move(entries));
     }
     if (tree_path != nullptr) {

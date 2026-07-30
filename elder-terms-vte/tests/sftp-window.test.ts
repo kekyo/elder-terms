@@ -151,6 +151,26 @@ const findRow = async (table: GtkTableElement, name: string): Promise<number> =>
     throw new Error(`SFTP row was not found: ${name}`);
   });
 
+const clickTreeExpander = async (
+  app: GtkApp,
+  table: GtkTableElement,
+  row: number
+): Promise<void> => {
+  const tableCapture = await table.capture();
+  const cell = await table.cellAt(row, 0);
+  const cellCapture = await cell?.capture();
+  if (cellCapture === undefined) {
+    throw new Error(`SFTP row ${row} did not expose bounds`);
+  }
+  // GtkTreeView exposes the row through AT-SPI, but not its expander.
+  await app.input.moveMouseTo(
+    tableCapture.bounds.x + 10,
+    Math.round(cellCapture.bounds.y + cellCapture.bounds.height / 2)
+  );
+  await app.input.setMouseButton('left', true);
+  await app.input.setMouseButton('left', false);
+};
+
 const openContextMenu = async (
   app: GtkApp,
   table: GtkTableElement,
@@ -381,6 +401,37 @@ describe('SFTP window', () => {
           async () => window.capture()
         );
         expect(capture.bounds.width).toBeGreaterThan(capture.bounds.height);
+      }
+    );
+  });
+
+  it('expands a populated directory on the first expander click', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      async ({ app, localDirectory }) => {
+        await mkdir(join(localDirectory, 'documents', 'nested'));
+        await writeFile(
+          join(localDirectory, 'documents', 'inside.txt'),
+          'inside\n'
+        );
+
+        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const documentsRow = await findRow(localTree, 'documents');
+        const initialRowCount = await localTree.getRowCount();
+        await clickTreeExpander(app, localTree, documentsRow);
+
+        expect(await findRow(localTree, 'nested')).toBeGreaterThan(
+          documentsRow
+        );
+        expect(await findRow(localTree, 'inside.txt')).toBeGreaterThan(
+          documentsRow
+        );
+        expect(await localTree.getRowCount()).toBe(initialRowCount + 2);
+        expect(
+          (await (await localTree.cellAt(documentsRow, 0))?.info())?.states
+        ).toContain('expanded');
       }
     );
   });
