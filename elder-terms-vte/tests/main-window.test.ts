@@ -1184,20 +1184,35 @@ describe.concurrent('elder-terms-vte main window', () => {
             );
             await waitForActivityIndicatorImageState(app, 'conn', 'on');
 
+            const mainWindow = expectElementKind(
+              await app.getById('main_window'),
+              'window'
+            );
             await openZmodemSendDialog(app);
             await waitForTransferDialogFolderUri(
               app,
               pathToFileURL(xdg.downloads).href
             );
 
+            expectElementKind(
+              await app.getById('transfer_file_dialog'),
+              'container'
+            );
             const dialog = await app.windowAt(1);
-            if (dialog !== undefined) {
-              await evidence.captureEvidence(
-                'zmodem-send-dialog-xdg-downloads',
-                async () => dialog.capture()
-              );
+            if (dialog === undefined) {
+              throw new Error('Transfer file dialog window was not found');
             }
+            expect((await dialog.info()).states).not.toContain('modal');
+            expect((await mainWindow.info()).states).not.toContain('sensitive');
+            await evidence.captureEvidence(
+              'zmodem-send-dialog-xdg-downloads',
+              async () => dialog.capture()
+            );
             await app.input.pressKey('Escape');
+            await waitForResult(async () => {
+              expect(await app.getWindowCount()).toBe(1);
+              expect((await mainWindow.info()).states).toContain('sensitive');
+            });
           },
           {
             env: {

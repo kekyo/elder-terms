@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -57,6 +58,7 @@ struct ApplicationState {
   bool terminal_shutdown_complete = false;
   GtkWidget *window = nullptr;
   GtkWidget *settings_dialog = nullptr;
+  GtkWidget *transfer_file_dialog = nullptr;
   guint settings_dialog_close_idle_id = 0;
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
   GtkWidget *log_enabled_menu_item = nullptr;
@@ -70,13 +72,30 @@ struct TransferMenuAction {
   elder_terms::TerminalTransferOptions options;
 };
 
+struct TransferFileDialogRequest {
+  std::function<void(std::vector<std::string>)> selected;
+};
+
 static void close_settings_dialog(ApplicationState *state);
+static void close_transfer_file_dialog(ApplicationState *state);
 static void schedule_settings_dialog_close(ApplicationState *state);
 static void restore_terminal_focus(ApplicationState *state);
 static void start_shared_sftp_connection_check(ApplicationState *state);
 static void update_application_session_identity(ApplicationState *state);
 static void update_application_terminal_presentation(
     ApplicationState *state);
+
+static void update_parent_window_sensitivity(ApplicationState *state) {
+  if (state == nullptr || state->window == nullptr) {
+    return;
+  }
+  gtk_widget_set_sensitive(
+      state->window,
+      state->settings_dialog == nullptr &&
+              state->transfer_file_dialog == nullptr
+          ? TRUE
+          : FALSE);
+}
 
 static void maybe_shutdown_application(ApplicationState *state) {
   if (state == nullptr || !state->terminal_shutdown_complete ||
@@ -191,7 +210,8 @@ static void update_application_terminal_presentation(
 
   const bool terminal_interactive =
       state->connection_active && !state->transfer_active &&
-      state->settings_dialog == nullptr;
+      state->settings_dialog == nullptr &&
+      state->transfer_file_dialog == nullptr;
   elder_terms::set_main_window_terminal_interactive(
       state->main_window, terminal_interactive);
   if (terminal_interactive) {
@@ -200,7 +220,9 @@ static void update_application_terminal_presentation(
   }
   elder_terms::set_main_window_transfer_button_sensitive(
       state->main_window,
-      state->connection_active && !state->transfer_active);
+      state->connection_active && !state->transfer_active &&
+          state->settings_dialog == nullptr &&
+          state->transfer_file_dialog == nullptr);
 }
 
 static void update_application_session_identity(ApplicationState *state) {
@@ -310,6 +332,7 @@ static void on_main_window_destroy(GtkWidget *, gpointer user_data) {
                                                          false);
   elder_terms::deactivate_main_window_activity_indicators(state->main_window);
   close_settings_dialog(state);
+  close_transfer_file_dialog(state);
   elder_terms::set_terminal_log_connection_active(state->log_state, false);
   elder_terms::stop_terminal_session(state->session_state);
   if (!state->shutdown_task.has_value()) {
@@ -330,6 +353,7 @@ static void on_settings_dialog_destroy(GtkWidget *, gpointer user_data) {
     state->settings_widget = nullptr;
   }
   state->settings_dialog = nullptr;
+  update_parent_window_sensitivity(state);
   update_application_terminal_presentation(state);
   restore_terminal_focus(state);
 }
@@ -512,7 +536,9 @@ static void open_settings_dialog(ApplicationState *state) {
   state->settings_dialog = dialog;
   elder_terms::set_main_window_settings_dialog(
       state->main_window, dialog, settings_root);
-  g_signal_connect(dialog, "destroy", G_CALLBACK(on_settings_dialog_destroy), state);
+  g_signal_connect(dialog, "destroy",
+                   G_CALLBACK(on_settings_dialog_destroy), state);
+  update_parent_window_sensitivity(state);
   update_application_terminal_presentation(state);
   gtk_widget_show_all(dialog);
 }
@@ -555,17 +581,101 @@ static void set_transfer_dialog_initial_folder(ApplicationState *state,
   }
 }
 
-static std::vector<std::string> choose_transfer_files(
-    ApplicationState *state, bool select_multiple) {
+static std::vector<std::string> selected_transfer_file_uris(
+    GtkFileChooser *chooser) {
   std::vector<std::string> uris;
-  if (!state->test_options.transfer_source_uris.empty()) {
-    uris = state->test_options.transfer_source_uris;
-    return uris;
+  GSList *files = gtk_file_chooser_get_files(chooser);
+  for (GSList *item = files; item != nullptr; item = item->next) {
+    GFile *file = G_FILE(item->data);
+    char *uri = g_file_get_uri(file);
+    if (uri != nullptr) {
+      uris.emplace_back(uri);
+      g_free(uri);
+    }
+    g_object_unref(file);
+  }
+  g_slist_free(files);
+  return uris;
+}
+
+static void on_transfer_file_dialog_destroy(GtkWidget *dialog,
+                                            gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state == nullptr || state->transfer_file_dialog != dialog) {
+    return;
   }
 
-  GtkFileChooserNative *dialog = gtk_file_chooser_native_new(
+  state->transfer_file_dialog = nullptr;
+  if (state->window != nullptr) {
+    update_parent_window_sensitivity(state);
+    update_application_terminal_presentation(state);
+    restore_terminal_focus(state);
+  }
+}
+
+static void on_transfer_file_dialog_response(GtkDialog *dialog,
+                                             gint response,
+                                             gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  auto *request = static_cast<TransferFileDialogRequest *>(
+      g_object_get_data(G_OBJECT(dialog),
+                        "elder-terms-transfer-file-request"));
+  std::function<void(std::vector<std::string>)> selected;
+  if (request != nullptr) {
+    selected = std::move(request->selected);
+  }
+
+  std::vector<std::string> uris;
+  if (response == GTK_RESPONSE_ACCEPT) {
+    uris = selected_transfer_file_uris(GTK_FILE_CHOOSER(dialog));
+  }
+
+  if (state != nullptr &&
+      state->transfer_file_dialog == GTK_WIDGET(dialog)) {
+    state->transfer_file_dialog = nullptr;
+    update_parent_window_sensitivity(state);
+  }
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+
+  if (!uris.empty() && selected) {
+    selected(std::move(uris));
+    return;
+  }
+  if (state != nullptr && state->window != nullptr) {
+    update_application_terminal_presentation(state);
+    restore_terminal_focus(state);
+  }
+}
+
+static void close_transfer_file_dialog(ApplicationState *state) {
+  if (state != nullptr && state->transfer_file_dialog != nullptr) {
+    gtk_widget_destroy(state->transfer_file_dialog);
+  }
+}
+
+static void choose_transfer_files(
+    ApplicationState *state, bool select_multiple,
+    std::function<void(std::vector<std::string>)> selected) {
+  if (state == nullptr || state->window == nullptr || !selected) {
+    return;
+  }
+  if (!state->test_options.transfer_source_uris.empty()) {
+    selected(state->test_options.transfer_source_uris);
+    return;
+  }
+  if (state->transfer_file_dialog != nullptr) {
+    gtk_window_present(GTK_WINDOW(state->transfer_file_dialog));
+    return;
+  }
+
+  GtkWidget *dialog = gtk_file_chooser_dialog_new(
       "Select file", GTK_WINDOW(state->window), GTK_FILE_CHOOSER_ACTION_OPEN,
-      "Open", "Cancel");
+      "Cancel", GTK_RESPONSE_CANCEL, "Open", GTK_RESPONSE_ACCEPT, nullptr);
+  gestament_gtk_assign_accessible_id(dialog, "transfer_file_dialog");
+  gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
+  gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_ACCEPT);
+
   GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
   gtk_file_chooser_set_local_only(chooser, FALSE);
   gtk_file_chooser_set_select_multiple(chooser, select_multiple);
@@ -574,23 +684,23 @@ static std::vector<std::string> choose_transfer_files(
     schedule_transfer_dialog_probe(chooser);
   }
 
-  const gint response = gtk_native_dialog_run(GTK_NATIVE_DIALOG(dialog));
-  if (response == GTK_RESPONSE_ACCEPT) {
-    GSList *files = gtk_file_chooser_get_files(chooser);
-    for (GSList *item = files; item != nullptr; item = item->next) {
-      GFile *file = G_FILE(item->data);
-      char *uri = g_file_get_uri(file);
-      if (uri != nullptr) {
-        uris.emplace_back(uri);
-        g_free(uri);
-      }
-      g_object_unref(file);
-    }
-    g_slist_free(files);
-  }
-
-  g_object_unref(dialog);
-  return uris;
+  auto *request = new TransferFileDialogRequest{
+      .selected = std::move(selected),
+  };
+  g_object_set_data_full(
+      G_OBJECT(dialog), "elder-terms-transfer-file-request", request,
+      [](gpointer data) {
+        delete static_cast<TransferFileDialogRequest *>(data);
+      });
+  state->transfer_file_dialog = dialog;
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(on_transfer_file_dialog_response), state);
+  g_signal_connect(dialog, "destroy",
+                   G_CALLBACK(on_transfer_file_dialog_destroy), state);
+  update_parent_window_sensitivity(state);
+  update_application_terminal_presentation(state);
+  gtk_widget_show_all(dialog);
+  gtk_window_present(GTK_WINDOW(dialog));
 }
 
 static bool start_transfer_request(ApplicationState *state,
@@ -638,12 +748,20 @@ static void on_transfer_menu_item_activate(GtkMenuItem *item,
 
   std::vector<std::string> source_uris;
   if (action->direction == elder_terms::TerminalTransferDirection::send) {
-    source_uris = choose_transfer_files(
+    const TransferMenuAction selected_action = *action;
+    choose_transfer_files(
         state,
-        action->protocol != elder_terms::TerminalTransferProtocol::xmodem);
-    if (source_uris.empty()) {
-      return;
-    }
+        action->protocol != elder_terms::TerminalTransferProtocol::xmodem,
+        [state, selected_action](std::vector<std::string> selected_uris) {
+          if (!start_transfer_request(state, selected_action,
+                                      std::move(selected_uris))) {
+            elder_terms::set_main_window_status_text(
+                state->main_window, "Transfer unavailable");
+            update_application_terminal_presentation(state);
+            restore_terminal_focus(state);
+          }
+        });
+    return;
   }
 
   if (!start_transfer_request(state, *action, std::move(source_uris))) {
@@ -666,15 +784,22 @@ static void start_zmodem_auto_transfer(
       .options = elder_terms::TerminalTransferOptions{},
   };
 
-  std::vector<std::string> source_uris;
   if (direction == elder_terms::TerminalTransferDirection::send) {
-    source_uris = choose_transfer_files(state, true);
-    if (source_uris.empty()) {
-      return;
-    }
+    choose_transfer_files(
+        state, true,
+        [state, action](std::vector<std::string> selected_uris) {
+          if (!start_transfer_request(state, action,
+                                      std::move(selected_uris))) {
+            elder_terms::set_main_window_status_text(
+                state->main_window, "Transfer unavailable");
+            update_application_terminal_presentation(state);
+            restore_terminal_focus(state);
+          }
+        });
+    return;
   }
 
-  if (!start_transfer_request(state, action, std::move(source_uris))) {
+  if (!start_transfer_request(state, action, {})) {
     elder_terms::set_main_window_status_text(state->main_window,
                                              "Transfer unavailable");
   }
@@ -756,6 +881,7 @@ static bool can_paste_terminal_text(const ApplicationState *state) {
   return state != nullptr && state->window != nullptr &&
          state->connection_active && !state->transfer_active &&
          state->settings_dialog == nullptr &&
+         state->transfer_file_dialog == nullptr &&
          elder_terms::terminal_session_supports_text_send(
              state->session_state);
 }
@@ -766,18 +892,20 @@ static void on_text_send_menu_item_activate(GtkMenuItem *,
   if (state == nullptr) {
     return;
   }
-  std::vector<std::string> source_uris = choose_transfer_files(state, false);
-  if (source_uris.empty()) {
-    return;
-  }
-  if (!start_text_send_request(
-          state,
-          elder_terms::TerminalTextSendFileSource{
-              .uri = std::move(source_uris.front()),
-          })) {
-    elder_terms::set_main_window_status_text(state->main_window,
-                                             "Text send unavailable");
-  }
+  choose_transfer_files(
+      state, false,
+      [state](std::vector<std::string> selected_uris) {
+        if (!start_text_send_request(
+                state,
+                elder_terms::TerminalTextSendFileSource{
+                    .uri = std::move(selected_uris.front()),
+                })) {
+          elder_terms::set_main_window_status_text(
+              state->main_window, "Text send unavailable");
+          update_application_terminal_presentation(state);
+          restore_terminal_focus(state);
+        }
+      });
 }
 
 static GtkWidget *create_text_send_menu_item(ApplicationState *state) {
@@ -1129,6 +1257,7 @@ int main(int argc, char **argv) {
       .terminal_shutdown_complete = false,
       .window = main_window->window,
       .settings_dialog = nullptr,
+      .transfer_file_dialog = nullptr,
       .settings_dialog_close_idle_id = 0,
       .settings_widget = nullptr,
       .log_enabled_menu_item = nullptr,

@@ -656,6 +656,12 @@ describe.concurrent('elder-terms-vte settings', () => {
             await app.getById('main_window'),
             'window'
           );
+          const settingsDialog = expectElementKind(
+            await app.getById('settings_dialog'),
+            'window'
+          );
+          expect((await settingsDialog.info()).states).not.toContain('modal');
+          await expectInsensitive(mainWindow);
           await mainWindow.activate();
           await app.input.pressKey('x');
           await app.input.pressKey('Return');
@@ -665,6 +671,7 @@ describe.concurrent('elder-terms-vte settings', () => {
             'button'
           ).click();
           await expectSettingsDialogClosed(app);
+          await expectSensitive(mainWindow);
           await expectTerminalFocused(app);
           await app.input.pressKey('b');
           await app.input.pressKey('Return');
