@@ -53,6 +53,7 @@ const runSftpFixture = async (
   context: TestContext,
   pauseTransfer: boolean,
   generalSettings: readonly string[],
+  gtkCss: string | undefined,
   body: (fixture: SftpFixture) => Promise<void>
 ): Promise<void> => {
   const directory = await mkdtemp(join(tmpdir(), 'elder-terms-sftp-'));
@@ -60,10 +61,15 @@ const runSftpFixture = async (
     const configHome = join(directory, 'xdg-config');
     const globalConfigDirectory = join(configHome, 'elder-terms');
     const globalConfigPath = join(globalConfigDirectory, 'global.ini');
+    const gtkConfigDirectory = join(configHome, 'gtk-3.0');
     const localDirectory = join(directory, 'local');
     const configPath = join(directory, 'sftp.ini');
     await mkdir(join(localDirectory, 'documents'), { recursive: true });
     await mkdir(globalConfigDirectory, { recursive: true });
+    if (gtkCss !== undefined) {
+      await mkdir(gtkConfigDirectory, { recursive: true });
+      await writeFile(join(gtkConfigDirectory, 'gtk.css'), gtkCss);
+    }
     await writeFile(join(localDirectory, 'hello.txt'), 'hello from local\n');
     await utimes(
       join(localDirectory, 'documents'),
@@ -171,6 +177,28 @@ const clickTreeExpander = async (
   await app.input.setMouseButton('left', false);
 };
 
+const captureRowBounds = async (
+  table: GtkTableElement,
+  row: number
+): Promise<GtkCapture['bounds']> => {
+  const cell = await table.cellAt(row, 0);
+  const capture = await cell?.capture();
+  if (capture === undefined) {
+    throw new Error(`SFTP row ${row} did not expose bounds`);
+  }
+  return capture.bounds;
+};
+
+const waitForRowShowing = async (
+  table: GtkTableElement,
+  row: number
+): Promise<void> => {
+  await waitForResult(async () => {
+    const cell = await table.cellAt(row, 0);
+    expect((await cell?.info())?.states).toContain('showing');
+  });
+};
+
 const openContextMenu = async (
   app: GtkApp,
   table: GtkTableElement,
@@ -256,6 +284,7 @@ describe('SFTP window', () => {
       context,
       false,
       ['exterior_background=#7A2468', 'background=#183C58'],
+      undefined,
       async ({ app, evidence }) => {
         const exteriorComponentBackground = [0x85, 0x27, 0x71] as const;
         const componentBackground = [0x1b, 0x45, 0x65] as const;
@@ -352,6 +381,7 @@ describe('SFTP window', () => {
       context,
       false,
       [],
+      undefined,
       async ({ app, evidence, localDirectory }) => {
         expect(await app.getWindowCount()).toBe(1);
         const window = expectElementKind(
@@ -410,6 +440,7 @@ describe('SFTP window', () => {
       context,
       false,
       [],
+      undefined,
       async ({ app, localDirectory }) => {
         await mkdir(join(localDirectory, 'documents', 'nested'));
         await writeFile(
@@ -436,11 +467,89 @@ describe('SFTP window', () => {
     );
   });
 
+  it('keeps mixed tree row geometry stable while scrolling', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      ['treeview.view {', '  -GtkTreeView-expander-size: 32;', '}', ''].join(
+        '\n'
+      ),
+      async ({ app, localDirectory }) => {
+        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        await findRow(localTree, 'documents');
+        await Promise.all([
+          ...Array.from({ length: 40 }, (_, index) =>
+            mkdir(join(localDirectory, `dir-${String(index).padStart(3, '0')}`))
+          ),
+          ...Array.from({ length: 80 }, (_, index) =>
+            writeFile(
+              join(
+                localDirectory,
+                index === 79
+                  ? 'file-079\nsecond-line'
+                  : `file-${String(index).padStart(3, '0')}`
+              ),
+              'file\n'
+            )
+          ),
+        ]);
+        await expectElementKind(
+          await app.getById('sftp_local_refresh_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(await localTree.getRowCount()).toBe(122);
+        });
+
+        const firstDirectoryRow = await findRow(localTree, 'dir-000');
+        const secondDirectoryRow = await findRow(localTree, 'dir-001');
+        const firstDirectoryBounds = await captureRowBounds(
+          localTree,
+          firstDirectoryRow
+        );
+        const secondDirectoryBounds = await captureRowBounds(
+          localTree,
+          secondDirectoryRow
+        );
+        expect(firstDirectoryBounds.height).toBeGreaterThanOrEqual(30);
+        const directoryPitch = secondDirectoryBounds.y - firstDirectoryBounds.y;
+
+        const penultimateFileRow = await findRow(localTree, 'file-078');
+        const finalFileRow = penultimateFileRow + 1;
+        const treeCapture = await localTree.capture();
+        await app.input.moveMouseTo(
+          Math.round(treeCapture.bounds.x + treeCapture.bounds.width / 2),
+          Math.round(treeCapture.bounds.y + treeCapture.bounds.height / 2)
+        );
+        await app.input.scrollWheel(0, 60);
+        await waitForRowShowing(localTree, finalFileRow);
+
+        const penultimateFileBounds = await captureRowBounds(
+          localTree,
+          penultimateFileRow
+        );
+        const finalFileBounds = await captureRowBounds(localTree, finalFileRow);
+        expect(finalFileBounds.height).toBe(firstDirectoryBounds.height);
+        expect(finalFileBounds.y - penultimateFileBounds.y).toBe(
+          directoryPitch
+        );
+
+        await app.input.scrollWheel(0, -60);
+        await waitForRowShowing(localTree, firstDirectoryRow);
+        expect(
+          (await captureRowBounds(localTree, firstDirectoryRow)).height
+        ).toBe(firstDirectoryBounds.height);
+      }
+    );
+  });
+
   it('sends and receives selected items from the pane context menus', async (context) => {
     await runSftpFixture(
       context,
       false,
       [],
+      undefined,
       async ({ app, localDirectory }) => {
         const localTree = expectTable(await app.getById('sftp_local_tree'));
         const remoteTree = expectTable(await app.getById('sftp_remote_tree'));
@@ -498,6 +607,7 @@ describe('SFTP window', () => {
       context,
       true,
       ['background=#183C58'],
+      undefined,
       async ({ app, evidence }) => {
         const background = [0x18, 0x3c, 0x58] as const;
         const componentBackground = [0x1b, 0x45, 0x65] as const;

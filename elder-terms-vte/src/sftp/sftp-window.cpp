@@ -1193,13 +1193,36 @@ static GtkWidget *create_toolbar_button(
   return button;
 }
 
+static int get_sftp_tree_row_height(GtkWidget *tree) {
+  GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
+  g_object_ref_sink(renderer);
+  g_object_set(renderer, "text", "Ag", nullptr);
+  int minimum_height = 0;
+  int natural_height = 0;
+  gtk_cell_renderer_get_preferred_height(
+      renderer, tree, &minimum_height, &natural_height);
+  g_object_unref(renderer);
+
+  int expander_size = 0;
+  int horizontal_separator = 0;
+  gtk_widget_style_get(
+      tree, "expander-size", &expander_size,
+      "horizontal-separator", &horizontal_separator, nullptr);
+  const int effective_expander_size =
+      expander_size + horizontal_separator / 2;
+  return std::max(natural_height, effective_expander_size);
+}
+
 static void append_sftp_tree_column(
     GtkWidget *tree, const char *title, int model_column,
-    bool expand) {
+    bool expand, int row_height) {
   GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
+  gtk_cell_renderer_set_fixed_size(renderer, -1, row_height);
   GtkTreeViewColumn *column =
       gtk_tree_view_column_new_with_attributes(
           title, renderer, "text", model_column, nullptr);
+  gtk_tree_view_column_set_sizing(
+      column, GTK_TREE_VIEW_COLUMN_FIXED);
   gtk_tree_view_column_set_resizable(column, TRUE);
   gtk_tree_view_column_set_expand(column, expand ? TRUE : FALSE);
   gtk_tree_view_append_column(GTK_TREE_VIEW(tree), column);
@@ -1218,12 +1241,15 @@ static GtkWidget *create_sftp_tree(SftpPaneState *pane,
   gtk_tree_view_set_rubber_banding(GTK_TREE_VIEW(tree), TRUE);
   gtk_tree_view_set_search_column(
       GTK_TREE_VIEW(tree), sftp_tree_name_column);
+  const int row_height = get_sftp_tree_row_height(tree);
   append_sftp_tree_column(
-      tree, "Name", sftp_tree_name_column, true);
+      tree, "Name", sftp_tree_name_column, true, row_height);
   append_sftp_tree_column(
-      tree, "Size", sftp_tree_size_column, false);
+      tree, "Size", sftp_tree_size_column, false, row_height);
   append_sftp_tree_column(
-      tree, "Modified", sftp_tree_modified_column, false);
+      tree, "Modified", sftp_tree_modified_column, false,
+      row_height);
+  gtk_tree_view_set_fixed_height_mode(GTK_TREE_VIEW(tree), TRUE);
   GtkTreeSelection *selection = gtk_tree_view_get_selection(
       GTK_TREE_VIEW(tree));
   gtk_tree_selection_set_mode(selection, GTK_SELECTION_MULTIPLE);
