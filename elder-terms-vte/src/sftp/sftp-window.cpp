@@ -31,6 +31,9 @@ static constexpr char local_browser_attributes[] =
 static constexpr guint transfer_progress_pulse_period_ms = 100;
 static constexpr const char *sftp_exterior_component_style_class =
     "sftp-exterior-components";
+static constexpr int sftp_content_padding = 12;
+static constexpr int sftp_pane_spacing = 12;
+static constexpr int sftp_control_spacing = 8;
 
 enum SftpTreeColumn {
   sftp_tree_name_column = 0,
@@ -1267,14 +1270,28 @@ static GtkWidget *create_sftp_pane(
   pane->window = window;
   pane->remote = remote;
   pane->frame = gtk_frame_new(remote ? "Remote" : "Local");
+  gestament_gtk_assign_accessible_id(
+      pane->frame,
+      remote ? "sftp_remote_group" : "sftp_local_group");
   gtk_widget_set_hexpand(pane->frame, TRUE);
   gtk_widget_set_vexpand(pane->frame, TRUE);
+  gtk_widget_set_margin_start(
+      pane->frame,
+      remote ? sftp_pane_spacing / 2 : sftp_content_padding);
+  gtk_widget_set_margin_end(
+      pane->frame,
+      remote ? sftp_content_padding : sftp_pane_spacing / 2);
+  gtk_widget_set_margin_top(pane->frame, sftp_content_padding);
+  gtk_widget_set_margin_bottom(pane->frame, sftp_content_padding);
 
-  GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-  gtk_container_set_border_width(GTK_CONTAINER(box), 8);
+  GtkWidget *box =
+      gtk_box_new(GTK_ORIENTATION_VERTICAL, sftp_control_spacing);
+  gtk_container_set_border_width(
+      GTK_CONTAINER(box), sftp_content_padding);
   gtk_container_add(GTK_CONTAINER(pane->frame), box);
 
-  GtkWidget *toolbar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  GtkWidget *toolbar =
+      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, sftp_control_spacing);
   gtk_box_pack_start(GTK_BOX(box), toolbar, FALSE, TRUE, 0);
   pane->path_entry = gtk_entry_new();
   gestament_gtk_assign_accessible_id(
@@ -1473,9 +1490,16 @@ create_sftp_window(SftpWindowOptions options) {
   gestament_gtk_assign_accessible_id(
       state->status_bar, "sftp_status_bar");
   GtkWidget *status_content =
-      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  gtk_container_set_border_width(
-      GTK_CONTAINER(status_content), 6);
+      gtk_box_new(
+          GTK_ORIENTATION_HORIZONTAL, sftp_control_spacing);
+  gtk_widget_set_margin_start(
+      status_content, sftp_content_padding);
+  gtk_widget_set_margin_end(
+      status_content, sftp_content_padding);
+  gtk_widget_set_margin_top(
+      status_content, sftp_control_spacing);
+  gtk_widget_set_margin_bottom(
+      status_content, sftp_control_spacing);
   gtk_container_add(
       GTK_CONTAINER(state->status_bar), status_content);
   gtk_box_pack_start(
@@ -1507,8 +1531,10 @@ create_sftp_window(SftpWindowOptions options) {
   gtk_widget_set_valign(state->transfer_overlay, GTK_ALIGN_START);
   gtk_widget_set_margin_top(state->transfer_overlay, 18);
   GtkWidget *transfer_box =
-      gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-  gtk_container_set_border_width(GTK_CONTAINER(transfer_box), 12);
+      gtk_box_new(
+          GTK_ORIENTATION_VERTICAL, sftp_control_spacing);
+  gtk_container_set_border_width(
+      GTK_CONTAINER(transfer_box), sftp_content_padding);
   gtk_container_add(GTK_CONTAINER(state->transfer_overlay),
                     transfer_box);
   state->transfer_label = gtk_label_new("Preparing transfer…");

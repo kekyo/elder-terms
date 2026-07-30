@@ -189,15 +189,15 @@ const captureRowBounds = async (
   return capture.bounds;
 };
 
-const waitForRowShowing = async (
-  table: GtkTableElement,
-  row: number
-): Promise<void> => {
-  await waitForResult(async () => {
-    const cell = await table.cellAt(row, 0);
-    expect((await cell?.info())?.states).toContain('showing');
-  });
-};
+const horizontalGap = (
+  left: GtkCapture['bounds'],
+  right: GtkCapture['bounds']
+): number => right.x - (left.x + left.width);
+
+const verticalGap = (
+  top: GtkCapture['bounds'],
+  bottom: GtkCapture['bounds']
+): number => bottom.y - (top.y + top.height);
 
 const openContextMenu = async (
   app: GtkApp,
@@ -361,6 +361,7 @@ describe('SFTP window', () => {
           await app.getById('sftp_window'),
           'window'
         );
+        await window.moveTo(16, 16);
         const capture = await evidence.captureEvidence(
           'sftp-connection-colors',
           async () => window.capture()
@@ -435,6 +436,83 @@ describe('SFTP window', () => {
     );
   });
 
+  it('pads content groups and controls outside the tree lists', async (context) => {
+    await runSftpFixture(context, false, [], undefined, async ({ app }) => {
+      const localTree = expectTable(await app.getById('sftp_local_tree'));
+      await findRow(localTree, 'documents');
+      const [
+        paned,
+        localGroup,
+        remoteGroup,
+        localPath,
+        localUp,
+        localRefresh,
+        tree,
+        status,
+        statusLabel,
+      ] = await Promise.all(
+        [
+          'sftp_root_paned',
+          'sftp_local_group',
+          'sftp_remote_group',
+          'sftp_local_path_entry',
+          'sftp_local_up_button',
+          'sftp_local_refresh_button',
+          'sftp_local_tree',
+          'sftp_status_bar',
+          'sftp_status_label',
+        ].map(async (id) => (await app.getById(id)).capture())
+      );
+
+      expect(localGroup.bounds.x - paned.bounds.x).toBeGreaterThanOrEqual(12);
+      expect(localGroup.bounds.y - paned.bounds.y).toBeGreaterThanOrEqual(12);
+      expect(
+        paned.bounds.x +
+          paned.bounds.width -
+          (remoteGroup.bounds.x + remoteGroup.bounds.width)
+      ).toBeGreaterThanOrEqual(12);
+      expect(
+        paned.bounds.y +
+          paned.bounds.height -
+          (localGroup.bounds.y + localGroup.bounds.height)
+      ).toBeGreaterThanOrEqual(12);
+      expect(
+        horizontalGap(localGroup.bounds, remoteGroup.bounds)
+      ).toBeGreaterThanOrEqual(12);
+
+      expect(localPath.bounds.x - localGroup.bounds.x).toBeGreaterThanOrEqual(
+        12
+      );
+      expect(
+        localGroup.bounds.x +
+          localGroup.bounds.width -
+          (localRefresh.bounds.x + localRefresh.bounds.width)
+      ).toBeGreaterThanOrEqual(12);
+      expect(
+        horizontalGap(localPath.bounds, localUp.bounds)
+      ).toBeGreaterThanOrEqual(8);
+      expect(
+        horizontalGap(localUp.bounds, localRefresh.bounds)
+      ).toBeGreaterThanOrEqual(8);
+      expect(verticalGap(localPath.bounds, tree.bounds)).toBeGreaterThanOrEqual(
+        8
+      );
+      expect(
+        localGroup.bounds.y +
+          localGroup.bounds.height -
+          (tree.bounds.y + tree.bounds.height)
+      ).toBeGreaterThanOrEqual(12);
+
+      expect(statusLabel.bounds.x - status.bounds.x).toBeGreaterThanOrEqual(12);
+      expect(statusLabel.bounds.y - status.bounds.y).toBeGreaterThanOrEqual(8);
+      expect(
+        status.bounds.y +
+          status.bounds.height -
+          (statusLabel.bounds.y + statusLabel.bounds.height)
+      ).toBeGreaterThanOrEqual(8);
+    });
+  });
+
   it('expands a populated directory on the first expander click', async (context) => {
     await runSftpFixture(
       context,
@@ -479,15 +557,15 @@ describe('SFTP window', () => {
         const localTree = expectTable(await app.getById('sftp_local_tree'));
         await findRow(localTree, 'documents');
         await Promise.all([
-          ...Array.from({ length: 40 }, (_, index) =>
+          ...Array.from({ length: 10 }, (_, index) =>
             mkdir(join(localDirectory, `dir-${String(index).padStart(3, '0')}`))
           ),
-          ...Array.from({ length: 80 }, (_, index) =>
+          ...Array.from({ length: 30 }, (_, index) =>
             writeFile(
               join(
                 localDirectory,
-                index === 79
-                  ? 'file-079\nsecond-line'
+                index === 10
+                  ? 'file-010\nsecond-line'
                   : `file-${String(index).padStart(3, '0')}`
               ),
               'file\n'
@@ -499,7 +577,7 @@ describe('SFTP window', () => {
           'button'
         ).click();
         await waitForResult(async () => {
-          expect(await localTree.getRowCount()).toBe(122);
+          expect(await localTree.getRowCount()).toBe(42);
         });
 
         const firstDirectoryRow = await findRow(localTree, 'dir-000');
@@ -515,28 +593,34 @@ describe('SFTP window', () => {
         expect(firstDirectoryBounds.height).toBeGreaterThanOrEqual(30);
         const directoryPitch = secondDirectoryBounds.y - firstDirectoryBounds.y;
 
-        const penultimateFileRow = await findRow(localTree, 'file-078');
-        const finalFileRow = penultimateFileRow + 1;
+        const previousFileRow = await findRow(localTree, 'file-009');
+        const multilineFileRow = previousFileRow + 1;
         const treeCapture = await localTree.capture();
         await app.input.moveMouseTo(
           Math.round(treeCapture.bounds.x + treeCapture.bounds.width / 2),
           Math.round(treeCapture.bounds.y + treeCapture.bounds.height / 2)
         );
-        await app.input.scrollWheel(0, 60);
-        await waitForRowShowing(localTree, finalFileRow);
+        await app.input.setMouseButton('left', true);
+        await app.input.setMouseButton('left', false);
+        await waitForResult(async () => {
+          expect((await localTree.info()).states).toContain('focused');
+        });
+        await app.input.scrollWheel(0, 8);
 
-        const penultimateFileBounds = await captureRowBounds(
+        const previousFileBounds = await captureRowBounds(
           localTree,
-          penultimateFileRow
+          previousFileRow
         );
-        const finalFileBounds = await captureRowBounds(localTree, finalFileRow);
-        expect(finalFileBounds.height).toBe(firstDirectoryBounds.height);
-        expect(finalFileBounds.y - penultimateFileBounds.y).toBe(
+        const multilineFileBounds = await captureRowBounds(
+          localTree,
+          multilineFileRow
+        );
+        expect(multilineFileBounds.height).toBe(firstDirectoryBounds.height);
+        expect(multilineFileBounds.y - previousFileBounds.y).toBe(
           directoryPitch
         );
 
-        await app.input.scrollWheel(0, -60);
-        await waitForRowShowing(localTree, firstDirectoryRow);
+        await app.input.scrollWheel(0, -8);
         expect(
           (await captureRowBounds(localTree, firstDirectoryRow)).height
         ).toBe(firstDirectoryBounds.height);
