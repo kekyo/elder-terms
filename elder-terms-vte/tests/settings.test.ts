@@ -189,6 +189,16 @@ const showGeneralSettingsPage = async (
     'settings_general_background_mode_combo'
   );
 
+const selectedSettingsTabName = async (app: GtkApp): Promise<string> => {
+  const notebook = expectElementKind(
+    await app.getById('settings_notebook'),
+    'tabList'
+  );
+  const selected = await notebook.selectedChildAt(0);
+  expect(selected).toBeDefined();
+  return (await selected?.info())?.name ?? '';
+};
+
 const showLoggingSettingsPage = async (app: GtkApp): Promise<void> => {
   const notebook = expectElementKind(
     await app.getById('settings_notebook'),
@@ -502,6 +512,35 @@ const expectRgbNear = (
   );
 };
 
+const maximumRgbChannelDifference = (left: RgbPixel, right: RgbPixel): number =>
+  Math.max(
+    Math.abs(left[0] - right[0]),
+    Math.abs(left[1] - right[1]),
+    Math.abs(left[2] - right[2])
+  );
+
+const expectHoverBackgroundContrast = async (
+  app: GtkApp,
+  element: GtkWidgetElement,
+  capture: () => Promise<GtkCapture>,
+  normalBackground: RgbPixel
+): Promise<void> => {
+  expect(capturePixel(await capture(), 0.8, 0.5)).toEqual(normalBackground);
+  const bounds = (await element.capture()).bounds;
+  await app.input.moveMouseTo(
+    Math.trunc(bounds.x + bounds.width * 0.8),
+    Math.trunc(bounds.y + bounds.height * 0.5)
+  );
+  await toPass(async () => {
+    expect(
+      maximumRgbChannelDifference(
+        capturePixel(await capture(), 0.8, 0.5),
+        normalBackground
+      )
+    ).toBeGreaterThanOrEqual(16);
+  });
+};
+
 const captureWindowBackgroundPixels = async (
   app: GtkApp
 ): Promise<WindowBackgroundPixels> => {
@@ -662,10 +701,20 @@ describe.concurrent('elder-terms-vte settings', () => {
           );
           expect((await settingsDialog.info()).states).not.toContain('modal');
           await expectInsensitive(mainWindow);
-          await mainWindow.activate();
-          await app.input.pressKey('x');
-          await app.input.pressKey('Return');
-
+          const nameEntry = expectElementKind(
+            await app.getById('settings_general_name_entry'),
+            'entry'
+          );
+          await focusEntry(app, nameEntry);
+          await mainWindow.moveTo(40, 40);
+          await settingsDialog.moveTo(480, 280);
+          const mainBounds = await mainWindow.bounds();
+          await app.input.moveMouseTo(mainBounds.x + 20, mainBounds.y + 20);
+          await app.input.setMouseButton('left', true);
+          await app.input.setMouseButton('left', false);
+          await toPass(async () => {
+            expect((await nameEntry.info()).states).toContain('focused');
+          });
           await expectElementKind(
             await app.getById('settings_cancel_button'),
             'button'
@@ -1244,6 +1293,33 @@ describe.concurrent('elder-terms-vte settings', () => {
               startupCapture
             );
 
+            await app.input.moveMouseTo(0, 0);
+            await expectElementKind(transferButton, 'toggleButton').click();
+            const transferMenuItem = await waitForResult(async () => {
+              const item = expectElementKind(
+                await app.getById('transfer_zmodem_send_item'),
+                'menuItem'
+              );
+              expect((await item.info()).states).toContain('showing');
+              return item;
+            });
+            await expectHoverBackgroundContrast(
+              app,
+              transferMenuItem,
+              async () => transferMenuItem.capture(),
+              componentBackground
+            );
+            await evidence.captureEvidence(
+              'connection-colors-transfer-menu-hover',
+              async () => transferMenuItem.capture()
+            );
+            await app.input.pressKey('Escape');
+            await toPass(async () => {
+              expect((await transferMenuItem.info()).states).not.toContain(
+                'showing'
+              );
+            });
+
             await openSettingsDialog(app);
             const generalTab = await showGeneralSettingsPage(app);
             const settingsRootCapture = await (
@@ -1396,6 +1472,7 @@ describe.concurrent('elder-terms-vte settings', () => {
               0.5,
               0.5
             );
+            await app.input.moveMouseTo(0, 0);
             const dropdown = await openComboBoxPopup(app, backgroundModeCombo);
             const dropdownCapture = await evidence.captureEvidence(
               'connection-colors-settings-dropdown',
@@ -1417,6 +1494,12 @@ describe.concurrent('elder-terms-vte settings', () => {
               connectionColorsSettingsDropdownFixturePath,
               evidence
             );
+            expect(
+              maximumRgbChannelDifference(
+                capturePixel(dropdownCapture, 0.8, 0.83),
+                componentBackground
+              )
+            ).toBeGreaterThanOrEqual(16);
             await app.input.pressKey('Escape');
 
             await expectElementKind(
@@ -1507,6 +1590,7 @@ describe.concurrent('elder-terms-vte settings', () => {
   it('opens the runtime settings dialog from the header bar', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
       await openSettingsDialog(app);
+      expect(await selectedSettingsTabName(app)).toBe('General');
     });
   });
 

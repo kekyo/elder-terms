@@ -10,6 +10,7 @@
 namespace elder_terms {
 
 static constexpr double component_lightness_delta = 0.04;
+static constexpr double component_highlight_lightness_delta = 0.20;
 static constexpr char component_background_selectors[] =
     "notebook > header > tabs > tab, "
     "button, "
@@ -47,6 +48,17 @@ static constexpr char popup_component_background_selectors[] =
     "tooltip.background, "
     "tooltip.background > box, "
     "tooltip.background > box > label";
+static constexpr char popup_component_highlight_selectors[] =
+    "window.popup *:hover, "
+    "window.popup *:hover *, "
+    "window.popup *:selected, "
+    "window.popup *:selected *, "
+    "menu > menuitem:hover, "
+    "menu > menuitem:hover > box, "
+    "menu > menuitem:hover > label, "
+    "menu > menuitem:hover > box > label, "
+    "popover modelbutton:hover, "
+    "popover modelbutton:hover > label";
 
 static std::string rgb_color_css(const RgbColor &color,
                                  const std::string &selector) {
@@ -103,7 +115,8 @@ static guint8 normalized_color_channel(double value) {
       std::lround(std::clamp(value, 0.0, 1.0) * 255.0));
 }
 
-static RgbColor derive_component_background(const RgbColor &color) {
+static RgbColor derive_component_background(const RgbColor &color,
+                                            double lightness_delta) {
   static constexpr double channel_maximum = 255.0;
   const double red =
       static_cast<double>(color.red) / channel_maximum;
@@ -136,8 +149,8 @@ static RgbColor derive_component_background(const RgbColor &color) {
   const double component_lightness =
       lightness <= 0.5
           ? lightness +
-                (1.0 - lightness) * component_lightness_delta
-          : lightness * (1.0 - component_lightness_delta);
+                (1.0 - lightness) * lightness_delta
+          : lightness * (1.0 - lightness_delta);
   const double component_chroma =
       (1.0 - std::abs(2.0 * component_lightness - 1.0)) *
       saturation;
@@ -185,7 +198,7 @@ GtkCssProvider *create_widget_background_provider(
 GtkCssProvider *create_widget_component_background_provider(
     const RgbColor &color, const char *target_name) {
   return create_background_provider(
-      derive_component_background(color),
+      derive_component_background(color, component_lightness_delta),
       component_background_selectors, target_name);
 }
 
@@ -193,7 +206,7 @@ GtkCssProvider *create_scoped_widget_component_background_provider(
     const RgbColor &color, const char *style_class,
     const char *target_name) {
   return create_background_provider(
-      derive_component_background(color),
+      derive_component_background(color, component_lightness_delta),
       scoped_descendant_selectors(
           style_class, component_background_selectors),
       target_name);
@@ -201,9 +214,18 @@ GtkCssProvider *create_scoped_widget_component_background_provider(
 
 GtkCssProvider *create_widget_popup_component_background_provider(
     const RgbColor &color, const char *target_name) {
-  return create_background_provider(
-      derive_component_background(color),
-      popup_component_background_selectors, target_name);
+  const RgbColor component_background =
+      derive_component_background(color, component_lightness_delta);
+  const RgbColor highlight_background =
+      derive_component_background(
+          color, component_highlight_lightness_delta);
+  const std::string css =
+      rgb_color_css(component_background,
+                    popup_component_background_selectors) +
+      "\n" +
+      rgb_color_css(highlight_background,
+                    popup_component_highlight_selectors);
+  return create_css_provider(css, target_name);
 }
 
 GtkCssProvider *create_scoped_widget_background_provider(

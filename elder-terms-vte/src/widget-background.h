@@ -48,8 +48,9 @@ GtkCssProvider *create_scoped_widget_component_background_provider(
  * @param color RGB content background used as the derivation source.
  * @param target_name Diagnostic name used when CSS parsing fails.
  * @returns Owned provider, or null when the CSS could not be loaded.
- * @remarks The derived color uses the same four-percent lightness adjustment
- * as regular interactive controls.
+ * @remarks Regular surfaces use the same four-percent lightness adjustment
+ * as other controls. Hovered and selected surfaces use a stronger adjustment
+ * so their interaction state remains visible with custom colors.
  */
 GtkCssProvider *create_widget_popup_component_background_provider(
     const RgbColor &color, const char *target_name);
