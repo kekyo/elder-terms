@@ -226,6 +226,19 @@ static gboolean on_window_drag_button_press(GtkWidget *,
   return GDK_EVENT_STOP;
 }
 
+static gboolean on_main_window_focus_in(GtkWidget *, GdkEventFocus *,
+                                        gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state == nullptr || state->global_defaults_dialog == nullptr) {
+    return GDK_EVENT_PROPAGATE;
+  }
+
+  gtk_window_present_with_time(
+      GTK_WINDOW(state->global_defaults_dialog),
+      gtk_get_current_event_time());
+  return GDK_EVENT_STOP;
+}
+
 static void on_global_defaults_dialog_destroy(GtkWidget *,
                                               gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
@@ -237,6 +250,9 @@ static void on_global_defaults_dialog_destroy(GtkWidget *,
   }
   if (!state->window_destroyed && state->main_window != nullptr) {
     gtk_widget_set_sensitive(state->main_window->window, TRUE);
+    gtk_window_present_with_time(
+        GTK_WINDOW(state->main_window->window),
+        gtk_get_current_event_time());
   }
 }
 
@@ -1432,6 +1448,8 @@ static bool initialize_main_window(ApplicationState *state) {
                    G_CALLBACK(on_connection_list_key_press), state);
   g_signal_connect(main_window->window, "key-press-event",
                    G_CALLBACK(on_connection_list_key_press), state);
+  g_signal_connect_after(main_window->window, "focus-in-event",
+                         G_CALLBACK(on_main_window_focus_in), state);
   g_signal_connect(main_window->new_button, "clicked",
                    G_CALLBACK(on_new_clicked), state);
   g_signal_connect(main_window->global_defaults_button, "clicked",

@@ -309,14 +309,36 @@ static void restore_terminal_focus(ApplicationState *state) {
     return;
   }
 
-  gtk_window_present(GTK_WINDOW(state->window));
+  gtk_window_present_with_time(GTK_WINDOW(state->window),
+                               gtk_get_current_event_time());
   elder_terms::focus_main_window_terminal_if_interactive(
       state->main_window);
+}
+
+static bool present_open_child_window(ApplicationState *state) {
+  if (state == nullptr) {
+    return false;
+  }
+
+  GtkWidget *child = state->settings_dialog;
+  if (child == nullptr) {
+    child = state->transfer_file_dialog;
+  }
+  if (child == nullptr) {
+    return false;
+  }
+
+  gtk_window_present_with_time(GTK_WINDOW(child),
+                               gtk_get_current_event_time());
+  return true;
 }
 
 static gboolean on_main_window_focus_in(
     GtkWidget *, GdkEventFocus *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
+  if (present_open_child_window(state)) {
+    return GDK_EVENT_STOP;
+  }
   if (state != nullptr) {
     elder_terms::focus_main_window_terminal_if_interactive(
         state->main_window);
@@ -541,6 +563,8 @@ static void open_settings_dialog(ApplicationState *state) {
   update_parent_window_sensitivity(state);
   update_application_terminal_presentation(state);
   gtk_widget_show_all(dialog);
+  gtk_window_present_with_time(GTK_WINDOW(dialog),
+                               gtk_get_current_event_time());
 }
 
 static void on_settings_button_clicked(GtkButton *, gpointer user_data) {
@@ -637,13 +661,13 @@ static void on_transfer_file_dialog_response(GtkDialog *dialog,
   }
   gtk_widget_destroy(GTK_WIDGET(dialog));
 
-  if (!uris.empty() && selected) {
-    selected(std::move(uris));
-    return;
-  }
   if (state != nullptr && state->window != nullptr) {
     update_application_terminal_presentation(state);
     restore_terminal_focus(state);
+  }
+  if (!uris.empty() && selected) {
+    selected(std::move(uris));
+    return;
   }
 }
 

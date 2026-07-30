@@ -111,6 +111,19 @@ const openGlobalDefaults = async (app: GtkApp) => {
   return dialog;
 };
 
+const selectedSettingsTabName = async (
+  app: GtkApp,
+  idPrefix: string
+): Promise<string> => {
+  const notebook = expectElementKind(
+    await app.getById(`${idPrefix}_notebook`),
+    'tabList'
+  );
+  const selected = await notebook.selectedChildAt(0);
+  expect(selected).toBeDefined();
+  return (await selected?.info())?.name ?? '';
+};
+
 const visibleSettingsTabNames = async (
   app: GtkApp,
   idPrefix: string
@@ -306,23 +319,56 @@ describe('elder-terms main window', () => {
   });
 
   it('opens global defaults independently and disables its parent until closed', async (context) => {
-    await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
-      const mainWindow = expectElementKind(
-        await app.getById('main_window'),
-        'window'
-      );
-      const dialog = await openGlobalDefaults(app);
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app, x11MapRecorder }) => {
+        if (x11MapRecorder === undefined) {
+          throw new Error('X11 focus recorder was not started');
+        }
+        const mainWindow = expectElementKind(
+          await app.getById('main_window'),
+          'window'
+        );
+        await mainWindow.moveTo(40, 40);
+        const dialog = await openGlobalDefaults(app);
+        await dialog.moveTo(480, 280);
 
-      expect((await dialog.info()).states).not.toContain('modal');
-      await expectInsensitive(mainWindow);
+        expect((await dialog.info()).states).not.toContain('modal');
+        await expectInsensitive(mainWindow);
+        expect(await selectedSettingsTabName(app, 'global_settings')).toBe(
+          'General'
+        );
 
-      await expectElementKind(
-        await app.getById('global_defaults_cancel_button'),
-        'button'
-      ).click();
-      await waitForWindowCount(app, 1);
-      await expectSensitive(mainWindow);
-    });
+        const mainWindowId = String(
+          Number.parseInt((await mainWindow.x11Info()).windowId, 16)
+        );
+        const dialogWindowId = String(
+          Number.parseInt((await dialog.x11Info()).windowId, 16)
+        );
+        const mainBounds = await mainWindow.bounds();
+        await app.input.moveMouseTo(mainBounds.x + 20, mainBounds.y + 20);
+        await app.input.setMouseButton('left', true);
+        await app.input.setMouseButton('left', false);
+        await waitForResult(async () => {
+          expect(await x11MapRecorder.focusedWindow()).toBe(dialogWindowId);
+        });
+        await expectElementKind(
+          await app.getById('global_defaults_cancel_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+        await expectSensitive(mainWindow);
+        await waitForResult(async () => {
+          expect(await x11MapRecorder.focusedWindow()).toBe(mainWindowId);
+        });
+      },
+      {
+        args: [],
+        env: {},
+        recordX11Maps: true,
+      }
+    );
   });
 
   it('pads the global defaults action row and moves the dialog when dragged', async (context) => {

@@ -1198,20 +1198,31 @@ describe.concurrent('elder-terms-vte main window', () => {
               await app.getById('transfer_file_dialog'),
               'container'
             );
-            const dialog = await app.windowAt(1);
-            if (dialog === undefined) {
+            const exposedDialog = await app.windowAt(1);
+            if (exposedDialog === undefined) {
               throw new Error('Transfer file dialog window was not found');
             }
+            const dialog = expectElementKind(exposedDialog, 'window');
             expect((await dialog.info()).states).not.toContain('modal');
             expect((await mainWindow.info()).states).not.toContain('sensitive');
             await evidence.captureEvidence(
               'zmodem-send-dialog-xdg-downloads',
               async () => dialog.capture()
             );
+            await mainWindow.moveTo(40, 40);
+            await dialog.moveTo(480, 280);
+            const mainBounds = await mainWindow.bounds();
+            await app.input.moveMouseTo(mainBounds.x + 20, mainBounds.y + 20);
+            await app.input.setMouseButton('left', true);
+            await app.input.setMouseButton('left', false);
+            await dialog.capture();
             await app.input.pressKey('Escape');
             await waitForResult(async () => {
               expect(await app.getWindowCount()).toBe(1);
               expect((await mainWindow.info()).states).toContain('sensitive');
+              expect(
+                (await (await app.getById('terminal_view')).info()).states
+              ).toContain('focused');
             });
           },
           {
