@@ -45,6 +45,8 @@ std::string sanitize_transfer_file_name(const std::string &name,
  * @param speed_bytes_per_second Current-file transfer speed when stable.
  * @param eta_seconds Remaining seconds when an ETA is stable.
  * @returns Status text suitable for the status bar.
+ * @remarks Numeric fields use figure-space minimum widths and expand without
+ * truncation when a value exceeds its usual column.
  */
 std::string format_transfer_status(
     const std::string &file_name, std::uint64_t transferred_bytes,

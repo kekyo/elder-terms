@@ -23,6 +23,10 @@ static constexpr std::uint32_t transfer_retry_limit = 8;
 static constexpr std::uint8_t transfer_pad_byte = 0x1a;
 static constexpr const char *fallback_receive_name = "received.bin";
 static constexpr std::uint64_t transfer_measurement_minimum_elapsed_ms = 1000;
+static constexpr std::size_t transfer_byte_field_width = 6;
+static constexpr std::size_t transfer_percent_field_width = 3;
+static constexpr std::size_t transfer_eta_field_width = 6;
+static constexpr const char *transfer_figure_space = "\xE2\x80\x87";
 
 struct GObjectDeleter {
   void operator()(void *object) const {
@@ -305,6 +309,23 @@ static std::string format_byte_count(std::uint64_t bytes) {
   return buffer;
 }
 
+static std::string align_transfer_field(const std::string &text,
+                                        std::size_t minimum_width) {
+  if (text.size() >= minimum_width) {
+    return text;
+  }
+
+  const std::size_t padding_count = minimum_width - text.size();
+  std::string result;
+  result.reserve(padding_count * std::strlen(transfer_figure_space) +
+                 text.size());
+  for (std::size_t index = 0; index < padding_count; ++index) {
+    result += transfer_figure_space;
+  }
+  result += text;
+  return result;
+}
+
 static std::uint64_t clamped_percent(std::uint64_t transferred,
                                      std::uint64_t total) {
   if (total == 0) {
@@ -402,26 +423,33 @@ std::string format_transfer_status(
     std::optional<std::uint64_t> eta_seconds) {
   std::string result = file_name.empty() ? fallback_receive_name : file_name;
   result += " ";
-  result += format_byte_count(transferred_bytes);
+  result += align_transfer_field(format_byte_count(transferred_bytes),
+                                 transfer_byte_field_width);
   if (total_bytes.has_value()) {
     result += "/";
     result += format_byte_count(*total_bytes);
     result += " (";
-    result += std::to_string(clamped_percent(transferred_bytes, *total_bytes));
+    result += align_transfer_field(
+        std::to_string(clamped_percent(transferred_bytes, *total_bytes)),
+        transfer_percent_field_width);
     result += "%";
     if (speed_bytes_per_second.has_value()) {
       result += ", ";
-      result += format_byte_count(*speed_bytes_per_second);
+      result += align_transfer_field(
+          format_byte_count(*speed_bytes_per_second),
+          transfer_byte_field_width);
       result += "/s";
     }
     if (eta_seconds.has_value()) {
       result += ", ETA ";
-      result += format_eta_duration(*eta_seconds);
+      result += align_transfer_field(format_eta_duration(*eta_seconds),
+                                     transfer_eta_field_width);
     }
     result += ")";
   } else if (speed_bytes_per_second.has_value()) {
     result += " (";
-    result += format_byte_count(*speed_bytes_per_second);
+    result += align_transfer_field(format_byte_count(*speed_bytes_per_second),
+                                   transfer_byte_field_width);
     result += "/s)";
   }
   return result;

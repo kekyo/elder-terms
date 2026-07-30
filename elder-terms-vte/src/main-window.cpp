@@ -1202,6 +1202,12 @@ std::optional<MainWindow> load_main_window() {
     release_main_window(&main_window);
     return std::nullopt;
   }
+  PangoAttrList *status_attributes = pango_attr_list_new();
+  pango_attr_list_insert(status_attributes,
+                         pango_attr_font_features_new("tnum=1"));
+  gtk_label_set_attributes(GTK_LABEL(main_window.status_label),
+                           status_attributes);
+  pango_attr_list_unref(status_attributes);
   install_terminal_context_menu(main_window.terminal,
                                 main_window.terminal_overlay);
   install_terminal_dim_overlay_input_pass_through(

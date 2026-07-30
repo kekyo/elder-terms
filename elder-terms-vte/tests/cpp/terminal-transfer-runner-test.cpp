@@ -720,9 +720,11 @@ static void run_transfer_integration_case(TransferIntegrationCase test_case) {
                         std::span<const std::uint8_t>(payload.data(),
                                                       payload.size()));
       if (is_zmodem_resume_case(test_case)) {
-        expect_status_contains(status_updates, "1KiB/2KiB (50%)",
-                               "ZMODEM send resume should publish the resume "
-                               "offset");
+        expect_status_contains(
+            status_updates,
+            format_transfer_status("payload.bin", zmodem_resume_offset,
+                                   payload.size(), std::nullopt, std::nullopt),
+            "ZMODEM send resume should publish the resume offset");
       }
     } else {
       const std::string remote_name = "remote.bin";
@@ -815,11 +817,13 @@ static void run_transfer_integration_case(TransferIntegrationCase test_case) {
                                              (local_name + ".partial")),
                     "completed ZMODEM resume receive should remove the "
                     "partial file");
-	        expect_status_contains(status_updates, "1KiB/2KiB (50%)",
-	                               "ZMODEM receive resume should publish the "
-	                               "resume offset");
-	      }
-	    }
+        expect_status_contains(
+            status_updates,
+            format_transfer_status(local_name, zmodem_resume_offset,
+                                   payload.size(), std::nullopt, std::nullopt),
+            "ZMODEM receive resume should publish the resume offset");
+      }
+    }
 
     expect_progress_updates_for_protocol(progress_updates, test_case.protocol);
     std::filesystem::remove_all(root);
@@ -879,34 +883,57 @@ static void sanitize_received_file_names() {
 }
 
 static void format_progress_status() {
+  const std::string figure_space = "\xE2\x80\x87";
+  const auto padding = [&figure_space](std::size_t count) {
+    std::string result;
+    for (std::size_t index = 0; index < count; ++index) {
+      result += figure_space;
+    }
+    return result;
+  };
+
   expect_equal(format_transfer_status("foobar.tar.gz", 650ULL * 1024ULL,
                                       2560ULL * 1024ULL, std::nullopt,
                                       std::nullopt),
-               "foobar.tar.gz 650KiB/2.5MiB (25%)",
-               "progress should format known total bytes");
+               "foobar.tar.gz 650KiB/2.5MiB (" + figure_space + "25%)",
+               "progress should align known total fields");
   expect_equal(format_transfer_status("stream.bin", 42, std::nullopt,
                                       std::nullopt, std::nullopt),
-               "stream.bin 42B",
-               "progress should omit unknown total bytes");
+               "stream.bin " + padding(3) + "42B",
+               "progress should align unknown total bytes");
   expect_equal(format_transfer_status("", 0, 0, std::nullopt, std::nullopt),
-               "received.bin 0B/0B (0%)",
+               "received.bin " + padding(4) + "0B/0B (" + padding(2) + "0%)",
                "progress should use the receive fallback name");
   expect_equal(format_transfer_status("stream.bin", 42, std::nullopt, 42,
                                       std::nullopt),
-               "stream.bin 42B (42B/s)",
-               "progress should format speed without a known total");
+               "stream.bin " + padding(3) + "42B (" + padding(3) + "42B/s)",
+               "progress should align speed without a known total");
   expect_equal(format_transfer_status("foobar.tar.gz", 650ULL * 1024ULL,
                                       2560ULL * 1024ULL, 640ULL * 1024ULL, 90),
-               "foobar.tar.gz 650KiB/2.5MiB (25%, 640KiB/s, ETA 01:30)",
-               "progress should format speed and ETA inside the percent group");
+               "foobar.tar.gz 650KiB/2.5MiB (" + figure_space +
+                   "25%, 640KiB/s, ETA " + figure_space + "01:30)",
+               "progress should align speed and ETA inside the percent group");
   expect_equal(format_transfer_status("done.bin", 2ULL * 1024ULL,
                                       2ULL * 1024ULL, 2ULL * 1024ULL, 0),
-               "done.bin 2KiB/2KiB (100%, 2KiB/s, ETA 00:00)",
-               "progress should format completed speed and ETA");
+               "done.bin " + padding(2) + "2KiB/2KiB (100%, " +
+                   padding(2) + "2KiB/s, ETA " +
+                   figure_space + "00:00)",
+               "progress should align completed speed and ETA");
   expect_equal(format_transfer_status("long.bin", 1ULL, 2ULL, 1ULL,
-                                      75ULL * 60ULL + 3),
-               "long.bin 1B/2B (50%, 1B/s, ETA 75:03)",
-               "progress should keep ETA minutes beyond one hour");
+                                      1000ULL * 60ULL + 3),
+               "long.bin " + padding(4) + "1B/2B (" +
+                   figure_space + "50%, " + padding(4) +
+                   "1B/s, ETA 1000:03)",
+               "progress should expand beyond the ETA minimum width");
+
+  const std::string short_fields =
+      format_transfer_status("stable.bin", 9, 1024ULL * 1024ULL, 9, 9);
+  const std::string longer_fields = format_transfer_status(
+      "stable.bin", 999ULL * 1024ULL, 1024ULL * 1024ULL, 999ULL * 1024ULL, 9);
+  expect_true(g_utf8_strlen(short_fields.c_str(), -1) ==
+                  g_utf8_strlen(longer_fields.c_str(), -1),
+              "progress columns should keep their character width while "
+              "values gain digits");
 }
 
 static void estimate_progress_speed() {

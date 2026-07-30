@@ -1689,9 +1689,9 @@ const waitForTransferProgressRange = async (
     }
   );
 
-const transferEtaStatusPattern = /\bETA [0-9]{2,}:[0-9]{2}\b/;
+const transferEtaStatusPattern = /\bETA \u2007*[0-9]{2,}:[0-9]{2}\b/;
 const transferSpeedStatusPattern =
-  /\b(?:[0-9]+(?:\.[0-9]+)?)(?:B|KiB|MiB|GiB|TiB)\/s\b/;
+  /(?:\u2007)*\b(?:[0-9]+(?:\.[0-9]+)?)(?:B|KiB|MiB|GiB|TiB)\/s\b/;
 
 const readStatusBarText = async (app: GtkApp): Promise<string> => {
   const statusLabel = expectElementKind(
