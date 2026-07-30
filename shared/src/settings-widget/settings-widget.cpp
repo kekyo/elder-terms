@@ -3200,9 +3200,12 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   GtkWidget *general_page = create_general_page(state);
   const std::string general_tab_id = widget_id(state, "general_tab");
+  GtkWidget *general_tab = create_tab_button(
+      state, general_page, "General", general_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), general_page,
-                           create_tab_button(state, general_page, "General",
-                                             general_tab_id.c_str()));
+                           general_tab);
+  gtk_widget_show(general_page);
+  gtk_widget_show(general_tab);
 
   GtkWidget *telnet_page = create_telnet_page(state);
   const std::string telnet_tab_id = widget_id(state, "telnet_tab");
@@ -3324,6 +3327,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   sync_widgets_from_draft(state);
   update_terminal_key_binding_validation(state);
   update_connection_pages(state);
+  gtk_notebook_set_current_page(GTK_NOTEBOOK(state->notebook), 0);
   state->synchronizing = false;
 
   return state;
