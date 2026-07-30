@@ -11,6 +11,10 @@ namespace elder_terms {
 
 static constexpr double component_lightness_delta = 0.04;
 static constexpr double component_highlight_lightness_delta = 0.20;
+// GtkScrolledWindow animates its edge indicators on these CSS nodes. An
+// opaque custom background there would temporarily cover the visible rows.
+static constexpr char widget_background_selectors[] =
+    "*:not(undershoot):not(overshoot)";
 static constexpr char component_background_selectors[] =
     "notebook > header > tabs > tab, "
     "button, "
@@ -192,7 +196,8 @@ static RgbColor derive_component_background(const RgbColor &color,
 
 GtkCssProvider *create_widget_background_provider(
     const RgbColor &color, const char *target_name) {
-  return create_background_provider(color, "*", target_name);
+  return create_background_provider(
+      color, widget_background_selectors, target_name);
 }
 
 GtkCssProvider *create_widget_component_background_provider(

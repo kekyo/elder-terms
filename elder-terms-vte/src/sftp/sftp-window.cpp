@@ -1196,15 +1196,53 @@ static GtkWidget *create_toolbar_button(
   return button;
 }
 
-static int get_sftp_tree_row_height(GtkWidget *tree) {
+struct SftpTreeRowMetrics {
+  int height = 0;
+  int vertical_padding = 0;
+  float vertical_alignment = 0.5F;
+};
+
+static SftpTreeRowMetrics get_sftp_tree_row_metrics(
+    GtkWidget *tree) {
+  static constexpr char row_height_sample[] = "AgÁgjあ漢Ⅳ";
   GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
   g_object_ref_sink(renderer);
-  g_object_set(renderer, "text", "AgÁgjあ漢Ⅳ", nullptr);
+  g_object_set(renderer, "text", row_height_sample, nullptr);
   int minimum_height = 0;
   int natural_height = 0;
   gtk_cell_renderer_get_preferred_height(
       renderer, tree, &minimum_height, &natural_height);
+  int vertical_padding = 0;
+  gtk_cell_renderer_get_padding(
+      renderer, nullptr, &vertical_padding);
   g_object_unref(renderer);
+
+  PangoLayout *layout =
+      gtk_widget_create_pango_layout(tree, row_height_sample);
+  PangoRectangle ink_rect = {};
+  PangoRectangle logical_rect = {};
+  pango_layout_get_pixel_extents(
+      layout, &ink_rect, &logical_rect);
+  g_object_unref(layout);
+  const int ink_center_twice =
+      ink_rect.y * 2 + ink_rect.height;
+  const int logical_center_twice =
+      logical_rect.y * 2 + logical_rect.height;
+  const int ink_center_offset =
+      (ink_center_twice - logical_center_twice) / 2;
+  const int requested_padding_correction =
+      ink_center_offset >= 0
+          ? ink_center_offset
+          : -ink_center_offset;
+  const int padding_correction = std::min(
+      vertical_padding, requested_padding_correction);
+  // GtkCellRendererText centers the logical rectangle, whose baseline can
+  // leave the visible ink low or high. Keep one spare pixel on the opposite
+  // side instead of enlarging the row with symmetric blank padding.
+  const float vertical_alignment =
+      padding_correction == 0
+          ? 0.5F
+          : (ink_center_offset > 0 ? 0.0F : 1.0F);
 
   int expander_size = 0;
   int horizontal_separator = 0;
@@ -1213,14 +1251,34 @@ static int get_sftp_tree_row_height(GtkWidget *tree) {
       "horizontal-separator", &horizontal_separator, nullptr);
   const int effective_expander_size =
       expander_size + horizontal_separator / 2;
-  return std::max(natural_height, effective_expander_size);
+  return {
+      .height = std::max(
+          natural_height - padding_correction,
+          effective_expander_size),
+      .vertical_padding =
+          vertical_padding - padding_correction,
+      .vertical_alignment = vertical_alignment,
+  };
 }
 
 static void append_sftp_tree_column(
     GtkWidget *tree, const char *title, int model_column,
-    bool expand, int row_height) {
+    bool expand, const SftpTreeRowMetrics &row_metrics) {
   GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
-  gtk_cell_renderer_set_fixed_size(renderer, -1, row_height);
+  int horizontal_padding = 0;
+  gtk_cell_renderer_get_padding(
+      renderer, &horizontal_padding, nullptr);
+  gtk_cell_renderer_set_padding(
+      renderer, horizontal_padding,
+      row_metrics.vertical_padding);
+  float horizontal_alignment = 0.0F;
+  gtk_cell_renderer_get_alignment(
+      renderer, &horizontal_alignment, nullptr);
+  gtk_cell_renderer_set_alignment(
+      renderer, horizontal_alignment,
+      row_metrics.vertical_alignment);
+  gtk_cell_renderer_set_fixed_size(
+      renderer, -1, row_metrics.height);
   GtkTreeViewColumn *column =
       gtk_tree_view_column_new_with_attributes(
           title, renderer, "text", model_column, nullptr);
@@ -1244,17 +1302,15 @@ static GtkWidget *create_sftp_tree(SftpPaneState *pane,
   gtk_tree_view_set_rubber_banding(GTK_TREE_VIEW(tree), TRUE);
   gtk_tree_view_set_search_column(
       GTK_TREE_VIEW(tree), sftp_tree_name_column);
-  const int row_height = get_sftp_tree_row_height(tree);
+  const SftpTreeRowMetrics row_metrics =
+      get_sftp_tree_row_metrics(tree);
   append_sftp_tree_column(
-      tree, "Name", sftp_tree_name_column, true, row_height);
+      tree, "Name", sftp_tree_name_column, true, row_metrics);
   append_sftp_tree_column(
-      tree, "Size", sftp_tree_size_column, false, row_height);
+      tree, "Size", sftp_tree_size_column, false, row_metrics);
   append_sftp_tree_column(
       tree, "Modified", sftp_tree_modified_column, false,
-      row_height);
-  // Fixed-height mode validates rows added to an initially empty model in
-  // stages. Explicit renderer sizes retain uniform rows without delaying the
-  // scroll range and repainting newly reached rows at the viewport edges.
+      row_metrics);
   GtkTreeSelection *selection = gtk_tree_view_get_selection(
       GTK_TREE_VIEW(tree));
   gtk_tree_selection_set_mode(selection, GTK_SELECTION_MULTIPLE);

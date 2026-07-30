@@ -189,24 +189,32 @@ const captureRowBounds = async (
   return capture.bounds;
 };
 
-const brightInkBottomMargin = (
+interface BrightInkVerticalMargins {
+  readonly top: number;
+  readonly bottom: number;
+}
+
+const brightInkVerticalMargins = (
   capture: GtkCapture,
   horizontalStartRatio: number,
-  horizontalEndRatio: number
-): number => {
+  horizontalEndRatio: number,
+  minimumChannel: number
+): BrightInkVerticalMargins => {
   const png = PNG.sync.read(capture.image) as PngImage;
   const firstX = Math.max(0, Math.trunc(png.width * horizontalStartRatio));
   const lastX = Math.min(png.width, Math.ceil(png.width * horizontalEndRatio));
+  let firstInkRow = png.height;
   let lastInkRow = -1;
   for (let y = 0; y < png.height; y += 1) {
     for (let x = firstX; x < lastX; x += 1) {
       const offset = (y * png.width + x) * 4;
       if (
-        (png.data[offset] ?? 0) >= 224 &&
-        (png.data[offset + 1] ?? 0) >= 224 &&
-        (png.data[offset + 2] ?? 0) >= 224 &&
+        (png.data[offset] ?? 0) >= minimumChannel &&
+        (png.data[offset + 1] ?? 0) >= minimumChannel &&
+        (png.data[offset + 2] ?? 0) >= minimumChannel &&
         (png.data[offset + 3] ?? 0) >= 224
       ) {
+        firstInkRow = Math.min(firstInkRow, y);
         lastInkRow = Math.max(lastInkRow, y);
       }
     }
@@ -214,7 +222,10 @@ const brightInkBottomMargin = (
   if (lastInkRow < 0) {
     throw new Error('SFTP tree did not contain bright text pixels');
   }
-  return png.height - lastInkRow - 1;
+  return {
+    top: firstInkRow,
+    bottom: png.height - lastInkRow - 1,
+  };
 };
 
 const horizontalGap = (
@@ -660,7 +671,7 @@ describe('SFTP window', () => {
     await runSftpFixture(
       context,
       false,
-      [],
+      ['background=#000000'],
       [
         'treeview.view {',
         '  background-color: rgb(0, 0, 0);',
@@ -715,11 +726,26 @@ describe('SFTP window', () => {
           'sftp-multilingual-row',
           async () => japaneseCapture
         );
+        const japaneseMargins = brightInkVerticalMargins(
+          japaneseCapture,
+          0,
+          1,
+          224
+        );
+        expect.soft(japaneseCapture.bounds.height).toBeLessThanOrEqual(26);
+        expect.soft(japaneseMargins.bottom).toBeGreaterThanOrEqual(5);
         expect
-          .soft(brightInkBottomMargin(japaneseCapture, 0, 1))
-          .toBeGreaterThanOrEqual(5);
+          .soft(Math.abs(japaneseMargins.top - japaneseMargins.bottom))
+          .toBeLessThanOrEqual(1);
 
         const treeCapture = await localTree.capture();
+        const initialTreeMargins = brightInkVerticalMargins(
+          treeCapture,
+          0.1,
+          0.45,
+          128
+        );
+        expect.soft(initialTreeMargins.bottom).toBeLessThanOrEqual(rowPitch);
         await app.input.moveMouseTo(
           Math.round(treeCapture.bounds.x + treeCapture.bounds.width / 2),
           Math.round(treeCapture.bounds.y + treeCapture.bounds.height / 2)
@@ -740,9 +766,18 @@ describe('SFTP window', () => {
           'sftp-scrolled-tree-bottom',
           async () => localTree.capture()
         );
+        const bottomTreeMargins = brightInkVerticalMargins(
+          bottomCapture,
+          0.1,
+          0.45,
+          128
+        );
+        expect.soft(bottomTreeMargins.bottom).toBeLessThanOrEqual(rowPitch);
         expect
-          .soft(brightInkBottomMargin(bottomCapture, 0.1, 0.45))
-          .toBeLessThanOrEqual(rowPitch);
+          .soft(bottomTreeMargins.top)
+          .toBeLessThanOrEqual(
+            initialTreeMargins.top + Math.floor(rowPitch / 2)
+          );
 
         await app.input.scrollWheel(0, -240);
         const topScrollRange = await verticalScrollbar.valueInfo();
@@ -754,9 +789,13 @@ describe('SFTP window', () => {
         expect(firstRowBounds.y + firstRowBounds.height).toBeLessThanOrEqual(
           treeCapture.bounds.y + treeCapture.bounds.height
         );
-        await evidence.captureEvidence('sftp-scrolled-tree-top', async () =>
-          localTree.capture()
+        const topCapture = await evidence.captureEvidence(
+          'sftp-scrolled-tree-top',
+          async () => localTree.capture()
         );
+        expect
+          .soft(brightInkVerticalMargins(topCapture, 0.1, 0.45, 128).bottom)
+          .toBeLessThanOrEqual(rowPitch);
       }
     );
   });
