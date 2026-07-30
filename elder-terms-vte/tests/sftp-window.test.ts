@@ -189,6 +189,34 @@ const captureRowBounds = async (
   return capture.bounds;
 };
 
+const brightInkBottomMargin = (
+  capture: GtkCapture,
+  horizontalStartRatio: number,
+  horizontalEndRatio: number
+): number => {
+  const png = PNG.sync.read(capture.image) as PngImage;
+  const firstX = Math.max(0, Math.trunc(png.width * horizontalStartRatio));
+  const lastX = Math.min(png.width, Math.ceil(png.width * horizontalEndRatio));
+  let lastInkRow = -1;
+  for (let y = 0; y < png.height; y += 1) {
+    for (let x = firstX; x < lastX; x += 1) {
+      const offset = (y * png.width + x) * 4;
+      if (
+        (png.data[offset] ?? 0) >= 224 &&
+        (png.data[offset + 1] ?? 0) >= 224 &&
+        (png.data[offset + 2] ?? 0) >= 224 &&
+        (png.data[offset + 3] ?? 0) >= 224
+      ) {
+        lastInkRow = Math.max(lastInkRow, y);
+      }
+    }
+  }
+  if (lastInkRow < 0) {
+    throw new Error('SFTP tree did not contain bright text pixels');
+  }
+  return png.height - lastInkRow - 1;
+};
+
 const horizontalGap = (
   left: GtkCapture['bounds'],
   right: GtkCapture['bounds']
@@ -624,6 +652,111 @@ describe('SFTP window', () => {
         expect(
           (await captureRowBounds(localTree, firstDirectoryRow)).height
         ).toBe(firstDirectoryBounds.height);
+      }
+    );
+  });
+
+  it('fully lays out multilingual rows and the dynamic scroll range', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      [
+        'treeview.view {',
+        '  background-color: rgb(0, 0, 0);',
+        '  color: rgb(255, 255, 255);',
+        '  font-family: "Ubuntu Sans";',
+        '  font-size: 11pt;',
+        '}',
+        '',
+      ].join('\n'),
+      async ({ app, evidence, localDirectory }) => {
+        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const verticalScrollbar = expectElementKind(
+          await app.getById('sftp_local_vertical_scrollbar'),
+          'scrollbar'
+        );
+        await findRow(localTree, 'hello.txt');
+        const initialFirstRow = await captureRowBounds(localTree, 0);
+        const initialSecondRow = await captureRowBounds(localTree, 1);
+        const rowPitch = initialSecondRow.y - initialFirstRow.y;
+
+        const japaneseName = 'a-オリジナルサウンドトラック 英雄伝説Ⅳ.txt';
+        await Promise.all([
+          writeFile(join(localDirectory, japaneseName), 'music\n'),
+          ...Array.from({ length: 160 }, (_, index) =>
+            writeFile(
+              join(
+                localDirectory,
+                `scroll-entry-${String(index).padStart(3, '0')}.txt`
+              ),
+              'file\n'
+            )
+          ),
+        ]);
+        await expectElementKind(
+          await app.getById('sftp_local_refresh_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(await localTree.getRowCount()).toBe(163);
+        });
+
+        const scrollRange = await verticalScrollbar.valueInfo();
+        expect.soft(scrollRange.maximum).toBeGreaterThanOrEqual(rowPitch * 140);
+
+        const japaneseRow = await findRow(localTree, japaneseName);
+        const japaneseCell = await localTree.cellAt(japaneseRow, 0);
+        const japaneseCapture = await japaneseCell?.capture();
+        if (japaneseCapture === undefined) {
+          throw new Error('Japanese SFTP row did not expose bounds');
+        }
+        await evidence.captureEvidence(
+          'sftp-multilingual-row',
+          async () => japaneseCapture
+        );
+        expect
+          .soft(brightInkBottomMargin(japaneseCapture, 0, 1))
+          .toBeGreaterThanOrEqual(5);
+
+        const treeCapture = await localTree.capture();
+        await app.input.moveMouseTo(
+          Math.round(treeCapture.bounds.x + treeCapture.bounds.width / 2),
+          Math.round(treeCapture.bounds.y + treeCapture.bounds.height / 2)
+        );
+        await app.input.scrollWheel(0, 240);
+        const bottomScrollRange = await verticalScrollbar.valueInfo();
+        expect(bottomScrollRange.value).toBeGreaterThan(scrollRange.value);
+        expect(
+          bottomScrollRange.maximum - bottomScrollRange.value
+        ).toBeLessThanOrEqual(treeCapture.bounds.height + rowPitch);
+        const finalRow = (await localTree.getRowCount()) - 1;
+        const finalRowBounds = await captureRowBounds(localTree, finalRow);
+        expect(finalRowBounds.y).toBeGreaterThanOrEqual(treeCapture.bounds.y);
+        expect(finalRowBounds.y + finalRowBounds.height).toBeLessThanOrEqual(
+          treeCapture.bounds.y + treeCapture.bounds.height
+        );
+        const bottomCapture = await evidence.captureEvidence(
+          'sftp-scrolled-tree-bottom',
+          async () => localTree.capture()
+        );
+        expect
+          .soft(brightInkBottomMargin(bottomCapture, 0.1, 0.45))
+          .toBeLessThanOrEqual(rowPitch);
+
+        await app.input.scrollWheel(0, -240);
+        const topScrollRange = await verticalScrollbar.valueInfo();
+        expect(topScrollRange.value).toBeLessThanOrEqual(
+          topScrollRange.minimum + rowPitch
+        );
+        const firstRowBounds = await captureRowBounds(localTree, 0);
+        expect(firstRowBounds.y).toBeGreaterThanOrEqual(treeCapture.bounds.y);
+        expect(firstRowBounds.y + firstRowBounds.height).toBeLessThanOrEqual(
+          treeCapture.bounds.y + treeCapture.bounds.height
+        );
+        await evidence.captureEvidence('sftp-scrolled-tree-top', async () =>
+          localTree.capture()
+        );
       }
     );
   });

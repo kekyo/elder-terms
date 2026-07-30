@@ -1199,7 +1199,7 @@ static GtkWidget *create_toolbar_button(
 static int get_sftp_tree_row_height(GtkWidget *tree) {
   GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
   g_object_ref_sink(renderer);
-  g_object_set(renderer, "text", "Ag", nullptr);
+  g_object_set(renderer, "text", "AgÁgjあ漢Ⅳ", nullptr);
   int minimum_height = 0;
   int natural_height = 0;
   gtk_cell_renderer_get_preferred_height(
@@ -1252,7 +1252,9 @@ static GtkWidget *create_sftp_tree(SftpPaneState *pane,
   append_sftp_tree_column(
       tree, "Modified", sftp_tree_modified_column, false,
       row_height);
-  gtk_tree_view_set_fixed_height_mode(GTK_TREE_VIEW(tree), TRUE);
+  // Fixed-height mode validates rows added to an initially empty model in
+  // stages. Explicit renderer sizes retain uniform rows without delaying the
+  // scroll range and repainting newly reached rows at the viewport edges.
   GtkTreeSelection *selection = gtk_tree_view_get_selection(
       GTK_TREE_VIEW(tree));
   gtk_tree_selection_set_mode(selection, GTK_SELECTION_MULTIPLE);
@@ -1314,6 +1316,11 @@ static GtkWidget *create_sftp_pane(
   gtk_scrolled_window_set_policy(
       GTK_SCROLLED_WINDOW(scroller), GTK_POLICY_AUTOMATIC,
       GTK_POLICY_AUTOMATIC);
+  gestament_gtk_assign_accessible_id(
+      gtk_scrolled_window_get_vscrollbar(
+          GTK_SCROLLED_WINDOW(scroller)),
+      remote ? "sftp_remote_vertical_scrollbar"
+             : "sftp_local_vertical_scrollbar");
   gtk_widget_set_hexpand(scroller, TRUE);
   gtk_widget_set_vexpand(scroller, TRUE);
   gtk_box_pack_start(GTK_BOX(box), scroller, TRUE, TRUE, 0);
