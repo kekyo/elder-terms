@@ -1196,6 +1196,95 @@ static GtkWidget *create_toolbar_button(
   return button;
 }
 
+struct SftpTreeCellRendererText {
+  GtkCellRendererText parent_instance;
+};
+
+struct SftpTreeCellRendererTextClass {
+  GtkCellRendererTextClass parent_class;
+};
+
+static void render_sftp_tree_cell_text(
+    GtkCellRenderer *renderer, cairo_t *cr, GtkWidget *widget,
+    const GdkRectangle *background_area,
+    const GdkRectangle *cell_area, GtkCellRendererState flags);
+
+G_DEFINE_TYPE(SftpTreeCellRendererText,
+              sftp_tree_cell_renderer_text,
+              GTK_TYPE_CELL_RENDERER_TEXT)
+
+static int get_sftp_tree_cell_ink_offset(
+    GtkCellRenderer *renderer, GtkWidget *widget,
+    const GdkRectangle *cell_area) {
+  char *text_value = nullptr;
+  g_object_get(renderer, "text", &text_value, nullptr);
+  SftpGCharPtr text(text_value);
+  if (text == nullptr || text.get()[0] == '\0') {
+    return 0;
+  }
+
+  SftpGObjectPtr<PangoLayout> layout(
+      gtk_widget_create_pango_layout(widget, text.get()));
+  PangoRectangle ink_rect = {};
+  PangoRectangle logical_rect = {};
+  pango_layout_get_pixel_extents(
+      layout.get(), &ink_rect, &logical_rect);
+
+  int vertical_padding = 0;
+  gtk_cell_renderer_get_padding(
+      renderer, nullptr, &vertical_padding);
+  float vertical_alignment = 0.5F;
+  gtk_cell_renderer_get_alignment(
+      renderer, nullptr, &vertical_alignment);
+  const int content_height = std::max(
+      0, cell_area->height - 2 * vertical_padding);
+  const int logical_height = std::min(
+      logical_rect.height, content_height);
+  const int available_height = std::max(
+      0, cell_area->height -
+             (logical_height + 2 * vertical_padding));
+  const int aligned_offset = std::max(
+      0, static_cast<int>(
+             vertical_alignment * available_height));
+  const int ink_center_twice =
+      2 * (aligned_offset + vertical_padding + ink_rect.y) +
+      ink_rect.height;
+  return (ink_center_twice - cell_area->height) / 2;
+}
+
+static void render_sftp_tree_cell_text(
+    GtkCellRenderer *renderer, cairo_t *cr, GtkWidget *widget,
+    const GdkRectangle *background_area,
+    const GdkRectangle *cell_area, GtkCellRendererState flags) {
+  const int vertical_offset = get_sftp_tree_cell_ink_offset(
+      renderer, widget, cell_area);
+  GdkRectangle adjusted_cell_area = *cell_area;
+  adjusted_cell_area.y -= vertical_offset;
+
+  // GtkCellRendererText aligns the layout's logical rectangle. Font
+  // fallback can make its visible ink asymmetric within that rectangle,
+  // so move the rendered value by its measured ink center instead.
+  cairo_save(cr);
+  cairo_rectangle(
+      cr, cell_area->x, cell_area->y, cell_area->width,
+      cell_area->height);
+  cairo_clip(cr);
+  GTK_CELL_RENDERER_CLASS(
+      sftp_tree_cell_renderer_text_parent_class)
+      ->render(renderer, cr, widget, background_area,
+               &adjusted_cell_area, flags);
+  cairo_restore(cr);
+}
+
+static void sftp_tree_cell_renderer_text_class_init(
+    SftpTreeCellRendererTextClass *renderer_class) {
+  GTK_CELL_RENDERER_CLASS(renderer_class)->render =
+      render_sftp_tree_cell_text;
+}
+
+static void sftp_tree_cell_renderer_text_init(
+    SftpTreeCellRendererText *) {}
+
 struct SftpTreeRowMetrics {
   int height = 0;
   int vertical_padding = 0;
@@ -1264,7 +1353,8 @@ static SftpTreeRowMetrics get_sftp_tree_row_metrics(
 static void append_sftp_tree_column(
     GtkWidget *tree, const char *title, int model_column,
     bool expand, const SftpTreeRowMetrics &row_metrics) {
-  GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
+  GtkCellRenderer *renderer = GTK_CELL_RENDERER(g_object_new(
+      sftp_tree_cell_renderer_text_get_type(), nullptr));
   int horizontal_padding = 0;
   gtk_cell_renderer_get_padding(
       renderer, &horizontal_padding, nullptr);

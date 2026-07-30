@@ -667,6 +667,102 @@ describe('SFTP window', () => {
     );
   });
 
+  it('centers text across fallback font runs', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      ['background=#000000'],
+      [
+        'treeview.view {',
+        '  background-color: rgb(0, 0, 0);',
+        '  color: rgb(255, 255, 255);',
+        '  font-family: "Ubuntu Sans";',
+        '  font-size: 11pt;',
+        '}',
+        '',
+      ].join('\n'),
+      async ({ app, evidence, localDirectory }) => {
+        const entries = [
+          {
+            id: 'latin',
+            name: 'English',
+          },
+          {
+            id: 'cyrillic',
+            name: 'Кириллица',
+          },
+          {
+            id: 'arabic',
+            name: 'العربية',
+          },
+          {
+            id: 'devanagari',
+            name: 'हिन्दी',
+          },
+          {
+            id: 'thai',
+            name: 'ภาษาไทย',
+          },
+          {
+            id: 'hebrew',
+            name: 'עברית',
+          },
+          {
+            id: 'hangul',
+            name: '한국어',
+          },
+          {
+            id: 'mixed-fallback',
+            name: 'オリジナルサウンドトラック 英雄伝説Ⅳ「朱紅い雫」',
+          },
+        ] as const;
+        await Promise.all(
+          entries.map(async ({ name }) => {
+            await writeFile(join(localDirectory, name), 'fixture\n');
+          })
+        );
+
+        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        await expectElementKind(
+          await app.getById('sftp_local_refresh_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(await localTree.getRowCount()).toBe(entries.length + 2);
+        });
+
+        for (const { id, name } of entries) {
+          const row = await findRow(localTree, name);
+          const cell = await localTree.cellAt(row, 0);
+          const capture = await cell?.capture();
+          if (capture === undefined) {
+            throw new Error(`${id} SFTP row did not expose bounds`);
+          }
+          await evidence.captureEvidence(
+            `sftp-fallback-${id}`,
+            async () => capture
+          );
+          const margins = brightInkVerticalMargins(capture, 0, 1, 128);
+          expect
+            .soft(capture.bounds.height, `${id} row height`)
+            .toBeLessThanOrEqual(26);
+          expect
+            .soft(
+              Math.min(margins.top, margins.bottom),
+              `${id} minimum vertical margin`
+            )
+            .toBeGreaterThanOrEqual(4);
+          expect
+            .soft(
+              Math.abs(margins.top - margins.bottom),
+              `${id} vertical centering`
+            )
+            .toBeLessThanOrEqual(3);
+        }
+      }
+    );
+  });
+
   it('fully lays out multilingual rows and the dynamic scroll range', async (context) => {
     await runSftpFixture(
       context,
