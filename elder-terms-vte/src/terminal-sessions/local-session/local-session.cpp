@@ -20,6 +20,9 @@
 
 #include "local-session.h"
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 #include "../../terminal-text-send-runner.h"
 #include "../terminal-view-io.h"
 
@@ -424,7 +427,7 @@ private:
     text_send_active = false;
     text_send_cancel_source.reset();
     if (request.status) {
-      request.status(succeeded ? connection_detail() : "Text send failed");
+      request.status(succeeded ? connection_detail() : _("Text send failed"));
     }
     if (!stopping && pty_fd >= 0) {
       terminal_io.connect_user_input(
@@ -531,7 +534,7 @@ public:
   }
 
   std::string connection_detail() const override {
-    return "local terminal";
+    return _("local terminal");
   }
 
   void apply_connection_profile(

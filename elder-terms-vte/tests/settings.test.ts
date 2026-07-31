@@ -616,15 +616,78 @@ describe.concurrent('elder-terms-vte settings', () => {
   it('uses a Japanese global UI language from a C UTF-8 environment', async (context) => {
     await runGtkTest(
       context,
-      ['--test-fixture'],
+      [
+        '--test-fixture',
+        '--test-show-transfer-progress',
+        '-c',
+        telnetLocalhostConfigPath,
+      ],
       async (app) => {
         const settingsButton = expectElementKind(
           await app.getById('settings_button'),
           'button'
         );
+        const transferButton = expectElementKind(
+          await app.getById('transfer_button'),
+          'toggleButton'
+        );
         await waitForResult(async () => {
           expect((await settingsButton.info()).description).toBe('設定');
+          const transferInfo = await transferButton.info();
+          expect(transferInfo.description).toBe('転送');
+          expect(transferInfo.states).toContain('showing');
+          expect(transferInfo.states).toContain('sensitive');
         });
+        expect(
+          await expectElementKind(
+            await app.getById('disconnected_notice_label'),
+            'label'
+          ).text()
+        ).toBe('切断されました');
+        const progressNotice = await app.getById('transfer_progress_notice');
+        const progressLabel = expectElementKind(
+          await app.getById('transfer_progress_notice_label'),
+          'label'
+        );
+        const transferCancel = expectElementKind(
+          await app.getById('transfer_cancel_button'),
+          'button'
+        );
+        await waitForResult(async () => {
+          expect(await progressLabel.text()).toBe('転送中...');
+          expect((await progressNotice.info()).states).toContain('showing');
+          const cancelInfo = await transferCancel.info();
+          expect(cancelInfo.name).toBe('キャンセル');
+          expect(cancelInfo.states).toContain('showing');
+        });
+        expect(
+          await expectElementKind(
+            await app.getById('conn_indicator_label'),
+            'label'
+          ).text()
+        ).toBe('CONN');
+
+        await transferButton.click();
+        for (const [id, name] of [
+          ['transfer_log_enabled_item', 'ログ記録'],
+          ['transfer_text_send_item', 'テキスト（送信）'],
+          ['transfer_zmodem_send_item', 'ZMODEM（送信）'],
+          ['transfer_ymodem_send_item', 'YMODEM（送信）'],
+          ['transfer_xmodem_1k_send_item', 'XMODEM 1K（送信）'],
+          ['transfer_xmodem_send_item', 'XMODEM（送信）'],
+          ['transfer_zmodem_receive_item', 'ZMODEM（受信）'],
+          ['transfer_ymodem_g_receive_item', 'YMODEM-g（受信）'],
+          ['transfer_ymodem_receive_item', 'YMODEM（受信）'],
+          ['transfer_xmodem_crc_receive_item', 'XMODEM CRC（受信）'],
+          ['transfer_xmodem_receive_item', 'XMODEM（受信）'],
+        ] as const) {
+          await waitForResult(async () => {
+            const item = expectElementKind(await app.getById(id), 'menuItem');
+            const info = await item.info();
+            expect(info.name).toBe(name);
+            expect(info.states).toContain('showing');
+          });
+        }
       },
       {
         env: {

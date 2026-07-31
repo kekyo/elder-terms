@@ -22,6 +22,9 @@
 
 #include "telnet-session.h"
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 #include "../../terminal-text-send-runner.h"
 #include "../../terminal-transfer-runner.h"
 #include "../../terminal-zmodem-auto-start.h"
@@ -602,7 +605,7 @@ private:
     text_send_active = false;
     text_send_cancel_source.reset();
     if (request.status) {
-      request.status(succeeded ? connection_detail() : "Text send failed");
+      request.status(succeeded ? connection_detail() : _("Text send failed"));
     }
     if (!stopping && socket_fd >= 0 && !transfer_active) {
       terminal_io.connect_user_input(
@@ -830,7 +833,7 @@ public:
 
   std::string connection_detail() const override {
     if (settings.address.empty()) {
-      return "telnet: (unknown)";
+      return _("telnet: (unknown)");
     }
 
     return "telnet: " + settings.address + ":" + std::to_string(settings.port);

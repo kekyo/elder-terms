@@ -9,6 +9,9 @@
 #include <glib.h>
 #include <unistd.h>
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 namespace elder_terms {
 
 static constexpr gdouble default_terminal_zoom = 1.0;
@@ -24,11 +27,24 @@ static std::string trim_ascii_whitespace(const std::string &value) {
   return first < last ? std::string(first, last) : std::string();
 }
 
-static std::string file_error(const std::string &operation,
+static std::string file_error(const char *format,
                               const std::filesystem::path &path,
                               const std::error_code &error) {
-  return "Warning: failed to " + operation + " " + path.string() + ": " +
-         error.message();
+  gchar *formatted = g_strdup_printf(
+      format, path.string().c_str(), error.message().c_str());
+  const std::string result = formatted == nullptr ? std::string() : formatted;
+  g_free(formatted);
+  return result;
+}
+
+static std::string temporary_file_error(const char *format,
+                                        const std::string &path,
+                                        int error) {
+  gchar *formatted =
+      g_strdup_printf(format, path.c_str(), std::strerror(error));
+  const std::string result = formatted == nullptr ? std::string() : formatted;
+  g_free(formatted);
+  return result;
 }
 
 static std::optional<std::filesystem::path> create_temporary_file(
@@ -39,13 +55,17 @@ static std::optional<std::filesystem::path> create_temporary_file(
           .string();
   const int descriptor = g_mkstemp(template_path.data());
   if (descriptor < 0) {
-    warnings->push_back("Warning: failed to create temporary file " +
-                        template_path + ": " + std::strerror(errno));
+    const int failure = errno;
+    warnings->push_back(temporary_file_error(
+        _("Warning: failed to create temporary file %s: %s"), template_path,
+        failure));
     return std::nullopt;
   }
   if (close(descriptor) != 0) {
-    warnings->push_back("Warning: failed to close temporary file " +
-                        template_path + ": " + std::strerror(errno));
+    const int failure = errno;
+    warnings->push_back(temporary_file_error(
+        _("Warning: failed to close temporary file %s: %s"), template_path,
+        failure));
     std::error_code remove_error;
     std::filesystem::remove(template_path, remove_error);
     return std::nullopt;
@@ -101,16 +121,16 @@ ConnectionNameValidationResult validate_connection_name(
       .error = {},
   };
   if (result.name.empty()) {
-    result.error = "Connection name must not be empty";
+    result.error = _("Connection name must not be empty");
     return result;
   }
   if (result.name == "." || result.name == "..") {
-    result.error = "Connection name must not be a relative path";
+    result.error = _("Connection name must not be a relative path");
     return result;
   }
   if (result.name.find('/') != std::string::npos ||
       result.name.find('\0') != std::string::npos) {
-    result.error = "Connection name must not contain a path separator";
+    result.error = _("Connection name must not contain a path separator");
     return result;
   }
 
@@ -122,7 +142,7 @@ ConnectionNameValidationResult validate_connection_name(
                 profile.path != current_path.value());
       });
   if (duplicate != profiles.end()) {
-    result.error = "A connection with this name already exists";
+    result.error = _("A connection with this name already exists");
     return result;
   }
   result.valid = true;
@@ -148,7 +168,8 @@ ConnectionSaveResult save_connection_profile(
   std::filesystem::create_directories(directory, directory_error);
   if (directory_error) {
     result.warnings.push_back(
-        file_error("create connection directory", directory, directory_error));
+        file_error(_("Warning: failed to create connection directory %s: %s"),
+                   directory, directory_error));
     return result;
   }
 
@@ -156,7 +177,10 @@ ConnectionSaveResult save_connection_profile(
   const ConnectionNameValidationResult validation =
       validate_connection_name(name, profiles, original_path);
   if (!validation.valid) {
-    result.warnings.push_back("Warning: " + validation.error);
+    gchar *formatted =
+        g_strdup_printf(_("Warning: %s"), validation.error.c_str());
+    result.warnings.emplace_back(formatted == nullptr ? "" : formatted);
+    g_free(formatted);
     return result;
   }
 
@@ -180,7 +204,8 @@ ConnectionSaveResult save_connection_profile(
     std::filesystem::rename(*temporary, target, replace_error);
     if (replace_error) {
       result.warnings.push_back(
-          file_error("replace connection profile", target, replace_error));
+          file_error(_("Warning: failed to replace connection profile %s: %s"),
+                     target, replace_error));
       remove_temporary_file(*temporary);
       return result;
     }
@@ -198,8 +223,9 @@ ConnectionSaveResult save_connection_profile(
   std::error_code backup_error;
   std::filesystem::rename(original_path.value(), *backup, backup_error);
   if (backup_error) {
-    result.warnings.push_back(file_error("prepare connection rename",
-                                         original_path.value(), backup_error));
+    result.warnings.push_back(file_error(
+        _("Warning: failed to prepare connection rename %s: %s"),
+        original_path.value(), backup_error));
     remove_temporary_file(*temporary);
     remove_temporary_file(*backup);
     return result;
@@ -209,13 +235,14 @@ ConnectionSaveResult save_connection_profile(
   std::filesystem::rename(*temporary, target, replace_error);
   if (replace_error) {
     result.warnings.push_back(
-        file_error("rename connection profile", target, replace_error));
+        file_error(_("Warning: failed to rename connection profile %s: %s"),
+                   target, replace_error));
     std::error_code rollback_error;
     std::filesystem::rename(*backup, original_path.value(), rollback_error);
     if (rollback_error) {
-      result.warnings.push_back(file_error("restore connection profile",
-                                           original_path.value(),
-                                           rollback_error));
+      result.warnings.push_back(file_error(
+          _("Warning: failed to restore connection profile %s: %s"),
+          original_path.value(), rollback_error));
     }
     remove_temporary_file(*temporary);
     remove_temporary_file(*backup);

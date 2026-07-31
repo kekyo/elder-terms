@@ -318,8 +318,20 @@ describe('elder-terms main window', () => {
   it('localizes launcher settings surfaces into Japanese', async (context) => {
     await runLauncherGtkTest(
       context,
-      prepareProfiles,
+      async () => {},
       async ({ app }) => {
+        expect((await (await app.getById('new_button')).info()).name).toBe(
+          '新規'
+        );
+        expect((await (await app.getById('connect_button')).info()).name).toBe(
+          '起動'
+        );
+        expect(
+          await expectElementKind(
+            await app.getById('empty_details_label'),
+            'label'
+          ).text()
+        ).toBe('接続を選択するか、新しい接続を作成してください。');
         expect(
           (await (await app.getById('global_defaults_button')).info()).name
         ).toBe('グローバル既定値');

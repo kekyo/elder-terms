@@ -1,6 +1,7 @@
 #include "sftp-window.h"
 
 #include <algorithm>
+#include <cstdarg>
 #include <cstdint>
 #include <ctime>
 #include <exception>
@@ -15,10 +16,23 @@
 #include <gio/gio.h>
 #include <gestament/gtk.h>
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 #include "../widget-background.h"
 #include "sftp-transfer-engine.h"
 
 namespace elder_terms {
+
+static std::string format_translated_string(const char *format, ...) {
+  va_list arguments;
+  va_start(arguments, format);
+  gchar *formatted = g_strdup_vprintf(format, arguments);
+  va_end(arguments);
+  const std::string result = formatted == nullptr ? std::string() : formatted;
+  g_free(formatted);
+  return result;
+}
 
 static constexpr char local_browser_attributes[] =
     G_FILE_ATTRIBUTE_STANDARD_NAME ","
@@ -154,14 +168,14 @@ struct SftpWindow {
 
 static std::string exception_text(std::exception_ptr error) {
   if (!error) {
-    return "Unknown SFTP failure";
+    return _("Unknown SFTP failure");
   }
   try {
     std::rethrow_exception(error);
   } catch (const std::exception &exception) {
     return exception.what();
   } catch (...) {
-    return "Unknown SFTP failure";
+    return _("Unknown SFTP failure");
   }
 }
 
@@ -227,7 +241,7 @@ static void append_dummy_row(GtkTreeStore *store,
   GtkTreeIter child;
   gtk_tree_store_append(store, &child, parent);
   gtk_tree_store_set(
-      store, &child, sftp_tree_name_column, "Loading…",
+      store, &child, sftp_tree_name_column, _("Loading…"),
       sftp_tree_size_column, "", sftp_tree_modified_column, "",
       sftp_tree_path_column, "", sftp_tree_type_column,
       static_cast<int>(SftpFileType::other),
@@ -370,7 +384,7 @@ static SftpFileAttributes local_browser_attributes_for(
   SftpGCharPtr path(g_file_get_path(child));
   if (path == nullptr) {
     throw std::runtime_error(
-        "SFTP local pane only supports native filesystem paths");
+        _("SFTP local pane only supports native filesystem paths"));
   }
   const char *name = g_file_info_get_name(info);
   return {
@@ -443,7 +457,7 @@ static std::string canonical_local_directory(
   SftpGCharPtr canonical(
       g_canonicalize_filename(path.c_str(), nullptr));
   if (canonical == nullptr || canonical.get()[0] == '\0') {
-    throw std::runtime_error("Local directory path is empty");
+    throw std::runtime_error(_("Local directory path is empty"));
   }
   return canonical.get();
 }
@@ -540,7 +554,7 @@ static void set_sftp_transfer_active(SftpWindow *window,
                            active ? TRUE : FALSE);
   if (active) {
     gtk_label_set_text(GTK_LABEL(window->transfer_label),
-                       "Preparing transfer…");
+                       _("Preparing transfer…"));
     gtk_progress_bar_set_fraction(
         GTK_PROGRESS_BAR(window->transfer_progress), 0.0);
     if (window->transfer_pulse_source == 0) {
@@ -560,16 +574,25 @@ static void update_sftp_transfer_progress(
       !window->transfer_active) {
     return;
   }
-  std::string label = "Transferring";
-  if (progress.total_items > 0) {
-    label += " " + std::to_string(progress.completed_items) +
-             " of " + std::to_string(progress.total_items);
-  }
-  if (!progress.current_path.empty()) {
-    label += " — " +
-             std::filesystem::path(progress.current_path)
-                 .filename()
-                 .string();
+  const bool has_items = progress.total_items > 0;
+  const std::string file_name =
+      progress.current_path.empty()
+          ? std::string()
+          : std::filesystem::path(progress.current_path).filename().string();
+  std::string label;
+  if (has_items && !file_name.empty()) {
+    label = format_translated_string(
+        _("Transferring %zu of %zu — %s"), progress.completed_items,
+        progress.total_items, file_name.c_str());
+  } else if (has_items) {
+    label = format_translated_string(_("Transferring %zu of %zu"),
+                                     progress.completed_items,
+                                     progress.total_items);
+  } else if (!file_name.empty()) {
+    label = format_translated_string(_("Transferring — %s"),
+                                     file_name.c_str());
+  } else {
+    label = _("Transferring");
   }
   gtk_label_set_text(GTK_LABEL(window->transfer_label),
                      label.c_str());
@@ -670,13 +693,14 @@ prompt_sftp_conflict_async(
     SftpWindow *window, const SftpTransferConflict &conflict,
     cardio::cancellation cancellation) {
   std::vector<std::pair<std::string, int>> buttons;
-  buttons.emplace_back("Cancel", GTK_RESPONSE_CANCEL);
-  buttons.emplace_back("Skip", GTK_RESPONSE_NO);
-  buttons.emplace_back("Overwrite", GTK_RESPONSE_YES);
+  buttons.emplace_back(_("Cancel"), GTK_RESPONSE_CANCEL);
+  buttons.emplace_back(_("Skip"), GTK_RESPONSE_NO);
+  buttons.emplace_back(_("Overwrite"), GTK_RESPONSE_YES);
   auto response_promise = prompt_sftp_choice_async(
-      window, GTK_MESSAGE_QUESTION, "Destination already exists",
-      conflict.destination_path +
-          "\nThe selected decision applies to all remaining conflicts.",
+      window, GTK_MESSAGE_QUESTION, _("Destination already exists"),
+      format_translated_string(
+          _("%s\nThe selected decision applies to all remaining conflicts."),
+          conflict.destination_path.c_str()),
       std::move(buttons), "sftp_conflict_dialog", cancellation);
   const int response = co_await response_promise;
   if (response == GTK_RESPONSE_YES) {
@@ -693,13 +717,14 @@ prompt_sftp_failure_async(
     SftpWindow *window, const SftpTransferFailure &failure,
     cardio::cancellation cancellation) {
   std::vector<std::pair<std::string, int>> buttons;
-  buttons.emplace_back("Abort", GTK_RESPONSE_CANCEL);
-  buttons.emplace_back("Skip", GTK_RESPONSE_NO);
-  buttons.emplace_back("Retry", GTK_RESPONSE_YES);
+  buttons.emplace_back(_("Abort"), GTK_RESPONSE_CANCEL);
+  buttons.emplace_back(_("Skip"), GTK_RESPONSE_NO);
+  buttons.emplace_back(_("Retry"), GTK_RESPONSE_YES);
   auto response_promise = prompt_sftp_choice_async(
-      window, GTK_MESSAGE_ERROR, "SFTP transfer failed",
-      failure.message + "\n\n" + failure.source_path + "\n→ " +
-          failure.destination_path,
+      window, GTK_MESSAGE_ERROR, _("SFTP transfer failed"),
+      format_translated_string(_("%s\n\n%s\n→ %s"), failure.message.c_str(),
+                               failure.source_path.c_str(),
+                               failure.destination_path.c_str()),
       std::move(buttons), "sftp_failure_dialog", cancellation);
   const int response = co_await response_promise;
   if (response == GTK_RESPONSE_YES) {
@@ -724,7 +749,7 @@ static void show_sftp_error(SftpWindow *window,
       GTK_WINDOW(window->window),
       static_cast<GtkDialogFlags>(GTK_DIALOG_DESTROY_WITH_PARENT),
       GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s",
-      "SFTP operation failed");
+      _("SFTP operation failed"));
   gtk_message_dialog_format_secondary_text(
       GTK_MESSAGE_DIALOG(dialog), "%s", message.c_str());
   gestament_gtk_assign_accessible_id(
@@ -782,9 +807,9 @@ static cardio::promise<void> load_sftp_pane_root_async(
   } catch (const cardio::canceled_exception &) {
   } catch (...) {
     if (!window->destroyed) {
-      const std::string side = pane->remote ? "remote" : "local";
-      set_sftp_status(
-          window, "Failed to load " + side + " directory");
+      set_sftp_status(window, pane->remote
+                                  ? _("Failed to load remote directory")
+                                  : _("Failed to load local directory"));
       show_sftp_error(window, exception_text(std::current_exception()));
       gtk_entry_set_text(GTK_ENTRY(pane->path_entry),
                          pane->current_directory.c_str());
@@ -856,7 +881,7 @@ static cardio::promise<void> expand_sftp_directory_async(
       if (tree_path != nullptr) {
         gtk_tree_path_free(tree_path);
       }
-      set_sftp_status(window, "Failed to expand directory");
+      set_sftp_status(window, _("Failed to expand directory"));
       show_sftp_error(window, exception_text(std::current_exception()));
     }
   }
@@ -1182,7 +1207,7 @@ static cardio::promise<void> run_sftp_window_transfer_async(
     succeeded = true;
   } catch (const cardio::canceled_exception &) {
     if (!window->destroyed) {
-      set_sftp_status(window, "Transfer cancelled");
+      set_sftp_status(window, _("Transfer cancelled"));
     }
   } catch (...) {
     if (!window->destroyed) {
@@ -1190,9 +1215,9 @@ static cardio::promise<void> run_sftp_window_transfer_async(
           exception_text(std::current_exception());
       if (message.find("canceled") != std::string::npos ||
           message.find("cancelled") != std::string::npos) {
-        set_sftp_status(window, "Transfer cancelled");
+        set_sftp_status(window, _("Transfer cancelled"));
       } else {
-        set_sftp_status(window, "Transfer failed");
+        set_sftp_status(window, _("Transfer failed"));
         show_sftp_error(window, message);
       }
     }
@@ -1204,12 +1229,14 @@ static cardio::promise<void> run_sftp_window_transfer_async(
   window->transfer_cancel_source.reset();
   set_sftp_transfer_active(window, false);
   if (succeeded) {
-    const char *verb =
-        direction == SftpTransferDirection::send ? "Sent" : "Received";
-    set_sftp_status(
-        window, std::string(verb) + " " +
-                    std::to_string(selected_count) +
-                    (selected_count == 1 ? " item" : " items"));
+    const char *format =
+        direction == SftpTransferDirection::send
+            ? g_dngettext(GETTEXT_PACKAGE, "Sent %zu item", "Sent %zu items",
+                          selected_count)
+            : g_dngettext(GETTEXT_PACKAGE, "Received %zu item",
+                          "Received %zu items", selected_count);
+    set_sftp_status(window,
+                    format_translated_string(format, selected_count));
   }
   refresh_sftp_panes(window);
 }
@@ -1505,11 +1532,11 @@ static GtkWidget *create_sftp_tree(SftpPaneState *pane,
   const SftpTreeRowMetrics row_metrics =
       get_sftp_tree_row_metrics(tree);
   append_sftp_tree_column(
-      tree, "Name", sftp_tree_name_column, true, row_metrics);
+      tree, _("Name"), sftp_tree_name_column, true, row_metrics);
   append_sftp_tree_column(
-      tree, "Size", sftp_tree_size_column, false, row_metrics);
+      tree, _("Size"), sftp_tree_size_column, false, row_metrics);
   append_sftp_tree_column(
-      tree, "Modified", sftp_tree_modified_column, false,
+      tree, _("Modified"), sftp_tree_modified_column, false,
       row_metrics);
   GtkTreeSelection *selection = gtk_tree_view_get_selection(
       GTK_TREE_VIEW(tree));
@@ -1527,7 +1554,7 @@ static GtkWidget *create_sftp_pane(
     SftpWindow *window, SftpPaneState *pane, bool remote) {
   pane->window = window;
   pane->remote = remote;
-  pane->frame = gtk_frame_new(remote ? "Remote" : "Local");
+  pane->frame = gtk_frame_new(remote ? _("Remote") : _("Local"));
   gestament_gtk_assign_accessible_id(
       pane->frame,
       remote ? "sftp_remote_group" : "sftp_local_group");
@@ -1559,11 +1586,11 @@ static GtkWidget *create_sftp_pane(
   gtk_widget_set_hexpand(pane->path_entry, TRUE);
   gtk_box_pack_start(GTK_BOX(toolbar), pane->path_entry, TRUE, TRUE, 0);
   pane->up_button = create_toolbar_button(
-      "Up", remote ? "sftp_remote_up_button"
+      _("Up"), remote ? "sftp_remote_up_button"
                     : "sftp_local_up_button");
   gtk_box_pack_start(GTK_BOX(toolbar), pane->up_button, FALSE, TRUE, 0);
   pane->refresh_button = create_toolbar_button(
-      "Refresh", remote ? "sftp_remote_refresh_button"
+      _("Refresh"), remote ? "sftp_remote_refresh_button"
                          : "sftp_local_refresh_button");
   gtk_box_pack_start(
       GTK_BOX(toolbar), pane->refresh_button, FALSE, TRUE, 0);
@@ -1588,7 +1615,7 @@ static GtkWidget *create_sftp_pane(
   gtk_menu_attach_to_widget(
       GTK_MENU(pane->menu), pane->tree, nullptr);
   pane->transfer_item = gtk_menu_item_new_with_label(
-      remote ? "Receive" : "Send");
+      remote ? _("Receive") : _("Send"));
   gestament_gtk_assign_accessible_id(
       pane->transfer_item,
       remote ? "sftp_receive_item" : "sftp_send_item");
@@ -1767,7 +1794,7 @@ create_sftp_window(SftpWindowOptions options) {
       GTK_CONTAINER(state->status_bar), status_content);
   gtk_box_pack_start(
       GTK_BOX(content), state->status_bar, FALSE, TRUE, 0);
-  state->status_label = gtk_label_new("Ready");
+  state->status_label = gtk_label_new(_("Ready"));
   gestament_gtk_assign_accessible_id(
       state->status_label, "sftp_status_label");
   gtk_label_set_xalign(GTK_LABEL(state->status_label), 0.0F);
@@ -1800,7 +1827,9 @@ create_sftp_window(SftpWindowOptions options) {
       GTK_CONTAINER(transfer_box), sftp_content_padding);
   gtk_container_add(GTK_CONTAINER(state->transfer_overlay),
                     transfer_box);
-  state->transfer_label = gtk_label_new("Preparing transfer…");
+  state->transfer_label = gtk_label_new(_("Preparing transfer…"));
+  gestament_gtk_assign_accessible_id(
+      state->transfer_label, "sftp_transfer_label");
   gtk_label_set_xalign(GTK_LABEL(state->transfer_label), 0.0F);
   gtk_box_pack_start(
       GTK_BOX(transfer_box), state->transfer_label, FALSE, TRUE, 0);
@@ -1811,7 +1840,7 @@ create_sftp_window(SftpWindowOptions options) {
   gtk_box_pack_start(
       GTK_BOX(transfer_box), state->transfer_progress, FALSE, TRUE, 0);
   state->transfer_cancel_button =
-      gtk_button_new_with_label("Cancel");
+      gtk_button_new_with_label(_("Cancel"));
   gestament_gtk_assign_accessible_id(
       state->transfer_cancel_button,
       "sftp_transfer_cancel_button");
@@ -1867,7 +1896,7 @@ void set_sftp_window_connection_available(
     if (window->transfer_cancel_source.has_value()) {
       (void)window->transfer_cancel_source->cancel();
     }
-    set_sftp_status(window.get(), "Disconnected");
+    set_sftp_status(window.get(), _("Disconnected"));
   }
   update_sftp_sensitivity(window.get());
 }

@@ -15,6 +15,9 @@
 #include <gio/gio.h>
 #include <glib.h>
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 namespace elder_terms {
 
 static constexpr std::uint32_t transfer_handshake_timeout_ms = 5000;
@@ -952,11 +955,15 @@ run_terminal_transfer_async(TerminalTransferRequest request,
       .measurement_baseline_time_ms = std::nullopt,
   };
   if (request.status) {
-    request.status(std::string("Starting ") +
-                   terminal_transfer_protocol_label(request.protocol) +
-                   (request.direction == TerminalTransferDirection::send
-                        ? " send"
-                        : " receive"));
+    const char *format =
+        request.direction == TerminalTransferDirection::send
+            ? _("Starting %s send")
+            : _("Starting %s receive");
+    gchar *formatted = g_strdup_printf(
+        format, terminal_transfer_protocol_label(request.protocol));
+    request.status(formatted == nullptr ? std::string()
+                                        : std::string(formatted));
+    g_free(formatted);
   }
   if (request.progress) {
     request.progress(TerminalTransferProgress{

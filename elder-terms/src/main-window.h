@@ -26,6 +26,8 @@ struct LauncherMainWindow {
   GtkCellRenderer *connection_name_renderer = nullptr;
   /** Stack switching between empty and settings state. */
   GtkWidget *details_stack = nullptr;
+  /** Message shown when no connection is selected. */
+  GtkWidget *empty_details_label = nullptr;
   /** Container receiving the shared settings widget. */
   GtkWidget *settings_container = nullptr;
   /** Bottom action row that can move the launcher window. */

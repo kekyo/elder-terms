@@ -8,6 +8,7 @@
 #include <array>
 #include <atomic>
 #include <cerrno>
+#include <cstdarg>
 #include <cstdint>
 #include <cstring>
 #include <deque>
@@ -28,9 +29,22 @@
 #include <libssh/callbacks.h>
 #include <libssh/libssh.h>
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 #include "../tcp-connector.h"
 
 namespace elder_terms {
+
+static std::string format_translated_string(const char *format, ...) {
+  va_list arguments;
+  va_start(arguments, format);
+  gchar *formatted = g_strdup_vprintf(format, arguments);
+  va_end(arguments);
+  const std::string result = formatted == nullptr ? std::string() : formatted;
+  g_free(formatted);
+  return result;
+}
 
 static std::runtime_error ssh_failure(ssh_session session,
                                       const std::string &operation) {
@@ -63,7 +77,7 @@ await_ssh_ready_async(ssh_session session, cardio::fd_event fallback,
   cancellation.throw_if_cancellation_requested();
   const int fd = ssh_get_fd(session);
   if (fd < 0) {
-    throw ssh_failure(session, "SSH session has no socket");
+    throw ssh_failure(session, _("SSH session has no socket"));
   }
   (void)co_await cardio::from_fd(fd, ssh_ready_events(session, fallback),
                                  std::move(cancellation));
@@ -228,7 +242,7 @@ host_key_prompt(ssh_session session, const SshEndpointSettings &settings,
   const char *key_type_name =
       ssh_key_type_to_char(ssh_key_type(server_key));
   const std::string key_type =
-      key_type_name == nullptr ? "unknown" : key_type_name;
+      key_type_name == nullptr ? _("unknown") : key_type_name;
   unsigned char *hash = nullptr;
   std::size_t hash_size = 0;
   std::string fingerprint;
@@ -247,17 +261,20 @@ host_key_prompt(ssh_session session, const SshEndpointSettings &settings,
     return std::nullopt;
   }
 
-  std::string message =
-      "Unknown SSH host key for " + settings.address + ":" +
-      std::to_string(settings.port) + "\nKey type: " + key_type +
-      "\nFingerprint: " + fingerprint;
+  std::string message = format_translated_string(
+      _("Unknown SSH host key for %s:%u\nKey type: %s\nFingerprint: %s"),
+      settings.address.c_str(), static_cast<unsigned int>(settings.port),
+      key_type.c_str(),
+      fingerprint.c_str());
   if (status == SSH_KNOWN_HOSTS_NOT_FOUND) {
-    message += "\nThe known_hosts file does not exist and will be created.";
+    message += "\n";
+    message += _("The known_hosts file does not exist and will be created.");
   }
-  message += "\nAccept and save this host key?";
+  message += "\n";
+  message += _("Accept and save this host key?");
   return SshUserPrompt{
       .kind = SshUserPromptKind::host_key,
-      .title = "SSH Host Key",
+      .title = _("SSH Host Key"),
       .message = std::move(message),
       .input_required = false,
       .echo = false,
@@ -276,14 +293,14 @@ verify_host_key_async(ssh_session session,
   }
   if (status == SSH_KNOWN_HOSTS_CHANGED) {
     throw std::runtime_error(
-        "SSH host key changed; connection rejected");
+        _("SSH host key changed; connection rejected"));
   }
   if (status == SSH_KNOWN_HOSTS_OTHER) {
     throw std::runtime_error(
-        "SSH host key type differs from known_hosts; connection rejected");
+        _("SSH host key type differs from known_hosts; connection rejected"));
   }
   if (status == SSH_KNOWN_HOSTS_ERROR) {
-    throw ssh_failure(session, "Failed to check SSH host key");
+    throw ssh_failure(session, _("Failed to check SSH host key"));
   }
 
   const std::optional<SshUserPrompt> prompt =
@@ -291,10 +308,10 @@ verify_host_key_async(ssh_session session,
   if (!prompt.has_value() ||
       !(co_await request_ssh_prompt_async(callbacks, *prompt, cancellation))
            .has_value()) {
-    throw std::runtime_error("SSH host key was not accepted");
+    throw std::runtime_error(_("SSH host key was not accepted"));
   }
   if (ssh_session_update_known_hosts(session) != SSH_OK) {
-    throw ssh_failure(session, "Failed to save SSH host key");
+    throw ssh_failure(session, _("Failed to save SSH host key"));
   }
 }
 
@@ -326,11 +343,11 @@ authenticate_private_key_async(ssh_session session,
             callbacks,
             {
                 .kind = SshUserPromptKind::private_key_passphrase,
-                .title = "SSH Key Passphrase",
-                .message =
-                    "Passphrase for " + settings.identity_file +
-                    " (attempt " + std::to_string(attempt) + " of " +
-                    std::to_string(maximum_passphrase_attempts) + "):",
+                .title = _("SSH Key Passphrase"),
+                .message = format_translated_string(
+                    _("Passphrase for %s (attempt %u of %u):"),
+                    settings.identity_file.c_str(), attempt,
+                    maximum_passphrase_attempts),
                 .input_required = true,
                 .echo = false,
             },
@@ -372,11 +389,10 @@ authenticate_password_async(ssh_session session,
             callbacks,
             {
                 .kind = SshUserPromptKind::password,
-                .title = "SSH Authentication",
-                .message =
-                    "Password for " + target + " (attempt " +
-                    std::to_string(attempt) + " of " +
-                    std::to_string(maximum_attempts) + "):",
+                .title = _("SSH Authentication"),
+                .message = format_translated_string(
+                    _("Password for %s (attempt %u of %u):"), target.c_str(),
+                    attempt, maximum_attempts),
                 .input_required = true,
                 .echo = false,
             },
@@ -395,7 +411,7 @@ authenticate_password_async(ssh_session session,
       co_return true;
     }
     if (result == SSH_AUTH_ERROR) {
-      throw ssh_failure(session, "SSH password authentication failed");
+      throw ssh_failure(session, _("SSH password authentication failed"));
     }
   }
   co_return false;
@@ -420,7 +436,7 @@ static std::string keyboard_interactive_message(const char *name,
     }
     message += prompt;
   }
-  return message.empty() ? "SSH authentication response:" : message;
+  return message.empty() ? _("SSH authentication response:") : message;
 }
 
 static cardio::promise<bool>
@@ -453,7 +469,7 @@ authenticate_keyboard_interactive_async(
                 callbacks,
                 {
                     .kind = SshUserPromptKind::keyboard_interactive,
-                    .title = "SSH Authentication",
+                    .title = _("SSH Authentication"),
                     .message = keyboard_interactive_message(
                         name, instruction, prompt),
                     .input_required = true,
@@ -479,7 +495,7 @@ authenticate_keyboard_interactive_async(
     }
     if (result == SSH_AUTH_ERROR) {
       throw ssh_failure(
-          session, "SSH keyboard-interactive authentication failed");
+          session, _("SSH keyboard-interactive authentication failed"));
     }
   }
   co_return false;
@@ -498,12 +514,12 @@ authenticate_session_async(ssh_session session,
     co_return;
   }
   if (result == SSH_AUTH_ERROR) {
-    throw ssh_failure(session, "SSH authentication negotiation failed");
+    throw ssh_failure(session, _("SSH authentication negotiation failed"));
   }
 
   int methods = ssh_userauth_list(session, nullptr);
   if (methods < 0) {
-    throw ssh_failure(session, "Failed to list SSH authentication methods");
+    throw ssh_failure(session, _("Failed to list SSH authentication methods"));
   }
 
   if ((methods & SSH_AUTH_METHOD_PUBLICKEY) != 0 &&
@@ -514,7 +530,7 @@ authenticate_session_async(ssh_session session,
       co_return;
     }
     if (result == SSH_AUTH_ERROR) {
-      throw ssh_failure(session, "SSH public-key authentication failed");
+      throw ssh_failure(session, _("SSH public-key authentication failed"));
     }
   }
 
@@ -535,7 +551,8 @@ authenticate_session_async(ssh_session session,
 
   methods = ssh_userauth_list(session, nullptr);
   if (methods < 0) {
-    throw ssh_failure(session, "Failed to refresh SSH authentication methods");
+    throw ssh_failure(
+        session, _("Failed to refresh SSH authentication methods"));
   }
   if ((methods & SSH_AUTH_METHOD_PASSWORD) != 0 &&
       co_await authenticate_password_async(session, settings, callbacks,
@@ -548,7 +565,7 @@ authenticate_session_async(ssh_session session,
     co_return;
   }
   throw std::runtime_error(
-      "SSH server did not accept an available authentication method");
+      _("SSH server did not accept an available authentication method"));
 }
 
 template <typename T> struct SshWorkerCompletion {
@@ -607,7 +624,7 @@ struct AuthenticatedSshTransport::Impl {
   void initialize_waiter() {
     socket_fd = ssh_get_fd(session);
     if (socket_fd < 0) {
-      throw ssh_failure(session, "SSH session has no socket");
+      throw ssh_failure(session, _("SSH session has no socket"));
     }
 
     wakeup_fd = open_ssh_event_fd();
@@ -704,7 +721,7 @@ struct AuthenticatedSshTransport::Impl {
           notify_ssh_event_fd(completion->event_fd);
         });
     if (!queued) {
-      throw std::runtime_error("SSH transport is closed");
+      throw std::runtime_error(_("SSH transport is closed"));
     }
 
     (void)co_await cardio::from_fd(
@@ -906,16 +923,16 @@ AuthenticatedSshTransport::connect_async(
   transport_impl->session = ssh_new();
   if (transport_impl->session == nullptr) {
     (void)::close(socket_fd);
-    throw std::runtime_error("Failed to allocate SSH session");
+    throw std::runtime_error(_("Failed to allocate SSH session"));
   }
   ssh_session session = transport_impl->session;
   try {
     if (ssh_options_set(session, SSH_OPTIONS_HOST,
                         settings.address.c_str()) != SSH_OK) {
-      throw ssh_failure(session, "Failed to set SSH host");
+      throw ssh_failure(session, _("Failed to set SSH host"));
     }
     if (ssh_options_parse_config(session, nullptr) != SSH_OK) {
-      throw ssh_failure(session, "Failed to parse SSH configuration");
+      throw ssh_failure(session, _("Failed to parse SSH configuration"));
     }
     const unsigned int port = static_cast<unsigned int>(settings.port);
     if (ssh_options_set(session, SSH_OPTIONS_HOST,
@@ -924,15 +941,15 @@ AuthenticatedSshTransport::connect_async(
         (!settings.username.empty() &&
          ssh_options_set(session, SSH_OPTIONS_USER,
                          settings.username.c_str()) != SSH_OK)) {
-      throw ssh_failure(session, "Failed to configure SSH endpoint");
+      throw ssh_failure(session, _("Failed to configure SSH endpoint"));
     }
     if (!options.known_hosts_file.empty() &&
         ssh_options_set(session, SSH_OPTIONS_KNOWNHOSTS,
                         options.known_hosts_file.c_str()) != SSH_OK) {
-      throw ssh_failure(session, "Failed to configure SSH known_hosts");
+      throw ssh_failure(session, _("Failed to configure SSH known_hosts"));
     }
     if (ssh_options_set(session, SSH_OPTIONS_FD, &socket_fd) != SSH_OK) {
-      throw ssh_failure(session, "Failed to attach SSH socket");
+      throw ssh_failure(session, _("Failed to attach SSH socket"));
     }
     socket_fd = -1;
 
@@ -942,7 +959,7 @@ AuthenticatedSshTransport::connect_async(
     ssh_callbacks_init(&transport_impl->session_callbacks);
     if (ssh_set_callbacks(session,
                           &transport_impl->session_callbacks) != SSH_OK) {
-      throw ssh_failure(session, "Failed to configure SSH callbacks");
+      throw ssh_failure(session, _("Failed to configure SSH callbacks"));
     }
     ssh_set_blocking(session, 0);
     co_await await_ssh_ok_async(
@@ -1004,7 +1021,7 @@ AuthenticatedSshTransport::execute_serialized_async(
   (void)co_await impl->execute_async<bool>(
       [owner, operation = std::move(operation)]() {
         if (owner->impl->session == nullptr) {
-          throw std::runtime_error("SSH transport is closed");
+          throw std::runtime_error(_("SSH transport is closed"));
         }
         operation(owner->impl->session);
         return true;
@@ -1100,7 +1117,7 @@ SshChannelConnection::open_async(
     const TerminalSessionCallbacks &callbacks,
     cardio::cancellation cancellation) {
   if (transport == nullptr || transport->impl == nullptr) {
-    throw std::invalid_argument("SSH transport is required");
+    throw std::invalid_argument(_("SSH transport is required"));
   }
   if (callbacks.connection_phase) {
     callbacks.connection_phase(
@@ -1154,7 +1171,7 @@ SshChannelConnection::read_async(std::span<unsigned char> buffer,
                                  cardio::cancellation cancellation) {
   if (impl == nullptr || impl->closed || impl->transport == nullptr ||
       impl->channel == nullptr) {
-    throw std::runtime_error("SSH channel is closed");
+    throw std::runtime_error(_("SSH channel is closed"));
   }
   if (buffer.empty()) {
     co_return 0;
@@ -1223,7 +1240,7 @@ cardio::promise<void> SshChannelConnection::write_all_async(
     cardio::cancellation cancellation) {
   if (impl == nullptr || impl->closed || impl->transport == nullptr ||
       impl->channel == nullptr) {
-    throw std::runtime_error("SSH channel is closed");
+    throw std::runtime_error(_("SSH channel is closed"));
   }
 
   const std::shared_ptr<AuthenticatedSshTransport> transport =
@@ -1261,7 +1278,7 @@ SshChannelConnection::resize_async(glong columns, glong rows,
                                    cardio::cancellation cancellation) {
   if (impl == nullptr || impl->closed || impl->transport == nullptr ||
       impl->channel == nullptr) {
-    throw std::runtime_error("SSH channel is closed");
+    throw std::runtime_error(_("SSH channel is closed"));
   }
   const std::shared_ptr<AuthenticatedSshTransport> transport =
       impl->transport;

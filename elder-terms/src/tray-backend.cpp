@@ -13,6 +13,9 @@
 
 #include "build-config.h"
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 namespace elder_terms {
 
 static constexpr char application_id[] = "net.kekyo.elder-terms";
@@ -365,10 +368,10 @@ static GVariant *build_menu_layout() {
   g_variant_builder_add_value(
       &children,
       g_variant_new_variant(
-          build_menu_item(open_menu_item_id, "Open elder-terms")));
+          build_menu_item(open_menu_item_id, _("Open elder-terms"))));
   g_variant_builder_add_value(
       &children,
-      g_variant_new_variant(build_menu_item(quit_menu_item_id, "Quit")));
+      g_variant_new_variant(build_menu_item(quit_menu_item_id, _("Quit"))));
   GVariant *root =
       g_variant_new("(i@a{sv}@av)", 0,
                     g_variant_builder_end(&root_properties),
@@ -384,10 +387,10 @@ build_menu_group_properties(const std::vector<int> &ids) {
     if (id == open_menu_item_id) {
       g_variant_builder_add(
           &builder, "(i@a{sv})", id,
-          build_menu_item_properties("Open elder-terms"));
+          build_menu_item_properties(_("Open elder-terms")));
     } else if (id == quit_menu_item_id) {
       g_variant_builder_add(&builder, "(i@a{sv})", id,
-                            build_menu_item_properties("Quit"));
+                            build_menu_item_properties(_("Quit")));
     }
   }
   return g_variant_builder_end(&builder);
@@ -854,8 +857,8 @@ static void create_xembed_backend(
                             implementation->options.title.c_str());
 
   GtkWidget *open_item =
-      gtk_menu_item_new_with_label("Open elder-terms");
-  GtkWidget *quit_item = gtk_menu_item_new_with_label("Quit");
+      gtk_menu_item_new_with_label(_("Open elder-terms"));
+  GtkWidget *quit_item = gtk_menu_item_new_with_label(_("Quit"));
   gtk_menu_shell_append(GTK_MENU_SHELL(implementation->status_menu),
                         open_item);
   gtk_menu_shell_append(GTK_MENU_SHELL(implementation->status_menu),

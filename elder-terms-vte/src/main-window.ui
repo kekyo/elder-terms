@@ -32,7 +32,7 @@
           <object class="GtkMenuButton" id="transfer_button">
             <property name="visible">False</property>
             <property name="can-focus">True</property>
-            <property name="tooltip-text">Transfer</property>
+            <property name="tooltip-text" translatable="yes">Transfer</property>
             <child>
               <object class="GtkImage" id="transfer_button_image">
                 <property name="visible">True</property>
@@ -113,7 +113,7 @@
                           <object class="GtkLabel" id="disconnected_notice_label">
                             <property name="visible">True</property>
                             <property name="can-focus">False</property>
-                            <property name="label">Disconnected</property>
+                            <property name="label" translatable="yes">Disconnected</property>
                             <property name="xalign">0</property>
                             <property name="wrap">True</property>
                             <property name="max-width-chars">64</property>
@@ -168,7 +168,7 @@
                                   <object class="GtkLabel" id="transfer_progress_notice_label">
                                     <property name="visible">True</property>
                                     <property name="can-focus">False</property>
-                                    <property name="label">Transferring...</property>
+                                    <property name="label" translatable="yes">Transferring...</property>
                                     <property name="xalign">0</property>
                                   </object>
                                   <packing>
@@ -208,7 +208,7 @@
                         <property name="receives-default">True</property>
                         <property name="halign">end</property>
                         <property name="margin-end">10</property>
-                        <property name="label">Cancel</property>
+                        <property name="label" translatable="yes">Cancel</property>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -249,7 +249,7 @@
                               <object class="GtkLabel" id="ssh_prompt_title_label">
                                 <property name="visible">True</property>
                                 <property name="can-focus">False</property>
-                                <property name="label">SSH Authentication</property>
+                                <property name="label" translatable="yes">SSH Authentication</property>
                                 <property name="xalign">0</property>
                               </object>
                             </child>
@@ -257,7 +257,7 @@
                               <object class="GtkLabel" id="ssh_prompt_message_label">
                                 <property name="visible">True</property>
                                 <property name="can-focus">False</property>
-                                <property name="label">Password:</property>
+                                <property name="label" translatable="yes">Password:</property>
                                 <property name="xalign">0</property>
                                 <property name="wrap">True</property>
                                 <property name="max-width-chars">56</property>
@@ -285,7 +285,7 @@
                                   <object class="GtkButton" id="ssh_prompt_cancel_button">
                                     <property name="visible">True</property>
                                     <property name="can-focus">True</property>
-                                    <property name="label">Cancel</property>
+                                    <property name="label" translatable="yes">Cancel</property>
                                   </object>
                                 </child>
                                 <child>
@@ -294,7 +294,7 @@
                                     <property name="can-focus">True</property>
                                     <property name="can-default">True</property>
                                     <property name="receives-default">True</property>
-                                    <property name="label">OK</property>
+                                    <property name="label" translatable="yes">OK</property>
                                   </object>
                                 </child>
                               </object>
@@ -345,7 +345,7 @@
                   <object class="GtkLabel" id="status_label">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
-                    <property name="label">Terminal</property>
+                    <property name="label" translatable="yes">Terminal</property>
                     <property name="xalign">0</property>
                     <property name="ellipsize">end</property>
                     <property name="margin-start">8</property>

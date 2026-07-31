@@ -1,5 +1,8 @@
 #include "serial-session.h"
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/eventfd.h>
@@ -976,7 +979,7 @@ private:
     text_send_active = false;
     text_send_cancel_source.reset();
     if (request.status) {
-      request.status(succeeded ? connection_detail() : "Text send failed");
+      request.status(succeeded ? connection_detail() : _("Text send failed"));
     }
     if (!stopping && serial_fd >= 0 && !carrier_disconnected &&
         !transfer_active) {
@@ -1252,7 +1255,7 @@ public:
 
   std::string connection_detail() const override {
     if (settings.device.empty()) {
-      return "serial: (unknown)";
+      return _("serial: (unknown)");
     }
 
     return "serial: " + settings.device +

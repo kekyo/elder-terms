@@ -8,6 +8,9 @@
 #include <gestament/gtk.h>
 #include <gtk/gtk.h>
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 #include <cardio.h>
 #include <elder-terms/localization.h>
 #include <elder-terms/settings/application-settings.h>
@@ -103,9 +106,9 @@ prompt_sftp_authentication_async(
   request->input_required = prompt.input_required;
   request->dialog = gtk_dialog_new_with_buttons(
       prompt.title.c_str(), nullptr,
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL), "Cancel",
+      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL), _("Cancel"),
       GTK_RESPONSE_CANCEL,
-      prompt.input_required ? "Continue" : "Accept",
+      prompt.input_required ? _("Continue") : _("Accept"),
       GTK_RESPONSE_ACCEPT, nullptr);
   gestament_gtk_assign_accessible_id(
       request->dialog, "sftp_ssh_prompt_dialog");
@@ -174,7 +177,7 @@ static void show_startup_error(
   std::cerr << message << '\n';
   state->startup_error_dialog = gtk_message_dialog_new(
       nullptr, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR,
-      GTK_BUTTONS_CLOSE, "%s", "Failed to start SFTP");
+      GTK_BUTTONS_CLOSE, "%s", _("Failed to start SFTP"));
   gtk_message_dialog_format_secondary_text(
       GTK_MESSAGE_DIALOG(state->startup_error_dialog), "%s",
       message.c_str());

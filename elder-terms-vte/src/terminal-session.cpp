@@ -2,6 +2,9 @@
 #include <utility>
 #include <variant>
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 #include "terminal-session.h"
 
 #include "terminal-sessions/terminal-session.h"
@@ -193,7 +196,7 @@ std::string terminal_session_window_title(const TerminalSessionState *state) {
 std::string
 terminal_session_connection_detail(const TerminalSessionState *state) {
   if (state == nullptr || state->session == nullptr) {
-    return "Terminal";
+    return _("Terminal");
   }
 
   return state->session->connection_detail();

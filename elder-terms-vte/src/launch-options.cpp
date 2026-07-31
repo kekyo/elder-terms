@@ -55,6 +55,12 @@ LaunchOptions parse_launch_options(int *argc, char **argv) {
       continue;
     }
 
+    if (argument == "--test-show-transfer-progress") {
+      options.test.show_transfer_progress = true;
+      ++index;
+      continue;
+    }
+
     if (argument == "--test-shared-sftp-disconnected") {
       options.test.shared_sftp_disconnected = true;
       ++index;

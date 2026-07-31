@@ -159,6 +159,21 @@ static void print_warnings(const std::vector<std::string> &warnings) {
   }
 }
 
+static std::string format_translated_string(const char *format,
+                                            const char *value) {
+  gchar *formatted = g_strdup_printf(format, value);
+  const std::string result = formatted == nullptr ? std::string() : formatted;
+  g_free(formatted);
+  return result;
+}
+
+static std::string format_translated_string(const char *format, int value) {
+  gchar *formatted = g_strdup_printf(format, value);
+  const std::string result = formatted == nullptr ? std::string() : formatted;
+  g_free(formatted);
+  return result;
+}
+
 static void on_notice_response(GtkDialog *dialog, gint, gpointer) {
   gtk_widget_destroy(GTK_WIDGET(dialog));
 }
@@ -356,7 +371,7 @@ static void on_global_defaults_dialog_response(GtkDialog *dialog,
       elder_terms::save_global_settings(store, state->global_config_path);
   if (!result.saved) {
     show_error_for_parent(GTK_WINDOW(dialog),
-                          "Failed to save global defaults", result.warnings);
+                          _("Failed to save global defaults"), result.warnings);
     return;
   }
   print_warnings(result.warnings);
@@ -622,7 +637,8 @@ build_registered_hotkey_actions(
     });
     actions.push_back({
         .id = action_id,
-        .description = "Open connection " + profile.name,
+        .description = format_translated_string(
+            _("Open connection %s"), profile.name.c_str()),
         .binding = *binding,
     });
   }
@@ -649,7 +665,7 @@ build_registered_hotkey_actions(
   }
   actions.push_back({
       .id = open_application_hotkey_action_id,
-      .description = "Open elder-terms",
+      .description = _("Open elder-terms"),
       .binding = *application_binding,
   });
   return actions;
@@ -704,7 +720,7 @@ static bool load_existing_connection(ApplicationState *state,
       elder_terms::load_connection_profile(path);
   print_warnings(result.warnings);
   if (!result.loaded) {
-    show_error(state, "Failed to load connection", result.warnings);
+    show_error(state, _("Failed to load connection"), result.warnings);
     return false;
   }
 
@@ -747,8 +763,9 @@ static std::string next_new_connection_name(
     const std::vector<elder_terms::ConnectionProfile> &profiles) {
   for (int suffix = 1;; ++suffix) {
     const std::string candidate =
-        suffix == 1 ? "New connection"
-                    : "New connection " + std::to_string(suffix);
+        suffix == 1
+            ? _("New connection")
+            : format_translated_string(_("New connection %d"), suffix);
     const auto validation = elder_terms::validate_connection_name(
         candidate, profiles, std::nullopt);
     if (validation.valid) {
@@ -897,7 +914,7 @@ static void start_connection_monitor(ApplicationState *state) {
   std::filesystem::create_directories(state->connection_directory,
                                       directory_error);
   if (directory_error) {
-    show_error(state, "Failed to monitor connections",
+    show_error(state, _("Failed to monitor connections"),
                {directory_error.message()});
     return;
   }
@@ -910,11 +927,11 @@ static void start_connection_monitor(ApplicationState *state) {
   g_object_unref(directory);
   if (state->connection_monitor == nullptr) {
     const std::string message =
-        error == nullptr ? "Unknown file monitor error" : error->message;
+        error == nullptr ? _("Unknown file monitor error") : error->message;
     if (error != nullptr) {
       g_error_free(error);
     }
-    show_error(state, "Failed to monitor connections", {message});
+    show_error(state, _("Failed to monitor connections"), {message});
     return;
   }
   g_signal_connect(state->connection_monitor, "changed",
@@ -1062,7 +1079,7 @@ create_temporary_startup_profile(ApplicationState *state,
   const int descriptor = g_file_open_tmp("elder-terms-startup-XXXXXX",
                                          &temporary_path, &error);
   if (descriptor == -1) {
-    warnings->push_back(error == nullptr ? "Failed to create startup profile"
+    warnings->push_back(error == nullptr ? _("Failed to create startup profile")
                                          : error->message);
     if (error != nullptr) {
       g_error_free(error);
@@ -1119,14 +1136,14 @@ static void launch_child_process(
     const std::filesystem::path &temporary_startup_path,
     const std::optional<std::string> &activation_token) {
   const std::string error_summary =
-      std::string("Failed to start ") + executable_name;
+      format_translated_string(_("Failed to start %s"), executable_name);
   if (executable.empty()) {
     if (!temporary_startup_path.empty()) {
       g_remove(temporary_startup_path.c_str());
     }
     show_error(state, error_summary,
-               {std::string(executable_name) +
-                " executable was not found"});
+               {format_translated_string(
+                   _("The %s executable was not found"), executable_name)});
     return;
   }
 
@@ -1154,7 +1171,7 @@ static void launch_child_process(
       g_remove(temporary_startup_path.c_str());
     }
     const std::string message =
-        error == nullptr ? "Unknown process launch error" : error->message;
+        error == nullptr ? _("Unknown process launch error") : error->message;
     if (error != nullptr) {
       g_error_free(error);
     }
@@ -1185,7 +1202,7 @@ static void launch_selected_connection(ApplicationState *state) {
   const char *executable_name =
       sftp ? "elder-terms-sftp" : "elder-terms-vte";
   const std::string error_summary =
-      std::string("Failed to start ") + executable_name;
+      format_translated_string(_("Failed to start %s"), executable_name);
 
   std::vector<std::string> arguments = {executable};
   if (!state->current_is_new && state->selected_path.has_value()) {
@@ -1220,7 +1237,7 @@ static void launch_saved_connection(
       elder_terms::load_connection_profile(path);
   print_warnings(loaded.warnings);
   if (!loaded.loaded) {
-    show_error(state, "Failed to load connection", loaded.warnings);
+    show_error(state, _("Failed to load connection"), loaded.warnings);
     return;
   }
 
@@ -1280,14 +1297,14 @@ static void request_discard_confirmation(ApplicationState *state,
       GTK_WINDOW(state->main_window->window),
       static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
                                   GTK_DIALOG_DESTROY_WITH_PARENT),
-      GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE, "%s", "Discard changes?");
+      GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE, "%s", _("Discard changes?"));
   gtk_message_dialog_format_secondary_text(
       GTK_MESSAGE_DIALOG(dialog), "%s",
-      "The current connection has changes that have not been applied.");
+      _("The current connection has changes that have not been applied."));
   GtkWidget *cancel = gtk_dialog_add_button(
-      GTK_DIALOG(dialog), "Cancel", GTK_RESPONSE_CANCEL);
+      GTK_DIALOG(dialog), _("Cancel"), GTK_RESPONSE_CANCEL);
   GtkWidget *discard = gtk_dialog_add_button(
-      GTK_DIALOG(dialog), "Discard", GTK_RESPONSE_ACCEPT);
+      GTK_DIALOG(dialog), _("Discard"), GTK_RESPONSE_ACCEPT);
   gestament_gtk_assign_accessible_id(dialog, "discard_changes_dialog");
   gestament_gtk_assign_accessible_id(cancel, "cancel_discard_button");
   gestament_gtk_assign_accessible_id(discard, "discard_changes_button");
@@ -1439,7 +1456,7 @@ static void on_apply_clicked(GtkButton *, gpointer user_data) {
           elder_terms::settings_widget_draft_store(state->settings_widget));
   print_warnings(result.warnings);
   if (!result.saved) {
-    show_error(state, "Failed to save connection", result.warnings);
+    show_error(state, _("Failed to save connection"), result.warnings);
     return;
   }
   select_existing_connection(state, result.path);

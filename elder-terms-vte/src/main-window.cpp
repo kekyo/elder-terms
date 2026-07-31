@@ -11,6 +11,9 @@
 #include <gestament/gtk.h>
 #include <vte/vte.h>
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 #include "main-window.h"
 #include "widget-background.h"
 
@@ -18,8 +21,6 @@ namespace elder_terms {
 
 static constexpr int indicator_icon_pixel_size = 18;
 static constexpr guint transfer_progress_pulse_period_ms = 120;
-static constexpr const char *disconnected_title_suffix = " (Disconnected)";
-static constexpr const char *disconnected_notice_text = "Disconnected";
 static constexpr const char *terminal_dim_overlay_style_class =
     "terminal-dim-overlay";
 static constexpr const char *disconnected_notice_background_style_class =
@@ -125,6 +126,14 @@ struct MainWindowTransferProgressState {
   GtkWidget *cancel_button = nullptr;
   MainWindowTransferCancelCallback cancel;
 };
+
+static std::string format_translated_string(const char *format,
+                                            const char *value) {
+  gchar *formatted = g_strdup_printf(format, value);
+  const std::string result = formatted == nullptr ? std::string() : formatted;
+  g_free(formatted);
+  return result;
+}
 
 static void on_terminal_context_copy_activate(GtkMenuItem *, gpointer data) {
   auto *terminal = VTE_TERMINAL(data);
@@ -243,11 +252,11 @@ static void install_terminal_context_menu(GtkWidget *terminal_widget,
   state->terminal = VTE_TERMINAL(terminal_widget);
   state->menu = gtk_menu_new();
   g_object_ref_sink(state->menu);
-  state->copy_item = gtk_menu_item_new_with_label("Copy");
+  state->copy_item = gtk_menu_item_new_with_label(_("Copy"));
   gestament_gtk_assign_accessible_id(state->copy_item,
                                      terminal_context_copy_item_id);
   gtk_menu_shell_append(GTK_MENU_SHELL(state->menu), state->copy_item);
-  state->paste_item = gtk_menu_item_new_with_label("Paste");
+  state->paste_item = gtk_menu_item_new_with_label(_("Paste"));
   gestament_gtk_assign_accessible_id(state->paste_item,
                                      terminal_context_paste_item_id);
   gtk_menu_shell_append(GTK_MENU_SHELL(state->menu), state->paste_item);
@@ -973,7 +982,8 @@ static std::string display_title(const MainWindow &main_window) {
     return main_window.base_title;
   }
 
-  return main_window.base_title + disconnected_title_suffix;
+  return format_translated_string(_("%s (Disconnected)"),
+                                  main_window.base_title.c_str());
 }
 
 static void apply_main_window_title(MainWindow *main_window) {
@@ -1345,7 +1355,7 @@ void set_main_window_connection_phase(MainWindow *main_window,
   if (phase != TerminalSessionConnectionPhase::disconnected &&
       main_window->disconnected_notice_label != nullptr) {
     gtk_label_set_text(GTK_LABEL(main_window->disconnected_notice_label),
-                       disconnected_notice_text);
+                       _("Disconnected"));
   }
   const TerminalConnectionPresentation presentation =
       terminal_connection_presentation(phase);
@@ -1367,9 +1377,11 @@ void set_main_window_connection_failure(MainWindow *main_window,
     return;
   }
 
-  const std::string text =
-      message.empty() ? "SSH connection failed"
-                      : "SSH connection failed:\n" + message;
+  const std::string text = message.empty()
+                               ? _("SSH connection failed")
+                               : format_translated_string(
+                                     _("SSH connection failed:\n%s"),
+                                     message.c_str());
   gtk_label_set_text(GTK_LABEL(main_window->disconnected_notice_label),
                      text.c_str());
 }
@@ -1437,12 +1449,12 @@ cardio::promise<SshUserPromptResponse> prompt_main_window_ssh_async(
           });
 
   gtk_label_set_text(GTK_LABEL(state->title_label),
-                     prompt.title.empty() ? "SSH" : prompt.title.c_str());
+                     prompt.title.empty() ? _("SSH") : prompt.title.c_str());
   gtk_label_set_text(GTK_LABEL(state->message_label),
                      prompt.message.c_str());
   gtk_button_set_label(
       GTK_BUTTON(state->accept_button),
-      prompt.kind == SshUserPromptKind::host_key ? "Accept" : "OK");
+      prompt.kind == SshUserPromptKind::host_key ? _("Accept") : _("OK"));
   gtk_entry_set_text(GTK_ENTRY(state->entry), "");
   gtk_entry_set_visibility(GTK_ENTRY(state->entry), prompt.echo);
 

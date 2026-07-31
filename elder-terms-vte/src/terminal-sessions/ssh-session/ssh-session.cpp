@@ -1,5 +1,8 @@
 #include "ssh-session.h"
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 #include <sys/eventfd.h>
 #include <unistd.h>
 
@@ -437,7 +440,7 @@ private:
     transfer_incoming.clear();
     transfer_cancel_source.reset();
     if (request.status) {
-      request.status(succeeded ? connection_detail() : "Transfer failed");
+      request.status(succeeded ? connection_detail() : _("Transfer failed"));
     }
     reconnect_user_input();
     if (request.active) {
@@ -501,7 +504,7 @@ private:
     text_send_active = false;
     text_send_cancel_source.reset();
     if (request.status) {
-      request.status(succeeded ? connection_detail() : "Text send failed");
+      request.status(succeeded ? connection_detail() : _("Text send failed"));
     }
     reconnect_user_input();
     if (request.active) {
@@ -615,7 +618,7 @@ public:
 
   std::string connection_detail() const override {
     if (settings.endpoint.address.empty()) {
-      return "ssh: (unknown)";
+      return _("ssh: (unknown)");
     }
     std::string endpoint = settings.endpoint.address + ":" +
                            std::to_string(settings.endpoint.port);

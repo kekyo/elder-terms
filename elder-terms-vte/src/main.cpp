@@ -1,4 +1,5 @@
 #include <clocale>
+#include <cstdarg>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -91,6 +92,16 @@ static void update_application_session_identity(ApplicationState *state);
 static void update_application_terminal_presentation(
     ApplicationState *state);
 
+static std::string format_translated_string(const char *format, ...) {
+  va_list arguments;
+  va_start(arguments, format);
+  gchar *formatted = g_strdup_vprintf(format, arguments);
+  va_end(arguments);
+  const std::string result = formatted == nullptr ? std::string() : formatted;
+  g_free(formatted);
+  return result;
+}
+
 static void update_parent_window_sensitivity(ApplicationState *state) {
   if (state == nullptr || state->window == nullptr) {
     return;
@@ -119,20 +130,22 @@ run_ssh_prompt_fixture_async(ApplicationState *state,
   if (fixture == "host-key") {
     prompt = {
         .kind = elder_terms::SshUserPromptKind::host_key,
-        .title = "SSH Host Key",
-        .message =
-            "Unknown SSH host key for fixture.example:22\n"
-            "Key type: ssh-ed25519\n"
-            "Fingerprint: SHA256:fixture-host-key\n"
-            "Accept and save this host key?",
+        .title = _("SSH Host Key"),
+        .message = format_translated_string(
+            _("Unknown SSH host key for %s:%d\n"
+              "Key type: %s\n"
+              "Fingerprint: %s\n"
+              "Accept and save this host key?"),
+            "fixture.example", 22, "ssh-ed25519",
+            "SHA256:fixture-host-key"),
         .input_required = false,
         .echo = false,
     };
   } else {
     prompt = {
         .kind = elder_terms::SshUserPromptKind::password,
-        .title = "SSH Authentication",
-        .message = "Password:",
+        .title = _("SSH Authentication"),
+        .message = _("Password:"),
         .input_required = true,
         .echo = false,
     };
@@ -147,7 +160,8 @@ run_ssh_prompt_fixture_async(ApplicationState *state,
   }
   elder_terms::set_main_window_status_text(
       state->main_window,
-      response.accepted ? "SSH prompt accepted" : "SSH prompt cancelled");
+      response.accepted ? _("SSH prompt accepted")
+                        : _("SSH prompt cancelled"));
 }
 
 static cardio::promise<void>
@@ -699,8 +713,9 @@ static void choose_transfer_files(
   }
 
   GtkWidget *dialog = gtk_file_chooser_dialog_new(
-      "Select file", GTK_WINDOW(state->window), GTK_FILE_CHOOSER_ACTION_OPEN,
-      "Cancel", GTK_RESPONSE_CANCEL, "Open", GTK_RESPONSE_ACCEPT, nullptr);
+      _("Select file"), GTK_WINDOW(state->window),
+      GTK_FILE_CHOOSER_ACTION_OPEN, _("Cancel"), GTK_RESPONSE_CANCEL,
+      _("Open"), GTK_RESPONSE_ACCEPT, nullptr);
   gestament_gtk_assign_accessible_id(dialog, "transfer_file_dialog");
   gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
   gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
@@ -786,7 +801,7 @@ static void on_transfer_menu_item_activate(GtkMenuItem *item,
           if (!start_transfer_request(state, selected_action,
                                       std::move(selected_uris))) {
             elder_terms::set_main_window_status_text(
-                state->main_window, "Transfer unavailable");
+                state->main_window, _("Transfer unavailable"));
             update_application_terminal_presentation(state);
             restore_terminal_focus(state);
           }
@@ -796,7 +811,7 @@ static void on_transfer_menu_item_activate(GtkMenuItem *item,
 
   if (!start_transfer_request(state, *action, std::move(source_uris))) {
     elder_terms::set_main_window_status_text(state->main_window,
-                                             "Transfer unavailable");
+                                             _("Transfer unavailable"));
   }
 }
 
@@ -821,7 +836,7 @@ static void start_zmodem_auto_transfer(
           if (!start_transfer_request(state, action,
                                       std::move(selected_uris))) {
             elder_terms::set_main_window_status_text(
-                state->main_window, "Transfer unavailable");
+                state->main_window, _("Transfer unavailable"));
             update_application_terminal_presentation(state);
             restore_terminal_focus(state);
           }
@@ -831,7 +846,7 @@ static void start_zmodem_auto_transfer(
 
   if (!start_transfer_request(state, action, {})) {
     elder_terms::set_main_window_status_text(state->main_window,
-                                             "Transfer unavailable");
+                                             _("Transfer unavailable"));
   }
 }
 
@@ -931,7 +946,7 @@ static void on_text_send_menu_item_activate(GtkMenuItem *,
                     .uri = std::move(selected_uris.front()),
                 })) {
           elder_terms::set_main_window_status_text(
-              state->main_window, "Text send unavailable");
+              state->main_window, _("Text send unavailable"));
           update_application_terminal_presentation(state);
           restore_terminal_focus(state);
         }
@@ -939,7 +954,7 @@ static void on_text_send_menu_item_activate(GtkMenuItem *,
 }
 
 static GtkWidget *create_text_send_menu_item(ApplicationState *state) {
-  GtkWidget *item = gtk_menu_item_new_with_label("Text (Send)");
+  GtkWidget *item = gtk_menu_item_new_with_label(_("Text (Send)"));
   gestament_gtk_assign_accessible_id(item, "transfer_text_send_item");
   g_signal_connect(item, "activate",
                    G_CALLBACK(on_text_send_menu_item_activate), state);
@@ -1017,7 +1032,7 @@ static cardio::promise<void> open_shared_sftp_window_async(
               << error.what() << '\n';
     if (state->window != nullptr) {
       elder_terms::set_main_window_status_text(
-          state->main_window, "SFTP unavailable");
+          state->main_window, _("SFTP unavailable"));
     }
   }
 
@@ -1048,7 +1063,7 @@ static void on_sftp_menu_item_activate(GtkMenuItem *,
             state->session_state);
     if (transport == nullptr) {
       elder_terms::set_main_window_status_text(
-          state->main_window, "SFTP unavailable");
+          state->main_window, _("SFTP unavailable"));
       return;
     }
   }
@@ -1068,7 +1083,7 @@ static void on_sftp_menu_item_activate(GtkMenuItem *,
 }
 
 static GtkWidget *create_sftp_menu_item(ApplicationState *state) {
-  GtkWidget *item = gtk_menu_item_new_with_label("SFTP");
+  GtkWidget *item = gtk_menu_item_new_with_label(_("SFTP"));
   gestament_gtk_assign_accessible_id(item, "transfer_sftp_item");
   g_signal_connect(item, "activate",
                    G_CALLBACK(on_sftp_menu_item_activate), state);
@@ -1092,7 +1107,7 @@ static void on_log_enabled_menu_item_toggled(GtkCheckMenuItem *item,
 }
 
 static GtkWidget *create_log_enabled_menu_item(ApplicationState *state) {
-  GtkWidget *item = gtk_check_menu_item_new_with_label("Log recording");
+  GtkWidget *item = gtk_check_menu_item_new_with_label(_("Log recording"));
   gestament_gtk_assign_accessible_id(item, "transfer_log_enabled_item");
   gtk_check_menu_item_set_active(
       GTK_CHECK_MENU_ITEM(item),
@@ -1138,21 +1153,21 @@ static void install_transfer_menu(ApplicationState *state) {
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
-          state, "transfer_zmodem_send_item", "ZMODEM (send)",
+          state, "transfer_zmodem_send_item", _("ZMODEM (send)"),
           elder_terms::TerminalTransferProtocol::zmodem,
           elder_terms::TerminalTransferDirection::send,
           elder_terms::TerminalTransferOptions{}));
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
-          state, "transfer_ymodem_send_item", "YMODEM (send)",
+          state, "transfer_ymodem_send_item", _("YMODEM (send)"),
           elder_terms::TerminalTransferProtocol::ymodem,
           elder_terms::TerminalTransferDirection::send,
           elder_terms::TerminalTransferOptions{}));
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
-          state, "transfer_xmodem_1k_send_item", "XMODEM 1K (send)",
+          state, "transfer_xmodem_1k_send_item", _("XMODEM 1K (send)"),
           elder_terms::TerminalTransferProtocol::xmodem,
           elder_terms::TerminalTransferDirection::send,
           make_xmodem_transfer_options(
@@ -1161,7 +1176,7 @@ static void install_transfer_menu(ApplicationState *state) {
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
-          state, "transfer_xmodem_send_item", "XMODEM (send)",
+          state, "transfer_xmodem_send_item", _("XMODEM (send)"),
           elder_terms::TerminalTransferProtocol::xmodem,
           elder_terms::TerminalTransferDirection::send,
           make_xmodem_transfer_options(
@@ -1171,14 +1186,14 @@ static void install_transfer_menu(ApplicationState *state) {
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
-          state, "transfer_zmodem_receive_item", "ZMODEM (receive)",
+          state, "transfer_zmodem_receive_item", _("ZMODEM (receive)"),
           elder_terms::TerminalTransferProtocol::zmodem,
           elder_terms::TerminalTransferDirection::receive,
           elder_terms::TerminalTransferOptions{}));
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
-          state, "transfer_ymodem_g_receive_item", "YMODEM-g (receive)",
+          state, "transfer_ymodem_g_receive_item", _("YMODEM-g (receive)"),
           elder_terms::TerminalTransferProtocol::ymodem,
           elder_terms::TerminalTransferDirection::receive,
           make_ymodem_transfer_options(
@@ -1186,7 +1201,7 @@ static void install_transfer_menu(ApplicationState *state) {
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
-          state, "transfer_ymodem_receive_item", "YMODEM (receive)",
+          state, "transfer_ymodem_receive_item", _("YMODEM (receive)"),
           elder_terms::TerminalTransferProtocol::ymodem,
           elder_terms::TerminalTransferDirection::receive,
           make_ymodem_transfer_options(
@@ -1194,7 +1209,8 @@ static void install_transfer_menu(ApplicationState *state) {
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
-          state, "transfer_xmodem_crc_receive_item", "XMODEM CRC (receive)",
+          state, "transfer_xmodem_crc_receive_item",
+          _("XMODEM CRC (receive)"),
           elder_terms::TerminalTransferProtocol::xmodem,
           elder_terms::TerminalTransferDirection::receive,
           make_xmodem_transfer_options(
@@ -1203,7 +1219,7 @@ static void install_transfer_menu(ApplicationState *state) {
   gtk_menu_shell_append(
       GTK_MENU_SHELL(menu),
       create_transfer_menu_item(
-          state, "transfer_xmodem_receive_item", "XMODEM (receive)",
+          state, "transfer_xmodem_receive_item", _("XMODEM (receive)"),
           elder_terms::TerminalTransferProtocol::xmodem,
           elder_terms::TerminalTransferDirection::receive,
           make_xmodem_transfer_options(
@@ -1391,7 +1407,7 @@ int main(int argc, char **argv) {
                             .utf8_text = std::move(utf8_text),
                         })) {
                   elder_terms::set_main_window_status_text(
-                      app_state.main_window, "Text send unavailable");
+                      app_state.main_window, _("Text send unavailable"));
                 }
               },
       });
@@ -1460,6 +1476,10 @@ int main(int argc, char **argv) {
   }
 
   gtk_widget_show_all(main_window->window);
+  if (launch_options.test.show_transfer_progress) {
+    elder_terms::set_main_window_transfer_progress_visible(
+        &*main_window, true);
+  }
   elder_terms::focus_main_window_terminal_if_interactive(
       &*main_window);
 

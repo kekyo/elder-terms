@@ -13,6 +13,9 @@
 
 #include <gio/gio.h>
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 #include "terminal-sessions/terminal-text-codec.h"
 
 namespace elder_terms {
@@ -21,8 +24,6 @@ static constexpr std::size_t text_source_read_size = 64 * 1024;
 static constexpr std::size_t maximum_text_send_chunk_size = 64 * 1024;
 static constexpr std::uint64_t throttle_intervals_per_second = 10;
 static constexpr std::uint64_t microseconds_per_second = 1000000;
-static constexpr char replacement_warning[] =
-    "Text contained characters that were replaced";
 
 struct GObjectDeleter {
   void operator()(void *object) const {
@@ -114,7 +115,7 @@ static void publish_replacement_warning(const TerminalTextSendRequest &request,
   }
   *warning_published = true;
   if (request.status) {
-    request.status(replacement_warning);
+    request.status(_("Text contained characters that were replaced"));
   }
 }
 

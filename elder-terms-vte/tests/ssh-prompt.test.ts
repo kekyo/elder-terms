@@ -14,6 +14,11 @@ import { runGtkTest, withTemporaryDirectory } from './gtk-test-helpers';
 const connectionColorsSshPromptFixturePath = fileURLToPath(
   new URL('./fixtures/connection-colors-ssh-prompt.png', import.meta.url)
 );
+const japaneseTestEnvironment = {
+  ELDER_TERMS_LOCALE_DIR: fileURLToPath(
+    new URL('../../.build/po/', import.meta.url)
+  ),
+} as const;
 
 const expectShowing = async (element: GtkWidgetElement): Promise<void> => {
   await toPass(async () => {
@@ -53,6 +58,43 @@ const expectOnlyMainWindow = async (app: GtkApp): Promise<void> => {
 };
 
 describe.concurrent('SSH prompt overlay', () => {
+  it('localizes the host-key prompt into Japanese', async (context) => {
+    await runGtkTest(
+      context,
+      ['--test-fixture', '--test-ssh-prompt=host-key'],
+      async (app) => {
+        expect(
+          await expectElementKind(
+            await app.getById('ssh_prompt_title_label'),
+            'label'
+          ).text()
+        ).toBe('SSHホスト鍵');
+        expect(
+          await expectElementKind(
+            await app.getById('ssh_prompt_message_label'),
+            'label'
+          ).text()
+        ).toContain('fixture.example:22の不明なSSHホスト鍵');
+        expect(
+          await expectElementKind(
+            await app.getById('ssh_prompt_message_label'),
+            'label'
+          ).text()
+        ).toContain('SHA256:fixture-host-key');
+        expect(
+          (await (await app.getById('ssh_prompt_accept_button')).info()).name
+        ).toBe('承認');
+        expect(
+          (await (await app.getById('ssh_prompt_cancel_button')).info()).name
+        ).toBe('キャンセル');
+      },
+      {
+        env: japaneseTestEnvironment,
+        globalSettings: '[general]\nui_language=ja\n',
+      }
+    );
+  });
+
   it('confirms an unknown host key inside the dimmed terminal surface', async (context) => {
     await runGtkTest(
       context,

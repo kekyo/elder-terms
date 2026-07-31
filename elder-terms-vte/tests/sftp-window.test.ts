@@ -49,11 +49,20 @@ interface SftpFixture {
   readonly localDirectory: string;
 }
 
-const runSftpFixture = async (
+const japaneseTestEnvironment = {
+  ELDER_TERMS_LOCALE_DIR: fileURLToPath(
+    new URL('../../.build/po/', import.meta.url)
+  ),
+  LANGUAGE: 'ja',
+  LC_ALL: 'ja_JP.UTF-8',
+} as const;
+
+const runSftpFixtureWithEnvironment = async (
   context: TestContext,
   pauseTransfer: boolean,
   generalSettings: readonly string[],
   gtkCss: string | undefined,
+  environment: Readonly<Record<string, string>>,
   body: (fixture: SftpFixture) => Promise<void>
 ): Promise<void> => {
   const directory = await mkdtemp(join(tmpdir(), 'elder-terms-sftp-'));
@@ -109,6 +118,7 @@ const runSftpFixture = async (
       const launcher = createGtkAppLauncher({
         appPath: sftpAppPath,
         env: {
+          ...environment,
           XDG_CONFIG_HOME: configHome,
         },
         onSystemOutput: evidence.recordSystemOutputEvent,
@@ -139,6 +149,22 @@ const runSftpFixture = async (
     await rm(directory, { recursive: true, force: true });
   }
 };
+
+const runSftpFixture = async (
+  context: TestContext,
+  pauseTransfer: boolean,
+  generalSettings: readonly string[],
+  gtkCss: string | undefined,
+  body: (fixture: SftpFixture) => Promise<void>
+): Promise<void> =>
+  runSftpFixtureWithEnvironment(
+    context,
+    pauseTransfer,
+    generalSettings,
+    gtkCss,
+    {},
+    body
+  );
 
 const expectTable = (element: GtkWidgetElement): GtkTableElement => {
   expect(element.kind).toBe('table');
@@ -327,6 +353,76 @@ const captureBorderSamples = (capture: GtkCapture): readonly RgbPixel[] => {
 };
 
 describe('SFTP window', () => {
+  it('localizes browser controls and state into Japanese', async (context) => {
+    await runSftpFixtureWithEnvironment(
+      context,
+      true,
+      [],
+      undefined,
+      japaneseTestEnvironment,
+      async ({ app }) => {
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('sftp_status_label'),
+              'label'
+            ).text()
+          ).toBe('準備完了');
+        });
+        for (const [id, name] of [
+          ['sftp_local_group', 'ローカル'],
+          ['sftp_remote_group', 'リモート'],
+          ['sftp_local_up_button', '上へ'],
+          ['sftp_remote_up_button', '上へ'],
+          ['sftp_local_refresh_button', '更新'],
+          ['sftp_remote_refresh_button', '更新'],
+        ] as const) {
+          expect((await (await app.getById(id)).info()).name).toBe(name);
+        }
+
+        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        await openContextMenu(
+          app,
+          localTree,
+          await findRow(localTree, 'hello.txt')
+        );
+        const send = expectElementKind(
+          await app.getById('sftp_send_item'),
+          'menuItem'
+        );
+        expect((await send.info()).name).toBe('送信');
+        await send.click();
+
+        const overlay = await app.getById('sftp_transfer_overlay');
+        const transferLabel = expectElementKind(
+          await app.getById('sftp_transfer_label'),
+          'label'
+        );
+        const cancel = expectElementKind(
+          await app.getById('sftp_transfer_cancel_button'),
+          'button'
+        );
+        await expectShowing(overlay);
+        await waitForResult(async () => {
+          expect(await transferLabel.text()).toMatch(/^転送/);
+          const cancelInfo = await cancel.info();
+          expect(cancelInfo.name).toBe('キャンセル');
+          expect(cancelInfo.states).toContain('showing');
+        });
+        await cancel.click();
+        await expectHidden(overlay);
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('sftp_status_label'),
+              'label'
+            ).text()
+          ).toBe('転送をキャンセルしました');
+        });
+      }
+    );
+  });
+
   it('applies configured exterior and browser RGB backgrounds', async (context) => {
     await runSftpFixture(
       context,
