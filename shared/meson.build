@@ -4,9 +4,21 @@ elder_terms_shared_xkbcommon_dep = dependency('xkbcommon')
 elder_terms_shared_include_dir = include_directories('include')
 elder_terms_symbol_map = meson.current_source_dir() / 'elder-terms.map'
 
+elder_terms_localization_configuration = configuration_data()
+elder_terms_localization_configuration.set_quoted(
+  'ELDER_TERMS_LOCALE_DIR',
+  get_option('prefix') / get_option('localedir'),
+)
+configure_file(
+  input: 'localization-config.h.in',
+  output: 'localization-config.h',
+  configuration: elder_terms_localization_configuration,
+)
+
 elder_terms_shared_sources = [
   'src/key-binding.cpp',
   'src/key-binding-input-widget.cpp',
+  'src/localization.cpp',
   'src/settings/application-settings.cpp',
   'src/settings/general-settings.cpp',
   'src/settings/local-session-settings.cpp',

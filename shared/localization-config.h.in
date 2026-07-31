@@ -1,0 +1,3 @@
+#pragma once
+
+#mesondefine ELDER_TERMS_LOCALE_DIR

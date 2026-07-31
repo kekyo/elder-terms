@@ -83,17 +83,27 @@ export interface SharedGtkTestContext {
 }
 
 /**
+ * Process options for a shared GTK fixture test.
+ */
+export interface SharedGtkTestOptions {
+  /** Additional environment variables passed to the fixture. */
+  readonly env: Readonly<Record<string, string>>;
+}
+
+/**
  * Launches the shared settings widget fixture for one test body.
  *
  * @param context Vitest test context.
  * @param args Fixture command-line arguments.
  * @param body Test body receiving the launched app.
+ * @param options Additional process options.
  * @returns Promise resolved after the app and launcher are released.
  */
 export const runSharedGtkTest = async (
   context: TestContext,
   args: readonly string[],
-  body: (context: SharedGtkTestContext) => Promise<void>
+  body: (context: SharedGtkTestContext) => Promise<void>,
+  options: SharedGtkTestOptions | undefined = undefined
 ): Promise<void> => {
   const testName = context.task.fullTestName ?? context.task.name;
   const directory = join(runResultsDirectory, sanitizePathSegment(testName));
@@ -101,6 +111,11 @@ export const runSharedGtkTest = async (
 
   const launcher = createGtkAppLauncher({
     appPath,
+    env: {
+      LANGUAGE: 'C',
+      LC_ALL: 'C.UTF-8',
+      ...options?.env,
+    },
     xvfbTrayHost: true,
   });
   const app = await launcher.launch(args);

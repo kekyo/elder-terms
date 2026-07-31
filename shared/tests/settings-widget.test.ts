@@ -19,6 +19,14 @@ import {
 const fixturePath = (name: string): string =>
   fileURLToPath(new URL(`./fixtures/${name}.png`, import.meta.url));
 
+const japaneseTestEnvironment = {
+  ELDER_TERMS_LOCALE_DIR: fileURLToPath(
+    new URL('../../.build/po/', import.meta.url)
+  ),
+  LANGUAGE: 'ja',
+  LC_ALL: 'ja_JP.UTF-8',
+} as const;
+
 const visualComparisonOptions = {
   maxDiffPixels: 0,
   threshold: 0.01,
@@ -404,6 +412,21 @@ const waitForEntryPlaceholder = async (
   });
 };
 
+const waitForEntryIconTooltip = async (
+  app: GtkApp,
+  id: string,
+  expected: string
+): Promise<void> => {
+  await waitForResult(async () => {
+    const prefix = `ICON_TOOLTIP ${id}=`;
+    const line = (await app.output()).stdout
+      .split('\n')
+      .reverse()
+      .find((candidate) => candidate.startsWith(prefix));
+    expect(line?.slice(prefix.length)).toBe(expected);
+  });
+};
+
 const waitForChangedState = async (
   app: GtkApp,
   expected: string
@@ -632,6 +655,165 @@ describe.concurrent('shared settings widget', () => {
       ]);
     });
   }, 60_000);
+
+  it('localizes all settings presentation text into Japanese', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--global-mode', '--page=general'],
+      async ({ app }) => {
+        expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual([
+          '一般',
+          'TELNET',
+          'シリアル',
+          'SSH',
+          'SFTP',
+          '端末',
+          '転送',
+          'ログ',
+        ]);
+        const pages = [
+          {
+            id: 'global_settings_general_page',
+            labels: [
+              '接続方式',
+              '起動モード',
+              'アプリケーションを開くショートカット',
+              'タイトル／ステータスバーの背景',
+              'コンテンツの背景',
+            ],
+          },
+          {
+            id: 'global_settings_telnet_page',
+            labels: ['アドレス', 'ポート', '端末種別'],
+          },
+          {
+            id: 'global_settings_ssh_page',
+            labels: [
+              'アドレス',
+              'ポート',
+              'ユーザー名',
+              '秘密鍵ファイル',
+              '端末種別',
+            ],
+          },
+          {
+            id: 'global_settings_sftp_page',
+            labels: ['ローカルディレクトリ', 'リモートディレクトリ'],
+          },
+          {
+            id: 'global_settings_serial_page',
+            labels: [
+              'デバイス',
+              'ボーレート',
+              'データビット',
+              'パリティ',
+              'ストップビット',
+              'フロー制御',
+              '接続監視信号',
+            ],
+          },
+          {
+            id: 'global_settings_terminal_page',
+            labels: [
+              '文字エンコーディング',
+              'Backspaceコード',
+              'カーソルキーモード',
+              '列数',
+              '行数',
+              '拡大率',
+              'セッション終了時にウィンドウを閉じる',
+              '拡大ショートカット',
+              '縮小ショートカット',
+            ],
+          },
+          {
+            id: 'global_settings_transfer_page',
+            labels: [
+              '転送ベースディレクトリ',
+              'テキスト送信速度（バイト/秒）',
+              'ZMODEM転送を自動開始する',
+            ],
+          },
+          {
+            id: 'global_settings_logging_page',
+            labels: [
+              'ログを有効にする',
+              'ログディレクトリ',
+              'ファイル名形式',
+              'ログ内容',
+            ],
+          },
+        ] as const;
+
+        for (const page of pages) {
+          await expectPageLabels(app, page.id, page.labels);
+        }
+        expect(
+          (await (await app.getById('global_settings_apply_button')).info())
+            .name
+        ).toBe('適用');
+        expect(
+          (await (await app.getById('global_settings_cancel_button')).info())
+            .name
+        ).toBe('キャンセル');
+      },
+      { env: japaneseTestEnvironment }
+    );
+
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=serial',
+        '--type=serial',
+        '--serial-parity=e',
+        '--serial-flow-control=xon',
+        '--serial-carrier-detect=dsr',
+      ],
+      async ({ app }) => {
+        await showSerialPage(app);
+        await expectSelectedComboValue(
+          app,
+          'settings_serial_parity_combo',
+          '偶数'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_serial_flow_control_combo',
+          'XON/XOFF（ソフトウェア）'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_serial_carrier_detect_combo',
+          'DSR（データセット準備完了）'
+        );
+
+        await selectSettingsTab(app, '端末');
+        const width = expectElementKind(
+          await app.getById('settings_terminal_width_entry'),
+          'entry'
+        );
+        await waitForEntryPlaceholder(
+          app,
+          'settings_terminal_width_entry',
+          '80（組み込み既定値）'
+        );
+        await width.setText('invalid');
+        await waitForEntryIconTooltip(
+          app,
+          'settings_terminal_width_entry',
+          '整数を入力してください'
+        );
+        expect(
+          (
+            await (
+              await app.getById('settings_terminal_zoom_in_key_reset_button')
+            ).info()
+          ).name
+        ).toBe('リセット');
+      },
+      { env: japaneseTestEnvironment }
+    );
+  }, 90_000);
 
   it('exposes launcher draft state without its internal action row', async (context) => {
     await runSharedGtkTest(

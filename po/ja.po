@@ -1,0 +1,316 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: elder-terms 0.0.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-31 00:00+0900\n"
+"PO-Revision-Date: 2026-07-31 00:00+0900\n"
+"Last-Translator: elder-terms contributors\n"
+"Language-Team: Japanese\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Connection name"
+msgstr "接続名"
+
+msgid "Connection type"
+msgstr "接続方式"
+
+msgid "Open connection shortcut"
+msgstr "接続を開くショートカット"
+
+msgid "Startup mode"
+msgstr "起動モード"
+
+msgid "Open application shortcut"
+msgstr "アプリケーションを開くショートカット"
+
+msgid "Title and status bar background"
+msgstr "タイトル／ステータスバーの背景"
+
+msgid "Content background"
+msgstr "コンテンツの背景"
+
+msgid "Character encoding"
+msgstr "文字エンコーディング"
+
+msgid "Backspace code"
+msgstr "Backspaceコード"
+
+msgid "Cursor key mode"
+msgstr "カーソルキーモード"
+
+msgid "Columns"
+msgstr "列数"
+
+msgid "Rows"
+msgstr "行数"
+
+msgid "Zoom factor"
+msgstr "拡大率"
+
+msgid "Close window when session ends"
+msgstr "セッション終了時にウィンドウを閉じる"
+
+msgid "Zoom in shortcut"
+msgstr "拡大ショートカット"
+
+msgid "Zoom out shortcut"
+msgstr "縮小ショートカット"
+
+msgid "Address"
+msgstr "アドレス"
+
+msgid "Port"
+msgstr "ポート"
+
+msgid "Terminal type"
+msgstr "端末種別"
+
+msgid "User name"
+msgstr "ユーザー名"
+
+msgid "Identity file"
+msgstr "秘密鍵ファイル"
+
+msgid "Local directory"
+msgstr "ローカルディレクトリ"
+
+msgid "Remote directory"
+msgstr "リモートディレクトリ"
+
+msgid "Device"
+msgstr "デバイス"
+
+msgid "Baud rate"
+msgstr "ボーレート"
+
+msgid "Data bits"
+msgstr "データビット"
+
+msgid "Parity"
+msgstr "パリティ"
+
+msgid "Stop bits"
+msgstr "ストップビット"
+
+msgid "Flow control"
+msgstr "フロー制御"
+
+msgid "Connection monitoring signal"
+msgstr "接続監視信号"
+
+msgid "Transfer base directory"
+msgstr "転送ベースディレクトリ"
+
+msgid "Text send rate (bytes/s)"
+msgstr "テキスト送信速度（バイト/秒）"
+
+msgid "Automatically start ZMODEM transfers"
+msgstr "ZMODEM転送を自動開始する"
+
+msgid "Enable logging"
+msgstr "ログを有効にする"
+
+msgid "Log directory"
+msgstr "ログディレクトリ"
+
+msgid "File name format"
+msgstr "ファイル名形式"
+
+msgid "Log content"
+msgstr "ログ内容"
+
+msgid "Local shell"
+msgstr "ローカルシェル"
+
+msgid "TELNET"
+msgstr "TELNET"
+
+msgid "Serial"
+msgstr "シリアル"
+
+msgid "SSH"
+msgstr "SSH"
+
+msgid "SFTP"
+msgstr "SFTP"
+
+msgid "Simple startup"
+msgstr "シンプル起動"
+
+msgid "System tray only"
+msgstr "システムトレイのみ"
+
+msgid "System tray and main window"
+msgstr "システムトレイとメインウィンドウ"
+
+msgid "BS"
+msgstr "BS"
+
+msgid "DEL"
+msgstr "DEL"
+
+msgid "Normal"
+msgstr "通常"
+
+msgid "ADM3"
+msgstr "ADM3"
+
+msgid "None"
+msgstr "なし"
+
+msgid "Even"
+msgstr "偶数"
+
+msgid "Odd"
+msgstr "奇数"
+
+msgid "XON/XOFF (software)"
+msgstr "XON/XOFF（ソフトウェア）"
+
+msgid "RTS/CTS (hardware)"
+msgstr "RTS/CTS（ハードウェア）"
+
+msgid "DCD (Data Carrier Detect)"
+msgstr "DCD（データキャリア検出）"
+
+msgid "CTS (Clear to Send)"
+msgstr "CTS（送信可）"
+
+msgid "DSR (Data Set Ready)"
+msgstr "DSR（データセット準備完了）"
+
+msgid "Raw bytes (before character conversion)"
+msgstr "生バイト列（文字変換前）"
+
+msgid "UTF-8 text (after character conversion)"
+msgstr "UTF-8テキスト（文字変換後）"
+
+msgid "General"
+msgstr "一般"
+
+msgid "Terminal"
+msgstr "端末"
+
+msgid "Transfer"
+msgstr "転送"
+
+msgid "Logging"
+msgstr "ログ"
+
+msgid "Apply"
+msgstr "適用"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Cancel"
+msgstr "キャンセル"
+
+msgid "Reset"
+msgstr "リセット"
+
+msgid "Enabled"
+msgstr "有効"
+
+msgid "Disabled"
+msgstr "無効"
+
+msgid "No color"
+msgstr "色なし"
+
+msgid "Custom color"
+msgstr "カスタム色"
+
+msgid "Press a key combination"
+msgstr "キーの組み合わせを入力してください"
+
+msgid "Clear key binding"
+msgstr "キー割り当てをクリア"
+
+msgid "Use global default"
+msgstr "グローバル既定値を使用"
+
+msgid "Use built-in default"
+msgstr "組み込み既定値を使用"
+
+msgid "Global default"
+msgstr "グローバル既定値"
+
+msgid "Built-in default"
+msgstr "組み込み既定値"
+
+#, c-format
+msgid "%s (global default)"
+msgstr "%s（グローバル既定値）"
+
+#, c-format
+msgid "%s (built-in default)"
+msgstr "%s（組み込み既定値）"
+
+msgid "Enter a whole number"
+msgstr "整数を入力してください"
+
+msgid "Enter a number"
+msgstr "数値を入力してください"
+
+#, c-format
+msgid "Value must be between %s and %s"
+msgstr "値は%sから%sの範囲で入力してください"
+
+msgid "Must include Ctrl, Shift, Alt, or Super"
+msgstr "Ctrl、Shift、Alt、Super のいずれかを含めてください"
+
+msgid "Contains an empty token"
+msgstr "空の要素が含まれています"
+
+#, c-format
+msgid "Contains an unknown modifier: %s"
+msgstr "不明な修飾キーが含まれています: %s"
+
+#, c-format
+msgid "Contains a duplicate modifier: %s"
+msgstr "修飾キーが重複しています: %s"
+
+msgid "Does not contain a key"
+msgstr "キーを含めてください"
+
+#, c-format
+msgid "Contains an unknown key: %s"
+msgstr "不明なキーが含まれています: %s"
+
+msgid "Zoom in and zoom out must use different key bindings"
+msgstr "拡大と縮小には異なるキー割り当てを指定してください"
+
+msgid "Must not be empty"
+msgstr "空にはできません"
+
+msgid "The character encoding is not supported"
+msgstr "この文字エンコーディングには対応していません"
+
+msgid "Contains a NUL byte"
+msgstr "NULバイトが含まれています"
+
+msgid "Contains an unmatched closing brace"
+msgstr "対応する開始波括弧のない終了波括弧が含まれています"
+
+msgid "Contains an unmatched opening brace"
+msgstr "対応する終了波括弧のない開始波括弧が含まれています"
+
+msgid "Contains an unknown placeholder"
+msgstr "不明なプレースホルダーが含まれています"
+
+msgid "Must be relative to the log base directory"
+msgstr "ログのベースディレクトリからの相対パスにしてください"
+
+msgid "Must not contain parent directory traversal"
+msgstr "親ディレクトリへの移動は指定できません"
+
+msgid "Must name a log file"
+msgstr "ログファイル名を指定してください"
+
+msgid "Invalid value"
+msgstr "無効な値です"

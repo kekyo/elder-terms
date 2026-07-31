@@ -1,5 +1,6 @@
 #include <elder-terms/settings-widget.h>
 
+#include <clocale>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
@@ -13,6 +14,7 @@
 #include <atk/atk.h>
 #include <gtk/gtk.h>
 
+#include <elder-terms/localization.h>
 #include <elder-terms/settings.h>
 #include <elder-terms/settings/general-settings.h>
 
@@ -485,6 +487,12 @@ static void print_entry_placeholders(GtkWidget *widget) {
          starts_with(id, "global_settings_"))) {
       std::cout << "PLACEHOLDER " << id << '='
                 << (placeholder == nullptr ? "" : placeholder) << '\n';
+      gchar *tooltip = gtk_entry_get_icon_tooltip_text(
+          GTK_ENTRY(widget), GTK_ENTRY_ICON_SECONDARY);
+      if (tooltip != nullptr) {
+        std::cout << "ICON_TOOLTIP " << id << '=' << tooltip << '\n';
+        g_free(tooltip);
+      }
     }
   }
   if (!GTK_IS_CONTAINER(widget)) {
@@ -707,6 +715,8 @@ static void on_window_destroy(GtkWidget *, gpointer data) {
 
 int main(int argc, char **argv) {
   try {
+    std::setlocale(LC_ALL, "");
+    elder_terms::initialize_localization();
     gtk_init(&argc, &argv);
     const elder_terms_settings_widget_fixture::FixtureOptions options =
         elder_terms_settings_widget_fixture::parse_options(argc, argv);
