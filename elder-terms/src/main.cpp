@@ -1,6 +1,7 @@
 #include <algorithm>
-#include <clocale>
+#include <cerrno>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <optional>
@@ -35,6 +36,8 @@ namespace {
 
 static constexpr char open_application_hotkey_action_id[] =
     "open-application";
+static constexpr char language_environment_name[] = "LANGUAGE";
+static constexpr char language_environment_prefix[] = "LANGUAGE=";
 
 enum class PendingActionKind {
   none,
@@ -42,6 +45,7 @@ enum class PendingActionKind {
   new_connection,
   close,
   quit,
+  restart,
 };
 
 struct PendingAction {
@@ -95,6 +99,9 @@ struct ApplicationState {
   GtkWidget *confirmation_dialog = nullptr;
   GtkWidget *global_defaults_dialog = nullptr;
   GtkWidget *global_defaults_save_button = nullptr;
+  GtkWidget *ui_language_restart_dialog = nullptr;
+  elder_terms::ApplicationUiLanguage global_defaults_initial_ui_language =
+      elder_terms::ApplicationUiLanguage::system;
   PendingAction pending_action;
   GFileMonitor *connection_monitor = nullptr;
   guint monitor_refresh_source = 0;
@@ -116,6 +123,7 @@ struct ApplicationState {
   bool application_shutting_down = false;
   bool startup_failed = false;
   bool shutting_down = false;
+  bool restart_requested = false;
 };
 
 enum ConnectionColumns {
@@ -142,6 +150,7 @@ static void present_main_window(
     std::optional<std::uint32_t> activation_time = std::nullopt,
     std::optional<std::string> activation_token = std::nullopt);
 static void request_application_quit(ApplicationState *state);
+static void request_application_restart(ApplicationState *state);
 static void enable_connection_selection(ApplicationState *state);
 
 static void print_warnings(const std::vector<std::string> &warnings) {
@@ -180,6 +189,59 @@ static void show_error(ApplicationState *state, const std::string &summary,
                        const std::vector<std::string> &details) {
   show_error_for_parent(GTK_WINDOW(state->main_window->window), summary,
                         details);
+}
+
+static void on_ui_language_restart_dialog_destroy(GtkWidget *dialog,
+                                                  gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state->ui_language_restart_dialog == dialog) {
+    state->ui_language_restart_dialog = nullptr;
+  }
+}
+
+static void on_ui_language_restart_dialog_response(GtkDialog *dialog,
+                                                   gint response,
+                                                   gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+  if (response == GTK_RESPONSE_ACCEPT) {
+    request_application_restart(state);
+  }
+}
+
+static void show_ui_language_restart_dialog(ApplicationState *state) {
+  if (state->ui_language_restart_dialog != nullptr) {
+    gtk_window_present(GTK_WINDOW(state->ui_language_restart_dialog));
+    return;
+  }
+
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(state->main_window->window),
+      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
+                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      GTK_MESSAGE_INFO, GTK_BUTTONS_NONE, "%s",
+      _("Restart to apply display language?"));
+  gtk_message_dialog_format_secondary_text(
+      GTK_MESSAGE_DIALOG(dialog), "%s",
+      _("The display language change will take effect after elder-terms "
+        "restarts."));
+  GtkWidget *later = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), _("Later"), GTK_RESPONSE_CANCEL);
+  GtkWidget *restart = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), _("Restart now"), GTK_RESPONSE_ACCEPT);
+  gestament_gtk_assign_accessible_id(dialog,
+                                     "ui_language_restart_dialog");
+  gestament_gtk_assign_accessible_id(
+      later, "ui_language_restart_later_button");
+  gestament_gtk_assign_accessible_id(
+      restart, "ui_language_restart_now_button");
+  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
+  state->ui_language_restart_dialog = dialog;
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(on_ui_language_restart_dialog_response), state);
+  g_signal_connect(dialog, "destroy",
+                   G_CALLBACK(on_ui_language_restart_dialog_destroy), state);
+  gtk_widget_show_all(dialog);
 }
 
 static bool editor_is_dirty(const ApplicationState *state) {
@@ -287,6 +349,9 @@ static void on_global_defaults_dialog_response(GtkDialog *dialog,
   const elder_terms::SettingsStore store =
       elder_terms::settings_widget_draft_store(
           state->global_defaults_widget);
+  const bool ui_language_changed =
+      elder_terms::application_ui_language(store) !=
+      state->global_defaults_initial_ui_language;
   const elder_terms::SettingsSaveResult result =
       elder_terms::save_global_settings(store, state->global_config_path);
   if (!result.saved) {
@@ -299,6 +364,9 @@ static void on_global_defaults_dialog_response(GtkDialog *dialog,
   elder_terms::settings_widget_rebase_fallbacks(state->settings_widget, store);
   update_action_sensitivity(state);
   gtk_widget_destroy(GTK_WIDGET(dialog));
+  if (ui_language_changed) {
+    show_ui_language_restart_dialog(state);
+  }
 }
 
 static void on_global_defaults_cancel_clicked(GtkButton *,
@@ -320,6 +388,8 @@ static void open_global_defaults_dialog(ApplicationState *state) {
   elder_terms::SettingsLoadResult loaded =
       elder_terms::load_global_settings(state->global_config_path, 1.0);
   print_warnings(loaded.warnings);
+  state->global_defaults_initial_ui_language =
+      elder_terms::application_ui_language(loaded.store);
 
   GtkWidget *dialog = gtk_dialog_new();
   gestament_gtk_assign_accessible_id(dialog, "global_defaults_dialog");
@@ -892,6 +962,98 @@ static std::string resolve_child_executable(
   return result;
 }
 
+static std::vector<std::string> copy_process_arguments(int argc,
+                                                       char **argv) {
+  std::vector<std::string> arguments;
+  arguments.reserve(static_cast<std::size_t>(std::max(argc, 1)));
+  for (int index = 0; index < argc; ++index) {
+    if (argv[index] != nullptr) {
+      arguments.emplace_back(argv[index]);
+    }
+  }
+  if (arguments.empty()) {
+    arguments.emplace_back("elder-terms");
+  }
+  return arguments;
+}
+
+static std::string
+resolve_launcher_executable(const std::string &argument_zero) {
+  const std::string executable_name =
+      argument_zero.empty() ? "elder-terms" : argument_zero;
+  const std::filesystem::path argument_path(executable_name);
+  if (argument_path.has_parent_path()) {
+    std::error_code error;
+    const std::filesystem::path absolute_path =
+        std::filesystem::absolute(argument_path, error).lexically_normal();
+    if (!error && executable_file(absolute_path)) {
+      return absolute_path.string();
+    }
+    return {};
+  }
+
+  gchar *program = g_find_program_in_path(executable_name.c_str());
+  if (program == nullptr) {
+    return {};
+  }
+  std::string result(program);
+  g_free(program);
+  return result;
+}
+
+static std::vector<std::string> copy_restart_environment(
+    const std::optional<std::string> &inherited_language) {
+  // Localization can replace LANGUAGE for this process. A restart that selects
+  // the system default must instead inherit the value from before that change.
+  std::vector<std::string> environment;
+  for (char **entry = environ; entry != nullptr && *entry != nullptr;
+       ++entry) {
+    const std::string value(*entry);
+    if (value.rfind(language_environment_prefix, 0) != 0) {
+      environment.push_back(value);
+    }
+  }
+  if (inherited_language.has_value()) {
+    environment.push_back(std::string(language_environment_prefix) +
+                          inherited_language.value());
+  }
+  return environment;
+}
+
+static int restart_launcher(
+    const std::string &executable,
+    const std::vector<std::string> &process_arguments,
+    const std::optional<std::string> &inherited_language) {
+  if (executable.empty()) {
+    std::cerr << "Error: unable to resolve elder-terms for restart\n";
+    return 1;
+  }
+
+  std::vector<std::string> argument_storage = process_arguments;
+  std::vector<char *> argument_pointers;
+  argument_pointers.reserve(argument_storage.size() + 1);
+  for (std::string &argument : argument_storage) {
+    argument_pointers.push_back(argument.data());
+  }
+  argument_pointers.push_back(nullptr);
+
+  std::vector<std::string> environment_storage =
+      copy_restart_environment(inherited_language);
+  std::vector<char *> environment_pointers;
+  environment_pointers.reserve(environment_storage.size() + 1);
+  for (std::string &entry : environment_storage) {
+    environment_pointers.push_back(entry.data());
+  }
+  environment_pointers.push_back(nullptr);
+
+  execve(executable.c_str(), argument_pointers.data(),
+         environment_pointers.data());
+  const int error = errno;
+  std::cerr << "Error: failed to restart elder-terms: "
+            << std::strerror(error) << '\n';
+  return 1;
+}
+
 static std::optional<std::filesystem::path>
 create_temporary_startup_profile(ApplicationState *state,
                                  std::vector<std::string> *warnings) {
@@ -1089,6 +1251,10 @@ static void perform_pending_action(ApplicationState *state,
   } else if (action.kind == PendingActionKind::quit) {
     state->quitting = true;
     gtk_widget_destroy(state->main_window->window);
+  } else if (action.kind == PendingActionKind::restart) {
+    state->restart_requested = true;
+    state->quitting = true;
+    gtk_widget_destroy(state->main_window->window);
   }
 }
 
@@ -1130,6 +1296,25 @@ static void request_discard_confirmation(ApplicationState *state,
   g_signal_connect(dialog, "response", G_CALLBACK(on_confirmation_response),
                    state);
   gtk_widget_show_all(dialog);
+}
+
+static void request_application_restart(ApplicationState *state) {
+  if (state == nullptr || state->quitting || state->window_destroyed) {
+    return;
+  }
+  if (editor_is_dirty(state)) {
+    request_discard_confirmation(
+        state, PendingAction{
+                   .kind = PendingActionKind::restart,
+                   .path = {},
+               });
+    return;
+  }
+  perform_pending_action(
+      state, PendingAction{
+                 .kind = PendingActionKind::restart,
+                 .path = {},
+             });
 }
 
 static void on_connection_selection_changed(GtkTreeSelection *,
@@ -1662,6 +1847,16 @@ static void on_application_shutdown(GApplication *,
 } // namespace
 
 int main(int argc, char **argv) {
+  const std::vector<std::string> process_arguments =
+      copy_process_arguments(argc, argv);
+  const std::string restart_executable =
+      resolve_launcher_executable(process_arguments.front());
+  const char *inherited_language_value =
+      g_getenv(language_environment_name);
+  const std::optional<std::string> inherited_language =
+      inherited_language_value == nullptr
+          ? std::nullopt
+          : std::optional<std::string>(inherited_language_value);
   const elder_terms::ApplicationUiLanguage ui_language =
       elder_terms::load_application_ui_language_preference(
           elder_terms::default_global_config_path());
@@ -1672,34 +1867,45 @@ int main(int argc, char **argv) {
   }
   gtk_disable_setlocale();
   gtk_init(&argc, &argv);
-  cardio::dispatcher_group_glib dispatcher_group;
-  cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);
-  GApplication *application = g_application_new(
-      elder_terms::launcher_application_id(),
-      G_APPLICATION_DEFAULT_FLAGS);
 
-  ApplicationState state;
-  state.application = application;
-  state.dispatcher = &dispatcher;
-  state.dispatcher_group = &dispatcher_group;
-  state.launcher_argv0 =
-      argc > 0 && argv[0] != nullptr ? argv[0] : "elder-terms";
-  g_signal_connect(application, "startup",
-                   G_CALLBACK(on_application_startup), &state);
-  g_signal_connect(application, "activate",
-                   G_CALLBACK(on_application_activate), &state);
-  g_signal_connect(application, "shutdown",
-                   G_CALLBACK(on_application_shutdown), &state);
+  int application_result = 1;
+  bool restart_requested = false;
+  // Leave this scope before execve() so dispatcher-owned descriptors and all
+  // GApplication resources are released before the process image is replaced.
+  {
+    cardio::dispatcher_group_glib dispatcher_group;
+    cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);
+    GApplication *application = g_application_new(
+        elder_terms::launcher_application_id(),
+        G_APPLICATION_DEFAULT_FLAGS);
 
-  const int result =
-      g_application_run(application, argc, argv);
-  if (!state.application_shutting_down) {
-    dispatcher_group.shutdown();
+    ApplicationState state;
+    state.application = application;
+    state.dispatcher = &dispatcher;
+    state.dispatcher_group = &dispatcher_group;
+    state.launcher_argv0 = process_arguments.front();
+    g_signal_connect(application, "startup",
+                     G_CALLBACK(on_application_startup), &state);
+    g_signal_connect(application, "activate",
+                     G_CALLBACK(on_application_activate), &state);
+    g_signal_connect(application, "shutdown",
+                     G_CALLBACK(on_application_shutdown), &state);
+
+    const int result = g_application_run(application, argc, argv);
+    if (!state.application_shutting_down) {
+      dispatcher_group.shutdown();
+    }
+    if (state.main_window_storage.has_value()) {
+      elder_terms::destroy_launcher_main_window(
+          &state.main_window_storage.value());
+    }
+    restart_requested = state.restart_requested && !state.startup_failed;
+    application_result = state.startup_failed ? 1 : result;
+    g_object_unref(application);
   }
-  if (state.main_window_storage.has_value()) {
-    elder_terms::destroy_launcher_main_window(
-        &state.main_window_storage.value());
+  if (restart_requested) {
+    return restart_launcher(restart_executable, process_arguments,
+                            inherited_language);
   }
-  g_object_unref(application);
-  return state.startup_failed ? 1 : result;
+  return application_result;
 }

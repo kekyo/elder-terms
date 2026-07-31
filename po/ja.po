@@ -332,3 +332,15 @@ msgstr "設定"
 
 msgid "Global defaults"
 msgstr "グローバル既定値"
+
+msgid "Restart to apply display language?"
+msgstr "表示言語を適用するため再起動しますか？"
+
+msgid "The display language change will take effect after elder-terms restarts."
+msgstr "表示言語の変更はelder-termsの再起動後に反映されます。"
+
+msgid "Later"
+msgstr "後で"
+
+msgid "Restart now"
+msgstr "今すぐ再起動"

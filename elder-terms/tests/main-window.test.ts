@@ -368,6 +368,136 @@ describe('elder-terms main window', () => {
     );
   });
 
+  it('saves a display language change and allows restarting later', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app, configHome }) => {
+        await openGlobalDefaults(app);
+        const language = expectElementKind(
+          await app.getById('global_settings_general_ui_language_combo'),
+          'comboBox'
+        );
+        await language.selectChildAt(2);
+        await expectElementKind(
+          await app.getById('global_defaults_save_button'),
+          'button'
+        ).click();
+
+        await waitForWindowCount(app, 2);
+        const restartDialog = expectElementKind(
+          await app.getById('ui_language_restart_dialog'),
+          'infoBar'
+        );
+        expect((await restartDialog.info()).states).toContain('modal');
+        expect(
+          (await (await app.getById('ui_language_restart_now_button')).info())
+            .name
+        ).toBe('Restart now');
+        await expectElementKind(
+          await app.getById('ui_language_restart_later_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+
+        expect(
+          await readFile(join(configHome, 'elder-terms', 'global.ini'), 'utf8')
+        ).toContain('ui_language=ja');
+        expect(
+          (await (await app.getById('global_defaults_button')).info()).name
+        ).toBe('Global defaults');
+      }
+    );
+  });
+
+  it('restarts with the saved display language and restores the inherited environment', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await prepareProfiles(connections);
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[general]\nui_language=ja\n'
+        );
+      },
+      async ({ app }) => {
+        expect(
+          (await (await app.getById('global_defaults_button')).info()).name
+        ).toBe('グローバル既定値');
+        await openGlobalDefaults(app);
+        const language = expectElementKind(
+          await app.getById('global_settings_general_ui_language_combo'),
+          'comboBox'
+        );
+        await language.selectChildAt(0);
+        await expectElementKind(
+          await app.getById('global_defaults_save_button'),
+          'button'
+        ).click();
+
+        await waitForWindowCount(app, 2);
+        expect(
+          (await (await app.getById('ui_language_restart_later_button')).info())
+            .name
+        ).toBe('後で');
+        const restart = expectElementKind(
+          await app.getById('ui_language_restart_now_button'),
+          'button'
+        );
+        expect((await restart.info()).name).toBe('今すぐ再起動');
+        await restart.click();
+
+        await waitForResult(async () => {
+          expect(
+            (await (await app.getById('global_defaults_button')).info()).name
+          ).toBe('Global defaults');
+        });
+      },
+      {
+        args: [],
+        env: {
+          ELDER_TERMS_LOCALE_DIR:
+            japaneseTestEnvironment.ELDER_TERMS_LOCALE_DIR,
+        },
+      }
+    );
+  });
+
+  it('confirms before restarting with dirty connection edits', async (context) => {
+    await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
+      await selectConnectionRow(app, await app.getById('connection_list'), 0);
+      const width = expectElementKind(
+        await app.getById('settings_terminal_width_entry'),
+        'entry'
+      );
+      await width.setText('99');
+
+      await openGlobalDefaults(app);
+      await expectElementKind(
+        await app.getById('global_settings_general_ui_language_combo'),
+        'comboBox'
+      ).selectChildAt(2);
+      await expectElementKind(
+        await app.getById('global_defaults_save_button'),
+        'button'
+      ).click();
+      await waitForWindowCount(app, 2);
+      await expectElementKind(
+        await app.getById('ui_language_restart_now_button'),
+        'button'
+      ).click();
+
+      await waitForWindowCount(app, 2);
+      expectElementKind(await app.getById('discard_changes_dialog'), 'infoBar');
+      await expectElementKind(
+        await app.getById('cancel_discard_button'),
+        'button'
+      ).click();
+      await waitForWindowCount(app, 1);
+      expect(await width.text()).toBe('99');
+    });
+  });
+
   it('starts unselected in a resizable split layout', async (context) => {
     await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
       expect(await app.getWindowCount()).toBe(1);
@@ -734,6 +864,11 @@ describe('elder-terms main window', () => {
       },
       async ({ app }) => {
         await openGlobalDefaults(app);
+        const language = expectElementKind(
+          await app.getById('global_settings_general_ui_language_combo'),
+          'comboBox'
+        );
+        await language.selectChildAt(2);
         await selectSettingsTab(app, 'global_settings', 'Terminal');
         const width = expectElementKind(
           await app.getById('global_settings_terminal_width_entry'),
@@ -758,6 +893,9 @@ describe('elder-terms main window', () => {
           await app.getById('global_defaults_dialog'),
           'window'
         );
+        expect(
+          await app.findById('ui_language_restart_dialog')
+        ).toBeUndefined();
         expect(await width.text()).toBe('95');
         await expectSensitive(save);
       }
