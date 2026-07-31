@@ -275,6 +275,53 @@ const readLaunchCapture = async (path: string): Promise<LaunchCapture> =>
   JSON.parse(await readFile(path, 'utf8')) as LaunchCapture;
 
 describe('elder-terms main window', () => {
+  it('uses a Japanese global UI language from a C UTF-8 environment', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await prepareProfiles(connections);
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[general]\nui_language=ja\n'
+        );
+      },
+      async ({ app }) => {
+        expect(
+          (await (await app.getById('global_defaults_button')).info()).name
+        ).toBe('グローバル既定値');
+      },
+      {
+        args: [],
+        env: {
+          ELDER_TERMS_LOCALE_DIR:
+            japaneseTestEnvironment.ELDER_TERMS_LOCALE_DIR,
+        },
+      }
+    );
+  });
+
+  it('uses an English global UI language from a Japanese environment', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await prepareProfiles(connections);
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[general]\nui_language=en\n'
+        );
+      },
+      async ({ app }) => {
+        expect(
+          (await (await app.getById('global_defaults_button')).info()).name
+        ).toBe('Global defaults');
+      },
+      {
+        args: [],
+        env: japaneseTestEnvironment,
+      }
+    );
+  });
+
   it('localizes launcher settings surfaces into Japanese', async (context) => {
     await runLauncherGtkTest(
       context,

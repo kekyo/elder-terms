@@ -39,6 +39,7 @@ using elder_terms::general_type_setting_key;
 using elder_terms::key_binding_matches;
 using elder_terms::parse_key_binding;
 using elder_terms::load_global_settings;
+using elder_terms::load_application_ui_language_preference;
 using elder_terms::load_settings;
 using elder_terms::LocalShellConnectionSettings;
 using elder_terms::terminal_log_base_directory_setting_key;
@@ -2287,6 +2288,9 @@ static void test_application_settings_are_global_only() {
                "startup_mode=tray\n"
                "open_application=\n");
   SettingsLoadResult global = load_global_settings(global_path, 1.0);
+  expect_true(load_application_ui_language_preference(global_path) ==
+                  ApplicationUiLanguage::japanese,
+              "the startup preference reader should select Japanese");
   expect_true(application_ui_language(global.store) ==
                   ApplicationUiLanguage::japanese,
               "global.ini should select Japanese UI text");
@@ -2337,6 +2341,9 @@ static void test_application_settings_are_global_only() {
                "startup_mode=background\n"
                "open_application=t\n");
   const SettingsLoadResult invalid = load_global_settings(invalid_path, 1.0);
+  expect_true(load_application_ui_language_preference(invalid_path) ==
+                  ApplicationUiLanguage::system,
+              "the startup preference reader should reject unknown values");
   remove_config(invalid_path);
   expect_true(application_startup_mode(invalid.store) == StartupMode::window,
               "an invalid startup mode should use the built-in default");
@@ -2403,6 +2410,9 @@ static void test_application_settings_are_global_only() {
                   std::string(application_ui_language_to_string(
                       ApplicationUiLanguage::japanese)) == "ja",
               "UI languages should expose stable configuration values");
+  expect_true(load_application_ui_language_preference(missing_path) ==
+                  ApplicationUiLanguage::system,
+              "a missing startup preference should follow the system");
 }
 
 static void test_connection_open_hotkey_settings() {

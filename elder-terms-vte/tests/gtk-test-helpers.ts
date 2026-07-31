@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -236,6 +236,8 @@ export interface TransferProgressBarValue {
 export interface RunGtkTestOptions {
   /** Environment overrides, including the isolated XDG config home. */
   readonly env?: GtkAppLauncherOptions['env'];
+  /** Optional global.ini contents written before the application starts. */
+  readonly globalSettings?: string;
   /** Additional output callback invoked for launched GTK app stdout/stderr. */
   readonly onOutput?: (event: GtkAppOutputEvent) => void;
 }
@@ -696,6 +698,15 @@ export const runGtkTest = async (
     join(tmpdir(), 'elder-terms-vte-xdg-config-')
   );
   try {
+    if (options?.globalSettings !== undefined) {
+      const globalDirectory = join(configHome, 'elder-terms');
+      await mkdir(globalDirectory, { recursive: true });
+      await writeFile(
+        join(globalDirectory, 'global.ini'),
+        options.globalSettings,
+        'utf8'
+      );
+    }
     const evidence = createTestEvidence(context);
     const launcher = createGtkAppLauncher({
       appPath,

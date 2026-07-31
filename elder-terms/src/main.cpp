@@ -1662,8 +1662,15 @@ static void on_application_shutdown(GApplication *,
 } // namespace
 
 int main(int argc, char **argv) {
-  std::setlocale(LC_ALL, "");
-  elder_terms::initialize_localization();
+  const elder_terms::ApplicationUiLanguage ui_language =
+      elder_terms::load_application_ui_language_preference(
+          elder_terms::default_global_config_path());
+  const elder_terms::LocalizationInitializationResult localization =
+      elder_terms::initialize_localization(ui_language);
+  for (const std::string &warning : localization.warnings) {
+    std::cerr << warning << '\n';
+  }
+  gtk_disable_setlocale();
   gtk_init(&argc, &argv);
   cardio::dispatcher_group_glib dispatcher_group;
   cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);

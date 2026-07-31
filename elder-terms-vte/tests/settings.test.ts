@@ -613,6 +613,49 @@ const connectionStatusTextMask = async (
 };
 
 describe.concurrent('elder-terms-vte settings', () => {
+  it('uses a Japanese global UI language from a C UTF-8 environment', async (context) => {
+    await runGtkTest(
+      context,
+      ['--test-fixture'],
+      async (app) => {
+        const settingsButton = expectElementKind(
+          await app.getById('settings_button'),
+          'button'
+        );
+        await waitForResult(async () => {
+          expect((await settingsButton.info()).description).toBe('設定');
+        });
+      },
+      {
+        env: {
+          ELDER_TERMS_LOCALE_DIR:
+            japaneseTestEnvironment.ELDER_TERMS_LOCALE_DIR,
+        },
+        globalSettings: '[general]\nui_language=ja\n',
+      }
+    );
+  });
+
+  it('uses an English global UI language from a Japanese environment', async (context) => {
+    await runGtkTest(
+      context,
+      ['--test-fixture'],
+      async (app) => {
+        const settingsButton = expectElementKind(
+          await app.getById('settings_button'),
+          'button'
+        );
+        await waitForResult(async () => {
+          expect((await settingsButton.info()).description).toBe('Settings');
+        });
+      },
+      {
+        env: japaneseTestEnvironment,
+        globalSettings: '[general]\nui_language=en\n',
+      }
+    );
+  });
+
   it('localizes runtime settings surfaces into Japanese', async (context) => {
     await runGtkTest(
       context,

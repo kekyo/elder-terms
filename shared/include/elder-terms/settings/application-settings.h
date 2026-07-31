@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -90,6 +91,20 @@ application_ui_language_to_string(ApplicationUiLanguage language);
  */
 ELDER_TERMS_API ApplicationUiLanguage
 application_ui_language(const SettingsStore &store);
+
+/**
+ * Reads the application UI language needed before the full settings load.
+ *
+ * @param global_config_path Global defaults INI path.
+ * @returns A supported configured language, or the system language when the
+ * file, key, or value cannot be read.
+ *
+ * @remarks This best-effort read intentionally does not report configuration
+ * warnings. The later full settings load remains responsible for diagnostics.
+ */
+ELDER_TERMS_API ApplicationUiLanguage
+load_application_ui_language_preference(
+    const std::filesystem::path &global_config_path);
 
 /**
  * Extracts the effective launcher startup mode.

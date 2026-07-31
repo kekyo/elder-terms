@@ -20,6 +20,7 @@
 #include <gestament/gtk.h>
 
 #include <elder-terms/localization.h>
+#include <elder-terms/settings/application-settings.h>
 #include <elder-terms/settings.h>
 #include <elder-terms/settings-widget.h>
 
@@ -1214,8 +1215,15 @@ static void install_transfer_menu(ApplicationState *state) {
 }
 
 int main(int argc, char **argv) {
-  std::setlocale(LC_ALL, "");
-  elder_terms::initialize_localization();
+  const elder_terms::ApplicationUiLanguage ui_language =
+      elder_terms::load_application_ui_language_preference(
+          elder_terms::default_global_config_path());
+  const elder_terms::LocalizationInitializationResult localization =
+      elder_terms::initialize_localization(ui_language);
+  for (const std::string &warning : localization.warnings) {
+    std::cerr << warning << '\n';
+  }
+  gtk_disable_setlocale();
   const auto launch_options =
     elder_terms::parse_launch_options(&argc, argv);
   gtk_init(&argc, &argv);

@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include <glib.h>
+
 namespace elder_terms {
 
 static constexpr char general_section[] = "general";
@@ -15,6 +17,16 @@ static constexpr char system_language[] = "system";
 static constexpr char english_language[] = "en";
 static constexpr char japanese_language[] = "ja";
 static constexpr char default_open_application[] = "ctrl+alt+t";
+
+static ApplicationUiLanguage parse_ui_language(const char *value) {
+  if (value != nullptr && std::string(value) == english_language) {
+    return ApplicationUiLanguage::english;
+  }
+  if (value != nullptr && std::string(value) == japanese_language) {
+    return ApplicationUiLanguage::japanese;
+  }
+  return ApplicationUiLanguage::system;
+}
 
 static bool validate_ui_language(const SettingValue &value,
                                  std::string *reason) {
@@ -97,13 +109,31 @@ application_ui_language_to_string(ApplicationUiLanguage language) {
 ApplicationUiLanguage application_ui_language(const SettingsStore &store) {
   const std::string value = setting_string_value_or_default(
       store, application_ui_language_setting_key(), system_language);
-  if (value == english_language) {
-    return ApplicationUiLanguage::english;
+  return parse_ui_language(value.c_str());
+}
+
+ApplicationUiLanguage load_application_ui_language_preference(
+    const std::filesystem::path &global_config_path) {
+  GKeyFile *key_file = g_key_file_new();
+  GError *error = nullptr;
+  if (!g_key_file_load_from_file(key_file, global_config_path.c_str(),
+                                 G_KEY_FILE_NONE, &error)) {
+    g_clear_error(&error);
+    g_key_file_unref(key_file);
+    return ApplicationUiLanguage::system;
   }
-  if (value == japanese_language) {
-    return ApplicationUiLanguage::japanese;
+
+  gchar *value = g_key_file_get_string(
+      key_file, general_section, ui_language_key, &error);
+  if (error != nullptr) {
+    g_clear_error(&error);
+    g_key_file_unref(key_file);
+    return ApplicationUiLanguage::system;
   }
-  return ApplicationUiLanguage::system;
+  const ApplicationUiLanguage language = parse_ui_language(value);
+  g_free(value);
+  g_key_file_unref(key_file);
+  return language;
 }
 
 const char *startup_mode_to_string(StartupMode mode) {

@@ -721,8 +721,13 @@ static void on_window_destroy(GtkWidget *, gpointer data) {
 
 int main(int argc, char **argv) {
   try {
-    std::setlocale(LC_ALL, "");
-    elder_terms::initialize_localization();
+    const elder_terms::LocalizationInitializationResult localization =
+        elder_terms::initialize_localization(
+            elder_terms::ApplicationUiLanguage::system);
+    for (const std::string &warning : localization.warnings) {
+      std::cerr << warning << '\n';
+    }
+    gtk_disable_setlocale();
     gtk_init(&argc, &argv);
     const elder_terms_settings_widget_fixture::FixtureOptions options =
         elder_terms_settings_widget_fixture::parse_options(argc, argv);
