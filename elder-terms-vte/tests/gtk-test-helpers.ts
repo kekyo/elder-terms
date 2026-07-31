@@ -700,6 +700,8 @@ export const runGtkTest = async (
     const launcher = createGtkAppLauncher({
       appPath,
       env: {
+        LANGUAGE: 'C',
+        LC_ALL: 'C.UTF-8',
         XDG_CONFIG_HOME: configHome,
         ...options?.env,
       },

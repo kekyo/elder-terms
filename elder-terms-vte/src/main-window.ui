@@ -15,7 +15,7 @@
           <object class="GtkButton" id="settings_button">
             <property name="visible">True</property>
             <property name="can-focus">True</property>
-            <property name="tooltip-text">Settings</property>
+            <property name="tooltip-text" translatable="yes">Settings</property>
             <child>
               <object class="GtkImage" id="settings_button_image">
                 <property name="visible">True</property>

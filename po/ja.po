@@ -314,3 +314,9 @@ msgstr "ログファイル名を指定してください"
 
 msgid "Invalid value"
 msgstr "無効な値です"
+
+msgid "Settings"
+msgstr "設定"
+
+msgid "Global defaults"
+msgstr "グローバル既定値"

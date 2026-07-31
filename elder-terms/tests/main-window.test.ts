@@ -16,6 +16,14 @@ import { waitForResult } from 'gestament/testing';
 import { describe, expect, it } from 'vitest';
 import { expectElementKind, runLauncherGtkTest } from './test-helpers';
 
+const japaneseTestEnvironment = {
+  ELDER_TERMS_LOCALE_DIR: fileURLToPath(
+    new URL('../../.build/po/', import.meta.url)
+  ),
+  LANGUAGE: 'ja',
+  LC_ALL: 'ja_JP.UTF-8',
+} as const;
+
 const selectConnectionRow = async (
   app: GtkApp,
   element: GtkWidgetElement,
@@ -267,6 +275,52 @@ const readLaunchCapture = async (path: string): Promise<LaunchCapture> =>
   JSON.parse(await readFile(path, 'utf8')) as LaunchCapture;
 
 describe('elder-terms main window', () => {
+  it('localizes launcher settings surfaces into Japanese', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app }) => {
+        expect(
+          (await (await app.getById('global_defaults_button')).info()).name
+        ).toBe('グローバル既定値');
+        expect((await (await app.getById('apply_button')).info()).name).toBe(
+          '適用'
+        );
+
+        const dialog = await openGlobalDefaults(app);
+        await waitForResult(async () => {
+          expect((await dialog.x11Info()).title).toBe('グローバル既定値');
+          expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual(
+            [
+              '一般',
+              'TELNET',
+              'シリアル',
+              'SSH',
+              'SFTP',
+              '端末',
+              '転送',
+              'ログ',
+            ]
+          );
+        });
+        expect(
+          (await (await app.getById('global_defaults_save_button')).info()).name
+        ).toBe('保存');
+        const cancel = expectElementKind(
+          await app.getById('global_defaults_cancel_button'),
+          'button'
+        );
+        expect((await cancel.info()).name).toBe('キャンセル');
+        await cancel.click();
+        await waitForWindowCount(app, 1);
+      },
+      {
+        args: [],
+        env: japaneseTestEnvironment,
+      }
+    );
+  });
+
   it('starts unselected in a resizable split layout', async (context) => {
     await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
       expect(await app.getWindowCount()).toBe(1);

@@ -58,6 +58,13 @@ const connectionColorsSettingsFixturePath = fileURLToPath(
 const connectionColorsSettingsDropdownFixturePath = fileURLToPath(
   new URL('./fixtures/connection-colors-settings-dropdown.png', import.meta.url)
 );
+const japaneseTestEnvironment = {
+  ELDER_TERMS_LOCALE_DIR: fileURLToPath(
+    new URL('../../.build/po/', import.meta.url)
+  ),
+  LANGUAGE: 'ja',
+  LC_ALL: 'ja_JP.UTF-8',
+} as const;
 const connectionStatusTextMaskWidth = 200;
 
 const shellQuote = (value: string): string =>
@@ -606,6 +613,45 @@ const connectionStatusTextMask = async (
 };
 
 describe.concurrent('elder-terms-vte settings', () => {
+  it('localizes runtime settings surfaces into Japanese', async (context) => {
+    await runGtkTest(
+      context,
+      ['--test-fixture'],
+      async (app) => {
+        const settingsButton = expectElementKind(
+          await app.getById('settings_button'),
+          'button'
+        );
+        await waitForResult(async () => {
+          expect((await settingsButton.info()).description).toBe('設定');
+        });
+
+        await openSettingsDialog(app);
+        const dialog = expectElementKind(
+          await app.getById('settings_dialog'),
+          'window'
+        );
+        await waitForResult(async () => {
+          expect((await dialog.x11Info()).title).toBe('設定');
+          expect(await selectedSettingsTabName(app)).toBe('一般');
+        });
+        expect(
+          (await (await app.getById('settings_apply_button')).info()).name
+        ).toBe('適用');
+        const cancel = expectElementKind(
+          await app.getById('settings_cancel_button'),
+          'button'
+        );
+        expect((await cancel.info()).name).toBe('キャンセル');
+        await cancel.click();
+        await expectSettingsDialogClosed(app);
+      },
+      {
+        env: japaneseTestEnvironment,
+      }
+    );
+  });
+
   it('shows an explicit connection name with the backend status', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'named.ini');

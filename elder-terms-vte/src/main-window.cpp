@@ -1128,6 +1128,7 @@ std::optional<MainWindow> load_main_window() {
   MainWindow main_window;
   GError *error = nullptr;
   main_window.builder = gtk_builder_new();
+  gtk_builder_set_translation_domain(main_window.builder, "elder-terms");
   const std::filesystem::path builder_file = ui_path();
   if (!gtk_builder_add_from_file(main_window.builder, builder_file.c_str(),
                                  &error)) {

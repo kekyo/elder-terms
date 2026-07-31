@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <clocale>
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
@@ -14,9 +15,13 @@
 #include <glib/gstdio.h>
 #include <gtk/gtk.h>
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 #include <unistd.h>
 
 #include <cardio.h>
+#include <elder-terms/localization.h>
 #include <elder-terms/settings/application-settings.h>
 #include <elder-terms/settings-widget.h>
 #include <elder-terms/settings.h>
@@ -318,7 +323,7 @@ static void open_global_defaults_dialog(ApplicationState *state) {
 
   GtkWidget *dialog = gtk_dialog_new();
   gestament_gtk_assign_accessible_id(dialog, "global_defaults_dialog");
-  gtk_window_set_title(GTK_WINDOW(dialog), "Global defaults");
+  gtk_window_set_title(GTK_WINDOW(dialog), _("Global defaults"));
   gtk_window_set_transient_for(GTK_WINDOW(dialog),
                                GTK_WINDOW(state->main_window->window));
   gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
@@ -337,8 +342,8 @@ static void open_global_defaults_dialog(ApplicationState *state) {
 
   GtkWidget *spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_widget_set_hexpand(spacer, TRUE);
-  GtkWidget *cancel = gtk_button_new_with_label("Cancel");
-  GtkWidget *save = gtk_button_new_with_label("Save");
+  GtkWidget *cancel = gtk_button_new_with_label(_("Cancel"));
+  GtkWidget *save = gtk_button_new_with_label(_("Save"));
   gestament_gtk_assign_accessible_id(cancel,
                                      "global_defaults_cancel_button");
   gestament_gtk_assign_accessible_id(save, "global_defaults_save_button");
@@ -1657,6 +1662,8 @@ static void on_application_shutdown(GApplication *,
 } // namespace
 
 int main(int argc, char **argv) {
+  std::setlocale(LC_ALL, "");
+  elder_terms::initialize_localization();
   gtk_init(&argc, &argv);
   cardio::dispatcher_group_glib dispatcher_group;
   cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);

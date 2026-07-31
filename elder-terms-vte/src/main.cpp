@@ -1,3 +1,4 @@
+#include <clocale>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -12,9 +13,13 @@
 #include <gtk/gtk.h>
 #include <vte/vte.h>
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 #include <cardio.h>
 #include <gestament/gtk.h>
 
+#include <elder-terms/localization.h>
 #include <elder-terms/settings.h>
 #include <elder-terms/settings-widget.h>
 
@@ -515,11 +520,11 @@ static void open_settings_dialog(ApplicationState *state) {
 
   GtkWidget *dialog = gtk_dialog_new();
   gestament_gtk_assign_accessible_id(dialog, "settings_dialog");
-  gtk_window_set_title(GTK_WINDOW(dialog), "Settings");
+  gtk_window_set_title(GTK_WINDOW(dialog), _("Settings"));
   GtkWidget *header_bar = gtk_header_bar_new();
   gestament_gtk_assign_accessible_id(
       header_bar, "settings_dialog_header_bar");
-  gtk_header_bar_set_title(GTK_HEADER_BAR(header_bar), "Settings");
+  gtk_header_bar_set_title(GTK_HEADER_BAR(header_bar), _("Settings"));
   gtk_header_bar_set_show_close_button(
       GTK_HEADER_BAR(header_bar), TRUE);
   gtk_window_set_titlebar(GTK_WINDOW(dialog), header_bar);
@@ -1209,6 +1214,8 @@ static void install_transfer_menu(ApplicationState *state) {
 }
 
 int main(int argc, char **argv) {
+  std::setlocale(LC_ALL, "");
+  elder_terms::initialize_localization();
   const auto launch_options =
     elder_terms::parse_launch_options(&argc, argv);
   gtk_init(&argc, &argv);

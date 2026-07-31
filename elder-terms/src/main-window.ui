@@ -126,7 +126,7 @@
                 <child>
                   <object class="GtkButton" id="global_defaults_button">
                     <property name="visible">True</property>
-                    <property name="label">Global defaults</property>
+                    <property name="label" translatable="yes">Global defaults</property>
                   </object>
                 </child>
                 <child>
@@ -143,7 +143,7 @@
                   <object class="GtkButton" id="apply_button">
                     <property name="visible">True</property>
                     <property name="sensitive">False</property>
-                    <property name="label">Apply</property>
+                    <property name="label" translatable="yes">Apply</property>
                   </object>
                 </child>
                 <child>

@@ -34,6 +34,7 @@ static GObject *required_object(GtkBuilder *builder, const char *id,
 
 std::optional<LauncherMainWindow> load_launcher_main_window() {
   GtkBuilder *builder = gtk_builder_new();
+  gtk_builder_set_translation_domain(builder, "elder-terms");
   const std::filesystem::path path =
       executable_directory() / "main-window.ui";
   GError *error = nullptr;
