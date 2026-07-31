@@ -6,6 +6,10 @@ elder_terms_symbol_map = meson.current_source_dir() / 'elder-terms.map'
 
 elder_terms_localization_configuration = configuration_data()
 elder_terms_localization_configuration.set_quoted(
+  'ELDER_TERMS_BUILD_LOCALE_DIR',
+  meson.project_build_root() / 'po',
+)
+elder_terms_localization_configuration.set_quoted(
   'ELDER_TERMS_LOCALE_DIR',
   get_option('prefix') / get_option('localedir'),
 )

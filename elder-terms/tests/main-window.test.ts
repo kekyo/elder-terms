@@ -275,7 +275,7 @@ const readLaunchCapture = async (path: string): Promise<LaunchCapture> =>
   JSON.parse(await readFile(path, 'utf8')) as LaunchCapture;
 
 describe('elder-terms main window', () => {
-  it('uses a Japanese global UI language from a C UTF-8 environment', async (context) => {
+  it('uses a Japanese global UI language from a C UTF-8 build-tree environment', async (context) => {
     await runLauncherGtkTest(
       context,
       async (connections) => {
@@ -289,13 +289,6 @@ describe('elder-terms main window', () => {
         expect(
           (await (await app.getById('global_defaults_button')).info()).name
         ).toBe('グローバル既定値');
-      },
-      {
-        args: [],
-        env: {
-          ELDER_TERMS_LOCALE_DIR:
-            japaneseTestEnvironment.ELDER_TERMS_LOCALE_DIR,
-        },
       }
     );
   });

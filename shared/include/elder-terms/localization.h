@@ -26,8 +26,9 @@ struct LocalizationInitializationResult {
  *
  * @remarks Call this before GTK initialization or any translated text lookup.
  * The ELDER_TERMS_LOCALE_DIR environment variable may override the installed
- * locale directory for development and tests. Call gtk_disable_setlocale()
- * before gtk_init() so GTK preserves the selected locale.
+ * or automatically detected build-tree locale directory. Call
+ * gtk_disable_setlocale() before gtk_init() so GTK preserves the selected
+ * locale.
  */
 ELDER_TERMS_API LocalizationInitializationResult
 initialize_localization(ApplicationUiLanguage language);

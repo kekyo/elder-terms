@@ -2,6 +2,7 @@
 
 #include <clocale>
 #include <cstdlib>
+#include <filesystem>
 #include <string>
 
 #include <glib.h>
@@ -28,6 +29,39 @@ static bool is_c_message_locale(const char *locale) {
 static bool select_japanese_message_locale() {
   return std::setlocale(LC_MESSAGES, "ja_JP.UTF-8") != nullptr ||
          std::setlocale(LC_MESSAGES, "ja_JP.utf8") != nullptr;
+}
+
+static bool path_is_within(const std::filesystem::path &path,
+                           const std::filesystem::path &directory) {
+  auto path_component = path.begin();
+  for (const auto &directory_component : directory) {
+    if (path_component == path.end() ||
+        *path_component != directory_component) {
+      return false;
+    }
+    ++path_component;
+  }
+  return true;
+}
+
+static bool is_running_from_build_tree() {
+  std::error_code error;
+  const std::filesystem::path executable =
+      std::filesystem::read_symlink("/proc/self/exe", error);
+  if (error) {
+    return false;
+  }
+
+  const std::filesystem::path build_root =
+      std::filesystem::weakly_canonical(
+          std::filesystem::path(ELDER_TERMS_BUILD_LOCALE_DIR).parent_path(),
+          error);
+  return !error && path_is_within(executable, build_root);
+}
+
+static const char *default_locale_directory() {
+  return is_running_from_build_tree() ? ELDER_TERMS_BUILD_LOCALE_DIR
+                                      : ELDER_TERMS_LOCALE_DIR;
 }
 
 LocalizationInitializationResult
@@ -65,7 +99,7 @@ initialize_localization(ApplicationUiLanguage language) {
   const char *locale_directory =
       override_directory != nullptr && override_directory[0] != '\0'
           ? override_directory
-          : ELDER_TERMS_LOCALE_DIR;
+          : default_locale_directory();
   bindtextdomain(gettext_package, locale_directory);
   bind_textdomain_codeset(gettext_package, "UTF-8");
   return result;
