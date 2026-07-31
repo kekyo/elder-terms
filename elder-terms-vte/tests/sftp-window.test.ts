@@ -157,10 +157,11 @@ const findRow = async (table: GtkTableElement, name: string): Promise<number> =>
     throw new Error(`SFTP row was not found: ${name}`);
   });
 
-const clickTreeExpander = async (
+const clickTreeRowAtHorizontalOffset = async (
   app: GtkApp,
   table: GtkTableElement,
-  row: number
+  row: number,
+  horizontalOffset: number
 ): Promise<void> => {
   const tableCapture = await table.capture();
   const cell = await table.cellAt(row, 0);
@@ -168,13 +169,21 @@ const clickTreeExpander = async (
   if (cellCapture === undefined) {
     throw new Error(`SFTP row ${row} did not expose bounds`);
   }
-  // GtkTreeView exposes the row through AT-SPI, but not its expander.
   await app.input.moveMouseTo(
-    tableCapture.bounds.x + 10,
+    tableCapture.bounds.x + horizontalOffset,
     Math.round(cellCapture.bounds.y + cellCapture.bounds.height / 2)
   );
   await app.input.setMouseButton('left', true);
   await app.input.setMouseButton('left', false);
+};
+
+const clickTreeExpander = async (
+  app: GtkApp,
+  table: GtkTableElement,
+  row: number
+): Promise<void> => {
+  // GtkTreeView exposes the row through AT-SPI, but not its expander.
+  await clickTreeRowAtHorizontalOffset(app, table, row, 10);
 };
 
 const captureRowBounds = async (
@@ -580,6 +589,66 @@ describe('SFTP window', () => {
         expect(
           (await (await localTree.cellAt(documentsRow, 0))?.info())?.states
         ).toContain('expanded');
+      }
+    );
+  });
+
+  it('opens and closes a directory from the enlarged expander target', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      ['treeview.view {', '  -GtkTreeView-expander-size: 12;', '}', ''].join(
+        '\n'
+      ),
+      async ({ app, localDirectory }) => {
+        await mkdir(join(localDirectory, 'documents', 'nested', 'deeper'), {
+          recursive: true,
+        });
+
+        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const documentsRow = await findRow(localTree, 'documents');
+        const initialRowCount = await localTree.getRowCount();
+
+        await clickTreeRowAtHorizontalOffset(app, localTree, documentsRow, 22);
+        await waitForResult(async () => {
+          expect(await localTree.getRowCount()).toBe(initialRowCount + 1);
+          expect(
+            (await (await localTree.cellAt(documentsRow, 0))?.info())?.states
+          ).toContain('expanded');
+        });
+
+        const nestedRow = await findRow(localTree, 'nested');
+        await clickTreeRowAtHorizontalOffset(app, localTree, nestedRow, 30);
+        await waitForResult(async () => {
+          expect(await localTree.getRowCount()).toBe(initialRowCount + 2);
+          expect(
+            (await (await localTree.cellAt(nestedRow, 0))?.info())?.states
+          ).toContain('expanded');
+        });
+
+        await clickTreeRowAtHorizontalOffset(app, localTree, nestedRow, 30);
+        await waitForResult(async () => {
+          expect(await localTree.getRowCount()).toBe(initialRowCount + 1);
+          expect(
+            (await (await localTree.cellAt(nestedRow, 0))?.info())?.states
+          ).not.toContain('expanded');
+        });
+
+        await clickTreeRowAtHorizontalOffset(app, localTree, documentsRow, 22);
+        await waitForResult(async () => {
+          expect(await localTree.getRowCount()).toBe(initialRowCount);
+          expect(
+            (await (await localTree.cellAt(documentsRow, 0))?.info())?.states
+          ).not.toContain('expanded');
+        });
+
+        const fileRow = await findRow(localTree, 'hello.txt');
+        await clickTreeRowAtHorizontalOffset(app, localTree, fileRow, 22);
+        expect(await localTree.getRowCount()).toBe(initialRowCount);
+        expect(
+          (await (await localTree.cellAt(fileRow, 0))?.info())?.states
+        ).not.toContain('expanded');
       }
     );
   });

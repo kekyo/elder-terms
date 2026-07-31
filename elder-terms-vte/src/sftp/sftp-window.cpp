@@ -34,6 +34,7 @@ static constexpr const char *sftp_exterior_component_style_class =
 static constexpr int sftp_content_padding = 12;
 static constexpr int sftp_pane_spacing = 12;
 static constexpr int sftp_control_spacing = 8;
+static constexpr int sftp_tree_expander_minimum_hit_width = 24;
 
 enum SftpTreeColumn {
   sftp_tree_name_column = 0,
@@ -985,11 +986,120 @@ selected_sftp_paths(SftpPaneState *pane) {
   return paths;
 }
 
+static bool is_sftp_tree_expander_extension(
+    GtkTreeView *tree, GtkTreePath *path,
+    GtkTreeViewColumn *column, int x) {
+  if (!gtk_tree_view_get_show_expanders(tree) ||
+      column != gtk_tree_view_get_expander_column(tree)) {
+    return false;
+  }
+
+  GtkTreeModel *model = gtk_tree_view_get_model(tree);
+  GtkTreeIter iterator;
+  if (model == nullptr ||
+      !gtk_tree_model_get_iter(model, &iterator, path) ||
+      !gtk_tree_model_iter_has_child(model, &iterator)) {
+    return false;
+  }
+
+  int expander_size = 0;
+  int horizontal_separator = 0;
+  gboolean indent_expanders = TRUE;
+  gtk_widget_style_get(
+      GTK_WIDGET(tree), "expander-size", &expander_size,
+      "horizontal-separator", &horizontal_separator,
+      "indent-expanders", &indent_expanders, nullptr);
+  if (expander_size <= 0) {
+    return false;
+  }
+
+  // GTK exposes the column background but not the native expander
+  // rectangle. Rebuild its horizontal range from the same style values
+  // and extend only the space outside it, preserving GTK's own handling
+  // inside the chevron for both LTR and RTL layouts.
+  GdkRectangle background_area = {};
+  gtk_tree_view_get_background_area(
+      tree, path, column, &background_area);
+  const int target_width = std::min(
+      background_area.width,
+      std::max(expander_size,
+               sftp_tree_expander_minimum_hit_width));
+  if (target_width <= expander_size) {
+    return false;
+  }
+
+  const int depth = gtk_tree_path_get_depth(path);
+  const int expander_stride =
+      expander_size + std::max(0, horizontal_separator) / 2;
+  const int depth_offset =
+      indent_expanders != FALSE
+          ? std::max(0, depth - 1) * expander_stride
+          : 0;
+  const bool right_to_left =
+      gtk_widget_get_direction(GTK_WIDGET(tree)) ==
+      GTK_TEXT_DIR_RTL;
+  const int expander_x =
+      right_to_left
+          ? background_area.x + background_area.width -
+                expander_size - depth_offset
+          : background_area.x +
+                std::max(0, horizontal_separator) / 2 +
+                depth_offset;
+
+  int target_x =
+      expander_x - (target_width - expander_size) / 2;
+  target_x = std::clamp(
+      target_x, background_area.x,
+      background_area.x + background_area.width - target_width);
+  const bool inside_target =
+      x >= target_x && x < target_x + target_width;
+  const bool inside_native_expander =
+      x >= expander_x && x < expander_x + expander_size;
+  return inside_target && !inside_native_expander;
+}
+
+static gboolean toggle_sftp_tree_expander_extension(
+    GtkWidget *widget, GdkEventButton *event) {
+  auto *tree = GTK_TREE_VIEW(widget);
+  if (event->button != GDK_BUTTON_PRIMARY ||
+      event->window != gtk_tree_view_get_bin_window(tree)) {
+    return FALSE;
+  }
+
+  GtkTreePath *path = nullptr;
+  GtkTreeViewColumn *column = nullptr;
+  if (!gtk_tree_view_get_path_at_pos(
+          tree, static_cast<gint>(event->x),
+          static_cast<gint>(event->y), &path, &column, nullptr,
+          nullptr)) {
+    return FALSE;
+  }
+  const bool inside_extension =
+      is_sftp_tree_expander_extension(
+          tree, path, column, static_cast<int>(event->x));
+  if (inside_extension) {
+    if (gtk_tree_view_row_expanded(tree, path)) {
+      gtk_tree_view_collapse_row(tree, path);
+    } else {
+      gtk_tree_view_expand_row(tree, path, FALSE);
+    }
+    gtk_widget_grab_focus(widget);
+  }
+  gtk_tree_path_free(path);
+  return inside_extension ? TRUE : FALSE;
+}
+
 static gboolean on_sftp_tree_button_press(
     GtkWidget *widget, GdkEventButton *event, gpointer data) {
   auto *pane = static_cast<SftpPaneState *>(data);
-  if (event->type != GDK_BUTTON_PRESS || event->button != 3 ||
-      pane == nullptr || pane->window->transfer_active ||
+  if (event->type != GDK_BUTTON_PRESS || pane == nullptr) {
+    return FALSE;
+  }
+  if (toggle_sftp_tree_expander_extension(widget, event)) {
+    return TRUE;
+  }
+  if (event->button != GDK_BUTTON_SECONDARY ||
+      pane->window->transfer_active ||
       (pane->remote &&
        !pane->window->connection_available)) {
     return FALSE;
