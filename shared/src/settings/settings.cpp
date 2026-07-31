@@ -301,7 +301,7 @@ create_global_default_settings(TerminalDisplaySettings terminal_defaults) {
   SettingsStore connection =
       create_default_settings(std::move(terminal_defaults), "elder-terms");
   std::vector<SettingDefinition> definitions;
-  definitions.reserve(connection.entries.size() + 2);
+  definitions.reserve(connection.entries.size() + 3);
   for (SettingEntry &entry : connection.entries) {
     if (is_connection_only_entry(entry)) {
       continue;
@@ -350,6 +350,11 @@ load_global_settings(const std::filesystem::path &global_config_path,
   result.loaded =
       load_settings_file(&result.store, global_config_path, true, true,
                          &result.warnings);
+  if (application_ui_language(result.store) ==
+      ApplicationUiLanguage::system) {
+    clear_explicit_setting_value(
+        &result.store, application_ui_language_setting_key());
+  }
   resolve_terminal_key_binding_conflict(&result.store, built_in,
                                         &result.warnings);
   mark_settings_store_clean(&result.store);

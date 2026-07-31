@@ -21,6 +21,9 @@ msgstr "接続方式"
 msgid "Open connection shortcut"
 msgstr "接続を開くショートカット"
 
+msgid "Display language"
+msgstr "表示言語"
+
 msgid "Startup mode"
 msgstr "起動モード"
 
@@ -137,6 +140,15 @@ msgstr "SSH"
 
 msgid "SFTP"
 msgstr "SFTP"
+
+msgid "System default"
+msgstr "システム設定"
+
+msgid "English"
+msgstr "English"
+
+msgid "日本語"
+msgstr "日本語"
 
 msgid "Simple startup"
 msgstr "シンプル起動"

@@ -11,6 +11,18 @@
 namespace elder_terms {
 
 /**
+ * Selects the language used for application UI text.
+ */
+enum class ApplicationUiLanguage {
+  /** Follows the process environment configured by the operating system. */
+  system,
+  /** Uses English source messages. */
+  english,
+  /** Uses the Japanese message catalog. */
+  japanese,
+};
+
+/**
  * Selects the launcher presentation used at application startup.
  */
 enum class StartupMode {
@@ -40,6 +52,13 @@ application_setting_definitions();
 ELDER_TERMS_API SettingKey application_startup_mode_setting_key();
 
 /**
+ * Returns the setting key for [general] ui_language.
+ *
+ * @returns Setting key for the application UI language.
+ */
+ELDER_TERMS_API SettingKey application_ui_language_setting_key();
+
+/**
  * Returns the setting key for [general] open_application.
  *
  * @returns Setting key for the global launcher activation hotkey.
@@ -53,6 +72,24 @@ ELDER_TERMS_API SettingKey application_open_hotkey_setting_key();
  * @returns Stable lowercase INI value.
  */
 ELDER_TERMS_API const char *startup_mode_to_string(StartupMode mode);
+
+/**
+ * Returns the stable INI value for an application UI language.
+ *
+ * @param language UI language to serialize.
+ * @returns `system`, `en`, or `ja`.
+ */
+ELDER_TERMS_API const char *
+application_ui_language_to_string(ApplicationUiLanguage language);
+
+/**
+ * Extracts the configured application UI language.
+ *
+ * @param store Global settings store.
+ * @returns Configured language, or the system language by default.
+ */
+ELDER_TERMS_API ApplicationUiLanguage
+application_ui_language(const SettingsStore &store);
 
 /**
  * Extracts the effective launcher startup mode.

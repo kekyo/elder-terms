@@ -43,6 +43,9 @@ static constexpr char boolean_disabled[] = "disabled";
 static constexpr char startup_window[] = "window";
 static constexpr char startup_tray[] = "tray";
 static constexpr char startup_window_and_tray[] = "window_and_tray";
+static constexpr char ui_language_system[] = "system";
+static constexpr char ui_language_english[] = "en";
+static constexpr char ui_language_japanese[] = "ja";
 
 struct ConnectionSettingsPage {
   std::vector<const char *> connection_types;
@@ -65,6 +68,7 @@ struct SettingsWidgetState {
   GtkWidget *general_type_combo = nullptr;
   KeyBindingInputWidgetState *general_open_connection_input = nullptr;
   GtkWidget *general_open_connection_reset_button = nullptr;
+  GtkWidget *general_ui_language_combo = nullptr;
   GtkWidget *general_startup_mode_combo = nullptr;
   KeyBindingInputWidgetState *general_open_application_input = nullptr;
   GtkWidget *general_open_application_reset_button = nullptr;
@@ -698,6 +702,21 @@ static void update_general_type_from_widget(SettingsWidgetState *state) {
   }
   update_connection_pages(state);
   sync_terminal_text_widgets(state);
+}
+
+static void
+update_application_ui_language_from_widget(SettingsWidgetState *state) {
+  const std::string language =
+      active_combo_id(state->general_ui_language_combo,
+                      ui_language_system);
+  if (language == ui_language_system) {
+    clear_explicit_setting_value(
+        &state->draft_store, application_ui_language_setting_key());
+    return;
+  }
+  set_explicit_setting_value(
+      &state->draft_store, application_ui_language_setting_key(),
+      SettingValue{language});
 }
 
 static void
@@ -1624,6 +1643,30 @@ static std::string startup_mode_label(const std::string &mode) {
   return setting_choice_label(application_startup_mode_setting_key(), mode);
 }
 
+static std::string ui_language_label(const std::string &language) {
+  return setting_choice_label(application_ui_language_setting_key(),
+                              language);
+}
+
+static void sync_application_ui_language_combo(
+    SettingsWidgetState *state) {
+  gtk_combo_box_text_remove_all(
+      GTK_COMBO_BOX_TEXT(state->general_ui_language_combo));
+  append_combo_option(state->general_ui_language_combo,
+                      ui_language_system,
+                      ui_language_label(ui_language_system).c_str());
+  append_combo_option(state->general_ui_language_combo,
+                      ui_language_english,
+                      ui_language_label(ui_language_english).c_str());
+  append_combo_option(state->general_ui_language_combo,
+                      ui_language_japanese,
+                      ui_language_label(ui_language_japanese).c_str());
+  gtk_combo_box_set_active_id(
+      GTK_COMBO_BOX(state->general_ui_language_combo),
+      application_ui_language_to_string(
+          application_ui_language(state->draft_store)));
+}
+
 static void sync_application_startup_mode_combo(
     SettingsWidgetState *state) {
   const std::string fallback = std::get<std::string>(setting_fallback_value(
@@ -1750,6 +1793,9 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
   }
   if (state->general_type_combo != nullptr) {
     sync_general_type_combo(state);
+  }
+  if (state->general_ui_language_combo != nullptr) {
+    sync_application_ui_language_combo(state);
   }
   if (state->general_startup_mode_combo != nullptr) {
     sync_application_startup_mode_combo(state);
@@ -2069,6 +2115,16 @@ static void on_application_startup_mode_changed(GtkComboBox *,
     return;
   }
   update_application_startup_mode_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_application_ui_language_changed(GtkComboBox *,
+                                               gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_application_ui_language_from_widget(state);
   notify_changed(state);
 }
 
@@ -2716,6 +2772,15 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
   }
 
   if (state->mode == SettingsWidgetMode::global_defaults) {
+    const std::string language_id =
+        widget_id(state, "general_ui_language_combo");
+    state->general_ui_language_combo =
+        create_combo_box(language_id.c_str());
+    g_signal_connect(state->general_ui_language_combo, "changed",
+                     G_CALLBACK(on_application_ui_language_changed), state);
+    attach_row(page, row++, application_ui_language_setting_key(),
+               state->general_ui_language_combo);
+
     const std::string startup_id =
         widget_id(state, "general_startup_mode_combo");
     state->general_startup_mode_combo =

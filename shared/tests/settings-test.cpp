@@ -21,6 +21,10 @@ using elder_terms::application_open_hotkey;
 using elder_terms::application_open_hotkey_setting_key;
 using elder_terms::application_startup_mode;
 using elder_terms::application_startup_mode_setting_key;
+using elder_terms::application_ui_language;
+using elder_terms::application_ui_language_setting_key;
+using elder_terms::application_ui_language_to_string;
+using elder_terms::ApplicationUiLanguage;
 using elder_terms::default_global_config_path;
 using elder_terms::default_terminal_text_settings;
 using elder_terms::default_terminal_display_settings;
@@ -2265,6 +2269,9 @@ static void test_application_settings_are_global_only() {
   const SettingsLoadResult defaults = load_global_settings(missing_path, 1.0);
   expect_true(application_startup_mode(defaults.store) == StartupMode::window,
               "the built-in startup mode should preserve simple startup");
+  expect_true(application_ui_language(defaults.store) ==
+                  ApplicationUiLanguage::system,
+              "the built-in UI language should follow the system");
   const auto default_hotkey = application_open_hotkey(defaults.store);
   expect_true(default_hotkey.has_value() &&
                   key_binding_matches(*default_hotkey, GDK_KEY_t,
@@ -2276,20 +2283,30 @@ static void test_application_settings_are_global_only() {
       temporary_config_path("application-global");
   write_config(global_path,
                "[general]\n"
+               "ui_language=ja\n"
                "startup_mode=tray\n"
                "open_application=\n");
   SettingsLoadResult global = load_global_settings(global_path, 1.0);
+  expect_true(application_ui_language(global.store) ==
+                  ApplicationUiLanguage::japanese,
+              "global.ini should select Japanese UI text");
   expect_true(application_startup_mode(global.store) == StartupMode::tray,
               "global.ini should select tray-only startup");
   expect_true(!application_open_hotkey(global.store).has_value(),
               "an explicit empty global hotkey should disable registration");
   expect_true(setting_has_explicit_value(
+                  global.store, application_ui_language_setting_key()) &&
+                  setting_has_explicit_value(
                   global.store, application_startup_mode_setting_key()) &&
                   setting_has_explicit_value(
                       global.store, application_open_hotkey_setting_key()),
               "application settings loaded from global.ini should remain "
               "explicit");
 
+  expect_true(set_explicit_setting_value(
+                  &global.store, application_ui_language_setting_key(),
+                  elder_terms::SettingValue{std::string("en")}),
+              "English should be accepted as an explicit UI language");
   expect_true(set_explicit_setting_value(
                   &global.store, application_startup_mode_setting_key(),
                   elder_terms::SettingValue{
@@ -2304,7 +2321,8 @@ static void test_application_settings_are_global_only() {
       save_global_settings(global.store, global_path);
   expect_true(global_save.saved, "application global settings should save");
   const std::string global_contents = read_config(global_path);
-  expect_true(global_contents.find("startup_mode=window_and_tray") !=
+  expect_true(global_contents.find("ui_language=en") != std::string::npos &&
+                  global_contents.find("startup_mode=window_and_tray") !=
                   std::string::npos &&
                   global_contents.find("open_application=ctrl+shift+y") !=
                       std::string::npos,
@@ -2315,12 +2333,16 @@ static void test_application_settings_are_global_only() {
       temporary_config_path("invalid-application-global");
   write_config(invalid_path,
                "[general]\n"
+               "ui_language=fr\n"
                "startup_mode=background\n"
                "open_application=t\n");
   const SettingsLoadResult invalid = load_global_settings(invalid_path, 1.0);
   remove_config(invalid_path);
   expect_true(application_startup_mode(invalid.store) == StartupMode::window,
               "an invalid startup mode should use the built-in default");
+  expect_true(application_ui_language(invalid.store) ==
+                  ApplicationUiLanguage::system,
+              "an unsupported UI language should follow the system");
   const auto invalid_hotkey = application_open_hotkey(invalid.store);
   expect_true(invalid_hotkey.has_value() &&
                   key_binding_matches(*invalid_hotkey, GDK_KEY_t,
@@ -2329,6 +2351,8 @@ static void test_application_settings_are_global_only() {
               "a modifier-free application hotkey should use the default");
   expect_true(
       warnings_contain(invalid.warnings,
+                       "invalid configuration value [general] ui_language") &&
+          warnings_contain(invalid.warnings,
                        "invalid configuration value [general] startup_mode") &&
           warnings_contain(
               invalid.warnings,
@@ -2340,6 +2364,7 @@ static void test_application_settings_are_global_only() {
   write_config(connection_path,
                "[general]\n"
                "name=Connection\n"
+               "ui_language=ja\n"
                "startup_mode=tray\n"
                "open_application=ctrl+shift+x\n");
   SettingsLoadResult connection = load_settings(
@@ -2351,6 +2376,9 @@ static void test_application_settings_are_global_only() {
   expect_true(application_startup_mode(connection.store) ==
                   StartupMode::window,
               "connection files must not configure application startup");
+  expect_true(application_ui_language(connection.store) ==
+                  ApplicationUiLanguage::system,
+              "connection files must not configure the UI language");
   const auto connection_hotkey = application_open_hotkey(connection.store);
   expect_true(connection_hotkey.has_value() &&
                   key_binding_matches(*connection_hotkey, GDK_KEY_t,
@@ -2360,11 +2388,21 @@ static void test_application_settings_are_global_only() {
   expect_true(save_settings(connection.store, connection_path).saved,
               "a connection containing ignored application keys should save");
   const std::string connection_contents = read_config(connection_path);
-  expect_true(connection_contents.find("startup_mode") == std::string::npos &&
+  expect_true(connection_contents.find("ui_language") == std::string::npos &&
+                  connection_contents.find("startup_mode") ==
+                      std::string::npos &&
                   connection_contents.find("open_application") ==
                       std::string::npos,
               "connection saves must omit application-only settings");
   remove_config(connection_path);
+
+  expect_true(std::string(application_ui_language_to_string(
+                  ApplicationUiLanguage::system)) == "system" &&
+                  std::string(application_ui_language_to_string(
+                      ApplicationUiLanguage::english)) == "en" &&
+                  std::string(application_ui_language_to_string(
+                      ApplicationUiLanguage::japanese)) == "ja",
+              "UI languages should expose stable configuration values");
 }
 
 static void test_connection_open_hotkey_settings() {

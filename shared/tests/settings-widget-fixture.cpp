@@ -596,10 +596,16 @@ static void print_store(const char *prefix,
             << " startup_mode="
             << elder_terms::startup_mode_to_string(
                    elder_terms::application_startup_mode(store))
+            << " ui_language="
+            << elder_terms::application_ui_language_to_string(
+                   elder_terms::application_ui_language(store))
             << " open_application="
             << elder_terms::application_open_hotkey_text(store)
             << " open_connection="
             << elder_terms::general_open_connection_hotkey_text(store);
+  print_setting_metadata(
+      store, "ui_language",
+      elder_terms::application_ui_language_setting_key());
   print_setting_metadata(
       store, "startup_mode",
       elder_terms::application_startup_mode_setting_key());

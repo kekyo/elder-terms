@@ -66,6 +66,7 @@ interface AppliedStore {
   readonly ssh_terminal_type: string;
   readonly ssh_username: string;
   readonly startup_mode: string;
+  readonly ui_language: string;
   readonly sftp_local_directory: string;
   readonly sftp_remote_directory: string;
   readonly telnet_address: string;
@@ -572,6 +573,7 @@ describe.concurrent('shared settings widget', () => {
             id: 'global_settings_general_page',
             labels: [
               'Connection type',
+              'Display language',
               'Startup mode',
               'Open application shortcut',
               'Title and status bar background',
@@ -654,7 +656,7 @@ describe.concurrent('shared settings widget', () => {
         'Open connection shortcut',
       ]);
     });
-  }, 60_000);
+  }, 90_000);
 
   it('localizes all settings presentation text into Japanese', async (context) => {
     await runSharedGtkTest(
@@ -676,6 +678,7 @@ describe.concurrent('shared settings widget', () => {
             id: 'global_settings_general_page',
             labels: [
               '接続方式',
+              '表示言語',
               '起動モード',
               'アプリケーションを開くショートカット',
               'タイトル／ステータスバーの背景',
@@ -3380,6 +3383,11 @@ describe.concurrent('shared settings widget', () => {
         );
         await expectSelectedComboValue(
           app,
+          'global_settings_general_ui_language_combo',
+          'System default'
+        );
+        await expectSelectedComboValue(
+          app,
           'global_settings_general_startup_mode_combo',
           'Simple startup (built-in default)'
         );
@@ -3428,7 +3436,7 @@ describe.concurrent('shared settings widget', () => {
     );
   }, 60_000);
 
-  it('edits global-only startup and application hotkey settings', async (context) => {
+  it('edits global-only UI language, startup, and application hotkey settings', async (context) => {
     await runSharedGtkTest(
       context,
       ['--global-mode', '--page=general'],
@@ -3436,6 +3444,19 @@ describe.concurrent('shared settings widget', () => {
         await expect(
           app.getById('settings_general_startup_mode_combo')
         ).rejects.toThrow();
+        await expect(
+          app.getById('settings_general_ui_language_combo')
+        ).rejects.toThrow();
+        const uiLanguage = expectElementKind(
+          await app.getById('global_settings_general_ui_language_combo'),
+          'comboBox'
+        );
+        await uiLanguage.selectChildAt(2);
+        await expectSelectedComboValue(
+          app,
+          'global_settings_general_ui_language_combo',
+          '日本語'
+        );
         const startupMode = expectElementKind(
           await app.getById('global_settings_general_startup_mode_combo'),
           'comboBox'
@@ -3463,10 +3484,36 @@ describe.concurrent('shared settings widget', () => {
           'button'
         ).click();
         const configured = await waitForAppliedStore(app);
+        expect(configured.ui_language).toBe('ja');
         expect(configured.startup_mode).toBe('window_and_tray');
         expect(configured.open_application).toBe('ctrl+shift+y');
+        expect(configured.ui_language_explicit).toBe('true');
         expect(configured.startup_mode_explicit).toBe('true');
         expect(configured.open_application_explicit).toBe('true');
+      }
+    );
+
+    await runSharedGtkTest(
+      context,
+      ['--global-mode', '--page=general', '--global=general.ui_language=ja'],
+      async ({ app }) => {
+        const uiLanguage = expectElementKind(
+          await app.getById('global_settings_general_ui_language_combo'),
+          'comboBox'
+        );
+        await uiLanguage.selectChildAt(0);
+        await expectSelectedComboValue(
+          app,
+          'global_settings_general_ui_language_combo',
+          'System default'
+        );
+        await expectElementKind(
+          await app.getById('global_settings_apply_button'),
+          'button'
+        ).click();
+        const system = await waitForAppliedStore(app);
+        expect(system.ui_language).toBe('system');
+        expect(system.ui_language_explicit).toBe('false');
       }
     );
 
