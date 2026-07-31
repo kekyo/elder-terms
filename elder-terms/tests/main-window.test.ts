@@ -698,7 +698,7 @@ describe('elder-terms main window', () => {
         await expectSelectedComboValue(
           app,
           'settings_terminal_auto_close_combo',
-          'Disabled (global)'
+          'Disabled (global default)'
         );
 
         await name.setText('Dirty Alpha');
@@ -740,7 +740,7 @@ describe('elder-terms main window', () => {
         await expectSelectedComboValue(
           app,
           'settings_terminal_auto_close_combo',
-          'Enabled (global)'
+          'Enabled (global default)'
         );
         await expectSensitive(apply);
 
@@ -773,7 +773,7 @@ describe('elder-terms main window', () => {
         await expectSelectedComboValue(
           app,
           'settings_terminal_auto_close_combo',
-          'Enabled (global)'
+          'Enabled (global default)'
         );
         await expectSensitive(apply);
         await apply.click();

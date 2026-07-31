@@ -909,7 +909,7 @@ describe.concurrent('elder-terms-vte settings', () => {
           await expectSelectedComboValue(
             app,
             'settings_terminal_backspace_code_combo',
-            'BS (global)'
+            'BS (global default)'
           );
         },
         {
@@ -1738,7 +1738,7 @@ describe.concurrent('elder-terms-vte settings', () => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
       await openSettingsDialog(app);
 
-      await expectSelectedConnectionType(app, 'Local (built-in)');
+      await expectSelectedConnectionType(app, 'Local shell (built-in default)');
       await showTerminalSettingsPage(app);
       expect(
         await expectElementKind(
@@ -1761,7 +1761,7 @@ describe.concurrent('elder-terms-vte settings', () => {
       await expectSelectedComboValue(
         app,
         'settings_terminal_auto_close_combo',
-        'Enabled (built-in)'
+        'Enabled (built-in default)'
       );
     });
   });
@@ -2024,7 +2024,7 @@ describe.concurrent('elder-terms-vte settings', () => {
           await expectSelectedComboValue(
             app,
             'settings_serial_parity_combo',
-            'e'
+            'Even'
           );
           await expectSelectedComboValue(
             app,
@@ -2034,12 +2034,12 @@ describe.concurrent('elder-terms-vte settings', () => {
           await expectSelectedComboValue(
             app,
             'settings_serial_flow_control_combo',
-            'xon'
+            'XON/XOFF (software)'
           );
           await expectSelectedComboValue(
             app,
             'settings_serial_carrier_detect_combo',
-            'dsr'
+            'DSR (Data Set Ready)'
           );
           await expectInsensitive(device);
           await expectSensitive(baudrate);
@@ -2219,7 +2219,7 @@ describe.concurrent('elder-terms-vte settings', () => {
           await expectSelectedComboValue(
             app,
             'settings_terminal_auto_close_combo',
-            'Enabled (built-in)'
+            'Enabled (built-in default)'
           );
           await expectElementKind(
             await app.getById('settings_terminal_auto_close_combo'),
@@ -2396,7 +2396,7 @@ describe.concurrent('elder-terms-vte settings', () => {
           await expectSelectedComboValue(
             app,
             'settings_terminal_auto_close_combo',
-            'Enabled (built-in)'
+            'Enabled (built-in default)'
           );
           await expectElementKind(
             await app.getById('settings_terminal_auto_close_combo'),

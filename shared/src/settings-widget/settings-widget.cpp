@@ -17,6 +17,8 @@
 #include <elder-terms/key-binding-input-widget.h>
 #include <elder-terms/settings/general-settings.h>
 
+#include "settings-presentation.h"
+
 namespace elder_terms {
 
 static constexpr char local_connection_type[] = "local";
@@ -165,9 +167,10 @@ static GtkWidget *create_row_label(const char *text) {
   return label;
 }
 
-static GtkWidget *attach_row(GtkWidget *grid, int row,
-                             const char *label_text, GtkWidget *control) {
-  GtkWidget *label = create_row_label(label_text);
+static GtkWidget *attach_row(GtkWidget *grid, int row, const SettingKey &key,
+                             GtkWidget *control) {
+  const std::string label_text = setting_label(key);
+  GtkWidget *label = create_row_label(label_text.c_str());
   gtk_grid_attach(GTK_GRID(grid), label, 0, row, 1, 1);
   gtk_widget_set_hexpand(control, true);
   gtk_widget_set_halign(control, GTK_ALIGN_FILL);
@@ -211,10 +214,6 @@ static std::string active_combo_id(GtkWidget *combo,
   return active_id == nullptr ? fallback : active_id;
 }
 
-static const char *source_name(SettingValueSource source) {
-  return source == SettingValueSource::global ? "global" : "built-in";
-}
-
 static std::string format_double(gdouble value) {
   std::ostringstream stream;
   stream << std::setprecision(15) << value;
@@ -231,22 +230,16 @@ static std::string format_setting_value(const SettingValue &value) {
   if (const auto *text = std::get_if<std::string>(&value)) {
     return *text;
   }
-  return std::get<bool>(value) ? "Enabled" : "Disabled";
-}
-
-static std::string inherited_label(const std::string &value,
-                                   SettingValueSource source) {
-  if (value.empty()) {
-    return source == SettingValueSource::global ? "Global default"
-                                                : "Built-in default";
-  }
-  return value + " (" + source_name(source) + ")";
+  return std::get<bool>(value)
+             ? settings_ui_text(SettingsUiText::enabled)
+             : settings_ui_text(SettingsUiText::disabled);
 }
 
 static std::string setting_fallback_label(const SettingsStore &store,
                                           const SettingKey &key,
                                           const std::string &display_value) {
-  return inherited_label(display_value, setting_fallback_source(store, key));
+  return inherited_setting_label(display_value,
+                                 setting_fallback_source(store, key));
 }
 
 static void sync_inheritable_entry(GtkWidget *entry,
@@ -281,9 +274,10 @@ static void set_entry_validation(GtkWidget *entry, bool valid,
   gtk_entry_set_icon_from_icon_name(
       GTK_ENTRY(entry), GTK_ENTRY_ICON_SECONDARY,
       valid ? nullptr : "dialog-error-symbolic");
-  gtk_entry_set_icon_tooltip_text(
-      GTK_ENTRY(entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : reason.c_str());
+  const std::string message = settings_validation_message(reason);
+  gtk_entry_set_icon_tooltip_text(GTK_ENTRY(entry),
+                                  GTK_ENTRY_ICON_SECONDARY,
+                                  valid ? nullptr : message.c_str());
 }
 
 static void update_string_entry(SettingsWidgetState *state, GtkWidget *entry,
@@ -455,14 +449,6 @@ static std::string terminal_cursor_fallback(
       built_in_defaults.cursor_key_mode);
 }
 
-static std::string terminal_backspace_label(const std::string &value) {
-  return value == terminal_backspace_bs ? "BS" : "DEL";
-}
-
-static std::string terminal_cursor_label(const std::string &value) {
-  return value == terminal_cursor_adm3 ? "ADM3" : "Normal";
-}
-
 static void populate_terminal_encoding_combo(SettingsWidgetState *state,
                                               const TerminalTextSettings
                                                   &built_in_defaults) {
@@ -529,13 +515,22 @@ static void populate_terminal_special_code_combos(
         terminal_backspace_fallback(state, built_in_defaults);
     const std::string default_label = setting_fallback_label(
         state->draft_store, terminal_backspace_code_setting_key(),
-        terminal_backspace_label(fallback));
+        setting_choice_label(terminal_backspace_code_setting_key(),
+                             fallback));
     append_combo_option(state->terminal_backspace_code_combo,
                         terminal_text_default, default_label.c_str());
     append_combo_option(state->terminal_backspace_code_combo,
-                        terminal_backspace_bs, "BS");
+                        terminal_backspace_bs,
+                        setting_choice_label(
+                            terminal_backspace_code_setting_key(),
+                            terminal_backspace_bs)
+                            .c_str());
     append_combo_option(state->terminal_backspace_code_combo,
-                        terminal_backspace_del, "DEL");
+                        terminal_backspace_del,
+                        setting_choice_label(
+                            terminal_backspace_code_setting_key(),
+                            terminal_backspace_del)
+                            .c_str());
     const char *active = terminal_text_default;
     if (setting_has_explicit_value(
             state->draft_store, terminal_backspace_code_setting_key())) {
@@ -557,13 +552,22 @@ static void populate_terminal_special_code_combos(
         terminal_cursor_fallback(state, built_in_defaults);
     const std::string default_label = setting_fallback_label(
         state->draft_store, terminal_cursor_key_mode_setting_key(),
-        terminal_cursor_label(fallback));
+        setting_choice_label(terminal_cursor_key_mode_setting_key(),
+                             fallback));
     append_combo_option(state->terminal_cursor_key_mode_combo,
                         terminal_text_default, default_label.c_str());
     append_combo_option(state->terminal_cursor_key_mode_combo,
-                        terminal_cursor_normal, "Normal");
+                        terminal_cursor_normal,
+                        setting_choice_label(
+                            terminal_cursor_key_mode_setting_key(),
+                            terminal_cursor_normal)
+                            .c_str());
     append_combo_option(state->terminal_cursor_key_mode_combo,
-                        terminal_cursor_adm3, "ADM3");
+                        terminal_cursor_adm3,
+                        setting_choice_label(
+                            terminal_cursor_key_mode_setting_key(),
+                            terminal_cursor_adm3)
+                            .c_str());
     const char *active = terminal_text_default;
     if (setting_has_explicit_value(
             state->draft_store, terminal_cursor_key_mode_setting_key())) {
@@ -939,9 +943,10 @@ static void set_terminal_encoding_validation(
   gtk_entry_set_icon_from_icon_name(
       GTK_ENTRY(state->terminal_encoding_entry), GTK_ENTRY_ICON_SECONDARY,
       valid ? nullptr : "dialog-error-symbolic");
+  const std::string message = settings_validation_message(reason);
   gtk_entry_set_icon_tooltip_text(
       GTK_ENTRY(state->terminal_encoding_entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : reason.c_str());
+      valid ? nullptr : message.c_str());
 }
 
 static void update_terminal_encoding_from_widget(SettingsWidgetState *state) {
@@ -1450,9 +1455,10 @@ static void set_log_file_name_format_validation(
   gtk_entry_set_icon_from_icon_name(
       GTK_ENTRY(state->log_file_name_format_entry), GTK_ENTRY_ICON_SECONDARY,
       valid ? nullptr : "dialog-error-symbolic");
+  const std::string message = settings_validation_message(reason);
   gtk_entry_set_icon_tooltip_text(
       GTK_ENTRY(state->log_file_name_format_entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : reason.c_str());
+      valid ? nullptr : message.c_str());
 }
 
 static void update_log_file_name_format_from_widget(
@@ -1500,7 +1506,7 @@ static void update_log_mode_from_widget(SettingsWidgetState *state) {
 
 struct ComboOption {
   const char *id;
-  const char *label;
+  std::string label;
 };
 
 static void populate_inheritable_combo(
@@ -1512,7 +1518,7 @@ static void populate_inheritable_combo(
       setting_fallback_label(store, key, fallback_display);
   append_combo_option(combo, inherit_choice, inherited.c_str());
   for (const ComboOption &option : options) {
-    append_combo_option(combo, option.id, option.label);
+    append_combo_option(combo, option.id, option.label.c_str());
   }
   gtk_combo_box_set_active_id(
       GTK_COMBO_BOX(combo),
@@ -1527,16 +1533,22 @@ static void populate_boolean_combo(GtkWidget *combo,
   const bool fallback =
       std::get<bool>(setting_fallback_value(store, key, SettingValue{false}));
   populate_inheritable_combo(
-      combo, store, key, fallback ? "Enabled" : "Disabled",
+      combo, store, key,
+      fallback ? settings_ui_text(SettingsUiText::enabled)
+               : settings_ui_text(SettingsUiText::disabled),
       {
-          {.id = boolean_enabled, .label = "Enabled"},
-          {.id = boolean_disabled, .label = "Disabled"},
+          {.id = boolean_enabled,
+           .label = settings_ui_text(SettingsUiText::enabled)},
+          {.id = boolean_disabled,
+           .label = settings_ui_text(SettingsUiText::disabled)},
       },
       effective_value ? boolean_enabled : boolean_disabled);
 }
 
 static std::string general_color_label(const std::string &value) {
-  return value == general_color_none ? "No color" : value;
+  return value == general_color_none
+             ? settings_ui_text(SettingsUiText::no_color)
+             : settings_ui_text(SettingsUiText::custom_color);
 }
 
 static void set_color_button_rgb(
@@ -1570,8 +1582,10 @@ static void sync_general_color_control(
   populate_inheritable_combo(
       combo, state->draft_store, key, general_color_label(fallback),
       {
-          {.id = general_color_none, .label = "No color"},
-          {.id = general_color_custom, .label = "Custom"},
+          {.id = general_color_none,
+           .label = settings_ui_text(SettingsUiText::no_color)},
+          {.id = general_color_custom,
+           .label = settings_ui_text(SettingsUiText::custom_color)},
       },
       effective == general_color_none ? general_color_none
                                       : general_color_custom);
@@ -1580,19 +1594,7 @@ static void sync_general_color_control(
 }
 
 static std::string connection_type_label(const std::string &type) {
-  if (type == telnet_connection_type) {
-    return "TELNET";
-  }
-  if (type == serial_connection_type) {
-    return "Serial";
-  }
-  if (type == ssh_connection_type) {
-    return "SSH";
-  }
-  if (type == sftp_connection_type) {
-    return "SFTP";
-  }
-  return "Local";
+  return setting_choice_label(general_type_setting_key(), type);
 }
 
 static void sync_general_type_combo(SettingsWidgetState *state) {
@@ -1604,23 +1606,22 @@ static void sync_general_type_combo(SettingsWidgetState *state) {
       state->general_type_combo, state->draft_store,
       general_type_setting_key(), connection_type_label(fallback),
       {
-          {.id = local_connection_type, .label = "Local"},
-          {.id = telnet_connection_type, .label = "TELNET"},
-          {.id = serial_connection_type, .label = "Serial"},
-          {.id = ssh_connection_type, .label = "SSH"},
-          {.id = sftp_connection_type, .label = "SFTP"},
+          {.id = local_connection_type,
+           .label = connection_type_label(local_connection_type)},
+          {.id = telnet_connection_type,
+           .label = connection_type_label(telnet_connection_type)},
+          {.id = serial_connection_type,
+           .label = connection_type_label(serial_connection_type)},
+          {.id = ssh_connection_type,
+           .label = connection_type_label(ssh_connection_type)},
+          {.id = sftp_connection_type,
+           .label = connection_type_label(sftp_connection_type)},
       },
       effective);
 }
 
 static std::string startup_mode_label(const std::string &mode) {
-  if (mode == startup_tray) {
-    return "System tray only";
-  }
-  if (mode == startup_window_and_tray) {
-    return "System tray and main window";
-  }
-  return "Simple startup";
+  return setting_choice_label(application_startup_mode_setting_key(), mode);
 }
 
 static void sync_application_startup_mode_combo(
@@ -1634,10 +1635,12 @@ static void sync_application_startup_mode_combo(
       state->general_startup_mode_combo, state->draft_store,
       application_startup_mode_setting_key(), startup_mode_label(fallback),
       {
-          {.id = startup_window, .label = "Simple startup"},
-          {.id = startup_tray, .label = "System tray only"},
+          {.id = startup_window,
+           .label = startup_mode_label(startup_window)},
+          {.id = startup_tray,
+           .label = startup_mode_label(startup_tray)},
           {.id = startup_window_and_tray,
-           .label = "System tray and main window"},
+           .label = startup_mode_label(startup_window_and_tray)},
       },
       effective);
 }
@@ -1655,10 +1658,13 @@ static void sync_zmodem_combo(SettingsWidgetState *state) {
   populate_inheritable_combo(
       state->transfer_zmodem_autostart_combo, state->draft_store,
       transfer_zmodem_autostart_setting_key(),
-      fallback ? "Enabled" : "Disabled",
+      fallback ? settings_ui_text(SettingsUiText::enabled)
+               : settings_ui_text(SettingsUiText::disabled),
       {
-          {.id = zmodem_autostart_enabled, .label = "Enabled"},
-          {.id = zmodem_autostart_disabled, .label = "Disabled"},
+          {.id = zmodem_autostart_enabled,
+           .label = settings_ui_text(SettingsUiText::enabled)},
+          {.id = zmodem_autostart_disabled,
+           .label = settings_ui_text(SettingsUiText::disabled)},
       },
       effective ? zmodem_autostart_enabled : zmodem_autostart_disabled);
 }
@@ -1674,22 +1680,22 @@ static void sync_key_binding_widget(
       input, !explicit_value && !effective_value.empty());
   GtkWidget *entry = key_binding_input_widget_root(input);
   if (explicit_value && effective_value.empty()) {
-    gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Disabled");
+    gtk_entry_set_placeholder_text(
+        GTK_ENTRY(entry), settings_ui_text(SettingsUiText::disabled));
     return;
   }
   if (explicit_value) {
-    gtk_entry_set_placeholder_text(GTK_ENTRY(entry),
-                                   "Press a key combination");
+    gtk_entry_set_placeholder_text(
+        GTK_ENTRY(entry),
+        settings_ui_text(SettingsUiText::press_key_combination));
     return;
   }
   const std::string placeholder =
-      effective_value.empty()
-          ? std::string("Disabled (") +
-                source_name(setting_fallback_source(
-                    state->draft_store, key)) +
-                ")"
-          : setting_fallback_label(state->draft_store, key,
-                                   effective_value);
+      setting_fallback_label(
+          state->draft_store, key,
+          effective_value.empty()
+              ? settings_ui_text(SettingsUiText::disabled)
+              : effective_value);
   gtk_entry_set_placeholder_text(GTK_ENTRY(entry), placeholder.c_str());
 }
 
@@ -1700,8 +1706,8 @@ static void sync_key_binding_reset_button(
   const char *tooltip =
       setting_fallback_source(state->draft_store, key) ==
               SettingValueSource::global
-          ? "Use global default"
-          : "Use built-in default";
+          ? settings_ui_text(SettingsUiText::use_global_default)
+          : settings_ui_text(SettingsUiText::use_built_in_default);
   gtk_widget_set_tooltip_text(button, tooltip);
 }
 
@@ -1897,16 +1903,17 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
   }
   if (state->serial_parity_combo != nullptr) {
     const std::string parity = serial_parity_to_string(serial.parity);
-    const std::string fallback = format_setting_value(setting_fallback_value(
-        state->draft_store, serial_parity_setting_key(),
-        SettingValue{std::string("n")}));
+    const SettingKey key = serial_parity_setting_key();
+    const std::string fallback = setting_choice_label(
+        key, format_setting_value(setting_fallback_value(
+                 state->draft_store, key,
+                 SettingValue{std::string("n")})));
     populate_inheritable_combo(
-        state->serial_parity_combo, state->draft_store,
-        serial_parity_setting_key(), fallback,
+        state->serial_parity_combo, state->draft_store, key, fallback,
         {
-            {.id = "n", .label = "n"},
-            {.id = "e", .label = "e"},
-            {.id = "o", .label = "o"},
+            {.id = "n", .label = setting_choice_label(key, "n")},
+            {.id = "e", .label = setting_choice_label(key, "e")},
+            {.id = "o", .label = setting_choice_label(key, "o")},
         },
         parity);
   }
@@ -1927,32 +1934,34 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
   if (state->serial_flow_control_combo != nullptr) {
     const std::string flow_control =
         serial_flow_control_to_string(serial.flow_control);
-    const std::string fallback = format_setting_value(setting_fallback_value(
-        state->draft_store, serial_flow_control_setting_key(),
-        SettingValue{std::string("none")}));
+    const SettingKey key = serial_flow_control_setting_key();
+    const std::string fallback = setting_choice_label(
+        key, format_setting_value(setting_fallback_value(
+                 state->draft_store, key,
+                 SettingValue{std::string("none")})));
     populate_inheritable_combo(
-        state->serial_flow_control_combo, state->draft_store,
-        serial_flow_control_setting_key(), fallback,
+        state->serial_flow_control_combo, state->draft_store, key, fallback,
         {
-            {.id = "none", .label = "none"},
-            {.id = "xon", .label = "xon"},
-            {.id = "hard", .label = "hard"},
+            {.id = "none", .label = setting_choice_label(key, "none")},
+            {.id = "xon", .label = setting_choice_label(key, "xon")},
+            {.id = "hard", .label = setting_choice_label(key, "hard")},
         },
         flow_control);
   }
   if (state->serial_carrier_detect_combo != nullptr) {
     const std::string carrier_detect =
         serial_carrier_detect_to_string(serial.carrier_detect);
-    const std::string fallback = format_setting_value(setting_fallback_value(
-        state->draft_store, serial_carrier_detect_setting_key(),
-        SettingValue{std::string("cd")}));
+    const SettingKey key = serial_carrier_detect_setting_key();
+    const std::string fallback = setting_choice_label(
+        key, format_setting_value(setting_fallback_value(
+                 state->draft_store, key,
+                 SettingValue{std::string("cd")})));
     populate_inheritable_combo(
-        state->serial_carrier_detect_combo, state->draft_store,
-        serial_carrier_detect_setting_key(), fallback,
+        state->serial_carrier_detect_combo, state->draft_store, key, fallback,
         {
-            {.id = "cd", .label = "cd"},
-            {.id = "cts", .label = "cts"},
-            {.id = "dsr", .label = "dsr"},
+            {.id = "cd", .label = setting_choice_label(key, "cd")},
+            {.id = "cts", .label = setting_choice_label(key, "cts")},
+            {.id = "dsr", .label = setting_choice_label(key, "dsr")},
         },
         carrier_detect);
   }
@@ -1993,17 +2002,19 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
   }
   if (state->log_mode_combo != nullptr) {
     const std::string effective = terminal_log_mode_to_string(log.mode);
+    const SettingKey key = terminal_log_mode_setting_key();
     const std::string fallback_value =
         std::get<std::string>(setting_fallback_value(
-            state->draft_store, terminal_log_mode_setting_key(),
+            state->draft_store, key,
             SettingValue{std::string(terminal_log_raw)}));
     populate_inheritable_combo(
-        state->log_mode_combo, state->draft_store,
-        terminal_log_mode_setting_key(),
-        fallback_value == terminal_log_cooked ? "Cooked" : "Raw",
+        state->log_mode_combo, state->draft_store, key,
+        setting_choice_label(key, fallback_value),
         {
-            {.id = terminal_log_raw, .label = "Raw"},
-            {.id = terminal_log_cooked, .label = "Cooked"},
+            {.id = terminal_log_raw,
+             .label = setting_choice_label(key, terminal_log_raw)},
+            {.id = terminal_log_cooked,
+             .label = setting_choice_label(key, terminal_log_cooked)},
         },
         effective);
   }
@@ -2075,7 +2086,9 @@ static void on_application_hotkey_changed(SettingsWidgetState *state) {
     gtk_entry_set_placeholder_text(
         GTK_ENTRY(key_binding_input_widget_root(
             state->general_open_application_input)),
-        effective.empty() ? "Disabled" : "Press a key combination");
+        effective.empty()
+            ? settings_ui_text(SettingsUiText::disabled)
+            : settings_ui_text(SettingsUiText::press_key_combination));
     sync_key_binding_reset_button(
         state, state->general_open_application_reset_button,
         application_open_hotkey_setting_key());
@@ -2119,7 +2132,9 @@ static void on_connection_hotkey_changed(SettingsWidgetState *state) {
     gtk_entry_set_placeholder_text(
         GTK_ENTRY(key_binding_input_widget_root(
             state->general_open_connection_input)),
-        effective.empty() ? "Disabled" : "Press a key combination");
+        effective.empty()
+            ? settings_ui_text(SettingsUiText::disabled)
+            : settings_ui_text(SettingsUiText::press_key_combination));
     sync_key_binding_reset_button(
         state, state->general_open_connection_reset_button,
         general_open_connection_hotkey_setting_key());
@@ -2297,7 +2312,9 @@ static void on_terminal_key_binding_changed(
   set_key_binding_input_widget_empty_clear_enabled(input, false);
   gtk_entry_set_placeholder_text(
       GTK_ENTRY(key_binding_input_widget_root(input)),
-      effective.empty() ? "Disabled" : "Press a key combination");
+      effective.empty()
+          ? settings_ui_text(SettingsUiText::disabled)
+          : settings_ui_text(SettingsUiText::press_key_combination));
   GtkWidget *reset_button =
       field == TerminalKeyBindingField::zoom_in
           ? state->terminal_zoom_in_key_reset_button
@@ -2649,7 +2666,8 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
                      G_CALLBACK(on_general_name_changed), state);
     g_signal_connect(state->general_name_entry, "focus-out-event",
                      G_CALLBACK(on_general_name_focus_out), state);
-    attach_row(page, row++, "name", state->general_name_entry);
+    attach_row(page, row++, general_name_setting_key(),
+               state->general_name_entry);
   }
 
   const std::string type_id = widget_id(state, "general_type_combo");
@@ -2658,7 +2676,8 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
                            state->is_runtime ? FALSE : TRUE);
   g_signal_connect(state->general_type_combo, "changed",
                    G_CALLBACK(on_general_type_changed), state);
-  attach_row(page, row++, "type", state->general_type_combo);
+  attach_row(page, row++, general_type_setting_key(),
+             state->general_type_combo);
 
   if (state->mode == SettingsWidgetMode::connection &&
       !state->is_runtime) {
@@ -2680,7 +2699,8 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
             state->general_open_connection_input),
         TRUE, TRUE, 0);
     state->general_open_connection_reset_button =
-        gtk_button_new_with_label("Reset");
+        gtk_button_new_with_label(
+            settings_ui_text(SettingsUiText::reset));
     const std::string reset_id =
         widget_id(state, "general_open_connection_reset_button");
     assign_accessible_id(state->general_open_connection_reset_button,
@@ -2691,7 +2711,8 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
     gtk_box_pack_start(
         GTK_BOX(hotkey_row),
         state->general_open_connection_reset_button, FALSE, FALSE, 0);
-    attach_row(page, row++, "open_connection", hotkey_row);
+    attach_row(page, row++, general_open_connection_hotkey_setting_key(),
+               hotkey_row);
   }
 
   if (state->mode == SettingsWidgetMode::global_defaults) {
@@ -2701,7 +2722,7 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
         create_combo_box(startup_id.c_str());
     g_signal_connect(state->general_startup_mode_combo, "changed",
                      G_CALLBACK(on_application_startup_mode_changed), state);
-    attach_row(page, row++, "startup_mode",
+    attach_row(page, row++, application_startup_mode_setting_key(),
                state->general_startup_mode_combo);
 
     const std::string hotkey_id =
@@ -2722,7 +2743,8 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
             state->general_open_application_input),
         TRUE, TRUE, 0);
     state->general_open_application_reset_button =
-        gtk_button_new_with_label("Reset");
+        gtk_button_new_with_label(
+            settings_ui_text(SettingsUiText::reset));
     const std::string reset_id =
         widget_id(state, "general_open_application_reset_button");
     assign_accessible_id(state->general_open_application_reset_button,
@@ -2733,7 +2755,8 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
     gtk_box_pack_start(
         GTK_BOX(hotkey_row),
         state->general_open_application_reset_button, FALSE, FALSE, 0);
-    attach_row(page, row++, "open_application", hotkey_row);
+    attach_row(page, row++, application_open_hotkey_setting_key(),
+               hotkey_row);
   }
 
   GtkWidget *exterior_color_row =
@@ -2763,7 +2786,8 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
   gtk_box_pack_start(
       GTK_BOX(exterior_color_row),
       state->general_exterior_background_button, FALSE, FALSE, 0);
-  attach_row(page, row++, "exterior_background", exterior_color_row);
+  attach_row(page, row++, general_exterior_background_setting_key(),
+             exterior_color_row);
 
   GtkWidget *background_color_row =
       gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
@@ -2787,7 +2811,8 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_general_background_color_set), state);
   gtk_box_pack_start(GTK_BOX(background_color_row),
                      state->general_background_button, FALSE, FALSE, 0);
-  attach_row(page, row, "background", background_color_row);
+  attach_row(page, row, general_background_setting_key(),
+             background_color_row);
 
   return page;
 }
@@ -2819,36 +2844,41 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_terminal_backspace_code_changed), state);
   g_signal_connect(state->terminal_cursor_key_mode_combo, "changed",
                    G_CALLBACK(on_terminal_cursor_key_mode_changed), state);
-  attach_row(page, 0, "encoding", state->terminal_encoding_combo);
-  attach_row(page, 1, "backspace_code",
+  attach_row(page, 0, terminal_encoding_setting_key(),
+             state->terminal_encoding_combo);
+  attach_row(page, 1, terminal_backspace_code_setting_key(),
              state->terminal_backspace_code_combo);
-  attach_row(page, 2, "cursor_key_mode",
+  attach_row(page, 2, terminal_cursor_key_mode_setting_key(),
              state->terminal_cursor_key_mode_combo);
 
   state->terminal_width_entry =
       create_entry(widget_id(state, "terminal_width_entry"));
   g_signal_connect(state->terminal_width_entry, "changed",
                    G_CALLBACK(on_terminal_width_changed), state);
-  attach_row(page, 3, "width", state->terminal_width_entry);
+  attach_row(page, 3, terminal_width_setting_key(),
+             state->terminal_width_entry);
 
   state->terminal_height_entry =
       create_entry(widget_id(state, "terminal_height_entry"));
   g_signal_connect(state->terminal_height_entry, "changed",
                    G_CALLBACK(on_terminal_height_changed), state);
-  attach_row(page, 4, "height", state->terminal_height_entry);
+  attach_row(page, 4, terminal_height_setting_key(),
+             state->terminal_height_entry);
 
   state->terminal_zoom_entry =
       create_entry(widget_id(state, "terminal_zoom_entry"));
   g_signal_connect(state->terminal_zoom_entry, "changed",
                    G_CALLBACK(on_terminal_zoom_changed), state);
-  attach_row(page, 5, "zoom", state->terminal_zoom_entry);
+  attach_row(page, 5, terminal_zoom_setting_key(),
+             state->terminal_zoom_entry);
 
   const std::string auto_close_id =
       widget_id(state, "terminal_auto_close_combo");
   state->terminal_auto_close_combo = create_combo_box(auto_close_id.c_str());
   g_signal_connect(state->terminal_auto_close_combo, "changed",
                    G_CALLBACK(on_terminal_auto_close_changed), state);
-  attach_row(page, 6, "auto_close", state->terminal_auto_close_combo);
+  attach_row(page, 6, terminal_auto_close_setting_key(),
+             state->terminal_auto_close_combo);
 
   const std::string zoom_in_id =
       widget_id(state, "terminal_zoom_in_key_entry");
@@ -2866,7 +2896,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
       key_binding_input_widget_root(state->terminal_zoom_in_key_input),
       TRUE, TRUE, 0);
   state->terminal_zoom_in_key_reset_button =
-      gtk_button_new_with_label("Reset");
+      gtk_button_new_with_label(settings_ui_text(SettingsUiText::reset));
   const std::string zoom_in_reset_id =
       widget_id(state, "terminal_zoom_in_key_reset_button");
   assign_accessible_id(state->terminal_zoom_in_key_reset_button,
@@ -2876,7 +2906,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(zoom_in_row),
                      state->terminal_zoom_in_key_reset_button, FALSE, FALSE,
                      0);
-  attach_row(page, 7, "zoom_in_key", zoom_in_row);
+  attach_row(page, 7, terminal_zoom_in_key_setting_key(), zoom_in_row);
 
   const std::string zoom_out_id =
       widget_id(state, "terminal_zoom_out_key_entry");
@@ -2894,7 +2924,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
       key_binding_input_widget_root(state->terminal_zoom_out_key_input),
       TRUE, TRUE, 0);
   state->terminal_zoom_out_key_reset_button =
-      gtk_button_new_with_label("Reset");
+      gtk_button_new_with_label(settings_ui_text(SettingsUiText::reset));
   const std::string zoom_out_reset_id =
       widget_id(state, "terminal_zoom_out_key_reset_button");
   assign_accessible_id(state->terminal_zoom_out_key_reset_button,
@@ -2904,7 +2934,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(zoom_out_row),
                      state->terminal_zoom_out_key_reset_button, FALSE, FALSE,
                      0);
-  attach_row(page, 8, "zoom_out_key", zoom_out_row);
+  attach_row(page, 8, terminal_zoom_out_key_setting_key(), zoom_out_row);
 
   return page;
 }
@@ -2919,7 +2949,8 @@ static GtkWidget *create_telnet_page(SettingsWidgetState *state) {
                            state->is_runtime ? FALSE : TRUE);
   g_signal_connect(state->telnet_address_entry, "changed",
                    G_CALLBACK(on_telnet_address_changed), state);
-  attach_row(page, 0, "address", state->telnet_address_entry);
+  attach_row(page, 0, telnet_address_setting_key(),
+             state->telnet_address_entry);
 
   state->telnet_port_entry =
       create_entry(widget_id(state, "telnet_port_entry"));
@@ -2927,7 +2958,7 @@ static GtkWidget *create_telnet_page(SettingsWidgetState *state) {
                            state->is_runtime ? FALSE : TRUE);
   g_signal_connect(state->telnet_port_entry, "changed",
                    G_CALLBACK(on_telnet_port_changed), state);
-  attach_row(page, 1, "port", state->telnet_port_entry);
+  attach_row(page, 1, telnet_port_setting_key(), state->telnet_port_entry);
 
   state->telnet_terminal_type_entry =
       create_entry(widget_id(state, "telnet_terminal_type_entry"));
@@ -2937,7 +2968,7 @@ static GtkWidget *create_telnet_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_telnet_terminal_type_changed), state);
   g_signal_connect(state->telnet_terminal_type_entry, "focus-out-event",
                    G_CALLBACK(on_telnet_terminal_type_focus_out), state);
-  attach_row(page, 2, "terminal_type",
+  attach_row(page, 2, telnet_terminal_type_setting_key(),
              state->telnet_terminal_type_entry);
 
   return page;
@@ -2953,28 +2984,30 @@ static GtkWidget *create_ssh_page(SettingsWidgetState *state) {
   gtk_widget_set_sensitive(state->ssh_address_entry, sensitive);
   g_signal_connect(state->ssh_address_entry, "changed",
                    G_CALLBACK(on_ssh_address_changed), state);
-  attach_row(page, 0, "address", state->ssh_address_entry);
+  attach_row(page, 0, ssh_address_setting_key(), state->ssh_address_entry);
 
   state->ssh_port_entry =
       create_entry(widget_id(state, "ssh_port_entry"));
   gtk_widget_set_sensitive(state->ssh_port_entry, sensitive);
   g_signal_connect(state->ssh_port_entry, "changed",
                    G_CALLBACK(on_ssh_port_changed), state);
-  attach_row(page, 1, "port", state->ssh_port_entry);
+  attach_row(page, 1, ssh_port_setting_key(), state->ssh_port_entry);
 
   state->ssh_username_entry =
       create_entry(widget_id(state, "ssh_username_entry"));
   gtk_widget_set_sensitive(state->ssh_username_entry, sensitive);
   g_signal_connect(state->ssh_username_entry, "changed",
                    G_CALLBACK(on_ssh_username_changed), state);
-  attach_row(page, 2, "username", state->ssh_username_entry);
+  attach_row(page, 2, ssh_username_setting_key(),
+             state->ssh_username_entry);
 
   state->ssh_identity_file_entry =
       create_entry(widget_id(state, "ssh_identity_file_entry"));
   gtk_widget_set_sensitive(state->ssh_identity_file_entry, sensitive);
   g_signal_connect(state->ssh_identity_file_entry, "changed",
                    G_CALLBACK(on_ssh_identity_file_changed), state);
-  attach_row(page, 3, "identity_file", state->ssh_identity_file_entry);
+  attach_row(page, 3, ssh_identity_file_setting_key(),
+             state->ssh_identity_file_entry);
 
   state->ssh_terminal_type_entry =
       create_entry(widget_id(state, "ssh_terminal_type_entry"));
@@ -2984,7 +3017,8 @@ static GtkWidget *create_ssh_page(SettingsWidgetState *state) {
   g_signal_connect(state->ssh_terminal_type_entry, "focus-out-event",
                    G_CALLBACK(on_ssh_terminal_type_focus_out), state);
   state->ssh_terminal_type_label =
-      attach_row(page, 4, "terminal_type", state->ssh_terminal_type_entry);
+      attach_row(page, 4, ssh_terminal_type_setting_key(),
+                 state->ssh_terminal_type_entry);
   gtk_widget_set_no_show_all(state->ssh_terminal_type_label, TRUE);
   gtk_widget_set_no_show_all(state->ssh_terminal_type_entry, TRUE);
 
@@ -2999,14 +3033,14 @@ static GtkWidget *create_sftp_page(SettingsWidgetState *state) {
       create_entry(widget_id(state, "sftp_local_directory_entry"));
   g_signal_connect(state->sftp_local_directory_entry, "changed",
                    G_CALLBACK(on_sftp_local_directory_changed), state);
-  attach_row(page, 0, "local_directory",
+  attach_row(page, 0, sftp_local_directory_setting_key(),
              state->sftp_local_directory_entry);
 
   state->sftp_remote_directory_entry =
       create_entry(widget_id(state, "sftp_remote_directory_entry"));
   g_signal_connect(state->sftp_remote_directory_entry, "changed",
                    G_CALLBACK(on_sftp_remote_directory_changed), state);
-  attach_row(page, 1, "remote_directory",
+  attach_row(page, 1, sftp_remote_directory_setting_key(),
              state->sftp_remote_directory_entry);
 
   return page;
@@ -3022,32 +3056,36 @@ static GtkWidget *create_serial_page(SettingsWidgetState *state) {
   gtk_widget_set_sensitive(state->serial_device_entry, device_sensitive);
   g_signal_connect(state->serial_device_entry, "changed",
                    G_CALLBACK(on_serial_device_changed), state);
-  attach_row(page, 0, "device", state->serial_device_entry);
+  attach_row(page, 0, serial_device_setting_key(),
+             state->serial_device_entry);
 
   state->serial_baudrate_entry =
       create_entry(widget_id(state, "serial_baudrate_entry"));
   g_signal_connect(state->serial_baudrate_entry, "changed",
                    G_CALLBACK(on_serial_baudrate_changed), state);
-  attach_row(page, 1, "baudrate", state->serial_baudrate_entry);
+  attach_row(page, 1, serial_baudrate_setting_key(),
+             state->serial_baudrate_entry);
 
   const std::string bits_id = widget_id(state, "serial_bits_combo");
   state->serial_bits_combo = create_combo_box(bits_id.c_str());
   g_signal_connect(state->serial_bits_combo, "changed",
                    G_CALLBACK(on_serial_bits_changed), state);
-  attach_row(page, 2, "bits", state->serial_bits_combo);
+  attach_row(page, 2, serial_bits_setting_key(), state->serial_bits_combo);
 
   const std::string parity_id = widget_id(state, "serial_parity_combo");
   state->serial_parity_combo = create_combo_box(parity_id.c_str());
   g_signal_connect(state->serial_parity_combo, "changed",
                    G_CALLBACK(on_serial_parity_changed), state);
-  attach_row(page, 3, "parity", state->serial_parity_combo);
+  attach_row(page, 3, serial_parity_setting_key(),
+             state->serial_parity_combo);
 
   const std::string stop_bit_id =
       widget_id(state, "serial_stop_bit_combo");
   state->serial_stop_bit_combo = create_combo_box(stop_bit_id.c_str());
   g_signal_connect(state->serial_stop_bit_combo, "changed",
                    G_CALLBACK(on_serial_stop_bit_changed), state);
-  attach_row(page, 4, "stop_bit", state->serial_stop_bit_combo);
+  attach_row(page, 4, serial_stop_bit_setting_key(),
+             state->serial_stop_bit_combo);
 
   const std::string flow_control_id =
       widget_id(state, "serial_flow_control_combo");
@@ -3055,7 +3093,8 @@ static GtkWidget *create_serial_page(SettingsWidgetState *state) {
       create_combo_box(flow_control_id.c_str());
   g_signal_connect(state->serial_flow_control_combo, "changed",
                    G_CALLBACK(on_serial_flow_control_changed), state);
-  attach_row(page, 5, "flow_control", state->serial_flow_control_combo);
+  attach_row(page, 5, serial_flow_control_setting_key(),
+             state->serial_flow_control_combo);
 
   const std::string carrier_detect_id =
       widget_id(state, "serial_carrier_detect_combo");
@@ -3063,7 +3102,8 @@ static GtkWidget *create_serial_page(SettingsWidgetState *state) {
       create_combo_box(carrier_detect_id.c_str());
   g_signal_connect(state->serial_carrier_detect_combo, "changed",
                    G_CALLBACK(on_serial_carrier_detect_changed), state);
-  attach_row(page, 6, "carrier_detect", state->serial_carrier_detect_combo);
+  attach_row(page, 6, serial_carrier_detect_setting_key(),
+             state->serial_carrier_detect_combo);
 
   return page;
 }
@@ -3076,13 +3116,14 @@ static GtkWidget *create_transfer_page(SettingsWidgetState *state) {
       create_entry(widget_id(state, "transfer_base_path_entry"));
   g_signal_connect(state->transfer_base_path_entry, "changed",
                    G_CALLBACK(on_transfer_base_path_changed), state);
-  attach_row(page, 0, "base_path", state->transfer_base_path_entry);
+  attach_row(page, 0, transfer_base_path_setting_key(),
+             state->transfer_base_path_entry);
 
   state->transfer_text_send_rate_entry =
       create_entry(widget_id(state, "transfer_text_send_rate_entry"));
   g_signal_connect(state->transfer_text_send_rate_entry, "changed",
                    G_CALLBACK(on_transfer_text_send_rate_changed), state);
-  attach_row(page, 1, "text_send_bytes_per_second",
+  attach_row(page, 1, transfer_text_send_bytes_per_second_setting_key(),
              state->transfer_text_send_rate_entry);
 
   const std::string zmodem_id =
@@ -3091,7 +3132,7 @@ static GtkWidget *create_transfer_page(SettingsWidgetState *state) {
       create_combo_box(zmodem_id.c_str());
   g_signal_connect(state->transfer_zmodem_autostart_combo, "changed",
                    G_CALLBACK(on_transfer_zmodem_autostart_changed), state);
-  attach_row(page, 2, "zmodem_autostart",
+  attach_row(page, 2, transfer_zmodem_autostart_setting_key(),
              state->transfer_zmodem_autostart_combo);
 
   return page;
@@ -3105,26 +3146,29 @@ static GtkWidget *create_logging_page(SettingsWidgetState *state) {
   state->log_enabled_combo = create_combo_box(enabled_id.c_str());
   g_signal_connect(state->log_enabled_combo, "changed",
                    G_CALLBACK(on_log_enabled_changed), state);
-  attach_row(page, 0, "enabled", state->log_enabled_combo);
+  attach_row(page, 0, terminal_log_enabled_setting_key(),
+             state->log_enabled_combo);
 
   state->log_base_directory_entry =
       create_entry(widget_id(state, "log_base_directory_entry"));
   g_signal_connect(state->log_base_directory_entry, "changed",
                    G_CALLBACK(on_log_base_directory_changed), state);
-  attach_row(page, 1, "base_directory", state->log_base_directory_entry);
+  attach_row(page, 1, terminal_log_base_directory_setting_key(),
+             state->log_base_directory_entry);
 
   state->log_file_name_format_entry =
       create_entry(widget_id(state, "log_file_name_format_entry"));
   g_signal_connect(state->log_file_name_format_entry, "changed",
                    G_CALLBACK(on_log_file_name_format_changed), state);
-  attach_row(page, 2, "file_name_format",
+  attach_row(page, 2, terminal_log_file_name_format_setting_key(),
              state->log_file_name_format_entry);
 
   const std::string mode_id = widget_id(state, "log_mode_combo");
   state->log_mode_combo = create_combo_box(mode_id.c_str());
   g_signal_connect(state->log_mode_combo, "changed",
                    G_CALLBACK(on_log_mode_changed), state);
-  attach_row(page, 3, "mode", state->log_mode_combo);
+  attach_row(page, 3, terminal_log_mode_setting_key(),
+             state->log_mode_combo);
 
   return page;
 }
@@ -3143,7 +3187,8 @@ static GtkWidget *create_button_box(SettingsWidgetState *state) {
   gtk_widget_set_margin_end(button_box, 12);
   gtk_widget_set_valign(button_box, GTK_ALIGN_CENTER);
 
-  state->apply_button = gtk_button_new_with_label("Apply");
+  state->apply_button =
+      gtk_button_new_with_label(settings_ui_text(SettingsUiText::apply));
   const std::string apply_id = widget_id(state, "apply_button");
   assign_accessible_id(state->apply_button, apply_id.c_str());
   gtk_widget_set_valign(state->apply_button, GTK_ALIGN_CENTER);
@@ -3152,7 +3197,8 @@ static GtkWidget *create_button_box(SettingsWidgetState *state) {
   gtk_container_add(GTK_CONTAINER(button_box), state->apply_button);
 
   if (state->callbacks.save) {
-    state->save_button = gtk_button_new_with_label("Save");
+    state->save_button =
+        gtk_button_new_with_label(settings_ui_text(SettingsUiText::save));
     const std::string save_id = widget_id(state, "save_button");
     assign_accessible_id(state->save_button, save_id.c_str());
     gtk_widget_set_valign(state->save_button, GTK_ALIGN_CENTER);
@@ -3161,7 +3207,8 @@ static GtkWidget *create_button_box(SettingsWidgetState *state) {
     gtk_container_add(GTK_CONTAINER(button_box), state->save_button);
   }
 
-  state->cancel_button = gtk_button_new_with_label("Cancel");
+  state->cancel_button =
+      gtk_button_new_with_label(settings_ui_text(SettingsUiText::cancel));
   const std::string cancel_id = widget_id(state, "cancel_button");
   assign_accessible_id(state->cancel_button, cancel_id.c_str());
   gtk_widget_set_valign(state->cancel_button, GTK_ALIGN_CENTER);
@@ -3201,7 +3248,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   GtkWidget *general_page = create_general_page(state);
   const std::string general_tab_id = widget_id(state, "general_tab");
   GtkWidget *general_tab = create_tab_button(
-      state, general_page, "General", general_tab_id.c_str());
+      state, general_page, settings_ui_text(SettingsUiText::general_tab),
+      general_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), general_page,
                            general_tab);
   gtk_widget_show(general_page);
@@ -3210,7 +3258,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   GtkWidget *telnet_page = create_telnet_page(state);
   const std::string telnet_tab_id = widget_id(state, "telnet_tab");
   GtkWidget *telnet_tab = create_tab_button(
-      state, telnet_page, "TELNET", telnet_tab_id.c_str());
+      state, telnet_page, settings_ui_text(SettingsUiText::telnet_tab),
+      telnet_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), telnet_page,
                            telnet_tab);
   gtk_widget_show_all(telnet_page);
@@ -3226,7 +3275,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   GtkWidget *serial_page = create_serial_page(state);
   const std::string serial_tab_id = widget_id(state, "serial_tab");
   GtkWidget *serial_tab = create_tab_button(
-      state, serial_page, "Serial", serial_tab_id.c_str());
+      state, serial_page, settings_ui_text(SettingsUiText::serial_tab),
+      serial_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), serial_page,
                            serial_tab);
   gtk_widget_show_all(serial_page);
@@ -3241,8 +3291,9 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   GtkWidget *ssh_page = create_ssh_page(state);
   const std::string ssh_tab_id = widget_id(state, "ssh_tab");
-  GtkWidget *ssh_tab =
-      create_tab_button(state, ssh_page, "SSH", ssh_tab_id.c_str());
+  GtkWidget *ssh_tab = create_tab_button(
+      state, ssh_page, settings_ui_text(SettingsUiText::ssh_tab),
+      ssh_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), ssh_page, ssh_tab);
   gtk_widget_show_all(ssh_page);
   gtk_widget_show_all(ssh_tab);
@@ -3256,8 +3307,9 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   GtkWidget *sftp_page = create_sftp_page(state);
   const std::string sftp_tab_id = widget_id(state, "sftp_tab");
-  GtkWidget *sftp_tab =
-      create_tab_button(state, sftp_page, "SFTP", sftp_tab_id.c_str());
+  GtkWidget *sftp_tab = create_tab_button(
+      state, sftp_page, settings_ui_text(SettingsUiText::sftp_tab),
+      sftp_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), sftp_page, sftp_tab);
   gtk_widget_show_all(sftp_page);
   gtk_widget_show_all(sftp_tab);
@@ -3272,7 +3324,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   GtkWidget *terminal_page = create_terminal_page(state);
   const std::string terminal_tab_id = widget_id(state, "terminal_tab");
   GtkWidget *terminal_tab = create_tab_button(
-      state, terminal_page, "Terminal", terminal_tab_id.c_str());
+      state, terminal_page, settings_ui_text(SettingsUiText::terminal_tab),
+      terminal_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), terminal_page,
                            terminal_tab);
   gtk_widget_show_all(terminal_page);
@@ -3289,7 +3342,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   GtkWidget *transfer_page = create_transfer_page(state);
   const std::string transfer_tab_id = widget_id(state, "transfer_tab");
   GtkWidget *transfer_tab = create_tab_button(
-      state, transfer_page, "Transfer", transfer_tab_id.c_str());
+      state, transfer_page, settings_ui_text(SettingsUiText::transfer_tab),
+      transfer_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), transfer_page,
                            transfer_tab);
   gtk_widget_show_all(transfer_page);
@@ -3306,7 +3360,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   GtkWidget *logging_page = create_logging_page(state);
   const std::string logging_tab_id = widget_id(state, "logging_tab");
   GtkWidget *logging_tab = create_tab_button(
-      state, logging_page, "Logging", logging_tab_id.c_str());
+      state, logging_page, settings_ui_text(SettingsUiText::logging_tab),
+      logging_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), logging_page,
                            logging_tab);
   gtk_widget_show_all(logging_page);

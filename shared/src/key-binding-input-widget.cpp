@@ -9,6 +9,8 @@
 
 #include <elder-terms/key-binding.h>
 
+#include "settings-widget/settings-presentation.h"
+
 namespace elder_terms {
 
 enum class KeyBindingInputDisplayMode {
@@ -58,6 +60,7 @@ static std::string validation_error(KeyBindingInputWidgetState *state) {
 static void update_validation_presentation(
     KeyBindingInputWidgetState *state) {
   const std::string error = validation_error(state);
+  const std::string message = settings_validation_message(error);
   GtkStyleContext *context = gtk_widget_get_style_context(state->entry);
   if (!error.empty()) {
     gtk_style_context_add_class(context, GTK_STYLE_CLASS_ERROR);
@@ -68,7 +71,7 @@ static void update_validation_presentation(
                                    GTK_ENTRY_ICON_SECONDARY, FALSE);
     gtk_entry_set_icon_tooltip_text(GTK_ENTRY(state->entry),
                                     GTK_ENTRY_ICON_SECONDARY,
-                                    error.c_str());
+                                    message.c_str());
     return;
   }
 
@@ -84,7 +87,8 @@ static void update_validation_presentation(
                                  show_clear ? TRUE : FALSE);
   gtk_entry_set_icon_tooltip_text(
       GTK_ENTRY(state->entry), GTK_ENTRY_ICON_SECONDARY,
-      show_clear ? "Clear key binding" : nullptr);
+      show_clear ? settings_ui_text(SettingsUiText::clear_key_binding)
+                 : nullptr);
 }
 
 static void set_entry_presentation(KeyBindingInputWidgetState *state,
@@ -303,8 +307,9 @@ create_key_binding_input_widget(KeyBindingInputWidgetOptions options) {
                             reinterpret_cast<gpointer *>(&state->entry));
   assign_accessible_id(state->entry, options.accessible_id);
   gtk_editable_set_editable(GTK_EDITABLE(state->entry), FALSE);
-  gtk_entry_set_placeholder_text(GTK_ENTRY(state->entry),
-                                 "Press a key combination");
+  gtk_entry_set_placeholder_text(
+      GTK_ENTRY(state->entry),
+      settings_ui_text(SettingsUiText::press_key_combination));
   gtk_widget_add_events(state->entry, GDK_KEY_PRESS_MASK |
                                           GDK_KEY_RELEASE_MASK |
                                           GDK_FOCUS_CHANGE_MASK);

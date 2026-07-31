@@ -20,6 +20,7 @@ elder_terms_shared_sources = [
   'src/settings/terminal-settings.cpp',
   'src/settings/terminal-type-settings.cpp',
   'src/settings/transfer-settings.cpp',
+  'src/settings-widget/settings-presentation.cpp',
   'src/settings-widget/settings-widget.cpp',
 ]
 

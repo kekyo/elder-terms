@@ -229,6 +229,20 @@ const findDescendantByName = async (
   return undefined;
 };
 
+const expectPageLabels = async (
+  app: GtkApp,
+  pageId: string,
+  expectedLabels: readonly string[]
+): Promise<void> => {
+  const page = await app.getById(pageId);
+  for (const label of expectedLabels) {
+    expect(
+      await findDescendantByName(page, 'label', label),
+      `${pageId}: ${label}`
+    ).toBeDefined();
+  }
+};
+
 const findWindowByName = async (
   app: GtkApp,
   name: string
@@ -525,6 +539,100 @@ describe.concurrent('shared settings widget', () => {
     }
   });
 
+  it('presents every settings key with a user-facing label', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--global-mode', '--page=general'],
+      async ({ app }) => {
+        const pages = [
+          {
+            id: 'global_settings_general_page',
+            labels: [
+              'Connection type',
+              'Startup mode',
+              'Open application shortcut',
+              'Title and status bar background',
+              'Content background',
+            ],
+          },
+          {
+            id: 'global_settings_telnet_page',
+            labels: ['Address', 'Port', 'Terminal type'],
+          },
+          {
+            id: 'global_settings_ssh_page',
+            labels: [
+              'Address',
+              'Port',
+              'User name',
+              'Identity file',
+              'Terminal type',
+            ],
+          },
+          {
+            id: 'global_settings_sftp_page',
+            labels: ['Local directory', 'Remote directory'],
+          },
+          {
+            id: 'global_settings_serial_page',
+            labels: [
+              'Device',
+              'Baud rate',
+              'Data bits',
+              'Parity',
+              'Stop bits',
+              'Flow control',
+              'Connection monitoring signal',
+            ],
+          },
+          {
+            id: 'global_settings_terminal_page',
+            labels: [
+              'Character encoding',
+              'Backspace code',
+              'Cursor key mode',
+              'Columns',
+              'Rows',
+              'Zoom factor',
+              'Close window when session ends',
+              'Zoom in shortcut',
+              'Zoom out shortcut',
+            ],
+          },
+          {
+            id: 'global_settings_transfer_page',
+            labels: [
+              'Transfer base directory',
+              'Text send rate (bytes/s)',
+              'Automatically start ZMODEM transfers',
+            ],
+          },
+          {
+            id: 'global_settings_logging_page',
+            labels: [
+              'Enable logging',
+              'Log directory',
+              'File name format',
+              'Log content',
+            ],
+          },
+        ] as const;
+
+        for (const page of pages) {
+          await expectPageLabels(app, page.id, page.labels);
+        }
+      }
+    );
+
+    await runSharedGtkTest(context, ['--page=general'], async ({ app }) => {
+      await expectPageLabels(app, 'settings_general_page', [
+        'Connection name',
+        'Connection type',
+        'Open connection shortcut',
+      ]);
+    });
+  }, 60_000);
+
   it('exposes launcher draft state without its internal action row', async (context) => {
     await runSharedGtkTest(
       context,
@@ -557,14 +665,17 @@ describe.concurrent('shared settings widget', () => {
               'entry'
             ).text()
           ).toBe('fixture');
-          await expectSelectedConnectionType(app, 'Local (built-in)');
+          await expectSelectedConnectionType(
+            app,
+            'Local shell (built-in default)'
+          );
           await expectSensitive(
             await app.getById('settings_general_type_combo')
           );
           await expectInheritedEntry(
             app,
             'settings_general_open_connection_entry',
-            'Disabled (built-in)'
+            'Disabled (built-in default)'
           );
         },
         differsFrom: undefined,
@@ -592,7 +703,10 @@ describe.concurrent('shared settings widget', () => {
       {
         args: ['--runtime'],
         assert: async (app) => {
-          await expectSelectedConnectionType(app, 'Local (built-in)');
+          await expectSelectedConnectionType(
+            app,
+            'Local shell (built-in default)'
+          );
           await expectInsensitive(
             await app.getById('settings_general_type_combo')
           );
@@ -690,7 +804,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForEntryPlaceholder(
           app,
           'settings_general_open_connection_entry',
-          'Disabled (built-in)'
+          'Disabled (built-in default)'
         );
         await expectElementKind(
           await app.getById('settings_apply_button'),
@@ -711,17 +825,17 @@ describe.concurrent('shared settings widget', () => {
           await expectInheritedEntry(
             app,
             'settings_terminal_encoding_entry',
-            'UTF-8 (built-in)'
+            'UTF-8 (built-in default)'
           );
           await expectSelectedComboValue(
             app,
             'settings_terminal_backspace_code_combo',
-            'DEL (built-in)'
+            'DEL (built-in default)'
           );
           await expectSelectedComboValue(
             app,
             'settings_terminal_cursor_key_mode_combo',
-            'Normal (built-in)'
+            'Normal (built-in default)'
           );
           const width = expectElementKind(
             await app.getById('settings_terminal_width_entry'),
@@ -731,7 +845,7 @@ describe.concurrent('shared settings widget', () => {
           await waitForEntryPlaceholder(
             app,
             'settings_terminal_width_entry',
-            '80 (built-in)'
+            '80 (built-in default)'
           );
           expect(
             await expectElementKind(
@@ -854,22 +968,22 @@ describe.concurrent('shared settings widget', () => {
       await expectSelectedComboValue(
         app,
         'settings_general_exterior_background_mode_combo',
-        'No color (built-in)'
+        'No color (built-in default)'
       );
       await expectSelectedComboValue(
         app,
         'settings_general_background_mode_combo',
-        'No color (built-in)'
+        'No color (built-in default)'
       );
       await waitForEntryPlaceholder(
         app,
         'settings_telnet_terminal_type_entry',
-        'xterm-256color (built-in)'
+        'xterm-256color (built-in default)'
       );
       await waitForEntryPlaceholder(
         app,
         'settings_ssh_terminal_type_entry',
-        'xterm-256color (built-in)'
+        'xterm-256color (built-in default)'
       );
       await expectSensitive(exteriorPicker);
       await expectSensitive(backgroundPicker);
@@ -888,22 +1002,22 @@ describe.concurrent('shared settings widget', () => {
       await expectSelectedComboValue(
         app,
         'settings_general_exterior_background_mode_combo',
-        'Custom'
+        'Custom color'
       );
       await expectSelectedComboValue(
         app,
         'settings_general_background_mode_combo',
-        'Custom'
+        'Custom color'
       );
       await waitForEntryPlaceholder(
         app,
         'settings_telnet_terminal_type_entry',
-        'xterm (built-in)'
+        'xterm (built-in default)'
       );
       await waitForEntryPlaceholder(
         app,
         'settings_ssh_terminal_type_entry',
-        'xterm (built-in)'
+        'xterm (built-in default)'
       );
 
       const backgroundMode = expectElementKind(
@@ -914,23 +1028,23 @@ describe.concurrent('shared settings widget', () => {
       await waitForEntryPlaceholder(
         app,
         'settings_telnet_terminal_type_entry',
-        'xterm-256color (built-in)'
+        'xterm-256color (built-in default)'
       );
       await waitForEntryPlaceholder(
         app,
         'settings_ssh_terminal_type_entry',
-        'xterm-256color (built-in)'
+        'xterm-256color (built-in default)'
       );
       await backgroundMode.selectChildAt(2);
       await waitForEntryPlaceholder(
         app,
         'settings_telnet_terminal_type_entry',
-        'xterm (built-in)'
+        'xterm (built-in default)'
       );
       await waitForEntryPlaceholder(
         app,
         'settings_ssh_terminal_type_entry',
-        'xterm (built-in)'
+        'xterm (built-in default)'
       );
       await expectElementKind(
         await app.getById('settings_apply_button'),
@@ -974,7 +1088,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_general_background_mode_combo',
-          'Custom'
+          'Custom color'
         );
         await expectSensitive(
           await app.getById('settings_general_exterior_background_button')
@@ -985,12 +1099,12 @@ describe.concurrent('shared settings widget', () => {
         await waitForEntryPlaceholder(
           app,
           'settings_telnet_terminal_type_entry',
-          'vt220 (global)'
+          'vt220 (global default)'
         );
         await waitForEntryPlaceholder(
           app,
           'settings_ssh_terminal_type_entry',
-          'ansi (global)'
+          'ansi (global default)'
         );
 
         await exteriorMode.selectChildAt(0);
@@ -998,12 +1112,12 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_general_exterior_background_mode_combo',
-          '#112233 (global)'
+          'Custom color (global default)'
         );
         await expectSelectedComboValue(
           app,
           'settings_general_background_mode_combo',
-          '#445566 (global)'
+          'Custom color (global default)'
         );
         await expectSensitive(
           await app.getById('settings_general_exterior_background_button')
@@ -1076,7 +1190,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_log_enabled_combo',
-          'Disabled (built-in)'
+          'Disabled (built-in default)'
         );
         expect(
           await expectElementKind(
@@ -1093,7 +1207,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_log_mode_combo',
-          'Raw (built-in)'
+          'Raw bytes (before character conversion) (built-in default)'
         );
       },
       differsFrom: undefined,
@@ -1141,12 +1255,12 @@ describe.concurrent('shared settings widget', () => {
           await waitForEntryPlaceholder(
             app,
             'settings_telnet_port_entry',
-            '23 (built-in)'
+            '23 (built-in default)'
           );
           await waitForEntryPlaceholder(
             app,
             'settings_telnet_terminal_type_entry',
-            'xterm-256color (built-in)'
+            'xterm-256color (built-in default)'
           );
           await expectSensitive(address);
           await expectSensitive(port);
@@ -1322,7 +1436,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForEntryPlaceholder(
           app,
           'settings_telnet_terminal_type_entry',
-          'xterm-256color (built-in)'
+          'xterm-256color (built-in default)'
         );
         await expectElementKind(
           await app.getById('settings_apply_button'),
@@ -1369,12 +1483,12 @@ describe.concurrent('shared settings widget', () => {
           await waitForEntryPlaceholder(
             app,
             'settings_ssh_port_entry',
-            '22 (built-in)'
+            '22 (built-in default)'
           );
           await waitForEntryPlaceholder(
             app,
             'settings_ssh_terminal_type_entry',
-            'xterm-256color (built-in)'
+            'xterm-256color (built-in default)'
           );
           await expectSensitive(address);
           await expectSensitive(port);
@@ -1583,7 +1697,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_serial_parity_combo',
-          'e'
+          'Even'
         );
         await expectSelectedComboValue(
           app,
@@ -1593,12 +1707,12 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_serial_flow_control_combo',
-          'xon'
+          'XON/XOFF (software)'
         );
         await expectSelectedComboValue(
           app,
           'settings_serial_carrier_detect_combo',
-          'dsr'
+          'DSR (Data Set Ready)'
         );
         await expectSensitive(device);
         await expectSensitive(baudrate);
@@ -1731,7 +1845,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_log_mode_combo',
-          'Cooked'
+          'UTF-8 text (after character conversion)'
         );
 
         await fileNameFormat.setText('../outside.log');
@@ -1831,7 +1945,7 @@ describe.concurrent('shared settings widget', () => {
       await expectSelectedComboValue(
         app,
         'settings_terminal_backspace_code_combo',
-        'DEL (built-in)'
+        'DEL (built-in default)'
       );
       await expectElementKind(
         await app.getById('settings_apply_button'),
@@ -1944,7 +2058,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_serial_parity_combo',
-          'o'
+          'Odd'
         );
         await expectSelectedComboValue(
           app,
@@ -1954,12 +2068,12 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_serial_flow_control_combo',
-          'hard'
+          'RTS/CTS (hardware)'
         );
         await expectSelectedComboValue(
           app,
           'settings_serial_carrier_detect_combo',
-          'cts'
+          'CTS (Clear to Send)'
         );
         await expectInsensitive(device);
         await expectSensitive(baudrate);
@@ -2146,17 +2260,17 @@ describe.concurrent('shared settings widget', () => {
         await waitForEntryPlaceholder(
           app,
           'settings_terminal_encoding_entry',
-          'UTF-8 (built-in)'
+          'UTF-8 (built-in default)'
         );
         await expectSelectedComboValue(
           app,
           'settings_terminal_backspace_code_combo',
-          'BS (built-in)'
+          'BS (built-in default)'
         );
         await expectSelectedComboValue(
           app,
           'settings_terminal_cursor_key_mode_combo',
-          'ADM3 (built-in)'
+          'ADM3 (built-in default)'
         );
 
         await encoding.setText('CP932');
@@ -2221,7 +2335,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForEntryPlaceholder(
           app,
           'settings_terminal_zoom_in_key_entry',
-          'ctrl+plus (built-in)'
+          'ctrl+plus (built-in default)'
         );
         expect((await zoomInKey.info()).states).not.toContain('editable');
         await clickWidget(app, zoomInKey);
@@ -2387,7 +2501,7 @@ describe.concurrent('shared settings widget', () => {
     ] as const;
 
     await runSharedGtkTest(context, args, async ({ app }) => {
-      await expectSelectedConnectionType(app, 'Serial (global)');
+      await expectSelectedConnectionType(app, 'Serial (global default)');
       await expectElementKind(
         await app.getById('settings_apply_button'),
         'button'
@@ -2438,47 +2552,47 @@ describe.concurrent('shared settings widget', () => {
       await expectInheritedEntry(
         app,
         'settings_terminal_width_entry',
-        '96 (global)'
+        '96 (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_terminal_height_entry',
-        '32 (global)'
+        '32 (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_terminal_zoom_entry',
-        '1.25 (global)'
+        '1.25 (global default)'
       );
       await expectSelectedComboValue(
         app,
         'settings_terminal_auto_close_combo',
-        'Enabled (global)'
+        'Enabled (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_terminal_encoding_entry',
-        'CP932 (global)'
+        'CP932 (global default)'
       );
       await expectSelectedComboValue(
         app,
         'settings_terminal_backspace_code_combo',
-        'DEL (global)'
+        'DEL (global default)'
       );
       await expectSelectedComboValue(
         app,
         'settings_terminal_cursor_key_mode_combo',
-        'Normal (global)'
+        'Normal (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_terminal_zoom_in_key_entry',
-        'alt+plus (global)'
+        'alt+plus (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_terminal_zoom_out_key_entry',
-        'alt+minus (global)'
+        'alt+minus (global default)'
       );
       expectElementKind(
         await app.getById('settings_terminal_zoom_in_key_reset_button'),
@@ -2493,103 +2607,103 @@ describe.concurrent('shared settings widget', () => {
       await expectInheritedEntry(
         app,
         'settings_serial_device_entry',
-        '/dev/ttyGLOBAL (global)'
+        '/dev/ttyGLOBAL (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_serial_baudrate_entry',
-        '57600 (global)'
+        '57600 (global default)'
       );
       await expectSelectedComboValue(
         app,
         'settings_serial_bits_combo',
-        '7 (global)'
+        '7 (global default)'
       );
       await expectSelectedComboValue(
         app,
         'settings_serial_parity_combo',
-        'e (global)'
+        'Even (global default)'
       );
       await expectSelectedComboValue(
         app,
         'settings_serial_stop_bit_combo',
-        '2 (global)'
+        '2 (global default)'
       );
       await expectSelectedComboValue(
         app,
         'settings_serial_flow_control_combo',
-        'xon (global)'
+        'XON/XOFF (software) (global default)'
       );
       await expectSelectedComboValue(
         app,
         'settings_serial_carrier_detect_combo',
-        'dsr (global)'
+        'DSR (Data Set Ready) (global default)'
       );
 
       await selectSettingsTab(app, 'Transfer');
       await expectInheritedEntry(
         app,
         'settings_transfer_base_path_entry',
-        'file:///tmp/global-transfer (global)'
+        'file:///tmp/global-transfer (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_transfer_text_send_rate_entry',
-        '4096 (global)'
+        '4096 (global default)'
       );
       await expectSelectedComboValue(
         app,
         'settings_transfer_zmodem_autostart_combo',
-        'Disabled (global)'
+        'Disabled (global default)'
       );
 
       await selectSettingsTab(app, 'Logging');
       await expectSelectedComboValue(
         app,
         'settings_log_enabled_combo',
-        'Enabled (global)'
+        'Enabled (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_log_base_directory_entry',
-        '/tmp/global-log (global)'
+        '/tmp/global-log (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_log_file_name_format_entry',
-        '{name}.global.log (global)'
+        '{name}.global.log (global default)'
       );
       await expectSelectedComboValue(
         app,
         'settings_log_mode_combo',
-        'Cooked (global)'
+        'UTF-8 text (after character conversion) (global default)'
       );
 
       await expectInheritedEntry(
         app,
         'settings_telnet_address_entry',
-        'global.telnet.test (global)'
+        'global.telnet.test (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_telnet_port_entry',
-        '2323 (global)'
+        '2323 (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_telnet_terminal_type_entry',
-        'vt220 (global)'
+        'vt220 (global default)'
       );
 
       await expectInheritedEntry(
         app,
         'settings_ssh_address_entry',
-        'global.ssh.test (global)'
+        'global.ssh.test (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_ssh_port_entry',
-        '2222 (global)'
+        '2222 (global default)'
       );
       await expectInheritedEntry(
         app,
@@ -2599,23 +2713,23 @@ describe.concurrent('shared settings widget', () => {
       await expectInheritedEntry(
         app,
         'settings_ssh_identity_file_entry',
-        '/tmp/id_global (global)'
+        '/tmp/id_global (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_ssh_terminal_type_entry',
-        'ansi (global)'
+        'ansi (global default)'
       );
 
       await expectInheritedEntry(
         app,
         'settings_sftp_local_directory_entry',
-        '/tmp/local (global)'
+        '/tmp/local (global default)'
       );
       await expectInheritedEntry(
         app,
         'settings_sftp_remote_directory_entry',
-        '/srv/global (global)'
+        '/srv/global (global default)'
       );
     });
   });
@@ -2633,7 +2747,7 @@ describe.concurrent('shared settings widget', () => {
         await expectInheritedEntry(
           app,
           'settings_terminal_width_entry',
-          '96 (global)'
+          '96 (global default)'
         );
         await width.setText('96');
         await expectElementKind(
@@ -2660,7 +2774,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForEntryPlaceholder(
           app,
           'settings_terminal_width_entry',
-          '96 (global)'
+          '96 (global default)'
         );
         await expectElementKind(
           await app.getById('settings_apply_button'),
@@ -2687,13 +2801,13 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_serial_parity_combo',
-          'e (global)'
+          'Even (global default)'
         );
         await parity.selectChildAt(2);
         await expectSelectedComboValue(
           app,
           'settings_serial_parity_combo',
-          'e'
+          'Even'
         );
         await expectElementKind(
           await app.getById('settings_apply_button'),
@@ -2724,7 +2838,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_serial_parity_combo',
-          'e (global)'
+          'Even (global default)'
         );
         await expectElementKind(
           await app.getById('settings_apply_button'),
@@ -2754,7 +2868,7 @@ describe.concurrent('shared settings widget', () => {
         const encoding = await expectInheritedEntry(
           app,
           'settings_terminal_encoding_entry',
-          'CP932 (global)'
+          'CP932 (global default)'
         );
         const autoClose = expectElementKind(
           await app.getById('settings_terminal_auto_close_combo'),
@@ -2763,7 +2877,7 @@ describe.concurrent('shared settings widget', () => {
         const zoomIn = await expectInheritedEntry(
           app,
           'settings_terminal_zoom_in_key_entry',
-          'alt+F1 (global)'
+          'alt+F1 (global default)'
         );
 
         await encoding.setText('CP932');
@@ -2773,7 +2887,7 @@ describe.concurrent('shared settings widget', () => {
         const terminalType = await expectInheritedEntry(
           app,
           'settings_telnet_terminal_type_entry',
-          'vt220 (global)'
+          'vt220 (global default)'
         );
         await terminalType.setText('vt220');
 
@@ -2821,7 +2935,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForEntryPlaceholder(
           app,
           'settings_ssh_username_entry',
-          'alice (global)'
+          'alice (global default)'
         );
         await expectElementKind(
           await app.getById('settings_apply_button'),
@@ -2866,7 +2980,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForEntryPlaceholder(
           app,
           'settings_terminal_width_entry',
-          '96 (global)'
+          '96 (global default)'
         );
       }
     );
@@ -2980,18 +3094,18 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_terminal_backspace_code_combo',
-          'BS (built-in)'
+          'BS (built-in default)'
         );
         await expectSelectedComboValue(
           app,
           'settings_terminal_cursor_key_mode_combo',
-          'ADM3 (built-in)'
+          'ADM3 (built-in default)'
         );
         await selectSettingsTab(app, 'Transfer');
         await expectSelectedComboValue(
           app,
           'settings_transfer_zmodem_autostart_combo',
-          'Enabled (built-in)'
+          'Enabled (built-in default)'
         );
 
         await selectSettingsTab(app, 'General');
@@ -3006,18 +3120,18 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_terminal_backspace_code_combo',
-          'DEL (built-in)'
+          'DEL (built-in default)'
         );
         await expectSelectedComboValue(
           app,
           'settings_terminal_cursor_key_mode_combo',
-          'Normal (built-in)'
+          'Normal (built-in default)'
         );
         await selectSettingsTab(app, 'Transfer');
         await expectSelectedComboValue(
           app,
           'settings_transfer_zmodem_autostart_combo',
-          'Disabled (built-in)'
+          'Disabled (built-in default)'
         );
       }
     );
@@ -3036,18 +3150,18 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_terminal_backspace_code_combo',
-          'DEL (global)'
+          'DEL (global default)'
         );
         await expectSelectedComboValue(
           app,
           'settings_terminal_cursor_key_mode_combo',
-          'Normal (global)'
+          'Normal (global default)'
         );
         await selectSettingsTab(app, 'Transfer');
         await expectSelectedComboValue(
           app,
           'settings_transfer_zmodem_autostart_combo',
-          'Disabled (global)'
+          'Disabled (global default)'
         );
       }
     );
@@ -3085,7 +3199,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'global_settings_general_startup_mode_combo',
-          'Simple startup (built-in)'
+          'Simple startup (built-in default)'
         );
         const openApplication = expectElementKind(
           await app.getById('global_settings_general_open_application_entry'),
@@ -3095,7 +3209,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForEntryPlaceholder(
           app,
           'global_settings_general_open_application_entry',
-          'ctrl+alt+t (built-in)'
+          'ctrl+alt+t (built-in default)'
         );
         await selectSettingsTab(app, 'SSH', 'global_settings');
         await waitForResult(async () => {
@@ -3116,7 +3230,7 @@ describe.concurrent('shared settings widget', () => {
         await expectInheritedEntry(
           app,
           'global_settings_terminal_height_entry',
-          '24 (built-in)'
+          '24 (built-in default)'
         );
         await expectElementKind(
           await app.getById('global_settings_apply_button'),
@@ -3196,7 +3310,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForEntryPlaceholder(
           app,
           'global_settings_general_open_application_entry',
-          'ctrl+alt+t (built-in)'
+          'ctrl+alt+t (built-in default)'
         );
         await expectElementKind(
           await app.getById('global_settings_apply_button'),
@@ -3258,7 +3372,7 @@ describe.concurrent('shared settings widget', () => {
         await expectInheritedEntry(
           app,
           'settings_terminal_height_entry',
-          '40 (global)'
+          '40 (global default)'
         );
         expect(await name.text()).toBe('DraftName');
       }
