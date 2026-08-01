@@ -293,6 +293,70 @@ msgstr "転送"
 msgid "Logging"
 msgstr "ログ"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Macro"
+msgstr "マクロ"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Macro rules"
+msgstr "マクロルール"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Rule ID"
+msgstr "ルールID"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Regular expression"
+msgstr "正規表現"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Action"
+msgstr "アクション"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Text to send"
+msgstr "送信テキスト"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Command"
+msgstr "コマンド"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Arguments"
+msgstr "引数"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Add rule"
+msgstr "ルールを追加"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Remove rule"
+msgstr "ルールを削除"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Move up"
+msgstr "上へ移動"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Move down"
+msgstr "下へ移動"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Send text"
+msgstr "テキストを送信"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Run command"
+msgstr "コマンドを実行"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Add argument"
+msgstr "引数を追加"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Remove argument"
+msgstr "引数を削除"
+
 #: shared/src/settings-widget/settings-presentation.cpp:140
 #: elder-terms/src/main-window.ui:146
 msgid "Apply"

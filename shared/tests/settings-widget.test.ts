@@ -536,19 +536,40 @@ describe.concurrent('shared settings widget', () => {
     const cases = [
       {
         args: [] as const,
-        expected: ['General', 'Terminal', 'Transfer', 'Logging'],
+        expected: ['General', 'Terminal', 'Macro', 'Transfer', 'Logging'],
       },
       {
         args: ['--type=telnet'] as const,
-        expected: ['General', 'TELNET', 'Terminal', 'Transfer', 'Logging'],
+        expected: [
+          'General',
+          'TELNET',
+          'Terminal',
+          'Macro',
+          'Transfer',
+          'Logging',
+        ],
       },
       {
         args: ['--type=serial'] as const,
-        expected: ['General', 'Serial', 'Terminal', 'Transfer', 'Logging'],
+        expected: [
+          'General',
+          'Serial',
+          'Terminal',
+          'Macro',
+          'Transfer',
+          'Logging',
+        ],
       },
       {
         args: ['--type=ssh'] as const,
-        expected: ['General', 'SSH', 'Terminal', 'Transfer', 'Logging'],
+        expected: [
+          'General',
+          'SSH',
+          'Terminal',
+          'Macro',
+          'Transfer',
+          'Logging',
+        ],
       },
       {
         args: ['--type=sftp'] as const,
@@ -561,6 +582,74 @@ describe.concurrent('shared settings widget', () => {
         expect(await visibleSettingsTabNames(app)).toEqual(testCase.expected);
       });
     }
+  });
+
+  it('adds, validates, edits, and reorders connection macros', async (context) => {
+    await runSharedGtkTest(context, ['--page=macro'], async ({ app }) => {
+      await selectSettingsTab(app, 'Macro');
+      const add = expectElementKind(
+        await app.getById('settings_macro_add_button'),
+        'button'
+      );
+      const apply = expectElementKind(
+        await app.getById('settings_apply_button'),
+        'button'
+      );
+
+      await add.click();
+      await expectInsensitive(apply);
+      const id = expectElementKind(
+        await app.getById('settings_macro_id_entry'),
+        'entry'
+      );
+      const regex = expectElementKind(
+        await app.getById('settings_macro_regex_entry'),
+        'entry'
+      );
+      expect(await id.text()).toBe('rule1');
+      await id.setText('first');
+      await regex.setText('^READY (?<value>.+)$');
+      const action = expectElementKind(
+        await app.getById('settings_macro_action_combo'),
+        'comboBox'
+      );
+      await action.selectChildAt(1);
+      const command = expectElementKind(
+        await app.getById('settings_macro_command_entry'),
+        'entry'
+      );
+      await command.setText('notify-send');
+      await expectSensitive(apply);
+
+      const addArgument = expectElementKind(
+        await app.getById('settings_macro_argument_add_button'),
+        'button'
+      );
+      await addArgument.click();
+      const argument = await waitForResult(async () =>
+        expectElementKind(
+          await app.getById('settings_macro_argument_0_entry'),
+          'entry'
+        )
+      );
+      await argument.setText('${value}');
+
+      await add.click();
+      await expectInsensitive(apply);
+      await regex.setText('SECOND');
+      await action.selectChildAt(1);
+      await command.setText('true');
+      await expectSensitive(apply);
+      await expectElementKind(
+        await app.getById('settings_macro_move_up_button'),
+        'button'
+      ).click();
+      await apply.click();
+
+      const store = await waitForAppliedStore(app);
+      expect(store.macro_count).toBe('2');
+      expect(store.macro_ids).toBe('rule2,first');
+    });
   });
 
   it('presents every settings key with a user-facing label', async (context) => {

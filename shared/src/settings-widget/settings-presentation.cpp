@@ -132,6 +132,8 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("SFTP");
   case SettingsUiText::terminal_tab:
     return _("Terminal");
+  case SettingsUiText::macro_tab:
+    return _("Macro");
   case SettingsUiText::transfer_tab:
     return _("Transfer");
   case SettingsUiText::logging_tab:
@@ -160,6 +162,36 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Use global default");
   case SettingsUiText::use_built_in_default:
     return _("Use built-in default");
+  case SettingsUiText::macro_rules:
+    return _("Macro rules");
+  case SettingsUiText::macro_id:
+    return _("Rule ID");
+  case SettingsUiText::macro_regex:
+    return _("Regular expression");
+  case SettingsUiText::macro_action:
+    return _("Action");
+  case SettingsUiText::macro_send:
+    return _("Text to send");
+  case SettingsUiText::macro_command:
+    return _("Command");
+  case SettingsUiText::macro_arguments:
+    return _("Arguments");
+  case SettingsUiText::macro_add:
+    return _("Add rule");
+  case SettingsUiText::macro_remove:
+    return _("Remove rule");
+  case SettingsUiText::macro_move_up:
+    return _("Move up");
+  case SettingsUiText::macro_move_down:
+    return _("Move down");
+  case SettingsUiText::macro_send_action:
+    return _("Send text");
+  case SettingsUiText::macro_command_action:
+    return _("Run command");
+  case SettingsUiText::macro_add_argument:
+    return _("Add argument");
+  case SettingsUiText::macro_remove_argument:
+    return _("Remove argument");
   }
   return "";
 }

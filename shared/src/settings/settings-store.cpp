@@ -110,6 +110,14 @@ SettingsStore create_settings_store(std::vector<SettingDefinition> definitions) 
   return store;
 }
 
+void set_macro_rules(SettingsStore *store, std::vector<MacroRule> rules) {
+  if (store->macro_rules == rules) {
+    return;
+  }
+  store->macro_rules = std::move(rules);
+  store->macro_rules_dirty = true;
+}
+
 void load_settings_store_from_key_file(SettingsStore *store,
                                        GKeyFile *key_file,
                                        std::vector<std::string> *warnings) {
@@ -310,7 +318,8 @@ bool setting_is_dirty(const SettingsStore &store, const SettingKey &key) {
 }
 
 bool settings_store_is_dirty(const SettingsStore &store) {
-  return std::any_of(store.entries.begin(), store.entries.end(),
+  return store.macro_rules_dirty ||
+         std::any_of(store.entries.begin(), store.entries.end(),
                      [](const SettingEntry &entry) { return entry.dirty; });
 }
 

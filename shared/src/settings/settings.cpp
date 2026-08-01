@@ -84,10 +84,160 @@ static void set_key_file_value(GKeyFile *key_file, const SettingEntry &entry) {
                          std::get<bool>(entry.value) ? TRUE : FALSE);
 }
 
+static std::string key_file_string(GKeyFile *key_file,
+                                   const std::string &group,
+                                   const char *key, GError **error) {
+  gchar *value = g_key_file_get_string(key_file, group.c_str(), key, error);
+  if (value == nullptr) {
+    return {};
+  }
+  std::string result = value;
+  g_free(value);
+  return result;
+}
+
+static void warn_invalid_macro(std::vector<std::string> *warnings,
+                               const std::string &group,
+                               const std::string &reason) {
+  warnings->push_back("Warning: invalid macro [" + group + "]: " + reason +
+                      "; ignoring rule");
+}
+
+static std::vector<MacroRule>
+load_macro_rules_from_key_file(GKeyFile *key_file,
+                               std::vector<std::string> *warnings) {
+  std::vector<MacroRule> rules;
+  gsize group_count = 0;
+  gchar **groups = g_key_file_get_groups(key_file, &group_count);
+  for (gsize group_index = 0; group_index < group_count; ++group_index) {
+    const std::string group = groups[group_index];
+    constexpr char prefix[] = "macro.";
+    if (!group.starts_with(prefix)) {
+      continue;
+    }
+
+    MacroRule rule;
+    rule.id = group.substr(sizeof(prefix) - 1);
+    std::string reason;
+    if (!macro_rule_id_is_valid(rule.id, &reason)) {
+      warn_invalid_macro(warnings, group, reason);
+      continue;
+    }
+    const bool duplicate =
+        std::any_of(rules.begin(), rules.end(), [&rule](const MacroRule &other) {
+          return other.id == rule.id;
+        });
+    if (duplicate) {
+      warn_invalid_macro(warnings, group, "identifier is duplicated");
+      continue;
+    }
+
+    const bool has_regex =
+        g_key_file_has_key(key_file, group.c_str(), "regex", nullptr);
+    const bool has_send =
+        g_key_file_has_key(key_file, group.c_str(), "send", nullptr);
+    const bool has_command =
+        g_key_file_has_key(key_file, group.c_str(), "command", nullptr);
+    const bool has_arguments =
+        g_key_file_has_key(key_file, group.c_str(), "arguments", nullptr);
+    if (!has_regex) {
+      warn_invalid_macro(warnings, group, "missing regex");
+      continue;
+    }
+    if (has_send == has_command) {
+      warn_invalid_macro(
+          warnings, group,
+          "exactly one of send or command must be specified");
+      continue;
+    }
+    if (has_send && has_arguments) {
+      warn_invalid_macro(warnings, group,
+                         "arguments may be used only with command");
+      continue;
+    }
+
+    GError *error = nullptr;
+    rule.pattern = key_file_string(key_file, group, "regex", &error);
+    if (error != nullptr) {
+      warn_invalid_macro(warnings, group, glib_error_message(error));
+      g_clear_error(&error);
+      continue;
+    }
+
+    if (has_send) {
+      const std::string text =
+          key_file_string(key_file, group, "send", &error);
+      if (error == nullptr) {
+        rule.action = MacroSendAction{.text = text};
+      }
+    } else {
+      MacroCommandAction action{
+          .command = key_file_string(key_file, group, "command", &error),
+          .arguments = {},
+      };
+      if (error == nullptr && has_arguments) {
+        gsize argument_count = 0;
+        gchar **arguments = g_key_file_get_string_list(
+            key_file, group.c_str(), "arguments", &argument_count, &error);
+        if (arguments != nullptr) {
+          action.arguments.reserve(argument_count);
+          for (gsize index = 0; index < argument_count; ++index) {
+            action.arguments.emplace_back(arguments[index]);
+          }
+          g_strfreev(arguments);
+        }
+      }
+      if (error == nullptr) {
+        rule.action = std::move(action);
+      }
+    }
+
+    if (error != nullptr) {
+      warn_invalid_macro(warnings, group, glib_error_message(error));
+      g_clear_error(&error);
+      continue;
+    }
+    if (!macro_rule_is_valid(rule, &reason)) {
+      warn_invalid_macro(warnings, group, reason);
+      continue;
+    }
+    rules.push_back(std::move(rule));
+  }
+  g_strfreev(groups);
+  return rules;
+}
+
+static void set_key_file_macro_rule(GKeyFile *key_file,
+                                    const MacroRule &rule) {
+  const std::string group = "macro." + rule.id;
+  g_key_file_set_string(key_file, group.c_str(), "regex",
+                        rule.pattern.c_str());
+  if (const auto *send = std::get_if<MacroSendAction>(&rule.action)) {
+    g_key_file_set_string(key_file, group.c_str(), "send",
+                          send->text.c_str());
+    return;
+  }
+
+  const auto &command = std::get<MacroCommandAction>(rule.action);
+  g_key_file_set_string(key_file, group.c_str(), "command",
+                        command.command.c_str());
+  if (command.arguments.empty()) {
+    return;
+  }
+  std::vector<const gchar *> arguments;
+  arguments.reserve(command.arguments.size());
+  for (const std::string &argument : command.arguments) {
+    arguments.push_back(argument.c_str());
+  }
+  g_key_file_set_string_list(key_file, group.c_str(), "arguments",
+                             arguments.data(), arguments.size());
+}
+
 static bool load_settings_file(SettingsStore *store,
                                const std::filesystem::path &path,
                                bool missing_is_optional,
                                bool exclude_connection_settings,
+                               std::vector<MacroRule> *macro_rules,
                                std::vector<std::string> *warnings) {
   std::error_code exists_error;
   const bool exists = std::filesystem::exists(path, exists_error);
@@ -122,6 +272,9 @@ static bool load_settings_file(SettingsStore *store,
                           nullptr);
   }
   load_settings_store_from_key_file(store, key_file, warnings);
+  if (macro_rules != nullptr) {
+    *macro_rules = load_macro_rules_from_key_file(key_file, warnings);
+  }
   g_key_file_unref(key_file);
   return true;
 }
@@ -130,6 +283,7 @@ static void mark_settings_store_clean(SettingsStore *store) {
   for (SettingEntry &entry : store->entries) {
     entry.dirty = false;
   }
+  store->macro_rules_dirty = false;
 }
 
 static void restore_setting_entry(SettingsStore *store,
@@ -192,6 +346,11 @@ static GKeyFile *serialize_settings(const SettingsStore &store,
       continue;
     }
     set_key_file_value(key_file, entry);
+  }
+  if (!exclude_connection_settings) {
+    for (const MacroRule &rule : store.macro_rules) {
+      set_key_file_macro_rule(key_file, rule);
+    }
   }
   return key_file;
 }
@@ -349,6 +508,7 @@ load_global_settings(const std::filesystem::path &global_config_path,
   const SettingsStore built_in = result.store;
   result.loaded =
       load_settings_file(&result.store, global_config_path, true, true,
+                         nullptr,
                          &result.warnings);
   if (application_ui_language(result.store) ==
       ApplicationUiLanguage::system) {
@@ -381,21 +541,27 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_zoom)
   }
   if (options.config_path.has_value()) {
     const SettingsStore previous = result.store;
-    result.loaded = load_settings_file(&result.store,
-                                       options.config_path.value(),
-                                       false, false,
-                                       &result.warnings) &&
-                    result.loaded;
+    std::vector<MacroRule> macros;
+    const bool loaded = load_settings_file(
+        &result.store, options.config_path.value(), false, false, &macros,
+        &result.warnings);
+    if (loaded) {
+      result.store.macro_rules = std::move(macros);
+    }
+    result.loaded = loaded && result.loaded;
     resolve_terminal_key_binding_conflict(&result.store, previous,
                                           &result.warnings);
   }
   if (options.startup_config_path.has_value()) {
     const SettingsStore previous = result.store;
-    result.loaded = load_settings_file(&result.store,
-                                       options.startup_config_path.value(),
-                                       false, false,
-                                       &result.warnings) &&
-                    result.loaded;
+    std::vector<MacroRule> macros;
+    const bool loaded = load_settings_file(
+        &result.store, options.startup_config_path.value(), false, false,
+        &macros, &result.warnings);
+    if (loaded) {
+      result.store.macro_rules = std::move(macros);
+    }
+    result.loaded = loaded && result.loaded;
     resolve_terminal_key_binding_conflict(&result.store, previous,
                                           &result.warnings);
   }

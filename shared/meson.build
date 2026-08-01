@@ -27,6 +27,7 @@ elder_terms_shared_sources = [
   'src/settings/general-settings.cpp',
   'src/settings/local-session-settings.cpp',
   'src/settings/log-settings.cpp',
+  'src/settings/macro-settings.cpp',
   'src/settings/serial-settings.cpp',
   'src/settings/settings.cpp',
   'src/settings/settings-store.cpp',

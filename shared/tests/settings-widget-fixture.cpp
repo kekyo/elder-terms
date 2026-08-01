@@ -405,22 +405,19 @@ static void select_initial_page(GtkWidget *window,
     return;
   }
 
-  if (page == "terminal") {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 5);
-  } else if (page == "telnet") {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 1);
-  } else if (page == "serial") {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 2);
-  } else if (page == "ssh") {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 3);
-  } else if (page == "sftp") {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 4);
-  } else if (page == "transfer") {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 6);
-  } else if (page == "logging") {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 7);
-  } else {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 0);
+  const std::string suffix = page.empty() ? "general" : page;
+  GtkWidget *target =
+      find_widget_by_name(window, "settings_" + suffix + "_page");
+  if (target == nullptr) {
+    target = find_widget_by_name(window,
+                                 "global_settings_" + suffix + "_page");
+  }
+  const gint page_number = target == nullptr
+                               ? 0
+                               : gtk_notebook_page_num(GTK_NOTEBOOK(notebook),
+                                                       target);
+  if (page_number >= 0) {
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), page_number);
   }
 }
 
@@ -539,6 +536,13 @@ static void print_store(const char *prefix,
       elder_terms::serial_connection_settings(store);
   const elder_terms::TerminalLogSettings log =
       elder_terms::terminal_log_settings(store);
+  std::string macro_ids;
+  for (const elder_terms::MacroRule &rule : store.macro_rules) {
+    if (!macro_ids.empty()) {
+      macro_ids += ',';
+    }
+    macro_ids += rule.id;
+  }
   std::cout << prefix
             << " dirty="
             << (elder_terms::settings_store_is_dirty(store) ? "true" : "false")
@@ -602,7 +606,9 @@ static void print_store(const char *prefix,
             << " open_application="
             << elder_terms::application_open_hotkey_text(store)
             << " open_connection="
-            << elder_terms::general_open_connection_hotkey_text(store);
+            << elder_terms::general_open_connection_hotkey_text(store)
+            << " macro_count=" << store.macro_rules.size()
+            << " macro_ids=" << macro_ids;
   print_setting_metadata(
       store, "ui_language",
       elder_terms::application_ui_language_setting_key());

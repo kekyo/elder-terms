@@ -7,6 +7,7 @@
 #include <glib.h>
 
 #include <elder-terms/export.h>
+#include <elder-terms/settings/macro-settings.h>
 
 namespace elder_terms {
 
@@ -87,6 +88,10 @@ struct SettingEntry {
 struct SettingsStore {
   /** Registered setting entries. */
   std::vector<SettingEntry> entries;
+  /** Ordered connection macro rules. */
+  std::vector<MacroRule> macro_rules;
+  /** True after the macro rule collection is changed in memory. */
+  bool macro_rules_dirty = false;
 };
 
 /**
@@ -107,6 +112,15 @@ ELDER_TERMS_API SettingKey make_setting_key(std::string section,
  */
 ELDER_TERMS_API SettingsStore
 create_settings_store(std::vector<SettingDefinition> definitions);
+
+/**
+ * Replaces all ordered connection macro rules.
+ *
+ * @param store Target settings store.
+ * @param rules New ordered rule collection.
+ */
+ELDER_TERMS_API void set_macro_rules(SettingsStore *store,
+                                     std::vector<MacroRule> rules);
 
 /**
  * Loads all registered keys from a parsed GLib key file.

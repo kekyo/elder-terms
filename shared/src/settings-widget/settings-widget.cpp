@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iomanip>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -92,6 +93,22 @@ struct SettingsWidgetState {
   KeyBindingInputWidgetState *terminal_zoom_out_key_input = nullptr;
   GtkWidget *terminal_zoom_in_key_reset_button = nullptr;
   GtkWidget *terminal_zoom_out_key_reset_button = nullptr;
+  GtkWidget *macro_list = nullptr;
+  GtkWidget *macro_editor = nullptr;
+  GtkWidget *macro_id_entry = nullptr;
+  GtkWidget *macro_regex_entry = nullptr;
+  GtkWidget *macro_action_combo = nullptr;
+  GtkWidget *macro_send_panel = nullptr;
+  GtkWidget *macro_send_view = nullptr;
+  GtkWidget *macro_command_panel = nullptr;
+  GtkWidget *macro_command_entry = nullptr;
+  GtkWidget *macro_arguments_box = nullptr;
+  GtkWidget *macro_argument_add_button = nullptr;
+  GtkWidget *macro_remove_button = nullptr;
+  GtkWidget *macro_move_up_button = nullptr;
+  GtkWidget *macro_move_down_button = nullptr;
+  int selected_macro = -1;
+  unsigned int next_macro_number = 1;
   GtkWidget *telnet_address_entry = nullptr;
   GtkWidget *telnet_port_entry = nullptr;
   GtkWidget *telnet_terminal_type_entry = nullptr;
@@ -1096,6 +1113,25 @@ static bool connection_hotkey_input_valid(
              state->general_open_connection_input);
 }
 
+static bool macro_rules_are_valid(const SettingsWidgetState *state) {
+  for (std::size_t index = 0; index < state->draft_store.macro_rules.size();
+       ++index) {
+    const MacroRule &rule = state->draft_store.macro_rules[index];
+    std::string reason;
+    if (!macro_rule_is_valid(rule, &reason)) {
+      return false;
+    }
+    const bool duplicated = std::any_of(
+        state->draft_store.macro_rules.begin() + index + 1,
+        state->draft_store.macro_rules.end(),
+        [&rule](const MacroRule &other) { return other.id == rule.id; });
+    if (duplicated) {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool settings_inputs_valid(const SettingsWidgetState *state) {
   return state->terminal_width_valid && state->terminal_height_valid &&
          state->terminal_zoom_valid && state->terminal_encoding_valid &&
@@ -1105,7 +1141,7 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
          terminal_key_binding_inputs_valid(state) &&
          connection_hotkey_input_valid(state) &&
          application_hotkey_input_valid(state) &&
-         state->log_file_name_format_valid;
+         state->log_file_name_format_valid && macro_rules_are_valid(state);
 }
 
 static void notify_changed(SettingsWidgetState *state) {
@@ -1521,6 +1557,519 @@ static void update_log_mode_from_widget(SettingsWidgetState *state) {
   set_explicit_setting_value(&state->draft_store,
                              terminal_log_mode_setting_key(),
                              SettingValue{mode});
+}
+
+static void on_macro_argument_changed(GtkEditable *editable, gpointer data);
+static void on_macro_argument_move_up_clicked(GtkButton *button,
+                                              gpointer data);
+static void on_macro_argument_move_down_clicked(GtkButton *button,
+                                                gpointer data);
+static void on_macro_argument_remove_clicked(GtkButton *button,
+                                             gpointer data);
+
+static MacroRule *selected_macro_rule(SettingsWidgetState *state) {
+  if (state->selected_macro < 0 ||
+      static_cast<std::size_t>(state->selected_macro) >=
+          state->draft_store.macro_rules.size()) {
+    return nullptr;
+  }
+  return &state->draft_store.macro_rules[state->selected_macro];
+}
+
+static void clear_container(GtkWidget *container) {
+  GList *children = gtk_container_get_children(GTK_CONTAINER(container));
+  for (GList *child = children; child != nullptr; child = child->next) {
+    gtk_widget_destroy(GTK_WIDGET(child->data));
+  }
+  g_list_free(children);
+}
+
+static void set_text_view_validation(GtkWidget *view, bool valid,
+                                     const std::string &reason) {
+  GtkStyleContext *context = gtk_widget_get_style_context(view);
+  if (valid) {
+    gtk_style_context_remove_class(context, GTK_STYLE_CLASS_ERROR);
+    gtk_widget_set_tooltip_text(view, nullptr);
+    return;
+  }
+  gtk_style_context_add_class(context, GTK_STYLE_CLASS_ERROR);
+  const std::string message = settings_validation_message(reason);
+  gtk_widget_set_tooltip_text(view, message.c_str());
+}
+
+static bool macro_id_is_duplicated(const SettingsWidgetState *state,
+                                   const MacroRule *selected) {
+  return std::count_if(
+             state->draft_store.macro_rules.begin(),
+             state->draft_store.macro_rules.end(),
+             [selected](const MacroRule &rule) {
+               return rule.id == selected->id;
+             }) > 1;
+}
+
+static void update_macro_validation(SettingsWidgetState *state) {
+  const MacroRule *rule = selected_macro_rule(state);
+  if (rule == nullptr) {
+    set_entry_validation(state->macro_id_entry, true, {});
+    set_entry_validation(state->macro_regex_entry, true, {});
+    set_entry_validation(state->macro_command_entry, true, {});
+    set_text_view_validation(state->macro_send_view, true, {});
+    update_action_sensitivity(state);
+    return;
+  }
+
+  std::string id_reason;
+  bool id_valid = macro_rule_id_is_valid(rule->id, &id_reason);
+  if (id_valid && macro_id_is_duplicated(state, rule)) {
+    id_valid = false;
+    id_reason = "identifier must be unique";
+  }
+  set_entry_validation(state->macro_id_entry, id_valid, id_reason);
+
+  std::string regex_reason;
+  bool regex_valid = !rule->pattern.empty();
+  if (!regex_valid) {
+    regex_reason = "regular expression must not be empty";
+  } else {
+    GError *error = nullptr;
+    GRegex *regex = g_regex_new(rule->pattern.c_str(), G_REGEX_DEFAULT,
+                                G_REGEX_MATCH_DEFAULT, &error);
+    if (regex == nullptr) {
+      regex_valid = false;
+      regex_reason = error == nullptr || error->message == nullptr
+                         ? "invalid regular expression"
+                         : std::string(error->message);
+    }
+    if (regex != nullptr) {
+      g_regex_unref(regex);
+    }
+    g_clear_error(&error);
+  }
+  set_entry_validation(state->macro_regex_entry, regex_valid, regex_reason);
+
+  std::string rule_reason;
+  const bool rule_valid = macro_rule_is_valid(*rule, &rule_reason);
+  if (std::holds_alternative<MacroSendAction>(rule->action)) {
+    set_entry_validation(state->macro_command_entry, true, {});
+    set_text_view_validation(state->macro_send_view, rule_valid,
+                             rule_reason);
+  } else {
+    set_text_view_validation(state->macro_send_view, true, {});
+    set_entry_validation(state->macro_command_entry, rule_valid,
+                         rule_reason);
+  }
+  update_action_sensitivity(state);
+}
+
+static void update_macro_rule_button_sensitivity(
+    SettingsWidgetState *state) {
+  const bool selected = selected_macro_rule(state) != nullptr;
+  const bool can_move_up = selected && state->selected_macro > 0;
+  const bool can_move_down =
+      selected && static_cast<std::size_t>(state->selected_macro + 1) <
+                      state->draft_store.macro_rules.size();
+  gtk_widget_set_sensitive(state->macro_remove_button, selected);
+  gtk_widget_set_sensitive(state->macro_move_up_button, can_move_up);
+  gtk_widget_set_sensitive(state->macro_move_down_button, can_move_down);
+}
+
+static int macro_argument_index(GtkWidget *widget) {
+  return GPOINTER_TO_INT(
+             g_object_get_data(G_OBJECT(widget), "elder-terms-macro-index")) -
+         1;
+}
+
+static void rebuild_macro_arguments(SettingsWidgetState *state) {
+  clear_container(state->macro_arguments_box);
+  const MacroRule *rule = selected_macro_rule(state);
+  const auto *command =
+      rule == nullptr ? nullptr
+                      : std::get_if<MacroCommandAction>(&rule->action);
+  if (command == nullptr) {
+    return;
+  }
+
+  for (std::size_t index = 0; index < command->arguments.size(); ++index) {
+    GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    GtkWidget *entry = create_entry(
+        widget_id(state, ("macro_argument_" + std::to_string(index) +
+                          "_entry")
+                             .c_str()));
+    gtk_entry_set_text(GTK_ENTRY(entry), command->arguments[index].c_str());
+    gtk_widget_set_hexpand(entry, TRUE);
+    g_object_set_data(G_OBJECT(entry), "elder-terms-macro-index",
+                      GINT_TO_POINTER(static_cast<int>(index) + 1));
+    g_signal_connect(entry, "changed", G_CALLBACK(on_macro_argument_changed),
+                     state);
+    gtk_box_pack_start(GTK_BOX(row), entry, TRUE, TRUE, 0);
+
+    const auto create_argument_button =
+        [state, index](const char *label, const char *suffix,
+                       SettingsUiText tooltip, GCallback callback) {
+          GtkWidget *button = gtk_button_new_with_label(label);
+          const std::string id =
+              widget_id(state, ("macro_argument_" + std::to_string(index) +
+                                suffix)
+                                   .c_str());
+          assign_accessible_id(button, id.c_str());
+          gtk_widget_set_tooltip_text(button, settings_ui_text(tooltip));
+          g_object_set_data(G_OBJECT(button), "elder-terms-macro-index",
+                            GINT_TO_POINTER(static_cast<int>(index) + 1));
+          g_signal_connect(button, "clicked", callback, state);
+          return button;
+        };
+    GtkWidget *up = create_argument_button(
+        "↑", "_move_up_button", SettingsUiText::macro_move_up,
+        G_CALLBACK(on_macro_argument_move_up_clicked));
+    GtkWidget *down = create_argument_button(
+        "↓", "_move_down_button", SettingsUiText::macro_move_down,
+        G_CALLBACK(on_macro_argument_move_down_clicked));
+    GtkWidget *remove = create_argument_button(
+        "−", "_remove_button", SettingsUiText::macro_remove_argument,
+        G_CALLBACK(on_macro_argument_remove_clicked));
+    gtk_widget_set_sensitive(up, index > 0);
+    gtk_widget_set_sensitive(down, index + 1 < command->arguments.size());
+    gtk_box_pack_start(GTK_BOX(row), up, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(row), down, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(row), remove, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(state->macro_arguments_box), row, FALSE, FALSE,
+                       0);
+    gtk_widget_show_all(row);
+  }
+  gtk_widget_show_all(state->macro_arguments_box);
+}
+
+static void sync_macro_editor(SettingsWidgetState *state) {
+  if (state->macro_editor == nullptr) {
+    return;
+  }
+  const bool previous_synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  const MacroRule *rule = selected_macro_rule(state);
+  const bool selected = rule != nullptr;
+  gtk_widget_set_sensitive(state->macro_editor, selected);
+  gtk_entry_set_text(GTK_ENTRY(state->macro_id_entry),
+                     selected ? rule->id.c_str() : "");
+  gtk_entry_set_text(GTK_ENTRY(state->macro_regex_entry),
+                     selected ? rule->pattern.c_str() : "");
+
+  const bool sends = selected &&
+                     std::holds_alternative<MacroSendAction>(rule->action);
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->macro_action_combo),
+                              sends ? "send" : "command");
+  const std::string send_text =
+      sends ? std::get<MacroSendAction>(rule->action).text : std::string();
+  gtk_text_buffer_set_text(
+      gtk_text_view_get_buffer(GTK_TEXT_VIEW(state->macro_send_view)),
+      send_text.c_str(), static_cast<gint>(send_text.size()));
+  const auto *command =
+      selected ? std::get_if<MacroCommandAction>(&rule->action) : nullptr;
+  gtk_entry_set_text(GTK_ENTRY(state->macro_command_entry),
+                     command == nullptr ? "" : command->command.c_str());
+  rebuild_macro_arguments(state);
+  gtk_widget_set_visible(state->macro_send_panel, selected && sends);
+  gtk_widget_set_visible(state->macro_command_panel,
+                         selected && !sends);
+  state->synchronizing = previous_synchronizing;
+  update_macro_rule_button_sensitivity(state);
+  update_macro_validation(state);
+}
+
+static void update_next_macro_number(SettingsWidgetState *state) {
+  for (const MacroRule &rule : state->draft_store.macro_rules) {
+    constexpr char prefix[] = "rule";
+    if (!rule.id.starts_with(prefix) || rule.id.size() == sizeof(prefix) - 1) {
+      continue;
+    }
+    const std::string suffix = rule.id.substr(sizeof(prefix) - 1);
+    if (!std::all_of(suffix.begin(), suffix.end(), [](unsigned char value) {
+          return std::isdigit(value) != 0;
+        })) {
+      continue;
+    }
+    const guint64 number = g_ascii_strtoull(suffix.c_str(), nullptr, 10);
+    if (number < std::numeric_limits<unsigned int>::max()) {
+      state->next_macro_number =
+          std::max(state->next_macro_number,
+                   static_cast<unsigned int>(number) + 1);
+    }
+  }
+}
+
+static void rebuild_macro_list(SettingsWidgetState *state) {
+  if (state->macro_list == nullptr) {
+    return;
+  }
+  const bool previous_synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  clear_container(state->macro_list);
+  if (state->draft_store.macro_rules.empty()) {
+    state->selected_macro = -1;
+  } else if (state->selected_macro < 0 ||
+             static_cast<std::size_t>(state->selected_macro) >=
+                 state->draft_store.macro_rules.size()) {
+    state->selected_macro = 0;
+  }
+
+  GtkListBoxRow *selected_row = nullptr;
+  for (std::size_t index = 0; index < state->draft_store.macro_rules.size();
+       ++index) {
+    GtkWidget *row = gtk_list_box_row_new();
+    GtkWidget *label =
+        gtk_label_new(state->draft_store.macro_rules[index].id.c_str());
+    gtk_label_set_xalign(GTK_LABEL(label), 0.0F);
+    gtk_container_add(GTK_CONTAINER(row), label);
+    g_object_set_data(G_OBJECT(row), "elder-terms-macro-index",
+                      GINT_TO_POINTER(static_cast<int>(index) + 1));
+    gtk_container_add(GTK_CONTAINER(state->macro_list), row);
+    if (static_cast<int>(index) == state->selected_macro) {
+      selected_row = GTK_LIST_BOX_ROW(row);
+    }
+  }
+  gtk_widget_show_all(state->macro_list);
+  if (selected_row != nullptr) {
+    gtk_list_box_select_row(GTK_LIST_BOX(state->macro_list), selected_row);
+  }
+  update_next_macro_number(state);
+  state->synchronizing = previous_synchronizing;
+  sync_macro_editor(state);
+}
+
+static void mark_macro_rules_changed(SettingsWidgetState *state) {
+  state->draft_store.macro_rules_dirty = true;
+  update_macro_validation(state);
+  notify_changed(state);
+}
+
+static void on_macro_list_row_selected(GtkListBox *, GtkListBoxRow *row,
+                                       gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  state->selected_macro =
+      row == nullptr ? -1 : macro_argument_index(GTK_WIDGET(row));
+  sync_macro_editor(state);
+}
+
+static void on_macro_id_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  MacroRule *rule = selected_macro_rule(state);
+  if (state->synchronizing || rule == nullptr) {
+    return;
+  }
+  const char *text = gtk_entry_get_text(GTK_ENTRY(state->macro_id_entry));
+  rule->id = text == nullptr ? "" : text;
+  state->draft_store.macro_rules_dirty = true;
+  rebuild_macro_list(state);
+  notify_changed(state);
+}
+
+static void on_macro_regex_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  MacroRule *rule = selected_macro_rule(state);
+  if (state->synchronizing || rule == nullptr) {
+    return;
+  }
+  const char *text = gtk_entry_get_text(GTK_ENTRY(state->macro_regex_entry));
+  rule->pattern = text == nullptr ? "" : text;
+  mark_macro_rules_changed(state);
+}
+
+static void on_macro_action_changed(GtkComboBox *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  MacroRule *rule = selected_macro_rule(state);
+  if (state->synchronizing || rule == nullptr) {
+    return;
+  }
+  if (active_combo_id(state->macro_action_combo, "send") == "command") {
+    if (!std::holds_alternative<MacroCommandAction>(rule->action)) {
+      rule->action = MacroCommandAction{};
+    }
+  } else if (!std::holds_alternative<MacroSendAction>(rule->action)) {
+    rule->action = MacroSendAction{};
+  }
+  state->draft_store.macro_rules_dirty = true;
+  sync_macro_editor(state);
+  notify_changed(state);
+}
+
+static void on_macro_send_changed(GtkTextBuffer *buffer, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  MacroRule *rule = selected_macro_rule(state);
+  if (state->synchronizing || rule == nullptr) {
+    return;
+  }
+  auto *send = std::get_if<MacroSendAction>(&rule->action);
+  if (send == nullptr) {
+    return;
+  }
+  GtkTextIter start;
+  GtkTextIter end;
+  gtk_text_buffer_get_bounds(buffer, &start, &end);
+  gchar *text = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+  send->text = text == nullptr ? "" : text;
+  g_free(text);
+  mark_macro_rules_changed(state);
+}
+
+static void on_macro_command_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  MacroRule *rule = selected_macro_rule(state);
+  if (state->synchronizing || rule == nullptr) {
+    return;
+  }
+  auto *command = std::get_if<MacroCommandAction>(&rule->action);
+  if (command == nullptr) {
+    return;
+  }
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->macro_command_entry));
+  command->command = text == nullptr ? "" : text;
+  mark_macro_rules_changed(state);
+}
+
+static void on_macro_add_clicked(GtkButton *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  std::string id;
+  do {
+    id = "rule" + std::to_string(state->next_macro_number++);
+  } while (std::any_of(
+      state->draft_store.macro_rules.begin(),
+      state->draft_store.macro_rules.end(),
+      [&id](const MacroRule &rule) { return rule.id == id; }));
+  state->draft_store.macro_rules.push_back(MacroRule{
+      .id = std::move(id),
+      .pattern = {},
+      .action = MacroSendAction{},
+  });
+  state->draft_store.macro_rules_dirty = true;
+  state->selected_macro =
+      static_cast<int>(state->draft_store.macro_rules.size()) - 1;
+  rebuild_macro_list(state);
+  notify_changed(state);
+}
+
+static void on_macro_remove_clicked(GtkButton *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (selected_macro_rule(state) == nullptr) {
+    return;
+  }
+  state->draft_store.macro_rules.erase(
+      state->draft_store.macro_rules.begin() + state->selected_macro);
+  if (static_cast<std::size_t>(state->selected_macro) >=
+      state->draft_store.macro_rules.size()) {
+    --state->selected_macro;
+  }
+  state->draft_store.macro_rules_dirty = true;
+  rebuild_macro_list(state);
+  notify_changed(state);
+}
+
+static void move_selected_macro(SettingsWidgetState *state, int offset) {
+  const int destination = state->selected_macro + offset;
+  if (selected_macro_rule(state) == nullptr || destination < 0 ||
+      static_cast<std::size_t>(destination) >=
+          state->draft_store.macro_rules.size()) {
+    return;
+  }
+  std::swap(state->draft_store.macro_rules[state->selected_macro],
+            state->draft_store.macro_rules[destination]);
+  state->selected_macro = destination;
+  state->draft_store.macro_rules_dirty = true;
+  rebuild_macro_list(state);
+  notify_changed(state);
+}
+
+static void on_macro_move_up_clicked(GtkButton *, gpointer data) {
+  move_selected_macro(static_cast<SettingsWidgetState *>(data), -1);
+}
+
+static void on_macro_move_down_clicked(GtkButton *, gpointer data) {
+  move_selected_macro(static_cast<SettingsWidgetState *>(data), 1);
+}
+
+static void on_macro_argument_add_clicked(GtkButton *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  MacroRule *rule = selected_macro_rule(state);
+  auto *command =
+      rule == nullptr ? nullptr
+                      : std::get_if<MacroCommandAction>(&rule->action);
+  if (command == nullptr) {
+    return;
+  }
+  command->arguments.emplace_back();
+  state->draft_store.macro_rules_dirty = true;
+  rebuild_macro_arguments(state);
+  update_macro_validation(state);
+  notify_changed(state);
+}
+
+static void on_macro_argument_changed(GtkEditable *editable, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  MacroRule *rule = selected_macro_rule(state);
+  auto *command =
+      rule == nullptr ? nullptr
+                      : std::get_if<MacroCommandAction>(&rule->action);
+  const int index = macro_argument_index(GTK_WIDGET(editable));
+  if (state->synchronizing || command == nullptr || index < 0 ||
+      static_cast<std::size_t>(index) >= command->arguments.size()) {
+    return;
+  }
+  const char *text = gtk_entry_get_text(GTK_ENTRY(editable));
+  command->arguments[index] = text == nullptr ? "" : text;
+  mark_macro_rules_changed(state);
+}
+
+static void move_macro_argument(SettingsWidgetState *state, GtkWidget *widget,
+                                int offset) {
+  MacroRule *rule = selected_macro_rule(state);
+  auto *command =
+      rule == nullptr ? nullptr
+                      : std::get_if<MacroCommandAction>(&rule->action);
+  const int index = macro_argument_index(widget);
+  const int destination = index + offset;
+  if (command == nullptr || index < 0 || destination < 0 ||
+      static_cast<std::size_t>(index) >= command->arguments.size() ||
+      static_cast<std::size_t>(destination) >= command->arguments.size()) {
+    return;
+  }
+  std::swap(command->arguments[index], command->arguments[destination]);
+  state->draft_store.macro_rules_dirty = true;
+  rebuild_macro_arguments(state);
+  update_macro_validation(state);
+  notify_changed(state);
+}
+
+static void on_macro_argument_move_up_clicked(GtkButton *button,
+                                              gpointer data) {
+  move_macro_argument(static_cast<SettingsWidgetState *>(data),
+                      GTK_WIDGET(button), -1);
+}
+
+static void on_macro_argument_move_down_clicked(GtkButton *button,
+                                                gpointer data) {
+  move_macro_argument(static_cast<SettingsWidgetState *>(data),
+                      GTK_WIDGET(button), 1);
+}
+
+static void on_macro_argument_remove_clicked(GtkButton *button,
+                                             gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  MacroRule *rule = selected_macro_rule(state);
+  auto *command =
+      rule == nullptr ? nullptr
+                      : std::get_if<MacroCommandAction>(&rule->action);
+  const int index = macro_argument_index(GTK_WIDGET(button));
+  if (command == nullptr || index < 0 ||
+      static_cast<std::size_t>(index) >= command->arguments.size()) {
+    return;
+  }
+  command->arguments.erase(command->arguments.begin() + index);
+  state->draft_store.macro_rules_dirty = true;
+  rebuild_macro_arguments(state);
+  update_macro_validation(state);
+  notify_changed(state);
 }
 
 struct ComboOption {
@@ -2063,6 +2612,9 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
              .label = setting_choice_label(key, terminal_log_cooked)},
         },
         effective);
+  }
+  if (state->macro_list != nullptr) {
+    rebuild_macro_list(state);
   }
   if (state->notebook != nullptr) {
     update_connection_pages(state);
@@ -3173,6 +3725,177 @@ static GtkWidget *create_serial_page(SettingsWidgetState *state) {
   return page;
 }
 
+static GtkWidget *create_macro_page(SettingsWidgetState *state) {
+  const std::string page_id = widget_id(state, "macro_page");
+  GtkWidget *page = create_page_grid(page_id.c_str());
+  GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+  gtk_widget_set_hexpand(paned, TRUE);
+  gtk_widget_set_vexpand(paned, TRUE);
+  gtk_grid_attach(GTK_GRID(page), paned, 0, 0, 2, 1);
+
+  GtkWidget *rule_panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+  gtk_widget_set_size_request(rule_panel, 190, -1);
+  GtkWidget *rule_label =
+      create_row_label(settings_ui_text(SettingsUiText::macro_rules));
+  gtk_box_pack_start(GTK_BOX(rule_panel), rule_label, FALSE, FALSE, 0);
+  GtkWidget *rule_scroll = gtk_scrolled_window_new(nullptr, nullptr);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(rule_scroll),
+                                 GTK_POLICY_AUTOMATIC,
+                                 GTK_POLICY_AUTOMATIC);
+  gtk_widget_set_vexpand(rule_scroll, TRUE);
+  state->macro_list = gtk_list_box_new();
+  assign_accessible_id(state->macro_list,
+                       widget_id(state, "macro_list").c_str());
+  gtk_list_box_set_selection_mode(GTK_LIST_BOX(state->macro_list),
+                                  GTK_SELECTION_SINGLE);
+  g_signal_connect(state->macro_list, "row-selected",
+                   G_CALLBACK(on_macro_list_row_selected), state);
+  gtk_container_add(GTK_CONTAINER(rule_scroll), state->macro_list);
+  gtk_box_pack_start(GTK_BOX(rule_panel), rule_scroll, TRUE, TRUE, 0);
+
+  GtkWidget *rule_buttons = gtk_grid_new();
+  gtk_grid_set_column_spacing(GTK_GRID(rule_buttons), 6);
+  GtkWidget *add =
+      gtk_button_new_with_label(settings_ui_text(SettingsUiText::macro_add));
+  assign_accessible_id(add, widget_id(state, "macro_add_button").c_str());
+  g_signal_connect(add, "clicked", G_CALLBACK(on_macro_add_clicked), state);
+  state->macro_remove_button = gtk_button_new_with_label(
+      settings_ui_text(SettingsUiText::macro_remove));
+  assign_accessible_id(state->macro_remove_button,
+                       widget_id(state, "macro_remove_button").c_str());
+  g_signal_connect(state->macro_remove_button, "clicked",
+                   G_CALLBACK(on_macro_remove_clicked), state);
+  state->macro_move_up_button = gtk_button_new_with_label(
+      settings_ui_text(SettingsUiText::macro_move_up));
+  assign_accessible_id(state->macro_move_up_button,
+                       widget_id(state, "macro_move_up_button").c_str());
+  g_signal_connect(state->macro_move_up_button, "clicked",
+                   G_CALLBACK(on_macro_move_up_clicked), state);
+  state->macro_move_down_button = gtk_button_new_with_label(
+      settings_ui_text(SettingsUiText::macro_move_down));
+  assign_accessible_id(state->macro_move_down_button,
+                       widget_id(state, "macro_move_down_button").c_str());
+  g_signal_connect(state->macro_move_down_button, "clicked",
+                   G_CALLBACK(on_macro_move_down_clicked), state);
+  gtk_grid_attach(GTK_GRID(rule_buttons), add, 0, 0, 2, 1);
+  gtk_grid_attach(GTK_GRID(rule_buttons), state->macro_remove_button, 0, 1, 2,
+                  1);
+  gtk_grid_attach(GTK_GRID(rule_buttons), state->macro_move_up_button, 0, 2, 1,
+                  1);
+  gtk_grid_attach(GTK_GRID(rule_buttons), state->macro_move_down_button, 1, 2,
+                  1, 1);
+  gtk_box_pack_start(GTK_BOX(rule_panel), rule_buttons, FALSE, FALSE, 0);
+  gtk_paned_pack1(GTK_PANED(paned), rule_panel, FALSE, FALSE);
+
+  state->macro_editor = gtk_grid_new();
+  gtk_grid_set_row_spacing(GTK_GRID(state->macro_editor), 8);
+  gtk_grid_set_column_spacing(GTK_GRID(state->macro_editor), 12);
+  gtk_widget_set_margin_start(state->macro_editor, 12);
+  gtk_widget_set_hexpand(state->macro_editor, TRUE);
+  gtk_widget_set_vexpand(state->macro_editor, TRUE);
+  state->macro_id_entry =
+      create_entry(widget_id(state, "macro_id_entry"));
+  g_signal_connect(state->macro_id_entry, "changed",
+                   G_CALLBACK(on_macro_id_changed), state);
+  GtkWidget *id_label =
+      create_row_label(settings_ui_text(SettingsUiText::macro_id));
+  gtk_grid_attach(GTK_GRID(state->macro_editor), id_label, 0, 0, 1, 1);
+  gtk_grid_attach(GTK_GRID(state->macro_editor), state->macro_id_entry, 1, 0,
+                  1, 1);
+
+  state->macro_regex_entry =
+      create_entry(widget_id(state, "macro_regex_entry"));
+  g_signal_connect(state->macro_regex_entry, "changed",
+                   G_CALLBACK(on_macro_regex_changed), state);
+  GtkWidget *regex_label =
+      create_row_label(settings_ui_text(SettingsUiText::macro_regex));
+  gtk_grid_attach(GTK_GRID(state->macro_editor), regex_label, 0, 1, 1, 1);
+  gtk_grid_attach(GTK_GRID(state->macro_editor), state->macro_regex_entry, 1,
+                  1, 1, 1);
+
+  state->macro_action_combo = create_combo_box(
+      widget_id(state, "macro_action_combo").c_str());
+  append_combo_option(state->macro_action_combo, "send",
+                      settings_ui_text(SettingsUiText::macro_send_action));
+  append_combo_option(state->macro_action_combo, "command",
+                      settings_ui_text(SettingsUiText::macro_command_action));
+  g_signal_connect(state->macro_action_combo, "changed",
+                   G_CALLBACK(on_macro_action_changed), state);
+  GtkWidget *action_label =
+      create_row_label(settings_ui_text(SettingsUiText::macro_action));
+  gtk_grid_attach(GTK_GRID(state->macro_editor), action_label, 0, 2, 1, 1);
+  gtk_grid_attach(GTK_GRID(state->macro_editor), state->macro_action_combo, 1,
+                  2, 1, 1);
+
+  state->macro_send_panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  GtkWidget *send_label =
+      create_row_label(settings_ui_text(SettingsUiText::macro_send));
+  gtk_box_pack_start(GTK_BOX(state->macro_send_panel), send_label, FALSE,
+                     FALSE, 0);
+  GtkWidget *send_scroll = gtk_scrolled_window_new(nullptr, nullptr);
+  gtk_widget_set_size_request(send_scroll, -1, 90);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(send_scroll),
+                                 GTK_POLICY_AUTOMATIC,
+                                 GTK_POLICY_AUTOMATIC);
+  state->macro_send_view = gtk_text_view_new();
+  assign_accessible_id(state->macro_send_view,
+                       widget_id(state, "macro_send_text").c_str());
+  gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(state->macro_send_view),
+                              GTK_WRAP_WORD_CHAR);
+  g_signal_connect(
+      gtk_text_view_get_buffer(GTK_TEXT_VIEW(state->macro_send_view)),
+      "changed", G_CALLBACK(on_macro_send_changed), state);
+  gtk_container_add(GTK_CONTAINER(send_scroll), state->macro_send_view);
+  gtk_box_pack_start(GTK_BOX(state->macro_send_panel), send_scroll, TRUE, TRUE,
+                     0);
+  gtk_grid_attach(GTK_GRID(state->macro_editor), state->macro_send_panel, 0, 3,
+                  2, 1);
+
+  state->macro_command_panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+  GtkWidget *command_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+  GtkWidget *command_label =
+      create_row_label(settings_ui_text(SettingsUiText::macro_command));
+  state->macro_command_entry =
+      create_entry(widget_id(state, "macro_command_entry"));
+  gtk_widget_set_hexpand(state->macro_command_entry, TRUE);
+  g_signal_connect(state->macro_command_entry, "changed",
+                   G_CALLBACK(on_macro_command_changed), state);
+  gtk_box_pack_start(GTK_BOX(command_row), command_label, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(command_row), state->macro_command_entry, TRUE,
+                     TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(state->macro_command_panel), command_row, FALSE,
+                     FALSE, 0);
+  GtkWidget *arguments_label =
+      create_row_label(settings_ui_text(SettingsUiText::macro_arguments));
+  gtk_box_pack_start(GTK_BOX(state->macro_command_panel), arguments_label,
+                     FALSE, FALSE, 0);
+  state->macro_arguments_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  assign_accessible_id(state->macro_arguments_box,
+                       widget_id(state, "macro_arguments_box").c_str());
+  gtk_box_pack_start(GTK_BOX(state->macro_command_panel),
+                     state->macro_arguments_box, FALSE, FALSE, 0);
+  state->macro_argument_add_button = gtk_button_new_with_label(
+      settings_ui_text(SettingsUiText::macro_add_argument));
+  assign_accessible_id(
+      state->macro_argument_add_button,
+      widget_id(state, "macro_argument_add_button").c_str());
+  g_signal_connect(state->macro_argument_add_button, "clicked",
+                   G_CALLBACK(on_macro_argument_add_clicked), state);
+  gtk_widget_set_halign(state->macro_argument_add_button, GTK_ALIGN_START);
+  gtk_box_pack_start(GTK_BOX(state->macro_command_panel),
+                     state->macro_argument_add_button, FALSE, FALSE, 0);
+  gtk_grid_attach(GTK_GRID(state->macro_editor), state->macro_command_panel, 0,
+                  3, 2, 1);
+  gtk_paned_pack2(GTK_PANED(paned), state->macro_editor, TRUE, FALSE);
+  gtk_widget_show_all(state->macro_send_panel);
+  gtk_widget_show_all(state->macro_command_panel);
+  gtk_widget_set_no_show_all(state->macro_send_panel, TRUE);
+  gtk_widget_set_no_show_all(state->macro_command_panel, TRUE);
+  gtk_widget_hide(state->macro_send_panel);
+  gtk_widget_hide(state->macro_command_panel);
+  return page;
+}
+
 static GtkWidget *create_transfer_page(SettingsWidgetState *state) {
   const std::string page_id = widget_id(state, "transfer_page");
   GtkWidget *page = create_page_grid(page_id.c_str());
@@ -3403,6 +4126,26 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       .page = terminal_page,
       .tab_label = terminal_tab,
   });
+
+  if (state->mode == SettingsWidgetMode::connection) {
+    GtkWidget *macro_page = create_macro_page(state);
+    const std::string macro_tab_id = widget_id(state, "macro_tab");
+    GtkWidget *macro_tab = create_tab_button(
+        state, macro_page, settings_ui_text(SettingsUiText::macro_tab),
+        macro_tab_id.c_str());
+    gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), macro_page,
+                             macro_tab);
+    gtk_widget_show_all(macro_page);
+    gtk_widget_show_all(macro_tab);
+    gtk_widget_set_no_show_all(macro_page, TRUE);
+    gtk_widget_set_no_show_all(macro_tab, TRUE);
+    state->connection_pages.push_back({
+        .connection_types = {local_connection_type, telnet_connection_type,
+                             serial_connection_type, ssh_connection_type},
+        .page = macro_page,
+        .tab_label = macro_tab,
+    });
+  }
 
   GtkWidget *transfer_page = create_transfer_page(state);
   const std::string transfer_tab_id = widget_id(state, "transfer_tab");

@@ -2678,6 +2678,136 @@ static void test_key_binding_conflicts_are_resolved_per_layer() {
               "overrides");
 }
 
+static void test_connection_macro_settings_round_trip_and_layering() {
+  const std::filesystem::path connection_path =
+      temporary_config_path("connection-macros");
+  const std::filesystem::path startup_path =
+      temporary_config_path("startup-macros");
+  const std::filesystem::path global_path =
+      temporary_config_path("global-macros");
+  const std::filesystem::path saved_path =
+      temporary_config_path("saved-macros");
+
+  write_config(
+      connection_path,
+      "[macro.reply_challenge]\n"
+      "regex=^CHALLENGE: (?<token>[A-Za-z0-9]+)$\n"
+      "send=RESPONSE ${token}\\r\\n\n"
+      "\n"
+      "[macro.notify_error]\n"
+      "regex=^ERROR (?<code>\\\\d+): (?<message>.*)$\n"
+      "command=notify-send\n"
+      "arguments=elder-terms;Error ${code}: ${message};\n");
+  write_config(global_path,
+               "[macro.ignored_global]\n"
+               "regex=global\n"
+               "send=ignored\n");
+
+  SettingsLoadResult loaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  expect_true(loaded.loaded, "valid connection macros should load");
+  expect_true(loaded.store.macro_rules.size() == 2,
+              "only connection macros should be loaded");
+  expect_true(loaded.store.macro_rules[0].id == "reply_challenge" &&
+                  loaded.store.macro_rules[1].id == "notify_error",
+              "macro section order should define priority");
+  const auto *send = std::get_if<elder_terms::MacroSendAction>(
+      &loaded.store.macro_rules[0].action);
+  expect_true(send != nullptr && send->text == "RESPONSE ${token}\r\n",
+              "send actions should decode key-file escapes");
+  const auto *command = std::get_if<elder_terms::MacroCommandAction>(
+      &loaded.store.macro_rules[1].action);
+  expect_true(command != nullptr && command->command == "notify-send" &&
+                  command->arguments ==
+                      std::vector<std::string>{"elder-terms",
+                                               "Error ${code}: ${message}"},
+              "command actions should retain ordered arguments");
+  expect_true(!elder_terms::settings_store_is_dirty(loaded.store),
+              "loaded macro rules should start clean");
+
+  const SettingsSaveResult saved = save_settings(loaded.store, saved_path);
+  expect_true(saved.saved, "macro settings should save");
+  const std::string saved_text = read_config(saved_path);
+  const std::size_t reply_position =
+      saved_text.find("[macro.reply_challenge]");
+  const std::size_t notify_position =
+      saved_text.find("[macro.notify_error]");
+  expect_true(reply_position != std::string::npos &&
+                  notify_position != std::string::npos &&
+                  reply_position < notify_position,
+              "saved macros should retain priority order");
+  const SettingsLoadResult reloaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = saved_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = std::nullopt,
+      },
+      1.0);
+  expect_true(reloaded.store.macro_rules == loaded.store.macro_rules,
+              "saved macro rules should round trip");
+
+  elder_terms::set_macro_rules(
+      &loaded.store,
+      {elder_terms::MacroRule{
+          .id = "replacement",
+          .pattern = "READY",
+          .action = elder_terms::MacroSendAction{.text = "go\\n"},
+      }});
+  expect_true(elder_terms::settings_store_is_dirty(loaded.store),
+              "replacing macro rules should mark the store dirty");
+
+  write_config(startup_path, "[terminal]\nwidth=91\n");
+  const SettingsLoadResult startup_clears_macros = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = startup_path,
+          .global_config_path = global_path,
+      },
+      1.0);
+  expect_true(startup_clears_macros.store.macro_rules.empty(),
+              "a valid startup profile should replace connection macros, "
+              "including with an empty set");
+
+  remove_config(connection_path);
+  remove_config(startup_path);
+  remove_config(global_path);
+  remove_config(saved_path);
+}
+
+static void test_invalid_connection_macros_warn_and_are_ignored() {
+  const std::filesystem::path path =
+      temporary_config_path("invalid-connection-macros");
+  write_config(path,
+               "[macro.bad id]\n"
+               "regex=(\n"
+               "send=value\n"
+               "command=missing\n"
+               "\n"
+               "[macro.valid]\n"
+               "regex=READY\n"
+               "send=go\n");
+
+  const SettingsLoadResult loaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+  expect_true(loaded.store.macro_rules.size() == 1 &&
+                  loaded.store.macro_rules[0].id == "valid",
+              "invalid macro rules should not disable valid rules");
+  expect_true(warnings_contain(loaded.warnings,
+                               "invalid macro [macro.bad id]"),
+              "invalid macro rules should emit a warning");
+}
+
 static void test_missing_global_settings_are_optional() {
   const std::filesystem::path missing =
       temporary_config_path("missing-global");
@@ -2776,6 +2906,8 @@ int main() {
     elder_terms_settings_test::test_connection_open_hotkey_settings();
     elder_terms_settings_test::test_rebase_preserves_draft_overrides_and_dirty_state();
     elder_terms_settings_test::test_key_binding_conflicts_are_resolved_per_layer();
+    elder_terms_settings_test::test_connection_macro_settings_round_trip_and_layering();
+    elder_terms_settings_test::test_invalid_connection_macros_warn_and_are_ignored();
     elder_terms_settings_test::test_missing_global_settings_are_optional();
     elder_terms_settings_test::test_save_empty_global_settings_creates_parent_directory();
   } catch (const std::exception &error) {
