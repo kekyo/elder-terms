@@ -17,6 +17,7 @@ cardio_include_dir = cardio_root_dir / 'include'
 libxyzm_root_dir = meson.project_source_root() / 'deps/libxyzm'
 libxyzm_include_dir = libxyzm_root_dir / 'include'
 libxyzm_build_dir = meson.current_build_dir()
+libxyzm_makefile = meson.current_source_dir() / 'libxyzm-cardio.mk'
 libxyzm_static_libraries = custom_target(
   'libxyzm-static-libraries',
   output: [
@@ -27,6 +28,8 @@ libxyzm_static_libraries = custom_target(
     make_program,
     '-C',
     libxyzm_root_dir,
+    '-f',
+    libxyzm_makefile,
     'CARDIO_DIR=' + cardio_root_dir,
     'BUILD_DIR=' + libxyzm_build_dir,
     libxyzm_build_dir / 'libxyzm.a',
@@ -184,6 +187,20 @@ terminal_text_send_runner_test = executable(
 )
 
 test('terminal-text-send-runner-test', terminal_text_send_runner_test)
+
+cardio_lifetime_test = executable(
+  'cardio-lifetime-test',
+  'tests/cpp/cardio-lifetime-test.cpp',
+  cpp_args: [
+    '-I' + cardio_include_dir,
+    '-DCARDIO_WITH_GLIB=1',
+  ],
+  dependencies: [
+    gio_dep,
+  ],
+)
+
+test('cardio-lifetime-test', cardio_lifetime_test)
 
 activity_indicator_test = executable(
   'activity-indicator-test',
