@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <span>
+#include <string>
 
 #include <elder-terms/settings.h>
 
@@ -82,6 +83,14 @@ public:
    * @param bytes Backend output bytes.
    */
   void feed(std::span<const unsigned char> bytes);
+
+  /**
+   * Encodes and sends UTF-8 text through the user-input callback.
+   *
+   * @param text UTF-8 text to send.
+   * @returns True when encoded bytes were delivered to the callback.
+   */
+  bool send_utf8_text(const std::string &text);
 
   /**
    * Applies runtime-editable text conversion and special-code settings.

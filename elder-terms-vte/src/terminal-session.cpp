@@ -116,6 +116,15 @@ void resize_terminal_session(TerminalSessionState *state, glong columns,
   state->session->resize(columns, rows);
 }
 
+bool send_terminal_session_text(TerminalSessionState *state,
+                                const std::string &utf8_text) {
+  if (state == nullptr || state->session == nullptr) {
+    return false;
+  }
+
+  return state->session->send_text(utf8_text);
+}
+
 bool terminal_session_supports_transfer(const TerminalSessionState *state) {
   if (state == nullptr || state->session == nullptr) {
     return false;

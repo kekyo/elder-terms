@@ -68,6 +68,16 @@ void resize_terminal_session(TerminalSessionState *state, glong columns,
                              glong rows);
 
 /**
+ * Sends UTF-8 text through the active backend's user-input path.
+ *
+ * @param state Session state created by create_terminal_session.
+ * @param utf8_text Text to encode and send.
+ * @returns True when encoded bytes were accepted by the input path.
+ */
+bool send_terminal_session_text(TerminalSessionState *state,
+                                const std::string &utf8_text);
+
+/**
  * Returns whether the active backend supports X/Y/ZMODEM transfers.
  *
  * @param state Session state created by create_terminal_session.

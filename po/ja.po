@@ -297,6 +297,10 @@ msgstr "ログ"
 msgid "Macro"
 msgstr "マクロ"
 
+#: elder-terms-vte/src/main.cpp
+msgid "Macro command failed"
+msgstr "マクロコマンドの実行に失敗しました"
+
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Macro rules"
 msgstr "マクロルール"

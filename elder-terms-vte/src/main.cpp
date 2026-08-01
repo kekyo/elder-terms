@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <clocale>
 #include <cstdarg>
 #include <cstdint>
@@ -33,6 +34,7 @@
 #include "sftp/sftp-window.h"
 #include "terminal-layout.h"
 #include "terminal-log.h"
+#include "terminal-macro-runner.h"
 #include "terminal-transfer-runner.h"
 #include "terminal-session.h"
 #include "terminal-sessions/ssh-session/authenticated-ssh-transport.h"
@@ -42,6 +44,7 @@ struct ApplicationState {
   elder_terms::TerminalSessionState *session_state = nullptr;
   elder_terms::TerminalLayoutState *layout_state = nullptr;
   elder_terms::TerminalLogState *log_state = nullptr;
+  elder_terms::TerminalMacroRunnerState *macro_runner = nullptr;
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
   std::optional<cardio::promise<void>> shutdown_task;
   std::optional<cardio::promise<void>> ssh_prompt_fixture_task;
@@ -91,6 +94,67 @@ static void start_shared_sftp_connection_check(ApplicationState *state);
 static void update_application_session_identity(ApplicationState *state);
 static void update_application_terminal_presentation(
     ApplicationState *state);
+
+static void on_macro_command_error_response(GtkDialog *dialog, gint,
+                                            gpointer) {
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+}
+
+static void show_macro_command_error(ApplicationState *state,
+                                     const std::string &detail) {
+  std::cerr << "Warning: macro command failed: " << detail << '\n';
+  if (state == nullptr || state->window == nullptr) {
+    return;
+  }
+
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(state->window),
+      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
+                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s", _("Macro command failed"));
+  gtk_window_set_title(GTK_WINDOW(dialog), _("Macro command failed"));
+  gestament_gtk_assign_accessible_id(dialog, "macro_command_error_dialog");
+  AtkObject *accessible = gtk_widget_get_accessible(dialog);
+  if (accessible != nullptr) {
+    atk_object_set_name(accessible, _("Macro command failed"));
+  }
+  gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), "%s",
+                                           detail.c_str());
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(on_macro_command_error_response), nullptr);
+  gtk_widget_show(dialog);
+}
+
+static void spawn_macro_command(ApplicationState *state, std::string command,
+                                std::vector<std::string> arguments) {
+  if (command.find('\0') != std::string::npos ||
+      std::any_of(arguments.begin(), arguments.end(),
+                  [](const std::string &argument) {
+                    return argument.find('\0') != std::string::npos;
+                  })) {
+    show_macro_command_error(state, "command contains a NUL byte");
+    return;
+  }
+
+  std::vector<gchar *> argv;
+  argv.reserve(arguments.size() + 2);
+  argv.push_back(command.data());
+  for (std::string &argument : arguments) {
+    argv.push_back(argument.data());
+  }
+  argv.push_back(nullptr);
+
+  GError *error = nullptr;
+  if (!g_spawn_async(nullptr, argv.data(), nullptr, G_SPAWN_SEARCH_PATH,
+                     nullptr, nullptr, nullptr, &error)) {
+    const std::string detail =
+        error == nullptr || error->message == nullptr
+            ? std::string("unknown spawn error")
+            : std::string(error->message);
+    g_clear_error(&error);
+    show_macro_command_error(state, detail);
+  }
+}
 
 static std::string format_translated_string(const char *format, ...) {
   va_list arguments;
@@ -439,6 +503,8 @@ static void schedule_settings_dialog_close(ApplicationState *state) {
 static void apply_runtime_settings(ApplicationState *state,
                                    const elder_terms::SettingsStore &store) {
   state->settings_store = store;
+  elder_terms::replace_terminal_macro_runner_rules(
+      state->macro_runner, state->settings_store.macro_rules);
   const elder_terms::GeneralColorSettings colors =
       elder_terms::general_color_settings(state->settings_store);
   elder_terms::set_main_window_colors(
@@ -1289,6 +1355,7 @@ int main(int argc, char **argv) {
       .session_state = nullptr,
       .layout_state = nullptr,
       .log_state = nullptr,
+      .macro_runner = nullptr,
       .dispatcher_group = &dispatcher_group,
       .shutdown_task = std::nullopt,
       .ssh_prompt_fixture_task = std::nullopt,
@@ -1375,6 +1442,8 @@ int main(int argc, char **argv) {
                        std::span<const unsigned char> cooked_bytes) {
             elder_terms::write_terminal_log(app_state.log_state, raw_bytes,
                                             cooked_bytes);
+            elder_terms::feed_terminal_macro_runner(app_state.macro_runner,
+                                                    cooked_bytes);
           },
       .zmodem_auto_start =
           [&app_state](elder_terms::TerminalTransferDirection direction) {
@@ -1392,6 +1461,21 @@ int main(int argc, char **argv) {
       .ssh_known_hosts_file =
           app_state.test_options.ssh_known_hosts_file,
     });
+  app_state.macro_runner = elder_terms::create_terminal_macro_runner(
+      app_state.settings_store.macro_rules,
+      {
+          .send =
+              [&app_state](std::string text) {
+                (void)elder_terms::send_terminal_session_text(
+                    app_state.session_state, text);
+              },
+          .command =
+              [&app_state](std::string command,
+                           std::vector<std::string> arguments) {
+                spawn_macro_command(&app_state, std::move(command),
+                                    std::move(arguments));
+              },
+      });
   elder_terms::set_main_window_terminal_paste_callbacks(
       &*main_window,
       {
@@ -1504,6 +1588,7 @@ int main(int argc, char **argv) {
   app_state.ssh_prompt_fixture_task.reset();
   elder_terms::destroy_terminal_layout(app_state.layout_state);
   elder_terms::destroy_terminal_session(app_state.session_state);
+  elder_terms::destroy_terminal_macro_runner(app_state.macro_runner);
   app_state.shutdown_task.reset();
   elder_terms::destroy_terminal_log(app_state.log_state);
   elder_terms::release_main_window(&*main_window);

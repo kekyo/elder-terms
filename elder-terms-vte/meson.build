@@ -54,6 +54,7 @@ elder_terms_sources = [
   'src/sftp/sftp-window.cpp',
   'src/terminal-connection-phase.cpp',
   'src/terminal-log.cpp',
+  'src/terminal-macro-runner.cpp',
   'src/terminal-text-send.cpp',
   'src/terminal-text-send-runner.cpp',
   'src/terminal-transfer.cpp',
@@ -166,6 +167,19 @@ terminal_text_codec_test = executable(
 )
 
 test('terminal-text-codec-test', terminal_text_codec_test)
+
+terminal_macro_runner_test = executable(
+  'terminal-macro-runner-test',
+  [
+    'tests/cpp/terminal-macro-runner-test.cpp',
+    'src/terminal-macro-runner.cpp',
+  ],
+  dependencies: [
+    elder_terms_dep,
+  ],
+)
+
+test('terminal-macro-runner-test', terminal_macro_runner_test)
 
 terminal_text_send_runner_test = executable(
   'terminal-text-send-runner-test',

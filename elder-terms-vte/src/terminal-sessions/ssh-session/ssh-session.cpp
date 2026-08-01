@@ -616,6 +616,10 @@ public:
     }
   }
 
+  bool send_text(const std::string &utf8_text) override {
+    return terminal_io.send_utf8_text(utf8_text);
+  }
+
   std::string connection_detail() const override {
     if (settings.endpoint.address.empty()) {
       return _("ssh: (unknown)");

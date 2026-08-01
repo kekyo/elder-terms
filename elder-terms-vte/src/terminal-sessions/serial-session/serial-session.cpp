@@ -1107,6 +1107,10 @@ public:
     close_fd_noexcept(&serial_fd);
   }
 
+  bool send_text(const std::string &utf8_text) override {
+    return terminal_io.send_utf8_text(utf8_text);
+  }
+
   void apply_connection_profile(
       const TerminalConnectionProfile &profile) override {
     const auto *updated_settings =

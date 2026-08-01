@@ -36,20 +36,9 @@ TerminalViewIo::~TerminalViewIo() {
 void TerminalViewIo::on_terminal_commit(VteTerminal *, const gchar *text,
                                         guint size, gpointer user_data) {
   auto *self = static_cast<TerminalViewIo *>(user_data);
-  if (self->input_callback && text != nullptr && size != 0) {
-    const auto *data = reinterpret_cast<const unsigned char *>(text);
-    const TerminalTextConversionResult conversion = self->text_codec->encode(
-        std::span<const unsigned char>(data, static_cast<std::size_t>(size)));
-    if (conversion.used_replacement && !self->encode_warning_reported) {
-      std::cerr << "Warning: terminal input contained text that is not "
-                   "representable in the selected encoding"
-                << '\n';
-      self->encode_warning_reported = true;
-    }
-    if (!conversion.bytes.empty()) {
-      self->input_callback(std::span<const unsigned char>(
-          conversion.bytes.data(), conversion.bytes.size()));
-    }
+  if (text != nullptr && size != 0) {
+    (void)self->send_utf8_text(
+        std::string(text, static_cast<std::size_t>(size)));
   }
 }
 
@@ -75,6 +64,28 @@ void TerminalViewIo::feed(std::span<const unsigned char> bytes) {
                       reinterpret_cast<const char *>(conversion.bytes.data()),
                       static_cast<gssize>(conversion.bytes.size()));
   }
+}
+
+bool TerminalViewIo::send_utf8_text(const std::string &text) {
+  if (!input_callback || text.empty()) {
+    return false;
+  }
+
+  const auto *data = reinterpret_cast<const unsigned char *>(text.data());
+  const TerminalTextConversionResult conversion = text_codec->encode(
+      std::span<const unsigned char>(data, text.size()));
+  if (conversion.used_replacement && !encode_warning_reported) {
+    std::cerr << "Warning: terminal input contained text that is not "
+                 "representable in the selected encoding"
+              << '\n';
+    encode_warning_reported = true;
+  }
+  if (conversion.bytes.empty()) {
+    return false;
+  }
+  input_callback(std::span<const unsigned char>(conversion.bytes.data(),
+                                                conversion.bytes.size()));
+  return true;
 }
 
 bool TerminalViewIo::apply_text_settings(

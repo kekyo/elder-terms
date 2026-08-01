@@ -533,6 +533,10 @@ public:
     set_pty_size(columns, rows);
   }
 
+  bool send_text(const std::string &utf8_text) override {
+    return terminal_io.send_utf8_text(utf8_text);
+  }
+
   std::string connection_detail() const override {
     return _("local terminal");
   }

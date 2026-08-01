@@ -46,6 +46,17 @@ public:
   virtual void resize(glong columns, glong rows) = 0;
 
   /**
+   * Sends UTF-8 text through the backend's normal user-input path.
+   *
+   * @param utf8_text Text to encode and send.
+   * @returns True when encoded bytes were accepted by the input path.
+   */
+  virtual bool send_text(const std::string &utf8_text) {
+    (void)utf8_text;
+    return false;
+  }
+
+  /**
    * Returns the current backend-specific connection detail.
    *
    * @returns Status text describing the current session endpoint.

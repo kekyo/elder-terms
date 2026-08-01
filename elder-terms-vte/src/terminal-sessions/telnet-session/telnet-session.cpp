@@ -721,6 +721,10 @@ public:
     }
   }
 
+  bool send_text(const std::string &utf8_text) override {
+    return terminal_io.send_utf8_text(utf8_text);
+  }
+
   void apply_connection_profile(
       const TerminalConnectionProfile &profile) override {
     (void)terminal_io.apply_text_settings(profile.text_settings);
