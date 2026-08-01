@@ -1,9 +1,11 @@
+import { execFile } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import type {
   GtkApp,
   GtkCapture,
@@ -46,6 +48,7 @@ import {
 
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
+const execFileAsync = promisify(execFile);
 const connectionColorsCustomFixturePath = fileURLToPath(
   new URL('./fixtures/connection-colors-custom.png', import.meta.url)
 );
@@ -69,6 +72,34 @@ const connectionStatusTextMaskWidth = 200;
 
 const shellQuote = (value: string): string =>
   `'${value.split("'").join("'\\''")}'`;
+
+interface ControlledExitShellFixture {
+  readonly markerPath: string;
+  readonly releasePath: string;
+  readonly shellPath: string;
+}
+
+const createControlledExitShellFixture = async (
+  directory: string
+): Promise<ControlledExitShellFixture> => {
+  const markerPath = join(directory, 'shell-exited.txt');
+  const releasePath = join(directory, 'shell-release');
+  const shellPath = join(directory, 'controlled-exit-shell.sh');
+  await execFileAsync('/usr/bin/mkfifo', [releasePath]);
+  await writeFile(
+    shellPath,
+    `#!/bin/sh\nIFS= read -r release < ${shellQuote(
+      releasePath
+    )}\nprintf exited > ${shellQuote(markerPath)}\nexit 0\n`,
+    'utf8'
+  );
+  await chmod(shellPath, 0o755);
+  return {
+    markerPath,
+    releasePath,
+    shellPath,
+  };
+};
 
 const listenOnLocalhost = async (server: Server): Promise<number> =>
   new Promise<number>((resolve, reject) => {
@@ -1884,7 +1915,7 @@ describe.concurrent('elder-terms-vte settings', () => {
         await closeServer(server);
       }
     });
-  });
+  }, 90_000);
 
   it('reflects the current local runtime settings in General and Terminal', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
@@ -2352,14 +2383,7 @@ describe.concurrent('elder-terms-vte settings', () => {
 
   it('does not apply runtime auto_close changes when cancelled', async (context) => {
     await withTemporaryDirectory(async (directory) => {
-      const markerPath = join(directory, 'shell-exited.txt');
-      const shellPath = join(directory, 'delayed-exit-shell.sh');
-      await writeFile(
-        shellPath,
-        `#!/bin/sh\nsleep 3\nprintf exited > ${shellQuote(markerPath)}\nexit 0\n`,
-        'utf8'
-      );
-      await chmod(shellPath, 0o755);
+      const shell = await createControlledExitShellFixture(directory);
 
       await runGtkTest(
         context,
@@ -2388,7 +2412,8 @@ describe.concurrent('elder-terms-vte settings', () => {
           ).click();
           await expectSettingsDialogClosed(app);
 
-          await waitForShellExit(markerPath);
+          await writeFile(shell.releasePath, 'exit\n', 'utf8');
+          await waitForShellExit(shell.markerPath);
           await delay(1_000);
           const output = await app.output();
           expect(output.exitCode).toBe(0);
@@ -2396,7 +2421,7 @@ describe.concurrent('elder-terms-vte settings', () => {
         },
         {
           env: {
-            SHELL: shellPath,
+            SHELL: shell.shellPath,
           },
         }
       );
@@ -2529,14 +2554,7 @@ describe.concurrent('elder-terms-vte settings', () => {
 
   it('applies runtime auto_close changes before the local shell exits', async (context) => {
     await withTemporaryDirectory(async (directory) => {
-      const markerPath = join(directory, 'shell-exited.txt');
-      const shellPath = join(directory, 'delayed-exit-shell.sh');
-      await writeFile(
-        shellPath,
-        `#!/bin/sh\nsleep 3\nprintf exited > ${shellQuote(markerPath)}\nexit 0\n`,
-        'utf8'
-      );
-      await chmod(shellPath, 0o755);
+      const shell = await createControlledExitShellFixture(directory);
 
       await runGtkTest(
         context,
@@ -2565,7 +2583,8 @@ describe.concurrent('elder-terms-vte settings', () => {
           ).click();
           await expectSettingsDialogClosed(app);
 
-          await waitForShellExit(markerPath);
+          await writeFile(shell.releasePath, 'exit\n', 'utf8');
+          await waitForShellExit(shell.markerPath);
           await delay(1_000);
           const output = await app.output();
           expect(output.exitCode).toBeNull();
@@ -2577,7 +2596,7 @@ describe.concurrent('elder-terms-vte settings', () => {
         },
         {
           env: {
-            SHELL: shellPath,
+            SHELL: shell.shellPath,
           },
         }
       );

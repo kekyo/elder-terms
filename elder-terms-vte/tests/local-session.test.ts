@@ -1,8 +1,10 @@
+import { execFile } from 'node:child_process';
 import { chmod, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { promisify } from 'node:util';
 import type { GtkApp, GtkCapture } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
@@ -31,6 +33,7 @@ import {
 
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
+const execFileAsync = promisify(execFile);
 const connectionColorsDisconnectedNoticeFixturePath = fileURLToPath(
   new URL(
     './fixtures/connection-colors-disconnected-notice.png',
@@ -41,6 +44,10 @@ const connectionColorsDisconnectedNoticeFixturePath = fileURLToPath(
 interface ExitingShellFixture {
   readonly markerPath: string;
   readonly shellPath: string;
+}
+
+interface ControlledExitShellFixture extends ExitingShellFixture {
+  readonly releasePath: string;
 }
 
 interface TriggeredOutputShellFixture {
@@ -76,21 +83,28 @@ const createExitingShellFixture = async (
   };
 };
 
-const createDelayedExitShellFixture = async (
+const createControlledExitShellFixture = async (
   directory: string
-): Promise<ExitingShellFixture> => {
+): Promise<ControlledExitShellFixture> => {
   const markerPath = join(directory, 'delayed-shell-exited.txt');
+  const releasePath = join(directory, 'delayed-shell-release');
   const shellPath = join(directory, 'delayed-exit-shell.sh');
   const output = 'LOCAL_CONN_DIM_MARKER '.repeat(60);
+  await execFileAsync('/usr/bin/mkfifo', [releasePath]);
   await writeFile(
     shellPath,
-    `#!/bin/sh\nprintf '%s\\n' ${shellQuote(output)}\nsleep 1\nprintf exited > ${shellQuote(markerPath)}\nexit 0\n`,
+    `#!/bin/sh\nprintf '%s\\n' ${shellQuote(
+      output
+    )}\nIFS= read -r release < ${shellQuote(
+      releasePath
+    )}\nprintf exited > ${shellQuote(markerPath)}\nexit 0\n`,
     'utf8'
   );
   await chmod(shellPath, 0o755);
 
   return {
     markerPath,
+    releasePath,
     shellPath,
   };
 };
@@ -350,7 +364,7 @@ describe.concurrent('elder-terms-vte local session', () => {
 
   it('shows CONN while the local shell is running and clears it after exit', async (context) => {
     await withTemporaryDirectory(async (directory) => {
-      const shell = await createDelayedExitShellFixture(directory);
+      const shell = await createControlledExitShellFixture(directory);
       const configPath = join(directory, 'auto-close-disabled.ini');
       const background = [0x60, 0x40, 0x20] as const;
       await writeFile(
@@ -376,6 +390,7 @@ describe.concurrent('elder-terms-vte local session', () => {
           await expectMainWindowStatus(app, 'local terminal');
           await expectDisconnectedNoticeHidden(app);
 
+          await writeFile(shell.releasePath, 'exit\n', 'utf8');
           await waitForShellExit(shell.markerPath);
           await waitForActivityIndicatorImageState(app, 'conn', 'off');
           await expectMainWindowTitle(app, `${connectedTitle} (Disconnected)`);
@@ -428,7 +443,7 @@ describe.concurrent('elder-terms-vte local session', () => {
 
   it('dims the terminal image after the local shell disconnects', async (context) => {
     await withTemporaryDirectory(async (directory) => {
-      const shell = await createDelayedExitShellFixture(directory);
+      const shell = await createControlledExitShellFixture(directory);
       const configPath = join(directory, 'auto-close-disabled.ini');
       await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
 
@@ -438,6 +453,7 @@ describe.concurrent('elder-terms-vte local session', () => {
         async (app, evidence) => {
           const terminal = await app.getById('terminal_view');
           await waitForActivityIndicatorImageState(app, 'conn', 'on');
+          await writeFile(shell.releasePath, 'exit\n', 'utf8');
           await waitForShellExit(shell.markerPath);
           await waitForActivityIndicatorImageState(app, 'conn', 'off');
           await assertTerminalCaptureMatches(
