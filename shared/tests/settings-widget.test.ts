@@ -212,6 +212,21 @@ const expectSelectedComboValue = async (
   expect((await selected?.info())?.name).toBe(expectedName);
 };
 
+const comboOptionNames = async (
+  app: GtkApp,
+  id: string
+): Promise<readonly string[]> => {
+  const combo = expectElementKind(await app.getById(id), 'comboBox');
+  const names: string[] = [];
+  const childCount = await combo.getChildCount();
+  for (let index = 0; index < childCount; index += 1) {
+    const child = await combo.childAt(index);
+    expect(child).toBeDefined();
+    names.push((await child?.info())?.name ?? '');
+  }
+  return names;
+};
+
 const findDescendantByName = async (
   root: GtkWidgetElement,
   kind: GtkWidgetElement['kind'],
@@ -3540,7 +3555,25 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('global_settings_general_ui_language_combo'),
           'comboBox'
         );
-        await uiLanguage.selectChildAt(2);
+        expect(
+          await comboOptionNames(
+            app,
+            'global_settings_general_ui_language_combo'
+          )
+        ).toEqual([
+          'System default',
+          'English',
+          'العربية',
+          'Español',
+          'Français',
+          'हिन्दी',
+          '日本語',
+          '한국어',
+          'Português',
+          'Русский',
+          '中文',
+        ]);
+        await uiLanguage.selectChildAt(6);
         await expectSelectedComboValue(
           app,
           'global_settings_general_ui_language_combo',

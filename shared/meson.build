@@ -83,3 +83,11 @@ executable(
     elder_terms_dep,
   ],
 )
+
+executable(
+  'elder-terms-localization-fixture',
+  'tests/localization-fixture.cpp',
+  dependencies: [
+    elder_terms_dep,
+  ],
+)

@@ -2307,6 +2307,26 @@ static void test_application_settings_are_global_only() {
               "application settings loaded from global.ini should remain "
               "explicit");
 
+  const std::vector<std::string> supported_ui_languages = {
+      "ar", "es", "fr", "hi", "ja", "ko", "pt", "ru", "zh"};
+  for (const std::string &language : supported_ui_languages) {
+    const std::filesystem::path language_path =
+        temporary_config_path("application-language-" + language);
+    write_config(language_path,
+                 "[general]\nui_language=" + language + "\n");
+    const SettingsLoadResult language_settings =
+        load_global_settings(language_path, 1.0);
+    expect_true(
+        std::string(application_ui_language_to_string(
+            load_application_ui_language_preference(language_path))) ==
+            language &&
+            std::string(application_ui_language_to_string(
+                application_ui_language(language_settings.store))) ==
+                language,
+        language + " should be accepted as a configured UI language");
+    remove_config(language_path);
+  }
+
   expect_true(set_explicit_setting_value(
                   &global.store, application_ui_language_setting_key(),
                   elder_terms::SettingValue{std::string("en")}),
@@ -2337,7 +2357,7 @@ static void test_application_settings_are_global_only() {
       temporary_config_path("invalid-application-global");
   write_config(invalid_path,
                "[general]\n"
-               "ui_language=fr\n"
+               "ui_language=de\n"
                "startup_mode=background\n"
                "open_application=t\n");
   const SettingsLoadResult invalid = load_global_settings(invalid_path, 1.0);
