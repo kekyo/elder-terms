@@ -46,7 +46,15 @@ static constexpr char startup_tray[] = "tray";
 static constexpr char startup_window_and_tray[] = "window_and_tray";
 static constexpr char ui_language_system[] = "system";
 static constexpr char ui_language_english[] = "en";
+static constexpr char ui_language_arabic[] = "ar";
+static constexpr char ui_language_spanish[] = "es";
+static constexpr char ui_language_french[] = "fr";
+static constexpr char ui_language_hindi[] = "hi";
 static constexpr char ui_language_japanese[] = "ja";
+static constexpr char ui_language_korean[] = "ko";
+static constexpr char ui_language_portuguese[] = "pt";
+static constexpr char ui_language_russian[] = "ru";
+static constexpr char ui_language_chinese[] = "zh";
 
 struct ConnectionSettingsPage {
   std::vector<const char *> connection_types;
@@ -2208,8 +2216,32 @@ static void sync_application_ui_language_combo(
                       ui_language_english,
                       ui_language_label(ui_language_english).c_str());
   append_combo_option(state->general_ui_language_combo,
+                      ui_language_arabic,
+                      ui_language_label(ui_language_arabic).c_str());
+  append_combo_option(state->general_ui_language_combo,
+                      ui_language_spanish,
+                      ui_language_label(ui_language_spanish).c_str());
+  append_combo_option(state->general_ui_language_combo,
+                      ui_language_french,
+                      ui_language_label(ui_language_french).c_str());
+  append_combo_option(state->general_ui_language_combo,
+                      ui_language_hindi,
+                      ui_language_label(ui_language_hindi).c_str());
+  append_combo_option(state->general_ui_language_combo,
                       ui_language_japanese,
                       ui_language_label(ui_language_japanese).c_str());
+  append_combo_option(state->general_ui_language_combo,
+                      ui_language_korean,
+                      ui_language_label(ui_language_korean).c_str());
+  append_combo_option(state->general_ui_language_combo,
+                      ui_language_portuguese,
+                      ui_language_label(ui_language_portuguese).c_str());
+  append_combo_option(state->general_ui_language_combo,
+                      ui_language_russian,
+                      ui_language_label(ui_language_russian).c_str());
+  append_combo_option(state->general_ui_language_combo,
+                      ui_language_chinese,
+                      ui_language_label(ui_language_chinese).c_str());
   gtk_combo_box_set_active_id(
       GTK_COMBO_BOX(state->general_ui_language_combo),
       application_ui_language_to_string(

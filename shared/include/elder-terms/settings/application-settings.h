@@ -19,8 +19,24 @@ enum class ApplicationUiLanguage {
   system,
   /** Uses English source messages. */
   english,
+  /** Uses the Arabic message catalog. */
+  arabic,
+  /** Uses the Spanish message catalog. */
+  spanish,
+  /** Uses the French message catalog. */
+  french,
+  /** Uses the Hindi message catalog. */
+  hindi,
   /** Uses the Japanese message catalog. */
   japanese,
+  /** Uses the Korean message catalog. */
+  korean,
+  /** Uses the Portuguese message catalog. */
+  portuguese,
+  /** Uses the Russian message catalog. */
+  russian,
+  /** Uses the Simplified Chinese message catalog. */
+  chinese,
 };
 
 /**
@@ -78,7 +94,7 @@ ELDER_TERMS_API const char *startup_mode_to_string(StartupMode mode);
  * Returns the stable INI value for an application UI language.
  *
  * @param language UI language to serialize.
- * @returns `system`, `en`, or `ja`.
+ * @returns A stable supported language code, or `system`.
  */
 ELDER_TERMS_API const char *
 application_ui_language_to_string(ApplicationUiLanguage language);

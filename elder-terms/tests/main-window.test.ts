@@ -383,7 +383,7 @@ describe('elder-terms main window', () => {
           await app.getById('global_settings_general_ui_language_combo'),
           'comboBox'
         );
-        await language.selectChildAt(2);
+        await language.selectChildAt(6);
         await expectElementKind(
           await app.getById('global_defaults_save_button'),
           'button'
@@ -481,7 +481,7 @@ describe('elder-terms main window', () => {
       await expectElementKind(
         await app.getById('global_settings_general_ui_language_combo'),
         'comboBox'
-      ).selectChildAt(2);
+      ).selectChildAt(6);
       await expectElementKind(
         await app.getById('global_defaults_save_button'),
         'button'
@@ -873,7 +873,7 @@ describe('elder-terms main window', () => {
           await app.getById('global_settings_general_ui_language_combo'),
           'comboBox'
         );
-        await language.selectChildAt(2);
+        await language.selectChildAt(6);
         await selectSettingsTab(app, 'global_settings', 'Terminal');
         const width = expectElementKind(
           await app.getById('global_settings_terminal_width_entry'),

@@ -2,11 +2,11 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-02 21:46+0900\n"
-"PO-Revision-Date: 2026-08-01 00:01+0900\n"
+"POT-Creation-Date: 2026-08-02 21:51+0900\n"
+"PO-Revision-Date: 2026-08-02 21:51+0900\n"
 "Last-Translator: elder-terms contributors\n"
-"Language-Team: Japanese\n"
-"Language: ja\n"
+"Language-Team: Korean\n"
+"Language: ko\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14,162 +14,162 @@ msgstr ""
 
 #: shared/src/settings-widget/settings-presentation.cpp:25
 msgid "Connection name"
-msgstr "接続名"
+msgstr "연결 이름"
 
 #: shared/src/settings-widget/settings-presentation.cpp:26
 msgid "Connection type"
-msgstr "接続方式"
+msgstr "연결 유형"
 
 #: shared/src/settings-widget/settings-presentation.cpp:28
 msgid "Open connection shortcut"
-msgstr "接続を開くショートカット"
+msgstr "연결 바로가기 열기"
 
 #: shared/src/settings-widget/settings-presentation.cpp:29
 msgid "Display language"
-msgstr "表示言語"
+msgstr "표시 언어"
 
 #: shared/src/settings-widget/settings-presentation.cpp:30
 msgid "Startup mode"
-msgstr "起動モード"
+msgstr "시작 모드"
 
 #: shared/src/settings-widget/settings-presentation.cpp:32
 msgid "Open application shortcut"
-msgstr "アプリケーションを開くショートカット"
+msgstr "애플리케이션 바로가기 열기"
 
 #: shared/src/settings-widget/settings-presentation.cpp:34
 msgid "Title and status bar background"
-msgstr "タイトル／ステータスバーの背景"
+msgstr "제목 및 상태 표시줄 배경"
 
 #: shared/src/settings-widget/settings-presentation.cpp:35
 msgid "Content background"
-msgstr "コンテンツの背景"
+msgstr "콘텐츠 배경"
 
 #: shared/src/settings-widget/settings-presentation.cpp:36
 msgid "Character encoding"
-msgstr "文字エンコーディング"
+msgstr "문자 인코딩"
 
 #: shared/src/settings-widget/settings-presentation.cpp:37
 msgid "Backspace code"
-msgstr "Backspaceコード"
+msgstr "백스페이스 코드"
 
 #: shared/src/settings-widget/settings-presentation.cpp:38
 msgid "Cursor key mode"
-msgstr "カーソルキーモード"
+msgstr "커서 키 모드"
 
 #: shared/src/settings-widget/settings-presentation.cpp:39
 msgid "Columns"
-msgstr "列数"
+msgstr "열"
 
 #: shared/src/settings-widget/settings-presentation.cpp:40
 msgid "Rows"
-msgstr "行数"
+msgstr "행"
 
 #: shared/src/settings-widget/settings-presentation.cpp:41
 msgid "Zoom factor"
-msgstr "拡大率"
+msgstr "확대/축소 비율"
 
 #: shared/src/settings-widget/settings-presentation.cpp:43
 msgid "Close window when session ends"
-msgstr "セッション終了時にウィンドウを閉じる"
+msgstr "세션이 끝나면 창을 닫습니다."
 
 #: shared/src/settings-widget/settings-presentation.cpp:44
 msgid "Zoom in shortcut"
-msgstr "拡大ショートカット"
+msgstr "확대 단축키"
 
 #: shared/src/settings-widget/settings-presentation.cpp:45
 msgid "Zoom out shortcut"
-msgstr "縮小ショートカット"
+msgstr "축소 단축키"
 
 #: shared/src/settings-widget/settings-presentation.cpp:46
 #: shared/src/settings-widget/settings-presentation.cpp:49
 msgid "Address"
-msgstr "アドレス"
+msgstr "주소"
 
 #: shared/src/settings-widget/settings-presentation.cpp:47
 #: shared/src/settings-widget/settings-presentation.cpp:50
 msgid "Port"
-msgstr "ポート"
+msgstr "포트"
 
 #: shared/src/settings-widget/settings-presentation.cpp:48
 #: shared/src/settings-widget/settings-presentation.cpp:53
 msgid "Terminal type"
-msgstr "端末種別"
+msgstr "터미널 유형"
 
 #: shared/src/settings-widget/settings-presentation.cpp:51
 msgid "User name"
-msgstr "ユーザー名"
+msgstr "사용자 이름"
 
 #: shared/src/settings-widget/settings-presentation.cpp:52
 msgid "Identity file"
-msgstr "秘密鍵ファイル"
+msgstr "ID 파일"
 
 #: shared/src/settings-widget/settings-presentation.cpp:54
 msgid "Local directory"
-msgstr "ローカルディレクトリ"
+msgstr "로컬 디렉터리"
 
 #: shared/src/settings-widget/settings-presentation.cpp:55
 msgid "Remote directory"
-msgstr "リモートディレクトリ"
+msgstr "원격 디렉터리"
 
 #: shared/src/settings-widget/settings-presentation.cpp:56
 msgid "Device"
-msgstr "デバイス"
+msgstr "장치"
 
 #: shared/src/settings-widget/settings-presentation.cpp:57
 msgid "Baud rate"
-msgstr "ボーレート"
+msgstr "전송 속도"
 
 #: shared/src/settings-widget/settings-presentation.cpp:58
 msgid "Data bits"
-msgstr "データビット"
+msgstr "데이터 비트"
 
 #: shared/src/settings-widget/settings-presentation.cpp:59
 msgid "Parity"
-msgstr "パリティ"
+msgstr "패리티"
 
 #: shared/src/settings-widget/settings-presentation.cpp:60
 msgid "Stop bits"
-msgstr "ストップビット"
+msgstr "정지 비트"
 
 #: shared/src/settings-widget/settings-presentation.cpp:61
 msgid "Flow control"
-msgstr "フロー制御"
+msgstr "흐름 제어"
 
 #: shared/src/settings-widget/settings-presentation.cpp:63
 msgid "Connection monitoring signal"
-msgstr "接続監視信号"
+msgstr "연결 모니터링 신호"
 
 #: shared/src/settings-widget/settings-presentation.cpp:65
 msgid "Transfer base directory"
-msgstr "転送ベースディレクトリ"
+msgstr "기본 디렉터리 전송"
 
 #: shared/src/settings-widget/settings-presentation.cpp:67
 msgid "Text send rate (bytes/s)"
-msgstr "テキスト送信速度（バイト/秒）"
+msgstr "텍스트 전송 속도(바이트/초)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:69
 msgid "Automatically start ZMODEM transfers"
-msgstr "ZMODEM転送を自動開始する"
+msgstr "자동으로 ZMODEM 전송 시작"
 
 #: shared/src/settings-widget/settings-presentation.cpp:70
 msgid "Enable logging"
-msgstr "ログを有効にする"
+msgstr "로깅 활성화"
 
 #: shared/src/settings-widget/settings-presentation.cpp:71
 msgid "Log directory"
-msgstr "ログディレクトリ"
+msgstr "로그 디렉터리"
 
 #: shared/src/settings-widget/settings-presentation.cpp:72
 msgid "File name format"
-msgstr "ファイル名形式"
+msgstr "파일 이름 형식"
 
 #: shared/src/settings-widget/settings-presentation.cpp:73
 msgid "Log content"
-msgstr "ログ内容"
+msgstr "로그 내용"
 
 #: shared/src/settings-widget/settings-presentation.cpp:77
 msgid "Local shell"
-msgstr "ローカルシェル"
+msgstr "로컬 쉘"
 
 #: shared/src/settings-widget/settings-presentation.cpp:78
 #: shared/src/settings-widget/settings-presentation.cpp:134
@@ -179,7 +179,7 @@ msgstr "TELNET"
 #: shared/src/settings-widget/settings-presentation.cpp:79
 #: shared/src/settings-widget/settings-presentation.cpp:136
 msgid "Serial"
-msgstr "シリアル"
+msgstr "직렬"
 
 #: shared/src/settings-widget/settings-presentation.cpp:80
 #: shared/src/settings-widget/settings-presentation.cpp:138
@@ -195,11 +195,11 @@ msgstr "SFTP"
 
 #: shared/src/settings-widget/settings-presentation.cpp:83
 msgid "System default"
-msgstr "システム設定"
+msgstr "시스템 기본값"
 
 #: shared/src/settings-widget/settings-presentation.cpp:84
 msgid "English"
-msgstr "English"
+msgstr "영어"
 
 #: shared/src/settings-widget/settings-presentation.cpp:85
 msgid "العربية"
@@ -239,15 +239,15 @@ msgstr "中文"
 
 #: shared/src/settings-widget/settings-presentation.cpp:95
 msgid "Simple startup"
-msgstr "シンプル起動"
+msgstr "간단한 시작"
 
 #: shared/src/settings-widget/settings-presentation.cpp:97
 msgid "System tray only"
-msgstr "システムトレイのみ"
+msgstr "시스템 트레이만"
 
 #: shared/src/settings-widget/settings-presentation.cpp:99
 msgid "System tray and main window"
-msgstr "システムトレイとメインウィンドウ"
+msgstr "시스템 트레이 및 기본 창"
 
 #: shared/src/settings-widget/settings-presentation.cpp:100
 msgid "BS"
@@ -259,7 +259,7 @@ msgstr "DEL"
 
 #: shared/src/settings-widget/settings-presentation.cpp:102
 msgid "Normal"
-msgstr "通常"
+msgstr "정상"
 
 #: shared/src/settings-widget/settings-presentation.cpp:103
 msgid "ADM3"
@@ -268,76 +268,76 @@ msgstr "ADM3"
 #: shared/src/settings-widget/settings-presentation.cpp:104
 #: shared/src/settings-widget/settings-presentation.cpp:107
 msgid "None"
-msgstr "なし"
+msgstr "없음"
 
 #: shared/src/settings-widget/settings-presentation.cpp:105
 msgid "Even"
-msgstr "偶数"
+msgstr "심지어"
 
 #: shared/src/settings-widget/settings-presentation.cpp:106
 msgid "Odd"
-msgstr "奇数"
+msgstr "홀수"
 
 #: shared/src/settings-widget/settings-presentation.cpp:109
 msgid "XON/XOFF (software)"
-msgstr "XON/XOFF（ソフトウェア）"
+msgstr "XON/XOFF(소프트웨어)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:111
 msgid "RTS/CTS (hardware)"
-msgstr "RTS/CTS（ハードウェア）"
+msgstr "RTS/CTS(하드웨어)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:113
 msgid "DCD (Data Carrier Detect)"
-msgstr "DCD（データキャリア検出）"
+msgstr "DCD(데이터 캐리어 감지)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:115
 msgid "CTS (Clear to Send)"
-msgstr "CTS（送信可）"
+msgstr "CTS (보내기 취소)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:117
 msgid "DSR (Data Set Ready)"
-msgstr "DSR（データセット準備完了）"
+msgstr "DSR(데이터 세트 준비)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:119
 msgid "Raw bytes (before character conversion)"
-msgstr "生バイト列（文字変換前）"
+msgstr "원시 바이트(문자 변환 전)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:121
 msgid "UTF-8 text (after character conversion)"
-msgstr "UTF-8テキスト（文字変換後）"
+msgstr "UTF-8 텍스트(문자 변환 후)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:132
 msgid "General"
-msgstr "一般"
+msgstr "일반"
 
 #: shared/src/settings-widget/settings-presentation.cpp:142
 #: elder-terms-vte/src/main-window.ui:348
 #: elder-terms-vte/src/terminal-session.cpp:208
 msgid "Terminal"
-msgstr "端末"
+msgstr "터미널"
 
 #: shared/src/settings-widget/settings-presentation.cpp:144
 msgid "Macro"
-msgstr "マクロ"
+msgstr "매크로"
 
 #: shared/src/settings-widget/settings-presentation.cpp:146
 #: elder-terms-vte/src/main-window.ui:35
 msgid "Transfer"
-msgstr "転送"
+msgstr "전송"
 
 #: shared/src/settings-widget/settings-presentation.cpp:148
 msgid "Logging"
-msgstr "ログ"
+msgstr "로깅"
 
 #: shared/src/settings-widget/settings-presentation.cpp:150
 #: elder-terms/src/main-window.ui:146
 msgid "Apply"
-msgstr "適用"
+msgstr "적용"
 
 #: shared/src/settings-widget/settings-presentation.cpp:152
 #: elder-terms/src/main.cpp:461
 msgid "Save"
-msgstr "保存"
+msgstr "저장"
 
 #: shared/src/settings-widget/settings-presentation.cpp:154
 #: elder-terms/src/main.cpp:460 elder-terms/src/main.cpp:1335
@@ -347,396 +347,393 @@ msgstr "保存"
 #: elder-terms-vte/src/sftp/sftp-window.cpp:696
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1843
 msgid "Cancel"
-msgstr "キャンセル"
+msgstr "취소"
 
 #: shared/src/settings-widget/settings-presentation.cpp:156
 msgid "Reset"
-msgstr "リセット"
+msgstr "재설정"
 
 #: shared/src/settings-widget/settings-presentation.cpp:158
 msgid "Enabled"
-msgstr "有効"
+msgstr "활성화됨"
 
 #: shared/src/settings-widget/settings-presentation.cpp:160
 msgid "Disabled"
-msgstr "無効"
+msgstr "비활성화됨"
 
 #: shared/src/settings-widget/settings-presentation.cpp:162
 msgid "No color"
-msgstr "色なし"
+msgstr "색상 없음"
 
 #: shared/src/settings-widget/settings-presentation.cpp:164
 msgid "Custom color"
-msgstr "カスタム色"
+msgstr "사용자 정의 색상"
 
 #: shared/src/settings-widget/settings-presentation.cpp:166
 msgid "Press a key combination"
-msgstr "キーの組み合わせを入力してください"
+msgstr "키 조합을 누르세요"
 
 #: shared/src/settings-widget/settings-presentation.cpp:168
 msgid "Clear key binding"
-msgstr "キー割り当てをクリア"
+msgstr "키 바인딩 지우기"
 
 #: shared/src/settings-widget/settings-presentation.cpp:170
 msgid "Use global default"
-msgstr "グローバル既定値を使用"
+msgstr "전역 기본값 사용"
 
 #: shared/src/settings-widget/settings-presentation.cpp:172
 msgid "Use built-in default"
-msgstr "組み込み既定値を使用"
+msgstr "내장된 기본값 사용"
 
 #: shared/src/settings-widget/settings-presentation.cpp:174
 msgid "Macro rules"
-msgstr "マクロルール"
+msgstr "매크로 규칙"
 
 #: shared/src/settings-widget/settings-presentation.cpp:176
 msgid "Rule ID"
-msgstr "ルールID"
+msgstr "규칙 ID"
 
 #: shared/src/settings-widget/settings-presentation.cpp:178
 msgid "Regular expression"
-msgstr "正規表現"
+msgstr "정규 표현식"
 
 #: shared/src/settings-widget/settings-presentation.cpp:180
 msgid "Action"
-msgstr "アクション"
+msgstr "액션"
 
 #: shared/src/settings-widget/settings-presentation.cpp:182
 msgid "Text to send"
-msgstr "送信テキスト"
+msgstr "보낼 텍스트"
 
 #: shared/src/settings-widget/settings-presentation.cpp:184
 msgid "Command"
-msgstr "コマンド"
+msgstr "명령"
 
 #: shared/src/settings-widget/settings-presentation.cpp:186
 msgid "Arguments"
-msgstr "引数"
+msgstr "인수"
 
 #: shared/src/settings-widget/settings-presentation.cpp:188
 msgid "Add rule"
-msgstr "ルールを追加"
+msgstr "규칙 추가"
 
 #: shared/src/settings-widget/settings-presentation.cpp:190
 msgid "Remove rule"
-msgstr "ルールを削除"
+msgstr "규칙 제거"
 
 #: shared/src/settings-widget/settings-presentation.cpp:192
 msgid "Move up"
-msgstr "上へ移動"
+msgstr "위로 이동"
 
 #: shared/src/settings-widget/settings-presentation.cpp:194
 msgid "Move down"
-msgstr "下へ移動"
+msgstr "아래로 이동"
 
 #: shared/src/settings-widget/settings-presentation.cpp:196
 msgid "Send text"
-msgstr "テキストを送信"
+msgstr "문자 보내기"
 
 #: shared/src/settings-widget/settings-presentation.cpp:198
 msgid "Run command"
-msgstr "コマンドを実行"
+msgstr "명령 실행"
 
 #: shared/src/settings-widget/settings-presentation.cpp:200
 msgid "Add argument"
-msgstr "引数を追加"
+msgstr "인수 추가"
 
 #: shared/src/settings-widget/settings-presentation.cpp:202
 msgid "Remove argument"
-msgstr "引数を削除"
+msgstr "인수 제거"
 
 #: shared/src/settings-widget/settings-presentation.cpp:230
 msgid "Global default"
-msgstr "グローバル既定値"
+msgstr "전역 기본값"
 
 #: shared/src/settings-widget/settings-presentation.cpp:231
 msgid "Built-in default"
-msgstr "組み込み既定値"
+msgstr "기본 제공"
 
 #: shared/src/settings-widget/settings-presentation.cpp:235
 #, c-format
 msgid "%s (global default)"
-msgstr "%s（グローバル既定値）"
+msgstr "%s(전역 기본값)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:236
 #, c-format
 msgid "%s (built-in default)"
-msgstr "%s（組み込み既定値）"
+msgstr "%s(내장 기본값)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:247
 msgid "Enter a whole number"
-msgstr "整数を入力してください"
+msgstr "정수를 입력하세요."
 
 #: shared/src/settings-widget/settings-presentation.cpp:250
 msgid "Enter a number"
-msgstr "数値を入力してください"
+msgstr "숫자를 입력하세요"
 
 #: shared/src/settings-widget/settings-presentation.cpp:261
 #, c-format
 msgid "Value must be between %s and %s"
-msgstr "値は%sから%sの範囲で入力してください"
+msgstr "값은 %s에서 %s"
 
 #: shared/src/settings-widget/settings-presentation.cpp:270
 msgid "Must include Ctrl, Shift, Alt, or Super"
-msgstr "Ctrl、Shift、Alt、Super のいずれかを含めてください"
+msgstr "Ctrl, Shift, Alt 또는 Super"
 
 #: shared/src/settings-widget/settings-presentation.cpp:273
 msgid "Contains an empty token"
-msgstr "空の要素が含まれています"
+msgstr "빈 토큰이 포함되어 있습니다."
 
 #: shared/src/settings-widget/settings-presentation.cpp:282
 #, c-format
 msgid "Contains an unknown modifier: %s"
-msgstr "不明な修飾キーが含まれています: %s"
+msgstr "알 수 없는 수정자가 포함되어 있습니다: %s"
 
 #: shared/src/settings-widget/settings-presentation.cpp:295
 #, c-format
 msgid "Contains a duplicate modifier: %s"
-msgstr "修飾キーが重複しています: %s"
+msgstr "중복 수정자를 포함합니다: %s"
 
 #: shared/src/settings-widget/settings-presentation.cpp:303
 msgid "Does not contain a key"
-msgstr "キーを含めてください"
+msgstr "키가 포함되어 있지 않습니다."
 
 #: shared/src/settings-widget/settings-presentation.cpp:310
 #, c-format
 msgid "Contains an unknown key: %s"
-msgstr "不明なキーが含まれています: %s"
+msgstr "알 수 없는 키가 포함되어 있습니다: %s"
 
 #: shared/src/settings-widget/settings-presentation.cpp:318
 msgid "Zoom in and zoom out must use different key bindings"
-msgstr "拡大と縮小には異なるキー割り当てを指定してください"
+msgstr "확대 및 축소는 다른 키 바인딩을 사용해야 합니다."
 
 #: shared/src/settings-widget/settings-presentation.cpp:321
 msgid "Must not be empty"
-msgstr "空にはできません"
+msgstr "비워둘 수 없습니다."
 
 #: shared/src/settings-widget/settings-presentation.cpp:324
 msgid "The character encoding is not supported"
-msgstr "この文字エンコーディングには対応していません"
+msgstr "문자 인코딩은 지원되지 않습니다."
 
 #: shared/src/settings-widget/settings-presentation.cpp:327
 msgid "Contains a NUL byte"
-msgstr "NULバイトが含まれています"
+msgstr "NUL 바이트"
 
 #: shared/src/settings-widget/settings-presentation.cpp:330
 msgid "Contains an unmatched closing brace"
-msgstr "対応する開始波括弧のない終了波括弧が含まれています"
+msgstr "일치하지 않는 닫는 중괄호가 포함되어 있습니다."
 
 #: shared/src/settings-widget/settings-presentation.cpp:333
 msgid "Contains an unmatched opening brace"
-msgstr "対応する終了波括弧のない開始波括弧が含まれています"
+msgstr "일치하지 않는 여는 중괄호를 포함합니다."
 
 #: shared/src/settings-widget/settings-presentation.cpp:336
 msgid "Contains an unknown placeholder"
-msgstr "不明なプレースホルダーが含まれています"
+msgstr "알 수 없는 자리 표시자가 포함되어 있습니다."
 
 #: shared/src/settings-widget/settings-presentation.cpp:339
 msgid "Must be relative to the log base directory"
-msgstr "ログのベースディレクトリからの相対パスにしてください"
+msgstr "로그 기본 디렉터리에 상대적이어야 합니다."
 
 #: shared/src/settings-widget/settings-presentation.cpp:342
 msgid "Must not contain parent directory traversal"
-msgstr "親ディレクトリへの移動は指定できません"
+msgstr "상위 디렉터리 순회를 포함하면 안 됩니다."
 
 #: shared/src/settings-widget/settings-presentation.cpp:345
 msgid "Must name a log file"
-msgstr "ログファイル名を指定してください"
+msgstr "로그 파일 이름을 지정해야 합니다."
 
 #: shared/src/settings-widget/settings-presentation.cpp:347
 msgid "Invalid value"
-msgstr "無効な値です"
+msgstr "잘못된 값"
 
 #: elder-terms/src/main.cpp:215
 msgid "Global shortcuts are unavailable"
-msgstr "グローバルショートカットを利用できません"
+msgstr "전역 단축키를 사용할 수 없습니다."
 
 #: elder-terms/src/main.cpp:224
 msgid ""
 "One or more configured global shortcuts could not be registered and will not "
 "work. Check whether your desktop environment supports global shortcuts."
-msgstr ""
-"設定されたグローバルショートカットの一部またはすべてを登録できなかったため、"
-"動作しません。デスクトップ環境がグローバルショートカットに対応しているか確認"
-"してください。"
+msgstr "하나 이상의 구성된 전역 바로가기를 등록할 수 없으며 작동하지 않습니다. 데스크탑 환경이 전역 바로가기를 지원하는지 확인하세요."
 
 #: elder-terms/src/main.cpp:228 elder-terms-vte/src/main-window.ui:297
 #: elder-terms-vte/src/main-window.cpp:1457
 msgid "OK"
-msgstr "OK"
+msgstr "확인"
 
 #: elder-terms/src/main.cpp:268
 msgid "Restart to apply display language?"
-msgstr "表示言語を適用するため再起動しますか？"
+msgstr "표시 언어를 적용하려면 다시 시작하시겠습니까?"
 
 #: elder-terms/src/main.cpp:271
 msgid ""
 "The display language change will take effect after elder-terms restarts."
-msgstr "表示言語の変更はelder-termsの再起動後に反映されます。"
+msgstr "표시 언어 변경은 elder-terms이(가) 다시 시작된 후에 적용됩니다."
 
 #: elder-terms/src/main.cpp:274
 msgid "Later"
-msgstr "後で"
+msgstr "나중에"
 
 #: elder-terms/src/main.cpp:276
 msgid "Restart now"
-msgstr "今すぐ再起動"
+msgstr "지금 다시 시작"
 
 #: elder-terms/src/main.cpp:404
 msgid "Failed to save global defaults"
-msgstr "グローバル既定値の保存に失敗しました"
+msgstr "전역 기본값을 저장하지 못했습니다."
 
 #: elder-terms/src/main.cpp:441 elder-terms/src/main-window.ui:129
 msgid "Global defaults"
-msgstr "グローバル既定値"
+msgstr "전역 기본값"
 
 #: elder-terms/src/main.cpp:671
 #, c-format
 msgid "Open connection %s"
-msgstr "接続「%s」を開く"
+msgstr "연결 열기 %s"
 
 #: elder-terms/src/main.cpp:698 elder-terms/src/tray-backend.cpp:371
 #: elder-terms/src/tray-backend.cpp:390 elder-terms/src/tray-backend.cpp:860
 msgid "Open elder-terms"
-msgstr "elder-termsを開く"
+msgstr "열기 elder-terms"
 
 #: elder-terms/src/main.cpp:753 elder-terms/src/main.cpp:1270
 msgid "Failed to load connection"
-msgstr "接続の読み込みに失敗しました"
+msgstr "연결을 로드하지 못했습니다."
 
 #: elder-terms/src/main.cpp:797
 msgid "New connection"
-msgstr "新しい接続"
+msgstr "새 연결"
 
 #: elder-terms/src/main.cpp:798
 #, c-format
 msgid "New connection %d"
-msgstr "新しい接続 %d"
+msgstr "새 연결 %d"
 
 #: elder-terms/src/main.cpp:947 elder-terms/src/main.cpp:964
 msgid "Failed to monitor connections"
-msgstr "接続一覧の監視に失敗しました"
+msgstr "연결 모니터링 실패"
 
 #: elder-terms/src/main.cpp:960
 msgid "Unknown file monitor error"
-msgstr "不明なファイル監視エラー"
+msgstr "알 수 없는 파일 모니터 오류"
 
 #: elder-terms/src/main.cpp:1112
 msgid "Failed to create startup profile"
-msgstr "起動用プロファイルの作成に失敗しました"
+msgstr "시작 프로필을 생성하지 못했습니다."
 
 #: elder-terms/src/main.cpp:1169 elder-terms/src/main.cpp:1235
 #, c-format
 msgid "Failed to start %s"
-msgstr "%sの起動に失敗しました"
+msgstr "%s"
 
 #: elder-terms/src/main.cpp:1176
 #, c-format
 msgid "The %s executable was not found"
-msgstr "%sの実行ファイルが見つかりません"
+msgstr "%s 실행 파일을 찾을 수 없습니다."
 
 #: elder-terms/src/main.cpp:1204
 msgid "Unknown process launch error"
-msgstr "不明なプロセス起動エラー"
+msgstr "알 수 없는 프로세스 시작 오류"
 
 #: elder-terms/src/main.cpp:1330
 msgid "Discard changes?"
-msgstr "変更を破棄しますか？"
+msgstr "변경 사항을 취소하시겠습니까?"
 
 #: elder-terms/src/main.cpp:1333
 msgid "The current connection has changes that have not been applied."
-msgstr "現在の接続には、まだ適用されていない変更があります。"
+msgstr "현재 연결에 적용되지 않은 변경 사항이 있습니다."
 
 #: elder-terms/src/main.cpp:1337
 msgid "Discard"
-msgstr "破棄"
+msgstr "폐기"
 
 #: elder-terms/src/main.cpp:1489
 msgid "Failed to save connection"
-msgstr "接続の保存に失敗しました"
+msgstr "연결을 저장하지 못했습니다."
 
 #: elder-terms/src/main-window.ui:81
 msgid "Select a connection or create a new one."
-msgstr "接続を選択するか、新しい接続を作成してください。"
+msgstr "연결을 선택하거나 새 연결을 만듭니다."
 
 #: elder-terms/src/main-window.ui:123
 msgid "New"
-msgstr "新規"
+msgstr "새로운"
 
 #: elder-terms/src/main-window.ui:153
 msgid "Launch"
-msgstr "起動"
+msgstr "출시"
 
 #: elder-terms/src/connection-repository.cpp:60
 #, c-format
 msgid "Warning: failed to create temporary file %s: %s"
-msgstr "警告: 一時ファイル%sの作成に失敗しました: %s"
+msgstr "경고: 임시 파일 %s을(를) 생성하지 못했습니다: %s"
 
 #: elder-terms/src/connection-repository.cpp:67
 #, c-format
 msgid "Warning: failed to close temporary file %s: %s"
-msgstr "警告: 一時ファイル%sを閉じられませんでした: %s"
+msgstr "경고: 임시 파일을 닫지 못했습니다. %s: %s"
 
 #: elder-terms/src/connection-repository.cpp:124
 msgid "Connection name must not be empty"
-msgstr "接続名は空にできません"
+msgstr "연결 이름은 비워둘 수 없습니다."
 
 #: elder-terms/src/connection-repository.cpp:128
 msgid "Connection name must not be a relative path"
-msgstr "接続名に相対パスは使用できません"
+msgstr "연결 이름은 상대 경로가 아니어야 합니다."
 
 #: elder-terms/src/connection-repository.cpp:133
 msgid "Connection name must not contain a path separator"
-msgstr "接続名にパス区切り文字は使用できません"
+msgstr "연결 이름에는 경로 구분 기호가 포함되어서는 안 됩니다."
 
 #: elder-terms/src/connection-repository.cpp:145
 msgid "A connection with this name already exists"
-msgstr "同じ名前の接続がすでに存在します"
+msgstr "이 이름을 가진 연결이 이미 존재합니다."
 
 #: elder-terms/src/connection-repository.cpp:171
 #, c-format
 msgid "Warning: failed to create connection directory %s: %s"
-msgstr "警告: 接続ディレクトリ%sの作成に失敗しました: %s"
+msgstr "경고: 연결 디렉터리를 생성하지 못했습니다. %s: %s"
 
 #: elder-terms/src/connection-repository.cpp:181
 #, c-format
 msgid "Warning: %s"
-msgstr "警告: %s"
+msgstr "경고: %s"
 
 #: elder-terms/src/connection-repository.cpp:207
 #, c-format
 msgid "Warning: failed to replace connection profile %s: %s"
-msgstr "警告: 接続プロファイル%sの置換に失敗しました: %s"
+msgstr "경고: 연결 프로필을 교체하지 못했습니다. %s: %s"
 
 #: elder-terms/src/connection-repository.cpp:227
 #, c-format
 msgid "Warning: failed to prepare connection rename %s: %s"
-msgstr "警告: 接続名変更の準備に失敗しました (%s): %s"
+msgstr "경고: 연결 이름 변경을 준비하지 못했습니다. %s: %s"
 
 #: elder-terms/src/connection-repository.cpp:238
 #, c-format
 msgid "Warning: failed to rename connection profile %s: %s"
-msgstr "警告: 接続プロファイル%sの名前変更に失敗しました: %s"
+msgstr "경고: 연결 프로필 이름을 바꾸지 못했습니다. %s: %s"
 
 #: elder-terms/src/connection-repository.cpp:244
 #, c-format
 msgid "Warning: failed to restore connection profile %s: %s"
-msgstr "警告: 接続プロファイル%sの復元に失敗しました: %s"
+msgstr "경고: 연결 프로필을 복원하지 못했습니다. %s: %s"
 
 #: elder-terms/src/tray-backend.cpp:374 elder-terms/src/tray-backend.cpp:393
 #: elder-terms/src/tray-backend.cpp:861
 msgid "Quit"
-msgstr "終了"
+msgstr "종료"
 
 #: elder-terms-vte/src/main.cpp:114 elder-terms-vte/src/main.cpp:115
 #: elder-terms-vte/src/main.cpp:119
 msgid "Macro command failed"
-msgstr "マクロコマンドの実行に失敗しました"
+msgstr "매크로 명령이 실패했습니다."
 
 #: elder-terms-vte/src/main.cpp:197
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:277
 msgid "SSH Host Key"
-msgstr "SSHホスト鍵"
+msgstr "SSH 호스트 키"
 
 #: elder-terms-vte/src/main.cpp:199
 #, c-format
@@ -745,223 +742,215 @@ msgid ""
 "Key type: %s\n"
 "Fingerprint: %s\n"
 "Accept and save this host key?"
-msgstr ""
-"%s:%dの不明なSSHホスト鍵\n"
-"鍵の種類: %s\n"
-"フィンガープリント: %s\n"
-"このホスト鍵を承認して保存しますか？"
+msgstr "%s:%d에 대한 알 수 없는 SSH 호스트 키\n키 유형: %s\n지문: %s\n이 호스트 키를 수락하고 저장하시겠습니까?"
 
 #: elder-terms-vte/src/main.cpp:211 elder-terms-vte/src/main-window.ui:252
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:472
 msgid "SSH Authentication"
-msgstr "SSH認証"
+msgstr "SSH 인증"
 
 #: elder-terms-vte/src/main.cpp:212 elder-terms-vte/src/main-window.ui:260
 msgid "Password:"
-msgstr "パスワード:"
+msgstr "비밀번호:"
 
 #: elder-terms-vte/src/main.cpp:227
 msgid "SSH prompt accepted"
-msgstr "SSHプロンプトを承認しました"
+msgstr "SSH 프롬프트가 허용됨"
 
 #: elder-terms-vte/src/main.cpp:228
 msgid "SSH prompt cancelled"
-msgstr "SSHプロンプトをキャンセルしました"
+msgstr "SSH 프롬프트가 취소됨"
 
 #: elder-terms-vte/src/main.cpp:604 elder-terms-vte/src/main.cpp:608
 #: elder-terms-vte/src/main-window.ui:18
 msgid "Settings"
-msgstr "設定"
+msgstr "설정"
 
 #: elder-terms-vte/src/main.cpp:782
 msgid "Select file"
-msgstr "ファイルを選択"
+msgstr "파일 선택"
 
 #: elder-terms-vte/src/main.cpp:784
 msgid "Open"
-msgstr "開く"
+msgstr "열기"
 
 #: elder-terms-vte/src/main.cpp:870 elder-terms-vte/src/main.cpp:880
 #: elder-terms-vte/src/main.cpp:905 elder-terms-vte/src/main.cpp:915
 msgid "Transfer unavailable"
-msgstr "転送を利用できません"
+msgstr "전송할 수 없음"
 
 #: elder-terms-vte/src/main.cpp:1015 elder-terms-vte/src/main.cpp:1494
 msgid "Text send unavailable"
-msgstr "テキスト送信を利用できません"
+msgstr "문자 전송을 사용할 수 없습니다."
 
 #: elder-terms-vte/src/main.cpp:1023
 msgid "Text (Send)"
-msgstr "テキスト（送信）"
+msgstr "텍스트(보내기)"
 
 #: elder-terms-vte/src/main.cpp:1101 elder-terms-vte/src/main.cpp:1132
 msgid "SFTP unavailable"
-msgstr "SFTPを利用できません"
+msgstr "SFTP 사용할 수 없음"
 
 #: elder-terms-vte/src/main.cpp:1176
 msgid "Log recording"
-msgstr "ログ記録"
+msgstr "로그 기록"
 
 #: elder-terms-vte/src/main.cpp:1222
 msgid "ZMODEM (send)"
-msgstr "ZMODEM（送信）"
+msgstr "ZMODEM (보내기)"
 
 #: elder-terms-vte/src/main.cpp:1229
 msgid "YMODEM (send)"
-msgstr "YMODEM（送信）"
+msgstr "YMODEM (보내기)"
 
 #: elder-terms-vte/src/main.cpp:1236
 msgid "XMODEM 1K (send)"
-msgstr "XMODEM 1K（送信）"
+msgstr "XMODEM 1K (보내기)"
 
 #: elder-terms-vte/src/main.cpp:1245
 msgid "XMODEM (send)"
-msgstr "XMODEM（送信）"
+msgstr "XMODEM (보내기)"
 
 #: elder-terms-vte/src/main.cpp:1255
 msgid "ZMODEM (receive)"
-msgstr "ZMODEM（受信）"
+msgstr "ZMODEM (수신)"
 
 #: elder-terms-vte/src/main.cpp:1262
 msgid "YMODEM-g (receive)"
-msgstr "YMODEM-g（受信）"
+msgstr "YMODEM-g (수신)"
 
 #: elder-terms-vte/src/main.cpp:1270
 msgid "YMODEM (receive)"
-msgstr "YMODEM（受信）"
+msgstr "YMODEM (수신)"
 
 #: elder-terms-vte/src/main.cpp:1279
 msgid "XMODEM CRC (receive)"
-msgstr "XMODEM CRC（受信）"
+msgstr "XMODEM CRC (수신)"
 
 #: elder-terms-vte/src/main.cpp:1288
 msgid "XMODEM (receive)"
-msgstr "XMODEM（受信）"
+msgstr "XMODEM (수신)"
 
 #: elder-terms-vte/src/main-window.ui:116
 #: elder-terms-vte/src/main-window.cpp:1358
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1899
 msgid "Disconnected"
-msgstr "切断されました"
+msgstr "연결이 끊어졌습니다."
 
 #: elder-terms-vte/src/main-window.ui:171
 msgid "Transferring..."
-msgstr "転送中..."
+msgstr "전송 중..."
 
 #: elder-terms-vte/src/main-window.cpp:255
 msgid "Copy"
-msgstr "コピー"
+msgstr "복사"
 
 #: elder-terms-vte/src/main-window.cpp:259
 msgid "Paste"
-msgstr "貼り付け"
+msgstr "붙여넣기"
 
 #: elder-terms-vte/src/main-window.cpp:985
 #, c-format
 msgid "%s (Disconnected)"
-msgstr "%s（切断）"
+msgstr "%s(연결 끊김)"
 
 #: elder-terms-vte/src/main-window.cpp:1381
 msgid "SSH connection failed"
-msgstr "SSH接続に失敗しました"
+msgstr "SSH 연결 실패"
 
 #: elder-terms-vte/src/main-window.cpp:1383
 #, c-format
 msgid ""
 "SSH connection failed:\n"
 "%s"
-msgstr ""
-"SSH接続に失敗しました:\n"
-"%s"
+msgstr "SSH 연결 실패:\n%s"
 
 #: elder-terms-vte/src/main-window.cpp:1457
 #: elder-terms-vte/src/sftp/sftp-main.cpp:111
 msgid "Accept"
-msgstr "承認"
+msgstr "수락"
 
 #: elder-terms-vte/src/sftp/sftp-main.cpp:111
 msgid "Continue"
-msgstr "続行"
+msgstr "계속"
 
 #: elder-terms-vte/src/sftp/sftp-main.cpp:180
 msgid "Failed to start SFTP"
-msgstr "SFTPの起動に失敗しました"
+msgstr "SFTP"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:171
 #: elder-terms-vte/src/sftp/sftp-window.cpp:178
 msgid "Unknown SFTP failure"
-msgstr "不明なSFTPエラー"
+msgstr "알 수 없음 SFTP 실패"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:244
 msgid "Loading…"
-msgstr "読み込み中…"
+msgstr "로드 중…"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:387
 msgid "SFTP local pane only supports native filesystem paths"
-msgstr "SFTPのローカルペインではローカルファイルシステムのパスのみ使用できます"
+msgstr "SFTP 로컬 창은 기본 파일 시스템 경로만 지원합니다."
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:460
 msgid "Local directory path is empty"
-msgstr "ローカルディレクトリのパスが空です"
+msgstr "로컬 디렉터리 경로가 비어 있습니다."
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:557
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1830
 msgid "Preparing transfer…"
-msgstr "転送を準備しています…"
+msgstr "전송 준비 중…"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:585
 #, c-format
 msgid "Transferring %zu of %zu — %s"
-msgstr "転送中 %zu/%zu — %s"
+msgstr "%zu 중 %zu 전송 중 — %s"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:588
 #, c-format
 msgid "Transferring %zu of %zu"
-msgstr "転送中 %zu/%zu"
+msgstr "%zu 중 %zu"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:592
 #, c-format
 msgid "Transferring — %s"
-msgstr "転送中 — %s"
+msgstr "전송 중 — %s"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:595
 msgid "Transferring"
-msgstr "転送中"
+msgstr "전송 중"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:697
 #: elder-terms-vte/src/sftp/sftp-window.cpp:721
 msgid "Skip"
-msgstr "スキップ"
+msgstr "건너뛰기"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:698
 msgid "Overwrite"
-msgstr "上書き"
+msgstr "덮어쓰기"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:700
 msgid "Destination already exists"
-msgstr "転送先に同名の項目があります"
+msgstr "대상이 이미 존재합니다."
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:702
 #, c-format
 msgid ""
 "%s\n"
 "The selected decision applies to all remaining conflicts."
-msgstr ""
-"%s\n"
-"選択した操作は残りのすべての衝突に適用されます。"
+msgstr "%s\n선택한 결정은 나머지 모든 충돌에 적용됩니다."
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:720
 msgid "Abort"
-msgstr "中止"
+msgstr "중단"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:722
 msgid "Retry"
-msgstr "再試行"
+msgstr "재시도"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:724
 msgid "SFTP transfer failed"
-msgstr "SFTP転送に失敗しました"
+msgstr "SFTP 전송 실패"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:725
 #, c-format
@@ -970,127 +959,123 @@ msgid ""
 "\n"
 "%s\n"
 "→ %s"
-msgstr ""
-"%s\n"
-"\n"
-"%s\n"
-"→ %s"
+msgstr "%s\n\n%s\n→ %s"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:752
 msgid "SFTP operation failed"
-msgstr "SFTP操作に失敗しました"
+msgstr "SFTP 작업 실패"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:811
 msgid "Failed to load remote directory"
-msgstr "リモートディレクトリの読み込みに失敗しました"
+msgstr "원격 디렉터리를 로드하지 못했습니다."
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:812
 msgid "Failed to load local directory"
-msgstr "ローカルディレクトリの読み込みに失敗しました"
+msgstr "로컬 디렉터리를 로드하지 못했습니다."
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:884
 msgid "Failed to expand directory"
-msgstr "ディレクトリの展開に失敗しました"
+msgstr "디렉터리를 확장하지 못했습니다."
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1210
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1218
 msgid "Transfer cancelled"
-msgstr "転送をキャンセルしました"
+msgstr "이체 취소됨"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1220
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:443
 msgid "Transfer failed"
-msgstr "転送に失敗しました"
+msgstr "전송 실패"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1234
 #, c-format
 msgid "Sent %zu item"
 msgid_plural "Sent %zu items"
-msgstr[0] "%zu個の項目を送信しました"
+msgstr[0] "%zu개 항목을 보냈습니다"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1236
 #, c-format
 msgid "Received %zu item"
 msgid_plural "Received %zu items"
-msgstr[0] "%zu個の項目を受信しました"
+msgstr[0] "%zu개 항목을 받았습니다"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1535
 msgid "Name"
-msgstr "名前"
+msgstr "이름"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1537
 msgid "Size"
-msgstr "サイズ"
+msgstr "크기"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1539
 msgid "Modified"
-msgstr "更新日時"
+msgstr "수정됨"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1557
 msgid "Remote"
-msgstr "リモート"
+msgstr "원격"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1557
 msgid "Local"
-msgstr "ローカル"
+msgstr "로컬"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1589
 msgid "Up"
-msgstr "上へ"
+msgstr "위로"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1593
 msgid "Refresh"
-msgstr "更新"
+msgstr "새로 고침"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1618
 msgid "Receive"
-msgstr "受信"
+msgstr "수신"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1618
 msgid "Send"
-msgstr "送信"
+msgstr "보내다"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1797
 msgid "Ready"
-msgstr "準備完了"
+msgstr "준비"
 
 #: elder-terms-vte/src/terminal-text-send-runner.cpp:118
 msgid "Text contained characters that were replaced"
-msgstr "置換された文字がテキストに含まれていました"
+msgstr "대체된 문자가 포함된 텍스트"
 
 #: elder-terms-vte/src/terminal-transfer-runner.cpp:960
 #, c-format
 msgid "Starting %s send"
-msgstr "%sの送信を開始しています"
+msgstr "시작 %s 보내기"
 
 #: elder-terms-vte/src/terminal-transfer-runner.cpp:961
 #, c-format
 msgid "Starting %s receive"
-msgstr "%sの受信を開始しています"
+msgstr "시작 %s 수신"
 
 #: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:430
 #: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:982
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:507
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:608
 msgid "Text send failed"
-msgstr "テキスト送信に失敗しました"
+msgstr "문자 전송 실패"
 
 #: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:541
 msgid "local terminal"
-msgstr "ローカル端末"
+msgstr "로컬 터미널"
 
 #: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1262
 msgid "serial: (unknown)"
-msgstr "シリアル:（不明）"
+msgstr "일련번호: (알 수 없음)"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:80
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:627
 msgid "SSH session has no socket"
-msgstr "SSHセッションにソケットがありません"
+msgstr "SSH 세션에 소켓이 없습니다."
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:245
 msgid "unknown"
-msgstr "不明"
+msgstr "알 수 없음"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:265
 #, c-format
@@ -1098,132 +1083,129 @@ msgid ""
 "Unknown SSH host key for %s:%u\n"
 "Key type: %s\n"
 "Fingerprint: %s"
-msgstr ""
-"%s:%uの不明なSSHホスト鍵\n"
-"鍵の種類: %s\n"
-"フィンガープリント: %s"
+msgstr "%s:%u에 대한 알 수 없는 SSH 호스트 키\n키 유형: %s\n지문: %s"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:271
 msgid "The known_hosts file does not exist and will be created."
-msgstr "known_hostsファイルが存在しないため作成します。"
+msgstr "Known_hosts 파일이 존재하지 않으며 생성됩니다."
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:274
 msgid "Accept and save this host key?"
-msgstr "このホスト鍵を承認して保存しますか？"
+msgstr "이 호스트 키를 수락하고 저장하시겠습니까?"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:296
 msgid "SSH host key changed; connection rejected"
-msgstr "SSHホスト鍵が変更されたため、接続を拒否しました"
+msgstr "SSH 호스트 키가 변경되었습니다. 연결이 거부되었습니다"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:300
 msgid "SSH host key type differs from known_hosts; connection rejected"
-msgstr "SSHホスト鍵の種類がknown_hostsと異なるため、接続を拒否しました"
+msgstr "SSH 호스트 키 유형이 Known_hosts와 다릅니다. 연결이 거부되었습니다"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:303
 msgid "Failed to check SSH host key"
-msgstr "SSHホスト鍵の確認に失敗しました"
+msgstr "SSH 호스트 키"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:311
 msgid "SSH host key was not accepted"
-msgstr "SSHホスト鍵が承認されませんでした"
+msgstr "SSH 호스트 키가 허용되지 않았습니다."
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:314
 msgid "Failed to save SSH host key"
-msgstr "SSHホスト鍵の保存に失敗しました"
+msgstr "SSH 호스트 키"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:346
 msgid "SSH Key Passphrase"
-msgstr "SSH鍵のパスフレーズ"
+msgstr "SSH 키 암호"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:348
 #, c-format
 msgid "Passphrase for %s (attempt %u of %u):"
-msgstr "%sのパスフレーズ（%u/%u回目）:"
+msgstr "%s에 대한 암호(%u의 %u 시도):"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:394
 #, c-format
 msgid "Password for %s (attempt %u of %u):"
-msgstr "%sのパスワード（%u/%u回目）:"
+msgstr "%s의 비밀번호(%u의 %u 시도):"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:414
 msgid "SSH password authentication failed"
-msgstr "SSHパスワード認証に失敗しました"
+msgstr "SSH 비밀번호 인증 실패"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:439
 msgid "SSH authentication response:"
-msgstr "SSH認証への応答:"
+msgstr "SSH 인증 응답:"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:498
 msgid "SSH keyboard-interactive authentication failed"
-msgstr "SSHキーボードインタラクティブ認証に失敗しました"
+msgstr "SSH 키보드 대화형 인증 실패"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:517
 msgid "SSH authentication negotiation failed"
-msgstr "SSH認証のネゴシエーションに失敗しました"
+msgstr "SSH 인증 협상 실패"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:522
 msgid "Failed to list SSH authentication methods"
-msgstr "SSH認証方法の取得に失敗しました"
+msgstr "SSH 인증 방법을 나열하지 못했습니다."
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:533
 msgid "SSH public-key authentication failed"
-msgstr "SSH公開鍵認証に失敗しました"
+msgstr "SSH 공개 키 인증 실패"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:555
 msgid "Failed to refresh SSH authentication methods"
-msgstr "SSH認証方法の更新に失敗しました"
+msgstr "SSH 인증 방법을 새로 고치지 못했습니다."
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:568
 msgid "SSH server did not accept an available authentication method"
-msgstr "SSHサーバーは利用可能な認証方法を受け入れませんでした"
+msgstr "SSH 서버가 사용 가능한 인증 방법을 수락하지 않았습니다."
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:724
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1024
 msgid "SSH transport is closed"
-msgstr "SSHトランスポートは閉じられています"
+msgstr "SSH 운송이 종료되었습니다"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:926
 msgid "Failed to allocate SSH session"
-msgstr "SSHセッションの割り当てに失敗しました"
+msgstr "SSH 세션"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:932
 msgid "Failed to set SSH host"
-msgstr "SSHホストの設定に失敗しました"
+msgstr "SSH 호스트"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:935
 msgid "Failed to parse SSH configuration"
-msgstr "SSH設定の解析に失敗しました"
+msgstr "SSH 구성을 구문 분석하지 못했습니다."
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:944
 msgid "Failed to configure SSH endpoint"
-msgstr "SSHエンドポイントの設定に失敗しました"
+msgstr "SSH 끝점"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:949
 msgid "Failed to configure SSH known_hosts"
-msgstr "SSHのknown_hostsの設定に失敗しました"
+msgstr "SSHknown_hosts"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:952
 msgid "Failed to attach SSH socket"
-msgstr "SSHソケットの割り当てに失敗しました"
+msgstr "SSH 소켓"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:962
 msgid "Failed to configure SSH callbacks"
-msgstr "SSHコールバックの設定に失敗しました"
+msgstr "SSH 콜백을 구성하지 못했습니다."
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1120
 msgid "SSH transport is required"
-msgstr "SSHトランスポートが必要です"
+msgstr "SSH 운송이 필요합니다"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1174
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1243
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1281
 msgid "SSH channel is closed"
-msgstr "SSHチャネルは閉じられています"
+msgstr "SSH 채널이 폐쇄되었습니다"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:625
 msgid "ssh: (unknown)"
-msgstr "ssh:（不明）"
+msgstr "SSH: (알 수 없음)"
 
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:840
 msgid "telnet: (unknown)"
-msgstr "telnet:（不明）"
+msgstr "텔넷: (알 수 없음)"

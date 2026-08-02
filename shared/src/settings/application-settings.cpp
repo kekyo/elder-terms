@@ -14,16 +14,33 @@ static constexpr char window_mode[] = "window";
 static constexpr char tray_mode[] = "tray";
 static constexpr char window_and_tray_mode[] = "window_and_tray";
 static constexpr char system_language[] = "system";
-static constexpr char english_language[] = "en";
-static constexpr char japanese_language[] = "ja";
 static constexpr char default_open_application[] = "ctrl+alt+t";
 
+struct UiLanguageEntry {
+  ApplicationUiLanguage language;
+  const char *value;
+};
+
+static constexpr UiLanguageEntry ui_languages[] = {
+    {ApplicationUiLanguage::english, "en"},
+    {ApplicationUiLanguage::arabic, "ar"},
+    {ApplicationUiLanguage::spanish, "es"},
+    {ApplicationUiLanguage::french, "fr"},
+    {ApplicationUiLanguage::hindi, "hi"},
+    {ApplicationUiLanguage::japanese, "ja"},
+    {ApplicationUiLanguage::korean, "ko"},
+    {ApplicationUiLanguage::portuguese, "pt"},
+    {ApplicationUiLanguage::russian, "ru"},
+    {ApplicationUiLanguage::chinese, "zh"},
+};
+
 static ApplicationUiLanguage parse_ui_language(const char *value) {
-  if (value != nullptr && std::string(value) == english_language) {
-    return ApplicationUiLanguage::english;
-  }
-  if (value != nullptr && std::string(value) == japanese_language) {
-    return ApplicationUiLanguage::japanese;
+  if (value != nullptr) {
+    for (const UiLanguageEntry &entry : ui_languages) {
+      if (std::string(value) == entry.value) {
+        return entry.language;
+      }
+    }
   }
   return ApplicationUiLanguage::system;
 }
@@ -31,13 +48,20 @@ static ApplicationUiLanguage parse_ui_language(const char *value) {
 static bool validate_ui_language(const SettingValue &value,
                                  std::string *reason) {
   const auto *text = std::get_if<std::string>(&value);
-  if (text == nullptr ||
-      (*text != system_language && *text != english_language &&
-       *text != japanese_language)) {
-    *reason = "must be system, en, or ja";
+  if (text == nullptr) {
+    *reason = "must be a supported UI language";
     return false;
   }
-  return true;
+  if (*text == system_language) {
+    return true;
+  }
+  for (const UiLanguageEntry &entry : ui_languages) {
+    if (*text == entry.value) {
+      return true;
+    }
+  }
+  *reason = "must be system, en, ar, es, fr, hi, ja, ko, pt, ru, or zh";
+  return false;
 }
 
 static bool validate_startup_mode(const SettingValue &value,
@@ -97,11 +121,10 @@ std::vector<SettingDefinition> application_setting_definitions() {
 
 const char *
 application_ui_language_to_string(ApplicationUiLanguage language) {
-  if (language == ApplicationUiLanguage::english) {
-    return english_language;
-  }
-  if (language == ApplicationUiLanguage::japanese) {
-    return japanese_language;
+  for (const UiLanguageEntry &entry : ui_languages) {
+    if (language == entry.language) {
+      return entry.value;
+    }
   }
   return system_language;
 }

@@ -26,9 +26,52 @@ static bool is_c_message_locale(const char *locale) {
          value == "C.utf8";
 }
 
-static bool select_japanese_message_locale() {
-  return std::setlocale(LC_MESSAGES, "ja_JP.UTF-8") != nullptr ||
-         std::setlocale(LC_MESSAGES, "ja_JP.utf8") != nullptr;
+static const char *message_locale_prefix(ApplicationUiLanguage language) {
+  switch (language) {
+  case ApplicationUiLanguage::arabic:
+    return "ar_SA";
+  case ApplicationUiLanguage::spanish:
+    return "es_ES";
+  case ApplicationUiLanguage::french:
+    return "fr_FR";
+  case ApplicationUiLanguage::hindi:
+    return "hi_IN";
+  case ApplicationUiLanguage::japanese:
+    return "ja_JP";
+  case ApplicationUiLanguage::korean:
+    return "ko_KR";
+  case ApplicationUiLanguage::portuguese:
+    return "pt_PT";
+  case ApplicationUiLanguage::russian:
+    return "ru_RU";
+  case ApplicationUiLanguage::chinese:
+    return "zh_CN";
+  case ApplicationUiLanguage::system:
+  case ApplicationUiLanguage::english:
+    return nullptr;
+  }
+  return nullptr;
+}
+
+static bool select_translated_message_locale(ApplicationUiLanguage language) {
+  const char *prefix = message_locale_prefix(language);
+  if (prefix != nullptr) {
+    const std::string utf8_locale = std::string(prefix) + ".UTF-8";
+    const std::string compact_utf8_locale = std::string(prefix) + ".utf8";
+    if (std::setlocale(LC_MESSAGES, utf8_locale.c_str()) != nullptr ||
+        std::setlocale(LC_MESSAGES, compact_utf8_locale.c_str()) != nullptr) {
+      return true;
+    }
+  }
+
+  static constexpr const char *fallback_locales[] = {
+      "en_US.UTF-8", "en_US.utf8", "ja_JP.UTF-8", "ja_JP.utf8"};
+  for (const char *locale : fallback_locales) {
+    if (std::setlocale(LC_MESSAGES, locale) != nullptr) {
+      return true;
+    }
+  }
+  return false;
 }
 
 static bool path_is_within(const std::filesystem::path &path,
@@ -73,12 +116,10 @@ initialize_localization(ApplicationUiLanguage language) {
         "Warning: unable to select the system locale for UI text");
   }
 
-  const char *requested_language = nullptr;
-  if (language == ApplicationUiLanguage::english) {
-    requested_language = "en";
-  } else if (language == ApplicationUiLanguage::japanese) {
-    requested_language = "ja";
-  }
+  const char *requested_language =
+      language == ApplicationUiLanguage::system
+          ? nullptr
+          : application_ui_language_to_string(language);
   if (requested_language != nullptr &&
       !g_setenv(language_environment, requested_language, TRUE)) {
     result.requested_language_applied = false;
@@ -86,12 +127,14 @@ initialize_localization(ApplicationUiLanguage language) {
         "Warning: unable to apply the configured UI language");
   }
 
-  if (language == ApplicationUiLanguage::japanese &&
+  if (language != ApplicationUiLanguage::system &&
+      language != ApplicationUiLanguage::english &&
       is_c_message_locale(std::setlocale(LC_MESSAGES, nullptr)) &&
-      !select_japanese_message_locale()) {
+      !select_translated_message_locale(language)) {
     result.requested_language_applied = false;
     result.warnings.push_back(
-        "Warning: Japanese UI text requires an installed ja_JP UTF-8 locale");
+        "Warning: translated UI text requires an installed non-C UTF-8 "
+        "locale");
   }
 
   const char *override_directory =
