@@ -34,6 +34,17 @@ export interface X11MapEvent {
   readonly className: string;
 }
 
+/** Modifier accepted by the X11 hotkey test recorder. */
+export type X11HotkeyModifier = 'control' | 'alt' | 'shift' | 'super';
+
+/** One X11 key combination reserved by the test recorder. */
+export interface X11Hotkey {
+  /** X11 keysym name. */
+  readonly key: string;
+  /** Modifiers held with the key. */
+  readonly modifiers: readonly X11HotkeyModifier[];
+}
+
 /** Records top-level X11 window maps from before application launch. */
 export interface X11MapRecorder {
   /**
@@ -60,6 +71,13 @@ export interface X11MapRecorder {
    * @returns A promise completed with the decimal X11 window identifier.
    */
   readonly focusedWindow: () => Promise<string>;
+  /**
+   * Reserves a global key combination in the recorder process.
+   *
+   * @param hotkey Key combination to reserve.
+   * @returns A promise completed after the X server accepts the grab.
+   */
+  readonly grabHotkey: (hotkey: X11Hotkey) => Promise<void>;
   /**
    * Stops the recorder.
    *
@@ -92,7 +110,19 @@ export interface LauncherGtkTestOptions {
   readonly xvfbTrayHost?: boolean;
   /** Whether to record top-level X11 window maps from before launch. */
   readonly recordX11Maps?: boolean;
+  /** X11 key combinations reserved before the application starts. */
+  readonly blockedHotkeys?: readonly X11Hotkey[];
 }
+
+const x11ModifierMasks: Readonly<Record<X11HotkeyModifier, number>> = {
+  shift: 1,
+  control: 4,
+  alt: 8,
+  super: 64,
+};
+
+const x11ModifierMask = (modifiers: readonly X11HotkeyModifier[]): number =>
+  modifiers.reduce((mask, modifier) => mask | x11ModifierMasks[modifier], 0);
 
 const parseX11MapEvent = (line: string): X11MapEvent | undefined => {
   const [kind, windowId, processId, name, instanceName, className] =
@@ -246,6 +276,16 @@ const startX11MapRecorder = async (
     events: () => [...recordedEvents],
     focusCompetitor: async () => request('focus-competitor'),
     focusedWindow: async () => request('active-window'),
+    grabHotkey: async (hotkey) => {
+      const result = await request(
+        `grab-hotkey ${hotkey.key} ${x11ModifierMask(hotkey.modifiers)}`
+      );
+      if (result !== 'ok') {
+        throw new Error(
+          `Failed to reserve X11 hotkey ${hotkey.modifiers.join('+')}+${hotkey.key}`
+        );
+      }
+    },
     stop: async () => {
       if (child.exitCode !== null || child.signalCode !== null) {
         return;
@@ -317,8 +357,14 @@ export const runLauncherGtkTest = async (
   });
   let x11MapRecorder: X11MapRecorder | undefined;
   try {
-    if (options?.recordX11Maps === true) {
+    if (
+      options?.recordX11Maps === true ||
+      (options?.blockedHotkeys?.length ?? 0) > 0
+    ) {
       x11MapRecorder = await startX11MapRecorder(await launcher.environment());
+    }
+    for (const hotkey of options?.blockedHotkeys ?? []) {
+      await x11MapRecorder?.grabHotkey(hotkey);
     }
     const app = await launcher.launch([...(options?.args ?? [])]);
     await body({ app, configHome, connections, x11MapRecorder });

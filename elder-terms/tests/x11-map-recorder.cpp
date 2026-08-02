@@ -1,6 +1,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 #include <poll.h>
@@ -103,6 +104,42 @@ static Window focused_window(Display *display) {
   return window;
 }
 
+static bool x11_error_trapped = false;
+
+static int on_x11_error(Display *, XErrorEvent *) {
+  x11_error_trapped = true;
+  return 0;
+}
+
+static bool grab_hotkey(Display *display, Window root,
+                        const std::string &key_name,
+                        unsigned int modifiers) {
+  const KeySym keysym = XStringToKeysym(key_name.c_str());
+  if (keysym == NoSymbol) {
+    return false;
+  }
+  const KeyCode keycode = XKeysymToKeycode(display, keysym);
+  if (keycode == 0) {
+    return false;
+  }
+
+  constexpr unsigned int lock_masks[] = {
+      0U,
+      LockMask,
+      Mod2Mask,
+      LockMask | Mod2Mask,
+  };
+  x11_error_trapped = false;
+  XErrorHandler previous_handler = XSetErrorHandler(on_x11_error);
+  for (const unsigned int lock_mask : lock_masks) {
+    XGrabKey(display, static_cast<int>(keycode), modifiers | lock_mask, root,
+             True, GrabModeAsync, GrabModeAsync);
+  }
+  XSync(display, False);
+  XSetErrorHandler(previous_handler);
+  return !x11_error_trapped;
+}
+
 int main() {
   Display *display = XOpenDisplay(nullptr);
   if (display == nullptr) {
@@ -165,6 +202,18 @@ int main() {
       } else if (command.starts_with("active-window ")) {
         XSync(display, False);
         std::cout << command << '\t' << focused_window(display)
+                  << std::endl;
+      } else if (command.starts_with("grab-hotkey ")) {
+        std::istringstream fields(command);
+        std::string operation;
+        std::string key_name;
+        unsigned int modifiers = 0;
+        unsigned int request_id = 0;
+        fields >> operation >> key_name >> modifiers >> request_id;
+        const bool valid = fields && operation == "grab-hotkey";
+        const bool grabbed =
+            valid && grab_hotkey(display, root, key_name, modifiers);
+        std::cout << command << '\t' << (grabbed ? "ok" : "failed")
                   << std::endl;
       }
     }
