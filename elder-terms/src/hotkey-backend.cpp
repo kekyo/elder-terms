@@ -68,6 +68,9 @@ struct HotkeyBackendImplementation {
   unsigned int portal_session_response_generation = 0;
   unsigned int portal_bind_response_generation = 0;
   unsigned int generation = 1;
+  bool initialization_pending = true;
+  bool backend_unavailable = false;
+  bool registration_failure_reported = false;
   bool destroyed = false;
 };
 
@@ -136,6 +139,27 @@ find_hotkey_action_id(const std::vector<HotkeyAction> &actions,
   return action == actions.end()
              ? std::nullopt
              : std::optional<std::string>(action->id);
+}
+
+static void notify_registration_failure(
+    HotkeyBackendImplementation *implementation) {
+  if (implementation == nullptr || implementation->destroyed ||
+      implementation->actions.empty() ||
+      implementation->registration_failure_reported) {
+    return;
+  }
+  implementation->registration_failure_reported = true;
+  if (implementation->options.registration_failed) {
+    implementation->options.registration_failed();
+  }
+}
+
+static void mark_backend_unavailable(
+    HotkeyBackendImplementation *implementation) {
+  implementation->initialization_pending = false;
+  implementation->backend_unavailable = true;
+  implementation->kind = HotkeyBackendKind::none;
+  notify_registration_failure(implementation);
 }
 
 static bool has_text(const char *value) {
@@ -299,11 +323,16 @@ static bool grab_x11_action(
 static void grab_x11_actions(
     HotkeyBackendImplementation *implementation) {
   ungrab_x11_actions(implementation);
+  bool all_registered = true;
   for (const HotkeyAction &action : implementation->actions) {
     if (!grab_x11_action(implementation, action)) {
+      all_registered = false;
       std::cerr << "Failed to register X11 hotkey action "
                 << action.id << '\n';
     }
+  }
+  if (!all_registered) {
+    notify_registration_failure(implementation);
   }
 }
 
@@ -352,6 +381,8 @@ static bool initialize_x11_backend(
   implementation->x11_root =
       DefaultRootWindow(implementation->x11_display);
   implementation->kind = HotkeyBackendKind::x11;
+  implementation->initialization_pending = false;
+  implementation->backend_unavailable = false;
   grab_x11_actions(implementation.get());
   implementation->tasks.emplace_back(
       run_x11_event_loop_async(implementation));
@@ -599,8 +630,12 @@ static void handle_portal_create_response(
   if (implementation->destroyed ||
       generation != implementation->generation ||
       implementation->portal_session_response_generation ==
-          generation ||
-      response != 0U) {
+          generation) {
+    return;
+  }
+  if (response != 0U) {
+    std::cerr << "Global shortcuts portal rejected the session request\n";
+    notify_registration_failure(implementation.get());
     return;
   }
 
@@ -611,6 +646,7 @@ static void handle_portal_create_response(
       session_handle == nullptr || *session_handle == '\0') {
     g_free(session_handle);
     std::cerr << "Global shortcuts portal did not return a session\n";
+    notify_registration_failure(implementation.get());
     return;
   }
   implementation->portal_session_handle = session_handle;
@@ -626,8 +662,12 @@ static void handle_portal_bind_response(
     unsigned int generation, guint32 response, GVariant *results) {
   if (implementation->destroyed ||
       generation != implementation->generation ||
-      implementation->portal_bind_response_generation == generation ||
-      response != 0U) {
+      implementation->portal_bind_response_generation == generation) {
+    return;
+  }
+  if (response != 0U) {
+    std::cerr << "Global shortcuts portal rejected the bind request\n";
+    notify_registration_failure(implementation.get());
     return;
   }
   GVariant *shortcuts =
@@ -638,6 +678,7 @@ static void handle_portal_bind_response(
                 G_VARIANT_TYPE("a(sa{sv})"));
   if (shortcuts == nullptr) {
     std::cerr << "Global shortcuts portal did not bind the hotkey\n";
+    notify_registration_failure(implementation.get());
     return;
   }
 
@@ -673,6 +714,7 @@ static void handle_portal_bind_response(
   } else {
     std::cerr << "Global shortcuts portal rejected one or more "
                  "hotkey actions\n";
+    notify_registration_failure(implementation.get());
   }
 }
 
@@ -772,6 +814,7 @@ static cardio::promise<void> create_portal_session_async(
             implementation, returned_handle, generation,
             PortalRequestKind::create_session)) {
       std::cerr << "Failed to observe the global shortcuts session response\n";
+      notify_registration_failure(implementation.get());
     }
     g_variant_unref(result);
   } catch (const cardio::canceled_exception &) {
@@ -780,6 +823,7 @@ static cardio::promise<void> create_portal_session_async(
         generation == implementation->generation) {
       std::cerr << "Failed to create a global shortcuts session: "
                 << error.what() << '\n';
+      notify_registration_failure(implementation.get());
     }
   }
 }
@@ -820,6 +864,9 @@ static cardio::promise<void> bind_portal_shortcut_async(
       has_shortcuts = true;
     }
     if (!has_shortcuts) {
+      std::cerr << "No configured hotkey can be registered by the global "
+                   "shortcuts portal\n";
+      notify_registration_failure(implementation.get());
       co_return;
     }
 
@@ -856,6 +903,7 @@ static cardio::promise<void> bind_portal_shortcut_async(
             implementation, returned_handle, generation,
             PortalRequestKind::bind_shortcuts)) {
       std::cerr << "Failed to observe the global shortcuts bind response\n";
+      notify_registration_failure(implementation.get());
     }
     g_variant_unref(result);
   } catch (const cardio::canceled_exception &) {
@@ -864,6 +912,7 @@ static cardio::promise<void> bind_portal_shortcut_async(
         generation == implementation->generation) {
       std::cerr << "Failed to bind global hotkey actions: "
                 << error.what() << '\n';
+      notify_registration_failure(implementation.get());
     }
   }
 }
@@ -900,22 +949,24 @@ static cardio::promise<void> initialize_portal_or_fallback_async(
         });
     if (selected == HotkeyBackendKind::portal) {
       implementation->kind = selected;
+      implementation->initialization_pending = false;
+      implementation->backend_unavailable = false;
       start_portal_registration(implementation);
     } else if (selected == HotkeyBackendKind::x11) {
       if (!initialize_x11_backend(implementation)) {
-        implementation->kind = HotkeyBackendKind::none;
+        mark_backend_unavailable(implementation.get());
       }
     } else {
-      implementation->kind = selected;
+      mark_backend_unavailable(implementation.get());
     }
   } catch (const cardio::canceled_exception &) {
   } catch (const std::exception &error) {
     if (!implementation->destroyed) {
       std::cerr << "Global shortcuts portal is unavailable: "
                 << error.what() << '\n';
-      if (has_x11 &&
+      if (!has_x11 ||
           !initialize_x11_backend(implementation)) {
-        implementation->kind = HotkeyBackendKind::none;
+        mark_backend_unavailable(implementation.get());
       }
     }
   }
@@ -942,14 +993,14 @@ create_hotkey_backend(HotkeyBackendOptions options,
   const bool has_x11 = x11_is_available();
   if (!prefer_portal && has_x11) {
     if (!initialize_x11_backend(implementation)) {
-      implementation->kind = HotkeyBackendKind::none;
+      mark_backend_unavailable(implementation.get());
     }
     return state;
   }
   if (implementation->options.dispatcher == nullptr) {
-    if (has_x11 &&
+    if (!has_x11 ||
         !initialize_x11_backend(implementation)) {
-      implementation->kind = HotkeyBackendKind::none;
+      mark_backend_unavailable(implementation.get());
     }
     return state;
   }
@@ -969,7 +1020,12 @@ void replace_hotkey_actions(
       state->implementation;
   ++implementation->generation;
   implementation->actions = actions;
-  if (implementation->kind == HotkeyBackendKind::x11) {
+  if (implementation->initialization_pending) {
+    return;
+  }
+  if (implementation->backend_unavailable) {
+    notify_registration_failure(implementation.get());
+  } else if (implementation->kind == HotkeyBackendKind::x11) {
     grab_x11_actions(implementation.get());
   } else if (implementation->kind ==
              HotkeyBackendKind::portal) {
@@ -991,6 +1047,8 @@ void destroy_hotkey_backend(HotkeyBackendState *state) {
   clear_portal_backend(implementation.get());
   destroy_x11_backend(implementation.get());
   g_clear_object(&implementation->connection);
+  implementation->initialization_pending = false;
+  implementation->backend_unavailable = true;
   implementation->kind = HotkeyBackendKind::none;
   delete state;
 }

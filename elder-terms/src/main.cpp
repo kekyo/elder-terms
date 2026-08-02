@@ -206,6 +206,36 @@ static void show_error(ApplicationState *state, const std::string &summary,
                         details);
 }
 
+static void show_hotkey_registration_error(ApplicationState *state) {
+  if (state == nullptr || state->main_window == nullptr ||
+      state->window_destroyed || state->application_shutting_down) {
+    return;
+  }
+
+  const char *summary = _("Global shortcuts are unavailable");
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(state->main_window->window),
+      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
+                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE, "%s", summary);
+  gtk_window_set_title(GTK_WINDOW(dialog), summary);
+  gtk_message_dialog_format_secondary_text(
+      GTK_MESSAGE_DIALOG(dialog), "%s",
+      _("One or more configured global shortcuts could not be registered and "
+        "will not work. Check whether your desktop environment supports "
+        "global shortcuts."));
+  GtkWidget *close = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), _("OK"), GTK_RESPONSE_CLOSE);
+  gestament_gtk_assign_accessible_id(
+      dialog, "hotkey_registration_error_dialog");
+  gestament_gtk_assign_accessible_id(
+      close, "hotkey_registration_error_close_button");
+  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CLOSE);
+  g_signal_connect(dialog, "response", G_CALLBACK(on_notice_response),
+                   nullptr);
+  gtk_widget_show_all(dialog);
+}
+
 static void on_ui_language_restart_dialog_destroy(GtkWidget *dialog,
                                                   gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
@@ -1789,6 +1819,9 @@ static void on_application_startup(GApplication *,
                 present_main_window(state, context.activation_time,
                                     context.activation_token);
               },
+          .registration_failed = [state]() {
+            show_hotkey_registration_error(state);
+          },
       },
       hotkey_actions);
   if (state->startup_mode == elder_terms::StartupMode::window) {

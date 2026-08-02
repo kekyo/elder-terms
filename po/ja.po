@@ -540,6 +540,19 @@ msgstr "今すぐ再起動"
 msgid "Failed to save global defaults"
 msgstr "グローバル既定値の保存に失敗しました"
 
+#: elder-terms/src/main.cpp:215
+msgid "Global shortcuts are unavailable"
+msgstr "グローバルショートカットを利用できません"
+
+#: elder-terms/src/main.cpp:224
+msgid ""
+"One or more configured global shortcuts could not be registered and will not "
+"work. Check whether your desktop environment supports global shortcuts."
+msgstr ""
+"設定されたグローバルショートカットの一部またはすべてを登録できなかった"
+"ため、動作しません。デスクトップ環境がグローバルショートカットに対応して"
+"いるか確認してください。"
+
 #: elder-terms/src/main.cpp:411 elder-terms/src/main-window.ui:129
 msgid "Global defaults"
 msgstr "グローバル既定値"

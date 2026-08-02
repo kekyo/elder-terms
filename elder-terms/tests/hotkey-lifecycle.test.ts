@@ -1,6 +1,7 @@
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type {
   GtkApp,
   GtkEntryElement,
@@ -11,6 +12,24 @@ import type {
 import { waitForResult } from 'gestament/testing';
 import { describe, expect, it } from 'vitest';
 import { expectElementKind, runLauncherGtkTest } from './test-helpers';
+
+const ctrlAltT = {
+  key: 't',
+  modifiers: ['control', 'alt'],
+} as const;
+
+const ctrlShiftY = {
+  key: 'y',
+  modifiers: ['control', 'shift'],
+} as const;
+
+const japaneseTestEnvironment = {
+  ELDER_TERMS_LOCALE_DIR: fileURLToPath(
+    new URL('../../.build/po/', import.meta.url)
+  ),
+  LANGUAGE: 'ja',
+  LC_ALL: 'ja_JP.UTF-8',
+} as const;
 
 const writeGlobalSettings = async (
   connections: string,
@@ -112,6 +131,32 @@ const clickWidget = async (
   await app.input.setMouseButton('left', false);
 };
 
+const findDescendantByName = async (
+  root: GtkWidgetElement,
+  kind: GtkWidgetElement['kind'],
+  name: string
+): Promise<GtkWidgetElement | undefined> => {
+  const info = await root.info();
+  if (info.kind === kind && info.name === name) {
+    return root;
+  }
+  if (!('getChildCount' in root) || !('childAt' in root)) {
+    return undefined;
+  }
+  const childCount = await root.getChildCount();
+  for (let index = 0; index < childCount; index += 1) {
+    const child = await root.childAt(index);
+    if (child === undefined) {
+      continue;
+    }
+    const match = await findDescendantByName(child, kind, name);
+    if (match !== undefined) {
+      return match;
+    }
+  }
+  return undefined;
+};
+
 const captureShortcut = async (
   app: GtkApp,
   entry: GtkEntryElement,
@@ -211,6 +256,133 @@ describe('elder-terms application hotkey lifecycle', () => {
         const tray = await app.getTrayItem({ id: 'elder-terms' });
         await tray.click();
         await waitForWindowCount(app, 1);
+      }
+    );
+  });
+
+  it('shows a localized dialog when the initial hotkey registration fails', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await writeGlobalSettings(connections, 'ctrl+alt+t');
+      },
+      async ({ app }) => {
+        await waitForWindowCount(app, 1);
+        const dialog = expectElementKind(
+          await app.getById('hotkey_registration_error_dialog'),
+          'infoBar'
+        );
+        expect(
+          await findDescendantByName(
+            dialog,
+            'label',
+            'グローバルショートカットを利用できません'
+          )
+        ).toBeDefined();
+      },
+      {
+        args: [],
+        blockedHotkeys: [ctrlAltT],
+        env: japaneseTestEnvironment,
+      }
+    );
+  });
+
+  it('does not show a registration error when every hotkey is disabled', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await writeGlobalSettings(connections, '');
+        await writeFile(
+          join(connections, 'Alpha.ini'),
+          '[general]\nopen_connection=\n'
+        );
+      },
+      async ({ app }) => {
+        expect(
+          await app.findById('hotkey_registration_error_dialog')
+        ).toBeUndefined();
+        const tray = await app.getTrayItem({ id: 'elder-terms' });
+        await tray.click();
+        await waitForWindowCount(app, 1);
+        expect(
+          await app.findById('hotkey_registration_error_dialog')
+        ).toBeUndefined();
+      },
+      {
+        args: [],
+        blockedHotkeys: [ctrlAltT],
+        env: {},
+      }
+    );
+  });
+
+  it('shows the registration error after the first hotkey is added to a connection', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await writeGlobalSettings(connections, '');
+        await writeFile(
+          join(connections, 'Alpha.ini'),
+          '[general]\nopen_connection=\n'
+        );
+      },
+      async ({ app, x11MapRecorder }) => {
+        const tray = await app.getTrayItem({ id: 'elder-terms' });
+        await tray.click();
+        await waitForWindowCount(app, 1);
+        expect(
+          await app.findById('hotkey_registration_error_dialog')
+        ).toBeUndefined();
+        await selectConnection(app, 0);
+        await selectGeneralSettingsTab(app, 'settings_notebook');
+
+        const entry = expectElementKind(
+          await app.getById('settings_general_open_connection_entry'),
+          'entry'
+        );
+        await captureShortcut(app, entry, ['control', 'alt'], 't');
+        await waitForResult(async () => {
+          expect(await entry.text()).toBe('ctrl+alt+t');
+        });
+        expect(x11MapRecorder).toBeDefined();
+        await x11MapRecorder?.grabHotkey(ctrlAltT);
+        await expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        ).click();
+
+        await waitForWindowCount(app, 2);
+        expectElementKind(
+          await app.getById('hotkey_registration_error_dialog'),
+          'infoBar'
+        );
+        await expectElementKind(
+          await app.getById('hotkey_registration_error_close_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+
+        await captureShortcut(app, entry, ['control', 'shift'], 'y');
+        await waitForResult(async () => {
+          expect(await entry.text()).toBe('ctrl+shift+y');
+        });
+        await x11MapRecorder?.grabHotkey(ctrlShiftY);
+        await expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(
+            await app.findById('hotkey_registration_error_dialog')
+          ).toBeUndefined();
+        });
+        expect(await app.getWindowCount()).toBe(1);
+      },
+      {
+        args: [],
+        env: {},
+        recordX11Maps: true,
       }
     );
   });
