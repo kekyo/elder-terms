@@ -2307,6 +2307,26 @@ static void test_application_settings_are_global_only() {
               "application settings loaded from global.ini should remain "
               "explicit");
 
+  const std::filesystem::path background_path =
+      temporary_config_path("application-background-startup");
+  write_config(background_path,
+               "[general]\n"
+               "startup_mode=background\n");
+  const SettingsLoadResult background =
+      load_global_settings(background_path, 1.0);
+  expect_true(
+      std::string(startup_mode_to_string(
+          application_startup_mode(background.store))) == "background",
+      "global.ini should select background-only startup");
+  expect_true(background.warnings.empty(),
+              "background-only startup should load without warnings");
+  expect_true(save_global_settings(background.store, background_path).saved,
+              "background-only startup should save");
+  expect_true(read_config(background_path).find("startup_mode=background") !=
+                  std::string::npos,
+              "global.ini should preserve background-only startup");
+  remove_config(background_path);
+
   const std::vector<std::string> supported_ui_languages = {
       "ar", "es", "fr", "hi", "ja", "ko", "pt", "ru", "zh"};
   for (const std::string &language : supported_ui_languages) {
@@ -2358,7 +2378,7 @@ static void test_application_settings_are_global_only() {
   write_config(invalid_path,
                "[general]\n"
                "ui_language=de\n"
-               "startup_mode=background\n"
+               "startup_mode=unsupported\n"
                "open_application=t\n");
   const SettingsLoadResult invalid = load_global_settings(invalid_path, 1.0);
   expect_true(load_application_ui_language_preference(invalid_path) ==

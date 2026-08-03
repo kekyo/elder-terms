@@ -1824,7 +1824,8 @@ static void on_application_startup(GApplication *,
           },
       },
       hotkey_actions);
-  if (state->startup_mode == elder_terms::StartupMode::window) {
+  if (state->startup_mode == elder_terms::StartupMode::window ||
+      state->startup_mode == elder_terms::StartupMode::background) {
     return;
   }
   state->tray_backend = elder_terms::create_tray_backend({
@@ -1865,6 +1866,9 @@ static void on_application_activate(GApplication *,
     return;
   }
   state->activated = true;
+  if (state->startup_mode == elder_terms::StartupMode::background) {
+    return;
+  }
   if (state->startup_mode == elder_terms::StartupMode::tray) {
     if (state->tray_availability ==
         elder_terms::TrayBackendAvailabilityState::unavailable) {

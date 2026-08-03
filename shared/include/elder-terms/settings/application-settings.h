@@ -45,6 +45,8 @@ enum class ApplicationUiLanguage {
 enum class StartupMode {
   /** Shows the launcher without creating a tray item. */
   window,
+  /** Runs without initially showing the launcher or creating a tray item. */
+  background,
   /** Creates a tray item without initially showing the launcher. */
   tray,
   /** Creates a tray item and initially shows the launcher. */

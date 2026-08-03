@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-02 21:51+0900\n"
+"POT-Creation-Date: 2026-08-03 21:36+0900\n"
 "PO-Revision-Date: 2026-08-02 21:51+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Portuguese\n"
@@ -172,23 +172,23 @@ msgid "Local shell"
 msgstr "Concha local"
 
 #: shared/src/settings-widget/settings-presentation.cpp:78
-#: shared/src/settings-widget/settings-presentation.cpp:134
+#: shared/src/settings-widget/settings-presentation.cpp:136
 msgid "TELNET"
 msgstr "TELNET"
 
 #: shared/src/settings-widget/settings-presentation.cpp:79
-#: shared/src/settings-widget/settings-presentation.cpp:136
+#: shared/src/settings-widget/settings-presentation.cpp:138
 msgid "Serial"
 msgstr "Serial"
 
 #: shared/src/settings-widget/settings-presentation.cpp:80
-#: shared/src/settings-widget/settings-presentation.cpp:138
+#: shared/src/settings-widget/settings-presentation.cpp:140
 #: elder-terms-vte/src/main-window.cpp:1452
 msgid "SSH"
 msgstr "SSH"
 
 #: shared/src/settings-widget/settings-presentation.cpp:81
-#: shared/src/settings-widget/settings-presentation.cpp:140
+#: shared/src/settings-widget/settings-presentation.cpp:142
 #: elder-terms-vte/src/main.cpp:1152
 msgid "SFTP"
 msgstr "SFTP"
@@ -242,104 +242,108 @@ msgid "Simple startup"
 msgstr "Inicialização simples"
 
 #: shared/src/settings-widget/settings-presentation.cpp:97
+msgid "Background only"
+msgstr "Somente em segundo plano"
+
+#: shared/src/settings-widget/settings-presentation.cpp:99
 msgid "System tray only"
 msgstr "Somente bandeja do sistema"
 
-#: shared/src/settings-widget/settings-presentation.cpp:99
+#: shared/src/settings-widget/settings-presentation.cpp:101
 msgid "System tray and main window"
 msgstr "Bandeja do sistema e janela principal"
 
-#: shared/src/settings-widget/settings-presentation.cpp:100
+#: shared/src/settings-widget/settings-presentation.cpp:102
 msgid "BS"
 msgstr "BS"
 
-#: shared/src/settings-widget/settings-presentation.cpp:101
+#: shared/src/settings-widget/settings-presentation.cpp:103
 msgid "DEL"
 msgstr "DEL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:102
+#: shared/src/settings-widget/settings-presentation.cpp:104
 msgid "Normal"
 msgstr "Normal"
 
-#: shared/src/settings-widget/settings-presentation.cpp:103
+#: shared/src/settings-widget/settings-presentation.cpp:105
 msgid "ADM3"
 msgstr "ADM3"
 
-#: shared/src/settings-widget/settings-presentation.cpp:104
-#: shared/src/settings-widget/settings-presentation.cpp:107
+#: shared/src/settings-widget/settings-presentation.cpp:106
+#: shared/src/settings-widget/settings-presentation.cpp:109
 msgid "None"
 msgstr "Nenhum"
 
-#: shared/src/settings-widget/settings-presentation.cpp:105
+#: shared/src/settings-widget/settings-presentation.cpp:107
 msgid "Even"
 msgstr "Até"
 
-#: shared/src/settings-widget/settings-presentation.cpp:106
+#: shared/src/settings-widget/settings-presentation.cpp:108
 msgid "Odd"
 msgstr "Estranho"
 
-#: shared/src/settings-widget/settings-presentation.cpp:109
+#: shared/src/settings-widget/settings-presentation.cpp:111
 msgid "XON/XOFF (software)"
 msgstr "XON/XOFF (software)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:111
+#: shared/src/settings-widget/settings-presentation.cpp:113
 msgid "RTS/CTS (hardware)"
 msgstr "RTS/CTS (hardware)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:113
+#: shared/src/settings-widget/settings-presentation.cpp:115
 msgid "DCD (Data Carrier Detect)"
 msgstr "DCD (detecção de portadora de dados)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:115
+#: shared/src/settings-widget/settings-presentation.cpp:117
 msgid "CTS (Clear to Send)"
 msgstr "CTS (Limpar para enviar)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:117
+#: shared/src/settings-widget/settings-presentation.cpp:119
 msgid "DSR (Data Set Ready)"
 msgstr "DSR (conjunto de dados pronto)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:119
+#: shared/src/settings-widget/settings-presentation.cpp:121
 msgid "Raw bytes (before character conversion)"
 msgstr "Bytes brutos (antes da conversão de caracteres)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:121
+#: shared/src/settings-widget/settings-presentation.cpp:123
 msgid "UTF-8 text (after character conversion)"
 msgstr "UTF-8 texto (após conversão de caracteres)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:132
+#: shared/src/settings-widget/settings-presentation.cpp:134
 msgid "General"
 msgstr "Geral"
 
-#: shared/src/settings-widget/settings-presentation.cpp:142
+#: shared/src/settings-widget/settings-presentation.cpp:144
 #: elder-terms-vte/src/main-window.ui:348
 #: elder-terms-vte/src/terminal-session.cpp:208
 msgid "Terminal"
 msgstr "Terminal"
 
-#: shared/src/settings-widget/settings-presentation.cpp:144
+#: shared/src/settings-widget/settings-presentation.cpp:146
 msgid "Macro"
 msgstr "Macro"
 
-#: shared/src/settings-widget/settings-presentation.cpp:146
+#: shared/src/settings-widget/settings-presentation.cpp:148
 #: elder-terms-vte/src/main-window.ui:35
 msgid "Transfer"
 msgstr "Transferência"
 
-#: shared/src/settings-widget/settings-presentation.cpp:148
+#: shared/src/settings-widget/settings-presentation.cpp:150
 msgid "Logging"
 msgstr "Registro"
 
-#: shared/src/settings-widget/settings-presentation.cpp:150
+#: shared/src/settings-widget/settings-presentation.cpp:152
 #: elder-terms/src/main-window.ui:146
 msgid "Apply"
 msgstr "Aplicar"
 
-#: shared/src/settings-widget/settings-presentation.cpp:152
+#: shared/src/settings-widget/settings-presentation.cpp:154
 #: elder-terms/src/main.cpp:461
 msgid "Save"
 msgstr "Salvar"
 
-#: shared/src/settings-widget/settings-presentation.cpp:154
+#: shared/src/settings-widget/settings-presentation.cpp:156
 #: elder-terms/src/main.cpp:460 elder-terms/src/main.cpp:1335
 #: elder-terms-vte/src/main.cpp:783 elder-terms-vte/src/main-window.ui:211
 #: elder-terms-vte/src/main-window.ui:288
@@ -349,201 +353,201 @@ msgstr "Salvar"
 msgid "Cancel"
 msgstr "Cancelar"
 
-#: shared/src/settings-widget/settings-presentation.cpp:156
+#: shared/src/settings-widget/settings-presentation.cpp:158
 msgid "Reset"
 msgstr "Redefinir"
 
-#: shared/src/settings-widget/settings-presentation.cpp:158
+#: shared/src/settings-widget/settings-presentation.cpp:160
 msgid "Enabled"
 msgstr "Habilitado"
 
-#: shared/src/settings-widget/settings-presentation.cpp:160
+#: shared/src/settings-widget/settings-presentation.cpp:162
 msgid "Disabled"
 msgstr "Desativado"
 
-#: shared/src/settings-widget/settings-presentation.cpp:162
+#: shared/src/settings-widget/settings-presentation.cpp:164
 msgid "No color"
 msgstr "Sem cor"
 
-#: shared/src/settings-widget/settings-presentation.cpp:164
+#: shared/src/settings-widget/settings-presentation.cpp:166
 msgid "Custom color"
 msgstr "Cor personalizada"
 
-#: shared/src/settings-widget/settings-presentation.cpp:166
+#: shared/src/settings-widget/settings-presentation.cpp:168
 msgid "Press a key combination"
 msgstr "Pressione uma combinação de teclas"
 
-#: shared/src/settings-widget/settings-presentation.cpp:168
+#: shared/src/settings-widget/settings-presentation.cpp:170
 msgid "Clear key binding"
 msgstr "Limpar ligação de chave"
 
-#: shared/src/settings-widget/settings-presentation.cpp:170
+#: shared/src/settings-widget/settings-presentation.cpp:172
 msgid "Use global default"
 msgstr "Usar padrão global"
 
-#: shared/src/settings-widget/settings-presentation.cpp:172
+#: shared/src/settings-widget/settings-presentation.cpp:174
 msgid "Use built-in default"
 msgstr "Use o padrão integrado"
 
-#: shared/src/settings-widget/settings-presentation.cpp:174
+#: shared/src/settings-widget/settings-presentation.cpp:176
 msgid "Macro rules"
 msgstr "Regras macro"
 
-#: shared/src/settings-widget/settings-presentation.cpp:176
+#: shared/src/settings-widget/settings-presentation.cpp:178
 msgid "Rule ID"
 msgstr "ID da regra"
 
-#: shared/src/settings-widget/settings-presentation.cpp:178
+#: shared/src/settings-widget/settings-presentation.cpp:180
 msgid "Regular expression"
 msgstr "Expressão regular"
 
-#: shared/src/settings-widget/settings-presentation.cpp:180
+#: shared/src/settings-widget/settings-presentation.cpp:182
 msgid "Action"
 msgstr "Ação"
 
-#: shared/src/settings-widget/settings-presentation.cpp:182
+#: shared/src/settings-widget/settings-presentation.cpp:184
 msgid "Text to send"
 msgstr "Texto para enviar"
 
-#: shared/src/settings-widget/settings-presentation.cpp:184
+#: shared/src/settings-widget/settings-presentation.cpp:186
 msgid "Command"
 msgstr "Comando"
 
-#: shared/src/settings-widget/settings-presentation.cpp:186
+#: shared/src/settings-widget/settings-presentation.cpp:188
 msgid "Arguments"
 msgstr "Argumentos"
 
-#: shared/src/settings-widget/settings-presentation.cpp:188
+#: shared/src/settings-widget/settings-presentation.cpp:190
 msgid "Add rule"
 msgstr "Adicionar regra"
 
-#: shared/src/settings-widget/settings-presentation.cpp:190
+#: shared/src/settings-widget/settings-presentation.cpp:192
 msgid "Remove rule"
 msgstr "Remover regra"
 
-#: shared/src/settings-widget/settings-presentation.cpp:192
+#: shared/src/settings-widget/settings-presentation.cpp:194
 msgid "Move up"
 msgstr "Subir"
 
-#: shared/src/settings-widget/settings-presentation.cpp:194
+#: shared/src/settings-widget/settings-presentation.cpp:196
 msgid "Move down"
 msgstr "Mover para baixo"
 
-#: shared/src/settings-widget/settings-presentation.cpp:196
+#: shared/src/settings-widget/settings-presentation.cpp:198
 msgid "Send text"
 msgstr "Enviar texto"
 
-#: shared/src/settings-widget/settings-presentation.cpp:198
+#: shared/src/settings-widget/settings-presentation.cpp:200
 msgid "Run command"
 msgstr "Execute o comando"
 
-#: shared/src/settings-widget/settings-presentation.cpp:200
+#: shared/src/settings-widget/settings-presentation.cpp:202
 msgid "Add argument"
 msgstr "Adicionar argumento"
 
-#: shared/src/settings-widget/settings-presentation.cpp:202
+#: shared/src/settings-widget/settings-presentation.cpp:204
 msgid "Remove argument"
 msgstr "Remover argumento"
 
-#: shared/src/settings-widget/settings-presentation.cpp:230
+#: shared/src/settings-widget/settings-presentation.cpp:232
 msgid "Global default"
 msgstr "Padrão global"
 
-#: shared/src/settings-widget/settings-presentation.cpp:231
+#: shared/src/settings-widget/settings-presentation.cpp:233
 msgid "Built-in default"
 msgstr "Padrão integrado"
 
-#: shared/src/settings-widget/settings-presentation.cpp:235
+#: shared/src/settings-widget/settings-presentation.cpp:237
 #, c-format
 msgid "%s (global default)"
 msgstr "%s (padrão global)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:236
+#: shared/src/settings-widget/settings-presentation.cpp:238
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s (padrão integrado)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:247
+#: shared/src/settings-widget/settings-presentation.cpp:249
 msgid "Enter a whole number"
 msgstr "Insira um número inteiro"
 
-#: shared/src/settings-widget/settings-presentation.cpp:250
+#: shared/src/settings-widget/settings-presentation.cpp:252
 msgid "Enter a number"
 msgstr "Insira um número"
 
-#: shared/src/settings-widget/settings-presentation.cpp:261
+#: shared/src/settings-widget/settings-presentation.cpp:263
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "O valor deve estar entre %s e %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:270
+#: shared/src/settings-widget/settings-presentation.cpp:272
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "Deve incluir Ctrl, Shift, Alt ou Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:273
+#: shared/src/settings-widget/settings-presentation.cpp:275
 msgid "Contains an empty token"
 msgstr "Contém um token vazio"
 
-#: shared/src/settings-widget/settings-presentation.cpp:282
+#: shared/src/settings-widget/settings-presentation.cpp:284
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "Contém um modificador desconhecido: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:295
+#: shared/src/settings-widget/settings-presentation.cpp:297
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "Contém um modificador duplicado: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:303
+#: shared/src/settings-widget/settings-presentation.cpp:305
 msgid "Does not contain a key"
 msgstr "Não contém uma chave"
 
-#: shared/src/settings-widget/settings-presentation.cpp:310
+#: shared/src/settings-widget/settings-presentation.cpp:312
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "Contém uma chave desconhecida: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:318
+#: shared/src/settings-widget/settings-presentation.cpp:320
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "Aumentar e diminuir zoom devem usar combinações de teclas diferentes"
 
-#: shared/src/settings-widget/settings-presentation.cpp:321
+#: shared/src/settings-widget/settings-presentation.cpp:323
 msgid "Must not be empty"
 msgstr "Não deve estar vazio"
 
-#: shared/src/settings-widget/settings-presentation.cpp:324
+#: shared/src/settings-widget/settings-presentation.cpp:326
 msgid "The character encoding is not supported"
 msgstr "A codificação de caracteres não é suportada"
 
-#: shared/src/settings-widget/settings-presentation.cpp:327
+#: shared/src/settings-widget/settings-presentation.cpp:329
 msgid "Contains a NUL byte"
 msgstr "Contém um byte NUL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:330
+#: shared/src/settings-widget/settings-presentation.cpp:332
 msgid "Contains an unmatched closing brace"
 msgstr "Contém uma chave de fechamento incomparável"
 
-#: shared/src/settings-widget/settings-presentation.cpp:333
+#: shared/src/settings-widget/settings-presentation.cpp:335
 msgid "Contains an unmatched opening brace"
 msgstr "Contém uma chave de abertura incomparável"
 
-#: shared/src/settings-widget/settings-presentation.cpp:336
+#: shared/src/settings-widget/settings-presentation.cpp:338
 msgid "Contains an unknown placeholder"
 msgstr "Contém um espaço reservado desconhecido"
 
-#: shared/src/settings-widget/settings-presentation.cpp:339
+#: shared/src/settings-widget/settings-presentation.cpp:341
 msgid "Must be relative to the log base directory"
 msgstr "Deve ser relativo ao diretório base de log"
 
-#: shared/src/settings-widget/settings-presentation.cpp:342
+#: shared/src/settings-widget/settings-presentation.cpp:344
 msgid "Must not contain parent directory traversal"
 msgstr "Não deve conter passagem do diretório pai"
 
-#: shared/src/settings-widget/settings-presentation.cpp:345
+#: shared/src/settings-widget/settings-presentation.cpp:347
 msgid "Must name a log file"
 msgstr "Deve nomear um arquivo de log"
 
-#: shared/src/settings-widget/settings-presentation.cpp:347
+#: shared/src/settings-widget/settings-presentation.cpp:349
 msgid "Invalid value"
 msgstr "Valor inválido"
 
@@ -555,7 +559,10 @@ msgstr "Os atalhos globais não estão disponíveis"
 msgid ""
 "One or more configured global shortcuts could not be registered and will not "
 "work. Check whether your desktop environment supports global shortcuts."
-msgstr "Um ou mais atalhos globais configurados não puderam ser registrados e não funcionarão. Verifique se o seu ambiente de área de trabalho oferece suporte a atalhos globais."
+msgstr ""
+"Um ou mais atalhos globais configurados não puderam ser registrados e não "
+"funcionarão. Verifique se o seu ambiente de área de trabalho oferece suporte "
+"a atalhos globais."
 
 #: elder-terms/src/main.cpp:228 elder-terms-vte/src/main-window.ui:297
 #: elder-terms-vte/src/main-window.cpp:1457
@@ -569,7 +576,9 @@ msgstr "Reiniciar para aplicar o idioma de exibição?"
 #: elder-terms/src/main.cpp:271
 msgid ""
 "The display language change will take effect after elder-terms restarts."
-msgstr "A alteração do idioma de exibição entrará em vigor após a reinicialização de elder-terms."
+msgstr ""
+"A alteração do idioma de exibição entrará em vigor após a reinicialização de "
+"elder-terms."
 
 #: elder-terms/src/main.cpp:274
 msgid "Later"
@@ -742,7 +751,11 @@ msgid ""
 "Key type: %s\n"
 "Fingerprint: %s\n"
 "Accept and save this host key?"
-msgstr "Chave de host SSH desconhecida para %s:%d\nTipo de chave: %s\nImpressão digital: %s\nAceitar e salvar esta chave de host?"
+msgstr ""
+"Chave de host SSH desconhecida para %s:%d\n"
+"Tipo de chave: %s\n"
+"Impressão digital: %s\n"
+"Aceitar e salvar esta chave de host?"
 
 #: elder-terms-vte/src/main.cpp:211 elder-terms-vte/src/main-window.ui:252
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
@@ -864,7 +877,9 @@ msgstr "SSH conexão falhou"
 msgid ""
 "SSH connection failed:\n"
 "%s"
-msgstr "SSH conexão falhou:\n%s"
+msgstr ""
+"SSH conexão falhou:\n"
+"%s"
 
 #: elder-terms-vte/src/main-window.cpp:1457
 #: elder-terms-vte/src/sftp/sftp-main.cpp:111
@@ -890,7 +905,8 @@ msgstr "Carregando…"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:387
 msgid "SFTP local pane only supports native filesystem paths"
-msgstr "SFTP painel local suporta apenas caminhos de sistema de arquivos nativos"
+msgstr ""
+"SFTP painel local suporta apenas caminhos de sistema de arquivos nativos"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:460
 msgid "Local directory path is empty"
@@ -938,7 +954,9 @@ msgstr "O destino já existe"
 msgid ""
 "%s\n"
 "The selected decision applies to all remaining conflicts."
-msgstr "%s\nA decisão selecionada aplica-se a todos os conflitos restantes."
+msgstr ""
+"%s\n"
+"A decisão selecionada aplica-se a todos os conflitos restantes."
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:720
 msgid "Abort"
@@ -959,7 +977,11 @@ msgid ""
 "\n"
 "%s\n"
 "→ %s"
-msgstr "%s\n\n%s\n→ %s"
+msgstr ""
+"%s\n"
+"\n"
+"%s\n"
+"→ %s"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:752
 msgid "SFTP operation failed"
@@ -1085,7 +1107,10 @@ msgid ""
 "Unknown SSH host key for %s:%u\n"
 "Key type: %s\n"
 "Fingerprint: %s"
-msgstr "Chave de host SSH desconhecida para %s:%u\nTipo de chave: %s\nImpressão digital: %s"
+msgstr ""
+"Chave de host SSH desconhecida para %s:%u\n"
+"Tipo de chave: %s\n"
+"Impressão digital: %s"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:271
 msgid "The known_hosts file does not exist and will be created."

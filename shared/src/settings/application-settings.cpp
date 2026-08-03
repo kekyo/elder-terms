@@ -11,6 +11,7 @@ static constexpr char ui_language_key[] = "ui_language";
 static constexpr char startup_mode_key[] = "startup_mode";
 static constexpr char open_application_key[] = "open_application";
 static constexpr char window_mode[] = "window";
+static constexpr char background_mode[] = "background";
 static constexpr char tray_mode[] = "tray";
 static constexpr char window_and_tray_mode[] = "window_and_tray";
 static constexpr char system_language[] = "system";
@@ -68,9 +69,10 @@ static bool validate_startup_mode(const SettingValue &value,
                                   std::string *reason) {
   const auto *text = std::get_if<std::string>(&value);
   if (text == nullptr ||
-      (*text != window_mode && *text != tray_mode &&
+      (*text != window_mode && *text != background_mode &&
+       *text != tray_mode &&
        *text != window_and_tray_mode)) {
-    *reason = "must be window, tray, or window_and_tray";
+    *reason = "must be window, background, tray, or window_and_tray";
     return false;
   }
   return true;
@@ -160,6 +162,9 @@ ApplicationUiLanguage load_application_ui_language_preference(
 }
 
 const char *startup_mode_to_string(StartupMode mode) {
+  if (mode == StartupMode::background) {
+    return background_mode;
+  }
   if (mode == StartupMode::tray) {
     return tray_mode;
   }
@@ -172,6 +177,9 @@ const char *startup_mode_to_string(StartupMode mode) {
 StartupMode application_startup_mode(const SettingsStore &store) {
   const std::string value = setting_string_value_or_default(
       store, application_startup_mode_setting_key(), window_mode);
+  if (value == background_mode) {
+    return StartupMode::background;
+  }
   if (value == tray_mode) {
     return StartupMode::tray;
   }

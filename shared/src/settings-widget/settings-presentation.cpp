@@ -93,6 +93,8 @@ static constexpr std::array setting_choices{
     SettingChoiceEntry{"general", "ui_language", "zh", N_("中文")},
     SettingChoiceEntry{"general", "startup_mode", "window",
                        N_("Simple startup")},
+    SettingChoiceEntry{"general", "startup_mode", "background",
+                       N_("Background only")},
     SettingChoiceEntry{"general", "startup_mode", "tray",
                        N_("System tray only")},
     SettingChoiceEntry{"general", "startup_mode", "window_and_tray",

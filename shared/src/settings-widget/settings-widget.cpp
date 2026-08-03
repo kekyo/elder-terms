@@ -42,6 +42,7 @@ static constexpr char inherit_choice[] = "inherit";
 static constexpr char boolean_enabled[] = "enabled";
 static constexpr char boolean_disabled[] = "disabled";
 static constexpr char startup_window[] = "window";
+static constexpr char startup_background[] = "background";
 static constexpr char startup_tray[] = "tray";
 static constexpr char startup_window_and_tray[] = "window_and_tray";
 static constexpr char ui_language_system[] = "system";
@@ -2261,6 +2262,8 @@ static void sync_application_startup_mode_combo(
       {
           {.id = startup_window,
            .label = startup_mode_label(startup_window)},
+          {.id = startup_background,
+           .label = startup_mode_label(startup_background)},
           {.id = startup_tray,
            .label = startup_mode_label(startup_tray)},
           {.id = startup_window_and_tray,

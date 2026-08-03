@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { GtkApp, GtkWidgetElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { describe, expect, it } from 'vitest';
@@ -8,12 +9,36 @@ import { expectElementKind, runLauncherGtkTest } from './test-helpers';
 
 const writeGlobalSettings = async (
   connections: string,
-  startupMode: 'tray' | 'window_and_tray'
+  startupMode: 'background' | 'tray' | 'window_and_tray'
 ): Promise<void> => {
   await writeFile(
     join(connections, '..', 'global.ini'),
     `[general]\nstartup_mode=${startupMode}\nopen_application=\n`
   );
+};
+
+const launcherPath = fileURLToPath(
+  new URL('../../.build/elder-terms/elder-terms', import.meta.url)
+);
+
+const activateRunningApplication = async (app: GtkApp): Promise<void> => {
+  const environment = await app.environment();
+  await new Promise<void>((resolve, reject) => {
+    execFile(
+      launcherPath,
+      [],
+      {
+        env: { ...process.env, ...environment },
+      },
+      (error) => {
+        if (error !== null) {
+          reject(error);
+          return;
+        }
+        resolve();
+      }
+    );
+  });
 };
 
 const waitForWindowCount = async (
@@ -107,6 +132,23 @@ const statusNotifierBusName = async (app: GtkApp): Promise<string> => {
 };
 
 describe('elder-terms tray lifecycle', () => {
+  it('starts in the background without a window or tray until activated again', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await writeGlobalSettings(connections, 'background');
+      },
+      async ({ app }) => {
+        await waitForWindowCount(app, 0);
+
+        await activateRunningApplication(app);
+
+        await waitForWindowCount(app, 1);
+        expect(await app.getTrayItemCount()).toBe(0);
+      }
+    );
+  });
+
   it('starts hidden and opens from both the tray icon and menu', async (context) => {
     await runLauncherGtkTest(
       context,

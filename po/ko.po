@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-02 21:51+0900\n"
+"POT-Creation-Date: 2026-08-03 21:36+0900\n"
 "PO-Revision-Date: 2026-08-02 21:51+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Korean\n"
@@ -172,23 +172,23 @@ msgid "Local shell"
 msgstr "로컬 쉘"
 
 #: shared/src/settings-widget/settings-presentation.cpp:78
-#: shared/src/settings-widget/settings-presentation.cpp:134
+#: shared/src/settings-widget/settings-presentation.cpp:136
 msgid "TELNET"
 msgstr "TELNET"
 
 #: shared/src/settings-widget/settings-presentation.cpp:79
-#: shared/src/settings-widget/settings-presentation.cpp:136
+#: shared/src/settings-widget/settings-presentation.cpp:138
 msgid "Serial"
 msgstr "직렬"
 
 #: shared/src/settings-widget/settings-presentation.cpp:80
-#: shared/src/settings-widget/settings-presentation.cpp:138
+#: shared/src/settings-widget/settings-presentation.cpp:140
 #: elder-terms-vte/src/main-window.cpp:1452
 msgid "SSH"
 msgstr "SSH"
 
 #: shared/src/settings-widget/settings-presentation.cpp:81
-#: shared/src/settings-widget/settings-presentation.cpp:140
+#: shared/src/settings-widget/settings-presentation.cpp:142
 #: elder-terms-vte/src/main.cpp:1152
 msgid "SFTP"
 msgstr "SFTP"
@@ -242,104 +242,108 @@ msgid "Simple startup"
 msgstr "간단한 시작"
 
 #: shared/src/settings-widget/settings-presentation.cpp:97
+msgid "Background only"
+msgstr "백그라운드만"
+
+#: shared/src/settings-widget/settings-presentation.cpp:99
 msgid "System tray only"
 msgstr "시스템 트레이만"
 
-#: shared/src/settings-widget/settings-presentation.cpp:99
+#: shared/src/settings-widget/settings-presentation.cpp:101
 msgid "System tray and main window"
 msgstr "시스템 트레이 및 기본 창"
 
-#: shared/src/settings-widget/settings-presentation.cpp:100
+#: shared/src/settings-widget/settings-presentation.cpp:102
 msgid "BS"
 msgstr "BS"
 
-#: shared/src/settings-widget/settings-presentation.cpp:101
+#: shared/src/settings-widget/settings-presentation.cpp:103
 msgid "DEL"
 msgstr "DEL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:102
+#: shared/src/settings-widget/settings-presentation.cpp:104
 msgid "Normal"
 msgstr "정상"
 
-#: shared/src/settings-widget/settings-presentation.cpp:103
+#: shared/src/settings-widget/settings-presentation.cpp:105
 msgid "ADM3"
 msgstr "ADM3"
 
-#: shared/src/settings-widget/settings-presentation.cpp:104
-#: shared/src/settings-widget/settings-presentation.cpp:107
+#: shared/src/settings-widget/settings-presentation.cpp:106
+#: shared/src/settings-widget/settings-presentation.cpp:109
 msgid "None"
 msgstr "없음"
 
-#: shared/src/settings-widget/settings-presentation.cpp:105
+#: shared/src/settings-widget/settings-presentation.cpp:107
 msgid "Even"
 msgstr "심지어"
 
-#: shared/src/settings-widget/settings-presentation.cpp:106
+#: shared/src/settings-widget/settings-presentation.cpp:108
 msgid "Odd"
 msgstr "홀수"
 
-#: shared/src/settings-widget/settings-presentation.cpp:109
+#: shared/src/settings-widget/settings-presentation.cpp:111
 msgid "XON/XOFF (software)"
 msgstr "XON/XOFF(소프트웨어)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:111
+#: shared/src/settings-widget/settings-presentation.cpp:113
 msgid "RTS/CTS (hardware)"
 msgstr "RTS/CTS(하드웨어)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:113
+#: shared/src/settings-widget/settings-presentation.cpp:115
 msgid "DCD (Data Carrier Detect)"
 msgstr "DCD(데이터 캐리어 감지)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:115
+#: shared/src/settings-widget/settings-presentation.cpp:117
 msgid "CTS (Clear to Send)"
 msgstr "CTS (보내기 취소)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:117
+#: shared/src/settings-widget/settings-presentation.cpp:119
 msgid "DSR (Data Set Ready)"
 msgstr "DSR(데이터 세트 준비)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:119
+#: shared/src/settings-widget/settings-presentation.cpp:121
 msgid "Raw bytes (before character conversion)"
 msgstr "원시 바이트(문자 변환 전)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:121
+#: shared/src/settings-widget/settings-presentation.cpp:123
 msgid "UTF-8 text (after character conversion)"
 msgstr "UTF-8 텍스트(문자 변환 후)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:132
+#: shared/src/settings-widget/settings-presentation.cpp:134
 msgid "General"
 msgstr "일반"
 
-#: shared/src/settings-widget/settings-presentation.cpp:142
+#: shared/src/settings-widget/settings-presentation.cpp:144
 #: elder-terms-vte/src/main-window.ui:348
 #: elder-terms-vte/src/terminal-session.cpp:208
 msgid "Terminal"
 msgstr "터미널"
 
-#: shared/src/settings-widget/settings-presentation.cpp:144
+#: shared/src/settings-widget/settings-presentation.cpp:146
 msgid "Macro"
 msgstr "매크로"
 
-#: shared/src/settings-widget/settings-presentation.cpp:146
+#: shared/src/settings-widget/settings-presentation.cpp:148
 #: elder-terms-vte/src/main-window.ui:35
 msgid "Transfer"
 msgstr "전송"
 
-#: shared/src/settings-widget/settings-presentation.cpp:148
+#: shared/src/settings-widget/settings-presentation.cpp:150
 msgid "Logging"
 msgstr "로깅"
 
-#: shared/src/settings-widget/settings-presentation.cpp:150
+#: shared/src/settings-widget/settings-presentation.cpp:152
 #: elder-terms/src/main-window.ui:146
 msgid "Apply"
 msgstr "적용"
 
-#: shared/src/settings-widget/settings-presentation.cpp:152
+#: shared/src/settings-widget/settings-presentation.cpp:154
 #: elder-terms/src/main.cpp:461
 msgid "Save"
 msgstr "저장"
 
-#: shared/src/settings-widget/settings-presentation.cpp:154
+#: shared/src/settings-widget/settings-presentation.cpp:156
 #: elder-terms/src/main.cpp:460 elder-terms/src/main.cpp:1335
 #: elder-terms-vte/src/main.cpp:783 elder-terms-vte/src/main-window.ui:211
 #: elder-terms-vte/src/main-window.ui:288
@@ -349,201 +353,201 @@ msgstr "저장"
 msgid "Cancel"
 msgstr "취소"
 
-#: shared/src/settings-widget/settings-presentation.cpp:156
+#: shared/src/settings-widget/settings-presentation.cpp:158
 msgid "Reset"
 msgstr "재설정"
 
-#: shared/src/settings-widget/settings-presentation.cpp:158
+#: shared/src/settings-widget/settings-presentation.cpp:160
 msgid "Enabled"
 msgstr "활성화됨"
 
-#: shared/src/settings-widget/settings-presentation.cpp:160
+#: shared/src/settings-widget/settings-presentation.cpp:162
 msgid "Disabled"
 msgstr "비활성화됨"
 
-#: shared/src/settings-widget/settings-presentation.cpp:162
+#: shared/src/settings-widget/settings-presentation.cpp:164
 msgid "No color"
 msgstr "색상 없음"
 
-#: shared/src/settings-widget/settings-presentation.cpp:164
+#: shared/src/settings-widget/settings-presentation.cpp:166
 msgid "Custom color"
 msgstr "사용자 정의 색상"
 
-#: shared/src/settings-widget/settings-presentation.cpp:166
+#: shared/src/settings-widget/settings-presentation.cpp:168
 msgid "Press a key combination"
 msgstr "키 조합을 누르세요"
 
-#: shared/src/settings-widget/settings-presentation.cpp:168
+#: shared/src/settings-widget/settings-presentation.cpp:170
 msgid "Clear key binding"
 msgstr "키 바인딩 지우기"
 
-#: shared/src/settings-widget/settings-presentation.cpp:170
+#: shared/src/settings-widget/settings-presentation.cpp:172
 msgid "Use global default"
 msgstr "전역 기본값 사용"
 
-#: shared/src/settings-widget/settings-presentation.cpp:172
+#: shared/src/settings-widget/settings-presentation.cpp:174
 msgid "Use built-in default"
 msgstr "내장된 기본값 사용"
 
-#: shared/src/settings-widget/settings-presentation.cpp:174
+#: shared/src/settings-widget/settings-presentation.cpp:176
 msgid "Macro rules"
 msgstr "매크로 규칙"
 
-#: shared/src/settings-widget/settings-presentation.cpp:176
+#: shared/src/settings-widget/settings-presentation.cpp:178
 msgid "Rule ID"
 msgstr "규칙 ID"
 
-#: shared/src/settings-widget/settings-presentation.cpp:178
+#: shared/src/settings-widget/settings-presentation.cpp:180
 msgid "Regular expression"
 msgstr "정규 표현식"
 
-#: shared/src/settings-widget/settings-presentation.cpp:180
+#: shared/src/settings-widget/settings-presentation.cpp:182
 msgid "Action"
 msgstr "액션"
 
-#: shared/src/settings-widget/settings-presentation.cpp:182
+#: shared/src/settings-widget/settings-presentation.cpp:184
 msgid "Text to send"
 msgstr "보낼 텍스트"
 
-#: shared/src/settings-widget/settings-presentation.cpp:184
+#: shared/src/settings-widget/settings-presentation.cpp:186
 msgid "Command"
 msgstr "명령"
 
-#: shared/src/settings-widget/settings-presentation.cpp:186
+#: shared/src/settings-widget/settings-presentation.cpp:188
 msgid "Arguments"
 msgstr "인수"
 
-#: shared/src/settings-widget/settings-presentation.cpp:188
+#: shared/src/settings-widget/settings-presentation.cpp:190
 msgid "Add rule"
 msgstr "규칙 추가"
 
-#: shared/src/settings-widget/settings-presentation.cpp:190
+#: shared/src/settings-widget/settings-presentation.cpp:192
 msgid "Remove rule"
 msgstr "규칙 제거"
 
-#: shared/src/settings-widget/settings-presentation.cpp:192
+#: shared/src/settings-widget/settings-presentation.cpp:194
 msgid "Move up"
 msgstr "위로 이동"
 
-#: shared/src/settings-widget/settings-presentation.cpp:194
+#: shared/src/settings-widget/settings-presentation.cpp:196
 msgid "Move down"
 msgstr "아래로 이동"
 
-#: shared/src/settings-widget/settings-presentation.cpp:196
+#: shared/src/settings-widget/settings-presentation.cpp:198
 msgid "Send text"
 msgstr "문자 보내기"
 
-#: shared/src/settings-widget/settings-presentation.cpp:198
+#: shared/src/settings-widget/settings-presentation.cpp:200
 msgid "Run command"
 msgstr "명령 실행"
 
-#: shared/src/settings-widget/settings-presentation.cpp:200
+#: shared/src/settings-widget/settings-presentation.cpp:202
 msgid "Add argument"
 msgstr "인수 추가"
 
-#: shared/src/settings-widget/settings-presentation.cpp:202
+#: shared/src/settings-widget/settings-presentation.cpp:204
 msgid "Remove argument"
 msgstr "인수 제거"
 
-#: shared/src/settings-widget/settings-presentation.cpp:230
+#: shared/src/settings-widget/settings-presentation.cpp:232
 msgid "Global default"
 msgstr "전역 기본값"
 
-#: shared/src/settings-widget/settings-presentation.cpp:231
+#: shared/src/settings-widget/settings-presentation.cpp:233
 msgid "Built-in default"
 msgstr "기본 제공"
 
-#: shared/src/settings-widget/settings-presentation.cpp:235
+#: shared/src/settings-widget/settings-presentation.cpp:237
 #, c-format
 msgid "%s (global default)"
 msgstr "%s(전역 기본값)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:236
+#: shared/src/settings-widget/settings-presentation.cpp:238
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s(내장 기본값)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:247
+#: shared/src/settings-widget/settings-presentation.cpp:249
 msgid "Enter a whole number"
 msgstr "정수를 입력하세요."
 
-#: shared/src/settings-widget/settings-presentation.cpp:250
+#: shared/src/settings-widget/settings-presentation.cpp:252
 msgid "Enter a number"
 msgstr "숫자를 입력하세요"
 
-#: shared/src/settings-widget/settings-presentation.cpp:261
+#: shared/src/settings-widget/settings-presentation.cpp:263
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "값은 %s에서 %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:270
+#: shared/src/settings-widget/settings-presentation.cpp:272
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "Ctrl, Shift, Alt 또는 Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:273
+#: shared/src/settings-widget/settings-presentation.cpp:275
 msgid "Contains an empty token"
 msgstr "빈 토큰이 포함되어 있습니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:282
+#: shared/src/settings-widget/settings-presentation.cpp:284
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "알 수 없는 수정자가 포함되어 있습니다: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:295
+#: shared/src/settings-widget/settings-presentation.cpp:297
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "중복 수정자를 포함합니다: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:303
+#: shared/src/settings-widget/settings-presentation.cpp:305
 msgid "Does not contain a key"
 msgstr "키가 포함되어 있지 않습니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:310
+#: shared/src/settings-widget/settings-presentation.cpp:312
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "알 수 없는 키가 포함되어 있습니다: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:318
+#: shared/src/settings-widget/settings-presentation.cpp:320
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "확대 및 축소는 다른 키 바인딩을 사용해야 합니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:321
+#: shared/src/settings-widget/settings-presentation.cpp:323
 msgid "Must not be empty"
 msgstr "비워둘 수 없습니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:324
+#: shared/src/settings-widget/settings-presentation.cpp:326
 msgid "The character encoding is not supported"
 msgstr "문자 인코딩은 지원되지 않습니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:327
+#: shared/src/settings-widget/settings-presentation.cpp:329
 msgid "Contains a NUL byte"
 msgstr "NUL 바이트"
 
-#: shared/src/settings-widget/settings-presentation.cpp:330
+#: shared/src/settings-widget/settings-presentation.cpp:332
 msgid "Contains an unmatched closing brace"
 msgstr "일치하지 않는 닫는 중괄호가 포함되어 있습니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:333
+#: shared/src/settings-widget/settings-presentation.cpp:335
 msgid "Contains an unmatched opening brace"
 msgstr "일치하지 않는 여는 중괄호를 포함합니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:336
+#: shared/src/settings-widget/settings-presentation.cpp:338
 msgid "Contains an unknown placeholder"
 msgstr "알 수 없는 자리 표시자가 포함되어 있습니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:339
+#: shared/src/settings-widget/settings-presentation.cpp:341
 msgid "Must be relative to the log base directory"
 msgstr "로그 기본 디렉터리에 상대적이어야 합니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:342
+#: shared/src/settings-widget/settings-presentation.cpp:344
 msgid "Must not contain parent directory traversal"
 msgstr "상위 디렉터리 순회를 포함하면 안 됩니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:345
+#: shared/src/settings-widget/settings-presentation.cpp:347
 msgid "Must name a log file"
 msgstr "로그 파일 이름을 지정해야 합니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:347
+#: shared/src/settings-widget/settings-presentation.cpp:349
 msgid "Invalid value"
 msgstr "잘못된 값"
 
@@ -555,7 +559,9 @@ msgstr "전역 단축키를 사용할 수 없습니다."
 msgid ""
 "One or more configured global shortcuts could not be registered and will not "
 "work. Check whether your desktop environment supports global shortcuts."
-msgstr "하나 이상의 구성된 전역 바로가기를 등록할 수 없으며 작동하지 않습니다. 데스크탑 환경이 전역 바로가기를 지원하는지 확인하세요."
+msgstr ""
+"하나 이상의 구성된 전역 바로가기를 등록할 수 없으며 작동하지 않습니다. 데스크"
+"탑 환경이 전역 바로가기를 지원하는지 확인하세요."
 
 #: elder-terms/src/main.cpp:228 elder-terms-vte/src/main-window.ui:297
 #: elder-terms-vte/src/main-window.cpp:1457
@@ -742,7 +748,11 @@ msgid ""
 "Key type: %s\n"
 "Fingerprint: %s\n"
 "Accept and save this host key?"
-msgstr "%s:%d에 대한 알 수 없는 SSH 호스트 키\n키 유형: %s\n지문: %s\n이 호스트 키를 수락하고 저장하시겠습니까?"
+msgstr ""
+"%s:%d에 대한 알 수 없는 SSH 호스트 키\n"
+"키 유형: %s\n"
+"지문: %s\n"
+"이 호스트 키를 수락하고 저장하시겠습니까?"
 
 #: elder-terms-vte/src/main.cpp:211 elder-terms-vte/src/main-window.ui:252
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
@@ -864,7 +874,9 @@ msgstr "SSH 연결 실패"
 msgid ""
 "SSH connection failed:\n"
 "%s"
-msgstr "SSH 연결 실패:\n%s"
+msgstr ""
+"SSH 연결 실패:\n"
+"%s"
 
 #: elder-terms-vte/src/main-window.cpp:1457
 #: elder-terms-vte/src/sftp/sftp-main.cpp:111
@@ -938,7 +950,9 @@ msgstr "대상이 이미 존재합니다."
 msgid ""
 "%s\n"
 "The selected decision applies to all remaining conflicts."
-msgstr "%s\n선택한 결정은 나머지 모든 충돌에 적용됩니다."
+msgstr ""
+"%s\n"
+"선택한 결정은 나머지 모든 충돌에 적용됩니다."
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:720
 msgid "Abort"
@@ -959,7 +973,11 @@ msgid ""
 "\n"
 "%s\n"
 "→ %s"
-msgstr "%s\n\n%s\n→ %s"
+msgstr ""
+"%s\n"
+"\n"
+"%s\n"
+"→ %s"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:752
 msgid "SFTP operation failed"
@@ -1083,7 +1101,10 @@ msgid ""
 "Unknown SSH host key for %s:%u\n"
 "Key type: %s\n"
 "Fingerprint: %s"
-msgstr "%s:%u에 대한 알 수 없는 SSH 호스트 키\n키 유형: %s\n지문: %s"
+msgstr ""
+"%s:%u에 대한 알 수 없는 SSH 호스트 키\n"
+"키 유형: %s\n"
+"지문: %s"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:271
 msgid "The known_hosts file does not exist and will be created."

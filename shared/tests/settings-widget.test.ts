@@ -3583,11 +3583,23 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('global_settings_general_startup_mode_combo'),
           'comboBox'
         );
-        await startupMode.selectChildAt(3);
+        expect(
+          await comboOptionNames(
+            app,
+            'global_settings_general_startup_mode_combo'
+          )
+        ).toEqual([
+          'Simple startup (built-in default)',
+          'Simple startup',
+          'Background only',
+          'System tray only',
+          'System tray and main window',
+        ]);
+        await startupMode.selectChildAt(2);
         await expectSelectedComboValue(
           app,
           'global_settings_general_startup_mode_combo',
-          'System tray and main window'
+          'Background only'
         );
 
         const openApplication = expectElementKind(
@@ -3607,7 +3619,7 @@ describe.concurrent('shared settings widget', () => {
         ).click();
         const configured = await waitForAppliedStore(app);
         expect(configured.ui_language).toBe('ja');
-        expect(configured.startup_mode).toBe('window_and_tray');
+        expect(configured.startup_mode).toBe('background');
         expect(configured.open_application).toBe('ctrl+shift+y');
         expect(configured.ui_language_explicit).toBe('true');
         expect(configured.startup_mode_explicit).toBe('true');

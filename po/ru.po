@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-02 21:51+0900\n"
+"POT-Creation-Date: 2026-08-03 21:36+0900\n"
 "PO-Revision-Date: 2026-08-02 21:51+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Russian\n"
@@ -10,7 +10,8 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
 #: shared/src/settings-widget/settings-presentation.cpp:25
 msgid "Connection name"
@@ -172,23 +173,23 @@ msgid "Local shell"
 msgstr "Локальная оболочка"
 
 #: shared/src/settings-widget/settings-presentation.cpp:78
-#: shared/src/settings-widget/settings-presentation.cpp:134
+#: shared/src/settings-widget/settings-presentation.cpp:136
 msgid "TELNET"
 msgstr "TELNET"
 
 #: shared/src/settings-widget/settings-presentation.cpp:79
-#: shared/src/settings-widget/settings-presentation.cpp:136
+#: shared/src/settings-widget/settings-presentation.cpp:138
 msgid "Serial"
 msgstr "Последовательный порт"
 
 #: shared/src/settings-widget/settings-presentation.cpp:80
-#: shared/src/settings-widget/settings-presentation.cpp:138
+#: shared/src/settings-widget/settings-presentation.cpp:140
 #: elder-terms-vte/src/main-window.cpp:1452
 msgid "SSH"
 msgstr "SSH"
 
 #: shared/src/settings-widget/settings-presentation.cpp:81
-#: shared/src/settings-widget/settings-presentation.cpp:140
+#: shared/src/settings-widget/settings-presentation.cpp:142
 #: elder-terms-vte/src/main.cpp:1152
 msgid "SFTP"
 msgstr "SFTP"
@@ -242,104 +243,108 @@ msgid "Simple startup"
 msgstr "Простой запуск"
 
 #: shared/src/settings-widget/settings-presentation.cpp:97
+msgid "Background only"
+msgstr "Только в фоновом режиме"
+
+#: shared/src/settings-widget/settings-presentation.cpp:99
 msgid "System tray only"
 msgstr "Только в системном трее"
 
-#: shared/src/settings-widget/settings-presentation.cpp:99
+#: shared/src/settings-widget/settings-presentation.cpp:101
 msgid "System tray and main window"
 msgstr "Панель задач и главное окно"
 
-#: shared/src/settings-widget/settings-presentation.cpp:100
+#: shared/src/settings-widget/settings-presentation.cpp:102
 msgid "BS"
 msgstr "BS"
 
-#: shared/src/settings-widget/settings-presentation.cpp:101
+#: shared/src/settings-widget/settings-presentation.cpp:103
 msgid "DEL"
 msgstr "DEL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:102
+#: shared/src/settings-widget/settings-presentation.cpp:104
 msgid "Normal"
 msgstr "Обычный"
 
-#: shared/src/settings-widget/settings-presentation.cpp:103
+#: shared/src/settings-widget/settings-presentation.cpp:105
 msgid "ADM3"
 msgstr "ADM3"
 
-#: shared/src/settings-widget/settings-presentation.cpp:104
-#: shared/src/settings-widget/settings-presentation.cpp:107
+#: shared/src/settings-widget/settings-presentation.cpp:106
+#: shared/src/settings-widget/settings-presentation.cpp:109
 msgid "None"
 msgstr "Нет"
 
-#: shared/src/settings-widget/settings-presentation.cpp:105
+#: shared/src/settings-widget/settings-presentation.cpp:107
 msgid "Even"
 msgstr "Даже"
 
-#: shared/src/settings-widget/settings-presentation.cpp:106
+#: shared/src/settings-widget/settings-presentation.cpp:108
 msgid "Odd"
 msgstr "Нечетный"
 
-#: shared/src/settings-widget/settings-presentation.cpp:109
+#: shared/src/settings-widget/settings-presentation.cpp:111
 msgid "XON/XOFF (software)"
 msgstr "XON/XOFF (программное обеспечение)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:111
+#: shared/src/settings-widget/settings-presentation.cpp:113
 msgid "RTS/CTS (hardware)"
 msgstr "RTS/CTS (аппаратное обеспечение)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:113
+#: shared/src/settings-widget/settings-presentation.cpp:115
 msgid "DCD (Data Carrier Detect)"
 msgstr "DCD (обнаружение носителя данных)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:115
+#: shared/src/settings-widget/settings-presentation.cpp:117
 msgid "CTS (Clear to Send)"
 msgstr "CTS (разрешено для отправки)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:117
+#: shared/src/settings-widget/settings-presentation.cpp:119
 msgid "DSR (Data Set Ready)"
 msgstr "DSR (набор данных готов)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:119
+#: shared/src/settings-widget/settings-presentation.cpp:121
 msgid "Raw bytes (before character conversion)"
 msgstr "Необработанные байты (до преобразования символов)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:121
+#: shared/src/settings-widget/settings-presentation.cpp:123
 msgid "UTF-8 text (after character conversion)"
 msgstr "UTF-8 текст (после преобразования символов)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:132
+#: shared/src/settings-widget/settings-presentation.cpp:134
 msgid "General"
 msgstr "Общие сведения"
 
-#: shared/src/settings-widget/settings-presentation.cpp:142
+#: shared/src/settings-widget/settings-presentation.cpp:144
 #: elder-terms-vte/src/main-window.ui:348
 #: elder-terms-vte/src/terminal-session.cpp:208
 msgid "Terminal"
 msgstr "Терминал"
 
-#: shared/src/settings-widget/settings-presentation.cpp:144
+#: shared/src/settings-widget/settings-presentation.cpp:146
 msgid "Macro"
 msgstr "Макрос"
 
-#: shared/src/settings-widget/settings-presentation.cpp:146
+#: shared/src/settings-widget/settings-presentation.cpp:148
 #: elder-terms-vte/src/main-window.ui:35
 msgid "Transfer"
 msgstr "Перенос"
 
-#: shared/src/settings-widget/settings-presentation.cpp:148
+#: shared/src/settings-widget/settings-presentation.cpp:150
 msgid "Logging"
 msgstr "Ведение журнала"
 
-#: shared/src/settings-widget/settings-presentation.cpp:150
+#: shared/src/settings-widget/settings-presentation.cpp:152
 #: elder-terms/src/main-window.ui:146
 msgid "Apply"
 msgstr "Применить"
 
-#: shared/src/settings-widget/settings-presentation.cpp:152
+#: shared/src/settings-widget/settings-presentation.cpp:154
 #: elder-terms/src/main.cpp:461
 msgid "Save"
 msgstr "Сохранить"
 
-#: shared/src/settings-widget/settings-presentation.cpp:154
+#: shared/src/settings-widget/settings-presentation.cpp:156
 #: elder-terms/src/main.cpp:460 elder-terms/src/main.cpp:1335
 #: elder-terms-vte/src/main.cpp:783 elder-terms-vte/src/main-window.ui:211
 #: elder-terms-vte/src/main-window.ui:288
@@ -349,201 +354,203 @@ msgstr "Сохранить"
 msgid "Cancel"
 msgstr "Отменить"
 
-#: shared/src/settings-widget/settings-presentation.cpp:156
+#: shared/src/settings-widget/settings-presentation.cpp:158
 msgid "Reset"
 msgstr "Сбросить"
 
-#: shared/src/settings-widget/settings-presentation.cpp:158
+#: shared/src/settings-widget/settings-presentation.cpp:160
 msgid "Enabled"
 msgstr "Включено"
 
-#: shared/src/settings-widget/settings-presentation.cpp:160
+#: shared/src/settings-widget/settings-presentation.cpp:162
 msgid "Disabled"
 msgstr "Отключено"
 
-#: shared/src/settings-widget/settings-presentation.cpp:162
+#: shared/src/settings-widget/settings-presentation.cpp:164
 msgid "No color"
 msgstr "Нет цвета"
 
-#: shared/src/settings-widget/settings-presentation.cpp:164
+#: shared/src/settings-widget/settings-presentation.cpp:166
 msgid "Custom color"
 msgstr "Пользовательский цвет"
 
-#: shared/src/settings-widget/settings-presentation.cpp:166
+#: shared/src/settings-widget/settings-presentation.cpp:168
 msgid "Press a key combination"
 msgstr "Нажмите комбинацию клавиш"
 
-#: shared/src/settings-widget/settings-presentation.cpp:168
+#: shared/src/settings-widget/settings-presentation.cpp:170
 msgid "Clear key binding"
 msgstr "Очистить привязку клавиш"
 
-#: shared/src/settings-widget/settings-presentation.cpp:170
+#: shared/src/settings-widget/settings-presentation.cpp:172
 msgid "Use global default"
 msgstr "Использовать глобальное значение по умолчанию"
 
-#: shared/src/settings-widget/settings-presentation.cpp:172
+#: shared/src/settings-widget/settings-presentation.cpp:174
 msgid "Use built-in default"
 msgstr "Использовать встроенный"
 
-#: shared/src/settings-widget/settings-presentation.cpp:174
+#: shared/src/settings-widget/settings-presentation.cpp:176
 msgid "Macro rules"
 msgstr "Макроправила"
 
-#: shared/src/settings-widget/settings-presentation.cpp:176
+#: shared/src/settings-widget/settings-presentation.cpp:178
 msgid "Rule ID"
 msgstr "Идентификатор правила"
 
-#: shared/src/settings-widget/settings-presentation.cpp:178
+#: shared/src/settings-widget/settings-presentation.cpp:180
 msgid "Regular expression"
 msgstr "Регулярное выражение"
 
-#: shared/src/settings-widget/settings-presentation.cpp:180
+#: shared/src/settings-widget/settings-presentation.cpp:182
 msgid "Action"
 msgstr "Действие"
 
-#: shared/src/settings-widget/settings-presentation.cpp:182
+#: shared/src/settings-widget/settings-presentation.cpp:184
 msgid "Text to send"
 msgstr "Текст для отправки"
 
-#: shared/src/settings-widget/settings-presentation.cpp:184
+#: shared/src/settings-widget/settings-presentation.cpp:186
 msgid "Command"
 msgstr "Команда"
 
-#: shared/src/settings-widget/settings-presentation.cpp:186
+#: shared/src/settings-widget/settings-presentation.cpp:188
 msgid "Arguments"
 msgstr "Аргументы"
 
-#: shared/src/settings-widget/settings-presentation.cpp:188
+#: shared/src/settings-widget/settings-presentation.cpp:190
 msgid "Add rule"
 msgstr "Добавить правило"
 
-#: shared/src/settings-widget/settings-presentation.cpp:190
+#: shared/src/settings-widget/settings-presentation.cpp:192
 msgid "Remove rule"
 msgstr "Удалить правило"
 
-#: shared/src/settings-widget/settings-presentation.cpp:192
+#: shared/src/settings-widget/settings-presentation.cpp:194
 msgid "Move up"
 msgstr "Вверх"
 
-#: shared/src/settings-widget/settings-presentation.cpp:194
+#: shared/src/settings-widget/settings-presentation.cpp:196
 msgid "Move down"
 msgstr "Перейти вниз"
 
-#: shared/src/settings-widget/settings-presentation.cpp:196
+#: shared/src/settings-widget/settings-presentation.cpp:198
 msgid "Send text"
 msgstr "Отправить текст"
 
-#: shared/src/settings-widget/settings-presentation.cpp:198
+#: shared/src/settings-widget/settings-presentation.cpp:200
 msgid "Run command"
 msgstr "Выполнить команду"
 
-#: shared/src/settings-widget/settings-presentation.cpp:200
+#: shared/src/settings-widget/settings-presentation.cpp:202
 msgid "Add argument"
 msgstr "Добавить аргумент"
 
-#: shared/src/settings-widget/settings-presentation.cpp:202
+#: shared/src/settings-widget/settings-presentation.cpp:204
 msgid "Remove argument"
 msgstr "Удалить аргумент"
 
-#: shared/src/settings-widget/settings-presentation.cpp:230
+#: shared/src/settings-widget/settings-presentation.cpp:232
 msgid "Global default"
 msgstr "Глобальное значение по умолчанию"
 
-#: shared/src/settings-widget/settings-presentation.cpp:231
+#: shared/src/settings-widget/settings-presentation.cpp:233
 msgid "Built-in default"
 msgstr "Встроенный по умолчанию"
 
-#: shared/src/settings-widget/settings-presentation.cpp:235
+#: shared/src/settings-widget/settings-presentation.cpp:237
 #, c-format
 msgid "%s (global default)"
 msgstr "%s (глобальное значение по умолчанию)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:236
+#: shared/src/settings-widget/settings-presentation.cpp:238
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s (встроено по умолчанию)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:247
+#: shared/src/settings-widget/settings-presentation.cpp:249
 msgid "Enter a whole number"
 msgstr "Введите целое число"
 
-#: shared/src/settings-widget/settings-presentation.cpp:250
+#: shared/src/settings-widget/settings-presentation.cpp:252
 msgid "Enter a number"
 msgstr "Введите номер"
 
-#: shared/src/settings-widget/settings-presentation.cpp:261
+#: shared/src/settings-widget/settings-presentation.cpp:263
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "Значение должно быть между %s и %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:270
+#: shared/src/settings-widget/settings-presentation.cpp:272
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "Должен включать Ctrl, Shift, Alt или Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:273
+#: shared/src/settings-widget/settings-presentation.cpp:275
 msgid "Contains an empty token"
 msgstr "Содержит пустой токен"
 
-#: shared/src/settings-widget/settings-presentation.cpp:282
+#: shared/src/settings-widget/settings-presentation.cpp:284
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "Содержит неизвестный модификатор: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:295
+#: shared/src/settings-widget/settings-presentation.cpp:297
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "Содержит повторяющийся модификатор: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:303
+#: shared/src/settings-widget/settings-presentation.cpp:305
 msgid "Does not contain a key"
 msgstr "Не содержит ключа"
 
-#: shared/src/settings-widget/settings-presentation.cpp:310
+#: shared/src/settings-widget/settings-presentation.cpp:312
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "Содержит неизвестный ключ: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:318
+#: shared/src/settings-widget/settings-presentation.cpp:320
 msgid "Zoom in and zoom out must use different key bindings"
-msgstr "Для увеличения и уменьшения масштаба необходимо использовать разные сочетания клавиш"
+msgstr ""
+"Для увеличения и уменьшения масштаба необходимо использовать разные "
+"сочетания клавиш"
 
-#: shared/src/settings-widget/settings-presentation.cpp:321
+#: shared/src/settings-widget/settings-presentation.cpp:323
 msgid "Must not be empty"
 msgstr "Не должно быть пустым"
 
-#: shared/src/settings-widget/settings-presentation.cpp:324
+#: shared/src/settings-widget/settings-presentation.cpp:326
 msgid "The character encoding is not supported"
 msgstr "Кодировка символов не поддерживается"
 
-#: shared/src/settings-widget/settings-presentation.cpp:327
+#: shared/src/settings-widget/settings-presentation.cpp:329
 msgid "Contains a NUL byte"
 msgstr "Содержит байт NUL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:330
+#: shared/src/settings-widget/settings-presentation.cpp:332
 msgid "Contains an unmatched closing brace"
 msgstr "Содержит несовпадающую закрывающую скобку"
 
-#: shared/src/settings-widget/settings-presentation.cpp:333
+#: shared/src/settings-widget/settings-presentation.cpp:335
 msgid "Contains an unmatched opening brace"
 msgstr "Содержит несовпадающую открывающую скобку"
 
-#: shared/src/settings-widget/settings-presentation.cpp:336
+#: shared/src/settings-widget/settings-presentation.cpp:338
 msgid "Contains an unknown placeholder"
 msgstr "Содержит неизвестный заполнитель"
 
-#: shared/src/settings-widget/settings-presentation.cpp:339
+#: shared/src/settings-widget/settings-presentation.cpp:341
 msgid "Must be relative to the log base directory"
 msgstr "Должно быть относительно базового каталога журнала"
 
-#: shared/src/settings-widget/settings-presentation.cpp:342
+#: shared/src/settings-widget/settings-presentation.cpp:344
 msgid "Must not contain parent directory traversal"
 msgstr "Не должен содержать обход родительского каталога"
 
-#: shared/src/settings-widget/settings-presentation.cpp:345
+#: shared/src/settings-widget/settings-presentation.cpp:347
 msgid "Must name a log file"
 msgstr "Файл журнала должен называться"
 
-#: shared/src/settings-widget/settings-presentation.cpp:347
+#: shared/src/settings-widget/settings-presentation.cpp:349
 msgid "Invalid value"
 msgstr "Недопустимое значение"
 
@@ -555,7 +562,10 @@ msgstr "Глобальные ярлыки недоступны"
 msgid ""
 "One or more configured global shortcuts could not be registered and will not "
 "work. Check whether your desktop environment supports global shortcuts."
-msgstr "Один или несколько настроенных глобальных ярлыков не могут быть зарегистрированы и не будут работать. Проверьте, поддерживает ли ваша среда рабочего стола глобальные ярлыки."
+msgstr ""
+"Один или несколько настроенных глобальных ярлыков не могут быть "
+"зарегистрированы и не будут работать. Проверьте, поддерживает ли ваша среда "
+"рабочего стола глобальные ярлыки."
 
 #: elder-terms/src/main.cpp:228 elder-terms-vte/src/main-window.ui:297
 #: elder-terms-vte/src/main-window.cpp:1457
@@ -569,7 +579,8 @@ msgstr "Перезапустить, чтобы применить язык от�
 #: elder-terms/src/main.cpp:271
 msgid ""
 "The display language change will take effect after elder-terms restarts."
-msgstr "Изменение языка отображения вступит в силу после перезапуска elder-terms."
+msgstr ""
+"Изменение языка отображения вступит в силу после перезапуска elder-terms."
 
 #: elder-terms/src/main.cpp:274
 msgid "Later"
@@ -708,7 +719,8 @@ msgstr "Внимание: не удалось заменить профиль п
 #: elder-terms/src/connection-repository.cpp:227
 #, c-format
 msgid "Warning: failed to prepare connection rename %s: %s"
-msgstr "Предупреждение: не удалось подготовить переименование соединения %s: %s"
+msgstr ""
+"Предупреждение: не удалось подготовить переименование соединения %s: %s"
 
 #: elder-terms/src/connection-repository.cpp:238
 #, c-format
@@ -742,7 +754,11 @@ msgid ""
 "Key type: %s\n"
 "Fingerprint: %s\n"
 "Accept and save this host key?"
-msgstr "Неизвестный ключ хоста SSH для %s:%d\nТип ключа: %s\nОтпечаток пальца: %s\nПринять и сохранить этот ключ хоста?"
+msgstr ""
+"Неизвестный ключ хоста SSH для %s:%d\n"
+"Тип ключа: %s\n"
+"Отпечаток пальца: %s\n"
+"Принять и сохранить этот ключ хоста?"
 
 #: elder-terms-vte/src/main.cpp:211 elder-terms-vte/src/main-window.ui:252
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
@@ -864,7 +880,9 @@ msgstr "SSH соединение не удалось"
 msgid ""
 "SSH connection failed:\n"
 "%s"
-msgstr "SSH не удалось установить соединение:\n%s"
+msgstr ""
+"SSH не удалось установить соединение:\n"
+"%s"
 
 #: elder-terms-vte/src/main-window.cpp:1457
 #: elder-terms-vte/src/sftp/sftp-main.cpp:111
@@ -890,7 +908,8 @@ msgstr "Загрузка…"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:387
 msgid "SFTP local pane only supports native filesystem paths"
-msgstr "SFTP локальная панель поддерживает только собственные пути файловой системы"
+msgstr ""
+"SFTP локальная панель поддерживает только собственные пути файловой системы"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:460
 msgid "Local directory path is empty"
@@ -938,7 +957,9 @@ msgstr "Пункт назначения уже существует"
 msgid ""
 "%s\n"
 "The selected decision applies to all remaining conflicts."
-msgstr "%s\nВыбранное решение применяется ко всем оставшимся конфликтам."
+msgstr ""
+"%s\n"
+"Выбранное решение применяется ко всем оставшимся конфликтам."
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:720
 msgid "Abort"
@@ -959,7 +980,11 @@ msgid ""
 "\n"
 "%s\n"
 "→ %s"
-msgstr "%s\n\n%s\n→ %s"
+msgstr ""
+"%s\n"
+"\n"
+"%s\n"
+"→ %s"
 
 #: elder-terms-vte/src/sftp/sftp-window.cpp:752
 msgid "SFTP operation failed"
@@ -1087,7 +1112,10 @@ msgid ""
 "Unknown SSH host key for %s:%u\n"
 "Key type: %s\n"
 "Fingerprint: %s"
-msgstr "Неизвестный ключ хоста SSH для %s:%u\nТип ключа: %s\nОтпечаток пальца: %s"
+msgstr ""
+"Неизвестный ключ хоста SSH для %s:%u\n"
+"Тип ключа: %s\n"
+"Отпечаток пальца: %s"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:271
 msgid "The known_hosts file does not exist and will be created."
