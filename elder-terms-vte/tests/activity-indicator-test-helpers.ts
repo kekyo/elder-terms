@@ -13,7 +13,16 @@ const { PNG } = require('pngjs') as typeof import('pngjs');
  * Stable activity indicator ids.
  */
 export type ActivityIndicatorId =
-  'conn' | 'log' | 'sd' | 'rd' | 'rts' | 'cts' | 'dtr' | 'dsr' | 'cd' | 'ri';
+  | 'conn'
+  | 'log'
+  | 'sd'
+  | 'rd'
+  | 'rts'
+  | 'cts'
+  | 'dtr'
+  | 'dsr'
+  | 'cd'
+  | 'ri';
 
 /**
  * Ordered activity indicators shown for non-serial sessions.
