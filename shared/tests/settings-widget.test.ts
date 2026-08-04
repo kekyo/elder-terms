@@ -1,4 +1,7 @@
 import { fileURLToPath } from 'node:url';
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type {
   GtkApp,
   GtkEntryElement,
@@ -76,6 +79,8 @@ interface AppliedStore {
   readonly serial_bits: string;
   readonly serial_carrier_detect: string;
   readonly serial_device: string;
+  readonly serial_device_match_mode: string;
+  readonly serial_device_usb_serial: string;
   readonly serial_flow_control: string;
   readonly serial_parity: string;
   readonly serial_stop_bit: string;
@@ -167,9 +172,63 @@ const showSftpPage = async (app: GtkApp): Promise<void> => {
 
 const showSerialPage = async (app: GtkApp): Promise<void> => {
   await waitForResult(async () => {
-    const device = await app.getById('settings_serial_device_entry');
+    const device = await app.getById('settings_serial_device_combo');
     expect((await device.info()).states).toContain('showing');
   });
+};
+
+interface SerialDeviceFixture {
+  readonly byIdRoot: string;
+  readonly byPathRoot: string;
+  readonly devRoot: string;
+  readonly environment: Readonly<Record<string, string>>;
+  readonly physicalTarget: string;
+  readonly root: string;
+  readonly stableTarget: string;
+  readonly sysClassTtyRoot: string;
+}
+
+const createSerialDeviceFixture = async (): Promise<SerialDeviceFixture> => {
+  const root = await mkdtemp(join(tmpdir(), 'elder-terms-serial-widget-'));
+  const devRoot = join(root, 'dev');
+  const byIdRoot = join(root, 'by-id');
+  const byPathRoot = join(root, 'by-path');
+  const sysClassTtyRoot = join(root, 'sys-class-tty');
+  const stableTarget = join(byIdRoot, 'usb-elder-demo');
+  const physicalTarget = join(byPathRoot, 'pci-demo-usb-0');
+  await Promise.all([
+    mkdir(devRoot, { recursive: true }),
+    mkdir(byIdRoot, { recursive: true }),
+    mkdir(byPathRoot, { recursive: true }),
+    mkdir(join(sysClassTtyRoot, 'null', 'device'), { recursive: true }),
+  ]);
+  await Promise.all([
+    symlink('/dev/null', stableTarget),
+    symlink('/dev/null', physicalTarget),
+    writeFile(
+      join(sysClassTtyRoot, 'null', 'device', 'product'),
+      'Elder USB Demo\n'
+    ),
+    writeFile(
+      join(sysClassTtyRoot, 'null', 'device', 'serial'),
+      'FT12345678901234\n'
+    ),
+  ]);
+  return {
+    byIdRoot,
+    byPathRoot,
+    devRoot,
+    environment: {
+      ELDER_TERMS_SERIAL_BY_ID_ROOT: byIdRoot,
+      ELDER_TERMS_SERIAL_BY_PATH_ROOT: byPathRoot,
+      ELDER_TERMS_SERIAL_DEV_ROOT: devRoot,
+      ELDER_TERMS_SERIAL_SYS_CLASS_TTY_ROOT: sysClassTtyRoot,
+    },
+    physicalTarget,
+    root,
+    stableTarget,
+    sysClassTtyRoot,
+  };
 };
 
 const showTransferPage = async (app: GtkApp): Promise<void> => {
@@ -705,7 +764,11 @@ describe.concurrent('shared settings widget', () => {
           {
             id: 'global_settings_serial_page',
             labels: [
+              'Device identification',
               'Device',
+              'Stable ID',
+              'USB serial number',
+              'Current device node',
               'Baud rate',
               'Data bits',
               'Parity',
@@ -810,7 +873,11 @@ describe.concurrent('shared settings widget', () => {
           {
             id: 'global_settings_serial_page',
             labels: [
+              'デバイス識別方式',
               'デバイス',
+              '安定ID',
+              'USBシリアル番号',
+              '現在のデバイスノード',
               'ボーレート',
               'データビット',
               'パリティ',
@@ -1952,8 +2019,8 @@ describe.concurrent('shared settings widget', () => {
         await showSerialPage(app);
 
         const device = expectElementKind(
-          await app.getById('settings_serial_device_entry'),
-          'entry'
+          await app.getById('settings_serial_device_combo'),
+          'comboBox'
         );
         const baudrate = expectElementKind(
           await app.getById('settings_serial_baudrate_entry'),
@@ -1980,7 +2047,11 @@ describe.concurrent('shared settings widget', () => {
           'comboBox'
         );
 
-        expect(await device.text()).toBe('/dev/ttyUSB9');
+        await expectSelectedComboValue(
+          app,
+          'settings_serial_device_combo',
+          '/dev/ttyUSB9'
+        );
         await expectNumericEntryValue(baudrate, 115200);
         await expectSelectedComboValue(app, 'settings_serial_bits_combo', '7');
         await expectSelectedComboValue(
@@ -2011,7 +2082,6 @@ describe.concurrent('shared settings widget', () => {
         await expectSensitive(flowControl);
         await expectSensitive(carrierDetect);
 
-        await device.setText('/dev/ttyUSB10');
         await setNumericEntryValue(baudrate, 57600);
         await bits.selectChildAt(4);
         await parity.selectChildAt(3);
@@ -2025,7 +2095,7 @@ describe.concurrent('shared settings widget', () => {
 
         const store = await waitForAppliedStore(app);
         expect(store.type).toBe('serial');
-        expect(store.serial_device).toBe('/dev/ttyUSB10');
+        expect(store.serial_device).toBe('/dev/ttyUSB9');
         expect(store.serial_baudrate).toBe('57600');
         expect(store.serial_bits).toBe('8');
         expect(store.serial_parity).toBe('o');
@@ -2035,6 +2105,119 @@ describe.concurrent('shared settings widget', () => {
       }
     );
   });
+
+  it('enumerates serial devices, maps identification modes, and refreshes after hotplug', async (context) => {
+    const fixture = await createSerialDeviceFixture();
+    try {
+      await runSharedGtkTest(
+        context,
+        ['--page=serial', '--type=serial', '--serial-match-mode=by-id'],
+        async ({ app }) => {
+          await showSerialPage(app);
+          await expect(
+            app.getById('settings_serial_device_entry')
+          ).rejects.toThrow();
+
+          const matchMode = expectElementKind(
+            await app.getById('settings_serial_device_match_mode_combo'),
+            'comboBox'
+          );
+          expect(
+            await comboOptionNames(
+              app,
+              'settings_serial_device_match_mode_combo'
+            )
+          ).toEqual([
+            'Stable device identity (built-in default)',
+            'Device path',
+            'Stable device identity',
+            'Physical USB port',
+          ]);
+
+          const device = expectElementKind(
+            await app.getById('settings_serial_device_combo'),
+            'comboBox'
+          );
+          expect(
+            await comboOptionNames(app, 'settings_serial_device_combo')
+          ).toEqual([
+            'No device (built-in default)',
+            'Elder USB Demo [SN:FT12...1234]',
+          ]);
+          await device.selectChildAt(1);
+          await expectSelectedComboValue(
+            app,
+            'settings_serial_device_combo',
+            'Elder USB Demo [SN:FT12...1234]'
+          );
+          expect(
+            (
+              await (
+                await app.getById('settings_serial_stable_id_value')
+              ).info()
+            ).name
+          ).toBe(fixture.stableTarget);
+          expect(
+            (
+              await (
+                await app.getById('settings_serial_usb_serial_value')
+              ).info()
+            ).name
+          ).toBe('FT12345678901234');
+          expect(
+            (
+              await (
+                await app.getById('settings_serial_current_node_value')
+              ).info()
+            ).name
+          ).toBe('/dev/null');
+
+          await mkdir(join(fixture.sysClassTtyRoot, 'zero', 'device'), {
+            recursive: true,
+          });
+          await Promise.all([
+            writeFile(
+              join(fixture.sysClassTtyRoot, 'zero', 'device', 'product'),
+              'Other USB\n'
+            ),
+            symlink('/dev/zero', join(fixture.byIdRoot, 'usb-other')),
+          ]);
+          await waitForResult(async () => {
+            expect(
+              await comboOptionNames(app, 'settings_serial_device_combo')
+            ).toEqual([
+              'No device (built-in default)',
+              'Elder USB Demo [SN:FT12...1234]',
+              'Other USB',
+            ]);
+          });
+
+          await matchMode.selectChildAt(3);
+          await expectSelectedComboValue(
+            app,
+            'settings_serial_device_match_mode_combo',
+            'Physical USB port'
+          );
+          await expectSelectedComboValue(
+            app,
+            'settings_serial_device_combo',
+            'pci-demo-usb-0'
+          );
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          const store = await waitForAppliedStore(app);
+          expect(store.serial_device_match_mode).toBe('by-path');
+          expect(store.serial_device).toBe(fixture.physicalTarget);
+          expect(store.serial_device_usb_serial).toBe('FT12345678901234');
+        },
+        { env: fixture.environment }
+      );
+    } finally {
+      await rm(fixture.root, { force: true, recursive: true });
+    }
+  }, 60_000);
 
   it('shows Transfer controls and applies transfer edits', async (context) => {
     await runSharedGtkTest(
@@ -2314,8 +2497,12 @@ describe.concurrent('shared settings widget', () => {
         await showSerialPage(app);
 
         const device = expectElementKind(
-          await app.getById('settings_serial_device_entry'),
-          'entry'
+          await app.getById('settings_serial_device_combo'),
+          'comboBox'
+        );
+        const matchMode = expectElementKind(
+          await app.getById('settings_serial_device_match_mode_combo'),
+          'comboBox'
         );
         const baudrate = expectElementKind(
           await app.getById('settings_serial_baudrate_entry'),
@@ -2341,7 +2528,11 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_serial_carrier_detect_combo'),
           'comboBox'
         );
-        expect(await device.text()).toBe('/dev/ttyUSB11');
+        await expectSelectedComboValue(
+          app,
+          'settings_serial_device_combo',
+          '/dev/ttyUSB11'
+        );
         await expectNumericEntryValue(baudrate, 38400);
         await expectSelectedComboValue(app, 'settings_serial_bits_combo', '6');
         await expectSelectedComboValue(
@@ -2365,6 +2556,7 @@ describe.concurrent('shared settings widget', () => {
           'CTS (Clear to Send)'
         );
         await expectInsensitive(device);
+        await expectInsensitive(matchMode);
         await expectSensitive(baudrate);
         await expectSensitive(bits);
         await expectSensitive(parity);
@@ -2893,9 +3085,9 @@ describe.concurrent('shared settings widget', () => {
       );
 
       await selectSettingsTab(app, 'Serial');
-      await expectInheritedEntry(
+      await expectSelectedComboValue(
         app,
-        'settings_serial_device_entry',
+        'settings_serial_device_combo',
         '/dev/ttyGLOBAL (global default)'
       );
       await expectInheritedEntry(
@@ -3684,7 +3876,7 @@ describe.concurrent('shared settings widget', () => {
         expect(reset.open_application_explicit).toBe('false');
       }
     );
-  });
+  }, 60_000);
 
   it('rebases inherited fields without changing dirty overrides or the connection name', async (context) => {
     await runSharedGtkTest(

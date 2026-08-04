@@ -1232,3 +1232,40 @@ msgstr "ssh: (अज्ञात)"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:840
 msgid "telnet: (unknown)"
 msgstr "टेलनेट: (अज्ञात)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:58
+msgid "Device identification"
+msgstr "डिवाइस पहचान"
+
+#: shared/src/settings-widget/settings-presentation.cpp:60
+#: shared/src/settings-widget/settings-presentation.cpp:220
+msgid "USB serial number"
+msgstr "USB सीरियल नंबर"
+
+#: shared/src/settings-widget/settings-presentation.cpp:112
+msgid "Device path"
+msgstr "डिवाइस पथ"
+
+#: shared/src/settings-widget/settings-presentation.cpp:114
+msgid "Stable device identity"
+msgstr "स्थिर डिवाइस पहचान"
+
+#: shared/src/settings-widget/settings-presentation.cpp:116
+msgid "Physical USB port"
+msgstr "भौतिक USB पोर्ट"
+
+#: shared/src/settings-widget/settings-presentation.cpp:216
+msgid "No device"
+msgstr "कोई डिवाइस नहीं"
+
+#: shared/src/settings-widget/settings-presentation.cpp:218
+msgid "Stable ID"
+msgstr "स्थिर ID"
+
+#: shared/src/settings-widget/settings-presentation.cpp:222
+msgid "Current device node"
+msgstr "वर्तमान डिवाइस नोड"
+
+#: shared/src/settings-widget/settings-presentation.cpp:224
+msgid "Unavailable"
+msgstr "अनुपलब्ध"

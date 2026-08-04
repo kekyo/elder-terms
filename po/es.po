@@ -1239,3 +1239,40 @@ msgstr "ssh: (desconocido)"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:840
 msgid "telnet: (unknown)"
 msgstr "telnet: (desconocido)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:58
+msgid "Device identification"
+msgstr "Identificación del dispositivo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:60
+#: shared/src/settings-widget/settings-presentation.cpp:220
+msgid "USB serial number"
+msgstr "Número de serie USB"
+
+#: shared/src/settings-widget/settings-presentation.cpp:112
+msgid "Device path"
+msgstr "Ruta del dispositivo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:114
+msgid "Stable device identity"
+msgstr "Identidad estable del dispositivo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:116
+msgid "Physical USB port"
+msgstr "Puerto USB físico"
+
+#: shared/src/settings-widget/settings-presentation.cpp:216
+msgid "No device"
+msgstr "Sin dispositivo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:218
+msgid "Stable ID"
+msgstr "ID estable"
+
+#: shared/src/settings-widget/settings-presentation.cpp:222
+msgid "Current device node"
+msgstr "Nodo de dispositivo actual"
+
+#: shared/src/settings-widget/settings-presentation.cpp:224
+msgid "Unavailable"
+msgstr "No disponible"

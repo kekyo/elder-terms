@@ -43,6 +43,11 @@ enum class SettingsUiText {
   macro_command_action,
   macro_add_argument,
   macro_remove_argument,
+  serial_no_device,
+  serial_stable_id,
+  serial_usb_serial,
+  serial_current_node,
+  unavailable,
 };
 
 const char *settings_ui_text(SettingsUiText text);

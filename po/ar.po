@@ -1241,3 +1241,40 @@ msgstr "ssh: (غير معروف)"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:840
 msgid "telnet: (unknown)"
 msgstr "التلنت: (غير معروف)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:58
+msgid "Device identification"
+msgstr "تعريف الجهاز"
+
+#: shared/src/settings-widget/settings-presentation.cpp:60
+#: shared/src/settings-widget/settings-presentation.cpp:220
+msgid "USB serial number"
+msgstr "الرقم التسلسلي لـ USB"
+
+#: shared/src/settings-widget/settings-presentation.cpp:112
+msgid "Device path"
+msgstr "مسار الجهاز"
+
+#: shared/src/settings-widget/settings-presentation.cpp:114
+msgid "Stable device identity"
+msgstr "هوية الجهاز الثابتة"
+
+#: shared/src/settings-widget/settings-presentation.cpp:116
+msgid "Physical USB port"
+msgstr "منفذ USB الفعلي"
+
+#: shared/src/settings-widget/settings-presentation.cpp:216
+msgid "No device"
+msgstr "لا يوجد جهاز"
+
+#: shared/src/settings-widget/settings-presentation.cpp:218
+msgid "Stable ID"
+msgstr "المعرّف الثابت"
+
+#: shared/src/settings-widget/settings-presentation.cpp:222
+msgid "Current device node"
+msgstr "عقدة الجهاز الحالية"
+
+#: shared/src/settings-widget/settings-presentation.cpp:224
+msgid "Unavailable"
+msgstr "غير متاح"

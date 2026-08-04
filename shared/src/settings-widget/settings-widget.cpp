@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -16,6 +17,7 @@
 #include <atk/atk.h>
 
 #include <elder-terms/key-binding-input-widget.h>
+#include <elder-terms/serial-device-event-monitor.h>
 #include <elder-terms/settings/general-settings.h>
 
 #include "settings-presentation.h"
@@ -25,6 +27,11 @@ namespace elder_terms {
 static constexpr char local_connection_type[] = "local";
 static constexpr char telnet_connection_type[] = "telnet";
 static constexpr char serial_connection_type[] = "serial";
+static constexpr char serial_device_path_mode[] = "path";
+static constexpr char serial_device_stable_id_mode[] = "by-id";
+static constexpr char serial_device_physical_port_mode[] = "by-path";
+static constexpr char serial_device_no_device_choice[] =
+    "__elder_terms_no_device";
 static constexpr char ssh_connection_type[] = "ssh";
 static constexpr char sftp_connection_type[] = "sftp";
 static constexpr char zmodem_autostart_enabled[] = "enabled";
@@ -131,7 +138,14 @@ struct SettingsWidgetState {
   bool ssh_port_valid = true;
   GtkWidget *sftp_local_directory_entry = nullptr;
   GtkWidget *sftp_remote_directory_entry = nullptr;
-  GtkWidget *serial_device_entry = nullptr;
+  GtkWidget *serial_device_match_mode_combo = nullptr;
+  GtkWidget *serial_device_combo = nullptr;
+  GtkWidget *serial_stable_id_value = nullptr;
+  GtkWidget *serial_usb_serial_value = nullptr;
+  GtkWidget *serial_current_node_value = nullptr;
+  std::vector<SerialDeviceChoice> serial_device_choices;
+  std::unique_ptr<SerialDeviceEventMonitor> serial_device_event_monitor;
+  bool serial_device_refresh_pending = false;
   GtkWidget *serial_baudrate_entry = nullptr;
   GtkWidget *serial_bits_combo = nullptr;
   GtkWidget *serial_parity_combo = nullptr;
@@ -153,6 +167,15 @@ struct SettingsWidgetState {
   GtkWidget *cancel_button = nullptr;
   std::vector<ConnectionSettingsPage> connection_pages;
 };
+
+static void sync_serial_device_widgets(SettingsWidgetState *state);
+static void refresh_serial_device_widgets(SettingsWidgetState *state);
+static std::optional<SerialDeviceChoice> serial_device_choice_for_target(
+    const std::vector<SerialDeviceChoice> &choices,
+    const std::string &target);
+static void sync_serial_device_metadata(
+    SettingsWidgetState *state,
+    const SerialConnectionSettings &serial);
 
 static std::string widget_id(const SettingsWidgetState *state,
                              const char *suffix) {
@@ -208,6 +231,16 @@ static GtkWidget *attach_row(GtkWidget *grid, int row, const SettingKey &key,
   return label;
 }
 
+static GtkWidget *attach_text_row(GtkWidget *grid, int row,
+                                  const char *text, GtkWidget *control) {
+  GtkWidget *label = create_row_label(text);
+  gtk_grid_attach(GTK_GRID(grid), label, 0, row, 1, 1);
+  gtk_widget_set_hexpand(control, true);
+  gtk_widget_set_halign(control, GTK_ALIGN_FILL);
+  gtk_grid_attach(GTK_GRID(grid), control, 1, row, 1, 1);
+  return label;
+}
+
 static GtkWidget *create_entry(const std::string &id) {
   GtkWidget *entry = gtk_entry_new();
   assign_accessible_id(entry, id.c_str());
@@ -218,6 +251,15 @@ static GtkWidget *create_combo_box(const char *id) {
   GtkWidget *combo = gtk_combo_box_text_new();
   assign_accessible_id(combo, id);
   return combo;
+}
+
+static GtkWidget *create_metadata_value_label(const std::string &id) {
+  GtkWidget *label = gtk_label_new("");
+  gtk_label_set_xalign(GTK_LABEL(label), 0.0F);
+  gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_MIDDLE);
+  gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+  assign_accessible_id(label, id.c_str());
+  return label;
 }
 
 static GtkWidget *create_editable_combo_box(const char *combo_id,
@@ -1338,8 +1380,84 @@ static void update_sftp_remote_directory_from_widget(
 }
 
 static void update_serial_device_from_widget(SettingsWidgetState *state) {
-  update_string_entry(state, state->serial_device_entry,
-                      serial_device_setting_key());
+  const std::string target =
+      active_combo_id(state->serial_device_combo, inherit_choice);
+  if (target == inherit_choice) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 serial_device_setting_key());
+    clear_explicit_setting_value(&state->draft_store,
+                                 serial_device_usb_serial_setting_key());
+  } else if (target == serial_device_no_device_choice) {
+    set_explicit_setting_value(&state->draft_store,
+                               serial_device_setting_key(),
+                               SettingValue{std::string()});
+    set_explicit_setting_value(&state->draft_store,
+                               serial_device_usb_serial_setting_key(),
+                               SettingValue{std::string()});
+  } else {
+    const std::optional<SerialDeviceChoice> choice =
+        serial_device_choice_for_target(state->serial_device_choices, target);
+    set_explicit_setting_value(&state->draft_store,
+                               serial_device_setting_key(),
+                               SettingValue{target});
+    set_explicit_setting_value(
+        &state->draft_store, serial_device_usb_serial_setting_key(),
+        SettingValue{choice.has_value()
+                         ? choice->usb_serial.value_or("")
+                         : std::string()});
+  }
+  sync_serial_device_metadata(
+      state, serial_connection_settings(state->draft_store));
+}
+
+static void update_serial_device_match_mode_from_widget(
+    SettingsWidgetState *state) {
+  const SerialConnectionSettings previous =
+      serial_connection_settings(state->draft_store);
+  const bool device_was_explicit = setting_has_explicit_value(
+      state->draft_store, serial_device_setting_key());
+  const std::string mode = active_combo_id(
+      state->serial_device_match_mode_combo, inherit_choice);
+  if (mode == inherit_choice) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 serial_device_match_mode_setting_key());
+  } else {
+    set_explicit_setting_value(&state->draft_store,
+                               serial_device_match_mode_setting_key(),
+                               SettingValue{mode});
+  }
+
+  const SerialDeviceMatchMode next_mode =
+      serial_connection_settings(state->draft_store).device_match_mode;
+  if (!previous.device.empty() &&
+      (device_was_explicit || mode != inherit_choice)) {
+    const SerialDevicePaths paths = host_serial_device_paths();
+    const std::optional<std::string> mapped =
+        resolve_serial_device_target_for_mode(next_mode, previous.device,
+                                              paths);
+    if (mapped.has_value()) {
+      set_explicit_setting_value(&state->draft_store,
+                                 serial_device_setting_key(),
+                                 SettingValue{*mapped});
+      const std::vector<SerialDeviceChoice> choices =
+          list_serial_device_choices(next_mode, paths);
+      const std::optional<SerialDeviceChoice> choice =
+          serial_device_choice_for_target(choices, *mapped);
+      set_explicit_setting_value(
+          &state->draft_store, serial_device_usb_serial_setting_key(),
+          SettingValue{choice.has_value()
+                           ? choice->usb_serial.value_or("")
+                           : previous.device_usb_serial.value_or("")});
+    } else {
+      set_explicit_setting_value(&state->draft_store,
+                                 serial_device_setting_key(),
+                                 SettingValue{std::string()});
+      set_explicit_setting_value(&state->draft_store,
+                                 serial_device_usb_serial_setting_key(),
+                                 SettingValue{std::string()});
+    }
+  }
+  sync_serial_device_widgets(state);
 }
 
 static void update_serial_baudrate_from_widget(SettingsWidgetState *state) {
@@ -2296,6 +2414,212 @@ static void sync_zmodem_combo(SettingsWidgetState *state) {
       effective ? zmodem_autostart_enabled : zmodem_autostart_disabled);
 }
 
+static std::optional<SerialDeviceChoice> serial_device_choice_for_target(
+    const std::vector<SerialDeviceChoice> &choices,
+    const std::string &target) {
+  const auto selected = std::find_if(
+      choices.begin(), choices.end(),
+      [&target](const SerialDeviceChoice &choice) {
+        return choice.target_path == target;
+      });
+  return selected == choices.end()
+             ? std::nullopt
+             : std::optional<SerialDeviceChoice>(*selected);
+}
+
+static std::optional<SerialDeviceChoice> serial_device_choice_for_usb_serial(
+    const std::vector<SerialDeviceChoice> &choices,
+    const std::optional<std::string> &usb_serial) {
+  if (!usb_serial.has_value() || usb_serial->empty()) {
+    return std::nullopt;
+  }
+  std::optional<SerialDeviceChoice> selected;
+  for (const SerialDeviceChoice &choice : choices) {
+    if (choice.usb_serial != usb_serial) {
+      continue;
+    }
+    if (selected.has_value()) {
+      return std::nullopt;
+    }
+    selected = choice;
+  }
+  return selected;
+}
+
+static std::string serial_device_choice_label(
+    const std::vector<SerialDeviceChoice> &choices,
+    const std::string &target) {
+  const std::optional<SerialDeviceChoice> choice =
+      serial_device_choice_for_target(choices, target);
+  return choice.has_value() ? choice->display_label : target;
+}
+
+static void populate_serial_device_match_mode_combo(
+    SettingsWidgetState *state,
+    const SerialConnectionSettings &serial) {
+  const SettingKey key = serial_device_match_mode_setting_key();
+  const std::string fallback = std::get<std::string>(setting_fallback_value(
+      state->draft_store, key,
+      SettingValue{std::string(serial_device_stable_id_mode)}));
+  populate_inheritable_combo(
+      state->serial_device_match_mode_combo, state->draft_store, key,
+      setting_choice_label(key, fallback),
+      {
+          {.id = serial_device_path_mode,
+           .label = setting_choice_label(key, serial_device_path_mode)},
+          {.id = serial_device_stable_id_mode,
+           .label = setting_choice_label(key, serial_device_stable_id_mode)},
+          {.id = serial_device_physical_port_mode,
+           .label =
+               setting_choice_label(key, serial_device_physical_port_mode)},
+      },
+      serial_device_match_mode_to_string(serial.device_match_mode));
+}
+
+static void populate_serial_device_combo(
+    SettingsWidgetState *state,
+    const SerialConnectionSettings &serial) {
+  state->serial_device_choices =
+      list_serial_device_choices(serial.device_match_mode);
+  gtk_combo_box_text_remove_all(
+      GTK_COMBO_BOX_TEXT(state->serial_device_combo));
+
+  const SettingKey key = serial_device_setting_key();
+  const std::string fallback = std::get<std::string>(setting_fallback_value(
+      state->draft_store, key, SettingValue{std::string()}));
+  const std::string fallback_display =
+      fallback.empty()
+          ? settings_ui_text(SettingsUiText::serial_no_device)
+          : serial_device_choice_label(state->serial_device_choices, fallback);
+  const std::string inherited =
+      setting_fallback_label(state->draft_store, key, fallback_display);
+  append_combo_option(state->serial_device_combo, inherit_choice,
+                      inherited.c_str());
+
+  const bool explicit_device =
+      setting_has_explicit_value(state->draft_store, key);
+  if (!fallback.empty() || (explicit_device && serial.device.empty())) {
+    append_combo_option(state->serial_device_combo,
+                        serial_device_no_device_choice,
+                        settings_ui_text(SettingsUiText::serial_no_device));
+  }
+  for (const SerialDeviceChoice &choice : state->serial_device_choices) {
+    append_combo_option(state->serial_device_combo,
+                        choice.target_path.c_str(),
+                        choice.display_label.c_str());
+  }
+
+  if (!explicit_device) {
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->serial_device_combo),
+                                inherit_choice);
+    return;
+  }
+  if (serial.device.empty()) {
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->serial_device_combo),
+                                serial_device_no_device_choice);
+    return;
+  }
+  if (!serial_device_choice_for_target(state->serial_device_choices,
+                                       serial.device)
+           .has_value()) {
+    append_combo_option(state->serial_device_combo, serial.device.c_str(),
+                        serial.device.c_str());
+  }
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->serial_device_combo),
+                              serial.device.c_str());
+}
+
+static void set_serial_metadata_label(GtkWidget *label,
+                                      const std::optional<std::string> &value) {
+  const char *text =
+      value.has_value() && !value->empty()
+          ? value->c_str()
+          : settings_ui_text(SettingsUiText::unavailable);
+  gtk_label_set_text(GTK_LABEL(label), text);
+  gtk_widget_set_tooltip_text(label, text);
+}
+
+static void sync_serial_device_metadata(
+    SettingsWidgetState *state,
+    const SerialConnectionSettings &serial) {
+  const SerialDevicePaths paths = host_serial_device_paths();
+  std::optional<SerialDeviceChoice> selected =
+      serial_device_choice_for_target(state->serial_device_choices,
+                                      serial.device);
+  if (!selected.has_value()) {
+    selected = serial_device_choice_for_usb_serial(
+        state->serial_device_choices, serial.device_usb_serial);
+  }
+
+  std::optional<std::string> current_node =
+      selected.has_value()
+          ? selected->current_node
+          : resolve_serial_device_current_node(serial.device);
+  std::optional<std::string> usb_serial =
+      selected.has_value() && selected->usb_serial.has_value()
+          ? selected->usb_serial
+          : serial.device_usb_serial;
+  std::optional<std::string> stable_id;
+  if (selected.has_value()) {
+    stable_id = resolve_serial_device_target_for_mode(
+        SerialDeviceMatchMode::stable_id, selected->target_path, paths);
+  } else {
+    stable_id = resolve_serial_device_target_for_mode(
+        SerialDeviceMatchMode::stable_id, serial.device, paths);
+  }
+  if ((!stable_id.has_value() || stable_id->empty()) &&
+      usb_serial.has_value()) {
+    const std::vector<SerialDeviceChoice> stable_choices =
+        list_serial_device_choices(SerialDeviceMatchMode::stable_id, paths);
+    const std::optional<SerialDeviceChoice> stable_choice =
+        serial_device_choice_for_usb_serial(stable_choices, usb_serial);
+    if (stable_choice.has_value()) {
+      stable_id = stable_choice->target_path;
+      if (!current_node.has_value()) {
+        current_node = stable_choice->current_node;
+      }
+    }
+  }
+
+  set_serial_metadata_label(state->serial_stable_id_value, stable_id);
+  set_serial_metadata_label(state->serial_usb_serial_value, usb_serial);
+  set_serial_metadata_label(state->serial_current_node_value, current_node);
+}
+
+static void sync_serial_device_widgets(SettingsWidgetState *state) {
+  if (state->serial_device_match_mode_combo == nullptr ||
+      state->serial_device_combo == nullptr) {
+    return;
+  }
+  const bool previous_synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  const SerialConnectionSettings serial =
+      serial_connection_settings(state->draft_store);
+  populate_serial_device_match_mode_combo(state, serial);
+  populate_serial_device_combo(state, serial);
+  sync_serial_device_metadata(state, serial);
+  state->synchronizing = previous_synchronizing;
+}
+
+static bool serial_device_combo_popup_is_shown(
+    const SettingsWidgetState *state) {
+  gboolean shown = FALSE;
+  g_object_get(state->serial_device_combo, "popup-shown", &shown, nullptr);
+  return shown != FALSE;
+}
+
+static void refresh_serial_device_widgets(SettingsWidgetState *state) {
+  if (state == nullptr || state->serial_device_combo == nullptr) {
+    return;
+  }
+  if (serial_device_combo_popup_is_shown(state)) {
+    state->serial_device_refresh_pending = true;
+    return;
+  }
+  state->serial_device_refresh_pending = false;
+  sync_serial_device_widgets(state);
+}
+
 static void sync_key_binding_widget(
     SettingsWidgetState *state, KeyBindingInputWidgetState *input,
     const SettingKey &key, const std::string &effective_value) {
@@ -2503,10 +2827,7 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
                            sftp_remote_directory_setting_key(),
                            sftp.remote_directory);
   }
-  if (state->serial_device_entry != nullptr) {
-    sync_inheritable_entry(state->serial_device_entry, state->draft_store,
-                           serial_device_setting_key(), serial.device);
-  }
+  sync_serial_device_widgets(state);
   if (state->serial_baudrate_entry != nullptr) {
     sync_inheritable_entry(state->serial_baudrate_entry,
                            state->draft_store,
@@ -3144,13 +3465,32 @@ static void on_sftp_remote_directory_changed(GtkEditable *, gpointer data) {
   notify_changed(state);
 }
 
-static void on_serial_device_changed(GtkEditable *, gpointer data) {
+static void on_serial_device_changed(GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) {
     return;
   }
   update_serial_device_from_widget(state);
   notify_changed(state);
+}
+
+static void on_serial_device_match_mode_changed(GtkComboBox *,
+                                                gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_serial_device_match_mode_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_serial_device_popup_shown_changed(GObject *, GParamSpec *,
+                                                 gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->serial_device_refresh_pending &&
+      !serial_device_combo_popup_is_shown(state)) {
+    refresh_serial_device_widgets(state);
+  }
 }
 
 static void on_serial_baudrate_changed(GtkEditable *, gpointer data) {
@@ -3703,32 +4043,63 @@ static GtkWidget *create_serial_page(SettingsWidgetState *state) {
   GtkWidget *page = create_page_grid(page_id.c_str());
   const gboolean device_sensitive = state->is_runtime ? FALSE : TRUE;
 
-  state->serial_device_entry =
-      create_entry(widget_id(state, "serial_device_entry"));
-  gtk_widget_set_sensitive(state->serial_device_entry, device_sensitive);
-  g_signal_connect(state->serial_device_entry, "changed",
+  const std::string match_mode_id =
+      widget_id(state, "serial_device_match_mode_combo");
+  state->serial_device_match_mode_combo =
+      create_combo_box(match_mode_id.c_str());
+  gtk_widget_set_sensitive(state->serial_device_match_mode_combo,
+                           device_sensitive);
+  g_signal_connect(state->serial_device_match_mode_combo, "changed",
+                   G_CALLBACK(on_serial_device_match_mode_changed), state);
+  attach_row(page, 0, serial_device_match_mode_setting_key(),
+             state->serial_device_match_mode_combo);
+
+  const std::string device_id = widget_id(state, "serial_device_combo");
+  state->serial_device_combo = create_combo_box(device_id.c_str());
+  gtk_widget_set_sensitive(state->serial_device_combo, device_sensitive);
+  g_signal_connect(state->serial_device_combo, "changed",
                    G_CALLBACK(on_serial_device_changed), state);
-  attach_row(page, 0, serial_device_setting_key(),
-             state->serial_device_entry);
+  g_signal_connect(state->serial_device_combo, "notify::popup-shown",
+                   G_CALLBACK(on_serial_device_popup_shown_changed), state);
+  attach_row(page, 1, serial_device_setting_key(),
+             state->serial_device_combo);
+
+  state->serial_stable_id_value = create_metadata_value_label(
+      widget_id(state, "serial_stable_id_value"));
+  attach_text_row(page, 2,
+                  settings_ui_text(SettingsUiText::serial_stable_id),
+                  state->serial_stable_id_value);
+
+  state->serial_usb_serial_value = create_metadata_value_label(
+      widget_id(state, "serial_usb_serial_value"));
+  attach_text_row(page, 3,
+                  settings_ui_text(SettingsUiText::serial_usb_serial),
+                  state->serial_usb_serial_value);
+
+  state->serial_current_node_value = create_metadata_value_label(
+      widget_id(state, "serial_current_node_value"));
+  attach_text_row(page, 4,
+                  settings_ui_text(SettingsUiText::serial_current_node),
+                  state->serial_current_node_value);
 
   state->serial_baudrate_entry =
       create_entry(widget_id(state, "serial_baudrate_entry"));
   g_signal_connect(state->serial_baudrate_entry, "changed",
                    G_CALLBACK(on_serial_baudrate_changed), state);
-  attach_row(page, 1, serial_baudrate_setting_key(),
+  attach_row(page, 5, serial_baudrate_setting_key(),
              state->serial_baudrate_entry);
 
   const std::string bits_id = widget_id(state, "serial_bits_combo");
   state->serial_bits_combo = create_combo_box(bits_id.c_str());
   g_signal_connect(state->serial_bits_combo, "changed",
                    G_CALLBACK(on_serial_bits_changed), state);
-  attach_row(page, 2, serial_bits_setting_key(), state->serial_bits_combo);
+  attach_row(page, 6, serial_bits_setting_key(), state->serial_bits_combo);
 
   const std::string parity_id = widget_id(state, "serial_parity_combo");
   state->serial_parity_combo = create_combo_box(parity_id.c_str());
   g_signal_connect(state->serial_parity_combo, "changed",
                    G_CALLBACK(on_serial_parity_changed), state);
-  attach_row(page, 3, serial_parity_setting_key(),
+  attach_row(page, 7, serial_parity_setting_key(),
              state->serial_parity_combo);
 
   const std::string stop_bit_id =
@@ -3736,7 +4107,7 @@ static GtkWidget *create_serial_page(SettingsWidgetState *state) {
   state->serial_stop_bit_combo = create_combo_box(stop_bit_id.c_str());
   g_signal_connect(state->serial_stop_bit_combo, "changed",
                    G_CALLBACK(on_serial_stop_bit_changed), state);
-  attach_row(page, 4, serial_stop_bit_setting_key(),
+  attach_row(page, 8, serial_stop_bit_setting_key(),
              state->serial_stop_bit_combo);
 
   const std::string flow_control_id =
@@ -3745,7 +4116,7 @@ static GtkWidget *create_serial_page(SettingsWidgetState *state) {
       create_combo_box(flow_control_id.c_str());
   g_signal_connect(state->serial_flow_control_combo, "changed",
                    G_CALLBACK(on_serial_flow_control_changed), state);
-  attach_row(page, 5, serial_flow_control_setting_key(),
+  attach_row(page, 9, serial_flow_control_setting_key(),
              state->serial_flow_control_combo);
 
   const std::string carrier_detect_id =
@@ -3754,7 +4125,7 @@ static GtkWidget *create_serial_page(SettingsWidgetState *state) {
       create_combo_box(carrier_detect_id.c_str());
   g_signal_connect(state->serial_carrier_detect_combo, "changed",
                    G_CALLBACK(on_serial_carrier_detect_changed), state);
-  attach_row(page, 6, serial_carrier_detect_setting_key(),
+  attach_row(page, 10, serial_carrier_detect_setting_key(),
              state->serial_carrier_detect_combo);
 
   return page;
@@ -4228,6 +4599,14 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_notebook_set_current_page(GTK_NOTEBOOK(state->notebook), 0);
   state->synchronizing = false;
 
+  SerialDeviceEventMonitorOptions monitor_options;
+  monitor_options.paths = host_serial_device_paths();
+  state->serial_device_event_monitor =
+      std::make_unique<SerialDeviceEventMonitor>(
+          std::move(monitor_options),
+          [state]() { refresh_serial_device_widgets(state); });
+  state->serial_device_event_monitor->start();
+
   return state;
 }
 
@@ -4391,6 +4770,7 @@ void destroy_settings_widget(SettingsWidgetState *state) {
     return;
   }
 
+  state->serial_device_event_monitor.reset();
   destroy_key_binding_input_widget(state->terminal_zoom_in_key_input);
   destroy_key_binding_input_widget(state->terminal_zoom_out_key_input);
   destroy_key_binding_input_widget(

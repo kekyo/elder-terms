@@ -309,7 +309,7 @@ const showSerialSettingsPage = async (app: GtkApp): Promise<void> => {
   await selectSettingsNotebookTab(
     app,
     'Serial',
-    'settings_serial_device_entry'
+    'settings_serial_device_combo'
   );
 };
 
@@ -2170,8 +2170,12 @@ describe.concurrent('elder-terms-vte settings', () => {
           await expectSelectedConnectionType(app, 'Serial');
           await showSerialSettingsPage(app);
           const device = expectElementKind(
-            await app.getById('settings_serial_device_entry'),
-            'entry'
+            await app.getById('settings_serial_device_combo'),
+            'comboBox'
+          );
+          const matchMode = expectElementKind(
+            await app.getById('settings_serial_device_match_mode_combo'),
+            'comboBox'
           );
           const baudrate = expectElementKind(
             await app.getById('settings_serial_baudrate_entry'),
@@ -2197,7 +2201,11 @@ describe.concurrent('elder-terms-vte settings', () => {
             await app.getById('settings_serial_carrier_detect_combo'),
             'comboBox'
           );
-          expect(await device.text()).toBe('/dev/ttyUSB0');
+          await expectSelectedComboValue(
+            app,
+            'settings_serial_device_combo',
+            '/dev/ttyUSB0'
+          );
           expect(await numericEntryValue(baudrate)).toBe(115200);
           await expectSelectedComboValue(
             app,
@@ -2225,6 +2233,7 @@ describe.concurrent('elder-terms-vte settings', () => {
             'DSR (Data Set Ready)'
           );
           await expectInsensitive(device);
+          await expectInsensitive(matchMode);
           await expectSensitive(baudrate);
           await expectSensitive(bits);
           await expectSensitive(parity);

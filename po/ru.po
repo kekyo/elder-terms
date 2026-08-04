@@ -1241,3 +1241,40 @@ msgstr "ssh: (неизвестно)"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:840
 msgid "telnet: (unknown)"
 msgstr "телнет: (неизвестно)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:58
+msgid "Device identification"
+msgstr "Идентификация устройства"
+
+#: shared/src/settings-widget/settings-presentation.cpp:60
+#: shared/src/settings-widget/settings-presentation.cpp:220
+msgid "USB serial number"
+msgstr "Серийный номер USB"
+
+#: shared/src/settings-widget/settings-presentation.cpp:112
+msgid "Device path"
+msgstr "Путь к устройству"
+
+#: shared/src/settings-widget/settings-presentation.cpp:114
+msgid "Stable device identity"
+msgstr "Постоянный идентификатор устройства"
+
+#: shared/src/settings-widget/settings-presentation.cpp:116
+msgid "Physical USB port"
+msgstr "Физический USB-порт"
+
+#: shared/src/settings-widget/settings-presentation.cpp:216
+msgid "No device"
+msgstr "Нет устройства"
+
+#: shared/src/settings-widget/settings-presentation.cpp:218
+msgid "Stable ID"
+msgstr "Постоянный ID"
+
+#: shared/src/settings-widget/settings-presentation.cpp:222
+msgid "Current device node"
+msgstr "Текущий узел устройства"
+
+#: shared/src/settings-widget/settings-presentation.cpp:224
+msgid "Unavailable"
+msgstr "Недоступно"

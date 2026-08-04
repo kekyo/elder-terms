@@ -188,6 +188,14 @@ static FixtureOptions parse_options(int argc, char **argv) {
       append_connection_assignment(
           &options, "serial", "device",
           option_value(argument, "--serial-device="));
+    } else if (starts_with(argument, "--serial-match-mode=")) {
+      append_connection_assignment(
+          &options, "serial", "device_match_mode",
+          option_value(argument, "--serial-match-mode="));
+    } else if (starts_with(argument, "--serial-usb-serial=")) {
+      append_connection_assignment(
+          &options, "serial", "device_usb_serial",
+          option_value(argument, "--serial-usb-serial="));
     } else if (starts_with(argument, "--serial-baudrate=")) {
       append_connection_assignment(
           &options, "serial", "baudrate",
@@ -578,6 +586,11 @@ static void print_store(const char *prefix,
             << " sftp_local_directory=" << sftp.local_directory
             << " sftp_remote_directory=" << sftp.remote_directory
             << " serial_device=" << serial.device
+            << " serial_device_match_mode="
+            << elder_terms::serial_device_match_mode_to_string(
+                   serial.device_match_mode)
+            << " serial_device_usb_serial="
+            << serial.device_usb_serial.value_or("")
             << " serial_baudrate=" << serial.baudrate
             << " serial_bits=" << serial.bits
             << " serial_parity="
@@ -668,6 +681,12 @@ static void print_store(const char *prefix,
                          elder_terms::sftp_remote_directory_setting_key());
   print_setting_metadata(store, "serial_device",
                          elder_terms::serial_device_setting_key());
+  print_setting_metadata(
+      store, "serial_device_match_mode",
+      elder_terms::serial_device_match_mode_setting_key());
+  print_setting_metadata(
+      store, "serial_device_usb_serial",
+      elder_terms::serial_device_usb_serial_setting_key());
   print_setting_metadata(store, "serial_baudrate",
                          elder_terms::serial_baudrate_setting_key());
   print_setting_metadata(store, "serial_bits",

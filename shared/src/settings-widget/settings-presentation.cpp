@@ -54,6 +54,10 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"sftp", "local_directory", N_("Local directory")},
     SettingLabelEntry{"sftp", "remote_directory", N_("Remote directory")},
     SettingLabelEntry{"serial", "device", N_("Device")},
+    SettingLabelEntry{"serial", "device_match_mode",
+                      N_("Device identification")},
+    SettingLabelEntry{"serial", "device_usb_serial",
+                      N_("USB serial number")},
     SettingLabelEntry{"serial", "baudrate", N_("Baud rate")},
     SettingLabelEntry{"serial", "bits", N_("Data bits")},
     SettingLabelEntry{"serial", "parity", N_("Parity")},
@@ -104,6 +108,12 @@ static constexpr std::array setting_choices{
     SettingChoiceEntry{"terminal", "cursor_key_mode", "normal", N_("Normal")},
     SettingChoiceEntry{"terminal", "cursor_key_mode", "adm3", N_("ADM3")},
     SettingChoiceEntry{"serial", "parity", "n", N_("None")},
+    SettingChoiceEntry{"serial", "device_match_mode", "path",
+                       N_("Device path")},
+    SettingChoiceEntry{"serial", "device_match_mode", "by-id",
+                       N_("Stable device identity")},
+    SettingChoiceEntry{"serial", "device_match_mode", "by-path",
+                       N_("Physical USB port")},
     SettingChoiceEntry{"serial", "parity", "e", N_("Even")},
     SettingChoiceEntry{"serial", "parity", "o", N_("Odd")},
     SettingChoiceEntry{"serial", "flow_control", "none", N_("None")},
@@ -202,6 +212,16 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Add argument");
   case SettingsUiText::macro_remove_argument:
     return _("Remove argument");
+  case SettingsUiText::serial_no_device:
+    return _("No device");
+  case SettingsUiText::serial_stable_id:
+    return _("Stable ID");
+  case SettingsUiText::serial_usb_serial:
+    return _("USB serial number");
+  case SettingsUiText::serial_current_node:
+    return _("Current device node");
+  case SettingsUiText::unavailable:
+    return _("Unavailable");
   }
   return "";
 }
