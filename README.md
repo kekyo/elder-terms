@@ -50,3 +50,20 @@ device_usb_serial=1234
 `device_match_mode` accepts `path`, `by-id`, or `by-path` and defaults to
 `by-id`. Existing configurations that only contain a direct `device` path
 remain usable.
+
+## Serial Connection Monitoring
+
+The **Connection monitoring signal** setting can watch DCD, CTS, or DSR for a
+high-to-low transition. Select **Ignore (do not monitor)** when the serial
+adapter does not provide a usable modem-line signal or its driver does not
+support modem-line polling. In this mode, modem-line state does not end the
+session or trigger **Close window when session ends**, and the serial session
+remains available for data transfer. A real device loss or read/write failure
+is still handled as a disconnection.
+
+The setting is stored as follows:
+
+```ini
+[serial]
+carrier_detect=ignore
+```
