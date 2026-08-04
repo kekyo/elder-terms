@@ -303,6 +303,10 @@ msgid "DSR (Data Set Ready)"
 msgstr "DSR（数据集就绪）"
 
 #: shared/src/settings-widget/settings-presentation.cpp:121
+msgid "Ignore (do not monitor)"
+msgstr "忽略（不监控）"
+
+#: shared/src/settings-widget/settings-presentation.cpp:121
 msgid "Raw bytes (before character conversion)"
 msgstr "原始字节（字符转换之前）"
 

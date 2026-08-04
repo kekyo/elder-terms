@@ -303,6 +303,10 @@ msgid "DSR (Data Set Ready)"
 msgstr "DSR (डेटा सेट तैयार)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:121
+msgid "Ignore (do not monitor)"
+msgstr "अनदेखा करें (निगरानी न करें)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:121
 msgid "Raw bytes (before character conversion)"
 msgstr "कच्चे बाइट्स (वर्ण रूपांतरण से पहले)"
 

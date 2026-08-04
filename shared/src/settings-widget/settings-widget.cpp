@@ -2913,6 +2913,7 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
             {.id = "cd", .label = setting_choice_label(key, "cd")},
             {.id = "cts", .label = setting_choice_label(key, "cts")},
             {.id = "dsr", .label = setting_choice_label(key, "dsr")},
+            {.id = "ignore", .label = setting_choice_label(key, "ignore")},
         },
         carrier_detect);
   }

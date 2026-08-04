@@ -941,7 +941,7 @@ describe.concurrent('shared settings widget', () => {
         '--type=serial',
         '--serial-parity=e',
         '--serial-flow-control=xon',
-        '--serial-carrier-detect=dsr',
+        '--serial-carrier-detect=ignore',
       ],
       async ({ app }) => {
         await showSerialPage(app);
@@ -958,7 +958,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_serial_carrier_detect_combo',
-          'DSR（データセット準備完了）'
+          '監視しない'
         );
 
         await selectSettingsTab(app, '端末');
@@ -2013,7 +2013,7 @@ describe.concurrent('shared settings widget', () => {
         '--serial-parity=e',
         '--serial-stop-bit=2',
         '--serial-flow-control=xon',
-        '--serial-carrier-detect=dsr',
+        '--serial-carrier-detect=ignore',
       ],
       async ({ app }) => {
         await showSerialPage(app);
@@ -2072,7 +2072,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_serial_carrier_detect_combo',
-          'DSR (Data Set Ready)'
+          'Ignore (do not monitor)'
         );
         await expectSensitive(device);
         await expectSensitive(baudrate);

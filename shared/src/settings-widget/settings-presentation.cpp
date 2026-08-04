@@ -127,6 +127,8 @@ static constexpr std::array setting_choices{
                        N_("CTS (Clear to Send)")},
     SettingChoiceEntry{"serial", "carrier_detect", "dsr",
                        N_("DSR (Data Set Ready)")},
+    SettingChoiceEntry{"serial", "carrier_detect", "ignore",
+                       N_("Ignore (do not monitor)")},
     SettingChoiceEntry{"log", "mode", "raw",
                        N_("Raw bytes (before character conversion)")},
     SettingChoiceEntry{"log", "mode", "cooked",

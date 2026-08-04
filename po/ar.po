@@ -304,6 +304,10 @@ msgid "DSR (Data Set Ready)"
 msgstr "DSR (مجموعة البيانات جاهزة)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:121
+msgid "Ignore (do not monitor)"
+msgstr "تجاهل (عدم المراقبة)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:121
 msgid "Raw bytes (before character conversion)"
 msgstr "البايتات الأولية (قبل تحويل الأحرف)"
 

@@ -304,6 +304,10 @@ msgid "DSR (Data Set Ready)"
 msgstr "DSR (набор данных готов)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:121
+msgid "Ignore (do not monitor)"
+msgstr "Игнорировать (не отслеживать)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:121
 msgid "Raw bytes (before character conversion)"
 msgstr "Необработанные байты (до преобразования символов)"
 
