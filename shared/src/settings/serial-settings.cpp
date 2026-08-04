@@ -25,6 +25,7 @@ static constexpr char serial_parity_odd[] = "o";
 static constexpr char serial_flow_control_none[] = "none";
 static constexpr char serial_flow_control_xon[] = "xon";
 static constexpr char serial_flow_control_hard[] = "hard";
+static constexpr char serial_carrier_detect_ignore[] = "ignore";
 static constexpr char serial_carrier_detect_cd[] = "cd";
 static constexpr char serial_carrier_detect_cts[] = "cts";
 static constexpr char serial_carrier_detect_dsr[] = "dsr";
@@ -101,10 +102,11 @@ static bool validate_carrier_detect(const SettingValue &value,
                                     std::string *reason) {
   const auto *text = std::get_if<std::string>(&value);
   if (text == nullptr ||
-      (*text != serial_carrier_detect_cd &&
+      (*text != serial_carrier_detect_ignore &&
+       *text != serial_carrier_detect_cd &&
        *text != serial_carrier_detect_cts &&
        *text != serial_carrier_detect_dsr)) {
-    *reason = "must be cd, cts, or dsr";
+    *reason = "must be ignore, cd, cts, or dsr";
     return false;
   }
   return true;
@@ -137,6 +139,9 @@ serial_flow_control_from_string(const std::string &value) {
 
 static SerialCarrierDetect
 serial_carrier_detect_from_string(const std::string &value) {
+  if (value == serial_carrier_detect_ignore) {
+    return SerialCarrierDetect::ignore;
+  }
   if (value == serial_carrier_detect_cts) {
     return SerialCarrierDetect::cts;
   }
@@ -301,6 +306,9 @@ std::string serial_flow_control_to_string(SerialFlowControl flow_control) {
 
 std::string
 serial_carrier_detect_to_string(SerialCarrierDetect carrier_detect) {
+  if (carrier_detect == SerialCarrierDetect::ignore) {
+    return serial_carrier_detect_ignore;
+  }
   if (carrier_detect == SerialCarrierDetect::cts) {
     return serial_carrier_detect_cts;
   }

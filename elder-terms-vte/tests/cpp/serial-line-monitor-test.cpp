@@ -83,6 +83,22 @@ static void test_selected_signal_controls_disconnect() {
               "CTS high-to-low should disconnect");
 }
 
+static void test_ignore_never_reports_signal_disconnects() {
+  FakeSerialLineMonitor monitor({
+      {.cts = true, .dsr = true, .cd = true},
+      {.cts = false, .dsr = false, .cd = false},
+  });
+  elder_terms::SerialCarrierTracker tracker(
+      elder_terms::SerialCarrierDetect::ignore);
+
+  expect_true(tracker.update(monitor.read()) ==
+                  elder_terms::SerialCarrierEvent::none,
+              "ignore should not arm serial signal disconnect detection");
+  expect_true(tracker.update(monitor.read()) ==
+                  elder_terms::SerialCarrierEvent::none,
+              "ignore should keep the session across every signal drop");
+}
+
 static void test_modem_status_maps_all_indicator_lines() {
   const elder_terms::SerialLineSignals signals =
       elder_terms::serial_line_signals_from_modem_status(
@@ -141,6 +157,8 @@ int main() {
         test_initial_low_does_not_disconnect_until_high_seen();
     elder_terms_serial_line_monitor_test::
         test_selected_signal_controls_disconnect();
+    elder_terms_serial_line_monitor_test::
+        test_ignore_never_reports_signal_disconnects();
     elder_terms_serial_line_monitor_test::
         test_modem_status_maps_all_indicator_lines();
     elder_terms_serial_line_monitor_test::

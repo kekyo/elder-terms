@@ -218,6 +218,43 @@ const expectSerialActivityIndicatorsVisibleInitialState = async (
 };
 
 describe.concurrent('elder-terms-vte serial session', () => {
+  it('keeps an ignored carrier session active without modem-line polling', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const helper = await startSerialPtyHelper();
+      try {
+        const configPath = join(directory, 'serial-ignore-carrier.ini');
+        const serialDevicePath = join(directory, 'ttyELDERTERMS0');
+        await symlink(helper.slavePath, serialDevicePath);
+        await writeFile(
+          configPath,
+          `[general]\ntype=serial\n\n[terminal]\nauto_close=true\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=ignore\n`,
+          'utf8'
+        );
+
+        await runGtkTest(
+          context,
+          ['-c', configPath, '--test-latch-activity-indicators'],
+          async (app) => {
+            await pressKeyUntilReceivedAndSdIndicatorOn(app, helper, 'a', '61');
+            helper.writeCommand('TX ignored-carrier-input');
+            await waitForActivityIndicatorImageState(app, 'rd', 'on');
+            await waitForActivityIndicatorImageState(app, 'conn', 'on');
+            await expectDisconnectedNoticeHidden(app);
+
+            const output = await app.output();
+            expect(output.exitCode).toBeNull();
+            expect(output.stderr).not.toContain(
+              'invalid configuration value [serial] carrier_detect'
+            );
+            expect(output.stderr).not.toContain('serial carrier detection');
+          }
+        );
+      } finally {
+        await helper.close();
+      }
+    });
+  });
+
   it('connects to a PTY serial device and transfers data in both directions', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const helper = await startSerialPtyHelper();

@@ -25,6 +25,10 @@ SerialCarrierTracker::SerialCarrierTracker(
 }
 
 SerialCarrierEvent SerialCarrierTracker::update(SerialLineSignals signals) {
+  if (carrier_detect == SerialCarrierDetect::ignore) {
+    return SerialCarrierEvent::none;
+  }
+
   const bool high = selected_signal_is_high(signals);
   if (high) {
     observed_high = true;

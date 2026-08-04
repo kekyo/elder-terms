@@ -1361,6 +1361,40 @@ static void test_serial_profile() {
               "serial carrier detect should come from the configuration file");
 }
 
+static void test_serial_ignore_carrier_profile() {
+  const std::filesystem::path path =
+      temporary_config_path("serial-ignore-carrier-profile");
+  write_config(path,
+               "[general]\n"
+               "type=serial\n"
+               "\n"
+               "[serial]\n"
+               "device=/dev/ttyUSB0\n"
+               "carrier_detect=ignore\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  const TerminalConnectionProfile profile =
+      required_terminal_connection_profile(result.store);
+  const auto *settings =
+      std::get_if<SerialConnectionSettings>(&profile.settings);
+  expect_true(settings != nullptr,
+              "ignored carrier profile should remain a serial profile");
+  expect_true(settings->carrier_detect == SerialCarrierDetect::ignore,
+              "ignore should disable serial carrier signal monitoring");
+  expect_true(elder_terms::serial_carrier_detect_to_string(
+                  settings->carrier_detect) == "ignore",
+              "ignored serial carrier detection should round trip");
+  expect_true(result.warnings.empty(),
+              "ignore should be accepted without configuration warnings");
+}
+
 static void test_invalid_values_fall_back_to_defaults() {
   const std::filesystem::path path = temporary_config_path("invalid-values");
   write_config(path,
@@ -1928,7 +1962,7 @@ static void test_save_serial_settings_omits_default_values() {
   set_setting_value(&store, serial_flow_control_setting_key(),
                     elder_terms::SettingValue{std::string("hard")});
   set_setting_value(&store, serial_carrier_detect_setting_key(),
-                    elder_terms::SettingValue{std::string("cts")});
+                    elder_terms::SettingValue{std::string("ignore")});
 
   const SettingsSaveResult result = save_settings(store, path);
   expect_true(result.saved, "serial settings save should succeed");
@@ -1955,7 +1989,7 @@ static void test_save_serial_settings_omits_default_values() {
               "saved settings should include non-default serial stop bit");
   expect_true(content.find("flow_control=hard") != std::string::npos,
               "saved settings should include non-default serial flow control");
-  expect_true(content.find("carrier_detect=cts") != std::string::npos,
+  expect_true(content.find("carrier_detect=ignore") != std::string::npos,
               "saved settings should include non-default serial carrier detect");
 }
 
@@ -2952,6 +2986,7 @@ int main() {
         test_sftp_profile_uses_ssh_endpoint_without_terminal_profile();
     elder_terms_settings_test::test_sftp_missing_ssh_address_warns();
     elder_terms_settings_test::test_serial_profile();
+    elder_terms_settings_test::test_serial_ignore_carrier_profile();
     elder_terms_settings_test::test_transfer_base_path_setting();
     elder_terms_settings_test::test_transfer_text_send_bytes_per_second_setting();
     elder_terms_settings_test::test_transfer_zmodem_autostart_setting();

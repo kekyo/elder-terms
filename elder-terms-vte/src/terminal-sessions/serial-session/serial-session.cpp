@@ -121,6 +121,9 @@ static bool serial_line_error_indicates_connection_lost(
 
 static bool selected_carrier_signal_is_high(SerialLineSignals signals,
                                             SerialCarrierDetect carrier_detect) {
+  if (carrier_detect == SerialCarrierDetect::ignore) {
+    return true;
+  }
   if (carrier_detect == SerialCarrierDetect::cts) {
     return signals.cts;
   }
@@ -428,6 +431,11 @@ private:
     }
 
     carrier_task.reset();
+    if (settings.carrier_detect == SerialCarrierDetect::ignore) {
+      notify_serial_line_state({});
+      handle_carrier_connected();
+      return;
+    }
     if (check_carrier_state(fd) != CarrierCheckResult::supported) {
       return;
     }
