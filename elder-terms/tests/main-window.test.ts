@@ -14,7 +14,15 @@ import { fileURLToPath } from 'node:url';
 import type { GtkApp, GtkWidgetElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { describe, expect, it } from 'vitest';
-import { expectElementKind, runLauncherGtkTest } from './test-helpers';
+import {
+  expectCaptureToMatchFixture,
+  expectElementKind,
+  runLauncherGtkTest,
+} from './test-helpers';
+
+const terminalEntriesFixturePath = fileURLToPath(
+  new URL('./fixtures/launcher-terminal-entries.png', import.meta.url)
+);
 
 const japaneseTestEnvironment = {
   ELDER_TERMS_LOCALE_DIR: fileURLToPath(
@@ -510,6 +518,8 @@ describe('elder-terms main window', () => {
         await app.getById('main_window'),
         'window'
       );
+      const splitPane = await app.getById('split_pane');
+      const terminalEntriesLabel = await app.getById('terminal_entries_label');
       const left = await app.getById('connection_scroller');
       const right = await app.getById('details_stack');
       const list = await app.getById('connection_list');
@@ -518,11 +528,25 @@ describe('elder-terms main window', () => {
       const connect = await app.getById('connect_button');
 
       expect(['table', 'tree']).toContain(list.kind);
+      expect((await terminalEntriesLabel.info()).name).toBe('Terminal entries');
       expect((await connect.info()).name).toBe('Launch');
       await expectInsensitive(apply);
       await expectInsensitive(connect);
-      expect((await left.capture()).bounds.x).toBeLessThan(
+      const terminalEntriesCapture = await terminalEntriesLabel.capture();
+      const leftCapture = await left.capture();
+      expect(terminalEntriesCapture.bounds.y).toBeLessThan(
+        leftCapture.bounds.y
+      );
+      expect(leftCapture.bounds.x).toBeLessThan(
         (await right.capture()).bounds.x
+      );
+
+      const splitPaneCapture = await splitPane.capture();
+      expect(splitPaneCapture.clipped).toBe(false);
+      await expectCaptureToMatchFixture(
+        splitPaneCapture,
+        'launcher-terminal-entries',
+        terminalEntriesFixturePath
       );
 
       const initialBounds = await window.moveTo(100, 100);

@@ -51,6 +51,8 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
       .builder = builder,
       .window = required_widget(builder, "main_window"),
       .split_pane = required_widget(builder, "split_pane"),
+      .terminal_entries_label =
+          required_widget(builder, "terminal_entries_label"),
       .connection_scroller =
           required_widget(builder, "connection_scroller"),
       .connection_list = required_widget(builder, "connection_list"),
@@ -70,6 +72,7 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
       .connect_button = required_widget(builder, "connect_button"),
   };
   if (result.window == nullptr || result.split_pane == nullptr ||
+      result.terminal_entries_label == nullptr ||
       result.connection_scroller == nullptr ||
       result.connection_list == nullptr || result.connection_store == nullptr ||
       result.connection_name_renderer == nullptr ||

@@ -1,23 +1,32 @@
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { TestContext } from 'vitest';
 import {
   createGtkAppLauncher,
   type GtkApp,
   type GtkAppEnvironment,
+  type GtkCapture,
   type GtkElementOfKind,
   type GtkWidgetElement,
   type GtkWidgetKind,
 } from 'gestament';
+import {
+  createGtkCaptureExpect,
+  type GtkCaptureLookSimilarOptions,
+} from 'gestament/testing';
 
 const defaultAppPath = fileURLToPath(
   new URL('../../.build/elder-terms/elder-terms', import.meta.url)
 );
 const x11MapRecorderPath = fileURLToPath(
   new URL('../../.build/elder-terms/x11-map-recorder', import.meta.url)
+);
+const launcherTestResultsDirectory = fileURLToPath(
+  new URL('../../test-results/launcher/', import.meta.url)
 );
 
 /** One top-level X11 window map observed during a launcher test. */
@@ -323,6 +332,47 @@ export const expectElementKind = <Kind extends GtkWidgetKind>(
 ): GtkElementOfKind<Kind> => {
   expect(element.kind).toBe(kind);
   return element as GtkElementOfKind<Kind>;
+};
+
+/**
+ * Compares a launcher capture with a committed fixture image.
+ *
+ * @remarks Set `ELDER_TERMS_UPDATE_LAUNCHER_FIXTURES=1` to replace the
+ * fixture with the current capture before comparing it.
+ *
+ * @param capture Actual launcher capture.
+ * @param name Comparison and evidence name.
+ * @param fixturePath Expected PNG path.
+ * @param options Optional visual comparison tolerances.
+ * @returns Promise resolved after the visual comparison passes.
+ */
+export const expectCaptureToMatchFixture = async (
+  capture: GtkCapture,
+  name: string,
+  fixturePath: string,
+  options?: GtkCaptureLookSimilarOptions
+): Promise<void> => {
+  if (process.env.ELDER_TERMS_UPDATE_LAUNCHER_FIXTURES === '1') {
+    await mkdir(dirname(fixturePath), { recursive: true });
+    await writeFile(fixturePath, capture.image);
+  }
+  if (!existsSync(fixturePath)) {
+    throw new Error(`missing launcher capture fixture: ${fixturePath}`);
+  }
+
+  const visualExpect = createGtkCaptureExpect({
+    outputResultPath: launcherTestResultsDirectory,
+    variant: 'comparisons',
+  });
+  try {
+    await visualExpect.expectCapture(capture, name).toLookSimilar(fixturePath, {
+      maxDiffPixels: 0,
+      threshold: 0.01,
+      ...options,
+    });
+  } finally {
+    await visualExpect.release();
+  }
 };
 
 /**

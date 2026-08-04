@@ -16,6 +16,8 @@ struct LauncherMainWindow {
   GtkWidget *window = nullptr;
   /** Resizable connection/details split pane. */
   GtkWidget *split_pane = nullptr;
+  /** Heading above the terminal connection list. */
+  GtkWidget *terminal_entries_label = nullptr;
   /** Scroller containing the connection list. */
   GtkWidget *connection_scroller = nullptr;
   /** Connection tree view. */
