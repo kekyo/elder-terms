@@ -1180,10 +1180,10 @@ describe('elder-terms main window', () => {
         },
         { message: 'selection change should show discard confirmation' }
       );
-      await expectElementKind(
-        await app.getById('discard_changes_button'),
-        'button'
-      ).click();
+      const discardChanges = await waitForResult(async () =>
+        expectElementKind(await app.getById('discard_changes_button'), 'button')
+      );
+      await discardChanges.click();
       await waitForResult(async () => {
         expect(Number(await width.text())).toBe(99);
       });

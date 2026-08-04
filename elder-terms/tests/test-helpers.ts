@@ -403,6 +403,9 @@ export const runLauncherGtkTest = async (
       XDG_CONFIG_HOME: configHome,
       ...options?.env,
     },
+    xvfbPool: {
+      type: 'xvfb',
+    },
     xvfbTrayHost: options?.xvfbTrayHost ?? true,
   });
   let x11MapRecorder: X11MapRecorder | undefined;
