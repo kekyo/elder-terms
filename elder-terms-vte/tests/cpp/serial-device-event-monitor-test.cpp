@@ -1,4 +1,4 @@
-#include "../../src/terminal-sessions/serial-session/serial-device-event-monitor.h"
+#include <elder-terms/serial-device-event-monitor.h>
 
 #ifndef ELDER_TERMS_ENABLE_TEST_DOUBLES
 #error "serial-device-event-monitor-test must be built with test doubles enabled"

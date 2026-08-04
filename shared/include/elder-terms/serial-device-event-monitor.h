@@ -1,9 +1,11 @@
 #pragma once
 
-#include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
+
+#include <elder-terms/export.h>
+#include <elder-terms/serial-device.h>
 
 namespace elder_terms {
 
@@ -16,8 +18,8 @@ using SerialDeviceEventCallback = std::function<void()>;
  * Options controlling serial device event monitoring.
  */
 struct SerialDeviceEventMonitorOptions {
-  /** Root used for Linux device files. */
-  std::filesystem::path dev_root = "/dev";
+  /** Filesystem roots used by serial device discovery. */
+  SerialDevicePaths paths;
 #ifdef ELDER_TERMS_ENABLE_TEST_DOUBLES
   /** Enables real udev and filesystem sources in tests. */
   bool enable_system_sources = true;
@@ -27,45 +29,55 @@ struct SerialDeviceEventMonitorOptions {
 /**
  * Event-driven monitor for serial device add/remove activity.
  */
-class SerialDeviceEventMonitor {
+class ELDER_TERMS_API SerialDeviceEventMonitor {
 public:
   /**
-   * Creates a monitor for a serial device selector.
+   * Creates a monitor for all serial device choices.
    *
-   * @param selector Value of [serial] device.
    * @param callback Callback invoked after relevant udev or filesystem events.
    */
-  SerialDeviceEventMonitor(std::string selector,
-                           SerialDeviceEventCallback callback);
+  explicit SerialDeviceEventMonitor(SerialDeviceEventCallback callback);
 
   /**
-   * Creates a monitor for a serial device selector with custom roots.
+   * Creates a monitor for all serial device choices with custom roots.
    *
-   * @param selector Value of [serial] device.
    * @param options Monitor options.
    * @param callback Callback invoked after relevant udev or filesystem events.
    */
-  SerialDeviceEventMonitor(std::string selector,
-                           SerialDeviceEventMonitorOptions options,
+  SerialDeviceEventMonitor(SerialDeviceEventMonitorOptions options,
                            SerialDeviceEventCallback callback);
 
   /**
-   * Stops the monitor and releases resources.
+   * Creates a monitor for one configured serial device target.
+   *
+   * @param target Configured serial device target.
+   * @param callback Callback invoked after relevant udev or filesystem events.
    */
+  SerialDeviceEventMonitor(std::string target,
+                           SerialDeviceEventCallback callback);
+
+  /**
+   * Creates a monitor for one configured serial device target with custom roots.
+   *
+   * @param target Configured serial device target.
+   * @param options Monitor options.
+   * @param callback Callback invoked after relevant udev or filesystem events.
+   */
+  SerialDeviceEventMonitor(std::string target,
+                           SerialDeviceEventMonitorOptions options,
+                           SerialDeviceEventCallback callback);
+
+  /** Stops the monitor and releases resources. */
   ~SerialDeviceEventMonitor();
 
   SerialDeviceEventMonitor(const SerialDeviceEventMonitor &) = delete;
   SerialDeviceEventMonitor &
   operator=(const SerialDeviceEventMonitor &) = delete;
 
-  /**
-   * Starts udev and filesystem monitoring.
-   */
+  /** Starts udev and filesystem monitoring. */
   void start();
 
-  /**
-   * Stops monitoring and cancels pending callbacks.
-   */
+  /** Stops monitoring and cancels pending callbacks. */
   void stop();
 
   /**
@@ -76,9 +88,7 @@ public:
   bool has_event_sources() const;
 
 #ifdef ELDER_TERMS_ENABLE_TEST_DOUBLES
-  /**
-   * Injects one device event for tests.
-   */
+  /** Injects one device event for tests. */
   void notify_device_event_for_test();
 #endif
 

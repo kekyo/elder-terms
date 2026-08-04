@@ -61,8 +61,6 @@ elder_terms_sources = [
   'src/terminal-transfer-runner.cpp',
   'src/terminal-zmodem-auto-start.cpp',
   'src/terminal-sessions/local-session/local-session.cpp',
-  'src/terminal-sessions/serial-session/serial-device-event-monitor.cpp',
-  'src/terminal-sessions/serial-session/serial-device-resolver.cpp',
   'src/terminal-sessions/serial-session/serial-line-monitor.cpp',
   'src/terminal-sessions/serial-session/serial-session.cpp',
   'src/terminal-sessions/serial-session/serial-termios.cpp',
@@ -404,24 +402,12 @@ foreach direction : terminal_transfer_test_directions
   )
 endforeach
 
-serial_device_resolver_test = executable(
-  'serial-device-resolver-test',
-  [
-    'tests/cpp/serial-device-resolver-test.cpp',
-    'src/terminal-sessions/serial-session/serial-device-resolver.cpp',
-  ],
-  dependencies: [
-    elder_terms_dep,
-  ],
-)
-
-test('serial-device-resolver-test', serial_device_resolver_test)
-
 serial_device_event_monitor_test = executable(
   'serial-device-event-monitor-test',
   [
     'tests/cpp/serial-device-event-monitor-test.cpp',
-    'src/terminal-sessions/serial-session/serial-device-event-monitor.cpp',
+    '../shared/src/serial-device.cpp',
+    '../shared/src/serial-device-event-monitor.cpp',
   ],
   cpp_args: [
     '-DELDER_TERMS_ENABLE_TEST_DOUBLES=1',
@@ -430,6 +416,7 @@ serial_device_event_monitor_test = executable(
     gio_dep,
     libudev_dep,
   ],
+  include_directories: elder_terms_shared_include_dir,
 )
 
 test('serial-device-event-monitor-test', serial_device_event_monitor_test)

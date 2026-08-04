@@ -11,6 +11,8 @@ static constexpr gint64 default_serial_bits = 8;
 static constexpr gint64 default_serial_stop_bit = 1;
 static constexpr char serial_section[] = "serial";
 static constexpr char serial_device_key[] = "device";
+static constexpr char serial_device_match_mode_key[] = "device_match_mode";
+static constexpr char serial_device_usb_serial_key[] = "device_usb_serial";
 static constexpr char serial_baudrate_key[] = "baudrate";
 static constexpr char serial_bits_key[] = "bits";
 static constexpr char serial_parity_key[] = "parity";
@@ -37,6 +39,16 @@ static bool validate_baudrate(const SettingValue &value, std::string *reason) {
   const auto *integer = std::get_if<gint64>(&value);
   if (integer == nullptr || *integer < 150 || *integer > 8000000) {
     *reason = "must be an integer between 150 and 8000000";
+    return false;
+  }
+  return true;
+}
+
+static bool validate_device_match_mode(const SettingValue &value,
+                                       std::string *reason) {
+  const auto *text = std::get_if<std::string>(&value);
+  if (text == nullptr || !parse_serial_device_match_mode(*text).has_value()) {
+    *reason = "must be path, by-id, or by-path";
     return false;
   }
   return true;
@@ -138,6 +150,14 @@ SettingKey serial_device_setting_key() {
   return serial_key(serial_device_key);
 }
 
+SettingKey serial_device_match_mode_setting_key() {
+  return serial_key(serial_device_match_mode_key);
+}
+
+SettingKey serial_device_usb_serial_setting_key() {
+  return serial_key(serial_device_usb_serial_key);
+}
+
 SettingKey serial_baudrate_setting_key() {
   return serial_key(serial_baudrate_key);
 }
@@ -166,6 +186,16 @@ std::vector<SettingDefinition> serial_connection_setting_definitions() {
   return {
       {
           .key = serial_device_setting_key(),
+          .default_value = SettingValue{std::string()},
+          .validate = nullptr,
+      },
+      {
+          .key = serial_device_match_mode_setting_key(),
+          .default_value = SettingValue{std::string("by-id")},
+          .validate = validate_device_match_mode,
+      },
+      {
+          .key = serial_device_usb_serial_setting_key(),
           .default_value = SettingValue{std::string()},
           .validate = nullptr,
       },
@@ -211,9 +241,25 @@ serial_connection_settings(const SettingsStore &store) {
   if (string_is_blank(device)) {
     device.clear();
   }
+  std::string usb_serial = setting_string_value_or_default(
+      store, serial_device_usb_serial_setting_key(), std::string());
+  if (string_is_blank(usb_serial)) {
+    usb_serial.clear();
+  }
+  const SerialDeviceMatchMode match_mode = parse_serial_device_match_mode(
+      setting_string_value_or_default(store,
+                                      serial_device_match_mode_setting_key(),
+                                      "by-id"))
+                                                .value_or(
+                                                    SerialDeviceMatchMode::stable_id);
 
   return {
       .device = std::move(device),
+      .device_match_mode = match_mode,
+      .device_usb_serial =
+          usb_serial.empty()
+              ? std::nullopt
+              : std::optional<std::string>(std::move(usb_serial)),
       .baudrate = setting_integer_value_or_default(
           store, serial_baudrate_setting_key(), default_serial_baudrate),
       .bits = setting_integer_value_or_default(

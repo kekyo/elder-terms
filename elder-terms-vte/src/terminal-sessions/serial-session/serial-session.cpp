@@ -32,8 +32,8 @@
 #include "../../terminal-transfer-runner.h"
 #include "../../terminal-zmodem-auto-start.h"
 #include "../terminal-view-io.h"
-#include "serial-device-resolver.h"
-#include "serial-device-event-monitor.h"
+#include <elder-terms/serial-device-event-monitor.h>
+#include <elder-terms/serial-device.h>
 #include "serial-line-monitor.h"
 #include "serial-termios.h"
 
@@ -449,8 +449,9 @@ private:
       co_return serial_fd >= 0;
     }
 
-    const SerialDeviceResolveResult resolve_result =
-        resolve_serial_device(settings.device);
+    const SerialDeviceResolveResult resolve_result = resolve_serial_device(
+        settings.device_match_mode, settings.device,
+        settings.device_usb_serial);
     if (!resolve_result.resolved) {
       if (!connection_warning_reported) {
         for (const std::string &warning : resolve_result.warnings) {
@@ -1122,10 +1123,16 @@ public:
     (void)terminal_io.apply_text_settings(profile.text_settings);
 
     const std::string current_device = settings.device;
+    const SerialDeviceMatchMode current_device_match_mode =
+        settings.device_match_mode;
+    const std::optional<std::string> current_device_usb_serial =
+        settings.device_usb_serial;
     const SerialCarrierDetect previous_carrier_detect =
         settings.carrier_detect;
     SerialConnectionSettings next_settings = *updated_settings;
     next_settings.device = current_device;
+    next_settings.device_match_mode = current_device_match_mode;
+    next_settings.device_usb_serial = current_device_usb_serial;
     settings = std::move(next_settings);
 
     if (settings.carrier_detect != previous_carrier_detect) {

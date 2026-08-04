@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
-import { readFile, rm, symlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { GtkApp } from 'gestament';
@@ -562,6 +562,93 @@ describe.concurrent('elder-terms-vte serial session', () => {
             title: connectedTitle,
           });
         });
+      } finally {
+        await firstHelper?.close();
+        await secondHelper?.close();
+      }
+    });
+  });
+
+  it('reconnects through a renamed stable ID by its USB serial identity', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'serial-stable-id.ini');
+      const devRoot = join(directory, 'dev');
+      const byIdRoot = join(directory, 'by-id');
+      const byPathRoot = join(directory, 'by-path');
+      const sysClassTtyRoot = join(directory, 'sys-class-tty');
+      const firstTarget = join(byIdRoot, 'usb-elder-old');
+      const secondTarget = join(byIdRoot, 'usb-elder-renamed');
+      const usbSerial = 'FT12345678901234';
+      let firstHelper: SerialPtyHelper | undefined;
+      let secondHelper: SerialPtyHelper | undefined;
+
+      const addUsbMetadata = async (slavePath: string): Promise<void> => {
+        const deviceDirectory = join(
+          sysClassTtyRoot,
+          basename(slavePath),
+          'device'
+        );
+        await mkdir(deviceDirectory, { recursive: true });
+        await writeFile(join(deviceDirectory, 'serial'), `${usbSerial}\n`);
+      };
+
+      try {
+        await Promise.all([
+          mkdir(devRoot, { recursive: true }),
+          mkdir(byIdRoot, { recursive: true }),
+          mkdir(byPathRoot, { recursive: true }),
+        ]);
+        firstHelper = await startSerialPtyHelper();
+        await addUsbMetadata(firstHelper.slavePath);
+        await symlink(firstHelper.slavePath, firstTarget);
+        await writeFile(
+          configPath,
+          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=${firstTarget}\ndevice_match_mode=by-id\ndevice_usb_serial=${usbSerial}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+          'utf8'
+        );
+
+        await runGtkTest(
+          context,
+          ['-c', configPath],
+          async (app) => {
+            const activeFirstHelper = firstHelper;
+            if (activeFirstHelper === undefined) {
+              throw new Error('first serial PTY helper is not running');
+            }
+            await pressKeyUntilReceived(app, activeFirstHelper, 'a', '61');
+            await waitForActivityIndicatorImageState(app, 'conn', 'on');
+
+            await firstHelper?.close();
+            await rm(firstTarget, { force: true });
+            await toPass(
+              async () => {
+                await app.input.pressKey('x');
+                expect((await app.output()).stderr).toMatch(
+                  /serial (device not found|open failed|read failed|write failed|carrier detection failed)/
+                );
+              },
+              {
+                message: 'serial session should notice the stable device loss',
+                timeoutMs: 7_000,
+              }
+            );
+            await waitForActivityIndicatorImageState(app, 'conn', 'off');
+
+            secondHelper = await startSerialPtyHelper();
+            await addUsbMetadata(secondHelper.slavePath);
+            await symlink(secondHelper.slavePath, secondTarget);
+            await pressKeyUntilReceived(app, secondHelper, 'b', '62');
+            await waitForActivityIndicatorImageState(app, 'conn', 'on');
+          },
+          {
+            env: {
+              ELDER_TERMS_SERIAL_BY_ID_ROOT: byIdRoot,
+              ELDER_TERMS_SERIAL_BY_PATH_ROOT: byPathRoot,
+              ELDER_TERMS_SERIAL_DEV_ROOT: devRoot,
+              ELDER_TERMS_SERIAL_SYS_CLASS_TTY_ROOT: sysClassTtyRoot,
+            },
+          }
+        );
       } finally {
         await firstHelper?.close();
         await secondHelper?.close();

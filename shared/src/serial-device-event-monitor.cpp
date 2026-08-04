@@ -1,4 +1,4 @@
-#include "serial-device-event-monitor.h"
+#include <elder-terms/serial-device-event-monitor.h>
 
 #include <libudev.h>
 
@@ -8,6 +8,7 @@
 #include <cerrno>
 #include <cstring>
 #include <iostream>
+#include <optional>
 #include <set>
 #include <system_error>
 #include <utility>
@@ -36,16 +37,18 @@ static bool path_is_under_root(const std::filesystem::path &path,
          starts_with(normalized_path, normalized_root + "/");
 }
 
-static bool selector_can_use_udev_events(
-    const std::string &selector,
+static bool target_can_use_udev_events(
+    const std::optional<std::string> &target,
     const SerialDeviceEventMonitorOptions &options) {
-  if (!contains_slash(selector)) {
+  if (!target.has_value() || !contains_slash(*target)) {
     return true;
   }
 
-  const std::filesystem::path selector_path(selector);
-  return selector_path.is_absolute() &&
-         path_is_under_root(selector_path, options.dev_root);
+  const std::filesystem::path target_path(*target);
+  return target_path.is_absolute() &&
+         (path_is_under_root(target_path, options.paths.dev_root) ||
+          path_is_under_root(target_path, options.paths.by_id_root) ||
+          path_is_under_root(target_path, options.paths.by_path_root));
 }
 
 static void remove_source(guint *source_id) {
@@ -55,32 +58,36 @@ static void remove_source(guint *source_id) {
   }
 }
 
-static std::vector<std::filesystem::path>
-serial_device_watch_directories(const std::string &selector,
-                                const SerialDeviceEventMonitorOptions &options) {
+static std::vector<std::filesystem::path> serial_device_watch_directories(
+    const std::optional<std::string> &target,
+    const SerialDeviceEventMonitorOptions &options) {
+  if (!target.has_value()) {
+    return {
+        options.paths.dev_root,
+        options.paths.by_id_root,
+        options.paths.by_id_root.parent_path(),
+        options.paths.by_path_root,
+        options.paths.by_path_root.parent_path(),
+    };
+  }
+
   std::vector<std::filesystem::path> directories;
-  const std::filesystem::path selector_path(selector);
-  const std::filesystem::path by_path_root =
-      options.dev_root / "serial" / "by-path";
-  const std::string by_path_prefix =
-      by_path_root.lexically_normal().string() + "/";
-  const std::string normalized_selector =
-      selector_path.lexically_normal().string();
-
-  if (starts_with(normalized_selector, by_path_prefix)) {
-    directories.push_back(selector_path.parent_path());
-    directories.push_back(selector_path.parent_path().parent_path());
+  const std::filesystem::path target_path(*target);
+  if (path_is_under_root(target_path, options.paths.by_path_root)) {
+    directories.push_back(target_path.parent_path());
+    directories.push_back(options.paths.by_path_root.parent_path());
     return directories;
   }
 
-  if (!contains_slash(selector)) {
-    directories.push_back(options.dev_root / "serial" / "by-id");
-    directories.push_back(options.dev_root / "serial");
+  if (path_is_under_root(target_path, options.paths.by_id_root) ||
+      !contains_slash(*target)) {
+    directories.push_back(options.paths.by_id_root);
+    directories.push_back(options.paths.by_id_root.parent_path());
     return directories;
   }
 
-  if (selector_path.is_absolute()) {
-    directories.push_back(selector_path.parent_path());
+  if (target_path.is_absolute()) {
+    directories.push_back(target_path.parent_path());
   }
   return directories;
 }
@@ -89,13 +96,20 @@ static bool serial_udev_action_is_relevant(const char *action) {
   if (action == nullptr) {
     return true;
   }
-  return std::strcmp(action, "add") == 0 || std::strcmp(action, "change") == 0 ||
+  return std::strcmp(action, "add") == 0 ||
+         std::strcmp(action, "change") == 0 ||
          std::strcmp(action, "remove") == 0;
+}
+
+static SerialDeviceEventMonitorOptions host_monitor_options() {
+  SerialDeviceEventMonitorOptions options;
+  options.paths = host_serial_device_paths();
+  return options;
 }
 
 class SerialDeviceEventMonitor::Impl {
 private:
-  std::string selector;
+  std::optional<std::string> target;
   SerialDeviceEventMonitorOptions options;
   SerialDeviceEventCallback callback;
   udev *udev_context = nullptr;
@@ -147,8 +161,7 @@ private:
       return;
     }
 
-    udev_device_monitor =
-        udev_monitor_new_from_netlink(udev_context, "udev");
+    udev_device_monitor = udev_monitor_new_from_netlink(udev_context, "udev");
     if (udev_device_monitor == nullptr) {
       std::cerr << "Warning: serial device udev monitor unavailable: "
                 << "udev_monitor_new_from_netlink failed" << '\n';
@@ -217,7 +230,7 @@ private:
   void start_file_monitors() {
     std::set<std::string> watched_directories;
     for (const std::filesystem::path &directory :
-         serial_device_watch_directories(selector, options)) {
+         serial_device_watch_directories(target, options)) {
       watch_directory(directory, &watched_directories);
     }
   }
@@ -270,10 +283,10 @@ private:
   }
 
 public:
-  Impl(std::string selector, SerialDeviceEventMonitorOptions options,
+  Impl(std::optional<std::string> target,
+       SerialDeviceEventMonitorOptions options,
        SerialDeviceEventCallback callback)
-      : selector(std::move(selector)),
-        options(std::move(options)),
+      : target(std::move(target)), options(std::move(options)),
         callback(std::move(callback)) {
   }
 
@@ -310,8 +323,7 @@ public:
     if (!file_monitors.empty()) {
       return true;
     }
-    return udev_watch_id != 0 && selector_can_use_udev_events(selector,
-                                                              options);
+    return udev_watch_id != 0 && target_can_use_udev_events(target, options);
   }
 
 #ifdef ELDER_TERMS_ENABLE_TEST_DOUBLES
@@ -322,16 +334,28 @@ public:
 };
 
 SerialDeviceEventMonitor::SerialDeviceEventMonitor(
-    std::string selector, SerialDeviceEventCallback callback)
-    : SerialDeviceEventMonitor(std::move(selector),
-                               SerialDeviceEventMonitorOptions{},
+    SerialDeviceEventCallback callback)
+    : SerialDeviceEventMonitor(host_monitor_options(), std::move(callback)) {
+}
+
+SerialDeviceEventMonitor::SerialDeviceEventMonitor(
+    SerialDeviceEventMonitorOptions options,
+    SerialDeviceEventCallback callback)
+    : impl(std::make_unique<Impl>(std::nullopt, std::move(options),
+                                  std::move(callback))) {
+}
+
+SerialDeviceEventMonitor::SerialDeviceEventMonitor(
+    std::string target, SerialDeviceEventCallback callback)
+    : SerialDeviceEventMonitor(std::move(target),
+                               host_monitor_options(),
                                std::move(callback)) {
 }
 
 SerialDeviceEventMonitor::SerialDeviceEventMonitor(
-    std::string selector, SerialDeviceEventMonitorOptions options,
+    std::string target, SerialDeviceEventMonitorOptions options,
     SerialDeviceEventCallback callback)
-    : impl(std::make_unique<Impl>(std::move(selector), std::move(options),
+    : impl(std::make_unique<Impl>(std::move(target), std::move(options),
                                   std::move(callback))) {
 }
 

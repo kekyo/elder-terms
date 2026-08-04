@@ -54,6 +54,7 @@ using elder_terms::save_settings;
 using elder_terms::save_global_settings;
 using elder_terms::SerialCarrierDetect;
 using elder_terms::SerialConnectionSettings;
+using elder_terms::SerialDeviceMatchMode;
 using elder_terms::SerialFlowControl;
 using elder_terms::SerialParity;
 using elder_terms::serial_baudrate_setting_key;
@@ -61,6 +62,8 @@ using elder_terms::serial_bits_setting_key;
 using elder_terms::serial_carrier_detect_setting_key;
 using elder_terms::serial_connection_settings;
 using elder_terms::serial_device_setting_key;
+using elder_terms::serial_device_match_mode_setting_key;
+using elder_terms::serial_device_usb_serial_setting_key;
 using elder_terms::serial_flow_control_setting_key;
 using elder_terms::serial_parity_setting_key;
 using elder_terms::serial_stop_bit_setting_key;
@@ -1311,6 +1314,8 @@ static void test_serial_profile() {
                "\n"
                "[serial]\n"
                "device=/dev/ttyUSB0\n"
+               "device_match_mode=by-path\n"
+               "device_usb_serial=FT123456\n"
                "baudrate=115200\n"
                "bits=7\n"
                "parity=e\n"
@@ -1336,6 +1341,12 @@ static void test_serial_profile() {
               "configured connection settings should be serial settings");
   expect_true(settings->device == "/dev/ttyUSB0",
               "serial device should come from the configuration file");
+  expect_true(settings->device_match_mode ==
+                  SerialDeviceMatchMode::physical_port,
+              "serial match mode should come from the configuration file");
+  expect_true(settings->device_usb_serial ==
+                  std::optional<std::string>("FT123456"),
+              "serial USB identity should come from the configuration file");
   expect_true(settings->baudrate == 115200,
               "serial baudrate should come from the configuration file");
   expect_true(settings->bits == 7,
@@ -1428,6 +1439,7 @@ static void test_invalid_serial_values_fall_back_to_defaults() {
                "type=serial\n"
                "\n"
                "[serial]\n"
+               "device_match_mode=invalid\n"
                "baudrate=149\n"
                "bits=9\n"
                "parity=x\n"
@@ -1451,6 +1463,8 @@ static void test_invalid_serial_values_fall_back_to_defaults() {
               "serial profile should still be selected after invalid values");
   expect_true(settings->device.empty(),
               "missing serial device should fall back to default");
+  expect_true(settings->device_match_mode == SerialDeviceMatchMode::stable_id,
+              "invalid serial match mode should fall back to stable ID");
   expect_true(settings->baudrate == 115200,
               "invalid serial baudrate should fall back to default");
   expect_true(settings->bits == 8,
@@ -1484,6 +1498,10 @@ static void test_invalid_serial_values_fall_back_to_defaults() {
       warnings_contain(result.warnings,
                        "invalid configuration value [serial] carrier_detect"),
       "invalid serial carrier detect should emit a warning");
+  expect_true(warnings_contain(
+                  result.warnings,
+                  "invalid configuration value [serial] device_match_mode"),
+              "invalid serial match mode should emit a warning");
   expect_true(warnings_contain(
                   result.warnings,
                   "missing required configuration value [serial] device"),
@@ -1573,6 +1591,14 @@ static void test_public_setting_keys() {
               "serial device key should use the serial section");
   expect_true(serial_device_setting_key().name == "device",
               "serial device key should use the device name");
+  expect_true(serial_device_match_mode_setting_key().section == "serial" &&
+                  serial_device_match_mode_setting_key().name ==
+                      "device_match_mode",
+              "serial match mode key should use [serial] device_match_mode");
+  expect_true(serial_device_usb_serial_setting_key().section == "serial" &&
+                  serial_device_usb_serial_setting_key().name ==
+                      "device_usb_serial",
+              "serial USB identity key should use [serial] device_usb_serial");
   expect_true(serial_baudrate_setting_key().name == "baudrate",
               "serial baudrate key should use the baudrate name");
   expect_true(serial_bits_setting_key().name == "bits",
@@ -1887,6 +1913,10 @@ static void test_save_serial_settings_omits_default_values() {
                     elder_terms::SettingValue{std::string("serial")});
   set_setting_value(&store, serial_device_setting_key(),
                     elder_terms::SettingValue{std::string("/dev/ttyUSB0")});
+  set_setting_value(&store, serial_device_match_mode_setting_key(),
+                    elder_terms::SettingValue{std::string("by-path")});
+  set_setting_value(&store, serial_device_usb_serial_setting_key(),
+                    elder_terms::SettingValue{std::string("FT123456")});
   set_setting_value(&store, serial_baudrate_setting_key(),
                     elder_terms::SettingValue{gint64{57600}});
   set_setting_value(&store, serial_bits_setting_key(),
@@ -1911,6 +1941,10 @@ static void test_save_serial_settings_omits_default_values() {
               "saved settings should include non-default serial section");
   expect_true(content.find("device=/dev/ttyUSB0") != std::string::npos,
               "saved settings should include non-default serial device");
+  expect_true(content.find("device_match_mode=by-path") != std::string::npos,
+              "saved settings should include non-default serial match mode");
+  expect_true(content.find("device_usb_serial=FT123456") != std::string::npos,
+              "saved settings should include the serial USB identity");
   expect_true(content.find("baudrate=57600") != std::string::npos,
               "saved settings should include non-default serial baudrate");
   expect_true(content.find("bits=7") != std::string::npos,

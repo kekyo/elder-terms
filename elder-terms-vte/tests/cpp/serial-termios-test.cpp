@@ -10,6 +10,8 @@ namespace elder_terms_serial_termios_test {
 static elder_terms::SerialConnectionSettings default_settings() {
   return {
       .device = "/dev/ttyUSB0",
+      .device_match_mode = elder_terms::SerialDeviceMatchMode::exact_path,
+      .device_usb_serial = std::nullopt,
       .baudrate = 115200,
       .bits = 8,
       .parity = elder_terms::SerialParity::none,

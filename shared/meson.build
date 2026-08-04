@@ -1,5 +1,7 @@
 elder_terms_shared_glib_dep = dependency('glib-2.0')
+elder_terms_shared_gio_dep = dependency('gio-2.0')
 elder_terms_shared_gtk_dep = dependency('gtk+-3.0')
+elder_terms_shared_libudev_dep = dependency('libudev')
 elder_terms_shared_xkbcommon_dep = dependency('xkbcommon')
 elder_terms_shared_include_dir = include_directories('include')
 elder_terms_symbol_map = meson.current_source_dir() / 'elder-terms.map'
@@ -23,6 +25,8 @@ elder_terms_shared_sources = [
   'src/key-binding.cpp',
   'src/key-binding-input-widget.cpp',
   'src/localization.cpp',
+  'src/serial-device.cpp',
+  'src/serial-device-event-monitor.cpp',
   'src/settings/application-settings.cpp',
   'src/settings/general-settings.cpp',
   'src/settings/local-session-settings.cpp',
@@ -47,7 +51,9 @@ elder_terms_library = shared_library(
   include_directories: elder_terms_shared_include_dir,
   dependencies: [
     elder_terms_shared_glib_dep,
+    elder_terms_shared_gio_dep,
     elder_terms_shared_gtk_dep,
+    elder_terms_shared_libudev_dep,
     elder_terms_shared_xkbcommon_dep,
   ],
   gnu_symbol_visibility: 'inlineshidden',
@@ -62,7 +68,9 @@ elder_terms_dep = declare_dependency(
   link_with: elder_terms_library,
   dependencies: [
     elder_terms_shared_glib_dep,
+    elder_terms_shared_gio_dep,
     elder_terms_shared_gtk_dep,
+    elder_terms_shared_libudev_dep,
   ],
 )
 
@@ -75,6 +83,16 @@ elder_terms_shared_test = executable(
 )
 
 test('elder-terms-shared-test', elder_terms_shared_test)
+
+elder_terms_serial_device_test = executable(
+  'elder-terms-serial-device-test',
+  'tests/serial-device-test.cpp',
+  dependencies: [
+    elder_terms_dep,
+  ],
+)
+
+test('elder-terms-serial-device-test', elder_terms_serial_device_test)
 
 executable(
   'elder-terms-settings-widget-fixture',

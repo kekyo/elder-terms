@@ -1,11 +1,13 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include <glib.h>
 
 #include <elder-terms/export.h>
+#include <elder-terms/serial-device.h>
 #include <elder-terms/settings/settings-store.h>
 
 namespace elder_terms {
@@ -52,6 +54,10 @@ enum class SerialCarrierDetect {
 struct SerialConnectionSettings {
   /** Serial device path or identifier. */
   std::string device;
+  /** Strategy used to identify the serial device after reattachment. */
+  SerialDeviceMatchMode device_match_mode = SerialDeviceMatchMode::stable_id;
+  /** Remembered USB serial number used as a supplemental stable-ID match. */
+  std::optional<std::string> device_usb_serial;
   /** Serial baud rate. */
   gint64 baudrate;
   /** Data bits per character. */
@@ -80,6 +86,20 @@ serial_connection_setting_definitions();
  * @returns Setting key for the serial device selector.
  */
 ELDER_TERMS_API SettingKey serial_device_setting_key();
+
+/**
+ * Returns the setting key for [serial] device_match_mode.
+ *
+ * @returns Setting key for the serial device identification strategy.
+ */
+ELDER_TERMS_API SettingKey serial_device_match_mode_setting_key();
+
+/**
+ * Returns the setting key for [serial] device_usb_serial.
+ *
+ * @returns Setting key for the remembered USB serial number.
+ */
+ELDER_TERMS_API SettingKey serial_device_usb_serial_setting_key();
 
 /**
  * Returns the setting key for [serial] baudrate.
