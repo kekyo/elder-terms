@@ -4534,26 +4534,6 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       .tab_label = terminal_tab,
   });
 
-  if (state->mode == SettingsWidgetMode::connection) {
-    GtkWidget *macro_page = create_macro_page(state);
-    const std::string macro_tab_id = widget_id(state, "macro_tab");
-    GtkWidget *macro_tab = create_tab_button(
-        state, macro_page, settings_ui_text(SettingsUiText::macro_tab),
-        macro_tab_id.c_str());
-    gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), macro_page,
-                             macro_tab);
-    gtk_widget_show_all(macro_page);
-    gtk_widget_show_all(macro_tab);
-    gtk_widget_set_no_show_all(macro_page, TRUE);
-    gtk_widget_set_no_show_all(macro_tab, TRUE);
-    state->connection_pages.push_back({
-        .connection_types = {local_connection_type, telnet_connection_type,
-                             serial_connection_type, ssh_connection_type},
-        .page = macro_page,
-        .tab_label = macro_tab,
-    });
-  }
-
   GtkWidget *transfer_page = create_transfer_page(state);
   const std::string transfer_tab_id = widget_id(state, "transfer_tab");
   GtkWidget *transfer_tab = create_tab_button(
@@ -4589,6 +4569,26 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       .page = logging_page,
       .tab_label = logging_tab,
   });
+
+  if (state->mode == SettingsWidgetMode::connection) {
+    GtkWidget *macro_page = create_macro_page(state);
+    const std::string macro_tab_id = widget_id(state, "macro_tab");
+    GtkWidget *macro_tab = create_tab_button(
+        state, macro_page, settings_ui_text(SettingsUiText::macro_tab),
+        macro_tab_id.c_str());
+    gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), macro_page,
+                             macro_tab);
+    gtk_widget_show_all(macro_page);
+    gtk_widget_show_all(macro_tab);
+    gtk_widget_set_no_show_all(macro_page, TRUE);
+    gtk_widget_set_no_show_all(macro_tab, TRUE);
+    state->connection_pages.push_back({
+        .connection_types = {local_connection_type, telnet_connection_type,
+                             serial_connection_type, ssh_connection_type},
+        .page = macro_page,
+        .tab_label = macro_tab,
+    });
+  }
 
   if (state->show_actions) {
     gtk_box_pack_start(GTK_BOX(state->root), create_button_box(state), FALSE,

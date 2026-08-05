@@ -610,7 +610,7 @@ describe.concurrent('shared settings widget', () => {
     const cases = [
       {
         args: [] as const,
-        expected: ['General', 'Terminal', 'Macro', 'Transfer', 'Logging'],
+        expected: ['General', 'Terminal', 'Transfer', 'Logging', 'Macro'],
       },
       {
         args: ['--type=telnet'] as const,
@@ -618,9 +618,9 @@ describe.concurrent('shared settings widget', () => {
           'General',
           'TELNET',
           'Terminal',
-          'Macro',
           'Transfer',
           'Logging',
+          'Macro',
         ],
       },
       {
@@ -629,9 +629,9 @@ describe.concurrent('shared settings widget', () => {
           'General',
           'Serial',
           'Terminal',
-          'Macro',
           'Transfer',
           'Logging',
+          'Macro',
         ],
       },
       {
@@ -640,9 +640,9 @@ describe.concurrent('shared settings widget', () => {
           'General',
           'SSH',
           'Terminal',
-          'Macro',
           'Transfer',
           'Logging',
+          'Macro',
         ],
       },
       {
