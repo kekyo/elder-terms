@@ -53,6 +53,7 @@ elder_terms_sources = [
   'src/sftp/sftp-transfer-engine.cpp',
   'src/sftp/sftp-window.cpp',
   'src/terminal-connection-phase.cpp',
+  'src/terminal-font.cpp',
   'src/terminal-log.cpp',
   'src/terminal-macro-runner.cpp',
   'src/terminal-text-send.cpp',
@@ -165,6 +166,20 @@ terminal_text_codec_test = executable(
 )
 
 test('terminal-text-codec-test', terminal_text_codec_test)
+
+terminal_font_test = executable(
+  'terminal-font-test',
+  [
+    'tests/cpp/terminal-font-test.cpp',
+    'src/terminal-font.cpp',
+  ],
+  dependencies: [
+    elder_terms_dep,
+    gtk_dep,
+  ],
+)
+
+test('terminal-font-test', terminal_font_test)
 
 terminal_macro_runner_test = executable(
   'terminal-macro-runner-test',

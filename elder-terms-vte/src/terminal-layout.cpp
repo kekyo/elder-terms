@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "terminal-layout.h"
+#include "terminal-font.h"
 
 namespace elder_terms {
 
@@ -39,6 +40,7 @@ struct TerminalLayoutState {
   TestOptions options;
   TerminalLayoutCallbacks callbacks;
   TerminalKeyBindings key_bindings;
+  PangoFontDescription *runtime_font = nullptr;
   GdkGeometry hints = {};
   GdkWindowState window_state = static_cast<GdkWindowState>(0);
   glong desired_columns = default_columns;
@@ -757,6 +759,7 @@ static gboolean feed_fixture_idle(gpointer data) {
 TerminalLayoutState *
 create_terminal_layout(const MainWindow &main_window, TestOptions options,
                        TerminalDisplaySettings terminal_display_settings,
+                       TerminalFontFamilies terminal_font_families,
                        TerminalKeyBindings terminal_key_bindings,
                        TerminalLayoutCallbacks callbacks) {
   auto *state = new TerminalLayoutState();
@@ -772,6 +775,12 @@ create_terminal_layout(const MainWindow &main_window, TestOptions options,
   state->key_bindings = std::move(terminal_key_bindings);
   state->desired_columns = terminal_display_settings.width;
   state->desired_rows = terminal_display_settings.height;
+  const PangoFontDescription *runtime_font =
+      vte_terminal_get_font(VTE_TERMINAL(state->terminal));
+  state->runtime_font =
+      runtime_font == nullptr ? pango_font_description_new()
+                              : pango_font_description_copy(runtime_font);
+  apply_terminal_font_families(state, terminal_font_families);
 
   GtkAdjustment *adjustment =
       gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(state->terminal));
@@ -860,6 +869,24 @@ void apply_terminal_display_settings(
   update_window_size(state);
 }
 
+void apply_terminal_font_families(
+    TerminalLayoutState *state,
+    const TerminalFontFamilies &terminal_font_families) {
+  if (state == nullptr || state->runtime_font == nullptr) {
+    return;
+  }
+
+  VteTerminal *terminal = VTE_TERMINAL(state->terminal);
+  PangoFontDescription *font = create_terminal_font_description(
+      state->runtime_font, terminal_font_families);
+  const PangoFontDescription *current_font = vte_terminal_get_font(terminal);
+  if (current_font == nullptr ||
+      pango_font_description_equal(current_font, font) == FALSE) {
+    vte_terminal_set_font(terminal, font);
+  }
+  pango_font_description_free(font);
+}
+
 void apply_terminal_key_bindings(
     TerminalLayoutState *state,
     TerminalKeyBindings terminal_key_bindings) {
@@ -883,6 +910,7 @@ void destroy_terminal_layout(TerminalLayoutState *state) {
   if (state->font_resize_guard_source != 0) {
     g_source_remove(state->font_resize_guard_source);
   }
+  pango_font_description_free(state->runtime_font);
   delete state;
 }
 

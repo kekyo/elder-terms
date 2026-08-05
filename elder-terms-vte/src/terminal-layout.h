@@ -47,6 +47,7 @@ struct TerminalLayoutCallbacks {
  * @param main_window Loaded main window widgets.
  * @param options Test harness options.
  * @param terminal_display_settings Initial terminal display settings.
+ * @param terminal_font_families Initial terminal font family overrides.
  * @param terminal_key_bindings Initial terminal action key bindings.
  * @param callbacks Optional layout callbacks.
  * @returns New layout state owned by the caller.
@@ -54,6 +55,7 @@ struct TerminalLayoutCallbacks {
 TerminalLayoutState *
 create_terminal_layout(const MainWindow &main_window, TestOptions options,
                        TerminalDisplaySettings terminal_display_settings,
+                       TerminalFontFamilies terminal_font_families,
                        TerminalKeyBindings terminal_key_bindings,
                        TerminalLayoutCallbacks callbacks);
 
@@ -80,6 +82,19 @@ void start_terminal_layout(TerminalLayoutState *state);
 void apply_terminal_display_settings(
     TerminalLayoutState *state,
     TerminalDisplaySettings terminal_display_settings);
+
+/**
+ * Applies terminal font family overrides to the live layout.
+ *
+ * The size and all other font attributes continue to come from the runtime
+ * font captured when the layout was created.
+ *
+ * @param state Layout state created by create_terminal_layout.
+ * @param terminal_font_families New terminal font family overrides.
+ */
+void apply_terminal_font_families(
+    TerminalLayoutState *state,
+    const TerminalFontFamilies &terminal_font_families);
 
 /**
  * Applies terminal action key bindings to the live layout.
