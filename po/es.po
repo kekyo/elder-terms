@@ -1280,3 +1280,33 @@ msgstr "Nodo de dispositivo actual"
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "Unavailable"
 msgstr "No disponible"
+
+#: elder-terms/src/main.cpp:1529
+msgid "Failed to delete connection"
+msgstr "No se pudo eliminar la conexión"
+
+#: elder-terms/src/main.cpp:1555
+msgid "Delete connection?"
+msgstr "¿Eliminar la conexión?"
+
+#: elder-terms/src/main.cpp:1557
+#, c-format
+msgid "The connection \"%s\" will be permanently deleted."
+msgstr "La conexión «%s» se eliminará permanentemente."
+
+#: elder-terms/src/main.cpp:1564 elder-terms/src/main-window.ui:21
+msgid "Delete"
+msgstr "Eliminar"
+
+#: elder-terms/src/main.cpp:1605 elder-terms/src/main.cpp:1618
+msgid "Failed to rename connection"
+msgstr "No se pudo cambiar el nombre de la conexión"
+
+#: elder-terms/src/main-window.ui:15
+msgid "Rename"
+msgstr "Cambiar nombre"
+
+#: elder-terms/src/connection-repository.cpp:309
+#, c-format
+msgid "Warning: failed to delete connection profile %s: %s"
+msgstr "Advertencia: no se pudo eliminar el perfil de conexión %s: %s"

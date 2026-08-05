@@ -1277,3 +1277,33 @@ msgstr "Nó de dispositivo atual"
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "Unavailable"
 msgstr "Indisponível"
+
+#: elder-terms/src/main.cpp:1529
+msgid "Failed to delete connection"
+msgstr "Falha ao excluir conexão"
+
+#: elder-terms/src/main.cpp:1555
+msgid "Delete connection?"
+msgstr "Excluir conexão?"
+
+#: elder-terms/src/main.cpp:1557
+#, c-format
+msgid "The connection \"%s\" will be permanently deleted."
+msgstr "A conexão \"%s\" será excluída permanentemente."
+
+#: elder-terms/src/main.cpp:1564 elder-terms/src/main-window.ui:21
+msgid "Delete"
+msgstr "Excluir"
+
+#: elder-terms/src/main.cpp:1605 elder-terms/src/main.cpp:1618
+msgid "Failed to rename connection"
+msgstr "Falha ao renomear conexão"
+
+#: elder-terms/src/main-window.ui:15
+msgid "Rename"
+msgstr "Renomear"
+
+#: elder-terms/src/connection-repository.cpp:309
+#, c-format
+msgid "Warning: failed to delete connection profile %s: %s"
+msgstr "Aviso: falha ao excluir o perfil de conexão %s: %s"

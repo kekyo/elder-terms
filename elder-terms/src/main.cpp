@@ -95,8 +95,13 @@ struct ApplicationState {
   bool has_selection = false;
   bool current_is_new = false;
   bool name_dirty = false;
+  bool rename_existing_on_edit = false;
   bool suppress_selection = false;
   GtkWidget *confirmation_dialog = nullptr;
+  GtkWidget *delete_connection_dialog = nullptr;
+  std::optional<std::filesystem::path> context_connection_path;
+  std::string context_connection_name;
+  std::optional<std::filesystem::path> delete_connection_path;
   GtkWidget *global_defaults_dialog = nullptr;
   GtkWidget *global_defaults_save_button = nullptr;
   GtkWidget *ui_language_restart_dialog = nullptr;
@@ -538,6 +543,33 @@ static ConnectionRow selected_row(ApplicationState *state) {
   return result;
 }
 
+static ConnectionRow connection_row_at_path(ApplicationState *state,
+                                             GtkTreePath *path) {
+  GtkTreeIter iterator;
+  GtkTreeModel *model =
+      GTK_TREE_MODEL(state->main_window->connection_store);
+  if (path == nullptr || !gtk_tree_model_get_iter(model, &iterator, path)) {
+    return {};
+  }
+
+  gchar *name = nullptr;
+  gchar *profile_path = nullptr;
+  gboolean is_new = FALSE;
+  gtk_tree_model_get(model, &iterator, connection_name_column, &name,
+                     connection_path_column, &profile_path,
+                     connection_is_new_column, &is_new, -1);
+  ConnectionRow result{
+      .valid = true,
+      .is_new = is_new != FALSE,
+      .name = name == nullptr ? std::string() : std::string(name),
+      .path = profile_path == nullptr ? std::filesystem::path()
+                                     : std::filesystem::path(profile_path),
+  };
+  g_free(name);
+  g_free(profile_path);
+  return result;
+}
+
 static bool row_matches_current(const ApplicationState *state,
                                 const ConnectionRow &row) {
   if (!state->has_selection || !row.valid ||
@@ -769,7 +801,8 @@ static bool load_existing_connection(ApplicationState *state,
   return true;
 }
 
-static void start_name_editing(ApplicationState *state) {
+static void start_name_editing(ApplicationState *state,
+                               bool rename_existing) {
   GtkTreeSelection *selection = gtk_tree_view_get_selection(
       GTK_TREE_VIEW(state->main_window->connection_list));
   GtkTreeModel *model = nullptr;
@@ -777,6 +810,8 @@ static void start_name_editing(ApplicationState *state) {
   if (!gtk_tree_selection_get_selected(selection, &model, &iterator)) {
     return;
   }
+  state->rename_existing_on_edit =
+      rename_existing && state->has_selection && !state->current_is_new;
   GtkTreePath *path = gtk_tree_model_get_path(model, &iterator);
   GtkTreeViewColumn *column = gtk_tree_view_get_column(
       GTK_TREE_VIEW(state->main_window->connection_list), 0);
@@ -831,7 +866,7 @@ static void begin_new_connection(ApplicationState *state) {
   gtk_stack_set_visible_child_name(GTK_STACK(state->main_window->details_stack),
                                    "settings");
   update_action_sensitivity(state);
-  start_name_editing(state);
+  start_name_editing(state, false);
 }
 
 static void select_existing_connection(
@@ -937,6 +972,21 @@ static void on_connection_directory_changed(GFileMonitor *, GFile *file,
     state->monitor_refresh_source =
         g_idle_add(refresh_connections_from_monitor, state);
   }
+}
+
+static void stop_connection_monitor(ApplicationState *state) {
+  if (state->monitor_refresh_source != 0) {
+    g_source_remove(state->monitor_refresh_source);
+    state->monitor_refresh_source = 0;
+  }
+  state->monitor_reload_selected = false;
+  state->monitor_renamed_path.reset();
+  if (state->connection_monitor == nullptr) {
+    return;
+  }
+  g_file_monitor_cancel(state->connection_monitor);
+  g_object_unref(state->connection_monitor);
+  state->connection_monitor = nullptr;
 }
 
 static void start_connection_monitor(ApplicationState *state) {
@@ -1388,9 +1438,167 @@ static void on_connection_selection_changed(GtkTreeSelection *,
   }
 }
 
+static gboolean on_connection_list_button_press(GtkWidget *widget,
+                                                GdkEventButton *event,
+                                                gpointer user_data) {
+  if (event == nullptr || event->type != GDK_BUTTON_PRESS ||
+      event->button != GDK_BUTTON_SECONDARY) {
+    return GDK_EVENT_PROPAGATE;
+  }
+
+  auto *state = static_cast<ApplicationState *>(user_data);
+  GtkTreePath *path = nullptr;
+  if (!gtk_tree_view_get_path_at_pos(
+          GTK_TREE_VIEW(widget), static_cast<gint>(event->x),
+          static_cast<gint>(event->y), &path, nullptr, nullptr, nullptr)) {
+    return GDK_EVENT_PROPAGATE;
+  }
+  const ConnectionRow row = connection_row_at_path(state, path);
+  if (!row.valid || row.is_new) {
+    gtk_tree_path_free(path);
+    return GDK_EVENT_PROPAGATE;
+  }
+
+  const bool target_is_current = row_matches_current(state, row);
+  if (editor_is_dirty(state) && !target_is_current) {
+    gtk_tree_path_free(path);
+    return GDK_EVENT_STOP;
+  }
+
+  if (!target_is_current) {
+    GtkTreeSelection *selection = gtk_tree_view_get_selection(
+        GTK_TREE_VIEW(state->main_window->connection_list));
+    state->suppress_selection = true;
+    gtk_tree_selection_select_path(selection, path);
+    state->suppress_selection = false;
+    if (!load_existing_connection(state, row.path)) {
+      restore_current_selection(state);
+      gtk_tree_path_free(path);
+      return GDK_EVENT_STOP;
+    }
+  }
+  gtk_tree_path_free(path);
+
+  state->context_connection_path = row.path;
+  state->context_connection_name = row.name;
+  gtk_widget_grab_focus(widget);
+  gtk_menu_popup_at_pointer(
+      GTK_MENU(state->main_window->connection_context_menu),
+      reinterpret_cast<GdkEvent *>(event));
+  return GDK_EVENT_STOP;
+}
+
+static void start_context_connection_rename(ApplicationState *state) {
+  if (state->shutting_down) {
+    return;
+  }
+  if (!state->context_connection_path.has_value() ||
+      !state->selected_path.has_value() || state->current_is_new ||
+      state->context_connection_path.value() !=
+          state->selected_path.value()) {
+    return;
+  }
+  state->suppress_selection = true;
+  const bool selected = select_matching_row(
+      state, state->context_connection_path, false);
+  state->suppress_selection = false;
+  if (!selected) {
+    return;
+  }
+  start_name_editing(state, true);
+}
+
+static void on_rename_connection_menu_item_activate(GtkMenuItem *,
+                                                    gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  gtk_menu_popdown(GTK_MENU(state->main_window->connection_context_menu));
+  start_context_connection_rename(state);
+}
+
+static void on_delete_connection_dialog_destroy(GtkWidget *dialog,
+                                                gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state->delete_connection_dialog == dialog) {
+    state->delete_connection_dialog = nullptr;
+    state->delete_connection_path.reset();
+  }
+}
+
+static void on_delete_connection_dialog_response(GtkDialog *dialog,
+                                                 gint response,
+                                                 gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  const std::optional<std::filesystem::path> path =
+      state->delete_connection_path;
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+  if (response != GTK_RESPONSE_ACCEPT || !path.has_value()) {
+    return;
+  }
+
+  stop_connection_monitor(state);
+  const elder_terms::ConnectionDeleteResult result =
+      elder_terms::delete_connection_profile(path.value());
+  start_connection_monitor(state);
+  print_warnings(result.warnings);
+  if (!result.deleted) {
+    show_error(state, _("Failed to delete connection"), result.warnings);
+    return;
+  }
+
+  preserve_current_editor_after_list_refresh(state);
+  reload_hotkey_actions(state);
+}
+
+static void on_delete_connection_menu_item_activate(GtkMenuItem *,
+                                                    gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  gtk_menu_popdown(GTK_MENU(state->main_window->connection_context_menu));
+  if (!state->context_connection_path.has_value() ||
+      !state->selected_path.has_value() || state->current_is_new ||
+      state->context_connection_path.value() !=
+          state->selected_path.value()) {
+    return;
+  }
+  if (state->delete_connection_dialog != nullptr) {
+    gtk_window_present(GTK_WINDOW(state->delete_connection_dialog));
+    return;
+  }
+
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(state->main_window->window),
+      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
+                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE, "%s", _("Delete connection?"));
+  const std::string secondary = format_translated_string(
+      _("The connection \"%s\" will be permanently deleted."),
+      state->context_connection_name.c_str());
+  gtk_message_dialog_format_secondary_text(
+      GTK_MESSAGE_DIALOG(dialog), "%s", secondary.c_str());
+  GtkWidget *cancel = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), _("Cancel"), GTK_RESPONSE_CANCEL);
+  GtkWidget *remove = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), _("Delete"), GTK_RESPONSE_ACCEPT);
+  gestament_gtk_assign_accessible_id(dialog, "delete_connection_dialog");
+  gestament_gtk_assign_accessible_id(
+      cancel, "cancel_delete_connection_button");
+  gestament_gtk_assign_accessible_id(remove, "delete_connection_button");
+  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
+  state->delete_connection_path = state->context_connection_path;
+  state->delete_connection_dialog = dialog;
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(on_delete_connection_dialog_response), state);
+  g_signal_connect(dialog, "destroy",
+                   G_CALLBACK(on_delete_connection_dialog_destroy), state);
+  gtk_widget_show_all(dialog);
+}
+
 static void on_name_edited(GtkCellRendererText *, gchar *path_text,
                            gchar *new_text, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
+  const bool rename_existing =
+      state->rename_existing_on_edit && !state->current_is_new &&
+      state->selected_path.has_value();
+  state->rename_existing_on_edit = false;
   g_object_set(state->main_window->connection_name_renderer, "editable", FALSE,
                nullptr);
   GtkTreePath *path = gtk_tree_path_new_from_string(path_text);
@@ -1408,6 +1616,38 @@ static void on_name_edited(GtkCellRendererText *, gchar *path_text,
   const auto validation = elder_terms::validate_connection_name(
       new_text == nullptr ? std::string() : std::string(new_text),
       state->profiles, state->selected_path);
+  if (rename_existing) {
+    if (!validation.valid) {
+      show_error(state, _("Failed to rename connection"),
+                 {validation.error});
+      return;
+    }
+
+    stop_connection_monitor(state);
+    const elder_terms::ConnectionRenameResult result =
+        elder_terms::rename_connection_profile(
+            state->connection_directory, state->selected_path.value(),
+            validation.name);
+    start_connection_monitor(state);
+    print_warnings(result.warnings);
+    if (!result.renamed) {
+      show_error(state, _("Failed to rename connection"), result.warnings);
+      return;
+    }
+
+    state->selected_path = result.path;
+    state->persisted_name = validation.name;
+    state->draft_name = validation.name;
+    state->name_error.clear();
+    state->name_dirty = false;
+    elder_terms::settings_widget_set_default_connection_name(
+        state->settings_widget, validation.name);
+    preserve_current_editor_after_list_refresh(state);
+    reload_hotkey_actions(state);
+    update_action_sensitivity(state);
+    return;
+  }
+
   state->draft_name = validation.name;
   state->name_error = validation.valid ? std::string() : validation.error;
   state->name_dirty =
@@ -1423,6 +1663,7 @@ static void on_name_edited(GtkCellRendererText *, gchar *path_text,
 
 static void on_name_editing_canceled(GtkCellRenderer *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
+  state->rename_existing_on_edit = false;
   g_object_set(state->main_window->connection_name_renderer, "editable", FALSE,
                nullptr);
 }
@@ -1441,13 +1682,13 @@ static gboolean on_connection_list_key_press(GtkWidget *, GdkEventKey *event,
   if (event->keyval != GDK_KEY_F2) {
     return FALSE;
   }
-  start_name_editing(static_cast<ApplicationState *>(user_data));
+  start_name_editing(static_cast<ApplicationState *>(user_data), true);
   return TRUE;
 }
 
 static gboolean on_rename_accelerator(GtkAccelGroup *, GObject *, guint,
                                       GdkModifierType, gpointer user_data) {
-  start_name_editing(static_cast<ApplicationState *>(user_data));
+  start_name_editing(static_cast<ApplicationState *>(user_data), true);
   return TRUE;
 }
 
@@ -1618,15 +1859,7 @@ static void on_window_destroy(GtkWidget *, gpointer user_data) {
   }
   state->window_destroyed = true;
   state->shutting_down = true;
-  if (state->monitor_refresh_source != 0) {
-    g_source_remove(state->monitor_refresh_source);
-    state->monitor_refresh_source = 0;
-  }
-  if (state->connection_monitor != nullptr) {
-    g_file_monitor_cancel(state->connection_monitor);
-    g_object_unref(state->connection_monitor);
-    state->connection_monitor = nullptr;
-  }
+  stop_connection_monitor(state);
   for (ChildLaunch *launch : state->child_launches) {
     launch->application = nullptr;
     if (!launch->temporary_startup_path.empty()) {
@@ -1681,6 +1914,18 @@ static bool initialize_main_window(ApplicationState *state) {
                    G_CALLBACK(on_name_editing_canceled), state);
   g_signal_connect(main_window->connection_name_renderer, "editing-started",
                    G_CALLBACK(on_name_editing_started), state);
+  gtk_menu_attach_to_widget(
+      GTK_MENU(main_window->connection_context_menu),
+      main_window->connection_list, nullptr);
+  gtk_widget_show_all(main_window->connection_context_menu);
+  g_signal_connect(main_window->connection_list, "button-press-event",
+                   G_CALLBACK(on_connection_list_button_press), state);
+  g_signal_connect(main_window->rename_connection_menu_item, "activate",
+                   G_CALLBACK(on_rename_connection_menu_item_activate),
+                   state);
+  g_signal_connect(main_window->delete_connection_menu_item, "activate",
+                   G_CALLBACK(on_delete_connection_menu_item_activate),
+                   state);
   g_signal_connect(main_window->connection_list, "key-press-event",
                    G_CALLBACK(on_connection_list_key_press), state);
   g_signal_connect(main_window->window, "key-press-event",

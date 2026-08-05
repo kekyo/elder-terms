@@ -44,6 +44,28 @@ struct ConnectionSaveResult {
 };
 
 /**
+ * Result of renaming a connection profile.
+ */
+struct ConnectionRenameResult {
+  /** True when the profile has its requested name. */
+  bool renamed = false;
+  /** Final INI path when renamed. */
+  std::filesystem::path path;
+  /** Failure diagnostics. */
+  std::vector<std::string> warnings;
+};
+
+/**
+ * Result of deleting a connection profile.
+ */
+struct ConnectionDeleteResult {
+  /** True when the profile was deleted. */
+  bool deleted = false;
+  /** Failure diagnostics. */
+  std::vector<std::string> warnings;
+};
+
+/**
  * Returns the XDG connection profile directory.
  *
  * @returns `$XDG_CONFIG_HOME/elder-terms/connections`, using GLib's fallback
@@ -94,5 +116,26 @@ ConnectionSaveResult save_connection_profile(
     const std::filesystem::path &directory,
     const std::optional<std::filesystem::path> &original_path,
     const std::string &name, const SettingsStore &store);
+
+/**
+ * Renames a connection profile without rewriting its contents.
+ *
+ * @param directory Connection profile directory.
+ * @param original_path Existing INI path.
+ * @param name Proposed connection name.
+ * @returns Rename status, final path, and diagnostics.
+ */
+ConnectionRenameResult rename_connection_profile(
+    const std::filesystem::path &directory,
+    const std::filesystem::path &original_path, const std::string &name);
+
+/**
+ * Deletes a connection profile.
+ *
+ * @param path Existing INI path.
+ * @returns Delete status and diagnostics.
+ */
+ConnectionDeleteResult
+delete_connection_profile(const std::filesystem::path &path);
 
 } // namespace elder_terms

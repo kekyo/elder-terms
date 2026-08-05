@@ -255,4 +255,63 @@ ConnectionSaveResult save_connection_profile(
   return result;
 }
 
+ConnectionRenameResult rename_connection_profile(
+    const std::filesystem::path &directory,
+    const std::filesystem::path &original_path, const std::string &name) {
+  ConnectionRenameResult result;
+  const auto profiles = list_connection_profiles(directory);
+  const ConnectionNameValidationResult validation =
+      validate_connection_name(name, profiles, original_path);
+  if (!validation.valid) {
+    gchar *formatted =
+        g_strdup_printf(_("Warning: %s"), validation.error.c_str());
+    result.warnings.emplace_back(formatted == nullptr ? "" : formatted);
+    g_free(formatted);
+    return result;
+  }
+
+  const std::filesystem::path target =
+      directory / (validation.name + ".ini");
+  if (original_path == target) {
+    std::error_code type_error;
+    if (std::filesystem::is_regular_file(original_path, type_error) &&
+        !type_error) {
+      result.renamed = true;
+      result.path = target;
+      return result;
+    }
+  }
+
+  std::error_code rename_error;
+  std::filesystem::rename(original_path, target, rename_error);
+  if (rename_error) {
+    result.warnings.push_back(
+        file_error(_("Warning: failed to rename connection profile %s: %s"),
+                   target, rename_error));
+    return result;
+  }
+  result.renamed = true;
+  result.path = target;
+  return result;
+}
+
+ConnectionDeleteResult
+delete_connection_profile(const std::filesystem::path &path) {
+  ConnectionDeleteResult result;
+  std::error_code delete_error;
+  const bool deleted = std::filesystem::remove(path, delete_error);
+  if (!deleted || delete_error) {
+    if (!delete_error) {
+      delete_error = std::make_error_code(
+          std::errc::no_such_file_or_directory);
+    }
+    result.warnings.push_back(
+        file_error(_("Warning: failed to delete connection profile %s: %s"),
+                   path, delete_error));
+    return result;
+  }
+  result.deleted = true;
+  return result;
+}
+
 } // namespace elder_terms

@@ -26,6 +26,12 @@ struct LauncherMainWindow {
   GtkListStore *connection_store = nullptr;
   /** Editable connection name renderer. */
   GtkCellRenderer *connection_name_renderer = nullptr;
+  /** Context menu for a saved connection. */
+  GtkWidget *connection_context_menu = nullptr;
+  /** Starts in-place editing of a saved connection name. */
+  GtkWidget *rename_connection_menu_item = nullptr;
+  /** Requests deletion of a saved connection. */
+  GtkWidget *delete_connection_menu_item = nullptr;
   /** Stack switching between empty and settings state. */
   GtkWidget *details_stack = nullptr;
   /** Message shown when no connection is selected. */
@@ -38,7 +44,7 @@ struct LauncherMainWindow {
   GtkWidget *new_button = nullptr;
   /** Opens the global defaults editor. */
   GtkWidget *global_defaults_button = nullptr;
-  /** Persists the selected connection draft. */
+  /** Saves the selected connection draft. */
   GtkWidget *apply_button = nullptr;
   /** Launches the selected connection. */
   GtkWidget *connect_button = nullptr;

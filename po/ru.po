@@ -1282,3 +1282,33 @@ msgstr "Текущий узел устройства"
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "Unavailable"
 msgstr "Недоступно"
+
+#: elder-terms/src/main.cpp:1529
+msgid "Failed to delete connection"
+msgstr "Не удалось удалить соединение"
+
+#: elder-terms/src/main.cpp:1555
+msgid "Delete connection?"
+msgstr "Удалить соединение?"
+
+#: elder-terms/src/main.cpp:1557
+#, c-format
+msgid "The connection \"%s\" will be permanently deleted."
+msgstr "Соединение «%s» будет удалено без возможности восстановления."
+
+#: elder-terms/src/main.cpp:1564 elder-terms/src/main-window.ui:21
+msgid "Delete"
+msgstr "Удалить"
+
+#: elder-terms/src/main.cpp:1605 elder-terms/src/main.cpp:1618
+msgid "Failed to rename connection"
+msgstr "Не удалось переименовать соединение"
+
+#: elder-terms/src/main-window.ui:15
+msgid "Rename"
+msgstr "Переименовать"
+
+#: elder-terms/src/connection-repository.cpp:309
+#, c-format
+msgid "Warning: failed to delete connection profile %s: %s"
+msgstr "Внимание: не удалось удалить профиль подключения %s: %s"

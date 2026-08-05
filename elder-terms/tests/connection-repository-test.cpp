@@ -139,6 +139,47 @@ static void test_rejects_save_name_collisions() {
   std::filesystem::remove_all(directory);
 }
 
+static void test_renames_and_deletes_profiles_without_rewriting_contents() {
+  const std::filesystem::path directory = temporary_directory();
+  const std::filesystem::path original = directory / "Original.ini";
+  const std::string content =
+      "# Preserve this formatting\n[terminal]\nwidth = 88\n";
+  write_file(original, content);
+
+  const auto renamed = elder_terms::rename_connection_profile(
+      directory, original, "  Renamed  ");
+  expect_true(renamed.renamed && renamed.path == directory / "Renamed.ini",
+              "renaming should normalize and move the selected profile");
+  std::ifstream renamed_file(renamed.path);
+  const std::string renamed_content{
+      std::istreambuf_iterator<char>(renamed_file),
+      std::istreambuf_iterator<char>()};
+  expect_true(renamed_content == content,
+              "renaming should preserve profile contents byte for byte");
+
+  const auto deleted = elder_terms::delete_connection_profile(renamed.path);
+  expect_true(deleted.deleted && !std::filesystem::exists(renamed.path),
+              "deleting should remove the selected profile");
+  std::filesystem::remove_all(directory);
+}
+
+static void test_rejects_rename_collisions_and_missing_deletes() {
+  const std::filesystem::path directory = temporary_directory();
+  const std::filesystem::path original = directory / "Original.ini";
+  write_file(original, "original");
+  write_file(directory / "Existing.ini", "existing");
+
+  const auto renamed = elder_terms::rename_connection_profile(
+      directory, original, "Existing");
+  expect_true(!renamed.renamed && std::filesystem::exists(original),
+              "rename collisions should preserve the original profile");
+  const auto deleted = elder_terms::delete_connection_profile(
+      directory / "Missing.ini");
+  expect_true(!deleted.deleted,
+              "deleting a missing profile should report failure");
+  std::filesystem::remove_all(directory);
+}
+
 } // namespace elder_terms_connection_repository_test
 
 int main() {
@@ -152,6 +193,10 @@ int main() {
     elder_terms_connection_repository_test::
         test_saves_loads_and_renames_profiles();
     elder_terms_connection_repository_test::test_rejects_save_name_collisions();
+    elder_terms_connection_repository_test::
+        test_renames_and_deletes_profiles_without_rewriting_contents();
+    elder_terms_connection_repository_test::
+        test_rejects_rename_collisions_and_missing_deletes();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

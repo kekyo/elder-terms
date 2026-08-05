@@ -1282,3 +1282,33 @@ msgstr "عقدة الجهاز الحالية"
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "Unavailable"
 msgstr "غير متاح"
+
+#: elder-terms/src/main.cpp:1529
+msgid "Failed to delete connection"
+msgstr "فشل حذف الاتصال"
+
+#: elder-terms/src/main.cpp:1555
+msgid "Delete connection?"
+msgstr "حذف الاتصال؟"
+
+#: elder-terms/src/main.cpp:1557
+#, c-format
+msgid "The connection \"%s\" will be permanently deleted."
+msgstr "سيتم حذف الاتصال \"%s\" نهائيًا."
+
+#: elder-terms/src/main.cpp:1564 elder-terms/src/main-window.ui:21
+msgid "Delete"
+msgstr "حذف"
+
+#: elder-terms/src/main.cpp:1605 elder-terms/src/main.cpp:1618
+msgid "Failed to rename connection"
+msgstr "فشل تغيير اسم الاتصال"
+
+#: elder-terms/src/main-window.ui:15
+msgid "Rename"
+msgstr "إعادة التسمية"
+
+#: elder-terms/src/connection-repository.cpp:309
+#, c-format
+msgid "Warning: failed to delete connection profile %s: %s"
+msgstr "تحذير: فشل حذف ملف تعريف الاتصال %s: %s"

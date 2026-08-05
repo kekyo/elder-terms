@@ -85,6 +85,40 @@ const doubleClickConnectionRow = async (
   }
 };
 
+const rightClickConnectionRow = async (
+  app: GtkApp,
+  element: GtkWidgetElement,
+  row: number
+): Promise<void> => {
+  if (element.kind !== 'table') {
+    throw new Error('Context-menu test requires a GTK table connection list');
+  }
+  const cell = await element.cellAt(row, 0);
+  const bounds = (await cell?.capture())?.bounds;
+  expect(bounds).toBeDefined();
+  if (bounds === undefined) {
+    return;
+  }
+  await app.input.moveMouseTo(
+    Math.round(bounds.x + bounds.width / 2),
+    Math.round(bounds.y + bounds.height / 2)
+  );
+  await app.input.setMouseButton('right', true);
+  await app.input.setMouseButton('right', false);
+};
+
+const replaceFocusedText = async (app: GtkApp, text: string): Promise<void> => {
+  await app.input.setModifier('control', true);
+  try {
+    await app.input.pressKey('a');
+  } finally {
+    await app.input.setModifier('control', false);
+  }
+  for (const character of text) {
+    await app.input.pressKey(character === ' ' ? 'space' : character);
+  }
+};
+
 const connectionRowCount = async (
   element: GtkWidgetElement
 ): Promise<number> => {
@@ -344,7 +378,7 @@ describe('elder-terms main window', () => {
           (await (await app.getById('global_defaults_button')).info()).name
         ).toBe('グローバル既定値');
         expect((await (await app.getById('apply_button')).info()).name).toBe(
-          '適用'
+          '保存'
         );
 
         const dialog = await openGlobalDefaults(app);
@@ -529,6 +563,7 @@ describe('elder-terms main window', () => {
 
       expect(['table', 'tree']).toContain(list.kind);
       expect((await terminalEntriesLabel.info()).name).toBe('Terminal entries');
+      expect((await apply.info()).name).toBe('Save');
       expect((await connect.info()).name).toBe('Launch');
       await expectInsensitive(apply);
       await expectInsensitive(connect);
@@ -1086,6 +1121,100 @@ describe('elder-terms main window', () => {
         await expectInsensitive(apply);
       }
     );
+  });
+
+  it('renames and deletes a saved connection from its context menu', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app, connections }) => {
+        const list = await app.getById('connection_list');
+        await rightClickConnectionRow(app, list, 0);
+        const renameItem = await waitForResult(async () => {
+          const item = expectElementKind(
+            await app.getById('rename_connection_menu_item'),
+            'menuItem'
+          );
+          expect((await item.info()).states).toContain('showing');
+          return item;
+        });
+        const deleteItem = expectElementKind(
+          await app.getById('delete_connection_menu_item'),
+          'menuItem'
+        );
+        expect((await renameItem.info()).name).toBe('Rename');
+        expect((await deleteItem.info()).name).toBe('Delete');
+
+        await renameItem.click();
+        await replaceFocusedText(app, 'renamed alpha');
+        await app.input.pressKey('Return');
+        await waitForResult(async () => {
+          expect(
+            await readFile(join(connections, 'renamed alpha.ini'), 'utf8')
+          ).toContain('width=88');
+        });
+        await expect(
+          readFile(join(connections, 'Alpha.ini'), 'utf8')
+        ).rejects.toMatchObject({ code: 'ENOENT' });
+
+        await rightClickConnectionRow(app, list, 1);
+        await waitForResult(async () => {
+          expect((await deleteItem.info()).states).toContain('showing');
+        });
+        await deleteItem.click();
+        const deleteDialog = expectElementKind(
+          await app.getById('delete_connection_dialog'),
+          'infoBar'
+        );
+        expect((await deleteDialog.info()).states).toContain('modal');
+        await expectElementKind(
+          await app.getById('cancel_delete_connection_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+        expect(
+          await readFile(join(connections, 'renamed alpha.ini'), 'utf8')
+        ).toContain('width=88');
+
+        await rightClickConnectionRow(app, list, 1);
+        await waitForResult(async () => {
+          expect((await deleteItem.info()).states).toContain('showing');
+        });
+        await deleteItem.click();
+        await expectElementKind(
+          await app.getById('delete_connection_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(await connectionRowCount(list)).toBe(1);
+        });
+        await expect(
+          readFile(join(connections, 'renamed alpha.ini'), 'utf8')
+        ).rejects.toMatchObject({ code: 'ENOENT' });
+      }
+    );
+  });
+
+  it('does not open another connection context menu while edits are unsaved', async (context) => {
+    await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
+      const list = await app.getById('connection_list');
+      await selectConnectionRow(app, list, 0);
+      const width = expectElementKind(
+        await app.getById('settings_terminal_width_entry'),
+        'entry'
+      );
+      await width.setText('97');
+
+      await rightClickConnectionRow(app, list, 1);
+      await expect(app.getById('rename_connection_menu_item')).rejects.toThrow(
+        /not found/iu
+      );
+      await expect(app.getById('delete_connection_menu_item')).rejects.toThrow(
+        /not found/iu
+      );
+      expect(await app.getWindowCount()).toBe(1);
+      expect(await width.text()).toBe('97');
+    });
   });
 
   it('creates a new profile and confirms before discarding edits', async (context) => {

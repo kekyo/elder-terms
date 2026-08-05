@@ -1272,3 +1272,33 @@ msgstr "現在のデバイスノード"
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "Unavailable"
 msgstr "利用不可"
+
+#: elder-terms/src/main.cpp:1529
+msgid "Failed to delete connection"
+msgstr "接続の削除に失敗しました"
+
+#: elder-terms/src/main.cpp:1555
+msgid "Delete connection?"
+msgstr "接続を削除しますか？"
+
+#: elder-terms/src/main.cpp:1557
+#, c-format
+msgid "The connection \"%s\" will be permanently deleted."
+msgstr "接続「%s」は完全に削除されます。"
+
+#: elder-terms/src/main.cpp:1564 elder-terms/src/main-window.ui:21
+msgid "Delete"
+msgstr "削除"
+
+#: elder-terms/src/main.cpp:1605 elder-terms/src/main.cpp:1618
+msgid "Failed to rename connection"
+msgstr "接続名の変更に失敗しました"
+
+#: elder-terms/src/main-window.ui:15
+msgid "Rename"
+msgstr "名前の変更"
+
+#: elder-terms/src/connection-repository.cpp:309
+#, c-format
+msgid "Warning: failed to delete connection profile %s: %s"
+msgstr "警告: 接続プロファイル%sの削除に失敗しました: %s"

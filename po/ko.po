@@ -1271,3 +1271,33 @@ msgstr "현재 장치 노드"
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "Unavailable"
 msgstr "사용할 수 없음"
+
+#: elder-terms/src/main.cpp:1529
+msgid "Failed to delete connection"
+msgstr "연결을 삭제하지 못했습니다."
+
+#: elder-terms/src/main.cpp:1555
+msgid "Delete connection?"
+msgstr "연결을 삭제하시겠습니까?"
+
+#: elder-terms/src/main.cpp:1557
+#, c-format
+msgid "The connection \"%s\" will be permanently deleted."
+msgstr "연결 \"%s\"이(가) 영구적으로 삭제됩니다."
+
+#: elder-terms/src/main.cpp:1564 elder-terms/src/main-window.ui:21
+msgid "Delete"
+msgstr "삭제"
+
+#: elder-terms/src/main.cpp:1605 elder-terms/src/main.cpp:1618
+msgid "Failed to rename connection"
+msgstr "연결 이름을 바꾸지 못했습니다."
+
+#: elder-terms/src/main-window.ui:15
+msgid "Rename"
+msgstr "이름 바꾸기"
+
+#: elder-terms/src/connection-repository.cpp:309
+#, c-format
+msgid "Warning: failed to delete connection profile %s: %s"
+msgstr "경고: 연결 프로필을 삭제하지 못했습니다. %s: %s"

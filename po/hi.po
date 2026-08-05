@@ -1273,3 +1273,33 @@ msgstr "वर्तमान डिवाइस नोड"
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "Unavailable"
 msgstr "अनुपलब्ध"
+
+#: elder-terms/src/main.cpp:1529
+msgid "Failed to delete connection"
+msgstr "कनेक्शन हटाने में विफल"
+
+#: elder-terms/src/main.cpp:1555
+msgid "Delete connection?"
+msgstr "कनेक्शन हटाएँ?"
+
+#: elder-terms/src/main.cpp:1557
+#, c-format
+msgid "The connection \"%s\" will be permanently deleted."
+msgstr "कनेक्शन \"%s\" स्थायी रूप से हटा दिया जाएगा।"
+
+#: elder-terms/src/main.cpp:1564 elder-terms/src/main-window.ui:21
+msgid "Delete"
+msgstr "हटाएँ"
+
+#: elder-terms/src/main.cpp:1605 elder-terms/src/main.cpp:1618
+msgid "Failed to rename connection"
+msgstr "कनेक्शन का नाम बदलने में विफल"
+
+#: elder-terms/src/main-window.ui:15
+msgid "Rename"
+msgstr "नाम बदलें"
+
+#: elder-terms/src/connection-repository.cpp:309
+#, c-format
+msgid "Warning: failed to delete connection profile %s: %s"
+msgstr "चेतावनी: कनेक्शन प्रोफ़ाइल %s को हटाने में विफल: %s"

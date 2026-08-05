@@ -1271,3 +1271,33 @@ msgstr "当前设备节点"
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "Unavailable"
 msgstr "不可用"
+
+#: elder-terms/src/main.cpp:1529
+msgid "Failed to delete connection"
+msgstr "删除连接失败"
+
+#: elder-terms/src/main.cpp:1555
+msgid "Delete connection?"
+msgstr "要删除连接吗？"
+
+#: elder-terms/src/main.cpp:1557
+#, c-format
+msgid "The connection \"%s\" will be permanently deleted."
+msgstr "连接“%s”将被永久删除。"
+
+#: elder-terms/src/main.cpp:1564 elder-terms/src/main-window.ui:21
+msgid "Delete"
+msgstr "删除"
+
+#: elder-terms/src/main.cpp:1605 elder-terms/src/main.cpp:1618
+msgid "Failed to rename connection"
+msgstr "重命名连接失败"
+
+#: elder-terms/src/main-window.ui:15
+msgid "Rename"
+msgstr "重命名"
+
+#: elder-terms/src/connection-repository.cpp:309
+#, c-format
+msgid "Warning: failed to delete connection profile %s: %s"
+msgstr "警告：删除连接配置文件 %s 失败：%s"

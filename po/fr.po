@@ -1285,3 +1285,33 @@ msgstr "Nœud de périphérique actuel"
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "Unavailable"
 msgstr "Indisponible"
+
+#: elder-terms/src/main.cpp:1529
+msgid "Failed to delete connection"
+msgstr "Échec de la suppression de la connexion"
+
+#: elder-terms/src/main.cpp:1555
+msgid "Delete connection?"
+msgstr "Supprimer la connexion ?"
+
+#: elder-terms/src/main.cpp:1557
+#, c-format
+msgid "The connection \"%s\" will be permanently deleted."
+msgstr "La connexion « %s » sera définitivement supprimée."
+
+#: elder-terms/src/main.cpp:1564 elder-terms/src/main-window.ui:21
+msgid "Delete"
+msgstr "Supprimer"
+
+#: elder-terms/src/main.cpp:1605 elder-terms/src/main.cpp:1618
+msgid "Failed to rename connection"
+msgstr "Échec du renommage de la connexion"
+
+#: elder-terms/src/main-window.ui:15
+msgid "Rename"
+msgstr "Renommer"
+
+#: elder-terms/src/connection-repository.cpp:309
+#, c-format
+msgid "Warning: failed to delete connection profile %s: %s"
+msgstr "Avertissement : échec de la suppression du profil de connexion %s : %s"

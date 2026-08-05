@@ -60,6 +60,12 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
           builder, "connection_store", GTK_TYPE_LIST_STORE)),
       .connection_name_renderer = GTK_CELL_RENDERER(required_object(
           builder, "connection_name_renderer", GTK_TYPE_CELL_RENDERER_TEXT)),
+      .connection_context_menu =
+          required_widget(builder, "connection_context_menu"),
+      .rename_connection_menu_item =
+          required_widget(builder, "rename_connection_menu_item"),
+      .delete_connection_menu_item =
+          required_widget(builder, "delete_connection_menu_item"),
       .details_stack = required_widget(builder, "details_stack"),
       .empty_details_label =
           required_widget(builder, "empty_details_label"),
@@ -76,6 +82,9 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
       result.connection_scroller == nullptr ||
       result.connection_list == nullptr || result.connection_store == nullptr ||
       result.connection_name_renderer == nullptr ||
+      result.connection_context_menu == nullptr ||
+      result.rename_connection_menu_item == nullptr ||
+      result.delete_connection_menu_item == nullptr ||
       result.details_stack == nullptr ||
       result.empty_details_label == nullptr ||
       result.settings_container == nullptr || result.action_row == nullptr ||
