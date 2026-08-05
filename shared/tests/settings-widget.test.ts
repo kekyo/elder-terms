@@ -57,6 +57,12 @@ interface AppliedStore {
   readonly encoding: string;
   readonly exterior_background: string;
   readonly height: string;
+  readonly font_fallback_family: string;
+  readonly font_fallback_family_explicit: string;
+  readonly font_fallback_family_source: string;
+  readonly font_primary_family: string;
+  readonly font_primary_family_explicit: string;
+  readonly font_primary_family_source: string;
   readonly log_base_directory: string;
   readonly log_enabled: string;
   readonly log_file_name_format: string;
@@ -460,7 +466,7 @@ const waitForAppliedStore = async (app: GtkApp): Promise<AppliedStore> =>
 
 const waitForPrintedStore = async (
   app: GtkApp,
-  prefix: 'APPLIED' | 'REBASED'
+  prefix: 'APPLIED' | 'REBASED' | 'SAVED'
 ): Promise<AppliedStore> =>
   waitForResult(async () => {
     const output = await app.output();
@@ -786,6 +792,8 @@ describe.concurrent('shared settings widget', () => {
               'Columns',
               'Rows',
               'Zoom factor',
+              'Primary font family',
+              'Secondary font family',
               'Close window when session ends',
               'Zoom in shortcut',
               'Zoom out shortcut',
@@ -2717,6 +2725,147 @@ describe.concurrent('shared settings widget', () => {
       }
     );
   });
+
+  it('applies, saves, and cancels family-only terminal font overrides', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=terminal',
+        '--save',
+        '--global=terminal.font_primary_family=Monospace',
+        '--global=terminal.font_fallback_family=IPAGothic',
+      ],
+      async ({ app, directory }) => {
+        await showTerminalPage(app);
+        const primaryOverride = expectElementKind(
+          await app.getById('settings_terminal_font_primary_override_check'),
+          'checkbox'
+        );
+        const fallbackOverride = expectElementKind(
+          await app.getById('settings_terminal_font_fallback_override_check'),
+          'checkbox'
+        );
+        const primaryButton = expectElementKind(
+          await app.getById('settings_terminal_font_primary_button'),
+          'button'
+        );
+        const fallbackButton = expectElementKind(
+          await app.getById('settings_terminal_font_fallback_button'),
+          'button'
+        );
+
+        expect(await primaryOverride.isChecked()).toBe(false);
+        expect(await fallbackOverride.isChecked()).toBe(false);
+        await expectInsensitive(primaryButton);
+        await expectInsensitive(fallbackButton);
+        await waitForResult(async () => {
+          const output = (await app.output()).stdout;
+          expect(output).toContain('primary_present=true');
+          expect(output).toContain('primary_level=0');
+          expect(output).toContain('primary_use_size=false');
+          expect(output).toContain('primary_show_size=false');
+          expect(output).toContain('primary_show_style=false');
+          expect(output).toContain('fallback_present=true');
+          expect(output).toContain('fallback_level=0');
+          expect(output).toContain('fallback_use_size=false');
+          expect(output).toContain('fallback_show_size=false');
+          expect(output).toContain('fallback_show_style=false');
+        });
+
+        const scrollbar = expectElementKind(
+          await app.getById('settings_terminal_page_scrollbar'),
+          'scrollbar'
+        );
+        const scrollbarValue = await scrollbar.valueInfo();
+        expect(scrollbarValue.maximum).toBeGreaterThan(scrollbarValue.minimum);
+        await scrollbar.setValue(scrollbarValue.maximum);
+        await waitForResult(async () => {
+          expect((await primaryOverride.info()).states).toContain('showing');
+          expect((await fallbackOverride.info()).states).toContain('showing');
+        });
+        const terminalPageCapture = await (
+          await app.getById('settings_terminal_page')
+        ).capture();
+        expect(terminalPageCapture.clipped).toBe(false);
+        await expectCaptureToMatchFixture(
+          terminalPageCapture,
+          'settings-widget-terminal-font-families',
+          fixturePath('settings-widget-terminal-font-families'),
+          directory,
+          visualComparisonOptions
+        );
+
+        await primaryOverride.toggle();
+        await fallbackOverride.toggle();
+        await expectSensitive(primaryButton);
+        await expectSensitive(fallbackButton);
+        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+
+        const applied = await waitForAppliedStore(app);
+        expect(applied.font_primary_family).toBe('Monospace');
+        expect(applied.font_primary_family_source).toBe('override');
+        expect(applied.font_primary_family_explicit).toBe('true');
+        expect(applied.font_fallback_family).toBe('IPAGothic');
+        expect(applied.font_fallback_family_source).toBe('override');
+        expect(applied.font_fallback_family_explicit).toBe('true');
+      }
+    );
+
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=terminal',
+        '--save',
+        '--font-primary-family=Monospace',
+        '--font-fallback-family=IPAGothic',
+      ],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        const primaryOverride = expectElementKind(
+          await app.getById('settings_terminal_font_primary_override_check'),
+          'checkbox'
+        );
+        expect(await primaryOverride.isChecked()).toBe(true);
+        await primaryOverride.toggle();
+        await expectElementKind(
+          await app.getById('settings_save_button'),
+          'button'
+        ).click();
+
+        const saved = await waitForPrintedStore(app, 'SAVED');
+        expect(saved.font_primary_family).toBe('');
+        expect(saved.font_primary_family_explicit).toBe('false');
+        expect(saved.font_fallback_family).toBe('IPAGothic');
+        expect(saved.font_fallback_family_explicit).toBe('true');
+      }
+    );
+
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal', '--global=terminal.font_primary_family=Monospace'],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        await expectElementKind(
+          await app.getById('settings_terminal_font_primary_override_check'),
+          'checkbox'
+        ).toggle();
+        await expectElementKind(
+          await app.getById('settings_cancel_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          const output = (await app.output()).stdout;
+          expect(output).toContain('CANCELLED');
+          expect(output).not.toContain('APPLIED');
+          expect(output).not.toContain('SAVED');
+        });
+      }
+    );
+  }, 120_000);
 
   it('applies terminal encoding and special-code selections', async (context) => {
     await runSharedGtkTest(

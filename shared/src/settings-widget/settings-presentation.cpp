@@ -39,6 +39,10 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"terminal", "width", N_("Columns")},
     SettingLabelEntry{"terminal", "height", N_("Rows")},
     SettingLabelEntry{"terminal", "zoom", N_("Zoom factor")},
+    SettingLabelEntry{"terminal", "font_primary_family",
+                      N_("Primary font family")},
+    SettingLabelEntry{"terminal", "font_fallback_family",
+                      N_("Secondary font family")},
     SettingLabelEntry{"terminal", "auto_close",
                       N_("Close window when session ends")},
     SettingLabelEntry{"terminal", "zoom_in_key", N_("Zoom in shortcut")},
@@ -168,6 +172,12 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Cancel");
   case SettingsUiText::reset:
     return _("Reset");
+  case SettingsUiText::override_setting:
+    return _("Override");
+  case SettingsUiText::select_primary_terminal_font:
+    return _("Select Primary Terminal Font");
+  case SettingsUiText::select_secondary_terminal_font:
+    return _("Select Secondary Terminal Font");
   case SettingsUiText::enabled:
     return _("Enabled");
   case SettingsUiText::disabled:

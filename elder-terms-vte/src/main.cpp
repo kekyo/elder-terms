@@ -613,7 +613,7 @@ static void open_settings_dialog(ApplicationState *state) {
       GTK_HEADER_BAR(header_bar), TRUE);
   gtk_window_set_titlebar(GTK_WINDOW(dialog), header_bar);
   gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(state->window));
-  gtk_window_set_default_size(GTK_WINDOW(dialog), 720, 420);
+  gtk_window_set_default_size(GTK_WINDOW(dialog), 720, 495);
 
   elder_terms::SettingsWidgetCallbacks callbacks;
   callbacks.apply = [state](const elder_terms::SettingsStore &store) {
