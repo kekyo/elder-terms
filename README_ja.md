@@ -142,7 +142,8 @@ carrier_detect=ignore
 
 「Backspaceコード」は、Backspaceキーを押したときに送信する制御コードを選択します。「BS」はASCII BS（`0x08`）、「DEL」はASCII DEL（`0x7f`）を送信します。接続先でBackspaceキーを押しても文字が消えない場合や、`^H` などが表示される場合は、この設定を切り替えて下さい。Deleteキーはこの設定にかかわらずDELを送信します。
 
-「カーソルキーモード」の「通常」は、`libvte` が生成した通常のエスケープシーケンスをそのまま送信します。「ADM3」は、古い端末やホストで使用される一バイトの制御コードへ変換し、上を `0x1e`、下を `0x1f`、右を `0x1c`、左を `0x1d` として送信します。接続先がADM-3系のカーソルキーを要求する場合に使用して下さい。
+「カーソルキーモード」の「通常」は、`libvte` が生成した通常のエスケープシーケンスをそのまま送信します。
+「ADM」は、 ([ADM-3A](https://www.bitsavers.org/pdf/learSiegler/ADM_3/ADM3A_Maint.pdf) 互換端末やホスト (主にRLogin由来と思われる) で使用される一バイトの制御コードへ変換し、上を `0x1e`、下を `0x1f`、右を `0x1c`、左を `0x1d` として送信します。接続先が ADM-3A 系のカーソルキーを要求する場合に使用して下さい。
 
 接続種別ごとの組み込み既定値は次の通りです。
 
@@ -152,6 +153,14 @@ carrier_detect=ignore
 | TELNET | UTF-8 | BS | 通常 |
 | シリアル | UTF-8 | BS | ADM3 |
 | SSH | UTF-8 | DEL | 通常 |
+
+### 文字コードの補足
+
+文字コードは iconv の定義名を受け入れますが、文字コード名には似て異なる定義がいくつか存在することに注意してください。
+
+例えば、日本語圏において、BBSシリアル通信でよく使われる「シフトJIS」は、iconv の定義名で `shift_jis` というわかりやすい対応名がありますが、実際には慣例的に NEC PC-9800 シリーズで使われている、拡張された `cp932` がベターです。
+
+異なる文字コードを使用した場合、拡張されたり変更されている文字を受信すると、文字化けの原因となります。
 
 ## ホットキーの設定
 
@@ -273,13 +282,22 @@ sudo apt install build-essential git meson ninja-build pkg-config gettext \
   libxkbcommon-dev liburing-dev libudev-dev libssh-dev libvte-2.91-dev
 ```
 
-このほか、Node.js 24以降とnpmが必要です。ディストリビューション付属のNode.jsが古い場合は、Node.jsの公式配布物や任意のバージョン管理ツールを使用して下さい。
+このほか、  Node.js 20以降が必要です。ディストリビューションが配布する Node.jsが使えるかもしれません:
 
-新しくソースコードを取得する場合は、依存する `cardio` と `libxyzm` も取得するため、サブモジュールを含めてcloneします。
+```bash
+sudo apt install nodejs
+node --version
+```
+
+あるいは、ディストリビューション付属の Node.js が古い場合は、 [Node.js の公式配布物](https://nodejs.org/ja/download) や任意のバージョン管理ツール（例えば [nvm](https://github.com/nvm-sh/nvm)）を使用して下さい。
+
+> GTKプロジェクトでNode.jsを使用するのを、奇妙に感じるかもしれません。
+> これはGTK UIのテストに [gestament](https://github.com/kekyo/gestament/) を使用するからです。
+
+新しくソースコードを取得する場合は、依存する [cardio](https://github.com/kekyo/cardio/) と [libxyzm](https://github.com/kekyo/libxyzm/) も取得するため、サブモジュールを含めてcloneします。
 
 ```bash
 git clone --recurse-submodules https://github.com/kekyo/elder-terms.git
-cd elder-terms
 ```
 
 既にclone済みの場合は、次のコマンドでサブモジュールを初期化・更新出来ます。
@@ -304,7 +322,13 @@ npm run build
 あるいは:
 
 ```bash
-npm run build
+npm run dev
+```
+
+テストを実行する場合は（UIテストを含むため、非常に時間がかかります）:
+
+```bash
+npm run test
 ```
 
 ## License
