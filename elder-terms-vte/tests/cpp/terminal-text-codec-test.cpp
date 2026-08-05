@@ -128,11 +128,11 @@ static void stateful_encoding_state_is_preserved_between_chunks() {
                "the second stateful chunk should retain iconv state");
 }
 
-static void adm3_cursor_keys_use_gtk_oldtype_legacy_codes() {
+static void trs80_cursor_keys_use_model_100_200_codes() {
   TerminalTextCodec codec({
       .encoding = "UTF-8",
       .backspace_code = TerminalBackspaceCode::bs,
-      .cursor_key_mode = TerminalCursorKeyMode::adm3,
+      .cursor_key_mode = TerminalCursorKeyMode::trs80,
   });
 
   const auto prefix = encode(&codec, {0x1b});
@@ -144,9 +144,9 @@ static void adm3_cursor_keys_use_gtk_oldtype_legacy_codes() {
   expect_bytes(prefix.bytes, {}, "a split escape prefix should remain pending");
   expect_bytes(introducer.bytes, {},
                "a split cursor introducer should remain pending");
-  expect_bytes(up.bytes, {0x1e}, "ADM3 up should use the legacy code");
+  expect_bytes(up.bytes, {0x1e}, "TRS80 up should use the Model 100/200 code");
   expect_bytes(remaining.bytes, {0x1f, 0x1c, 0x1d},
-               "ADM3 cursor directions should use legacy codes");
+               "TRS80 cursor directions should use Model 100/200 codes");
 }
 
 static void normal_and_unknown_cursor_sequences_pass_through() {
@@ -155,14 +155,14 @@ static void normal_and_unknown_cursor_sequences_pass_through() {
       .backspace_code = TerminalBackspaceCode::del,
       .cursor_key_mode = TerminalCursorKeyMode::normal,
   });
-  TerminalTextCodec adm3({
+  TerminalTextCodec trs80({
       .encoding = "UTF-8",
       .backspace_code = TerminalBackspaceCode::del,
-      .cursor_key_mode = TerminalCursorKeyMode::adm3,
+      .cursor_key_mode = TerminalCursorKeyMode::trs80,
   });
 
   const auto normal_up = encode(&normal, {0x1b, '[', 'A'});
-  const auto unknown = encode(&adm3, {0x1b, '[', 'Z'});
+  const auto unknown = encode(&trs80, {0x1b, '[', 'Z'});
 
   expect_bytes(normal_up.bytes, {0x1b, '[', 'A'},
                "normal cursor mode should preserve VTE input");
@@ -174,7 +174,7 @@ static void finite_text_encoding_uses_only_the_character_encoding() {
   TerminalTextEncoder encoder({
       .encoding = "SHIFT-JIS",
       .backspace_code = TerminalBackspaceCode::bs,
-      .cursor_key_mode = TerminalCursorKeyMode::adm3,
+      .cursor_key_mode = TerminalCursorKeyMode::trs80,
   });
 
   const auto first = encode(&encoder, {0xe6, 0x97});
@@ -233,7 +233,7 @@ int main() {
   elder_terms::shift_jis_is_converted_across_chunk_boundaries();
   elder_terms::invalid_or_unrepresentable_text_uses_directional_replacements();
   elder_terms::stateful_encoding_state_is_preserved_between_chunks();
-  elder_terms::adm3_cursor_keys_use_gtk_oldtype_legacy_codes();
+  elder_terms::trs80_cursor_keys_use_model_100_200_codes();
   elder_terms::normal_and_unknown_cursor_sequences_pass_through();
   elder_terms::finite_text_encoding_uses_only_the_character_encoding();
   elder_terms::finite_text_encoding_finishes_pending_input_and_shift_state();

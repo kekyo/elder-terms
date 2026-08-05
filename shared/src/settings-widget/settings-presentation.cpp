@@ -106,7 +106,7 @@ static constexpr std::array setting_choices{
     SettingChoiceEntry{"terminal", "backspace_code", "bs", N_("BS")},
     SettingChoiceEntry{"terminal", "backspace_code", "del", N_("DEL")},
     SettingChoiceEntry{"terminal", "cursor_key_mode", "normal", N_("Normal")},
-    SettingChoiceEntry{"terminal", "cursor_key_mode", "adm3", N_("ADM3")},
+    SettingChoiceEntry{"terminal", "cursor_key_mode", "trs80", N_("TRS80")},
     SettingChoiceEntry{"serial", "parity", "n", N_("None")},
     SettingChoiceEntry{"serial", "device_match_mode", "path",
                        N_("Device path")},

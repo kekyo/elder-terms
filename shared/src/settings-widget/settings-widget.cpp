@@ -40,7 +40,7 @@ static constexpr char terminal_text_default[] = "default";
 static constexpr char terminal_backspace_bs[] = "bs";
 static constexpr char terminal_backspace_del[] = "del";
 static constexpr char terminal_cursor_normal[] = "normal";
-static constexpr char terminal_cursor_adm3[] = "adm3";
+static constexpr char terminal_cursor_trs80[] = "trs80";
 static constexpr char terminal_log_raw[] = "raw";
 static constexpr char terminal_log_cooked[] = "cooked";
 static constexpr char general_color_none[] = "none";
@@ -635,18 +635,18 @@ static void populate_terminal_special_code_combos(
                             terminal_cursor_normal)
                             .c_str());
     append_combo_option(state->terminal_cursor_key_mode_combo,
-                        terminal_cursor_adm3,
+                        terminal_cursor_trs80,
                         setting_choice_label(
                             terminal_cursor_key_mode_setting_key(),
-                            terminal_cursor_adm3)
+                            terminal_cursor_trs80)
                             .c_str());
     const char *active = terminal_text_default;
     if (setting_has_explicit_value(
             state->draft_store, terminal_cursor_key_mode_setting_key())) {
       active = setting_string_value_or_default(
                    state->draft_store, terminal_cursor_key_mode_setting_key(),
-                   fallback) == terminal_cursor_adm3
-                   ? terminal_cursor_adm3
+                   fallback) == terminal_cursor_trs80
+                   ? terminal_cursor_trs80
                    : terminal_cursor_normal;
     }
     gtk_combo_box_set_active_id(

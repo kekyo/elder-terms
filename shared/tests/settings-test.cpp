@@ -97,6 +97,7 @@ using elder_terms::terminal_auto_close;
 using elder_terms::terminal_backspace_code_setting_key;
 using elder_terms::terminal_connection_profile;
 using elder_terms::terminal_cursor_key_mode_setting_key;
+using elder_terms::terminal_cursor_key_mode_to_string;
 using elder_terms::terminal_display_settings;
 using elder_terms::terminal_encoding_choices;
 using elder_terms::terminal_encoding_name_is_valid;
@@ -759,7 +760,7 @@ static void test_terminal_text_defaults_follow_connection_type() {
       default_terminal_text_settings(TerminalConnectionKind::serial);
   expect_true(serial.encoding == "UTF-8" &&
                   serial.backspace_code == TerminalBackspaceCode::bs &&
-                  serial.cursor_key_mode == TerminalCursorKeyMode::adm3,
+                  serial.cursor_key_mode == TerminalCursorKeyMode::trs80,
               "serial terminal text defaults should match gtk-oldtype");
 
   const TerminalTextSettings ssh =
@@ -807,8 +808,37 @@ static void test_terminal_text_explicit_settings_override_connection_defaults() 
                   profile.text_settings.backspace_code ==
                       TerminalBackspaceCode::bs &&
                   profile.text_settings.cursor_key_mode ==
-                      TerminalCursorKeyMode::adm3,
+                      TerminalCursorKeyMode::trs80,
               "clearing terminal text overrides should restore serial defaults");
+}
+
+static void test_terminal_cursor_key_mode_uses_trs80_name() {
+  const std::filesystem::path path =
+      temporary_config_path("trs80-cursor-key-mode");
+  write_config(path,
+               "[general]\n"
+               "type=local\n"
+               "\n"
+               "[terminal]\n"
+               "cursor_key_mode=trs80\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  const TerminalTextSettings text =
+      required_terminal_connection_profile(result.store).text_settings;
+  expect_true(text.cursor_key_mode == TerminalCursorKeyMode::trs80,
+              "TRS80 cursor-key mode should be loaded from its setting name");
+  expect_true(std::string(terminal_cursor_key_mode_to_string(
+                  text.cursor_key_mode)) == "trs80",
+              "TRS80 cursor-key mode should use its setting name when saved");
+  expect_true(result.warnings.empty(),
+              "TRS80 cursor-key mode should not emit a settings warning");
 }
 
 static void test_terminal_encoding_choices_are_supported() {
@@ -857,7 +887,7 @@ static void test_invalid_terminal_text_values_fall_back_to_type_defaults() {
       required_terminal_connection_profile(result.store).text_settings;
   expect_true(text.encoding == "UTF-8" &&
                   text.backspace_code == TerminalBackspaceCode::bs &&
-                  text.cursor_key_mode == TerminalCursorKeyMode::adm3,
+                  text.cursor_key_mode == TerminalCursorKeyMode::trs80,
               "invalid terminal text values should use serial defaults");
   expect_true(warnings_contain(
                   result.warnings,
@@ -2975,6 +3005,7 @@ int main() {
         test_invalid_general_colors_fall_back_and_warn();
     elder_terms_settings_test::test_terminal_text_defaults_follow_connection_type();
     elder_terms_settings_test::test_terminal_text_explicit_settings_override_connection_defaults();
+    elder_terms_settings_test::test_terminal_cursor_key_mode_uses_trs80_name();
     elder_terms_settings_test::test_terminal_encoding_choices_are_supported();
     elder_terms_settings_test::test_terminal_log_settings();
     elder_terms_settings_test::test_terminal_log_file_name_format_validation();

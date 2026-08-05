@@ -2751,7 +2751,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_terminal_cursor_key_mode_combo',
-          'ADM3 (built-in default)'
+          'TRS80 (built-in default)'
         );
 
         await encoding.setText('CP932');
@@ -3580,7 +3580,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_terminal_cursor_key_mode_combo',
-          'ADM3 (built-in default)'
+          'TRS80 (built-in default)'
         );
         await selectSettingsTab(app, 'Transfer');
         await expectSelectedComboValue(

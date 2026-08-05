@@ -143,7 +143,7 @@ carrier_detect=ignore
 「Backspaceコード」は、Backspaceキーを押したときに送信する制御コードを選択します。「BS」はASCII BS（`0x08`）、「DEL」はASCII DEL（`0x7f`）を送信します。接続先でBackspaceキーを押しても文字が消えない場合や、`^H` などが表示される場合は、この設定を切り替えて下さい。Deleteキーはこの設定にかかわらずDELを送信します。
 
 「カーソルキーモード」の「通常」は、`libvte` が生成した通常のエスケープシーケンスをそのまま送信します。
-「ADM」は、 ([ADM-3A](https://www.bitsavers.org/pdf/learSiegler/ADM_3/ADM3A_Maint.pdf) 互換端末やホスト (主にRLogin由来と思われる) で使用される一バイトの制御コードへ変換し、上を `0x1e`、下を `0x1f`、右を `0x1c`、左を `0x1d` として送信します。接続先が ADM-3A 系のカーソルキーを要求する場合に使用して下さい。
+「TRS80」は、 TRS-80 Model 100/200, MSX, IBM PC GW-BASIC/Quick BASIC で使用される1バイトの制御コードへ変換し、上を `0x1e`、下を `0x1f`、右を `0x1c`、左を `0x1d` として送信します。接続先が TRS-80 系のカーソルキーを要求する場合に使用して下さい。
 
 接続種別ごとの組み込み既定値は次の通りです。
 

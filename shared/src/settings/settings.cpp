@@ -599,7 +599,7 @@ const char *terminal_backspace_code_to_string(TerminalBackspaceCode code) {
 }
 
 const char *terminal_cursor_key_mode_to_string(TerminalCursorKeyMode mode) {
-  return mode == TerminalCursorKeyMode::adm3 ? "adm3" : "normal";
+  return mode == TerminalCursorKeyMode::trs80 ? "trs80" : "normal";
 }
 
 TerminalTextSettings
@@ -610,7 +610,7 @@ default_terminal_text_settings(TerminalConnectionKind kind) {
     settings.backspace_code = TerminalBackspaceCode::bs;
   }
   if (kind == TerminalConnectionKind::serial) {
-    settings.cursor_key_mode = TerminalCursorKeyMode::adm3;
+    settings.cursor_key_mode = TerminalCursorKeyMode::trs80;
   }
   return settings;
 }
@@ -635,8 +635,8 @@ TerminalTextSettings terminal_text_settings(const SettingsStore &store,
     const std::string configured = setting_string_value_or_default(
         store, terminal_cursor_key_mode_setting_key(),
         terminal_cursor_key_mode_to_string(settings.cursor_key_mode));
-    settings.cursor_key_mode = configured == "adm3"
-                                   ? TerminalCursorKeyMode::adm3
+    settings.cursor_key_mode = configured == "trs80"
+                                   ? TerminalCursorKeyMode::trs80
                                    : TerminalCursorKeyMode::normal;
   }
   return settings;

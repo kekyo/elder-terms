@@ -111,8 +111,8 @@ static bool validate_terminal_backspace_code(const SettingValue &value,
 static bool validate_terminal_cursor_key_mode(const SettingValue &value,
                                               std::string *reason) {
   const auto *text = std::get_if<std::string>(&value);
-  if (text == nullptr || (*text != "normal" && *text != "adm3")) {
-    *reason = "must be normal or adm3";
+  if (text == nullptr || (*text != "normal" && *text != "trs80")) {
+    *reason = "must be normal or trs80";
     return false;
   }
   return true;

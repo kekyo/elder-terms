@@ -267,8 +267,8 @@ msgid "Normal"
 msgstr "Обычный"
 
 #: shared/src/settings-widget/settings-presentation.cpp:105
-msgid "ADM3"
-msgstr "ADM3"
+msgid "TRS80"
+msgstr "TRS80"
 
 #: shared/src/settings-widget/settings-presentation.cpp:106
 #: shared/src/settings-widget/settings-presentation.cpp:109

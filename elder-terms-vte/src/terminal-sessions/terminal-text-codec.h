@@ -67,7 +67,7 @@ public:
  * Stateful character and special-code converter at the VTE UTF-8 boundary.
  *
  * @remarks Backend input is decoded to UTF-8. VTE commit input is optionally
- * remapped for ADM3 cursor keys and encoded to the configured backend
+ * remapped for TRS80 cursor keys and encoded to the configured backend
  * character set. Conversion state and incomplete multibyte sequences are
  * retained between calls.
  */

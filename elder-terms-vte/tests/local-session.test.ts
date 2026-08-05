@@ -649,7 +649,7 @@ describe.concurrent('elder-terms-vte local session', () => {
       await chmod(shellPath, 0o755);
       await writeFile(
         configPath,
-        `[terminal]\nauto_close=false\nencoding=SHIFT-JIS\ncursor_key_mode=adm3\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
+        `[terminal]\nauto_close=false\nencoding=SHIFT-JIS\ncursor_key_mode=trs80\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
         'utf8'
       );
 

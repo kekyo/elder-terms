@@ -51,8 +51,8 @@ enum class TerminalBackspaceCode {
 enum class TerminalCursorKeyMode {
   /** Preserve VTE cursor-key escape sequences. */
   normal,
-  /** Rewrite cursor-key sequences to ADM3 one-byte codes. */
-  adm3,
+  /** Rewrite cursor-key sequences to Tandy TRS-80 Model 100/200 codes. */
+  trs80,
 };
 
 /**

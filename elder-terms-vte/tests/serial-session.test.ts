@@ -303,7 +303,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
     });
   });
 
-  it('applies serial terminal backspace and ADM3 cursor settings', async (context) => {
+  it('applies serial terminal backspace and TRS80 cursor settings', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const helper = await startSerialPtyHelper();
       try {
@@ -312,7 +312,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
         await symlink(helper.slavePath, serialDevicePath);
         await writeFile(
           configPath,
-          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\nbackspace_code=del\ncursor_key_mode=adm3\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\nbackspace_code=del\ncursor_key_mode=trs80\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
           'utf8'
         );
 
@@ -705,7 +705,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
         await writeFile(sourcePath, '日本\x1b[A', 'utf8');
         await writeFile(
           configPath,
-          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\nencoding=SHIFT-JIS\ncursor_key_mode=adm3\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
+          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\nencoding=SHIFT-JIS\ncursor_key_mode=trs80\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
           'utf8'
         );
 
