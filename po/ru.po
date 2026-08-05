@@ -70,6 +70,14 @@ msgid "Zoom factor"
 msgstr "Коэффициент масштабирования"
 
 #: shared/src/settings-widget/settings-presentation.cpp:43
+msgid "Primary font family"
+msgstr "Основное семейство шрифтов"
+
+#: shared/src/settings-widget/settings-presentation.cpp:45
+msgid "Secondary font family"
+msgstr "Дополнительное семейство шрифтов"
+
+#: shared/src/settings-widget/settings-presentation.cpp:43
 msgid "Close window when session ends"
 msgstr "Закрыть окно по завершении сеанса"
 
@@ -361,6 +369,18 @@ msgstr "Отменить"
 #: shared/src/settings-widget/settings-presentation.cpp:158
 msgid "Reset"
 msgstr "Сбросить"
+
+#: shared/src/settings-widget/settings-presentation.cpp:176
+msgid "Override"
+msgstr "Переопределить"
+
+#: shared/src/settings-widget/settings-presentation.cpp:178
+msgid "Select Primary Terminal Font"
+msgstr "Выбрать основной шрифт терминала"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+msgid "Select Secondary Terminal Font"
+msgstr "Выбрать дополнительный шрифт терминала"
 
 #: shared/src/settings-widget/settings-presentation.cpp:160
 msgid "Enabled"

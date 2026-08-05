@@ -903,6 +903,8 @@ describe.concurrent('shared settings widget', () => {
               '列数',
               '行数',
               '拡大率',
+              'プライマリフォントファミリー',
+              'セカンダリフォントファミリー',
               'セッション終了時にウィンドウを閉じる',
               '拡大ショートカット',
               '縮小ショートカット',
@@ -930,6 +932,14 @@ describe.concurrent('shared settings widget', () => {
         for (const page of pages) {
           await expectPageLabels(app, page.id, page.labels);
         }
+        const primaryFontOverride = await app.getById(
+          'global_settings_terminal_font_primary_override_check'
+        );
+        const fallbackFontOverride = await app.getById(
+          'global_settings_terminal_font_fallback_override_check'
+        );
+        expect((await primaryFontOverride.info()).name).toBe('上書き');
+        expect((await fallbackFontOverride.info()).name).toBe('上書き');
         expect(
           (await (await app.getById('global_settings_apply_button')).info())
             .name

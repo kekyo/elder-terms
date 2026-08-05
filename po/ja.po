@@ -69,6 +69,14 @@ msgid "Zoom factor"
 msgstr "拡大率"
 
 #: shared/src/settings-widget/settings-presentation.cpp:43
+msgid "Primary font family"
+msgstr "プライマリフォントファミリー"
+
+#: shared/src/settings-widget/settings-presentation.cpp:45
+msgid "Secondary font family"
+msgstr "セカンダリフォントファミリー"
+
+#: shared/src/settings-widget/settings-presentation.cpp:43
 msgid "Close window when session ends"
 msgstr "セッション終了時にウィンドウを閉じる"
 
@@ -360,6 +368,18 @@ msgstr "キャンセル"
 #: shared/src/settings-widget/settings-presentation.cpp:158
 msgid "Reset"
 msgstr "リセット"
+
+#: shared/src/settings-widget/settings-presentation.cpp:176
+msgid "Override"
+msgstr "上書き"
+
+#: shared/src/settings-widget/settings-presentation.cpp:178
+msgid "Select Primary Terminal Font"
+msgstr "プライマリ端末フォントを選択"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+msgid "Select Secondary Terminal Font"
+msgstr "セカンダリ端末フォントを選択"
 
 #: shared/src/settings-widget/settings-presentation.cpp:160
 msgid "Enabled"

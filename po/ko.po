@@ -69,6 +69,14 @@ msgid "Zoom factor"
 msgstr "확대/축소 비율"
 
 #: shared/src/settings-widget/settings-presentation.cpp:43
+msgid "Primary font family"
+msgstr "기본 글꼴 모음"
+
+#: shared/src/settings-widget/settings-presentation.cpp:45
+msgid "Secondary font family"
+msgstr "보조 글꼴 모음"
+
+#: shared/src/settings-widget/settings-presentation.cpp:43
 msgid "Close window when session ends"
 msgstr "세션이 끝나면 창을 닫습니다."
 
@@ -360,6 +368,18 @@ msgstr "취소"
 #: shared/src/settings-widget/settings-presentation.cpp:158
 msgid "Reset"
 msgstr "재설정"
+
+#: shared/src/settings-widget/settings-presentation.cpp:176
+msgid "Override"
+msgstr "재정의"
+
+#: shared/src/settings-widget/settings-presentation.cpp:178
+msgid "Select Primary Terminal Font"
+msgstr "기본 터미널 글꼴 선택"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+msgid "Select Secondary Terminal Font"
+msgstr "보조 터미널 글꼴 선택"
 
 #: shared/src/settings-widget/settings-presentation.cpp:160
 msgid "Enabled"

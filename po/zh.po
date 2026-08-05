@@ -69,6 +69,14 @@ msgid "Zoom factor"
 msgstr "缩放系数"
 
 #: shared/src/settings-widget/settings-presentation.cpp:43
+msgid "Primary font family"
+msgstr "主字体族"
+
+#: shared/src/settings-widget/settings-presentation.cpp:45
+msgid "Secondary font family"
+msgstr "辅助字体族"
+
+#: shared/src/settings-widget/settings-presentation.cpp:43
 msgid "Close window when session ends"
 msgstr "会话结束时关闭窗口"
 
@@ -360,6 +368,18 @@ msgstr "取消"
 #: shared/src/settings-widget/settings-presentation.cpp:158
 msgid "Reset"
 msgstr "重置"
+
+#: shared/src/settings-widget/settings-presentation.cpp:176
+msgid "Override"
+msgstr "覆盖"
+
+#: shared/src/settings-widget/settings-presentation.cpp:178
+msgid "Select Primary Terminal Font"
+msgstr "选择主要终端字体"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+msgid "Select Secondary Terminal Font"
+msgstr "选择辅助终端字体"
 
 #: shared/src/settings-widget/settings-presentation.cpp:160
 msgid "Enabled"

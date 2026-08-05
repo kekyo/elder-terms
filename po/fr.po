@@ -69,6 +69,14 @@ msgid "Zoom factor"
 msgstr "Facteur de zoom"
 
 #: shared/src/settings-widget/settings-presentation.cpp:43
+msgid "Primary font family"
+msgstr "Famille de polices principale"
+
+#: shared/src/settings-widget/settings-presentation.cpp:45
+msgid "Secondary font family"
+msgstr "Famille de polices secondaire"
+
+#: shared/src/settings-widget/settings-presentation.cpp:43
 msgid "Close window when session ends"
 msgstr "Fermer la fenêtre à la fin de la session"
 
@@ -360,6 +368,18 @@ msgstr "Annuler"
 #: shared/src/settings-widget/settings-presentation.cpp:158
 msgid "Reset"
 msgstr "Réinitialiser"
+
+#: shared/src/settings-widget/settings-presentation.cpp:176
+msgid "Override"
+msgstr "Remplacer"
+
+#: shared/src/settings-widget/settings-presentation.cpp:178
+msgid "Select Primary Terminal Font"
+msgstr "Sélectionner la police principale du terminal"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+msgid "Select Secondary Terminal Font"
+msgstr "Sélectionner la police secondaire du terminal"
 
 #: shared/src/settings-widget/settings-presentation.cpp:160
 msgid "Enabled"

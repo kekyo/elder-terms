@@ -69,6 +69,14 @@ msgid "Zoom factor"
 msgstr "ज़ूम कारक"
 
 #: shared/src/settings-widget/settings-presentation.cpp:43
+msgid "Primary font family"
+msgstr "प्राथमिक फ़ॉन्ट परिवार"
+
+#: shared/src/settings-widget/settings-presentation.cpp:45
+msgid "Secondary font family"
+msgstr "द्वितीयक फ़ॉन्ट परिवार"
+
+#: shared/src/settings-widget/settings-presentation.cpp:43
 msgid "Close window when session ends"
 msgstr "सत्र समाप्त होने पर विंडो बंद करें"
 
@@ -360,6 +368,18 @@ msgstr "रद्द करें"
 #: shared/src/settings-widget/settings-presentation.cpp:158
 msgid "Reset"
 msgstr "रीसेट करें"
+
+#: shared/src/settings-widget/settings-presentation.cpp:176
+msgid "Override"
+msgstr "अधिलेखित करें"
+
+#: shared/src/settings-widget/settings-presentation.cpp:178
+msgid "Select Primary Terminal Font"
+msgstr "प्राथमिक टर्मिनल फ़ॉन्ट चुनें"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+msgid "Select Secondary Terminal Font"
+msgstr "द्वितीयक टर्मिनल फ़ॉन्ट चुनें"
 
 #: shared/src/settings-widget/settings-presentation.cpp:160
 msgid "Enabled"

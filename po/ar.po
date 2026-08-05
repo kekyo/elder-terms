@@ -70,6 +70,14 @@ msgid "Zoom factor"
 msgstr "عامل التكبير/التصغير"
 
 #: shared/src/settings-widget/settings-presentation.cpp:43
+msgid "Primary font family"
+msgstr "عائلة الخط الأساسية"
+
+#: shared/src/settings-widget/settings-presentation.cpp:45
+msgid "Secondary font family"
+msgstr "عائلة الخط الثانوية"
+
+#: shared/src/settings-widget/settings-presentation.cpp:43
 msgid "Close window when session ends"
 msgstr "إغلاق النافذة عند انتهاء الجلسة"
 
@@ -361,6 +369,18 @@ msgstr "إلغاء"
 #: shared/src/settings-widget/settings-presentation.cpp:158
 msgid "Reset"
 msgstr "إعادة تعيين"
+
+#: shared/src/settings-widget/settings-presentation.cpp:176
+msgid "Override"
+msgstr "تجاوز"
+
+#: shared/src/settings-widget/settings-presentation.cpp:178
+msgid "Select Primary Terminal Font"
+msgstr "اختر خط الطرفية الأساسي"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+msgid "Select Secondary Terminal Font"
+msgstr "اختر خط الطرفية الثانوي"
 
 #: shared/src/settings-widget/settings-presentation.cpp:160
 msgid "Enabled"
