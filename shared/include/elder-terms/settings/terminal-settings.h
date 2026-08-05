@@ -23,6 +23,19 @@ struct TerminalDisplaySettings {
 };
 
 /**
+ * Ordered terminal font family overrides.
+ *
+ * The fallback family is used after the primary family when the primary font
+ * does not contain a requested glyph. Neither value contains a font size.
+ */
+struct TerminalFontFamilies {
+  /** Primary font family, or no value to retain VTE's default family. */
+  std::optional<std::string> primary_family;
+  /** Secondary fallback family, or no value to use normal system fallback. */
+  std::optional<std::string> fallback_family;
+};
+
+/**
  * Keyboard bindings for terminal display actions.
  */
 struct TerminalKeyBindings {
@@ -61,6 +74,20 @@ ELDER_TERMS_API SettingKey terminal_height_setting_key();
  * @returns Setting key for terminal font scale.
  */
 ELDER_TERMS_API SettingKey terminal_zoom_setting_key();
+
+/**
+ * Returns the setting key for [terminal] font_primary_family.
+ *
+ * @returns Setting key for the primary terminal font family.
+ */
+ELDER_TERMS_API SettingKey terminal_font_primary_family_setting_key();
+
+/**
+ * Returns the setting key for [terminal] font_fallback_family.
+ *
+ * @returns Setting key for the secondary terminal font family.
+ */
+ELDER_TERMS_API SettingKey terminal_font_fallback_family_setting_key();
 
 /**
  * Returns the setting key for [terminal] auto_close.
@@ -140,6 +167,15 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults);
  */
 ELDER_TERMS_API TerminalDisplaySettings
 terminal_display_settings(const SettingsStore &store);
+
+/**
+ * Extracts ordered terminal font family overrides from a store.
+ *
+ * @param store Source settings store.
+ * @returns Primary and secondary family overrides without a font size.
+ */
+ELDER_TERMS_API TerminalFontFamilies
+terminal_font_families(const SettingsStore &store);
 
 /**
  * Extracts the terminal auto-close behavior from a store.

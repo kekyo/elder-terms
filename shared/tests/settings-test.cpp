@@ -92,6 +92,7 @@ using elder_terms::TerminalConnectionKind;
 using elder_terms::TerminalConnectionProfile;
 using elder_terms::TerminalCursorKeyMode;
 using elder_terms::TerminalDisplaySettings;
+using elder_terms::TerminalFontFamilies;
 using elder_terms::TerminalTextSettings;
 using elder_terms::terminal_auto_close;
 using elder_terms::terminal_backspace_code_setting_key;
@@ -102,6 +103,9 @@ using elder_terms::terminal_display_settings;
 using elder_terms::terminal_encoding_choices;
 using elder_terms::terminal_encoding_name_is_valid;
 using elder_terms::terminal_encoding_setting_key;
+using elder_terms::terminal_font_fallback_family_setting_key;
+using elder_terms::terminal_font_families;
+using elder_terms::terminal_font_primary_family_setting_key;
 using elder_terms::terminal_height_setting_key;
 using elder_terms::terminal_width_setting_key;
 using elder_terms::terminal_zoom_setting_key;
@@ -183,6 +187,11 @@ static void test_default_settings() {
   expect_true(display.width == 80, "default terminal width should be 80");
   expect_true(display.height == 24, "default terminal height should be 24");
   expect_true(display.zoom == 1.2, "default terminal zoom should be retained");
+  const TerminalFontFamilies fonts = terminal_font_families(store);
+  expect_true(!fonts.primary_family.has_value(),
+              "the default primary terminal font should remain unspecified");
+  expect_true(!fonts.fallback_family.has_value(),
+              "the default fallback terminal font should remain unspecified");
   expect_true(terminal_auto_close(store),
               "default terminal auto-close should be enabled");
   const GeneralColorSettings colors = general_color_settings(store);
@@ -262,6 +271,64 @@ static void test_default_settings() {
   expect_true(profile.text_settings.cursor_key_mode ==
                   TerminalCursorKeyMode::normal,
               "default local cursor keys should use normal sequences");
+}
+
+static void test_terminal_font_family_settings_round_trip_and_layering() {
+  const std::filesystem::path global_path =
+      temporary_config_path("global-terminal-fonts");
+  const std::filesystem::path connection_path =
+      temporary_config_path("connection-terminal-fonts");
+  write_config(global_path,
+               "[terminal]\n"
+               "font_primary_family=Global Latin\n"
+               "font_fallback_family=Global CJK\n");
+  write_config(connection_path,
+               "[terminal]\n"
+               "font_primary_family=Connection Latin\n");
+
+  SettingsLoadResult loaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  remove_config(global_path);
+
+  TerminalFontFamilies fonts = terminal_font_families(loaded.store);
+  expect_true(fonts.primary_family ==
+                  std::optional<std::string>{"Connection Latin"},
+              "a connection primary font should override the global font");
+  expect_true(fonts.fallback_family ==
+                  std::optional<std::string>{"Global CJK"},
+              "an unspecified fallback font should inherit the global font");
+  expect_true(setting_value_source(
+                  loaded.store,
+                  terminal_font_primary_family_setting_key()) ==
+                  SettingValueSource::override,
+              "the connection primary font should report an override source");
+  expect_true(setting_value_source(
+                  loaded.store,
+                  terminal_font_fallback_family_setting_key()) ==
+                  SettingValueSource::global,
+              "the inherited fallback font should report a global source");
+
+  expect_true(
+      set_explicit_setting_value(
+          &loaded.store, terminal_font_fallback_family_setting_key(),
+          elder_terms::SettingValue{std::string("Connection CJK")}),
+      "a fallback font family override should be accepted");
+  const SettingsSaveResult save_result =
+      save_settings(loaded.store, connection_path);
+  expect_true(save_result.saved, "terminal font families should save");
+  const std::string content = read_config(connection_path);
+  remove_config(connection_path);
+  expect_true(content.find("font_primary_family=Connection Latin") !=
+                  std::string::npos,
+              "the primary font family should be persisted");
+  expect_true(content.find("font_fallback_family=Connection CJK") !=
+                  std::string::npos,
+              "the fallback font family should be persisted");
 }
 
 static void test_general_color_settings() {
@@ -1588,6 +1655,16 @@ static void test_public_setting_keys() {
               "terminal height key should use the height name");
   expect_true(terminal_zoom_setting_key().name == "zoom",
               "terminal zoom key should use the zoom name");
+  expect_true(
+      terminal_font_primary_family_setting_key().section == "terminal" &&
+          terminal_font_primary_family_setting_key().name ==
+              "font_primary_family",
+      "primary font family key should use [terminal] font_primary_family");
+  expect_true(
+      terminal_font_fallback_family_setting_key().section == "terminal" &&
+          terminal_font_fallback_family_setting_key().name ==
+              "font_fallback_family",
+      "fallback font family key should use [terminal] font_fallback_family");
   expect_true(terminal_auto_close_setting_key().name == "auto_close",
               "terminal auto_close key should use the auto_close name");
   expect_true(terminal_zoom_in_key_setting_key().section == "terminal" &&
@@ -2993,6 +3070,8 @@ static void test_save_empty_global_settings_creates_parent_directory() {
 int main() {
   try {
     elder_terms_settings_test::test_default_settings();
+    elder_terms_settings_test::
+        test_terminal_font_family_settings_round_trip_and_layering();
     elder_terms_settings_test::test_connection_name_settings();
     elder_terms_settings_test::test_general_color_settings();
     elder_terms_settings_test::

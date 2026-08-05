@@ -17,6 +17,10 @@ static constexpr char terminal_section[] = "terminal";
 static constexpr char terminal_width_key[] = "width";
 static constexpr char terminal_height_key[] = "height";
 static constexpr char terminal_zoom_key[] = "zoom";
+static constexpr char terminal_font_primary_family_key[] =
+    "font_primary_family";
+static constexpr char terminal_font_fallback_family_key[] =
+    "font_fallback_family";
 static constexpr char terminal_auto_close_key[] = "auto_close";
 static constexpr char terminal_zoom_in_key_name[] = "zoom_in_key";
 static constexpr char terminal_zoom_out_key_name[] = "zoom_out_key";
@@ -68,6 +72,16 @@ static bool validate_zoom(const SettingValue &value, std::string *reason) {
   const auto *number = std::get_if<gdouble>(&value);
   if (number == nullptr || *number <= 0.0 || !std::isfinite(*number)) {
     *reason = "must be a positive finite number";
+    return false;
+  }
+  return true;
+}
+
+static bool validate_font_family(const SettingValue &value,
+                                 std::string *reason) {
+  const auto *text = std::get_if<std::string>(&value);
+  if (text == nullptr || trim_ascii_whitespace(*text).empty()) {
+    *reason = "must be a non-empty font family name";
     return false;
   }
   return true;
@@ -140,6 +154,14 @@ SettingKey terminal_height_setting_key() {
 
 SettingKey terminal_zoom_setting_key() {
   return terminal_key(terminal_zoom_key);
+}
+
+SettingKey terminal_font_primary_family_setting_key() {
+  return terminal_key(terminal_font_primary_family_key);
+}
+
+SettingKey terminal_font_fallback_family_setting_key() {
+  return terminal_key(terminal_font_fallback_family_key);
 }
 
 SettingKey terminal_auto_close_setting_key() {
@@ -225,6 +247,16 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .validate = validate_zoom,
       },
       {
+          .key = terminal_font_primary_family_setting_key(),
+          .default_value = SettingValue{std::string{}},
+          .validate = validate_font_family,
+      },
+      {
+          .key = terminal_font_fallback_family_setting_key(),
+          .default_value = SettingValue{std::string{}},
+          .validate = validate_font_family,
+      },
+      {
           .key = terminal_auto_close_setting_key(),
           .default_value = SettingValue{default_terminal_auto_close},
           .validate = nullptr,
@@ -269,6 +301,23 @@ TerminalDisplaySettings terminal_display_settings(const SettingsStore &store) {
           store, terminal_height_setting_key(), default_terminal_height)),
       .zoom = setting_double_value_or_default(
           store, terminal_zoom_setting_key(), gdouble{1.0}),
+  };
+}
+
+TerminalFontFamilies terminal_font_families(const SettingsStore &store) {
+  const std::string primary = trim_ascii_whitespace(
+      setting_string_value_or_default(
+          store, terminal_font_primary_family_setting_key(), ""));
+  const std::string fallback = trim_ascii_whitespace(
+      setting_string_value_or_default(
+          store, terminal_font_fallback_family_setting_key(), ""));
+  return {
+      .primary_family =
+          primary.empty() ? std::nullopt
+                          : std::optional<std::string>{primary},
+      .fallback_family =
+          fallback.empty() ? std::nullopt
+                           : std::optional<std::string>{fallback},
   };
 }
 
