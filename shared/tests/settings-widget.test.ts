@@ -2953,10 +2953,12 @@ describe.concurrent('shared settings widget', () => {
         ).click();
 
         const applied = await waitForAppliedStore(app);
-        expect(applied.font_primary_family).toBe('');
+        expect((await app.output()).stdout).toContain(
+          'font_primary_family=Noto Sans Mono font_fallback_family=Monospace'
+        );
         expect(applied.font_primary_family_source).toBe('override');
         expect(applied.font_primary_family_explicit).toBe('true');
-        expect(applied.font_fallback_family).toBe('');
+        expect(applied.font_fallback_family).toBe('Monospace');
         expect(applied.font_fallback_family_source).toBe('override');
         expect(applied.font_fallback_family_explicit).toBe('true');
       }
@@ -2988,7 +2990,9 @@ describe.concurrent('shared settings widget', () => {
         ).click();
 
         const saved = await waitForPrintedStore(app, 'SAVED');
-        expect(saved.font_primary_family).toBe('');
+        expect((await app.output()).stdout).toContain(
+          'font_primary_family=Noto Sans Mono font_fallback_family=IPAGothic'
+        );
         expect(saved.font_primary_family_explicit).toBe('false');
         expect(saved.font_fallback_family).toBe('IPAGothic');
         expect(saved.font_fallback_family_explicit).toBe('true');

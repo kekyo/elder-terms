@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, type TestContext } from 'vitest';
 import {
@@ -762,6 +762,9 @@ const readPngFile = async (path: string): Promise<PngImage> =>
 /**
  * Asserts that a terminal capture matches an expected fixture image.
  *
+ * @remarks Set `ELDER_TERMS_UPDATE_VTE_FIXTURES=1` to replace the fixture
+ * with the current capture before comparing it.
+ *
  * @param terminal Terminal widget to capture.
  * @param name Evidence and comparison name.
  * @param masterImagePath Expected PNG path.
@@ -785,6 +788,10 @@ export const assertTerminalCaptureMatches = async (
     name,
     async () => capture
   );
+  if (process.env.ELDER_TERMS_UPDATE_VTE_FIXTURES === '1') {
+    await mkdir(dirname(masterImagePath), { recursive: true });
+    await writeFile(masterImagePath, savedCapture.image);
+  }
   const expectedPng = await readPngFile(masterImagePath);
   const savedPng = readPng(savedCapture);
 

@@ -3,6 +3,8 @@
 #include <cstring>
 #include <iostream>
 
+#include <elder-terms/settings.h>
+
 namespace elder_terms {
 
 static bool expect(bool condition, const char *message) {
@@ -62,6 +64,28 @@ static bool ordered_families_preserve_every_non_family_field() {
   return passed;
 }
 
+static bool built_in_families_preserve_the_runtime_font_size() {
+  const SettingsStore store = create_default_settings(
+      default_terminal_display_settings(1.0), "elder-terms");
+  const TerminalFontFamilies families = terminal_font_families(store);
+  PangoFontDescription *base = create_base_font();
+  PangoFontDescription *font =
+      create_terminal_font_description(base, families);
+
+  const char *family = pango_font_description_get_family(font);
+  const bool passed =
+      expect(family != nullptr &&
+                 std::strcmp(family, "Noto Sans Mono,Monospace") == 0,
+             "the built-in families should be ordered for fallback") &&
+      expect(pango_font_description_get_size(font) ==
+                 pango_font_description_get_size(base),
+             "the built-in families should preserve the runtime font size");
+
+  pango_font_description_free(font);
+  pango_font_description_free(base);
+  return passed;
+}
+
 static bool fallback_only_keeps_the_runtime_family_first() {
   PangoFontDescription *base = create_base_font();
   PangoFontDescription *font = create_terminal_font_description(
@@ -102,6 +126,8 @@ static bool unspecified_families_leave_the_runtime_font_unchanged() {
 
 int main() {
   return elder_terms::ordered_families_preserve_every_non_family_field() &&
+                 elder_terms::
+                     built_in_families_preserve_the_runtime_font_size() &&
                  elder_terms::fallback_only_keeps_the_runtime_family_first() &&
                  elder_terms::
                      unspecified_families_leave_the_runtime_font_unchanged()

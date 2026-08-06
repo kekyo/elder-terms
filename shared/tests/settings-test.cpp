@@ -188,10 +188,12 @@ static void test_default_settings() {
   expect_true(display.height == 24, "default terminal height should be 24");
   expect_true(display.zoom == 1.2, "default terminal zoom should be retained");
   const TerminalFontFamilies fonts = terminal_font_families(store);
-  expect_true(!fonts.primary_family.has_value(),
-              "the default primary terminal font should remain unspecified");
-  expect_true(!fonts.fallback_family.has_value(),
-              "the default fallback terminal font should remain unspecified");
+  expect_true(fonts.primary_family ==
+                  std::optional<std::string>{"Noto Sans Mono"},
+              "the default primary terminal font should be Noto Sans Mono");
+  expect_true(fonts.fallback_family ==
+                  std::optional<std::string>{"Monospace"},
+              "the default fallback terminal font should be Monospace");
   expect_true(terminal_auto_close(store),
               "default terminal auto-close should be enabled");
   const GeneralColorSettings colors = general_color_settings(store);
@@ -355,11 +357,12 @@ static void test_terminal_font_family_defaults_override_global_fonts() {
   remove_config(global_path);
 
   const TerminalFontFamilies fonts = terminal_font_families(loaded.store);
-  expect_true(!fonts.primary_family.has_value(),
-              "an explicit default should suppress the global primary font");
-  expect_true(
-      !fonts.fallback_family.has_value(),
-      "an explicit default should suppress the global fallback font");
+  expect_true(fonts.primary_family ==
+                  std::optional<std::string>{"Noto Sans Mono"},
+              "an explicit default should restore the built-in primary font");
+  expect_true(fonts.fallback_family ==
+                  std::optional<std::string>{"Monospace"},
+              "an explicit default should restore the built-in fallback font");
   expect_true(setting_value_source(
                   loaded.store,
                   terminal_font_primary_family_setting_key()) ==

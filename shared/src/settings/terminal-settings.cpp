@@ -21,7 +21,10 @@ static constexpr char terminal_font_primary_family_key[] =
     "font_primary_family";
 static constexpr char terminal_font_fallback_family_key[] =
     "font_fallback_family";
-static constexpr char default_terminal_font_family[] = "default";
+static constexpr char terminal_font_default_value[] = "default";
+static constexpr char default_terminal_font_primary_family[] =
+    "Noto Sans Mono";
+static constexpr char default_terminal_font_fallback_family[] = "Monospace";
 static constexpr char terminal_auto_close_key[] = "auto_close";
 static constexpr char terminal_zoom_in_key_name[] = "zoom_in_key";
 static constexpr char terminal_zoom_out_key_name[] = "zoom_out_key";
@@ -89,10 +92,11 @@ static bool validate_font_family(const SettingValue &value,
 }
 
 static std::optional<std::string>
-terminal_font_family_value(const std::string &value) {
+terminal_font_family_value(const std::string &value,
+                           const char *default_family) {
   const std::string normalized = trim_ascii_whitespace(value);
-  if (normalized.empty() || normalized == default_terminal_font_family) {
-    return std::nullopt;
+  if (normalized.empty() || normalized == terminal_font_default_value) {
+    return std::string(default_family);
   }
   return normalized;
 }
@@ -318,10 +322,12 @@ TerminalFontFamilies terminal_font_families(const SettingsStore &store) {
   return {
       .primary_family = terminal_font_family_value(
           setting_string_value_or_default(
-              store, terminal_font_primary_family_setting_key(), "")),
+              store, terminal_font_primary_family_setting_key(), ""),
+          default_terminal_font_primary_family),
       .fallback_family = terminal_font_family_value(
           setting_string_value_or_default(
-              store, terminal_font_fallback_family_setting_key(), "")),
+              store, terminal_font_fallback_family_setting_key(), ""),
+          default_terminal_font_fallback_family),
   };
 }
 

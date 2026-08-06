@@ -23,7 +23,7 @@ struct TerminalDisplaySettings {
 };
 
 /**
- * Ordered terminal font family overrides.
+ * Ordered terminal font families.
  *
  * The fallback family is used after the primary family when the primary font
  * does not contain a requested glyph. Neither value contains a font size.
@@ -169,10 +169,10 @@ ELDER_TERMS_API TerminalDisplaySettings
 terminal_display_settings(const SettingsStore &store);
 
 /**
- * Extracts ordered terminal font family overrides from a store.
+ * Extracts the resolved ordered terminal font families from a store.
  *
  * @param store Source settings store.
- * @returns Primary and secondary family overrides without a font size.
+ * @returns Primary and secondary families without a font size.
  */
 ELDER_TERMS_API TerminalFontFamilies
 terminal_font_families(const SettingsStore &store);
