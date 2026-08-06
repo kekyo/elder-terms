@@ -1011,14 +1011,8 @@ static void sync_terminal_font_controls(SettingsWidgetState *state) {
           : FALSE);
   set_font_button_family(state->terminal_font_primary_button, primary);
   set_font_button_family(state->terminal_font_fallback_button, fallback);
-  gtk_widget_set_sensitive(
-      state->terminal_font_primary_button,
-      gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(
-          state->terminal_font_primary_override_check)));
-  gtk_widget_set_sensitive(
-      state->terminal_font_fallback_button,
-      gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(
-          state->terminal_font_fallback_override_check)));
+  gtk_widget_set_sensitive(state->terminal_font_primary_button, TRUE);
+  gtk_widget_set_sensitive(state->terminal_font_fallback_button, TRUE);
 }
 
 static void update_terminal_font_override_from_widget(
@@ -1044,15 +1038,17 @@ static void update_terminal_font_override_from_widget(
 static void update_terminal_font_family_from_widget(
     SettingsWidgetState *state, GtkWidget *override_check,
     GtkWidget *button, const SettingKey &key) {
-  if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(override_check)) ==
-      FALSE) {
+  const std::optional<std::string> family = font_button_family(button);
+  if (!family.has_value()) {
     return;
   }
-  const std::optional<std::string> family = font_button_family(button);
-  if (family.has_value()) {
-    set_explicit_setting_value(&state->draft_store, key,
-                               SettingValue{family.value()});
-  }
+
+  const bool previous_synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(override_check), TRUE);
+  state->synchronizing = previous_synchronizing;
+  set_explicit_setting_value(&state->draft_store, key,
+                             SettingValue{family.value()});
 }
 
 enum class GeneralColorField {

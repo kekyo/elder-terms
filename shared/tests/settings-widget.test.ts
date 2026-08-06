@@ -372,6 +372,28 @@ const chooseNamedColor = async (
   });
 };
 
+const confirmSelectedFont = async (
+  app: GtkApp,
+  pickerId: string,
+  dialogName: string
+): Promise<void> => {
+  await expectElementKind(await app.getById(pickerId), 'button').click();
+  const dialog = await waitForResult(async () => {
+    const window = await findWindowByName(app, dialogName);
+    if (window === undefined) {
+      throw new Error('font chooser dialog is not open');
+    }
+    return window;
+  });
+  await expectElementKind(
+    await findDescendantByName(dialog, 'button', 'Select'),
+    'button'
+  ).click();
+  await waitForResult(async () => {
+    expect(await findWindowByName(app, dialogName)).toBeUndefined();
+  });
+};
+
 const visibleSettingsTabNames = async (
   app: GtkApp,
   idPrefix = 'settings'
@@ -2736,7 +2758,7 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
-  it('applies, saves, and cancels family-only terminal font overrides', async (context) => {
+  it('selects, applies, saves, and cancels family-only terminal font overrides', async (context) => {
     await runSharedGtkTest(
       context,
       [
@@ -2766,8 +2788,8 @@ describe.concurrent('shared settings widget', () => {
 
         expect(await primaryOverride.isChecked()).toBe(false);
         expect(await fallbackOverride.isChecked()).toBe(false);
-        await expectInsensitive(primaryButton);
-        await expectInsensitive(fallbackButton);
+        await expectSensitive(primaryButton);
+        await expectSensitive(fallbackButton);
         await waitForResult(async () => {
           const output = (await app.output()).stdout;
           expect(output).toContain('primary_present=true');
@@ -2805,8 +2827,20 @@ describe.concurrent('shared settings widget', () => {
           visualComparisonOptions
         );
 
-        await primaryOverride.toggle();
-        await fallbackOverride.toggle();
+        await confirmSelectedFont(
+          app,
+          'settings_terminal_font_primary_button',
+          'Select Primary Terminal Font'
+        );
+        expect(await primaryOverride.isChecked()).toBe(true);
+        expect(await fallbackOverride.isChecked()).toBe(false);
+        await confirmSelectedFont(
+          app,
+          'settings_terminal_font_fallback_button',
+          'Select Secondary Terminal Font'
+        );
+        expect(await primaryOverride.isChecked()).toBe(true);
+        expect(await fallbackOverride.isChecked()).toBe(true);
         await expectSensitive(primaryButton);
         await expectSensitive(fallbackButton);
         await waitForChangedState(app, 'CHANGED dirty=true valid=true');
