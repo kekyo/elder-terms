@@ -43,6 +43,8 @@ static constexpr char terminal_cursor_normal[] = "normal";
 static constexpr char terminal_cursor_trs80[] = "trs80";
 static constexpr char terminal_log_raw[] = "raw";
 static constexpr char terminal_log_cooked[] = "cooked";
+static constexpr char terminal_font_default[] = "default";
+static constexpr char terminal_font_custom[] = "custom";
 static constexpr char general_color_none[] = "none";
 static constexpr char general_color_custom[] = "custom";
 static constexpr char inherit_choice[] = "inherit";
@@ -97,9 +99,9 @@ struct SettingsWidgetState {
   GtkWidget *terminal_width_entry = nullptr;
   GtkWidget *terminal_height_entry = nullptr;
   GtkWidget *terminal_zoom_entry = nullptr;
-  GtkWidget *terminal_font_primary_override_check = nullptr;
+  GtkWidget *terminal_font_primary_mode_combo = nullptr;
   GtkWidget *terminal_font_primary_button = nullptr;
-  GtkWidget *terminal_font_fallback_override_check = nullptr;
+  GtkWidget *terminal_font_fallback_mode_combo = nullptr;
   GtkWidget *terminal_font_fallback_button = nullptr;
   GtkWidget *terminal_auto_close_combo = nullptr;
   GtkWidget *terminal_encoding_combo = nullptr;
@@ -995,32 +997,57 @@ static void sync_terminal_font_controls(SettingsWidgetState *state) {
       fonts.primary_family.value_or(default_font_button_family);
   const std::string fallback = fonts.fallback_family.value_or(primary);
 
-  gtk_toggle_button_set_active(
-      GTK_TOGGLE_BUTTON(state->terminal_font_primary_override_check),
-      setting_has_explicit_value(
-          state->draft_store,
-          terminal_font_primary_family_setting_key())
-          ? TRUE
-          : FALSE);
-  gtk_toggle_button_set_active(
-      GTK_TOGGLE_BUTTON(state->terminal_font_fallback_override_check),
-      setting_has_explicit_value(
-          state->draft_store,
-          terminal_font_fallback_family_setting_key())
-          ? TRUE
-          : FALSE);
+  const auto populate_mode_combo = [state](GtkWidget *combo,
+                                            const SettingKey &key) {
+    gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(combo));
+    const std::string fallback_value = std::get<std::string>(
+        setting_fallback_value(state->draft_store, key,
+                               SettingValue{std::string()}));
+    const std::string fallback_display =
+        fallback_value.empty()
+            ? std::string()
+            : fallback_value == terminal_font_default
+                  ? settings_ui_text(SettingsUiText::use_built_in_default)
+                  : settings_ui_text(SettingsUiText::custom_font);
+    const std::string inherited = setting_fallback_label(
+        state->draft_store, key, fallback_display);
+    append_combo_option(combo, inherit_choice, inherited.c_str());
+    append_combo_option(
+        combo, terminal_font_default,
+        settings_ui_text(SettingsUiText::use_built_in_default));
+    append_combo_option(combo, terminal_font_custom,
+                        settings_ui_text(SettingsUiText::custom_font));
+
+    const std::string effective = setting_string_value_or_default(
+        state->draft_store, key, std::string());
+    const char *active = inherit_choice;
+    if (setting_has_explicit_value(state->draft_store, key)) {
+      active = effective == terminal_font_default ? terminal_font_default
+                                                   : terminal_font_custom;
+    }
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo), active);
+  };
+
+  populate_mode_combo(state->terminal_font_primary_mode_combo,
+                      terminal_font_primary_family_setting_key());
+  populate_mode_combo(state->terminal_font_fallback_mode_combo,
+                      terminal_font_fallback_family_setting_key());
   set_font_button_family(state->terminal_font_primary_button, primary);
   set_font_button_family(state->terminal_font_fallback_button, fallback);
   gtk_widget_set_sensitive(state->terminal_font_primary_button, TRUE);
   gtk_widget_set_sensitive(state->terminal_font_fallback_button, TRUE);
 }
 
-static void update_terminal_font_override_from_widget(
-    SettingsWidgetState *state, GtkWidget *override_check,
+static void update_terminal_font_mode_from_widget(
+    SettingsWidgetState *state, GtkWidget *mode_combo,
     GtkWidget *button, const SettingKey &key) {
-  if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(override_check)) ==
-      FALSE) {
+  const std::string choice = active_combo_id(mode_combo, inherit_choice);
+  if (choice == inherit_choice) {
     clear_explicit_setting_value(&state->draft_store, key);
+  } else if (choice == terminal_font_default) {
+    set_explicit_setting_value(
+        &state->draft_store, key,
+        SettingValue{std::string(terminal_font_default)});
   } else {
     const std::optional<std::string> family = font_button_family(button);
     if (family.has_value()) {
@@ -1036,7 +1063,7 @@ static void update_terminal_font_override_from_widget(
 }
 
 static void update_terminal_font_family_from_widget(
-    SettingsWidgetState *state, GtkWidget *override_check,
+    SettingsWidgetState *state, GtkWidget *mode_combo,
     GtkWidget *button, const SettingKey &key) {
   const std::optional<std::string> family = font_button_family(button);
   if (!family.has_value()) {
@@ -1045,7 +1072,8 @@ static void update_terminal_font_family_from_widget(
 
   const bool previous_synchronizing = state->synchronizing;
   state->synchronizing = true;
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(override_check), TRUE);
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(mode_combo),
+                              terminal_font_custom);
   state->synchronizing = previous_synchronizing;
   set_explicit_setting_value(&state->draft_store, key,
                              SettingValue{family.value()});
@@ -2863,7 +2891,9 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
     state->terminal_zoom_valid = true;
     set_entry_validation(state->terminal_zoom_entry, true, {});
   }
-  if (state->terminal_font_primary_button != nullptr &&
+  if (state->terminal_font_primary_mode_combo != nullptr &&
+      state->terminal_font_fallback_mode_combo != nullptr &&
+      state->terminal_font_primary_button != nullptr &&
       state->terminal_font_fallback_button != nullptr) {
     sync_terminal_font_controls(state);
   }
@@ -3284,27 +3314,27 @@ static void on_terminal_auto_close_changed(GtkComboBox *, gpointer data) {
   notify_changed(state);
 }
 
-static void on_terminal_font_primary_override_toggled(GtkToggleButton *,
-                                                       gpointer data) {
+static void on_terminal_font_primary_mode_changed(GtkComboBox *,
+                                                  gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) {
     return;
   }
-  update_terminal_font_override_from_widget(
-      state, state->terminal_font_primary_override_check,
+  update_terminal_font_mode_from_widget(
+      state, state->terminal_font_primary_mode_combo,
       state->terminal_font_primary_button,
       terminal_font_primary_family_setting_key());
   notify_changed(state);
 }
 
-static void on_terminal_font_fallback_override_toggled(GtkToggleButton *,
-                                                        gpointer data) {
+static void on_terminal_font_fallback_mode_changed(GtkComboBox *,
+                                                   gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) {
     return;
   }
-  update_terminal_font_override_from_widget(
-      state, state->terminal_font_fallback_override_check,
+  update_terminal_font_mode_from_widget(
+      state, state->terminal_font_fallback_mode_combo,
       state->terminal_font_fallback_button,
       terminal_font_fallback_family_setting_key());
   notify_changed(state);
@@ -3316,7 +3346,7 @@ static void on_terminal_font_primary_set(GtkFontButton *, gpointer data) {
     return;
   }
   update_terminal_font_family_from_widget(
-      state, state->terminal_font_primary_override_check,
+      state, state->terminal_font_primary_mode_combo,
       state->terminal_font_primary_button,
       terminal_font_primary_family_setting_key());
   notify_changed(state);
@@ -3328,7 +3358,7 @@ static void on_terminal_font_fallback_set(GtkFontButton *, gpointer data) {
     return;
   }
   update_terminal_font_family_from_widget(
-      state, state->terminal_font_fallback_override_check,
+      state, state->terminal_font_fallback_mode_combo,
       state->terminal_font_fallback_button,
       terminal_font_fallback_family_setting_key());
   notify_changed(state);
@@ -4112,23 +4142,18 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
 
   GtkWidget *primary_font_row =
       gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  state->terminal_font_primary_override_check =
-      gtk_check_button_new_with_label(
-          settings_ui_text(SettingsUiText::override_setting));
-  assign_accessible_id(
-      state->terminal_font_primary_override_check,
-      widget_id(state, "terminal_font_primary_override_check").c_str());
+  state->terminal_font_primary_mode_combo = create_combo_box(
+      widget_id(state, "terminal_font_primary_mode_combo").c_str());
   state->terminal_font_primary_button = create_font_family_button(
       widget_id(state, "terminal_font_primary_button"),
       settings_ui_text(SettingsUiText::select_primary_terminal_font));
-  g_signal_connect(state->terminal_font_primary_override_check, "toggled",
-                   G_CALLBACK(on_terminal_font_primary_override_toggled),
+  g_signal_connect(state->terminal_font_primary_mode_combo, "changed",
+                   G_CALLBACK(on_terminal_font_primary_mode_changed),
                    state);
   g_signal_connect(state->terminal_font_primary_button, "font-set",
                    G_CALLBACK(on_terminal_font_primary_set), state);
   gtk_box_pack_start(GTK_BOX(primary_font_row),
-                     state->terminal_font_primary_override_check, FALSE,
-                     FALSE, 0);
+                     state->terminal_font_primary_mode_combo, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(primary_font_row),
                      state->terminal_font_primary_button, TRUE, TRUE, 0);
   attach_row(page, 9, terminal_font_primary_family_setting_key(),
@@ -4136,23 +4161,18 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
 
   GtkWidget *fallback_font_row =
       gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  state->terminal_font_fallback_override_check =
-      gtk_check_button_new_with_label(
-          settings_ui_text(SettingsUiText::override_setting));
-  assign_accessible_id(
-      state->terminal_font_fallback_override_check,
-      widget_id(state, "terminal_font_fallback_override_check").c_str());
+  state->terminal_font_fallback_mode_combo = create_combo_box(
+      widget_id(state, "terminal_font_fallback_mode_combo").c_str());
   state->terminal_font_fallback_button = create_font_family_button(
       widget_id(state, "terminal_font_fallback_button"),
       settings_ui_text(SettingsUiText::select_secondary_terminal_font));
-  g_signal_connect(state->terminal_font_fallback_override_check, "toggled",
-                   G_CALLBACK(on_terminal_font_fallback_override_toggled),
+  g_signal_connect(state->terminal_font_fallback_mode_combo, "changed",
+                   G_CALLBACK(on_terminal_font_fallback_mode_changed),
                    state);
   g_signal_connect(state->terminal_font_fallback_button, "font-set",
                    G_CALLBACK(on_terminal_font_fallback_set), state);
   gtk_box_pack_start(GTK_BOX(fallback_font_row),
-                     state->terminal_font_fallback_override_check, FALSE,
-                     FALSE, 0);
+                     state->terminal_font_fallback_mode_combo, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(fallback_font_row),
                      state->terminal_font_fallback_button, TRUE, TRUE, 0);
   attach_row(page, 10, terminal_font_fallback_family_setting_key(),

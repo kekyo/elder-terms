@@ -369,9 +369,9 @@ msgstr "취소"
 msgid "Reset"
 msgstr "재설정"
 
-#: shared/src/settings-widget/settings-presentation.cpp:176
-msgid "Override"
-msgstr "재정의"
+#: shared/src/settings-widget/settings-presentation.cpp:184
+msgid "Custom font"
+msgstr "사용자 지정 글꼴"
 
 #: shared/src/settings-widget/settings-presentation.cpp:178
 msgid "Select Primary Terminal Font"

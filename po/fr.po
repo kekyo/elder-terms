@@ -369,9 +369,9 @@ msgstr "Annuler"
 msgid "Reset"
 msgstr "Réinitialiser"
 
-#: shared/src/settings-widget/settings-presentation.cpp:176
-msgid "Override"
-msgstr "Remplacer"
+#: shared/src/settings-widget/settings-presentation.cpp:184
+msgid "Custom font"
+msgstr "Police personnalisée"
 
 #: shared/src/settings-widget/settings-presentation.cpp:178
 msgid "Select Primary Terminal Font"

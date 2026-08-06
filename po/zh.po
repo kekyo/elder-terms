@@ -369,9 +369,9 @@ msgstr "取消"
 msgid "Reset"
 msgstr "重置"
 
-#: shared/src/settings-widget/settings-presentation.cpp:176
-msgid "Override"
-msgstr "覆盖"
+#: shared/src/settings-widget/settings-presentation.cpp:184
+msgid "Custom font"
+msgstr "自定义字体"
 
 #: shared/src/settings-widget/settings-presentation.cpp:178
 msgid "Select Primary Terminal Font"

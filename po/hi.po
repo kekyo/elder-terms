@@ -369,9 +369,9 @@ msgstr "रद्द करें"
 msgid "Reset"
 msgstr "रीसेट करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:176
-msgid "Override"
-msgstr "अधिलेखित करें"
+#: shared/src/settings-widget/settings-presentation.cpp:184
+msgid "Custom font"
+msgstr "कस्टम फ़ॉन्ट"
 
 #: shared/src/settings-widget/settings-presentation.cpp:178
 msgid "Select Primary Terminal Font"

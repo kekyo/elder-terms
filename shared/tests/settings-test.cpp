@@ -331,6 +331,60 @@ static void test_terminal_font_family_settings_round_trip_and_layering() {
               "the fallback font family should be persisted");
 }
 
+static void test_terminal_font_family_defaults_override_global_fonts() {
+  const std::filesystem::path global_path =
+      temporary_config_path("global-terminal-font-defaults");
+  const std::filesystem::path connection_path =
+      temporary_config_path("connection-terminal-font-defaults");
+  write_config(global_path,
+               "[terminal]\n"
+               "font_primary_family=Global Latin\n"
+               "font_fallback_family=Global CJK\n");
+  write_config(connection_path,
+               "[terminal]\n"
+               "font_primary_family=default\n"
+               "font_fallback_family=default\n");
+
+  const SettingsLoadResult loaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  remove_config(global_path);
+
+  const TerminalFontFamilies fonts = terminal_font_families(loaded.store);
+  expect_true(!fonts.primary_family.has_value(),
+              "an explicit default should suppress the global primary font");
+  expect_true(
+      !fonts.fallback_family.has_value(),
+      "an explicit default should suppress the global fallback font");
+  expect_true(setting_value_source(
+                  loaded.store,
+                  terminal_font_primary_family_setting_key()) ==
+                  SettingValueSource::override,
+              "the default primary font should remain an override");
+  expect_true(setting_value_source(
+                  loaded.store,
+                  terminal_font_fallback_family_setting_key()) ==
+                  SettingValueSource::override,
+              "the default fallback font should remain an override");
+
+  const SettingsSaveResult save_result =
+      save_settings(loaded.store, connection_path);
+  expect_true(save_result.saved,
+              "explicit terminal font defaults should save");
+  const std::string content = read_config(connection_path);
+  remove_config(connection_path);
+  expect_true(content.find("font_primary_family=default") !=
+                  std::string::npos,
+              "the default primary font should be persisted");
+  expect_true(content.find("font_fallback_family=default") !=
+                  std::string::npos,
+              "the default fallback font should be persisted");
+}
+
 static void test_general_color_settings() {
   const std::filesystem::path path =
       temporary_config_path("general-colors");
@@ -3072,6 +3126,8 @@ int main() {
     elder_terms_settings_test::test_default_settings();
     elder_terms_settings_test::
         test_terminal_font_family_settings_round_trip_and_layering();
+    elder_terms_settings_test::
+        test_terminal_font_family_defaults_override_global_fonts();
     elder_terms_settings_test::test_connection_name_settings();
     elder_terms_settings_test::test_general_color_settings();
     elder_terms_settings_test::

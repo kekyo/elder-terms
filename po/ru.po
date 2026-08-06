@@ -370,9 +370,9 @@ msgstr "Отменить"
 msgid "Reset"
 msgstr "Сбросить"
 
-#: shared/src/settings-widget/settings-presentation.cpp:176
-msgid "Override"
-msgstr "Переопределить"
+#: shared/src/settings-widget/settings-presentation.cpp:184
+msgid "Custom font"
+msgstr "Пользовательский шрифт"
 
 #: shared/src/settings-widget/settings-presentation.cpp:178
 msgid "Select Primary Terminal Font"

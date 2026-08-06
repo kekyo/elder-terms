@@ -21,6 +21,7 @@ static constexpr char terminal_font_primary_family_key[] =
     "font_primary_family";
 static constexpr char terminal_font_fallback_family_key[] =
     "font_fallback_family";
+static constexpr char default_terminal_font_family[] = "default";
 static constexpr char terminal_auto_close_key[] = "auto_close";
 static constexpr char terminal_zoom_in_key_name[] = "zoom_in_key";
 static constexpr char terminal_zoom_out_key_name[] = "zoom_out_key";
@@ -85,6 +86,15 @@ static bool validate_font_family(const SettingValue &value,
     return false;
   }
   return true;
+}
+
+static std::optional<std::string>
+terminal_font_family_value(const std::string &value) {
+  const std::string normalized = trim_ascii_whitespace(value);
+  if (normalized.empty() || normalized == default_terminal_font_family) {
+    return std::nullopt;
+  }
+  return normalized;
 }
 
 static bool validate_key_binding(const SettingValue &value,
@@ -305,19 +315,13 @@ TerminalDisplaySettings terminal_display_settings(const SettingsStore &store) {
 }
 
 TerminalFontFamilies terminal_font_families(const SettingsStore &store) {
-  const std::string primary = trim_ascii_whitespace(
-      setting_string_value_or_default(
-          store, terminal_font_primary_family_setting_key(), ""));
-  const std::string fallback = trim_ascii_whitespace(
-      setting_string_value_or_default(
-          store, terminal_font_fallback_family_setting_key(), ""));
   return {
-      .primary_family =
-          primary.empty() ? std::nullopt
-                          : std::optional<std::string>{primary},
-      .fallback_family =
-          fallback.empty() ? std::nullopt
-                           : std::optional<std::string>{fallback},
+      .primary_family = terminal_font_family_value(
+          setting_string_value_or_default(
+              store, terminal_font_primary_family_setting_key(), "")),
+      .fallback_family = terminal_font_family_value(
+          setting_string_value_or_default(
+              store, terminal_font_fallback_family_setting_key(), "")),
   };
 }
 

@@ -172,8 +172,6 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Cancel");
   case SettingsUiText::reset:
     return _("Reset");
-  case SettingsUiText::override_setting:
-    return _("Override");
   case SettingsUiText::select_primary_terminal_font:
     return _("Select Primary Terminal Font");
   case SettingsUiText::select_secondary_terminal_font:
@@ -182,6 +180,8 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Enabled");
   case SettingsUiText::disabled:
     return _("Disabled");
+  case SettingsUiText::custom_font:
+    return _("Custom font");
   case SettingsUiText::no_color:
     return _("No color");
   case SettingsUiText::custom_color:

@@ -954,14 +954,38 @@ describe.concurrent('shared settings widget', () => {
         for (const page of pages) {
           await expectPageLabels(app, page.id, page.labels);
         }
-        const primaryFontOverride = await app.getById(
-          'global_settings_terminal_font_primary_override_check'
+        const primaryFontMode = expectElementKind(
+          await app.getById('global_settings_terminal_font_primary_mode_combo'),
+          'comboBox'
         );
-        const fallbackFontOverride = await app.getById(
-          'global_settings_terminal_font_fallback_override_check'
+        const fallbackFontMode = expectElementKind(
+          await app.getById(
+            'global_settings_terminal_font_fallback_mode_combo'
+          ),
+          'comboBox'
         );
-        expect((await primaryFontOverride.info()).name).toBe('上書き');
-        expect((await fallbackFontOverride.info()).name).toBe('上書き');
+        expect(primaryFontMode.kind).toBe('comboBox');
+        expect(fallbackFontMode.kind).toBe('comboBox');
+        await expectSelectedComboValue(
+          app,
+          'global_settings_terminal_font_primary_mode_combo',
+          '組み込み既定値'
+        );
+        await expectSelectedComboValue(
+          app,
+          'global_settings_terminal_font_fallback_mode_combo',
+          '組み込み既定値'
+        );
+        expect(
+          await comboOptionNames(
+            app,
+            'global_settings_terminal_font_primary_mode_combo'
+          )
+        ).toEqual([
+          '組み込み既定値',
+          '組み込み既定値を使用',
+          'カスタムフォント',
+        ]);
         expect(
           (await (await app.getById('global_settings_apply_button')).info())
             .name
@@ -2758,7 +2782,7 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
-  it('selects, applies, saves, and cancels family-only terminal font overrides', async (context) => {
+  it('uses three-state terminal font modes and applies, saves, and cancels overrides', async (context) => {
     await runSharedGtkTest(
       context,
       [
@@ -2769,13 +2793,13 @@ describe.concurrent('shared settings widget', () => {
       ],
       async ({ app, directory }) => {
         await showTerminalPage(app);
-        const primaryOverride = expectElementKind(
-          await app.getById('settings_terminal_font_primary_override_check'),
-          'checkbox'
+        const primaryMode = expectElementKind(
+          await app.getById('settings_terminal_font_primary_mode_combo'),
+          'comboBox'
         );
-        const fallbackOverride = expectElementKind(
-          await app.getById('settings_terminal_font_fallback_override_check'),
-          'checkbox'
+        const fallbackMode = expectElementKind(
+          await app.getById('settings_terminal_font_fallback_mode_combo'),
+          'comboBox'
         );
         const primaryButton = expectElementKind(
           await app.getById('settings_terminal_font_primary_button'),
@@ -2786,8 +2810,36 @@ describe.concurrent('shared settings widget', () => {
           'button'
         );
 
-        expect(await primaryOverride.isChecked()).toBe(false);
-        expect(await fallbackOverride.isChecked()).toBe(false);
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_font_primary_mode_combo',
+          'Custom font (global default)'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_font_fallback_mode_combo',
+          'Custom font (global default)'
+        );
+        expect(
+          await comboOptionNames(
+            app,
+            'settings_terminal_font_primary_mode_combo'
+          )
+        ).toEqual([
+          'Custom font (global default)',
+          'Use built-in default',
+          'Custom font',
+        ]);
+        expect(
+          await comboOptionNames(
+            app,
+            'settings_terminal_font_fallback_mode_combo'
+          )
+        ).toEqual([
+          'Custom font (global default)',
+          'Use built-in default',
+          'Custom font',
+        ]);
         await expectSensitive(primaryButton);
         await expectSensitive(fallbackButton);
         await waitForResult(async () => {
@@ -2812,8 +2864,8 @@ describe.concurrent('shared settings widget', () => {
         expect(scrollbarValue.maximum).toBeGreaterThan(scrollbarValue.minimum);
         await scrollbar.setValue(scrollbarValue.maximum);
         await waitForResult(async () => {
-          expect((await primaryOverride.info()).states).toContain('showing');
-          expect((await fallbackOverride.info()).states).toContain('showing');
+          expect((await primaryMode.info()).states).toContain('showing');
+          expect((await fallbackMode.info()).states).toContain('showing');
         });
         const terminalPageCapture = await (
           await app.getById('settings_terminal_page')
@@ -2832,15 +2884,31 @@ describe.concurrent('shared settings widget', () => {
           'settings_terminal_font_primary_button',
           'Select Primary Terminal Font'
         );
-        expect(await primaryOverride.isChecked()).toBe(true);
-        expect(await fallbackOverride.isChecked()).toBe(false);
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_font_primary_mode_combo',
+          'Custom font'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_font_fallback_mode_combo',
+          'Custom font (global default)'
+        );
         await confirmSelectedFont(
           app,
           'settings_terminal_font_fallback_button',
           'Select Secondary Terminal Font'
         );
-        expect(await primaryOverride.isChecked()).toBe(true);
-        expect(await fallbackOverride.isChecked()).toBe(true);
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_font_primary_mode_combo',
+          'Custom font'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_font_fallback_mode_combo',
+          'Custom font'
+        );
         await expectSensitive(primaryButton);
         await expectSensitive(fallbackButton);
         await waitForChangedState(app, 'CHANGED dirty=true valid=true');
@@ -2863,18 +2931,57 @@ describe.concurrent('shared settings widget', () => {
       context,
       [
         '--page=terminal',
+        '--global=terminal.font_primary_family=Monospace',
+        '--global=terminal.font_fallback_family=IPAGothic',
+      ],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        const primaryMode = expectElementKind(
+          await app.getById('settings_terminal_font_primary_mode_combo'),
+          'comboBox'
+        );
+        const fallbackMode = expectElementKind(
+          await app.getById('settings_terminal_font_fallback_mode_combo'),
+          'comboBox'
+        );
+        await primaryMode.selectChildAt(1);
+        await fallbackMode.selectChildAt(1);
+        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+
+        const applied = await waitForAppliedStore(app);
+        expect(applied.font_primary_family).toBe('');
+        expect(applied.font_primary_family_source).toBe('override');
+        expect(applied.font_primary_family_explicit).toBe('true');
+        expect(applied.font_fallback_family).toBe('');
+        expect(applied.font_fallback_family_source).toBe('override');
+        expect(applied.font_fallback_family_explicit).toBe('true');
+      }
+    );
+
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=terminal',
         '--save',
         '--font-primary-family=Monospace',
         '--font-fallback-family=IPAGothic',
       ],
       async ({ app }) => {
         await showTerminalPage(app);
-        const primaryOverride = expectElementKind(
-          await app.getById('settings_terminal_font_primary_override_check'),
-          'checkbox'
+        const primaryMode = expectElementKind(
+          await app.getById('settings_terminal_font_primary_mode_combo'),
+          'comboBox'
         );
-        expect(await primaryOverride.isChecked()).toBe(true);
-        await primaryOverride.toggle();
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_font_primary_mode_combo',
+          'Custom font'
+        );
+        await primaryMode.selectChildAt(0);
         await expectElementKind(
           await app.getById('settings_save_button'),
           'button'
@@ -2893,10 +3000,11 @@ describe.concurrent('shared settings widget', () => {
       ['--page=terminal', '--global=terminal.font_primary_family=Monospace'],
       async ({ app }) => {
         await showTerminalPage(app);
-        await expectElementKind(
-          await app.getById('settings_terminal_font_primary_override_check'),
-          'checkbox'
-        ).toggle();
+        const primaryMode = expectElementKind(
+          await app.getById('settings_terminal_font_primary_mode_combo'),
+          'comboBox'
+        );
+        await primaryMode.selectChildAt(2);
         await expectElementKind(
           await app.getById('settings_cancel_button'),
           'button'

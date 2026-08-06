@@ -370,9 +370,9 @@ msgstr "إلغاء"
 msgid "Reset"
 msgstr "إعادة تعيين"
 
-#: shared/src/settings-widget/settings-presentation.cpp:176
-msgid "Override"
-msgstr "تجاوز"
+#: shared/src/settings-widget/settings-presentation.cpp:184
+msgid "Custom font"
+msgstr "خط مخصص"
 
 #: shared/src/settings-widget/settings-presentation.cpp:178
 msgid "Select Primary Terminal Font"
