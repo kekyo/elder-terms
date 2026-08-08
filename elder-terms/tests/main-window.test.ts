@@ -239,6 +239,22 @@ const prepareProfiles = async (connections: string): Promise<void> => {
   await writeFile(join(connections, 'Beta.ini'), '[terminal]\nwidth=99\n');
 };
 
+const beginDirtyConnectionEdit = async (app: GtkApp, value: number) => {
+  const list = await app.getById('connection_list');
+  await selectConnectionRow(app, list, 0);
+  const width = expectElementKind(
+    await app.getById('settings_terminal_width_entry'),
+    'entry'
+  );
+  await waitForResult(async () => {
+    expect(Number(await width.text())).toBe(88);
+  });
+  const apply = expectElementKind(await app.getById('apply_button'), 'button');
+  await width.setText(String(value));
+  await expectSensitive(apply);
+  return { list, width };
+};
+
 interface FakeVteContext {
   readonly executable: string;
   readonly capture: string;
@@ -1268,24 +1284,9 @@ describe('elder-terms main window', () => {
     );
   });
 
-  it('confirms before changing selection or closing with unsaved edits', async (context) => {
+  it('keeps unsaved edits when selection change confirmation is canceled', async (context) => {
     await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
-      const list = await app.getById('connection_list');
-      await selectConnectionRow(app, list, 0);
-      const width = expectElementKind(
-        await app.getById('settings_terminal_width_entry'),
-        'entry'
-      );
-      await waitForResult(async () => {
-        expect(Number(await width.text())).toBe(88);
-      });
-      const apply = expectElementKind(
-        await app.getById('apply_button'),
-        'button'
-      );
-      await width.setText('96');
-      await expectSensitive(apply);
-
+      const { list, width } = await beginDirtyConnectionEdit(app, 96);
       await selectConnectionRow(app, list, 1);
       await waitForResult(
         async () => {
@@ -1301,7 +1302,12 @@ describe('elder-terms main window', () => {
         expect(await app.getWindowCount()).toBe(1);
       });
       expect(Number(await width.text())).toBe(96);
+    });
+  });
 
+  it('changes selection after discarding unsaved edits', async (context) => {
+    await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
+      const { list, width } = await beginDirtyConnectionEdit(app, 96);
       await selectConnectionRow(app, list, 1);
       await waitForResult(
         async () => {
@@ -1309,16 +1315,19 @@ describe('elder-terms main window', () => {
         },
         { message: 'selection change should show discard confirmation' }
       );
-      const discardChanges = await waitForResult(async () =>
-        expectElementKind(await app.getById('discard_changes_button'), 'button')
-      );
-      await discardChanges.click();
+      await expectElementKind(
+        await app.getById('discard_changes_button'),
+        'button'
+      ).click();
       await waitForResult(async () => {
         expect(Number(await width.text())).toBe(99);
       });
-      await width.setText('97');
-      await expectSensitive(apply);
+    });
+  });
 
+  it('keeps unsaved edits when window close confirmation is canceled', async (context) => {
+    await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
+      const { width } = await beginDirtyConnectionEdit(app, 97);
       const window = expectElementKind(
         await app.getById('main_window'),
         'window'
