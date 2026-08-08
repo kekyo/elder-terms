@@ -4023,7 +4023,11 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   assign_accessible_id(
       gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(scroller)),
       widget_id(state, "terminal_page_scrollbar").c_str());
-  gtk_container_add(GTK_CONTAINER(scroller), page);
+  // Keep the grid margins inside a painted surface instead of exposing the
+  // implicit GtkViewport window around the direct scroll child.
+  GtkWidget *page_surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_container_add(GTK_CONTAINER(page_surface), page);
+  gtk_container_add(GTK_CONTAINER(scroller), page_surface);
 
   const std::string encoding_combo_id =
       widget_id(state, "terminal_encoding_combo");

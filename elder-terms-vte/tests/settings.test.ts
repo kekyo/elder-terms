@@ -1770,6 +1770,86 @@ describe.concurrent('elder-terms-vte settings', () => {
     });
   }, 90_000);
 
+  it('keeps custom settings backgrounds continuous across terminal scroll edges', async (context) => {
+    const background = [0x60, 0x40, 0x20] as const;
+    const componentBackground = [0x6b, 0x48, 0x24] as const;
+
+    await runGtkTest(
+      context,
+      ['--test-fixture'],
+      async (app, evidence) => {
+        await openSettingsDialog(app);
+        await showTerminalSettingsPage(app);
+
+        const terminalPage = await app.getById('settings_terminal_page');
+        const scrollbar = expectElementKind(
+          await app.getById('settings_terminal_page_scrollbar'),
+          'scrollbar'
+        );
+        const topCapture = await evidence.captureEvidence(
+          'settings-terminal-scroll-top-custom-background',
+          async () => terminalPage.capture()
+        );
+        const scrollbarCapture = await scrollbar.capture();
+        const pageCenterY =
+          topCapture.bounds.y + Math.trunc(topCapture.bounds.height / 2);
+        const pageCenterX =
+          topCapture.bounds.x + Math.trunc(topCapture.bounds.width / 2);
+
+        expect
+          .soft([
+            capturePixelAtScreenPosition(
+              topCapture,
+              topCapture.bounds.x + 6,
+              pageCenterY
+            ),
+            capturePixelAtScreenPosition(
+              topCapture,
+              scrollbarCapture.bounds.x - 6,
+              pageCenterY
+            ),
+            capturePixelAtScreenPosition(
+              topCapture,
+              pageCenterX,
+              topCapture.bounds.y + 6
+            ),
+          ])
+          .toEqual([background, background, background]);
+
+        expect
+          .soft(
+            capturePixel(
+              topCapture,
+              0.5,
+              (topCapture.bounds.height - 30) / topCapture.bounds.height
+            )
+          )
+          .toEqual(componentBackground);
+
+        const scrollRange = await scrollbar.valueInfo();
+        expect(scrollRange.maximum).toBeGreaterThan(scrollRange.minimum);
+        await scrollbar.setValue(scrollRange.maximum);
+        await toPass(async () => {
+          expect((await scrollbar.valueInfo()).value).toBe(scrollRange.maximum);
+        });
+
+        const bottomCapture = await evidence.captureEvidence(
+          'settings-terminal-scroll-bottom-custom-background',
+          async () => terminalPage.capture()
+        );
+        expect
+          .soft(
+            capturePixel(bottomCapture, 0.5, 20 / bottomCapture.bounds.height)
+          )
+          .toEqual(componentBackground);
+      },
+      {
+        globalSettings:
+          '[general]\nexterior_background=#204060\nbackground=#604020\n',
+      }
+    );
+  });
+
   it('opens the runtime settings dialog from the header bar', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
       await openSettingsDialog(app);

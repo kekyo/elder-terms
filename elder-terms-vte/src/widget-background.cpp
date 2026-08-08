@@ -239,7 +239,8 @@ GtkCssProvider *create_scoped_widget_background_provider(
     const char *target_name) {
   const std::string class_selector = "." + std::string(style_class);
   std::string css = rgb_color_css(
-      color, class_selector + ", " + class_selector + " *");
+      color, class_selector + ", " + class_selector + " " +
+                 widget_background_selectors);
   if (transparent_descendants_style_class != nullptr) {
     css += class_selector + " ." +
            std::string(transparent_descendants_style_class) +
