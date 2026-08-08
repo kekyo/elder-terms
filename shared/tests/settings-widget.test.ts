@@ -2862,22 +2862,32 @@ describe.concurrent('shared settings widget', () => {
         );
         const scrollbarValue = await scrollbar.valueInfo();
         expect(scrollbarValue.maximum).toBeGreaterThan(scrollbarValue.minimum);
+        const window = expectElementKind(
+          await app.getById('settings_widget_test_window'),
+          'window'
+        );
+        const windowBounds = await window.bounds();
+        await app.input.moveMouseTo(
+          windowBounds.x + 5,
+          windowBounds.y + windowBounds.height - 5
+        );
         await scrollbar.setValue(scrollbarValue.maximum);
         await waitForResult(async () => {
           expect((await primaryMode.info()).states).toContain('showing');
           expect((await fallbackMode.info()).states).toContain('showing');
         });
-        const terminalPageCapture = await (
-          await app.getById('settings_terminal_page')
-        ).capture();
-        expect(terminalPageCapture.clipped).toBe(false);
-        await expectCaptureToMatchFixture(
-          terminalPageCapture,
-          'settings-widget-terminal-font-families',
-          fixturePath('settings-widget-terminal-font-families'),
-          directory,
-          visualComparisonOptions
-        );
+        const terminalPage = await app.getById('settings_terminal_page');
+        await waitForResult(async () => {
+          const terminalPageCapture = await terminalPage.capture();
+          expect(terminalPageCapture.clipped).toBe(false);
+          await expectCaptureToMatchFixture(
+            terminalPageCapture,
+            'settings-widget-terminal-font-families',
+            fixturePath('settings-widget-terminal-font-families'),
+            directory,
+            visualComparisonOptions
+          );
+        });
 
         await confirmSelectedFont(
           app,
