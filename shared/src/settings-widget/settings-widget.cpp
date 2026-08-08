@@ -37,6 +37,7 @@ static constexpr char sftp_connection_type[] = "sftp";
 static constexpr char zmodem_autostart_enabled[] = "enabled";
 static constexpr char zmodem_autostart_disabled[] = "disabled";
 static constexpr char terminal_text_default[] = "default";
+static constexpr char terminal_backspace_auto[] = "auto";
 static constexpr char terminal_backspace_bs[] = "bs";
 static constexpr char terminal_backspace_del[] = "del";
 static constexpr char terminal_cursor_normal[] = "normal";
@@ -643,6 +644,12 @@ static void populate_terminal_special_code_combos(
     append_combo_option(state->terminal_backspace_code_combo,
                         terminal_text_default, default_label.c_str());
     append_combo_option(state->terminal_backspace_code_combo,
+                        terminal_backspace_auto,
+                        setting_choice_label(
+                            terminal_backspace_code_setting_key(),
+                            terminal_backspace_auto)
+                            .c_str());
+    append_combo_option(state->terminal_backspace_code_combo,
                         terminal_backspace_bs,
                         setting_choice_label(
                             terminal_backspace_code_setting_key(),
@@ -657,12 +664,15 @@ static void populate_terminal_special_code_combos(
     const char *active = terminal_text_default;
     if (setting_has_explicit_value(
             state->draft_store, terminal_backspace_code_setting_key())) {
-      active = setting_string_value_or_default(
-                   state->draft_store, terminal_backspace_code_setting_key(),
-                   fallback) ==
-                       terminal_backspace_bs
-                   ? terminal_backspace_bs
-                   : terminal_backspace_del;
+      const std::string configured = setting_string_value_or_default(
+          state->draft_store, terminal_backspace_code_setting_key(), fallback);
+      if (configured == terminal_backspace_auto) {
+        active = terminal_backspace_auto;
+      } else if (configured == terminal_backspace_bs) {
+        active = terminal_backspace_bs;
+      } else {
+        active = terminal_backspace_del;
+      }
     }
     gtk_combo_box_set_active_id(
         GTK_COMBO_BOX(state->terminal_backspace_code_combo), active);

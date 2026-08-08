@@ -595,6 +595,9 @@ save_global_settings(const SettingsStore &store,
 }
 
 const char *terminal_backspace_code_to_string(TerminalBackspaceCode code) {
+  if (code == TerminalBackspaceCode::automatic) {
+    return "auto";
+  }
   return code == TerminalBackspaceCode::bs ? "bs" : "del";
 }
 
@@ -627,8 +630,13 @@ TerminalTextSettings terminal_text_settings(const SettingsStore &store,
     const std::string configured = setting_string_value_or_default(
         store, terminal_backspace_code_setting_key(),
         terminal_backspace_code_to_string(settings.backspace_code));
-    settings.backspace_code = configured == "bs" ? TerminalBackspaceCode::bs
-                                                  : TerminalBackspaceCode::del;
+    if (configured == "auto") {
+      settings.backspace_code = TerminalBackspaceCode::automatic;
+    } else {
+      settings.backspace_code = configured == "bs"
+                                    ? TerminalBackspaceCode::bs
+                                    : TerminalBackspaceCode::del;
+    }
   }
   if (setting_has_configured_value(
           store, terminal_cursor_key_mode_setting_key())) {

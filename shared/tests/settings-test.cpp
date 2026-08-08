@@ -936,6 +936,43 @@ static void test_terminal_text_explicit_settings_override_connection_defaults() 
               "clearing terminal text overrides should restore serial defaults");
 }
 
+static void test_terminal_backspace_auto_setting_round_trips() {
+  const std::filesystem::path path =
+      temporary_config_path("terminal-backspace-auto");
+  write_config(path,
+               "[general]\n"
+               "type=serial\n"
+               "\n"
+               "[terminal]\n"
+               "backspace_code=auto\n");
+
+  const SettingsLoadResult loaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  expect_true(loaded.loaded,
+              "Auto Backspace configuration should load successfully");
+  expect_true(!warnings_contain(
+                  loaded.warnings,
+                  "invalid configuration value [terminal] backspace_code"),
+              "Auto Backspace configuration should be valid");
+  const TerminalConnectionProfile profile =
+      required_terminal_connection_profile(loaded.store);
+  expect_true(std::string(terminal_backspace_code_to_string(
+                  profile.text_settings.backspace_code)) == "auto",
+              "explicit Auto Backspace should override the serial BS default");
+
+  const SettingsSaveResult saved = save_settings(loaded.store, path);
+  expect_true(saved.saved,
+              "Auto Backspace configuration should save successfully");
+  expect_true(read_config(path).find("backspace_code=auto") !=
+                  std::string::npos,
+              "saved settings should preserve Auto Backspace");
+  remove_config(path);
+}
+
 static void test_terminal_cursor_key_mode_uses_trs80_name() {
   const std::filesystem::path path =
       temporary_config_path("trs80-cursor-key-mode");
@@ -3143,6 +3180,7 @@ int main() {
         test_invalid_general_colors_fall_back_and_warn();
     elder_terms_settings_test::test_terminal_text_defaults_follow_connection_type();
     elder_terms_settings_test::test_terminal_text_explicit_settings_override_connection_defaults();
+    elder_terms_settings_test::test_terminal_backspace_auto_setting_round_trips();
     elder_terms_settings_test::test_terminal_cursor_key_mode_uses_trs80_name();
     elder_terms_settings_test::test_terminal_encoding_choices_are_supported();
     elder_terms_settings_test::test_terminal_log_settings();

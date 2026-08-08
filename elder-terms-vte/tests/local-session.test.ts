@@ -560,13 +560,13 @@ describe.concurrent('elder-terms-vte local session', () => {
     });
   });
 
-  it('applies the local terminal backspace setting', async (context) => {
+  it('applies the automatic local terminal backspace setting', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const shell = await createRawInputShellFixture(directory);
       const configPath = join(directory, 'terminal-text.ini');
       await writeFile(
         configPath,
-        '[terminal]\nauto_close=false\nbackspace_code=bs\n',
+        '[terminal]\nauto_close=false\nbackspace_code=auto\n',
         'utf8'
       );
 
@@ -586,7 +586,7 @@ describe.concurrent('elder-terms-vte local session', () => {
             },
             {
               message:
-                'local shell should receive the configured ASCII BS code',
+                'local shell should receive the VTE automatic Backspace code',
               timeoutMs: 5_000,
             }
           );

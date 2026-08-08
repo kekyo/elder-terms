@@ -261,6 +261,10 @@ msgstr "Barre d'état système uniquement"
 msgid "System tray and main window"
 msgstr "Barre d'état système et fenêtre principale"
 
+#: shared/src/settings-widget/settings-presentation.cpp:110
+msgid "Auto"
+msgstr "Automatique"
+
 #: shared/src/settings-widget/settings-presentation.cpp:102
 msgid "BS"
 msgstr "BS"

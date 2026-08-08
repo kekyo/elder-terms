@@ -129,8 +129,9 @@ static bool validate_terminal_encoding(const SettingValue &value,
 static bool validate_terminal_backspace_code(const SettingValue &value,
                                              std::string *reason) {
   const auto *text = std::get_if<std::string>(&value);
-  if (text == nullptr || (*text != "bs" && *text != "del")) {
-    *reason = "must be bs or del";
+  if (text == nullptr ||
+      (*text != "auto" && *text != "bs" && *text != "del")) {
+    *reason = "must be auto, bs, or del";
     return false;
   }
   return true;

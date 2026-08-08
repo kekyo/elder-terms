@@ -261,6 +261,10 @@ msgstr "시스템 트레이만"
 msgid "System tray and main window"
 msgstr "시스템 트레이 및 기본 창"
 
+#: shared/src/settings-widget/settings-presentation.cpp:110
+msgid "Auto"
+msgstr "자동"
+
 #: shared/src/settings-widget/settings-presentation.cpp:102
 msgid "BS"
 msgstr "BS"

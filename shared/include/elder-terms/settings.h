@@ -36,9 +36,11 @@ enum class TerminalConnectionKind {
 };
 
 /**
- * Code emitted when the user presses Backspace.
+ * Binding used when the user presses Backspace.
  */
 enum class TerminalBackspaceCode {
+  /** Let VTE select the Backspace sequence from terminal I/O settings. */
+  automatic,
   /** ASCII BS (0x08). */
   bs,
   /** ASCII DEL (0x7f). */
@@ -62,7 +64,7 @@ enum class TerminalCursorKeyMode {
 struct TerminalTextSettings {
   /** iconv encoding used on the backend byte stream. */
   std::string encoding = "UTF-8";
-  /** Code emitted by the Backspace key. */
+  /** Binding used by the Backspace key. */
   TerminalBackspaceCode backspace_code = TerminalBackspaceCode::del;
   /** Outbound cursor-key handling mode. */
   TerminalCursorKeyMode cursor_key_mode = TerminalCursorKeyMode::normal;
@@ -90,9 +92,9 @@ struct TerminalConnectionProfile {
 };
 
 /**
- * Returns the INI value for a Backspace code.
+ * Returns the INI value for a Backspace binding.
  *
- * @param code Backspace code.
+ * @param code Backspace binding.
  * @returns Stable setting value.
  */
 ELDER_TERMS_API const char *

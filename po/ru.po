@@ -262,6 +262,10 @@ msgstr "Только в системном трее"
 msgid "System tray and main window"
 msgstr "Панель задач и главное окно"
 
+#: shared/src/settings-widget/settings-presentation.cpp:110
+msgid "Auto"
+msgstr "Авто"
+
 #: shared/src/settings-widget/settings-presentation.cpp:102
 msgid "BS"
 msgstr "BS"

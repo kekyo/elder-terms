@@ -262,6 +262,10 @@ msgstr "علبة النظام فقط"
 msgid "System tray and main window"
 msgstr "علبة النظام والنافذة الرئيسية"
 
+#: shared/src/settings-widget/settings-presentation.cpp:110
+msgid "Auto"
+msgstr "تلقائي"
+
 #: shared/src/settings-widget/settings-presentation.cpp:102
 msgid "BS"
 msgstr "BS"

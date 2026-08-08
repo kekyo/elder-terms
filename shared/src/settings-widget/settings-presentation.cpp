@@ -107,6 +107,7 @@ static constexpr std::array setting_choices{
                        N_("System tray only")},
     SettingChoiceEntry{"general", "startup_mode", "window_and_tray",
                        N_("System tray and main window")},
+    SettingChoiceEntry{"terminal", "backspace_code", "auto", N_("Auto")},
     SettingChoiceEntry{"terminal", "backspace_code", "bs", N_("BS")},
     SettingChoiceEntry{"terminal", "backspace_code", "del", N_("DEL")},
     SettingChoiceEntry{"terminal", "cursor_key_mode", "normal", N_("Normal")},

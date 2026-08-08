@@ -3070,7 +3070,12 @@ describe.concurrent('shared settings widget', () => {
         );
 
         await encoding.setText('CP932');
-        await backspace.selectChildAt(2);
+        await backspace.selectChildAt(1);
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_backspace_code_combo',
+          'Auto'
+        );
         await cursorKeys.selectChildAt(1);
         await waitForChangedState(app, 'CHANGED dirty=true valid=true');
         await expectElementKind(
@@ -3080,7 +3085,7 @@ describe.concurrent('shared settings widget', () => {
 
         const store = await waitForAppliedStore(app);
         expect(store.encoding).toBe('CP932');
-        expect(store.backspace_code).toBe('del');
+        expect(store.backspace_code).toBe('auto');
         expect(store.cursor_key_mode).toBe('normal');
       }
     );

@@ -12,6 +12,9 @@ namespace elder_terms {
 
 static VteEraseBinding
 backspace_binding(TerminalBackspaceCode backspace_code) {
+  if (backspace_code == TerminalBackspaceCode::automatic) {
+    return VTE_ERASE_AUTO;
+  }
   return backspace_code == TerminalBackspaceCode::bs
              ? VTE_ERASE_ASCII_BACKSPACE
              : VTE_ERASE_ASCII_DELETE;
