@@ -415,7 +415,7 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
     });
   });
 
-  it('sends the default Backspace as BS and Delete as ASCII DEL', async (context) => {
+  it('sends the default Backspace as BS and Delete using the VTE automatic binding', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const receivedChunks: Buffer[] = [];
       let acceptedSocket: Socket | undefined;
@@ -474,11 +474,12 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
             async () => {
               const newData =
                 receivedBytes(receivedChunks).slice(baselineLength);
-              expect(newData).toContain(asciiDel);
-              expect(hasSubsequence(newData, xtermDeleteSequence)).toBe(false);
+              expect(hasSubsequence(newData, xtermDeleteSequence)).toBe(true);
+              expect(newData).not.toContain(asciiDel);
             },
             {
-              message: 'TELNET client should send Delete as ASCII DEL',
+              message:
+                'TELNET client should let VTE generate the Delete sequence',
               timeoutMs: 5_000,
             }
           );

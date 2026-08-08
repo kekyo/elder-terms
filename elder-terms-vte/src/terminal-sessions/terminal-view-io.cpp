@@ -28,8 +28,7 @@ TerminalViewIo::TerminalViewIo(
       output_callback(std::move(output_callback)) {
   vte_terminal_set_backspace_binding(
       VTE_TERMINAL(terminal), backspace_binding(text_settings.backspace_code));
-  vte_terminal_set_delete_binding(VTE_TERMINAL(terminal),
-                                  VTE_ERASE_ASCII_DELETE);
+  vte_terminal_set_delete_binding(VTE_TERMINAL(terminal), VTE_ERASE_AUTO);
 }
 
 TerminalViewIo::~TerminalViewIo() {
@@ -97,8 +96,7 @@ bool TerminalViewIo::apply_text_settings(
     auto next_codec = std::make_unique<TerminalTextCodec>(settings);
     vte_terminal_set_backspace_binding(
         VTE_TERMINAL(terminal), backspace_binding(settings.backspace_code));
-    vte_terminal_set_delete_binding(VTE_TERMINAL(terminal),
-                                    VTE_ERASE_ASCII_DELETE);
+    vte_terminal_set_delete_binding(VTE_TERMINAL(terminal), VTE_ERASE_AUTO);
     text_codec = std::move(next_codec);
     decode_warning_reported = false;
     encode_warning_reported = false;
