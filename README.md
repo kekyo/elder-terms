@@ -1,6 +1,6 @@
 # elder-terms
 
-'90s, come back in this time.
+'90s, come back in this time. This is all we need.
 
 ![elder-terms](./images/elder-terms-128.png)
 

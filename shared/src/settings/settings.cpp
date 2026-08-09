@@ -625,8 +625,6 @@ default_terminal_text_settings(TerminalConnectionKind kind) {
     settings.backspace_code = TerminalBackspaceCode::bs;
     settings.cursor_key_mode = TerminalCursorKeyMode::trs80;
     settings.return_code = TerminalReturnCode::cr;
-  } else if (kind == TerminalConnectionKind::telnet) {
-    settings.return_code = TerminalReturnCode::crlf;
   }
   return settings;
 }

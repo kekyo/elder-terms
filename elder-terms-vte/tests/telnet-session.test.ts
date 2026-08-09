@@ -858,8 +858,10 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
                 hasSubsequence(
                   sent,
                   [
-                    0x41, 0xff, 0xff, 0x42, 0x0d, 0x0a, 0x43, 0x0d, 0x0a, 0x44,
-                    0x0d, 0x0a,
+                    // Auto emits CR for each logical newline, which TELNET NVT
+                    // frames as CR NUL.
+                    0x41, 0xff, 0xff, 0x42, 0x0d, 0x00, 0x43, 0x0d, 0x00, 0x44,
+                    0x0d, 0x00,
                   ]
                 )
               ).toBe(true);

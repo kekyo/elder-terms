@@ -2527,7 +2527,7 @@ describe.concurrent('shared settings widget', () => {
       await expectSelectedComboValue(
         app,
         'settings_terminal_return_code_combo',
-        'CRLF (built-in default)'
+        'Auto (built-in default)'
       );
       await expectElementKind(
         await app.getById('settings_apply_button'),
@@ -2537,7 +2537,7 @@ describe.concurrent('shared settings widget', () => {
       const store = await waitForAppliedStore(app);
       expect(store.type).toBe('telnet');
       expect(store.backspace_code).toBe('auto');
-      expect(store.return_code).toBe('crlf');
+      expect(store.return_code).toBe('auto');
     });
   });
 

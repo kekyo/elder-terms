@@ -1,6 +1,6 @@
 # elder-terms
 
-'90s、あの頃のパラダイス
+'90s、あの頃のパラダイス。こういうのでいいんだよ。
 
 ![elder-terms](./images/elder-terms-128.png)
 
@@ -190,7 +190,7 @@ carrier_detect=ignore
 | 接続種別 | 文字エンコーディング | Backspaceコード | カーソルキーモード | Enter/Returnコード |
 | :--- | :--- | :--- | :--- | :--- |
 | ローカルターミナル | UTF-8 | `Auto` | `通常` | `Auto` |
-| TELNET | UTF-8 | `Auto` | `通常` | `CRLF` |
+| TELNET | UTF-8 | `Auto` | `通常` | `Auto` |
 | シリアル | UTF-8 | `BS` | `TRS80` | `CR` |
 | SSH | UTF-8 | `Auto` | `通常` | `Auto` |
 

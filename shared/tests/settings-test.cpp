@@ -896,8 +896,8 @@ static void test_terminal_text_defaults_follow_connection_type() {
   expect_true(telnet.encoding == "UTF-8" &&
                   telnet.backspace_code == TerminalBackspaceCode::automatic &&
                   telnet.cursor_key_mode == TerminalCursorKeyMode::normal &&
-                  telnet.return_code == TerminalReturnCode::crlf,
-              "TELNET terminal text defaults should use CRLF Return");
+                  telnet.return_code == TerminalReturnCode::automatic,
+              "TELNET terminal text defaults should preserve VTE Return");
 
   const TerminalTextSettings serial =
       default_terminal_text_settings(TerminalConnectionKind::serial);
