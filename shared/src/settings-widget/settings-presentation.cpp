@@ -48,6 +48,8 @@ static constexpr std::array setting_labels{
                       N_("Close window when session ends")},
     SettingLabelEntry{"terminal", "zoom_in_key", N_("Zoom in shortcut")},
     SettingLabelEntry{"terminal", "zoom_out_key", N_("Zoom out shortcut")},
+    SettingLabelEntry{"terminal", "send_break_key",
+                      N_("Send BREAK shortcut")},
     SettingLabelEntry{"telnet", "address", N_("Address")},
     SettingLabelEntry{"telnet", "port", N_("Port")},
     SettingLabelEntry{"telnet", "terminal_type", N_("Terminal type")},

@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/eventfd.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 #include <cardio.h>
@@ -43,6 +44,18 @@ static void close_fd_noexcept(int *fd) {
   if (*fd >= 0) {
     (void)::close(*fd);
     *fd = -1;
+  }
+}
+
+static void set_serial_break_state(int fd, bool active) {
+  const unsigned long request = active ? TIOCSBRK : TIOCCBRK;
+  while (::ioctl(fd, request) < 0) {
+    if (errno == EINTR) {
+      continue;
+    }
+    throw std::system_error(errno, std::generic_category(),
+                            active ? "serial TIOCSBRK failed"
+                                   : "serial TIOCCBRK failed");
   }
 }
 
@@ -180,6 +193,7 @@ private:
   std::optional<cardio::promise<void>> ended_task;
   std::optional<cardio::promise<void>> transfer_task;
   std::optional<cardio::promise<void>> text_send_task;
+  std::optional<cardio::promise<void>> break_task;
   int serial_fd = -1;
   int device_event_fd = -1;
   int transfer_input_event_fd = -1;
@@ -194,6 +208,11 @@ private:
   bool carrier_disconnected = false;
   bool transfer_active = false;
   bool text_send_active = false;
+  bool break_active = false;
+  bool break_asserted = false;
+  int break_fd = -1;
+  std::uint64_t connection_generation = 0;
+  std::uint64_t break_generation = 0;
   bool zmodem_autostart_enabled = false;
   std::deque<unsigned char> transfer_incoming;
   TerminalZmodemAutoStartDetectorState zmodem_auto_start_detector;
@@ -233,6 +252,28 @@ private:
     if (callbacks.activity) {
       callbacks.activity(indicator);
     }
+  }
+
+  void clear_break_noexcept(int expected_fd,
+                            std::uint64_t expected_generation) {
+    if (!break_active || break_fd != expected_fd ||
+        break_generation != expected_generation) {
+      return;
+    }
+    if (break_asserted) {
+      try {
+        set_serial_break_state(expected_fd, false);
+      } catch (const std::exception &error) {
+        if (!stopping) {
+          std::cerr << "Warning: failed to clear serial BREAK: "
+                    << error.what() << '\n';
+        }
+      }
+    }
+    break_asserted = false;
+    break_active = false;
+    break_fd = -1;
+    break_generation = 0;
   }
 
   void notify_indicator_state(ActivityIndicatorId indicator, bool active) {
@@ -337,6 +378,7 @@ private:
       return;
     }
 
+    clear_break_noexcept(serial_fd, connection_generation);
     cancel_modem_transfer_noexcept();
     cancel_text_send_noexcept();
     cancel_connection_noexcept();
@@ -357,6 +399,7 @@ private:
       return;
     }
 
+    clear_break_noexcept(serial_fd, connection_generation);
     cancel_modem_transfer_noexcept();
     cancel_text_send_noexcept();
     outgoing.clear();
@@ -482,6 +525,10 @@ private:
 
       configure_serial_port(opened_fd, settings);
       serial_fd = opened_fd;
+      ++connection_generation;
+      if (connection_generation == 0) {
+        ++connection_generation;
+      }
       opened_fd = -1;
       carrier_tracker = SerialCarrierTracker(settings.carrier_detect);
       line_warning_reported = false;
@@ -1028,6 +1075,53 @@ private:
     finish_text_send(request, succeeded);
   }
 
+  cardio::promise<void>
+  send_break_async(TerminalBreakRequest request, int fd,
+                   std::uint64_t generation,
+                   cardio::cancellation cancellation) {
+    bool succeeded = false;
+    try {
+      if (!break_active || break_fd != fd ||
+          break_generation != generation || serial_fd != fd ||
+          connection_generation != generation || carrier_disconnected) {
+        throw std::runtime_error("serial BREAK is not connected");
+      }
+      set_serial_break_state(fd, true);
+      break_asserted = true;
+      notify_activity(ActivityIndicatorId::sd);
+      co_await cardio::promises::delay(500, cancellation);
+      cancellation.throw_if_cancellation_requested();
+      if (!break_active || break_fd != fd ||
+          break_generation != generation || serial_fd != fd ||
+          connection_generation != generation || carrier_disconnected) {
+        throw std::runtime_error("serial BREAK connection was lost");
+      }
+      set_serial_break_state(fd, false);
+      break_asserted = false;
+      break_active = false;
+      break_fd = -1;
+      break_generation = 0;
+      succeeded = true;
+    } catch (const cardio::canceled_exception &) {
+      clear_break_noexcept(fd, generation);
+    } catch (const std::exception &error) {
+      clear_break_noexcept(fd, generation);
+      if (!stopping) {
+        std::cerr << "Warning: serial BREAK failed: " << error.what()
+                  << '\n';
+      }
+    }
+
+    if (!stopping) {
+      if (request.status) {
+        request.status(succeeded ? _("BREAK sent") : _("BREAK failed"));
+      }
+      if (request.finished) {
+        request.finished(succeeded);
+      }
+    }
+  }
+
   static char flow_control_title_code(SerialFlowControl flow_control) {
     if (flow_control == SerialFlowControl::xon) {
       return 'x';
@@ -1103,6 +1197,7 @@ public:
     }
 
     stopping = true;
+    clear_break_noexcept(serial_fd, connection_generation);
     cancel_modem_transfer_noexcept();
     cancel_text_send_noexcept();
     cancel_connection_noexcept();
@@ -1179,6 +1274,10 @@ public:
     return true;
   }
 
+  bool supports_break() const override {
+    return true;
+  }
+
   bool transfer_in_progress() const override {
     return transfer_active || text_send_active;
   }
@@ -1203,6 +1302,7 @@ public:
 
   bool start_transfer(TerminalTransferRequest request) override {
     if (!started || stopping || transfer_active || text_send_active ||
+        break_active ||
         serial_fd < 0 || carrier_disconnected) {
       return false;
     }
@@ -1243,6 +1343,7 @@ public:
 
   bool start_text_send(TerminalTextSendRequest request) override {
     if (!started || stopping || transfer_active || text_send_active ||
+        break_active ||
         serial_fd < 0 || carrier_disconnected ||
         !terminal_text_send_source_is_valid(request.source)) {
       return false;
@@ -1269,6 +1370,24 @@ public:
     text_send_task.reset();
     text_send_task.emplace(
         text_send_loop_async(std::move(request), std::move(transport)));
+    return true;
+  }
+
+  bool send_break(TerminalBreakRequest request) override {
+    if (!started || stopping || transfer_active || text_send_active ||
+        break_active || serial_fd < 0 || carrier_disconnected ||
+        !connection_cancel_source.has_value()) {
+      return false;
+    }
+
+    break_active = true;
+    break_asserted = false;
+    break_fd = serial_fd;
+    break_generation = connection_generation;
+    break_task.reset();
+    break_task.emplace(send_break_async(
+        std::move(request), break_fd, break_generation,
+        connection_cancel_source->get_cancellation()));
     return true;
   }
 

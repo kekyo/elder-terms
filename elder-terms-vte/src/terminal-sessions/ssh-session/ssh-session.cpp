@@ -90,6 +90,7 @@ private:
   std::optional<cardio::promise<void>> transfer_task;
   std::optional<cardio::promise<void>> text_send_task;
   std::optional<cardio::promise<void>> resize_task;
+  std::optional<cardio::promise<void>> break_task;
   TerminalZmodemAutoStartDetectorState zmodem_auto_start_detector;
   int transfer_input_event_fd = -1;
   glong columns = 80;
@@ -102,6 +103,7 @@ private:
   bool resize_pending = false;
   bool transfer_active = false;
   bool text_send_active = false;
+  bool break_active = false;
   bool zmodem_autostart_enabled = false;
 
   void notify_connection_phase(TerminalSessionConnectionPhase phase) {
@@ -538,6 +540,37 @@ private:
     finish_text_send(request, succeeded);
   }
 
+  cardio::promise<void> send_break_async(TerminalBreakRequest request) {
+    bool succeeded = false;
+    try {
+      auto lock_promise =
+          backend_write_mutex.lock(stop_source.get_cancellation());
+      auto lock = std::move(co_await lock_promise);
+      if (!break_active || stopping || !connected || connection == nullptr) {
+        throw std::runtime_error("SSH BREAK is not connected");
+      }
+      co_await connection->send_break_async(
+          500, stop_source.get_cancellation());
+      notify_activity(ActivityIndicatorId::sd);
+      succeeded = true;
+    } catch (const cardio::canceled_exception &) {
+    } catch (const std::exception &error) {
+      if (!stopping) {
+        std::cerr << "Warning: SSH BREAK failed: " << error.what() << '\n';
+      }
+    }
+
+    break_active = false;
+    if (!stopping) {
+      if (request.status) {
+        request.status(succeeded ? _("BREAK sent") : _("BREAK failed"));
+      }
+      if (request.finished) {
+        request.finished(succeeded);
+      }
+    }
+  }
+
   void send_user_input(std::span<const unsigned char> bytes) {
     if (bytes.empty() || transfer_active || text_send_active) {
       return;
@@ -640,6 +673,10 @@ public:
     return true;
   }
 
+  bool supports_break() const override {
+    return true;
+  }
+
   bool transfer_in_progress() const override {
     return transfer_active || text_send_active;
   }
@@ -671,7 +708,7 @@ public:
 
   bool start_transfer(TerminalTransferRequest request) override {
     if (!started || stopping || !connected || connection == nullptr ||
-        transfer_active || text_send_active) {
+        transfer_active || text_send_active || break_active) {
       return false;
     }
     if (request.direction == TerminalTransferDirection::send &&
@@ -712,7 +749,7 @@ public:
 
   bool start_text_send(TerminalTextSendRequest request) override {
     if (!started || stopping || !connected || connection == nullptr ||
-        transfer_active || text_send_active ||
+        transfer_active || text_send_active || break_active ||
         !terminal_text_send_source_is_valid(request.source)) {
       return false;
     }
@@ -738,6 +775,18 @@ public:
     text_send_task.reset();
     text_send_task.emplace(
         text_send_loop_async(std::move(request), std::move(transport)));
+    return true;
+  }
+
+  bool send_break(TerminalBreakRequest request) override {
+    if (!started || stopping || !connected || connection == nullptr ||
+        transfer_active || text_send_active || break_active) {
+      return false;
+    }
+
+    break_active = true;
+    break_task.reset();
+    break_task.emplace(send_break_async(std::move(request)));
     return true;
   }
 

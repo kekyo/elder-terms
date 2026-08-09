@@ -43,6 +43,8 @@ struct TerminalKeyBindings {
   std::optional<KeyBinding> zoom_in;
   /** Zoom-out binding, or no value when the action is disabled. */
   std::optional<KeyBinding> zoom_out;
+  /** BREAK binding, or no value when the action is disabled. */
+  std::optional<KeyBinding> send_break;
 };
 
 /**
@@ -109,6 +111,13 @@ ELDER_TERMS_API SettingKey terminal_zoom_in_key_setting_key();
  * @returns Setting key for the terminal zoom-out binding.
  */
 ELDER_TERMS_API SettingKey terminal_zoom_out_key_setting_key();
+
+/**
+ * Returns the setting key for [terminal] send_break_key.
+ *
+ * @returns Setting key for the terminal BREAK binding.
+ */
+ELDER_TERMS_API SettingKey terminal_send_break_key_setting_key();
 
 /**
  * Returns the setting key for [terminal] encoding.
@@ -211,6 +220,15 @@ ELDER_TERMS_API std::string
 terminal_zoom_out_key(const SettingsStore &store);
 
 /**
+ * Extracts the raw terminal BREAK binding text from a store.
+ *
+ * @param store Source settings store.
+ * @returns Configured binding text, or an empty string when disabled.
+ */
+ELDER_TERMS_API std::string
+terminal_send_break_key(const SettingsStore &store);
+
+/**
  * Extracts parsed terminal keyboard bindings from a store.
  *
  * @param store Source settings store containing validated values.
@@ -220,10 +238,10 @@ ELDER_TERMS_API TerminalKeyBindings
 terminal_key_bindings(const SettingsStore &store);
 
 /**
- * Checks whether both terminal zoom actions use the same enabled binding.
+ * Checks whether terminal actions share an enabled binding.
  *
  * @param store Source settings store containing individually valid values.
- * @returns True when the two enabled bindings conflict.
+ * @returns True when any two enabled bindings conflict.
  */
 ELDER_TERMS_API bool
 terminal_key_bindings_conflict(const SettingsStore &store);

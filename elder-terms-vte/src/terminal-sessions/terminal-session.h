@@ -8,6 +8,7 @@
 #include <elder-terms/settings.h>
 
 #include "../terminal-session-callbacks.h"
+#include "../terminal-break.h"
 #include "../terminal-text-send.h"
 #include "../terminal-transfer.h"
 
@@ -82,6 +83,15 @@ public:
   }
 
   /**
+   * Returns whether this backend can send a terminal BREAK action.
+   *
+   * @returns True when BREAK requests are supported.
+   */
+  virtual bool supports_break() const {
+    return false;
+  }
+
+  /**
    * Returns whether a transfer is currently active.
    *
    * @returns True while a transfer task is active.
@@ -108,6 +118,17 @@ public:
    * @returns True when the request was accepted.
    */
   virtual bool start_text_send(TerminalTextSendRequest request) {
+    (void)request;
+    return false;
+  }
+
+  /**
+   * Starts one terminal BREAK request.
+   *
+   * @param request BREAK presentation callbacks.
+   * @returns True when the request was accepted.
+   */
+  virtual bool send_break(TerminalBreakRequest request) {
     (void)request;
     return false;
   }

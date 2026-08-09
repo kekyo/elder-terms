@@ -92,6 +92,7 @@ interface AppliedStore {
   readonly serial_flow_control: string;
   readonly serial_parity: string;
   readonly serial_stop_bit: string;
+  readonly send_break_key: string;
   readonly transfer_base_path: string;
   readonly text_send_bytes_per_second: string;
   readonly text_send_follow_return_code: string;
@@ -166,8 +167,12 @@ const showTerminalKeyBindings = async (app: GtkApp): Promise<void> => {
   await waitForResult(async () => {
     const zoomIn = await app.getById('settings_terminal_zoom_in_key_entry');
     const zoomOut = await app.getById('settings_terminal_zoom_out_key_entry');
+    const sendBreak = await app.getById(
+      'settings_terminal_send_break_key_entry'
+    );
     expect((await zoomIn.info()).states).toContain('showing');
     expect((await zoomOut.info()).states).toContain('showing');
+    expect((await sendBreak.info()).states).toContain('showing');
   });
 };
 
@@ -869,6 +874,7 @@ describe.concurrent('shared settings widget', () => {
               'Close window when session ends',
               'Zoom in shortcut',
               'Zoom out shortcut',
+              'Send BREAK shortcut',
             ],
           },
           {
@@ -1335,6 +1341,17 @@ describe.concurrent('shared settings widget', () => {
               'entry'
             ).text()
           ).toBe('');
+          expect(
+            await expectElementKind(
+              await app.getById('settings_terminal_send_break_key_entry'),
+              'entry'
+            ).text()
+          ).toBe('');
+          await waitForEntryPlaceholder(
+            app,
+            'settings_terminal_send_break_key_entry',
+            'Disabled (built-in default)'
+          );
         },
         differsFrom: undefined,
         fixtureName: 'settings-widget-terminal-page-default',
@@ -2745,6 +2762,7 @@ describe.concurrent('shared settings widget', () => {
         '--height=31',
         '--zoom=1.25',
         '--auto-close=false',
+        '--send-break-key=shift+F11',
       ],
       async ({ app, directory }) => {
         await showTerminalPage(app);
@@ -2773,6 +2791,10 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_terminal_zoom_out_key_entry'),
           'entry'
         );
+        const sendBreakKey = expectElementKind(
+          await app.getById('settings_terminal_send_break_key_entry'),
+          'entry'
+        );
         await expectNumericEntryValue(width, 88);
         await expectNumericEntryValue(height, 31);
         await expectNumericEntryValue(zoom, 1.25);
@@ -2783,6 +2805,7 @@ describe.concurrent('shared settings widget', () => {
         );
         expect(await zoomInKey.text()).toBe('');
         expect(await zoomOutKey.text()).toBe('');
+        expect(await sendBreakKey.text()).toBe('shift+F11');
 
         const window = expectElementKind(
           await app.getById('settings_widget_test_window'),
@@ -2842,6 +2865,7 @@ describe.concurrent('shared settings widget', () => {
         await autoClose.selectChildAt(1);
         await showTerminalKeyBindings(app);
         await captureKeyBinding(app, zoomInKey, ['alt'], 'Up');
+        await captureKeyBinding(app, sendBreakKey, ['shift'], 'F12');
         await clearKeyBinding(
           app,
           zoomOutKey,
@@ -2865,6 +2889,7 @@ describe.concurrent('shared settings widget', () => {
         expect(store.auto_close).toBe('true');
         expect(store.zoom_in_key).toBe('alt+Up');
         expect(store.zoom_out_key).toBe('');
+        expect(store.send_break_key).toBe('shift+F12');
       }
     );
   });
@@ -3334,6 +3359,10 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_terminal_zoom_out_key_entry'),
           'entry'
         );
+        const sendBreakKey = expectElementKind(
+          await app.getById('settings_terminal_send_break_key_entry'),
+          'entry'
+        );
         const apply = await app.getById('settings_apply_button');
         const save = await app.getById('settings_save_button');
 
@@ -3353,10 +3382,25 @@ describe.concurrent('shared settings widget', () => {
           await expectSensitive(apply);
           await expectSensitive(save);
         });
+
+        await captureKeyBinding(app, sendBreakKey, ['alt'], 'F1');
+        await expectEntryText(sendBreakKey, 'alt+F1');
+        await waitForResult(async () => {
+          await expectInsensitive(apply);
+          await expectInsensitive(save);
+        });
+
+        await captureKeyBinding(app, sendBreakKey, ['alt'], 'F3');
+        await expectEntryText(sendBreakKey, 'alt+F3');
+        await waitForResult(async () => {
+          await expectSensitive(apply);
+          await expectSensitive(save);
+        });
         await expectElementKind(apply, 'button').click();
         const store = await waitForAppliedStore(app);
         expect(store.zoom_in_key).toBe('alt+F1');
         expect(store.zoom_out_key).toBe('alt+F2');
+        expect(store.send_break_key).toBe('alt+F3');
       }
     );
   });
@@ -3374,6 +3418,7 @@ describe.concurrent('shared settings widget', () => {
       '--global=terminal.cursor_key_mode=normal',
       '--global=terminal.zoom_in_key=alt+plus',
       '--global=terminal.zoom_out_key=alt+minus',
+      '--global=terminal.send_break_key=alt+F12',
       '--global=telnet.address=global.telnet.test',
       '--global=telnet.port=2323',
       '--global=telnet.terminal_type=vt220',
@@ -3419,6 +3464,7 @@ describe.concurrent('shared settings widget', () => {
         'cursor_key_mode',
         'zoom_in_key',
         'zoom_out_key',
+        'send_break_key',
         'telnet_address',
         'telnet_port',
         'telnet_terminal_type',
@@ -3496,12 +3542,21 @@ describe.concurrent('shared settings widget', () => {
         'settings_terminal_zoom_out_key_entry',
         'alt+minus (global default)'
       );
+      await expectInheritedEntry(
+        app,
+        'settings_terminal_send_break_key_entry',
+        'alt+F12 (global default)'
+      );
       expectElementKind(
         await app.getById('settings_terminal_zoom_in_key_reset_button'),
         'button'
       );
       expectElementKind(
         await app.getById('settings_terminal_zoom_out_key_reset_button'),
+        'button'
+      );
+      expectElementKind(
+        await app.getById('settings_terminal_send_break_key_reset_button'),
         'button'
       );
 

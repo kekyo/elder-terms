@@ -218,6 +218,38 @@ const expectSerialActivityIndicatorsVisibleInitialState = async (
 };
 
 describe.concurrent('elder-terms-vte serial session', () => {
+  it('holds and releases a serial BREAK asynchronously', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const helper = await startSerialPtyHelper();
+      try {
+        const serialDevicePath = join(directory, 'ttyELDERTERMS0');
+        const configPath = join(directory, 'serial-break.ini');
+        await symlink(helper.slavePath, serialDevicePath);
+        await writeFile(
+          configPath,
+          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\nsend_break_key=F12\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=ignore\n`,
+          'utf8'
+        );
+
+        await runGtkTest(context, ['-c', configPath], async (app) => {
+          const connectionStatus = `serial: ${serialDevicePath}:9600:n81n`;
+          await expectMainWindowStatus(app, connectionStatus);
+          await focusTerminal(app);
+          await waitForActivityIndicatorImageState(app, 'sd', 'off');
+          const receivedBeforeBreak = allReceivedHex(helper);
+
+          await app.input.pressKey('F12');
+          await expectMainWindowStatus(app, 'Sending BREAK');
+          await waitForActivityIndicatorImageState(app, 'sd', 'on');
+          await expectMainWindowStatus(app, 'BREAK sent');
+          expect(allReceivedHex(helper)).toBe(receivedBeforeBreak);
+        });
+      } finally {
+        await helper.close();
+      }
+    });
+  });
+
   it('keeps an ignored carrier session active without modem-line polling', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const helper = await startSerialPtyHelper();

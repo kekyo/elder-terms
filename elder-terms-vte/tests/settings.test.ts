@@ -2133,6 +2133,18 @@ describe.concurrent('elder-terms-vte settings', () => {
       );
       await captureKeyBinding(app, zoomInKey, ['alt'], 'Up');
       await captureKeyBinding(app, zoomOutKey, ['alt'], 'Down');
+      const terminalScrollbar = expectElementKind(
+        await app.getById('settings_terminal_page_scrollbar'),
+        'scrollbar'
+      );
+      await terminalScrollbar.setValue(
+        (await terminalScrollbar.valueInfo()).maximum
+      );
+      const sendBreakKey = expectElementKind(
+        await app.getById('settings_terminal_send_break_key_entry'),
+        'entry'
+      );
+      await captureKeyBinding(app, sendBreakKey, ['alt'], 'F12');
       await expectElementKind(
         await app.getById('settings_apply_button'),
         'button'
@@ -2158,6 +2170,9 @@ describe.concurrent('elder-terms-vte settings', () => {
           initialLayout.hints.heightIncrement
         );
       });
+
+      await pressKeyWithModifiers(app, ['alt'], 'F12');
+      await expectMainWindowStatus(app, 'BREAK unavailable');
     });
   });
 

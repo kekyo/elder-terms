@@ -141,6 +141,14 @@ bool terminal_session_supports_text_send(const TerminalSessionState *state) {
   return state->session->supports_text_send();
 }
 
+bool terminal_session_supports_break(const TerminalSessionState *state) {
+  if (state == nullptr || state->session == nullptr) {
+    return false;
+  }
+
+  return state->session->supports_break();
+}
+
 bool terminal_session_transfer_in_progress(const TerminalSessionState *state) {
   if (state == nullptr || state->session == nullptr) {
     return false;
@@ -165,6 +173,15 @@ bool start_terminal_session_text_send(TerminalSessionState *state,
   }
 
   return state->session->start_text_send(std::move(request));
+}
+
+bool send_terminal_session_break(TerminalSessionState *state,
+                                 TerminalBreakRequest request) {
+  if (state == nullptr || state->session == nullptr) {
+    return false;
+  }
+
+  return state->session->send_break(std::move(request));
 }
 
 bool cancel_terminal_session_transfer(TerminalSessionState *state) {

@@ -117,6 +117,7 @@ private:
   std::optional<cardio::promise<void>> write_task;
   std::optional<cardio::promise<void>> transfer_task;
   std::optional<cardio::promise<void>> text_send_task;
+  std::optional<cardio::promise<void>> break_task;
   int socket_fd = -1;
   int transfer_input_event_fd = -1;
   int binary_negotiation_event_fd = -1;
@@ -125,6 +126,7 @@ private:
   bool writing = false;
   bool transfer_active = false;
   bool text_send_active = false;
+  bool break_active = false;
   bool initial_binary_negotiation_pending = false;
   bool zmodem_autostart_enabled = false;
   std::deque<unsigned char> transfer_incoming;
@@ -671,6 +673,49 @@ private:
     enqueue_bytes(protocol.encode_user_input(bytes));
   }
 
+  cardio::promise<void> send_break_async(TerminalBreakRequest request) {
+    bool succeeded = false;
+    try {
+      TelnetBytes encoded = protocol.encode_break();
+      auto write_lock_promise =
+          backend_write_mutex.lock(stop_source.get_cancellation());
+      auto write_lock = std::move(co_await write_lock_promise);
+      std::size_t offset = 0;
+      while (offset < encoded.size()) {
+        if (!break_active || stopping || socket_fd < 0 || !io.has_value()) {
+          throw std::runtime_error("TELNET BREAK is not connected");
+        }
+        std::span<const unsigned char> remaining(encoded.data() + offset,
+                                                 encoded.size() - offset);
+        const std::size_t written = co_await cardio::io_urings::write(
+            *io, socket_fd, std::as_bytes(remaining),
+            stop_source.get_cancellation());
+        if (written == 0) {
+          throw std::runtime_error("TELNET BREAK write made no progress");
+        }
+        notify_activity(ActivityIndicatorId::sd);
+        offset += written;
+      }
+      succeeded = true;
+    } catch (const cardio::canceled_exception &) {
+    } catch (const std::exception &error) {
+      if (!stopping) {
+        std::cerr << "Warning: TELNET BREAK failed: " << error.what()
+                  << '\n';
+      }
+    }
+
+    break_active = false;
+    if (!stopping) {
+      if (request.status) {
+        request.status(succeeded ? _("BREAK sent") : _("BREAK failed"));
+      }
+      if (request.finished) {
+        request.finished(succeeded);
+      }
+    }
+  }
+
 public:
   TerminalTelnetSession(GtkWidget *terminal, TelnetConnectionSettings settings,
                         TerminalTextSettings text_settings,
@@ -757,6 +802,10 @@ public:
     return true;
   }
 
+  bool supports_break() const override {
+    return true;
+  }
+
   bool transfer_in_progress() const override {
     return transfer_active || text_send_active;
   }
@@ -781,6 +830,7 @@ public:
 
   bool start_transfer(TerminalTransferRequest request) override {
     if (!started || stopping || transfer_active || text_send_active ||
+        break_active ||
         socket_fd < 0) {
       return false;
     }
@@ -825,6 +875,7 @@ public:
 
   bool start_text_send(TerminalTextSendRequest request) override {
     if (!started || stopping || transfer_active || text_send_active ||
+        break_active ||
         socket_fd < 0 ||
         !terminal_text_send_source_is_valid(request.source)) {
       return false;
@@ -852,6 +903,18 @@ public:
     text_send_task.reset();
     text_send_task.emplace(
         text_send_loop_async(std::move(request), std::move(transport)));
+    return true;
+  }
+
+  bool send_break(TerminalBreakRequest request) override {
+    if (!started || stopping || transfer_active || text_send_active ||
+        break_active || socket_fd < 0 || !io.has_value()) {
+      return false;
+    }
+
+    break_active = true;
+    break_task.reset();
+    break_task.emplace(send_break_async(std::move(request)));
     return true;
   }
 

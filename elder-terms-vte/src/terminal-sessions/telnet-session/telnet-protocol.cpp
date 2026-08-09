@@ -6,6 +6,7 @@
 namespace elder_terms {
 
 static constexpr unsigned char telnet_se = 240;
+static constexpr unsigned char telnet_brk = 243;
 static constexpr unsigned char telnet_sb = 250;
 static constexpr unsigned char telnet_will = 251;
 static constexpr unsigned char telnet_wont = 252;
@@ -328,6 +329,10 @@ TelnetBytes TelnetProtocol::finish_text_send_encoding() {
     text_send_pending_cr = false;
   }
   return result;
+}
+
+TelnetBytes TelnetProtocol::encode_break() const {
+  return {telnet_iac, telnet_brk};
 }
 
 std::vector<TelnetBytes> TelnetProtocol::encode_enable_binary() {

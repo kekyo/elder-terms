@@ -55,9 +55,11 @@ struct TerminalLayoutState {
   bool font_resize_guard_active = false;
   bool font_zoom_anchor_active = false;
   bool font_zoom_pending = false;
+  bool break_key_pressed = false;
   guint window_size_sync_source = 0;
   guint font_resize_guard_source = 0;
   guint font_zoom_source = 0;
+  guint break_key_hardware_code = 0;
   gdouble pending_font_scale = 1.0;
   gdouble font_zoom_anchor_scale = 1.0;
   gdouble smooth_zoom_delta_y = 0.0;
@@ -524,6 +526,18 @@ static gboolean on_terminal_key_press_event(GtkWidget *, GdkEventKey *event,
                                              gpointer data) {
   TerminalLayoutState *state = static_cast<TerminalLayoutState *>(data);
   const auto modifiers = static_cast<GdkModifierType>(event->state);
+  if (state->key_bindings.send_break.has_value() &&
+      key_binding_matches(*state->key_bindings.send_break, event->keyval,
+                          modifiers)) {
+    if (!state->break_key_pressed) {
+      state->break_key_pressed = true;
+      state->break_key_hardware_code = event->hardware_keycode;
+      if (state->callbacks.break_requested) {
+        state->callbacks.break_requested();
+      }
+    }
+    return GDK_EVENT_STOP;
+  }
   if (state->key_bindings.zoom_in.has_value() &&
       key_binding_matches(*state->key_bindings.zoom_in, event->keyval,
                           modifiers)) {
@@ -536,6 +550,25 @@ static gboolean on_terminal_key_press_event(GtkWidget *, GdkEventKey *event,
     queue_font_scale_update(state, -1);
     return GDK_EVENT_STOP;
   }
+  return GDK_EVENT_PROPAGATE;
+}
+
+static gboolean on_terminal_key_release_event(GtkWidget *, GdkEventKey *event,
+                                              gpointer data) {
+  TerminalLayoutState *state = static_cast<TerminalLayoutState *>(data);
+  if (state->break_key_pressed &&
+      state->break_key_hardware_code == event->hardware_keycode) {
+    state->break_key_pressed = false;
+    state->break_key_hardware_code = 0;
+  }
+  return GDK_EVENT_PROPAGATE;
+}
+
+static gboolean on_terminal_focus_out_event(GtkWidget *, GdkEventFocus *,
+                                            gpointer data) {
+  TerminalLayoutState *state = static_cast<TerminalLayoutState *>(data);
+  state->break_key_pressed = false;
+  state->break_key_hardware_code = 0;
   return GDK_EVENT_PROPAGATE;
 }
 
@@ -787,7 +820,8 @@ create_terminal_layout(const MainWindow &main_window, TestOptions options,
   gtk_range_set_adjustment(GTK_RANGE(state->terminal_scrollbar), adjustment);
   gtk_widget_add_events(state->terminal,
                         GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK |
-                            GDK_KEY_PRESS_MASK);
+                            GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK |
+                            GDK_FOCUS_CHANGE_MASK);
 
   return state;
 }
@@ -823,6 +857,10 @@ void connect_terminal_layout_signals(TerminalLayoutState *state) {
                    G_CALLBACK(on_terminal_scroll_event), state);
   g_signal_connect(state->terminal, "key-press-event",
                    G_CALLBACK(on_terminal_key_press_event), state);
+  g_signal_connect(state->terminal, "key-release-event",
+                   G_CALLBACK(on_terminal_key_release_event), state);
+  g_signal_connect(state->terminal, "focus-out-event",
+                   G_CALLBACK(on_terminal_focus_out_event), state);
   g_signal_connect(state->terminal, "resize-window",
                    G_CALLBACK(on_terminal_resize_window), state);
 }
@@ -894,6 +932,8 @@ void apply_terminal_key_bindings(
     return;
   }
   state->key_bindings = std::move(terminal_key_bindings);
+  state->break_key_pressed = false;
+  state->break_key_hardware_code = 0;
 }
 
 void destroy_terminal_layout(TerminalLayoutState *state) {

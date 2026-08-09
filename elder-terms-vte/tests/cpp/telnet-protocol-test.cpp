@@ -296,6 +296,12 @@ static void text_send_nvt_framing_spans_chunks_and_flushes_eof_cr() {
                "text send EOF should frame a pending bare CR");
 }
 
+static void break_command_uses_the_telnet_brk_control_sequence() {
+  TelnetProtocol protocol("xterm-256color");
+  expect_bytes(protocol.encode_break(), {255, 243},
+               "TELNET BREAK should encode as IAC BRK");
+}
+
 static void terminal_type_negotiation_reports_configured_type() {
   TelnetProtocol protocol("vt220");
   const TelnetProtocolResult negotiation =
@@ -376,6 +382,7 @@ int main() {
     elder_terms::user_input_applies_nvt_framing_and_iac_escaping();
     elder_terms::only_local_binary_disables_outbound_nvt_framing();
     elder_terms::text_send_nvt_framing_spans_chunks_and_flushes_eof_cr();
+    elder_terms::break_command_uses_the_telnet_brk_control_sequence();
     elder_terms::terminal_type_negotiation_reports_configured_type();
     elder_terms::terminal_type_send_requires_active_negotiation();
     elder_terms::terminal_type_response_escapes_iac();

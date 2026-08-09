@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <span>
 #include <string>
@@ -103,6 +104,16 @@ public:
    */
   cardio::promise<void> resize_async(glong columns, glong rows,
                                      cardio::cancellation cancellation);
+
+  /**
+   * Sends an RFC 4335 BREAK request to the remote terminal channel.
+   *
+   * @param duration_ms BREAK duration in milliseconds.
+   * @param cancellation Operation cancellation signal.
+   */
+  cardio::promise<void>
+  send_break_async(std::uint32_t duration_ms,
+                   cardio::cancellation cancellation);
 
   /**
    * Returns the authenticated transport shared by this shell channel.

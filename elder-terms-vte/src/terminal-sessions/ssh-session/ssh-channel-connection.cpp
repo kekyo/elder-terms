@@ -1294,6 +1294,24 @@ SshChannelConnection::resize_async(glong columns, glong rows,
   co_await flush_transport_async(transport, std::move(cancellation));
 }
 
+cardio::promise<void> SshChannelConnection::send_break_async(
+    std::uint32_t duration_ms, cardio::cancellation cancellation) {
+  if (impl == nullptr || impl->closed || impl->transport == nullptr ||
+      impl->channel == nullptr) {
+    throw std::runtime_error(_("SSH channel is closed"));
+  }
+  const std::shared_ptr<AuthenticatedSshTransport> transport =
+      impl->transport;
+  const ssh_channel channel = impl->channel;
+  co_await await_transport_ok_async(
+      transport,
+      [channel, duration_ms]() {
+        return ssh_channel_request_send_break(channel, duration_ms);
+      },
+      "Failed to send SSH BREAK", true, cancellation);
+  co_await flush_transport_async(transport, std::move(cancellation));
+}
+
 std::shared_ptr<AuthenticatedSshTransport>
 SshChannelConnection::authenticated_transport() const {
   return impl == nullptr ? nullptr : impl->transport;

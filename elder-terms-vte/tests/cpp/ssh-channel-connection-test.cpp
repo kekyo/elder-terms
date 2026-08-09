@@ -987,6 +987,8 @@ static void run_client_case(const ServerOptions &server_options,
       co_await connection->resize_async(
           server_options.resized_columns, server_options.resized_rows,
           cancellation_source.get_cancellation());
+      co_await connection->send_break_async(
+          500, cancellation_source.get_cancellation());
       co_await connection->write_all_async(
           bytes(server_options.payload),
           cancellation_source.get_cancellation());

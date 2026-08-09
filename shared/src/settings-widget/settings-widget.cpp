@@ -1,6 +1,7 @@
 #include <elder-terms/settings-widget.h>
 
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <cctype>
 #include <cmath>
@@ -120,8 +121,10 @@ struct SettingsWidgetState {
   bool terminal_encoding_valid = true;
   KeyBindingInputWidgetState *terminal_zoom_in_key_input = nullptr;
   KeyBindingInputWidgetState *terminal_zoom_out_key_input = nullptr;
+  KeyBindingInputWidgetState *terminal_send_break_key_input = nullptr;
   GtkWidget *terminal_zoom_in_key_reset_button = nullptr;
   GtkWidget *terminal_zoom_out_key_reset_button = nullptr;
+  GtkWidget *terminal_send_break_key_reset_button = nullptr;
   GtkWidget *macro_list = nullptr;
   GtkWidget *macro_editor = nullptr;
   GtkWidget *macro_id_entry = nullptr;
@@ -1338,27 +1341,42 @@ static void update_terminal_return_code_from_widget(
 
 static bool terminal_key_binding_inputs_conflict(
     SettingsWidgetState *state) {
-  const std::string zoom_in_text = setting_has_explicit_value(
-                                       state->draft_store,
-                                       terminal_zoom_in_key_setting_key())
-                                       ? key_binding_input_widget_text(
-                                             state->terminal_zoom_in_key_input)
-                                       : terminal_zoom_in_key(
-                                             state->draft_store);
-  const std::string zoom_out_text = setting_has_explicit_value(
-                                        state->draft_store,
-                                        terminal_zoom_out_key_setting_key())
-                                        ? key_binding_input_widget_text(
-                                              state->terminal_zoom_out_key_input)
-                                        : terminal_zoom_out_key(
-                                              state->draft_store);
-  const KeyBindingParseResult zoom_in = parse_key_binding(
-      zoom_in_text);
-  const KeyBindingParseResult zoom_out = parse_key_binding(
-      zoom_out_text);
-  return zoom_in.error.empty() && zoom_out.error.empty() &&
-         zoom_in.binding.has_value() && zoom_out.binding.has_value() &&
-         key_bindings_equal(*zoom_in.binding, *zoom_out.binding);
+  const auto binding_text = [state](KeyBindingInputWidgetState *input,
+                                    const SettingKey &key,
+                                    const std::string &effective) {
+    return setting_has_explicit_value(state->draft_store, key)
+               ? key_binding_input_widget_text(input)
+               : effective;
+  };
+  const std::array<KeyBindingParseResult, 3> bindings = {
+      parse_key_binding(binding_text(
+          state->terminal_zoom_in_key_input,
+          terminal_zoom_in_key_setting_key(),
+          terminal_zoom_in_key(state->draft_store))),
+      parse_key_binding(binding_text(
+          state->terminal_zoom_out_key_input,
+          terminal_zoom_out_key_setting_key(),
+          terminal_zoom_out_key(state->draft_store))),
+      parse_key_binding(binding_text(
+          state->terminal_send_break_key_input,
+          terminal_send_break_key_setting_key(),
+          terminal_send_break_key(state->draft_store))),
+  };
+  for (std::size_t left = 0; left < bindings.size(); ++left) {
+    if (!bindings[left].error.empty() ||
+        !bindings[left].binding.has_value()) {
+      continue;
+    }
+    for (std::size_t right = left + 1; right < bindings.size(); ++right) {
+      if (bindings[right].error.empty() &&
+          bindings[right].binding.has_value() &&
+          key_bindings_equal(*bindings[left].binding,
+                             *bindings[right].binding)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 static bool terminal_key_binding_inputs_valid(
@@ -1366,7 +1384,9 @@ static bool terminal_key_binding_inputs_valid(
   return key_binding_input_widget_is_valid(
              state->terminal_zoom_in_key_input) &&
          key_binding_input_widget_is_valid(
-             state->terminal_zoom_out_key_input);
+             state->terminal_zoom_out_key_input) &&
+         key_binding_input_widget_is_valid(
+             state->terminal_send_break_key_input);
 }
 
 static bool application_hotkey_input_valid(
@@ -1433,13 +1453,16 @@ static void update_action_sensitivity(SettingsWidgetState *state) {
 static void update_terminal_key_binding_validation(
     SettingsWidgetState *state) {
   constexpr char conflict_error[] =
-      "Zoom in and zoom out must use different key bindings";
+      "Terminal actions must use different key bindings";
   const bool conflict = terminal_key_binding_inputs_conflict(state);
   set_key_binding_input_widget_external_error(
       state->terminal_zoom_in_key_input,
       conflict ? conflict_error : std::string());
   set_key_binding_input_widget_external_error(
       state->terminal_zoom_out_key_input,
+      conflict ? conflict_error : std::string());
+  set_key_binding_input_widget_external_error(
+      state->terminal_send_break_key_input,
       conflict ? conflict_error : std::string());
   update_action_sensitivity(state);
 }
@@ -1466,6 +1489,18 @@ static void update_terminal_zoom_out_key_from_widget(
       &state->draft_store, terminal_zoom_out_key_setting_key(),
       SettingValue{
           key_binding_input_widget_text(state->terminal_zoom_out_key_input)});
+}
+
+static void update_terminal_send_break_key_from_widget(
+    SettingsWidgetState *state) {
+  if (!key_binding_input_widget_is_valid(
+          state->terminal_send_break_key_input)) {
+    return;
+  }
+  set_explicit_setting_value(
+      &state->draft_store, terminal_send_break_key_setting_key(),
+      SettingValue{key_binding_input_widget_text(
+          state->terminal_send_break_key_input)});
 }
 
 static void update_telnet_address_from_widget(SettingsWidgetState *state) {
@@ -3023,6 +3058,15 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
         state, state->terminal_zoom_out_key_reset_button,
         terminal_zoom_out_key_setting_key());
   }
+  if (state->terminal_send_break_key_input != nullptr) {
+    sync_key_binding_widget(
+        state, state->terminal_send_break_key_input,
+        terminal_send_break_key_setting_key(),
+        terminal_send_break_key(state->draft_store));
+    sync_key_binding_reset_button(
+        state, state->terminal_send_break_key_reset_button,
+        terminal_send_break_key_setting_key());
+  }
   if (state->telnet_address_entry != nullptr) {
     sync_inheritable_entry(state->telnet_address_entry, state->draft_store,
                            telnet_address_setting_key(), telnet.address);
@@ -3552,7 +3596,75 @@ static void on_terminal_return_code_changed(GtkComboBox *, gpointer data) {
 enum class TerminalKeyBindingField {
   zoom_in,
   zoom_out,
+  send_break,
 };
+
+static KeyBindingInputWidgetState *terminal_key_binding_input(
+    SettingsWidgetState *state, TerminalKeyBindingField field) {
+  switch (field) {
+  case TerminalKeyBindingField::zoom_in:
+    return state->terminal_zoom_in_key_input;
+  case TerminalKeyBindingField::zoom_out:
+    return state->terminal_zoom_out_key_input;
+  case TerminalKeyBindingField::send_break:
+    return state->terminal_send_break_key_input;
+  }
+  return nullptr;
+}
+
+static GtkWidget *terminal_key_binding_reset_button(
+    SettingsWidgetState *state, TerminalKeyBindingField field) {
+  switch (field) {
+  case TerminalKeyBindingField::zoom_in:
+    return state->terminal_zoom_in_key_reset_button;
+  case TerminalKeyBindingField::zoom_out:
+    return state->terminal_zoom_out_key_reset_button;
+  case TerminalKeyBindingField::send_break:
+    return state->terminal_send_break_key_reset_button;
+  }
+  return nullptr;
+}
+
+static SettingKey terminal_key_binding_setting_key(
+    TerminalKeyBindingField field) {
+  switch (field) {
+  case TerminalKeyBindingField::zoom_in:
+    return terminal_zoom_in_key_setting_key();
+  case TerminalKeyBindingField::zoom_out:
+    return terminal_zoom_out_key_setting_key();
+  case TerminalKeyBindingField::send_break:
+    return terminal_send_break_key_setting_key();
+  }
+  return {};
+}
+
+static std::string terminal_key_binding_effective_text(
+    const SettingsWidgetState *state, TerminalKeyBindingField field) {
+  switch (field) {
+  case TerminalKeyBindingField::zoom_in:
+    return terminal_zoom_in_key(state->draft_store);
+  case TerminalKeyBindingField::zoom_out:
+    return terminal_zoom_out_key(state->draft_store);
+  case TerminalKeyBindingField::send_break:
+    return terminal_send_break_key(state->draft_store);
+  }
+  return {};
+}
+
+static void update_terminal_key_binding_from_widget(
+    SettingsWidgetState *state, TerminalKeyBindingField field) {
+  switch (field) {
+  case TerminalKeyBindingField::zoom_in:
+    update_terminal_zoom_in_key_from_widget(state);
+    return;
+  case TerminalKeyBindingField::zoom_out:
+    update_terminal_zoom_out_key_from_widget(state);
+    return;
+  case TerminalKeyBindingField::send_break:
+    update_terminal_send_break_key_from_widget(state);
+    return;
+  }
+}
 
 static void on_terminal_key_binding_changed(
     SettingsWidgetState *state, TerminalKeyBindingField field) {
@@ -3560,37 +3672,23 @@ static void on_terminal_key_binding_changed(
     return;
   }
   KeyBindingInputWidgetState *input =
-      field == TerminalKeyBindingField::zoom_in
-          ? state->terminal_zoom_in_key_input
-          : state->terminal_zoom_out_key_input;
+      terminal_key_binding_input(state, field);
   if (!key_binding_input_widget_is_valid(input)) {
     update_terminal_key_binding_validation(state);
     notify_changed(state);
     return;
   }
-  if (field == TerminalKeyBindingField::zoom_in) {
-    update_terminal_zoom_in_key_from_widget(state);
-  } else {
-    update_terminal_zoom_out_key_from_widget(state);
-  }
-  const SettingKey key =
-      field == TerminalKeyBindingField::zoom_in
-          ? terminal_zoom_in_key_setting_key()
-          : terminal_zoom_out_key_setting_key();
+  update_terminal_key_binding_from_widget(state, field);
+  const SettingKey key = terminal_key_binding_setting_key(field);
   const std::string effective =
-      field == TerminalKeyBindingField::zoom_in
-          ? terminal_zoom_in_key(state->draft_store)
-          : terminal_zoom_out_key(state->draft_store);
+      terminal_key_binding_effective_text(state, field);
   set_key_binding_input_widget_empty_clear_enabled(input, false);
   gtk_entry_set_placeholder_text(
       GTK_ENTRY(key_binding_input_widget_root(input)),
       effective.empty()
           ? settings_ui_text(SettingsUiText::disabled)
           : settings_ui_text(SettingsUiText::press_key_combination));
-  GtkWidget *reset_button =
-      field == TerminalKeyBindingField::zoom_in
-          ? state->terminal_zoom_in_key_reset_button
-          : state->terminal_zoom_out_key_reset_button;
+  GtkWidget *reset_button = terminal_key_binding_reset_button(state, field);
   sync_key_binding_reset_button(state, reset_button, key);
   update_terminal_key_binding_validation(state);
   notify_changed(state);
@@ -3598,23 +3696,13 @@ static void on_terminal_key_binding_changed(
 
 static void reset_terminal_key_binding(SettingsWidgetState *state,
                                        TerminalKeyBindingField field) {
-  const SettingKey key =
-      field == TerminalKeyBindingField::zoom_in
-          ? terminal_zoom_in_key_setting_key()
-          : terminal_zoom_out_key_setting_key();
+  const SettingKey key = terminal_key_binding_setting_key(field);
   KeyBindingInputWidgetState *input =
-      field == TerminalKeyBindingField::zoom_in
-          ? state->terminal_zoom_in_key_input
-          : state->terminal_zoom_out_key_input;
-  GtkWidget *button =
-      field == TerminalKeyBindingField::zoom_in
-          ? state->terminal_zoom_in_key_reset_button
-          : state->terminal_zoom_out_key_reset_button;
+      terminal_key_binding_input(state, field);
+  GtkWidget *button = terminal_key_binding_reset_button(state, field);
   clear_explicit_setting_value(&state->draft_store, key);
   const std::string effective =
-      field == TerminalKeyBindingField::zoom_in
-          ? terminal_zoom_in_key(state->draft_store)
-          : terminal_zoom_out_key(state->draft_store);
+      terminal_key_binding_effective_text(state, field);
   const bool previous_synchronizing = state->synchronizing;
   state->synchronizing = true;
   sync_key_binding_widget(state, input, key, effective);
@@ -3636,6 +3724,13 @@ static void on_terminal_zoom_out_key_reset_clicked(GtkButton *,
   reset_terminal_key_binding(
       static_cast<SettingsWidgetState *>(data),
       TerminalKeyBindingField::zoom_out);
+}
+
+static void on_terminal_send_break_key_reset_clicked(GtkButton *,
+                                                     gpointer data) {
+  reset_terminal_key_binding(
+      static_cast<SettingsWidgetState *>(data),
+      TerminalKeyBindingField::send_break);
 }
 
 static void on_telnet_address_changed(GtkEditable *, gpointer data) {
@@ -4273,6 +4368,37 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                      0);
   attach_row(page, 9, terminal_zoom_out_key_setting_key(), zoom_out_row);
 
+  const std::string send_break_id =
+      widget_id(state, "terminal_send_break_key_entry");
+  state->terminal_send_break_key_input = create_key_binding_input_widget({
+      .text = "",
+      .accessible_id = send_break_id,
+      .changed = [state]() {
+        on_terminal_key_binding_changed(
+            state, TerminalKeyBindingField::send_break);
+      },
+  });
+  GtkWidget *send_break_row =
+      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_box_pack_start(
+      GTK_BOX(send_break_row),
+      key_binding_input_widget_root(state->terminal_send_break_key_input),
+      TRUE, TRUE, 0);
+  state->terminal_send_break_key_reset_button =
+      gtk_button_new_with_label(settings_ui_text(SettingsUiText::reset));
+  const std::string send_break_reset_id =
+      widget_id(state, "terminal_send_break_key_reset_button");
+  assign_accessible_id(state->terminal_send_break_key_reset_button,
+                       send_break_reset_id.c_str());
+  g_signal_connect(state->terminal_send_break_key_reset_button, "clicked",
+                   G_CALLBACK(on_terminal_send_break_key_reset_clicked),
+                   state);
+  gtk_box_pack_start(GTK_BOX(send_break_row),
+                     state->terminal_send_break_key_reset_button, FALSE,
+                     FALSE, 0);
+  attach_row(page, 10, terminal_send_break_key_setting_key(),
+             send_break_row);
+
   GtkWidget *primary_font_row =
       gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   state->terminal_font_primary_mode_combo = create_combo_box(
@@ -4289,7 +4415,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                      state->terminal_font_primary_mode_combo, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(primary_font_row),
                      state->terminal_font_primary_button, TRUE, TRUE, 0);
-  attach_row(page, 10, terminal_font_primary_family_setting_key(),
+  attach_row(page, 11, terminal_font_primary_family_setting_key(),
              primary_font_row);
 
   GtkWidget *fallback_font_row =
@@ -4308,7 +4434,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                      state->terminal_font_fallback_mode_combo, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(fallback_font_row),
                      state->terminal_font_fallback_button, TRUE, TRUE, 0);
-  attach_row(page, 11, terminal_font_fallback_family_setting_key(),
+  attach_row(page, 12, terminal_font_fallback_family_setting_key(),
              fallback_font_row);
 
   return scroller;
@@ -5167,6 +5293,7 @@ void destroy_settings_widget(SettingsWidgetState *state) {
   state->serial_device_event_monitor.reset();
   destroy_key_binding_input_widget(state->terminal_zoom_in_key_input);
   destroy_key_binding_input_widget(state->terminal_zoom_out_key_input);
+  destroy_key_binding_input_widget(state->terminal_send_break_key_input);
   destroy_key_binding_input_widget(
       state->general_open_connection_input);
   destroy_key_binding_input_widget(

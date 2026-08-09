@@ -318,10 +318,13 @@ static void resolve_terminal_key_binding_conflict(
   }
 
   warnings->push_back(
-      "Warning: conflicting terminal key bindings [terminal] zoom_in_key "
-      "and [terminal] zoom_out_key; using fallbacks");
+      "Warning: conflicting terminal key bindings among [terminal] "
+      "zoom_in_key, [terminal] zoom_out_key, and [terminal] send_break_key; "
+      "using fallbacks");
   restore_setting_entry(store, previous, terminal_zoom_in_key_setting_key());
   restore_setting_entry(store, previous, terminal_zoom_out_key_setting_key());
+  restore_setting_entry(store, previous,
+                        terminal_send_break_key_setting_key());
 }
 
 static bool is_connection_only_key(const SettingKey &key) {

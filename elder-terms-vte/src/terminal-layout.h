@@ -31,6 +31,9 @@ using TerminalGridSizeChangedCallback =
 using TerminalDisplaySettingsChangedCallback =
     std::function<void(TerminalDisplaySettings settings)>;
 
+/** Called when the configured terminal BREAK shortcut is pressed. */
+using TerminalBreakRequestedCallback = std::function<void()>;
+
 /**
  * Optional callbacks emitted by terminal layout state.
  */
@@ -39,6 +42,8 @@ struct TerminalLayoutCallbacks {
   TerminalGridSizeChangedCallback grid_size_changed;
   /** Receives VTE grid size or font scale changes. */
   TerminalDisplaySettingsChangedCallback display_settings_changed;
+  /** Receives one non-repeated BREAK shortcut press. */
+  TerminalBreakRequestedCallback break_requested;
 };
 
 /**

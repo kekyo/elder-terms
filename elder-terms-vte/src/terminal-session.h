@@ -8,6 +8,7 @@
 #include <elder-terms/settings.h>
 
 #include "terminal-session-callbacks.h"
+#include "terminal-break.h"
 #include "terminal-text-send.h"
 #include "terminal-transfer.h"
 
@@ -94,6 +95,14 @@ bool terminal_session_supports_transfer(const TerminalSessionState *state);
 bool terminal_session_supports_text_send(const TerminalSessionState *state);
 
 /**
+ * Returns whether the active backend supports terminal BREAK requests.
+ *
+ * @param state Session state created by create_terminal_session.
+ * @returns True when BREAK can be requested from this backend type.
+ */
+bool terminal_session_supports_break(const TerminalSessionState *state);
+
+/**
  * Returns whether the active backend is transferring a file.
  *
  * @param state Session state created by create_terminal_session.
@@ -120,6 +129,16 @@ bool start_terminal_session_transfer(TerminalSessionState *state,
  */
 bool start_terminal_session_text_send(TerminalSessionState *state,
                                       TerminalTextSendRequest request);
+
+/**
+ * Starts one terminal BREAK request on the active backend.
+ *
+ * @param state Session state created by create_terminal_session.
+ * @param request BREAK presentation callbacks.
+ * @returns True when the request was accepted.
+ */
+bool send_terminal_session_break(TerminalSessionState *state,
+                                 TerminalBreakRequest request);
 
 /**
  * Requests cancellation of the active file transfer or text send.

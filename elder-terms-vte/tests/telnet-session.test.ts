@@ -1,16 +1,21 @@
+import { execFile } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import {
+  expectMainWindowStatus,
   runGtkTest,
   telnetLocalhostConfigPath,
   withTemporaryDirectory,
 } from './gtk-test-helpers';
+import { openTerminalContextMenu } from './clipboard-test-helpers';
+import { expectElementKind } from './test-helpers';
 import {
   activateTextSend,
   expectTextSendActive,
@@ -18,6 +23,7 @@ import {
 } from './text-send-test-helpers';
 
 const telnetSe = 240;
+const telnetBrk = 243;
 const telnetSb = 250;
 const telnetWill = 251;
 const telnetWont = 252;
@@ -32,6 +38,7 @@ const telnetTerminalTypeSend = 1;
 const asciiBs = 8;
 const asciiDel = 127;
 const xtermDeleteSequence = [0x1b, 0x5b, 0x33, 0x7e];
+const execFileAsync = promisify(execFile);
 
 const listenOnLocalhost = async (server: Server): Promise<number> =>
   new Promise<number>((resolve, reject) => {
@@ -83,7 +90,130 @@ const hasSubsequence = (
   return false;
 };
 
+const countSubsequence = (
+  bytes: readonly number[],
+  sequence: readonly number[]
+): number => {
+  let count = 0;
+  for (let index = 0; index <= bytes.length - sequence.length; ++index) {
+    if (sequence.every((value, offset) => bytes[index + offset] === value)) {
+      ++count;
+    }
+  }
+  return count;
+};
+
 describe.concurrent('elder-terms-vte TELNET session', () => {
+  it('sends BREAK from its shortcut once per press and from the context menu', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const receivedChunks: Buffer[] = [];
+      let acceptedSocket: Socket | undefined;
+      let binaryAccepted = false;
+      const server = createServer((socket) => {
+        acceptedSocket = socket;
+        socket.on('data', (chunk) => {
+          receivedChunks.push(Buffer.from(chunk));
+          const data = receivedBytes(receivedChunks);
+          if (
+            !binaryAccepted &&
+            hasSubsequence(data, [telnetIac, telnetWill, telnetBinary]) &&
+            hasSubsequence(data, [telnetIac, telnetDo, telnetBinary])
+          ) {
+            binaryAccepted = true;
+            socket.write(
+              Buffer.from([
+                telnetIac,
+                telnetDo,
+                telnetBinary,
+                telnetIac,
+                telnetWill,
+                telnetBinary,
+              ])
+            );
+          }
+        });
+        socket.write('connected\r\n');
+      });
+
+      try {
+        const port = await listenOnLocalhost(server);
+        const configPath = join(directory, 'telnet-break.ini');
+        await writeFile(
+          configPath,
+          `[general]\ntype=telnet\nname=break\n\n[terminal]\nauto_close=false\nsend_break_key=F12\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
+          'utf8'
+        );
+
+        await runGtkTest(context, ['-c', configPath], async (app) => {
+          await toPass(async () => {
+            expect(acceptedSocket).not.toBeUndefined();
+            expect(binaryAccepted).toBe(true);
+          });
+          await expectMainWindowStatus(app, `telnet: 127.0.0.1:${port}`);
+          await waitForActivityIndicatorImageState(app, 'sd', 'off');
+
+          const baseline = receivedBytes(receivedChunks).length;
+          const mainWindow = expectElementKind(
+            await app.getById('main_window'),
+            'window'
+          );
+          await mainWindow.activate();
+          const environment = await app.environment();
+          try {
+            await execFileAsync('/usr/bin/xdotool', ['keydown', 'F12'], {
+              env: environment,
+            });
+            await execFileAsync('/usr/bin/xdotool', ['keydown', 'F12'], {
+              env: environment,
+            });
+          } finally {
+            await execFileAsync('/usr/bin/xdotool', ['keyup', 'F12'], {
+              env: environment,
+            });
+          }
+
+          await expectMainWindowStatus(app, 'BREAK sent');
+          await waitForActivityIndicatorImageState(app, 'sd', 'on');
+          await waitForActivityIndicatorImageState(app, 'sd', 'off');
+          expect(
+            countSubsequence(receivedBytes(receivedChunks).slice(baseline), [
+              telnetIac,
+              telnetBrk,
+            ])
+          ).toBe(1);
+
+          const contextBaseline = receivedBytes(receivedChunks).length;
+          await openTerminalContextMenu(app);
+          const breakItem = await waitForResult(async () => {
+            const item = expectElementKind(
+              await app.getById('terminal_context_break_item'),
+              'menuItem'
+            );
+            const info = await item.info();
+            expect(info.name).toBe('Send BREAK');
+            expect(info.states).toContain('showing');
+            expect(info.states).toContain('enabled');
+            expect(info.states).toContain('sensitive');
+            return item;
+          });
+          await breakItem.click();
+          await expectMainWindowStatus(app, 'BREAK sent');
+          await toPass(async () => {
+            expect(
+              countSubsequence(
+                receivedBytes(receivedChunks).slice(contextBaseline),
+                [telnetIac, telnetBrk]
+              )
+            ).toBe(1);
+          });
+        });
+      } finally {
+        acceptedSocket?.destroy();
+        await closeServer(server);
+      }
+    });
+  });
+
   it('negotiates BINARY and NAWS after connecting, tolerates BINARY disable, and sends user input', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const receivedChunks: Buffer[] = [];

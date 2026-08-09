@@ -589,6 +589,18 @@ describe.concurrent('elder-terms-vte main window', () => {
         expect(info.states).not.toContain('sensitive');
         return item;
       });
+      const breakItem = await waitForResult(async () => {
+        const item = expectElementKind(
+          await app.getById('terminal_context_break_item'),
+          'menuItem'
+        );
+        const info = await item.info();
+        expect(info.name).toBe('Send BREAK');
+        expect(info.states).toContain('showing');
+        expect(info.states).not.toContain('enabled');
+        expect(info.states).not.toContain('sensitive');
+        return item;
+      });
 
       await app.input.pressKey('Escape');
       const provider = await startClipboardTextProvider(app, 'clipboard text');
@@ -603,6 +615,10 @@ describe.concurrent('elder-terms-vte main window', () => {
           expect(info.states).toContain('showing');
           expect(info.states).toContain('enabled');
           expect(info.states).toContain('sensitive');
+          const breakInfo = await breakItem.info();
+          expect(breakInfo.states).toContain('showing');
+          expect(breakInfo.states).not.toContain('enabled');
+          expect(breakInfo.states).not.toContain('sensitive');
         });
       } finally {
         await provider.close();

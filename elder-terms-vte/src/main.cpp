@@ -1003,6 +1003,47 @@ static bool can_paste_terminal_text(const ApplicationState *state) {
              state->session_state);
 }
 
+static bool can_send_terminal_break(const ApplicationState *state) {
+  return state != nullptr && state->window != nullptr &&
+         state->connection_active && !state->transfer_active &&
+         state->settings_dialog == nullptr &&
+         state->transfer_file_dialog == nullptr &&
+         elder_terms::terminal_session_supports_break(state->session_state);
+}
+
+static void request_terminal_break(ApplicationState *state) {
+  if (state == nullptr) {
+    return;
+  }
+  if (!can_send_terminal_break(state)) {
+    elder_terms::set_main_window_status_text(state->main_window,
+                                             _("BREAK unavailable"));
+    restore_terminal_focus(state);
+    return;
+  }
+
+  elder_terms::set_main_window_status_text(state->main_window,
+                                           _("Sending BREAK"));
+  const bool accepted = elder_terms::send_terminal_session_break(
+      state->session_state,
+      {
+          .status =
+              [state](std::string status) {
+                elder_terms::set_main_window_status_text(
+                    state->main_window, status);
+              },
+          .finished =
+              [state](bool) {
+                restore_terminal_focus(state);
+              },
+      });
+  if (!accepted) {
+    elder_terms::set_main_window_status_text(state->main_window,
+                                             _("BREAK unavailable"));
+    restore_terminal_focus(state);
+  }
+}
+
 static void on_text_send_menu_item_activate(GtkMenuItem *,
                                             gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
@@ -1503,6 +1544,18 @@ int main(int argc, char **argv) {
                 }
               },
       });
+  elder_terms::set_main_window_terminal_break_callbacks(
+      &*main_window,
+      {
+          .can_send =
+              [&app_state]() {
+                return can_send_terminal_break(&app_state);
+              },
+          .send =
+              [&app_state]() {
+                request_terminal_break(&app_state);
+              },
+      });
   elder_terms::set_main_window_transfer_cancel_callback(
       &*main_window, [&app_state]() {
         return elder_terms::cancel_terminal_session_transfer(
@@ -1534,6 +1587,10 @@ int main(int argc, char **argv) {
               elder_terms::TerminalDisplaySettings terminal_settings) {
             update_runtime_terminal_display_settings(
               &app_state, terminal_settings);
+          },
+      .break_requested =
+          [&app_state]() {
+            request_terminal_break(&app_state);
           },
     });
 

@@ -113,6 +113,8 @@ using elder_terms::terminal_return_code_to_string;
 using elder_terms::terminal_width_setting_key;
 using elder_terms::terminal_zoom_setting_key;
 using elder_terms::terminal_key_bindings;
+using elder_terms::terminal_send_break_key;
+using elder_terms::terminal_send_break_key_setting_key;
 using elder_terms::terminal_zoom_in_key_setting_key;
 using elder_terms::terminal_zoom_out_key_setting_key;
 using elder_terms::transfer_base_path;
@@ -211,12 +213,16 @@ static void test_default_settings() {
               "default terminal zoom-in key should be enabled");
   expect_true(key_bindings.zoom_out.has_value(),
               "default terminal zoom-out key should be enabled");
+  expect_true(!key_bindings.send_break.has_value(),
+              "default terminal BREAK key should be disabled");
   expect_true(key_binding_matches(*key_bindings.zoom_in, GDK_KEY_plus,
                                   GDK_CONTROL_MASK),
               "default terminal zoom-in key should be Ctrl+plus");
   expect_true(key_binding_matches(*key_bindings.zoom_out, GDK_KEY_minus,
                                   GDK_CONTROL_MASK),
               "default terminal zoom-out key should be Ctrl+minus");
+  expect_true(terminal_send_break_key(store).empty(),
+              "default terminal BREAK key text should be empty");
   expect_true(transfer_base_path(store).empty(),
               "default transfer base path should be empty");
   expect_true(transfer_text_send_bytes_per_second(store) == 1024,
@@ -1196,7 +1202,8 @@ static void test_terminal_key_binding_configuration() {
   write_config(custom_path,
                "[terminal]\n"
                "zoom_in_key=alt+Up\n"
-               "zoom_out_key=\n");
+               "zoom_out_key=\n"
+               "send_break_key=shift+F12\n");
   const SettingsLoadResult custom = load_settings(
       SettingsLoadOptions{
           .config_path = std::optional<std::filesystem::path>{custom_path},
@@ -1212,13 +1219,18 @@ static void test_terminal_key_binding_configuration() {
               "configured terminal zoom-in key should be loaded");
   expect_true(!custom_bindings.zoom_out.has_value(),
               "empty terminal zoom-out key should disable the action");
+  expect_true(custom_bindings.send_break.has_value() &&
+                  key_binding_matches(*custom_bindings.send_break,
+                                      GDK_KEY_F12, GDK_SHIFT_MASK),
+              "configured terminal BREAK key should be loaded");
 
   const std::filesystem::path invalid_path =
       temporary_config_path("terminal-key-bindings-invalid");
   write_config(invalid_path,
                "[terminal]\n"
                "zoom_in_key=ctrl++plus\n"
-               "zoom_out_key=ctrl+minus\n");
+               "zoom_out_key=ctrl+minus\n"
+               "send_break_key=ctrl++F12\n");
   const SettingsLoadResult invalid = load_settings(
       SettingsLoadOptions{
           .config_path = std::optional<std::filesystem::path>{invalid_path},
@@ -1230,18 +1242,25 @@ static void test_terminal_key_binding_configuration() {
                   invalid.warnings,
                   "invalid configuration value [terminal] zoom_in_key"),
               "invalid terminal key binding should emit a warning");
+  expect_true(warnings_contain(
+                  invalid.warnings,
+                  "invalid configuration value [terminal] send_break_key"),
+              "invalid terminal BREAK binding should emit a warning");
   const auto invalid_bindings = terminal_key_bindings(invalid.store);
   expect_true(invalid_bindings.zoom_in.has_value() &&
                   key_binding_matches(*invalid_bindings.zoom_in,
                                       GDK_KEY_plus, GDK_CONTROL_MASK),
               "invalid terminal key binding should use its default");
+  expect_true(!invalid_bindings.send_break.has_value(),
+              "invalid terminal BREAK binding should use its empty default");
 
   const std::filesystem::path conflict_path =
       temporary_config_path("terminal-key-bindings-conflict");
   write_config(conflict_path,
                "[terminal]\n"
                "zoom_in_key=alt+F1\n"
-               "zoom_out_key=ALT-f1\n");
+               "zoom_out_key=alt+F2\n"
+               "send_break_key=ALT-f1\n");
   const SettingsLoadResult conflict = load_settings(
       SettingsLoadOptions{
           .config_path = std::optional<std::filesystem::path>{conflict_path},
@@ -1258,8 +1277,9 @@ static void test_terminal_key_binding_configuration() {
                   key_binding_matches(*conflict_bindings.zoom_in,
                                       GDK_KEY_plus, GDK_CONTROL_MASK) &&
                   key_binding_matches(*conflict_bindings.zoom_out,
-                                      GDK_KEY_minus, GDK_CONTROL_MASK),
-              "conflicting terminal key bindings should both use defaults");
+                                      GDK_KEY_minus, GDK_CONTROL_MASK) &&
+                  !conflict_bindings.send_break.has_value(),
+              "conflicting terminal key bindings should all use defaults");
 }
 
 static void test_transfer_base_path_setting() {
@@ -1868,6 +1888,10 @@ static void test_public_setting_keys() {
   expect_true(terminal_zoom_out_key_setting_key().section == "terminal" &&
                   terminal_zoom_out_key_setting_key().name == "zoom_out_key",
               "terminal zoom-out key should use [terminal] zoom_out_key");
+  expect_true(terminal_send_break_key_setting_key().section == "terminal" &&
+                  terminal_send_break_key_setting_key().name ==
+                      "send_break_key",
+              "terminal BREAK key should use [terminal] send_break_key");
   expect_true(terminal_encoding_setting_key().section == "terminal" &&
                   terminal_encoding_setting_key().name == "encoding",
               "terminal encoding key should use [terminal] encoding");
@@ -2089,6 +2113,8 @@ static void test_save_settings_omits_default_values() {
                     elder_terms::SettingValue{false});
   set_setting_value(&store, terminal_zoom_in_key_setting_key(),
                     elder_terms::SettingValue{std::string("alt+Up")});
+  set_setting_value(&store, terminal_send_break_key_setting_key(),
+                    elder_terms::SettingValue{std::string("shift+F12")});
   set_setting_value(&store, telnet_address_setting_key(),
                     elder_terms::SettingValue{std::string("host.example")});
   set_setting_value(&store, telnet_port_setting_key(),
@@ -2121,6 +2147,8 @@ static void test_save_settings_omits_default_values() {
               "saved settings should include non-default auto-close");
   expect_true(content.find("zoom_in_key=alt+Up") != std::string::npos,
               "saved settings should include non-default zoom-in key");
+  expect_true(content.find("send_break_key=shift+F12") != std::string::npos,
+              "saved settings should include non-default BREAK key");
   expect_true(content.find("[telnet]") != std::string::npos,
               "saved settings should include non-default TELNET section");
   expect_true(content.find("address=host.example") != std::string::npos,
@@ -3009,7 +3037,8 @@ static void test_key_binding_conflicts_are_resolved_per_layer() {
   write_config(invalid_global_path,
                "[terminal]\n"
                "zoom_in_key=ctrl+plus\n"
-               "zoom_out_key=ctrl+plus\n");
+               "zoom_out_key=ctrl+plus\n"
+               "send_break_key=alt+F12\n");
   const SettingsLoadResult invalid_global = load_settings(
       SettingsLoadOptions{
           .config_path = std::nullopt,
@@ -3024,8 +3053,13 @@ static void test_key_binding_conflicts_are_resolved_per_layer() {
                   setting_value_source(
                       invalid_global.store,
                       terminal_zoom_out_key_setting_key()) ==
-                      SettingValueSource::built_in,
-              "a conflicting global pair should fall back to built-ins");
+                      SettingValueSource::built_in &&
+                  setting_value_source(
+                      invalid_global.store,
+                      terminal_send_break_key_setting_key()) ==
+                      SettingValueSource::built_in &&
+                  terminal_send_break_key(invalid_global.store).empty(),
+              "a conflicting global action set should fall back to built-ins");
 
   const std::filesystem::path valid_global_path =
       temporary_config_path("valid-global-bindings");
@@ -3034,11 +3068,13 @@ static void test_key_binding_conflicts_are_resolved_per_layer() {
   write_config(valid_global_path,
                "[terminal]\n"
                "zoom_in_key=alt+Up\n"
-               "zoom_out_key=alt+Down\n");
+               "zoom_out_key=alt+Down\n"
+               "send_break_key=alt+F12\n");
   write_config(invalid_connection_path,
                "[terminal]\n"
                "zoom_in_key=ctrl+Left\n"
-               "zoom_out_key=ctrl+Left\n");
+               "zoom_out_key=ctrl+Right\n"
+               "send_break_key=ctrl+Left\n");
   const SettingsLoadResult invalid_connection = load_settings(
       SettingsLoadOptions{
           .config_path = invalid_connection_path,
@@ -3049,9 +3085,11 @@ static void test_key_binding_conflicts_are_resolved_per_layer() {
   expect_true(elder_terms::terminal_zoom_in_key(invalid_connection.store) ==
                   "alt+Up" &&
                   elder_terms::terminal_zoom_out_key(
-                      invalid_connection.store) == "alt+Down",
-              "a conflicting connection pair should fall back to the valid "
-              "global pair");
+                      invalid_connection.store) == "alt+Down" &&
+                  terminal_send_break_key(invalid_connection.store) ==
+                      "alt+F12",
+              "a conflicting connection action set should fall back to the "
+              "valid global action set");
   expect_true(setting_value_source(
                   invalid_connection.store,
                   terminal_zoom_in_key_setting_key()) ==
@@ -3059,6 +3097,10 @@ static void test_key_binding_conflicts_are_resolved_per_layer() {
                   setting_value_source(
                       invalid_connection.store,
                       terminal_zoom_out_key_setting_key()) ==
+                      SettingValueSource::global &&
+                  setting_value_source(
+                      invalid_connection.store,
+                      terminal_send_break_key_setting_key()) ==
                       SettingValueSource::global,
               "clearing a conflicting override should retain global sources");
 
@@ -3069,11 +3111,13 @@ static void test_key_binding_conflicts_are_resolved_per_layer() {
   write_config(valid_connection_path,
                "[terminal]\n"
                "zoom_in_key=ctrl+Left\n"
-               "zoom_out_key=ctrl+Right\n");
+               "zoom_out_key=ctrl+Right\n"
+               "send_break_key=ctrl+F12\n");
   write_config(invalid_startup_path,
                "[terminal]\n"
                "zoom_in_key=shift+Up\n"
-               "zoom_out_key=shift+Up\n");
+               "zoom_out_key=shift+Down\n"
+               "send_break_key=shift+Down\n");
   const SettingsLoadResult invalid_startup = load_settings(
       SettingsLoadOptions{
           .config_path = valid_connection_path,
@@ -3088,9 +3132,11 @@ static void test_key_binding_conflicts_are_resolved_per_layer() {
   expect_true(elder_terms::terminal_zoom_in_key(invalid_startup.store) ==
                   "ctrl+Left" &&
                   elder_terms::terminal_zoom_out_key(invalid_startup.store) ==
-                      "ctrl+Right",
-              "a conflicting startup pair should restore the connection "
-              "layer");
+                      "ctrl+Right" &&
+                  terminal_send_break_key(invalid_startup.store) ==
+                      "ctrl+F12",
+              "a conflicting startup action set should restore the "
+              "connection layer");
   expect_true(setting_value_source(
                   invalid_startup.store,
                   terminal_zoom_in_key_setting_key()) ==
@@ -3098,6 +3144,10 @@ static void test_key_binding_conflicts_are_resolved_per_layer() {
                   setting_value_source(
                       invalid_startup.store,
                       terminal_zoom_out_key_setting_key()) ==
+                      SettingValueSource::override &&
+                  setting_value_source(
+                      invalid_startup.store,
+                      terminal_send_break_key_setting_key()) ==
                       SettingValueSource::override,
               "restored connection bindings should remain explicit "
               "overrides");

@@ -155,6 +155,10 @@ static FixtureOptions parse_options(int argc, char **argv) {
       append_connection_assignment(
           &options, "terminal", "zoom_out_key",
           option_value(argument, "--zoom-out-key="));
+    } else if (starts_with(argument, "--send-break-key=")) {
+      append_connection_assignment(
+          &options, "terminal", "send_break_key",
+          option_value(argument, "--send-break-key="));
     } else if (starts_with(argument, "--page=")) {
       options.page = option_value(argument, "--page=");
     } else if (starts_with(argument, "--telnet-address=")) {
@@ -643,6 +647,8 @@ static void print_store(const char *prefix,
             << elder_terms::terminal_zoom_in_key(store)
             << " zoom_out_key="
             << elder_terms::terminal_zoom_out_key(store)
+            << " send_break_key="
+            << elder_terms::terminal_send_break_key(store)
             << " telnet_address=" << telnet.address
             << " telnet_port=" << telnet.port
             << " telnet_terminal_type=" << telnet.terminal_type
@@ -739,6 +745,8 @@ static void print_store(const char *prefix,
                          elder_terms::terminal_zoom_in_key_setting_key());
   print_setting_metadata(store, "zoom_out_key",
                          elder_terms::terminal_zoom_out_key_setting_key());
+  print_setting_metadata(store, "send_break_key",
+                         elder_terms::terminal_send_break_key_setting_key());
   print_setting_metadata(store, "telnet_address",
                          elder_terms::telnet_address_setting_key());
   print_setting_metadata(store, "telnet_port",

@@ -40,6 +40,14 @@ struct MainWindowTerminalPasteCallbacks {
   std::function<void(std::string utf8_text)> paste;
 };
 
+/** Handles terminal context-menu BREAK availability and activation. */
+struct MainWindowTerminalBreakCallbacks {
+  /** Returns whether current application state can send BREAK. */
+  std::function<bool()> can_send;
+  /** Requests one terminal BREAK action. */
+  std::function<void()> send;
+};
+
 /**
  * Holds the GTK builder and required widgets from main-window.ui.
  */
@@ -193,6 +201,15 @@ void set_main_window_settings_dialog(
  */
 void set_main_window_terminal_paste_callbacks(
     MainWindow *main_window, MainWindowTerminalPasteCallbacks callbacks);
+
+/**
+ * Configures BREAK handling for the terminal context menu.
+ *
+ * @param main_window Main window containing the terminal context menu.
+ * @param callbacks BREAK availability and activation callbacks.
+ */
+void set_main_window_terminal_break_callbacks(
+    MainWindow *main_window, MainWindowTerminalBreakCallbacks callbacks);
 
 /**
  * Records activity against one status-bar activity indicator.

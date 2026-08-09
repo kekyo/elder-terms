@@ -128,6 +128,13 @@ public:
   TelnetBytes finish_text_send_encoding();
 
   /**
+   * Encodes the TELNET BREAK control command.
+   *
+   * @returns IAC BRK bytes ready for the network.
+   */
+  TelnetBytes encode_break() const;
+
+  /**
    * Encodes TELNET BINARY negotiation requests.
    *
    * @returns WILL BINARY and DO BINARY request bytes.
