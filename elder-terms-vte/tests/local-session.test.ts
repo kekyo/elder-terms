@@ -600,6 +600,62 @@ describe.concurrent('elder-terms-vte local session', () => {
     });
   });
 
+  it('sends the configured Return code from the local terminal', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      for (const testCase of [
+        { expected: [0x0d], name: 'cr' },
+        { expected: [0x0a], name: 'lf' },
+        { expected: [0x0d, 0x0a], name: 'crlf' },
+      ] as const) {
+        const markerPath = join(directory, `${testCase.name}.bin`);
+        const readyPath = join(directory, `${testCase.name}-ready.txt`);
+        const shellPath = join(directory, `${testCase.name}-shell.sh`);
+        const configPath = join(directory, `${testCase.name}.ini`);
+        await writeFile(
+          shellPath,
+          `#!/bin/sh\nstty raw -echo\nprintf ready > ${shellQuote(
+            readyPath
+          )}\ndd bs=1 count=${testCase.expected.length} of=${shellQuote(
+            markerPath
+          )} 2>/dev/null\nexit 0\n`,
+          'utf8'
+        );
+        await chmod(shellPath, 0o755);
+        await writeFile(
+          configPath,
+          `[terminal]\nauto_close=false\nreturn_code=${testCase.name}\n`,
+          'utf8'
+        );
+
+        await runGtkTest(
+          context,
+          ['-c', configPath],
+          async (app) => {
+            await waitForFileText(readyPath, 'ready');
+            await focusTerminal(app);
+            await app.input.pressKey('Return');
+            await toPass(
+              async () => {
+                expect(
+                  Array.from((await readFile(markerPath)).values())
+                ).toEqual(testCase.expected);
+              },
+              {
+                message: `local Return should send ${testCase.name}`,
+                timeoutMs: 5_000,
+              }
+            );
+          },
+          {
+            env: {
+              SHELL: shellPath,
+            },
+          }
+        );
+      }
+    });
+  });
+
   it('sets the local PTY size from the configured VTE grid', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const shell = await createSizeShellFixture(directory);

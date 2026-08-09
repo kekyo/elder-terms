@@ -143,6 +143,10 @@ static FixtureOptions parse_options(int argc, char **argv) {
       append_connection_assignment(
           &options, "terminal", "cursor_key_mode",
           option_value(argument, "--cursor-key-mode="));
+    } else if (starts_with(argument, "--return-code=")) {
+      append_connection_assignment(
+          &options, "terminal", "return_code",
+          option_value(argument, "--return-code="));
     } else if (starts_with(argument, "--zoom-in-key=")) {
       append_connection_assignment(
           &options, "terminal", "zoom_in_key",
@@ -620,6 +624,9 @@ static void print_store(const char *prefix,
             << " cursor_key_mode="
             << elder_terms::terminal_cursor_key_mode_to_string(
                    text_settings.cursor_key_mode)
+            << " return_code="
+            << elder_terms::terminal_return_code_to_string(
+                   text_settings.return_code)
             << " auto_close="
             << (elder_terms::terminal_auto_close(store) ? "true" : "false")
             << " exterior_background=" << exterior_background
@@ -714,6 +721,8 @@ static void print_store(const char *prefix,
                          elder_terms::terminal_backspace_code_setting_key());
   print_setting_metadata(store, "cursor_key_mode",
                          elder_terms::terminal_cursor_key_mode_setting_key());
+  print_setting_metadata(store, "return_code",
+                         elder_terms::terminal_return_code_setting_key());
   print_setting_metadata(store, "zoom_in_key",
                          elder_terms::terminal_zoom_in_key_setting_key());
   print_setting_metadata(store, "zoom_out_key",

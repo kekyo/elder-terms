@@ -132,6 +132,13 @@ ELDER_TERMS_API SettingKey terminal_backspace_code_setting_key();
 ELDER_TERMS_API SettingKey terminal_cursor_key_mode_setting_key();
 
 /**
+ * Returns the setting key for [terminal] return_code.
+ *
+ * @returns Setting key for the Enter/Return send code.
+ */
+ELDER_TERMS_API SettingKey terminal_return_code_setting_key();
+
+/**
  * Checks whether iconv can convert between one encoding and UTF-8 in both
  * directions.
  *

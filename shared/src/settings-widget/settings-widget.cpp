@@ -42,6 +42,10 @@ static constexpr char terminal_backspace_bs[] = "bs";
 static constexpr char terminal_backspace_del[] = "del";
 static constexpr char terminal_cursor_normal[] = "normal";
 static constexpr char terminal_cursor_trs80[] = "trs80";
+static constexpr char terminal_return_auto[] = "auto";
+static constexpr char terminal_return_cr[] = "cr";
+static constexpr char terminal_return_lf[] = "lf";
+static constexpr char terminal_return_crlf[] = "crlf";
 static constexpr char terminal_log_raw[] = "raw";
 static constexpr char terminal_log_cooked[] = "cooked";
 static constexpr char terminal_font_default[] = "default";
@@ -109,6 +113,7 @@ struct SettingsWidgetState {
   GtkWidget *terminal_encoding_entry = nullptr;
   GtkWidget *terminal_backspace_code_combo = nullptr;
   GtkWidget *terminal_cursor_key_mode_combo = nullptr;
+  GtkWidget *terminal_return_code_combo = nullptr;
   bool terminal_width_valid = true;
   bool terminal_height_valid = true;
   bool terminal_zoom_valid = true;
@@ -573,6 +578,20 @@ static std::string terminal_cursor_fallback(
       built_in_defaults.cursor_key_mode);
 }
 
+static std::string terminal_return_fallback(
+    const SettingsWidgetState *state,
+    const TerminalTextSettings &built_in_defaults) {
+  if (setting_fallback_source(state->draft_store,
+                              terminal_return_code_setting_key()) ==
+      SettingValueSource::global) {
+    return std::get<std::string>(setting_fallback_value(
+        state->draft_store, terminal_return_code_setting_key(),
+        SettingValue{std::string(terminal_return_code_to_string(
+            built_in_defaults.return_code))}));
+  }
+  return terminal_return_code_to_string(built_in_defaults.return_code);
+}
+
 static void populate_terminal_encoding_combo(SettingsWidgetState *state,
                                               const TerminalTextSettings
                                                   &built_in_defaults) {
@@ -712,6 +731,42 @@ static void populate_terminal_special_code_combos(
     }
     gtk_combo_box_set_active_id(
         GTK_COMBO_BOX(state->terminal_cursor_key_mode_combo), active);
+  }
+
+  if (state->terminal_return_code_combo != nullptr) {
+    gtk_combo_box_text_remove_all(
+        GTK_COMBO_BOX_TEXT(state->terminal_return_code_combo));
+    const std::string fallback =
+        terminal_return_fallback(state, built_in_defaults);
+    const std::string default_label = setting_fallback_label(
+        state->draft_store, terminal_return_code_setting_key(),
+        setting_choice_label(terminal_return_code_setting_key(), fallback));
+    append_combo_option(state->terminal_return_code_combo,
+                        terminal_text_default, default_label.c_str());
+    for (const char *choice : {terminal_return_auto, terminal_return_cr,
+                               terminal_return_lf, terminal_return_crlf}) {
+      append_combo_option(
+          state->terminal_return_code_combo, choice,
+          setting_choice_label(terminal_return_code_setting_key(), choice)
+              .c_str());
+    }
+    const char *active = terminal_text_default;
+    if (setting_has_explicit_value(state->draft_store,
+                                   terminal_return_code_setting_key())) {
+      const std::string configured = setting_string_value_or_default(
+          state->draft_store, terminal_return_code_setting_key(), fallback);
+      if (configured == terminal_return_auto) {
+        active = terminal_return_auto;
+      } else if (configured == terminal_return_cr) {
+        active = terminal_return_cr;
+      } else if (configured == terminal_return_lf) {
+        active = terminal_return_lf;
+      } else {
+        active = terminal_return_crlf;
+      }
+    }
+    gtk_combo_box_set_active_id(
+        GTK_COMBO_BOX(state->terminal_return_code_combo), active);
   }
 }
 
@@ -1263,6 +1318,20 @@ static void update_terminal_cursor_key_mode_from_widget(
   }
   set_explicit_setting_value(&state->draft_store,
                              terminal_cursor_key_mode_setting_key(),
+                             SettingValue{choice});
+}
+
+static void update_terminal_return_code_from_widget(
+    SettingsWidgetState *state) {
+  const std::string choice = active_combo_id(
+      state->terminal_return_code_combo, terminal_text_default);
+  if (choice == terminal_text_default) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 terminal_return_code_setting_key());
+    return;
+  }
+  set_explicit_setting_value(&state->draft_store,
+                             terminal_return_code_setting_key(),
                              SettingValue{choice});
 }
 
@@ -3447,6 +3516,15 @@ static void on_terminal_cursor_key_mode_changed(GtkComboBox *, gpointer data) {
   notify_changed(state);
 }
 
+static void on_terminal_return_code_changed(GtkComboBox *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_terminal_return_code_from_widget(state);
+  notify_changed(state);
+}
+
 enum class TerminalKeyBindingField {
   zoom_in,
   zoom_out,
@@ -4054,6 +4132,9 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
       widget_id(state, "terminal_cursor_key_mode_combo");
   state->terminal_cursor_key_mode_combo =
       create_combo_box(cursor_id.c_str());
+  const std::string return_id =
+      widget_id(state, "terminal_return_code_combo");
+  state->terminal_return_code_combo = create_combo_box(return_id.c_str());
   if (state->terminal_encoding_entry != nullptr) {
     g_signal_connect(state->terminal_encoding_entry, "changed",
                      G_CALLBACK(on_terminal_encoding_changed), state);
@@ -4062,32 +4143,36 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_terminal_backspace_code_changed), state);
   g_signal_connect(state->terminal_cursor_key_mode_combo, "changed",
                    G_CALLBACK(on_terminal_cursor_key_mode_changed), state);
+  g_signal_connect(state->terminal_return_code_combo, "changed",
+                   G_CALLBACK(on_terminal_return_code_changed), state);
   attach_row(page, 0, terminal_encoding_setting_key(),
              state->terminal_encoding_combo);
   attach_row(page, 1, terminal_backspace_code_setting_key(),
              state->terminal_backspace_code_combo);
   attach_row(page, 2, terminal_cursor_key_mode_setting_key(),
              state->terminal_cursor_key_mode_combo);
+  attach_row(page, 3, terminal_return_code_setting_key(),
+             state->terminal_return_code_combo);
 
   state->terminal_width_entry =
       create_entry(widget_id(state, "terminal_width_entry"));
   g_signal_connect(state->terminal_width_entry, "changed",
                    G_CALLBACK(on_terminal_width_changed), state);
-  attach_row(page, 3, terminal_width_setting_key(),
+  attach_row(page, 4, terminal_width_setting_key(),
              state->terminal_width_entry);
 
   state->terminal_height_entry =
       create_entry(widget_id(state, "terminal_height_entry"));
   g_signal_connect(state->terminal_height_entry, "changed",
                    G_CALLBACK(on_terminal_height_changed), state);
-  attach_row(page, 4, terminal_height_setting_key(),
+  attach_row(page, 5, terminal_height_setting_key(),
              state->terminal_height_entry);
 
   state->terminal_zoom_entry =
       create_entry(widget_id(state, "terminal_zoom_entry"));
   g_signal_connect(state->terminal_zoom_entry, "changed",
                    G_CALLBACK(on_terminal_zoom_changed), state);
-  attach_row(page, 5, terminal_zoom_setting_key(),
+  attach_row(page, 6, terminal_zoom_setting_key(),
              state->terminal_zoom_entry);
 
   const std::string auto_close_id =
@@ -4095,7 +4180,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   state->terminal_auto_close_combo = create_combo_box(auto_close_id.c_str());
   g_signal_connect(state->terminal_auto_close_combo, "changed",
                    G_CALLBACK(on_terminal_auto_close_changed), state);
-  attach_row(page, 6, terminal_auto_close_setting_key(),
+  attach_row(page, 7, terminal_auto_close_setting_key(),
              state->terminal_auto_close_combo);
 
   const std::string zoom_in_id =
@@ -4124,7 +4209,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(zoom_in_row),
                      state->terminal_zoom_in_key_reset_button, FALSE, FALSE,
                      0);
-  attach_row(page, 7, terminal_zoom_in_key_setting_key(), zoom_in_row);
+  attach_row(page, 8, terminal_zoom_in_key_setting_key(), zoom_in_row);
 
   const std::string zoom_out_id =
       widget_id(state, "terminal_zoom_out_key_entry");
@@ -4152,7 +4237,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(zoom_out_row),
                      state->terminal_zoom_out_key_reset_button, FALSE, FALSE,
                      0);
-  attach_row(page, 8, terminal_zoom_out_key_setting_key(), zoom_out_row);
+  attach_row(page, 9, terminal_zoom_out_key_setting_key(), zoom_out_row);
 
   GtkWidget *primary_font_row =
       gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
@@ -4170,7 +4255,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                      state->terminal_font_primary_mode_combo, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(primary_font_row),
                      state->terminal_font_primary_button, TRUE, TRUE, 0);
-  attach_row(page, 9, terminal_font_primary_family_setting_key(),
+  attach_row(page, 10, terminal_font_primary_family_setting_key(),
              primary_font_row);
 
   GtkWidget *fallback_font_row =
@@ -4189,7 +4274,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                      state->terminal_font_fallback_mode_combo, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(fallback_font_row),
                      state->terminal_font_fallback_button, TRUE, TRUE, 0);
-  attach_row(page, 10, terminal_font_fallback_family_setting_key(),
+  attach_row(page, 11, terminal_font_fallback_family_setting_key(),
              fallback_font_row);
 
   return scroller;

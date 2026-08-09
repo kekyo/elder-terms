@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
   GtkApp,
+  GtkCapture,
   GtkEntryElement,
   GtkKeyboardModifier,
   GtkKeyInput,
@@ -54,6 +55,7 @@ interface AppliedStore {
   readonly backspace_code: string;
   readonly background: string;
   readonly cursor_key_mode: string;
+  readonly return_code: string;
   readonly encoding: string;
   readonly exterior_background: string;
   readonly height: string;
@@ -150,6 +152,21 @@ const showTerminalPage = async (app: GtkApp): Promise<void> => {
   await waitForResult(async () => {
     const width = await app.getById('settings_terminal_width_entry');
     expect((await width.info()).states).toContain('showing');
+  });
+};
+
+const showTerminalKeyBindings = async (app: GtkApp): Promise<void> => {
+  const scrollbar = expectElementKind(
+    await app.getById('settings_terminal_page_scrollbar'),
+    'scrollbar'
+  );
+  const range = await scrollbar.valueInfo();
+  await scrollbar.setValue(range.maximum);
+  await waitForResult(async () => {
+    const zoomIn = await app.getById('settings_terminal_zoom_in_key_entry');
+    const zoomOut = await app.getById('settings_terminal_zoom_out_key_entry');
+    expect((await zoomIn.info()).states).toContain('showing');
+    expect((await zoomOut.info()).states).toContain('showing');
   });
 };
 
@@ -451,7 +468,30 @@ const expectPageVisualFixture = async (
     windowBounds.x + 5,
     windowBounds.y + windowBounds.height - 5
   );
-  const capture = await (await app.getById(testCase.pageId)).capture();
+  const page = await app.getById(testCase.pageId);
+  let previousImage: Buffer | undefined;
+  let consecutiveStableCaptures = 0;
+  const capture = await waitForResult<GtkCapture>(
+    async () => {
+      const currentCapture = await page.capture();
+      if (
+        previousImage !== undefined &&
+        previousImage.equals(currentCapture.image)
+      ) {
+        consecutiveStableCaptures += 1;
+      } else {
+        consecutiveStableCaptures = 0;
+      }
+      previousImage = currentCapture.image;
+      expect(consecutiveStableCaptures).toBeGreaterThanOrEqual(2);
+      return currentCapture;
+    },
+    {
+      timeoutMs: 2_000,
+      intervalMs: 50,
+      message: `settings page did not become visually stable: ${testCase.fixtureName}`,
+    }
+  );
   expect(capture.clipped).toBe(false);
   await expectCaptureToMatchFixture(
     capture,
@@ -1256,6 +1296,11 @@ describe.concurrent('shared settings widget', () => {
             app,
             'settings_terminal_cursor_key_mode_combo',
             'Normal (built-in default)'
+          );
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_return_code_combo',
+            'Auto (built-in default)'
           );
           const width = expectElementKind(
             await app.getById('settings_terminal_width_entry'),
@@ -2433,6 +2478,11 @@ describe.concurrent('shared settings widget', () => {
         'settings_terminal_backspace_code_combo',
         'Auto (built-in default)'
       );
+      await expectSelectedComboValue(
+        app,
+        'settings_terminal_return_code_combo',
+        'CRLF (built-in default)'
+      );
       await expectElementKind(
         await app.getById('settings_apply_button'),
         'button'
@@ -2441,6 +2491,7 @@ describe.concurrent('shared settings widget', () => {
       const store = await waitForAppliedStore(app);
       expect(store.type).toBe('telnet');
       expect(store.backspace_code).toBe('auto');
+      expect(store.return_code).toBe('crlf');
     });
   });
 
@@ -2762,6 +2813,7 @@ describe.concurrent('shared settings widget', () => {
         await setNumericEntryValue(height, 25);
         await setNumericEntryValue(zoom, 1.1);
         await autoClose.selectChildAt(1);
+        await showTerminalKeyBindings(app);
         await captureKeyBinding(app, zoomInKey, ['alt'], 'Up');
         await clearKeyBinding(
           app,
@@ -3060,6 +3112,10 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_terminal_cursor_key_mode_combo'),
           'comboBox'
         );
+        const returnCode = expectElementKind(
+          await app.getById('settings_terminal_return_code_combo'),
+          'comboBox'
+        );
         expect(await encoding.text()).toBe('');
         await waitForEntryPlaceholder(
           app,
@@ -3076,6 +3132,11 @@ describe.concurrent('shared settings widget', () => {
           'settings_terminal_cursor_key_mode_combo',
           'TRS80 (built-in default)'
         );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_return_code_combo',
+          'CR (built-in default)'
+        );
 
         await encoding.setText('CP932');
         await backspace.selectChildAt(1);
@@ -3085,6 +3146,7 @@ describe.concurrent('shared settings widget', () => {
           'Auto'
         );
         await cursorKeys.selectChildAt(1);
+        await returnCode.selectChildAt(3);
         await waitForChangedState(app, 'CHANGED dirty=true valid=true');
         await expectElementKind(
           await app.getById('settings_apply_button'),
@@ -3095,6 +3157,7 @@ describe.concurrent('shared settings widget', () => {
         expect(store.encoding).toBe('CP932');
         expect(store.backspace_code).toBe('auto');
         expect(store.cursor_key_mode).toBe('normal');
+        expect(store.return_code).toBe('lf');
       }
     );
   });
@@ -3247,6 +3310,7 @@ describe.concurrent('shared settings widget', () => {
         const apply = await app.getById('settings_apply_button');
         const save = await app.getById('settings_save_button');
 
+        await showTerminalKeyBindings(app);
         await captureKeyBinding(app, zoomInKey, ['alt'], 'F1');
         await expectEntryText(zoomInKey, 'alt+F1');
         await captureKeyBinding(app, zoomOutKey, ['alt'], 'F1');
@@ -3885,6 +3949,7 @@ describe.concurrent('shared settings widget', () => {
           await expectInsensitive(save);
         });
 
+        await showTerminalKeyBindings(app);
         await captureKeyBinding(app, zoomOut, ['alt'], 'F2');
         await waitForResult(async () => {
           await expectSensitive(apply);
@@ -3909,6 +3974,11 @@ describe.concurrent('shared settings widget', () => {
           app,
           'settings_terminal_cursor_key_mode_combo',
           'TRS80 (built-in default)'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_return_code_combo',
+          'CR (built-in default)'
         );
         await selectSettingsTab(app, 'Transfer');
         await expectSelectedComboValue(
@@ -3936,6 +4006,11 @@ describe.concurrent('shared settings widget', () => {
           'settings_terminal_cursor_key_mode_combo',
           'Normal (built-in default)'
         );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_return_code_combo',
+          'Auto (built-in default)'
+        );
         await selectSettingsTab(app, 'Transfer');
         await expectSelectedComboValue(
           app,
@@ -3952,6 +4027,7 @@ describe.concurrent('shared settings widget', () => {
         '--type=serial',
         '--global=terminal.backspace_code=del',
         '--global=terminal.cursor_key_mode=normal',
+        '--global=terminal.return_code=lf',
         '--global=transfer.zmodem_autostart=false',
       ],
       async ({ app }) => {
@@ -3965,6 +4041,11 @@ describe.concurrent('shared settings widget', () => {
           app,
           'settings_terminal_cursor_key_mode_combo',
           'Normal (global default)'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_return_code_combo',
+          'LF (global default)'
         );
         await selectSettingsTab(app, 'Transfer');
         await expectSelectedComboValue(

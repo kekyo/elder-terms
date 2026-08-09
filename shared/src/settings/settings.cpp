@@ -605,12 +605,25 @@ const char *terminal_cursor_key_mode_to_string(TerminalCursorKeyMode mode) {
   return mode == TerminalCursorKeyMode::trs80 ? "trs80" : "normal";
 }
 
+const char *terminal_return_code_to_string(TerminalReturnCode code) {
+  if (code == TerminalReturnCode::automatic) {
+    return "auto";
+  }
+  if (code == TerminalReturnCode::cr) {
+    return "cr";
+  }
+  return code == TerminalReturnCode::lf ? "lf" : "crlf";
+}
+
 TerminalTextSettings
 default_terminal_text_settings(TerminalConnectionKind kind) {
   TerminalTextSettings settings;
   if (kind == TerminalConnectionKind::serial) {
     settings.backspace_code = TerminalBackspaceCode::bs;
     settings.cursor_key_mode = TerminalCursorKeyMode::trs80;
+    settings.return_code = TerminalReturnCode::cr;
+  } else if (kind == TerminalConnectionKind::telnet) {
+    settings.return_code = TerminalReturnCode::crlf;
   }
   return settings;
 }
@@ -643,6 +656,21 @@ TerminalTextSettings terminal_text_settings(const SettingsStore &store,
     settings.cursor_key_mode = configured == "trs80"
                                    ? TerminalCursorKeyMode::trs80
                                    : TerminalCursorKeyMode::normal;
+  }
+  if (setting_has_configured_value(store,
+                                   terminal_return_code_setting_key())) {
+    const std::string configured = setting_string_value_or_default(
+        store, terminal_return_code_setting_key(),
+        terminal_return_code_to_string(settings.return_code));
+    if (configured == "auto") {
+      settings.return_code = TerminalReturnCode::automatic;
+    } else if (configured == "cr") {
+      settings.return_code = TerminalReturnCode::cr;
+    } else if (configured == "lf") {
+      settings.return_code = TerminalReturnCode::lf;
+    } else {
+      settings.return_code = TerminalReturnCode::crlf;
+    }
   }
   return settings;
 }

@@ -31,11 +31,13 @@ static constexpr char terminal_zoom_out_key_name[] = "zoom_out_key";
 static constexpr char terminal_encoding_key[] = "encoding";
 static constexpr char terminal_backspace_code_key[] = "backspace_code";
 static constexpr char terminal_cursor_key_mode_key[] = "cursor_key_mode";
+static constexpr char terminal_return_code_key[] = "return_code";
 static constexpr char default_terminal_zoom_in_key[] = "ctrl+plus";
 static constexpr char default_terminal_zoom_out_key[] = "ctrl+minus";
 static constexpr char default_terminal_encoding[] = "UTF-8";
 static constexpr char default_terminal_backspace_code[] = "auto";
 static constexpr char default_terminal_cursor_key_mode[] = "normal";
+static constexpr char default_terminal_return_code[] = "auto";
 
 static std::string trim_ascii_whitespace(const std::string &value) {
   const auto first = std::find_if_not(
@@ -147,6 +149,18 @@ static bool validate_terminal_cursor_key_mode(const SettingValue &value,
   return true;
 }
 
+static bool validate_terminal_return_code(const SettingValue &value,
+                                          std::string *reason) {
+  const auto *text = std::get_if<std::string>(&value);
+  if (text == nullptr ||
+      (*text != "auto" && *text != "cr" && *text != "lf" &&
+       *text != "crlf")) {
+    *reason = "must be auto, cr, lf, or crlf";
+    return false;
+  }
+  return true;
+}
+
 static SettingKey terminal_key(const char *name) {
   return make_setting_key(terminal_section, name);
 }
@@ -201,6 +215,10 @@ SettingKey terminal_backspace_code_setting_key() {
 
 SettingKey terminal_cursor_key_mode_setting_key() {
   return terminal_key(terminal_cursor_key_mode_key);
+}
+
+SettingKey terminal_return_code_setting_key() {
+  return terminal_key(terminal_return_code_key);
 }
 
 bool terminal_encoding_name_is_valid(const std::string &encoding,
@@ -304,6 +322,12 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .default_value =
               SettingValue{std::string(default_terminal_cursor_key_mode)},
           .validate = validate_terminal_cursor_key_mode,
+      },
+      {
+          .key = terminal_return_code_setting_key(),
+          .default_value =
+              SettingValue{std::string(default_terminal_return_code)},
+          .validate = validate_terminal_return_code,
       },
   };
 }

@@ -93,6 +93,7 @@ using elder_terms::TerminalConnectionProfile;
 using elder_terms::TerminalCursorKeyMode;
 using elder_terms::TerminalDisplaySettings;
 using elder_terms::TerminalFontFamilies;
+using elder_terms::TerminalReturnCode;
 using elder_terms::TerminalTextSettings;
 using elder_terms::terminal_auto_close;
 using elder_terms::terminal_backspace_code_setting_key;
@@ -107,6 +108,8 @@ using elder_terms::terminal_font_fallback_family_setting_key;
 using elder_terms::terminal_font_families;
 using elder_terms::terminal_font_primary_family_setting_key;
 using elder_terms::terminal_height_setting_key;
+using elder_terms::terminal_return_code_setting_key;
+using elder_terms::terminal_return_code_to_string;
 using elder_terms::terminal_width_setting_key;
 using elder_terms::terminal_zoom_setting_key;
 using elder_terms::terminal_key_bindings;
@@ -874,29 +877,33 @@ static void test_terminal_text_defaults_follow_connection_type() {
       default_terminal_text_settings(TerminalConnectionKind::local_shell);
   expect_true(local.encoding == "UTF-8" &&
                   local.backspace_code == TerminalBackspaceCode::automatic &&
-                  local.cursor_key_mode == TerminalCursorKeyMode::normal,
-              "local terminal text defaults should use automatic Backspace");
+                  local.cursor_key_mode == TerminalCursorKeyMode::normal &&
+                  local.return_code == TerminalReturnCode::automatic,
+              "local terminal text defaults should preserve VTE Return");
 
   const TerminalTextSettings telnet =
       default_terminal_text_settings(TerminalConnectionKind::telnet);
   expect_true(telnet.encoding == "UTF-8" &&
                   telnet.backspace_code == TerminalBackspaceCode::automatic &&
-                  telnet.cursor_key_mode == TerminalCursorKeyMode::normal,
-              "TELNET terminal text defaults should use automatic Backspace");
+                  telnet.cursor_key_mode == TerminalCursorKeyMode::normal &&
+                  telnet.return_code == TerminalReturnCode::crlf,
+              "TELNET terminal text defaults should use CRLF Return");
 
   const TerminalTextSettings serial =
       default_terminal_text_settings(TerminalConnectionKind::serial);
   expect_true(serial.encoding == "UTF-8" &&
                   serial.backspace_code == TerminalBackspaceCode::bs &&
-                  serial.cursor_key_mode == TerminalCursorKeyMode::trs80,
+                  serial.cursor_key_mode == TerminalCursorKeyMode::trs80 &&
+                  serial.return_code == TerminalReturnCode::cr,
               "serial terminal text defaults should match gtk-oldtype");
 
   const TerminalTextSettings ssh =
       default_terminal_text_settings(TerminalConnectionKind::ssh);
   expect_true(ssh.encoding == "UTF-8" &&
                   ssh.backspace_code == TerminalBackspaceCode::automatic &&
-                  ssh.cursor_key_mode == TerminalCursorKeyMode::normal,
-              "SSH terminal text defaults should use automatic Backspace");
+                  ssh.cursor_key_mode == TerminalCursorKeyMode::normal &&
+                  ssh.return_code == TerminalReturnCode::automatic,
+              "SSH terminal text defaults should preserve VTE Return");
 }
 
 static void test_terminal_text_explicit_settings_override_connection_defaults() {
@@ -914,6 +921,9 @@ static void test_terminal_text_explicit_settings_override_connection_defaults() 
   set_explicit_setting_value(
       &store, terminal_cursor_key_mode_setting_key(),
       elder_terms::SettingValue{std::string("normal")});
+  set_explicit_setting_value(
+      &store, terminal_return_code_setting_key(),
+      elder_terms::SettingValue{std::string("lf")});
 
   TerminalConnectionProfile profile =
       required_terminal_connection_profile(store);
@@ -925,19 +935,57 @@ static void test_terminal_text_explicit_settings_override_connection_defaults() 
   expect_true(profile.text_settings.cursor_key_mode ==
                   TerminalCursorKeyMode::normal,
               "explicit cursor-key mode should override serial default");
+  expect_true(profile.text_settings.return_code == TerminalReturnCode::lf,
+              "explicit Return code should override serial default");
 
   clear_explicit_setting_value(&store, terminal_encoding_setting_key());
   clear_explicit_setting_value(&store,
                                terminal_backspace_code_setting_key());
   clear_explicit_setting_value(&store,
                                terminal_cursor_key_mode_setting_key());
+  clear_explicit_setting_value(&store, terminal_return_code_setting_key());
   profile = required_terminal_connection_profile(store);
   expect_true(profile.text_settings.encoding == "UTF-8" &&
                   profile.text_settings.backspace_code ==
                       TerminalBackspaceCode::bs &&
                   profile.text_settings.cursor_key_mode ==
-                      TerminalCursorKeyMode::trs80,
+                      TerminalCursorKeyMode::trs80 &&
+                  profile.text_settings.return_code == TerminalReturnCode::cr,
               "clearing terminal text overrides should restore serial defaults");
+}
+
+static void test_terminal_return_code_setting_round_trips() {
+  const std::filesystem::path path =
+      temporary_config_path("terminal-return-code");
+  write_config(path,
+               "[general]\n"
+               "type=local\n"
+               "\n"
+               "[terminal]\n"
+               "return_code=crlf\n");
+
+  const SettingsLoadResult loaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  expect_true(loaded.loaded,
+              "Return code configuration should load successfully");
+  const TerminalTextSettings text =
+      required_terminal_connection_profile(loaded.store).text_settings;
+  expect_true(text.return_code == TerminalReturnCode::crlf,
+              "CRLF Return code should be loaded");
+  expect_true(std::string(terminal_return_code_to_string(text.return_code)) ==
+                  "crlf",
+              "CRLF Return code should use its stable setting name");
+
+  const SettingsSaveResult saved = save_settings(loaded.store, path);
+  expect_true(saved.saved,
+              "Return code configuration should save successfully");
+  expect_true(read_config(path).find("return_code=crlf") != std::string::npos,
+              "saved settings should preserve the Return code");
+  remove_config(path);
 }
 
 static void test_terminal_backspace_auto_setting_round_trips() {
@@ -1038,7 +1086,8 @@ static void test_invalid_terminal_text_values_fall_back_to_type_defaults() {
                "[terminal]\n"
                "encoding=elder-terms-invalid-encoding\n"
                "backspace_code=invalid\n"
-               "cursor_key_mode=invalid\n");
+               "cursor_key_mode=invalid\n"
+               "return_code=invalid\n");
 
   const SettingsLoadResult result = load_settings(
       SettingsLoadOptions{
@@ -1052,7 +1101,8 @@ static void test_invalid_terminal_text_values_fall_back_to_type_defaults() {
       required_terminal_connection_profile(result.store).text_settings;
   expect_true(text.encoding == "UTF-8" &&
                   text.backspace_code == TerminalBackspaceCode::bs &&
-                  text.cursor_key_mode == TerminalCursorKeyMode::trs80,
+                  text.cursor_key_mode == TerminalCursorKeyMode::trs80 &&
+                  text.return_code == TerminalReturnCode::cr,
               "invalid terminal text values should use serial defaults");
   expect_true(warnings_contain(
                   result.warnings,
@@ -1066,6 +1116,10 @@ static void test_invalid_terminal_text_values_fall_back_to_type_defaults() {
                   result.warnings,
                   "invalid configuration value [terminal] cursor_key_mode"),
               "invalid cursor-key mode should emit a warning");
+  expect_true(warnings_contain(
+                  result.warnings,
+                  "invalid configuration value [terminal] return_code"),
+              "invalid Return code should emit a warning");
 }
 
 static void test_key_binding_parser_uses_exact_modifiers() {
@@ -1782,6 +1836,9 @@ static void test_public_setting_keys() {
                   terminal_cursor_key_mode_setting_key().name ==
                       "cursor_key_mode",
               "cursor-key mode key should use [terminal] cursor_key_mode");
+  expect_true(terminal_return_code_setting_key().section == "terminal" &&
+                  terminal_return_code_setting_key().name == "return_code",
+              "Return code key should use [terminal] return_code");
   expect_true(
       general_exterior_background_setting_key().section == "general" &&
           general_exterior_background_setting_key().name ==
@@ -3185,6 +3242,7 @@ int main() {
     elder_terms_settings_test::test_terminal_text_defaults_follow_connection_type();
     elder_terms_settings_test::test_terminal_text_explicit_settings_override_connection_defaults();
     elder_terms_settings_test::test_terminal_backspace_auto_setting_round_trips();
+    elder_terms_settings_test::test_terminal_return_code_setting_round_trips();
     elder_terms_settings_test::test_terminal_cursor_key_mode_uses_trs80_name();
     elder_terms_settings_test::test_terminal_encoding_choices_are_supported();
     elder_terms_settings_test::test_terminal_log_settings();

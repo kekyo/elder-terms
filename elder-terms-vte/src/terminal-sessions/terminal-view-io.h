@@ -51,11 +51,19 @@ private:
   TerminalViewInputCallback input_callback;
   TerminalViewOutputCallback output_callback;
   gulong commit_handler_id = 0;
+  gulong key_press_handler_id = 0;
+  guint return_key_clear_source_id = 0;
+  TerminalReturnCode return_code = TerminalReturnCode::automatic;
+  bool return_key_pending = false;
   bool decode_warning_reported = false;
   bool encode_warning_reported = false;
 
   static void on_terminal_commit(VteTerminal *terminal, const gchar *text,
                                  guint size, gpointer user_data);
+  static gboolean on_terminal_key_press(GtkWidget *widget,
+                                        GdkEventKey *event,
+                                        gpointer user_data);
+  static gboolean clear_pending_return_key(gpointer user_data);
 
 public:
   /**
