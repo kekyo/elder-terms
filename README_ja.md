@@ -16,11 +16,23 @@
 シリアル接続やTELNET、そしてパソコン通信。すべてが懐かしく、すべてが満たされ、そして全てがコントローラブルだったあの頃。
 現代的な機能も追加して、蘇るターミナル生活。
 
+### 基本的なターミナル
+
 ![Terminal](./images/terminal.png)
+
+### ターミナルランチャー
 
 ![Launcher](./images/launcher-settings.png)
 
+### 複雑な表示
+
 ![Complex terminal](./images/complex-terminal.png)
+
+### シリアルデバイス
+
+![Serial terminal](./images/serial-terminal.png)
+
+### 外郭色のカスタマイズ
 
 ![Colored terminal](./images/colored-terminal.png)
 
@@ -99,13 +111,13 @@ elder-terms
 
 ![Settings (Terminal)](./images/font-size.png)
 
-ターミナルウインドウをどのように配置するのかは、ウインドウマネージャやWaylandコンポジターにまかせてあります。つまり、あなたのウインドウシステムの環境に従って、 `Super` キーなどのキーバインドを活用して下さい。
+ターミナルウインドウをどのように配置するのかは、ウインドウマネージャやWaylandコンポジターに任せてあります。つまり、あなたのウインドウシステムの環境に従って、 `Super` キーなどのキーバインドを活用して下さい。
 
 現代に於いては、IoT開発、つまりはArduinoのようなシリアルデバイスを使ったデバッグやログ採取を行う機会が多いでしょう。elder-termsはそのような環境でも無類の力を発揮します。
 
 ああ、わかっていますとも。アナログモデムの事も忘れていません。そのノスタルジーは、ターミナル下部のインジケータが補ってくれます:
 
-![Indicator](./images/indicator.png)
+![Indicator](./images/serial-indicator.png)
 
 点滅がやけに規則正しくないか、だって？ もちろん。これは [SONY NEWS ワークステーション](https://en.wikipedia.org/wiki/Sony_NEWS) のオマージュですよ。
 
@@ -211,6 +223,9 @@ font_fallback_family=Noto Sans Mono CJK JP
 
 ホットキーは、elder-termsのランチャーが起動している間だけ機能します。
 システムトレイに対応した環境では、ランチャーの「グローバル既定値」で「起動モード」を「システムトレイのみ」または「システムトレイとメインウィンドウ」に設定すると、ランチャーをシステムトレイに常駐させられます。
+
+![System tray](./images/system-tray.png)
+
 ログイン直後からホットキーを使いたい場合は、デスクトップ環境の自動起動アプリケーションに `elder-terms` を登録して下さい。
 
 各接続の「接続を開くショートカット」にキーの組み合わせを設定すると、ランチャーが非表示でも、そのホットキーで接続を直接起動出来ます。
