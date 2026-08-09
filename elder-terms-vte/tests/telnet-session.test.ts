@@ -415,7 +415,7 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
     });
   });
 
-  it('sends the default Backspace as BS and Delete using the VTE automatic binding', async (context) => {
+  it('uses the VTE automatic Backspace and Delete bindings by default', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const receivedChunks: Buffer[] = [];
       let acceptedSocket: Socket | undefined;
@@ -463,7 +463,8 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
               expect(newData).toContain(asciiBs);
             },
             {
-              message: 'TELNET client should send Backspace as ASCII BS',
+              message:
+                'TELNET client should let VTE send Backspace as ASCII BS',
               timeoutMs: 5_000,
             }
           );

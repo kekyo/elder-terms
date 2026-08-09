@@ -1250,7 +1250,7 @@ describe.concurrent('shared settings widget', () => {
           await expectSelectedComboValue(
             app,
             'settings_terminal_backspace_code_combo',
-            'DEL (built-in default)'
+            'Auto (built-in default)'
           );
           await expectSelectedComboValue(
             app,
@@ -2013,7 +2013,7 @@ describe.concurrent('shared settings widget', () => {
         expect(store.ssh_username).toBe('alice');
         expect(store.ssh_identity_file).toBe('~/.ssh/id_test');
         expect(store.ssh_terminal_type).toBe('xterm-256color');
-        expect(store.backspace_code).toBe('del');
+        expect(store.backspace_code).toBe('auto');
       }
     );
   });
@@ -2411,7 +2411,7 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
-  it('updates General and TELNET state from the editable connection type', async (context) => {
+  it('updates General and TELNET state with an Auto default', async (context) => {
     await runSharedGtkTest(context, [], async ({ app }) => {
       const combo = expectElementKind(
         await app.getById('settings_general_type_combo'),
@@ -2426,6 +2426,13 @@ describe.concurrent('shared settings widget', () => {
       await waitForResult(async () => {
         expect((await telnetPage.info()).states).toContain('visible');
       });
+      await selectSettingsTab(app, 'Terminal');
+      await showTerminalPage(app);
+      await expectSelectedComboValue(
+        app,
+        'settings_terminal_backspace_code_combo',
+        'Auto (built-in default)'
+      );
       await expectElementKind(
         await app.getById('settings_apply_button'),
         'button'
@@ -2433,6 +2440,7 @@ describe.concurrent('shared settings widget', () => {
 
       const store = await waitForAppliedStore(app);
       expect(store.type).toBe('telnet');
+      expect(store.backspace_code).toBe('auto');
     });
   });
 
@@ -2461,7 +2469,7 @@ describe.concurrent('shared settings widget', () => {
     });
   });
 
-  it('updates General and SSH state with a DEL default', async (context) => {
+  it('updates General and SSH state with an Auto default', async (context) => {
     await runSharedGtkTest(context, [], async ({ app }) => {
       const combo = expectElementKind(
         await app.getById('settings_general_type_combo'),
@@ -2481,7 +2489,7 @@ describe.concurrent('shared settings widget', () => {
       await expectSelectedComboValue(
         app,
         'settings_terminal_backspace_code_combo',
-        'DEL (built-in default)'
+        'Auto (built-in default)'
       );
       await expectElementKind(
         await app.getById('settings_apply_button'),
@@ -2490,7 +2498,7 @@ describe.concurrent('shared settings widget', () => {
 
       const store = await waitForAppliedStore(app);
       expect(store.type).toBe('ssh');
-      expect(store.backspace_code).toBe('del');
+      expect(store.backspace_code).toBe('auto');
     });
   });
 
@@ -3921,7 +3929,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_terminal_backspace_code_combo',
-          'DEL (built-in default)'
+          'Auto (built-in default)'
         );
         await expectSelectedComboValue(
           app,

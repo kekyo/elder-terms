@@ -34,7 +34,7 @@ static constexpr char terminal_cursor_key_mode_key[] = "cursor_key_mode";
 static constexpr char default_terminal_zoom_in_key[] = "ctrl+plus";
 static constexpr char default_terminal_zoom_out_key[] = "ctrl+minus";
 static constexpr char default_terminal_encoding[] = "UTF-8";
-static constexpr char default_terminal_backspace_code[] = "del";
+static constexpr char default_terminal_backspace_code[] = "auto";
 static constexpr char default_terminal_cursor_key_mode[] = "normal";
 
 static std::string trim_ascii_whitespace(const std::string &value) {

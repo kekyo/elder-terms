@@ -174,10 +174,10 @@ carrier_detect=ignore
 
 | 接続種別 | 文字エンコーディング | Backspaceコード | カーソルキーモード |
 | :--- | :--- | :--- | :--- |
-| ローカルターミナル | UTF-8 | `DEL` | `通常` |
-| TELNET | UTF-8 | `BS` | `通常` |
+| ローカルターミナル | UTF-8 | `Auto` | `通常` |
+| TELNET | UTF-8 | `Auto` | `通常` |
 | シリアル | UTF-8 | `BS` | `TRS80` |
-| SSH | UTF-8 | `DEL` | `通常` |
+| SSH | UTF-8 | `Auto` | `通常` |
 
 ### 文字コードの補足
 

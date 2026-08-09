@@ -267,9 +267,13 @@ static void test_default_settings() {
               "default connection settings should be local shell settings");
   expect_true(profile.text_settings.encoding == "UTF-8",
               "default local terminal encoding should be UTF-8");
+  expect_true(elder_terms::setting_string_value_or_default(
+                  store, terminal_backspace_code_setting_key(), "") ==
+                  "auto",
+              "built-in terminal Backspace setting should be Auto");
   expect_true(profile.text_settings.backspace_code ==
-                  TerminalBackspaceCode::del,
-              "default local Backspace should send DEL");
+                  TerminalBackspaceCode::automatic,
+              "default local Backspace should use automatic binding");
   expect_true(profile.text_settings.cursor_key_mode ==
                   TerminalCursorKeyMode::normal,
               "default local cursor keys should use normal sequences");
@@ -869,16 +873,16 @@ static void test_terminal_text_defaults_follow_connection_type() {
   const TerminalTextSettings local =
       default_terminal_text_settings(TerminalConnectionKind::local_shell);
   expect_true(local.encoding == "UTF-8" &&
-                  local.backspace_code == TerminalBackspaceCode::del &&
+                  local.backspace_code == TerminalBackspaceCode::automatic &&
                   local.cursor_key_mode == TerminalCursorKeyMode::normal,
-              "local terminal text defaults should match gtk-oldtype");
+              "local terminal text defaults should use automatic Backspace");
 
   const TerminalTextSettings telnet =
       default_terminal_text_settings(TerminalConnectionKind::telnet);
   expect_true(telnet.encoding == "UTF-8" &&
-                  telnet.backspace_code == TerminalBackspaceCode::bs &&
+                  telnet.backspace_code == TerminalBackspaceCode::automatic &&
                   telnet.cursor_key_mode == TerminalCursorKeyMode::normal,
-              "TELNET terminal text defaults should match gtk-oldtype");
+              "TELNET terminal text defaults should use automatic Backspace");
 
   const TerminalTextSettings serial =
       default_terminal_text_settings(TerminalConnectionKind::serial);
@@ -890,9 +894,9 @@ static void test_terminal_text_defaults_follow_connection_type() {
   const TerminalTextSettings ssh =
       default_terminal_text_settings(TerminalConnectionKind::ssh);
   expect_true(ssh.encoding == "UTF-8" &&
-                  ssh.backspace_code == TerminalBackspaceCode::del &&
+                  ssh.backspace_code == TerminalBackspaceCode::automatic &&
                   ssh.cursor_key_mode == TerminalCursorKeyMode::normal,
-              "SSH terminal text defaults should use DEL and normal keys");
+              "SSH terminal text defaults should use automatic Backspace");
 }
 
 static void test_terminal_text_explicit_settings_override_connection_defaults() {
@@ -1482,8 +1486,8 @@ static void test_invalid_ssh_values_fall_back_and_warn() {
   expect_true(settings->terminal_type == "xterm-256color",
               "blank SSH terminal type should use the default");
   expect_true(profile.text_settings.backspace_code ==
-                  TerminalBackspaceCode::del,
-              "SSH should use DEL when Backspace is not explicit");
+                  TerminalBackspaceCode::automatic,
+              "SSH should use automatic Backspace when it is not explicit");
   expect_true(warnings_contain(
                   result.warnings,
                   "missing required configuration value [ssh] address"),

@@ -65,7 +65,7 @@ struct TerminalTextSettings {
   /** iconv encoding used on the backend byte stream. */
   std::string encoding = "UTF-8";
   /** Binding used by the Backspace key. */
-  TerminalBackspaceCode backspace_code = TerminalBackspaceCode::del;
+  TerminalBackspaceCode backspace_code = TerminalBackspaceCode::automatic;
   /** Outbound cursor-key handling mode. */
   TerminalCursorKeyMode cursor_key_mode = TerminalCursorKeyMode::normal;
 };

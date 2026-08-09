@@ -608,11 +608,8 @@ const char *terminal_cursor_key_mode_to_string(TerminalCursorKeyMode mode) {
 TerminalTextSettings
 default_terminal_text_settings(TerminalConnectionKind kind) {
   TerminalTextSettings settings;
-  if (kind == TerminalConnectionKind::telnet ||
-      kind == TerminalConnectionKind::serial) {
-    settings.backspace_code = TerminalBackspaceCode::bs;
-  }
   if (kind == TerminalConnectionKind::serial) {
+    settings.backspace_code = TerminalBackspaceCode::bs;
     settings.cursor_key_mode = TerminalCursorKeyMode::trs80;
   }
   return settings;
