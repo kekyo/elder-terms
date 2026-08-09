@@ -979,6 +979,7 @@ describe.concurrent('shared settings widget', () => {
               '文字エンコーディング',
               'Backspaceコード',
               'カーソルキーモード',
+              'Enter/Returnコード',
               '列数',
               '行数',
               '拡大率',
@@ -987,6 +988,7 @@ describe.concurrent('shared settings widget', () => {
               'セッション終了時にウィンドウを閉じる',
               '拡大ショートカット',
               '縮小ショートカット',
+              'BREAK送信ショートカット',
             ],
           },
           {
@@ -994,6 +996,7 @@ describe.concurrent('shared settings widget', () => {
             labels: [
               '転送ベースディレクトリ',
               'テキスト送信速度（バイト/秒）',
+              'テキスト送信時にEnter/Returnコードに従う',
               'ZMODEM転送を自動開始する',
             ],
           },
@@ -2989,17 +2992,18 @@ describe.concurrent('shared settings widget', () => {
           expect((await fallbackMode.info()).states).toContain('showing');
         });
         const terminalPage = await app.getById('settings_terminal_page');
-        await waitForResult(async () => {
-          const terminalPageCapture = await terminalPage.capture();
-          expect(terminalPageCapture.clipped).toBe(false);
-          await expectCaptureToMatchFixture(
-            terminalPageCapture,
-            'settings-widget-terminal-font-families',
-            fixturePath('settings-widget-terminal-font-families'),
-            directory,
-            visualComparisonOptions
-          );
-        });
+        const terminalPageCapture = await captureWhenVisuallyStable(
+          terminalPage,
+          'settings-widget-terminal-font-families'
+        );
+        expect(terminalPageCapture.clipped).toBe(false);
+        await expectCaptureToMatchFixture(
+          terminalPageCapture,
+          'settings-widget-terminal-font-families',
+          fixturePath('settings-widget-terminal-font-families'),
+          directory,
+          visualComparisonOptions
+        );
 
         await confirmSelectedFont(
           app,
