@@ -159,6 +159,17 @@ join_chunks(const std::vector<std::vector<unsigned char>> &chunks) {
   return result;
 }
 
+static std::vector<unsigned char> bytes_from_text(const std::string &text) {
+  return std::vector<unsigned char>(text.begin(), text.end());
+}
+
+static void configure_newline_behavior(TerminalTextSendRequest *request,
+                                       TerminalReturnCode return_code,
+                                       bool follow_return_code) {
+  request->text_settings.return_code = return_code;
+  request->follow_return_code = follow_return_code;
+}
+
 static void throttles_encoded_payload_in_bounded_chunks() {
   const std::filesystem::path path = temporary_file_path("throttle.txt");
   const std::vector<unsigned char> input{'a', 'b', 'c', 'd', 'e'};
@@ -273,6 +284,98 @@ encodes_and_throttles_buffered_text_with_progress_and_replacements() {
               "buffered text progress should finish at its UTF-8 byte size");
 }
 
+static void normalizes_file_and_buffer_line_endings_to_the_return_code() {
+  const std::string input = "a\r\nb\rc\nd";
+  struct NewlineCase {
+    TerminalReturnCode return_code;
+    const char *expected;
+    const char *name;
+  };
+  const NewlineCase cases[] = {
+      {.return_code = TerminalReturnCode::automatic,
+       .expected = "a\rb\rc\rd",
+       .name = "Auto"},
+      {.return_code = TerminalReturnCode::cr,
+       .expected = "a\rb\rc\rd",
+       .name = "CR"},
+      {.return_code = TerminalReturnCode::lf,
+       .expected = "a\nb\nc\nd",
+       .name = "LF"},
+      {.return_code = TerminalReturnCode::crlf,
+       .expected = "a\r\nb\r\nc\r\nd",
+       .name = "CRLF"},
+  };
+
+  const std::filesystem::path path = temporary_file_path("newlines.txt");
+  write_file(path, bytes_from_text(input));
+  for (const NewlineCase &test_case : cases) {
+    FakeTextTransportState file_state;
+    TerminalTextSendRequest file_request =
+        make_request(path, "UTF-8", 8000000);
+    configure_newline_behavior(&file_request, test_case.return_code, true);
+    run_text_send(std::move(file_request), make_transport(&file_state));
+    expect_true(join_chunks(file_state.chunks) ==
+                    bytes_from_text(test_case.expected),
+                std::string(test_case.name) +
+                    " should normalize file line endings");
+
+    FakeTextTransportState buffer_state;
+    TerminalTextSendRequest buffer_request =
+        make_buffer_request(input, "UTF-8", 8000000);
+    configure_newline_behavior(&buffer_request, test_case.return_code, true);
+    run_text_send(std::move(buffer_request), make_transport(&buffer_state));
+    expect_true(join_chunks(buffer_state.chunks) ==
+                    bytes_from_text(test_case.expected),
+                std::string(test_case.name) +
+                    " should normalize buffered line endings");
+  }
+  std::filesystem::remove(path);
+}
+
+static void preserves_line_endings_when_return_code_following_is_disabled() {
+  const std::string input = "a\r\nb\rc\nd\r";
+  FakeTextTransportState state;
+  TerminalTextSendRequest request =
+      make_buffer_request(input, "UTF-8", 8000000);
+  configure_newline_behavior(&request, TerminalReturnCode::lf, false);
+
+  run_text_send(std::move(request), make_transport(&state));
+
+  expect_true(join_chunks(state.chunks) == bytes_from_text(input),
+              "disabled Return-code following should preserve source bytes");
+}
+
+static void preserves_crlf_across_file_read_boundaries_and_flushes_eof_cr() {
+  std::vector<unsigned char> input(65535, 'a');
+  input.push_back('\r');
+  input.push_back('\n');
+  input.push_back('b');
+  input.push_back('\r');
+  const std::filesystem::path path =
+      temporary_file_path("boundary-newlines.txt");
+  write_file(path, input);
+
+  FakeTextTransportState state;
+  std::vector<TerminalTransferProgress> progress;
+  TerminalTextSendRequest request = make_request(path, "UTF-8", 8000000);
+  configure_newline_behavior(&request, TerminalReturnCode::crlf, true);
+  request.progress = [&progress](TerminalTransferProgress update) {
+    progress.push_back(update);
+  };
+  run_text_send(std::move(request), make_transport(&state));
+  std::filesystem::remove(path);
+
+  std::vector<unsigned char> expected(65535, 'a');
+  expected.insert(expected.end(), {'\r', '\n', 'b', '\r', '\n'});
+  expect_true(join_chunks(state.chunks) == expected,
+              "split CRLF should stay one newline and EOF CR should flush");
+  const double expected_first_fraction =
+      65536.0 / static_cast<double>(input.size());
+  expect_true(progress.size() >= 3 && progress[1].fraction.has_value() &&
+                  *progress[1].fraction == expected_first_fraction,
+              "progress should count consumed source bytes at read boundaries");
+}
+
 } // namespace elder_terms
 
 int main() {
@@ -281,5 +384,8 @@ int main() {
   elder_terms::encodes_text_and_reports_source_progress_and_replacements();
   elder_terms::
       encodes_and_throttles_buffered_text_with_progress_and_replacements();
+  elder_terms::normalizes_file_and_buffer_line_endings_to_the_return_code();
+  elder_terms::preserves_line_endings_when_return_code_following_is_disabled();
+  elder_terms::preserves_crlf_across_file_read_boundaries_and_flushes_eof_cr();
   return 0;
 }

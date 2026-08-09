@@ -24,6 +24,14 @@ ELDER_TERMS_API SettingKey
 transfer_text_send_bytes_per_second_setting_key();
 
 /**
+ * Returns the text-send Return-code behavior setting key.
+ *
+ * @returns Setting key for [transfer] text_send_follow_return_code.
+ */
+ELDER_TERMS_API SettingKey
+transfer_text_send_follow_return_code_setting_key();
+
+/**
  * Returns the ZMODEM auto-start setting key.
  *
  * @returns Setting key for [transfer] zmodem_autostart.
@@ -55,6 +63,15 @@ ELDER_TERMS_API std::string transfer_base_path(const SettingsStore &store);
  */
 ELDER_TERMS_API gint64
 transfer_text_send_bytes_per_second(const SettingsStore &store);
+
+/**
+ * Reads whether text sends normalize line endings to the Enter/Return code.
+ *
+ * @param store Source settings store.
+ * @returns True when text sends follow the terminal Enter/Return code.
+ */
+ELDER_TERMS_API bool
+transfer_text_send_follow_return_code(const SettingsStore &store);
 
 /**
  * Reads the effective ZMODEM auto-start setting.

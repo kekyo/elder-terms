@@ -240,6 +240,14 @@ static FixtureOptions parse_options(int argc, char **argv) {
       append_connection_assignment(
           &options, "transfer", "text_send_bytes_per_second",
           option_value(argument, "--text-send-bytes-per-second="));
+    } else if (starts_with(argument,
+                           "--text-send-follow-return-code=")) {
+      const std::string value =
+          option_value(argument, "--text-send-follow-return-code=");
+      append_connection_assignment(
+          &options, "transfer", "text_send_follow_return_code",
+          value == "enabled" ? "true"
+                             : value == "disabled" ? "false" : value);
     } else if (starts_with(argument, "--zmodem-autostart=")) {
       const std::string value =
           option_value(argument, "--zmodem-autostart=");
@@ -665,6 +673,10 @@ static void print_store(const char *prefix,
             << " transfer_base_path=" << elder_terms::transfer_base_path(store)
             << " text_send_bytes_per_second="
             << elder_terms::transfer_text_send_bytes_per_second(store)
+            << " text_send_follow_return_code="
+            << (elder_terms::transfer_text_send_follow_return_code(store)
+                    ? "enabled"
+                    : "disabled")
             << " zmodem_autostart=" << zmodem_autostart_name(store)
             << " log_enabled=" << (log.enabled ? "true" : "false")
             << " log_base_directory=" << log.base_directory
@@ -772,6 +784,9 @@ static void print_store(const char *prefix,
   print_setting_metadata(
       store, "text_send_bytes_per_second",
       elder_terms::transfer_text_send_bytes_per_second_setting_key());
+  print_setting_metadata(
+      store, "text_send_follow_return_code",
+      elder_terms::transfer_text_send_follow_return_code_setting_key());
   print_setting_metadata(
       store, "zmodem_autostart",
       elder_terms::transfer_zmodem_autostart_setting_key());

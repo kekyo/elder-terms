@@ -8,6 +8,8 @@ static constexpr char transfer_section[] = "transfer";
 static constexpr char transfer_base_path_key[] = "base_path";
 static constexpr char transfer_text_send_bytes_per_second_key[] =
     "text_send_bytes_per_second";
+static constexpr char transfer_text_send_follow_return_code_key[] =
+    "text_send_follow_return_code";
 static constexpr char transfer_zmodem_autostart_key[] = "zmodem_autostart";
 static constexpr gint64 default_text_send_bytes_per_second = 1024;
 
@@ -33,6 +35,10 @@ SettingKey transfer_text_send_bytes_per_second_setting_key() {
   return transfer_key(transfer_text_send_bytes_per_second_key);
 }
 
+SettingKey transfer_text_send_follow_return_code_setting_key() {
+  return transfer_key(transfer_text_send_follow_return_code_key);
+}
+
 SettingKey transfer_zmodem_autostart_setting_key() {
   return transfer_key(transfer_zmodem_autostart_key);
 }
@@ -47,6 +53,10 @@ std::vector<SettingDefinition> transfer_setting_definitions() {
           .key = transfer_text_send_bytes_per_second_setting_key(),
           .default_value = SettingValue{default_text_send_bytes_per_second},
           .validate = validate_text_send_bytes_per_second,
+      },
+      {
+          .key = transfer_text_send_follow_return_code_setting_key(),
+          .default_value = SettingValue{true},
       },
       {
           .key = transfer_zmodem_autostart_setting_key(),
@@ -65,6 +75,11 @@ gint64 transfer_text_send_bytes_per_second(const SettingsStore &store) {
   return setting_integer_value_or_default(
       store, transfer_text_send_bytes_per_second_setting_key(),
       default_text_send_bytes_per_second);
+}
+
+bool transfer_text_send_follow_return_code(const SettingsStore &store) {
+  return setting_boolean_value_or_default(
+      store, transfer_text_send_follow_return_code_setting_key(), true);
 }
 
 bool transfer_zmodem_autostart(const SettingsStore &store) {

@@ -256,6 +256,46 @@ static void user_input_preserves_ascii_del() {
   expect_bytes(encoded, {127}, "User input should preserve ASCII DEL");
 }
 
+static void user_input_applies_nvt_framing_and_iac_escaping() {
+  TelnetProtocol protocol("xterm-256color");
+  const TelnetBytes input{'a', 13, 10, 'b', 13, 'c', 10, 255};
+  const TelnetBytes encoded = protocol.encode_user_input(
+      std::span<const unsigned char>(input.data(), input.size()));
+
+  expect_bytes(encoded,
+               {'a', 13, 10, 'b', 13, 0, 'c', 10, 255, 255},
+               "NVT user input should preserve CRLF, frame bare CR, and "
+               "escape IAC");
+}
+
+static void only_local_binary_disables_outbound_nvt_framing() {
+  TelnetProtocol remote_only("xterm-256color");
+  (void)receive_bytes(&remote_only, {255, 251, 0});
+  const TelnetBytes remote_only_input{13};
+  expect_bytes(remote_only.encode_user_input(remote_only_input), {13, 0},
+               "remote BINARY should not disable outbound NVT framing");
+
+  TelnetProtocol local("xterm-256color");
+  (void)receive_bytes(&local, {255, 253, 0});
+  const TelnetBytes local_input{13, 255};
+  expect_bytes(local.encode_user_input(local_input), {13, 255, 255},
+               "local BINARY should preserve outbound bytes except IAC");
+}
+
+static void text_send_nvt_framing_spans_chunks_and_flushes_eof_cr() {
+  TelnetProtocol protocol("xterm-256color");
+  protocol.begin_text_send_encoding();
+  const TelnetBytes first_input{'a', 13};
+  const TelnetBytes second_input{10, 'b', 13};
+
+  expect_bytes(protocol.encode_text_send(first_input), {'a'},
+               "text send should retain trailing CR across chunks");
+  expect_bytes(protocol.encode_text_send(second_input), {13, 10, 'b'},
+               "split CRLF should remain CRLF without an inserted NUL");
+  expect_bytes(protocol.finish_text_send_encoding(), {13, 0},
+               "text send EOF should frame a pending bare CR");
+}
+
 static void terminal_type_negotiation_reports_configured_type() {
   TelnetProtocol protocol("vt220");
   const TelnetProtocolResult negotiation =
@@ -333,6 +373,9 @@ int main() {
     elder_terms::remote_binary_receive_preserves_nvt_bytes();
     elder_terms::user_input_escapes_iac();
     elder_terms::user_input_preserves_ascii_del();
+    elder_terms::user_input_applies_nvt_framing_and_iac_escaping();
+    elder_terms::only_local_binary_disables_outbound_nvt_framing();
+    elder_terms::text_send_nvt_framing_spans_chunks_and_flushes_eof_cr();
     elder_terms::terminal_type_negotiation_reports_configured_type();
     elder_terms::terminal_type_send_requires_active_negotiation();
     elder_terms::terminal_type_response_escapes_iac();

@@ -21,6 +21,9 @@ export interface ClipboardTextProvider {
   readonly close: () => Promise<void>;
 }
 
+/** X11 text selection owned by a clipboard test provider. */
+export type ClipboardTextSelection = 'clipboard' | 'primary';
+
 const closeClipboardTextProvider = async (
   child: ChildProcessWithoutNullStreams
 ): Promise<void> => {
@@ -44,13 +47,16 @@ const closeClipboardTextProvider = async (
  *
  * @param app Running GTK app whose display owns the clipboard.
  * @param text UTF-8 clipboard text to provide.
+ * @param selection Clipboard or primary selection to own.
  * @returns Provider handle after clipboard ownership is ready.
  */
 export const startClipboardTextProvider = async (
   app: GtkApp,
-  text: string
+  text: string,
+  selection: ClipboardTextSelection = 'clipboard'
 ): Promise<ClipboardTextProvider> => {
-  const child = spawn(clipboardWriteHelperPath, [text], {
+  const arguments_ = selection === 'primary' ? ['--primary', text] : [text];
+  const child = spawn(clipboardWriteHelperPath, arguments_, {
     env: await app.environment(),
     stdio: ['pipe', 'pipe', 'pipe'],
   });

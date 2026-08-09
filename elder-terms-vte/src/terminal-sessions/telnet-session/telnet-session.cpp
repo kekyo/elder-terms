@@ -566,12 +566,14 @@ private:
   }
 
   cardio::promise<void>
-  send_text_bytes(std::span<const unsigned char> bytes,
-                  cardio::cancellation cancellation) {
+  write_text_send_bytes(TelnetBytes encoded,
+                        cardio::cancellation cancellation) {
     if (!text_send_active || stopping || socket_fd < 0 || !io.has_value()) {
       throw std::runtime_error("TELNET text send is not connected");
     }
-    TelnetBytes encoded = protocol.encode_user_input(bytes);
+    if (encoded.empty()) {
+      co_return;
+    }
     auto write_lock_promise = backend_write_mutex.lock(cancellation);
     auto write_lock = std::move(co_await write_lock_promise);
     std::size_t offset = 0;
@@ -592,6 +594,19 @@ private:
     }
   }
 
+  cardio::promise<void>
+  send_text_bytes(std::span<const unsigned char> bytes,
+                  cardio::cancellation cancellation) {
+    co_await write_text_send_bytes(protocol.encode_text_send(bytes),
+                                   std::move(cancellation));
+  }
+
+  cardio::promise<void>
+  finish_text_send_encoding_async(cardio::cancellation cancellation) {
+    co_await write_text_send_bytes(protocol.finish_text_send_encoding(),
+                                   std::move(cancellation));
+  }
+
   static cardio::promise<void>
   delay_text_send_async(std::uint64_t delay_us,
                         cardio::cancellation cancellation) {
@@ -602,6 +617,7 @@ private:
 
   void finish_text_send(const TerminalTextSendRequest &request,
                         bool succeeded) {
+    protocol.begin_text_send_encoding();
     text_send_active = false;
     text_send_cancel_source.reset();
     if (request.status) {
@@ -626,10 +642,13 @@ private:
                        TerminalTextSendTransport transport) {
     bool succeeded = false;
     try {
+      cardio::cancellation cancellation =
+          text_send_cancel_source->get_cancellation();
       TerminalTextSendRequest run_request = request;
       co_await run_terminal_text_send_async(
           std::move(run_request), std::move(transport),
-          text_send_cancel_source->get_cancellation());
+          cancellation);
+      co_await finish_text_send_encoding_async(cancellation);
       succeeded = true;
     } catch (const cardio::canceled_exception &) {
       if (!stopping) {
@@ -812,6 +831,7 @@ public:
     }
 
     text_send_cancel_source.emplace();
+    protocol.begin_text_send_encoding();
     text_send_active = true;
     zmodem_auto_start_detector = {};
     terminal_io.disconnect_user_input();

@@ -206,16 +206,16 @@ static void on_clipboard_text_received(GtkClipboard *, const gchar *text,
   request->paste(std::string(text));
 }
 
-static void on_terminal_context_paste_activate(GtkMenuItem *, gpointer data) {
-  auto *state = static_cast<TerminalContextMenuState *>(data);
+static void request_terminal_paste(TerminalContextMenuState *state,
+                                   GdkAtom selection) {
   if (!state->paste_callbacks.can_paste ||
       !state->paste_callbacks.paste ||
       !state->paste_callbacks.can_paste()) {
     return;
   }
 
-  GtkClipboard *clipboard = gtk_widget_get_clipboard(
-      GTK_WIDGET(state->terminal), GDK_SELECTION_CLIPBOARD);
+  GtkClipboard *clipboard =
+      gtk_widget_get_clipboard(GTK_WIDGET(state->terminal), selection);
   auto *request = new ClipboardTextRequest{
       .can_paste = state->paste_callbacks.can_paste,
       .paste = state->paste_callbacks.paste,
@@ -223,14 +223,51 @@ static void on_terminal_context_paste_activate(GtkMenuItem *, gpointer data) {
   gtk_clipboard_request_text(clipboard, on_clipboard_text_received, request);
 }
 
+static void on_terminal_context_paste_activate(GtkMenuItem *, gpointer data) {
+  auto *state = static_cast<TerminalContextMenuState *>(data);
+  request_terminal_paste(state, GDK_SELECTION_CLIPBOARD);
+}
+
+static void on_terminal_paste_clipboard(VteTerminal *terminal,
+                                        gpointer data) {
+  g_signal_stop_emission_by_name(terminal, "paste-clipboard");
+  request_terminal_paste(static_cast<TerminalContextMenuState *>(data),
+                         GDK_SELECTION_CLIPBOARD);
+}
+
+static gboolean on_terminal_paste_key_press(GtkWidget *, GdkEventKey *event,
+                                            gpointer data) {
+  if (event->keyval != GDK_KEY_Insert &&
+      event->keyval != GDK_KEY_KP_Insert) {
+    return GDK_EVENT_PROPAGATE;
+  }
+
+  constexpr GdkModifierType relevant_modifiers = static_cast<GdkModifierType>(
+      GDK_SHIFT_MASK | GDK_CONTROL_MASK | GDK_MOD1_MASK | GDK_SUPER_MASK |
+      GDK_HYPER_MASK | GDK_META_MASK);
+  if ((event->state & relevant_modifiers) != GDK_SHIFT_MASK) {
+    return GDK_EVENT_PROPAGATE;
+  }
+
+  request_terminal_paste(static_cast<TerminalContextMenuState *>(data),
+                         GDK_SELECTION_CLIPBOARD);
+  return GDK_EVENT_STOP;
+}
+
 static gboolean on_terminal_button_press(GtkWidget *, GdkEventButton *event,
                                          gpointer data) {
-  if (event->type != GDK_BUTTON_PRESS ||
-      event->button != GDK_BUTTON_SECONDARY) {
+  if (event->type != GDK_BUTTON_PRESS) {
     return GDK_EVENT_PROPAGATE;
   }
 
   auto *state = static_cast<TerminalContextMenuState *>(data);
+  if (event->button == GDK_BUTTON_MIDDLE) {
+    request_terminal_paste(state, GDK_SELECTION_PRIMARY);
+    return GDK_EVENT_STOP;
+  }
+  if (event->button != GDK_BUTTON_SECONDARY) {
+    return GDK_EVENT_PROPAGATE;
+  }
   gtk_widget_set_sensitive(
       state->copy_item, vte_terminal_get_has_selection(state->terminal));
   update_terminal_context_paste_sensitivity(state);
@@ -267,6 +304,11 @@ static void install_terminal_context_menu(GtkWidget *terminal_widget,
                    terminal_widget);
   g_signal_connect(state->paste_item, "activate",
                    G_CALLBACK(on_terminal_context_paste_activate), state);
+  g_signal_connect(terminal_widget, "paste-clipboard",
+                   G_CALLBACK(on_terminal_paste_clipboard), state);
+  gtk_widget_add_events(terminal_widget, GDK_KEY_PRESS_MASK);
+  g_signal_connect(terminal_widget, "key-press-event",
+                   G_CALLBACK(on_terminal_paste_key_press), state);
   gtk_widget_add_events(terminal_widget, GDK_BUTTON_PRESS_MASK);
   g_signal_connect(terminal_widget, "button-press-event",
                    G_CALLBACK(on_terminal_button_press), state);

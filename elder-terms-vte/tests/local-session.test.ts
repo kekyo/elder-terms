@@ -20,10 +20,15 @@ import {
   expectMainWindowStatus,
   expectMainWindowTitle,
   localTerminalDisconnectedDimPath,
+  pressKeyWithModifiers,
   runGtkTest,
   withTemporaryDirectory,
 } from './gtk-test-helpers';
-import { capturePixel, expectCaptureToMatchFixture } from './test-helpers';
+import {
+  capturePixel,
+  expectCaptureToMatchFixture,
+  expectElementKind,
+} from './test-helpers';
 import {
   activateTextSend,
   cancelTextSend,
@@ -745,6 +750,79 @@ describe.concurrent('elder-terms-vte local session', () => {
     });
   });
 
+  it('applies the text-send Return-code setting to file line endings', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const sourceText = 'a\r\nb\rc\nd';
+      for (const testCase of [
+        { expected: 'a\nb\nc\nd', follow: true, name: 'follow' },
+        { expected: sourceText, follow: false, name: 'preserve' },
+      ] as const) {
+        const sourcePath = join(directory, `${testCase.name}-send.txt`);
+        const receivedPath = join(directory, `${testCase.name}-received.bin`);
+        const receivedReadyPath = join(
+          directory,
+          `${testCase.name}-received-ready.txt`
+        );
+        const readyPath = join(directory, `${testCase.name}-ready.txt`);
+        const releasePath = join(directory, `${testCase.name}-release`);
+        const shellPath = join(directory, `${testCase.name}-shell.sh`);
+        const configPath = join(directory, `${testCase.name}.ini`);
+        await execFileAsync('/usr/bin/mkfifo', [releasePath]);
+        await writeFile(sourcePath, sourceText, 'utf8');
+        await writeFile(
+          shellPath,
+          `#!/bin/sh\nstty raw -echo\nprintf ready > ${shellQuote(
+            readyPath
+          )}\ndd bs=1 count=${Buffer.byteLength(
+            testCase.expected
+          )} of=${shellQuote(receivedPath)} 2>/dev/null\nprintf received > ${shellQuote(
+            receivedReadyPath
+          )}\nIFS= read -r release < ${shellQuote(releasePath)}\nexit 0\n`,
+          'utf8'
+        );
+        await chmod(shellPath, 0o755);
+        await writeFile(
+          configPath,
+          `[terminal]\nauto_close=false\nreturn_code=lf\n\n[transfer]\ntext_send_bytes_per_second=8000000\ntext_send_follow_return_code=${String(
+            testCase.follow
+          )}\n`,
+          'utf8'
+        );
+
+        await runGtkTest(
+          context,
+          [
+            '-c',
+            configPath,
+            `--test-transfer-source-uri=${pathToFileURL(sourcePath).href}`,
+          ],
+          async (app) => {
+            await waitForFileText(readyPath, 'ready');
+            let shellWaitingForRelease = false;
+            try {
+              const button = await activateTextSend(app);
+              await waitForFileText(receivedReadyPath, 'received');
+              shellWaitingForRelease = true;
+              await expectTextSendFinished(app, button, 'local terminal');
+              expect(await readFile(receivedPath, 'utf8')).toBe(
+                testCase.expected
+              );
+            } finally {
+              if (shellWaitingForRelease) {
+                await writeFile(releasePath, 'release\n', 'utf8');
+              }
+            }
+          },
+          {
+            env: {
+              SHELL: shellPath,
+            },
+          }
+        );
+      }
+    });
+  });
+
   it('cancels an active text send and restores terminal input', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const sourcePath = join(directory, 'send.txt');
@@ -861,6 +939,105 @@ describe.concurrent('elder-terms-vte local session', () => {
           },
         }
       );
+    });
+  });
+
+  it('normalizes line endings for every terminal paste route', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const pastedText = 'a\r\nb\rc\nd';
+      const expectedText = 'a\nb\nc\nd';
+      const routes = [
+        { name: 'context', selection: 'clipboard' },
+        { name: 'shift-insert', selection: 'clipboard' },
+        { name: 'middle', selection: 'primary' },
+      ] as const;
+
+      for (const route of routes) {
+        const receivedPath = join(directory, `${route.name}-pasted.bin`);
+        const receivedReadyPath = join(
+          directory,
+          `${route.name}-received-ready.txt`
+        );
+        const readyPath = join(directory, `${route.name}-ready.txt`);
+        const releasePath = join(directory, `${route.name}-release`);
+        const shellPath = join(directory, `${route.name}-shell.sh`);
+        const configPath = join(directory, `${route.name}.ini`);
+        await execFileAsync('/usr/bin/mkfifo', [releasePath]);
+        await writeFile(
+          shellPath,
+          `#!/bin/sh\nstty raw -echo\nprintf ready > ${shellQuote(
+            readyPath
+          )}\ndd bs=1 count=${Buffer.byteLength(
+            expectedText
+          )} of=${shellQuote(receivedPath)} 2>/dev/null\nprintf received > ${shellQuote(
+            receivedReadyPath
+          )}\nIFS= read -r release < ${shellQuote(releasePath)}\nexit 0\n`,
+          'utf8'
+        );
+        await chmod(shellPath, 0o755);
+        await writeFile(
+          configPath,
+          '[terminal]\nauto_close=false\nreturn_code=lf\n\n' +
+            '[transfer]\ntext_send_bytes_per_second=10\n' +
+            'text_send_follow_return_code=true\n',
+          'utf8'
+        );
+
+        await runGtkTest(
+          context,
+          ['-c', configPath],
+          async (app) => {
+            await waitForFileText(readyPath, 'ready');
+            await focusTerminal(app);
+            const provider = await startClipboardTextProvider(
+              app,
+              pastedText,
+              route.selection
+            );
+            let shellWaitingForRelease = false;
+            try {
+              const button = expectElementKind(
+                await app.getById('transfer_button'),
+                'toggleButton'
+              );
+              if (route.name === 'context') {
+                await activateTerminalPaste(app);
+              } else if (route.name === 'shift-insert') {
+                await pressKeyWithModifiers(app, ['shift'], 'Insert');
+              } else {
+                const terminalCapture = await (
+                  await app.getById('terminal_view')
+                ).capture();
+                await app.input.moveMouseTo(
+                  Math.trunc(
+                    terminalCapture.bounds.x + terminalCapture.bounds.width / 2
+                  ),
+                  Math.trunc(
+                    terminalCapture.bounds.y + terminalCapture.bounds.height / 2
+                  )
+                );
+                await app.input.setMouseButton('middle', true);
+                await app.input.setMouseButton('middle', false);
+              }
+              await expectTextSendActive(button);
+              await waitForFileText(receivedReadyPath, 'received');
+              shellWaitingForRelease = true;
+              await expectTextSendFinished(app, button, 'local terminal');
+              expect(await readFile(receivedPath, 'utf8')).toBe(expectedText);
+            } finally {
+              if (shellWaitingForRelease) {
+                await writeFile(releasePath, 'release\n', 'utf8');
+              }
+              await provider.close();
+            }
+          },
+          {
+            env: {
+              SHELL: shellPath,
+            },
+          }
+        );
+      }
     });
   });
 });

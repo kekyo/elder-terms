@@ -94,6 +94,7 @@ interface AppliedStore {
   readonly serial_stop_bit: string;
   readonly transfer_base_path: string;
   readonly text_send_bytes_per_second: string;
+  readonly text_send_follow_return_code: string;
   readonly type: string;
   readonly width: string;
   readonly zmodem_autostart: string;
@@ -468,10 +469,34 @@ const expectPageVisualFixture = async (
     windowBounds.x + 5,
     windowBounds.y + windowBounds.height - 5
   );
-  const page = await app.getById(testCase.pageId);
+  const capture = await captureWhenVisuallyStable(
+    await app.getById(testCase.pageId),
+    testCase.fixtureName
+  );
+  expect(capture.clipped).toBe(false);
+  await expectCaptureToMatchFixture(
+    capture,
+    testCase.fixtureName,
+    fixturePath(testCase.fixtureName),
+    directory,
+    visualComparisonOptions
+  );
+  if (testCase.differsFrom !== undefined) {
+    const diffPixels = await countCaptureFixtureDiffPixels(
+      capture,
+      fixturePath(testCase.differsFrom)
+    );
+    expect(diffPixels, testCase.fixtureName).toBeGreaterThan(0);
+  }
+};
+
+const captureWhenVisuallyStable = async (
+  page: GtkWidgetElement,
+  description: string
+): Promise<GtkCapture> => {
   let previousImage: Buffer | undefined;
   let consecutiveStableCaptures = 0;
-  const capture = await waitForResult<GtkCapture>(
+  return waitForResult<GtkCapture>(
     async () => {
       const currentCapture = await page.capture();
       if (
@@ -489,24 +514,9 @@ const expectPageVisualFixture = async (
     {
       timeoutMs: 2_000,
       intervalMs: 50,
-      message: `settings page did not become visually stable: ${testCase.fixtureName}`,
+      message: `settings page did not become visually stable: ${description}`,
     }
   );
-  expect(capture.clipped).toBe(false);
-  await expectCaptureToMatchFixture(
-    capture,
-    testCase.fixtureName,
-    fixturePath(testCase.fixtureName),
-    directory,
-    visualComparisonOptions
-  );
-  if (testCase.differsFrom !== undefined) {
-    const diffPixels = await countCaptureFixtureDiffPixels(
-      capture,
-      fixturePath(testCase.differsFrom)
-    );
-    expect(diffPixels, testCase.fixtureName).toBeGreaterThan(0);
-  }
 };
 
 const parseAppliedStore = (line: string): AppliedStore => {
@@ -866,6 +876,7 @@ describe.concurrent('shared settings widget', () => {
             labels: [
               'Transfer base directory',
               'Text send rate (bytes/s)',
+              'Follow Enter/Return code for text send',
               'Automatically start ZMODEM transfers',
             ],
           },
@@ -2335,6 +2346,7 @@ describe.concurrent('shared settings widget', () => {
         '--page=transfer',
         '--transfer-base-path=file:///tmp/elder-terms-transfer',
         '--text-send-bytes-per-second=4096',
+        '--text-send-follow-return-code=disabled',
         '--zmodem-autostart=disabled',
       ],
       async ({ app }) => {
@@ -2352,8 +2364,19 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_transfer_text_send_rate_entry'),
           'entry'
         );
+        const followReturnCode = expectElementKind(
+          await app.getById(
+            'settings_transfer_text_send_follow_return_code_combo'
+          ),
+          'comboBox'
+        );
         expect(await basePath.text()).toBe('file:///tmp/elder-terms-transfer');
         await expectNumericEntryValue(textSendRate, 4096);
+        await expectSelectedComboValue(
+          app,
+          'settings_transfer_text_send_follow_return_code_combo',
+          'Disabled'
+        );
         await expectSelectedComboValue(
           app,
           'settings_transfer_zmodem_autostart_combo',
@@ -2361,10 +2384,12 @@ describe.concurrent('shared settings widget', () => {
         );
         await expectSensitive(basePath);
         await expectSensitive(textSendRate);
+        await expectSensitive(followReturnCode);
         await expectSensitive(zmodemAutostart);
 
         await basePath.setText('file:///tmp/elder-terms-downloads');
         await setNumericEntryValue(textSendRate, 2048);
+        await followReturnCode.selectChildAt(1);
         await zmodemAutostart.selectChildAt(1);
         await expectElementKind(
           await app.getById('settings_apply_button'),
@@ -2376,6 +2401,7 @@ describe.concurrent('shared settings widget', () => {
           'file:///tmp/elder-terms-downloads'
         );
         expect(store.text_send_bytes_per_second).toBe('2048');
+        expect(store.text_send_follow_return_code).toBe('enabled');
         expect(store.zmodem_autostart).toBe('enabled');
       }
     );
@@ -2767,9 +2793,10 @@ describe.concurrent('shared settings widget', () => {
           windowBounds.x + 5,
           windowBounds.y + windowBounds.height - 5
         );
-        const terminalPageCapture = await (
-          await app.getById('settings_terminal_page')
-        ).capture();
+        const terminalPageCapture = await captureWhenVisuallyStable(
+          await app.getById('settings_terminal_page'),
+          'settings-widget-terminal-page'
+        );
         expect(terminalPageCapture.clipped).toBe(false);
         await expectCaptureToMatchFixture(
           terminalPageCapture,
@@ -3366,6 +3393,7 @@ describe.concurrent('shared settings widget', () => {
       '--global=serial.carrier_detect=dsr',
       '--global=transfer.base_path=file:///tmp/global-transfer',
       '--global=transfer.text_send_bytes_per_second=4096',
+      '--global=transfer.text_send_follow_return_code=false',
       '--global=transfer.zmodem_autostart=false',
       '--global=log.enabled=true',
       '--global=log.base_directory=/tmp/global-log',
@@ -3410,6 +3438,7 @@ describe.concurrent('shared settings widget', () => {
         'serial_carrier_detect',
         'transfer_base_path',
         'text_send_bytes_per_second',
+        'text_send_follow_return_code',
         'zmodem_autostart',
         'log_enabled',
         'log_base_directory',
@@ -3523,6 +3552,11 @@ describe.concurrent('shared settings widget', () => {
         app,
         'settings_transfer_text_send_rate_entry',
         '4096 (global default)'
+      );
+      await expectSelectedComboValue(
+        app,
+        'settings_transfer_text_send_follow_return_code_combo',
+        'Disabled (global default)'
       );
       await expectSelectedComboValue(
         app,

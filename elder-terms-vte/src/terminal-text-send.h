@@ -48,6 +48,8 @@ struct TerminalTextSendRequest {
   TerminalTextSendSource source;
   /** Terminal character encoding captured when the operation starts. */
   TerminalTextSettings text_settings;
+  /** True to normalize logical line endings to text_settings.return_code. */
+  bool follow_return_code = true;
   /** Maximum encoded payload rate in bytes per second. */
   std::uint64_t bytes_per_second = 1024;
   /** Receives transfer active/inactive state changes. */

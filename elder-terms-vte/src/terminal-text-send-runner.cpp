@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <gio/gio.h>
 
@@ -43,6 +44,59 @@ struct GBytesDeleter {
 
 template <typename T> using GObjectPtr = std::unique_ptr<T, GObjectDeleter>;
 using GBytesPtr = std::unique_ptr<GBytes, GBytesDeleter>;
+
+struct TextSendLineEndingNormalizer {
+  bool enabled = true;
+  TerminalReturnCode return_code = TerminalReturnCode::automatic;
+  bool pending_cr = false;
+
+  void append_newline(std::vector<unsigned char> *output) const {
+    if (return_code == TerminalReturnCode::lf) {
+      output->push_back('\n');
+      return;
+    }
+    output->push_back('\r');
+    if (return_code == TerminalReturnCode::crlf) {
+      output->push_back('\n');
+    }
+  }
+
+  std::vector<unsigned char>
+  normalize(std::span<const unsigned char> input) {
+    if (!enabled) {
+      return std::vector<unsigned char>(input.begin(), input.end());
+    }
+
+    std::vector<unsigned char> output;
+    output.reserve(input.size());
+    for (unsigned char byte : input) {
+      if (pending_cr) {
+        append_newline(&output);
+        pending_cr = false;
+        if (byte == '\n') {
+          continue;
+        }
+      }
+      if (byte == '\r') {
+        pending_cr = true;
+      } else if (byte == '\n') {
+        append_newline(&output);
+      } else {
+        output.push_back(byte);
+      }
+    }
+    return output;
+  }
+
+  std::vector<unsigned char> finish() {
+    std::vector<unsigned char> output;
+    if (enabled && pending_cr) {
+      append_newline(&output);
+      pending_cr = false;
+    }
+    return output;
+  }
+};
 
 static std::optional<std::uint64_t> source_size(GFileInfo *info) {
   if (info == nullptr ||
@@ -194,6 +248,10 @@ run_terminal_text_send_async(TerminalTextSendRequest request,
   }
 
   TerminalTextEncoder encoder(request.text_settings);
+  TextSendLineEndingNormalizer newline_normalizer{
+      .enabled = request.follow_return_code,
+      .return_code = request.text_settings.return_code,
+  };
   std::array<std::byte, text_source_read_size> buffer{};
   std::uint64_t consumed = 0;
   std::uint64_t next_send_us = 0;
@@ -213,8 +271,10 @@ run_terminal_text_send_async(TerminalTextSendRequest request,
 
     const auto *input =
         reinterpret_cast<const unsigned char *>(buffer.data());
-    TerminalTextConversionResult converted = encoder.encode(
+    std::vector<unsigned char> normalized = newline_normalizer.normalize(
         std::span<const unsigned char>(input, read_size));
+    TerminalTextConversionResult converted = encoder.encode(
+        std::span<const unsigned char>(normalized.data(), normalized.size()));
     publish_replacement_warning(request, &warning_published,
                                 converted.used_replacement);
     co_await send_encoded_bytes(std::move(converted.bytes), request, &transport,
@@ -223,6 +283,16 @@ run_terminal_text_send_async(TerminalTextSendRequest request,
     consumed += read_size;
     publish_progress(request, consumed, total_size);
   }
+
+  std::vector<unsigned char> normalized_tail = newline_normalizer.finish();
+  TerminalTextConversionResult tail = encoder.encode(
+      std::span<const unsigned char>(normalized_tail.data(),
+                                     normalized_tail.size()));
+  publish_replacement_warning(request, &warning_published,
+                              tail.used_replacement);
+  co_await send_encoded_bytes(std::move(tail.bytes), request, &transport,
+                              &next_send_us, &has_send_deadline,
+                              cancellation);
 
   TerminalTextConversionResult finished = encoder.finish();
   publish_replacement_warning(request, &warning_published,

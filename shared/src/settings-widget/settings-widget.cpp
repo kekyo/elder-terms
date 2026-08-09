@@ -168,6 +168,7 @@ struct SettingsWidgetState {
   bool serial_baudrate_valid = true;
   GtkWidget *transfer_base_path_entry = nullptr;
   GtkWidget *transfer_text_send_rate_entry = nullptr;
+  GtkWidget *transfer_text_send_follow_return_code_combo = nullptr;
   GtkWidget *transfer_zmodem_autostart_combo = nullptr;
   bool transfer_text_send_rate_valid = true;
   GtkWidget *log_enabled_combo = nullptr;
@@ -1830,6 +1831,22 @@ static void update_transfer_zmodem_autostart_from_widget(
       SettingValue{choice == zmodem_autostart_enabled});
 }
 
+static void update_transfer_text_send_follow_return_code_from_widget(
+    SettingsWidgetState *state) {
+  const std::string choice = active_combo_id(
+      state->transfer_text_send_follow_return_code_combo, inherit_choice);
+  if (choice == inherit_choice) {
+    clear_explicit_setting_value(
+        &state->draft_store,
+        transfer_text_send_follow_return_code_setting_key());
+    return;
+  }
+  set_explicit_setting_value(
+      &state->draft_store,
+      transfer_text_send_follow_return_code_setting_key(),
+      SettingValue{choice == boolean_enabled});
+}
+
 static void update_log_enabled_from_widget(SettingsWidgetState *state) {
   const std::string choice =
       active_combo_id(state->log_enabled_combo, inherit_choice);
@@ -3159,6 +3176,13 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
   if (state->transfer_zmodem_autostart_combo != nullptr) {
     sync_zmodem_combo(state);
   }
+  if (state->transfer_text_send_follow_return_code_combo != nullptr) {
+    populate_boolean_combo(
+        state->transfer_text_send_follow_return_code_combo,
+        state->draft_store,
+        transfer_text_send_follow_return_code_setting_key(),
+        transfer_text_send_follow_return_code(state->draft_store));
+  }
   if (state->log_enabled_combo != nullptr) {
     populate_boolean_combo(state->log_enabled_combo, state->draft_store,
                            terminal_log_enabled_setting_key(), log.enabled);
@@ -3859,6 +3883,16 @@ static void on_transfer_zmodem_autostart_changed(GtkComboBox *,
     return;
   }
   update_transfer_zmodem_autostart_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_transfer_text_send_follow_return_code_changed(
+    GtkComboBox *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_transfer_text_send_follow_return_code_from_widget(state);
   notify_changed(state);
 }
 
@@ -4669,13 +4703,24 @@ static GtkWidget *create_transfer_page(SettingsWidgetState *state) {
   attach_row(page, 1, transfer_text_send_bytes_per_second_setting_key(),
              state->transfer_text_send_rate_entry);
 
+  const std::string follow_return_code_id =
+      widget_id(state, "transfer_text_send_follow_return_code_combo");
+  state->transfer_text_send_follow_return_code_combo =
+      create_combo_box(follow_return_code_id.c_str());
+  g_signal_connect(
+      state->transfer_text_send_follow_return_code_combo, "changed",
+      G_CALLBACK(on_transfer_text_send_follow_return_code_changed), state);
+  attach_row(page, 2,
+             transfer_text_send_follow_return_code_setting_key(),
+             state->transfer_text_send_follow_return_code_combo);
+
   const std::string zmodem_id =
       widget_id(state, "transfer_zmodem_autostart_combo");
   state->transfer_zmodem_autostart_combo =
       create_combo_box(zmodem_id.c_str());
   g_signal_connect(state->transfer_zmodem_autostart_combo, "changed",
                    G_CALLBACK(on_transfer_zmodem_autostart_changed), state);
-  attach_row(page, 2, transfer_zmodem_autostart_setting_key(),
+  attach_row(page, 3, transfer_zmodem_autostart_setting_key(),
              state->transfer_zmodem_autostart_combo);
 
   return page;

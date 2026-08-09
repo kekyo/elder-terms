@@ -260,9 +260,72 @@ TelnetProtocol::receive(std::span<const unsigned char> bytes) {
 TelnetBytes
 TelnetProtocol::encode_user_input(std::span<const unsigned char> bytes) const {
   TelnetBytes result;
-  result.reserve(bytes.size());
-  for (unsigned char byte : bytes) {
-    append_escaped_byte(&result, byte);
+  result.reserve(bytes.size() + 1);
+  for (std::size_t index = 0; index < bytes.size(); ++index) {
+    const unsigned char byte = bytes[index];
+    if (!local_binary_enabled && byte == telnet_cr) {
+      append_escaped_byte(&result, telnet_cr);
+      if (index + 1 < bytes.size() && bytes[index + 1] == telnet_lf) {
+        append_escaped_byte(&result, telnet_lf);
+        ++index;
+      } else {
+        append_escaped_byte(&result, telnet_nul);
+      }
+    } else {
+      append_escaped_byte(&result, byte);
+    }
+  }
+  return result;
+}
+
+void TelnetProtocol::begin_text_send_encoding() {
+  text_send_pending_cr = false;
+}
+
+TelnetBytes
+TelnetProtocol::encode_text_send(std::span<const unsigned char> bytes) {
+  TelnetBytes result;
+  result.reserve(bytes.size() + 2);
+
+  std::size_t index = 0;
+  if (text_send_pending_cr) {
+    append_escaped_byte(&result, telnet_cr);
+    if (!local_binary_enabled && !bytes.empty() && bytes.front() == telnet_lf) {
+      append_escaped_byte(&result, telnet_lf);
+      index = 1;
+    } else {
+      append_escaped_byte(&result, telnet_nul);
+    }
+    text_send_pending_cr = false;
+  }
+
+  for (; index < bytes.size(); ++index) {
+    const unsigned char byte = bytes[index];
+    if (!local_binary_enabled && byte == telnet_cr) {
+      if (index + 1 == bytes.size()) {
+        text_send_pending_cr = true;
+      } else {
+        append_escaped_byte(&result, telnet_cr);
+        if (bytes[index + 1] == telnet_lf) {
+          append_escaped_byte(&result, telnet_lf);
+          ++index;
+        } else {
+          append_escaped_byte(&result, telnet_nul);
+        }
+      }
+    } else {
+      append_escaped_byte(&result, byte);
+    }
+  }
+  return result;
+}
+
+TelnetBytes TelnetProtocol::finish_text_send_encoding() {
+  TelnetBytes result;
+  if (text_send_pending_cr) {
+    append_escaped_byte(&result, telnet_cr);
+    append_escaped_byte(&result, telnet_nul);
+    text_send_pending_cr = false;
   }
   return result;
 }

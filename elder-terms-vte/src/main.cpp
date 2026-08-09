@@ -967,6 +967,9 @@ static bool start_text_send_request(ApplicationState *state,
   elder_terms::TerminalTextSendRequest request{
       .source = std::move(source),
       .text_settings = profile->text_settings,
+      .follow_return_code =
+          elder_terms::transfer_text_send_follow_return_code(
+              state->settings_store),
       .bytes_per_second = static_cast<std::uint64_t>(
           elder_terms::transfer_text_send_bytes_per_second(
               state->settings_store)),

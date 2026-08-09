@@ -46,6 +46,7 @@ private:
   bool local_binary_requested = false;
   bool remote_binary_requested = false;
   bool binary_rejected = false;
+  bool text_send_pending_cr = false;
   std::string terminal_type;
   bool terminal_type_enabled = false;
   TelnetBytes suboption_bytes;
@@ -107,6 +108,24 @@ public:
    * @returns Bytes with TELNET IAC escaping applied.
    */
   TelnetBytes encode_user_input(std::span<const unsigned char> bytes) const;
+
+  /** Resets the streaming TELNET encoder for a new text send. */
+  void begin_text_send_encoding();
+
+  /**
+   * Encodes one text-send chunk while retaining a trailing NVT CR.
+   *
+   * @param bytes Encoded terminal text payload chunk.
+   * @returns TELNET-framed bytes ready for the network.
+   */
+  TelnetBytes encode_text_send(std::span<const unsigned char> bytes);
+
+  /**
+   * Finishes streaming text-send encoding.
+   *
+   * @returns A trailing NVT CR NUL sequence when a bare CR was pending.
+   */
+  TelnetBytes finish_text_send_encoding();
 
   /**
    * Encodes TELNET BINARY negotiation requests.

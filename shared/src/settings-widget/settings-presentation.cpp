@@ -74,6 +74,8 @@ static constexpr std::array setting_labels{
                       N_("Transfer base directory")},
     SettingLabelEntry{"transfer", "text_send_bytes_per_second",
                       N_("Text send rate (bytes/s)")},
+    SettingLabelEntry{"transfer", "text_send_follow_return_code",
+                      N_("Follow Enter/Return code for text send")},
     SettingLabelEntry{"transfer", "zmodem_autostart",
                       N_("Automatically start ZMODEM transfers")},
     SettingLabelEntry{"log", "enabled", N_("Enable logging")},

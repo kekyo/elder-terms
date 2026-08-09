@@ -119,6 +119,8 @@ using elder_terms::transfer_base_path;
 using elder_terms::transfer_base_path_setting_key;
 using elder_terms::transfer_text_send_bytes_per_second;
 using elder_terms::transfer_text_send_bytes_per_second_setting_key;
+using elder_terms::transfer_text_send_follow_return_code;
+using elder_terms::transfer_text_send_follow_return_code_setting_key;
 using elder_terms::transfer_zmodem_autostart;
 using elder_terms::transfer_zmodem_autostart_setting_key;
 using elder_terms::rebase_settings_store_fallbacks;
@@ -219,6 +221,8 @@ static void test_default_settings() {
               "default transfer base path should be empty");
   expect_true(transfer_text_send_bytes_per_second(store) == 1024,
               "default text send rate should be 1024 bytes per second");
+  expect_true(transfer_text_send_follow_return_code(store),
+              "text send should follow the Return code by default");
   expect_true(!transfer_zmodem_autostart(store),
               "default local transfer ZMODEM auto-start should be disabled");
   const TerminalLogSettings log = terminal_log_settings(store);
@@ -1316,6 +1320,45 @@ static void test_transfer_text_send_bytes_per_second_setting() {
               "out-of-range text send rate should emit a warning");
 }
 
+static void test_transfer_text_send_follow_return_code_setting() {
+  const std::filesystem::path valid =
+      temporary_config_path("text-send-follow-return-code");
+  write_config(valid,
+               "[transfer]\n"
+               "text_send_follow_return_code=false\n");
+
+  const SettingsLoadResult valid_result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{valid},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(valid);
+
+  expect_true(!transfer_text_send_follow_return_code(valid_result.store),
+              "explicit false should preserve text-send line endings");
+
+  const std::filesystem::path invalid =
+      temporary_config_path("invalid-text-send-follow-return-code");
+  write_config(invalid,
+               "[transfer]\n"
+               "text_send_follow_return_code=sometimes\n");
+
+  const SettingsLoadResult invalid_result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{invalid},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(invalid);
+
+  expect_true(transfer_text_send_follow_return_code(invalid_result.store),
+              "invalid text-send Return-code behavior should use true");
+  expect_true(warnings_contain(invalid_result.warnings,
+                               "text_send_follow_return_code"),
+              "invalid text-send Return-code behavior should warn");
+}
+
 static void test_transfer_zmodem_autostart_setting() {
   SettingsStore local_store =
       create_default_settings(default_terminal_display_settings(1.0),
@@ -1917,6 +1960,12 @@ static void test_public_setting_keys() {
   expect_true(transfer_text_send_bytes_per_second_setting_key().name ==
                   "text_send_bytes_per_second",
               "text send rate key should use the requested name");
+  expect_true(
+      transfer_text_send_follow_return_code_setting_key().section ==
+          "transfer" &&
+          transfer_text_send_follow_return_code_setting_key().name ==
+              "text_send_follow_return_code",
+      "text send Return-code behavior key should use the requested name");
   expect_true(transfer_zmodem_autostart_setting_key().section == "transfer",
               "transfer zmodem_autostart key should use the transfer section");
   expect_true(transfer_zmodem_autostart_setting_key().name ==
@@ -2051,6 +2100,9 @@ static void test_save_settings_omits_default_values() {
       elder_terms::SettingValue{std::string("file:///tmp/downloads")});
   set_setting_value(&store, transfer_text_send_bytes_per_second_setting_key(),
                     elder_terms::SettingValue{gint64{2048}});
+  set_setting_value(
+      &store, transfer_text_send_follow_return_code_setting_key(),
+      elder_terms::SettingValue{false});
 
   const SettingsSaveResult result = save_settings(store, path);
   expect_true(result.saved, "settings save should succeed");
@@ -2083,6 +2135,9 @@ static void test_save_settings_omits_default_values() {
   expect_true(content.find("text_send_bytes_per_second=2048") !=
                   std::string::npos,
               "saved settings should include non-default text send rate");
+  expect_true(content.find("text_send_follow_return_code=false") !=
+                  std::string::npos,
+              "saved settings should include text-send Return-code behavior");
   expect_true(content.find("height=") == std::string::npos,
               "saved settings should omit default terminal height");
   expect_true(content.find("zoom=") == std::string::npos,
@@ -3258,6 +3313,7 @@ int main() {
     elder_terms_settings_test::test_serial_ignore_carrier_profile();
     elder_terms_settings_test::test_transfer_base_path_setting();
     elder_terms_settings_test::test_transfer_text_send_bytes_per_second_setting();
+    elder_terms_settings_test::test_transfer_text_send_follow_return_code_setting();
     elder_terms_settings_test::test_transfer_zmodem_autostart_setting();
     elder_terms_settings_test::test_invalid_values_fall_back_to_defaults();
     elder_terms_settings_test::test_invalid_terminal_text_values_fall_back_to_type_defaults();

@@ -1,6 +1,7 @@
 #include <unistd.h>
 
 #include <iostream>
+#include <string>
 
 #include <glib-unix.h>
 #include <gtk/gtk.h>
@@ -17,15 +18,16 @@ static gboolean on_stdin_ready(gint fd, GIOCondition condition,
 
 int main(int argc, char **argv) {
   gtk_init(&argc, &argv);
-  if (argc != 2) {
-    std::cerr << "Usage: clipboard-write-helper TEXT\n";
+  const bool use_primary = argc == 3 && std::string(argv[1]) == "--primary";
+  if (argc != 2 && !use_primary) {
+    std::cerr << "Usage: clipboard-write-helper [--primary] TEXT\n";
     return 2;
   }
 
   GMainLoop *loop = g_main_loop_new(nullptr, FALSE);
-  GtkClipboard *clipboard =
-      gtk_clipboard_get_default(gdk_display_get_default());
-  gtk_clipboard_set_text(clipboard, argv[1], -1);
+  GtkClipboard *clipboard = gtk_clipboard_get(
+      use_primary ? GDK_SELECTION_PRIMARY : GDK_SELECTION_CLIPBOARD);
+  gtk_clipboard_set_text(clipboard, argv[use_primary ? 2 : 1], -1);
   g_unix_fd_add(STDIN_FILENO,
                 static_cast<GIOCondition>(G_IO_IN | G_IO_HUP | G_IO_ERR),
                 on_stdin_ready, loop);

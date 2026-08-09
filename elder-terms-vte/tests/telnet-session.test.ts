@@ -690,7 +690,7 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
         const sourcePath = join(directory, 'send.txt');
         const configPath = join(directory, 'telnet.ini');
         const logPath = join(directory, 'logs', 'cooked.txt');
-        await writeFile(sourcePath, 'AÿB0123456789', 'utf8');
+        await writeFile(sourcePath, 'AÿB\r\nC\rD\n', 'utf8');
         await writeFile(
           configPath,
           `[general]\ntype=telnet\n\n[terminal]\nauto_close=false\nencoding=ISO-8859-1\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
@@ -728,8 +728,8 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
                 hasSubsequence(
                   sent,
                   [
-                    0x41, 0xff, 0xff, 0x42, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35,
-                    0x36, 0x37, 0x38, 0x39,
+                    0x41, 0xff, 0xff, 0x42, 0x0d, 0x0a, 0x43, 0x0d, 0x0a, 0x44,
+                    0x0d, 0x0a,
                   ]
                 )
               ).toBe(true);
