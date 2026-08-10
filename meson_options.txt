@@ -4,3 +4,10 @@ option(
   value: '/etc/xdg/autostart',
   description: 'Installation directory for system-wide XDG autostart entries',
 )
+
+option(
+  'build_tests',
+  type: 'boolean',
+  value: true,
+  description: 'Build test executables and fixtures',
+)

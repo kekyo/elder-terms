@@ -5,10 +5,10 @@ libudev_dep = dependency('libudev')
 libssh_dep = dependency('libssh')
 vte_dep = dependency('vte-2.91')
 
-gestament_config = find_program('npx')
+gestament_config = find_program('gestament-config')
 gestament_include_dir = run_command(
   gestament_config,
-  ['gestament-config', '--includedir'],
+  ['--includedir'],
   check: true,
 ).stdout().strip()
 make_program = find_program('make')
@@ -100,6 +100,9 @@ executable(
   link_with: [
     libxyzm_async_static_library,
   ],
+  install: true,
+  install_dir: elder_terms_private_install_dir / 'elder-terms-vte',
+  install_rpath: elder_terms_private_install_rpath,
 )
 
 executable(
@@ -130,8 +133,12 @@ executable(
     liburing_dep,
     libssh_dep,
   ],
+  install: true,
+  install_dir: elder_terms_private_install_dir / 'elder-terms-vte',
+  install_rpath: elder_terms_private_install_rpath,
 )
 
+if get_option('build_tests')
 executable(
   'clipboard-read-helper',
   'tests/cpp/clipboard-read-helper.cpp',
@@ -480,11 +487,33 @@ executable(
     libxyzm_static_library,
   ],
 )
+endif
 
 configure_file(
   input: 'src/main-window.ui',
   output: 'main-window.ui',
   copy: true,
+)
+
+install_data(
+  [
+    'src/main-window.ui',
+    'src/indicators/green-on.png',
+    'src/indicators/green-off.png',
+  ],
+  install_dir: elder_terms_private_install_dir / 'elder-terms-vte',
+)
+
+install_symlink(
+  'elder-terms-vte',
+  pointing_to: '..' / elder_terms_private_install_dir / 'elder-terms-vte/elder-terms-vte',
+  install_dir: get_option('bindir'),
+)
+
+install_symlink(
+  'elder-terms-sftp',
+  pointing_to: '..' / elder_terms_private_install_dir / 'elder-terms-vte/elder-terms-sftp',
+  install_dir: get_option('bindir'),
 )
 
 configure_file(

@@ -6,10 +6,10 @@ elder_terms_launcher_x11_dep = dependency('x11')
 elder_terms_launcher_cardio_include_dir = (
   meson.project_source_root() / 'deps/cardio/include'
 )
-elder_terms_launcher_gestament_config = find_program('npx')
+elder_terms_launcher_gestament_config = find_program('gestament-config')
 elder_terms_launcher_gestament_include_dir = run_command(
   elder_terms_launcher_gestament_config,
-  ['gestament-config', '--includedir'],
+  ['--includedir'],
   check: true,
 ).stdout().strip()
 
@@ -51,8 +51,12 @@ elder_terms_launcher = executable(
     elder_terms_launcher_gtk_dep,
     elder_terms_launcher_x11_dep,
   ],
+  install: true,
+  install_dir: elder_terms_private_install_dir / 'launcher',
+  install_rpath: elder_terms_private_install_rpath,
 )
 
+if get_option('build_tests')
 executable(
   'x11-map-recorder',
   'tests/x11-map-recorder.cpp',
@@ -126,6 +130,7 @@ test(
   'hotkey-backend-test',
   elder_terms_hotkey_backend_test,
 )
+endif
 
 configure_file(
   input: 'src/main-window.ui',
@@ -134,8 +139,24 @@ configure_file(
 )
 
 install_data(
+  'src/main-window.ui',
+  install_dir: elder_terms_private_install_dir / 'launcher',
+)
+
+install_symlink(
+  'elder-terms',
+  pointing_to: '..' / elder_terms_private_install_dir / 'launcher/elder-terms',
+  install_dir: get_option('bindir'),
+)
+
+install_data(
   'packaging/autostart/net.kekyo.elder-terms.desktop',
   install_dir: get_option('autostartdir'),
+)
+
+install_data(
+  'packaging/applications/net.kekyo.elder-terms.desktop',
+  install_dir: get_option('datadir') / 'applications',
 )
 
 foreach icon_size : ['16', '22', '24', '32', '48', '64', '128', '256']

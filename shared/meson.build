@@ -61,6 +61,8 @@ elder_terms_library = shared_library(
     '-Wl,--version-script=' + elder_terms_symbol_map,
   ],
   link_depends: elder_terms_symbol_map,
+  install: true,
+  install_dir: elder_terms_private_install_dir,
 )
 
 elder_terms_dep = declare_dependency(
@@ -74,6 +76,7 @@ elder_terms_dep = declare_dependency(
   ],
 )
 
+if get_option('build_tests')
 elder_terms_shared_test = executable(
   'elder-terms-shared-test',
   'tests/settings-test.cpp',
@@ -109,3 +112,4 @@ executable(
     elder_terms_dep,
   ],
 )
+endif
