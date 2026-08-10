@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.5
+Type=Application
+Name=elder-terms
+Comment=Keep the elder-terms launcher and hotkeys available
+Comment[ja]=elder-termsのランチャーとホットキーを利用可能にします
+TryExec=elder-terms
+Exec=elder-terms
+Icon=elder-terms
+Terminal=false
+NoDisplay=true
+StartupNotify=false

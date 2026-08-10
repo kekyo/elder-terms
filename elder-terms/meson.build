@@ -133,6 +133,11 @@ configure_file(
   copy: true,
 )
 
+install_data(
+  'packaging/autostart/net.kekyo.elder-terms.desktop',
+  install_dir: get_option('autostartdir'),
+)
+
 foreach icon_size : ['16', '22', '24', '32', '48', '64', '128', '256']
   install_data(
     '../data/icons/hicolor/' + icon_size + 'x' + icon_size + '/apps/elder-terms.png',
