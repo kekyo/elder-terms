@@ -460,6 +460,45 @@ npm run dev
 npm run test
 ```
 
+## debパッケージの生成
+
+パッケージ生成スクリプトは、ランチャー、ターミナル、SFTPの各実行ファイル、専用共有ライブラリとUIデータ、翻訳カタログ、デスクトップエントリ、XDG自動起動エントリ、アイコン、文書、ライセンス表記を、一つの`elder-terms` debパッケージにまとめます。
+
+対応するパッケージの組み合わせは次の通りです。
+
+| ディストリビューション | リリース | アーキテクチャ |
+| --- | --- | --- |
+| Debian | bookworm | amd64, i386, arm64, armhf |
+| Debian | trixie | amd64, i386, arm64, armhf, riscv64 |
+| Ubuntu | 24.04 | amd64, arm64 |
+| Ubuntu | 26.04 | amd64, arm64 |
+
+ホストにはPodman、非ネイティブターゲット用のbinfmt/QEMU、`dpkg-deb`、`readelf`、Node.js、`npx`が必要です。リポジトリのルートで、再利用可能な前提イメージを一度生成してから、全組み合わせのパッケージを生成します。
+
+```sh
+./prereq.sh
+./build_package_all.sh
+```
+
+前提パッケージの構成を変更した場合は、イメージを再生成して下さい。
+
+```sh
+./prereq.sh --force
+```
+
+どちらのコマンドも、`--distro`、`--release`、`--arch`、`--jobs`による絞り込みに対応します。例えば、ホストと同じUbuntu 24.04 amd64向けだけを生成する場合は、次のように実行します。
+
+```sh
+./prereq.sh \
+  --distro ubuntu --release 24.04 --arch amd64
+./build_package.sh \
+  --target deb --distro ubuntu --release 24.04 --arch amd64
+```
+
+アーキテクチャは`amd64`、`i386`、`armhf`、`aarch64`などの別名も使用出来ます。`noble`と`resolute`は、それぞれUbuntu 24.04と26.04として扱います。デバッグ情報を残す場合は`--debug`を指定して下さい。`--version`を指定しない場合は、`npx screw-up format -e '{version}' -f`でバージョンを決定します。
+
+生成物は`artifacts/deb/`に保存されます。ファイル名は、例えば`elder-terms-VERSION-ubuntu-24.04-amd64.deb`です。各パッケージについて、controlメタデータ、実行時依存、インストール配置、シンボリックリンクの参照先、ELFアーキテクチャを検査します。その後、対象と同じディストリビューションとアーキテクチャの新しいコンテナへ実際にインストールし、必須ファイルと動的ライブラリの解決を検証します。
+
 ## License
 
 Under MIT.
