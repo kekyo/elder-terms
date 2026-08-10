@@ -26,6 +26,8 @@ const containerScript = join(
 const prerequisiteScript = join(projectRoot, 'prereq.sh');
 const allPackagesScript = join(projectRoot, 'build_package_all.sh');
 const dpkgDeb = '/usr/bin/dpkg-deb';
+const debianTrixieI386PackageTestEnabled =
+  process.env.ELDER_TERMS_TEST_DEBIAN_TRIXIE_I386 === '1';
 
 const run = (
   command: string,
@@ -35,6 +37,7 @@ const run = (
   spawnSync(command, commandArguments, {
     encoding: 'utf8',
     env: environment,
+    maxBuffer: 64 * 1024 * 1024,
   });
 
 const runSourced = (
@@ -271,6 +274,7 @@ exit 91
     expect(invocation).toContain('--libdir=lib');
     expect(invocation).toContain('-Dautostartdir=/etc/xdg/autostart');
     expect(invocation).toContain('-Dbuild_tests=false');
+    expect(invocation).toContain('-Dwerror=false');
     expect(invocation).toContain('--buildtype=release');
   });
 
@@ -607,4 +611,36 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       ].join('\n')
     );
   });
+
+  it.runIf(debianTrixieI386PackageTestEnabled)(
+    'builds the Debian trixie i386 release package',
+    () => {
+      const prerequisiteImage = run('podman', [
+        'image',
+        'exists',
+        'localhost/elder-terms-pack-deb-debian-trixie-i686:latest',
+      ]);
+      expectSuccess(
+        prerequisiteImage,
+        'Debian trixie i386 prerequisite image is unavailable'
+      );
+
+      const result = run(packageScript, [
+        '--version',
+        '1.2.3-i386-regression',
+        '--target',
+        'deb',
+        '--distro',
+        'debian',
+        '--release',
+        'trixie',
+        '--arch',
+        'i386',
+        '--jobs',
+        '1',
+      ]);
+      expectSuccess(result, 'Debian trixie i386 package build failed');
+    },
+    1_200_000
+  );
 });

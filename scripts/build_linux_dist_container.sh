@@ -206,7 +206,8 @@ meson setup "$build_dir" . \
 	--prefix=/usr \
 	--libdir=lib \
 	-Dautostartdir=/etc/xdg/autostart \
-	-Dbuild_tests=false
+	-Dbuild_tests=false \
+	-Dwerror=false
 meson compile -C "$build_dir" -j "$ELDER_TERMS_MAKE_JOBS"
 mkdir -p "$stage_dir"
 if [ "$ELDER_TERMS_BUILD_TYPE" = 'release' ]; then
