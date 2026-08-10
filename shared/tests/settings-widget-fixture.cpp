@@ -108,6 +108,10 @@ static FixtureOptions parse_options(int argc, char **argv) {
     } else if (starts_with(argument, "--height=")) {
       append_connection_assignment(
           &options, "terminal", "height", option_value(argument, "--height="));
+    } else if (starts_with(argument, "--scrollback-lines=")) {
+      append_connection_assignment(
+          &options, "terminal", "scrollback_lines",
+          option_value(argument, "--scrollback-lines="));
     } else if (starts_with(argument, "--zoom=")) {
       append_connection_assignment(
           &options, "terminal", "zoom", option_value(argument, "--zoom="));
@@ -319,6 +323,7 @@ static elder_terms::SettingsStore create_default_store() {
           elder_terms::TerminalDisplaySettings{
               .width = 80,
               .height = 24,
+              .scrollback_lines = 10000,
               .zoom = 1.0,
           },
           "fixture");
@@ -624,6 +629,7 @@ static void print_store(const char *prefix,
                    elder_terms::general_connection_kind(store))
             << " name=" << elder_terms::general_connection_name(store)
             << " width=" << display.width << " height=" << display.height
+            << " scrollback_lines=" << display.scrollback_lines
             << " zoom=" << display.zoom
             << " font_primary_family="
             << font_families.primary_family.value_or("")
@@ -718,6 +724,9 @@ static void print_store(const char *prefix,
                          elder_terms::terminal_width_setting_key());
   print_setting_metadata(store, "height",
                          elder_terms::terminal_height_setting_key());
+  print_setting_metadata(
+      store, "scrollback_lines",
+      elder_terms::terminal_scrollback_lines_setting_key());
   print_setting_metadata(store, "zoom",
                          elder_terms::terminal_zoom_setting_key());
   print_setting_metadata(

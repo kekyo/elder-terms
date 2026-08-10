@@ -39,6 +39,8 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"terminal", "return_code", N_("Enter/Return code")},
     SettingLabelEntry{"terminal", "width", N_("Columns")},
     SettingLabelEntry{"terminal", "height", N_("Rows")},
+    SettingLabelEntry{"terminal", "scrollback_lines",
+                      N_("Scrollback lines")},
     SettingLabelEntry{"terminal", "zoom", N_("Zoom factor")},
     SettingLabelEntry{"terminal", "font_primary_family",
                       N_("Primary font family")},

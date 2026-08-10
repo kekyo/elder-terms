@@ -12,10 +12,14 @@ namespace elder_terms {
 
 static constexpr glong default_terminal_width = 80;
 static constexpr glong default_terminal_height = 24;
+static constexpr glong default_terminal_scrollback_lines = 10000;
+static constexpr gint64 minimum_terminal_scrollback_lines = 1000;
+static constexpr gint64 maximum_terminal_scrollback_lines = 100000;
 static constexpr bool default_terminal_auto_close = true;
 static constexpr char terminal_section[] = "terminal";
 static constexpr char terminal_width_key[] = "width";
 static constexpr char terminal_height_key[] = "height";
+static constexpr char terminal_scrollback_lines_key[] = "scrollback_lines";
 static constexpr char terminal_zoom_key[] = "zoom";
 static constexpr char terminal_font_primary_family_key[] =
     "font_primary_family";
@@ -80,6 +84,17 @@ static bool validate_zoom(const SettingValue &value, std::string *reason) {
   const auto *number = std::get_if<gdouble>(&value);
   if (number == nullptr || *number <= 0.0 || !std::isfinite(*number)) {
     *reason = "must be a positive finite number";
+    return false;
+  }
+  return true;
+}
+
+static bool validate_scrollback_lines(const SettingValue &value,
+                                      std::string *reason) {
+  const auto *integer = std::get_if<gint64>(&value);
+  if (integer == nullptr || *integer < minimum_terminal_scrollback_lines ||
+      *integer > maximum_terminal_scrollback_lines) {
+    *reason = "must be an integer between 1000 and 100000";
     return false;
   }
   return true;
@@ -171,6 +186,7 @@ TerminalDisplaySettings default_terminal_display_settings(gdouble default_zoom) 
   return {
       .width = default_terminal_width,
       .height = default_terminal_height,
+      .scrollback_lines = default_terminal_scrollback_lines,
       .zoom = default_zoom,
   };
 }
@@ -181,6 +197,10 @@ SettingKey terminal_width_setting_key() {
 
 SettingKey terminal_height_setting_key() {
   return terminal_key(terminal_height_key);
+}
+
+SettingKey terminal_scrollback_lines_setting_key() {
+  return terminal_key(terminal_scrollback_lines_key);
 }
 
 SettingKey terminal_zoom_setting_key() {
@@ -281,6 +301,13 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .validate = validate_positive_integer,
       },
       {
+          .key = terminal_scrollback_lines_setting_key(),
+          .default_value =
+              SettingValue{static_cast<gint64>(
+                  terminal_defaults.scrollback_lines)},
+          .validate = validate_scrollback_lines,
+      },
+      {
           .key = terminal_zoom_setting_key(),
           .default_value = SettingValue{terminal_defaults.zoom},
           .validate = validate_zoom,
@@ -350,6 +377,9 @@ TerminalDisplaySettings terminal_display_settings(const SettingsStore &store) {
           store, terminal_width_setting_key(), default_terminal_width)),
       .height = static_cast<glong>(setting_integer_value_or_default(
           store, terminal_height_setting_key(), default_terminal_height)),
+      .scrollback_lines = static_cast<glong>(setting_integer_value_or_default(
+          store, terminal_scrollback_lines_setting_key(),
+          default_terminal_scrollback_lines)),
       .zoom = setting_double_value_or_default(
           store, terminal_zoom_setting_key(), gdouble{1.0}),
   };

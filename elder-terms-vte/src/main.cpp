@@ -587,6 +587,11 @@ static void update_runtime_terminal_display_settings(
       elder_terms::SettingValue{
           static_cast<gint64>(terminal_display_settings.height)});
   elder_terms::set_setting_value(
+      &state->settings_store,
+      elder_terms::terminal_scrollback_lines_setting_key(),
+      elder_terms::SettingValue{
+          static_cast<gint64>(terminal_display_settings.scrollback_lines)});
+  elder_terms::set_setting_value(
       &state->settings_store, elder_terms::terminal_zoom_setting_key(),
       elder_terms::SettingValue{terminal_display_settings.zoom});
 
@@ -1453,6 +1458,8 @@ int main(int argc, char **argv) {
 
   vte_terminal_set_font_scale(
     vte_terminal, terminal_display_settings.zoom);
+  vte_terminal_set_scrollback_lines(
+    vte_terminal, terminal_display_settings.scrollback_lines);
   vte_terminal_set_size(
     vte_terminal, terminal_display_settings.width, terminal_display_settings.height);
 

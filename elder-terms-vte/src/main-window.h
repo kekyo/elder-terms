@@ -112,6 +112,8 @@ struct MainWindow {
   GtkWidget *status_label = nullptr;
   /** Hidden fixture-only terminal grid-size label. */
   GtkWidget *fixture_grid_size_label = nullptr;
+  /** Hidden fixture-only VTE scrollback-size label. */
+  GtkWidget *fixture_scrollback_lines_label = nullptr;
   /** Status bar activity indicator container. */
   GtkWidget *activity_indicator_bar = nullptr;
   /** Open runtime settings dialog receiving connection backgrounds. */

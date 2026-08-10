@@ -18,6 +18,8 @@ struct TerminalDisplaySettings {
   glong width;
   /** Initial terminal rows. */
   glong height;
+  /** Maximum normal-screen scrollback history in lines. */
+  glong scrollback_lines;
   /** Initial VTE font scale. */
   gdouble zoom;
 };
@@ -69,6 +71,13 @@ ELDER_TERMS_API SettingKey terminal_width_setting_key();
  * @returns Setting key for terminal rows.
  */
 ELDER_TERMS_API SettingKey terminal_height_setting_key();
+
+/**
+ * Returns the setting key for [terminal] scrollback_lines.
+ *
+ * @returns Setting key for the VTE scrollback buffer size.
+ */
+ELDER_TERMS_API SettingKey terminal_scrollback_lines_setting_key();
 
 /**
  * Returns the setting key for [terminal] zoom.

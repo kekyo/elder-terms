@@ -56,6 +56,7 @@ interface AppliedStore {
   readonly background: string;
   readonly cursor_key_mode: string;
   readonly return_code: string;
+  readonly scrollback_lines: string;
   readonly encoding: string;
   readonly exterior_background: string;
   readonly height: string;
@@ -868,6 +869,7 @@ describe.concurrent('shared settings widget', () => {
               'Cursor key mode',
               'Columns',
               'Rows',
+              'Scrollback lines',
               'Zoom factor',
               'Primary font family',
               'Secondary font family',
@@ -982,6 +984,7 @@ describe.concurrent('shared settings widget', () => {
               'Enter/Returnコード',
               '列数',
               '行数',
+              'スクロールバッファ行数',
               '拡大率',
               'プライマリフォントファミリー',
               'セカンダリフォントファミリー',
@@ -1331,6 +1334,11 @@ describe.concurrent('shared settings widget', () => {
             app,
             'settings_terminal_width_entry',
             '80 (built-in default)'
+          );
+          await waitForEntryPlaceholder(
+            app,
+            'settings_terminal_scrollback_lines_entry',
+            '10000 (built-in default)'
           );
           expect(
             await expectElementKind(
@@ -2763,6 +2771,7 @@ describe.concurrent('shared settings widget', () => {
         '--page=terminal',
         '--width=88',
         '--height=31',
+        '--scrollback-lines=20000',
         '--zoom=1.25',
         '--auto-close=false',
         '--send-break-key=shift+F11',
@@ -2780,6 +2789,10 @@ describe.concurrent('shared settings widget', () => {
         );
         const zoom = expectElementKind(
           await app.getById('settings_terminal_zoom_entry'),
+          'entry'
+        );
+        const scrollbackLines = expectElementKind(
+          await app.getById('settings_terminal_scrollback_lines_entry'),
           'entry'
         );
         const autoClose = expectElementKind(
@@ -2800,6 +2813,7 @@ describe.concurrent('shared settings widget', () => {
         );
         await expectNumericEntryValue(width, 88);
         await expectNumericEntryValue(height, 31);
+        await expectNumericEntryValue(scrollbackLines, 20000);
         await expectNumericEntryValue(zoom, 1.25);
         await expectSelectedComboValue(
           app,
@@ -2864,6 +2878,7 @@ describe.concurrent('shared settings widget', () => {
 
         await setNumericEntryValue(width, 81);
         await setNumericEntryValue(height, 25);
+        await setNumericEntryValue(scrollbackLines, 50000);
         await setNumericEntryValue(zoom, 1.1);
         await autoClose.selectChildAt(1);
         await showTerminalKeyBindings(app);
@@ -2872,7 +2887,7 @@ describe.concurrent('shared settings widget', () => {
         await clearKeyBinding(
           app,
           zoomOutKey,
-          width,
+          zoomInKey,
           'settings_terminal_zoom_out_key_reset_button'
         );
         await waitForEntryPlaceholder(
@@ -2888,6 +2903,7 @@ describe.concurrent('shared settings widget', () => {
         const store = await waitForAppliedStore(app);
         expect(store.width).toBe('81');
         expect(store.height).toBe('25');
+        expect(store.scrollback_lines).toBe('50000');
         expect(Number(store.zoom)).toBeCloseTo(1.1);
         expect(store.auto_close).toBe('true');
         expect(store.zoom_in_key).toBe('alt+Up');
@@ -3244,18 +3260,68 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
+  it('accepts only terminal scrollback sizes from 1000 through 100000', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal', '--save'],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        const scrollbackLines = expectElementKind(
+          await app.getById('settings_terminal_scrollback_lines_entry'),
+          'entry'
+        );
+        const apply = await app.getById('settings_apply_button');
+        const save = await app.getById('settings_save_button');
+
+        await waitForEntryPlaceholder(
+          app,
+          'settings_terminal_scrollback_lines_entry',
+          '10000 (built-in default)'
+        );
+        await scrollbackLines.setText('999');
+        await waitForEntryIconTooltip(
+          app,
+          'settings_terminal_scrollback_lines_entry',
+          'Value must be between 1000 and 100000'
+        );
+        await expectInsensitive(apply);
+        await expectInsensitive(save);
+
+        await scrollbackLines.setText('100001');
+        await waitForEntryIconTooltip(
+          app,
+          'settings_terminal_scrollback_lines_entry',
+          'Value must be between 1000 and 100000'
+        );
+        await expectInsensitive(apply);
+        await expectInsensitive(save);
+
+        await scrollbackLines.setText('100000');
+        await waitForResult(async () => {
+          await expectSensitive(apply);
+          await expectSensitive(save);
+        });
+        await expectElementKind(apply, 'button').click();
+        expect((await waitForAppliedStore(app)).scrollback_lines).toBe(
+          '100000'
+        );
+      }
+    );
+  });
+
   it('captures terminal key bindings with live modifier state', async (context) => {
     await runSharedGtkTest(
       context,
       ['--page=terminal', '--save'],
       async ({ app }) => {
         await showTerminalPage(app);
+        await showTerminalKeyBindings(app);
         const zoomInKey = expectElementKind(
           await app.getById('settings_terminal_zoom_in_key_entry'),
           'entry'
         );
-        const width = expectElementKind(
-          await app.getById('settings_terminal_width_entry'),
+        const zoomOutKey = expectElementKind(
+          await app.getById('settings_terminal_zoom_out_key_entry'),
           'entry'
         );
 
@@ -3268,7 +3334,7 @@ describe.concurrent('shared settings widget', () => {
         expect((await zoomInKey.info()).states).not.toContain('editable');
         await clickWidget(app, zoomInKey);
         await expectEntryText(zoomInKey, '');
-        await clickWidget(app, width);
+        await clickWidget(app, zoomOutKey);
         await expectEntryText(zoomInKey, '');
         expect((await app.output()).stdout).not.toContain('CHANGED');
 
@@ -3319,7 +3385,7 @@ describe.concurrent('shared settings widget', () => {
         await app.input.setModifier('control', true);
         try {
           await expectEntryText(zoomInKey, 'ctrl');
-          await clickWidget(app, width);
+          await clickWidget(app, zoomOutKey);
           await expectEntryText(zoomInKey, 'BackSpace');
         } finally {
           await app.input.setModifier('control', false);
@@ -3328,7 +3394,7 @@ describe.concurrent('shared settings widget', () => {
         await clearKeyBinding(
           app,
           zoomInKey,
-          width,
+          zoomOutKey,
           'settings_terminal_zoom_in_key_reset_button'
         );
         await expectEntryText(zoomInKey, '');
@@ -3415,6 +3481,7 @@ describe.concurrent('shared settings widget', () => {
       '--global=general.type=serial',
       '--global=terminal.width=96',
       '--global=terminal.height=32',
+      '--global=terminal.scrollback_lines=20000',
       '--global=terminal.zoom=1.25',
       '--global=terminal.auto_close=true',
       '--global=terminal.encoding=CP932',
@@ -3461,6 +3528,7 @@ describe.concurrent('shared settings widget', () => {
         'type',
         'width',
         'height',
+        'scrollback_lines',
         'zoom',
         'auto_close',
         'encoding',
@@ -3510,6 +3578,11 @@ describe.concurrent('shared settings widget', () => {
         app,
         'settings_terminal_height_entry',
         '32 (global default)'
+      );
+      await expectInheritedEntry(
+        app,
+        'settings_terminal_scrollback_lines_entry',
+        '20000 (global default)'
       );
       await expectInheritedEntry(
         app,
@@ -3848,6 +3921,7 @@ describe.concurrent('shared settings widget', () => {
 
         await encoding.setText('CP932');
         await autoClose.selectChildAt(1);
+        await showTerminalKeyBindings(app);
         await captureKeyBinding(app, zoomIn, ['alt'], 'F1');
         await selectSettingsTab(app, 'TELNET');
         const terminalType = await expectInheritedEntry(

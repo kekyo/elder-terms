@@ -72,6 +72,8 @@ static constexpr char ui_language_portuguese[] = "pt";
 static constexpr char ui_language_russian[] = "ru";
 static constexpr char ui_language_chinese[] = "zh";
 static constexpr char default_font_button_family[] = "Monospace";
+static constexpr gint64 minimum_terminal_scrollback_lines = 1000;
+static constexpr gint64 maximum_terminal_scrollback_lines = 100000;
 
 struct ConnectionSettingsPage {
   std::vector<const char *> connection_types;
@@ -104,6 +106,7 @@ struct SettingsWidgetState {
   GtkWidget *general_background_button = nullptr;
   GtkWidget *terminal_width_entry = nullptr;
   GtkWidget *terminal_height_entry = nullptr;
+  GtkWidget *terminal_scrollback_lines_entry = nullptr;
   GtkWidget *terminal_zoom_entry = nullptr;
   GtkWidget *terminal_font_primary_mode_combo = nullptr;
   GtkWidget *terminal_font_primary_button = nullptr;
@@ -117,6 +120,7 @@ struct SettingsWidgetState {
   GtkWidget *terminal_return_code_combo = nullptr;
   bool terminal_width_valid = true;
   bool terminal_height_valid = true;
+  bool terminal_scrollback_lines_valid = true;
   bool terminal_zoom_valid = true;
   bool terminal_encoding_valid = true;
   KeyBindingInputWidgetState *terminal_zoom_in_key_input = nullptr;
@@ -1016,6 +1020,40 @@ static void update_terminal_height_from_widget(SettingsWidgetState *state) {
   }
 }
 
+static void
+update_terminal_scrollback_lines_from_widget(SettingsWidgetState *state) {
+  const char *text = gtk_entry_get_text(
+      GTK_ENTRY(state->terminal_scrollback_lines_entry));
+  if (trim_ascii_whitespace(text == nullptr ? "" : text).empty()) {
+    clear_explicit_setting_value(
+        &state->draft_store, terminal_scrollback_lines_setting_key());
+    state->terminal_scrollback_lines_valid = true;
+    set_entry_validation(state->terminal_scrollback_lines_entry, true, {});
+    sync_cleared_entry(
+        state, state->terminal_scrollback_lines_entry,
+        terminal_scrollback_lines_setting_key(),
+        std::to_string(setting_integer_value_or_default(
+            state->draft_store, terminal_scrollback_lines_setting_key(),
+            10000)));
+    return;
+  }
+  gtk_entry_set_placeholder_text(
+      GTK_ENTRY(state->terminal_scrollback_lines_entry), nullptr);
+  gint64 value = 0;
+  std::string reason;
+  state->terminal_scrollback_lines_valid = parse_integer_entry(
+      state->terminal_scrollback_lines_entry,
+      minimum_terminal_scrollback_lines, maximum_terminal_scrollback_lines,
+      &value, &reason);
+  set_entry_validation(state->terminal_scrollback_lines_entry,
+                       state->terminal_scrollback_lines_valid, reason);
+  if (state->terminal_scrollback_lines_valid) {
+    set_explicit_setting_value(
+        &state->draft_store, terminal_scrollback_lines_setting_key(),
+        SettingValue{value});
+  }
+}
+
 static void update_terminal_zoom_from_widget(SettingsWidgetState *state) {
   const char *text =
       gtk_entry_get_text(GTK_ENTRY(state->terminal_zoom_entry));
@@ -1424,6 +1462,7 @@ static bool macro_rules_are_valid(const SettingsWidgetState *state) {
 
 static bool settings_inputs_valid(const SettingsWidgetState *state) {
   return state->terminal_width_valid && state->terminal_height_valid &&
+         state->terminal_scrollback_lines_valid &&
          state->terminal_zoom_valid && state->terminal_encoding_valid &&
          state->telnet_port_valid && state->ssh_port_valid &&
          state->serial_baudrate_valid &&
@@ -3015,6 +3054,14 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
     state->terminal_height_valid = true;
     set_entry_validation(state->terminal_height_entry, true, {});
   }
+  if (state->terminal_scrollback_lines_entry != nullptr) {
+    sync_inheritable_entry(
+        state->terminal_scrollback_lines_entry, state->draft_store,
+        terminal_scrollback_lines_setting_key(),
+        std::to_string(display.scrollback_lines));
+    state->terminal_scrollback_lines_valid = true;
+    set_entry_validation(state->terminal_scrollback_lines_entry, true, {});
+  }
   if (state->terminal_zoom_entry != nullptr) {
     sync_inheritable_entry(state->terminal_zoom_entry, state->draft_store,
                            terminal_zoom_setting_key(),
@@ -3438,6 +3485,17 @@ static void on_terminal_height_changed(GtkEditable *, gpointer data) {
     return;
   }
   update_terminal_height_from_widget(state);
+  update_action_sensitivity(state);
+  notify_changed(state);
+}
+
+static void on_terminal_scrollback_lines_changed(GtkEditable *,
+                                                 gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_terminal_scrollback_lines_from_widget(state);
   update_action_sensitivity(state);
   notify_changed(state);
 }
@@ -4297,11 +4355,18 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   attach_row(page, 5, terminal_height_setting_key(),
              state->terminal_height_entry);
 
+  state->terminal_scrollback_lines_entry =
+      create_entry(widget_id(state, "terminal_scrollback_lines_entry"));
+  g_signal_connect(state->terminal_scrollback_lines_entry, "changed",
+                   G_CALLBACK(on_terminal_scrollback_lines_changed), state);
+  attach_row(page, 6, terminal_scrollback_lines_setting_key(),
+             state->terminal_scrollback_lines_entry);
+
   state->terminal_zoom_entry =
       create_entry(widget_id(state, "terminal_zoom_entry"));
   g_signal_connect(state->terminal_zoom_entry, "changed",
                    G_CALLBACK(on_terminal_zoom_changed), state);
-  attach_row(page, 6, terminal_zoom_setting_key(),
+  attach_row(page, 7, terminal_zoom_setting_key(),
              state->terminal_zoom_entry);
 
   const std::string auto_close_id =
@@ -4309,7 +4374,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   state->terminal_auto_close_combo = create_combo_box(auto_close_id.c_str());
   g_signal_connect(state->terminal_auto_close_combo, "changed",
                    G_CALLBACK(on_terminal_auto_close_changed), state);
-  attach_row(page, 7, terminal_auto_close_setting_key(),
+  attach_row(page, 8, terminal_auto_close_setting_key(),
              state->terminal_auto_close_combo);
 
   const std::string zoom_in_id =
@@ -4338,7 +4403,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(zoom_in_row),
                      state->terminal_zoom_in_key_reset_button, FALSE, FALSE,
                      0);
-  attach_row(page, 8, terminal_zoom_in_key_setting_key(), zoom_in_row);
+  attach_row(page, 9, terminal_zoom_in_key_setting_key(), zoom_in_row);
 
   const std::string zoom_out_id =
       widget_id(state, "terminal_zoom_out_key_entry");
@@ -4366,7 +4431,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(zoom_out_row),
                      state->terminal_zoom_out_key_reset_button, FALSE, FALSE,
                      0);
-  attach_row(page, 9, terminal_zoom_out_key_setting_key(), zoom_out_row);
+  attach_row(page, 10, terminal_zoom_out_key_setting_key(), zoom_out_row);
 
   const std::string send_break_id =
       widget_id(state, "terminal_send_break_key_entry");
@@ -4396,7 +4461,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(send_break_row),
                      state->terminal_send_break_key_reset_button, FALSE,
                      FALSE, 0);
-  attach_row(page, 10, terminal_send_break_key_setting_key(),
+  attach_row(page, 11, terminal_send_break_key_setting_key(),
              send_break_row);
 
   GtkWidget *primary_font_row =
@@ -4415,7 +4480,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                      state->terminal_font_primary_mode_combo, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(primary_font_row),
                      state->terminal_font_primary_button, TRUE, TRUE, 0);
-  attach_row(page, 11, terminal_font_primary_family_setting_key(),
+  attach_row(page, 12, terminal_font_primary_family_setting_key(),
              primary_font_row);
 
   GtkWidget *fallback_font_row =
@@ -4434,7 +4499,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                      state->terminal_font_fallback_mode_combo, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(fallback_font_row),
                      state->terminal_font_fallback_button, TRUE, TRUE, 0);
-  attach_row(page, 12, terminal_font_fallback_family_setting_key(),
+  attach_row(page, 13, terminal_font_fallback_family_setting_key(),
              fallback_font_row);
 
   return scroller;
@@ -5153,6 +5218,8 @@ void settings_widget_rebase_fallbacks(
 
   const bool width_invalid = !state->terminal_width_valid;
   const bool height_invalid = !state->terminal_height_valid;
+  const bool scrollback_lines_invalid =
+      !state->terminal_scrollback_lines_valid;
   const bool zoom_invalid = !state->terminal_zoom_valid;
   const bool encoding_invalid = !state->terminal_encoding_valid;
   const bool telnet_port_invalid = !state->telnet_port_valid;
@@ -5166,6 +5233,8 @@ void settings_widget_rebase_fallbacks(
   };
   const std::string width_text = entry_text(state->terminal_width_entry);
   const std::string height_text = entry_text(state->terminal_height_entry);
+  const std::string scrollback_lines_text =
+      entry_text(state->terminal_scrollback_lines_entry);
   const std::string zoom_text = entry_text(state->terminal_zoom_entry);
   const std::string encoding_text =
       entry_text(state->terminal_encoding_entry);
@@ -5197,6 +5266,10 @@ void settings_widget_rebase_fallbacks(
                   [state]() { update_terminal_width_from_widget(state); });
   restore_invalid(state->terminal_height_entry, height_text, height_invalid,
                   [state]() { update_terminal_height_from_widget(state); });
+  restore_invalid(
+      state->terminal_scrollback_lines_entry, scrollback_lines_text,
+      scrollback_lines_invalid,
+      [state]() { update_terminal_scrollback_lines_from_widget(state); });
   restore_invalid(state->terminal_zoom_entry, zoom_text, zoom_invalid,
                   [state]() { update_terminal_zoom_from_widget(state); });
   if (encoding_invalid) {

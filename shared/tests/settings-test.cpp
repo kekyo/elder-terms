@@ -108,6 +108,7 @@ using elder_terms::terminal_font_fallback_family_setting_key;
 using elder_terms::terminal_font_families;
 using elder_terms::terminal_font_primary_family_setting_key;
 using elder_terms::terminal_height_setting_key;
+using elder_terms::terminal_scrollback_lines_setting_key;
 using elder_terms::terminal_return_code_setting_key;
 using elder_terms::terminal_return_code_to_string;
 using elder_terms::terminal_width_setting_key;
@@ -193,6 +194,8 @@ static void test_default_settings() {
   const TerminalDisplaySettings display = terminal_display_settings(store);
   expect_true(display.width == 80, "default terminal width should be 80");
   expect_true(display.height == 24, "default terminal height should be 24");
+  expect_true(display.scrollback_lines == 10000,
+              "default terminal scrollback should retain 10000 lines");
   expect_true(display.zoom == 1.2, "default terminal zoom should be retained");
   const TerminalFontFamilies fonts = terminal_font_families(store);
   expect_true(fonts.primary_family ==
@@ -290,6 +293,84 @@ static void test_default_settings() {
   expect_true(profile.text_settings.cursor_key_mode ==
                   TerminalCursorKeyMode::normal,
               "default local cursor keys should use normal sequences");
+}
+
+static SettingsLoadResult
+load_terminal_scrollback_lines(const std::string &name,
+                               const std::string &value) {
+  const std::filesystem::path path = temporary_config_path(name);
+  write_config(path, "[terminal]\nscrollback_lines=" + value + "\n");
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+  return result;
+}
+
+static void test_terminal_scrollback_lines_range_and_round_trip() {
+  const SettingsLoadResult minimum =
+      load_terminal_scrollback_lines("scrollback-minimum", "1000");
+  expect_true(terminal_display_settings(minimum.store).scrollback_lines ==
+                  1000,
+              "minimum terminal scrollback should be accepted");
+  expect_true(minimum.warnings.empty(),
+              "minimum terminal scrollback should not emit warnings");
+
+  const SettingsLoadResult maximum =
+      load_terminal_scrollback_lines("scrollback-maximum", "100000");
+  expect_true(terminal_display_settings(maximum.store).scrollback_lines ==
+                  100000,
+              "maximum terminal scrollback should be accepted");
+  expect_true(maximum.warnings.empty(),
+              "maximum terminal scrollback should not emit warnings");
+
+  const SettingsLoadResult below_minimum =
+      load_terminal_scrollback_lines("scrollback-below-minimum", "999");
+  expect_true(
+      terminal_display_settings(below_minimum.store).scrollback_lines ==
+          10000,
+      "terminal scrollback below the minimum should use the default");
+  expect_true(warnings_contain(
+                  below_minimum.warnings,
+                  "invalid configuration value [terminal] scrollback_lines"),
+              "terminal scrollback below the minimum should emit a warning");
+
+  const SettingsLoadResult above_maximum =
+      load_terminal_scrollback_lines("scrollback-above-maximum", "100001");
+  expect_true(
+      terminal_display_settings(above_maximum.store).scrollback_lines ==
+          10000,
+      "terminal scrollback above the maximum should use the default");
+  expect_true(warnings_contain(
+                  above_maximum.warnings,
+                  "invalid configuration value [terminal] scrollback_lines"),
+              "terminal scrollback above the maximum should emit a warning");
+
+  const std::filesystem::path saved_path =
+      temporary_config_path("scrollback-round-trip");
+  SettingsStore configured = minimum.store;
+  expect_true(set_explicit_setting_value(
+                  &configured, terminal_scrollback_lines_setting_key(),
+                  elder_terms::SettingValue{gint64{54321}}),
+              "valid terminal scrollback should be accepted in memory");
+  const SettingsSaveResult saved = save_settings(configured, saved_path);
+  expect_true(saved.saved, "terminal scrollback settings should save");
+  expect_true(read_config(saved_path).find("scrollback_lines=54321") !=
+                  std::string::npos,
+              "saved settings should include terminal scrollback lines");
+  const SettingsLoadResult reloaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = saved_path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(saved_path);
+  expect_true(terminal_display_settings(reloaded.store).scrollback_lines ==
+                  54321,
+              "terminal scrollback should survive saving and reloading");
 }
 
 static void test_terminal_font_family_settings_round_trip_and_layering() {
@@ -1868,6 +1949,11 @@ static void test_public_setting_keys() {
               "terminal width key should use the width name");
   expect_true(terminal_height_setting_key().name == "height",
               "terminal height key should use the height name");
+  expect_true(terminal_scrollback_lines_setting_key().section == "terminal" &&
+                  terminal_scrollback_lines_setting_key().name ==
+                      "scrollback_lines",
+              "terminal scrollback key should use [terminal] "
+              "scrollback_lines");
   expect_true(terminal_zoom_setting_key().name == "zoom",
               "terminal zoom key should use the zoom name");
   expect_true(
@@ -3330,6 +3416,8 @@ static void test_save_empty_global_settings_creates_parent_directory() {
 int main() {
   try {
     elder_terms_settings_test::test_default_settings();
+    elder_terms_settings_test::
+        test_terminal_scrollback_lines_range_and_round_trip();
     elder_terms_settings_test::
         test_terminal_font_family_settings_round_trip_and_layering();
     elder_terms_settings_test::

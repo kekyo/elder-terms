@@ -30,6 +30,7 @@ import {
   expectWindowCellSize,
   moveMouseToTerminalCenter,
   pressKeyWithModifiers,
+  readFixtureVteScrollbackLines,
   readTerminalGridLayout,
   readWindowCellLayout,
   runGtkTest,
@@ -951,6 +952,27 @@ describe.concurrent('elder-terms-vte settings', () => {
         );
       }
     );
+  });
+
+  it('applies the configured scrollback size to VTE', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'scrollback.ini');
+      await writeFile(
+        configPath,
+        '[terminal]\nscrollback_lines=23456\n',
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app) => {
+          await waitForResult(async () => {
+            expect(await readFixtureVteScrollbackLines(app)).toBe(23456);
+          });
+        }
+      );
+    });
   });
 
   it('uses the startup terminal grid size from a read-only INI file', async (context) => {
@@ -2123,6 +2145,13 @@ describe.concurrent('elder-terms-vte settings', () => {
 
       await openSettingsDialog(app);
       await showTerminalSettingsPage(app);
+      const terminalScrollbar = expectElementKind(
+        await app.getById('settings_terminal_page_scrollbar'),
+        'scrollbar'
+      );
+      await terminalScrollbar.setValue(
+        (await terminalScrollbar.valueInfo()).maximum
+      );
       const zoomInKey = expectElementKind(
         await app.getById('settings_terminal_zoom_in_key_entry'),
         'entry'
@@ -2133,13 +2162,6 @@ describe.concurrent('elder-terms-vte settings', () => {
       );
       await captureKeyBinding(app, zoomInKey, ['alt'], 'Up');
       await captureKeyBinding(app, zoomOutKey, ['alt'], 'Down');
-      const terminalScrollbar = expectElementKind(
-        await app.getById('settings_terminal_page_scrollbar'),
-        'scrollbar'
-      );
-      await terminalScrollbar.setValue(
-        (await terminalScrollbar.valueInfo()).maximum
-      );
       const sendBreakKey = expectElementKind(
         await app.getById('settings_terminal_send_break_key_entry'),
         'entry'
@@ -2573,6 +2595,33 @@ describe.concurrent('elder-terms-vte settings', () => {
           await expectFileContent(configPath, initialConfig);
         }
       );
+    });
+  });
+
+  it('applies runtime scrollback size changes to VTE', async (context) => {
+    await runGtkTest(context, ['--test-fixture'], async (app) => {
+      await waitForResult(async () => {
+        expect(await readFixtureVteScrollbackLines(app)).toBe(10000);
+      });
+      await openSettingsDialog(app);
+      await showTerminalSettingsPage(app);
+
+      await setNumericEntryValue(
+        expectElementKind(
+          await app.getById('settings_terminal_scrollback_lines_entry'),
+          'entry'
+        ),
+        54321
+      );
+      await expectElementKind(
+        await app.getById('settings_apply_button'),
+        'button'
+      ).click();
+      await expectSettingsDialogClosed(app);
+
+      await waitForResult(async () => {
+        expect(await readFixtureVteScrollbackLines(app)).toBe(54321);
+      });
     });
   });
 

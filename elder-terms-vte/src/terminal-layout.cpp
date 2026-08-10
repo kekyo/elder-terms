@@ -37,6 +37,7 @@ struct TerminalLayoutState {
   GtkWidget *terminal_scrollbar = nullptr;
   GtkWidget *status_bar = nullptr;
   GtkWidget *fixture_grid_size_label = nullptr;
+  GtkWidget *fixture_scrollback_lines_label = nullptr;
   TestOptions options;
   TerminalLayoutCallbacks callbacks;
   TerminalKeyBindings key_bindings;
@@ -225,6 +226,10 @@ static void update_fixture_grid_status(TerminalLayoutState *state) {
   const std::string label =
       std::to_string(columns) + "x" + std::to_string(rows);
   gtk_label_set_text(GTK_LABEL(state->fixture_grid_size_label), label.c_str());
+  const std::string scrollback_lines =
+      std::to_string(vte_terminal_get_scrollback_lines(terminal));
+  gtk_label_set_text(GTK_LABEL(state->fixture_scrollback_lines_label),
+                     scrollback_lines.c_str());
 }
 
 static void notify_terminal_grid_size_changed(TerminalLayoutState *state,
@@ -262,6 +267,7 @@ static void notify_terminal_display_settings_changed(
   state->callbacks.display_settings_changed({
       .width = columns,
       .height = rows,
+      .scrollback_lines = vte_terminal_get_scrollback_lines(terminal),
       .zoom = zoom,
   });
 }
@@ -803,6 +809,8 @@ create_terminal_layout(const MainWindow &main_window, TestOptions options,
   state->terminal_scrollbar = main_window.terminal_scrollbar;
   state->status_bar = main_window.status_bar;
   state->fixture_grid_size_label = main_window.fixture_grid_size_label;
+  state->fixture_scrollback_lines_label =
+      main_window.fixture_scrollback_lines_label;
   state->options = options;
   state->callbacks = callbacks;
   state->key_bindings = std::move(terminal_key_bindings);
@@ -881,6 +889,7 @@ void apply_terminal_display_settings(
     TerminalDisplaySettings terminal_display_settings) {
   if (state == nullptr || terminal_display_settings.width <= 0 ||
       terminal_display_settings.height <= 0 ||
+      terminal_display_settings.scrollback_lines <= 0 ||
       terminal_display_settings.zoom <= 0.0) {
     return;
   }
@@ -896,6 +905,11 @@ void apply_terminal_display_settings(
   state->desired_rows = terminal_display_settings.height;
 
   VteTerminal *terminal = VTE_TERMINAL(state->terminal);
+  if (vte_terminal_get_scrollback_lines(terminal) !=
+      terminal_display_settings.scrollback_lines) {
+    vte_terminal_set_scrollback_lines(
+        terminal, terminal_display_settings.scrollback_lines);
+  }
   if (!font_scale_matches(vte_terminal_get_font_scale(terminal),
                           terminal_display_settings.zoom)) {
     start_font_resize_guard(state);
@@ -904,6 +918,7 @@ void apply_terminal_display_settings(
 
   ensure_terminal_grid_size(state, state->desired_columns,
                             state->desired_rows);
+  update_fixture_grid_status(state);
   update_window_size(state);
 }
 

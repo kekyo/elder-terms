@@ -894,6 +894,24 @@ export const expectFixtureVteGridSize = async (
 };
 
 /**
+ * Reads the scrollback size reported by VTE through the hidden fixture label.
+ *
+ * @param app Running GTK app.
+ * @returns Current VTE scrollback size in lines.
+ */
+export const readFixtureVteScrollbackLines = async (
+  app: GtkApp
+): Promise<number> => {
+  const scrollbackLabel = expectElementKind(
+    await app.getById('fixture_scrollback_lines_label'),
+    'label'
+  );
+  const lines = Number(await scrollbackLabel.text());
+  expect(Number.isInteger(lines)).toBe(true);
+  return lines;
+};
+
+/**
  * Reads main window geometry and resize hints.
  *
  * @param app Running GTK app.
