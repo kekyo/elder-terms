@@ -19,4 +19,17 @@
 elder-terms is a GTK terminal for serial, TELNET, local shell, SSH, and SFTP
 connections, inspired by personal computing in the 1990s.
 
+## Automatic startup
+
+The Debian package and Meson installation install a system-wide XDG autostart
+entry for elder-terms. The configured startup mode determines whether the
+launcher window or system tray item appears after login, so configured hotkeys
+are available immediately.
+
+Use the desktop environment's startup application settings to disable automatic
+startup. A user can also override the system entry by placing a file named
+`net.kekyo.elder-terms.desktop` with `Hidden=true` in
+`~/.config/autostart`. Building the source tree without installing it does not
+install the autostart entry.
+
 TODO:
