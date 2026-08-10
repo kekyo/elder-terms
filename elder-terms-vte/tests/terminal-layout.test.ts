@@ -324,7 +324,7 @@ describe.concurrent('elder-terms-vte terminal layout', () => {
     });
   });
 
-  it('zooms with the default Ctrl+minus binding and keeps the VTE grid size', async (context) => {
+  it('zooms with the default Ctrl+equal and Ctrl+minus bindings while keeping the VTE grid size', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app, evidence) => {
       const initialLayout = await waitForResult(async () => {
         const layout = await readTerminalGridLayout(app);
@@ -333,7 +333,7 @@ describe.concurrent('elder-terms-vte terminal layout', () => {
         return layout;
       });
 
-      await pressKeyWithModifiers(app, ['control'], 'minus');
+      await pressKeyWithModifiers(app, ['control'], 'equal');
       const zoomedLayout = await waitForResult(async () => {
         const layout = await readTerminalGridLayout(app);
         expect(layout.hints.widthIncrement).not.toBe(
@@ -344,10 +344,12 @@ describe.concurrent('elder-terms-vte terminal layout', () => {
         return layout;
       });
 
-      await moveMouseToTerminalCenter(app, zoomedLayout);
-      await scrollWheelWithControl(app, -1);
+      await pressKeyWithModifiers(app, ['control'], 'minus');
       const restoredLayout = await waitForResult(async () => {
         const layout = await readTerminalGridLayout(app);
+        expect(layout.hints.widthIncrement).not.toBe(
+          zoomedLayout.hints.widthIncrement
+        );
         expect(layout.hints.widthIncrement).toBe(
           initialLayout.hints.widthIncrement
         );

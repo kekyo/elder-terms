@@ -215,9 +215,9 @@ static void test_default_settings() {
               "default terminal zoom-out key should be enabled");
   expect_true(!key_bindings.send_break.has_value(),
               "default terminal BREAK key should be disabled");
-  expect_true(key_binding_matches(*key_bindings.zoom_in, GDK_KEY_plus,
+  expect_true(key_binding_matches(*key_bindings.zoom_in, GDK_KEY_equal,
                                   GDK_CONTROL_MASK),
-              "default terminal zoom-in key should be Ctrl+plus");
+              "default terminal zoom-in key should be Ctrl+equal");
   expect_true(key_binding_matches(*key_bindings.zoom_out, GDK_KEY_minus,
                                   GDK_CONTROL_MASK),
               "default terminal zoom-out key should be Ctrl+minus");
@@ -1249,7 +1249,7 @@ static void test_terminal_key_binding_configuration() {
   const auto invalid_bindings = terminal_key_bindings(invalid.store);
   expect_true(invalid_bindings.zoom_in.has_value() &&
                   key_binding_matches(*invalid_bindings.zoom_in,
-                                      GDK_KEY_plus, GDK_CONTROL_MASK),
+                                      GDK_KEY_equal, GDK_CONTROL_MASK),
               "invalid terminal key binding should use its default");
   expect_true(!invalid_bindings.send_break.has_value(),
               "invalid terminal BREAK binding should use its empty default");
@@ -1275,7 +1275,7 @@ static void test_terminal_key_binding_configuration() {
   expect_true(conflict_bindings.zoom_in.has_value() &&
                   conflict_bindings.zoom_out.has_value() &&
                   key_binding_matches(*conflict_bindings.zoom_in,
-                                      GDK_KEY_plus, GDK_CONTROL_MASK) &&
+                                      GDK_KEY_equal, GDK_CONTROL_MASK) &&
                   key_binding_matches(*conflict_bindings.zoom_out,
                                       GDK_KEY_minus, GDK_CONTROL_MASK) &&
                   !conflict_bindings.send_break.has_value(),

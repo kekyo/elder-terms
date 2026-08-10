@@ -3263,7 +3263,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForEntryPlaceholder(
           app,
           'settings_terminal_zoom_in_key_entry',
-          'ctrl+plus (built-in default)'
+          'ctrl+equal (built-in default)'
         );
         expect((await zoomInKey.info()).states).not.toContain('editable');
         await clickWidget(app, zoomInKey);
@@ -4014,7 +4014,7 @@ describe.concurrent('shared settings widget', () => {
         args: [
           '--page=terminal',
           '--save',
-          '--zoom-out-key=ctrl+plus',
+          '--zoom-out-key=ctrl+equal',
         ] as const,
       },
       {
