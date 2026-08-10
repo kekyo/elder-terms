@@ -11,5 +11,8 @@
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
     "dev": "npm run build && ./.build/elder-terms/elder-terms"
+  },
+  "devDependencies": {
+    "screw-up": ">=1.36.0"
   }
 }
