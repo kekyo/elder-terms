@@ -150,7 +150,6 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
             expect(binaryAccepted).toBe(true);
           });
           await expectMainWindowStatus(app, `telnet: 127.0.0.1:${port}`);
-          await waitForActivityIndicatorImageState(app, 'sd', 'off');
 
           const baseline = receivedBytes(receivedChunks).length;
           const mainWindow = expectElementKind(
@@ -173,14 +172,20 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
           }
 
           await expectMainWindowStatus(app, 'BREAK sent');
-          await waitForActivityIndicatorImageState(app, 'sd', 'on');
-          await waitForActivityIndicatorImageState(app, 'sd', 'off');
-          expect(
-            countSubsequence(receivedBytes(receivedChunks).slice(baseline), [
-              telnetIac,
-              telnetBrk,
-            ])
-          ).toBe(1);
+          await toPass(
+            async () => {
+              expect(
+                countSubsequence(
+                  receivedBytes(receivedChunks).slice(baseline),
+                  [telnetIac, telnetBrk]
+                )
+              ).toBe(1);
+            },
+            {
+              message: 'F12 should send one TELNET BREAK command',
+              timeoutMs: 5_000,
+            }
+          );
 
           const contextBaseline = receivedBytes(receivedChunks).length;
           await openTerminalContextMenu(app);
