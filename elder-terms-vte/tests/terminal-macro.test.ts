@@ -41,6 +41,10 @@ const connectionConfig = (port: number, macro: readonly string[]): string =>
     '',
     '[terminal]',
     'auto_close=false',
+    'return_code=lf',
+    '',
+    '[transfer]',
+    'text_send_follow_return_code=true',
     '',
     '[telnet]',
     'address=127.0.0.1',
@@ -51,7 +55,7 @@ const connectionConfig = (port: number, macro: readonly string[]): string =>
   ].join('\n');
 
 describe.concurrent('elder-terms-vte terminal macros', () => {
-  it('sends expanded text as soon as a received line matches', async (context) => {
+  it('sends expanded text with the configured Return code', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       let socket: Socket | undefined;
       let received = Buffer.alloc(0);
@@ -78,7 +82,7 @@ describe.concurrent('elder-terms-vte terminal macros', () => {
 
         await runGtkTest(context, ['-c', configPath], async () => {
           await waitForResult(async () => {
-            expect(received.toString('utf8')).toContain('RESPONSE TOKEN\r\n');
+            expect(received.toString('utf8')).toContain('RESPONSE TOKEN\n');
           });
         });
       } finally {
