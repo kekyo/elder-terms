@@ -130,6 +130,10 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, and SFTP connect
       'usr/share/applications/net.kekyo.elder-terms.desktop',
       '[Desktop Entry]\nType=Application\nExec=elder-terms\n',
     ],
+    [
+      'usr/share/applications/net.kekyo.elder-terms-vte.desktop',
+      '[Desktop Entry]\nType=Application\nExec=elder-terms-vte\n',
+    ],
     ['usr/lib/elder-terms/launcher/main-window.ui', '<interface/>\n'],
     ['usr/lib/elder-terms/elder-terms-vte/main-window.ui', '<interface/>\n'],
     ['usr/lib/elder-terms/elder-terms-vte/green-on.png', 'on\n'],
@@ -472,7 +476,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     createPackageStage(
       badStage,
       debianArchitecture,
-      'usr/lib/elder-terms/elder-terms-vte/main-window.ui'
+      'usr/share/applications/net.kekyo.elder-terms-vte.desktop'
     );
     for (const [stage, output] of [
       [goodStage, goodPackage],
@@ -499,7 +503,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     );
     expect(badValidation.status).not.toBe(0);
     expect(badValidation.stderr).toContain(
-      'usr/lib/elder-terms/elder-terms-vte/main-window.ui'
+      'usr/share/applications/net.kekyo.elder-terms-vte.desktop'
     );
   });
 
@@ -570,6 +574,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       join(libraryDirectory, 'elder-terms/elder-terms-vte/green-on.png'),
       join(libraryDirectory, 'elder-terms/elder-terms-vte/green-off.png'),
       'share/applications/net.kekyo.elder-terms.desktop',
+      'share/applications/net.kekyo.elder-terms-vte.desktop',
     ]) {
       expect(lstatSync(join(installedRoot, relativePath)).isFile()).toBe(true);
     }

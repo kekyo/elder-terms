@@ -405,6 +405,7 @@ validate_deb_package() {
 		usr/lib/elder-terms/elder-terms-vte/green-on.png \
 		usr/lib/elder-terms/elder-terms-vte/green-off.png \
 		usr/share/applications/net.kekyo.elder-terms.desktop \
+		usr/share/applications/net.kekyo.elder-terms-vte.desktop \
 		etc/xdg/autostart/net.kekyo.elder-terms.desktop \
 		usr/share/icons/hicolor/256x256/apps/elder-terms.png \
 		usr/share/locale/ja/LC_MESSAGES/elder-terms.mo \

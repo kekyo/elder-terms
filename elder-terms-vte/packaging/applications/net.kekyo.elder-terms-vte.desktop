@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.5
+Type=Application
+Name=elder-terms terminal
+Comment=Run an elder-terms terminal session
+TryExec=elder-terms-vte
+Exec=elder-terms-vte
+Icon=elder-terms
+Terminal=false
+NoDisplay=true
+Categories=System;TerminalEmulator;
+StartupNotify=true
+StartupWMClass=Elder-terms-vte

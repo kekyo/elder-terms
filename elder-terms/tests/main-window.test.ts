@@ -333,7 +333,7 @@ const readLaunchCapture = async (path: string): Promise<LaunchCapture> =>
   JSON.parse(await readFile(path, 'utf8')) as LaunchCapture;
 
 describe('elder-terms main window', () => {
-  it('publishes a runtime icon for its main window', async (context) => {
+  it('publishes a runtime icon and desktop identity for its main window', async (context) => {
     await runLauncherGtkTest(
       context,
       async () => {},
@@ -354,6 +354,8 @@ describe('elder-terms main window', () => {
           .find((event) => event.windowId === windowId);
         expect(mapEvent).toBeDefined();
         expect(mapEvent?.hasIcon).toBe(true);
+        expect(mapEvent?.instanceName).toBe('net.kekyo.elder-terms');
+        expect(mapEvent?.className).toBe('Elder-terms');
       },
       {
         args: [],

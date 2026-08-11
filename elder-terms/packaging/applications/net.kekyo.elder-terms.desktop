@@ -1,9 +1,12 @@
 [Desktop Entry]
+Version=1.5
 Type=Application
 Name=elder-terms
 Comment=GTK terminal for serial, TELNET, local shell, SSH, and SFTP connections
+TryExec=elder-terms
 Exec=elder-terms
 Icon=elder-terms
 Terminal=false
 Categories=System;TerminalEmulator;
 StartupNotify=true
+StartupWMClass=Elder-terms

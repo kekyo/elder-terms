@@ -40,6 +40,9 @@
 #include "terminal-session.h"
 #include "terminal-sessions/ssh-session/authenticated-ssh-transport.h"
 
+static constexpr char terminal_application_id[] =
+    "net.kekyo.elder-terms-vte";
+
 struct ApplicationState {
   elder_terms::MainWindow *main_window = nullptr;
   elder_terms::TerminalSessionState *session_state = nullptr;
@@ -1365,6 +1368,7 @@ int main(int argc, char **argv) {
   const auto launch_options =
     elder_terms::parse_launch_options(&argc, argv);
   gtk_init(&argc, &argv);
+  g_set_prgname(terminal_application_id);
   (void)elder_terms::initialize_application_window_icon();
 
   g_type_ensure(VTE_TYPE_TERMINAL);

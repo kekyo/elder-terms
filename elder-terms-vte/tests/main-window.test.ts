@@ -251,16 +251,18 @@ const readClipboardText = async (app: GtkApp): Promise<string> => {
 };
 
 describe.concurrent('elder-terms-vte main window', () => {
-  it('publishes a runtime icon for its main window', async (context) => {
+  it('publishes a runtime icon and desktop identity for its main window', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
       const mainWindow = expectElementKind(
         await app.getById('main_window'),
         'window'
       );
       const x11 = await mainWindow.x11Info();
+      expect(x11.instanceName).toBe('net.kekyo.elder-terms-vte');
+      expect(x11.className).toBe('Elder-terms-vte');
       const result = await execFileAsync(
         'xprop',
-        ['-id', x11.windowId, '-len', '8', '_NET_WM_ICON'],
+        ['-id', x11.windowId, '-len', '16', '32c', '_NET_WM_ICON'],
         {
           env: {
             ...process.env,
@@ -269,7 +271,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         }
       );
       expect(result.stdout.toString()).toMatch(
-        /_NET_WM_ICON\(CARDINAL\) =\s+Icon \([1-9]\d* x [1-9]\d*\):/u
+        /_NET_WM_ICON\(CARDINAL\) = [1-9]\d*, [1-9]\d*/u
       );
     });
   });

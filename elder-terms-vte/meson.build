@@ -516,6 +516,11 @@ install_symlink(
   install_dir: get_option('bindir'),
 )
 
+install_data(
+  'packaging/applications/net.kekyo.elder-terms-vte.desktop',
+  install_dir: get_option('datadir') / 'applications',
+)
+
 configure_file(
   input: 'src/indicators/green-on.png',
   output: 'green-on.png',

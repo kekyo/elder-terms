@@ -10,3 +10,4 @@ Icon=elder-terms
 Terminal=false
 NoDisplay=true
 StartupNotify=false
+StartupWMClass=Elder-terms

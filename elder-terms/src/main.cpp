@@ -2016,6 +2016,7 @@ static void on_tray_availability_changed(ApplicationState *state,
 static void on_application_startup(GApplication *,
                                    gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
+  g_set_prgname(elder_terms::launcher_application_id());
   state->connection_directory =
       elder_terms::default_connection_directory();
   state->global_config_path =
