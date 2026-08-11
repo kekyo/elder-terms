@@ -36,6 +36,7 @@
 #include "terminal-layout.h"
 #include "terminal-log.h"
 #include "terminal-macro-runner.h"
+#include "terminal-text-send.h"
 #include "terminal-transfer-runner.h"
 #include "terminal-session.h"
 #include "terminal-sessions/ssh-session/authenticated-ssh-transport.h"
@@ -1531,6 +1532,16 @@ int main(int argc, char **argv) {
       {
           .send =
               [&app_state](std::string text) {
+                const std::optional<elder_terms::TerminalConnectionProfile>
+                    profile = elder_terms::terminal_connection_profile(
+                        app_state.settings_store);
+                if (profile.has_value()) {
+                  text = elder_terms::normalize_terminal_text_line_endings(
+                      text,
+                      elder_terms::transfer_text_send_follow_return_code(
+                          app_state.settings_store),
+                      profile->text_settings.return_code);
+                }
                 (void)elder_terms::send_terminal_session_text(
                     app_state.session_state, text);
               },

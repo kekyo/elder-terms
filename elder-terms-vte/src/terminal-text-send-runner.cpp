@@ -45,59 +45,6 @@ struct GBytesDeleter {
 template <typename T> using GObjectPtr = std::unique_ptr<T, GObjectDeleter>;
 using GBytesPtr = std::unique_ptr<GBytes, GBytesDeleter>;
 
-struct TextSendLineEndingNormalizer {
-  bool enabled = true;
-  TerminalReturnCode return_code = TerminalReturnCode::automatic;
-  bool pending_cr = false;
-
-  void append_newline(std::vector<unsigned char> *output) const {
-    if (return_code == TerminalReturnCode::lf) {
-      output->push_back('\n');
-      return;
-    }
-    output->push_back('\r');
-    if (return_code == TerminalReturnCode::crlf) {
-      output->push_back('\n');
-    }
-  }
-
-  std::vector<unsigned char>
-  normalize(std::span<const unsigned char> input) {
-    if (!enabled) {
-      return std::vector<unsigned char>(input.begin(), input.end());
-    }
-
-    std::vector<unsigned char> output;
-    output.reserve(input.size());
-    for (unsigned char byte : input) {
-      if (pending_cr) {
-        append_newline(&output);
-        pending_cr = false;
-        if (byte == '\n') {
-          continue;
-        }
-      }
-      if (byte == '\r') {
-        pending_cr = true;
-      } else if (byte == '\n') {
-        append_newline(&output);
-      } else {
-        output.push_back(byte);
-      }
-    }
-    return output;
-  }
-
-  std::vector<unsigned char> finish() {
-    std::vector<unsigned char> output;
-    if (enabled && pending_cr) {
-      append_newline(&output);
-      pending_cr = false;
-    }
-    return output;
-  }
-};
-
 static std::optional<std::uint64_t> source_size(GFileInfo *info) {
   if (info == nullptr ||
       !g_file_info_has_attribute(info, G_FILE_ATTRIBUTE_STANDARD_SIZE)) {
@@ -248,10 +195,8 @@ run_terminal_text_send_async(TerminalTextSendRequest request,
   }
 
   TerminalTextEncoder encoder(request.text_settings);
-  TextSendLineEndingNormalizer newline_normalizer{
-      .enabled = request.follow_return_code,
-      .return_code = request.text_settings.return_code,
-  };
+  TerminalTextLineEndingNormalizer newline_normalizer(
+      request.follow_return_code, request.text_settings.return_code);
   std::array<std::byte, text_source_read_size> buffer{};
   std::uint64_t consumed = 0;
   std::uint64_t next_send_us = 0;

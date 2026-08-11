@@ -1,14 +1,72 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include <elder-terms/settings.h>
 
 #include "terminal-transfer.h"
 
 namespace elder_terms {
+
+/**
+ * Incrementally normalizes logical line endings for terminal text sends.
+ */
+class TerminalTextLineEndingNormalizer {
+public:
+  /**
+   * Creates a line-ending normalizer.
+   *
+   * @param follow_return_code True to replace CRLF, CR, and LF with the
+   * configured Return code.
+   * @param return_code Return code used for each logical line ending.
+   */
+  TerminalTextLineEndingNormalizer(bool follow_return_code,
+                                   TerminalReturnCode return_code);
+
+  /**
+   * Normalizes one input chunk.
+   *
+   * @param input Source bytes from a UTF-8 text stream.
+   * @returns Bytes ready for character encoding.
+   *
+   * @remarks A trailing CR is retained until the next chunk so a split CRLF
+   * is treated as one logical line ending.
+   */
+  std::vector<unsigned char>
+  normalize(std::span<const unsigned char> input);
+
+  /**
+   * Flushes a retained trailing CR at the end of input.
+   *
+   * @returns Final normalized bytes.
+   */
+  std::vector<unsigned char> finish();
+
+private:
+  void append_newline(std::vector<unsigned char> *output) const;
+
+  bool follow_return_code;
+  TerminalReturnCode return_code;
+  bool pending_carriage_return = false;
+};
+
+/**
+ * Normalizes all logical line endings in one complete UTF-8 string.
+ *
+ * @param utf8_text Complete UTF-8 text to normalize.
+ * @param follow_return_code True to replace CRLF, CR, and LF with the
+ * configured Return code; false to preserve the original line endings.
+ * @param return_code Return code used for each logical line ending. Auto is
+ * represented as CR for text sends.
+ * @returns Text with normalized or preserved line endings.
+ */
+std::string normalize_terminal_text_line_endings(
+    const std::string &utf8_text, bool follow_return_code,
+    TerminalReturnCode return_code);
 
 /**
  * Describes a UTF-8 text file used as a terminal text send source.
