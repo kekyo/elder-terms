@@ -32,6 +32,8 @@ struct TerminalGridPadding {
 struct TerminalLayoutState {
   GtkWidget *window = nullptr;
   GtkWidget *root_box = nullptr;
+  GtkWidget *frame_start_border = nullptr;
+  GtkWidget *frame_end_border = nullptr;
   GtkWidget *terminal_scroller = nullptr;
   GtkWidget *terminal = nullptr;
   GtkWidget *terminal_scrollbar = nullptr;
@@ -57,6 +59,7 @@ struct TerminalLayoutState {
   bool font_zoom_anchor_active = false;
   bool font_zoom_pending = false;
   bool break_key_pressed = false;
+  bool show_border = false;
   guint window_size_sync_source = 0;
   guint font_resize_guard_source = 0;
   guint font_zoom_source = 0;
@@ -345,6 +348,16 @@ static void queue_window_size_update(TerminalLayoutState *state) {
 
   state->update_pending = true;
   g_idle_add(update_window_size_idle, state);
+}
+
+static void set_border_visibility(TerminalLayoutState *state,
+                                  bool show_border) {
+  state->show_border = show_border;
+  for (GtkWidget *border : {state->frame_start_border,
+                            state->frame_end_border}) {
+    gtk_widget_set_no_show_all(border, show_border ? FALSE : TRUE);
+    gtk_widget_set_visible(border, show_border ? TRUE : FALSE);
+  }
 }
 
 static bool has_pending_font_zoom(TerminalLayoutState *state) {
@@ -798,12 +811,15 @@ static gboolean feed_fixture_idle(gpointer data) {
 TerminalLayoutState *
 create_terminal_layout(const MainWindow &main_window, TestOptions options,
                        TerminalDisplaySettings terminal_display_settings,
+                       bool show_border,
                        TerminalFontFamilies terminal_font_families,
                        TerminalKeyBindings terminal_key_bindings,
                        TerminalLayoutCallbacks callbacks) {
   auto *state = new TerminalLayoutState();
   state->window = main_window.window;
   state->root_box = main_window.root_box;
+  state->frame_start_border = main_window.frame_start_border;
+  state->frame_end_border = main_window.frame_end_border;
   state->terminal_scroller = main_window.terminal_scroller;
   state->terminal = main_window.terminal;
   state->terminal_scrollbar = main_window.terminal_scrollbar;
@@ -816,6 +832,7 @@ create_terminal_layout(const MainWindow &main_window, TestOptions options,
   state->key_bindings = std::move(terminal_key_bindings);
   state->desired_columns = terminal_display_settings.width;
   state->desired_rows = terminal_display_settings.height;
+  set_border_visibility(state, show_border);
   const PangoFontDescription *runtime_font =
       vte_terminal_get_font(VTE_TERMINAL(state->terminal));
   state->runtime_font =
@@ -920,6 +937,16 @@ void apply_terminal_display_settings(
                             state->desired_rows);
   update_fixture_grid_status(state);
   update_window_size(state);
+}
+
+void apply_terminal_border_visibility(TerminalLayoutState *state,
+                                      bool show_border) {
+  if (state == nullptr || state->show_border == show_border) {
+    return;
+  }
+
+  set_border_visibility(state, show_border);
+  queue_window_size_update(state);
 }
 
 void apply_terminal_font_families(

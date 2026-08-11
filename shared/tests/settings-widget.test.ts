@@ -52,6 +52,7 @@ interface AppliedStore {
   readonly [key: string]: string;
   readonly name: string;
   readonly auto_close: string;
+  readonly show_border: string;
   readonly backspace_code: string;
   readonly background: string;
   readonly cursor_key_mode: string;
@@ -874,6 +875,7 @@ describe.concurrent('shared settings widget', () => {
               'Primary font family',
               'Secondary font family',
               'Close window when session ends',
+              'Show window side borders',
               'Zoom in shortcut',
               'Zoom out shortcut',
               'Send BREAK shortcut',
@@ -989,6 +991,7 @@ describe.concurrent('shared settings widget', () => {
               'プライマリフォントファミリー',
               'セカンダリフォントファミリー',
               'セッション終了時にウィンドウを閉じる',
+              'ウィンドウの左右にボーダーを表示する',
               '拡大ショートカット',
               '縮小ショートカット',
               'BREAK送信ショートカット',
@@ -2774,6 +2777,7 @@ describe.concurrent('shared settings widget', () => {
         '--scrollback-lines=20000',
         '--zoom=1.25',
         '--auto-close=false',
+        '--show-border=true',
         '--send-break-key=shift+F11',
       ],
       async ({ app, directory }) => {
@@ -2799,6 +2803,10 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_terminal_auto_close_combo'),
           'comboBox'
         );
+        const showBorder = expectElementKind(
+          await app.getById('settings_terminal_show_border_combo'),
+          'comboBox'
+        );
         const zoomInKey = expectElementKind(
           await app.getById('settings_terminal_zoom_in_key_entry'),
           'entry'
@@ -2819,6 +2827,11 @@ describe.concurrent('shared settings widget', () => {
           app,
           'settings_terminal_auto_close_combo',
           'Disabled'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_show_border_combo',
+          'Enabled'
         );
         expect(await zoomInKey.text()).toBe('');
         expect(await zoomOutKey.text()).toBe('');
@@ -2881,6 +2894,7 @@ describe.concurrent('shared settings widget', () => {
         await setNumericEntryValue(scrollbackLines, 50000);
         await setNumericEntryValue(zoom, 1.1);
         await autoClose.selectChildAt(1);
+        await showBorder.selectChildAt(2);
         await showTerminalKeyBindings(app);
         await captureKeyBinding(app, zoomInKey, ['alt'], 'Up');
         await captureKeyBinding(app, sendBreakKey, ['shift'], 'F12');
@@ -2906,6 +2920,7 @@ describe.concurrent('shared settings widget', () => {
         expect(store.scrollback_lines).toBe('50000');
         expect(Number(store.zoom)).toBeCloseTo(1.1);
         expect(store.auto_close).toBe('true');
+        expect(store.show_border).toBe('false');
         expect(store.zoom_in_key).toBe('alt+Up');
         expect(store.zoom_out_key).toBe('');
         expect(store.send_break_key).toBe('shift+F12');
@@ -3484,6 +3499,7 @@ describe.concurrent('shared settings widget', () => {
       '--global=terminal.scrollback_lines=20000',
       '--global=terminal.zoom=1.25',
       '--global=terminal.auto_close=true',
+      '--global=terminal.show_border=true',
       '--global=terminal.encoding=CP932',
       '--global=terminal.backspace_code=del',
       '--global=terminal.cursor_key_mode=normal',
@@ -3531,6 +3547,7 @@ describe.concurrent('shared settings widget', () => {
         'scrollback_lines',
         'zoom',
         'auto_close',
+        'show_border',
         'encoding',
         'backspace_code',
         'cursor_key_mode',
@@ -3592,6 +3609,11 @@ describe.concurrent('shared settings widget', () => {
       await expectSelectedComboValue(
         app,
         'settings_terminal_auto_close_combo',
+        'Enabled (global default)'
+      );
+      await expectSelectedComboValue(
+        app,
+        'settings_terminal_show_border_combo',
         'Enabled (global default)'
       );
       await expectInheritedEntry(

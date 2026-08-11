@@ -64,6 +64,10 @@ struct MainWindow {
   GtkWidget *transfer_button = nullptr;
   /** Root container inside the window. */
   GtkWidget *root_box = nullptr;
+  /** Optional left border around the terminal window content. */
+  GtkWidget *frame_start_border = nullptr;
+  /** Optional right border around the terminal window content. */
+  GtkWidget *frame_end_border = nullptr;
   /** Scroller surrounding the terminal and scrollbar. */
   GtkWidget *terminal_scroller = nullptr;
   /** Overlay stacking disconnected status on top of the terminal. */

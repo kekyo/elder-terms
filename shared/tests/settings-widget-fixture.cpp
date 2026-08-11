@@ -127,6 +127,10 @@ static FixtureOptions parse_options(int argc, char **argv) {
       append_connection_assignment(
           &options, "terminal", "auto_close",
           option_value(argument, "--auto-close="));
+    } else if (starts_with(argument, "--show-border=")) {
+      append_connection_assignment(
+          &options, "terminal", "show_border",
+          option_value(argument, "--show-border="));
     } else if (starts_with(argument, "--exterior-background=")) {
       append_connection_assignment(
           &options, "general", "exterior_background",
@@ -647,6 +651,8 @@ static void print_store(const char *prefix,
                    text_settings.return_code)
             << " auto_close="
             << (elder_terms::terminal_auto_close(store) ? "true" : "false")
+            << " show_border="
+            << (elder_terms::terminal_show_border(store) ? "true" : "false")
             << " exterior_background=" << exterior_background
             << " background=" << background
             << " zoom_in_key="
@@ -737,6 +743,8 @@ static void print_store(const char *prefix,
       elder_terms::terminal_font_fallback_family_setting_key());
   print_setting_metadata(store, "auto_close",
                          elder_terms::terminal_auto_close_setting_key());
+  print_setting_metadata(store, "show_border",
+                         elder_terms::terminal_show_border_setting_key());
   print_setting_metadata(
       store, "exterior_background",
       elder_terms::general_exterior_background_setting_key());

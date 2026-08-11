@@ -16,6 +16,7 @@ static constexpr glong default_terminal_scrollback_lines = 10000;
 static constexpr gint64 minimum_terminal_scrollback_lines = 1000;
 static constexpr gint64 maximum_terminal_scrollback_lines = 100000;
 static constexpr bool default_terminal_auto_close = true;
+static constexpr bool default_terminal_show_border = false;
 static constexpr char terminal_section[] = "terminal";
 static constexpr char terminal_width_key[] = "width";
 static constexpr char terminal_height_key[] = "height";
@@ -30,6 +31,7 @@ static constexpr char default_terminal_font_primary_family[] =
     "Noto Sans Mono";
 static constexpr char default_terminal_font_fallback_family[] = "Monospace";
 static constexpr char terminal_auto_close_key[] = "auto_close";
+static constexpr char terminal_show_border_key[] = "show_border";
 static constexpr char terminal_zoom_in_key_name[] = "zoom_in_key";
 static constexpr char terminal_zoom_out_key_name[] = "zoom_out_key";
 static constexpr char terminal_send_break_key_name[] = "send_break_key";
@@ -219,6 +221,10 @@ SettingKey terminal_auto_close_setting_key() {
   return terminal_key(terminal_auto_close_key);
 }
 
+SettingKey terminal_show_border_setting_key() {
+  return terminal_key(terminal_show_border_key);
+}
+
 SettingKey terminal_zoom_in_key_setting_key() {
   return terminal_key(terminal_zoom_in_key_name);
 }
@@ -328,6 +334,11 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .validate = nullptr,
       },
       {
+          .key = terminal_show_border_setting_key(),
+          .default_value = SettingValue{default_terminal_show_border},
+          .validate = nullptr,
+      },
+      {
           .key = terminal_zoom_in_key_setting_key(),
           .default_value = SettingValue{std::string(default_terminal_zoom_in_key)},
           .validate = validate_key_binding,
@@ -401,6 +412,11 @@ TerminalFontFamilies terminal_font_families(const SettingsStore &store) {
 bool terminal_auto_close(const SettingsStore &store) {
   return setting_boolean_value_or_default(
       store, terminal_auto_close_setting_key(), default_terminal_auto_close);
+}
+
+bool terminal_show_border(const SettingsStore &store) {
+  return setting_boolean_value_or_default(
+      store, terminal_show_border_setting_key(), default_terminal_show_border);
 }
 
 std::string terminal_zoom_in_key(const SettingsStore &store) {

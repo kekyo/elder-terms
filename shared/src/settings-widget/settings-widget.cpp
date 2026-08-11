@@ -113,6 +113,7 @@ struct SettingsWidgetState {
   GtkWidget *terminal_font_fallback_mode_combo = nullptr;
   GtkWidget *terminal_font_fallback_button = nullptr;
   GtkWidget *terminal_auto_close_combo = nullptr;
+  GtkWidget *terminal_show_border_combo = nullptr;
   GtkWidget *terminal_encoding_combo = nullptr;
   GtkWidget *terminal_encoding_entry = nullptr;
   GtkWidget *terminal_backspace_code_combo = nullptr;
@@ -1095,6 +1096,20 @@ static void update_terminal_auto_close_from_widget(
   }
   set_explicit_setting_value(
       &state->draft_store, terminal_auto_close_setting_key(),
+      SettingValue{choice == boolean_enabled});
+}
+
+static void update_terminal_show_border_from_widget(
+    SettingsWidgetState *state) {
+  const std::string choice = active_combo_id(
+      state->terminal_show_border_combo, inherit_choice);
+  if (choice == inherit_choice) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 terminal_show_border_setting_key());
+    return;
+  }
+  set_explicit_setting_value(
+      &state->draft_store, terminal_show_border_setting_key(),
       SettingValue{choice == boolean_enabled});
 }
 
@@ -3081,6 +3096,12 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
                            terminal_auto_close_setting_key(),
                            terminal_auto_close(state->draft_store));
   }
+  if (state->terminal_show_border_combo != nullptr) {
+    populate_boolean_combo(state->terminal_show_border_combo,
+                           state->draft_store,
+                           terminal_show_border_setting_key(),
+                           terminal_show_border(state->draft_store));
+  }
   sync_general_color_control(
       state, GeneralColorField::exterior_background,
       colors.exterior_background);
@@ -3516,6 +3537,15 @@ static void on_terminal_auto_close_changed(GtkComboBox *, gpointer data) {
     return;
   }
   update_terminal_auto_close_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_terminal_show_border_changed(GtkComboBox *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_terminal_show_border_from_widget(state);
   notify_changed(state);
 }
 
@@ -4377,6 +4407,15 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   attach_row(page, 8, terminal_auto_close_setting_key(),
              state->terminal_auto_close_combo);
 
+  const std::string show_border_id =
+      widget_id(state, "terminal_show_border_combo");
+  state->terminal_show_border_combo =
+      create_combo_box(show_border_id.c_str());
+  g_signal_connect(state->terminal_show_border_combo, "changed",
+                   G_CALLBACK(on_terminal_show_border_changed), state);
+  attach_row(page, 9, terminal_show_border_setting_key(),
+             state->terminal_show_border_combo);
+
   const std::string zoom_in_id =
       widget_id(state, "terminal_zoom_in_key_entry");
   state->terminal_zoom_in_key_input = create_key_binding_input_widget({
@@ -4403,7 +4442,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(zoom_in_row),
                      state->terminal_zoom_in_key_reset_button, FALSE, FALSE,
                      0);
-  attach_row(page, 9, terminal_zoom_in_key_setting_key(), zoom_in_row);
+  attach_row(page, 10, terminal_zoom_in_key_setting_key(), zoom_in_row);
 
   const std::string zoom_out_id =
       widget_id(state, "terminal_zoom_out_key_entry");
@@ -4431,7 +4470,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(zoom_out_row),
                      state->terminal_zoom_out_key_reset_button, FALSE, FALSE,
                      0);
-  attach_row(page, 10, terminal_zoom_out_key_setting_key(), zoom_out_row);
+  attach_row(page, 11, terminal_zoom_out_key_setting_key(), zoom_out_row);
 
   const std::string send_break_id =
       widget_id(state, "terminal_send_break_key_entry");
@@ -4461,7 +4500,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(send_break_row),
                      state->terminal_send_break_key_reset_button, FALSE,
                      FALSE, 0);
-  attach_row(page, 11, terminal_send_break_key_setting_key(),
+  attach_row(page, 12, terminal_send_break_key_setting_key(),
              send_break_row);
 
   GtkWidget *primary_font_row =
@@ -4480,7 +4519,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                      state->terminal_font_primary_mode_combo, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(primary_font_row),
                      state->terminal_font_primary_button, TRUE, TRUE, 0);
-  attach_row(page, 12, terminal_font_primary_family_setting_key(),
+  attach_row(page, 13, terminal_font_primary_family_setting_key(),
              primary_font_row);
 
   GtkWidget *fallback_font_row =
@@ -4499,7 +4538,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                      state->terminal_font_fallback_mode_combo, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(fallback_font_row),
                      state->terminal_font_fallback_button, TRUE, TRUE, 0);
-  attach_row(page, 13, terminal_font_fallback_family_setting_key(),
+  attach_row(page, 14, terminal_font_fallback_family_setting_key(),
              fallback_font_row);
 
   return scroller;

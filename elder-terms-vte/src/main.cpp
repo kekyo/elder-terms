@@ -554,6 +554,9 @@ static void apply_runtime_settings(ApplicationState *state,
   elder_terms::apply_terminal_key_bindings(
       state->layout_state,
       elder_terms::terminal_key_bindings(state->settings_store));
+  elder_terms::apply_terminal_border_visibility(
+      state->layout_state,
+      elder_terms::terminal_show_border(state->settings_store));
 }
 
 static bool save_runtime_settings(
@@ -1583,6 +1586,7 @@ int main(int argc, char **argv) {
 
   app_state.layout_state = elder_terms::create_terminal_layout(
     *main_window, launch_options.test, terminal_display_settings,
+    elder_terms::terminal_show_border(app_state.settings_store),
     terminal_font_families, terminal_key_bindings,
     {
       .grid_size_changed = [&app_state](glong columns, glong rows) {

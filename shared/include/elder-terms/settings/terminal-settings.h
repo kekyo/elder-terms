@@ -108,6 +108,13 @@ ELDER_TERMS_API SettingKey terminal_font_fallback_family_setting_key();
 ELDER_TERMS_API SettingKey terminal_auto_close_setting_key();
 
 /**
+ * Returns the setting key for [terminal] show_border.
+ *
+ * @returns Setting key for terminal window side-border visibility.
+ */
+ELDER_TERMS_API SettingKey terminal_show_border_setting_key();
+
+/**
  * Returns the setting key for [terminal] zoom_in_key.
  *
  * @returns Setting key for the terminal zoom-in binding.
@@ -209,6 +216,14 @@ terminal_font_families(const SettingsStore &store);
  * @returns True when the app should exit after the active session ends.
  */
 ELDER_TERMS_API bool terminal_auto_close(const SettingsStore &store);
+
+/**
+ * Extracts terminal window side-border visibility from a store.
+ *
+ * @param store Source settings store.
+ * @returns True when the terminal window should show left and right borders.
+ */
+ELDER_TERMS_API bool terminal_show_border(const SettingsStore &store);
 
 /**
  * Extracts the raw terminal zoom-in binding text from a store.

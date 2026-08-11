@@ -2051,6 +2051,87 @@ describe.concurrent('elder-terms-vte settings', () => {
     });
   });
 
+  it('applies window side borders without changing the terminal grid', async (context) => {
+    await runGtkTest(context, ['--test-fixture'], async (app, evidence) => {
+      const initialLayout = await waitForResult(async () => {
+        const layout = await readTerminalGridLayout(app);
+        expectWindowCellSize(layout, defaultColumns, defaultRows);
+        await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+        return layout;
+      });
+      const startBorder = await app.getById('frame_start_border');
+      const endBorder = await app.getById('frame_end_border');
+      expect((await startBorder.info()).states).not.toContain('showing');
+      expect((await endBorder.info()).states).not.toContain('showing');
+
+      await openSettingsDialog(app);
+      await showTerminalSettingsPage(app);
+      await expectSelectedComboValue(
+        app,
+        'settings_terminal_show_border_combo',
+        'Disabled (built-in default)'
+      );
+      await expectElementKind(
+        await app.getById('settings_terminal_show_border_combo'),
+        'comboBox'
+      ).selectChildAt(1);
+      await expectElementKind(
+        await app.getById('settings_apply_button'),
+        'button'
+      ).click();
+      await expectSettingsDialogClosed(app);
+
+      const borderedLayout = await waitForResult(async () => {
+        const layout = await readTerminalGridLayout(app);
+        expectWindowCellSize(layout, defaultColumns, defaultRows);
+        await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+        expect(layout.hints.baseWidth).toBe(initialLayout.hints.baseWidth + 4);
+        expect(layout.mainBounds.width).toBe(
+          initialLayout.mainBounds.width + 4
+        );
+        return layout;
+      });
+      const [startCapture, endCapture] = await Promise.all([
+        evidence.captureEvidence('runtime-window-start-border', async () =>
+          startBorder.capture()
+        ),
+        evidence.captureEvidence('runtime-window-end-border', async () =>
+          endBorder.capture()
+        ),
+      ]);
+      expect(startCapture.bounds.width).toBe(2);
+      expect(endCapture.bounds.width).toBe(2);
+      expectWindowCellSize(borderedLayout, defaultColumns, defaultRows);
+
+      await openSettingsDialog(app);
+      await showTerminalSettingsPage(app);
+      await expectSelectedComboValue(
+        app,
+        'settings_terminal_show_border_combo',
+        'Enabled'
+      );
+      await expectElementKind(
+        await app.getById('settings_terminal_show_border_combo'),
+        'comboBox'
+      ).selectChildAt(2);
+      await expectElementKind(
+        await app.getById('settings_apply_button'),
+        'button'
+      ).click();
+      await expectSettingsDialogClosed(app);
+
+      await waitForResult(async () => {
+        const layout = await readTerminalGridLayout(app);
+        expectWindowCellSize(layout, defaultColumns, defaultRows);
+        await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+        expect(layout.hints.baseWidth).toBe(initialLayout.hints.baseWidth);
+        expect(layout.mainBounds.width).toBe(initialLayout.mainBounds.width);
+      });
+      expect((await startBorder.info()).states).not.toContain('showing');
+      expect((await endBorder.info()).states).not.toContain('showing');
+    });
+  });
+
   it('reflects runtime terminal grid settings after window resizing', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
       const initialLayout = await waitForResult(async () => {

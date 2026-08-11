@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-10 12:56+0900\n"
+"POT-Creation-Date: 2026-08-11 09:40+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Japanese\n"
@@ -88,560 +88,564 @@ msgstr "セカンダリフォントファミリー"
 msgid "Close window when session ends"
 msgstr "セッション終了時にウィンドウを閉じる"
 
-#: shared/src/settings-widget/settings-presentation.cpp:51
+#: shared/src/settings-widget/settings-presentation.cpp:52
+msgid "Show window side borders"
+msgstr "ウィンドウの左右にボーダーを表示する"
+
+#: shared/src/settings-widget/settings-presentation.cpp:53
 msgid "Zoom in shortcut"
 msgstr "拡大ショートカット"
 
-#: shared/src/settings-widget/settings-presentation.cpp:52
+#: shared/src/settings-widget/settings-presentation.cpp:54
 msgid "Zoom out shortcut"
 msgstr "縮小ショートカット"
 
-#: shared/src/settings-widget/settings-presentation.cpp:54
+#: shared/src/settings-widget/settings-presentation.cpp:56
 msgid "Send BREAK shortcut"
 msgstr "BREAK送信ショートカット"
 
-#: shared/src/settings-widget/settings-presentation.cpp:55
-#: shared/src/settings-widget/settings-presentation.cpp:58
+#: shared/src/settings-widget/settings-presentation.cpp:57
+#: shared/src/settings-widget/settings-presentation.cpp:60
 msgid "Address"
 msgstr "アドレス"
 
-#: shared/src/settings-widget/settings-presentation.cpp:56
-#: shared/src/settings-widget/settings-presentation.cpp:59
+#: shared/src/settings-widget/settings-presentation.cpp:58
+#: shared/src/settings-widget/settings-presentation.cpp:61
 msgid "Port"
 msgstr "ポート"
 
-#: shared/src/settings-widget/settings-presentation.cpp:57
-#: shared/src/settings-widget/settings-presentation.cpp:62
+#: shared/src/settings-widget/settings-presentation.cpp:59
+#: shared/src/settings-widget/settings-presentation.cpp:64
 msgid "Terminal type"
 msgstr "端末種別"
 
-#: shared/src/settings-widget/settings-presentation.cpp:60
+#: shared/src/settings-widget/settings-presentation.cpp:62
 msgid "User name"
 msgstr "ユーザー名"
 
-#: shared/src/settings-widget/settings-presentation.cpp:61
+#: shared/src/settings-widget/settings-presentation.cpp:63
 msgid "Identity file"
 msgstr "秘密鍵ファイル"
 
-#: shared/src/settings-widget/settings-presentation.cpp:63
+#: shared/src/settings-widget/settings-presentation.cpp:65
 msgid "Local directory"
 msgstr "ローカルディレクトリ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:64
+#: shared/src/settings-widget/settings-presentation.cpp:66
 msgid "Remote directory"
 msgstr "リモートディレクトリ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:65
+#: shared/src/settings-widget/settings-presentation.cpp:67
 msgid "Device"
 msgstr "デバイス"
 
-#: shared/src/settings-widget/settings-presentation.cpp:67
+#: shared/src/settings-widget/settings-presentation.cpp:69
 msgid "Device identification"
 msgstr "デバイス識別方式"
 
-#: shared/src/settings-widget/settings-presentation.cpp:69
-#: shared/src/settings-widget/settings-presentation.cpp:244
+#: shared/src/settings-widget/settings-presentation.cpp:71
+#: shared/src/settings-widget/settings-presentation.cpp:246
 msgid "USB serial number"
 msgstr "USBシリアル番号"
 
-#: shared/src/settings-widget/settings-presentation.cpp:70
+#: shared/src/settings-widget/settings-presentation.cpp:72
 msgid "Baud rate"
 msgstr "ボーレート"
 
-#: shared/src/settings-widget/settings-presentation.cpp:71
+#: shared/src/settings-widget/settings-presentation.cpp:73
 msgid "Data bits"
 msgstr "データビット"
 
-#: shared/src/settings-widget/settings-presentation.cpp:72
+#: shared/src/settings-widget/settings-presentation.cpp:74
 msgid "Parity"
 msgstr "パリティ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:73
+#: shared/src/settings-widget/settings-presentation.cpp:75
 msgid "Stop bits"
 msgstr "ストップビット"
 
-#: shared/src/settings-widget/settings-presentation.cpp:74
+#: shared/src/settings-widget/settings-presentation.cpp:76
 msgid "Flow control"
 msgstr "フロー制御"
 
-#: shared/src/settings-widget/settings-presentation.cpp:76
+#: shared/src/settings-widget/settings-presentation.cpp:78
 msgid "Connection monitoring signal"
 msgstr "接続監視信号"
 
-#: shared/src/settings-widget/settings-presentation.cpp:78
+#: shared/src/settings-widget/settings-presentation.cpp:80
 msgid "Transfer base directory"
 msgstr "転送ベースディレクトリ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:80
+#: shared/src/settings-widget/settings-presentation.cpp:82
 msgid "Text send rate (bytes/s)"
 msgstr "テキスト送信速度（バイト/秒）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:82
+#: shared/src/settings-widget/settings-presentation.cpp:84
 msgid "Follow Enter/Return code for text send"
 msgstr "テキスト送信時にEnter/Returnコードに従う"
 
-#: shared/src/settings-widget/settings-presentation.cpp:84
+#: shared/src/settings-widget/settings-presentation.cpp:86
 msgid "Automatically start ZMODEM transfers"
 msgstr "ZMODEM転送を自動開始する"
 
-#: shared/src/settings-widget/settings-presentation.cpp:85
+#: shared/src/settings-widget/settings-presentation.cpp:87
 msgid "Enable logging"
 msgstr "ログを有効にする"
 
-#: shared/src/settings-widget/settings-presentation.cpp:86
+#: shared/src/settings-widget/settings-presentation.cpp:88
 msgid "Log directory"
 msgstr "ログディレクトリ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:87
+#: shared/src/settings-widget/settings-presentation.cpp:89
 msgid "File name format"
 msgstr "ファイル名形式"
 
-#: shared/src/settings-widget/settings-presentation.cpp:88
+#: shared/src/settings-widget/settings-presentation.cpp:90
 msgid "Log content"
 msgstr "ログ内容"
 
-#: shared/src/settings-widget/settings-presentation.cpp:92
+#: shared/src/settings-widget/settings-presentation.cpp:94
 msgid "Local shell"
 msgstr "ローカルシェル"
 
-#: shared/src/settings-widget/settings-presentation.cpp:93
-#: shared/src/settings-widget/settings-presentation.cpp:164
+#: shared/src/settings-widget/settings-presentation.cpp:95
+#: shared/src/settings-widget/settings-presentation.cpp:166
 msgid "TELNET"
 msgstr "TELNET"
 
-#: shared/src/settings-widget/settings-presentation.cpp:94
-#: shared/src/settings-widget/settings-presentation.cpp:166
+#: shared/src/settings-widget/settings-presentation.cpp:96
+#: shared/src/settings-widget/settings-presentation.cpp:168
 msgid "Serial"
 msgstr "シリアル"
 
-#: shared/src/settings-widget/settings-presentation.cpp:95
-#: shared/src/settings-widget/settings-presentation.cpp:168
-#: elder-terms-vte/src/main-window.cpp:1535
+#: shared/src/settings-widget/settings-presentation.cpp:97
+#: shared/src/settings-widget/settings-presentation.cpp:170
+#: elder-terms-vte/src/main-window.cpp:1557
 msgid "SSH"
 msgstr "SSH"
 
-#: shared/src/settings-widget/settings-presentation.cpp:96
-#: shared/src/settings-widget/settings-presentation.cpp:170
-#: elder-terms-vte/src/main.cpp:1204
+#: shared/src/settings-widget/settings-presentation.cpp:98
+#: shared/src/settings-widget/settings-presentation.cpp:172
+#: elder-terms-vte/src/main.cpp:1207
 msgid "SFTP"
 msgstr "SFTP"
 
-#: shared/src/settings-widget/settings-presentation.cpp:98
+#: shared/src/settings-widget/settings-presentation.cpp:100
 msgid "System default"
 msgstr "システム設定"
 
-#: shared/src/settings-widget/settings-presentation.cpp:99
+#: shared/src/settings-widget/settings-presentation.cpp:101
 msgid "English"
 msgstr "English"
 
-#: shared/src/settings-widget/settings-presentation.cpp:100
+#: shared/src/settings-widget/settings-presentation.cpp:102
 msgid "العربية"
 msgstr "العربية"
 
-#: shared/src/settings-widget/settings-presentation.cpp:101
+#: shared/src/settings-widget/settings-presentation.cpp:103
 msgid "Español"
 msgstr "Español"
 
-#: shared/src/settings-widget/settings-presentation.cpp:102
+#: shared/src/settings-widget/settings-presentation.cpp:104
 msgid "Français"
 msgstr "Français"
 
-#: shared/src/settings-widget/settings-presentation.cpp:103
+#: shared/src/settings-widget/settings-presentation.cpp:105
 msgid "हिन्दी"
 msgstr "हिन्दी"
 
-#: shared/src/settings-widget/settings-presentation.cpp:104
+#: shared/src/settings-widget/settings-presentation.cpp:106
 msgid "日本語"
 msgstr "日本語"
 
-#: shared/src/settings-widget/settings-presentation.cpp:105
+#: shared/src/settings-widget/settings-presentation.cpp:107
 msgid "한국어"
 msgstr "한국어"
 
-#: shared/src/settings-widget/settings-presentation.cpp:106
+#: shared/src/settings-widget/settings-presentation.cpp:108
 msgid "Português"
 msgstr "Português"
 
-#: shared/src/settings-widget/settings-presentation.cpp:107
+#: shared/src/settings-widget/settings-presentation.cpp:109
 msgid "Русский"
 msgstr "Русский"
 
-#: shared/src/settings-widget/settings-presentation.cpp:108
+#: shared/src/settings-widget/settings-presentation.cpp:110
 msgid "中文"
 msgstr "中文"
 
-#: shared/src/settings-widget/settings-presentation.cpp:110
+#: shared/src/settings-widget/settings-presentation.cpp:112
 msgid "Simple startup"
 msgstr "シンプル起動"
 
-#: shared/src/settings-widget/settings-presentation.cpp:112
+#: shared/src/settings-widget/settings-presentation.cpp:114
 msgid "Background only"
 msgstr "バックグラウンドのみ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:114
+#: shared/src/settings-widget/settings-presentation.cpp:116
 msgid "System tray only"
 msgstr "システムトレイのみ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:116
+#: shared/src/settings-widget/settings-presentation.cpp:118
 msgid "System tray and main window"
 msgstr "システムトレイとメインウィンドウ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:117
-#: shared/src/settings-widget/settings-presentation.cpp:122
+#: shared/src/settings-widget/settings-presentation.cpp:119
+#: shared/src/settings-widget/settings-presentation.cpp:124
 msgid "Auto"
 msgstr "自動"
 
-#: shared/src/settings-widget/settings-presentation.cpp:118
+#: shared/src/settings-widget/settings-presentation.cpp:120
 msgid "BS"
 msgstr "BS"
 
-#: shared/src/settings-widget/settings-presentation.cpp:119
+#: shared/src/settings-widget/settings-presentation.cpp:121
 msgid "DEL"
 msgstr "DEL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:120
+#: shared/src/settings-widget/settings-presentation.cpp:122
 msgid "Normal"
 msgstr "通常"
 
-#: shared/src/settings-widget/settings-presentation.cpp:121
+#: shared/src/settings-widget/settings-presentation.cpp:123
 msgid "TRS80"
 msgstr "TRS80"
 
-#: shared/src/settings-widget/settings-presentation.cpp:123
+#: shared/src/settings-widget/settings-presentation.cpp:125
 msgid "CR"
 msgstr "CR"
 
-#: shared/src/settings-widget/settings-presentation.cpp:124
+#: shared/src/settings-widget/settings-presentation.cpp:126
 msgid "LF"
 msgstr "LF"
 
-#: shared/src/settings-widget/settings-presentation.cpp:125
+#: shared/src/settings-widget/settings-presentation.cpp:127
 msgid "CRLF"
 msgstr "CRLF"
 
-#: shared/src/settings-widget/settings-presentation.cpp:126
-#: shared/src/settings-widget/settings-presentation.cpp:135
+#: shared/src/settings-widget/settings-presentation.cpp:128
+#: shared/src/settings-widget/settings-presentation.cpp:137
 msgid "None"
 msgstr "なし"
 
-#: shared/src/settings-widget/settings-presentation.cpp:128
+#: shared/src/settings-widget/settings-presentation.cpp:130
 msgid "Device path"
 msgstr "デバイスパス"
 
-#: shared/src/settings-widget/settings-presentation.cpp:130
+#: shared/src/settings-widget/settings-presentation.cpp:132
 msgid "Stable device identity"
 msgstr "安定したデバイスID"
 
-#: shared/src/settings-widget/settings-presentation.cpp:132
+#: shared/src/settings-widget/settings-presentation.cpp:134
 msgid "Physical USB port"
 msgstr "物理USBポート"
 
-#: shared/src/settings-widget/settings-presentation.cpp:133
+#: shared/src/settings-widget/settings-presentation.cpp:135
 msgid "Even"
 msgstr "偶数"
 
-#: shared/src/settings-widget/settings-presentation.cpp:134
+#: shared/src/settings-widget/settings-presentation.cpp:136
 msgid "Odd"
 msgstr "奇数"
 
-#: shared/src/settings-widget/settings-presentation.cpp:137
+#: shared/src/settings-widget/settings-presentation.cpp:139
 msgid "XON/XOFF (software)"
 msgstr "XON/XOFF（ソフトウェア）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:139
+#: shared/src/settings-widget/settings-presentation.cpp:141
 msgid "RTS/CTS (hardware)"
 msgstr "RTS/CTS（ハードウェア）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:141
+#: shared/src/settings-widget/settings-presentation.cpp:143
 msgid "DCD (Data Carrier Detect)"
 msgstr "DCD（データキャリア検出）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:143
+#: shared/src/settings-widget/settings-presentation.cpp:145
 msgid "CTS (Clear to Send)"
 msgstr "CTS（送信可）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:145
+#: shared/src/settings-widget/settings-presentation.cpp:147
 msgid "DSR (Data Set Ready)"
 msgstr "DSR（データセット準備完了）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:147
+#: shared/src/settings-widget/settings-presentation.cpp:149
 msgid "Ignore (do not monitor)"
 msgstr "監視しない"
 
-#: shared/src/settings-widget/settings-presentation.cpp:149
+#: shared/src/settings-widget/settings-presentation.cpp:151
 msgid "Raw bytes (before character conversion)"
 msgstr "生バイト列（文字変換前）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:151
+#: shared/src/settings-widget/settings-presentation.cpp:153
 msgid "UTF-8 text (after character conversion)"
 msgstr "UTF-8テキスト（文字変換後）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:162
+#: shared/src/settings-widget/settings-presentation.cpp:164
 msgid "General"
 msgstr "一般"
 
-#: shared/src/settings-widget/settings-presentation.cpp:172
-#: elder-terms-vte/src/main-window.ui:348
+#: shared/src/settings-widget/settings-presentation.cpp:174
+#: elder-terms-vte/src/main-window.ui:370
 #: elder-terms-vte/src/terminal-session.cpp:225
 msgid "Terminal"
 msgstr "端末"
 
-#: shared/src/settings-widget/settings-presentation.cpp:174
+#: shared/src/settings-widget/settings-presentation.cpp:176
 msgid "Macro"
 msgstr "マクロ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:176
+#: shared/src/settings-widget/settings-presentation.cpp:178
 #: elder-terms-vte/src/main-window.ui:35
 msgid "Transfer"
 msgstr "転送"
 
-#: shared/src/settings-widget/settings-presentation.cpp:178
+#: shared/src/settings-widget/settings-presentation.cpp:180
 msgid "Logging"
 msgstr "ログ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:180
+#: shared/src/settings-widget/settings-presentation.cpp:182
 msgid "Apply"
 msgstr "適用"
 
-#: shared/src/settings-widget/settings-presentation.cpp:182
+#: shared/src/settings-widget/settings-presentation.cpp:184
 #: elder-terms/src/main.cpp:466 elder-terms/src/main-window.ui:184
 msgid "Save"
 msgstr "保存"
 
-#: shared/src/settings-widget/settings-presentation.cpp:184
+#: shared/src/settings-widget/settings-presentation.cpp:186
 #: elder-terms/src/main.cpp:465 elder-terms/src/main.cpp:1385
-#: elder-terms/src/main.cpp:1578 elder-terms-vte/src/main.cpp:791
-#: elder-terms-vte/src/main-window.ui:211
-#: elder-terms-vte/src/main-window.ui:288
+#: elder-terms/src/main.cpp:1578 elder-terms-vte/src/main.cpp:794
+#: elder-terms-vte/src/main-window.ui:233
+#: elder-terms-vte/src/main-window.ui:310
 #: elder-terms-vte/src/sftp/sftp-main.cpp:109
 #: elder-terms-vte/src/sftp/sftp-window.cpp:696
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1843
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: shared/src/settings-widget/settings-presentation.cpp:186
+#: shared/src/settings-widget/settings-presentation.cpp:188
 msgid "Reset"
 msgstr "リセット"
 
-#: shared/src/settings-widget/settings-presentation.cpp:188
+#: shared/src/settings-widget/settings-presentation.cpp:190
 msgid "Select Primary Terminal Font"
 msgstr "プライマリ端末フォントを選択"
 
-#: shared/src/settings-widget/settings-presentation.cpp:190
+#: shared/src/settings-widget/settings-presentation.cpp:192
 msgid "Select Secondary Terminal Font"
 msgstr "セカンダリ端末フォントを選択"
 
-#: shared/src/settings-widget/settings-presentation.cpp:192
+#: shared/src/settings-widget/settings-presentation.cpp:194
 msgid "Enabled"
 msgstr "有効"
 
-#: shared/src/settings-widget/settings-presentation.cpp:194
+#: shared/src/settings-widget/settings-presentation.cpp:196
 msgid "Disabled"
 msgstr "無効"
 
-#: shared/src/settings-widget/settings-presentation.cpp:196
+#: shared/src/settings-widget/settings-presentation.cpp:198
 msgid "Custom font"
 msgstr "カスタムフォント"
 
-#: shared/src/settings-widget/settings-presentation.cpp:198
+#: shared/src/settings-widget/settings-presentation.cpp:200
 msgid "No color"
 msgstr "色なし"
 
-#: shared/src/settings-widget/settings-presentation.cpp:200
+#: shared/src/settings-widget/settings-presentation.cpp:202
 msgid "Custom color"
 msgstr "カスタム色"
 
-#: shared/src/settings-widget/settings-presentation.cpp:202
+#: shared/src/settings-widget/settings-presentation.cpp:204
 msgid "Press a key combination"
 msgstr "キーの組み合わせを入力してください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:204
+#: shared/src/settings-widget/settings-presentation.cpp:206
 msgid "Clear key binding"
 msgstr "キー割り当てをクリア"
 
-#: shared/src/settings-widget/settings-presentation.cpp:206
+#: shared/src/settings-widget/settings-presentation.cpp:208
 msgid "Use global default"
 msgstr "グローバル既定値を使用"
 
-#: shared/src/settings-widget/settings-presentation.cpp:208
+#: shared/src/settings-widget/settings-presentation.cpp:210
 msgid "Use built-in default"
 msgstr "組み込み既定値を使用"
 
-#: shared/src/settings-widget/settings-presentation.cpp:210
+#: shared/src/settings-widget/settings-presentation.cpp:212
 msgid "Macro rules"
 msgstr "マクロルール"
 
-#: shared/src/settings-widget/settings-presentation.cpp:212
+#: shared/src/settings-widget/settings-presentation.cpp:214
 msgid "Rule ID"
 msgstr "ルールID"
 
-#: shared/src/settings-widget/settings-presentation.cpp:214
+#: shared/src/settings-widget/settings-presentation.cpp:216
 msgid "Regular expression"
 msgstr "正規表現"
 
-#: shared/src/settings-widget/settings-presentation.cpp:216
+#: shared/src/settings-widget/settings-presentation.cpp:218
 msgid "Action"
 msgstr "アクション"
 
-#: shared/src/settings-widget/settings-presentation.cpp:218
+#: shared/src/settings-widget/settings-presentation.cpp:220
 msgid "Text to send"
 msgstr "送信テキスト"
 
-#: shared/src/settings-widget/settings-presentation.cpp:220
+#: shared/src/settings-widget/settings-presentation.cpp:222
 msgid "Command"
 msgstr "コマンド"
 
-#: shared/src/settings-widget/settings-presentation.cpp:222
+#: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "Arguments"
 msgstr "引数"
 
-#: shared/src/settings-widget/settings-presentation.cpp:224
+#: shared/src/settings-widget/settings-presentation.cpp:226
 msgid "Add rule"
 msgstr "ルールを追加"
 
-#: shared/src/settings-widget/settings-presentation.cpp:226
+#: shared/src/settings-widget/settings-presentation.cpp:228
 msgid "Remove rule"
 msgstr "ルールを削除"
 
-#: shared/src/settings-widget/settings-presentation.cpp:228
+#: shared/src/settings-widget/settings-presentation.cpp:230
 msgid "Move up"
 msgstr "上へ移動"
 
-#: shared/src/settings-widget/settings-presentation.cpp:230
+#: shared/src/settings-widget/settings-presentation.cpp:232
 msgid "Move down"
 msgstr "下へ移動"
 
-#: shared/src/settings-widget/settings-presentation.cpp:232
+#: shared/src/settings-widget/settings-presentation.cpp:234
 msgid "Send text"
 msgstr "テキストを送信"
 
-#: shared/src/settings-widget/settings-presentation.cpp:234
+#: shared/src/settings-widget/settings-presentation.cpp:236
 msgid "Run command"
 msgstr "コマンドを実行"
 
-#: shared/src/settings-widget/settings-presentation.cpp:236
+#: shared/src/settings-widget/settings-presentation.cpp:238
 msgid "Add argument"
 msgstr "引数を追加"
 
-#: shared/src/settings-widget/settings-presentation.cpp:238
+#: shared/src/settings-widget/settings-presentation.cpp:240
 msgid "Remove argument"
 msgstr "引数を削除"
 
-#: shared/src/settings-widget/settings-presentation.cpp:240
+#: shared/src/settings-widget/settings-presentation.cpp:242
 msgid "No device"
 msgstr "デバイスなし"
 
-#: shared/src/settings-widget/settings-presentation.cpp:242
+#: shared/src/settings-widget/settings-presentation.cpp:244
 msgid "Stable ID"
 msgstr "安定ID"
 
-#: shared/src/settings-widget/settings-presentation.cpp:246
+#: shared/src/settings-widget/settings-presentation.cpp:248
 msgid "Current device node"
 msgstr "現在のデバイスノード"
 
-#: shared/src/settings-widget/settings-presentation.cpp:248
+#: shared/src/settings-widget/settings-presentation.cpp:250
 msgid "Unavailable"
 msgstr "利用不可"
 
-#: shared/src/settings-widget/settings-presentation.cpp:276
+#: shared/src/settings-widget/settings-presentation.cpp:278
 msgid "Global default"
 msgstr "グローバル既定値"
 
-#: shared/src/settings-widget/settings-presentation.cpp:277
+#: shared/src/settings-widget/settings-presentation.cpp:279
 msgid "Built-in default"
 msgstr "組み込み既定値"
 
-#: shared/src/settings-widget/settings-presentation.cpp:281
+#: shared/src/settings-widget/settings-presentation.cpp:283
 #, c-format
 msgid "%s (global default)"
 msgstr "%s（グローバル既定値）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:282
+#: shared/src/settings-widget/settings-presentation.cpp:284
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s（組み込み既定値）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:293
+#: shared/src/settings-widget/settings-presentation.cpp:295
 msgid "Enter a whole number"
 msgstr "整数を入力してください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:296
+#: shared/src/settings-widget/settings-presentation.cpp:298
 msgid "Enter a number"
 msgstr "数値を入力してください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:307
+#: shared/src/settings-widget/settings-presentation.cpp:309
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "値は%sから%sの範囲で入力してください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:316
+#: shared/src/settings-widget/settings-presentation.cpp:318
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "Ctrl、Shift、Alt、Super のいずれかを含めてください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:319
+#: shared/src/settings-widget/settings-presentation.cpp:321
 msgid "Contains an empty token"
 msgstr "空の要素が含まれています"
 
-#: shared/src/settings-widget/settings-presentation.cpp:328
+#: shared/src/settings-widget/settings-presentation.cpp:330
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "不明な修飾キーが含まれています: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:341
+#: shared/src/settings-widget/settings-presentation.cpp:343
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "修飾キーが重複しています: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:349
+#: shared/src/settings-widget/settings-presentation.cpp:351
 msgid "Does not contain a key"
 msgstr "キーを含めてください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:356
+#: shared/src/settings-widget/settings-presentation.cpp:358
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "不明なキーが含まれています: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:364
+#: shared/src/settings-widget/settings-presentation.cpp:366
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "拡大と縮小には異なるキー割り当てを指定してください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:367
+#: shared/src/settings-widget/settings-presentation.cpp:369
 msgid "Must not be empty"
 msgstr "空にはできません"
 
-#: shared/src/settings-widget/settings-presentation.cpp:370
+#: shared/src/settings-widget/settings-presentation.cpp:372
 msgid "The character encoding is not supported"
 msgstr "この文字エンコーディングには対応していません"
 
-#: shared/src/settings-widget/settings-presentation.cpp:373
+#: shared/src/settings-widget/settings-presentation.cpp:375
 msgid "Contains a NUL byte"
 msgstr "NULバイトが含まれています"
 
-#: shared/src/settings-widget/settings-presentation.cpp:376
+#: shared/src/settings-widget/settings-presentation.cpp:378
 msgid "Contains an unmatched closing brace"
 msgstr "対応する開始波括弧のない終了波括弧が含まれています"
 
-#: shared/src/settings-widget/settings-presentation.cpp:379
+#: shared/src/settings-widget/settings-presentation.cpp:381
 msgid "Contains an unmatched opening brace"
 msgstr "対応する終了波括弧のない開始波括弧が含まれています"
 
-#: shared/src/settings-widget/settings-presentation.cpp:382
+#: shared/src/settings-widget/settings-presentation.cpp:384
 msgid "Contains an unknown placeholder"
 msgstr "不明なプレースホルダーが含まれています"
 
-#: shared/src/settings-widget/settings-presentation.cpp:385
+#: shared/src/settings-widget/settings-presentation.cpp:387
 msgid "Must be relative to the log base directory"
 msgstr "ログのベースディレクトリからの相対パスにしてください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:388
+#: shared/src/settings-widget/settings-presentation.cpp:390
 msgid "Must not contain parent directory traversal"
 msgstr "親ディレクトリへの移動は指定できません"
 
-#: shared/src/settings-widget/settings-presentation.cpp:391
+#: shared/src/settings-widget/settings-presentation.cpp:393
 msgid "Must name a log file"
 msgstr "ログファイル名を指定してください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:393
+#: shared/src/settings-widget/settings-presentation.cpp:395
 msgid "Invalid value"
 msgstr "無効な値です"
 
@@ -658,8 +662,8 @@ msgstr ""
 "動作しません。デスクトップ環境がグローバルショートカットに対応しているか確認"
 "してください。"
 
-#: elder-terms/src/main.cpp:233 elder-terms-vte/src/main-window.ui:297
-#: elder-terms-vte/src/main-window.cpp:1540
+#: elder-terms/src/main.cpp:233 elder-terms-vte/src/main-window.ui:319
+#: elder-terms-vte/src/main-window.cpp:1562
 msgid "OK"
 msgstr "OK"
 
@@ -885,13 +889,13 @@ msgstr ""
 "フィンガープリント: %s\n"
 "このホスト鍵を承認して保存しますか？"
 
-#: elder-terms-vte/src/main.cpp:211 elder-terms-vte/src/main-window.ui:252
+#: elder-terms-vte/src/main.cpp:211 elder-terms-vte/src/main-window.ui:274
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:472
 msgid "SSH Authentication"
 msgstr "SSH認証"
 
-#: elder-terms-vte/src/main.cpp:212 elder-terms-vte/src/main-window.ui:260
+#: elder-terms-vte/src/main.cpp:212 elder-terms-vte/src/main-window.ui:282
 msgid "Password:"
 msgstr "パスワード:"
 
@@ -903,116 +907,116 @@ msgstr "SSHプロンプトを承認しました"
 msgid "SSH prompt cancelled"
 msgstr "SSHプロンプトをキャンセルしました"
 
-#: elder-terms-vte/src/main.cpp:612 elder-terms-vte/src/main.cpp:616
+#: elder-terms-vte/src/main.cpp:615 elder-terms-vte/src/main.cpp:619
 #: elder-terms-vte/src/main-window.ui:18
 msgid "Settings"
 msgstr "設定"
 
-#: elder-terms-vte/src/main.cpp:790
+#: elder-terms-vte/src/main.cpp:793
 msgid "Select file"
 msgstr "ファイルを選択"
 
-#: elder-terms-vte/src/main.cpp:792
+#: elder-terms-vte/src/main.cpp:795
 msgid "Open"
 msgstr "開く"
 
-#: elder-terms-vte/src/main.cpp:878 elder-terms-vte/src/main.cpp:888
-#: elder-terms-vte/src/main.cpp:913 elder-terms-vte/src/main.cpp:923
+#: elder-terms-vte/src/main.cpp:881 elder-terms-vte/src/main.cpp:891
+#: elder-terms-vte/src/main.cpp:916 elder-terms-vte/src/main.cpp:926
 msgid "Transfer unavailable"
 msgstr "転送を利用できません"
 
-#: elder-terms-vte/src/main.cpp:1025 elder-terms-vte/src/main.cpp:1047
+#: elder-terms-vte/src/main.cpp:1028 elder-terms-vte/src/main.cpp:1050
 msgid "BREAK unavailable"
 msgstr "BREAKを利用できません"
 
-#: elder-terms-vte/src/main.cpp:1031
+#: elder-terms-vte/src/main.cpp:1034
 msgid "Sending BREAK"
 msgstr "BREAKを送信中"
 
-#: elder-terms-vte/src/main.cpp:1067 elder-terms-vte/src/main.cpp:1550
+#: elder-terms-vte/src/main.cpp:1070 elder-terms-vte/src/main.cpp:1553
 msgid "Text send unavailable"
 msgstr "テキスト送信を利用できません"
 
-#: elder-terms-vte/src/main.cpp:1075
+#: elder-terms-vte/src/main.cpp:1078
 msgid "Text (Send)"
 msgstr "テキスト（送信）"
 
-#: elder-terms-vte/src/main.cpp:1153 elder-terms-vte/src/main.cpp:1184
+#: elder-terms-vte/src/main.cpp:1156 elder-terms-vte/src/main.cpp:1187
 msgid "SFTP unavailable"
 msgstr "SFTPを利用できません"
 
-#: elder-terms-vte/src/main.cpp:1228
+#: elder-terms-vte/src/main.cpp:1231
 msgid "Log recording"
 msgstr "ログ記録"
 
-#: elder-terms-vte/src/main.cpp:1274
+#: elder-terms-vte/src/main.cpp:1277
 msgid "ZMODEM (send)"
 msgstr "ZMODEM（送信）"
 
-#: elder-terms-vte/src/main.cpp:1281
+#: elder-terms-vte/src/main.cpp:1284
 msgid "YMODEM (send)"
 msgstr "YMODEM（送信）"
 
-#: elder-terms-vte/src/main.cpp:1288
+#: elder-terms-vte/src/main.cpp:1291
 msgid "XMODEM 1K (send)"
 msgstr "XMODEM 1K（送信）"
 
-#: elder-terms-vte/src/main.cpp:1297
+#: elder-terms-vte/src/main.cpp:1300
 msgid "XMODEM (send)"
 msgstr "XMODEM（送信）"
 
-#: elder-terms-vte/src/main.cpp:1307
+#: elder-terms-vte/src/main.cpp:1310
 msgid "ZMODEM (receive)"
 msgstr "ZMODEM（受信）"
 
-#: elder-terms-vte/src/main.cpp:1314
+#: elder-terms-vte/src/main.cpp:1317
 msgid "YMODEM-g (receive)"
 msgstr "YMODEM-g（受信）"
 
-#: elder-terms-vte/src/main.cpp:1322
+#: elder-terms-vte/src/main.cpp:1325
 msgid "YMODEM (receive)"
 msgstr "YMODEM（受信）"
 
-#: elder-terms-vte/src/main.cpp:1331
+#: elder-terms-vte/src/main.cpp:1334
 msgid "XMODEM CRC (receive)"
 msgstr "XMODEM CRC（受信）"
 
-#: elder-terms-vte/src/main.cpp:1340
+#: elder-terms-vte/src/main.cpp:1343
 msgid "XMODEM (receive)"
 msgstr "XMODEM（受信）"
 
-#: elder-terms-vte/src/main-window.ui:116
-#: elder-terms-vte/src/main-window.cpp:1441
+#: elder-terms-vte/src/main-window.ui:138
+#: elder-terms-vte/src/main-window.cpp:1463
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1899
 msgid "Disconnected"
 msgstr "切断されました"
 
-#: elder-terms-vte/src/main-window.ui:171
+#: elder-terms-vte/src/main-window.ui:193
 msgid "Transferring..."
 msgstr "転送中..."
 
-#: elder-terms-vte/src/main-window.cpp:308
+#: elder-terms-vte/src/main-window.cpp:311
 msgid "Copy"
 msgstr "コピー"
 
-#: elder-terms-vte/src/main-window.cpp:312
+#: elder-terms-vte/src/main-window.cpp:315
 msgid "Paste"
 msgstr "貼り付け"
 
-#: elder-terms-vte/src/main-window.cpp:318
+#: elder-terms-vte/src/main-window.cpp:321
 msgid "Send BREAK"
 msgstr "BREAKを送信"
 
-#: elder-terms-vte/src/main-window.cpp:1052
+#: elder-terms-vte/src/main-window.cpp:1064
 #, c-format
 msgid "%s (Disconnected)"
 msgstr "%s（切断）"
 
-#: elder-terms-vte/src/main-window.cpp:1464
+#: elder-terms-vte/src/main-window.cpp:1486
 msgid "SSH connection failed"
 msgstr "SSH接続に失敗しました"
 
-#: elder-terms-vte/src/main-window.cpp:1466
+#: elder-terms-vte/src/main-window.cpp:1488
 #, c-format
 msgid ""
 "SSH connection failed:\n"
@@ -1021,7 +1025,7 @@ msgstr ""
 "SSH接続に失敗しました:\n"
 "%s"
 
-#: elder-terms-vte/src/main-window.cpp:1540
+#: elder-terms-vte/src/main-window.cpp:1562
 #: elder-terms-vte/src/sftp/sftp-main.cpp:111
 msgid "Accept"
 msgstr "承認"

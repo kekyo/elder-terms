@@ -52,6 +52,7 @@ struct TerminalLayoutCallbacks {
  * @param main_window Loaded main window widgets.
  * @param options Test harness options.
  * @param terminal_display_settings Initial terminal display settings.
+ * @param show_border Whether to show the terminal window side borders.
  * @param terminal_font_families Initial terminal font family overrides.
  * @param terminal_key_bindings Initial terminal action key bindings.
  * @param callbacks Optional layout callbacks.
@@ -60,6 +61,7 @@ struct TerminalLayoutCallbacks {
 TerminalLayoutState *
 create_terminal_layout(const MainWindow &main_window, TestOptions options,
                        TerminalDisplaySettings terminal_display_settings,
+                       bool show_border,
                        TerminalFontFamilies terminal_font_families,
                        TerminalKeyBindings terminal_key_bindings,
                        TerminalLayoutCallbacks callbacks);
@@ -87,6 +89,15 @@ void start_terminal_layout(TerminalLayoutState *state);
 void apply_terminal_display_settings(
     TerminalLayoutState *state,
     TerminalDisplaySettings terminal_display_settings);
+
+/**
+ * Applies terminal window side-border visibility to the live layout.
+ *
+ * @param state Layout state created by create_terminal_layout.
+ * @param show_border Whether to show the left and right frame borders.
+ */
+void apply_terminal_border_visibility(TerminalLayoutState *state,
+                                      bool show_border);
 
 /**
  * Applies terminal font family overrides to the live layout.

@@ -20,6 +20,7 @@
 namespace elder_terms {
 
 static constexpr int indicator_icon_pixel_size = 18;
+static constexpr int frame_border_width = 2;
 static constexpr guint transfer_progress_pulse_period_ms = 120;
 static constexpr const char *terminal_dim_overlay_style_class =
     "terminal-dim-overlay";
@@ -33,6 +34,8 @@ static constexpr const char *transfer_progress_notice_label_style_class =
     "transfer-progress-notice-label";
 static constexpr const char *settings_exterior_background_style_class =
     "settings-exterior-background";
+static constexpr const char *frame_border_style_class =
+    "terminal-window-frame-border";
 static constexpr const char *main_exterior_component_style_class =
     "main-exterior-components";
 static constexpr const char *settings_background_style_class =
@@ -400,6 +403,8 @@ static bool main_window_has_required_widgets(const MainWindow &main_window) {
          main_window.settings_button != nullptr &&
          main_window.transfer_button != nullptr &&
          main_window.root_box != nullptr &&
+         main_window.frame_start_border != nullptr &&
+         main_window.frame_end_border != nullptr &&
          main_window.terminal_scroller != nullptr &&
          main_window.terminal_overlay != nullptr &&
          main_window.terminal != nullptr &&
@@ -752,13 +757,16 @@ static void clear_main_window_exterior_background(MainWindow *main_window) {
   update_widget_style_class(
       main_window->status_bar,
       main_exterior_component_style_class, false);
-  GtkCssProvider *provider =
-      main_window->exterior_background_provider;
+  GtkCssProvider *provider = main_window->exterior_background_provider;
   if (provider != nullptr) {
     remove_main_window_exterior_provider(
         main_window->header_bar, provider);
     remove_main_window_exterior_provider(
         main_window->status_bar, provider);
+    remove_main_window_exterior_provider(
+        main_window->frame_start_border, provider);
+    remove_main_window_exterior_provider(
+        main_window->frame_end_border, provider);
   }
   g_clear_object(&main_window->exterior_background_provider);
   g_clear_object(
@@ -911,6 +919,10 @@ static void set_main_window_exterior_background(
       main_window->header_bar, provider);
   add_main_window_exterior_provider(
       main_window->status_bar, provider);
+  add_main_window_exterior_provider(
+      main_window->frame_start_border, provider);
+  add_main_window_exterior_provider(
+      main_window->frame_end_border, provider);
   if (component_provider != nullptr) {
     update_widget_style_class(
         main_window->header_bar,
@@ -1227,6 +1239,10 @@ std::optional<MainWindow> load_main_window() {
   main_window.transfer_button =
       required_widget(main_window.builder, "transfer_button");
   main_window.root_box = required_widget(main_window.builder, "root_box");
+  main_window.frame_start_border =
+      required_widget(main_window.builder, "frame_start_border");
+  main_window.frame_end_border =
+      required_widget(main_window.builder, "frame_end_border");
   main_window.terminal_scroller =
       required_widget(main_window.builder, "terminal_scroller");
   main_window.terminal_overlay =
@@ -1281,6 +1297,12 @@ std::optional<MainWindow> load_main_window() {
   if (!main_window_has_required_widgets(main_window)) {
     release_main_window(&main_window);
     return std::nullopt;
+  }
+  for (GtkWidget *border : {main_window.frame_start_border,
+                            main_window.frame_end_border}) {
+    gtk_widget_set_size_request(border, frame_border_width, -1);
+    gtk_widget_set_vexpand(border, TRUE);
+    update_widget_style_class(border, frame_border_style_class, true);
   }
   PangoAttrList *status_attributes = pango_attr_list_new();
   pango_attr_list_insert(status_attributes,

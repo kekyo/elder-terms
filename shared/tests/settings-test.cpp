@@ -109,6 +109,8 @@ using elder_terms::terminal_font_families;
 using elder_terms::terminal_font_primary_family_setting_key;
 using elder_terms::terminal_height_setting_key;
 using elder_terms::terminal_scrollback_lines_setting_key;
+using elder_terms::terminal_show_border;
+using elder_terms::terminal_show_border_setting_key;
 using elder_terms::terminal_return_code_setting_key;
 using elder_terms::terminal_return_code_to_string;
 using elder_terms::terminal_width_setting_key;
@@ -206,6 +208,8 @@ static void test_default_settings() {
               "the default fallback terminal font should be Monospace");
   expect_true(terminal_auto_close(store),
               "default terminal auto-close should be enabled");
+  expect_true(!terminal_show_border(store),
+              "terminal window side borders should be disabled by default");
   const GeneralColorSettings colors = general_color_settings(store);
   expect_true(!colors.exterior_background.has_value(),
               "default exterior background should remain theme-controlled");
@@ -1799,6 +1803,7 @@ static void test_invalid_values_fall_back_to_defaults() {
                "height=-5\n"
                "zoom=0\n"
                "auto_close=invalid\n"
+               "show_border=invalid\n"
                "\n"
                "[telnet]\n"
                "address=127.0.0.1\n"
@@ -1823,6 +1828,8 @@ static void test_invalid_values_fall_back_to_defaults() {
               "invalid terminal zoom should fall back to default");
   expect_true(terminal_auto_close(result.store),
               "invalid terminal auto-close should fall back to default");
+  expect_true(!terminal_show_border(result.store),
+              "invalid terminal border visibility should fall back to false");
 
   const TerminalConnectionProfile profile =
       required_terminal_connection_profile(result.store);
@@ -1848,6 +1855,10 @@ static void test_invalid_values_fall_back_to_defaults() {
                   result.warnings,
                   "invalid configuration value [terminal] auto_close"),
               "invalid terminal auto-close should emit a warning");
+  expect_true(warnings_contain(
+                  result.warnings,
+                  "invalid configuration value [terminal] show_border"),
+              "invalid terminal border visibility should emit a warning");
   expect_true(warnings_contain(result.warnings,
                                "invalid configuration value [telnet] port"),
               "invalid TELNET port should emit a warning");
@@ -1968,6 +1979,9 @@ static void test_public_setting_keys() {
       "fallback font family key should use [terminal] font_fallback_family");
   expect_true(terminal_auto_close_setting_key().name == "auto_close",
               "terminal auto_close key should use the auto_close name");
+  expect_true(terminal_show_border_setting_key().section == "terminal" &&
+                  terminal_show_border_setting_key().name == "show_border",
+              "terminal border key should use [terminal] show_border");
   expect_true(terminal_zoom_in_key_setting_key().section == "terminal" &&
                   terminal_zoom_in_key_setting_key().name == "zoom_in_key",
               "terminal zoom-in key should use [terminal] zoom_in_key");
@@ -2197,6 +2211,8 @@ static void test_save_settings_omits_default_values() {
                     elder_terms::SettingValue{gdouble{1.0}});
   set_setting_value(&store, terminal_auto_close_setting_key(),
                     elder_terms::SettingValue{false});
+  set_setting_value(&store, terminal_show_border_setting_key(),
+                    elder_terms::SettingValue{true});
   set_setting_value(&store, terminal_zoom_in_key_setting_key(),
                     elder_terms::SettingValue{std::string("alt+Up")});
   set_setting_value(&store, terminal_send_break_key_setting_key(),
@@ -2231,6 +2247,8 @@ static void test_save_settings_omits_default_values() {
               "saved settings should include non-default terminal width");
   expect_true(content.find("auto_close=false") != std::string::npos,
               "saved settings should include non-default auto-close");
+  expect_true(content.find("show_border=true") != std::string::npos,
+              "saved settings should include enabled terminal borders");
   expect_true(content.find("zoom_in_key=alt+Up") != std::string::npos,
               "saved settings should include non-default zoom-in key");
   expect_true(content.find("send_break_key=shift+F12") != std::string::npos,
