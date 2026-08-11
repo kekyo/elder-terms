@@ -41,6 +41,8 @@ export interface X11MapEvent {
   readonly instanceName: string;
   /** Window manager class name. */
   readonly className: string;
+  /** Whether the window publishes valid _NET_WM_ICON dimensions and pixels. */
+  readonly hasIcon: boolean;
 }
 
 /** Modifier accepted by the X11 hotkey test recorder. */
@@ -134,7 +136,7 @@ const x11ModifierMask = (modifiers: readonly X11HotkeyModifier[]): number =>
   modifiers.reduce((mask, modifier) => mask | x11ModifierMasks[modifier], 0);
 
 const parseX11MapEvent = (line: string): X11MapEvent | undefined => {
-  const [kind, windowId, processId, name, instanceName, className] =
+  const [kind, windowId, processId, name, instanceName, className, hasIcon] =
     line.split('\t');
   if (
     kind !== 'map' ||
@@ -142,7 +144,8 @@ const parseX11MapEvent = (line: string): X11MapEvent | undefined => {
     processId === undefined ||
     name === undefined ||
     instanceName === undefined ||
-    className === undefined
+    className === undefined ||
+    (hasIcon !== '0' && hasIcon !== '1')
   ) {
     return undefined;
   }
@@ -152,6 +155,7 @@ const parseX11MapEvent = (line: string): X11MapEvent | undefined => {
     name,
     instanceName,
     className,
+    hasIcon: hasIcon === '1',
   };
 };
 

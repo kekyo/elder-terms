@@ -48,8 +48,29 @@ static unsigned long window_process_id(Display *display, Window window,
   return process_id;
 }
 
+static bool window_has_icon(Display *display, Window window, Atom icon_atom) {
+  Atom actual_type = None;
+  int actual_format = 0;
+  unsigned long item_count = 0;
+  unsigned long bytes_after = 0;
+  unsigned char *data = nullptr;
+  const int status =
+      XGetWindowProperty(display, window, icon_atom, 0, 2, False, XA_CARDINAL,
+                         &actual_type, &actual_format, &item_count,
+                         &bytes_after, &data);
+  const auto *dimensions = reinterpret_cast<unsigned long *>(data);
+  const bool has_icon =
+      status == Success && actual_type == XA_CARDINAL && actual_format == 32 &&
+      item_count == 2 && dimensions != nullptr && dimensions[0] > 0 &&
+      dimensions[1] > 0 && bytes_after > 0;
+  if (data != nullptr) {
+    XFree(data);
+  }
+  return has_icon;
+}
+
 static void report_map_event(Display *display, Window window,
-                             Atom process_id_atom) {
+                             Atom process_id_atom, Atom icon_atom) {
   char *window_name = nullptr;
   XClassHint class_hint{
       .res_name = nullptr,
@@ -61,7 +82,9 @@ static void report_map_event(Display *display, Window window,
             << window_process_id(display, window, process_id_atom) << '\t'
             << sanitize_field(window_name) << '\t'
             << sanitize_field(class_hint.res_name) << '\t'
-            << sanitize_field(class_hint.res_class) << std::endl;
+            << sanitize_field(class_hint.res_class) << '\t'
+            << (window_has_icon(display, window, icon_atom) ? 1 : 0)
+            << std::endl;
   if (window_name != nullptr) {
     XFree(window_name);
   }
@@ -73,12 +96,13 @@ static void report_map_event(Display *display, Window window,
   }
 }
 
-static void drain_x11_events(Display *display, Atom process_id_atom) {
+static void drain_x11_events(Display *display, Atom process_id_atom,
+                             Atom icon_atom) {
   while (XPending(display) > 0) {
     XEvent event;
     XNextEvent(display, &event);
     if (event.type == MapNotify) {
-      report_map_event(display, event.xmap.window, process_id_atom);
+      report_map_event(display, event.xmap.window, process_id_atom, icon_atom);
     }
   }
 }
@@ -151,6 +175,7 @@ int main() {
   XSync(display, False);
   const Atom process_id_atom =
       XInternAtom(display, "_NET_WM_PID", False);
+  const Atom icon_atom = XInternAtom(display, "_NET_WM_ICON", False);
   Window focus_competitor = None;
   std::cout << "ready" << std::endl;
 
@@ -178,7 +203,7 @@ int main() {
       return 1;
     }
     if ((descriptors[0].revents & POLLIN) != 0) {
-      drain_x11_events(display, process_id_atom);
+      drain_x11_events(display, process_id_atom, icon_atom);
     }
     if ((descriptors[1].revents & (POLLIN | POLLHUP)) != 0) {
       std::string command;
@@ -188,7 +213,7 @@ int main() {
         running = false;
       } else if (command.starts_with("barrier ")) {
         XSync(display, False);
-        drain_x11_events(display, process_id_atom);
+        drain_x11_events(display, process_id_atom, icon_atom);
         std::cout << command << std::endl;
       } else if (command.starts_with("focus-competitor ")) {
         if (focus_competitor == None) {
@@ -197,7 +222,7 @@ int main() {
         XMapRaised(display, focus_competitor);
         XSetInputFocus(display, focus_competitor, RevertToParent, CurrentTime);
         XSync(display, False);
-        drain_x11_events(display, process_id_atom);
+        drain_x11_events(display, process_id_atom, icon_atom);
         std::cout << command << '\t' << focus_competitor << std::endl;
       } else if (command.starts_with("active-window ")) {
         XSync(display, False);

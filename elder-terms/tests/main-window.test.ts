@@ -333,6 +333,36 @@ const readLaunchCapture = async (path: string): Promise<LaunchCapture> =>
   JSON.parse(await readFile(path, 'utf8')) as LaunchCapture;
 
 describe('elder-terms main window', () => {
+  it('publishes a runtime icon for its main window', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async () => {},
+      async ({ app, x11MapRecorder }) => {
+        if (x11MapRecorder === undefined) {
+          throw new Error('X11 map recorder was not started');
+        }
+        const mainWindow = expectElementKind(
+          await app.getById('main_window'),
+          'window'
+        );
+        const windowId = String(
+          Number.parseInt((await mainWindow.x11Info()).windowId, 16)
+        );
+        await x11MapRecorder.flush();
+        const mapEvent = x11MapRecorder
+          .events()
+          .find((event) => event.windowId === windowId);
+        expect(mapEvent).toBeDefined();
+        expect(mapEvent?.hasIcon).toBe(true);
+      },
+      {
+        args: [],
+        env: {},
+        recordX11Maps: true,
+      }
+    );
+  });
+
   it('uses a Japanese global UI language from a C UTF-8 build-tree environment', async (context) => {
     await runLauncherGtkTest(
       context,

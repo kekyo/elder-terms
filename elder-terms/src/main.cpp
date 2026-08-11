@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include <cardio.h>
+#include <elder-terms/application-icon.h>
 #include <elder-terms/localization.h>
 #include <elder-terms/settings/application-settings.h>
 #include <elder-terms/settings-widget.h>
@@ -2166,6 +2167,7 @@ int main(int argc, char **argv) {
   }
   gtk_disable_setlocale();
   gtk_init(&argc, &argv);
+  (void)elder_terms::initialize_application_window_icon();
 
   int application_result = 1;
   bool restart_requested = false;

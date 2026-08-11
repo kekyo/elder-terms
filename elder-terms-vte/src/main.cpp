@@ -21,6 +21,7 @@
 #include <cardio.h>
 #include <gestament/gtk.h>
 
+#include <elder-terms/application-icon.h>
 #include <elder-terms/localization.h>
 #include <elder-terms/settings/application-settings.h>
 #include <elder-terms/settings.h>
@@ -1364,6 +1365,7 @@ int main(int argc, char **argv) {
   const auto launch_options =
     elder_terms::parse_launch_options(&argc, argv);
   gtk_init(&argc, &argv);
+  (void)elder_terms::initialize_application_window_icon();
 
   g_type_ensure(VTE_TYPE_TERMINAL);
 
