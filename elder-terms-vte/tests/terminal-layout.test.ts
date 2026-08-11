@@ -24,6 +24,7 @@ import {
   terminalTextGrid81x25Path,
   withTemporaryDirectory,
 } from './gtk-test-helpers';
+import { capturePixel } from './test-helpers';
 
 describe.concurrent('elder-terms-vte terminal layout', () => {
   it('fills the whole terminal image up to the right and bottom edges', async (context) => {
@@ -78,6 +79,126 @@ describe.concurrent('elder-terms-vte terminal layout', () => {
         'fixture-terminal-whole-cell-resize',
         terminalTextGrid81x25Path,
         evidence
+      );
+    });
+  });
+
+  it('keeps whole-cell geometry while showing colored window side borders', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'window-side-borders.ini');
+      await writeFile(
+        configPath,
+        '[general]\nexterior_background=#800000\n\n[terminal]\nshow_border=true\n',
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app, evidence) => {
+          const startBorder = await app.getById('frame_start_border');
+          const endBorder = await app.getById('frame_end_border');
+          const root = await app.getById('root_box');
+
+          const assertBorders = async (): Promise<void> => {
+            const [startCapture, endCapture, rootCapture, scrollerCapture] =
+              await Promise.all([
+                startBorder.capture(),
+                endBorder.capture(),
+                root.capture(),
+                (await app.getById('terminal_scroller')).capture(),
+              ]);
+
+            expect(startCapture.bounds.width).toBe(2);
+            expect(endCapture.bounds.width).toBe(2);
+            expect(startCapture.bounds.x).toBe(rootCapture.bounds.x);
+            expect(startCapture.bounds.y).toBe(rootCapture.bounds.y);
+            expect(startCapture.bounds.height).toBe(rootCapture.bounds.height);
+            expect(startCapture.bounds.x + startCapture.bounds.width).toBe(
+              scrollerCapture.bounds.x
+            );
+            expect(endCapture.bounds.x).toBe(
+              scrollerCapture.bounds.x + scrollerCapture.bounds.width
+            );
+            expect(endCapture.bounds.y).toBe(rootCapture.bounds.y);
+            expect(endCapture.bounds.height).toBe(rootCapture.bounds.height);
+            expect(endCapture.bounds.x + endCapture.bounds.width).toBe(
+              rootCapture.bounds.x + rootCapture.bounds.width
+            );
+            expect(capturePixel(startCapture, 0.5, 0.5)).toStrictEqual([
+              128, 0, 0,
+            ]);
+            expect(capturePixel(endCapture, 0.5, 0.5)).toStrictEqual([
+              128, 0, 0,
+            ]);
+
+            await Promise.all([
+              evidence.captureEvidence(
+                'window-start-border',
+                async () => startCapture
+              ),
+              evidence.captureEvidence(
+                'window-end-border',
+                async () => endCapture
+              ),
+            ]);
+          };
+
+          const initialLayout = await waitForResult(async () => {
+            const layout = await readTerminalGridLayout(app);
+            expectWindowCellSize(layout, defaultColumns, defaultRows);
+            await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+            return layout;
+          });
+          await assertBorders();
+          await assertTerminalTextGridMatches(
+            initialLayout.terminal,
+            'fixture-terminal-bordered-initial',
+            terminalTextGrid80x24Path,
+            evidence
+          );
+
+          await initialLayout.mainWindow.resizeTo(
+            initialLayout.mainBounds.width + initialLayout.hints.widthIncrement,
+            initialLayout.mainBounds.height +
+              initialLayout.hints.heightIncrement
+          );
+          const resizedLayout = await waitForResult(async () => {
+            const layout = await readTerminalGridLayout(app);
+            expectWindowCellSize(layout, defaultColumns + 1, defaultRows + 1);
+            await expectFixtureVteGridSize(
+              app,
+              defaultColumns + 1,
+              defaultRows + 1
+            );
+            return layout;
+          });
+          await assertTerminalTextGridMatches(
+            resizedLayout.terminal,
+            'fixture-terminal-bordered-resized',
+            terminalTextGrid81x25Path,
+            evidence
+          );
+
+          await moveMouseToTerminalCenter(app, resizedLayout);
+          await scrollWheelWithControl(app, -1);
+          await waitForResult(async () => {
+            const layout = await readTerminalGridLayout(app);
+            expect(layout.hints.widthIncrement).not.toBe(
+              resizedLayout.hints.widthIncrement
+            );
+            expect(layout.hints.heightIncrement).not.toBe(
+              resizedLayout.hints.heightIncrement
+            );
+            expectWindowCellSize(layout, defaultColumns + 1, defaultRows + 1);
+            await expectFixtureVteGridSize(
+              app,
+              defaultColumns + 1,
+              defaultRows + 1
+            );
+          });
+          await assertBorders();
+        }
       );
     });
   });
