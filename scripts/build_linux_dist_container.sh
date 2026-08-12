@@ -116,7 +116,9 @@ validate_installed_package() {
 	require_command readlink
 	assert_file "$package_path"
 
-	dpkg "--path-include=/usr/share/doc/$ELDER_TERMS_PACKAGE_NAME/*" \
+	dpkg \
+		"--path-include=/usr/share/doc/$ELDER_TERMS_PACKAGE_NAME/*" \
+		"--path-include=/usr/share/locale/*/LC_MESSAGES/$ELDER_TERMS_PACKAGE_NAME.mo" \
 		-i "$package_path"
 	installed_status=$(dpkg-query -W -f='${Status}' "$ELDER_TERMS_PACKAGE_NAME")
 	[ "$installed_status" = 'install ok installed' ] ||

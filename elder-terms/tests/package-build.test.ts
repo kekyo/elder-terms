@@ -589,7 +589,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     expect(dynamicSection.stdout).toContain('[$ORIGIN/..]');
   });
 
-  it('starts installed-package validation by installing the built deb', () => {
+  it('re-includes package data filtered by minimal distribution images', () => {
     const binDirectory = join(temporaryRoot, 'validation-bin');
     const invocationPath = join(temporaryRoot, 'dpkg-install.txt');
     mkdirSync(binDirectory);
@@ -610,6 +610,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     expect(readFileSync(invocationPath, 'utf8')).toBe(
       [
         '--path-include=/usr/share/doc/elder-terms/*',
+        '--path-include=/usr/share/locale/*/LC_MESSAGES/elder-terms.mo',
         '-i',
         packagePath,
         '',
