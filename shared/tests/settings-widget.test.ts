@@ -2445,7 +2445,7 @@ describe.concurrent('shared settings widget', () => {
         '--page=logging',
         '--log-enabled=true',
         '--log-base-directory=/tmp/elder-terms-log',
-        '--log-file-name-format={YYYY-MM-DD}/{hh:mm:ss}_{fff}.txt',
+        '--log-file-name-format=${YYYY-MM-DD}/${hh:mm:ss}_${fff}.txt',
         '--log-mode=cooked',
         '--save',
       ],
@@ -2478,7 +2478,7 @@ describe.concurrent('shared settings widget', () => {
         );
         expect(await baseDirectory.text()).toBe('/tmp/elder-terms-log');
         expect(await fileNameFormat.text()).toBe(
-          '{YYYY-MM-DD}/{hh:mm:ss}_{fff}.txt'
+          '${YYYY-MM-DD}/${hh:mm:ss}_${fff}.txt'
         );
         await expectSelectedComboValue(
           app,
@@ -2492,9 +2492,9 @@ describe.concurrent('shared settings widget', () => {
         await expectInsensitive(save);
 
         await fileNameFormat.setText(
-          '{YYYY}-{MM}-{DD}/{name}_{hh}-{mm}-{ss}.txt'
+          '${YYYY}-${MM}-${DD}/${name}_${hh}-${mm}-${ss}.txt'
         );
-        await baseDirectory.setText('{documents}/elder-terms/{name}');
+        await baseDirectory.setText('${documents}/elder-terms/${name}');
         await enabled.selectChildAt(2);
         await mode.selectChildAt(1);
         await waitForChangedState(app, 'CHANGED dirty=true valid=true');
@@ -2504,9 +2504,11 @@ describe.concurrent('shared settings widget', () => {
 
         const store = await waitForAppliedStore(app);
         expect(store.log_enabled).toBe('false');
-        expect(store.log_base_directory).toBe('{documents}/elder-terms/{name}');
+        expect(store.log_base_directory).toBe(
+          '${documents}/elder-terms/${name}'
+        );
         expect(store.log_file_name_format).toBe(
-          '{YYYY}-{MM}-{DD}/{name}_{hh}-{mm}-{ss}.txt'
+          '${YYYY}-${MM}-${DD}/${name}_${hh}-${mm}-${ss}.txt'
         );
         expect(store.log_mode).toBe('raw');
       }
@@ -3529,7 +3531,7 @@ describe.concurrent('shared settings widget', () => {
       '--global=transfer.zmodem_autostart=false',
       '--global=log.enabled=true',
       '--global=log.base_directory=/tmp/global-log',
-      '--global=log.file_name_format={name}.global.log',
+      '--global=log.file_name_format=${name}.global.log',
       '--global=log.mode=cooked',
     ] as const;
 
@@ -3732,7 +3734,7 @@ describe.concurrent('shared settings widget', () => {
       await expectInheritedEntry(
         app,
         'settings_log_file_name_format_entry',
-        '{name}.global.log (global default)'
+        '${name}.global.log (global default)'
       );
       await expectSelectedComboValue(
         app,
@@ -4558,10 +4560,10 @@ describe.concurrent('shared settings widget', () => {
         '--page=terminal',
         '--global=terminal.width=90',
         '--global=terminal.encoding=CP932',
-        '--global=log.file_name_format={name}.log',
+        '--global=log.file_name_format=${name}.log',
         '--rebase-global=terminal.width=100',
         '--rebase-global=terminal.encoding=UTF-8',
-        '--rebase-global=log.file_name_format={YYYY}.log',
+        '--rebase-global=log.file_name_format=${YYYY}.log',
         '--save',
       ],
       async ({ app }) => {
@@ -4594,7 +4596,7 @@ describe.concurrent('shared settings widget', () => {
         expect(rebased.width_source).toBe('global');
         expect(rebased.encoding).toBe('UTF-8');
         expect(rebased.encoding_source).toBe('global');
-        expect(rebased.log_file_name_format).toBe('{YYYY}.log');
+        expect(rebased.log_file_name_format).toBe('${YYYY}.log');
         expect(rebased.log_file_name_format_source).toBe('global');
         expect(await fileNameFormat.text()).toBe('../outside.log');
 

@@ -27,15 +27,15 @@ struct TerminalLogSettings {
   /** True when a log file should be open while the backend is connected. */
   bool enabled = false;
   /** Directory format beneath which log paths are created. Named and temporal
-   * placeholders may appear anywhere. `{documents}` and `{downloads}` use
+   * placeholders may appear anywhere. `${documents}` and `${downloads}` use
    * their XDG user directories, falling back to `$HOME/Documents` and
-   * `$HOME/Downloads`; `{home}` uses the home directory; and `{name}` uses the
-   * sanitized connection name. */
-  std::string base_directory = "{documents}/logs/";
+   * `$HOME/Downloads`; `${home}` uses the home directory; and `${name}` uses
+   * the sanitized connection name. A literal `$` is written as `$$`. */
+  std::string base_directory = "${documents}/logs/";
   /** Path format evaluated for each connection using the same named and
    * temporal placeholders as the base directory. */
-  std::string file_name_format = "{YYYYMMDD}_{hhmmss}_{fff}.txt";
-  /** Effective connection name used by the `{name}` placeholder. */
+  std::string file_name_format = "${YYYYMMDD}_${hhmmss}_${fff}.txt";
+  /** Effective connection name used by the `${name}` placeholder. */
   std::string connection_name = "elder-terms";
   /** Received byte representation written to the log. */
   TerminalLogMode mode = TerminalLogMode::raw;
@@ -75,10 +75,11 @@ ELDER_TERMS_API SettingKey terminal_log_mode_setting_key();
 /**
  * Validates a terminal log file path format.
  *
- * @param format Candidate format containing `{documents}`, `{downloads}`,
- * `{home}`, `{name}`, and the temporal fields `YYYY`, `MM`, `DD`, `hh`, `mm`,
- * `ss`, and `fff`. Temporal fields may be placed in separate braces or
- * combined with punctuation separators inside one pair of braces.
+ * @param format Candidate format containing `${documents}`, `${downloads}`,
+ * `${home}`, `${name}`, and the temporal fields `YYYY`, `MM`, `DD`, `hh`,
+ * `mm`, `ss`, and `fff`. Temporal fields may be placed in separate
+ * placeholders or combined with punctuation separators inside one
+ * placeholder. A literal `$` is written as `$$`.
  * @param reason Receives a human-readable validation failure reason.
  * @returns True when the format has valid placeholders, contains no parent
  * directory traversal, and names a file.

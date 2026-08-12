@@ -21,9 +21,9 @@ static constexpr char log_file_name_format_key[] = "file_name_format";
 static constexpr char log_mode_key[] = "mode";
 static constexpr bool default_log_enabled = false;
 static constexpr char default_log_base_directory[] =
-    "{documents}/logs/";
+    "${documents}/logs/";
 static constexpr char default_log_file_name_format[] =
-    "{YYYYMMDD}_{hhmmss}_{fff}.txt";
+    "${YYYYMMDD}_${hhmmss}_${fff}.txt";
 static constexpr char default_log_mode[] = "raw";
 
 struct LogPathFormatValues {
@@ -151,23 +151,28 @@ static bool expand_log_path_format(const std::string &format,
       *reason = "contains a NUL byte";
       return false;
     }
-    if (format[index] == '}') {
-      *reason = "contains an unmatched closing brace";
-      return false;
-    }
-    if (format[index] != '{') {
+    if (format[index] != '$') {
       output->push_back(format[index]);
       ++index;
       continue;
     }
+    if (index + 1 < format.size() && format[index + 1] == '$') {
+      output->push_back('$');
+      index += 2;
+      continue;
+    }
+    if (index + 1 >= format.size() || format[index + 1] != '{') {
+      *reason = "literal '$' must be written as '$$'";
+      return false;
+    }
 
-    const std::size_t end = format.find('}', index + 1);
+    const std::size_t end = format.find('}', index + 2);
     if (end == std::string::npos) {
       *reason = "contains an unmatched opening brace";
       return false;
     }
-    const std::string_view placeholder(format.data() + index + 1,
-                                       end - index - 1);
+    const std::string_view placeholder(format.data() + index + 2,
+                                       end - index - 2);
     std::string expanded;
     if (!append_named_format(placeholder, values, &expanded) &&
         !append_temporal_format(placeholder, values, &expanded)) {

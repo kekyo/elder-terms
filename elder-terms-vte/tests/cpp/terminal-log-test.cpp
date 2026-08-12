@@ -155,7 +155,7 @@ static void test_user_directory_base_paths_are_expanded() {
           elder_terms::TerminalLogSettings{
               .enabled = true,
               .base_directory =
-                  "{documents}/" + root.filename().string(),
+                  "${documents}/" + root.filename().string(),
               .file_name_format = "documents-fallback.log",
               .connection_name = "fixture",
               .mode = elder_terms::TerminalLogMode::raw,
@@ -170,7 +170,7 @@ static void test_user_directory_base_paths_are_expanded() {
           elder_terms::TerminalLogSettings{
               .enabled = true,
               .base_directory =
-                  "{downloads}/" + root.filename().string(),
+                  "${downloads}/" + root.filename().string(),
               .file_name_format = "downloads-fallback.log",
               .connection_name = "fixture",
               .mode = elder_terms::TerminalLogMode::raw,
@@ -192,7 +192,7 @@ static void test_user_directory_base_paths_are_expanded() {
       write_single_raw_log(
           elder_terms::TerminalLogSettings{
               .enabled = true,
-              .base_directory = "{documents}/logs",
+              .base_directory = "${documents}/logs",
               .file_name_format = "documents.log",
               .connection_name = "fixture",
               .mode = elder_terms::TerminalLogMode::raw,
@@ -206,7 +206,7 @@ static void test_user_directory_base_paths_are_expanded() {
       write_single_raw_log(
           elder_terms::TerminalLogSettings{
               .enabled = true,
-              .base_directory = "{downloads}/logs",
+              .base_directory = "${downloads}/logs",
               .file_name_format = "downloads.log",
               .connection_name = "fixture",
               .mode = elder_terms::TerminalLogMode::raw,
@@ -220,7 +220,7 @@ static void test_user_directory_base_paths_are_expanded() {
       write_single_raw_log(
           elder_terms::TerminalLogSettings{
               .enabled = true,
-              .base_directory = "{home}/" + root.filename().string(),
+              .base_directory = "${home}/" + root.filename().string(),
               .file_name_format = "home.log",
               .connection_name = "fixture",
               .mode = elder_terms::TerminalLogMode::raw,
@@ -234,7 +234,7 @@ static void test_user_directory_base_paths_are_expanded() {
               .enabled = true,
               .base_directory = root.string(),
               .file_name_format =
-                  "{documents}/logs/documents-from-format.log",
+                  "${documents}/logs/documents-from-format.log",
               .connection_name = "fixture",
               .mode = elder_terms::TerminalLogMode::raw,
           },
@@ -249,7 +249,7 @@ static void test_user_directory_base_paths_are_expanded() {
               .enabled = true,
               .base_directory = root.string(),
               .file_name_format =
-                  "{downloads}/logs/downloads-from-format.log",
+                  "${downloads}/logs/downloads-from-format.log",
               .connection_name = "fixture",
               .mode = elder_terms::TerminalLogMode::raw,
           },
@@ -264,7 +264,7 @@ static void test_user_directory_base_paths_are_expanded() {
               .enabled = true,
               .base_directory = root.string(),
               .file_name_format =
-                  "{home}/" + root.filename().string() +
+                  "${home}/" + root.filename().string() +
                   "/home-from-format.log",
               .connection_name = "fixture",
               .mode = elder_terms::TerminalLogMode::raw,
@@ -299,7 +299,7 @@ static void test_connection_name_path_placeholder_is_sanitized_once() {
         elder_terms::TerminalLogSettings{
             .enabled = true,
             .base_directory = root.string(),
-            .file_name_format = "{name}/session.log",
+            .file_name_format = "${name}/session.log",
             .connection_name = "Tokyo/../Lab",
             .mode = elder_terms::TerminalLogMode::raw,
         },
@@ -311,7 +311,7 @@ static void test_connection_name_path_placeholder_is_sanitized_once() {
     write_single_raw_log(
         elder_terms::TerminalLogSettings{
             .enabled = true,
-            .base_directory = root.string() + "/{name}",
+            .base_directory = root.string() + "/${name}",
             .file_name_format = "session.log",
             .connection_name = "..",
             .mode = elder_terms::TerminalLogMode::raw,
@@ -325,12 +325,12 @@ static void test_connection_name_path_placeholder_is_sanitized_once() {
         elder_terms::TerminalLogSettings{
             .enabled = true,
             .base_directory = root.string(),
-            .file_name_format = "{name}.log",
-            .connection_name = "literal-{YYYY}",
+            .file_name_format = "${name}.log",
+            .connection_name = "literal-${YYYY}",
             .mode = elder_terms::TerminalLogMode::raw,
         },
         "literal", nullptr);
-    expect_true(read_file(root / "literal-{YYYY}.log") == "literal",
+    expect_true(read_file(root / "literal-${YYYY}.log") == "literal",
                 "placeholders introduced by a connection name should not be "
                 "expanded recursively");
 
@@ -338,7 +338,7 @@ static void test_connection_name_path_placeholder_is_sanitized_once() {
         elder_terms::TerminalLogSettings{
             .enabled = true,
             .base_directory = root.string(),
-            .file_name_format = "{name}.log",
+            .file_name_format = "${name}.log",
             .connection_name = std::string("A\0B", 3),
             .mode = elder_terms::TerminalLogMode::raw,
         },
@@ -350,7 +350,7 @@ static void test_connection_name_path_placeholder_is_sanitized_once() {
         elder_terms::TerminalLogSettings{
             .enabled = true,
             .base_directory = root.string(),
-            .file_name_format = "{name}.log",
+            .file_name_format = "${name}.log",
             .connection_name = "",
             .mode = elder_terms::TerminalLogMode::raw,
         },
@@ -378,8 +378,8 @@ static void test_connection_boundaries_reopen_formatted_paths_and_modes() {
 
   elder_terms::TerminalLogSettings settings{
       .enabled = true,
-      .base_directory = root.string() + "/{YYYY/MM/DD}",
-      .file_name_format = "{hh}-{mm}-{ss}_{fff}.txt",
+      .base_directory = root.string() + "/${YYYY/MM/DD}",
+      .file_name_format = "${hh}-${mm}-${ss}_${fff}.txt",
       .connection_name = "fixture",
       .mode = elder_terms::TerminalLogMode::raw,
   };
@@ -401,8 +401,9 @@ static void test_connection_boundaries_reopen_formatted_paths_and_modes() {
     elder_terms::set_terminal_log_connection_active(log, false);
 
     settings.mode = elder_terms::TerminalLogMode::cooked;
-    settings.base_directory = root.string() + "/{YYYY}-{MM}-{DD}";
-    settings.file_name_format = "{YYYY-MM-DD}/{hh:mm:ss}_{fff}.txt";
+    settings.base_directory = root.string() + "/${YYYY}-${MM}-${DD}";
+    settings.file_name_format =
+        "${YYYY-MM-DD}/${hh:mm:ss}_${fff}.txt";
     elder_terms::apply_terminal_log_settings(log, settings);
     elder_terms::set_terminal_log_connection_active(log, true);
     elder_terms::write_terminal_log(log, bytes("raw-second"),
