@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-11 09:40+0900\n"
+"POT-Creation-Date: 2026-08-12 12:41+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Spanish\n"
@@ -220,13 +220,13 @@ msgstr "Serie"
 
 #: shared/src/settings-widget/settings-presentation.cpp:97
 #: shared/src/settings-widget/settings-presentation.cpp:170
-#: elder-terms-vte/src/main-window.cpp:1557
+#: elder-terms-vte/src/main-window.cpp:1590
 msgid "SSH"
 msgstr "SSH"
 
 #: shared/src/settings-widget/settings-presentation.cpp:98
 #: shared/src/settings-widget/settings-presentation.cpp:172
-#: elder-terms-vte/src/main.cpp:1207
+#: elder-terms-vte/src/main.cpp:1233
 msgid "SFTP"
 msgstr "SFTP"
 
@@ -408,13 +408,13 @@ msgid "Apply"
 msgstr "Aplicar"
 
 #: shared/src/settings-widget/settings-presentation.cpp:184
-#: elder-terms/src/main.cpp:466 elder-terms/src/main-window.ui:184
+#: elder-terms/src/main.cpp:467 elder-terms/src/main-window.ui:184
 msgid "Save"
 msgstr "Guardar"
 
 #: shared/src/settings-widget/settings-presentation.cpp:186
-#: elder-terms/src/main.cpp:465 elder-terms/src/main.cpp:1385
-#: elder-terms/src/main.cpp:1578 elder-terms-vte/src/main.cpp:794
+#: elder-terms/src/main.cpp:466 elder-terms/src/main.cpp:1386
+#: elder-terms/src/main.cpp:1579 elder-terms-vte/src/main.cpp:820
 #: elder-terms-vte/src/main-window.ui:233
 #: elder-terms-vte/src/main-window.ui:310
 #: elder-terms-vte/src/sftp/sftp-main.cpp:109
@@ -649,11 +649,11 @@ msgstr "Debe nombrar un archivo de registro"
 msgid "Invalid value"
 msgstr "Valor no válido"
 
-#: elder-terms/src/main.cpp:220
+#: elder-terms/src/main.cpp:221
 msgid "Global shortcuts are unavailable"
 msgstr "Los atajos globales no están disponibles"
 
-#: elder-terms/src/main.cpp:229
+#: elder-terms/src/main.cpp:230
 msgid ""
 "One or more configured global shortcuts could not be registered and will not "
 "work. Check whether your desktop environment supports global shortcuts."
@@ -662,121 +662,121 @@ msgstr ""
 "no funcionarán. Compruebe si su entorno de escritorio admite accesos "
 "directos globales."
 
-#: elder-terms/src/main.cpp:233 elder-terms-vte/src/main-window.ui:319
-#: elder-terms-vte/src/main-window.cpp:1562
+#: elder-terms/src/main.cpp:234 elder-terms-vte/src/main-window.ui:319
+#: elder-terms-vte/src/main-window.cpp:1595
 msgid "OK"
 msgstr "OK"
 
-#: elder-terms/src/main.cpp:273
+#: elder-terms/src/main.cpp:274
 msgid "Restart to apply display language?"
 msgstr "¿Reiniciar para aplicar el idioma de visualización?"
 
-#: elder-terms/src/main.cpp:276
+#: elder-terms/src/main.cpp:277
 msgid ""
 "The display language change will take effect after elder-terms restarts."
 msgstr ""
 "El cambio de idioma de visualización entrará en vigor después de que se "
 "reinicie elder-terms."
 
-#: elder-terms/src/main.cpp:279
+#: elder-terms/src/main.cpp:280
 msgid "Later"
 msgstr "Más tarde"
 
-#: elder-terms/src/main.cpp:281
+#: elder-terms/src/main.cpp:282
 msgid "Restart now"
 msgstr "Reiniciar ahora"
 
-#: elder-terms/src/main.cpp:409
+#: elder-terms/src/main.cpp:410
 msgid "Failed to save global defaults"
 msgstr "No se pudieron guardar los valores predeterminados globales"
 
-#: elder-terms/src/main.cpp:446 elder-terms/src/main-window.ui:167
+#: elder-terms/src/main.cpp:447 elder-terms/src/main-window.ui:167
 msgid "Global defaults"
 msgstr "Valores predeterminados globales"
 
-#: elder-terms/src/main.cpp:703
+#: elder-terms/src/main.cpp:704
 #, c-format
 msgid "Open connection %s"
 msgstr "Conexión abierta %s"
 
-#: elder-terms/src/main.cpp:730 elder-terms/src/tray-backend.cpp:371
+#: elder-terms/src/main.cpp:731 elder-terms/src/tray-backend.cpp:371
 #: elder-terms/src/tray-backend.cpp:390 elder-terms/src/tray-backend.cpp:860
 msgid "Open elder-terms"
 msgstr "Abierto elder-terms"
 
-#: elder-terms/src/main.cpp:785 elder-terms/src/main.cpp:1320
+#: elder-terms/src/main.cpp:786 elder-terms/src/main.cpp:1321
 msgid "Failed to load connection"
 msgstr "Error al cargar la conexión"
 
-#: elder-terms/src/main.cpp:832
+#: elder-terms/src/main.cpp:833
 msgid "New connection"
 msgstr "Nueva conexión"
 
-#: elder-terms/src/main.cpp:833
+#: elder-terms/src/main.cpp:834
 #, c-format
 msgid "New connection %d"
 msgstr "Nueva conexión %d"
 
-#: elder-terms/src/main.cpp:997 elder-terms/src/main.cpp:1014
+#: elder-terms/src/main.cpp:998 elder-terms/src/main.cpp:1015
 msgid "Failed to monitor connections"
 msgstr "Error al monitorear las conexiones"
 
-#: elder-terms/src/main.cpp:1010
+#: elder-terms/src/main.cpp:1011
 msgid "Unknown file monitor error"
 msgstr "Error de monitor de archivo desconocido"
 
-#: elder-terms/src/main.cpp:1162
+#: elder-terms/src/main.cpp:1163
 msgid "Failed to create startup profile"
 msgstr "Error al crear el perfil de inicio"
 
-#: elder-terms/src/main.cpp:1219 elder-terms/src/main.cpp:1285
+#: elder-terms/src/main.cpp:1220 elder-terms/src/main.cpp:1286
 #, c-format
 msgid "Failed to start %s"
 msgstr "Error al iniciar %s"
 
-#: elder-terms/src/main.cpp:1226
+#: elder-terms/src/main.cpp:1227
 #, c-format
 msgid "The %s executable was not found"
 msgstr "No se encontró el ejecutable %s"
 
-#: elder-terms/src/main.cpp:1254
+#: elder-terms/src/main.cpp:1255
 msgid "Unknown process launch error"
 msgstr "Error de inicio de proceso desconocido"
 
-#: elder-terms/src/main.cpp:1380
+#: elder-terms/src/main.cpp:1381
 msgid "Discard changes?"
 msgstr "¿Descartar cambios?"
 
-#: elder-terms/src/main.cpp:1383
+#: elder-terms/src/main.cpp:1384
 msgid "The current connection has changes that have not been applied."
 msgstr "La conexión actual tiene cambios que no se han aplicado."
 
-#: elder-terms/src/main.cpp:1387
+#: elder-terms/src/main.cpp:1388
 msgid "Discard"
 msgstr "Descartar"
 
-#: elder-terms/src/main.cpp:1544
+#: elder-terms/src/main.cpp:1545
 msgid "Failed to delete connection"
 msgstr "No se pudo eliminar la conexión"
 
-#: elder-terms/src/main.cpp:1571
+#: elder-terms/src/main.cpp:1572
 msgid "Delete connection?"
 msgstr "¿Eliminar la conexión?"
 
-#: elder-terms/src/main.cpp:1573
+#: elder-terms/src/main.cpp:1574
 #, c-format
 msgid "The connection \"%s\" will be permanently deleted."
 msgstr "La conexión «%s» se eliminará permanentemente."
 
-#: elder-terms/src/main.cpp:1580 elder-terms/src/main-window.ui:21
+#: elder-terms/src/main.cpp:1581 elder-terms/src/main-window.ui:21
 msgid "Delete"
 msgstr "Eliminar"
 
-#: elder-terms/src/main.cpp:1621 elder-terms/src/main.cpp:1634
+#: elder-terms/src/main.cpp:1622 elder-terms/src/main.cpp:1635
 msgid "Failed to rename connection"
 msgstr "No se pudo cambiar el nombre de la conexión"
 
-#: elder-terms/src/main.cpp:1730
+#: elder-terms/src/main.cpp:1731
 msgid "Failed to save connection"
 msgstr "No se pudo guardar la conexión"
 
@@ -870,17 +870,16 @@ msgstr "Advertencia: no se pudo eliminar el perfil de conexión %s: %s"
 msgid "Quit"
 msgstr "Salir"
 
-#: elder-terms-vte/src/main.cpp:114 elder-terms-vte/src/main.cpp:115
-#: elder-terms-vte/src/main.cpp:119
+#: elder-terms-vte/src/main.cpp:182
 msgid "Macro command failed"
 msgstr "Error en el comando de macro"
 
-#: elder-terms-vte/src/main.cpp:197
+#: elder-terms-vte/src/main.cpp:223
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:277
 msgid "SSH Host Key"
 msgstr "SSH Clave de host"
 
-#: elder-terms-vte/src/main.cpp:199
+#: elder-terms-vte/src/main.cpp:225
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%d\n"
@@ -893,104 +892,108 @@ msgstr ""
 "Huella digital: %s\n"
 "¿Aceptar y guardar esta clave de host?"
 
-#: elder-terms-vte/src/main.cpp:211 elder-terms-vte/src/main-window.ui:274
+#: elder-terms-vte/src/main.cpp:237 elder-terms-vte/src/main-window.ui:274
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:472
 msgid "SSH Authentication"
 msgstr "SSH Autenticación"
 
-#: elder-terms-vte/src/main.cpp:212 elder-terms-vte/src/main-window.ui:282
+#: elder-terms-vte/src/main.cpp:238 elder-terms-vte/src/main-window.ui:282
 msgid "Password:"
 msgstr "Contraseña:"
 
-#: elder-terms-vte/src/main.cpp:227
+#: elder-terms-vte/src/main.cpp:253
 msgid "SSH prompt accepted"
 msgstr "SSH mensaje aceptado"
 
-#: elder-terms-vte/src/main.cpp:228
+#: elder-terms-vte/src/main.cpp:254
 msgid "SSH prompt cancelled"
 msgstr "SSH aviso cancelado"
 
-#: elder-terms-vte/src/main.cpp:615 elder-terms-vte/src/main.cpp:619
+#: elder-terms-vte/src/main.cpp:641 elder-terms-vte/src/main.cpp:645
 #: elder-terms-vte/src/main-window.ui:18
 msgid "Settings"
 msgstr "Configuración"
 
-#: elder-terms-vte/src/main.cpp:793
+#: elder-terms-vte/src/main.cpp:819
 msgid "Select file"
 msgstr "Seleccionar archivo"
 
-#: elder-terms-vte/src/main.cpp:795
+#: elder-terms-vte/src/main.cpp:821
 msgid "Open"
 msgstr "Abrir"
 
-#: elder-terms-vte/src/main.cpp:881 elder-terms-vte/src/main.cpp:891
-#: elder-terms-vte/src/main.cpp:916 elder-terms-vte/src/main.cpp:926
+#: elder-terms-vte/src/main.cpp:907 elder-terms-vte/src/main.cpp:917
+#: elder-terms-vte/src/main.cpp:942 elder-terms-vte/src/main.cpp:952
 msgid "Transfer unavailable"
 msgstr "Transferencia no disponible"
 
-#: elder-terms-vte/src/main.cpp:1028 elder-terms-vte/src/main.cpp:1050
+#: elder-terms-vte/src/main.cpp:1054 elder-terms-vte/src/main.cpp:1076
 msgid "BREAK unavailable"
 msgstr "BREAK no disponible"
 
-#: elder-terms-vte/src/main.cpp:1034
+#: elder-terms-vte/src/main.cpp:1060
 msgid "Sending BREAK"
 msgstr "Enviando BREAK"
 
-#: elder-terms-vte/src/main.cpp:1070 elder-terms-vte/src/main.cpp:1553
+#: elder-terms-vte/src/main.cpp:1096 elder-terms-vte/src/main.cpp:1618
 msgid "Text send unavailable"
 msgstr "Envío de texto no disponible"
 
-#: elder-terms-vte/src/main.cpp:1078
+#: elder-terms-vte/src/main.cpp:1104
 msgid "Text (Send)"
 msgstr "Texto (Enviar)"
 
-#: elder-terms-vte/src/main.cpp:1156 elder-terms-vte/src/main.cpp:1187
+#: elder-terms-vte/src/main.cpp:1182 elder-terms-vte/src/main.cpp:1213
 msgid "SFTP unavailable"
 msgstr "SFTP no disponible"
 
-#: elder-terms-vte/src/main.cpp:1231
+#: elder-terms-vte/src/main.cpp:1257
 msgid "Log recording"
 msgstr "Registro de grabación"
 
-#: elder-terms-vte/src/main.cpp:1277
+#: elder-terms-vte/src/main.cpp:1303
 msgid "ZMODEM (send)"
 msgstr "ZMODEM (enviar)"
 
-#: elder-terms-vte/src/main.cpp:1284
+#: elder-terms-vte/src/main.cpp:1310
 msgid "YMODEM (send)"
 msgstr "YMODEM (enviar)"
 
-#: elder-terms-vte/src/main.cpp:1291
+#: elder-terms-vte/src/main.cpp:1317
 msgid "XMODEM 1K (send)"
 msgstr "XMODEM 1K (enviar)"
 
-#: elder-terms-vte/src/main.cpp:1300
+#: elder-terms-vte/src/main.cpp:1326
 msgid "XMODEM (send)"
 msgstr "XMODEM (enviar)"
 
-#: elder-terms-vte/src/main.cpp:1310
+#: elder-terms-vte/src/main.cpp:1336
 msgid "ZMODEM (receive)"
 msgstr "ZMODEM (recibir)"
 
-#: elder-terms-vte/src/main.cpp:1317
+#: elder-terms-vte/src/main.cpp:1343
 msgid "YMODEM-g (receive)"
 msgstr "YMODEM-g (recibir)"
 
-#: elder-terms-vte/src/main.cpp:1325
+#: elder-terms-vte/src/main.cpp:1351
 msgid "YMODEM (receive)"
 msgstr "YMODEM (recibir)"
 
-#: elder-terms-vte/src/main.cpp:1334
+#: elder-terms-vte/src/main.cpp:1360
 msgid "XMODEM CRC (receive)"
 msgstr "XMODEM CRC (recibir)"
 
-#: elder-terms-vte/src/main.cpp:1343
+#: elder-terms-vte/src/main.cpp:1369
 msgid "XMODEM (receive)"
 msgstr "XMODEM (recibir)"
 
+#: elder-terms-vte/src/main.cpp:1598
+msgid "Hyperlink command failed"
+msgstr "Error en el comando de hipervínculo"
+
 #: elder-terms-vte/src/main-window.ui:138
-#: elder-terms-vte/src/main-window.cpp:1463
+#: elder-terms-vte/src/main-window.cpp:1496
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1899
 msgid "Disconnected"
 msgstr "Desconectado"
@@ -999,28 +1002,28 @@ msgstr "Desconectado"
 msgid "Transferring..."
 msgstr "Transfiriendo..."
 
-#: elder-terms-vte/src/main-window.cpp:311
+#: elder-terms-vte/src/main-window.cpp:330
 msgid "Copy"
 msgstr "Copiar"
 
-#: elder-terms-vte/src/main-window.cpp:315
+#: elder-terms-vte/src/main-window.cpp:334
 msgid "Paste"
 msgstr "Pegar"
 
-#: elder-terms-vte/src/main-window.cpp:321
+#: elder-terms-vte/src/main-window.cpp:340
 msgid "Send BREAK"
 msgstr "Enviar BREAK"
 
-#: elder-terms-vte/src/main-window.cpp:1064
+#: elder-terms-vte/src/main-window.cpp:1083
 #, c-format
 msgid "%s (Disconnected)"
 msgstr "%s (Desconectado)"
 
-#: elder-terms-vte/src/main-window.cpp:1486
+#: elder-terms-vte/src/main-window.cpp:1519
 msgid "SSH connection failed"
 msgstr "SSH conexión fallida"
 
-#: elder-terms-vte/src/main-window.cpp:1488
+#: elder-terms-vte/src/main-window.cpp:1521
 #, c-format
 msgid ""
 "SSH connection failed:\n"
@@ -1029,7 +1032,7 @@ msgstr ""
 "SSH error de conexión:\n"
 "%s"
 
-#: elder-terms-vte/src/main-window.cpp:1562
+#: elder-terms-vte/src/main-window.cpp:1595
 #: elder-terms-vte/src/sftp/sftp-main.cpp:111
 msgid "Accept"
 msgstr "Aceptar"
@@ -1210,7 +1213,7 @@ msgstr "Enviar"
 msgid "Ready"
 msgstr "Listo"
 
-#: elder-terms-vte/src/terminal-text-send-runner.cpp:172
+#: elder-terms-vte/src/terminal-text-send-runner.cpp:119
 msgid "Text contained characters that were replaced"
 msgstr "El texto contenía caracteres que fueron reemplazados"
 

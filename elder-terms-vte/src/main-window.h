@@ -48,6 +48,16 @@ struct MainWindowTerminalBreakCallbacks {
   std::function<void()> send;
 };
 
+/** Handles activation of an OSC 8 hyperlink from the terminal. */
+struct MainWindowTerminalHyperlinkCallbacks {
+  /**
+   * Receives the raw OSC 8 target under a Ctrl+left click.
+   *
+   * @returns True when the target was accepted and the event was consumed.
+   */
+  std::function<bool(std::string target)> activate;
+};
+
 /**
  * Holds the GTK builder and required widgets from main-window.ui.
  */
@@ -216,6 +226,15 @@ void set_main_window_terminal_paste_callbacks(
  */
 void set_main_window_terminal_break_callbacks(
     MainWindow *main_window, MainWindowTerminalBreakCallbacks callbacks);
+
+/**
+ * Configures Ctrl+left-click OSC 8 hyperlink activation.
+ *
+ * @param main_window Main window containing the VTE terminal.
+ * @param callbacks Hyperlink activation callback.
+ */
+void set_main_window_terminal_hyperlink_callbacks(
+    MainWindow *main_window, MainWindowTerminalHyperlinkCallbacks callbacks);
 
 /**
  * Records activity against one status-bar activity indicator.

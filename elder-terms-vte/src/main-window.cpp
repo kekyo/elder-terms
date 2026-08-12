@@ -95,6 +95,7 @@ struct TerminalContextMenuState {
   guint paste_query_generation = 0;
   MainWindowTerminalPasteCallbacks paste_callbacks;
   MainWindowTerminalBreakCallbacks break_callbacks;
+  MainWindowTerminalHyperlinkCallbacks hyperlink_callbacks;
 };
 
 struct ClipboardTargetsRequest {
@@ -276,6 +277,24 @@ static gboolean on_terminal_button_press(GtkWidget *, GdkEventButton *event,
   }
 
   auto *state = static_cast<TerminalContextMenuState *>(data);
+  constexpr GdkModifierType relevant_modifiers = static_cast<GdkModifierType>(
+      GDK_SHIFT_MASK | GDK_CONTROL_MASK | GDK_MOD1_MASK | GDK_SUPER_MASK |
+      GDK_HYPER_MASK | GDK_META_MASK);
+  const bool hyperlink_activation =
+      event->button == GDK_BUTTON_PRIMARY &&
+      (event->state & relevant_modifiers) == GDK_CONTROL_MASK;
+  if (hyperlink_activation && state->hyperlink_callbacks.activate) {
+    gchar *target = vte_terminal_hyperlink_check_event(
+        state->terminal, reinterpret_cast<GdkEvent *>(event));
+    if (target != nullptr) {
+      const bool activated =
+          state->hyperlink_callbacks.activate(std::string(target));
+      g_free(target);
+      if (activated) {
+        return GDK_EVENT_STOP;
+      }
+    }
+  }
   if (event->button == GDK_BUTTON_MIDDLE) {
     request_terminal_paste(state, GDK_SELECTION_PRIMARY);
     return GDK_EVENT_STOP;
@@ -1420,6 +1439,20 @@ void set_main_window_terminal_break_callbacks(
       terminal_context_menu_state_key));
   if (state != nullptr) {
     state->break_callbacks = std::move(callbacks);
+  }
+}
+
+void set_main_window_terminal_hyperlink_callbacks(
+    MainWindow *main_window, MainWindowTerminalHyperlinkCallbacks callbacks) {
+  if (main_window == nullptr || main_window->terminal_overlay == nullptr) {
+    return;
+  }
+
+  auto *state = static_cast<TerminalContextMenuState *>(g_object_get_data(
+      G_OBJECT(main_window->terminal_overlay),
+      terminal_context_menu_state_key));
+  if (state != nullptr) {
+    state->hyperlink_callbacks = std::move(callbacks);
   }
 }
 

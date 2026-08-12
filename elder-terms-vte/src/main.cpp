@@ -33,6 +33,7 @@
 #include "sftp/sftp-fixture-client.h"
 #include "sftp/sftp-paths.h"
 #include "sftp/sftp-window.h"
+#include "terminal-hyperlink-resolver.h"
 #include "terminal-layout.h"
 #include "terminal-log.h"
 #include "terminal-macro-runner.h"
@@ -50,6 +51,7 @@ struct ApplicationState {
   elder_terms::TerminalLayoutState *layout_state = nullptr;
   elder_terms::TerminalLogState *log_state = nullptr;
   elder_terms::TerminalMacroRunnerState *macro_runner = nullptr;
+  elder_terms::TerminalHyperlinkResolverState *hyperlink_resolver = nullptr;
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
   std::optional<cardio::promise<void>> shutdown_task;
   std::optional<cardio::promise<void>> ssh_prompt_fixture_task;
@@ -100,14 +102,17 @@ static void update_application_session_identity(ApplicationState *state);
 static void update_application_terminal_presentation(
     ApplicationState *state);
 
-static void on_macro_command_error_response(GtkDialog *dialog, gint,
-                                            gpointer) {
+static void on_external_command_error_response(GtkDialog *dialog, gint,
+                                               gpointer) {
   gtk_widget_destroy(GTK_WIDGET(dialog));
 }
 
-static void show_macro_command_error(ApplicationState *state,
-                                     const std::string &detail) {
-  std::cerr << "Warning: macro command failed: " << detail << '\n';
+static void show_external_command_error(ApplicationState *state,
+                                        const char *warning_context,
+                                        const char *dialog_title,
+                                        const char *accessible_id,
+                                        const std::string &detail) {
+  std::cerr << "Warning: " << warning_context << " failed: " << detail << '\n';
   if (state == nullptr || state->window == nullptr) {
     return;
   }
@@ -116,29 +121,35 @@ static void show_macro_command_error(ApplicationState *state,
       GTK_WINDOW(state->window),
       static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
                                   GTK_DIALOG_DESTROY_WITH_PARENT),
-      GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s", _("Macro command failed"));
-  gtk_window_set_title(GTK_WINDOW(dialog), _("Macro command failed"));
-  gestament_gtk_assign_accessible_id(dialog, "macro_command_error_dialog");
+      GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s", dialog_title);
+  gtk_window_set_title(GTK_WINDOW(dialog), dialog_title);
+  gestament_gtk_assign_accessible_id(dialog, accessible_id);
   AtkObject *accessible = gtk_widget_get_accessible(dialog);
   if (accessible != nullptr) {
-    atk_object_set_name(accessible, _("Macro command failed"));
+    atk_object_set_name(accessible, dialog_title);
   }
   gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), "%s",
                                            detail.c_str());
   g_signal_connect(dialog, "response",
-                   G_CALLBACK(on_macro_command_error_response), nullptr);
+                   G_CALLBACK(on_external_command_error_response), nullptr);
   gtk_widget_show(dialog);
 }
 
-static void spawn_macro_command(ApplicationState *state, std::string command,
-                                std::vector<std::string> arguments) {
+static bool spawn_external_command(ApplicationState *state,
+                                   std::string command,
+                                   std::vector<std::string> arguments,
+                                   const char *warning_context,
+                                   const char *dialog_title,
+                                   const char *accessible_id) {
   if (command.find('\0') != std::string::npos ||
       std::any_of(arguments.begin(), arguments.end(),
                   [](const std::string &argument) {
                     return argument.find('\0') != std::string::npos;
                   })) {
-    show_macro_command_error(state, "command contains a NUL byte");
-    return;
+    show_external_command_error(state, warning_context, dialog_title,
+                                accessible_id,
+                                "command contains a NUL byte");
+    return false;
   }
 
   std::vector<gchar *> argv;
@@ -157,8 +168,18 @@ static void spawn_macro_command(ApplicationState *state, std::string command,
             ? std::string("unknown spawn error")
             : std::string(error->message);
     g_clear_error(&error);
-    show_macro_command_error(state, detail);
+    show_external_command_error(state, warning_context, dialog_title,
+                                accessible_id, detail);
+    return false;
   }
+  return true;
+}
+
+static void spawn_macro_command(ApplicationState *state, std::string command,
+                                std::vector<std::string> arguments) {
+  (void)spawn_external_command(
+      state, std::move(command), std::move(arguments), "macro command",
+      _("Macro command failed"), "macro_command_error_dialog");
 }
 
 static std::string format_translated_string(const char *format, ...) {
@@ -1418,6 +1439,7 @@ int main(int argc, char **argv) {
       .layout_state = nullptr,
       .log_state = nullptr,
       .macro_runner = nullptr,
+      .hyperlink_resolver = nullptr,
       .dispatcher_group = &dispatcher_group,
       .shutdown_task = std::nullopt,
       .ssh_prompt_fixture_task = std::nullopt,
@@ -1463,6 +1485,14 @@ int main(int argc, char **argv) {
     elder_terms::terminal_font_families(app_state.settings_store);
   const auto terminal_key_bindings =
     elder_terms::terminal_key_bindings(app_state.settings_store);
+  const bool hyperlink_actions_enabled =
+      app_state.settings_store.hyperlink_actions_enabled &&
+      !app_state.settings_store.hyperlink_rules.empty();
+  app_state.hyperlink_resolver =
+      elder_terms::create_terminal_hyperlink_resolver(
+          app_state.settings_store.hyperlink_rules);
+  vte_terminal_set_allow_hyperlink(
+      vte_terminal, hyperlink_actions_enabled ? TRUE : FALSE);
   elder_terms::set_main_window_activity_indicator_connection_kind(
       &*main_window, connection_profile->kind);
 
@@ -1550,6 +1580,24 @@ int main(int argc, char **argv) {
                            std::vector<std::string> arguments) {
                 spawn_macro_command(&app_state, std::move(command),
                                     std::move(arguments));
+              },
+      });
+  elder_terms::set_main_window_terminal_hyperlink_callbacks(
+      &*main_window,
+      {
+          .activate =
+              [&app_state](std::string target) {
+                const std::optional<elder_terms::TerminalHyperlinkAction>
+                    action = elder_terms::resolve_terminal_hyperlink(
+                        app_state.hyperlink_resolver, target);
+                if (!action.has_value()) {
+                  return false;
+                }
+                (void)spawn_external_command(
+                    &app_state, action->command, action->arguments,
+                    "hyperlink command", _("Hyperlink command failed"),
+                    "hyperlink_command_error_dialog");
+                return true;
               },
       });
   elder_terms::set_main_window_terminal_paste_callbacks(
@@ -1685,6 +1733,8 @@ int main(int argc, char **argv) {
   app_state.shutdown_task.reset();
   elder_terms::destroy_terminal_log(app_state.log_state);
   elder_terms::release_main_window(&*main_window);
+  elder_terms::destroy_terminal_hyperlink_resolver(
+      app_state.hyperlink_resolver);
 
   return 0;
 }
