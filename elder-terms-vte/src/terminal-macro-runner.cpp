@@ -1,15 +1,16 @@
 #include "terminal-macro-runner.h"
 
-#include <algorithm>
-#include <cctype>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
 #include <vector>
 
 #include <glib.h>
+
+#include <elder-terms/settings/regex-capture-template.h>
 
 namespace elder_terms {
 
@@ -53,55 +54,12 @@ compile_macro_rules(std::vector<MacroRule> rules) {
   return compiled;
 }
 
-static int decimal_capture_number(const std::string &capture) {
-  int number = 0;
-  for (unsigned char character : capture) {
-    number = number * 10 + static_cast<int>(character - '0');
-  }
-  return number;
-}
-
-static std::string expand_macro_template(const std::string &value,
-                                         GMatchInfo *match) {
-  std::string expanded;
-  for (std::size_t index = 0; index < value.size();) {
-    if (value[index] != '$') {
-      expanded.push_back(value[index]);
-      ++index;
-      continue;
-    }
-    if (index + 1 < value.size() && value[index + 1] == '$') {
-      expanded.push_back('$');
-      index += 2;
-      continue;
-    }
-
-    const std::size_t closing = value.find('}', index + 2);
-    if (index + 1 >= value.size() || value[index + 1] != '{' ||
-        closing == std::string::npos) {
-      expanded.push_back('$');
-      ++index;
-      continue;
-    }
-
-    const std::string capture =
-        value.substr(index + 2, closing - index - 2);
-    const bool numeric =
-        !capture.empty() &&
-        std::all_of(capture.begin(), capture.end(), [](unsigned char value) {
-          return std::isdigit(value) != 0;
-        });
-    gchar *matched = numeric
-                         ? g_match_info_fetch(
-                               match, decimal_capture_number(capture))
-                         : g_match_info_fetch_named(match, capture.c_str());
-    if (matched != nullptr) {
-      expanded.append(matched);
-    }
-    g_free(matched);
-    index = closing + 1;
-  }
-  return expanded;
+static std::optional<std::string>
+expand_macro_template(const std::string &value, GMatchInfo *match) {
+  std::string reason;
+  return expand_regex_capture_template(
+      value, match,
+      RegexCaptureTemplateOptions{.allow_uri_decode = false}, &reason);
 }
 
 static void execute_macro_action(TerminalMacroRunnerState *state,
@@ -109,7 +67,11 @@ static void execute_macro_action(TerminalMacroRunnerState *state,
                                  GMatchInfo *match) {
   if (const auto *send = std::get_if<MacroSendAction>(&action)) {
     if (state->callbacks.send) {
-      state->callbacks.send(expand_macro_template(send->text, match));
+      const std::optional<std::string> expanded =
+          expand_macro_template(send->text, match);
+      if (expanded.has_value()) {
+        state->callbacks.send(*expanded);
+      }
     }
     return;
   }
@@ -121,10 +83,18 @@ static void execute_macro_action(TerminalMacroRunnerState *state,
   std::vector<std::string> arguments;
   arguments.reserve(command.arguments.size());
   for (const std::string &argument : command.arguments) {
-    arguments.push_back(expand_macro_template(argument, match));
+    const std::optional<std::string> expanded =
+        expand_macro_template(argument, match);
+    if (!expanded.has_value()) {
+      return;
+    }
+    arguments.push_back(*expanded);
   }
-  state->callbacks.command(expand_macro_template(command.command, match),
-                           std::move(arguments));
+  const std::optional<std::string> expanded_command =
+      expand_macro_template(command.command, match);
+  if (expanded_command.has_value()) {
+    state->callbacks.command(*expanded_command, std::move(arguments));
+  }
 }
 
 static void match_current_macro_line(TerminalMacroRunnerState *state) {

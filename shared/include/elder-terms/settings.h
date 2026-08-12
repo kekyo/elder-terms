@@ -9,6 +9,7 @@
 #include <elder-terms/export.h>
 #include <elder-terms/settings/application-settings.h>
 #include <elder-terms/settings/general-settings.h>
+#include <elder-terms/settings/hyperlink-settings.h>
 #include <elder-terms/settings/local-session-settings.h>
 #include <elder-terms/settings/log-settings.h>
 #include <elder-terms/settings/serial-settings.h>

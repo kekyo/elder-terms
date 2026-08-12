@@ -118,6 +118,19 @@ void set_macro_rules(SettingsStore *store, std::vector<MacroRule> rules) {
   store->macro_rules_dirty = true;
 }
 
+void set_hyperlink_actions(SettingsStore *store, bool enabled,
+                           std::vector<HyperlinkActionRule> rules) {
+  if (store->hyperlink_actions_enabled == enabled &&
+      store->hyperlink_rules == rules &&
+      store->hyperlink_settings_configured) {
+    return;
+  }
+  store->hyperlink_actions_enabled = enabled;
+  store->hyperlink_rules = std::move(rules);
+  store->hyperlink_settings_configured = true;
+  store->hyperlink_settings_dirty = true;
+}
+
 void load_settings_store_from_key_file(SettingsStore *store,
                                        GKeyFile *key_file,
                                        std::vector<std::string> *warnings) {
@@ -318,7 +331,7 @@ bool setting_is_dirty(const SettingsStore &store, const SettingKey &key) {
 }
 
 bool settings_store_is_dirty(const SettingsStore &store) {
-  return store.macro_rules_dirty ||
+  return store.hyperlink_settings_dirty || store.macro_rules_dirty ||
          std::any_of(store.entries.begin(), store.entries.end(),
                      [](const SettingEntry &entry) { return entry.dirty; });
 }

@@ -3387,6 +3387,131 @@ static void test_invalid_connection_macros_warn_and_are_ignored() {
               "invalid macro rules should emit a warning");
 }
 
+static void test_global_hyperlink_actions_override_built_in_defaults() {
+  const std::filesystem::path connection_path =
+      temporary_config_path("connection-hyperlinks");
+  const std::filesystem::path global_path =
+      temporary_config_path("global-hyperlinks");
+  const std::filesystem::path saved_path =
+      temporary_config_path("saved-global-hyperlinks");
+
+  write_config(connection_path,
+               "[hyperlink]\n"
+               "enabled=false\n"
+               "\n"
+               "[hyperlink.ignored_connection]\n"
+               "regex=^ignored:(?<value>.+)$\n"
+               "command=ignored\n"
+               "arguments=${value};\n");
+  write_config(global_path,
+               "[hyperlink]\n"
+               "enabled=true\n"
+               "\n"
+               "[hyperlink.second]\n"
+               "regex=^open:(?<path>.+):(?<line>[0-9]+)$\n"
+               "command=second-tool\n"
+               "arguments=--line;${line};${path|uri-decode};\n"
+               "\n"
+               "[hyperlink.first]\n"
+               "regex=^first:(?<value>.+)$\n"
+               "command=first-tool\n"
+               "arguments=${value};\n");
+
+  const SettingsLoadResult loaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  expect_true(loaded.loaded, "valid hyperlink actions should load");
+  expect_true(loaded.store.hyperlink_actions_enabled,
+              "connection files must not disable global hyperlink actions");
+  expect_true(loaded.store.hyperlink_rules.size() == 2 &&
+                  loaded.store.hyperlink_rules[0].id == "second" &&
+                  loaded.store.hyperlink_rules[1].id == "first",
+              "global hyperlink section order should define priority");
+  expect_true(loaded.store.hyperlink_settings_configured,
+              "custom global hyperlink actions should be marked configured");
+  expect_true(!elder_terms::settings_store_is_dirty(loaded.store),
+              "loaded hyperlink actions should start clean");
+
+  SettingsLoadResult editable = load_global_settings(global_path, 1.0);
+  const SettingsSaveResult saved =
+      save_global_settings(editable.store, saved_path);
+  expect_true(saved.saved, "global hyperlink actions should save");
+  const SettingsLoadResult reloaded = load_global_settings(saved_path, 1.0);
+  expect_true(reloaded.store.hyperlink_actions_enabled ==
+                      editable.store.hyperlink_actions_enabled &&
+                  reloaded.store.hyperlink_rules ==
+                      editable.store.hyperlink_rules &&
+                  reloaded.store.hyperlink_settings_configured,
+              "global hyperlink actions should round trip");
+
+  elder_terms::set_hyperlink_actions(
+      &editable.store, false,
+      {elder_terms::HyperlinkActionRule{
+          .id = "replacement",
+          .pattern = "^replacement:(?<value>.+)$",
+          .command = "replacement-tool",
+          .arguments = {"${value}"},
+      }});
+  expect_true(elder_terms::settings_store_is_dirty(editable.store),
+              "replacing hyperlink actions should mark the store dirty");
+
+  remove_config(connection_path);
+  remove_config(global_path);
+  remove_config(saved_path);
+}
+
+static void test_hyperlink_defaults_disable_and_invalid_rules() {
+  const SettingsStore defaults = create_default_settings(
+      default_terminal_display_settings(1.0), "defaults");
+  expect_true(defaults.hyperlink_actions_enabled &&
+                  defaults.hyperlink_rules.size() == 2 &&
+                  !defaults.hyperlink_settings_configured,
+              "VS Code hyperlink actions should be built in by default");
+
+  const std::filesystem::path disabled_path =
+      temporary_config_path("disabled-hyperlinks");
+  write_config(disabled_path,
+               "[hyperlink]\n"
+               "enabled=false\n");
+  const SettingsLoadResult disabled =
+      load_global_settings(disabled_path, 1.0);
+  expect_true(!disabled.store.hyperlink_actions_enabled &&
+                  disabled.store.hyperlink_rules.empty() &&
+                  disabled.store.hyperlink_settings_configured,
+              "an explicit disabled section should suppress built-in rules");
+
+  const std::filesystem::path invalid_path =
+      temporary_config_path("invalid-hyperlinks");
+  write_config(invalid_path,
+               "[hyperlink]\n"
+               "enabled=true\n"
+               "\n"
+               "[hyperlink.bad]\n"
+               "regex=^bad:(?<path>.+)$\n"
+               "command=bad-tool\n"
+               "arguments=${path|shell};\n"
+               "\n"
+               "[hyperlink.valid]\n"
+               "regex=^valid:(?<path>.+)$\n"
+               "command=valid-tool\n"
+               "arguments=${path|uri-decode};\n");
+  const SettingsLoadResult invalid = load_global_settings(invalid_path, 1.0);
+  expect_true(invalid.store.hyperlink_rules.size() == 1 &&
+                  invalid.store.hyperlink_rules[0].id == "valid",
+              "invalid custom rules should not restore built-in actions or "
+              "disable valid custom rules");
+  expect_true(warnings_contain(invalid.warnings,
+                               "invalid hyperlink [hyperlink.bad]"),
+              "invalid hyperlink rules should emit a warning");
+
+  remove_config(disabled_path);
+  remove_config(invalid_path);
+}
+
 static void test_missing_global_settings_are_optional() {
   const std::filesystem::path missing =
       temporary_config_path("missing-global");
@@ -3498,6 +3623,10 @@ int main() {
     elder_terms_settings_test::test_key_binding_conflicts_are_resolved_per_layer();
     elder_terms_settings_test::test_connection_macro_settings_round_trip_and_layering();
     elder_terms_settings_test::test_invalid_connection_macros_warn_and_are_ignored();
+    elder_terms_settings_test::
+        test_global_hyperlink_actions_override_built_in_defaults();
+    elder_terms_settings_test::
+        test_hyperlink_defaults_disable_and_invalid_rules();
     elder_terms_settings_test::test_missing_global_settings_are_optional();
     elder_terms_settings_test::test_save_empty_global_settings_creates_parent_directory();
   } catch (const std::exception &error) {

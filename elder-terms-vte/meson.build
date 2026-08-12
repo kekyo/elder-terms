@@ -54,6 +54,7 @@ elder_terms_sources = [
   'src/sftp/sftp-window.cpp',
   'src/terminal-connection-phase.cpp',
   'src/terminal-font.cpp',
+  'src/terminal-hyperlink-resolver.cpp',
   'src/terminal-log.cpp',
   'src/terminal-macro-runner.cpp',
   'src/terminal-text-send.cpp',
@@ -200,6 +201,19 @@ terminal_macro_runner_test = executable(
 )
 
 test('terminal-macro-runner-test', terminal_macro_runner_test)
+
+terminal_hyperlink_resolver_test = executable(
+  'terminal-hyperlink-resolver-test',
+  [
+    'tests/cpp/terminal-hyperlink-resolver-test.cpp',
+    'src/terminal-hyperlink-resolver.cpp',
+  ],
+  dependencies: [
+    elder_terms_dep,
+  ],
+)
+
+test('terminal-hyperlink-resolver-test', terminal_hyperlink_resolver_test)
 
 terminal_text_send_runner_test = executable(
   'terminal-text-send-runner-test',

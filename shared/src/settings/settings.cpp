@@ -233,6 +233,153 @@ static void set_key_file_macro_rule(GKeyFile *key_file,
                              arguments.data(), arguments.size());
 }
 
+static void warn_invalid_hyperlink(std::vector<std::string> *warnings,
+                                   const std::string &group,
+                                   const std::string &reason) {
+  warnings->push_back("Warning: invalid hyperlink [" + group + "]: " +
+                      reason + "; ignoring rule");
+}
+
+static std::vector<HyperlinkActionRule>
+load_hyperlink_rules_from_key_file(GKeyFile *key_file,
+                                   std::vector<std::string> *warnings) {
+  std::vector<HyperlinkActionRule> rules;
+  gsize group_count = 0;
+  gchar **groups = g_key_file_get_groups(key_file, &group_count);
+  for (gsize group_index = 0; group_index < group_count; ++group_index) {
+    const std::string group = groups[group_index];
+    constexpr char prefix[] = "hyperlink.";
+    if (!group.starts_with(prefix)) {
+      continue;
+    }
+
+    HyperlinkActionRule rule;
+    rule.id = group.substr(sizeof(prefix) - 1);
+    std::string reason;
+    if (!hyperlink_action_rule_id_is_valid(rule.id, &reason)) {
+      warn_invalid_hyperlink(warnings, group, reason);
+      continue;
+    }
+    const bool duplicate = std::any_of(
+        rules.begin(), rules.end(), [&rule](const HyperlinkActionRule &other) {
+          return other.id == rule.id;
+        });
+    if (duplicate) {
+      warn_invalid_hyperlink(warnings, group, "identifier is duplicated");
+      continue;
+    }
+
+    const bool has_regex =
+        g_key_file_has_key(key_file, group.c_str(), "regex", nullptr);
+    const bool has_command =
+        g_key_file_has_key(key_file, group.c_str(), "command", nullptr);
+    const bool has_arguments =
+        g_key_file_has_key(key_file, group.c_str(), "arguments", nullptr);
+    if (!has_regex) {
+      warn_invalid_hyperlink(warnings, group, "missing regex");
+      continue;
+    }
+    if (!has_command) {
+      warn_invalid_hyperlink(warnings, group, "missing command");
+      continue;
+    }
+
+    GError *error = nullptr;
+    rule.pattern = key_file_string(key_file, group, "regex", &error);
+    if (error == nullptr) {
+      rule.command = key_file_string(key_file, group, "command", &error);
+    }
+    if (error == nullptr && has_arguments) {
+      gsize argument_count = 0;
+      gchar **arguments = g_key_file_get_string_list(
+          key_file, group.c_str(), "arguments", &argument_count, &error);
+      if (arguments != nullptr) {
+        rule.arguments.reserve(argument_count);
+        for (gsize index = 0; index < argument_count; ++index) {
+          rule.arguments.emplace_back(arguments[index]);
+        }
+        g_strfreev(arguments);
+      }
+    }
+    if (error != nullptr) {
+      warn_invalid_hyperlink(warnings, group, glib_error_message(error));
+      g_clear_error(&error);
+      continue;
+    }
+    if (!hyperlink_action_rule_is_valid(rule, &reason)) {
+      warn_invalid_hyperlink(warnings, group, reason);
+      continue;
+    }
+    rules.push_back(std::move(rule));
+  }
+  g_strfreev(groups);
+  return rules;
+}
+
+static bool key_file_has_hyperlink_rule_group(GKeyFile *key_file) {
+  bool found = false;
+  gsize group_count = 0;
+  gchar **groups = g_key_file_get_groups(key_file, &group_count);
+  for (gsize group_index = 0; group_index < group_count; ++group_index) {
+    if (std::string(groups[group_index]).starts_with("hyperlink.")) {
+      found = true;
+      break;
+    }
+  }
+  g_strfreev(groups);
+  return found;
+}
+
+static void load_hyperlink_settings_from_key_file(
+    SettingsStore *store, GKeyFile *key_file,
+    std::vector<std::string> *warnings) {
+  const bool has_root = g_key_file_has_group(key_file, "hyperlink");
+  if (!has_root && !key_file_has_hyperlink_rule_group(key_file)) {
+    return;
+  }
+
+  bool enabled = true;
+  if (has_root &&
+      g_key_file_has_key(key_file, "hyperlink", "enabled", nullptr)) {
+    GError *error = nullptr;
+    enabled = g_key_file_get_boolean(key_file, "hyperlink", "enabled",
+                                     &error) != FALSE;
+    if (error != nullptr) {
+      warnings->push_back(
+          "Warning: invalid hyperlink [hyperlink]: " +
+          glib_error_message(error) + "; using enabled=true");
+      g_clear_error(&error);
+      enabled = true;
+    }
+  }
+
+  store->hyperlink_actions_enabled = enabled;
+  store->hyperlink_rules =
+      load_hyperlink_rules_from_key_file(key_file, warnings);
+  store->hyperlink_settings_configured = true;
+  store->hyperlink_settings_dirty = false;
+}
+
+static void set_key_file_hyperlink_rule(GKeyFile *key_file,
+                                        const HyperlinkActionRule &rule) {
+  const std::string group = "hyperlink." + rule.id;
+  g_key_file_set_string(key_file, group.c_str(), "regex",
+                        rule.pattern.c_str());
+  g_key_file_set_string(key_file, group.c_str(), "command",
+                        rule.command.c_str());
+  if (rule.arguments.empty()) {
+    return;
+  }
+
+  std::vector<const gchar *> arguments;
+  arguments.reserve(rule.arguments.size());
+  for (const std::string &argument : rule.arguments) {
+    arguments.push_back(argument.c_str());
+  }
+  g_key_file_set_string_list(key_file, group.c_str(), "arguments",
+                             arguments.data(), arguments.size());
+}
+
 static bool load_settings_file(SettingsStore *store,
                                const std::filesystem::path &path,
                                bool missing_is_optional,
@@ -272,6 +419,9 @@ static bool load_settings_file(SettingsStore *store,
                           nullptr);
   }
   load_settings_store_from_key_file(store, key_file, warnings);
+  if (exclude_connection_settings) {
+    load_hyperlink_settings_from_key_file(store, key_file, warnings);
+  }
   if (macro_rules != nullptr) {
     *macro_rules = load_macro_rules_from_key_file(key_file, warnings);
   }
@@ -284,6 +434,7 @@ static void mark_settings_store_clean(SettingsStore *store) {
     entry.dirty = false;
   }
   store->macro_rules_dirty = false;
+  store->hyperlink_settings_dirty = false;
 }
 
 static void restore_setting_entry(SettingsStore *store,
@@ -353,6 +504,12 @@ static GKeyFile *serialize_settings(const SettingsStore &store,
   if (!exclude_connection_settings) {
     for (const MacroRule &rule : store.macro_rules) {
       set_key_file_macro_rule(key_file, rule);
+    }
+  } else if (store.hyperlink_settings_configured) {
+    g_key_file_set_boolean(key_file, "hyperlink", "enabled",
+                           store.hyperlink_actions_enabled ? TRUE : FALSE);
+    for (const HyperlinkActionRule &rule : store.hyperlink_rules) {
+      set_key_file_hyperlink_rule(key_file, rule);
     }
   }
   return key_file;
@@ -471,7 +628,10 @@ create_global_default_settings(TerminalDisplaySettings terminal_defaults) {
     definitions.push_back(std::move(entry.definition));
   }
   append_definitions(&definitions, application_setting_definitions());
-  return create_settings_store(std::move(definitions));
+  SettingsStore global = create_settings_store(std::move(definitions));
+  global.hyperlink_actions_enabled = connection.hyperlink_actions_enabled;
+  global.hyperlink_rules = std::move(connection.hyperlink_rules);
+  return global;
 }
 
 SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
@@ -488,7 +648,10 @@ SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
   append_definitions(&definitions, sftp_connection_setting_definitions());
   append_definitions(&definitions, serial_connection_setting_definitions());
   append_definitions(&definitions, transfer_setting_definitions());
-  return create_settings_store(std::move(definitions));
+  SettingsStore store = create_settings_store(std::move(definitions));
+  store.hyperlink_actions_enabled = true;
+  store.hyperlink_rules = default_hyperlink_action_rules();
+  return store;
 }
 
 std::filesystem::path default_global_config_path() {
@@ -539,6 +702,12 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_zoom)
         load_global_settings(options.global_config_path.value(),
                              default_terminal_zoom);
     rebase_settings_store_fallbacks(&result.store, global.store);
+    result.store.hyperlink_actions_enabled =
+        global.store.hyperlink_actions_enabled;
+    result.store.hyperlink_rules = global.store.hyperlink_rules;
+    result.store.hyperlink_settings_configured =
+        global.store.hyperlink_settings_configured;
+    result.store.hyperlink_settings_dirty = false;
     result.warnings.insert(result.warnings.end(), global.warnings.begin(),
                            global.warnings.end());
   }

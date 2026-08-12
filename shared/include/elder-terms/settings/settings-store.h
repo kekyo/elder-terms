@@ -7,6 +7,7 @@
 #include <glib.h>
 
 #include <elder-terms/export.h>
+#include <elder-terms/settings/hyperlink-settings.h>
 #include <elder-terms/settings/macro-settings.h>
 
 namespace elder_terms {
@@ -88,6 +89,14 @@ struct SettingEntry {
 struct SettingsStore {
   /** Registered setting entries. */
   std::vector<SettingEntry> entries;
+  /** True when OSC 8 hyperlink command activation is enabled. */
+  bool hyperlink_actions_enabled = true;
+  /** Effective ordered OSC 8 hyperlink command rules. */
+  std::vector<HyperlinkActionRule> hyperlink_rules;
+  /** True when global.ini explicitly configures hyperlink actions. */
+  bool hyperlink_settings_configured = false;
+  /** True after hyperlink settings are changed in memory. */
+  bool hyperlink_settings_dirty = false;
   /** Ordered connection macro rules. */
   std::vector<MacroRule> macro_rules;
   /** True after the macro rule collection is changed in memory. */
@@ -121,6 +130,17 @@ create_settings_store(std::vector<SettingDefinition> definitions);
  */
 ELDER_TERMS_API void set_macro_rules(SettingsStore *store,
                                      std::vector<MacroRule> rules);
+
+/**
+ * Replaces the global OSC 8 hyperlink action settings.
+ *
+ * @param store Target settings store.
+ * @param enabled Whether OSC 8 hyperlink activation is enabled.
+ * @param rules New ordered rule collection.
+ */
+ELDER_TERMS_API void
+set_hyperlink_actions(SettingsStore *store, bool enabled,
+                      std::vector<HyperlinkActionRule> rules);
 
 /**
  * Loads all registered keys from a parsed GLib key file.
