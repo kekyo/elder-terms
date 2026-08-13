@@ -1,0 +1,1395 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: elder-terms 0.0.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-12 12:41+0900\n"
+"PO-Revision-Date: 2026-08-10 02:05+0900\n"
+"Last-Translator: elder-terms contributors\n"
+"Language-Team: Japanese\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: shared/src/settings-widget/settings-presentation.cpp:25
+msgid "Connection name"
+msgstr "接続名"
+
+#: shared/src/settings-widget/settings-presentation.cpp:26
+msgid "Connection type"
+msgstr "接続方式"
+
+#: shared/src/settings-widget/settings-presentation.cpp:28
+msgid "Open connection shortcut"
+msgstr "接続を開くショートカット"
+
+#: shared/src/settings-widget/settings-presentation.cpp:29
+msgid "Display language"
+msgstr "表示言語"
+
+#: shared/src/settings-widget/settings-presentation.cpp:30
+msgid "Startup mode"
+msgstr "起動モード"
+
+#: shared/src/settings-widget/settings-presentation.cpp:32
+msgid "Open application shortcut"
+msgstr "アプリケーションを開くショートカット"
+
+#: shared/src/settings-widget/settings-presentation.cpp:34
+msgid "Title and status bar background"
+msgstr "タイトル／ステータスバーの背景"
+
+#: shared/src/settings-widget/settings-presentation.cpp:35
+msgid "Content background"
+msgstr "コンテンツの背景"
+
+#: shared/src/settings-widget/settings-presentation.cpp:36
+msgid "Character encoding"
+msgstr "文字エンコーディング"
+
+#: shared/src/settings-widget/settings-presentation.cpp:37
+msgid "Backspace code"
+msgstr "Backspaceコード"
+
+#: shared/src/settings-widget/settings-presentation.cpp:38
+msgid "Cursor key mode"
+msgstr "カーソルキーモード"
+
+#: shared/src/settings-widget/settings-presentation.cpp:39
+msgid "Enter/Return code"
+msgstr "Enter/Returnコード"
+
+#: shared/src/settings-widget/settings-presentation.cpp:40
+msgid "Columns"
+msgstr "列数"
+
+#: shared/src/settings-widget/settings-presentation.cpp:41
+msgid "Rows"
+msgstr "行数"
+
+#: shared/src/settings-widget/settings-presentation.cpp:43
+msgid "Scrollback lines"
+msgstr "スクロールバッファ行数"
+
+#: shared/src/settings-widget/settings-presentation.cpp:44
+msgid "Zoom factor"
+msgstr "拡大率"
+
+#: shared/src/settings-widget/settings-presentation.cpp:46
+msgid "Primary font family"
+msgstr "プライマリフォントファミリー"
+
+#: shared/src/settings-widget/settings-presentation.cpp:48
+msgid "Secondary font family"
+msgstr "セカンダリフォントファミリー"
+
+#: shared/src/settings-widget/settings-presentation.cpp:50
+msgid "Close window when session ends"
+msgstr "セッション終了時にウィンドウを閉じる"
+
+#: shared/src/settings-widget/settings-presentation.cpp:52
+msgid "Show window side borders"
+msgstr "ウィンドウの左右にボーダーを表示する"
+
+#: shared/src/settings-widget/settings-presentation.cpp:53
+msgid "Zoom in shortcut"
+msgstr "拡大ショートカット"
+
+#: shared/src/settings-widget/settings-presentation.cpp:54
+msgid "Zoom out shortcut"
+msgstr "縮小ショートカット"
+
+#: shared/src/settings-widget/settings-presentation.cpp:56
+msgid "Send BREAK shortcut"
+msgstr "BREAK送信ショートカット"
+
+#: shared/src/settings-widget/settings-presentation.cpp:57
+#: shared/src/settings-widget/settings-presentation.cpp:60
+msgid "Address"
+msgstr "アドレス"
+
+#: shared/src/settings-widget/settings-presentation.cpp:58
+#: shared/src/settings-widget/settings-presentation.cpp:61
+msgid "Port"
+msgstr "ポート"
+
+#: shared/src/settings-widget/settings-presentation.cpp:59
+#: shared/src/settings-widget/settings-presentation.cpp:64
+msgid "Terminal type"
+msgstr "端末種別"
+
+#: shared/src/settings-widget/settings-presentation.cpp:62
+msgid "User name"
+msgstr "ユーザー名"
+
+#: shared/src/settings-widget/settings-presentation.cpp:63
+msgid "Identity file"
+msgstr "秘密鍵ファイル"
+
+#: shared/src/settings-widget/settings-presentation.cpp:65
+msgid "Local directory"
+msgstr "ローカルディレクトリ"
+
+#: shared/src/settings-widget/settings-presentation.cpp:66
+msgid "Remote directory"
+msgstr "リモートディレクトリ"
+
+#: shared/src/settings-widget/settings-presentation.cpp:67
+msgid "Device"
+msgstr "デバイス"
+
+#: shared/src/settings-widget/settings-presentation.cpp:69
+msgid "Device identification"
+msgstr "デバイス識別方式"
+
+#: shared/src/settings-widget/settings-presentation.cpp:71
+#: shared/src/settings-widget/settings-presentation.cpp:246
+msgid "USB serial number"
+msgstr "USBシリアル番号"
+
+#: shared/src/settings-widget/settings-presentation.cpp:72
+msgid "Baud rate"
+msgstr "ボーレート"
+
+#: shared/src/settings-widget/settings-presentation.cpp:73
+msgid "Data bits"
+msgstr "データビット"
+
+#: shared/src/settings-widget/settings-presentation.cpp:74
+msgid "Parity"
+msgstr "パリティ"
+
+#: shared/src/settings-widget/settings-presentation.cpp:75
+msgid "Stop bits"
+msgstr "ストップビット"
+
+#: shared/src/settings-widget/settings-presentation.cpp:76
+msgid "Flow control"
+msgstr "フロー制御"
+
+#: shared/src/settings-widget/settings-presentation.cpp:78
+msgid "Connection monitoring signal"
+msgstr "接続監視信号"
+
+#: shared/src/settings-widget/settings-presentation.cpp:80
+msgid "Transfer base directory"
+msgstr "転送ベースディレクトリ"
+
+#: shared/src/settings-widget/settings-presentation.cpp:82
+msgid "Text send rate (bytes/s)"
+msgstr "テキスト送信速度（バイト/秒）"
+
+#: shared/src/settings-widget/settings-presentation.cpp:84
+msgid "Follow Enter/Return code for text send"
+msgstr "テキスト送信時にEnter/Returnコードに従う"
+
+#: shared/src/settings-widget/settings-presentation.cpp:86
+msgid "Automatically start ZMODEM transfers"
+msgstr "ZMODEM転送を自動開始する"
+
+#: shared/src/settings-widget/settings-presentation.cpp:87
+msgid "Enable logging"
+msgstr "ログを有効にする"
+
+#: shared/src/settings-widget/settings-presentation.cpp:88
+msgid "Log directory"
+msgstr "ログディレクトリ"
+
+#: shared/src/settings-widget/settings-presentation.cpp:89
+msgid "File name format"
+msgstr "ファイル名形式"
+
+#: shared/src/settings-widget/settings-presentation.cpp:90
+msgid "Log content"
+msgstr "ログ内容"
+
+#: shared/src/settings-widget/settings-presentation.cpp:94
+msgid "Local shell"
+msgstr "ローカルシェル"
+
+#: shared/src/settings-widget/settings-presentation.cpp:95
+#: shared/src/settings-widget/settings-presentation.cpp:166
+msgid "TELNET"
+msgstr "TELNET"
+
+#: shared/src/settings-widget/settings-presentation.cpp:96
+#: shared/src/settings-widget/settings-presentation.cpp:168
+msgid "Serial"
+msgstr "シリアル"
+
+#: shared/src/settings-widget/settings-presentation.cpp:97
+#: shared/src/settings-widget/settings-presentation.cpp:170
+#: elder-terms-vte/src/main-window.cpp:1590
+msgid "SSH"
+msgstr "SSH"
+
+#: shared/src/settings-widget/settings-presentation.cpp:98
+#: shared/src/settings-widget/settings-presentation.cpp:172
+#: elder-terms-vte/src/main.cpp:1233
+msgid "SFTP"
+msgstr "SFTP"
+
+#: shared/src/settings-widget/settings-presentation.cpp:100
+msgid "System default"
+msgstr "システム設定"
+
+#: shared/src/settings-widget/settings-presentation.cpp:101
+msgid "English"
+msgstr "English"
+
+#: shared/src/settings-widget/settings-presentation.cpp:102
+msgid "العربية"
+msgstr "العربية"
+
+#: shared/src/settings-widget/settings-presentation.cpp:103
+msgid "Español"
+msgstr "Español"
+
+#: shared/src/settings-widget/settings-presentation.cpp:104
+msgid "Français"
+msgstr "Français"
+
+#: shared/src/settings-widget/settings-presentation.cpp:105
+msgid "हिन्दी"
+msgstr "हिन्दी"
+
+#: shared/src/settings-widget/settings-presentation.cpp:106
+msgid "日本語"
+msgstr "日本語"
+
+#: shared/src/settings-widget/settings-presentation.cpp:107
+msgid "한국어"
+msgstr "한국어"
+
+#: shared/src/settings-widget/settings-presentation.cpp:108
+msgid "Português"
+msgstr "Português"
+
+#: shared/src/settings-widget/settings-presentation.cpp:109
+msgid "Русский"
+msgstr "Русский"
+
+#: shared/src/settings-widget/settings-presentation.cpp:110
+msgid "中文"
+msgstr "中文"
+
+#: shared/src/settings-widget/settings-presentation.cpp:112
+msgid "Simple startup"
+msgstr "シンプル起動"
+
+#: shared/src/settings-widget/settings-presentation.cpp:114
+msgid "Background only"
+msgstr "バックグラウンドのみ"
+
+#: shared/src/settings-widget/settings-presentation.cpp:116
+msgid "System tray only"
+msgstr "システムトレイのみ"
+
+#: shared/src/settings-widget/settings-presentation.cpp:118
+msgid "System tray and main window"
+msgstr "システムトレイとメインウィンドウ"
+
+#: shared/src/settings-widget/settings-presentation.cpp:119
+#: shared/src/settings-widget/settings-presentation.cpp:124
+msgid "Auto"
+msgstr "自動"
+
+#: shared/src/settings-widget/settings-presentation.cpp:120
+msgid "BS"
+msgstr "BS"
+
+#: shared/src/settings-widget/settings-presentation.cpp:121
+msgid "DEL"
+msgstr "DEL"
+
+#: shared/src/settings-widget/settings-presentation.cpp:122
+msgid "Normal"
+msgstr "通常"
+
+#: shared/src/settings-widget/settings-presentation.cpp:123
+msgid "TRS80"
+msgstr "TRS80"
+
+#: shared/src/settings-widget/settings-presentation.cpp:125
+msgid "CR"
+msgstr "CR"
+
+#: shared/src/settings-widget/settings-presentation.cpp:126
+msgid "LF"
+msgstr "LF"
+
+#: shared/src/settings-widget/settings-presentation.cpp:127
+msgid "CRLF"
+msgstr "CRLF"
+
+#: shared/src/settings-widget/settings-presentation.cpp:128
+#: shared/src/settings-widget/settings-presentation.cpp:137
+msgid "None"
+msgstr "なし"
+
+#: shared/src/settings-widget/settings-presentation.cpp:130
+msgid "Device path"
+msgstr "デバイスパス"
+
+#: shared/src/settings-widget/settings-presentation.cpp:132
+msgid "Stable device identity"
+msgstr "安定したデバイスID"
+
+#: shared/src/settings-widget/settings-presentation.cpp:134
+msgid "Physical USB port"
+msgstr "物理USBポート"
+
+#: shared/src/settings-widget/settings-presentation.cpp:135
+msgid "Even"
+msgstr "偶数"
+
+#: shared/src/settings-widget/settings-presentation.cpp:136
+msgid "Odd"
+msgstr "奇数"
+
+#: shared/src/settings-widget/settings-presentation.cpp:139
+msgid "XON/XOFF (software)"
+msgstr "XON/XOFF（ソフトウェア）"
+
+#: shared/src/settings-widget/settings-presentation.cpp:141
+msgid "RTS/CTS (hardware)"
+msgstr "RTS/CTS（ハードウェア）"
+
+#: shared/src/settings-widget/settings-presentation.cpp:143
+msgid "DCD (Data Carrier Detect)"
+msgstr "DCD（データキャリア検出）"
+
+#: shared/src/settings-widget/settings-presentation.cpp:145
+msgid "CTS (Clear to Send)"
+msgstr "CTS（送信可）"
+
+#: shared/src/settings-widget/settings-presentation.cpp:147
+msgid "DSR (Data Set Ready)"
+msgstr "DSR（データセット準備完了）"
+
+#: shared/src/settings-widget/settings-presentation.cpp:149
+msgid "Ignore (do not monitor)"
+msgstr "監視しない"
+
+#: shared/src/settings-widget/settings-presentation.cpp:151
+msgid "Raw bytes (before character conversion)"
+msgstr "生バイト列（文字変換前）"
+
+#: shared/src/settings-widget/settings-presentation.cpp:153
+msgid "UTF-8 text (after character conversion)"
+msgstr "UTF-8テキスト（文字変換後）"
+
+#: shared/src/settings-widget/settings-presentation.cpp:164
+msgid "General"
+msgstr "一般"
+
+#: shared/src/settings-widget/settings-presentation.cpp:174
+#: elder-terms-vte/src/main-window.ui:370
+#: elder-terms-vte/src/terminal-session.cpp:225
+msgid "Terminal"
+msgstr "端末"
+
+#: shared/src/settings-widget/settings-presentation.cpp:176
+msgid "Macro"
+msgstr "マクロ"
+
+#: shared/src/settings-widget/settings-presentation.cpp:178
+#: elder-terms-vte/src/main-window.ui:35
+msgid "Transfer"
+msgstr "転送"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+msgid "Logging"
+msgstr "ログ"
+
+#: shared/src/settings-widget/settings-presentation.cpp:182
+msgid "Apply"
+msgstr "適用"
+
+#: shared/src/settings-widget/settings-presentation.cpp:184
+#: elder-terms/src/main.cpp:467 elder-terms/src/main-window.ui:184
+msgid "Save"
+msgstr "保存"
+
+#: shared/src/settings-widget/settings-presentation.cpp:186
+#: elder-terms/src/main.cpp:466 elder-terms/src/main.cpp:1386
+#: elder-terms/src/main.cpp:1579 elder-terms-vte/src/main.cpp:820
+#: elder-terms-vte/src/main-window.ui:233
+#: elder-terms-vte/src/main-window.ui:310
+#: elder-terms-vte/src/sftp/sftp-main.cpp:109
+#: elder-terms-vte/src/sftp/sftp-window.cpp:696
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1843
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: shared/src/settings-widget/settings-presentation.cpp:188
+msgid "Reset"
+msgstr "リセット"
+
+#: shared/src/settings-widget/settings-presentation.cpp:190
+msgid "Select Primary Terminal Font"
+msgstr "プライマリ端末フォントを選択"
+
+#: shared/src/settings-widget/settings-presentation.cpp:192
+msgid "Select Secondary Terminal Font"
+msgstr "セカンダリ端末フォントを選択"
+
+#: shared/src/settings-widget/settings-presentation.cpp:194
+msgid "Enabled"
+msgstr "有効"
+
+#: shared/src/settings-widget/settings-presentation.cpp:196
+msgid "Disabled"
+msgstr "無効"
+
+#: shared/src/settings-widget/settings-presentation.cpp:198
+msgid "Custom font"
+msgstr "カスタムフォント"
+
+#: shared/src/settings-widget/settings-presentation.cpp:200
+msgid "No color"
+msgstr "色なし"
+
+#: shared/src/settings-widget/settings-presentation.cpp:202
+msgid "Custom color"
+msgstr "カスタム色"
+
+#: shared/src/settings-widget/settings-presentation.cpp:204
+msgid "Press a key combination"
+msgstr "キーの組み合わせを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp:206
+msgid "Clear key binding"
+msgstr "キー割り当てをクリア"
+
+#: shared/src/settings-widget/settings-presentation.cpp:208
+msgid "Use global default"
+msgstr "グローバル既定値を使用"
+
+#: shared/src/settings-widget/settings-presentation.cpp:210
+msgid "Use built-in default"
+msgstr "組み込み既定値を使用"
+
+#: shared/src/settings-widget/settings-presentation.cpp:212
+msgid "Macro rules"
+msgstr "マクロルール"
+
+#: shared/src/settings-widget/settings-presentation.cpp:214
+msgid "Rule ID"
+msgstr "ルールID"
+
+#: shared/src/settings-widget/settings-presentation.cpp:216
+msgid "Regular expression"
+msgstr "正規表現"
+
+#: shared/src/settings-widget/settings-presentation.cpp:218
+msgid "Action"
+msgstr "アクション"
+
+#: shared/src/settings-widget/settings-presentation.cpp:220
+msgid "Text to send"
+msgstr "送信テキスト"
+
+#: shared/src/settings-widget/settings-presentation.cpp:222
+msgid "Command"
+msgstr "コマンド"
+
+#: shared/src/settings-widget/settings-presentation.cpp:224
+msgid "Arguments"
+msgstr "引数"
+
+#: shared/src/settings-widget/settings-presentation.cpp:226
+msgid "Add rule"
+msgstr "ルールを追加"
+
+#: shared/src/settings-widget/settings-presentation.cpp:228
+msgid "Remove rule"
+msgstr "ルールを削除"
+
+#: shared/src/settings-widget/settings-presentation.cpp:230
+msgid "Move up"
+msgstr "上へ移動"
+
+#: shared/src/settings-widget/settings-presentation.cpp:232
+msgid "Move down"
+msgstr "下へ移動"
+
+#: shared/src/settings-widget/settings-presentation.cpp:234
+msgid "Send text"
+msgstr "テキストを送信"
+
+#: shared/src/settings-widget/settings-presentation.cpp:236
+msgid "Run command"
+msgstr "コマンドを実行"
+
+#: shared/src/settings-widget/settings-presentation.cpp:238
+msgid "Add argument"
+msgstr "引数を追加"
+
+#: shared/src/settings-widget/settings-presentation.cpp:240
+msgid "Remove argument"
+msgstr "引数を削除"
+
+#: shared/src/settings-widget/settings-presentation.cpp:242
+msgid "No device"
+msgstr "デバイスなし"
+
+#: shared/src/settings-widget/settings-presentation.cpp:244
+msgid "Stable ID"
+msgstr "安定ID"
+
+#: shared/src/settings-widget/settings-presentation.cpp:248
+msgid "Current device node"
+msgstr "現在のデバイスノード"
+
+#: shared/src/settings-widget/settings-presentation.cpp:250
+msgid "Unavailable"
+msgstr "利用不可"
+
+#: shared/src/settings-widget/settings-presentation.cpp:278
+msgid "Global default"
+msgstr "グローバル既定値"
+
+#: shared/src/settings-widget/settings-presentation.cpp:279
+msgid "Built-in default"
+msgstr "組み込み既定値"
+
+#: shared/src/settings-widget/settings-presentation.cpp:283
+#, c-format
+msgid "%s (global default)"
+msgstr "%s（グローバル既定値）"
+
+#: shared/src/settings-widget/settings-presentation.cpp:284
+#, c-format
+msgid "%s (built-in default)"
+msgstr "%s（組み込み既定値）"
+
+#: shared/src/settings-widget/settings-presentation.cpp:295
+msgid "Enter a whole number"
+msgstr "整数を入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp:298
+msgid "Enter a number"
+msgstr "数値を入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp:309
+#, c-format
+msgid "Value must be between %s and %s"
+msgstr "値は%sから%sの範囲で入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp:318
+msgid "Must include Ctrl, Shift, Alt, or Super"
+msgstr "Ctrl、Shift、Alt、Super のいずれかを含めてください"
+
+#: shared/src/settings-widget/settings-presentation.cpp:321
+msgid "Contains an empty token"
+msgstr "空の要素が含まれています"
+
+#: shared/src/settings-widget/settings-presentation.cpp:330
+#, c-format
+msgid "Contains an unknown modifier: %s"
+msgstr "不明な修飾キーが含まれています: %s"
+
+#: shared/src/settings-widget/settings-presentation.cpp:343
+#, c-format
+msgid "Contains a duplicate modifier: %s"
+msgstr "修飾キーが重複しています: %s"
+
+#: shared/src/settings-widget/settings-presentation.cpp:351
+msgid "Does not contain a key"
+msgstr "キーを含めてください"
+
+#: shared/src/settings-widget/settings-presentation.cpp:358
+#, c-format
+msgid "Contains an unknown key: %s"
+msgstr "不明なキーが含まれています: %s"
+
+#: shared/src/settings-widget/settings-presentation.cpp:366
+msgid "Zoom in and zoom out must use different key bindings"
+msgstr "拡大と縮小には異なるキー割り当てを指定してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp:369
+msgid "Must not be empty"
+msgstr "空にはできません"
+
+#: shared/src/settings-widget/settings-presentation.cpp:372
+msgid "The character encoding is not supported"
+msgstr "この文字エンコーディングには対応していません"
+
+#: shared/src/settings-widget/settings-presentation.cpp:375
+msgid "Contains a NUL byte"
+msgstr "NULバイトが含まれています"
+
+#: shared/src/settings-widget/settings-presentation.cpp:378
+msgid "Contains an unmatched closing brace"
+msgstr "対応する開始波括弧のない終了波括弧が含まれています"
+
+#: shared/src/settings-widget/settings-presentation.cpp:381
+msgid "Contains an unmatched opening brace"
+msgstr "対応する終了波括弧のない開始波括弧が含まれています"
+
+#: shared/src/settings-widget/settings-presentation.cpp:384
+msgid "Contains an unknown placeholder"
+msgstr "不明なプレースホルダーが含まれています"
+
+#: shared/src/settings-widget/settings-presentation.cpp:387
+msgid "Must be relative to the log base directory"
+msgstr "ログのベースディレクトリからの相対パスにしてください"
+
+#: shared/src/settings-widget/settings-presentation.cpp:390
+msgid "Must not contain parent directory traversal"
+msgstr "親ディレクトリへの移動は指定できません"
+
+#: shared/src/settings-widget/settings-presentation.cpp:393
+msgid "Must name a log file"
+msgstr "ログファイル名を指定してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp:395
+msgid "Invalid value"
+msgstr "無効な値です"
+
+#: elder-terms/src/main.cpp:221
+msgid "Global shortcuts are unavailable"
+msgstr "グローバルショートカットを利用できません"
+
+#: elder-terms/src/main.cpp:230
+msgid ""
+"One or more configured global shortcuts could not be registered and will not "
+"work. Check whether your desktop environment supports global shortcuts."
+msgstr ""
+"設定されたグローバルショートカットの一部またはすべてを登録できなかったため、"
+"動作しません。デスクトップ環境がグローバルショートカットに対応しているか確認"
+"してください。"
+
+#: elder-terms/src/main.cpp:234 elder-terms-vte/src/main-window.ui:319
+#: elder-terms-vte/src/main-window.cpp:1595
+msgid "OK"
+msgstr "OK"
+
+#: elder-terms/src/main.cpp:274
+msgid "Restart to apply display language?"
+msgstr "表示言語を適用するため再起動しますか？"
+
+#: elder-terms/src/main.cpp:277
+msgid ""
+"The display language change will take effect after elder-terms restarts."
+msgstr "表示言語の変更はelder-termsの再起動後に反映されます。"
+
+#: elder-terms/src/main.cpp:280
+msgid "Later"
+msgstr "後で"
+
+#: elder-terms/src/main.cpp:282
+msgid "Restart now"
+msgstr "今すぐ再起動"
+
+#: elder-terms/src/main.cpp:410
+msgid "Failed to save global defaults"
+msgstr "グローバル既定値の保存に失敗しました"
+
+#: elder-terms/src/main.cpp:447 elder-terms/src/main-window.ui:167
+msgid "Global defaults"
+msgstr "グローバル既定値"
+
+#: elder-terms/src/main.cpp:704
+#, c-format
+msgid "Open connection %s"
+msgstr "接続「%s」を開く"
+
+#: elder-terms/src/main.cpp:731 elder-terms/src/tray-backend.cpp:371
+#: elder-terms/src/tray-backend.cpp:390 elder-terms/src/tray-backend.cpp:860
+msgid "Open elder-terms"
+msgstr "elder-termsを開く"
+
+#: elder-terms/src/main.cpp:786 elder-terms/src/main.cpp:1321
+msgid "Failed to load connection"
+msgstr "接続の読み込みに失敗しました"
+
+#: elder-terms/src/main.cpp:833
+msgid "New connection"
+msgstr "新しい接続"
+
+#: elder-terms/src/main.cpp:834
+#, c-format
+msgid "New connection %d"
+msgstr "新しい接続 %d"
+
+#: elder-terms/src/main.cpp:998 elder-terms/src/main.cpp:1015
+msgid "Failed to monitor connections"
+msgstr "接続一覧の監視に失敗しました"
+
+#: elder-terms/src/main.cpp:1011
+msgid "Unknown file monitor error"
+msgstr "不明なファイル監視エラー"
+
+#: elder-terms/src/main.cpp:1163
+msgid "Failed to create startup profile"
+msgstr "起動用プロファイルの作成に失敗しました"
+
+#: elder-terms/src/main.cpp:1220 elder-terms/src/main.cpp:1286
+#, c-format
+msgid "Failed to start %s"
+msgstr "%sの起動に失敗しました"
+
+#: elder-terms/src/main.cpp:1227
+#, c-format
+msgid "The %s executable was not found"
+msgstr "%sの実行ファイルが見つかりません"
+
+#: elder-terms/src/main.cpp:1255
+msgid "Unknown process launch error"
+msgstr "不明なプロセス起動エラー"
+
+#: elder-terms/src/main.cpp:1381
+msgid "Discard changes?"
+msgstr "変更を破棄しますか？"
+
+#: elder-terms/src/main.cpp:1384
+msgid "The current connection has changes that have not been applied."
+msgstr "現在の接続には、まだ適用されていない変更があります。"
+
+#: elder-terms/src/main.cpp:1388
+msgid "Discard"
+msgstr "破棄"
+
+#: elder-terms/src/main.cpp:1545
+msgid "Failed to delete connection"
+msgstr "接続の削除に失敗しました"
+
+#: elder-terms/src/main.cpp:1572
+msgid "Delete connection?"
+msgstr "接続を削除しますか？"
+
+#: elder-terms/src/main.cpp:1574
+#, c-format
+msgid "The connection \"%s\" will be permanently deleted."
+msgstr "接続「%s」は完全に削除されます。"
+
+#: elder-terms/src/main.cpp:1581 elder-terms/src/main-window.ui:21
+msgid "Delete"
+msgstr "削除"
+
+#: elder-terms/src/main.cpp:1622 elder-terms/src/main.cpp:1635
+msgid "Failed to rename connection"
+msgstr "接続名の変更に失敗しました"
+
+#: elder-terms/src/main.cpp:1731
+msgid "Failed to save connection"
+msgstr "接続の保存に失敗しました"
+
+#: elder-terms/src/main-window.ui:15
+msgid "Rename"
+msgstr "名前の変更"
+
+#: elder-terms/src/main-window.ui:63
+msgid "Terminal entries"
+msgstr "ターミナルエントリ"
+
+#: elder-terms/src/main-window.ui:119
+msgid "Select a connection or create a new one."
+msgstr "接続を選択するか、新しい接続を作成してください。"
+
+#: elder-terms/src/main-window.ui:161
+msgid "New"
+msgstr "新規"
+
+#: elder-terms/src/main-window.ui:191
+msgid "Launch"
+msgstr "起動"
+
+#: elder-terms/src/connection-repository.cpp:60
+#, c-format
+msgid "Warning: failed to create temporary file %s: %s"
+msgstr "警告: 一時ファイル%sの作成に失敗しました: %s"
+
+#: elder-terms/src/connection-repository.cpp:67
+#, c-format
+msgid "Warning: failed to close temporary file %s: %s"
+msgstr "警告: 一時ファイル%sを閉じられませんでした: %s"
+
+#: elder-terms/src/connection-repository.cpp:124
+msgid "Connection name must not be empty"
+msgstr "接続名は空にできません"
+
+#: elder-terms/src/connection-repository.cpp:128
+msgid "Connection name must not be a relative path"
+msgstr "接続名に相対パスは使用できません"
+
+#: elder-terms/src/connection-repository.cpp:133
+msgid "Connection name must not contain a path separator"
+msgstr "接続名にパス区切り文字は使用できません"
+
+#: elder-terms/src/connection-repository.cpp:145
+msgid "A connection with this name already exists"
+msgstr "同じ名前の接続がすでに存在します"
+
+#: elder-terms/src/connection-repository.cpp:171
+#, c-format
+msgid "Warning: failed to create connection directory %s: %s"
+msgstr "警告: 接続ディレクトリ%sの作成に失敗しました: %s"
+
+#: elder-terms/src/connection-repository.cpp:181
+#: elder-terms/src/connection-repository.cpp:267
+#, c-format
+msgid "Warning: %s"
+msgstr "警告: %s"
+
+#: elder-terms/src/connection-repository.cpp:207
+#, c-format
+msgid "Warning: failed to replace connection profile %s: %s"
+msgstr "警告: 接続プロファイル%sの置換に失敗しました: %s"
+
+#: elder-terms/src/connection-repository.cpp:227
+#, c-format
+msgid "Warning: failed to prepare connection rename %s: %s"
+msgstr "警告: 接続名変更の準備に失敗しました (%s): %s"
+
+#: elder-terms/src/connection-repository.cpp:238
+#: elder-terms/src/connection-repository.cpp:289
+#, c-format
+msgid "Warning: failed to rename connection profile %s: %s"
+msgstr "警告: 接続プロファイル%sの名前変更に失敗しました: %s"
+
+#: elder-terms/src/connection-repository.cpp:244
+#, c-format
+msgid "Warning: failed to restore connection profile %s: %s"
+msgstr "警告: 接続プロファイル%sの復元に失敗しました: %s"
+
+#: elder-terms/src/connection-repository.cpp:309
+#, c-format
+msgid "Warning: failed to delete connection profile %s: %s"
+msgstr "警告: 接続プロファイル%sの削除に失敗しました: %s"
+
+#: elder-terms/src/tray-backend.cpp:374 elder-terms/src/tray-backend.cpp:393
+#: elder-terms/src/tray-backend.cpp:861
+msgid "Quit"
+msgstr "終了"
+
+#: elder-terms-vte/src/main.cpp:182
+msgid "Macro command failed"
+msgstr "マクロコマンドの実行に失敗しました"
+
+#: elder-terms-vte/src/main.cpp:223
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:277
+msgid "SSH Host Key"
+msgstr "SSHホスト鍵"
+
+#: elder-terms-vte/src/main.cpp:225
+#, c-format
+msgid ""
+"Unknown SSH host key for %s:%d\n"
+"Key type: %s\n"
+"Fingerprint: %s\n"
+"Accept and save this host key?"
+msgstr ""
+"%s:%dの不明なSSHホスト鍵\n"
+"鍵の種類: %s\n"
+"フィンガープリント: %s\n"
+"このホスト鍵を承認して保存しますか？"
+
+#: elder-terms-vte/src/main.cpp:237 elder-terms-vte/src/main-window.ui:274
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:472
+msgid "SSH Authentication"
+msgstr "SSH認証"
+
+#: elder-terms-vte/src/main.cpp:238 elder-terms-vte/src/main-window.ui:282
+msgid "Password:"
+msgstr "パスワード:"
+
+#: elder-terms-vte/src/main.cpp:253
+msgid "SSH prompt accepted"
+msgstr "SSHプロンプトを承認しました"
+
+#: elder-terms-vte/src/main.cpp:254
+msgid "SSH prompt cancelled"
+msgstr "SSHプロンプトをキャンセルしました"
+
+#: elder-terms-vte/src/main.cpp:641 elder-terms-vte/src/main.cpp:645
+#: elder-terms-vte/src/main-window.ui:18
+msgid "Settings"
+msgstr "設定"
+
+#: elder-terms-vte/src/main.cpp:819
+msgid "Select file"
+msgstr "ファイルを選択"
+
+#: elder-terms-vte/src/main.cpp:821
+msgid "Open"
+msgstr "開く"
+
+#: elder-terms-vte/src/main.cpp:907 elder-terms-vte/src/main.cpp:917
+#: elder-terms-vte/src/main.cpp:942 elder-terms-vte/src/main.cpp:952
+msgid "Transfer unavailable"
+msgstr "転送を利用できません"
+
+#: elder-terms-vte/src/main.cpp:1054 elder-terms-vte/src/main.cpp:1076
+msgid "BREAK unavailable"
+msgstr "BREAKを利用できません"
+
+#: elder-terms-vte/src/main.cpp:1060
+msgid "Sending BREAK"
+msgstr "BREAKを送信中"
+
+#: elder-terms-vte/src/main.cpp:1096 elder-terms-vte/src/main.cpp:1618
+msgid "Text send unavailable"
+msgstr "テキスト送信を利用できません"
+
+#: elder-terms-vte/src/main.cpp:1104
+msgid "Text (Send)"
+msgstr "テキスト（送信）"
+
+#: elder-terms-vte/src/main.cpp:1182 elder-terms-vte/src/main.cpp:1213
+msgid "SFTP unavailable"
+msgstr "SFTPを利用できません"
+
+#: elder-terms-vte/src/main.cpp:1257
+msgid "Log recording"
+msgstr "ログ記録"
+
+#: elder-terms-vte/src/main.cpp:1303
+msgid "ZMODEM (send)"
+msgstr "ZMODEM（送信）"
+
+#: elder-terms-vte/src/main.cpp:1310
+msgid "YMODEM (send)"
+msgstr "YMODEM（送信）"
+
+#: elder-terms-vte/src/main.cpp:1317
+msgid "XMODEM 1K (send)"
+msgstr "XMODEM 1K（送信）"
+
+#: elder-terms-vte/src/main.cpp:1326
+msgid "XMODEM (send)"
+msgstr "XMODEM（送信）"
+
+#: elder-terms-vte/src/main.cpp:1336
+msgid "ZMODEM (receive)"
+msgstr "ZMODEM（受信）"
+
+#: elder-terms-vte/src/main.cpp:1343
+msgid "YMODEM-g (receive)"
+msgstr "YMODEM-g（受信）"
+
+#: elder-terms-vte/src/main.cpp:1351
+msgid "YMODEM (receive)"
+msgstr "YMODEM（受信）"
+
+#: elder-terms-vte/src/main.cpp:1360
+msgid "XMODEM CRC (receive)"
+msgstr "XMODEM CRC（受信）"
+
+#: elder-terms-vte/src/main.cpp:1369
+msgid "XMODEM (receive)"
+msgstr "XMODEM（受信）"
+
+#: elder-terms-vte/src/main.cpp:1598
+msgid "Hyperlink command failed"
+msgstr "ハイパーリンクコマンドの実行に失敗しました"
+
+#: elder-terms-vte/src/main-window.ui:138
+#: elder-terms-vte/src/main-window.cpp:1496
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1899
+msgid "Disconnected"
+msgstr "切断されました"
+
+#: elder-terms-vte/src/main-window.ui:193
+msgid "Transferring..."
+msgstr "転送中..."
+
+#: elder-terms-vte/src/main-window.cpp:330
+msgid "Copy"
+msgstr "コピー"
+
+#: elder-terms-vte/src/main-window.cpp:334
+msgid "Paste"
+msgstr "貼り付け"
+
+#: elder-terms-vte/src/main-window.cpp:340
+msgid "Send BREAK"
+msgstr "BREAKを送信"
+
+#: elder-terms-vte/src/main-window.cpp:1083
+#, c-format
+msgid "%s (Disconnected)"
+msgstr "%s（切断）"
+
+#: elder-terms-vte/src/main-window.cpp:1519
+msgid "SSH connection failed"
+msgstr "SSH接続に失敗しました"
+
+#: elder-terms-vte/src/main-window.cpp:1521
+#, c-format
+msgid ""
+"SSH connection failed:\n"
+"%s"
+msgstr ""
+"SSH接続に失敗しました:\n"
+"%s"
+
+#: elder-terms-vte/src/main-window.cpp:1595
+#: elder-terms-vte/src/sftp/sftp-main.cpp:111
+msgid "Accept"
+msgstr "承認"
+
+#: elder-terms-vte/src/sftp/sftp-main.cpp:111
+msgid "Continue"
+msgstr "続行"
+
+#: elder-terms-vte/src/sftp/sftp-main.cpp:180
+msgid "Failed to start SFTP"
+msgstr "SFTPの起動に失敗しました"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:171
+#: elder-terms-vte/src/sftp/sftp-window.cpp:178
+msgid "Unknown SFTP failure"
+msgstr "不明なSFTPエラー"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:244
+msgid "Loading…"
+msgstr "読み込み中…"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:387
+msgid "SFTP local pane only supports native filesystem paths"
+msgstr "SFTPのローカルペインではローカルファイルシステムのパスのみ使用できます"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:460
+msgid "Local directory path is empty"
+msgstr "ローカルディレクトリのパスが空です"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:557
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1830
+msgid "Preparing transfer…"
+msgstr "転送を準備しています…"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:585
+#, c-format
+msgid "Transferring %zu of %zu — %s"
+msgstr "転送中 %zu/%zu — %s"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:588
+#, c-format
+msgid "Transferring %zu of %zu"
+msgstr "転送中 %zu/%zu"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:592
+#, c-format
+msgid "Transferring — %s"
+msgstr "転送中 — %s"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:595
+msgid "Transferring"
+msgstr "転送中"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:697
+#: elder-terms-vte/src/sftp/sftp-window.cpp:721
+msgid "Skip"
+msgstr "スキップ"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:698
+msgid "Overwrite"
+msgstr "上書き"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:700
+msgid "Destination already exists"
+msgstr "転送先に同名の項目があります"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:702
+#, c-format
+msgid ""
+"%s\n"
+"The selected decision applies to all remaining conflicts."
+msgstr ""
+"%s\n"
+"選択した操作は残りのすべての衝突に適用されます。"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:720
+msgid "Abort"
+msgstr "中止"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:722
+msgid "Retry"
+msgstr "再試行"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:724
+msgid "SFTP transfer failed"
+msgstr "SFTP転送に失敗しました"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:725
+#, c-format
+msgid ""
+"%s\n"
+"\n"
+"%s\n"
+"→ %s"
+msgstr ""
+"%s\n"
+"\n"
+"%s\n"
+"→ %s"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:752
+msgid "SFTP operation failed"
+msgstr "SFTP操作に失敗しました"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:811
+msgid "Failed to load remote directory"
+msgstr "リモートディレクトリの読み込みに失敗しました"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:812
+msgid "Failed to load local directory"
+msgstr "ローカルディレクトリの読み込みに失敗しました"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:884
+msgid "Failed to expand directory"
+msgstr "ディレクトリの展開に失敗しました"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1210
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1218
+msgid "Transfer cancelled"
+msgstr "転送をキャンセルしました"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1220
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:445
+msgid "Transfer failed"
+msgstr "転送に失敗しました"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1234
+#, c-format
+msgid "Sent %zu item"
+msgid_plural "Sent %zu items"
+msgstr[0] "%zu個の項目を送信しました"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1236
+#, c-format
+msgid "Received %zu item"
+msgid_plural "Received %zu items"
+msgstr[0] "%zu個の項目を受信しました"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1535
+msgid "Name"
+msgstr "名前"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1537
+msgid "Size"
+msgstr "サイズ"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1539
+msgid "Modified"
+msgstr "更新日時"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1557
+msgid "Remote"
+msgstr "リモート"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1557
+msgid "Local"
+msgstr "ローカル"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1589
+msgid "Up"
+msgstr "上へ"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1593
+msgid "Refresh"
+msgstr "更新"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1618
+msgid "Receive"
+msgstr "受信"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1618
+msgid "Send"
+msgstr "送信"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1797
+msgid "Ready"
+msgstr "準備完了"
+
+#: elder-terms-vte/src/terminal-text-send-runner.cpp:119
+msgid "Text contained characters that were replaced"
+msgstr "置換された文字がテキストに含まれていました"
+
+#: elder-terms-vte/src/terminal-transfer-runner.cpp:960
+#, c-format
+msgid "Starting %s send"
+msgstr "%sの送信を開始しています"
+
+#: elder-terms-vte/src/terminal-transfer-runner.cpp:961
+#, c-format
+msgid "Starting %s receive"
+msgstr "%sの受信を開始しています"
+
+#: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:430
+#: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1038
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:509
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:626
+msgid "Text send failed"
+msgstr "テキスト送信に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:541
+msgid "local terminal"
+msgstr "ローカル端末"
+
+#: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1117
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:566
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:711
+msgid "BREAK sent"
+msgstr "BREAKを送信しました"
+
+#: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1117
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:566
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:711
+msgid "BREAK failed"
+msgstr "BREAKの送信に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1396
+msgid "serial: (unknown)"
+msgstr "シリアル:（不明）"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:80
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:627
+msgid "SSH session has no socket"
+msgstr "SSHセッションにソケットがありません"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:245
+msgid "unknown"
+msgstr "不明"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:265
+#, c-format
+msgid ""
+"Unknown SSH host key for %s:%u\n"
+"Key type: %s\n"
+"Fingerprint: %s"
+msgstr ""
+"%s:%uの不明なSSHホスト鍵\n"
+"鍵の種類: %s\n"
+"フィンガープリント: %s"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:271
+msgid "The known_hosts file does not exist and will be created."
+msgstr "known_hostsファイルが存在しないため作成します。"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:274
+msgid "Accept and save this host key?"
+msgstr "このホスト鍵を承認して保存しますか？"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:296
+msgid "SSH host key changed; connection rejected"
+msgstr "SSHホスト鍵が変更されたため、接続を拒否しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:300
+msgid "SSH host key type differs from known_hosts; connection rejected"
+msgstr "SSHホスト鍵の種類がknown_hostsと異なるため、接続を拒否しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:303
+msgid "Failed to check SSH host key"
+msgstr "SSHホスト鍵の確認に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:311
+msgid "SSH host key was not accepted"
+msgstr "SSHホスト鍵が承認されませんでした"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:314
+msgid "Failed to save SSH host key"
+msgstr "SSHホスト鍵の保存に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:346
+msgid "SSH Key Passphrase"
+msgstr "SSH鍵のパスフレーズ"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:348
+#, c-format
+msgid "Passphrase for %s (attempt %u of %u):"
+msgstr "%sのパスフレーズ（%u/%u回目）:"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:394
+#, c-format
+msgid "Password for %s (attempt %u of %u):"
+msgstr "%sのパスワード（%u/%u回目）:"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:414
+msgid "SSH password authentication failed"
+msgstr "SSHパスワード認証に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:439
+msgid "SSH authentication response:"
+msgstr "SSH認証への応答:"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:498
+msgid "SSH keyboard-interactive authentication failed"
+msgstr "SSHキーボードインタラクティブ認証に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:517
+msgid "SSH authentication negotiation failed"
+msgstr "SSH認証のネゴシエーションに失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:522
+msgid "Failed to list SSH authentication methods"
+msgstr "SSH認証方法の取得に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:533
+msgid "SSH public-key authentication failed"
+msgstr "SSH公開鍵認証に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:555
+msgid "Failed to refresh SSH authentication methods"
+msgstr "SSH認証方法の更新に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:568
+msgid "SSH server did not accept an available authentication method"
+msgstr "SSHサーバーは利用可能な認証方法を受け入れませんでした"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:724
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1024
+msgid "SSH transport is closed"
+msgstr "SSHトランスポートは閉じられています"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:926
+msgid "Failed to allocate SSH session"
+msgstr "SSHセッションの割り当てに失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:932
+msgid "Failed to set SSH host"
+msgstr "SSHホストの設定に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:935
+msgid "Failed to parse SSH configuration"
+msgstr "SSH設定の解析に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:944
+msgid "Failed to configure SSH endpoint"
+msgstr "SSHエンドポイントの設定に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:949
+msgid "Failed to configure SSH known_hosts"
+msgstr "SSHのknown_hostsの設定に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:952
+msgid "Failed to attach SSH socket"
+msgstr "SSHソケットの割り当てに失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:962
+msgid "Failed to configure SSH callbacks"
+msgstr "SSHコールバックの設定に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1120
+msgid "SSH transport is required"
+msgstr "SSHトランスポートが必要です"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1174
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1243
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1281
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1301
+msgid "SSH channel is closed"
+msgstr "SSHチャネルは閉じられています"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:658
+msgid "ssh: (unknown)"
+msgstr "ssh:（不明）"
+
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
+msgid "telnet: (unknown)"
+msgstr "telnet:（不明）"

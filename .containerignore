@@ -1,0 +1,9 @@
+**
+!package.json
+!package-lock.json
+!shared/
+!shared/package.json
+!elder-terms/
+!elder-terms/package.json
+!elder-terms-vte/
+!elder-terms-vte/package.json

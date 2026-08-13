@@ -1,0 +1,1400 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: elder-terms 0.0.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-12 12:41+0900\n"
+"PO-Revision-Date: 2026-08-10 02:05+0900\n"
+"Last-Translator: elder-terms contributors\n"
+"Language-Team: Portuguese\n"
+"Language: pt\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: shared/src/settings-widget/settings-presentation.cpp:25
+msgid "Connection name"
+msgstr "Nome da conexão"
+
+#: shared/src/settings-widget/settings-presentation.cpp:26
+msgid "Connection type"
+msgstr "Tipo de conexão"
+
+#: shared/src/settings-widget/settings-presentation.cpp:28
+msgid "Open connection shortcut"
+msgstr "Abra o atalho de conexão"
+
+#: shared/src/settings-widget/settings-presentation.cpp:29
+msgid "Display language"
+msgstr "Idioma de exibição"
+
+#: shared/src/settings-widget/settings-presentation.cpp:30
+msgid "Startup mode"
+msgstr "Modo de inicialização"
+
+#: shared/src/settings-widget/settings-presentation.cpp:32
+msgid "Open application shortcut"
+msgstr "Abra o atalho do aplicativo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:34
+msgid "Title and status bar background"
+msgstr "Título e fundo da barra de status"
+
+#: shared/src/settings-widget/settings-presentation.cpp:35
+msgid "Content background"
+msgstr "Histórico do conteúdo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:36
+msgid "Character encoding"
+msgstr "Codificação de caracteres"
+
+#: shared/src/settings-widget/settings-presentation.cpp:37
+msgid "Backspace code"
+msgstr "Código de retrocesso"
+
+#: shared/src/settings-widget/settings-presentation.cpp:38
+msgid "Cursor key mode"
+msgstr "Modo de tecla do cursor"
+
+#: shared/src/settings-widget/settings-presentation.cpp:39
+msgid "Enter/Return code"
+msgstr "Código de Enter/Return"
+
+#: shared/src/settings-widget/settings-presentation.cpp:40
+msgid "Columns"
+msgstr "Colunas"
+
+#: shared/src/settings-widget/settings-presentation.cpp:41
+msgid "Rows"
+msgstr "Linhas"
+
+#: shared/src/settings-widget/settings-presentation.cpp:43
+msgid "Scrollback lines"
+msgstr "Linhas do histórico"
+
+#: shared/src/settings-widget/settings-presentation.cpp:44
+msgid "Zoom factor"
+msgstr "Fator de zoom"
+
+#: shared/src/settings-widget/settings-presentation.cpp:46
+msgid "Primary font family"
+msgstr "Família de fontes primária"
+
+#: shared/src/settings-widget/settings-presentation.cpp:48
+msgid "Secondary font family"
+msgstr "Família de fontes secundária"
+
+#: shared/src/settings-widget/settings-presentation.cpp:50
+msgid "Close window when session ends"
+msgstr "Fecha a janela quando a sessão termina"
+
+#: shared/src/settings-widget/settings-presentation.cpp:52
+msgid "Show window side borders"
+msgstr "Mostrar bordas laterais da janela"
+
+#: shared/src/settings-widget/settings-presentation.cpp:53
+msgid "Zoom in shortcut"
+msgstr "Ampliar atalho"
+
+#: shared/src/settings-widget/settings-presentation.cpp:54
+msgid "Zoom out shortcut"
+msgstr "Atalho para diminuir zoom"
+
+#: shared/src/settings-widget/settings-presentation.cpp:56
+msgid "Send BREAK shortcut"
+msgstr "Atalho para enviar BREAK"
+
+#: shared/src/settings-widget/settings-presentation.cpp:57
+#: shared/src/settings-widget/settings-presentation.cpp:60
+msgid "Address"
+msgstr "Endereço"
+
+#: shared/src/settings-widget/settings-presentation.cpp:58
+#: shared/src/settings-widget/settings-presentation.cpp:61
+msgid "Port"
+msgstr "Porta"
+
+#: shared/src/settings-widget/settings-presentation.cpp:59
+#: shared/src/settings-widget/settings-presentation.cpp:64
+msgid "Terminal type"
+msgstr "Tipo de terminal"
+
+#: shared/src/settings-widget/settings-presentation.cpp:62
+msgid "User name"
+msgstr "Nome de usuário"
+
+#: shared/src/settings-widget/settings-presentation.cpp:63
+msgid "Identity file"
+msgstr "Arquivo de identidade"
+
+#: shared/src/settings-widget/settings-presentation.cpp:65
+msgid "Local directory"
+msgstr "Diretório local"
+
+#: shared/src/settings-widget/settings-presentation.cpp:66
+msgid "Remote directory"
+msgstr "Diretório remoto"
+
+#: shared/src/settings-widget/settings-presentation.cpp:67
+msgid "Device"
+msgstr "Dispositivo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:69
+msgid "Device identification"
+msgstr "Identificação do dispositivo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:71
+#: shared/src/settings-widget/settings-presentation.cpp:246
+msgid "USB serial number"
+msgstr "Número de série USB"
+
+#: shared/src/settings-widget/settings-presentation.cpp:72
+msgid "Baud rate"
+msgstr "Taxa de transmissão"
+
+#: shared/src/settings-widget/settings-presentation.cpp:73
+msgid "Data bits"
+msgstr "Bits de dados"
+
+#: shared/src/settings-widget/settings-presentation.cpp:74
+msgid "Parity"
+msgstr "Paridade"
+
+#: shared/src/settings-widget/settings-presentation.cpp:75
+msgid "Stop bits"
+msgstr "Bits de parada"
+
+#: shared/src/settings-widget/settings-presentation.cpp:76
+msgid "Flow control"
+msgstr "Controle de fluxo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:78
+msgid "Connection monitoring signal"
+msgstr "Sinal de monitoramento de conexão"
+
+#: shared/src/settings-widget/settings-presentation.cpp:80
+msgid "Transfer base directory"
+msgstr "Transferir diretório base"
+
+#: shared/src/settings-widget/settings-presentation.cpp:82
+msgid "Text send rate (bytes/s)"
+msgstr "Taxa de envio de texto (bytes/s)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:84
+msgid "Follow Enter/Return code for text send"
+msgstr "Seguir o código de Enter/Return no envio de texto"
+
+#: shared/src/settings-widget/settings-presentation.cpp:86
+msgid "Automatically start ZMODEM transfers"
+msgstr "Inicia automaticamente transferências ZMODEM"
+
+#: shared/src/settings-widget/settings-presentation.cpp:87
+msgid "Enable logging"
+msgstr "Habilitar registro"
+
+#: shared/src/settings-widget/settings-presentation.cpp:88
+msgid "Log directory"
+msgstr "Diretório de log"
+
+#: shared/src/settings-widget/settings-presentation.cpp:89
+msgid "File name format"
+msgstr "Formato do nome do arquivo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:90
+msgid "Log content"
+msgstr "Registrar conteúdo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:94
+msgid "Local shell"
+msgstr "Concha local"
+
+#: shared/src/settings-widget/settings-presentation.cpp:95
+#: shared/src/settings-widget/settings-presentation.cpp:166
+msgid "TELNET"
+msgstr "TELNET"
+
+#: shared/src/settings-widget/settings-presentation.cpp:96
+#: shared/src/settings-widget/settings-presentation.cpp:168
+msgid "Serial"
+msgstr "Serial"
+
+#: shared/src/settings-widget/settings-presentation.cpp:97
+#: shared/src/settings-widget/settings-presentation.cpp:170
+#: elder-terms-vte/src/main-window.cpp:1590
+msgid "SSH"
+msgstr "SSH"
+
+#: shared/src/settings-widget/settings-presentation.cpp:98
+#: shared/src/settings-widget/settings-presentation.cpp:172
+#: elder-terms-vte/src/main.cpp:1233
+msgid "SFTP"
+msgstr "SFTP"
+
+#: shared/src/settings-widget/settings-presentation.cpp:100
+msgid "System default"
+msgstr "Padrão do sistema"
+
+#: shared/src/settings-widget/settings-presentation.cpp:101
+msgid "English"
+msgstr "Inglês"
+
+#: shared/src/settings-widget/settings-presentation.cpp:102
+msgid "العربية"
+msgstr "العربية"
+
+#: shared/src/settings-widget/settings-presentation.cpp:103
+msgid "Español"
+msgstr "Español"
+
+#: shared/src/settings-widget/settings-presentation.cpp:104
+msgid "Français"
+msgstr "Français"
+
+#: shared/src/settings-widget/settings-presentation.cpp:105
+msgid "हिन्दी"
+msgstr "हिन्दी"
+
+#: shared/src/settings-widget/settings-presentation.cpp:106
+msgid "日本語"
+msgstr "日本語"
+
+#: shared/src/settings-widget/settings-presentation.cpp:107
+msgid "한국어"
+msgstr "한국어"
+
+#: shared/src/settings-widget/settings-presentation.cpp:108
+msgid "Português"
+msgstr "Português"
+
+#: shared/src/settings-widget/settings-presentation.cpp:109
+msgid "Русский"
+msgstr "Русский"
+
+#: shared/src/settings-widget/settings-presentation.cpp:110
+msgid "中文"
+msgstr "中文"
+
+#: shared/src/settings-widget/settings-presentation.cpp:112
+msgid "Simple startup"
+msgstr "Inicialização simples"
+
+#: shared/src/settings-widget/settings-presentation.cpp:114
+msgid "Background only"
+msgstr "Somente em segundo plano"
+
+#: shared/src/settings-widget/settings-presentation.cpp:116
+msgid "System tray only"
+msgstr "Somente bandeja do sistema"
+
+#: shared/src/settings-widget/settings-presentation.cpp:118
+msgid "System tray and main window"
+msgstr "Bandeja do sistema e janela principal"
+
+#: shared/src/settings-widget/settings-presentation.cpp:119
+#: shared/src/settings-widget/settings-presentation.cpp:124
+msgid "Auto"
+msgstr "Automático"
+
+#: shared/src/settings-widget/settings-presentation.cpp:120
+msgid "BS"
+msgstr "BS"
+
+#: shared/src/settings-widget/settings-presentation.cpp:121
+msgid "DEL"
+msgstr "DEL"
+
+#: shared/src/settings-widget/settings-presentation.cpp:122
+msgid "Normal"
+msgstr "Normal"
+
+#: shared/src/settings-widget/settings-presentation.cpp:123
+msgid "TRS80"
+msgstr "TRS80"
+
+#: shared/src/settings-widget/settings-presentation.cpp:125
+msgid "CR"
+msgstr "CR"
+
+#: shared/src/settings-widget/settings-presentation.cpp:126
+msgid "LF"
+msgstr "LF"
+
+#: shared/src/settings-widget/settings-presentation.cpp:127
+msgid "CRLF"
+msgstr "CRLF"
+
+#: shared/src/settings-widget/settings-presentation.cpp:128
+#: shared/src/settings-widget/settings-presentation.cpp:137
+msgid "None"
+msgstr "Nenhum"
+
+#: shared/src/settings-widget/settings-presentation.cpp:130
+msgid "Device path"
+msgstr "Caminho do dispositivo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:132
+msgid "Stable device identity"
+msgstr "Identidade estável do dispositivo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:134
+msgid "Physical USB port"
+msgstr "Porta USB física"
+
+#: shared/src/settings-widget/settings-presentation.cpp:135
+msgid "Even"
+msgstr "Até"
+
+#: shared/src/settings-widget/settings-presentation.cpp:136
+msgid "Odd"
+msgstr "Estranho"
+
+#: shared/src/settings-widget/settings-presentation.cpp:139
+msgid "XON/XOFF (software)"
+msgstr "XON/XOFF (software)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:141
+msgid "RTS/CTS (hardware)"
+msgstr "RTS/CTS (hardware)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:143
+msgid "DCD (Data Carrier Detect)"
+msgstr "DCD (detecção de portadora de dados)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:145
+msgid "CTS (Clear to Send)"
+msgstr "CTS (Limpar para enviar)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:147
+msgid "DSR (Data Set Ready)"
+msgstr "DSR (conjunto de dados pronto)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:149
+msgid "Ignore (do not monitor)"
+msgstr "Ignorar (não monitorar)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:151
+msgid "Raw bytes (before character conversion)"
+msgstr "Bytes brutos (antes da conversão de caracteres)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:153
+msgid "UTF-8 text (after character conversion)"
+msgstr "UTF-8 texto (após conversão de caracteres)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:164
+msgid "General"
+msgstr "Geral"
+
+#: shared/src/settings-widget/settings-presentation.cpp:174
+#: elder-terms-vte/src/main-window.ui:370
+#: elder-terms-vte/src/terminal-session.cpp:225
+msgid "Terminal"
+msgstr "Terminal"
+
+#: shared/src/settings-widget/settings-presentation.cpp:176
+msgid "Macro"
+msgstr "Macro"
+
+#: shared/src/settings-widget/settings-presentation.cpp:178
+#: elder-terms-vte/src/main-window.ui:35
+msgid "Transfer"
+msgstr "Transferência"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+msgid "Logging"
+msgstr "Registro"
+
+#: shared/src/settings-widget/settings-presentation.cpp:182
+msgid "Apply"
+msgstr "Aplicar"
+
+#: shared/src/settings-widget/settings-presentation.cpp:184
+#: elder-terms/src/main.cpp:467 elder-terms/src/main-window.ui:184
+msgid "Save"
+msgstr "Salvar"
+
+#: shared/src/settings-widget/settings-presentation.cpp:186
+#: elder-terms/src/main.cpp:466 elder-terms/src/main.cpp:1386
+#: elder-terms/src/main.cpp:1579 elder-terms-vte/src/main.cpp:820
+#: elder-terms-vte/src/main-window.ui:233
+#: elder-terms-vte/src/main-window.ui:310
+#: elder-terms-vte/src/sftp/sftp-main.cpp:109
+#: elder-terms-vte/src/sftp/sftp-window.cpp:696
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1843
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: shared/src/settings-widget/settings-presentation.cpp:188
+msgid "Reset"
+msgstr "Redefinir"
+
+#: shared/src/settings-widget/settings-presentation.cpp:190
+msgid "Select Primary Terminal Font"
+msgstr "Selecionar fonte primária do terminal"
+
+#: shared/src/settings-widget/settings-presentation.cpp:192
+msgid "Select Secondary Terminal Font"
+msgstr "Selecionar fonte secundária do terminal"
+
+#: shared/src/settings-widget/settings-presentation.cpp:194
+msgid "Enabled"
+msgstr "Habilitado"
+
+#: shared/src/settings-widget/settings-presentation.cpp:196
+msgid "Disabled"
+msgstr "Desativado"
+
+#: shared/src/settings-widget/settings-presentation.cpp:198
+msgid "Custom font"
+msgstr "Fonte personalizada"
+
+#: shared/src/settings-widget/settings-presentation.cpp:200
+msgid "No color"
+msgstr "Sem cor"
+
+#: shared/src/settings-widget/settings-presentation.cpp:202
+msgid "Custom color"
+msgstr "Cor personalizada"
+
+#: shared/src/settings-widget/settings-presentation.cpp:204
+msgid "Press a key combination"
+msgstr "Pressione uma combinação de teclas"
+
+#: shared/src/settings-widget/settings-presentation.cpp:206
+msgid "Clear key binding"
+msgstr "Limpar ligação de chave"
+
+#: shared/src/settings-widget/settings-presentation.cpp:208
+msgid "Use global default"
+msgstr "Usar padrão global"
+
+#: shared/src/settings-widget/settings-presentation.cpp:210
+msgid "Use built-in default"
+msgstr "Use o padrão integrado"
+
+#: shared/src/settings-widget/settings-presentation.cpp:212
+msgid "Macro rules"
+msgstr "Regras macro"
+
+#: shared/src/settings-widget/settings-presentation.cpp:214
+msgid "Rule ID"
+msgstr "ID da regra"
+
+#: shared/src/settings-widget/settings-presentation.cpp:216
+msgid "Regular expression"
+msgstr "Expressão regular"
+
+#: shared/src/settings-widget/settings-presentation.cpp:218
+msgid "Action"
+msgstr "Ação"
+
+#: shared/src/settings-widget/settings-presentation.cpp:220
+msgid "Text to send"
+msgstr "Texto para enviar"
+
+#: shared/src/settings-widget/settings-presentation.cpp:222
+msgid "Command"
+msgstr "Comando"
+
+#: shared/src/settings-widget/settings-presentation.cpp:224
+msgid "Arguments"
+msgstr "Argumentos"
+
+#: shared/src/settings-widget/settings-presentation.cpp:226
+msgid "Add rule"
+msgstr "Adicionar regra"
+
+#: shared/src/settings-widget/settings-presentation.cpp:228
+msgid "Remove rule"
+msgstr "Remover regra"
+
+#: shared/src/settings-widget/settings-presentation.cpp:230
+msgid "Move up"
+msgstr "Subir"
+
+#: shared/src/settings-widget/settings-presentation.cpp:232
+msgid "Move down"
+msgstr "Mover para baixo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:234
+msgid "Send text"
+msgstr "Enviar texto"
+
+#: shared/src/settings-widget/settings-presentation.cpp:236
+msgid "Run command"
+msgstr "Execute o comando"
+
+#: shared/src/settings-widget/settings-presentation.cpp:238
+msgid "Add argument"
+msgstr "Adicionar argumento"
+
+#: shared/src/settings-widget/settings-presentation.cpp:240
+msgid "Remove argument"
+msgstr "Remover argumento"
+
+#: shared/src/settings-widget/settings-presentation.cpp:242
+msgid "No device"
+msgstr "Nenhum dispositivo"
+
+#: shared/src/settings-widget/settings-presentation.cpp:244
+msgid "Stable ID"
+msgstr "ID estável"
+
+#: shared/src/settings-widget/settings-presentation.cpp:248
+msgid "Current device node"
+msgstr "Nó de dispositivo atual"
+
+#: shared/src/settings-widget/settings-presentation.cpp:250
+msgid "Unavailable"
+msgstr "Indisponível"
+
+#: shared/src/settings-widget/settings-presentation.cpp:278
+msgid "Global default"
+msgstr "Padrão global"
+
+#: shared/src/settings-widget/settings-presentation.cpp:279
+msgid "Built-in default"
+msgstr "Padrão integrado"
+
+#: shared/src/settings-widget/settings-presentation.cpp:283
+#, c-format
+msgid "%s (global default)"
+msgstr "%s (padrão global)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:284
+#, c-format
+msgid "%s (built-in default)"
+msgstr "%s (padrão integrado)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:295
+msgid "Enter a whole number"
+msgstr "Insira um número inteiro"
+
+#: shared/src/settings-widget/settings-presentation.cpp:298
+msgid "Enter a number"
+msgstr "Insira um número"
+
+#: shared/src/settings-widget/settings-presentation.cpp:309
+#, c-format
+msgid "Value must be between %s and %s"
+msgstr "O valor deve estar entre %s e %s"
+
+#: shared/src/settings-widget/settings-presentation.cpp:318
+msgid "Must include Ctrl, Shift, Alt, or Super"
+msgstr "Deve incluir Ctrl, Shift, Alt ou Super"
+
+#: shared/src/settings-widget/settings-presentation.cpp:321
+msgid "Contains an empty token"
+msgstr "Contém um token vazio"
+
+#: shared/src/settings-widget/settings-presentation.cpp:330
+#, c-format
+msgid "Contains an unknown modifier: %s"
+msgstr "Contém um modificador desconhecido: %s"
+
+#: shared/src/settings-widget/settings-presentation.cpp:343
+#, c-format
+msgid "Contains a duplicate modifier: %s"
+msgstr "Contém um modificador duplicado: %s"
+
+#: shared/src/settings-widget/settings-presentation.cpp:351
+msgid "Does not contain a key"
+msgstr "Não contém uma chave"
+
+#: shared/src/settings-widget/settings-presentation.cpp:358
+#, c-format
+msgid "Contains an unknown key: %s"
+msgstr "Contém uma chave desconhecida: %s"
+
+#: shared/src/settings-widget/settings-presentation.cpp:366
+msgid "Zoom in and zoom out must use different key bindings"
+msgstr "Aumentar e diminuir zoom devem usar combinações de teclas diferentes"
+
+#: shared/src/settings-widget/settings-presentation.cpp:369
+msgid "Must not be empty"
+msgstr "Não deve estar vazio"
+
+#: shared/src/settings-widget/settings-presentation.cpp:372
+msgid "The character encoding is not supported"
+msgstr "A codificação de caracteres não é suportada"
+
+#: shared/src/settings-widget/settings-presentation.cpp:375
+msgid "Contains a NUL byte"
+msgstr "Contém um byte NUL"
+
+#: shared/src/settings-widget/settings-presentation.cpp:378
+msgid "Contains an unmatched closing brace"
+msgstr "Contém uma chave de fechamento incomparável"
+
+#: shared/src/settings-widget/settings-presentation.cpp:381
+msgid "Contains an unmatched opening brace"
+msgstr "Contém uma chave de abertura incomparável"
+
+#: shared/src/settings-widget/settings-presentation.cpp:384
+msgid "Contains an unknown placeholder"
+msgstr "Contém um espaço reservado desconhecido"
+
+#: shared/src/settings-widget/settings-presentation.cpp:387
+msgid "Must be relative to the log base directory"
+msgstr "Deve ser relativo ao diretório base de log"
+
+#: shared/src/settings-widget/settings-presentation.cpp:390
+msgid "Must not contain parent directory traversal"
+msgstr "Não deve conter passagem do diretório pai"
+
+#: shared/src/settings-widget/settings-presentation.cpp:393
+msgid "Must name a log file"
+msgstr "Deve nomear um arquivo de log"
+
+#: shared/src/settings-widget/settings-presentation.cpp:395
+msgid "Invalid value"
+msgstr "Valor inválido"
+
+#: elder-terms/src/main.cpp:221
+msgid "Global shortcuts are unavailable"
+msgstr "Os atalhos globais não estão disponíveis"
+
+#: elder-terms/src/main.cpp:230
+msgid ""
+"One or more configured global shortcuts could not be registered and will not "
+"work. Check whether your desktop environment supports global shortcuts."
+msgstr ""
+"Um ou mais atalhos globais configurados não puderam ser registrados e não "
+"funcionarão. Verifique se o seu ambiente de área de trabalho oferece suporte "
+"a atalhos globais."
+
+#: elder-terms/src/main.cpp:234 elder-terms-vte/src/main-window.ui:319
+#: elder-terms-vte/src/main-window.cpp:1595
+msgid "OK"
+msgstr "OK"
+
+#: elder-terms/src/main.cpp:274
+msgid "Restart to apply display language?"
+msgstr "Reiniciar para aplicar o idioma de exibição?"
+
+#: elder-terms/src/main.cpp:277
+msgid ""
+"The display language change will take effect after elder-terms restarts."
+msgstr ""
+"A alteração do idioma de exibição entrará em vigor após a reinicialização de "
+"elder-terms."
+
+#: elder-terms/src/main.cpp:280
+msgid "Later"
+msgstr "Mais tarde"
+
+#: elder-terms/src/main.cpp:282
+msgid "Restart now"
+msgstr "Reinicie agora"
+
+#: elder-terms/src/main.cpp:410
+msgid "Failed to save global defaults"
+msgstr "Falha ao salvar padrões globais"
+
+#: elder-terms/src/main.cpp:447 elder-terms/src/main-window.ui:167
+msgid "Global defaults"
+msgstr "Padrões globais"
+
+#: elder-terms/src/main.cpp:704
+#, c-format
+msgid "Open connection %s"
+msgstr "Conexão aberta %s"
+
+#: elder-terms/src/main.cpp:731 elder-terms/src/tray-backend.cpp:371
+#: elder-terms/src/tray-backend.cpp:390 elder-terms/src/tray-backend.cpp:860
+msgid "Open elder-terms"
+msgstr "Abra elder-terms"
+
+#: elder-terms/src/main.cpp:786 elder-terms/src/main.cpp:1321
+msgid "Failed to load connection"
+msgstr "Falha ao carregar conexão"
+
+#: elder-terms/src/main.cpp:833
+msgid "New connection"
+msgstr "Nova conexão"
+
+#: elder-terms/src/main.cpp:834
+#, c-format
+msgid "New connection %d"
+msgstr "Nova conexão %d"
+
+#: elder-terms/src/main.cpp:998 elder-terms/src/main.cpp:1015
+msgid "Failed to monitor connections"
+msgstr "Falha ao monitorar conexões"
+
+#: elder-terms/src/main.cpp:1011
+msgid "Unknown file monitor error"
+msgstr "Erro desconhecido no monitor de arquivo"
+
+#: elder-terms/src/main.cpp:1163
+msgid "Failed to create startup profile"
+msgstr "Falha ao criar perfil de inicialização"
+
+#: elder-terms/src/main.cpp:1220 elder-terms/src/main.cpp:1286
+#, c-format
+msgid "Failed to start %s"
+msgstr "Falha ao iniciar %s"
+
+#: elder-terms/src/main.cpp:1227
+#, c-format
+msgid "The %s executable was not found"
+msgstr "O executável %s não foi encontrado"
+
+#: elder-terms/src/main.cpp:1255
+msgid "Unknown process launch error"
+msgstr "Erro desconhecido de inicialização do processo"
+
+#: elder-terms/src/main.cpp:1381
+msgid "Discard changes?"
+msgstr "Descartar alterações?"
+
+#: elder-terms/src/main.cpp:1384
+msgid "The current connection has changes that have not been applied."
+msgstr "A conexão atual possui alterações que não foram aplicadas."
+
+#: elder-terms/src/main.cpp:1388
+msgid "Discard"
+msgstr "Descarte"
+
+#: elder-terms/src/main.cpp:1545
+msgid "Failed to delete connection"
+msgstr "Falha ao excluir conexão"
+
+#: elder-terms/src/main.cpp:1572
+msgid "Delete connection?"
+msgstr "Excluir conexão?"
+
+#: elder-terms/src/main.cpp:1574
+#, c-format
+msgid "The connection \"%s\" will be permanently deleted."
+msgstr "A conexão \"%s\" será excluída permanentemente."
+
+#: elder-terms/src/main.cpp:1581 elder-terms/src/main-window.ui:21
+msgid "Delete"
+msgstr "Excluir"
+
+#: elder-terms/src/main.cpp:1622 elder-terms/src/main.cpp:1635
+msgid "Failed to rename connection"
+msgstr "Falha ao renomear conexão"
+
+#: elder-terms/src/main.cpp:1731
+msgid "Failed to save connection"
+msgstr "Falha ao salvar conexão"
+
+#: elder-terms/src/main-window.ui:15
+msgid "Rename"
+msgstr "Renomear"
+
+#: elder-terms/src/main-window.ui:63
+msgid "Terminal entries"
+msgstr "Entradas de terminal"
+
+#: elder-terms/src/main-window.ui:119
+msgid "Select a connection or create a new one."
+msgstr "Selecione uma conexão ou crie uma nova."
+
+#: elder-terms/src/main-window.ui:161
+msgid "New"
+msgstr "Novo"
+
+#: elder-terms/src/main-window.ui:191
+msgid "Launch"
+msgstr "Lançamento"
+
+#: elder-terms/src/connection-repository.cpp:60
+#, c-format
+msgid "Warning: failed to create temporary file %s: %s"
+msgstr "Aviso: falha ao criar arquivo temporário %s: %s"
+
+#: elder-terms/src/connection-repository.cpp:67
+#, c-format
+msgid "Warning: failed to close temporary file %s: %s"
+msgstr "Aviso: falha ao fechar o arquivo temporário %s: %s"
+
+#: elder-terms/src/connection-repository.cpp:124
+msgid "Connection name must not be empty"
+msgstr "O nome da conexão não deve estar vazio"
+
+#: elder-terms/src/connection-repository.cpp:128
+msgid "Connection name must not be a relative path"
+msgstr "O nome da conexão não deve ser um caminho relativo"
+
+#: elder-terms/src/connection-repository.cpp:133
+msgid "Connection name must not contain a path separator"
+msgstr "O nome da conexão não deve conter um separador de caminho"
+
+#: elder-terms/src/connection-repository.cpp:145
+msgid "A connection with this name already exists"
+msgstr "Já existe uma conexão com este nome"
+
+#: elder-terms/src/connection-repository.cpp:171
+#, c-format
+msgid "Warning: failed to create connection directory %s: %s"
+msgstr "Aviso: falha ao criar o diretório de conexão %s: %s"
+
+#: elder-terms/src/connection-repository.cpp:181
+#: elder-terms/src/connection-repository.cpp:267
+#, c-format
+msgid "Warning: %s"
+msgstr "Aviso: %s"
+
+#: elder-terms/src/connection-repository.cpp:207
+#, c-format
+msgid "Warning: failed to replace connection profile %s: %s"
+msgstr "Aviso: falha ao substituir o perfil de conexão %s: %s"
+
+#: elder-terms/src/connection-repository.cpp:227
+#, c-format
+msgid "Warning: failed to prepare connection rename %s: %s"
+msgstr "Aviso: falha ao preparar a renomeação da conexão %s: %s"
+
+#: elder-terms/src/connection-repository.cpp:238
+#: elder-terms/src/connection-repository.cpp:289
+#, c-format
+msgid "Warning: failed to rename connection profile %s: %s"
+msgstr "Aviso: falha ao renomear o perfil de conexão %s: %s"
+
+#: elder-terms/src/connection-repository.cpp:244
+#, c-format
+msgid "Warning: failed to restore connection profile %s: %s"
+msgstr "Aviso: falha ao restaurar o perfil de conexão %s: %s"
+
+#: elder-terms/src/connection-repository.cpp:309
+#, c-format
+msgid "Warning: failed to delete connection profile %s: %s"
+msgstr "Aviso: falha ao excluir o perfil de conexão %s: %s"
+
+#: elder-terms/src/tray-backend.cpp:374 elder-terms/src/tray-backend.cpp:393
+#: elder-terms/src/tray-backend.cpp:861
+msgid "Quit"
+msgstr "Sair de"
+
+#: elder-terms-vte/src/main.cpp:182
+msgid "Macro command failed"
+msgstr "Comando de macro falhou"
+
+#: elder-terms-vte/src/main.cpp:223
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:277
+msgid "SSH Host Key"
+msgstr "SSH Chave do host"
+
+#: elder-terms-vte/src/main.cpp:225
+#, c-format
+msgid ""
+"Unknown SSH host key for %s:%d\n"
+"Key type: %s\n"
+"Fingerprint: %s\n"
+"Accept and save this host key?"
+msgstr ""
+"Chave de host SSH desconhecida para %s:%d\n"
+"Tipo de chave: %s\n"
+"Impressão digital: %s\n"
+"Aceitar e salvar esta chave de host?"
+
+#: elder-terms-vte/src/main.cpp:237 elder-terms-vte/src/main-window.ui:274
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:472
+msgid "SSH Authentication"
+msgstr "SSH Autenticação"
+
+#: elder-terms-vte/src/main.cpp:238 elder-terms-vte/src/main-window.ui:282
+msgid "Password:"
+msgstr "Senha:"
+
+#: elder-terms-vte/src/main.cpp:253
+msgid "SSH prompt accepted"
+msgstr "SSH prompt aceito"
+
+#: elder-terms-vte/src/main.cpp:254
+msgid "SSH prompt cancelled"
+msgstr "SSH prompt cancelado"
+
+#: elder-terms-vte/src/main.cpp:641 elder-terms-vte/src/main.cpp:645
+#: elder-terms-vte/src/main-window.ui:18
+msgid "Settings"
+msgstr "Configurações"
+
+#: elder-terms-vte/src/main.cpp:819
+msgid "Select file"
+msgstr "Selecione o arquivo"
+
+#: elder-terms-vte/src/main.cpp:821
+msgid "Open"
+msgstr "Abra"
+
+#: elder-terms-vte/src/main.cpp:907 elder-terms-vte/src/main.cpp:917
+#: elder-terms-vte/src/main.cpp:942 elder-terms-vte/src/main.cpp:952
+msgid "Transfer unavailable"
+msgstr "Transferência indisponível"
+
+#: elder-terms-vte/src/main.cpp:1054 elder-terms-vte/src/main.cpp:1076
+msgid "BREAK unavailable"
+msgstr "BREAK indisponível"
+
+#: elder-terms-vte/src/main.cpp:1060
+msgid "Sending BREAK"
+msgstr "Enviando BREAK"
+
+#: elder-terms-vte/src/main.cpp:1096 elder-terms-vte/src/main.cpp:1618
+msgid "Text send unavailable"
+msgstr "Envio de texto indisponível"
+
+#: elder-terms-vte/src/main.cpp:1104
+msgid "Text (Send)"
+msgstr "Texto (Enviar)"
+
+#: elder-terms-vte/src/main.cpp:1182 elder-terms-vte/src/main.cpp:1213
+msgid "SFTP unavailable"
+msgstr "SFTP indisponível"
+
+#: elder-terms-vte/src/main.cpp:1257
+msgid "Log recording"
+msgstr "Gravação de log"
+
+#: elder-terms-vte/src/main.cpp:1303
+msgid "ZMODEM (send)"
+msgstr "ZMODEM (enviar)"
+
+#: elder-terms-vte/src/main.cpp:1310
+msgid "YMODEM (send)"
+msgstr "YMODEM (enviar)"
+
+#: elder-terms-vte/src/main.cpp:1317
+msgid "XMODEM 1K (send)"
+msgstr "XMODEM 1K (enviar)"
+
+#: elder-terms-vte/src/main.cpp:1326
+msgid "XMODEM (send)"
+msgstr "XMODEM (enviar)"
+
+#: elder-terms-vte/src/main.cpp:1336
+msgid "ZMODEM (receive)"
+msgstr "ZMODEM (receber)"
+
+#: elder-terms-vte/src/main.cpp:1343
+msgid "YMODEM-g (receive)"
+msgstr "YMODEM-g (receber)"
+
+#: elder-terms-vte/src/main.cpp:1351
+msgid "YMODEM (receive)"
+msgstr "YMODEM (receber)"
+
+#: elder-terms-vte/src/main.cpp:1360
+msgid "XMODEM CRC (receive)"
+msgstr "XMODEM CRC (receber)"
+
+#: elder-terms-vte/src/main.cpp:1369
+msgid "XMODEM (receive)"
+msgstr "XMODEM (receber)"
+
+#: elder-terms-vte/src/main.cpp:1598
+msgid "Hyperlink command failed"
+msgstr "Comando de hiperlink falhou"
+
+#: elder-terms-vte/src/main-window.ui:138
+#: elder-terms-vte/src/main-window.cpp:1496
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1899
+msgid "Disconnected"
+msgstr "Desconectado"
+
+#: elder-terms-vte/src/main-window.ui:193
+msgid "Transferring..."
+msgstr "Transferindo..."
+
+#: elder-terms-vte/src/main-window.cpp:330
+msgid "Copy"
+msgstr "Copiar"
+
+#: elder-terms-vte/src/main-window.cpp:334
+msgid "Paste"
+msgstr "Cole"
+
+#: elder-terms-vte/src/main-window.cpp:340
+msgid "Send BREAK"
+msgstr "Enviar BREAK"
+
+#: elder-terms-vte/src/main-window.cpp:1083
+#, c-format
+msgid "%s (Disconnected)"
+msgstr "%s (Desconectado)"
+
+#: elder-terms-vte/src/main-window.cpp:1519
+msgid "SSH connection failed"
+msgstr "SSH conexão falhou"
+
+#: elder-terms-vte/src/main-window.cpp:1521
+#, c-format
+msgid ""
+"SSH connection failed:\n"
+"%s"
+msgstr ""
+"SSH conexão falhou:\n"
+"%s"
+
+#: elder-terms-vte/src/main-window.cpp:1595
+#: elder-terms-vte/src/sftp/sftp-main.cpp:111
+msgid "Accept"
+msgstr "Aceitar"
+
+#: elder-terms-vte/src/sftp/sftp-main.cpp:111
+msgid "Continue"
+msgstr "Continuar"
+
+#: elder-terms-vte/src/sftp/sftp-main.cpp:180
+msgid "Failed to start SFTP"
+msgstr "Falha ao iniciar SFTP"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:171
+#: elder-terms-vte/src/sftp/sftp-window.cpp:178
+msgid "Unknown SFTP failure"
+msgstr "Falha SFTP desconhecida"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:244
+msgid "Loading…"
+msgstr "Carregando…"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:387
+msgid "SFTP local pane only supports native filesystem paths"
+msgstr ""
+"SFTP painel local suporta apenas caminhos de sistema de arquivos nativos"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:460
+msgid "Local directory path is empty"
+msgstr "O caminho do diretório local está vazio"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:557
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1830
+msgid "Preparing transfer…"
+msgstr "Preparando transferência…"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:585
+#, c-format
+msgid "Transferring %zu of %zu — %s"
+msgstr "Transferindo %zu de %zu — %s"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:588
+#, c-format
+msgid "Transferring %zu of %zu"
+msgstr "Transferindo %zu de %zu"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:592
+#, c-format
+msgid "Transferring — %s"
+msgstr "Transferindo — %s"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:595
+msgid "Transferring"
+msgstr "Transferindo"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:697
+#: elder-terms-vte/src/sftp/sftp-window.cpp:721
+msgid "Skip"
+msgstr "Pular"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:698
+msgid "Overwrite"
+msgstr "Substituir"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:700
+msgid "Destination already exists"
+msgstr "O destino já existe"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:702
+#, c-format
+msgid ""
+"%s\n"
+"The selected decision applies to all remaining conflicts."
+msgstr ""
+"%s\n"
+"A decisão selecionada aplica-se a todos os conflitos restantes."
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:720
+msgid "Abort"
+msgstr "Anular"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:722
+msgid "Retry"
+msgstr "Tente novamente"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:724
+msgid "SFTP transfer failed"
+msgstr "SFTP transferência falhou"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:725
+#, c-format
+msgid ""
+"%s\n"
+"\n"
+"%s\n"
+"→ %s"
+msgstr ""
+"%s\n"
+"\n"
+"%s\n"
+"→ %s"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:752
+msgid "SFTP operation failed"
+msgstr "SFTP operação falhou"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:811
+msgid "Failed to load remote directory"
+msgstr "Falha ao carregar o diretório remoto"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:812
+msgid "Failed to load local directory"
+msgstr "Falha ao carregar o diretório local"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:884
+msgid "Failed to expand directory"
+msgstr "Falha ao expandir o diretório"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1210
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1218
+msgid "Transfer cancelled"
+msgstr "Transferência cancelada"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1220
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:445
+msgid "Transfer failed"
+msgstr "Falha na transferência"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1234
+#, c-format
+msgid "Sent %zu item"
+msgid_plural "Sent %zu items"
+msgstr[0] "%zu item enviado"
+msgstr[1] "%zu itens enviados"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1236
+#, c-format
+msgid "Received %zu item"
+msgid_plural "Received %zu items"
+msgstr[0] "%zu item recebido"
+msgstr[1] "%zu itens recebidos"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1535
+msgid "Name"
+msgstr "Nome"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1537
+msgid "Size"
+msgstr "Tamanho"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1539
+msgid "Modified"
+msgstr "Modificado"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1557
+msgid "Remote"
+msgstr "Remoto"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1557
+msgid "Local"
+msgstr "Local"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1589
+msgid "Up"
+msgstr "Acima"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1593
+msgid "Refresh"
+msgstr "Atualizar"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1618
+msgid "Receive"
+msgstr "Receba"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1618
+msgid "Send"
+msgstr "Enviar"
+
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1797
+msgid "Ready"
+msgstr "Pronto"
+
+#: elder-terms-vte/src/terminal-text-send-runner.cpp:119
+msgid "Text contained characters that were replaced"
+msgstr "O texto continha caracteres que foram substituídos"
+
+#: elder-terms-vte/src/terminal-transfer-runner.cpp:960
+#, c-format
+msgid "Starting %s send"
+msgstr "Iniciando %s enviar"
+
+#: elder-terms-vte/src/terminal-transfer-runner.cpp:961
+#, c-format
+msgid "Starting %s receive"
+msgstr "Iniciando %s recebe"
+
+#: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:430
+#: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1038
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:509
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:626
+msgid "Text send failed"
+msgstr "Falha no envio de texto"
+
+#: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:541
+msgid "local terminal"
+msgstr "terminal local"
+
+#: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1117
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:566
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:711
+msgid "BREAK sent"
+msgstr "BREAK enviado"
+
+#: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1117
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:566
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:711
+msgid "BREAK failed"
+msgstr "Falha ao enviar BREAK"
+
+#: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1396
+msgid "serial: (unknown)"
+msgstr "série: (desconhecido)"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:80
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:627
+msgid "SSH session has no socket"
+msgstr "SSH não possui soquete"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:245
+msgid "unknown"
+msgstr "desconhecido"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:265
+#, c-format
+msgid ""
+"Unknown SSH host key for %s:%u\n"
+"Key type: %s\n"
+"Fingerprint: %s"
+msgstr ""
+"Chave de host SSH desconhecida para %s:%u\n"
+"Tipo de chave: %s\n"
+"Impressão digital: %s"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:271
+msgid "The known_hosts file does not exist and will be created."
+msgstr "O arquivoknown_hosts não existe e será criado."
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:274
+msgid "Accept and save this host key?"
+msgstr "Aceita e salva esta chave de host?"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:296
+msgid "SSH host key changed; connection rejected"
+msgstr "SSH chave do host alterada; conexão rejeitada"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:300
+msgid "SSH host key type differs from known_hosts; connection rejected"
+msgstr "SSH difere deknown_hosts; conexão rejeitada"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:303
+msgid "Failed to check SSH host key"
+msgstr "Falha ao verificar SSH chave do host"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:311
+msgid "SSH host key was not accepted"
+msgstr "SSH chave de host não foi aceita"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:314
+msgid "Failed to save SSH host key"
+msgstr "Falha ao salvar SSH chave do host"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:346
+msgid "SSH Key Passphrase"
+msgstr "SSH Senha da chave"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:348
+#, c-format
+msgid "Passphrase for %s (attempt %u of %u):"
+msgstr "Senha para %s (tentativa %u de %u):"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:394
+#, c-format
+msgid "Password for %s (attempt %u of %u):"
+msgstr "Senha para %s (tentativa %u de %u):"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:414
+msgid "SSH password authentication failed"
+msgstr "SSH falha na autenticação de senha"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:439
+msgid "SSH authentication response:"
+msgstr "SSH resposta de autenticação:"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:498
+msgid "SSH keyboard-interactive authentication failed"
+msgstr "SSH falha na autenticação interativa do teclado"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:517
+msgid "SSH authentication negotiation failed"
+msgstr "SSH negociação de autenticação falhou"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:522
+msgid "Failed to list SSH authentication methods"
+msgstr "Falha ao listar métodos de autenticação SSH"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:533
+msgid "SSH public-key authentication failed"
+msgstr "SSH falha na autenticação de chave pública"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:555
+msgid "Failed to refresh SSH authentication methods"
+msgstr "Falha ao atualizar métodos de autenticação SSH"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:568
+msgid "SSH server did not accept an available authentication method"
+msgstr "SSH o servidor não aceitou um método de autenticação disponível"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:724
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1024
+msgid "SSH transport is closed"
+msgstr "SSH transporte fechado"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:926
+msgid "Failed to allocate SSH session"
+msgstr "Falha ao alocar SSH sessão"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:932
+msgid "Failed to set SSH host"
+msgstr "Falha ao definir host SSH"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:935
+msgid "Failed to parse SSH configuration"
+msgstr "Falha ao analisar a configuração de SSH"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:944
+msgid "Failed to configure SSH endpoint"
+msgstr "Falha ao configurar o endpoint SSH"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:949
+msgid "Failed to configure SSH known_hosts"
+msgstr "Falha ao configurar SSHknown_hosts"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:952
+msgid "Failed to attach SSH socket"
+msgstr "Falha ao conectar o soquete SSH"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:962
+msgid "Failed to configure SSH callbacks"
+msgstr "Falha ao configurar retornos de chamada SSH"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1120
+msgid "SSH transport is required"
+msgstr "SSH transporte é necessário"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1174
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1243
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1281
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1301
+msgid "SSH channel is closed"
+msgstr "SSH canal está fechado"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:658
+msgid "ssh: (unknown)"
+msgstr "ssh: (desconhecido)"
+
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
+msgid "telnet: (unknown)"
+msgstr "telnet: (desconhecido)"

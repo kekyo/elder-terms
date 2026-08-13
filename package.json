@@ -3,9 +3,16 @@
   "version": "0.0.1",
   "private": true,
   "workspaces": [
+    "shared",
+    "elder-terms",
     "elder-terms-vte"
   ],
   "scripts": {
-    "test": "npm run test --workspaces"
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "dev": "npm run build && ./.build/elder-terms/elder-terms"
+  },
+  "devDependencies": {
+    "screw-up": ">=1.36.0"
   }
 }

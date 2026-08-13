@@ -1,0 +1,7 @@
+{
+  global:
+    _ZN11elder_terms*;
+    _ZNK11elder_terms*;
+  local:
+    *;
+};

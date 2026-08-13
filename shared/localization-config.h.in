@@ -1,0 +1,4 @@
+#pragma once
+
+#mesondefine ELDER_TERMS_BUILD_LOCALE_DIR
+#mesondefine ELDER_TERMS_LOCALE_DIR
