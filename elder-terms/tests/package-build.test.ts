@@ -282,6 +282,60 @@ exit 91
     expect(invocation).toContain('--buildtype=release');
   });
 
+  it('disables libxyzm debug information for release package builds', () => {
+    const binDirectory = join(temporaryRoot, 'libxyzm-bin');
+    const buildDirectory = join(temporaryRoot, 'libxyzm-release-build');
+    const invocationPath = join(temporaryRoot, 'libxyzm-make-invocation.txt');
+    mkdirSync(binDirectory);
+    writeExecutable(
+      join(binDirectory, 'make'),
+      `#!/bin/sh
+set -eu
+printf '%s\n' "$@" >"$ELDER_TERMS_TEST_LIBXYZM_MAKE_INVOCATION"
+build_dir=''
+for argument in "$@"; do
+  case $argument in BUILD_DIR=*) build_dir=\${argument#BUILD_DIR=} ;; esac
+done
+[ -n "$build_dir" ] || exit 81
+mkdir -p "$build_dir"
+: >"$build_dir/libxyzm.a"
+: >"$build_dir/libxyzm_async.a"
+`
+    );
+    const environment = {
+      ...process.env,
+      PATH: `${binDirectory}:${process.env.PATH}`,
+      ELDER_TERMS_TEST_LIBXYZM_MAKE_INVOCATION: invocationPath,
+    };
+
+    const setup = run(
+      'meson',
+      [
+        'setup',
+        buildDirectory,
+        projectRoot,
+        '--buildtype=release',
+        '-Dbuild_tests=false',
+      ],
+      environment
+    );
+    expectSuccess(setup, 'release Meson setup failed');
+    const compile = run(
+      'meson',
+      [
+        'compile',
+        '-C',
+        buildDirectory,
+        'elder-terms-vte/libxyzm-static-libraries',
+      ],
+      environment
+    );
+    expectSuccess(compile, 'release libxyzm build failed');
+    expect(readFileSync(invocationPath, 'utf8').split('\n')).toContain(
+      'LIBXYZM_EXTRA_CXXFLAGS=-g0'
+    );
+  });
+
   it('orchestrates isolated build and installation-validation containers', () => {
     const fakeProject = join(temporaryRoot, 'orchestration-project');
     const binDirectory = join(temporaryRoot, 'orchestration-bin');

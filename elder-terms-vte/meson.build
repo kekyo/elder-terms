@@ -18,6 +18,10 @@ libxyzm_root_dir = meson.project_source_root() / 'deps/libxyzm'
 libxyzm_include_dir = libxyzm_root_dir / 'include'
 libxyzm_build_dir = meson.current_build_dir()
 libxyzm_makefile = meson.current_source_dir() / 'libxyzm-cardio.mk'
+libxyzm_extra_cxxflags = ''
+if get_option('buildtype') == 'release'
+  libxyzm_extra_cxxflags = '-g0'
+endif
 libxyzm_static_libraries = custom_target(
   'libxyzm-static-libraries',
   output: [
@@ -32,6 +36,7 @@ libxyzm_static_libraries = custom_target(
     libxyzm_makefile,
     'CARDIO_DIR=' + cardio_root_dir,
     'BUILD_DIR=' + libxyzm_build_dir,
+    'LIBXYZM_EXTRA_CXXFLAGS=' + libxyzm_extra_cxxflags,
     libxyzm_build_dir / 'libxyzm.a',
     libxyzm_build_dir / 'libxyzm_async.a',
   ],
