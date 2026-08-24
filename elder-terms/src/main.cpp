@@ -842,6 +842,20 @@ static std::string next_new_connection_name(
   }
 }
 
+static std::string next_duplicate_connection_name(
+    const std::string &source_name,
+    const std::vector<elder_terms::ConnectionProfile> &profiles) {
+  for (int suffix = 2;; ++suffix) {
+    const std::string candidate =
+        source_name + " (" + std::to_string(suffix) + ")";
+    const auto validation = elder_terms::validate_connection_name(
+        candidate, profiles, std::nullopt);
+    if (validation.valid) {
+      return candidate;
+    }
+  }
+}
+
 static void begin_new_connection(ApplicationState *state) {
   populate_profile_rows(state);
   state->has_selection = true;
@@ -1518,6 +1532,36 @@ static void on_rename_connection_menu_item_activate(GtkMenuItem *,
   start_context_connection_rename(state);
 }
 
+static void on_duplicate_connection_menu_item_activate(GtkMenuItem *,
+                                                       gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  gtk_menu_popdown(GTK_MENU(state->main_window->connection_context_menu));
+  if (state->shutting_down ||
+      !state->context_connection_path.has_value() ||
+      !state->selected_path.has_value() || state->current_is_new ||
+      state->context_connection_path.value() !=
+          state->selected_path.value()) {
+    return;
+  }
+
+  const std::vector<elder_terms::ConnectionProfile> profiles =
+      elder_terms::list_connection_profiles(state->connection_directory);
+  const std::string name = next_duplicate_connection_name(
+      state->context_connection_name, profiles);
+  const elder_terms::ConnectionSaveResult result =
+      elder_terms::save_connection_profile(
+          state->connection_directory, std::nullopt, name,
+          elder_terms::settings_widget_draft_store(state->settings_widget));
+  print_warnings(result.warnings);
+  if (!result.saved) {
+    show_error(state, _("Failed to duplicate connection"), result.warnings);
+    return;
+  }
+
+  select_existing_connection(state, result.path);
+  reload_hotkey_actions(state);
+}
+
 static void on_delete_connection_dialog_destroy(GtkWidget *dialog,
                                                 gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
@@ -1925,6 +1969,9 @@ static bool initialize_main_window(ApplicationState *state) {
                    G_CALLBACK(on_connection_list_button_press), state);
   g_signal_connect(main_window->rename_connection_menu_item, "activate",
                    G_CALLBACK(on_rename_connection_menu_item_activate),
+                   state);
+  g_signal_connect(main_window->duplicate_connection_menu_item, "activate",
+                   G_CALLBACK(on_duplicate_connection_menu_item_activate),
                    state);
   g_signal_connect(main_window->delete_connection_menu_item, "activate",
                    G_CALLBACK(on_delete_connection_menu_item_activate),

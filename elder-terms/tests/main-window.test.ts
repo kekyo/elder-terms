@@ -440,6 +440,7 @@ describe('elder-terms main window', () => {
           return item;
         });
         expect((await duplicateItem.info()).name).toBe('複製');
+        await app.input.pressKey('Escape');
 
         const dialog = await openGlobalDefaults(app);
         await waitForResult(async () => {

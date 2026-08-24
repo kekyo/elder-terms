@@ -64,6 +64,8 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
           required_widget(builder, "connection_context_menu"),
       .rename_connection_menu_item =
           required_widget(builder, "rename_connection_menu_item"),
+      .duplicate_connection_menu_item =
+          required_widget(builder, "duplicate_connection_menu_item"),
       .delete_connection_menu_item =
           required_widget(builder, "delete_connection_menu_item"),
       .details_stack = required_widget(builder, "details_stack"),
@@ -84,6 +86,7 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
       result.connection_name_renderer == nullptr ||
       result.connection_context_menu == nullptr ||
       result.rename_connection_menu_item == nullptr ||
+      result.duplicate_connection_menu_item == nullptr ||
       result.delete_connection_menu_item == nullptr ||
       result.details_stack == nullptr ||
       result.empty_details_label == nullptr ||
