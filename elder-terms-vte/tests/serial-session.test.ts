@@ -231,19 +231,23 @@ describe.concurrent('elder-terms-vte serial session', () => {
           'utf8'
         );
 
-        await runGtkTest(context, ['-c', configPath], async (app) => {
-          const connectionStatus = `serial: ${serialDevicePath}:9600:n81n`;
-          await expectMainWindowStatus(app, connectionStatus);
-          await focusTerminal(app);
-          await waitForActivityIndicatorImageState(app, 'sd', 'off');
-          const receivedBeforeBreak = allReceivedHex(helper);
+        await runGtkTest(
+          context,
+          ['-c', configPath, '--test-latch-activity-indicators'],
+          async (app) => {
+            const connectionStatus = `serial: ${serialDevicePath}:9600:n81n`;
+            await expectMainWindowStatus(app, connectionStatus);
+            await focusTerminal(app);
+            await waitForActivityIndicatorImageState(app, 'sd', 'off');
+            const receivedBeforeBreak = allReceivedHex(helper);
 
-          await app.input.pressKey('F12');
-          await expectMainWindowStatus(app, 'Sending BREAK');
-          await waitForActivityIndicatorImageState(app, 'sd', 'on');
-          await expectMainWindowStatus(app, 'BREAK sent');
-          expect(allReceivedHex(helper)).toBe(receivedBeforeBreak);
-        });
+            await app.input.pressKey('F12');
+            await expectMainWindowStatus(app, 'Sending BREAK');
+            await waitForActivityIndicatorImageState(app, 'sd', 'on');
+            await expectMainWindowStatus(app, 'BREAK sent');
+            expect(allReceivedHex(helper)).toBe(receivedBeforeBreak);
+          }
+        );
       } finally {
         await helper.close();
       }
