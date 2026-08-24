@@ -67,6 +67,12 @@ interface RawInputShellFixture {
   readonly shellPath: string;
 }
 
+interface KeyboardProtocolShellFixture {
+  readonly activeInputPath: string;
+  readonly inactiveInputPath: string;
+  readonly shellPath: string;
+}
+
 const shellQuote = (value: string): string =>
   `'${value.split("'").join("'\\''")}'`;
 
@@ -183,6 +189,33 @@ const createRawInputShellFixture = async (
   return {
     markerPath,
     readyPath,
+    shellPath,
+  };
+};
+
+const createKeyboardProtocolShellFixture = async (
+  directory: string
+): Promise<KeyboardProtocolShellFixture> => {
+  const activeInputPath = join(directory, 'keyboard-protocol-active.bin');
+  const inactiveInputPath = join(directory, 'keyboard-protocol-inactive.bin');
+  const shellPath = join(directory, 'keyboard-protocol-shell.sh');
+  await writeFile(
+    shellPath,
+    `#!/bin/sh
+stty raw -echo
+printf '\\033[>7uKEYBOARD_PROTOCOL_ACTIVE\\n'
+dd bs=1 count=7 iflag=fullblock of=${shellQuote(activeInputPath)} 2>/dev/null
+printf '\\033[<uKEYBOARD_PROTOCOL_INACTIVE\\n'
+dd bs=1 count=1 iflag=fullblock of=${shellQuote(inactiveInputPath)} 2>/dev/null
+exit 0
+`,
+    'utf8'
+  );
+  await chmod(shellPath, 0o755);
+
+  return {
+    activeInputPath,
+    inactiveInputPath,
     shellPath,
   };
 };
@@ -658,6 +691,87 @@ describe.concurrent('elder-terms-vte local session', () => {
           }
         );
       }
+    });
+  });
+
+  it('encodes Ctrl+Enter only while the app requests enhanced keyboard input', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const shell = await createKeyboardProtocolShellFixture(directory);
+      const logPath = join(directory, 'logs', 'cooked.txt');
+      const configPath = join(directory, 'keyboard-protocol.ini');
+      await writeFile(
+        configPath,
+        `[terminal]
+auto_close=false
+
+[log]
+enabled=true
+base_directory=${directory}
+file_name_format=logs/cooked.txt
+mode=cooked
+`,
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        ['-c', configPath],
+        async (app) => {
+          await toPass(
+            async () => {
+              expect(await readFile(logPath, 'utf8')).toContain(
+                'KEYBOARD_PROTOCOL_ACTIVE'
+              );
+            },
+            {
+              message: 'local shell keyboard mode push should be observed',
+              timeoutMs: 5_000,
+            }
+          );
+          await focusTerminal(app);
+          await pressKeyWithModifiers(app, ['control'], 'Return');
+          await toPass(
+            async () => {
+              expect(
+                Array.from((await readFile(shell.activeInputPath)).values())
+              ).toEqual([0x1b, 0x5b, 0x31, 0x33, 0x3b, 0x35, 0x75]);
+            },
+            {
+              message: 'Ctrl+Enter should be encoded as CSI 13;5u',
+              timeoutMs: 5_000,
+            }
+          );
+
+          await toPass(
+            async () => {
+              expect(await readFile(logPath, 'utf8')).toContain(
+                'KEYBOARD_PROTOCOL_INACTIVE'
+              );
+            },
+            {
+              message: 'local shell keyboard mode pop should be observed',
+              timeoutMs: 5_000,
+            }
+          );
+          await pressKeyWithModifiers(app, ['control'], 'Return');
+          await toPass(
+            async () => {
+              expect(
+                Array.from((await readFile(shell.inactiveInputPath)).values())
+              ).toEqual([0x0d]);
+            },
+            {
+              message: 'Ctrl+Enter should return to legacy CR after pop',
+              timeoutMs: 5_000,
+            }
+          );
+        },
+        {
+          env: {
+            SHELL: shell.shellPath,
+          },
+        }
+      );
     });
   });
 

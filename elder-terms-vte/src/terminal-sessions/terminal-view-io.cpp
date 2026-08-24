@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <system_error>
 #include <utility>
 
@@ -20,6 +21,45 @@ static bool is_plain_return_key(const GdkEventKey *event) {
       GDK_SHIFT_MASK | GDK_CONTROL_MASK | GDK_MOD1_MASK | GDK_SUPER_MASK |
       GDK_HYPER_MASK | GDK_META_MASK;
   return (event->state & action_modifiers) == 0;
+}
+
+static std::optional<TerminalSpecialKey>
+terminal_special_key(const GdkEventKey *event) {
+  if (event == nullptr) {
+    return std::nullopt;
+  }
+  switch (event->keyval) {
+  case GDK_KEY_Return:
+    return TerminalSpecialKey::enter;
+  case GDK_KEY_KP_Enter:
+    return TerminalSpecialKey::keypad_enter;
+  case GDK_KEY_Tab:
+  case GDK_KEY_ISO_Left_Tab:
+    return TerminalSpecialKey::tab;
+  case GDK_KEY_BackSpace:
+    return TerminalSpecialKey::backspace;
+  case GDK_KEY_Escape:
+    return TerminalSpecialKey::escape;
+  case GDK_KEY_space:
+    return TerminalSpecialKey::space;
+  default:
+    return std::nullopt;
+  }
+}
+
+static TerminalKeyModifiers terminal_key_modifiers(const GdkEventKey *event) {
+  if (event == nullptr) {
+    return {};
+  }
+  return {
+      .shift = (event->state & GDK_SHIFT_MASK) != 0 ||
+               event->keyval == GDK_KEY_ISO_Left_Tab,
+      .alt = (event->state & GDK_MOD1_MASK) != 0,
+      .control = (event->state & GDK_CONTROL_MASK) != 0,
+      .super = (event->state & GDK_SUPER_MASK) != 0,
+      .hyper = (event->state & GDK_HYPER_MASK) != 0,
+      .meta = (event->state & GDK_META_MASK) != 0,
+  };
 }
 
 static bool is_line_ending_commit(const std::string &text) {
@@ -67,15 +107,22 @@ void TerminalViewIo::on_terminal_commit(VteTerminal *, const gchar *text,
   auto *self = static_cast<TerminalViewIo *>(user_data);
   if (text != nullptr && size != 0) {
     std::string committed(text, static_cast<std::size_t>(size));
-    if (self->return_key_pending &&
-        self->return_code != TerminalReturnCode::automatic &&
-        is_line_ending_commit(committed)) {
+    bool clear_pending = false;
+    if (self->pending_modified_special_key.has_value() &&
+        is_legacy_modified_special_key_commit(
+            self->pending_modified_special_key->key, committed)) {
+      committed = self->pending_modified_special_key->encoded_sequence;
+      clear_pending = true;
+    } else if (self->return_key_pending &&
+               self->return_code != TerminalReturnCode::automatic &&
+               is_line_ending_commit(committed)) {
       committed = return_code_text(self->return_code);
+      clear_pending = true;
+    } else if (self->return_key_pending) {
+      clear_pending = true;
     }
-    self->return_key_pending = false;
-    if (self->return_key_clear_source_id != 0) {
-      g_source_remove(self->return_key_clear_source_id);
-      self->return_key_clear_source_id = 0;
+    if (clear_pending) {
+      self->clear_pending_key_state();
     }
     (void)self->send_utf8_text(committed);
   }
@@ -85,23 +132,44 @@ gboolean TerminalViewIo::on_terminal_key_press(GtkWidget *,
                                                GdkEventKey *event,
                                                gpointer user_data) {
   auto *self = static_cast<TerminalViewIo *>(user_data);
+  self->clear_pending_key_state();
   self->return_key_pending = is_plain_return_key(event);
-  if (self->return_key_clear_source_id != 0) {
-    g_source_remove(self->return_key_clear_source_id);
-    self->return_key_clear_source_id = 0;
+  if (self->keyboard_protocol_state.modified_special_keys_enabled()) {
+    const std::optional<TerminalSpecialKey> key = terminal_special_key(event);
+    if (key.has_value()) {
+      std::optional<std::string> encoded =
+          encode_modified_special_key(*key, terminal_key_modifiers(event));
+      if (encoded.has_value()) {
+        self->pending_modified_special_key = {
+            .key = *key,
+            .encoded_sequence = std::move(*encoded),
+        };
+      }
+    }
   }
-  if (self->return_key_pending) {
-    self->return_key_clear_source_id =
-        g_idle_add(TerminalViewIo::clear_pending_return_key, self);
+  if (self->return_key_pending ||
+      self->pending_modified_special_key.has_value()) {
+    self->pending_key_clear_source_id =
+        g_idle_add(TerminalViewIo::clear_pending_key, self);
   }
   return GDK_EVENT_PROPAGATE;
 }
 
-gboolean TerminalViewIo::clear_pending_return_key(gpointer user_data) {
+gboolean TerminalViewIo::clear_pending_key(gpointer user_data) {
   auto *self = static_cast<TerminalViewIo *>(user_data);
   self->return_key_pending = false;
-  self->return_key_clear_source_id = 0;
+  self->pending_modified_special_key.reset();
+  self->pending_key_clear_source_id = 0;
   return G_SOURCE_REMOVE;
+}
+
+void TerminalViewIo::clear_pending_key_state() {
+  if (pending_key_clear_source_id != 0) {
+    g_source_remove(pending_key_clear_source_id);
+    pending_key_clear_source_id = 0;
+  }
+  return_key_pending = false;
+  pending_modified_special_key.reset();
 }
 
 void TerminalViewIo::feed(std::span<const unsigned char> bytes) {
@@ -115,6 +183,12 @@ void TerminalViewIo::feed(std::span<const unsigned char> bytes) {
                  "selected encoding"
               << '\n';
     decode_warning_reported = true;
+  }
+  if (!conversion.bytes.empty()) {
+    // XYZMODEM payloads bypass TerminalViewIo::feed(), so only cooked bytes on
+    // the terminal presentation path can affect keyboard protocol state.
+    keyboard_protocol_state.observe(std::span<const unsigned char>(
+        conversion.bytes.data(), conversion.bytes.size()));
   }
   if (output_callback) {
     output_callback(
@@ -188,11 +262,7 @@ void TerminalViewIo::connect_user_input(TerminalViewInputCallback callback) {
 }
 
 void TerminalViewIo::disconnect_user_input() {
-  if (return_key_clear_source_id != 0) {
-    g_source_remove(return_key_clear_source_id);
-    return_key_clear_source_id = 0;
-  }
-  return_key_pending = false;
+  clear_pending_key_state();
   if (key_press_handler_id != 0) {
     g_signal_handler_disconnect(terminal, key_press_handler_id);
     key_press_handler_id = 0;

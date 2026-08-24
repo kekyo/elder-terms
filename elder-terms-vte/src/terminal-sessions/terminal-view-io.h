@@ -5,11 +5,13 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 
 #include <elder-terms/settings.h>
 
+#include "terminal-keyboard-protocol.h"
 #include "terminal-text-codec.h"
 
 namespace elder_terms {
@@ -46,14 +48,21 @@ using TerminalViewOutputCallback = std::function<void(
  */
 class TerminalViewIo {
 private:
+  struct PendingModifiedSpecialKey {
+    TerminalSpecialKey key;
+    std::string encoded_sequence;
+  };
+
   GtkWidget *terminal = nullptr;
   std::unique_ptr<TerminalTextCodec> text_codec;
+  TerminalKeyboardProtocolState keyboard_protocol_state;
   TerminalViewInputCallback input_callback;
   TerminalViewOutputCallback output_callback;
   gulong commit_handler_id = 0;
   gulong key_press_handler_id = 0;
-  guint return_key_clear_source_id = 0;
+  guint pending_key_clear_source_id = 0;
   TerminalReturnCode return_code = TerminalReturnCode::automatic;
+  std::optional<PendingModifiedSpecialKey> pending_modified_special_key;
   bool return_key_pending = false;
   bool decode_warning_reported = false;
   bool encode_warning_reported = false;
@@ -63,7 +72,8 @@ private:
   static gboolean on_terminal_key_press(GtkWidget *widget,
                                         GdkEventKey *event,
                                         gpointer user_data);
-  static gboolean clear_pending_return_key(gpointer user_data);
+  static gboolean clear_pending_key(gpointer user_data);
+  void clear_pending_key_state();
 
 public:
   /**
