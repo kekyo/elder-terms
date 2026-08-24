@@ -349,11 +349,28 @@ const expectPageLabels = async (
   expectedLabels: readonly string[]
 ): Promise<void> => {
   const page = await app.getById(pageId);
+  const labels = new Set<string>();
+  const pending = [page];
+  while (pending.length > 0) {
+    const element = pending.pop() as GtkWidgetElement;
+    const info = await element.info();
+    if (info.kind === 'label') {
+      labels.add(info.name);
+    }
+    if (!('getChildCount' in element) || !('childAt' in element)) {
+      continue;
+    }
+    const childCount = await element.getChildCount();
+    for (let index = 0; index < childCount; ++index) {
+      const child = await element.childAt(index);
+      if (child !== undefined) {
+        pending.push(child);
+      }
+    }
+  }
+
   for (const label of expectedLabels) {
-    expect(
-      await findDescendantByName(page, 'label', label),
-      `${pageId}: ${label}`
-    ).toBeDefined();
+    expect(labels.has(label), `${pageId}: ${label}`).toBe(true);
   }
 };
 

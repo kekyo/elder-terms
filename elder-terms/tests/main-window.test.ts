@@ -408,7 +408,7 @@ describe('elder-terms main window', () => {
   it('localizes launcher settings surfaces into Japanese', async (context) => {
     await runLauncherGtkTest(
       context,
-      async () => {},
+      prepareProfiles,
       async ({ app }) => {
         expect((await (await app.getById('new_button')).info()).name).toBe(
           '新規'
@@ -428,6 +428,19 @@ describe('elder-terms main window', () => {
         expect((await (await app.getById('apply_button')).info()).name).toBe(
           '保存'
         );
+
+        const list = await app.getById('connection_list');
+        await rightClickConnectionRow(app, list, 0);
+        const duplicateItem = await waitForResult(async () => {
+          const item = expectElementKind(
+            await app.getById('duplicate_connection_menu_item'),
+            'menuItem'
+          );
+          expect((await item.info()).states).toContain('showing');
+          return item;
+        });
+        expect((await duplicateItem.info()).name).toBe('複製');
+        await app.input.pressKey('Escape');
 
         const dialog = await openGlobalDefaults(app);
         await waitForResult(async () => {
@@ -1167,6 +1180,57 @@ describe('elder-terms main window', () => {
           ).toContain('width=91');
         });
         await expectInsensitive(apply);
+      }
+    );
+  });
+
+  it('duplicates a saved connection from its context menu', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app, connections }) => {
+        const list = await app.getById('connection_list');
+        await rightClickConnectionRow(app, list, 0);
+        const duplicateItem = await waitForResult(async () => {
+          const item = expectElementKind(
+            await app.getById('duplicate_connection_menu_item'),
+            'menuItem'
+          );
+          expect((await item.info()).states).toContain('showing');
+          return item;
+        });
+        expect((await duplicateItem.info()).name).toBe('Duplicate');
+
+        await duplicateItem.click();
+        await waitForResult(async () => {
+          expect(await connectionRowCount(list)).toBe(3);
+          expect(
+            await readFile(join(connections, 'Alpha (2).ini'), 'utf8')
+          ).toContain('width=88');
+        });
+        expect(
+          await readFile(join(connections, 'Alpha.ini'), 'utf8')
+        ).toContain('width=88');
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('settings_terminal_width_entry'),
+              'entry'
+            ).text()
+          ).toBe('88');
+        });
+
+        await rightClickConnectionRow(app, list, 0);
+        await waitForResult(async () => {
+          expect((await duplicateItem.info()).states).toContain('showing');
+        });
+        await duplicateItem.click();
+        await waitForResult(async () => {
+          expect(await connectionRowCount(list)).toBe(4);
+          expect(
+            await readFile(join(connections, 'Alpha (3).ini'), 'utf8')
+          ).toContain('width=88');
+        });
       }
     );
   });

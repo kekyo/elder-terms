@@ -37,6 +37,7 @@ namespace {
 
 static constexpr char open_application_hotkey_action_id[] =
     "open-application";
+static constexpr char autostart_option_name[] = "autostart";
 static constexpr char language_environment_name[] = "LANGUAGE";
 static constexpr char language_environment_prefix[] = "LANGUAGE=";
 
@@ -124,6 +125,7 @@ struct ApplicationState {
       elder_terms::TrayBackendAvailabilityState::pending;
   bool application_held = false;
   bool activated = false;
+  bool initial_activation_from_autostart = false;
   bool quitting = false;
   bool window_destroyed = false;
   bool application_shutting_down = false;
@@ -840,6 +842,20 @@ static std::string next_new_connection_name(
   }
 }
 
+static std::string next_duplicate_connection_name(
+    const std::string &source_name,
+    const std::vector<elder_terms::ConnectionProfile> &profiles) {
+  for (int suffix = 2;; ++suffix) {
+    const std::string candidate =
+        source_name + " (" + std::to_string(suffix) + ")";
+    const auto validation = elder_terms::validate_connection_name(
+        candidate, profiles, std::nullopt);
+    if (validation.valid) {
+      return candidate;
+    }
+  }
+}
+
 static void begin_new_connection(ApplicationState *state) {
   populate_profile_rows(state);
   state->has_selection = true;
@@ -1516,6 +1532,36 @@ static void on_rename_connection_menu_item_activate(GtkMenuItem *,
   start_context_connection_rename(state);
 }
 
+static void on_duplicate_connection_menu_item_activate(GtkMenuItem *,
+                                                       gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  gtk_menu_popdown(GTK_MENU(state->main_window->connection_context_menu));
+  if (state->shutting_down ||
+      !state->context_connection_path.has_value() ||
+      !state->selected_path.has_value() || state->current_is_new ||
+      state->context_connection_path.value() !=
+          state->selected_path.value()) {
+    return;
+  }
+
+  const std::vector<elder_terms::ConnectionProfile> profiles =
+      elder_terms::list_connection_profiles(state->connection_directory);
+  const std::string name = next_duplicate_connection_name(
+      state->context_connection_name, profiles);
+  const elder_terms::ConnectionSaveResult result =
+      elder_terms::save_connection_profile(
+          state->connection_directory, std::nullopt, name,
+          elder_terms::settings_widget_draft_store(state->settings_widget));
+  print_warnings(result.warnings);
+  if (!result.saved) {
+    show_error(state, _("Failed to duplicate connection"), result.warnings);
+    return;
+  }
+
+  select_existing_connection(state, result.path);
+  reload_hotkey_actions(state);
+}
+
 static void on_delete_connection_dialog_destroy(GtkWidget *dialog,
                                                 gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
@@ -1924,6 +1970,9 @@ static bool initialize_main_window(ApplicationState *state) {
   g_signal_connect(main_window->rename_connection_menu_item, "activate",
                    G_CALLBACK(on_rename_connection_menu_item_activate),
                    state);
+  g_signal_connect(main_window->duplicate_connection_menu_item, "activate",
+                   G_CALLBACK(on_duplicate_connection_menu_item_activate),
+                   state);
   g_signal_connect(main_window->delete_connection_menu_item, "activate",
                    G_CALLBACK(on_delete_connection_menu_item_activate),
                    state);
@@ -2006,9 +2055,16 @@ static void on_tray_availability_changed(ApplicationState *state,
   }
   state->tray_availability = availability;
   if (availability ==
+      elder_terms::TrayBackendAvailabilityState::available) {
+    // After the initial tray registration succeeds, a later host loss uses
+    // the normal window fallback even when the process began at login.
+    state->initial_activation_from_autostart = false;
+  }
+  if (availability ==
           elder_terms::TrayBackendAvailabilityState::unavailable &&
       state->activated &&
-      state->startup_mode == elder_terms::StartupMode::tray) {
+      state->startup_mode == elder_terms::StartupMode::tray &&
+      !state->initial_activation_from_autostart) {
     present_main_window(state);
   }
 }
@@ -2017,6 +2073,7 @@ static void on_application_startup(GApplication *,
                                    gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
   g_set_prgname(elder_terms::launcher_application_id());
+  (void)elder_terms::initialize_application_window_icon();
   state->connection_directory =
       elder_terms::default_connection_directory();
   state->global_config_path =
@@ -2118,12 +2175,35 @@ static void on_application_activate(GApplication *,
   }
   if (state->startup_mode == elder_terms::StartupMode::tray) {
     if (state->tray_availability ==
-        elder_terms::TrayBackendAvailabilityState::unavailable) {
+            elder_terms::TrayBackendAvailabilityState::unavailable &&
+        !state->initial_activation_from_autostart) {
       present_main_window(state);
     }
     return;
   }
   present_main_window(state);
+}
+
+static gint on_application_command_line(
+    GApplication *application,
+    GApplicationCommandLine *command_line,
+    gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  gboolean autostart = FALSE;
+  GVariantDict *options =
+      g_application_command_line_get_options_dict(command_line);
+  if (options != nullptr) {
+    (void)g_variant_dict_lookup(options, autostart_option_name, "b",
+                                &autostart);
+  }
+  if (autostart != FALSE && state->activated) {
+    return 0;
+  }
+  if (!state->activated) {
+    state->initial_activation_from_autostart = autostart != FALSE;
+  }
+  g_application_activate(application);
+  return 0;
 }
 
 static void on_application_shutdown(GApplication *,
@@ -2167,8 +2247,6 @@ int main(int argc, char **argv) {
     std::cerr << warning << '\n';
   }
   gtk_disable_setlocale();
-  gtk_init(&argc, &argv);
-  (void)elder_terms::initialize_application_window_icon();
 
   int application_result = 1;
   bool restart_requested = false;
@@ -2179,7 +2257,12 @@ int main(int argc, char **argv) {
     cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);
     GApplication *application = g_application_new(
         elder_terms::launcher_application_id(),
-        G_APPLICATION_DEFAULT_FLAGS);
+        G_APPLICATION_HANDLES_COMMAND_LINE);
+    g_application_add_option_group(application,
+                                   gtk_get_option_group(TRUE));
+    g_application_add_main_option(
+        application, autostart_option_name, 0, G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_NONE, "Start from the desktop session", nullptr);
 
     ApplicationState state;
     state.application = application;
@@ -2190,6 +2273,8 @@ int main(int argc, char **argv) {
                      G_CALLBACK(on_application_startup), &state);
     g_signal_connect(application, "activate",
                      G_CALLBACK(on_application_activate), &state);
+    g_signal_connect(application, "command-line",
+                     G_CALLBACK(on_application_command_line), &state);
     g_signal_connect(application, "shutdown",
                      G_CALLBACK(on_application_shutdown), &state);
 

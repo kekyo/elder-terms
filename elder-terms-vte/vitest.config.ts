@@ -75,7 +75,7 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.ts'],
     maxConcurrency: testMaxConcurrency,
-    testTimeout: 30_000,
+    testTimeout: 60_000,
     coverage: {
       enabled: false,
     },

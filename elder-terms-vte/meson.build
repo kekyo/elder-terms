@@ -76,6 +76,7 @@ elder_terms_sources = [
   'src/terminal-sessions/tcp-connector.cpp',
   telnet_protocol_source,
   'src/terminal-sessions/telnet-session/telnet-session.cpp',
+  'src/terminal-sessions/terminal-keyboard-protocol.cpp',
   'src/terminal-sessions/terminal-text-codec.cpp',
   'src/terminal-sessions/terminal-view-io.cpp',
   'src/terminal-layout.cpp',
@@ -179,6 +180,16 @@ terminal_text_codec_test = executable(
 )
 
 test('terminal-text-codec-test', terminal_text_codec_test)
+
+terminal_keyboard_protocol_test = executable(
+  'terminal-keyboard-protocol-test',
+  [
+    'tests/cpp/terminal-keyboard-protocol-test.cpp',
+    'src/terminal-sessions/terminal-keyboard-protocol.cpp',
+  ],
+)
+
+test('terminal-keyboard-protocol-test', terminal_keyboard_protocol_test)
 
 terminal_font_test = executable(
   'terminal-font-test',

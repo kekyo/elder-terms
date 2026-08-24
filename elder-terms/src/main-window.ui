@@ -16,6 +16,12 @@
       </object>
     </child>
     <child>
+      <object class="GtkMenuItem" id="duplicate_connection_menu_item">
+        <property name="visible">True</property>
+        <property name="label" translatable="yes">Duplicate</property>
+      </object>
+    </child>
+    <child>
       <object class="GtkMenuItem" id="delete_connection_menu_item">
         <property name="visible">True</property>
         <property name="label" translatable="yes">Delete</property>

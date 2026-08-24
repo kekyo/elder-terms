@@ -90,84 +90,101 @@ const applicationHasOwner = async (
 };
 
 describe('elder-terms XDG autostart', () => {
-  it('installs a desktop entry that launches the launcher', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'elder-terms-autostart-'));
-    const stagingDirectory = join(directory, 'stage');
-    const configHome = join(directory, 'config');
-    const connections = join(configHome, 'elder-terms', 'connections');
-    await mkdir(stagingDirectory, { recursive: true });
-    await mkdir(connections, { recursive: true });
-    await writeFile(
-      join(configHome, 'elder-terms', 'global.ini'),
-      '[general]\nstartup_mode=window\nopen_application=\n'
-    );
-
-    const launcher = createGtkAppLauncher({
-      appPath: launcherPath,
-      env: {
-        LANGUAGE: 'C',
-        LC_ALL: 'C.UTF-8',
-        XDG_CONFIG_HOME: configHome,
-      },
-      xvfbPool: {
-        type: 'xvfb',
-      },
-      xvfbTrayHost: false,
-    });
-    let processId: number | undefined;
-    try {
-      await execute('meson', [
-        'install',
-        '-C',
-        buildDirectory,
-        '--no-rebuild',
-        '--destdir',
-        stagingDirectory,
-      ]);
-      const desktopFile = join(
-        stagingDirectory,
-        'etc',
-        'xdg',
-        'autostart',
-        desktopFileName
+  it.each([
+    { startupMode: 'window', expectedWindowCount: 1 },
+    { startupMode: 'tray', expectedWindowCount: 0 },
+  ] as const)(
+    'launches with the configured $startupMode presentation',
+    async ({ startupMode, expectedWindowCount }) => {
+      const directory = await mkdtemp(join(tmpdir(), 'elder-terms-autostart-'));
+      const stagingDirectory = join(directory, 'stage');
+      const configHome = join(directory, 'config');
+      const connections = join(configHome, 'elder-terms', 'connections');
+      await mkdir(stagingDirectory, { recursive: true });
+      await mkdir(connections, { recursive: true });
+      await writeFile(
+        join(configHome, 'elder-terms', 'global.ini'),
+        `[general]\nstartup_mode=${startupMode}\nopen_application=\n`
       );
-      await execute('desktop-file-validate', [desktopFile]);
 
-      const environment = {
-        ...(await launcher.environment()),
-        PATH: `${dirname(launcherPath)}:${process.env.PATH ?? ''}`,
-      };
-      await execute('gio', ['launch', desktopFile], environment);
-      await execute(
-        'gdbus',
-        ['wait', '--session', '--timeout', '10', applicationBusName],
-        environment
-      );
-      processId = await applicationProcessId(environment);
-
-      await waitForResult(async () => {
-        expect(await launcherWindowIds(environment)).toHaveLength(1);
+      const launcher = createGtkAppLauncher({
+        appPath: launcherPath,
+        env: {
+          LANGUAGE: 'C',
+          LC_ALL: 'C.UTF-8',
+          XDG_CONFIG_HOME: configHome,
+        },
+        xvfbPool: {
+          type: 'xvfb',
+        },
+        xvfbTrayHost: false,
       });
-    } finally {
-      if (processId !== undefined) {
-        try {
-          process.kill(processId, 'SIGTERM');
-          const environment = await launcher.environment();
+      let processId: number | undefined;
+      try {
+        await execute('meson', [
+          'install',
+          '-C',
+          buildDirectory,
+          '--no-rebuild',
+          '--destdir',
+          stagingDirectory,
+        ]);
+        const desktopFile = join(
+          stagingDirectory,
+          'etc',
+          'xdg',
+          'autostart',
+          desktopFileName
+        );
+        await execute('desktop-file-validate', [desktopFile]);
+
+        const environment = {
+          ...(await launcher.environment()),
+          PATH: `${dirname(launcherPath)}:${process.env.PATH ?? ''}`,
+        };
+        await execute('gio', ['launch', desktopFile], environment);
+        await execute(
+          'gdbus',
+          ['wait', '--session', '--timeout', '10', applicationBusName],
+          environment
+        );
+        processId = await applicationProcessId(environment);
+
+        if (startupMode === 'tray') {
+          await execute(launcherPath, ['--autostart'], environment);
+        }
+        await waitForResult(async () => {
+          expect(await launcherWindowIds(environment)).toHaveLength(
+            expectedWindowCount
+          );
+        });
+        if (startupMode === 'tray') {
+          await execute(launcherPath, [], environment);
           await waitForResult(async () => {
-            expect(await applicationHasOwner(environment)).toBe(false);
+            expect(await launcherWindowIds(environment)).toHaveLength(1);
           });
-        } catch (error) {
-          if (!(
-            error instanceof Error &&
-            'code' in error &&
-            error.code === 'ESRCH'
-          )) {
-            throw error;
+        }
+      } finally {
+        if (processId !== undefined) {
+          try {
+            process.kill(processId, 'SIGTERM');
+            const environment = await launcher.environment();
+            await waitForResult(async () => {
+              expect(await applicationHasOwner(environment)).toBe(false);
+            });
+          } catch (error) {
+            if (!(
+              error instanceof Error &&
+              'code' in error &&
+              error.code === 'ESRCH'
+            )) {
+              throw error;
+            }
           }
         }
+        await launcher.release();
+        await rm(directory, { recursive: true, force: true });
       }
-      await launcher.release();
-      await rm(directory, { recursive: true, force: true });
     }
-  });
+  );
 });

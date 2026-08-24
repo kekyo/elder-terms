@@ -30,6 +30,8 @@ struct LauncherMainWindow {
   GtkWidget *connection_context_menu = nullptr;
   /** Starts in-place editing of a saved connection name. */
   GtkWidget *rename_connection_menu_item = nullptr;
+  /** Duplicates a saved connection. */
+  GtkWidget *duplicate_connection_menu_item = nullptr;
   /** Requests deletion of a saved connection. */
   GtkWidget *delete_connection_menu_item = nullptr;
   /** Stack switching between empty and settings state. */
