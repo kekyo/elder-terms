@@ -96,6 +96,9 @@ msgstr "セッション終了時にウィンドウを閉じる"
 msgid "Show window side borders"
 msgstr "ウィンドウの左右にボーダーを表示する"
 
+msgid "Window side border width (px)"
+msgstr "ウィンドウ左右のボーダー幅（px）"
+
 msgid "BEL sound"
 msgstr "BELサウンド"
 

@@ -97,6 +97,9 @@ msgstr "إغلاق النافذة عند انتهاء الجلسة"
 msgid "Show window side borders"
 msgstr "إظهار الحدود الجانبية للنافذة"
 
+msgid "Window side border width (px)"
+msgstr "سُمك الحدود الجانبية للنافذة (بكسل)"
+
 msgid "BEL sound"
 msgstr "صوت BEL"
 

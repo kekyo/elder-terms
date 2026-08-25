@@ -96,6 +96,9 @@ msgstr "会话结束时关闭窗口"
 msgid "Show window side borders"
 msgstr "显示窗口左右边框"
 
+msgid "Window side border width (px)"
+msgstr "窗口左右边框宽度（像素）"
+
 msgid "BEL sound"
 msgstr "BEL 声音"
 

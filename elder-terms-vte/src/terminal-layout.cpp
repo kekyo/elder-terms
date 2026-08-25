@@ -60,6 +60,7 @@ struct TerminalLayoutState {
   bool font_zoom_pending = false;
   bool break_key_pressed = false;
   bool show_border = false;
+  gint border_width = 0;
   guint window_size_sync_source = 0;
   guint font_resize_guard_source = 0;
   guint font_zoom_source = 0;
@@ -368,6 +369,14 @@ static void set_border_visibility(TerminalLayoutState *state,
                             state->frame_end_border}) {
     gtk_widget_set_no_show_all(border, show_border ? FALSE : TRUE);
     gtk_widget_set_visible(border, show_border ? TRUE : FALSE);
+  }
+}
+
+static void set_border_width(TerminalLayoutState *state, gint border_width) {
+  state->border_width = border_width;
+  for (GtkWidget *border : {state->frame_start_border,
+                            state->frame_end_border}) {
+    gtk_widget_set_size_request(border, border_width, -1);
   }
 }
 
@@ -852,7 +861,7 @@ static gboolean feed_fixture_idle(gpointer data) {
 TerminalLayoutState *
 create_terminal_layout(const MainWindow &main_window, TestOptions options,
                        TerminalDisplaySettings terminal_display_settings,
-                       bool show_border,
+                       bool show_border, gint border_width,
                        TerminalFontFamilies terminal_font_families,
                        TerminalKeyBindings terminal_key_bindings,
                        TerminalLayoutCallbacks callbacks) {
@@ -873,6 +882,7 @@ create_terminal_layout(const MainWindow &main_window, TestOptions options,
   state->key_bindings = std::move(terminal_key_bindings);
   state->desired_columns = terminal_display_settings.width;
   state->desired_rows = terminal_display_settings.height;
+  set_border_width(state, border_width);
   set_border_visibility(state, show_border);
   const PangoFontDescription *runtime_font =
       vte_terminal_get_font(VTE_TERMINAL(state->terminal));
@@ -990,6 +1000,17 @@ void apply_terminal_border_visibility(TerminalLayoutState *state,
   }
 
   set_border_visibility(state, show_border);
+  queue_window_size_update(state);
+}
+
+void apply_terminal_border_width(TerminalLayoutState *state,
+                                 gint border_width) {
+  if (state == nullptr || border_width <= 0 ||
+      state->border_width == border_width) {
+    return;
+  }
+
+  set_border_width(state, border_width);
   queue_window_size_update(state);
 }
 

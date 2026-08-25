@@ -96,6 +96,9 @@ msgstr "세션이 끝나면 창을 닫습니다."
 msgid "Show window side borders"
 msgstr "창 좌우 테두리 표시"
 
+msgid "Window side border width (px)"
+msgstr "창 좌우 테두리 너비(px)"
+
 msgid "BEL sound"
 msgstr "BEL 소리"
 

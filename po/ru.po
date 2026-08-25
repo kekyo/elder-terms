@@ -97,6 +97,9 @@ msgstr "Закрыть окно по завершении сеанса"
 msgid "Show window side borders"
 msgstr "Показывать боковые границы окна"
 
+msgid "Window side border width (px)"
+msgstr "Ширина боковых границ окна (пикс.)"
+
 msgid "BEL sound"
 msgstr "Звук BEL"
 

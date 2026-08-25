@@ -96,6 +96,9 @@ msgstr "Cerrar ventana cuando finaliza la sesión"
 msgid "Show window side borders"
 msgstr "Mostrar bordes laterales de la ventana"
 
+msgid "Window side border width (px)"
+msgstr "Ancho de los bordes laterales de la ventana (px)"
+
 msgid "BEL sound"
 msgstr "Sonido BEL"
 

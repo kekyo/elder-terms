@@ -54,6 +54,7 @@ interface AppliedStore {
   readonly auto_close: string;
   readonly bell_sound: string;
   readonly show_border: string;
+  readonly border_width: string;
   readonly backspace_code: string;
   readonly background: string;
   readonly cursor_key_mode: string;
@@ -913,6 +914,7 @@ describe.concurrent('shared settings widget', () => {
               'Secondary font family',
               'Close window when session ends',
               'Show window side borders',
+              'Window side border width (px)',
               'Zoom in shortcut',
               'Zoom out shortcut',
               'Send BREAK shortcut',
@@ -1034,6 +1036,7 @@ describe.concurrent('shared settings widget', () => {
               'セカンダリフォントファミリー',
               'セッション終了時にウィンドウを閉じる',
               'ウィンドウの左右にボーダーを表示する',
+              'ウィンドウ左右のボーダー幅（px）',
               '拡大ショートカット',
               '縮小ショートカット',
               'BREAK送信ショートカット',
@@ -1502,6 +1505,11 @@ describe.concurrent('shared settings widget', () => {
             app,
             'settings_terminal_scrollback_lines_entry',
             '10000 (built-in default)'
+          );
+          await waitForEntryPlaceholder(
+            app,
+            'settings_terminal_border_width_entry',
+            '4 (built-in default)'
           );
           expect(
             await expectElementKind(
@@ -2940,6 +2948,7 @@ describe.concurrent('shared settings widget', () => {
         '--zoom=1.25',
         '--auto-close=false',
         '--show-border=true',
+        '--border-width=7',
         '--send-break-key=shift+F11',
       ],
       async ({ app, directory }) => {
@@ -2969,6 +2978,10 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_terminal_show_border_combo'),
           'comboBox'
         );
+        const borderWidth = expectElementKind(
+          await app.getById('settings_terminal_border_width_entry'),
+          'entry'
+        );
         const zoomInKey = expectElementKind(
           await app.getById('settings_terminal_zoom_in_key_entry'),
           'entry'
@@ -2995,6 +3008,7 @@ describe.concurrent('shared settings widget', () => {
           'settings_terminal_show_border_combo',
           'Enabled'
         );
+        await expectNumericEntryValue(borderWidth, 7);
         expect(await zoomInKey.text()).toBe('');
         expect(await zoomOutKey.text()).toBe('');
         expect(await sendBreakKey.text()).toBe('shift+F11');
@@ -3057,6 +3071,7 @@ describe.concurrent('shared settings widget', () => {
         await setNumericEntryValue(zoom, 1.1);
         await autoClose.selectChildAt(1);
         await showBorder.selectChildAt(2);
+        await setNumericEntryValue(borderWidth, 6);
         await showTerminalKeyBindings(app);
         await captureKeyBinding(app, zoomInKey, ['alt'], 'Up');
         await captureKeyBinding(app, sendBreakKey, ['shift'], 'F12');
@@ -3083,6 +3098,7 @@ describe.concurrent('shared settings widget', () => {
         expect(Number(store.zoom)).toBeCloseTo(1.1);
         expect(store.auto_close).toBe('true');
         expect(store.show_border).toBe('false');
+        expect(store.border_width).toBe('6');
         expect(store.zoom_in_key).toBe('alt+Up');
         expect(store.zoom_out_key).toBe('');
         expect(store.send_break_key).toBe('shift+F12');
@@ -3523,6 +3539,53 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
+  it('accepts only terminal border widths from 1 through 1000 pixels', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal', '--save'],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        const borderWidth = expectElementKind(
+          await app.getById('settings_terminal_border_width_entry'),
+          'entry'
+        );
+        const apply = await app.getById('settings_apply_button');
+        const save = await app.getById('settings_save_button');
+
+        await waitForEntryPlaceholder(
+          app,
+          'settings_terminal_border_width_entry',
+          '4 (built-in default)'
+        );
+        await borderWidth.setText('0');
+        await waitForEntryIconTooltip(
+          app,
+          'settings_terminal_border_width_entry',
+          'Value must be between 1 and 1000'
+        );
+        await expectInsensitive(apply);
+        await expectInsensitive(save);
+
+        await borderWidth.setText('1001');
+        await waitForEntryIconTooltip(
+          app,
+          'settings_terminal_border_width_entry',
+          'Value must be between 1 and 1000'
+        );
+        await expectInsensitive(apply);
+        await expectInsensitive(save);
+
+        await borderWidth.setText('1000');
+        await waitForResult(async () => {
+          await expectSensitive(apply);
+          await expectSensitive(save);
+        });
+        await expectElementKind(apply, 'button').click();
+        expect((await waitForAppliedStore(app)).border_width).toBe('1000');
+      }
+    );
+  });
+
   it('captures terminal key bindings with live modifier state', async (context) => {
     await runSharedGtkTest(
       context,
@@ -3699,6 +3762,7 @@ describe.concurrent('shared settings widget', () => {
       '--global=terminal.zoom=1.25',
       '--global=terminal.auto_close=true',
       '--global=terminal.show_border=true',
+      '--global=terminal.border_width=9',
       '--global=terminal.encoding=CP932',
       '--global=terminal.backspace_code=del',
       '--global=terminal.cursor_key_mode=normal',
@@ -3748,6 +3812,7 @@ describe.concurrent('shared settings widget', () => {
         'zoom',
         'auto_close',
         'show_border',
+        'border_width',
         'encoding',
         'backspace_code',
         'cursor_key_mode',
@@ -3816,6 +3881,11 @@ describe.concurrent('shared settings widget', () => {
         app,
         'settings_terminal_show_border_combo',
         'Enabled (global default)'
+      );
+      await expectInheritedEntry(
+        app,
+        'settings_terminal_border_width_entry',
+        '9 (global default)'
       );
       await expectInheritedEntry(
         app,

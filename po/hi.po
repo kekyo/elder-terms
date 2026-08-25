@@ -96,6 +96,9 @@ msgstr "सत्र समाप्त होने पर विंडो ब�
 msgid "Show window side borders"
 msgstr "विंडो की पार्श्व सीमाएँ दिखाएँ"
 
+msgid "Window side border width (px)"
+msgstr "विंडो की पार्श्व सीमा की चौड़ाई (px)"
+
 msgid "BEL sound"
 msgstr "BEL ध्वनि"
 

@@ -124,6 +124,13 @@ ELDER_TERMS_API SettingKey terminal_auto_close_setting_key();
 ELDER_TERMS_API SettingKey terminal_show_border_setting_key();
 
 /**
+ * Returns the setting key for [terminal] border_width.
+ *
+ * @returns Setting key for terminal window side-border width in pixels.
+ */
+ELDER_TERMS_API SettingKey terminal_border_width_setting_key();
+
+/**
  * Returns the setting key for [terminal] bell_sound.
  *
  * @returns Setting key for terminal BEL playback.
@@ -251,6 +258,14 @@ ELDER_TERMS_API bool terminal_auto_close(const SettingsStore &store);
  * @returns True when the terminal window should show left and right borders.
  */
 ELDER_TERMS_API bool terminal_show_border(const SettingsStore &store);
+
+/**
+ * Extracts terminal window side-border width from a store.
+ *
+ * @param store Source settings store.
+ * @returns Width of each terminal window side border in pixels.
+ */
+ELDER_TERMS_API gint terminal_border_width(const SettingsStore &store);
 
 /**
  * Extracts terminal BEL playback settings from a store.

@@ -135,6 +135,10 @@ static FixtureOptions parse_options(int argc, char **argv) {
       append_connection_assignment(
           &options, "terminal", "show_border",
           option_value(argument, "--show-border="));
+    } else if (starts_with(argument, "--border-width=")) {
+      append_connection_assignment(
+          &options, "terminal", "border_width",
+          option_value(argument, "--border-width="));
     } else if (starts_with(argument, "--exterior-background=")) {
       append_connection_assignment(
           &options, "general", "exterior_background",
@@ -666,6 +670,8 @@ static void print_store(const char *prefix,
                                             : "default")
             << " show_border="
             << (elder_terms::terminal_show_border(store) ? "true" : "false")
+            << " border_width="
+            << elder_terms::terminal_border_width(store)
             << " exterior_background=" << exterior_background
             << " background=" << background
             << " zoom_in_key="
@@ -761,6 +767,8 @@ static void print_store(const char *prefix,
                          elder_terms::terminal_bell_sound_setting_key());
   print_setting_metadata(store, "show_border",
                          elder_terms::terminal_show_border_setting_key());
+  print_setting_metadata(store, "border_width",
+                         elder_terms::terminal_border_width_setting_key());
   print_setting_metadata(
       store, "exterior_background",
       elder_terms::general_exterior_background_setting_key());

@@ -20,7 +20,6 @@
 namespace elder_terms {
 
 static constexpr int indicator_icon_pixel_size = 18;
-static constexpr int frame_border_width = 2;
 static constexpr guint transfer_progress_pulse_period_ms = 120;
 static constexpr const char *terminal_dim_overlay_style_class =
     "terminal-dim-overlay";
@@ -1319,7 +1318,6 @@ std::optional<MainWindow> load_main_window() {
   }
   for (GtkWidget *border : {main_window.frame_start_border,
                             main_window.frame_end_border}) {
-    gtk_widget_set_size_request(border, frame_border_width, -1);
     gtk_widget_set_vexpand(border, TRUE);
     update_widget_style_class(border, frame_border_style_class, true);
   }

@@ -97,6 +97,8 @@ using elder_terms::TerminalReturnCode;
 using elder_terms::TerminalTextSettings;
 using elder_terms::terminal_auto_close;
 using elder_terms::terminal_backspace_code_setting_key;
+using elder_terms::terminal_border_width;
+using elder_terms::terminal_border_width_setting_key;
 using elder_terms::TerminalBellSettings;
 using elder_terms::terminal_bell_settings;
 using elder_terms::terminal_bell_sound_is_valid;
@@ -214,6 +216,8 @@ static void test_default_settings() {
               "default terminal auto-close should be enabled");
   expect_true(!terminal_show_border(store),
               "terminal window side borders should be disabled by default");
+  expect_true(terminal_border_width(store) == 4,
+              "default terminal window side-border width should be 4 pixels");
   expect_true(!terminal_bell_settings(store).sound_file.has_value(),
               "the default terminal bell should retain VTE's built-in beep");
   const GeneralColorSettings colors = general_color_settings(store);
@@ -492,6 +496,76 @@ static void test_terminal_scrollback_lines_range_and_round_trip() {
   expect_true(terminal_display_settings(reloaded.store).scrollback_lines ==
                   54321,
               "terminal scrollback should survive saving and reloading");
+}
+
+static SettingsLoadResult load_terminal_border_width(const std::string &name,
+                                                      const std::string &value) {
+  const std::filesystem::path path = temporary_config_path(name);
+  write_config(path, "[terminal]\nborder_width=" + value + "\n");
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+  return result;
+}
+
+static void test_terminal_border_width_range_and_round_trip() {
+  const SettingsLoadResult minimum =
+      load_terminal_border_width("border-width-minimum", "1");
+  expect_true(terminal_border_width(minimum.store) == 1,
+              "minimum terminal border width should be accepted");
+  expect_true(minimum.warnings.empty(),
+              "minimum terminal border width should not emit warnings");
+
+  const SettingsLoadResult maximum =
+      load_terminal_border_width("border-width-maximum", "1000");
+  expect_true(terminal_border_width(maximum.store) == 1000,
+              "maximum terminal border width should be accepted");
+  expect_true(maximum.warnings.empty(),
+              "maximum terminal border width should not emit warnings");
+
+  const SettingsLoadResult below_minimum =
+      load_terminal_border_width("border-width-below-minimum", "0");
+  expect_true(terminal_border_width(below_minimum.store) == 4,
+              "terminal border width below the minimum should use the default");
+  expect_true(warnings_contain(
+                  below_minimum.warnings,
+                  "invalid configuration value [terminal] border_width"),
+              "terminal border width below the minimum should emit a warning");
+
+  const SettingsLoadResult above_maximum =
+      load_terminal_border_width("border-width-above-maximum", "1001");
+  expect_true(terminal_border_width(above_maximum.store) == 4,
+              "terminal border width above the maximum should use the default");
+  expect_true(warnings_contain(
+                  above_maximum.warnings,
+                  "invalid configuration value [terminal] border_width"),
+              "terminal border width above the maximum should emit a warning");
+
+  const std::filesystem::path saved_path =
+      temporary_config_path("border-width-round-trip");
+  SettingsStore configured = minimum.store;
+  expect_true(set_explicit_setting_value(
+                  &configured, terminal_border_width_setting_key(),
+                  elder_terms::SettingValue{gint64{12}}),
+              "valid terminal border width should be accepted in memory");
+  const SettingsSaveResult saved = save_settings(configured, saved_path);
+  expect_true(saved.saved, "terminal border width settings should save");
+  expect_true(read_config(saved_path).find("border_width=12") !=
+                  std::string::npos,
+              "saved settings should include terminal border width");
+  const SettingsLoadResult reloaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = saved_path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(saved_path);
+  expect_true(terminal_border_width(reloaded.store) == 12,
+              "terminal border width should survive saving and reloading");
 }
 
 static void test_terminal_font_family_settings_round_trip_and_layering() {
@@ -2226,6 +2300,9 @@ static void test_public_setting_keys() {
   expect_true(terminal_show_border_setting_key().section == "terminal" &&
                   terminal_show_border_setting_key().name == "show_border",
               "terminal border key should use [terminal] show_border");
+  expect_true(terminal_border_width_setting_key().section == "terminal" &&
+                  terminal_border_width_setting_key().name == "border_width",
+              "terminal border width key should use [terminal] border_width");
   expect_true(terminal_zoom_in_key_setting_key().section == "terminal" &&
                   terminal_zoom_in_key_setting_key().name == "zoom_in_key",
               "terminal zoom-in key should use [terminal] zoom_in_key");
@@ -2457,6 +2534,8 @@ static void test_save_settings_omits_default_values() {
                     elder_terms::SettingValue{false});
   set_setting_value(&store, terminal_show_border_setting_key(),
                     elder_terms::SettingValue{true});
+  set_setting_value(&store, terminal_border_width_setting_key(),
+                    elder_terms::SettingValue{gint64{6}});
   set_setting_value(&store, terminal_zoom_in_key_setting_key(),
                     elder_terms::SettingValue{std::string("alt+Up")});
   set_setting_value(&store, terminal_send_break_key_setting_key(),
@@ -2493,6 +2572,8 @@ static void test_save_settings_omits_default_values() {
               "saved settings should include non-default auto-close");
   expect_true(content.find("show_border=true") != std::string::npos,
               "saved settings should include enabled terminal borders");
+  expect_true(content.find("border_width=6") != std::string::npos,
+              "saved settings should include non-default terminal border width");
   expect_true(content.find("zoom_in_key=alt+Up") != std::string::npos,
               "saved settings should include non-default zoom-in key");
   expect_true(content.find("send_break_key=shift+F12") != std::string::npos,
@@ -3807,6 +3888,8 @@ int main() {
         test_local_command_line_setting_round_trip_and_layering();
     elder_terms_settings_test::
         test_terminal_scrollback_lines_range_and_round_trip();
+    elder_terms_settings_test::
+        test_terminal_border_width_range_and_round_trip();
     elder_terms_settings_test::
         test_terminal_font_family_settings_round_trip_and_layering();
     elder_terms_settings_test::
