@@ -1,6 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
   <requires lib="gtk+" version="3.24"/>
+  <object class="GtkMenu" id="application_menu">
+    <child>
+      <object class="GtkMenuItem" id="application_settings_menu_item">
+        <property name="visible">True</property>
+        <property name="label" translatable="yes">Application settings</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="about_menu_item">
+        <property name="visible">True</property>
+        <property name="label" translatable="yes">About elder-terms</property>
+      </object>
+    </child>
+  </object>
   <object class="GtkWindow" id="main_window">
     <property name="visible">False</property>
     <property name="can-focus">False</property>
@@ -38,6 +52,24 @@
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
                 <property name="icon-name">document-send-symbolic</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="pack-type">end</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkMenuButton" id="application_menu_button">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="popup">application_menu</property>
+            <property name="tooltip-text" translatable="yes">Application</property>
+            <child>
+              <object class="GtkImage" id="application_menu_button_image">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="icon-name">open-menu-symbolic</property>
               </object>
             </child>
           </object>

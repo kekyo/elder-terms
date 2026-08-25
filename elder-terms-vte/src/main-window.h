@@ -72,6 +72,12 @@ struct MainWindow {
   GtkWidget *settings_button = nullptr;
   /** Button that opens the file transfer menu. */
   GtkWidget *transfer_button = nullptr;
+  /** Button that opens application-level commands. */
+  GtkWidget *application_menu_button = nullptr;
+  /** Requests the launcher-owned application settings page. */
+  GtkWidget *application_settings_menu_item = nullptr;
+  /** Requests the launcher-owned application information page. */
+  GtkWidget *about_menu_item = nullptr;
   /** Root container inside the window. */
   GtkWidget *root_box = nullptr;
   /** Optional left border around the terminal window content. */

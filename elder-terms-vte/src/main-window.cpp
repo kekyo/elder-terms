@@ -420,6 +420,9 @@ static bool main_window_has_required_widgets(const MainWindow &main_window) {
   return main_window.window != nullptr && main_window.header_bar != nullptr &&
          main_window.settings_button != nullptr &&
          main_window.transfer_button != nullptr &&
+         main_window.application_menu_button != nullptr &&
+         main_window.application_settings_menu_item != nullptr &&
+         main_window.about_menu_item != nullptr &&
          main_window.root_box != nullptr &&
          main_window.frame_start_border != nullptr &&
          main_window.frame_end_border != nullptr &&
@@ -1256,6 +1259,12 @@ std::optional<MainWindow> load_main_window() {
       required_widget(main_window.builder, "settings_button");
   main_window.transfer_button =
       required_widget(main_window.builder, "transfer_button");
+  main_window.application_menu_button =
+      required_widget(main_window.builder, "application_menu_button");
+  main_window.application_settings_menu_item = required_widget(
+      main_window.builder, "application_settings_menu_item");
+  main_window.about_menu_item =
+      required_widget(main_window.builder, "about_menu_item");
   main_window.root_box = required_widget(main_window.builder, "root_box");
   main_window.frame_start_border =
       required_widget(main_window.builder, "frame_start_border");

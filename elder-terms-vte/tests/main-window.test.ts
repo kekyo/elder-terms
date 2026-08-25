@@ -251,6 +251,56 @@ const readClipboardText = async (app: GtkApp): Promise<string> => {
 };
 
 describe.concurrent('elder-terms-vte main window', () => {
+  it('requests launcher-owned application settings and About pages', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const launcher = join(directory, 'elder-terms-launcher');
+      const capture = join(directory, 'application-dialog-requests.txt');
+      await writeFile(
+        launcher,
+        '#!/bin/sh\nset -eu\nprintf \'%s\\n\' "$@" >>"$ELDER_TERMS_APPLICATION_REQUEST_CAPTURE"\n'
+      );
+      await chmod(launcher, 0o755);
+
+      await runGtkTest(
+        context,
+        ['--test-fixture'],
+        async (app) => {
+          const menu = expectElementKind(
+            await app.getById('application_menu_button'),
+            'toggleButton'
+          );
+          await menu.click();
+          await expectElementKind(
+            await app.getById('application_settings_menu_item'),
+            'menuItem'
+          ).click();
+          await waitForResult(async () => {
+            expect(await readFile(capture, 'utf8')).toBe(
+              '--application-settings\n'
+            );
+          });
+
+          await menu.click();
+          await expectElementKind(
+            await app.getById('about_menu_item'),
+            'menuItem'
+          ).click();
+          await waitForResult(async () => {
+            expect(await readFile(capture, 'utf8')).toBe(
+              '--application-settings\n--about\n'
+            );
+          });
+        },
+        {
+          env: {
+            ELDER_TERMS_APPLICATION_REQUEST_CAPTURE: capture,
+            ELDER_TERMS_LAUNCHER_PATH: launcher,
+          },
+        }
+      );
+    });
+  });
+
   it('publishes a runtime icon and desktop identity for its main window', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
       const mainWindow = expectElementKind(
@@ -685,15 +735,17 @@ describe.concurrent('elder-terms-vte main window', () => {
       await waitForResult(async () => {
         expect((await copyItem.info()).states).not.toContain('showing');
       });
-      await selectTerminalCells(app, bounds, 5, 0);
-
-      await openTerminalContextMenu(
-        app,
-        bounds.x + cellWidth * 6.5,
-        bounds.y + cellHeight / 2
-      );
       await waitForResult(async () => {
+        await selectTerminalCells(app, bounds, 5, 0);
+        await openTerminalContextMenu(
+          app,
+          bounds.x + cellWidth * 6.5,
+          bounds.y + cellHeight / 2
+        );
         const info = await copyItem.info();
+        if (!info.states.includes('enabled')) {
+          await app.input.pressKey('Escape');
+        }
         expect(info.states).toContain('showing');
         expect(info.states).toContain('enabled');
         expect(info.states).toContain('sensitive');

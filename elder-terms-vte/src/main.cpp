@@ -187,6 +187,46 @@ static bool spawn_external_command(ApplicationState *state,
   return true;
 }
 
+static std::string resolve_launcher_executable() {
+  const char *configured = g_getenv("ELDER_TERMS_LAUNCHER_PATH");
+  if (configured != nullptr && configured[0] != '\0') {
+    return configured;
+  }
+
+  std::error_code read_error;
+  const std::filesystem::path executable =
+      std::filesystem::read_symlink("/proc/self/exe", read_error);
+  if (!read_error) {
+    const std::filesystem::path private_directory =
+        executable.parent_path().parent_path();
+    const std::filesystem::path candidates[] = {
+        private_directory / "launcher" / "elder-terms",
+        private_directory / "elder-terms" / "elder-terms",
+    };
+    for (const std::filesystem::path &candidate : candidates) {
+      if (g_file_test(candidate.c_str(), G_FILE_TEST_IS_EXECUTABLE)) {
+        return candidate.string();
+      }
+    }
+  }
+
+  char *found = g_find_program_in_path("elder-terms");
+  if (found == nullptr) {
+    return "elder-terms";
+  }
+  const std::string result = found;
+  g_free(found);
+  return result;
+}
+
+static void request_launcher_application_page(ApplicationState *state,
+                                              const char *option) {
+  (void)spawn_external_command(
+      state, resolve_launcher_executable(), {option},
+      "application dialog request", _("Failed to open elder-terms"),
+      "application_dialog_request_error");
+}
+
 static void spawn_macro_command(ApplicationState *state, std::string command,
                                 std::vector<std::string> arguments) {
   (void)spawn_external_command(
@@ -710,6 +750,18 @@ static void open_settings_dialog(ApplicationState *state) {
 
 static void on_settings_button_clicked(GtkButton *, gpointer user_data) {
   open_settings_dialog(static_cast<ApplicationState *>(user_data));
+}
+
+static void on_application_settings_menu_item_activate(GtkMenuItem *,
+                                                       gpointer user_data) {
+  request_launcher_application_page(
+      static_cast<ApplicationState *>(user_data),
+      "--application-settings");
+}
+
+static void on_about_menu_item_activate(GtkMenuItem *, gpointer user_data) {
+  request_launcher_application_page(
+      static_cast<ApplicationState *>(user_data), "--about");
 }
 
 static gboolean emit_transfer_dialog_current_folder_uri(gpointer data) {
@@ -1727,6 +1779,12 @@ int main(int argc, char **argv) {
   g_signal_connect(
     main_window->settings_button, "clicked",
     G_CALLBACK(on_settings_button_clicked), &app_state);
+  g_signal_connect(
+    main_window->application_settings_menu_item, "activate",
+    G_CALLBACK(on_application_settings_menu_item_activate), &app_state);
+  g_signal_connect(
+    main_window->about_menu_item, "activate",
+    G_CALLBACK(on_about_menu_item_activate), &app_state);
 
   bool session_started = false;
   if (!launch_options.test.fixture && app_state.session_state != nullptr) {
