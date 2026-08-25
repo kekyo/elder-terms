@@ -56,6 +56,7 @@
 - テキストのペーストやテキストファイルの送信を実行出来ます。
   その際に、送信速度と改行コードの扱いを指定して、ホスト側のバッファオーバーフローや改行コードの不一致を回避出来ます。
 - インジケータがターミナルの下部に表示されます。アナログモデムを思い出して、余韻に浸れます。
+- BELに、組み込みbeepまたは任意のWAV/Ogg Vorbisサウンドを指定出来ます。
 - フォントサイズをショートカットキーで変更したり、マウスのホイールで変更したり出来ます。
 - 接続毎にウインドウのエクステリアカラーやターミナルの背景色をカスタマイズ出来ます。
 - ホットキー一発で、指定された接続を起動出来ます(Waylandでは、XDG Global Shortcutsポータルが必要)。
@@ -276,6 +277,19 @@ INIファイルを直接編集する場合は、次のように指定します�
 scrollback_lines=20000
 ```
 
+## BELサウンドの設定
+
+「端末」タブの「BELサウンド」では、BELを受信したときに再生するサウンドを指定出来ます。組み込み既定値の `default` は、従来どおりVTEの単純なbeepを使用します。
+
+カスタムサウンドには、既存ファイルの絶対パスを指定します。対応する形式はOgg Vorbis（`.oga`、従来の拡張子 `.ogg` も可）とWAV（PCM）です。
+
+```ini
+[terminal]
+bell_sound=/home/user/.local/share/sounds/terminal-bell.oga
+```
+
+接続設定ではグローバル既定値を継承出来ます。グローバル側でカスタムサウンドを指定していても、その接続だけ組み込みbeepへ戻す場合は `bell_sound=default` を明示します。libcanberraが再生を開始出来なかった場合は、設定を再適用するまで組み込みbeepへフォールバックします。
+
 ## フォントファミリーの設定
 
 「端末」タブを下へスクロールすると、プライマリとセカンダリの2つのフォントファミリーを指定出来ます。それぞれのドロップダウンでは、グローバル既定値または組み込み既定値の継承、組み込み既定値の明示的な使用、カスタムフォントを選択出来ます。フォント選択ダイアログでフォントを確定すると、自動的にカスタムフォントへ切り替わります。
@@ -467,7 +481,7 @@ UbuntuまたはDebianでビルドする場合は、C++20対応コンパイラ、
 ```bash
 sudo apt update
 sudo apt install build-essential git meson ninja-build pkg-config gettext \
-  libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libx11-dev \
+  libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev \
   libxkbcommon-dev liburing-dev libudev-dev libssh-dev libvte-2.91-dev
 ```
 

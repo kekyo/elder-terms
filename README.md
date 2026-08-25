@@ -65,6 +65,7 @@ connections, inspired by personal computing in the 1990s.
   incompatible newline codes.
 - Shows indicators at the bottom of the terminal so you can reminisce about
   analog modems.
+- Uses either the built-in beep or a custom WAV/Ogg Vorbis sound for BEL.
 - Changes the font size with keyboard shortcuts or the mouse wheel.
 - Customizes the window exterior colors and terminal background for each
   connection.
@@ -395,6 +396,26 @@ When editing the INI file directly, specify the value as follows:
 scrollback_lines=20000
 ```
 
+## Configuring the BEL Sound
+
+"BEL sound" on the "Terminal" tab selects the sound played when the terminal
+receives BEL. The built-in `default` value keeps VTE's existing simple beep.
+
+For a custom sound, enter the absolute path of an existing file. Supported
+formats are Ogg Vorbis (`.oga`, with the legacy `.ogg` extension also accepted)
+and WAV (PCM).
+
+```ini
+[terminal]
+bell_sound=/home/user/.local/share/sounds/terminal-bell.oga
+```
+
+Connection settings can inherit the global default. If the global default uses
+a custom sound, set `bell_sound=default` on one connection to restore the
+built-in beep for that connection. If libcanberra cannot start playback,
+elder-terms falls back to the built-in beep until the settings are applied
+again.
+
 ## Configuring Font Families
 
 Scroll down on the "Terminal" tab to specify primary and secondary font
@@ -678,7 +699,7 @@ gettext, and the development packages for the libraries used by elder-terms:
 ```bash
 sudo apt update
 sudo apt install build-essential git meson ninja-build pkg-config gettext \
-  libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libx11-dev \
+  libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev \
   libxkbcommon-dev liburing-dev libudev-dev libssh-dev libvte-2.91-dev
 ```
 
