@@ -186,6 +186,29 @@ Clearing a text field or selecting the default item in a selection field
 removes the explicit value, causing the setting to inherit the global or
 built-in default again.
 
+## Local Startup Process
+
+For a Local connection, "Startup command" on the Local tab selects the process
+that `elder-terms-vte` starts in the terminal. The setting takes effect the next
+time the connection is opened and is read-only in a running terminal.
+
+When this field is empty, it inherits the global or built-in default. The
+built-in default starts the user's shell specified by `SHELL`, with no
+additional arguments. If `SHELL` is unset or empty, `/bin/sh` is used.
+
+The value is split into an executable and arguments using shell-style quoting,
+but the process is started directly without a shell. Environment-variable
+expansion, globbing, redirection, and pipelines are therefore not performed.
+Start a shell explicitly when those features are required, for example:
+
+```ini
+[local]
+command_line=/bin/sh -lc 'exec tmux new-session -A -s elder-terms'
+```
+
+The same `[local]` setting can be saved as a global default or overridden for
+an individual connection. Clearing "Startup command" restores inheritance.
+
 ## Selecting a Serial Device
 
 For a serial connection, "Device identification" lets you choose one of three

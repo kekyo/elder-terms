@@ -102,6 +102,10 @@ static FixtureOptions parse_options(int argc, char **argv) {
       append_connection_assignment(
           &options, "general", "open_connection",
           option_value(argument, "--open-connection="));
+    } else if (starts_with(argument, "--local-command-line=")) {
+      append_connection_assignment(
+          &options, "local", "command_line",
+          option_value(argument, "--local-command-line="));
     } else if (starts_with(argument, "--width=")) {
       append_connection_assignment(
           &options, "terminal", "width", option_value(argument, "--width="));
@@ -618,6 +622,10 @@ static void print_store(const char *prefix,
       elder_terms::serial_connection_settings(store);
   const elder_terms::TerminalLogSettings log =
       elder_terms::terminal_log_settings(store);
+  const std::string local_command_line =
+      elder_terms::setting_string_value_or_default(
+          store, elder_terms::local_command_line_setting_key(),
+          std::string());
   std::string macro_ids;
   for (const elder_terms::MacroRule &rule : store.macro_rules) {
     if (!macro_ids.empty()) {
@@ -661,6 +669,7 @@ static void print_store(const char *prefix,
             << elder_terms::terminal_zoom_out_key(store)
             << " send_break_key="
             << elder_terms::terminal_send_break_key(store)
+            << " local_command_line=" << local_command_line
             << " telnet_address=" << telnet.address
             << " telnet_port=" << telnet.port
             << " telnet_terminal_type=" << telnet.terminal_type
@@ -764,6 +773,8 @@ static void print_store(const char *prefix,
                          elder_terms::terminal_zoom_out_key_setting_key());
   print_setting_metadata(store, "send_break_key",
                          elder_terms::terminal_send_break_key_setting_key());
+  print_setting_metadata(store, "local_command_line",
+                         elder_terms::local_command_line_setting_key());
   print_setting_metadata(store, "telnet_address",
                          elder_terms::telnet_address_setting_key());
   print_setting_metadata(store, "telnet_port",

@@ -104,6 +104,8 @@ struct SettingsWidgetState {
   GtkWidget *general_exterior_background_button = nullptr;
   GtkWidget *general_background_mode_combo = nullptr;
   GtkWidget *general_background_button = nullptr;
+  GtkWidget *local_command_line_entry = nullptr;
+  bool local_command_line_valid = true;
   GtkWidget *terminal_width_entry = nullptr;
   GtkWidget *terminal_height_entry = nullptr;
   GtkWidget *terminal_scrollback_lines_entry = nullptr;
@@ -1476,7 +1478,8 @@ static bool macro_rules_are_valid(const SettingsWidgetState *state) {
 }
 
 static bool settings_inputs_valid(const SettingsWidgetState *state) {
-  return state->terminal_width_valid && state->terminal_height_valid &&
+  return state->local_command_line_valid && state->terminal_width_valid &&
+         state->terminal_height_valid &&
          state->terminal_scrollback_lines_valid &&
          state->terminal_zoom_valid && state->terminal_encoding_valid &&
          state->telnet_port_valid && state->ssh_port_valid &&
@@ -1555,6 +1558,39 @@ static void update_terminal_send_break_key_from_widget(
       &state->draft_store, terminal_send_break_key_setting_key(),
       SettingValue{key_binding_input_widget_text(
           state->terminal_send_break_key_input)});
+}
+
+static void update_local_command_line_from_widget(
+    SettingsWidgetState *state) {
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->local_command_line_entry));
+  const std::string command_line = text == nullptr ? "" : text;
+  if (trim_ascii_whitespace(command_line).empty()) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 local_command_line_setting_key());
+    state->local_command_line_valid = true;
+    set_entry_validation(state->local_command_line_entry, true, {});
+    sync_cleared_entry(
+        state, state->local_command_line_entry,
+        local_command_line_setting_key(),
+        setting_string_value_or_default(
+            state->draft_store, local_command_line_setting_key(),
+            std::string()));
+    return;
+  }
+
+  gtk_entry_set_placeholder_text(
+      GTK_ENTRY(state->local_command_line_entry), nullptr);
+  std::string reason;
+  state->local_command_line_valid =
+      local_command_line_is_valid(command_line, &reason);
+  set_entry_validation(state->local_command_line_entry,
+                       state->local_command_line_valid, reason);
+  if (state->local_command_line_valid) {
+    set_explicit_setting_value(&state->draft_store,
+                               local_command_line_setting_key(),
+                               SettingValue{command_line});
+  }
 }
 
 static void update_telnet_address_from_widget(SettingsWidgetState *state) {
@@ -3107,6 +3143,16 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
       colors.exterior_background);
   sync_general_color_control(state, GeneralColorField::background,
                              colors.background);
+  if (state->local_command_line_entry != nullptr) {
+    sync_inheritable_entry(
+        state->local_command_line_entry, state->draft_store,
+        local_command_line_setting_key(),
+        setting_string_value_or_default(
+            state->draft_store, local_command_line_setting_key(),
+            std::string()));
+    state->local_command_line_valid = true;
+    set_entry_validation(state->local_command_line_entry, true, {});
+  }
   sync_terminal_type_entries(state);
   if (state->terminal_zoom_in_key_input != nullptr) {
     sync_key_binding_widget(
@@ -3819,6 +3865,16 @@ static void on_terminal_send_break_key_reset_clicked(GtkButton *,
   reset_terminal_key_binding(
       static_cast<SettingsWidgetState *>(data),
       TerminalKeyBindingField::send_break);
+}
+
+static void on_local_command_line_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_local_command_line_from_widget(state);
+  update_action_sensitivity(state);
+  notify_changed(state);
 }
 
 static void on_telnet_address_changed(GtkEditable *, gpointer data) {
@@ -4544,6 +4600,22 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   return scroller;
 }
 
+static GtkWidget *create_local_page(SettingsWidgetState *state) {
+  const std::string page_id = widget_id(state, "local_page");
+  GtkWidget *page = create_page_grid(page_id.c_str());
+
+  state->local_command_line_entry =
+      create_entry(widget_id(state, "local_command_line_entry"));
+  gtk_widget_set_sensitive(state->local_command_line_entry,
+                           state->is_runtime ? FALSE : TRUE);
+  g_signal_connect(state->local_command_line_entry, "changed",
+                   G_CALLBACK(on_local_command_line_changed), state);
+  attach_row(page, 0, local_command_line_setting_key(),
+             state->local_command_line_entry);
+
+  return page;
+}
+
 static GtkWidget *create_telnet_page(SettingsWidgetState *state) {
   const std::string page_id = widget_id(state, "telnet_page");
   GtkWidget *page = create_page_grid(page_id.c_str());
@@ -5073,6 +5145,23 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_widget_show(general_page);
   gtk_widget_show(general_tab);
 
+  GtkWidget *local_page = create_local_page(state);
+  const std::string local_tab_id = widget_id(state, "local_tab");
+  GtkWidget *local_tab = create_tab_button(
+      state, local_page, settings_ui_text(SettingsUiText::local_tab),
+      local_tab_id.c_str());
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), local_page,
+                           local_tab);
+  gtk_widget_show_all(local_page);
+  gtk_widget_show_all(local_tab);
+  gtk_widget_set_no_show_all(local_page, TRUE);
+  gtk_widget_set_no_show_all(local_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {local_connection_type},
+      .page = local_page,
+      .tab_label = local_tab,
+  });
+
   GtkWidget *telnet_page = create_telnet_page(state);
   const std::string telnet_tab_id = widget_id(state, "telnet_tab");
   GtkWidget *telnet_tab = create_tab_button(
@@ -5255,6 +5344,8 @@ void settings_widget_rebase_fallbacks(
     return;
   }
 
+  const bool local_command_line_invalid =
+      !state->local_command_line_valid;
   const bool width_invalid = !state->terminal_width_valid;
   const bool height_invalid = !state->terminal_height_valid;
   const bool scrollback_lines_invalid =
@@ -5270,6 +5361,8 @@ void settings_widget_rebase_fallbacks(
     const char *text = gtk_entry_get_text(GTK_ENTRY(entry));
     return std::string(text == nullptr ? "" : text);
   };
+  const std::string local_command_line_text =
+      entry_text(state->local_command_line_entry);
   const std::string width_text = entry_text(state->terminal_width_entry);
   const std::string height_text = entry_text(state->terminal_height_entry);
   const std::string scrollback_lines_text =
@@ -5301,6 +5394,11 @@ void settings_widget_rebase_fallbacks(
         gtk_entry_set_text(GTK_ENTRY(entry), text.c_str());
         update();
       };
+  restore_invalid(state->local_command_line_entry,
+                  local_command_line_text,
+                  local_command_line_invalid, [state]() {
+                    update_local_command_line_from_widget(state);
+                  });
   restore_invalid(state->terminal_width_entry, width_text, width_invalid,
                   [state]() { update_terminal_width_from_widget(state); });
   restore_invalid(state->terminal_height_entry, height_text, height_invalid,

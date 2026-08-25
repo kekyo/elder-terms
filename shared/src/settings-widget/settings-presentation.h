@@ -8,6 +8,7 @@ namespace elder_terms {
 
 enum class SettingsUiText {
   general_tab,
+  local_tab,
   telnet_tab,
   serial_tab,
   ssh_tab,

@@ -33,6 +33,7 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"general", "exterior_background",
                       N_("Title and status bar background")},
     SettingLabelEntry{"general", "background", N_("Content background")},
+    SettingLabelEntry{"local", "command_line", N_("Startup command")},
     SettingLabelEntry{"terminal", "encoding", N_("Character encoding")},
     SettingLabelEntry{"terminal", "backspace_code", N_("Backspace code")},
     SettingLabelEntry{"terminal", "cursor_key_mode", N_("Cursor key mode")},
@@ -162,6 +163,8 @@ const char *settings_ui_text(SettingsUiText text) {
   switch (text) {
   case SettingsUiText::general_tab:
     return _("General");
+  case SettingsUiText::local_tab:
+    return _("Local");
   case SettingsUiText::telnet_tab:
     return _("TELNET");
   case SettingsUiText::serial_tab:

@@ -71,6 +71,7 @@ interface AppliedStore {
   readonly log_enabled: string;
   readonly log_file_name_format: string;
   readonly log_mode: string;
+  readonly local_command_line: string;
   readonly open_application: string;
   readonly open_connection: string;
   readonly ssh_address: string;
@@ -266,6 +267,13 @@ const showTransferPage = async (app: GtkApp): Promise<void> => {
   await waitForResult(async () => {
     const basePath = await app.getById('settings_transfer_base_path_entry');
     expect((await basePath.info()).states).toContain('showing');
+  });
+};
+
+const showLocalPage = async (app: GtkApp): Promise<void> => {
+  await waitForResult(async () => {
+    const commandLine = await app.getById('settings_local_command_line_entry');
+    expect((await commandLine.info()).states).toContain('showing');
   });
 };
 
@@ -712,7 +720,14 @@ describe.concurrent('shared settings widget', () => {
     const cases = [
       {
         args: [] as const,
-        expected: ['General', 'Terminal', 'Transfer', 'Logging', 'Macro'],
+        expected: [
+          'General',
+          'Local',
+          'Terminal',
+          'Transfer',
+          'Logging',
+          'Macro',
+        ],
       },
       {
         args: ['--type=telnet'] as const,
@@ -846,6 +861,10 @@ describe.concurrent('shared settings widget', () => {
             ],
           },
           {
+            id: 'global_settings_local_page',
+            labels: ['Startup command'],
+          },
+          {
             id: 'global_settings_telnet_page',
             labels: ['Address', 'Port', 'Terminal type'],
           },
@@ -940,6 +959,7 @@ describe.concurrent('shared settings widget', () => {
       async ({ app }) => {
         expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual([
           '一般',
+          'ローカル',
           'TELNET',
           'シリアル',
           'SSH',
@@ -959,6 +979,10 @@ describe.concurrent('shared settings widget', () => {
               'タイトル／ステータスバーの背景',
               'コンテンツの背景',
             ],
+          },
+          {
+            id: 'global_settings_local_page',
+            labels: ['起動コマンド'],
           },
           {
             id: 'global_settings_telnet_page',
@@ -1267,6 +1291,124 @@ describe.concurrent('shared settings widget', () => {
       ).click();
       expect((await waitForAppliedStore(app)).name).toBe('Tokyo/Lab');
     });
+  });
+
+  it('matches Local visual fixtures for default, configured, and runtime settings', async (context) => {
+    const cases: readonly SettingVisualCase[] = [
+      {
+        args: ['--page=local'],
+        assert: async (app) => {
+          const commandLine = expectElementKind(
+            await app.getById('settings_local_command_line_entry'),
+            'entry'
+          );
+          expect(await commandLine.text()).toBe('');
+          await waitForEntryPlaceholder(
+            app,
+            'settings_local_command_line_entry',
+            'Built-in default'
+          );
+          await expectSensitive(commandLine);
+        },
+        differsFrom: undefined,
+        fixtureName: 'settings-widget-local-page-default-editable',
+        pageId: 'settings_local_page',
+        prepare: showLocalPage,
+      },
+      {
+        args: ['--page=local', '--local-command-line=/bin/bash --noprofile'],
+        assert: async (app) => {
+          expect(
+            await expectElementKind(
+              await app.getById('settings_local_command_line_entry'),
+              'entry'
+            ).text()
+          ).toBe('/bin/bash --noprofile');
+        },
+        differsFrom: 'settings-widget-local-page-default-editable',
+        fixtureName: 'settings-widget-local-command-bash',
+        pageId: 'settings_local_page',
+        prepare: showLocalPage,
+      },
+      {
+        args: [
+          '--page=local',
+          '--runtime',
+          '--local-command-line=/bin/bash --noprofile',
+        ],
+        assert: async (app) => {
+          await expectInsensitive(
+            await app.getById('settings_local_command_line_entry')
+          );
+        },
+        differsFrom: 'settings-widget-local-command-bash',
+        fixtureName: 'settings-widget-local-page-runtime',
+        pageId: 'settings_local_page',
+        prepare: showLocalPage,
+      },
+    ];
+
+    for (const testCase of cases) {
+      await runSharedGtkTest(
+        context,
+        testCase.args,
+        async ({ app, directory }) => {
+          await testCase.prepare(app);
+          await testCase.assert(app);
+          await expectPageVisualFixture(app, testCase, directory);
+        }
+      );
+    }
+  });
+
+  it('edits, validates, and restores inheritance for the Local startup command', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=local', '--global=local.command_line=global-process', '--save'],
+      async ({ app }) => {
+        await showLocalPage(app);
+        const commandLine = expectElementKind(
+          await app.getById('settings_local_command_line_entry'),
+          'entry'
+        );
+        const apply = await app.getById('settings_apply_button');
+        const save = await app.getById('settings_save_button');
+        await expectInheritedEntry(
+          app,
+          'settings_local_command_line_entry',
+          'global-process (global default)'
+        );
+
+        await commandLine.setText("broken '");
+        await waitForChangedState(app, 'CHANGED dirty=true valid=false');
+        await expectInsensitive(apply);
+        await expectInsensitive(save);
+
+        await commandLine.setText('connection-process');
+        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
+        await expectSensitive(apply);
+        await expectSensitive(save);
+        await expectElementKind(apply, 'button').click();
+        const explicit = await waitForAppliedStore(app);
+        expect(explicit.local_command_line).toBe('connection-process');
+        expect(explicit.local_command_line_source).toBe('override');
+        expect(explicit.local_command_line_explicit).toBe('true');
+
+        await commandLine.setText('');
+        await waitForEntryPlaceholder(
+          app,
+          'settings_local_command_line_entry',
+          'global-process (global default)'
+        );
+        await expectElementKind(apply, 'button').click();
+        await waitForResult(async () => {
+          const inherited = await waitForAppliedStore(app);
+          expect(inherited.local_command_line).toBe('global-process');
+          expect(inherited.local_command_line_source).toBe('global');
+          expect(inherited.local_command_line_explicit).toBe('false');
+        });
+      }
+    );
   });
 
   it('edits, validates, and resets the connection launch hotkey', async (context) => {
@@ -3525,6 +3667,7 @@ describe.concurrent('shared settings widget', () => {
       '--global=terminal.zoom_in_key=alt+plus',
       '--global=terminal.zoom_out_key=alt+minus',
       '--global=terminal.send_break_key=alt+F12',
+      '--global=local.command_line=global-process',
       '--global=telnet.address=global.telnet.test',
       '--global=telnet.port=2323',
       '--global=telnet.terminal_type=vt220',
@@ -3573,6 +3716,7 @@ describe.concurrent('shared settings widget', () => {
         'zoom_in_key',
         'zoom_out_key',
         'send_break_key',
+        'local_command_line',
         'telnet_address',
         'telnet_port',
         'telnet_terminal_type',
@@ -3676,6 +3820,12 @@ describe.concurrent('shared settings widget', () => {
       expectElementKind(
         await app.getById('settings_terminal_send_break_key_reset_button'),
         'button'
+      );
+
+      await expectInheritedEntry(
+        app,
+        'settings_local_command_line_entry',
+        'global-process (global default)'
       );
 
       await selectSettingsTab(app, 'Serial');
@@ -4272,6 +4422,7 @@ describe.concurrent('shared settings widget', () => {
       async ({ app }) => {
         expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual([
           'General',
+          'Local',
           'TELNET',
           'Serial',
           'SSH',

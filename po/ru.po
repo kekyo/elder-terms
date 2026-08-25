@@ -46,6 +46,10 @@ msgid "Content background"
 msgstr "Фон содержимого"
 
 #: shared/src/settings-widget/settings-presentation.cpp:36
+msgid "Startup command"
+msgstr "Команда запуска"
+
+#: shared/src/settings-widget/settings-presentation.cpp:37
 msgid "Character encoding"
 msgstr "Кодировка символов"
 

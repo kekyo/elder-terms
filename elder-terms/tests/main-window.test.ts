@@ -448,6 +448,7 @@ describe('elder-terms main window', () => {
           expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual(
             [
               '一般',
+              'ローカル',
               'TELNET',
               'シリアル',
               'SSH',
@@ -847,6 +848,7 @@ describe('elder-terms main window', () => {
           expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual(
             [
               'General',
+              'Local',
               'TELNET',
               'Serial',
               'SSH',
