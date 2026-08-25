@@ -401,9 +401,9 @@ scrollback_lines=20000
 "BEL sound" on the "Terminal" tab selects the sound played when the terminal
 receives BEL. The built-in `default` value keeps VTE's existing simple beep.
 
-For a custom sound, enter the absolute path of an existing file. Supported
-formats are Ogg Vorbis (`.oga`, with the legacy `.ogg` extension also accepted)
-and WAV (PCM).
+For a custom sound, enter the absolute path of an existing file or use the
+"Select file" button to choose it. Supported formats are Ogg Vorbis (`.oga`,
+with the legacy `.ogg` extension also accepted) and WAV (PCM).
 
 ```ini
 [terminal]
