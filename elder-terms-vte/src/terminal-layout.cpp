@@ -294,6 +294,14 @@ static void ensure_terminal_grid_size(TerminalLayoutState *state,
                                            current_rows);
 }
 
+static void notify_current_terminal_grid_size(TerminalLayoutState *state) {
+  VteTerminal *terminal = VTE_TERMINAL(state->terminal);
+  const glong columns = vte_terminal_get_column_count(terminal);
+  const glong rows = vte_terminal_get_row_count(terminal);
+  update_fixture_grid_status(state);
+  notify_terminal_grid_size_changed(state, columns, rows);
+}
+
 static void resize_window_to_hinted_grid(TerminalLayoutState *state,
                                          glong columns, glong rows) {
   if (state->hints.width_inc <= 0 || state->hints.height_inc <= 0) {
@@ -321,6 +329,9 @@ static void update_window_size(TerminalLayoutState *state) {
     return;
   }
   if (state->realized && window_state_is_snapped(state->window_state)) {
+    // Snapped allocations are temporary: notify the backend without replacing
+    // the normal-window grid that should be restored later.
+    notify_current_terminal_grid_size(state);
     return;
   }
 
@@ -737,22 +748,30 @@ static void queue_window_size_sync(TerminalLayoutState *state) {
 static gboolean on_window_configure_event(GtkWidget *, GdkEventConfigure *,
                                           gpointer data) {
   TerminalLayoutState *state = static_cast<TerminalLayoutState *>(data);
-  if (!state->realized || window_state_is_snapped(state->window_state)) {
+  if (!state->realized) {
     return GDK_EVENT_PROPAGATE;
   }
 
-  queue_window_size_sync(state);
+  if (window_state_is_snapped(state->window_state)) {
+    queue_window_size_update(state);
+  } else {
+    queue_window_size_sync(state);
+  }
   return GDK_EVENT_PROPAGATE;
 }
 
 static void on_window_size_allocate(GtkWidget *, GtkAllocation *,
                                     gpointer data) {
   TerminalLayoutState *state = static_cast<TerminalLayoutState *>(data);
-  if (!state->realized || window_state_is_snapped(state->window_state)) {
+  if (!state->realized) {
     return;
   }
 
-  queue_window_size_sync(state);
+  if (window_state_is_snapped(state->window_state)) {
+    queue_window_size_update(state);
+  } else {
+    queue_window_size_sync(state);
+  }
 }
 
 static void on_style_updated(GtkWidget *, gpointer data) {
@@ -767,11 +786,33 @@ static gboolean on_window_state_event(GtkWidget *, GdkEventWindowState *event,
   if (window_state_is_snapped(event->new_window_state)) {
     gtk_window_set_geometry_hints(GTK_WINDOW(state->window), nullptr, nullptr,
                                   static_cast<GdkWindowHints>(0));
-  } else {
-    queue_window_size_update(state);
   }
+  queue_window_size_update(state);
 
   return GDK_EVENT_PROPAGATE;
+}
+
+static gboolean maximize_window_for_test_idle(gpointer data) {
+  TerminalLayoutState *state = static_cast<TerminalLayoutState *>(data);
+  if (!state->realized || state->hints.width_inc <= 0 ||
+      state->hints.height_inc <= 0) {
+    return G_SOURCE_REMOVE;
+  }
+
+  // Xvfb has no window manager, so reproduce its maximized state and
+  // allocation events with a deterministic two-cell expansion.
+  GdkEventWindowState event = {};
+  event.new_window_state = GDK_WINDOW_STATE_MAXIMIZED;
+  on_window_state_event(state->window, &event, state);
+
+  GdkWindow *gdk_window = gtk_widget_get_window(state->window);
+  if (gdk_window != nullptr) {
+    gdk_window_resize(
+        gdk_window,
+        hinted_width_for_grid(state, state->desired_columns + 2),
+        hinted_height_for_grid(state, state->desired_rows + 2));
+  }
+  return G_SOURCE_REMOVE;
 }
 
 static void on_window_realized(GtkWidget *, gpointer data) {
@@ -896,6 +937,9 @@ void start_terminal_layout(TerminalLayoutState *state) {
   }
 
   queue_window_size_update(state);
+  if (state->options.maximize_window) {
+    g_idle_add(maximize_window_for_test_idle, state);
+  }
   if (state->options.fixture) {
     g_idle_add(feed_fixture_idle, state);
   }
