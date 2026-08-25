@@ -30,8 +30,24 @@ configure_file(
   configuration: elder_terms_localization_configuration,
 )
 
+elder_terms_application_version = get_option('application_version')
+if elder_terms_application_version == ''
+  elder_terms_application_version = meson.project_version()
+endif
+elder_terms_application_version_configuration = configuration_data()
+elder_terms_application_version_configuration.set_quoted(
+  'ELDER_TERMS_APPLICATION_VERSION',
+  elder_terms_application_version,
+)
+configure_file(
+  input: 'application-version-config.h.in',
+  output: 'application-version-config.h',
+  configuration: elder_terms_application_version_configuration,
+)
+
 elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/application-icon.cpp',
+  'src/application-version.cpp',
   'src/key-binding.cpp',
   'src/key-binding-input-widget.cpp',
   'src/localization.cpp',
@@ -54,6 +70,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/settings/terminal-type-settings.cpp',
   'src/settings/transfer-settings.cpp',
   'src/settings-widget/settings-presentation.cpp',
+  'src/settings-widget/application-settings-widget.cpp',
   'src/settings-widget/settings-widget.cpp',
 ]
 

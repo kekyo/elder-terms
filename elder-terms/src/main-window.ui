@@ -28,6 +28,20 @@
       </object>
     </child>
   </object>
+  <object class="GtkMenu" id="application_menu">
+    <child>
+      <object class="GtkMenuItem" id="application_settings_menu_item">
+        <property name="visible">True</property>
+        <property name="label" translatable="yes">Application settings</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="about_menu_item">
+        <property name="visible">True</property>
+        <property name="label" translatable="yes">About elder-terms</property>
+      </object>
+    </child>
+  </object>
   <object class="GtkWindow" id="main_window">
     <property name="visible">False</property>
     <property name="can-focus">False</property>
@@ -39,6 +53,23 @@
         <property name="visible">True</property>
         <property name="title">elder-terms</property>
         <property name="show-close-button">True</property>
+        <child>
+          <object class="GtkMenuButton" id="application_menu_button">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="popup">application_menu</property>
+            <property name="tooltip-text" translatable="yes">Application</property>
+            <child>
+              <object class="GtkImage" id="application_menu_button_image">
+                <property name="visible">True</property>
+                <property name="icon-name">open-menu-symbolic</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="pack-type">end</property>
+          </packing>
+        </child>
       </object>
     </child>
     <child>
@@ -170,7 +201,7 @@
                 <child>
                   <object class="GtkButton" id="global_defaults_button">
                     <property name="visible">True</property>
-                    <property name="label" translatable="yes">Global defaults</property>
+                    <property name="label" translatable="yes">Connection defaults</property>
                   </object>
                 </child>
                 <child>

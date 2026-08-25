@@ -855,9 +855,6 @@ describe.concurrent('shared settings widget', () => {
             id: 'global_settings_general_page',
             labels: [
               'Connection type',
-              'Display language',
-              'Startup mode',
-              'Open application shortcut',
               'Title and status bar background',
               'Content background',
             ],
@@ -976,9 +973,6 @@ describe.concurrent('shared settings widget', () => {
             id: 'global_settings_general_page',
             labels: [
               '接続方式',
-              '表示言語',
-              '起動モード',
-              'アプリケーションを開くショートカット',
               'タイトル／ステータスバーの背景',
               'コンテンツの背景',
             ],
@@ -4613,30 +4607,19 @@ describe.concurrent('shared settings widget', () => {
         expect(
           generalIds.has('global_settings_general_open_connection_entry')
         ).toBe(false);
+        expect(
+          generalIds.has('global_settings_general_ui_language_combo')
+        ).toBe(false);
+        expect(
+          generalIds.has('global_settings_general_startup_mode_combo')
+        ).toBe(false);
+        expect(
+          generalIds.has('global_settings_general_open_application_entry')
+        ).toBe(false);
         await expect(app.getById('settings_notebook')).rejects.toThrow();
         expectElementKind(
           await app.getById('global_settings_general_type_combo'),
           'comboBox'
-        );
-        await expectSelectedComboValue(
-          app,
-          'global_settings_general_ui_language_combo',
-          'System default'
-        );
-        await expectSelectedComboValue(
-          app,
-          'global_settings_general_startup_mode_combo',
-          'Simple startup (built-in default)'
-        );
-        const openApplication = expectElementKind(
-          await app.getById('global_settings_general_open_application_entry'),
-          'entry'
-        );
-        expect(await openApplication.text()).toBe('');
-        await waitForEntryPlaceholder(
-          app,
-          'global_settings_general_open_application_entry',
-          'ctrl+alt+t (built-in default)'
         );
         await selectSettingsTab(app, 'SSH', 'global_settings');
         await waitForResult(async () => {
@@ -4669,152 +4652,6 @@ describe.concurrent('shared settings widget', () => {
         expect(store.width_explicit).toBe('true');
         expect(store.height_source).toBe('built-in');
         expect(store.height_explicit).toBe('false');
-      }
-    );
-  }, 60_000);
-
-  it('edits global-only UI language, startup, and application hotkey settings', async (context) => {
-    await runSharedGtkTest(
-      context,
-      ['--global-mode', '--page=general'],
-      async ({ app }) => {
-        await expect(
-          app.getById('settings_general_startup_mode_combo')
-        ).rejects.toThrow();
-        await expect(
-          app.getById('settings_general_ui_language_combo')
-        ).rejects.toThrow();
-        const uiLanguage = expectElementKind(
-          await app.getById('global_settings_general_ui_language_combo'),
-          'comboBox'
-        );
-        expect(
-          await comboOptionNames(
-            app,
-            'global_settings_general_ui_language_combo'
-          )
-        ).toEqual([
-          'System default',
-          'English',
-          'العربية',
-          'Español',
-          'Français',
-          'हिन्दी',
-          '日本語',
-          '한국어',
-          'Português',
-          'Русский',
-          '中文',
-        ]);
-        await uiLanguage.selectChildAt(6);
-        await expectSelectedComboValue(
-          app,
-          'global_settings_general_ui_language_combo',
-          '日本語'
-        );
-        const startupMode = expectElementKind(
-          await app.getById('global_settings_general_startup_mode_combo'),
-          'comboBox'
-        );
-        expect(
-          await comboOptionNames(
-            app,
-            'global_settings_general_startup_mode_combo'
-          )
-        ).toEqual([
-          'Simple startup (built-in default)',
-          'Simple startup',
-          'Background only',
-          'System tray only',
-          'System tray and main window',
-        ]);
-        await startupMode.selectChildAt(2);
-        await expectSelectedComboValue(
-          app,
-          'global_settings_general_startup_mode_combo',
-          'Background only'
-        );
-
-        const openApplication = expectElementKind(
-          await app.getById('global_settings_general_open_application_entry'),
-          'entry'
-        );
-        await captureKeyBinding(
-          app,
-          openApplication,
-          ['control', 'shift'],
-          'y'
-        );
-        await expectEntryText(openApplication, 'ctrl+shift+y');
-        await expectElementKind(
-          await app.getById('global_settings_apply_button'),
-          'button'
-        ).click();
-        const configured = await waitForAppliedStore(app);
-        expect(configured.ui_language).toBe('ja');
-        expect(configured.startup_mode).toBe('background');
-        expect(configured.open_application).toBe('ctrl+shift+y');
-        expect(configured.ui_language_explicit).toBe('true');
-        expect(configured.startup_mode_explicit).toBe('true');
-        expect(configured.open_application_explicit).toBe('true');
-      }
-    );
-
-    await runSharedGtkTest(
-      context,
-      ['--global-mode', '--page=general', '--global=general.ui_language=ja'],
-      async ({ app }) => {
-        const uiLanguage = expectElementKind(
-          await app.getById('global_settings_general_ui_language_combo'),
-          'comboBox'
-        );
-        await uiLanguage.selectChildAt(0);
-        await expectSelectedComboValue(
-          app,
-          'global_settings_general_ui_language_combo',
-          'System default'
-        );
-        await expectElementKind(
-          await app.getById('global_settings_apply_button'),
-          'button'
-        ).click();
-        const system = await waitForAppliedStore(app);
-        expect(system.ui_language).toBe('system');
-        expect(system.ui_language_explicit).toBe('false');
-      }
-    );
-
-    await runSharedGtkTest(
-      context,
-      ['--global-mode', '--page=general', '--global=general.open_application='],
-      async ({ app }) => {
-        const openApplication = expectElementKind(
-          await app.getById('global_settings_general_open_application_entry'),
-          'entry'
-        );
-        await waitForEntryPlaceholder(
-          app,
-          'global_settings_general_open_application_entry',
-          'Disabled'
-        );
-        await expectElementKind(
-          await app.getById(
-            'global_settings_general_open_application_reset_button'
-          ),
-          'button'
-        ).click();
-        await waitForEntryPlaceholder(
-          app,
-          'global_settings_general_open_application_entry',
-          'ctrl+alt+t (built-in default)'
-        );
-        await expectElementKind(
-          await app.getById('global_settings_apply_button'),
-          'button'
-        ).click();
-        const reset = await waitForAppliedStore(app);
-        expect(reset.open_application).toBe('ctrl+alt+t');
-        expect(reset.open_application_explicit).toBe('false');
       }
     );
   }, 60_000);

@@ -23,6 +23,8 @@
 
 #include <cardio.h>
 #include <elder-terms/application-icon.h>
+#include <elder-terms/application-settings-widget.h>
+#include <elder-terms/application-version.h>
 #include <elder-terms/localization.h>
 #include <elder-terms/settings/application-settings.h>
 #include <elder-terms/settings-widget.h>
@@ -38,6 +40,9 @@ namespace {
 static constexpr char open_application_hotkey_action_id[] =
     "open-application";
 static constexpr char autostart_option_name[] = "autostart";
+static constexpr char application_settings_option_name[] =
+    "application-settings";
+static constexpr char about_option_name[] = "about";
 static constexpr char language_environment_name[] = "LANGUAGE";
 static constexpr char language_environment_prefix[] = "LANGUAGE=";
 
@@ -48,6 +53,11 @@ enum class PendingActionKind {
   close,
   quit,
   restart,
+};
+
+enum class ApplicationDialogPage {
+  application = 0,
+  about = 1,
 };
 
 struct PendingAction {
@@ -87,6 +97,8 @@ struct ApplicationState {
   elder_terms::TrayBackendState *tray_backend = nullptr;
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
   elder_terms::SettingsWidgetState *global_defaults_widget = nullptr;
+  elder_terms::ApplicationSettingsWidgetState *application_settings_widget =
+      nullptr;
   std::filesystem::path connection_directory;
   std::filesystem::path global_config_path;
   std::vector<elder_terms::ConnectionProfile> profiles;
@@ -106,9 +118,14 @@ struct ApplicationState {
   std::optional<std::filesystem::path> delete_connection_path;
   GtkWidget *global_defaults_dialog = nullptr;
   GtkWidget *global_defaults_save_button = nullptr;
+  GtkWidget *application_dialog = nullptr;
+  GtkWidget *application_dialog_notebook = nullptr;
+  GtkWidget *application_dialog_save_button = nullptr;
+  GtkWidget *application_dialog_cancel_button = nullptr;
   GtkWidget *ui_language_restart_dialog = nullptr;
-  elder_terms::ApplicationUiLanguage global_defaults_initial_ui_language =
+  elder_terms::ApplicationUiLanguage application_initial_ui_language =
       elder_terms::ApplicationUiLanguage::system;
+  bool application_dialog_parent_was_visible = false;
   PendingAction pending_action;
   GFileMonitor *connection_monitor = nullptr;
   guint monitor_refresh_source = 0;
@@ -160,6 +177,8 @@ static void present_main_window(
 static void request_application_quit(ApplicationState *state);
 static void request_application_restart(ApplicationState *state);
 static void enable_connection_selection(ApplicationState *state);
+static void open_application_dialog(ApplicationState *state,
+                                    ApplicationDialogPage page);
 
 static void print_warnings(const std::vector<std::string> &warnings) {
   for (const std::string &warning : warnings) {
@@ -349,14 +368,18 @@ static gboolean on_window_drag_button_press(GtkWidget *,
 static gboolean on_main_window_focus_in(GtkWidget *, GdkEventFocus *,
                                         gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
-  if (state == nullptr || state->global_defaults_dialog == nullptr) {
+  if (state == nullptr) {
     return GDK_EVENT_PROPAGATE;
   }
-
-  gtk_window_present_with_time(
-      GTK_WINDOW(state->global_defaults_dialog),
-      gtk_get_current_event_time());
-  return GDK_EVENT_STOP;
+  GtkWidget *dialog = state->application_dialog != nullptr
+                          ? state->application_dialog
+                          : state->global_defaults_dialog;
+  if (dialog != nullptr) {
+    gtk_window_present_with_time(GTK_WINDOW(dialog),
+                                 gtk_get_current_event_time());
+    return GDK_EVENT_STOP;
+  }
+  return GDK_EVENT_PROPAGATE;
 }
 
 static void on_global_defaults_dialog_destroy(GtkWidget *,
@@ -402,24 +425,18 @@ static void on_global_defaults_dialog_response(GtkDialog *dialog,
   const elder_terms::SettingsStore store =
       elder_terms::settings_widget_draft_store(
           state->global_defaults_widget);
-  const bool ui_language_changed =
-      elder_terms::application_ui_language(store) !=
-      state->global_defaults_initial_ui_language;
   const elder_terms::SettingsSaveResult result =
       elder_terms::save_global_settings(store, state->global_config_path);
   if (!result.saved) {
     show_error_for_parent(GTK_WINDOW(dialog),
-                          _("Failed to save global defaults"), result.warnings);
+                          _("Failed to save connection defaults"),
+                          result.warnings);
     return;
   }
   print_warnings(result.warnings);
-  replace_registered_hotkeys(state, store);
   elder_terms::settings_widget_rebase_fallbacks(state->settings_widget, store);
   update_action_sensitivity(state);
   gtk_widget_destroy(GTK_WIDGET(dialog));
-  if (ui_language_changed) {
-    show_ui_language_restart_dialog(state);
-  }
 }
 
 static void on_global_defaults_cancel_clicked(GtkButton *,
@@ -441,12 +458,9 @@ static void open_global_defaults_dialog(ApplicationState *state) {
   elder_terms::SettingsLoadResult loaded =
       elder_terms::load_global_settings(state->global_config_path, 1.0);
   print_warnings(loaded.warnings);
-  state->global_defaults_initial_ui_language =
-      elder_terms::application_ui_language(loaded.store);
-
   GtkWidget *dialog = gtk_dialog_new();
   gestament_gtk_assign_accessible_id(dialog, "global_defaults_dialog");
-  gtk_window_set_title(GTK_WINDOW(dialog), _("Global defaults"));
+  gtk_window_set_title(GTK_WINDOW(dialog), _("Connection defaults"));
   gtk_window_set_transient_for(GTK_WINDOW(dialog),
                                GTK_WINDOW(state->main_window->window));
   gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
@@ -517,6 +531,272 @@ static void open_global_defaults_dialog(ApplicationState *state) {
 static void on_global_defaults_clicked(GtkButton *, gpointer user_data) {
   open_global_defaults_dialog(
       static_cast<ApplicationState *>(user_data));
+}
+
+static void update_application_dialog_actions(ApplicationState *state) {
+  if (state == nullptr || state->application_dialog_notebook == nullptr ||
+      state->application_dialog_save_button == nullptr ||
+      state->application_dialog_cancel_button == nullptr) {
+    return;
+  }
+  const int page = gtk_notebook_get_current_page(
+      GTK_NOTEBOOK(state->application_dialog_notebook));
+  const bool editing =
+      page == static_cast<int>(ApplicationDialogPage::application);
+  gtk_widget_set_visible(state->application_dialog_save_button,
+                         editing ? TRUE : FALSE);
+  gtk_button_set_label(
+      GTK_BUTTON(state->application_dialog_cancel_button),
+      editing ? _("Cancel") : _("Close"));
+  if (editing && state->application_settings_widget != nullptr) {
+    const bool sensitive =
+        elder_terms::application_settings_widget_is_valid(
+            state->application_settings_widget) &&
+        elder_terms::application_settings_widget_is_dirty(
+            state->application_settings_widget);
+    gtk_widget_set_sensitive(state->application_dialog_save_button,
+                             sensitive ? TRUE : FALSE);
+  }
+}
+
+static void on_application_dialog_switch_page(GtkNotebook *, GtkWidget *,
+                                              guint, gpointer user_data) {
+  update_application_dialog_actions(
+      static_cast<ApplicationState *>(user_data));
+}
+
+static void on_application_dialog_destroy(GtkWidget *dialog,
+                                          gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state->application_dialog != dialog) {
+    return;
+  }
+  state->application_dialog = nullptr;
+  state->application_dialog_notebook = nullptr;
+  state->application_dialog_save_button = nullptr;
+  state->application_dialog_cancel_button = nullptr;
+  if (state->application_settings_widget != nullptr) {
+    elder_terms::destroy_application_settings_widget(
+        state->application_settings_widget);
+    state->application_settings_widget = nullptr;
+  }
+  if (!state->window_destroyed && state->main_window != nullptr) {
+    gtk_widget_set_sensitive(state->main_window->window, TRUE);
+    if (state->application_dialog_parent_was_visible) {
+      gtk_window_present_with_time(
+          GTK_WINDOW(state->main_window->window),
+          gtk_get_current_event_time());
+    }
+  }
+  state->application_dialog_parent_was_visible = false;
+}
+
+static void close_application_dialog(ApplicationState *state) {
+  if (state != nullptr && state->application_dialog != nullptr) {
+    gtk_widget_destroy(state->application_dialog);
+  }
+}
+
+static void on_application_dialog_response(GtkDialog *dialog, gint response,
+                                           gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (response != GTK_RESPONSE_ACCEPT) {
+    gtk_widget_destroy(GTK_WIDGET(dialog));
+    return;
+  }
+  if (state->application_settings_widget == nullptr ||
+      !elder_terms::application_settings_widget_is_valid(
+          state->application_settings_widget) ||
+      !elder_terms::application_settings_widget_is_dirty(
+          state->application_settings_widget)) {
+    update_application_dialog_actions(state);
+    return;
+  }
+
+  const elder_terms::SettingsStore store =
+      elder_terms::application_settings_widget_draft_store(
+          state->application_settings_widget);
+  const bool ui_language_changed =
+      elder_terms::application_ui_language(store) !=
+      state->application_initial_ui_language;
+  const elder_terms::SettingsSaveResult result =
+      elder_terms::save_application_settings(store,
+                                             state->global_config_path);
+  if (!result.saved) {
+    show_error_for_parent(GTK_WINDOW(dialog),
+                          _("Failed to save application settings"),
+                          result.warnings);
+    return;
+  }
+  print_warnings(result.warnings);
+  replace_registered_hotkeys(state, store);
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+  if (ui_language_changed) {
+    show_ui_language_restart_dialog(state);
+  }
+}
+
+static void on_application_dialog_cancel_clicked(GtkButton *,
+                                                 gpointer user_data) {
+  gtk_dialog_response(GTK_DIALOG(user_data), GTK_RESPONSE_CANCEL);
+}
+
+static void on_application_dialog_save_clicked(GtkButton *,
+                                               gpointer user_data) {
+  gtk_dialog_response(GTK_DIALOG(user_data), GTK_RESPONSE_ACCEPT);
+}
+
+static GtkWidget *create_application_about_page() {
+  GtkWidget *page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_set_margin_top(page, 32);
+  gtk_widget_set_margin_bottom(page, 32);
+  gtk_widget_set_margin_start(page, 32);
+  gtk_widget_set_margin_end(page, 32);
+  gtk_widget_set_valign(page, GTK_ALIGN_CENTER);
+
+  GtkWidget *title = gtk_label_new("elder-terms");
+  PangoAttrList *attributes = pango_attr_list_new();
+  pango_attr_list_insert(attributes,
+                         pango_attr_scale_new(PANGO_SCALE_LARGE));
+  pango_attr_list_insert(attributes,
+                         pango_attr_weight_new(PANGO_WEIGHT_BOLD));
+  gtk_label_set_attributes(GTK_LABEL(title), attributes);
+  pango_attr_list_unref(attributes);
+  gtk_box_pack_start(GTK_BOX(page), title, FALSE, FALSE, 0);
+
+  const std::string version = format_translated_string(
+      _("Version %s"), elder_terms::application_version());
+  GtkWidget *version_label = gtk_label_new(version.c_str());
+  gtk_label_set_selectable(GTK_LABEL(version_label), TRUE);
+  gestament_gtk_assign_accessible_id(
+      version_label, "application_about_version_label");
+  gtk_box_pack_start(GTK_BOX(page), version_label, FALSE, FALSE, 0);
+  return page;
+}
+
+static void select_application_dialog_page(ApplicationState *state,
+                                           ApplicationDialogPage page) {
+  if (state == nullptr || state->application_dialog_notebook == nullptr) {
+    return;
+  }
+  gtk_notebook_set_current_page(
+      GTK_NOTEBOOK(state->application_dialog_notebook),
+      static_cast<int>(page));
+  update_application_dialog_actions(state);
+}
+
+static void open_application_dialog(ApplicationState *state,
+                                    ApplicationDialogPage page) {
+  if (state == nullptr || state->main_window == nullptr ||
+      state->window_destroyed) {
+    return;
+  }
+  if (state->application_dialog != nullptr) {
+    select_application_dialog_page(state, page);
+    gtk_window_present(GTK_WINDOW(state->application_dialog));
+    return;
+  }
+  if (state->global_defaults_dialog != nullptr) {
+    gtk_window_present(GTK_WINDOW(state->global_defaults_dialog));
+    return;
+  }
+
+  elder_terms::SettingsLoadResult loaded =
+      elder_terms::load_global_settings(state->global_config_path, 1.0);
+  print_warnings(loaded.warnings);
+  state->application_initial_ui_language =
+      elder_terms::application_ui_language(loaded.store);
+
+  GtkWidget *dialog = gtk_dialog_new();
+  gestament_gtk_assign_accessible_id(dialog, "application_dialog");
+  gtk_window_set_title(GTK_WINDOW(dialog), _("Application"));
+  gtk_window_set_transient_for(GTK_WINDOW(dialog),
+                               GTK_WINDOW(state->main_window->window));
+  gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
+  gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+  gtk_window_set_default_size(GTK_WINDOW(dialog), 600, 320);
+
+  GtkWidget *notebook = gtk_notebook_new();
+  gestament_gtk_assign_accessible_id(notebook,
+                                     "application_dialog_notebook");
+  GtkWidget *settings_page =
+      gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  elder_terms::ApplicationSettingsWidgetOptions options{
+      .store = std::move(loaded.store),
+      .id_prefix = "application_settings",
+      .changed = [state]() { update_application_dialog_actions(state); },
+  };
+  state->application_settings_widget =
+      elder_terms::create_application_settings_widget(std::move(options));
+  gtk_box_pack_start(
+      GTK_BOX(settings_page),
+      elder_terms::application_settings_widget_root(
+          state->application_settings_widget),
+      TRUE, TRUE, 0);
+  gtk_notebook_append_page(GTK_NOTEBOOK(notebook), settings_page,
+                           gtk_label_new(_("Application")));
+  gtk_notebook_append_page(GTK_NOTEBOOK(notebook),
+                           create_application_about_page(),
+                           gtk_label_new(_("About")));
+
+  GtkWidget *action_row = gtk_event_box_new();
+  GtkWidget *action_content = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_margin_start(action_content, 12);
+  gtk_widget_set_margin_end(action_content, 12);
+  gtk_widget_set_margin_top(action_content, 10);
+  gtk_widget_set_margin_bottom(action_content, 10);
+  gtk_container_add(GTK_CONTAINER(action_row), action_content);
+  GtkWidget *spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_hexpand(spacer, TRUE);
+  GtkWidget *cancel = gtk_button_new_with_label(_("Cancel"));
+  GtkWidget *save = gtk_button_new_with_label(_("Save"));
+  gestament_gtk_assign_accessible_id(cancel,
+                                     "application_dialog_cancel_button");
+  gestament_gtk_assign_accessible_id(save,
+                                     "application_dialog_save_button");
+  gtk_widget_set_can_default(save, TRUE);
+  gtk_box_pack_start(GTK_BOX(action_content), spacer, TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(action_content), cancel, FALSE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(action_content), save, FALSE, TRUE, 0);
+
+  state->application_dialog = dialog;
+  state->application_dialog_notebook = notebook;
+  state->application_dialog_save_button = save;
+  state->application_dialog_cancel_button = cancel;
+  state->application_dialog_parent_was_visible =
+      gtk_widget_get_visible(state->main_window->window) != FALSE;
+  GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+  gtk_box_pack_start(GTK_BOX(content), notebook, TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(content), action_row, FALSE, TRUE, 0);
+  gtk_widget_grab_default(save);
+
+  g_signal_connect(notebook, "switch-page",
+                   G_CALLBACK(on_application_dialog_switch_page), state);
+  g_signal_connect(cancel, "clicked",
+                   G_CALLBACK(on_application_dialog_cancel_clicked), dialog);
+  g_signal_connect(save, "clicked",
+                   G_CALLBACK(on_application_dialog_save_clicked), dialog);
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(on_application_dialog_response), state);
+  g_signal_connect(dialog, "destroy",
+                   G_CALLBACK(on_application_dialog_destroy), state);
+  g_signal_connect(action_row, "button-press-event",
+                   G_CALLBACK(on_window_drag_button_press), dialog);
+  gtk_widget_set_sensitive(state->main_window->window, FALSE);
+  gtk_widget_show_all(dialog);
+  select_application_dialog_page(state, page);
+  gtk_window_present(GTK_WINDOW(dialog));
+}
+
+static void on_application_settings_menu_item_activate(GtkMenuItem *,
+                                                       gpointer user_data) {
+  open_application_dialog(static_cast<ApplicationState *>(user_data),
+                          ApplicationDialogPage::application);
+}
+
+static void on_about_menu_item_activate(GtkMenuItem *, gpointer user_data) {
+  open_application_dialog(static_cast<ApplicationState *>(user_data),
+                          ApplicationDialogPage::about);
 }
 
 static ConnectionRow selected_row(ApplicationState *state) {
@@ -1914,6 +2194,7 @@ static void on_window_destroy(GtkWidget *, gpointer user_data) {
       launch->temporary_startup_path.clear();
     }
   }
+  close_application_dialog(state);
   close_global_defaults_dialog(state);
   if (state->settings_widget != nullptr) {
     elder_terms::destroy_settings_widget(state->settings_widget);
@@ -1976,6 +2257,11 @@ static bool initialize_main_window(ApplicationState *state) {
   g_signal_connect(main_window->delete_connection_menu_item, "activate",
                    G_CALLBACK(on_delete_connection_menu_item_activate),
                    state);
+  g_signal_connect(
+      main_window->application_settings_menu_item, "activate",
+      G_CALLBACK(on_application_settings_menu_item_activate), state);
+  g_signal_connect(main_window->about_menu_item, "activate",
+                   G_CALLBACK(on_about_menu_item_activate), state);
   g_signal_connect(main_window->connection_list, "key-press-event",
                    G_CALLBACK(on_connection_list_key_press), state);
   g_signal_connect(main_window->window, "key-press-event",
@@ -2146,6 +2432,14 @@ static void on_application_startup(GApplication *,
                     present_main_window(state,
                                         context.activation_time);
                   },
+              .application_settings = [state]() {
+                open_application_dialog(
+                    state, ApplicationDialogPage::application);
+              },
+              .about = [state]() {
+                open_application_dialog(state,
+                                        ApplicationDialogPage::about);
+              },
               .quit = [state]() {
                 request_application_quit(state);
               },
@@ -2190,11 +2484,23 @@ static gint on_application_command_line(
     gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
   gboolean autostart = FALSE;
+  gboolean application_settings = FALSE;
+  gboolean about = FALSE;
   GVariantDict *options =
       g_application_command_line_get_options_dict(command_line);
   if (options != nullptr) {
     (void)g_variant_dict_lookup(options, autostart_option_name, "b",
                                 &autostart);
+    (void)g_variant_dict_lookup(options, application_settings_option_name,
+                                "b", &application_settings);
+    (void)g_variant_dict_lookup(options, about_option_name, "b", &about);
+  }
+  if (application_settings != FALSE || about != FALSE) {
+    state->activated = true;
+    open_application_dialog(
+        state, about != FALSE ? ApplicationDialogPage::about
+                              : ApplicationDialogPage::application);
+    return 0;
   }
   if (autostart != FALSE && state->activated) {
     return 0;
@@ -2263,6 +2569,13 @@ int main(int argc, char **argv) {
     g_application_add_main_option(
         application, autostart_option_name, 0, G_OPTION_FLAG_NONE,
         G_OPTION_ARG_NONE, "Start from the desktop session", nullptr);
+    g_application_add_main_option(
+        application, application_settings_option_name, 0,
+        G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE,
+        "Open application settings", nullptr);
+    g_application_add_main_option(
+        application, about_option_name, 0, G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_NONE, "Show application information", nullptr);
 
     ApplicationState state;
     state.application = application;

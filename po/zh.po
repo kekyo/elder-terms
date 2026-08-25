@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 13:53+0900\n"
+"POT-Creation-Date: 2026-08-26 00:10+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Chinese\n"
@@ -52,621 +52,641 @@ msgstr "启动命令"
 msgid "Character encoding"
 msgstr "字符编码"
 
-#: shared/src/settings-widget/settings-presentation.cpp:37
+#: shared/src/settings-widget/settings-presentation.cpp:38
 msgid "Backspace code"
 msgstr "退格代码"
 
-#: shared/src/settings-widget/settings-presentation.cpp:38
+#: shared/src/settings-widget/settings-presentation.cpp:39
 msgid "Cursor key mode"
 msgstr "光标键模式"
 
-#: shared/src/settings-widget/settings-presentation.cpp:39
+#: shared/src/settings-widget/settings-presentation.cpp:40
 msgid "Enter/Return code"
 msgstr "Enter/Return 代码"
 
-#: shared/src/settings-widget/settings-presentation.cpp:40
+#: shared/src/settings-widget/settings-presentation.cpp:41
 msgid "Columns"
 msgstr "列"
 
-#: shared/src/settings-widget/settings-presentation.cpp:41
+#: shared/src/settings-widget/settings-presentation.cpp:42
 msgid "Rows"
 msgstr "行"
 
-#: shared/src/settings-widget/settings-presentation.cpp:43
+#: shared/src/settings-widget/settings-presentation.cpp:44
 msgid "Scrollback lines"
 msgstr "滚动缓冲区行数"
 
-#: shared/src/settings-widget/settings-presentation.cpp:44
+#: shared/src/settings-widget/settings-presentation.cpp:45
 msgid "Zoom factor"
 msgstr "缩放系数"
 
-#: shared/src/settings-widget/settings-presentation.cpp:46
+#: shared/src/settings-widget/settings-presentation.cpp:47
 msgid "Primary font family"
 msgstr "主字体族"
 
-#: shared/src/settings-widget/settings-presentation.cpp:48
+#: shared/src/settings-widget/settings-presentation.cpp:49
 msgid "Secondary font family"
 msgstr "辅助字体族"
 
-#: shared/src/settings-widget/settings-presentation.cpp:50
+#: shared/src/settings-widget/settings-presentation.cpp:51
 msgid "Close window when session ends"
 msgstr "会话结束时关闭窗口"
 
-#: shared/src/settings-widget/settings-presentation.cpp:52
+#: shared/src/settings-widget/settings-presentation.cpp:53
 msgid "Show window side borders"
 msgstr "显示窗口左右边框"
 
+#: shared/src/settings-widget/settings-presentation.cpp:55
 msgid "Window side border width (px)"
 msgstr "窗口左右边框宽度（像素）"
 
+#: shared/src/settings-widget/settings-presentation.cpp:56
 msgid "BEL sound"
 msgstr "BEL 声音"
 
-#: shared/src/settings-widget/settings-presentation.cpp:53
+#: shared/src/settings-widget/settings-presentation.cpp:57
 msgid "Zoom in shortcut"
 msgstr "放大快捷方式"
 
-#: shared/src/settings-widget/settings-presentation.cpp:54
+#: shared/src/settings-widget/settings-presentation.cpp:58
 msgid "Zoom out shortcut"
 msgstr "缩小快捷方式"
 
-#: shared/src/settings-widget/settings-presentation.cpp:56
+#: shared/src/settings-widget/settings-presentation.cpp:60
 msgid "Send BREAK shortcut"
 msgstr "发送 BREAK 快捷键"
 
-#: shared/src/settings-widget/settings-presentation.cpp:57
-#: shared/src/settings-widget/settings-presentation.cpp:60
+#: shared/src/settings-widget/settings-presentation.cpp:61
+#: shared/src/settings-widget/settings-presentation.cpp:64
 msgid "Address"
 msgstr "地址"
 
-#: shared/src/settings-widget/settings-presentation.cpp:58
-#: shared/src/settings-widget/settings-presentation.cpp:61
+#: shared/src/settings-widget/settings-presentation.cpp:62
+#: shared/src/settings-widget/settings-presentation.cpp:65
 msgid "Port"
 msgstr "端口"
 
-#: shared/src/settings-widget/settings-presentation.cpp:59
-#: shared/src/settings-widget/settings-presentation.cpp:64
+#: shared/src/settings-widget/settings-presentation.cpp:63
+#: shared/src/settings-widget/settings-presentation.cpp:68
 msgid "Terminal type"
 msgstr "终端类型"
 
-#: shared/src/settings-widget/settings-presentation.cpp:62
+#: shared/src/settings-widget/settings-presentation.cpp:66
 msgid "User name"
 msgstr "用户名"
 
-#: shared/src/settings-widget/settings-presentation.cpp:63
+#: shared/src/settings-widget/settings-presentation.cpp:67
 msgid "Identity file"
 msgstr "身份文件"
 
-#: shared/src/settings-widget/settings-presentation.cpp:65
+#: shared/src/settings-widget/settings-presentation.cpp:69
 msgid "Local directory"
 msgstr "本地目录"
 
-#: shared/src/settings-widget/settings-presentation.cpp:66
+#: shared/src/settings-widget/settings-presentation.cpp:70
 msgid "Remote directory"
 msgstr "远程目录"
 
-#: shared/src/settings-widget/settings-presentation.cpp:67
+#: shared/src/settings-widget/settings-presentation.cpp:71
 msgid "Device"
 msgstr "设备"
 
-#: shared/src/settings-widget/settings-presentation.cpp:69
+#: shared/src/settings-widget/settings-presentation.cpp:73
 msgid "Device identification"
 msgstr "设备识别方式"
 
-#: shared/src/settings-widget/settings-presentation.cpp:71
-#: shared/src/settings-widget/settings-presentation.cpp:246
+#: shared/src/settings-widget/settings-presentation.cpp:75
+#: shared/src/settings-widget/settings-presentation.cpp:256
 msgid "USB serial number"
 msgstr "USB 序列号"
 
-#: shared/src/settings-widget/settings-presentation.cpp:72
+#: shared/src/settings-widget/settings-presentation.cpp:76
 msgid "Baud rate"
 msgstr "波特率"
 
-#: shared/src/settings-widget/settings-presentation.cpp:73
+#: shared/src/settings-widget/settings-presentation.cpp:77
 msgid "Data bits"
 msgstr "数据位"
 
-#: shared/src/settings-widget/settings-presentation.cpp:74
+#: shared/src/settings-widget/settings-presentation.cpp:78
 msgid "Parity"
 msgstr "奇偶校验"
 
-#: shared/src/settings-widget/settings-presentation.cpp:75
+#: shared/src/settings-widget/settings-presentation.cpp:79
 msgid "Stop bits"
 msgstr "停止位"
 
-#: shared/src/settings-widget/settings-presentation.cpp:76
+#: shared/src/settings-widget/settings-presentation.cpp:80
 msgid "Flow control"
 msgstr "流量控制"
 
-#: shared/src/settings-widget/settings-presentation.cpp:78
+#: shared/src/settings-widget/settings-presentation.cpp:82
 msgid "Connection monitoring signal"
 msgstr "连接监控信号"
 
-#: shared/src/settings-widget/settings-presentation.cpp:80
+#: shared/src/settings-widget/settings-presentation.cpp:84
 msgid "Transfer base directory"
 msgstr "传输基目录"
 
-#: shared/src/settings-widget/settings-presentation.cpp:82
+#: shared/src/settings-widget/settings-presentation.cpp:86
 msgid "Text send rate (bytes/s)"
 msgstr "文本发送速率（字节/秒）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:84
+#: shared/src/settings-widget/settings-presentation.cpp:88
 msgid "Follow Enter/Return code for text send"
 msgstr "文本发送遵循 Enter/Return 代码"
 
-#: shared/src/settings-widget/settings-presentation.cpp:86
+#: shared/src/settings-widget/settings-presentation.cpp:90
 msgid "Automatically start ZMODEM transfers"
 msgstr "自动开始 ZMODEM 传输"
 
-#: shared/src/settings-widget/settings-presentation.cpp:87
+#: shared/src/settings-widget/settings-presentation.cpp:91
 msgid "Enable logging"
 msgstr "启用日志记录"
 
-#: shared/src/settings-widget/settings-presentation.cpp:88
+#: shared/src/settings-widget/settings-presentation.cpp:92
 msgid "Log directory"
 msgstr "日志目录"
 
-#: shared/src/settings-widget/settings-presentation.cpp:89
+#: shared/src/settings-widget/settings-presentation.cpp:93
 msgid "File name format"
 msgstr "文件名格式"
 
-#: shared/src/settings-widget/settings-presentation.cpp:90
+#: shared/src/settings-widget/settings-presentation.cpp:94
 msgid "Log content"
 msgstr "日志内容"
 
-#: shared/src/settings-widget/settings-presentation.cpp:94
+#: shared/src/settings-widget/settings-presentation.cpp:98
 msgid "Local shell"
 msgstr "本地 shell"
 
-#: shared/src/settings-widget/settings-presentation.cpp:95
-#: shared/src/settings-widget/settings-presentation.cpp:166
+#: shared/src/settings-widget/settings-presentation.cpp:99
+#: shared/src/settings-widget/settings-presentation.cpp:172
 msgid "TELNET"
 msgstr "TELNET"
 
-#: shared/src/settings-widget/settings-presentation.cpp:96
-#: shared/src/settings-widget/settings-presentation.cpp:168
+#: shared/src/settings-widget/settings-presentation.cpp:100
+#: shared/src/settings-widget/settings-presentation.cpp:174
 msgid "Serial"
 msgstr "串口"
 
-#: shared/src/settings-widget/settings-presentation.cpp:97
-#: shared/src/settings-widget/settings-presentation.cpp:170
-#: elder-terms-vte/src/main-window.cpp:1590
+#: shared/src/settings-widget/settings-presentation.cpp:101
+#: shared/src/settings-widget/settings-presentation.cpp:176
+#: elder-terms-vte/src/main-window.cpp:1597
 msgid "SSH"
 msgstr "SSH"
 
-#: shared/src/settings-widget/settings-presentation.cpp:98
-#: shared/src/settings-widget/settings-presentation.cpp:172
-#: elder-terms-vte/src/main.cpp:1233
+#: shared/src/settings-widget/settings-presentation.cpp:102
+#: shared/src/settings-widget/settings-presentation.cpp:178
+#: elder-terms-vte/src/main.cpp:1303
 msgid "SFTP"
 msgstr "SFTP"
 
-#: shared/src/settings-widget/settings-presentation.cpp:100
+#: shared/src/settings-widget/settings-presentation.cpp:104
 msgid "System default"
 msgstr "系统默认"
 
-#: shared/src/settings-widget/settings-presentation.cpp:101
+#: shared/src/settings-widget/settings-presentation.cpp:105
 msgid "English"
 msgstr "英语"
 
-#: shared/src/settings-widget/settings-presentation.cpp:102
+#: shared/src/settings-widget/settings-presentation.cpp:106
 msgid "العربية"
 msgstr "العربية"
 
-#: shared/src/settings-widget/settings-presentation.cpp:103
+#: shared/src/settings-widget/settings-presentation.cpp:107
 msgid "Español"
 msgstr "Español"
 
-#: shared/src/settings-widget/settings-presentation.cpp:104
+#: shared/src/settings-widget/settings-presentation.cpp:108
 msgid "Français"
 msgstr "Français"
 
-#: shared/src/settings-widget/settings-presentation.cpp:105
+#: shared/src/settings-widget/settings-presentation.cpp:109
 msgid "हिन्दी"
 msgstr "हिन्दी"
 
-#: shared/src/settings-widget/settings-presentation.cpp:106
+#: shared/src/settings-widget/settings-presentation.cpp:110
 msgid "日本語"
 msgstr "日本語"
 
-#: shared/src/settings-widget/settings-presentation.cpp:107
+#: shared/src/settings-widget/settings-presentation.cpp:111
 msgid "한국어"
 msgstr "한국어"
 
-#: shared/src/settings-widget/settings-presentation.cpp:108
+#: shared/src/settings-widget/settings-presentation.cpp:112
 msgid "Português"
 msgstr "Português"
 
-#: shared/src/settings-widget/settings-presentation.cpp:109
+#: shared/src/settings-widget/settings-presentation.cpp:113
 msgid "Русский"
 msgstr "Русский"
 
-#: shared/src/settings-widget/settings-presentation.cpp:110
+#: shared/src/settings-widget/settings-presentation.cpp:114
 msgid "中文"
 msgstr "中文"
 
-#: shared/src/settings-widget/settings-presentation.cpp:112
+#: shared/src/settings-widget/settings-presentation.cpp:116
 msgid "Simple startup"
 msgstr "简单启动"
 
-#: shared/src/settings-widget/settings-presentation.cpp:114
+#: shared/src/settings-widget/settings-presentation.cpp:118
 msgid "Background only"
 msgstr "仅在后台运行"
 
-#: shared/src/settings-widget/settings-presentation.cpp:116
+#: shared/src/settings-widget/settings-presentation.cpp:120
 msgid "System tray only"
 msgstr "仅系统托盘"
 
-#: shared/src/settings-widget/settings-presentation.cpp:118
+#: shared/src/settings-widget/settings-presentation.cpp:122
 msgid "System tray and main window"
 msgstr "系统托盘和主窗口"
 
-#: shared/src/settings-widget/settings-presentation.cpp:119
-#: shared/src/settings-widget/settings-presentation.cpp:124
+#: shared/src/settings-widget/settings-presentation.cpp:123
+#: shared/src/settings-widget/settings-presentation.cpp:128
 msgid "Auto"
 msgstr "自动"
 
-#: shared/src/settings-widget/settings-presentation.cpp:120
+#: shared/src/settings-widget/settings-presentation.cpp:124
 msgid "BS"
 msgstr "BS"
 
-#: shared/src/settings-widget/settings-presentation.cpp:121
+#: shared/src/settings-widget/settings-presentation.cpp:125
 msgid "DEL"
 msgstr "DEL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:122
+#: shared/src/settings-widget/settings-presentation.cpp:126
 msgid "Normal"
 msgstr "正常"
 
-#: shared/src/settings-widget/settings-presentation.cpp:123
+#: shared/src/settings-widget/settings-presentation.cpp:127
 msgid "TRS80"
 msgstr "TRS80"
 
-#: shared/src/settings-widget/settings-presentation.cpp:125
+#: shared/src/settings-widget/settings-presentation.cpp:129
 msgid "CR"
 msgstr "CR"
 
-#: shared/src/settings-widget/settings-presentation.cpp:126
+#: shared/src/settings-widget/settings-presentation.cpp:130
 msgid "LF"
 msgstr "LF"
 
-#: shared/src/settings-widget/settings-presentation.cpp:127
+#: shared/src/settings-widget/settings-presentation.cpp:131
 msgid "CRLF"
 msgstr "CRLF"
 
-#: shared/src/settings-widget/settings-presentation.cpp:128
-#: shared/src/settings-widget/settings-presentation.cpp:137
+#: shared/src/settings-widget/settings-presentation.cpp:132
+#: shared/src/settings-widget/settings-presentation.cpp:141
 msgid "None"
 msgstr "无"
 
-#: shared/src/settings-widget/settings-presentation.cpp:130
+#: shared/src/settings-widget/settings-presentation.cpp:134
 msgid "Device path"
 msgstr "设备路径"
 
-#: shared/src/settings-widget/settings-presentation.cpp:132
+#: shared/src/settings-widget/settings-presentation.cpp:136
 msgid "Stable device identity"
 msgstr "稳定设备标识"
 
-#: shared/src/settings-widget/settings-presentation.cpp:134
+#: shared/src/settings-widget/settings-presentation.cpp:138
 msgid "Physical USB port"
 msgstr "物理 USB 端口"
 
-#: shared/src/settings-widget/settings-presentation.cpp:135
+#: shared/src/settings-widget/settings-presentation.cpp:139
 msgid "Even"
 msgstr "甚至"
 
-#: shared/src/settings-widget/settings-presentation.cpp:136
+#: shared/src/settings-widget/settings-presentation.cpp:140
 msgid "Odd"
 msgstr "奇数"
 
-#: shared/src/settings-widget/settings-presentation.cpp:139
+#: shared/src/settings-widget/settings-presentation.cpp:143
 msgid "XON/XOFF (software)"
 msgstr "XON/XOFF（软件）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:141
+#: shared/src/settings-widget/settings-presentation.cpp:145
 msgid "RTS/CTS (hardware)"
 msgstr "RTS/CTS（硬件）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:143
+#: shared/src/settings-widget/settings-presentation.cpp:147
 msgid "DCD (Data Carrier Detect)"
 msgstr "DCD（数据载体检测）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:145
+#: shared/src/settings-widget/settings-presentation.cpp:149
 msgid "CTS (Clear to Send)"
 msgstr "CTS（清除发送）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:147
+#: shared/src/settings-widget/settings-presentation.cpp:151
 msgid "DSR (Data Set Ready)"
 msgstr "DSR（数据集就绪）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:149
+#: shared/src/settings-widget/settings-presentation.cpp:153
 msgid "Ignore (do not monitor)"
 msgstr "忽略（不监控）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:151
+#: shared/src/settings-widget/settings-presentation.cpp:155
 msgid "Raw bytes (before character conversion)"
 msgstr "原始字节（字符转换之前）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:153
+#: shared/src/settings-widget/settings-presentation.cpp:157
 msgid "UTF-8 text (after character conversion)"
 msgstr "UTF-8 文本（字符转换后）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:164
+#: shared/src/settings-widget/settings-presentation.cpp:168
 msgid "General"
 msgstr "一般"
 
-#: shared/src/settings-widget/settings-presentation.cpp:174
-#: elder-terms-vte/src/main-window.ui:370
+#: shared/src/settings-widget/settings-presentation.cpp:170
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1557
+msgid "Local"
+msgstr "本地"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+#: elder-terms-vte/src/main-window.ui:402
 #: elder-terms-vte/src/terminal-session.cpp:225
 msgid "Terminal"
 msgstr "终端"
 
-#: shared/src/settings-widget/settings-presentation.cpp:176
+#: shared/src/settings-widget/settings-presentation.cpp:182
 msgid "Macro"
 msgstr "宏"
 
-#: shared/src/settings-widget/settings-presentation.cpp:178
-#: elder-terms-vte/src/main-window.ui:35
+#: shared/src/settings-widget/settings-presentation.cpp:184
+#: elder-terms-vte/src/main-window.ui:49
 msgid "Transfer"
 msgstr "传输"
 
-#: shared/src/settings-widget/settings-presentation.cpp:180
+#: shared/src/settings-widget/settings-presentation.cpp:186
 msgid "Logging"
 msgstr "记录"
 
-#: shared/src/settings-widget/settings-presentation.cpp:182
+#: shared/src/settings-widget/settings-presentation.cpp:188
 msgid "Apply"
 msgstr "申请"
 
-#: shared/src/settings-widget/settings-presentation.cpp:184
-#: elder-terms/src/main.cpp:469 elder-terms/src/main-window.ui:190
+#: shared/src/settings-widget/settings-presentation.cpp:190
+#: elder-terms/src/main.cpp:483 elder-terms/src/main.cpp:752
+#: elder-terms/src/main-window.ui:221
 msgid "Save"
 msgstr "保存"
 
-#: shared/src/settings-widget/settings-presentation.cpp:186
-#: elder-terms/src/main.cpp:468 elder-terms/src/main.cpp:1402
-#: elder-terms/src/main.cpp:1625 elder-terms-vte/src/main.cpp:820
-#: elder-terms-vte/src/main-window.ui:233
-#: elder-terms-vte/src/main-window.ui:310
+#: shared/src/settings-widget/settings-presentation.cpp:192
+#: elder-terms/src/main.cpp:482 elder-terms/src/main.cpp:550
+#: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1682
+#: elder-terms/src/main.cpp:1905 elder-terms-vte/src/main.cpp:890
+#: elder-terms-vte/src/main-window.ui:265
+#: elder-terms-vte/src/main-window.ui:342
 #: elder-terms-vte/src/sftp/sftp-main.cpp:109
 #: elder-terms-vte/src/sftp/sftp-window.cpp:696
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1843
 msgid "Cancel"
 msgstr "取消"
 
-#: shared/src/settings-widget/settings-presentation.cpp:188
+#: shared/src/settings-widget/settings-presentation.cpp:194
 msgid "Reset"
 msgstr "重置"
 
-#: shared/src/settings-widget/settings-presentation.cpp:190
+#: shared/src/settings-widget/settings-presentation.cpp:196
+#: elder-terms-vte/src/main.cpp:889
+msgid "Select file"
+msgstr "选择文件"
+
+#: shared/src/settings-widget/settings-presentation.cpp:198
+#: elder-terms-vte/src/main.cpp:891
+msgid "Open"
+msgstr "打开"
+
+#: shared/src/settings-widget/settings-presentation.cpp:200
 msgid "Select Primary Terminal Font"
 msgstr "选择主要终端字体"
 
-#: shared/src/settings-widget/settings-presentation.cpp:192
+#: shared/src/settings-widget/settings-presentation.cpp:202
 msgid "Select Secondary Terminal Font"
 msgstr "选择辅助终端字体"
 
-#: shared/src/settings-widget/settings-presentation.cpp:194
+#: shared/src/settings-widget/settings-presentation.cpp:204
 msgid "Enabled"
 msgstr "已启用"
 
-#: shared/src/settings-widget/settings-presentation.cpp:196
+#: shared/src/settings-widget/settings-presentation.cpp:206
 msgid "Disabled"
 msgstr "已禁用"
 
-#: shared/src/settings-widget/settings-presentation.cpp:198
+#: shared/src/settings-widget/settings-presentation.cpp:208
 msgid "Custom font"
 msgstr "自定义字体"
 
-#: shared/src/settings-widget/settings-presentation.cpp:200
+#: shared/src/settings-widget/settings-presentation.cpp:210
 msgid "No color"
 msgstr "无颜色"
 
-#: shared/src/settings-widget/settings-presentation.cpp:202
+#: shared/src/settings-widget/settings-presentation.cpp:212
 msgid "Custom color"
 msgstr "自定义颜色"
 
-#: shared/src/settings-widget/settings-presentation.cpp:204
+#: shared/src/settings-widget/settings-presentation.cpp:214
 msgid "Press a key combination"
 msgstr "按组合键"
 
-#: shared/src/settings-widget/settings-presentation.cpp:206
+#: shared/src/settings-widget/settings-presentation.cpp:216
 msgid "Clear key binding"
 msgstr "清除键绑定"
 
-#: shared/src/settings-widget/settings-presentation.cpp:208
+#: shared/src/settings-widget/settings-presentation.cpp:218
 msgid "Use global default"
 msgstr "使用全局默认值"
 
-#: shared/src/settings-widget/settings-presentation.cpp:210
+#: shared/src/settings-widget/settings-presentation.cpp:220
 msgid "Use built-in default"
 msgstr "使用内置默认值"
 
-#: shared/src/settings-widget/settings-presentation.cpp:212
+#: shared/src/settings-widget/settings-presentation.cpp:222
 msgid "Macro rules"
 msgstr "宏规则"
 
-#: shared/src/settings-widget/settings-presentation.cpp:214
+#: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "Rule ID"
 msgstr "规则 ID"
 
-#: shared/src/settings-widget/settings-presentation.cpp:216
+#: shared/src/settings-widget/settings-presentation.cpp:226
 msgid "Regular expression"
 msgstr "正则表达式"
 
-#: shared/src/settings-widget/settings-presentation.cpp:218
+#: shared/src/settings-widget/settings-presentation.cpp:228
 msgid "Action"
 msgstr "操作"
 
-#: shared/src/settings-widget/settings-presentation.cpp:220
+#: shared/src/settings-widget/settings-presentation.cpp:230
 msgid "Text to send"
 msgstr "要发送的文本"
 
-#: shared/src/settings-widget/settings-presentation.cpp:222
+#: shared/src/settings-widget/settings-presentation.cpp:232
 msgid "Command"
 msgstr "命令"
 
-#: shared/src/settings-widget/settings-presentation.cpp:224
+#: shared/src/settings-widget/settings-presentation.cpp:234
 msgid "Arguments"
 msgstr "参数"
 
-#: shared/src/settings-widget/settings-presentation.cpp:226
+#: shared/src/settings-widget/settings-presentation.cpp:236
 msgid "Add rule"
 msgstr "添加规则"
 
-#: shared/src/settings-widget/settings-presentation.cpp:228
+#: shared/src/settings-widget/settings-presentation.cpp:238
 msgid "Remove rule"
 msgstr "删除规则"
 
-#: shared/src/settings-widget/settings-presentation.cpp:230
+#: shared/src/settings-widget/settings-presentation.cpp:240
 msgid "Move up"
 msgstr "向上移动"
 
-#: shared/src/settings-widget/settings-presentation.cpp:232
+#: shared/src/settings-widget/settings-presentation.cpp:242
 msgid "Move down"
 msgstr "下移"
 
-#: shared/src/settings-widget/settings-presentation.cpp:234
+#: shared/src/settings-widget/settings-presentation.cpp:244
 msgid "Send text"
 msgstr "发送文本"
 
-#: shared/src/settings-widget/settings-presentation.cpp:236
+#: shared/src/settings-widget/settings-presentation.cpp:246
 msgid "Run command"
 msgstr "运行命令"
 
-#: shared/src/settings-widget/settings-presentation.cpp:238
+#: shared/src/settings-widget/settings-presentation.cpp:248
 msgid "Add argument"
 msgstr "添加参数"
 
-#: shared/src/settings-widget/settings-presentation.cpp:240
+#: shared/src/settings-widget/settings-presentation.cpp:250
 msgid "Remove argument"
 msgstr "删除参数"
 
-#: shared/src/settings-widget/settings-presentation.cpp:242
+#: shared/src/settings-widget/settings-presentation.cpp:252
 msgid "No device"
 msgstr "无设备"
 
-#: shared/src/settings-widget/settings-presentation.cpp:244
+#: shared/src/settings-widget/settings-presentation.cpp:254
 msgid "Stable ID"
 msgstr "稳定 ID"
 
-#: shared/src/settings-widget/settings-presentation.cpp:248
+#: shared/src/settings-widget/settings-presentation.cpp:258
 msgid "Current device node"
 msgstr "当前设备节点"
 
-#: shared/src/settings-widget/settings-presentation.cpp:250
+#: shared/src/settings-widget/settings-presentation.cpp:260
 msgid "Unavailable"
 msgstr "不可用"
 
-#: shared/src/settings-widget/settings-presentation.cpp:278
+#: shared/src/settings-widget/settings-presentation.cpp:288
 msgid "Global default"
 msgstr "全局默认"
 
-#: shared/src/settings-widget/settings-presentation.cpp:279
+#: shared/src/settings-widget/settings-presentation.cpp:289
 msgid "Built-in default"
 msgstr "内置默认值"
 
-#: shared/src/settings-widget/settings-presentation.cpp:283
+#: shared/src/settings-widget/settings-presentation.cpp:293
 #, c-format
 msgid "%s (global default)"
 msgstr "%s （全局默认）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:284
+#: shared/src/settings-widget/settings-presentation.cpp:294
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s （内置默认值）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:295
+#: shared/src/settings-widget/settings-presentation.cpp:305
 msgid "Enter a whole number"
 msgstr "输入整数"
 
-#: shared/src/settings-widget/settings-presentation.cpp:298
+#: shared/src/settings-widget/settings-presentation.cpp:308
 msgid "Enter a number"
 msgstr "输入数字"
 
-#: shared/src/settings-widget/settings-presentation.cpp:309
+#: shared/src/settings-widget/settings-presentation.cpp:319
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "值必须介于 %s 和 %s 之间"
 
-#: shared/src/settings-widget/settings-presentation.cpp:318
+#: shared/src/settings-widget/settings-presentation.cpp:328
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "必须包括 Ctrl、Shift、Alt 或 Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:321
+#: shared/src/settings-widget/settings-presentation.cpp:331
 msgid "Contains an empty token"
 msgstr "包含空标记"
 
-#: shared/src/settings-widget/settings-presentation.cpp:330
+#: shared/src/settings-widget/settings-presentation.cpp:340
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "包含未知修饰符：%s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:343
+#: shared/src/settings-widget/settings-presentation.cpp:353
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "包含重复修饰符： %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:351
+#: shared/src/settings-widget/settings-presentation.cpp:361
 msgid "Does not contain a key"
 msgstr "不包含键"
 
-#: shared/src/settings-widget/settings-presentation.cpp:358
+#: shared/src/settings-widget/settings-presentation.cpp:368
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "包含未知密钥：%s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:366
+#: shared/src/settings-widget/settings-presentation.cpp:376
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "放大和缩小必须使用不同的键绑定"
 
-#: shared/src/settings-widget/settings-presentation.cpp:369
+#: shared/src/settings-widget/settings-presentation.cpp:379
 msgid "Must not be empty"
 msgstr "不能为空"
 
-#: shared/src/settings-widget/settings-presentation.cpp:372
+#: shared/src/settings-widget/settings-presentation.cpp:382
 msgid "The character encoding is not supported"
 msgstr "不支持字符编码"
 
-#: shared/src/settings-widget/settings-presentation.cpp:375
+#: shared/src/settings-widget/settings-presentation.cpp:385
 msgid "Contains a NUL byte"
 msgstr "包含 NUL 字节"
 
+#: shared/src/settings-widget/settings-presentation.cpp:390
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
 msgstr "输入 default，或选择使用绝对路径的现有 .oga、.ogg 或 .wav 文件"
 
-#: shared/src/settings-widget/settings-presentation.cpp:378
+#: shared/src/settings-widget/settings-presentation.cpp:393
 msgid "Contains an unmatched closing brace"
 msgstr "包含不匹配的右大括号"
 
-#: shared/src/settings-widget/settings-presentation.cpp:381
+#: shared/src/settings-widget/settings-presentation.cpp:396
 msgid "Contains an unmatched opening brace"
 msgstr "包含不匹配的左大括号"
 
-#: shared/src/settings-widget/settings-presentation.cpp:384
+#: shared/src/settings-widget/settings-presentation.cpp:399
 msgid "Contains an unknown placeholder"
 msgstr "包含未知占位符"
 
-#: shared/src/settings-widget/settings-presentation.cpp:387
+#: shared/src/settings-widget/settings-presentation.cpp:402
 msgid "Must be relative to the log base directory"
 msgstr "必须相对于日志基目录"
 
-#: shared/src/settings-widget/settings-presentation.cpp:390
+#: shared/src/settings-widget/settings-presentation.cpp:405
 msgid "Must not contain parent directory traversal"
 msgstr "不得包含父目录遍历"
 
-#: shared/src/settings-widget/settings-presentation.cpp:393
+#: shared/src/settings-widget/settings-presentation.cpp:408
 msgid "Must name a log file"
 msgstr "必须命名日志文件"
 
-#: shared/src/settings-widget/settings-presentation.cpp:395
+#: shared/src/settings-widget/settings-presentation.cpp:410
 msgid "Invalid value"
 msgstr "无效值"
 
-#: elder-terms/src/main.cpp:223
+#: elder-terms/src/main.cpp:242
 msgid "Global shortcuts are unavailable"
 msgstr "全局快捷方式不可用"
 
-#: elder-terms/src/main.cpp:232
+#: elder-terms/src/main.cpp:251
 msgid ""
 "One or more configured global shortcuts could not be registered and will not "
 "work. Check whether your desktop environment supports global shortcuts."
@@ -674,123 +694,145 @@ msgstr ""
 "一个或多个已配置的全局快捷方式无法注册并且无法工作。检查您的桌面环境是否支持"
 "全局快捷方式。"
 
-#: elder-terms/src/main.cpp:236 elder-terms-vte/src/main-window.ui:319
-#: elder-terms-vte/src/main-window.cpp:1595
+#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:351
+#: elder-terms-vte/src/main-window.cpp:1602
 msgid "OK"
 msgstr "好的"
 
-#: elder-terms/src/main.cpp:276
+#: elder-terms/src/main.cpp:295
 msgid "Restart to apply display language?"
 msgstr "重新启动以应用显示语言？"
 
-#: elder-terms/src/main.cpp:279
+#: elder-terms/src/main.cpp:298
 msgid ""
 "The display language change will take effect after elder-terms restarts."
 msgstr "显示语言更改将在 elder-terms 重新启动后生效。"
 
-#: elder-terms/src/main.cpp:282
+#: elder-terms/src/main.cpp:301
 msgid "Later"
 msgstr "稍后"
 
-#: elder-terms/src/main.cpp:284
+#: elder-terms/src/main.cpp:303
 msgid "Restart now"
 msgstr "立即重新启动"
 
-#: elder-terms/src/main.cpp:412
-msgid "Failed to save global defaults"
-msgstr "无法保存全局默认值"
+#: elder-terms/src/main.cpp:432
+msgid "Failed to save connection defaults"
+msgstr "无法保存连接默认设置"
 
-#: elder-terms/src/main.cpp:449 elder-terms/src/main-window.ui:173
-msgid "Global defaults"
-msgstr "全局默认值"
+#: elder-terms/src/main.cpp:463 elder-terms/src/main-window.ui:204
+msgid "Connection defaults"
+msgstr "连接默认设置"
 
-#: elder-terms/src/main.cpp:706
+#: elder-terms/src/main.cpp:550
+msgid "Close"
+msgstr "关闭"
+
+#: elder-terms/src/main.cpp:627
+msgid "Failed to save application settings"
+msgstr "无法保存应用程序设置"
+
+#: elder-terms/src/main.cpp:668
+#, c-format
+msgid "Version %s"
+msgstr "版本 %s"
+
+#: elder-terms/src/main.cpp:712 elder-terms/src/main.cpp:737
+#: elder-terms/src/main-window.ui:61 elder-terms-vte/src/main-window.ui:67
+msgid "Application"
+msgstr "应用程序"
+
+#: elder-terms/src/main.cpp:740
+msgid "About"
+msgstr "关于"
+
+#: elder-terms/src/main.cpp:986
 #, c-format
 msgid "Open connection %s"
 msgstr "打开连接 %s"
 
-#: elder-terms/src/main.cpp:733 elder-terms/src/tray-backend.cpp:371
-#: elder-terms/src/tray-backend.cpp:390 elder-terms/src/tray-backend.cpp:860
+#: elder-terms/src/main.cpp:1013 elder-terms/src/tray-backend.cpp:373
+#: elder-terms/src/tray-backend.cpp:400 elder-terms/src/tray-backend.cpp:907
 msgid "Open elder-terms"
 msgstr "打开 elder-terms"
 
-#: elder-terms/src/main.cpp:788 elder-terms/src/main.cpp:1337
+#: elder-terms/src/main.cpp:1068 elder-terms/src/main.cpp:1617
 msgid "Failed to load connection"
 msgstr "无法加载连接"
 
-#: elder-terms/src/main.cpp:835
+#: elder-terms/src/main.cpp:1115
 msgid "New connection"
 msgstr "新连接"
 
-#: elder-terms/src/main.cpp:836
+#: elder-terms/src/main.cpp:1116
 #, c-format
 msgid "New connection %d"
 msgstr "新连接 %d"
 
-#: elder-terms/src/main.cpp:1014 elder-terms/src/main.cpp:1031
+#: elder-terms/src/main.cpp:1294 elder-terms/src/main.cpp:1311
 msgid "Failed to monitor connections"
 msgstr "无法监视连接"
 
-#: elder-terms/src/main.cpp:1027
+#: elder-terms/src/main.cpp:1307
 msgid "Unknown file monitor error"
 msgstr "未知文件监视器错误"
 
-#: elder-terms/src/main.cpp:1179
+#: elder-terms/src/main.cpp:1459
 msgid "Failed to create startup profile"
 msgstr "无法创建启动配置文件"
 
-#: elder-terms/src/main.cpp:1236 elder-terms/src/main.cpp:1302
+#: elder-terms/src/main.cpp:1516 elder-terms/src/main.cpp:1582
 #, c-format
 msgid "Failed to start %s"
 msgstr "启动失败 %s"
 
-#: elder-terms/src/main.cpp:1243
+#: elder-terms/src/main.cpp:1523
 #, c-format
 msgid "The %s executable was not found"
 msgstr "未找到 %s 可执行文件"
 
-#: elder-terms/src/main.cpp:1271
+#: elder-terms/src/main.cpp:1551
 msgid "Unknown process launch error"
 msgstr "未知进程启动错误"
 
-#: elder-terms/src/main.cpp:1397
+#: elder-terms/src/main.cpp:1677
 msgid "Discard changes?"
 msgstr "放弃更改？"
 
-#: elder-terms/src/main.cpp:1400
+#: elder-terms/src/main.cpp:1680
 msgid "The current connection has changes that have not been applied."
 msgstr "当前连接有尚未应用的更改。"
 
-#: elder-terms/src/main.cpp:1404
+#: elder-terms/src/main.cpp:1684
 msgid "Discard"
 msgstr "放弃"
 
-#: elder-terms/src/main.cpp:1557
+#: elder-terms/src/main.cpp:1837
 msgid "Failed to duplicate connection"
 msgstr "复制连接失败"
 
-#: elder-terms/src/main.cpp:1591
+#: elder-terms/src/main.cpp:1871
 msgid "Failed to delete connection"
 msgstr "删除连接失败"
 
-#: elder-terms/src/main.cpp:1618
+#: elder-terms/src/main.cpp:1898
 msgid "Delete connection?"
 msgstr "要删除连接吗？"
 
-#: elder-terms/src/main.cpp:1620
+#: elder-terms/src/main.cpp:1900
 #, c-format
 msgid "The connection \"%s\" will be permanently deleted."
 msgstr "连接“%s”将被永久删除。"
 
-#: elder-terms/src/main.cpp:1627 elder-terms/src/main-window.ui:27
+#: elder-terms/src/main.cpp:1907 elder-terms/src/main-window.ui:27
 msgid "Delete"
 msgstr "删除"
 
-#: elder-terms/src/main.cpp:1668 elder-terms/src/main.cpp:1681
+#: elder-terms/src/main.cpp:1948 elder-terms/src/main.cpp:1961
 msgid "Failed to rename connection"
 msgstr "重命名连接失败"
 
-#: elder-terms/src/main.cpp:1777
+#: elder-terms/src/main.cpp:2057
 msgid "Failed to save connection"
 msgstr "无法保存连接"
 
@@ -802,19 +844,31 @@ msgstr "重命名"
 msgid "Duplicate"
 msgstr "复制"
 
-#: elder-terms/src/main-window.ui:69
+#: elder-terms/src/main-window.ui:35 elder-terms/src/tray-backend.cpp:377
+#: elder-terms/src/tray-backend.cpp:404 elder-terms/src/tray-backend.cpp:909
+#: elder-terms-vte/src/main-window.ui:8
+msgid "Application settings"
+msgstr "应用程序设置"
+
+#: elder-terms/src/main-window.ui:41 elder-terms/src/tray-backend.cpp:381
+#: elder-terms/src/tray-backend.cpp:408 elder-terms/src/tray-backend.cpp:911
+#: elder-terms-vte/src/main-window.ui:14
+msgid "About elder-terms"
+msgstr "关于 elder-terms"
+
+#: elder-terms/src/main-window.ui:100
 msgid "Terminal entries"
 msgstr "终端条目"
 
-#: elder-terms/src/main-window.ui:125
+#: elder-terms/src/main-window.ui:156
 msgid "Select a connection or create a new one."
 msgstr "选择一个连接或创建一个新连接。"
 
-#: elder-terms/src/main-window.ui:167
+#: elder-terms/src/main-window.ui:198
 msgid "New"
 msgstr "新"
 
-#: elder-terms/src/main-window.ui:197
+#: elder-terms/src/main-window.ui:228
 msgid "Launch"
 msgstr "启动"
 
@@ -881,21 +935,25 @@ msgstr "警告：无法恢复连接配置文件 %s：%s"
 msgid "Warning: failed to delete connection profile %s: %s"
 msgstr "警告：删除连接配置文件 %s 失败：%s"
 
-#: elder-terms/src/tray-backend.cpp:374 elder-terms/src/tray-backend.cpp:393
-#: elder-terms/src/tray-backend.cpp:861
+#: elder-terms/src/tray-backend.cpp:384 elder-terms/src/tray-backend.cpp:411
+#: elder-terms/src/tray-backend.cpp:912
 msgid "Quit"
 msgstr "退出"
 
-#: elder-terms-vte/src/main.cpp:182
+#: elder-terms-vte/src/main.cpp:226
+msgid "Failed to open elder-terms"
+msgstr "无法打开 elder-terms"
+
+#: elder-terms-vte/src/main.cpp:234
 msgid "Macro command failed"
 msgstr "宏命令失败"
 
-#: elder-terms-vte/src/main.cpp:223
+#: elder-terms-vte/src/main.cpp:275
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:277
 msgid "SSH Host Key"
 msgstr "SSH 主机密钥"
 
-#: elder-terms-vte/src/main.cpp:225
+#: elder-terms-vte/src/main.cpp:277
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%d\n"
@@ -908,138 +966,130 @@ msgstr ""
 "指纹：%s\n"
 "接受并保存此主机密钥吗？"
 
-#: elder-terms-vte/src/main.cpp:237 elder-terms-vte/src/main-window.ui:274
+#: elder-terms-vte/src/main.cpp:289 elder-terms-vte/src/main-window.ui:306
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:472
 msgid "SSH Authentication"
 msgstr "SSH 身份验证"
 
-#: elder-terms-vte/src/main.cpp:238 elder-terms-vte/src/main-window.ui:282
+#: elder-terms-vte/src/main.cpp:290 elder-terms-vte/src/main-window.ui:314
 msgid "Password:"
 msgstr "密码："
 
-#: elder-terms-vte/src/main.cpp:253
+#: elder-terms-vte/src/main.cpp:305
 msgid "SSH prompt accepted"
 msgstr "SSH 提示已接受"
 
-#: elder-terms-vte/src/main.cpp:254
+#: elder-terms-vte/src/main.cpp:306
 msgid "SSH prompt cancelled"
 msgstr "SSH 提示已取消"
 
-#: elder-terms-vte/src/main.cpp:641 elder-terms-vte/src/main.cpp:645
-#: elder-terms-vte/src/main-window.ui:18
+#: elder-terms-vte/src/main.cpp:699 elder-terms-vte/src/main.cpp:703
+#: elder-terms-vte/src/main-window.ui:32
 msgid "Settings"
 msgstr "设置"
 
-#: elder-terms-vte/src/main.cpp:819
-msgid "Select file"
-msgstr "选择文件"
-
-#: elder-terms-vte/src/main.cpp:821
-msgid "Open"
-msgstr "打开"
-
-#: elder-terms-vte/src/main.cpp:907 elder-terms-vte/src/main.cpp:917
-#: elder-terms-vte/src/main.cpp:942 elder-terms-vte/src/main.cpp:952
+#: elder-terms-vte/src/main.cpp:977 elder-terms-vte/src/main.cpp:987
+#: elder-terms-vte/src/main.cpp:1012 elder-terms-vte/src/main.cpp:1022
 msgid "Transfer unavailable"
 msgstr "转账不可用"
 
-#: elder-terms-vte/src/main.cpp:1054 elder-terms-vte/src/main.cpp:1076
+#: elder-terms-vte/src/main.cpp:1124 elder-terms-vte/src/main.cpp:1146
 msgid "BREAK unavailable"
 msgstr "BREAK 不可用"
 
-#: elder-terms-vte/src/main.cpp:1060
+#: elder-terms-vte/src/main.cpp:1130
 msgid "Sending BREAK"
 msgstr "正在发送 BREAK"
 
-#: elder-terms-vte/src/main.cpp:1096 elder-terms-vte/src/main.cpp:1618
+#: elder-terms-vte/src/main.cpp:1166 elder-terms-vte/src/main.cpp:1715
 msgid "Text send unavailable"
 msgstr "文本发送不可用"
 
-#: elder-terms-vte/src/main.cpp:1104
+#: elder-terms-vte/src/main.cpp:1174
 msgid "Text (Send)"
 msgstr "文本（发送）"
 
-#: elder-terms-vte/src/main.cpp:1182 elder-terms-vte/src/main.cpp:1213
+#: elder-terms-vte/src/main.cpp:1252 elder-terms-vte/src/main.cpp:1283
 msgid "SFTP unavailable"
 msgstr "SFTP 不可用"
 
-#: elder-terms-vte/src/main.cpp:1257
+#: elder-terms-vte/src/main.cpp:1327
 msgid "Log recording"
 msgstr "日志记录"
 
-#: elder-terms-vte/src/main.cpp:1303
+#: elder-terms-vte/src/main.cpp:1373
 msgid "ZMODEM (send)"
 msgstr "ZMODEM（发送）"
 
-#: elder-terms-vte/src/main.cpp:1310
+#: elder-terms-vte/src/main.cpp:1380
 msgid "YMODEM (send)"
 msgstr "YMODEM（发送）"
 
-#: elder-terms-vte/src/main.cpp:1317
+#: elder-terms-vte/src/main.cpp:1387
 msgid "XMODEM 1K (send)"
 msgstr "XMODEM 1K（发送）"
 
-#: elder-terms-vte/src/main.cpp:1326
+#: elder-terms-vte/src/main.cpp:1396
 msgid "XMODEM (send)"
 msgstr "XMODEM（发送）"
 
-#: elder-terms-vte/src/main.cpp:1336
+#: elder-terms-vte/src/main.cpp:1406
 msgid "ZMODEM (receive)"
 msgstr "ZMODEM（接收）"
 
-#: elder-terms-vte/src/main.cpp:1343
+#: elder-terms-vte/src/main.cpp:1413
 msgid "YMODEM-g (receive)"
 msgstr "YMODEM-g（接收）"
 
-#: elder-terms-vte/src/main.cpp:1351
+#: elder-terms-vte/src/main.cpp:1421
 msgid "YMODEM (receive)"
 msgstr "YMODEM（接收）"
 
-#: elder-terms-vte/src/main.cpp:1360
+#: elder-terms-vte/src/main.cpp:1430
 msgid "XMODEM CRC (receive)"
 msgstr "XMODEM CRC（接收）"
 
-#: elder-terms-vte/src/main.cpp:1369
+#: elder-terms-vte/src/main.cpp:1439
 msgid "XMODEM (receive)"
 msgstr "XMODEM（接收）"
 
-#: elder-terms-vte/src/main.cpp:1598
+#: elder-terms-vte/src/main.cpp:1695
 msgid "Hyperlink command failed"
 msgstr "超链接命令失败"
 
-#: elder-terms-vte/src/main-window.ui:138
-#: elder-terms-vte/src/main-window.cpp:1496
+#: elder-terms-vte/src/main-window.ui:170
+#: elder-terms-vte/src/main-window.cpp:1503
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1899
 msgid "Disconnected"
 msgstr "已断开连接"
 
-#: elder-terms-vte/src/main-window.ui:193
+#: elder-terms-vte/src/main-window.ui:225
 msgid "Transferring..."
 msgstr "正在传输..."
 
-#: elder-terms-vte/src/main-window.cpp:330
+#: elder-terms-vte/src/main-window.cpp:329
 msgid "Copy"
 msgstr "复制"
 
-#: elder-terms-vte/src/main-window.cpp:334
+#: elder-terms-vte/src/main-window.cpp:333
 msgid "Paste"
 msgstr "粘贴"
 
-#: elder-terms-vte/src/main-window.cpp:340
+#: elder-terms-vte/src/main-window.cpp:339
 msgid "Send BREAK"
 msgstr "发送 BREAK"
 
-#: elder-terms-vte/src/main-window.cpp:1083
+#: elder-terms-vte/src/main-window.cpp:1085
 #, c-format
 msgid "%s (Disconnected)"
 msgstr "%s（断开连接）"
 
-#: elder-terms-vte/src/main-window.cpp:1519
+#: elder-terms-vte/src/main-window.cpp:1526
 msgid "SSH connection failed"
 msgstr "SSH 连接失败"
 
-#: elder-terms-vte/src/main-window.cpp:1521
+#: elder-terms-vte/src/main-window.cpp:1528
 #, c-format
 msgid ""
 "SSH connection failed:\n"
@@ -1048,7 +1098,7 @@ msgstr ""
 "SSH 连接失败：\n"
 "%s"
 
-#: elder-terms-vte/src/main-window.cpp:1595
+#: elder-terms-vte/src/main-window.cpp:1602
 #: elder-terms-vte/src/sftp/sftp-main.cpp:111
 msgid "Accept"
 msgstr "接受"
@@ -1203,10 +1253,6 @@ msgstr "已修改"
 msgid "Remote"
 msgstr "远程"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1557
-msgid "Local"
-msgstr "本地"
-
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1589
 msgid "Up"
 msgstr "向上"
@@ -1248,7 +1294,7 @@ msgstr "开始 %s 接收"
 msgid "Text send failed"
 msgstr "文本发送失败"
 
-#: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:541
+#: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:549
 msgid "local terminal"
 msgstr "本地终端"
 
@@ -1413,3 +1459,9 @@ msgstr "ssh：（未知）"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
 msgid "telnet: (unknown)"
 msgstr "远程登录：（未知）"
+
+#~ msgid "Failed to save global defaults"
+#~ msgstr "无法保存全局默认值"
+
+#~ msgid "Global defaults"
+#~ msgstr "全局默认值"

@@ -56,21 +56,6 @@ static constexpr char general_color_custom[] = "custom";
 static constexpr char inherit_choice[] = "inherit";
 static constexpr char boolean_enabled[] = "enabled";
 static constexpr char boolean_disabled[] = "disabled";
-static constexpr char startup_window[] = "window";
-static constexpr char startup_background[] = "background";
-static constexpr char startup_tray[] = "tray";
-static constexpr char startup_window_and_tray[] = "window_and_tray";
-static constexpr char ui_language_system[] = "system";
-static constexpr char ui_language_english[] = "en";
-static constexpr char ui_language_arabic[] = "ar";
-static constexpr char ui_language_spanish[] = "es";
-static constexpr char ui_language_french[] = "fr";
-static constexpr char ui_language_hindi[] = "hi";
-static constexpr char ui_language_japanese[] = "ja";
-static constexpr char ui_language_korean[] = "ko";
-static constexpr char ui_language_portuguese[] = "pt";
-static constexpr char ui_language_russian[] = "ru";
-static constexpr char ui_language_chinese[] = "zh";
 static constexpr char default_font_button_family[] = "Monospace";
 static constexpr gint64 minimum_terminal_scrollback_lines = 1000;
 static constexpr gint64 maximum_terminal_scrollback_lines = 100000;
@@ -98,10 +83,6 @@ struct SettingsWidgetState {
   GtkWidget *general_type_combo = nullptr;
   KeyBindingInputWidgetState *general_open_connection_input = nullptr;
   GtkWidget *general_open_connection_reset_button = nullptr;
-  GtkWidget *general_ui_language_combo = nullptr;
-  GtkWidget *general_startup_mode_combo = nullptr;
-  KeyBindingInputWidgetState *general_open_application_input = nullptr;
-  GtkWidget *general_open_application_reset_button = nullptr;
   GtkWidget *general_exterior_background_mode_combo = nullptr;
   GtkWidget *general_exterior_background_button = nullptr;
   GtkWidget *general_background_mode_combo = nullptr;
@@ -907,51 +888,6 @@ static void update_general_type_from_widget(SettingsWidgetState *state) {
 }
 
 static void
-update_application_ui_language_from_widget(SettingsWidgetState *state) {
-  const std::string language =
-      active_combo_id(state->general_ui_language_combo,
-                      ui_language_system);
-  if (language == ui_language_system) {
-    clear_explicit_setting_value(
-        &state->draft_store, application_ui_language_setting_key());
-    return;
-  }
-  set_explicit_setting_value(
-      &state->draft_store, application_ui_language_setting_key(),
-      SettingValue{language});
-}
-
-static void
-update_application_startup_mode_from_widget(SettingsWidgetState *state) {
-  const std::string mode =
-      active_combo_id(state->general_startup_mode_combo, inherit_choice);
-  if (mode == inherit_choice) {
-    clear_explicit_setting_value(
-        &state->draft_store, application_startup_mode_setting_key());
-    return;
-  }
-  set_explicit_setting_value(
-      &state->draft_store, application_startup_mode_setting_key(),
-      SettingValue{mode});
-}
-
-static void
-update_application_hotkey_from_widget(SettingsWidgetState *state) {
-  const std::string text =
-      key_binding_input_widget_text(state->general_open_application_input);
-  std::string reason;
-  const bool valid = application_hotkey_text_is_valid(text, &reason);
-  set_key_binding_input_widget_external_error(
-      state->general_open_application_input, valid ? std::string() : reason);
-  if (!valid) {
-    return;
-  }
-  set_explicit_setting_value(
-      &state->draft_store, application_open_hotkey_setting_key(),
-      SettingValue{text});
-}
-
-static void
 update_connection_hotkey_from_widget(SettingsWidgetState *state) {
   const std::string text =
       key_binding_input_widget_text(
@@ -1515,13 +1451,6 @@ static bool terminal_key_binding_inputs_valid(
              state->terminal_send_break_key_input);
 }
 
-static bool application_hotkey_input_valid(
-    const SettingsWidgetState *state) {
-  return state->general_open_application_input == nullptr ||
-         key_binding_input_widget_is_valid(
-             state->general_open_application_input);
-}
-
 static bool connection_hotkey_input_valid(
     const SettingsWidgetState *state) {
   return state->general_open_connection_input == nullptr ||
@@ -1560,7 +1489,6 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
          state->transfer_text_send_rate_valid &&
          terminal_key_binding_inputs_valid(state) &&
          connection_hotkey_input_valid(state) &&
-         application_hotkey_input_valid(state) &&
          state->log_file_name_format_valid && macro_rules_are_valid(state);
 }
 
@@ -2748,81 +2676,6 @@ static void sync_general_type_combo(SettingsWidgetState *state) {
       effective);
 }
 
-static std::string startup_mode_label(const std::string &mode) {
-  return setting_choice_label(application_startup_mode_setting_key(), mode);
-}
-
-static std::string ui_language_label(const std::string &language) {
-  return setting_choice_label(application_ui_language_setting_key(),
-                              language);
-}
-
-static void sync_application_ui_language_combo(
-    SettingsWidgetState *state) {
-  gtk_combo_box_text_remove_all(
-      GTK_COMBO_BOX_TEXT(state->general_ui_language_combo));
-  append_combo_option(state->general_ui_language_combo,
-                      ui_language_system,
-                      ui_language_label(ui_language_system).c_str());
-  append_combo_option(state->general_ui_language_combo,
-                      ui_language_english,
-                      ui_language_label(ui_language_english).c_str());
-  append_combo_option(state->general_ui_language_combo,
-                      ui_language_arabic,
-                      ui_language_label(ui_language_arabic).c_str());
-  append_combo_option(state->general_ui_language_combo,
-                      ui_language_spanish,
-                      ui_language_label(ui_language_spanish).c_str());
-  append_combo_option(state->general_ui_language_combo,
-                      ui_language_french,
-                      ui_language_label(ui_language_french).c_str());
-  append_combo_option(state->general_ui_language_combo,
-                      ui_language_hindi,
-                      ui_language_label(ui_language_hindi).c_str());
-  append_combo_option(state->general_ui_language_combo,
-                      ui_language_japanese,
-                      ui_language_label(ui_language_japanese).c_str());
-  append_combo_option(state->general_ui_language_combo,
-                      ui_language_korean,
-                      ui_language_label(ui_language_korean).c_str());
-  append_combo_option(state->general_ui_language_combo,
-                      ui_language_portuguese,
-                      ui_language_label(ui_language_portuguese).c_str());
-  append_combo_option(state->general_ui_language_combo,
-                      ui_language_russian,
-                      ui_language_label(ui_language_russian).c_str());
-  append_combo_option(state->general_ui_language_combo,
-                      ui_language_chinese,
-                      ui_language_label(ui_language_chinese).c_str());
-  gtk_combo_box_set_active_id(
-      GTK_COMBO_BOX(state->general_ui_language_combo),
-      application_ui_language_to_string(
-          application_ui_language(state->draft_store)));
-}
-
-static void sync_application_startup_mode_combo(
-    SettingsWidgetState *state) {
-  const std::string fallback = std::get<std::string>(setting_fallback_value(
-      state->draft_store, application_startup_mode_setting_key(),
-      SettingValue{std::string(startup_window)}));
-  const std::string effective =
-      startup_mode_to_string(application_startup_mode(state->draft_store));
-  populate_inheritable_combo(
-      state->general_startup_mode_combo, state->draft_store,
-      application_startup_mode_setting_key(), startup_mode_label(fallback),
-      {
-          {.id = startup_window,
-           .label = startup_mode_label(startup_window)},
-          {.id = startup_background,
-           .label = startup_mode_label(startup_background)},
-          {.id = startup_tray,
-           .label = startup_mode_label(startup_tray)},
-          {.id = startup_window_and_tray,
-           .label = startup_mode_label(startup_window_and_tray)},
-      },
-      effective);
-}
-
 static bool zmodem_fallback_value(const SettingsStore &store) {
   SettingsStore fallback_store = store;
   clear_explicit_setting_value(&fallback_store,
@@ -3135,12 +2988,6 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
   if (state->general_type_combo != nullptr) {
     sync_general_type_combo(state);
   }
-  if (state->general_ui_language_combo != nullptr) {
-    sync_application_ui_language_combo(state);
-  }
-  if (state->general_startup_mode_combo != nullptr) {
-    sync_application_startup_mode_combo(state);
-  }
   if (state->general_open_connection_input != nullptr) {
     sync_key_binding_widget(
         state, state->general_open_connection_input,
@@ -3151,17 +2998,6 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
         general_open_connection_hotkey_setting_key());
     set_key_binding_input_widget_external_error(
         state->general_open_connection_input, {});
-  }
-  if (state->general_open_application_input != nullptr) {
-    sync_key_binding_widget(
-        state, state->general_open_application_input,
-        application_open_hotkey_setting_key(),
-        application_open_hotkey_text(state->draft_store));
-    sync_key_binding_reset_button(
-        state, state->general_open_application_reset_button,
-        application_open_hotkey_setting_key());
-    set_key_binding_input_widget_external_error(
-        state->general_open_application_input, {});
   }
   sync_terminal_text_widgets(state);
   if (state->terminal_width_entry != nullptr) {
@@ -3512,72 +3348,6 @@ static gboolean on_general_name_focus_out(GtkWidget *, GdkEventFocus *,
                      general_connection_name(state->draft_store).c_str());
   state->synchronizing = previous_synchronizing;
   return FALSE;
-}
-
-static void on_application_startup_mode_changed(GtkComboBox *,
-                                                gpointer data) {
-  auto *state = static_cast<SettingsWidgetState *>(data);
-  if (state->synchronizing) {
-    return;
-  }
-  update_application_startup_mode_from_widget(state);
-  notify_changed(state);
-}
-
-static void on_application_ui_language_changed(GtkComboBox *,
-                                               gpointer data) {
-  auto *state = static_cast<SettingsWidgetState *>(data);
-  if (state->synchronizing) {
-    return;
-  }
-  update_application_ui_language_from_widget(state);
-  notify_changed(state);
-}
-
-static void on_application_hotkey_changed(SettingsWidgetState *state) {
-  if (state->synchronizing) {
-    return;
-  }
-  update_application_hotkey_from_widget(state);
-  if (key_binding_input_widget_is_valid(
-          state->general_open_application_input)) {
-    const std::string effective =
-        application_open_hotkey_text(state->draft_store);
-    set_key_binding_input_widget_empty_clear_enabled(
-        state->general_open_application_input, false);
-    gtk_entry_set_placeholder_text(
-        GTK_ENTRY(key_binding_input_widget_root(
-            state->general_open_application_input)),
-        effective.empty()
-            ? settings_ui_text(SettingsUiText::disabled)
-            : settings_ui_text(SettingsUiText::press_key_combination));
-    sync_key_binding_reset_button(
-        state, state->general_open_application_reset_button,
-        application_open_hotkey_setting_key());
-  }
-  update_action_sensitivity(state);
-  notify_changed(state);
-}
-
-static void on_application_hotkey_reset_clicked(GtkButton *,
-                                                gpointer data) {
-  auto *state = static_cast<SettingsWidgetState *>(data);
-  clear_explicit_setting_value(
-      &state->draft_store, application_open_hotkey_setting_key());
-  const bool previous_synchronizing = state->synchronizing;
-  state->synchronizing = true;
-  sync_key_binding_widget(
-      state, state->general_open_application_input,
-      application_open_hotkey_setting_key(),
-      application_open_hotkey_text(state->draft_store));
-  sync_key_binding_reset_button(
-      state, state->general_open_application_reset_button,
-      application_open_hotkey_setting_key());
-  set_key_binding_input_widget_external_error(
-      state->general_open_application_input, {});
-  state->synchronizing = previous_synchronizing;
-  update_action_sensitivity(state);
-  notify_changed(state);
 }
 
 static void on_connection_hotkey_changed(SettingsWidgetState *state) {
@@ -4501,59 +4271,6 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
         GTK_BOX(hotkey_row),
         state->general_open_connection_reset_button, FALSE, FALSE, 0);
     attach_row(page, row++, general_open_connection_hotkey_setting_key(),
-               hotkey_row);
-  }
-
-  if (state->mode == SettingsWidgetMode::global_defaults) {
-    const std::string language_id =
-        widget_id(state, "general_ui_language_combo");
-    state->general_ui_language_combo =
-        create_combo_box(language_id.c_str());
-    g_signal_connect(state->general_ui_language_combo, "changed",
-                     G_CALLBACK(on_application_ui_language_changed), state);
-    attach_row(page, row++, application_ui_language_setting_key(),
-               state->general_ui_language_combo);
-
-    const std::string startup_id =
-        widget_id(state, "general_startup_mode_combo");
-    state->general_startup_mode_combo =
-        create_combo_box(startup_id.c_str());
-    g_signal_connect(state->general_startup_mode_combo, "changed",
-                     G_CALLBACK(on_application_startup_mode_changed), state);
-    attach_row(page, row++, application_startup_mode_setting_key(),
-               state->general_startup_mode_combo);
-
-    const std::string hotkey_id =
-        widget_id(state, "general_open_application_entry");
-    state->general_open_application_input =
-        create_key_binding_input_widget({
-            .text = "",
-            .accessible_id = hotkey_id,
-            .changed = [state]() {
-              on_application_hotkey_changed(state);
-            },
-        });
-    GtkWidget *hotkey_row =
-        gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    gtk_box_pack_start(
-        GTK_BOX(hotkey_row),
-        key_binding_input_widget_root(
-            state->general_open_application_input),
-        TRUE, TRUE, 0);
-    state->general_open_application_reset_button =
-        gtk_button_new_with_label(
-            settings_ui_text(SettingsUiText::reset));
-    const std::string reset_id =
-        widget_id(state, "general_open_application_reset_button");
-    assign_accessible_id(state->general_open_application_reset_button,
-                         reset_id.c_str());
-    g_signal_connect(state->general_open_application_reset_button,
-                     "clicked",
-                     G_CALLBACK(on_application_hotkey_reset_clicked), state);
-    gtk_box_pack_start(
-        GTK_BOX(hotkey_row),
-        state->general_open_application_reset_button, FALSE, FALSE, 0);
-    attach_row(page, row++, application_open_hotkey_setting_key(),
                hotkey_row);
   }
 
@@ -5797,8 +5514,6 @@ void destroy_settings_widget(SettingsWidgetState *state) {
   destroy_key_binding_input_widget(state->terminal_send_break_key_input);
   destroy_key_binding_input_widget(
       state->general_open_connection_input);
-  destroy_key_binding_input_widget(
-      state->general_open_application_input);
   if (state->root != nullptr && gtk_widget_get_parent(state->root) == nullptr) {
     gtk_widget_destroy(state->root);
   }

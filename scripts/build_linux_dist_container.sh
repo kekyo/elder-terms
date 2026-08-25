@@ -210,6 +210,7 @@ meson setup "$build_dir" . \
 	--prefix=/usr \
 	--libdir=lib \
 	-Dautostartdir=/etc/xdg/autostart \
+	-Dapplication_version="$ELDER_TERMS_PACKAGE_VERSION" \
 	-Dbuild_tests=false \
 	-Dwerror=false
 meson compile -C "$build_dir" -j "$ELDER_TERMS_MAKE_JOBS"

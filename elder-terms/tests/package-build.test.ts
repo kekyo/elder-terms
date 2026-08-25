@@ -291,6 +291,7 @@ exit 0
     expect(invocation).toContain('-Dbuild_tests=false');
     expect(invocation).toContain('-Dwerror=false');
     expect(invocation).toContain('--buildtype=release');
+    expect(invocation).toContain('-Dapplication_version=1.2.3-test');
     expect(readFileSync(pkgConfigInvocationPath, 'utf8').split('\n')).toContain(
       '--exists libcanberra'
     );

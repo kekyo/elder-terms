@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 13:53+0900\n"
+"POT-Creation-Date: 2026-08-26 00:10+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: French\n"
@@ -52,622 +52,644 @@ msgstr "Commande de démarrage"
 msgid "Character encoding"
 msgstr "Codage des caractères"
 
-#: shared/src/settings-widget/settings-presentation.cpp:37
+#: shared/src/settings-widget/settings-presentation.cpp:38
 msgid "Backspace code"
 msgstr "Code de retour arrière"
 
-#: shared/src/settings-widget/settings-presentation.cpp:38
+#: shared/src/settings-widget/settings-presentation.cpp:39
 msgid "Cursor key mode"
 msgstr "Mode touche curseur"
 
-#: shared/src/settings-widget/settings-presentation.cpp:39
+#: shared/src/settings-widget/settings-presentation.cpp:40
 msgid "Enter/Return code"
 msgstr "Code Entrée/Retour"
 
-#: shared/src/settings-widget/settings-presentation.cpp:40
+#: shared/src/settings-widget/settings-presentation.cpp:41
 msgid "Columns"
 msgstr "Colonnes"
 
-#: shared/src/settings-widget/settings-presentation.cpp:41
+#: shared/src/settings-widget/settings-presentation.cpp:42
 msgid "Rows"
 msgstr "Lignes"
 
-#: shared/src/settings-widget/settings-presentation.cpp:43
+#: shared/src/settings-widget/settings-presentation.cpp:44
 msgid "Scrollback lines"
 msgstr "Lignes de défilement arrière"
 
-#: shared/src/settings-widget/settings-presentation.cpp:44
+#: shared/src/settings-widget/settings-presentation.cpp:45
 msgid "Zoom factor"
 msgstr "Facteur de zoom"
 
-#: shared/src/settings-widget/settings-presentation.cpp:46
+#: shared/src/settings-widget/settings-presentation.cpp:47
 msgid "Primary font family"
 msgstr "Famille de polices principale"
 
-#: shared/src/settings-widget/settings-presentation.cpp:48
+#: shared/src/settings-widget/settings-presentation.cpp:49
 msgid "Secondary font family"
 msgstr "Famille de polices secondaire"
 
-#: shared/src/settings-widget/settings-presentation.cpp:50
+#: shared/src/settings-widget/settings-presentation.cpp:51
 msgid "Close window when session ends"
 msgstr "Fermer la fenêtre à la fin de la session"
 
-#: shared/src/settings-widget/settings-presentation.cpp:52
+#: shared/src/settings-widget/settings-presentation.cpp:53
 msgid "Show window side borders"
 msgstr "Afficher les bordures latérales de la fenêtre"
 
+#: shared/src/settings-widget/settings-presentation.cpp:55
 msgid "Window side border width (px)"
 msgstr "Largeur des bordures latérales de la fenêtre (px)"
 
+#: shared/src/settings-widget/settings-presentation.cpp:56
 msgid "BEL sound"
 msgstr "Son BEL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:53
+#: shared/src/settings-widget/settings-presentation.cpp:57
 msgid "Zoom in shortcut"
 msgstr "Raccourci zoom avant"
 
-#: shared/src/settings-widget/settings-presentation.cpp:54
+#: shared/src/settings-widget/settings-presentation.cpp:58
 msgid "Zoom out shortcut"
 msgstr "Raccourci pour zoom arrière"
 
-#: shared/src/settings-widget/settings-presentation.cpp:56
+#: shared/src/settings-widget/settings-presentation.cpp:60
 msgid "Send BREAK shortcut"
 msgstr "Raccourci d’envoi de BREAK"
 
-#: shared/src/settings-widget/settings-presentation.cpp:57
-#: shared/src/settings-widget/settings-presentation.cpp:60
+#: shared/src/settings-widget/settings-presentation.cpp:61
+#: shared/src/settings-widget/settings-presentation.cpp:64
 msgid "Address"
 msgstr "Adresse"
 
-#: shared/src/settings-widget/settings-presentation.cpp:58
-#: shared/src/settings-widget/settings-presentation.cpp:61
+#: shared/src/settings-widget/settings-presentation.cpp:62
+#: shared/src/settings-widget/settings-presentation.cpp:65
 msgid "Port"
 msgstr "Port"
 
-#: shared/src/settings-widget/settings-presentation.cpp:59
-#: shared/src/settings-widget/settings-presentation.cpp:64
+#: shared/src/settings-widget/settings-presentation.cpp:63
+#: shared/src/settings-widget/settings-presentation.cpp:68
 msgid "Terminal type"
 msgstr "Type de borne"
 
-#: shared/src/settings-widget/settings-presentation.cpp:62
+#: shared/src/settings-widget/settings-presentation.cpp:66
 msgid "User name"
 msgstr "Nom d'utilisateur"
 
-#: shared/src/settings-widget/settings-presentation.cpp:63
+#: shared/src/settings-widget/settings-presentation.cpp:67
 msgid "Identity file"
 msgstr "Fiche d'identité"
 
-#: shared/src/settings-widget/settings-presentation.cpp:65
+#: shared/src/settings-widget/settings-presentation.cpp:69
 msgid "Local directory"
 msgstr "Répertoire local"
 
-#: shared/src/settings-widget/settings-presentation.cpp:66
+#: shared/src/settings-widget/settings-presentation.cpp:70
 msgid "Remote directory"
 msgstr "Répertoire distant"
 
-#: shared/src/settings-widget/settings-presentation.cpp:67
+#: shared/src/settings-widget/settings-presentation.cpp:71
 msgid "Device"
 msgstr "Appareil"
 
-#: shared/src/settings-widget/settings-presentation.cpp:69
+#: shared/src/settings-widget/settings-presentation.cpp:73
 msgid "Device identification"
 msgstr "Identification du périphérique"
 
-#: shared/src/settings-widget/settings-presentation.cpp:71
-#: shared/src/settings-widget/settings-presentation.cpp:246
+#: shared/src/settings-widget/settings-presentation.cpp:75
+#: shared/src/settings-widget/settings-presentation.cpp:256
 msgid "USB serial number"
 msgstr "Numéro de série USB"
 
-#: shared/src/settings-widget/settings-presentation.cpp:72
+#: shared/src/settings-widget/settings-presentation.cpp:76
 msgid "Baud rate"
 msgstr "Débit en bauds"
 
-#: shared/src/settings-widget/settings-presentation.cpp:73
+#: shared/src/settings-widget/settings-presentation.cpp:77
 msgid "Data bits"
 msgstr "Bits de données"
 
-#: shared/src/settings-widget/settings-presentation.cpp:74
+#: shared/src/settings-widget/settings-presentation.cpp:78
 msgid "Parity"
 msgstr "Parité"
 
-#: shared/src/settings-widget/settings-presentation.cpp:75
+#: shared/src/settings-widget/settings-presentation.cpp:79
 msgid "Stop bits"
 msgstr "Bits d'arrêt"
 
-#: shared/src/settings-widget/settings-presentation.cpp:76
+#: shared/src/settings-widget/settings-presentation.cpp:80
 msgid "Flow control"
 msgstr "Contrôle de flux"
 
-#: shared/src/settings-widget/settings-presentation.cpp:78
+#: shared/src/settings-widget/settings-presentation.cpp:82
 msgid "Connection monitoring signal"
 msgstr "Signal de surveillance de connexion"
 
-#: shared/src/settings-widget/settings-presentation.cpp:80
+#: shared/src/settings-widget/settings-presentation.cpp:84
 msgid "Transfer base directory"
 msgstr "Transférer le répertoire de base"
 
-#: shared/src/settings-widget/settings-presentation.cpp:82
+#: shared/src/settings-widget/settings-presentation.cpp:86
 msgid "Text send rate (bytes/s)"
 msgstr "Débit d'envoi de texte (octets/s)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:84
+#: shared/src/settings-widget/settings-presentation.cpp:88
 msgid "Follow Enter/Return code for text send"
 msgstr "Utiliser le code Entrée/Retour pour l’envoi de texte"
 
-#: shared/src/settings-widget/settings-presentation.cpp:86
+#: shared/src/settings-widget/settings-presentation.cpp:90
 msgid "Automatically start ZMODEM transfers"
 msgstr "Démarre automatiquement les transferts ZMODEM"
 
-#: shared/src/settings-widget/settings-presentation.cpp:87
+#: shared/src/settings-widget/settings-presentation.cpp:91
 msgid "Enable logging"
 msgstr "Activer la journalisation"
 
-#: shared/src/settings-widget/settings-presentation.cpp:88
+#: shared/src/settings-widget/settings-presentation.cpp:92
 msgid "Log directory"
 msgstr "Répertoire des journaux"
 
-#: shared/src/settings-widget/settings-presentation.cpp:89
+#: shared/src/settings-widget/settings-presentation.cpp:93
 msgid "File name format"
 msgstr "Format du nom de fichier"
 
-#: shared/src/settings-widget/settings-presentation.cpp:90
+#: shared/src/settings-widget/settings-presentation.cpp:94
 msgid "Log content"
 msgstr "Contenu du journal"
 
-#: shared/src/settings-widget/settings-presentation.cpp:94
+#: shared/src/settings-widget/settings-presentation.cpp:98
 msgid "Local shell"
 msgstr "Shell local"
 
-#: shared/src/settings-widget/settings-presentation.cpp:95
-#: shared/src/settings-widget/settings-presentation.cpp:166
+#: shared/src/settings-widget/settings-presentation.cpp:99
+#: shared/src/settings-widget/settings-presentation.cpp:172
 msgid "TELNET"
 msgstr "TELNET"
 
-#: shared/src/settings-widget/settings-presentation.cpp:96
-#: shared/src/settings-widget/settings-presentation.cpp:168
+#: shared/src/settings-widget/settings-presentation.cpp:100
+#: shared/src/settings-widget/settings-presentation.cpp:174
 msgid "Serial"
 msgstr "Série"
 
-#: shared/src/settings-widget/settings-presentation.cpp:97
-#: shared/src/settings-widget/settings-presentation.cpp:170
-#: elder-terms-vte/src/main-window.cpp:1590
+#: shared/src/settings-widget/settings-presentation.cpp:101
+#: shared/src/settings-widget/settings-presentation.cpp:176
+#: elder-terms-vte/src/main-window.cpp:1597
 msgid "SSH"
 msgstr "SSH"
 
-#: shared/src/settings-widget/settings-presentation.cpp:98
-#: shared/src/settings-widget/settings-presentation.cpp:172
-#: elder-terms-vte/src/main.cpp:1233
+#: shared/src/settings-widget/settings-presentation.cpp:102
+#: shared/src/settings-widget/settings-presentation.cpp:178
+#: elder-terms-vte/src/main.cpp:1303
 msgid "SFTP"
 msgstr "SFTP"
 
-#: shared/src/settings-widget/settings-presentation.cpp:100
+#: shared/src/settings-widget/settings-presentation.cpp:104
 msgid "System default"
 msgstr "Valeur par défaut du système"
 
-#: shared/src/settings-widget/settings-presentation.cpp:101
+#: shared/src/settings-widget/settings-presentation.cpp:105
 msgid "English"
 msgstr "Anglais"
 
-#: shared/src/settings-widget/settings-presentation.cpp:102
+#: shared/src/settings-widget/settings-presentation.cpp:106
 msgid "العربية"
 msgstr "العربية"
 
-#: shared/src/settings-widget/settings-presentation.cpp:103
+#: shared/src/settings-widget/settings-presentation.cpp:107
 msgid "Español"
 msgstr "Español"
 
-#: shared/src/settings-widget/settings-presentation.cpp:104
+#: shared/src/settings-widget/settings-presentation.cpp:108
 msgid "Français"
 msgstr "Français"
 
-#: shared/src/settings-widget/settings-presentation.cpp:105
+#: shared/src/settings-widget/settings-presentation.cpp:109
 msgid "हिन्दी"
 msgstr "हिन्दी"
 
-#: shared/src/settings-widget/settings-presentation.cpp:106
+#: shared/src/settings-widget/settings-presentation.cpp:110
 msgid "日本語"
 msgstr "日本語"
 
-#: shared/src/settings-widget/settings-presentation.cpp:107
+#: shared/src/settings-widget/settings-presentation.cpp:111
 msgid "한국어"
 msgstr "한국어"
 
-#: shared/src/settings-widget/settings-presentation.cpp:108
+#: shared/src/settings-widget/settings-presentation.cpp:112
 msgid "Português"
 msgstr "Português"
 
-#: shared/src/settings-widget/settings-presentation.cpp:109
+#: shared/src/settings-widget/settings-presentation.cpp:113
 msgid "Русский"
 msgstr "Русский"
 
-#: shared/src/settings-widget/settings-presentation.cpp:110
+#: shared/src/settings-widget/settings-presentation.cpp:114
 msgid "中文"
 msgstr "中文"
 
-#: shared/src/settings-widget/settings-presentation.cpp:112
+#: shared/src/settings-widget/settings-presentation.cpp:116
 msgid "Simple startup"
 msgstr "Démarrage simple"
 
-#: shared/src/settings-widget/settings-presentation.cpp:114
+#: shared/src/settings-widget/settings-presentation.cpp:118
 msgid "Background only"
 msgstr "Arrière-plan uniquement"
 
-#: shared/src/settings-widget/settings-presentation.cpp:116
+#: shared/src/settings-widget/settings-presentation.cpp:120
 msgid "System tray only"
 msgstr "Barre d'état système uniquement"
 
-#: shared/src/settings-widget/settings-presentation.cpp:118
+#: shared/src/settings-widget/settings-presentation.cpp:122
 msgid "System tray and main window"
 msgstr "Barre d'état système et fenêtre principale"
 
-#: shared/src/settings-widget/settings-presentation.cpp:119
-#: shared/src/settings-widget/settings-presentation.cpp:124
+#: shared/src/settings-widget/settings-presentation.cpp:123
+#: shared/src/settings-widget/settings-presentation.cpp:128
 msgid "Auto"
 msgstr "Automatique"
 
-#: shared/src/settings-widget/settings-presentation.cpp:120
+#: shared/src/settings-widget/settings-presentation.cpp:124
 msgid "BS"
 msgstr "BS"
 
-#: shared/src/settings-widget/settings-presentation.cpp:121
+#: shared/src/settings-widget/settings-presentation.cpp:125
 msgid "DEL"
 msgstr "DEL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:122
+#: shared/src/settings-widget/settings-presentation.cpp:126
 msgid "Normal"
 msgstr "Normal"
 
-#: shared/src/settings-widget/settings-presentation.cpp:123
+#: shared/src/settings-widget/settings-presentation.cpp:127
 msgid "TRS80"
 msgstr "TRS80"
 
-#: shared/src/settings-widget/settings-presentation.cpp:125
+#: shared/src/settings-widget/settings-presentation.cpp:129
 msgid "CR"
 msgstr "CR"
 
-#: shared/src/settings-widget/settings-presentation.cpp:126
+#: shared/src/settings-widget/settings-presentation.cpp:130
 msgid "LF"
 msgstr "LF"
 
-#: shared/src/settings-widget/settings-presentation.cpp:127
+#: shared/src/settings-widget/settings-presentation.cpp:131
 msgid "CRLF"
 msgstr "CRLF"
 
-#: shared/src/settings-widget/settings-presentation.cpp:128
-#: shared/src/settings-widget/settings-presentation.cpp:137
+#: shared/src/settings-widget/settings-presentation.cpp:132
+#: shared/src/settings-widget/settings-presentation.cpp:141
 msgid "None"
 msgstr "Aucun"
 
-#: shared/src/settings-widget/settings-presentation.cpp:130
+#: shared/src/settings-widget/settings-presentation.cpp:134
 msgid "Device path"
 msgstr "Chemin du périphérique"
 
-#: shared/src/settings-widget/settings-presentation.cpp:132
+#: shared/src/settings-widget/settings-presentation.cpp:136
 msgid "Stable device identity"
 msgstr "Identité stable du périphérique"
 
-#: shared/src/settings-widget/settings-presentation.cpp:134
+#: shared/src/settings-widget/settings-presentation.cpp:138
 msgid "Physical USB port"
 msgstr "Port USB physique"
 
-#: shared/src/settings-widget/settings-presentation.cpp:135
+#: shared/src/settings-widget/settings-presentation.cpp:139
 msgid "Even"
 msgstr "Même"
 
-#: shared/src/settings-widget/settings-presentation.cpp:136
+#: shared/src/settings-widget/settings-presentation.cpp:140
 msgid "Odd"
 msgstr "Impair"
 
-#: shared/src/settings-widget/settings-presentation.cpp:139
+#: shared/src/settings-widget/settings-presentation.cpp:143
 msgid "XON/XOFF (software)"
 msgstr "XON/XOFF (logiciel)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:141
+#: shared/src/settings-widget/settings-presentation.cpp:145
 msgid "RTS/CTS (hardware)"
 msgstr "RTS/CTS (matériel)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:143
+#: shared/src/settings-widget/settings-presentation.cpp:147
 msgid "DCD (Data Carrier Detect)"
 msgstr "DCD (Détection de support de données)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:145
+#: shared/src/settings-widget/settings-presentation.cpp:149
 msgid "CTS (Clear to Send)"
 msgstr "CTS (Effacer pour envoyer)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:147
+#: shared/src/settings-widget/settings-presentation.cpp:151
 msgid "DSR (Data Set Ready)"
 msgstr "DSR (ensemble de données prêt)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:149
+#: shared/src/settings-widget/settings-presentation.cpp:153
 msgid "Ignore (do not monitor)"
 msgstr "Ignorer (ne pas surveiller)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:151
+#: shared/src/settings-widget/settings-presentation.cpp:155
 msgid "Raw bytes (before character conversion)"
 msgstr "Octets bruts (avant conversion des caractères)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:153
+#: shared/src/settings-widget/settings-presentation.cpp:157
 msgid "UTF-8 text (after character conversion)"
 msgstr "UTF-8 texte (après conversion des caractères)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:164
+#: shared/src/settings-widget/settings-presentation.cpp:168
 msgid "General"
 msgstr "Général"
 
-#: shared/src/settings-widget/settings-presentation.cpp:174
-#: elder-terms-vte/src/main-window.ui:370
+#: shared/src/settings-widget/settings-presentation.cpp:170
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1557
+msgid "Local"
+msgstr "Local"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+#: elder-terms-vte/src/main-window.ui:402
 #: elder-terms-vte/src/terminal-session.cpp:225
 msgid "Terminal"
 msgstr "Terminal"
 
-#: shared/src/settings-widget/settings-presentation.cpp:176
+#: shared/src/settings-widget/settings-presentation.cpp:182
 msgid "Macro"
 msgstr "Macro"
 
-#: shared/src/settings-widget/settings-presentation.cpp:178
-#: elder-terms-vte/src/main-window.ui:35
+#: shared/src/settings-widget/settings-presentation.cpp:184
+#: elder-terms-vte/src/main-window.ui:49
 msgid "Transfer"
 msgstr "Transfert"
 
-#: shared/src/settings-widget/settings-presentation.cpp:180
+#: shared/src/settings-widget/settings-presentation.cpp:186
 msgid "Logging"
 msgstr "Journalisation"
 
-#: shared/src/settings-widget/settings-presentation.cpp:182
+#: shared/src/settings-widget/settings-presentation.cpp:188
 msgid "Apply"
 msgstr "Appliquer"
 
-#: shared/src/settings-widget/settings-presentation.cpp:184
-#: elder-terms/src/main.cpp:469 elder-terms/src/main-window.ui:190
+#: shared/src/settings-widget/settings-presentation.cpp:190
+#: elder-terms/src/main.cpp:483 elder-terms/src/main.cpp:752
+#: elder-terms/src/main-window.ui:221
 msgid "Save"
 msgstr "Enregistrer"
 
-#: shared/src/settings-widget/settings-presentation.cpp:186
-#: elder-terms/src/main.cpp:468 elder-terms/src/main.cpp:1402
-#: elder-terms/src/main.cpp:1625 elder-terms-vte/src/main.cpp:820
-#: elder-terms-vte/src/main-window.ui:233
-#: elder-terms-vte/src/main-window.ui:310
+#: shared/src/settings-widget/settings-presentation.cpp:192
+#: elder-terms/src/main.cpp:482 elder-terms/src/main.cpp:550
+#: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1682
+#: elder-terms/src/main.cpp:1905 elder-terms-vte/src/main.cpp:890
+#: elder-terms-vte/src/main-window.ui:265
+#: elder-terms-vte/src/main-window.ui:342
 #: elder-terms-vte/src/sftp/sftp-main.cpp:109
 #: elder-terms-vte/src/sftp/sftp-window.cpp:696
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1843
 msgid "Cancel"
 msgstr "Annuler"
 
-#: shared/src/settings-widget/settings-presentation.cpp:188
+#: shared/src/settings-widget/settings-presentation.cpp:194
 msgid "Reset"
 msgstr "Réinitialiser"
 
-#: shared/src/settings-widget/settings-presentation.cpp:190
+#: shared/src/settings-widget/settings-presentation.cpp:196
+#: elder-terms-vte/src/main.cpp:889
+msgid "Select file"
+msgstr "Sélectionnez le fichier"
+
+#: shared/src/settings-widget/settings-presentation.cpp:198
+#: elder-terms-vte/src/main.cpp:891
+msgid "Open"
+msgstr "Ouvert"
+
+#: shared/src/settings-widget/settings-presentation.cpp:200
 msgid "Select Primary Terminal Font"
 msgstr "Sélectionner la police principale du terminal"
 
-#: shared/src/settings-widget/settings-presentation.cpp:192
+#: shared/src/settings-widget/settings-presentation.cpp:202
 msgid "Select Secondary Terminal Font"
 msgstr "Sélectionner la police secondaire du terminal"
 
-#: shared/src/settings-widget/settings-presentation.cpp:194
+#: shared/src/settings-widget/settings-presentation.cpp:204
 msgid "Enabled"
 msgstr "Activé"
 
-#: shared/src/settings-widget/settings-presentation.cpp:196
+#: shared/src/settings-widget/settings-presentation.cpp:206
 msgid "Disabled"
 msgstr "Désactivé"
 
-#: shared/src/settings-widget/settings-presentation.cpp:198
+#: shared/src/settings-widget/settings-presentation.cpp:208
 msgid "Custom font"
 msgstr "Police personnalisée"
 
-#: shared/src/settings-widget/settings-presentation.cpp:200
+#: shared/src/settings-widget/settings-presentation.cpp:210
 msgid "No color"
 msgstr "Aucune couleur"
 
-#: shared/src/settings-widget/settings-presentation.cpp:202
+#: shared/src/settings-widget/settings-presentation.cpp:212
 msgid "Custom color"
 msgstr "Couleur personnalisée"
 
-#: shared/src/settings-widget/settings-presentation.cpp:204
+#: shared/src/settings-widget/settings-presentation.cpp:214
 msgid "Press a key combination"
 msgstr "Appuyez sur une combinaison de touches"
 
-#: shared/src/settings-widget/settings-presentation.cpp:206
+#: shared/src/settings-widget/settings-presentation.cpp:216
 msgid "Clear key binding"
 msgstr "Effacer la liaison des touches"
 
-#: shared/src/settings-widget/settings-presentation.cpp:208
+#: shared/src/settings-widget/settings-presentation.cpp:218
 msgid "Use global default"
 msgstr "Utiliser la valeur par défaut globale"
 
-#: shared/src/settings-widget/settings-presentation.cpp:210
+#: shared/src/settings-widget/settings-presentation.cpp:220
 msgid "Use built-in default"
 msgstr "Utiliser la valeur par défaut intégrée"
 
-#: shared/src/settings-widget/settings-presentation.cpp:212
+#: shared/src/settings-widget/settings-presentation.cpp:222
 msgid "Macro rules"
 msgstr "Règles des macros"
 
-#: shared/src/settings-widget/settings-presentation.cpp:214
+#: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "Rule ID"
 msgstr "ID de règle"
 
-#: shared/src/settings-widget/settings-presentation.cpp:216
+#: shared/src/settings-widget/settings-presentation.cpp:226
 msgid "Regular expression"
 msgstr "Expression régulière"
 
-#: shared/src/settings-widget/settings-presentation.cpp:218
+#: shared/src/settings-widget/settings-presentation.cpp:228
 msgid "Action"
 msgstr "Action"
 
-#: shared/src/settings-widget/settings-presentation.cpp:220
+#: shared/src/settings-widget/settings-presentation.cpp:230
 msgid "Text to send"
 msgstr "Texte à envoyer"
 
-#: shared/src/settings-widget/settings-presentation.cpp:222
+#: shared/src/settings-widget/settings-presentation.cpp:232
 msgid "Command"
 msgstr "Commande"
 
-#: shared/src/settings-widget/settings-presentation.cpp:224
+#: shared/src/settings-widget/settings-presentation.cpp:234
 msgid "Arguments"
 msgstr "Arguments"
 
-#: shared/src/settings-widget/settings-presentation.cpp:226
+#: shared/src/settings-widget/settings-presentation.cpp:236
 msgid "Add rule"
 msgstr "Ajouter une règle"
 
-#: shared/src/settings-widget/settings-presentation.cpp:228
+#: shared/src/settings-widget/settings-presentation.cpp:238
 msgid "Remove rule"
 msgstr "Supprimer la règle"
 
-#: shared/src/settings-widget/settings-presentation.cpp:230
+#: shared/src/settings-widget/settings-presentation.cpp:240
 msgid "Move up"
 msgstr "Monter"
 
-#: shared/src/settings-widget/settings-presentation.cpp:232
+#: shared/src/settings-widget/settings-presentation.cpp:242
 msgid "Move down"
 msgstr "Descendre"
 
-#: shared/src/settings-widget/settings-presentation.cpp:234
+#: shared/src/settings-widget/settings-presentation.cpp:244
 msgid "Send text"
 msgstr "Envoyer un SMS"
 
-#: shared/src/settings-widget/settings-presentation.cpp:236
+#: shared/src/settings-widget/settings-presentation.cpp:246
 msgid "Run command"
 msgstr "Exécuter la commande"
 
-#: shared/src/settings-widget/settings-presentation.cpp:238
+#: shared/src/settings-widget/settings-presentation.cpp:248
 msgid "Add argument"
 msgstr "Ajouter un argument"
 
-#: shared/src/settings-widget/settings-presentation.cpp:240
+#: shared/src/settings-widget/settings-presentation.cpp:250
 msgid "Remove argument"
 msgstr "Supprimer l'argument"
 
-#: shared/src/settings-widget/settings-presentation.cpp:242
+#: shared/src/settings-widget/settings-presentation.cpp:252
 msgid "No device"
 msgstr "Aucun périphérique"
 
-#: shared/src/settings-widget/settings-presentation.cpp:244
+#: shared/src/settings-widget/settings-presentation.cpp:254
 msgid "Stable ID"
 msgstr "ID stable"
 
-#: shared/src/settings-widget/settings-presentation.cpp:248
+#: shared/src/settings-widget/settings-presentation.cpp:258
 msgid "Current device node"
 msgstr "Nœud de périphérique actuel"
 
-#: shared/src/settings-widget/settings-presentation.cpp:250
+#: shared/src/settings-widget/settings-presentation.cpp:260
 msgid "Unavailable"
 msgstr "Indisponible"
 
-#: shared/src/settings-widget/settings-presentation.cpp:278
+#: shared/src/settings-widget/settings-presentation.cpp:288
 msgid "Global default"
 msgstr "Valeur par défaut globale"
 
-#: shared/src/settings-widget/settings-presentation.cpp:279
+#: shared/src/settings-widget/settings-presentation.cpp:289
 msgid "Built-in default"
 msgstr "Valeur par défaut intégrée"
 
-#: shared/src/settings-widget/settings-presentation.cpp:283
+#: shared/src/settings-widget/settings-presentation.cpp:293
 #, c-format
 msgid "%s (global default)"
 msgstr "%s (par défaut global)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:284
+#: shared/src/settings-widget/settings-presentation.cpp:294
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s (par défaut intégré)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:295
+#: shared/src/settings-widget/settings-presentation.cpp:305
 msgid "Enter a whole number"
 msgstr "Entrez un nombre entier"
 
-#: shared/src/settings-widget/settings-presentation.cpp:298
+#: shared/src/settings-widget/settings-presentation.cpp:308
 msgid "Enter a number"
 msgstr "Entrez un numéro"
 
-#: shared/src/settings-widget/settings-presentation.cpp:309
+#: shared/src/settings-widget/settings-presentation.cpp:319
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "La valeur doit être comprise entre %s et %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:318
+#: shared/src/settings-widget/settings-presentation.cpp:328
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "Doit inclure Ctrl, Shift, Alt ou Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:321
+#: shared/src/settings-widget/settings-presentation.cpp:331
 msgid "Contains an empty token"
 msgstr "Contient un jeton vide"
 
-#: shared/src/settings-widget/settings-presentation.cpp:330
+#: shared/src/settings-widget/settings-presentation.cpp:340
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "Contient un modificateur inconnu : %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:343
+#: shared/src/settings-widget/settings-presentation.cpp:353
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "Contient un modificateur en double : %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:351
+#: shared/src/settings-widget/settings-presentation.cpp:361
 msgid "Does not contain a key"
 msgstr "Ne contient pas de clé"
 
-#: shared/src/settings-widget/settings-presentation.cpp:358
+#: shared/src/settings-widget/settings-presentation.cpp:368
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "Contient une clé inconnue : %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:366
+#: shared/src/settings-widget/settings-presentation.cpp:376
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr ""
 "Les zooms avant et arrière doivent utiliser des raccourcis clavier différents"
 
-#: shared/src/settings-widget/settings-presentation.cpp:369
+#: shared/src/settings-widget/settings-presentation.cpp:379
 msgid "Must not be empty"
 msgstr "Ne doit pas être vide"
 
-#: shared/src/settings-widget/settings-presentation.cpp:372
+#: shared/src/settings-widget/settings-presentation.cpp:382
 msgid "The character encoding is not supported"
 msgstr "L'encodage des caractères n'est pas pris en charge"
 
-#: shared/src/settings-widget/settings-presentation.cpp:375
+#: shared/src/settings-widget/settings-presentation.cpp:385
 msgid "Contains a NUL byte"
 msgstr "Contient un NUL octet"
 
+#: shared/src/settings-widget/settings-presentation.cpp:390
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
-msgstr "Saisissez default ou sélectionnez un fichier .oga, .ogg ou .wav existant avec un chemin absolu"
+msgstr ""
+"Saisissez default ou sélectionnez un fichier .oga, .ogg ou .wav existant "
+"avec un chemin absolu"
 
-#: shared/src/settings-widget/settings-presentation.cpp:378
+#: shared/src/settings-widget/settings-presentation.cpp:393
 msgid "Contains an unmatched closing brace"
 msgstr "Contient une accolade fermante inégalée"
 
-#: shared/src/settings-widget/settings-presentation.cpp:381
+#: shared/src/settings-widget/settings-presentation.cpp:396
 msgid "Contains an unmatched opening brace"
 msgstr "Contient une accolade ouvrante inégalée"
 
-#: shared/src/settings-widget/settings-presentation.cpp:384
+#: shared/src/settings-widget/settings-presentation.cpp:399
 msgid "Contains an unknown placeholder"
 msgstr "Contient un espace réservé inconnu"
 
-#: shared/src/settings-widget/settings-presentation.cpp:387
+#: shared/src/settings-widget/settings-presentation.cpp:402
 msgid "Must be relative to the log base directory"
 msgstr "Doit être relatif au répertoire de base des journaux"
 
-#: shared/src/settings-widget/settings-presentation.cpp:390
+#: shared/src/settings-widget/settings-presentation.cpp:405
 msgid "Must not contain parent directory traversal"
 msgstr "Ne doit pas contenir de parcours de répertoire parent"
 
-#: shared/src/settings-widget/settings-presentation.cpp:393
+#: shared/src/settings-widget/settings-presentation.cpp:408
 msgid "Must name a log file"
 msgstr "Doit nommer un fichier journal"
 
-#: shared/src/settings-widget/settings-presentation.cpp:395
+#: shared/src/settings-widget/settings-presentation.cpp:410
 msgid "Invalid value"
 msgstr "Valeur invalide"
 
-#: elder-terms/src/main.cpp:223
+#: elder-terms/src/main.cpp:242
 msgid "Global shortcuts are unavailable"
 msgstr "Les raccourcis globaux ne sont pas disponibles"
 
-#: elder-terms/src/main.cpp:232
+#: elder-terms/src/main.cpp:251
 msgid ""
 "One or more configured global shortcuts could not be registered and will not "
 "work. Check whether your desktop environment supports global shortcuts."
@@ -676,127 +698,149 @@ msgstr ""
 "et ne fonctionneront pas. Vérifiez si votre environnement de bureau prend en "
 "charge les raccourcis globaux."
 
-#: elder-terms/src/main.cpp:236 elder-terms-vte/src/main-window.ui:319
-#: elder-terms-vte/src/main-window.cpp:1595
+#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:351
+#: elder-terms-vte/src/main-window.cpp:1602
 msgid "OK"
 msgstr "OK"
 
-#: elder-terms/src/main.cpp:276
+#: elder-terms/src/main.cpp:295
 msgid "Restart to apply display language?"
 msgstr "Redémarrer pour appliquer la langue d'affichage ?"
 
-#: elder-terms/src/main.cpp:279
+#: elder-terms/src/main.cpp:298
 msgid ""
 "The display language change will take effect after elder-terms restarts."
 msgstr ""
 "Le changement de langue d'affichage prendra effet après le redémarrage de "
 "elder-terms."
 
-#: elder-terms/src/main.cpp:282
+#: elder-terms/src/main.cpp:301
 msgid "Later"
 msgstr "Plus tard"
 
-#: elder-terms/src/main.cpp:284
+#: elder-terms/src/main.cpp:303
 msgid "Restart now"
 msgstr "Redémarrer maintenant"
 
-#: elder-terms/src/main.cpp:412
-msgid "Failed to save global defaults"
-msgstr "Échec de l'enregistrement des paramètres globaux par défaut"
+#: elder-terms/src/main.cpp:432
+msgid "Failed to save connection defaults"
+msgstr "Échec de l’enregistrement des paramètres de connexion par défaut"
 
-#: elder-terms/src/main.cpp:449 elder-terms/src/main-window.ui:173
-msgid "Global defaults"
-msgstr "Valeurs par défaut globales"
+#: elder-terms/src/main.cpp:463 elder-terms/src/main-window.ui:204
+msgid "Connection defaults"
+msgstr "Paramètres de connexion par défaut"
 
-#: elder-terms/src/main.cpp:706
+#: elder-terms/src/main.cpp:550
+msgid "Close"
+msgstr "Fermer"
+
+#: elder-terms/src/main.cpp:627
+msgid "Failed to save application settings"
+msgstr "Échec de l’enregistrement des paramètres de l’application"
+
+#: elder-terms/src/main.cpp:668
+#, c-format
+msgid "Version %s"
+msgstr "Version %s"
+
+#: elder-terms/src/main.cpp:712 elder-terms/src/main.cpp:737
+#: elder-terms/src/main-window.ui:61 elder-terms-vte/src/main-window.ui:67
+msgid "Application"
+msgstr "Application"
+
+#: elder-terms/src/main.cpp:740
+msgid "About"
+msgstr "À propos"
+
+#: elder-terms/src/main.cpp:986
 #, c-format
 msgid "Open connection %s"
 msgstr "Connexion ouverte %s"
 
-#: elder-terms/src/main.cpp:733 elder-terms/src/tray-backend.cpp:371
-#: elder-terms/src/tray-backend.cpp:390 elder-terms/src/tray-backend.cpp:860
+#: elder-terms/src/main.cpp:1013 elder-terms/src/tray-backend.cpp:373
+#: elder-terms/src/tray-backend.cpp:400 elder-terms/src/tray-backend.cpp:907
 msgid "Open elder-terms"
 msgstr "Ouvert elder-terms"
 
-#: elder-terms/src/main.cpp:788 elder-terms/src/main.cpp:1337
+#: elder-terms/src/main.cpp:1068 elder-terms/src/main.cpp:1617
 msgid "Failed to load connection"
 msgstr "Échec du chargement de la connexion"
 
-#: elder-terms/src/main.cpp:835
+#: elder-terms/src/main.cpp:1115
 msgid "New connection"
 msgstr "Nouvelle connexion"
 
-#: elder-terms/src/main.cpp:836
+#: elder-terms/src/main.cpp:1116
 #, c-format
 msgid "New connection %d"
 msgstr "Nouvelle connexion %d"
 
-#: elder-terms/src/main.cpp:1014 elder-terms/src/main.cpp:1031
+#: elder-terms/src/main.cpp:1294 elder-terms/src/main.cpp:1311
 msgid "Failed to monitor connections"
 msgstr "Échec de la surveillance des connexions"
 
-#: elder-terms/src/main.cpp:1027
+#: elder-terms/src/main.cpp:1307
 msgid "Unknown file monitor error"
 msgstr "Erreur de surveillance de fichiers inconnue"
 
-#: elder-terms/src/main.cpp:1179
+#: elder-terms/src/main.cpp:1459
 msgid "Failed to create startup profile"
 msgstr "Échec de la création du profil de démarrage"
 
-#: elder-terms/src/main.cpp:1236 elder-terms/src/main.cpp:1302
+#: elder-terms/src/main.cpp:1516 elder-terms/src/main.cpp:1582
 #, c-format
 msgid "Failed to start %s"
 msgstr "Échec du démarrage de %s"
 
-#: elder-terms/src/main.cpp:1243
+#: elder-terms/src/main.cpp:1523
 #, c-format
 msgid "The %s executable was not found"
 msgstr "L'exécutable %s est introuvable"
 
-#: elder-terms/src/main.cpp:1271
+#: elder-terms/src/main.cpp:1551
 msgid "Unknown process launch error"
 msgstr "Erreur de lancement de processus inconnue"
 
-#: elder-terms/src/main.cpp:1397
+#: elder-terms/src/main.cpp:1677
 msgid "Discard changes?"
 msgstr "Supprimer les modifications ?"
 
-#: elder-terms/src/main.cpp:1400
+#: elder-terms/src/main.cpp:1680
 msgid "The current connection has changes that have not been applied."
 msgstr ""
 "La connexion actuelle comporte des modifications qui n'ont pas été "
 "appliquées."
 
-#: elder-terms/src/main.cpp:1404
+#: elder-terms/src/main.cpp:1684
 msgid "Discard"
 msgstr "Supprimer"
 
-#: elder-terms/src/main.cpp:1557
+#: elder-terms/src/main.cpp:1837
 msgid "Failed to duplicate connection"
 msgstr "Échec de la duplication de la connexion"
 
-#: elder-terms/src/main.cpp:1591
+#: elder-terms/src/main.cpp:1871
 msgid "Failed to delete connection"
 msgstr "Échec de la suppression de la connexion"
 
-#: elder-terms/src/main.cpp:1618
+#: elder-terms/src/main.cpp:1898
 msgid "Delete connection?"
 msgstr "Supprimer la connexion ?"
 
-#: elder-terms/src/main.cpp:1620
+#: elder-terms/src/main.cpp:1900
 #, c-format
 msgid "The connection \"%s\" will be permanently deleted."
 msgstr "La connexion « %s » sera définitivement supprimée."
 
-#: elder-terms/src/main.cpp:1627 elder-terms/src/main-window.ui:27
+#: elder-terms/src/main.cpp:1907 elder-terms/src/main-window.ui:27
 msgid "Delete"
 msgstr "Supprimer"
 
-#: elder-terms/src/main.cpp:1668 elder-terms/src/main.cpp:1681
+#: elder-terms/src/main.cpp:1948 elder-terms/src/main.cpp:1961
 msgid "Failed to rename connection"
 msgstr "Échec du renommage de la connexion"
 
-#: elder-terms/src/main.cpp:1777
+#: elder-terms/src/main.cpp:2057
 msgid "Failed to save connection"
 msgstr "Échec de l'enregistrement de la connexion"
 
@@ -808,19 +852,31 @@ msgstr "Renommer"
 msgid "Duplicate"
 msgstr "Dupliquer"
 
-#: elder-terms/src/main-window.ui:69
+#: elder-terms/src/main-window.ui:35 elder-terms/src/tray-backend.cpp:377
+#: elder-terms/src/tray-backend.cpp:404 elder-terms/src/tray-backend.cpp:909
+#: elder-terms-vte/src/main-window.ui:8
+msgid "Application settings"
+msgstr "Paramètres de l’application"
+
+#: elder-terms/src/main-window.ui:41 elder-terms/src/tray-backend.cpp:381
+#: elder-terms/src/tray-backend.cpp:408 elder-terms/src/tray-backend.cpp:911
+#: elder-terms-vte/src/main-window.ui:14
+msgid "About elder-terms"
+msgstr "À propos d’elder-terms"
+
+#: elder-terms/src/main-window.ui:100
 msgid "Terminal entries"
 msgstr "Entrées de terminal"
 
-#: elder-terms/src/main-window.ui:125
+#: elder-terms/src/main-window.ui:156
 msgid "Select a connection or create a new one."
 msgstr "Sélectionnez une connexion ou créez-en une nouvelle."
 
-#: elder-terms/src/main-window.ui:167
+#: elder-terms/src/main-window.ui:198
 msgid "New"
 msgstr "Nouveau"
 
-#: elder-terms/src/main-window.ui:197
+#: elder-terms/src/main-window.ui:228
 msgid "Launch"
 msgstr "Lancement"
 
@@ -891,21 +947,25 @@ msgstr ""
 msgid "Warning: failed to delete connection profile %s: %s"
 msgstr "Avertissement : échec de la suppression du profil de connexion %s : %s"
 
-#: elder-terms/src/tray-backend.cpp:374 elder-terms/src/tray-backend.cpp:393
-#: elder-terms/src/tray-backend.cpp:861
+#: elder-terms/src/tray-backend.cpp:384 elder-terms/src/tray-backend.cpp:411
+#: elder-terms/src/tray-backend.cpp:912
 msgid "Quit"
 msgstr "Quitter"
 
-#: elder-terms-vte/src/main.cpp:182
+#: elder-terms-vte/src/main.cpp:226
+msgid "Failed to open elder-terms"
+msgstr "Impossible d’ouvrir elder-terms"
+
+#: elder-terms-vte/src/main.cpp:234
 msgid "Macro command failed"
 msgstr "Échec de la commande macro"
 
-#: elder-terms-vte/src/main.cpp:223
+#: elder-terms-vte/src/main.cpp:275
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:277
 msgid "SSH Host Key"
 msgstr "SSH Clé d'hôte"
 
-#: elder-terms-vte/src/main.cpp:225
+#: elder-terms-vte/src/main.cpp:277
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%d\n"
@@ -918,138 +978,130 @@ msgstr ""
 "Empreinte digitale : %s\n"
 "Accepter et enregistrer cette clé d'hôte ?"
 
-#: elder-terms-vte/src/main.cpp:237 elder-terms-vte/src/main-window.ui:274
+#: elder-terms-vte/src/main.cpp:289 elder-terms-vte/src/main-window.ui:306
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:472
 msgid "SSH Authentication"
 msgstr "SSH Authentification"
 
-#: elder-terms-vte/src/main.cpp:238 elder-terms-vte/src/main-window.ui:282
+#: elder-terms-vte/src/main.cpp:290 elder-terms-vte/src/main-window.ui:314
 msgid "Password:"
 msgstr "Mot de passe :"
 
-#: elder-terms-vte/src/main.cpp:253
+#: elder-terms-vte/src/main.cpp:305
 msgid "SSH prompt accepted"
 msgstr "SSH invite acceptée"
 
-#: elder-terms-vte/src/main.cpp:254
+#: elder-terms-vte/src/main.cpp:306
 msgid "SSH prompt cancelled"
 msgstr "SSH invite annulée"
 
-#: elder-terms-vte/src/main.cpp:641 elder-terms-vte/src/main.cpp:645
-#: elder-terms-vte/src/main-window.ui:18
+#: elder-terms-vte/src/main.cpp:699 elder-terms-vte/src/main.cpp:703
+#: elder-terms-vte/src/main-window.ui:32
 msgid "Settings"
 msgstr "Paramètres"
 
-#: elder-terms-vte/src/main.cpp:819
-msgid "Select file"
-msgstr "Sélectionnez le fichier"
-
-#: elder-terms-vte/src/main.cpp:821
-msgid "Open"
-msgstr "Ouvert"
-
-#: elder-terms-vte/src/main.cpp:907 elder-terms-vte/src/main.cpp:917
-#: elder-terms-vte/src/main.cpp:942 elder-terms-vte/src/main.cpp:952
+#: elder-terms-vte/src/main.cpp:977 elder-terms-vte/src/main.cpp:987
+#: elder-terms-vte/src/main.cpp:1012 elder-terms-vte/src/main.cpp:1022
 msgid "Transfer unavailable"
 msgstr "Transfert indisponible"
 
-#: elder-terms-vte/src/main.cpp:1054 elder-terms-vte/src/main.cpp:1076
+#: elder-terms-vte/src/main.cpp:1124 elder-terms-vte/src/main.cpp:1146
 msgid "BREAK unavailable"
 msgstr "BREAK indisponible"
 
-#: elder-terms-vte/src/main.cpp:1060
+#: elder-terms-vte/src/main.cpp:1130
 msgid "Sending BREAK"
 msgstr "Envoi de BREAK"
 
-#: elder-terms-vte/src/main.cpp:1096 elder-terms-vte/src/main.cpp:1618
+#: elder-terms-vte/src/main.cpp:1166 elder-terms-vte/src/main.cpp:1715
 msgid "Text send unavailable"
 msgstr "Envoi de SMS indisponible"
 
-#: elder-terms-vte/src/main.cpp:1104
+#: elder-terms-vte/src/main.cpp:1174
 msgid "Text (Send)"
 msgstr "Texte (Envoyer)"
 
-#: elder-terms-vte/src/main.cpp:1182 elder-terms-vte/src/main.cpp:1213
+#: elder-terms-vte/src/main.cpp:1252 elder-terms-vte/src/main.cpp:1283
 msgid "SFTP unavailable"
 msgstr "SFTP indisponible"
 
-#: elder-terms-vte/src/main.cpp:1257
+#: elder-terms-vte/src/main.cpp:1327
 msgid "Log recording"
 msgstr "Enregistrement du journal"
 
-#: elder-terms-vte/src/main.cpp:1303
+#: elder-terms-vte/src/main.cpp:1373
 msgid "ZMODEM (send)"
 msgstr "ZMODEM (envoyer)"
 
-#: elder-terms-vte/src/main.cpp:1310
+#: elder-terms-vte/src/main.cpp:1380
 msgid "YMODEM (send)"
 msgstr "YMODEM (envoyer)"
 
-#: elder-terms-vte/src/main.cpp:1317
+#: elder-terms-vte/src/main.cpp:1387
 msgid "XMODEM 1K (send)"
 msgstr "XMODEM 1K (envoyer)"
 
-#: elder-terms-vte/src/main.cpp:1326
+#: elder-terms-vte/src/main.cpp:1396
 msgid "XMODEM (send)"
 msgstr "XMODEM (envoyer)"
 
-#: elder-terms-vte/src/main.cpp:1336
+#: elder-terms-vte/src/main.cpp:1406
 msgid "ZMODEM (receive)"
 msgstr "ZMODEM (recevoir)"
 
-#: elder-terms-vte/src/main.cpp:1343
+#: elder-terms-vte/src/main.cpp:1413
 msgid "YMODEM-g (receive)"
 msgstr "YMODEM-g (recevoir)"
 
-#: elder-terms-vte/src/main.cpp:1351
+#: elder-terms-vte/src/main.cpp:1421
 msgid "YMODEM (receive)"
 msgstr "YMODEM (recevoir)"
 
-#: elder-terms-vte/src/main.cpp:1360
+#: elder-terms-vte/src/main.cpp:1430
 msgid "XMODEM CRC (receive)"
 msgstr "XMODEM CRC (recevoir)"
 
-#: elder-terms-vte/src/main.cpp:1369
+#: elder-terms-vte/src/main.cpp:1439
 msgid "XMODEM (receive)"
 msgstr "XMODEM (recevoir)"
 
-#: elder-terms-vte/src/main.cpp:1598
+#: elder-terms-vte/src/main.cpp:1695
 msgid "Hyperlink command failed"
 msgstr "Échec de la commande de l’hyperlien"
 
-#: elder-terms-vte/src/main-window.ui:138
-#: elder-terms-vte/src/main-window.cpp:1496
+#: elder-terms-vte/src/main-window.ui:170
+#: elder-terms-vte/src/main-window.cpp:1503
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1899
 msgid "Disconnected"
 msgstr "Déconnecté"
 
-#: elder-terms-vte/src/main-window.ui:193
+#: elder-terms-vte/src/main-window.ui:225
 msgid "Transferring..."
 msgstr "Transfert..."
 
-#: elder-terms-vte/src/main-window.cpp:330
+#: elder-terms-vte/src/main-window.cpp:329
 msgid "Copy"
 msgstr "Copier"
 
-#: elder-terms-vte/src/main-window.cpp:334
+#: elder-terms-vte/src/main-window.cpp:333
 msgid "Paste"
 msgstr "Coller"
 
-#: elder-terms-vte/src/main-window.cpp:340
+#: elder-terms-vte/src/main-window.cpp:339
 msgid "Send BREAK"
 msgstr "Envoyer BREAK"
 
-#: elder-terms-vte/src/main-window.cpp:1083
+#: elder-terms-vte/src/main-window.cpp:1085
 #, c-format
 msgid "%s (Disconnected)"
 msgstr "%s (Déconnecté)"
 
-#: elder-terms-vte/src/main-window.cpp:1519
+#: elder-terms-vte/src/main-window.cpp:1526
 msgid "SSH connection failed"
 msgstr "SSH échec de la connexion"
 
-#: elder-terms-vte/src/main-window.cpp:1521
+#: elder-terms-vte/src/main-window.cpp:1528
 #, c-format
 msgid ""
 "SSH connection failed:\n"
@@ -1058,7 +1110,7 @@ msgstr ""
 "SSH a échoué :\n"
 "%s"
 
-#: elder-terms-vte/src/main-window.cpp:1595
+#: elder-terms-vte/src/main-window.cpp:1602
 #: elder-terms-vte/src/sftp/sftp-main.cpp:111
 msgid "Accept"
 msgstr "Accepter"
@@ -1217,10 +1269,6 @@ msgstr "Modifié"
 msgid "Remote"
 msgstr "Télécommande"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1557
-msgid "Local"
-msgstr "Local"
-
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1589
 msgid "Up"
 msgstr "Plus"
@@ -1262,7 +1310,7 @@ msgstr "À partir de %s, recevez"
 msgid "Text send failed"
 msgstr "Échec de l'envoi du texte"
 
-#: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:541
+#: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:549
 msgid "local terminal"
 msgstr "terminal local"
 
@@ -1427,3 +1475,9 @@ msgstr "ssh : (inconnu)"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
 msgid "telnet: (unknown)"
 msgstr "telnet : (inconnu)"
+
+#~ msgid "Failed to save global defaults"
+#~ msgstr "Échec de l'enregistrement des paramètres globaux par défaut"
+
+#~ msgid "Global defaults"
+#~ msgstr "Valeurs par défaut globales"

@@ -387,7 +387,7 @@ describe('elder-terms application hotkey lifecycle', () => {
     );
   });
 
-  it('replaces the active hotkey immediately after global settings are saved', async (context) => {
+  it('replaces the active hotkey immediately after application settings are saved', async (context) => {
     await runLauncherGtkTest(
       context,
       async (connections) => {
@@ -398,14 +398,17 @@ describe('elder-terms application hotkey lifecycle', () => {
         await tray.click();
         await waitForWindowCount(app, 1);
         await expectElementKind(
-          await app.getById('global_defaults_button'),
-          'button'
+          await app.getById('application_menu_button'),
+          'toggleButton'
+        ).click();
+        await expectElementKind(
+          await app.getById('application_settings_menu_item'),
+          'menuItem'
         ).click();
         await waitForWindowCount(app, 2);
-        await selectGeneralSettingsTab(app, 'global_settings_notebook');
 
         const entry = expectElementKind(
-          await app.getById('global_settings_general_open_application_entry'),
+          await app.getById('application_settings_open_application_entry'),
           'entry'
         );
         await captureShortcut(app, entry, ['control', 'shift'], 'y');
@@ -413,7 +416,7 @@ describe('elder-terms application hotkey lifecycle', () => {
           expect(await entry.text()).toBe('ctrl+shift+y');
         });
         await expectElementKind(
-          await app.getById('global_defaults_save_button'),
+          await app.getById('application_dialog_save_button'),
           'button'
         ).click();
         await waitForWindowCount(app, 1);
