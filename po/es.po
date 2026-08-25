@@ -96,6 +96,9 @@ msgstr "Cerrar ventana cuando finaliza la sesión"
 msgid "Show window side borders"
 msgstr "Mostrar bordes laterales de la ventana"
 
+msgid "BEL sound"
+msgstr "Sonido BEL"
+
 #: shared/src/settings-widget/settings-presentation.cpp:53
 msgid "Zoom in shortcut"
 msgstr "Ampliar acceso directo"
@@ -624,6 +627,9 @@ msgstr "La codificación de caracteres no es compatible"
 #: shared/src/settings-widget/settings-presentation.cpp:375
 msgid "Contains a NUL byte"
 msgstr "Contiene un NUL byte"
+
+msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
+msgstr "Introduzca default o seleccione un archivo .oga, .ogg o .wav existente con ruta absoluta"
 
 #: shared/src/settings-widget/settings-presentation.cpp:378
 msgid "Contains an unmatched closing brace"

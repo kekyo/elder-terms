@@ -97,6 +97,10 @@ using elder_terms::TerminalReturnCode;
 using elder_terms::TerminalTextSettings;
 using elder_terms::terminal_auto_close;
 using elder_terms::terminal_backspace_code_setting_key;
+using elder_terms::TerminalBellSettings;
+using elder_terms::terminal_bell_settings;
+using elder_terms::terminal_bell_sound_is_valid;
+using elder_terms::terminal_bell_sound_setting_key;
 using elder_terms::terminal_connection_profile;
 using elder_terms::terminal_cursor_key_mode_setting_key;
 using elder_terms::terminal_cursor_key_mode_to_string;
@@ -210,6 +214,8 @@ static void test_default_settings() {
               "default terminal auto-close should be enabled");
   expect_true(!terminal_show_border(store),
               "terminal window side borders should be disabled by default");
+  expect_true(!terminal_bell_settings(store).sound_file.has_value(),
+              "the default terminal bell should retain VTE's built-in beep");
   const GeneralColorSettings colors = general_color_settings(store);
   expect_true(!colors.exterior_background.has_value(),
               "default exterior background should remain theme-controlled");
@@ -599,6 +605,128 @@ static void test_terminal_font_family_defaults_override_global_fonts() {
   expect_true(content.find("font_fallback_family=default") !=
                   std::string::npos,
               "the default fallback font should be persisted");
+}
+
+static void test_terminal_bell_sound_validation_and_round_trip() {
+  const std::filesystem::path wav_path =
+      temporary_config_path("terminal-bell-wav").replace_extension(".wav");
+  const std::filesystem::path oga_path =
+      temporary_config_path("terminal-bell-oga").replace_extension(".oga");
+  const std::filesystem::path ogg_path =
+      temporary_config_path("terminal-bell-ogg").replace_extension(".ogg");
+  const std::filesystem::path mp3_path =
+      temporary_config_path("terminal-bell-mp3").replace_extension(".mp3");
+  write_config(wav_path, "test");
+  write_config(oga_path, "test");
+  write_config(ogg_path, "test");
+  write_config(mp3_path, "test");
+
+  const elder_terms::SettingKey bell_key =
+      terminal_bell_sound_setting_key();
+  expect_true(bell_key.section == "terminal" &&
+                  bell_key.name == "bell_sound",
+              "the terminal bell should use [terminal] bell_sound");
+
+  std::string reason;
+  expect_true(terminal_bell_sound_is_valid("default", &reason),
+              "the built-in terminal bell value should be accepted");
+  expect_true(terminal_bell_sound_is_valid(wav_path.string(), &reason),
+              "an existing WAV terminal bell should be accepted");
+  expect_true(terminal_bell_sound_is_valid(oga_path.string(), &reason),
+              "an existing Ogg Vorbis .oga terminal bell should be accepted");
+  expect_true(terminal_bell_sound_is_valid(ogg_path.string(), &reason),
+              "an existing Ogg Vorbis .ogg terminal bell should be accepted");
+  expect_true(!terminal_bell_sound_is_valid("relative.wav", &reason),
+              "a relative terminal bell path should be rejected");
+  expect_true(!terminal_bell_sound_is_valid(mp3_path.string(), &reason),
+              "an unsupported terminal bell extension should be rejected");
+  expect_true(!terminal_bell_sound_is_valid(
+                  (wav_path.parent_path() / "missing.wav").string(), &reason),
+              "a missing terminal bell file should be rejected");
+
+  SettingsStore store =
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
+  expect_true(set_explicit_setting_value(
+                  &store, terminal_bell_sound_setting_key(),
+                  elder_terms::SettingValue{wav_path.string()}),
+              "a custom terminal bell should be accepted by the settings store");
+  const TerminalBellSettings bell = terminal_bell_settings(store);
+  expect_true(bell.sound_file ==
+                  std::optional<std::filesystem::path>{wav_path},
+              "the custom terminal bell path should be exposed as a path");
+
+  const std::filesystem::path config_path =
+      temporary_config_path("terminal-bell-round-trip");
+  const SettingsSaveResult saved = save_settings(store, config_path);
+  expect_true(saved.saved, "custom terminal bell settings should save");
+  expect_true(read_config(config_path).find("bell_sound=" +
+                                            wav_path.string()) !=
+                  std::string::npos,
+              "a custom terminal bell path should be persisted");
+  const SettingsLoadResult reloaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = config_path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  expect_true(terminal_bell_settings(reloaded.store).sound_file ==
+                  std::optional<std::filesystem::path>{wav_path},
+              "a custom terminal bell should survive saving and reloading");
+
+  expect_true(set_explicit_setting_value(
+                  &store, terminal_bell_sound_setting_key(),
+                  elder_terms::SettingValue{std::string("default")}),
+              "an explicit built-in terminal bell should be accepted");
+  expect_true(!terminal_bell_settings(store).sound_file.has_value(),
+              "an explicit default should restore VTE's built-in beep");
+
+  const std::filesystem::path global_path =
+      temporary_config_path("global-terminal-bell");
+  const std::filesystem::path connection_path =
+      temporary_config_path("connection-terminal-bell");
+  write_config(global_path,
+               "[terminal]\n"
+               "bell_sound=" +
+                   oga_path.string() + "\n");
+  write_config(connection_path, "");
+  SettingsLoadResult layered = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  expect_true(terminal_bell_settings(layered.store).sound_file ==
+                  std::optional<std::filesystem::path>{oga_path},
+              "a connection should inherit the global terminal bell");
+  expect_true(setting_value_source(layered.store, bell_key) ==
+                  SettingValueSource::global,
+              "an inherited terminal bell should report its global source");
+
+  write_config(connection_path,
+               "[terminal]\n"
+               "bell_sound=default\n");
+  layered = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  expect_true(!terminal_bell_settings(layered.store).sound_file.has_value(),
+              "an explicit default should override a global custom bell");
+  expect_true(setting_value_source(layered.store, bell_key) ==
+                  SettingValueSource::override,
+              "an explicit default terminal bell should remain an override");
+
+  remove_config(config_path);
+  remove_config(global_path);
+  remove_config(connection_path);
+  remove_config(wav_path);
+  remove_config(oga_path);
+  remove_config(ogg_path);
+  remove_config(mp3_path);
 }
 
 static void test_general_color_settings() {
@@ -3683,6 +3811,8 @@ int main() {
         test_terminal_font_family_settings_round_trip_and_layering();
     elder_terms_settings_test::
         test_terminal_font_family_defaults_override_global_fonts();
+    elder_terms_settings_test::
+        test_terminal_bell_sound_validation_and_round_trip();
     elder_terms_settings_test::test_connection_name_settings();
     elder_terms_settings_test::test_general_color_settings();
     elder_terms_settings_test::

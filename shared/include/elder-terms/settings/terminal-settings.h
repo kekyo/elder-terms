@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -35,6 +36,14 @@ struct TerminalFontFamilies {
   std::optional<std::string> primary_family;
   /** Secondary fallback family, or no value to use normal system fallback. */
   std::optional<std::string> fallback_family;
+};
+
+/**
+ * Terminal BEL playback settings.
+ */
+struct TerminalBellSettings {
+  /** Custom sound file, or no value to retain VTE's built-in audible bell. */
+  std::optional<std::filesystem::path> sound_file;
 };
 
 /**
@@ -115,6 +124,13 @@ ELDER_TERMS_API SettingKey terminal_auto_close_setting_key();
 ELDER_TERMS_API SettingKey terminal_show_border_setting_key();
 
 /**
+ * Returns the setting key for [terminal] bell_sound.
+ *
+ * @returns Setting key for terminal BEL playback.
+ */
+ELDER_TERMS_API SettingKey terminal_bell_sound_setting_key();
+
+/**
  * Returns the setting key for [terminal] zoom_in_key.
  *
  * @returns Setting key for the terminal zoom-in binding.
@@ -183,6 +199,17 @@ ELDER_TERMS_API bool terminal_encoding_name_is_valid(
 ELDER_TERMS_API std::vector<std::string> terminal_encoding_choices();
 
 /**
+ * Validates a terminal BEL sound setting.
+ *
+ * @param value `default` or an absolute path to an existing .oga, .ogg, or
+ * .wav regular file.
+ * @param reason Receives a human-readable validation failure reason.
+ * @returns True when the built-in beep or a supported custom file is selected.
+ */
+ELDER_TERMS_API bool terminal_bell_sound_is_valid(
+    const std::string &value, std::string *reason);
+
+/**
  * Returns terminal setting definitions.
  *
  * @param terminal_defaults Default terminal display settings.
@@ -224,6 +251,15 @@ ELDER_TERMS_API bool terminal_auto_close(const SettingsStore &store);
  * @returns True when the terminal window should show left and right borders.
  */
 ELDER_TERMS_API bool terminal_show_border(const SettingsStore &store);
+
+/**
+ * Extracts terminal BEL playback settings from a store.
+ *
+ * @param store Source settings store containing validated values.
+ * @returns Built-in or custom terminal BEL playback settings.
+ */
+ELDER_TERMS_API TerminalBellSettings
+terminal_bell_settings(const SettingsStore &store);
 
 /**
  * Extracts the raw terminal zoom-in binding text from a store.

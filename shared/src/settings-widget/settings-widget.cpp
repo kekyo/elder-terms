@@ -116,6 +116,7 @@ struct SettingsWidgetState {
   GtkWidget *terminal_font_fallback_button = nullptr;
   GtkWidget *terminal_auto_close_combo = nullptr;
   GtkWidget *terminal_show_border_combo = nullptr;
+  GtkWidget *terminal_bell_sound_entry = nullptr;
   GtkWidget *terminal_encoding_combo = nullptr;
   GtkWidget *terminal_encoding_entry = nullptr;
   GtkWidget *terminal_backspace_code_combo = nullptr;
@@ -126,6 +127,7 @@ struct SettingsWidgetState {
   bool terminal_scrollback_lines_valid = true;
   bool terminal_zoom_valid = true;
   bool terminal_encoding_valid = true;
+  bool terminal_bell_sound_valid = true;
   KeyBindingInputWidgetState *terminal_zoom_in_key_input = nullptr;
   KeyBindingInputWidgetState *terminal_zoom_out_key_input = nullptr;
   KeyBindingInputWidgetState *terminal_send_break_key_input = nullptr;
@@ -1115,6 +1117,39 @@ static void update_terminal_show_border_from_widget(
       SettingValue{choice == boolean_enabled});
 }
 
+static void update_terminal_bell_sound_from_widget(
+    SettingsWidgetState *state) {
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->terminal_bell_sound_entry));
+  const std::string value = text == nullptr ? "" : text;
+  if (value.empty()) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 terminal_bell_sound_setting_key());
+    state->terminal_bell_sound_valid = true;
+    set_entry_validation(state->terminal_bell_sound_entry, true, {});
+    sync_cleared_entry(
+        state, state->terminal_bell_sound_entry,
+        terminal_bell_sound_setting_key(),
+        setting_string_value_or_default(
+            state->draft_store, terminal_bell_sound_setting_key(),
+            "default"));
+    return;
+  }
+
+  gtk_entry_set_placeholder_text(GTK_ENTRY(state->terminal_bell_sound_entry),
+                                 nullptr);
+  std::string reason;
+  state->terminal_bell_sound_valid =
+      terminal_bell_sound_is_valid(value, &reason);
+  set_entry_validation(state->terminal_bell_sound_entry,
+                       state->terminal_bell_sound_valid, reason);
+  if (state->terminal_bell_sound_valid) {
+    set_explicit_setting_value(&state->draft_store,
+                               terminal_bell_sound_setting_key(),
+                               SettingValue{value});
+  }
+}
+
 static void sync_terminal_font_controls(SettingsWidgetState *state) {
   const TerminalFontFamilies fonts = terminal_font_families(state->draft_store);
   const std::string primary =
@@ -1482,6 +1517,7 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
          state->terminal_height_valid &&
          state->terminal_scrollback_lines_valid &&
          state->terminal_zoom_valid && state->terminal_encoding_valid &&
+         state->terminal_bell_sound_valid &&
          state->telnet_port_valid && state->ssh_port_valid &&
          state->serial_baudrate_valid &&
          state->transfer_text_send_rate_valid &&
@@ -3138,6 +3174,16 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
                            terminal_show_border_setting_key(),
                            terminal_show_border(state->draft_store));
   }
+  if (state->terminal_bell_sound_entry != nullptr) {
+    sync_inheritable_entry(
+        state->terminal_bell_sound_entry, state->draft_store,
+        terminal_bell_sound_setting_key(),
+        setting_string_value_or_default(
+            state->draft_store, terminal_bell_sound_setting_key(),
+            "default"));
+    state->terminal_bell_sound_valid = true;
+    set_entry_validation(state->terminal_bell_sound_entry, true, {});
+  }
   sync_general_color_control(
       state, GeneralColorField::exterior_background,
       colors.exterior_background);
@@ -3592,6 +3638,16 @@ static void on_terminal_show_border_changed(GtkComboBox *, gpointer data) {
     return;
   }
   update_terminal_show_border_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_terminal_bell_sound_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_terminal_bell_sound_from_widget(state);
+  update_action_sensitivity(state);
   notify_changed(state);
 }
 
@@ -4472,6 +4528,13 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   attach_row(page, 9, terminal_show_border_setting_key(),
              state->terminal_show_border_combo);
 
+  state->terminal_bell_sound_entry =
+      create_entry(widget_id(state, "terminal_bell_sound_entry"));
+  g_signal_connect(state->terminal_bell_sound_entry, "changed",
+                   G_CALLBACK(on_terminal_bell_sound_changed), state);
+  attach_row(page, 10, terminal_bell_sound_setting_key(),
+             state->terminal_bell_sound_entry);
+
   const std::string zoom_in_id =
       widget_id(state, "terminal_zoom_in_key_entry");
   state->terminal_zoom_in_key_input = create_key_binding_input_widget({
@@ -4498,7 +4561,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(zoom_in_row),
                      state->terminal_zoom_in_key_reset_button, FALSE, FALSE,
                      0);
-  attach_row(page, 10, terminal_zoom_in_key_setting_key(), zoom_in_row);
+  attach_row(page, 11, terminal_zoom_in_key_setting_key(), zoom_in_row);
 
   const std::string zoom_out_id =
       widget_id(state, "terminal_zoom_out_key_entry");
@@ -4526,7 +4589,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(zoom_out_row),
                      state->terminal_zoom_out_key_reset_button, FALSE, FALSE,
                      0);
-  attach_row(page, 11, terminal_zoom_out_key_setting_key(), zoom_out_row);
+  attach_row(page, 12, terminal_zoom_out_key_setting_key(), zoom_out_row);
 
   const std::string send_break_id =
       widget_id(state, "terminal_send_break_key_entry");
@@ -4556,7 +4619,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(send_break_row),
                      state->terminal_send_break_key_reset_button, FALSE,
                      FALSE, 0);
-  attach_row(page, 12, terminal_send_break_key_setting_key(),
+  attach_row(page, 13, terminal_send_break_key_setting_key(),
              send_break_row);
 
   GtkWidget *primary_font_row =
@@ -4575,7 +4638,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                      state->terminal_font_primary_mode_combo, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(primary_font_row),
                      state->terminal_font_primary_button, TRUE, TRUE, 0);
-  attach_row(page, 13, terminal_font_primary_family_setting_key(),
+  attach_row(page, 14, terminal_font_primary_family_setting_key(),
              primary_font_row);
 
   GtkWidget *fallback_font_row =
@@ -4594,7 +4657,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                      state->terminal_font_fallback_mode_combo, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(fallback_font_row),
                      state->terminal_font_fallback_button, TRUE, TRUE, 0);
-  attach_row(page, 14, terminal_font_fallback_family_setting_key(),
+  attach_row(page, 15, terminal_font_fallback_family_setting_key(),
              fallback_font_row);
 
   return scroller;
@@ -5352,6 +5415,7 @@ void settings_widget_rebase_fallbacks(
       !state->terminal_scrollback_lines_valid;
   const bool zoom_invalid = !state->terminal_zoom_valid;
   const bool encoding_invalid = !state->terminal_encoding_valid;
+  const bool bell_sound_invalid = !state->terminal_bell_sound_valid;
   const bool telnet_port_invalid = !state->telnet_port_valid;
   const bool ssh_port_invalid = !state->ssh_port_valid;
   const bool baudrate_invalid = !state->serial_baudrate_valid;
@@ -5370,6 +5434,8 @@ void settings_widget_rebase_fallbacks(
   const std::string zoom_text = entry_text(state->terminal_zoom_entry);
   const std::string encoding_text =
       entry_text(state->terminal_encoding_entry);
+  const std::string bell_sound_text =
+      entry_text(state->terminal_bell_sound_entry);
   const std::string telnet_port_text =
       entry_text(state->telnet_port_entry);
   const std::string ssh_port_text = entry_text(state->ssh_port_entry);
@@ -5416,6 +5482,10 @@ void settings_widget_rebase_fallbacks(
   restore_invalid(state->terminal_encoding_entry, encoding_text,
                   encoding_invalid, [state]() {
                     update_terminal_encoding_from_widget(state);
+                  });
+  restore_invalid(state->terminal_bell_sound_entry, bell_sound_text,
+                  bell_sound_invalid, [state]() {
+                    update_terminal_bell_sound_from_widget(state);
                   });
   restore_invalid(state->telnet_port_entry, telnet_port_text,
                   telnet_port_invalid,

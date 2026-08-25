@@ -52,6 +52,7 @@ interface AppliedStore {
   readonly [key: string]: string;
   readonly name: string;
   readonly auto_close: string;
+  readonly bell_sound: string;
   readonly show_border: string;
   readonly backspace_code: string;
   readonly background: string;
@@ -3432,6 +3433,43 @@ describe.concurrent('shared settings widget', () => {
         await waitForChangedState(app, 'CHANGED dirty=true valid=true');
         await expectSensitive(apply);
         await expectSensitive(save);
+      }
+    );
+  });
+
+  it('validates and applies a custom terminal BEL sound file', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal', '--save'],
+      async ({ app, directory }) => {
+        await showTerminalPage(app);
+        const bellSound = expectElementKind(
+          await app.getById('settings_terminal_bell_sound_entry'),
+          'entry'
+        );
+        const apply = await app.getById('settings_apply_button');
+        const save = await app.getById('settings_save_button');
+
+        expect(await bellSound.text()).toBe('');
+        await waitForEntryPlaceholder(
+          app,
+          'settings_terminal_bell_sound_entry',
+          'default (built-in default)'
+        );
+
+        await bellSound.setText('relative.wav');
+        await waitForChangedState(app, 'CHANGED dirty=true valid=false');
+        await expectInsensitive(apply);
+        await expectInsensitive(save);
+
+        const soundPath = join(directory, 'bell.wav');
+        await writeFile(soundPath, 'test');
+        await bellSound.setText(soundPath);
+        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
+        await expectSensitive(apply);
+        await expectSensitive(save);
+        await expectElementKind(apply, 'button').click();
+        expect((await waitForAppliedStore(app)).bell_sound).toBe(soundPath);
       }
     );
   });

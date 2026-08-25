@@ -597,6 +597,8 @@ static void print_store(const char *prefix,
       elder_terms::terminal_display_settings(store);
   const elder_terms::TerminalFontFamilies font_families =
       elder_terms::terminal_font_families(store);
+  const elder_terms::TerminalBellSettings bell =
+      elder_terms::terminal_bell_settings(store);
   const std::string exterior_background =
       elder_terms::setting_string_value_or_default(
           store,
@@ -659,6 +661,9 @@ static void print_store(const char *prefix,
                    text_settings.return_code)
             << " auto_close="
             << (elder_terms::terminal_auto_close(store) ? "true" : "false")
+            << " bell_sound="
+            << (bell.sound_file.has_value() ? bell.sound_file->string()
+                                            : "default")
             << " show_border="
             << (elder_terms::terminal_show_border(store) ? "true" : "false")
             << " exterior_background=" << exterior_background
@@ -752,6 +757,8 @@ static void print_store(const char *prefix,
       elder_terms::terminal_font_fallback_family_setting_key());
   print_setting_metadata(store, "auto_close",
                          elder_terms::terminal_auto_close_setting_key());
+  print_setting_metadata(store, "bell_sound",
+                         elder_terms::terminal_bell_sound_setting_key());
   print_setting_metadata(store, "show_border",
                          elder_terms::terminal_show_border_setting_key());
   print_setting_metadata(

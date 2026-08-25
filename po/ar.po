@@ -97,6 +97,9 @@ msgstr "إغلاق النافذة عند انتهاء الجلسة"
 msgid "Show window side borders"
 msgstr "إظهار الحدود الجانبية للنافذة"
 
+msgid "BEL sound"
+msgstr "صوت BEL"
+
 #: shared/src/settings-widget/settings-presentation.cpp:53
 msgid "Zoom in shortcut"
 msgstr "اختصار التكبير"
@@ -625,6 +628,9 @@ msgstr "ترميز الأحرف غير مدعوم"
 #: shared/src/settings-widget/settings-presentation.cpp:375
 msgid "Contains a NUL byte"
 msgstr "يحتوي على NUL بايت"
+
+msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
+msgstr "أدخل default أو حدد ملف .oga أو .ogg أو .wav موجودًا بمسار مطلق"
 
 #: shared/src/settings-widget/settings-presentation.cpp:378
 msgid "Contains an unmatched closing brace"

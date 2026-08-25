@@ -96,6 +96,9 @@ msgstr "会话结束时关闭窗口"
 msgid "Show window side borders"
 msgstr "显示窗口左右边框"
 
+msgid "BEL sound"
+msgstr "BEL 声音"
+
 #: shared/src/settings-widget/settings-presentation.cpp:53
 msgid "Zoom in shortcut"
 msgstr "放大快捷方式"
@@ -624,6 +627,9 @@ msgstr "不支持字符编码"
 #: shared/src/settings-widget/settings-presentation.cpp:375
 msgid "Contains a NUL byte"
 msgstr "包含 NUL 字节"
+
+msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
+msgstr "输入 default，或选择使用绝对路径的现有 .oga、.ogg 或 .wav 文件"
 
 #: shared/src/settings-widget/settings-presentation.cpp:378
 msgid "Contains an unmatched closing brace"

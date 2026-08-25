@@ -97,6 +97,9 @@ msgstr "Закрыть окно по завершении сеанса"
 msgid "Show window side borders"
 msgstr "Показывать боковые границы окна"
 
+msgid "BEL sound"
+msgstr "Звук BEL"
+
 #: shared/src/settings-widget/settings-presentation.cpp:53
 msgid "Zoom in shortcut"
 msgstr "Увеличить ярлык"
@@ -627,6 +630,9 @@ msgstr "Кодировка символов не поддерживается"
 #: shared/src/settings-widget/settings-presentation.cpp:375
 msgid "Contains a NUL byte"
 msgstr "Содержит байт NUL"
+
+msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
+msgstr "Введите default или выберите существующий файл .oga, .ogg или .wav с абсолютным путём"
 
 #: shared/src/settings-widget/settings-presentation.cpp:378
 msgid "Contains an unmatched closing brace"

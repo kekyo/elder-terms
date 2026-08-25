@@ -96,6 +96,9 @@ msgstr "सत्र समाप्त होने पर विंडो ब�
 msgid "Show window side borders"
 msgstr "विंडो की पार्श्व सीमाएँ दिखाएँ"
 
+msgid "BEL sound"
+msgstr "BEL ध्वनि"
+
 #: shared/src/settings-widget/settings-presentation.cpp:53
 msgid "Zoom in shortcut"
 msgstr "शॉर्टकट में ज़ूम करें"
@@ -624,6 +627,9 @@ msgstr "वर्ण एन्कोडिंग समर्थित नही
 #: shared/src/settings-widget/settings-presentation.cpp:375
 msgid "Contains a NUL byte"
 msgstr "में एक NUL बाइट"
+
+msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
+msgstr "default दर्ज करें या निरपेक्ष पथ वाली मौजूदा .oga, .ogg या .wav फ़ाइल चुनें"
 
 #: shared/src/settings-widget/settings-presentation.cpp:378
 msgid "Contains an unmatched closing brace"

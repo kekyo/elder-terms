@@ -250,6 +250,10 @@ container_image_for_target debian trixie riscv64
   it('configures Meson for a relocatable package installation', () => {
     const binDirectory = join(temporaryRoot, 'container-bin');
     const invocationPath = join(temporaryRoot, 'meson-invocation.txt');
+    const pkgConfigInvocationPath = join(
+      temporaryRoot,
+      'pkg-config-invocation.txt'
+    );
     mkdirSync(binDirectory);
     writeExecutable(
       join(binDirectory, 'meson'),
@@ -258,7 +262,13 @@ printf '%s\\n' "$@" >"$ELDER_TERMS_TEST_MESON_INVOCATION"
 exit 91
 `
     );
-    writeExecutable(join(binDirectory, 'pkg-config'), '#!/bin/sh\nexit 0\n');
+    writeExecutable(
+      join(binDirectory, 'pkg-config'),
+      `#!/bin/sh
+printf '%s\\n' "$*" >>"$ELDER_TERMS_TEST_PKG_CONFIG_INVOCATION"
+exit 0
+`
+    );
 
     const result = run(containerScript, [], {
       ...process.env,
@@ -270,6 +280,7 @@ exit 91
       ELDER_TERMS_PACKAGE_NAME: 'elder-terms',
       ELDER_TERMS_PACKAGE_VERSION: '1.2.3-test',
       ELDER_TERMS_TEST_MESON_INVOCATION: invocationPath,
+      ELDER_TERMS_TEST_PKG_CONFIG_INVOCATION: pkgConfigInvocationPath,
       ELDER_TERMS_WORK_DIR: join(temporaryRoot, 'container-work'),
     });
     expect(result.status).toBe(91);
@@ -280,6 +291,9 @@ exit 91
     expect(invocation).toContain('-Dbuild_tests=false');
     expect(invocation).toContain('-Dwerror=false');
     expect(invocation).toContain('--buildtype=release');
+    expect(readFileSync(pkgConfigInvocationPath, 'utf8').split('\n')).toContain(
+      '--exists libcanberra'
+    );
   });
 
   it('disables libxyzm debug information for release package builds', () => {
@@ -471,6 +485,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     );
     const containerfile = readFileSync(`${recordsPath}.containerfile`, 'utf8');
     for (const dependency of [
+      'libcanberra-dev',
       'libgtk-3-dev',
       'libssh-dev',
       'libudev-dev',

@@ -96,6 +96,9 @@ msgstr "セッション終了時にウィンドウを閉じる"
 msgid "Show window side borders"
 msgstr "ウィンドウの左右にボーダーを表示する"
 
+msgid "BEL sound"
+msgstr "BELサウンド"
+
 #: shared/src/settings-widget/settings-presentation.cpp:53
 msgid "Zoom in shortcut"
 msgstr "拡大ショートカット"
@@ -624,6 +627,9 @@ msgstr "この文字エンコーディングには対応していません"
 #: shared/src/settings-widget/settings-presentation.cpp:375
 msgid "Contains a NUL byte"
 msgstr "NULバイトが含まれています"
+
+msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
+msgstr "defaultを入力するか、既存の.oga、.ogg、.wavファイルを絶対パスで指定してください"
 
 #: shared/src/settings-widget/settings-presentation.cpp:378
 msgid "Contains an unmatched closing brace"
