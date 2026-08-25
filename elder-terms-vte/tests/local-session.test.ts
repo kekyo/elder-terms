@@ -333,6 +333,58 @@ const brightPixelCount = (capture: GtkCapture): number => {
 };
 
 describe.concurrent('elder-terms-vte local session', () => {
+  it('starts the configured local process with exact arguments instead of the user shell', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const markerPath = join(directory, 'configured-process-arguments.txt');
+      const fallbackMarkerPath = join(directory, 'fallback-shell-started.txt');
+      const commandPath = join(directory, 'configured-local-process');
+      const fallbackShellPath = join(directory, 'fallback-shell.sh');
+      const configPath = join(directory, 'configured-local-process.ini');
+      await writeFile(
+        commandPath,
+        `#!/bin/sh\nprintf '%s\\n' "$#" "$@" > ${shellQuote(
+          markerPath
+        )}\nexit 0\n`,
+        'utf8'
+      );
+      await chmod(commandPath, 0o755);
+      await writeFile(
+        fallbackShellPath,
+        `#!/bin/sh\nprintf fallback > ${shellQuote(
+          fallbackMarkerPath
+        )}\nexit 0\n`,
+        'utf8'
+      );
+      await chmod(fallbackShellPath, 0o755);
+      await writeFile(
+        configPath,
+        "[local]\ncommand_line=configured-local-process alpha 'two words' $HOME '*'\n\n[terminal]\nauto_close=false\n",
+        'utf8'
+      );
+
+      await runGtkTest(
+        context,
+        ['-c', configPath],
+        async (_app, evidence) => {
+          await waitForFileText(
+            markerPath,
+            ['4', 'alpha', 'two words', '$HOME', '*', ''].join('\n')
+          );
+          await expect(
+            readFile(fallbackMarkerPath, 'utf8')
+          ).rejects.toMatchObject({ code: 'ENOENT' });
+          await evidence.log('configured local process arguments preserved');
+        },
+        {
+          env: {
+            PATH: `${directory}:${process.env.PATH ?? ''}`,
+            SHELL: fallbackShellPath,
+          },
+        }
+      );
+    });
+  });
+
   it('exits when the local shell exits and terminal auto_close is enabled', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const shell = await createExitingShellFixture(directory);

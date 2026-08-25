@@ -299,6 +299,117 @@ static void test_default_settings() {
               "default local cursor keys should use normal sequences");
 }
 
+static void test_local_command_line_setting_round_trip_and_layering() {
+  const elder_terms::SettingKey command_line_key =
+      elder_terms::local_command_line_setting_key();
+  expect_true(command_line_key.section == "local" &&
+                  command_line_key.name == "command_line",
+              "the local startup command should use [local] command_line");
+
+  const SettingsStore defaults =
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
+  expect_true(elder_terms::setting_string_value_or_default(
+                  defaults, command_line_key, "missing") == "",
+              "the built-in local command line should select the user shell");
+  const TerminalConnectionProfile default_profile =
+      required_terminal_connection_profile(defaults);
+  const LocalShellConnectionSettings default_local =
+      std::get<LocalShellConnectionSettings>(default_profile.settings);
+  expect_true(default_local.argv.empty(),
+              "the default local process arguments should defer to the user "
+              "shell");
+
+  const std::filesystem::path global_path =
+      temporary_config_path("global-local-command-line");
+  const std::filesystem::path connection_path =
+      temporary_config_path("connection-local-command-line");
+  const std::filesystem::path startup_path =
+      temporary_config_path("startup-local-command-line");
+  const std::filesystem::path saved_path =
+      temporary_config_path("saved-local-command-line");
+  write_config(global_path,
+               "[local]\n"
+               "command_line=global-shell --global\n");
+  write_config(connection_path,
+               "[general]\n"
+               "type=local\n"
+               "\n"
+               "[local]\n"
+               "command_line=connection-shell 'connection value'\n");
+  write_config(startup_path,
+               "[local]\n"
+               "command_line=startup-shell --startup\n");
+
+  const SettingsLoadResult loaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = startup_path,
+          .global_config_path = global_path,
+      },
+      1.0);
+  expect_true(loaded.loaded,
+              "a layered local startup command should load successfully");
+  expect_true(elder_terms::setting_string_value_or_default(
+                  loaded.store, command_line_key, "") ==
+                  "startup-shell --startup",
+              "startup settings should override the connection local "
+              "command");
+  expect_true(setting_value_source(loaded.store, command_line_key) ==
+                  SettingValueSource::override,
+              "a startup local command should be reported as an override");
+  expect_true(setting_fallback_source(loaded.store, command_line_key) ==
+                  SettingValueSource::global,
+              "an overridden local command should retain its global source");
+  expect_true(std::get<std::string>(setting_fallback_value(
+                  loaded.store, command_line_key,
+                  elder_terms::SettingValue{std::string()})) ==
+                  "global-shell --global",
+              "an overridden local command should retain its global value");
+  const TerminalConnectionProfile configured_profile =
+      required_terminal_connection_profile(loaded.store);
+  const LocalShellConnectionSettings configured_local =
+      std::get<LocalShellConnectionSettings>(configured_profile.settings);
+  expect_true(configured_local.argv ==
+                  std::vector<std::string>{"startup-shell", "--startup"},
+              "the effective local command line should be parsed into exact "
+              "process arguments");
+
+  const SettingsSaveResult saved = save_settings(loaded.store, saved_path);
+  expect_true(saved.saved, "the local startup command should save");
+  expect_true(read_config(saved_path).find(
+                  "command_line=startup-shell --startup") !=
+                  std::string::npos,
+              "the saved connection should retain its local startup command");
+
+  write_config(connection_path,
+               "[general]\n"
+               "type=local\n"
+               "\n"
+               "[local]\n"
+               "command_line=broken 'command line\n");
+  const SettingsLoadResult invalid = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  expect_true(warnings_contain(
+                  invalid.warnings,
+                  "invalid configuration value [local] command_line"),
+              "an invalid local command line should emit a precise warning");
+  expect_true(elder_terms::setting_string_value_or_default(
+                  invalid.store, command_line_key, "") ==
+                  "global-shell --global",
+              "an invalid local command should use the global fallback");
+
+  remove_config(global_path);
+  remove_config(connection_path);
+  remove_config(startup_path);
+  remove_config(saved_path);
+}
+
 static SettingsLoadResult
 load_terminal_scrollback_lines(const std::string &name,
                                const std::string &value) {
@@ -3564,6 +3675,8 @@ static void test_save_empty_global_settings_creates_parent_directory() {
 int main() {
   try {
     elder_terms_settings_test::test_default_settings();
+    elder_terms_settings_test::
+        test_local_command_line_setting_round_trip_and_layering();
     elder_terms_settings_test::
         test_terminal_scrollback_lines_range_and_round_trip();
     elder_terms_settings_test::

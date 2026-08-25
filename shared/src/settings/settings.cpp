@@ -884,7 +884,7 @@ terminal_connection_profile(const SettingsStore &store) {
   return TerminalConnectionProfile{
       .name = general_connection_name(store),
       .kind = TerminalConnectionKind::local_shell,
-      .settings = LocalShellConnectionSettings{},
+      .settings = local_shell_connection_settings(store),
       .text_settings =
           terminal_text_settings(store, TerminalConnectionKind::local_shell),
   };
