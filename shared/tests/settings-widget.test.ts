@@ -3490,6 +3490,71 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
+  it('selects a terminal BEL sound file through a cancellable chooser', async (context) => {
+    const root = await mkdtemp(join(tmpdir(), 'elder-terms-bell-sound-'));
+    const soundPath = join(root, 'selected-bell.ogg');
+    try {
+      await writeFile(soundPath, 'test');
+      await runSharedGtkTest(
+        context,
+        ['--page=terminal', '--save', `--bell-sound-dialog-file=${soundPath}`],
+        async ({ app }) => {
+          await showTerminalPage(app);
+          const bellSound = expectElementKind(
+            await app.getById('settings_terminal_bell_sound_entry'),
+            'entry'
+          );
+          const scrollbar = expectElementKind(
+            await app.getById('settings_terminal_page_scrollbar'),
+            'scrollbar'
+          );
+          const range = await scrollbar.valueInfo();
+          await scrollbar.setValue(range.maximum);
+
+          const browse = expectElementKind(
+            await app.getById('settings_terminal_bell_sound_browse_button'),
+            'button'
+          );
+          await waitForResult(async () => {
+            expect((await browse.info()).states).toContain('showing');
+          });
+
+          await browse.click();
+          await waitForResult(async () => {
+            expect(await app.getWindowCount()).toBe(2);
+          });
+          expectElementKind(
+            await app.getById('settings_terminal_bell_sound_dialog'),
+            'container'
+          );
+          await app.input.pressKey('Escape');
+          await waitForResult(async () => {
+            expect(await app.getWindowCount()).toBe(1);
+            expect(await bellSound.text()).toBe('');
+          });
+
+          await browse.click();
+          await expectElementKind(
+            await app.getById('settings_terminal_bell_sound_open_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(await app.getWindowCount()).toBe(1);
+            expect(await bellSound.text()).toBe(soundPath);
+          });
+          await waitForChangedState(app, 'CHANGED dirty=true valid=true');
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          expect((await waitForAppliedStore(app)).bell_sound).toBe(soundPath);
+        }
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('accepts only terminal scrollback sizes from 1000 through 100000', async (context) => {
     await runSharedGtkTest(
       context,

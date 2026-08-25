@@ -120,6 +120,7 @@ struct SettingsWidgetState {
   GtkWidget *terminal_show_border_combo = nullptr;
   GtkWidget *terminal_border_width_entry = nullptr;
   GtkWidget *terminal_bell_sound_entry = nullptr;
+  GtkWidget *terminal_bell_sound_dialog = nullptr;
   GtkWidget *terminal_encoding_combo = nullptr;
   GtkWidget *terminal_encoding_entry = nullptr;
   GtkWidget *terminal_backspace_code_combo = nullptr;
@@ -3705,6 +3706,144 @@ static void on_terminal_bell_sound_changed(GtkEditable *, gpointer data) {
   notify_changed(state);
 }
 
+static void restore_terminal_bell_sound_dialog_parent(GtkWidget *dialog) {
+  if (dialog == nullptr || !GTK_IS_WINDOW(dialog)) {
+    return;
+  }
+  GtkWindow *parent =
+      gtk_window_get_transient_for(GTK_WINDOW(dialog));
+  if (parent != nullptr &&
+      !gtk_widget_in_destruction(GTK_WIDGET(parent))) {
+    gtk_widget_set_sensitive(GTK_WIDGET(parent), TRUE);
+  }
+}
+
+static void on_terminal_bell_sound_dialog_destroy(GtkWidget *dialog,
+                                                  gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state == nullptr || state->terminal_bell_sound_dialog != dialog) {
+    return;
+  }
+  state->terminal_bell_sound_dialog = nullptr;
+  restore_terminal_bell_sound_dialog_parent(dialog);
+}
+
+static void on_terminal_bell_sound_dialog_response(GtkDialog *dialog,
+                                                   gint response,
+                                                   gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state == nullptr ||
+      state->terminal_bell_sound_dialog != GTK_WIDGET(dialog)) {
+    return;
+  }
+
+  if (response == GTK_RESPONSE_ACCEPT) {
+    gchar *filename =
+        gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+    if (filename != nullptr) {
+      gchar *utf8_filename =
+          g_filename_to_utf8(filename, -1, nullptr, nullptr, nullptr);
+      if (utf8_filename != nullptr) {
+        gtk_entry_set_text(GTK_ENTRY(state->terminal_bell_sound_entry),
+                           utf8_filename);
+        g_free(utf8_filename);
+      }
+      g_free(filename);
+    }
+  }
+
+  state->terminal_bell_sound_dialog = nullptr;
+  restore_terminal_bell_sound_dialog_parent(GTK_WIDGET(dialog));
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+}
+
+static void add_terminal_bell_sound_filter(GtkFileChooser *chooser) {
+  GtkFileFilter *filter = gtk_file_filter_new();
+  const std::string name = setting_label(terminal_bell_sound_setting_key());
+  gtk_file_filter_set_name(filter, name.c_str());
+  for (const char *pattern : {"*.oga", "*.ogg", "*.wav", "*.OGA",
+                              "*.OGG", "*.WAV"}) {
+    gtk_file_filter_add_pattern(filter, pattern);
+  }
+  gtk_file_filter_add_mime_type(filter, "audio/ogg");
+  gtk_file_filter_add_mime_type(filter, "audio/wav");
+  gtk_file_filter_add_mime_type(filter, "audio/x-wav");
+  gtk_file_chooser_add_filter(chooser, filter);
+}
+
+static void select_current_terminal_bell_sound(GtkFileChooser *chooser,
+                                               GtkWidget *entry) {
+  const char *text = gtk_entry_get_text(GTK_ENTRY(entry));
+  const std::string value = text == nullptr ? "" : text;
+  std::string reason;
+  if (value == terminal_text_default ||
+      !terminal_bell_sound_is_valid(value, &reason)) {
+    return;
+  }
+
+  gchar *filename =
+      g_filename_from_utf8(value.c_str(), -1, nullptr, nullptr, nullptr);
+  if (filename != nullptr) {
+    gtk_file_chooser_set_filename(chooser, filename);
+    g_free(filename);
+  }
+}
+
+static void on_terminal_bell_sound_browse_clicked(GtkButton *,
+                                                  gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state == nullptr || state->root == nullptr) {
+    return;
+  }
+  if (state->terminal_bell_sound_dialog != nullptr) {
+    gtk_window_present(GTK_WINDOW(state->terminal_bell_sound_dialog));
+    return;
+  }
+
+  GtkWidget *toplevel = gtk_widget_get_toplevel(state->root);
+  GtkWindow *parent =
+      GTK_IS_WINDOW(toplevel) ? GTK_WINDOW(toplevel) : nullptr;
+  GtkWidget *dialog = gtk_file_chooser_dialog_new(
+      settings_ui_text(SettingsUiText::select_file), parent,
+      GTK_FILE_CHOOSER_ACTION_OPEN,
+      settings_ui_text(SettingsUiText::cancel), GTK_RESPONSE_CANCEL,
+      settings_ui_text(SettingsUiText::open), GTK_RESPONSE_ACCEPT, nullptr);
+  assign_accessible_id(
+      dialog, widget_id(state, "terminal_bell_sound_dialog").c_str());
+  gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
+  gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_ACCEPT);
+
+  GtkWidget *cancel_button = gtk_dialog_get_widget_for_response(
+      GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
+  GtkWidget *open_button = gtk_dialog_get_widget_for_response(
+      GTK_DIALOG(dialog), GTK_RESPONSE_ACCEPT);
+  assign_accessible_id(
+      cancel_button,
+      widget_id(state, "terminal_bell_sound_cancel_button").c_str());
+  assign_accessible_id(
+      open_button,
+      widget_id(state, "terminal_bell_sound_open_button").c_str());
+
+  GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
+  gtk_file_chooser_set_local_only(chooser, TRUE);
+  gtk_file_chooser_set_select_multiple(chooser, FALSE);
+  add_terminal_bell_sound_filter(chooser);
+  select_current_terminal_bell_sound(
+      chooser, state->terminal_bell_sound_entry);
+
+  state->terminal_bell_sound_dialog = dialog;
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(on_terminal_bell_sound_dialog_response), state);
+  g_signal_connect(dialog, "destroy",
+                   G_CALLBACK(on_terminal_bell_sound_dialog_destroy), state);
+  if (parent != nullptr) {
+    gtk_widget_set_sensitive(GTK_WIDGET(parent), FALSE);
+  }
+  gtk_widget_show_all(dialog);
+  gtk_window_present(GTK_WINDOW(dialog));
+}
+
 static void on_terminal_font_primary_mode_changed(GtkComboBox *,
                                                   gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
@@ -4593,8 +4732,19 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
       create_entry(widget_id(state, "terminal_bell_sound_entry"));
   g_signal_connect(state->terminal_bell_sound_entry, "changed",
                    G_CALLBACK(on_terminal_bell_sound_changed), state);
-  attach_row(page, 11, terminal_bell_sound_setting_key(),
-             state->terminal_bell_sound_entry);
+  GtkWidget *bell_sound_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_box_pack_start(GTK_BOX(bell_sound_row),
+                     state->terminal_bell_sound_entry, TRUE, TRUE, 0);
+  GtkWidget *bell_sound_browse =
+      gtk_button_new_with_label(settings_ui_text(SettingsUiText::select_file));
+  assign_accessible_id(
+      bell_sound_browse,
+      widget_id(state, "terminal_bell_sound_browse_button").c_str());
+  g_signal_connect(bell_sound_browse, "clicked",
+                   G_CALLBACK(on_terminal_bell_sound_browse_clicked), state);
+  gtk_box_pack_start(GTK_BOX(bell_sound_row), bell_sound_browse, FALSE, FALSE,
+                     0);
+  attach_row(page, 11, terminal_bell_sound_setting_key(), bell_sound_row);
 
   const std::string zoom_in_id =
       widget_id(state, "terminal_zoom_in_key_entry");
@@ -5639,6 +5789,9 @@ void destroy_settings_widget(SettingsWidgetState *state) {
   }
 
   state->serial_device_event_monitor.reset();
+  if (state->terminal_bell_sound_dialog != nullptr) {
+    gtk_widget_destroy(state->terminal_bell_sound_dialog);
+  }
   destroy_key_binding_input_widget(state->terminal_zoom_in_key_input);
   destroy_key_binding_input_widget(state->terminal_zoom_out_key_input);
   destroy_key_binding_input_widget(state->terminal_send_break_key_input);

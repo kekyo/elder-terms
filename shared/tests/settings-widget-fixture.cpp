@@ -31,6 +31,7 @@ struct FixtureOptions {
   bool has_save = false;
   bool show_actions = true;
   bool global_mode = false;
+  std::string bell_sound_dialog_file;
   std::string page = "general";
   std::vector<ConfigAssignment> connection_assignments;
   std::vector<ConfigAssignment> global_assignments;
@@ -40,6 +41,7 @@ struct FixtureOptions {
 struct FixtureState {
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
   std::optional<elder_terms::SettingsStore> rebase_store;
+  std::string bell_sound_dialog_file;
   GtkWidget *window = nullptr;
 };
 
@@ -177,6 +179,9 @@ static FixtureOptions parse_options(int argc, char **argv) {
           option_value(argument, "--send-break-key="));
     } else if (starts_with(argument, "--page=")) {
       options.page = option_value(argument, "--page=");
+    } else if (starts_with(argument, "--bell-sound-dialog-file=")) {
+      options.bell_sound_dialog_file =
+          option_value(argument, "--bell-sound-dialog-file=");
     } else if (starts_with(argument, "--telnet-address=")) {
       append_connection_assignment(
           &options, "telnet", "address",
@@ -417,6 +422,21 @@ static GtkWidget *find_widget_by_name(GtkWidget *widget,
   }
   g_list_free(children);
   return nullptr;
+}
+
+static void select_bell_sound_dialog_file(GtkButton *, gpointer data) {
+  const auto *file = static_cast<const std::string *>(data);
+  GList *windows = gtk_window_list_toplevels();
+  for (GList *window = windows; window != nullptr; window = window->next) {
+    GtkWidget *dialog = find_widget_by_name(
+        GTK_WIDGET(window->data), "settings_terminal_bell_sound_dialog");
+    if (dialog == nullptr || !GTK_IS_FILE_CHOOSER(dialog)) {
+      continue;
+    }
+    gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), file->c_str());
+    break;
+  }
+  g_list_free(windows);
 }
 
 static void print_color_picker_alpha(GtkWidget *window,
@@ -891,6 +911,7 @@ int main(int argc, char **argv) {
     const elder_terms_settings_widget_fixture::FixtureOptions options =
         elder_terms_settings_widget_fixture::parse_options(argc, argv);
     elder_terms_settings_widget_fixture::FixtureState state;
+    state.bell_sound_dialog_file = options.bell_sound_dialog_file;
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     state.window = window;
@@ -966,6 +987,18 @@ int main(int argc, char **argv) {
         GTK_BOX(contents),
         elder_terms::settings_widget_root(state.settings_widget), TRUE, TRUE,
         0);
+    if (!state.bell_sound_dialog_file.empty()) {
+      GtkWidget *browse_button =
+          elder_terms_settings_widget_fixture::find_widget_by_name(
+              window, "settings_terminal_bell_sound_browse_button");
+      if (browse_button != nullptr) {
+        g_signal_connect_after(
+            browse_button, "clicked",
+            G_CALLBACK(elder_terms_settings_widget_fixture::
+                           select_bell_sound_dialog_file),
+            &state.bell_sound_dialog_file);
+      }
+    }
     if (state.rebase_store.has_value()) {
       GtkWidget *rebase_button =
           gtk_button_new_with_label("Rebase test fallbacks");

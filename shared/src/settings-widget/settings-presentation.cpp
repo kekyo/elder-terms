@@ -192,6 +192,10 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Cancel");
   case SettingsUiText::reset:
     return _("Reset");
+  case SettingsUiText::select_file:
+    return _("Select file");
+  case SettingsUiText::open:
+    return _("Open");
   case SettingsUiText::select_primary_terminal_font:
     return _("Select Primary Terminal Font");
   case SettingsUiText::select_secondary_terminal_font:

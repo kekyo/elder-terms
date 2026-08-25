@@ -21,6 +21,8 @@ enum class SettingsUiText {
   save,
   cancel,
   reset,
+  select_file,
+  open,
   select_primary_terminal_font,
   select_secondary_terminal_font,
   enabled,
