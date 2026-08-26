@@ -36,6 +36,7 @@ dbus-user-session
 dpkg-dev
 gettext
 hicolor-icon-theme
+libcanberra-dev
 libgtk-3-dev
 libssh-dev
 libudev-dev

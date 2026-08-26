@@ -192,6 +192,7 @@ for pkg_config_module in \
 	gio-2.0 \
 	gdk-pixbuf-2.0 \
 	gtk+-3.0 \
+	libcanberra \
 	libssh \
 	libudev \
 	liburing \
@@ -209,6 +210,7 @@ meson setup "$build_dir" . \
 	--prefix=/usr \
 	--libdir=lib \
 	-Dautostartdir=/etc/xdg/autostart \
+	-Dapplication_version="$ELDER_TERMS_PACKAGE_VERSION" \
 	-Dbuild_tests=false \
 	-Dwerror=false
 meson compile -C "$build_dir" -j "$ELDER_TERMS_MAKE_JOBS"
@@ -223,7 +225,7 @@ deb_arch=$(dpkg-architecture -qDEB_HOST_ARCH)
 control_dir="$stage_dir/DEBIAN"
 mkdir -p "$control_dir"
 shlib_depends=$(calculate_shlibdeps)
-runtime_depends='dbus-user-session, hicolor-icon-theme'
+runtime_depends='dbus-user-session, hicolor-icon-theme, libcanberra-pulse'
 write_control_file "$control_dir/control" "$shlib_depends, $runtime_depends"
 chmod 0644 "$control_dir/control"
 

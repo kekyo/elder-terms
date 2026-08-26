@@ -496,15 +496,23 @@ public:
           });
       read_task.emplace(read_loop_async());
 
-      std::string shell = shell_path();
-      char *argv[] = {
-          shell.data(),
-          nullptr,
-      };
+      std::vector<std::string> process_arguments = settings.argv;
+      const GSpawnFlags spawn_flags =
+          process_arguments.empty() ? static_cast<GSpawnFlags>(0)
+                                    : G_SPAWN_SEARCH_PATH;
+      if (process_arguments.empty()) {
+        process_arguments.push_back(shell_path());
+      }
+      std::vector<char *> argv;
+      argv.reserve(process_arguments.size() + 1);
+      for (std::string &argument : process_arguments) {
+        argv.push_back(argument.data());
+      }
+      argv.push_back(nullptr);
       spawn_state = std::make_shared<LocalShellSpawnState>();
       spawn_state->session = this;
       vte_pty_spawn_async(
-          pty, nullptr, argv, nullptr, static_cast<GSpawnFlags>(0), nullptr,
+          pty, nullptr, argv.data(), nullptr, spawn_flags, nullptr,
           nullptr, nullptr, -1, nullptr,
           TerminalLocalShellSession::on_pty_spawned,
           new std::shared_ptr<LocalShellSpawnState>(spawn_state));

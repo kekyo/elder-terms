@@ -766,6 +766,51 @@ save_global_settings(const SettingsStore &store,
                                         global_config_path);
 }
 
+static void update_application_key_file_value(
+    GKeyFile *key_file, const SettingsStore &store, const SettingKey &key) {
+  if (!setting_has_explicit_value(store, key)) {
+    (void)g_key_file_remove_key(key_file, key.section.c_str(),
+                               key.name.c_str(), nullptr);
+    return;
+  }
+  const std::string value =
+      setting_string_value_or_default(store, key, std::string());
+  g_key_file_set_string(key_file, key.section.c_str(), key.name.c_str(),
+                        value.c_str());
+}
+
+SettingsSaveResult save_application_settings(
+    const SettingsStore &store,
+    const std::filesystem::path &global_config_path) {
+  GKeyFile *key_file = g_key_file_new();
+  GError *error = nullptr;
+  if (!g_key_file_load_from_file(
+          key_file, global_config_path.c_str(),
+          static_cast<GKeyFileFlags>(G_KEY_FILE_KEEP_COMMENTS |
+                                     G_KEY_FILE_KEEP_TRANSLATIONS),
+          &error) &&
+      !g_error_matches(error, G_FILE_ERROR, G_FILE_ERROR_NOENT)) {
+    const std::string warning =
+        "Warning: failed to load configuration file " +
+        path_string(global_config_path) + ": " + glib_error_message(error);
+    g_clear_error(&error);
+    g_key_file_unref(key_file);
+    return {
+        .saved = false,
+        .warnings = {warning},
+    };
+  }
+  g_clear_error(&error);
+
+  update_application_key_file_value(
+      key_file, store, application_ui_language_setting_key());
+  update_application_key_file_value(
+      key_file, store, application_startup_mode_setting_key());
+  update_application_key_file_value(
+      key_file, store, application_open_hotkey_setting_key());
+  return write_global_settings_key_file(key_file, global_config_path);
+}
+
 const char *terminal_backspace_code_to_string(TerminalBackspaceCode code) {
   if (code == TerminalBackspaceCode::automatic) {
     return "auto";
@@ -884,7 +929,7 @@ terminal_connection_profile(const SettingsStore &store) {
   return TerminalConnectionProfile{
       .name = general_connection_name(store),
       .kind = TerminalConnectionKind::local_shell,
-      .settings = LocalShellConnectionSettings{},
+      .settings = local_shell_connection_settings(store),
       .text_settings =
           terminal_text_settings(store, TerminalConnectionKind::local_shell),
   };

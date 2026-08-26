@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 13:53+0900\n"
+"POT-Creation-Date: 2026-08-26 00:10+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Hindi\n"
@@ -45,615 +45,648 @@ msgid "Content background"
 msgstr "सामग्री पृष्ठभूमि"
 
 #: shared/src/settings-widget/settings-presentation.cpp:36
+msgid "Startup command"
+msgstr "स्टार्टअप कमांड"
+
+#: shared/src/settings-widget/settings-presentation.cpp:37
 msgid "Character encoding"
 msgstr "कैरेक्टर एन्कोडिंग"
 
-#: shared/src/settings-widget/settings-presentation.cpp:37
+#: shared/src/settings-widget/settings-presentation.cpp:38
 msgid "Backspace code"
 msgstr "बैकस्पेस कोड"
 
-#: shared/src/settings-widget/settings-presentation.cpp:38
+#: shared/src/settings-widget/settings-presentation.cpp:39
 msgid "Cursor key mode"
 msgstr "कर्सर कुंजी मोड"
 
-#: shared/src/settings-widget/settings-presentation.cpp:39
+#: shared/src/settings-widget/settings-presentation.cpp:40
 msgid "Enter/Return code"
 msgstr "Enter/Return कोड"
 
-#: shared/src/settings-widget/settings-presentation.cpp:40
+#: shared/src/settings-widget/settings-presentation.cpp:41
 msgid "Columns"
 msgstr "कॉलम"
 
-#: shared/src/settings-widget/settings-presentation.cpp:41
+#: shared/src/settings-widget/settings-presentation.cpp:42
 msgid "Rows"
 msgstr "पंक्तियाँ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:43
+#: shared/src/settings-widget/settings-presentation.cpp:44
 msgid "Scrollback lines"
 msgstr "स्क्रॉलबैक पंक्तियाँ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:44
+#: shared/src/settings-widget/settings-presentation.cpp:45
 msgid "Zoom factor"
 msgstr "ज़ूम कारक"
 
-#: shared/src/settings-widget/settings-presentation.cpp:46
+#: shared/src/settings-widget/settings-presentation.cpp:47
 msgid "Primary font family"
 msgstr "प्राथमिक फ़ॉन्ट परिवार"
 
-#: shared/src/settings-widget/settings-presentation.cpp:48
+#: shared/src/settings-widget/settings-presentation.cpp:49
 msgid "Secondary font family"
 msgstr "द्वितीयक फ़ॉन्ट परिवार"
 
-#: shared/src/settings-widget/settings-presentation.cpp:50
+#: shared/src/settings-widget/settings-presentation.cpp:51
 msgid "Close window when session ends"
 msgstr "सत्र समाप्त होने पर विंडो बंद करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:52
+#: shared/src/settings-widget/settings-presentation.cpp:53
 msgid "Show window side borders"
 msgstr "विंडो की पार्श्व सीमाएँ दिखाएँ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:53
+#: shared/src/settings-widget/settings-presentation.cpp:55
+msgid "Window side border width (px)"
+msgstr "विंडो की पार्श्व सीमा की चौड़ाई (px)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:56
+msgid "BEL sound"
+msgstr "BEL ध्वनि"
+
+#: shared/src/settings-widget/settings-presentation.cpp:57
 msgid "Zoom in shortcut"
 msgstr "शॉर्टकट में ज़ूम करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:54
+#: shared/src/settings-widget/settings-presentation.cpp:58
 msgid "Zoom out shortcut"
 msgstr "ज़ूम आउट शॉर्टकट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:56
+#: shared/src/settings-widget/settings-presentation.cpp:60
 msgid "Send BREAK shortcut"
 msgstr "BREAK भेजने का शॉर्टकट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:57
-#: shared/src/settings-widget/settings-presentation.cpp:60
+#: shared/src/settings-widget/settings-presentation.cpp:61
+#: shared/src/settings-widget/settings-presentation.cpp:64
 msgid "Address"
 msgstr "पता"
 
-#: shared/src/settings-widget/settings-presentation.cpp:58
-#: shared/src/settings-widget/settings-presentation.cpp:61
+#: shared/src/settings-widget/settings-presentation.cpp:62
+#: shared/src/settings-widget/settings-presentation.cpp:65
 msgid "Port"
 msgstr "पोर्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:59
-#: shared/src/settings-widget/settings-presentation.cpp:64
+#: shared/src/settings-widget/settings-presentation.cpp:63
+#: shared/src/settings-widget/settings-presentation.cpp:68
 msgid "Terminal type"
 msgstr "टर्मिनल प्रकार"
 
-#: shared/src/settings-widget/settings-presentation.cpp:62
+#: shared/src/settings-widget/settings-presentation.cpp:66
 msgid "User name"
 msgstr "उपयोगकर्ता नाम"
 
-#: shared/src/settings-widget/settings-presentation.cpp:63
+#: shared/src/settings-widget/settings-presentation.cpp:67
 msgid "Identity file"
 msgstr "पहचान फ़ाइल"
 
-#: shared/src/settings-widget/settings-presentation.cpp:65
+#: shared/src/settings-widget/settings-presentation.cpp:69
 msgid "Local directory"
 msgstr "स्थानीय निर्देशिका"
 
-#: shared/src/settings-widget/settings-presentation.cpp:66
+#: shared/src/settings-widget/settings-presentation.cpp:70
 msgid "Remote directory"
 msgstr "दूरस्थ निर्देशिका"
 
-#: shared/src/settings-widget/settings-presentation.cpp:67
+#: shared/src/settings-widget/settings-presentation.cpp:71
 msgid "Device"
 msgstr "डिवाइस"
 
-#: shared/src/settings-widget/settings-presentation.cpp:69
+#: shared/src/settings-widget/settings-presentation.cpp:73
 msgid "Device identification"
 msgstr "डिवाइस पहचान"
 
-#: shared/src/settings-widget/settings-presentation.cpp:71
-#: shared/src/settings-widget/settings-presentation.cpp:246
+#: shared/src/settings-widget/settings-presentation.cpp:75
+#: shared/src/settings-widget/settings-presentation.cpp:256
 msgid "USB serial number"
 msgstr "USB सीरियल नंबर"
 
-#: shared/src/settings-widget/settings-presentation.cpp:72
+#: shared/src/settings-widget/settings-presentation.cpp:76
 msgid "Baud rate"
 msgstr "बॉड दर"
 
-#: shared/src/settings-widget/settings-presentation.cpp:73
+#: shared/src/settings-widget/settings-presentation.cpp:77
 msgid "Data bits"
 msgstr "डेटा बिट्स"
 
-#: shared/src/settings-widget/settings-presentation.cpp:74
+#: shared/src/settings-widget/settings-presentation.cpp:78
 msgid "Parity"
 msgstr "समता"
 
-#: shared/src/settings-widget/settings-presentation.cpp:75
+#: shared/src/settings-widget/settings-presentation.cpp:79
 msgid "Stop bits"
 msgstr "स्टॉप बिट्स"
 
-#: shared/src/settings-widget/settings-presentation.cpp:76
+#: shared/src/settings-widget/settings-presentation.cpp:80
 msgid "Flow control"
 msgstr "प्रवाह नियंत्रण"
 
-#: shared/src/settings-widget/settings-presentation.cpp:78
+#: shared/src/settings-widget/settings-presentation.cpp:82
 msgid "Connection monitoring signal"
 msgstr "कनेक्शन मॉनिटरिंग सिग्नल"
 
-#: shared/src/settings-widget/settings-presentation.cpp:80
+#: shared/src/settings-widget/settings-presentation.cpp:84
 msgid "Transfer base directory"
 msgstr "आधार निर्देशिका स्थानांतरित करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:82
+#: shared/src/settings-widget/settings-presentation.cpp:86
 msgid "Text send rate (bytes/s)"
 msgstr "टेक्स्ट भेजने की दर (बाइट्स/सेकेंड)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:84
+#: shared/src/settings-widget/settings-presentation.cpp:88
 msgid "Follow Enter/Return code for text send"
 msgstr "टेक्स्ट भेजते समय Enter/Return कोड का अनुसरण करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:86
+#: shared/src/settings-widget/settings-presentation.cpp:90
 msgid "Automatically start ZMODEM transfers"
 msgstr "स्वचालित रूप से ZMODEM स्थानांतरण प्रारंभ करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:87
+#: shared/src/settings-widget/settings-presentation.cpp:91
 msgid "Enable logging"
 msgstr "लॉगिंग सक्षम करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:88
+#: shared/src/settings-widget/settings-presentation.cpp:92
 msgid "Log directory"
 msgstr "लॉग निर्देशिका"
 
-#: shared/src/settings-widget/settings-presentation.cpp:89
+#: shared/src/settings-widget/settings-presentation.cpp:93
 msgid "File name format"
 msgstr "फ़ाइल नाम प्रारूप"
 
-#: shared/src/settings-widget/settings-presentation.cpp:90
+#: shared/src/settings-widget/settings-presentation.cpp:94
 msgid "Log content"
 msgstr "लॉग सामग्री"
 
-#: shared/src/settings-widget/settings-presentation.cpp:94
+#: shared/src/settings-widget/settings-presentation.cpp:98
 msgid "Local shell"
 msgstr "स्थानीय शेल"
 
-#: shared/src/settings-widget/settings-presentation.cpp:95
-#: shared/src/settings-widget/settings-presentation.cpp:166
+#: shared/src/settings-widget/settings-presentation.cpp:99
+#: shared/src/settings-widget/settings-presentation.cpp:172
 msgid "TELNET"
 msgstr "TELNET"
 
-#: shared/src/settings-widget/settings-presentation.cpp:96
-#: shared/src/settings-widget/settings-presentation.cpp:168
+#: shared/src/settings-widget/settings-presentation.cpp:100
+#: shared/src/settings-widget/settings-presentation.cpp:174
 msgid "Serial"
 msgstr "सीरियल"
 
-#: shared/src/settings-widget/settings-presentation.cpp:97
-#: shared/src/settings-widget/settings-presentation.cpp:170
-#: elder-terms-vte/src/main-window.cpp:1590
+#: shared/src/settings-widget/settings-presentation.cpp:101
+#: shared/src/settings-widget/settings-presentation.cpp:176
+#: elder-terms-vte/src/main-window.cpp:1597
 msgid "SSH"
 msgstr "SSH"
 
-#: shared/src/settings-widget/settings-presentation.cpp:98
-#: shared/src/settings-widget/settings-presentation.cpp:172
-#: elder-terms-vte/src/main.cpp:1233
+#: shared/src/settings-widget/settings-presentation.cpp:102
+#: shared/src/settings-widget/settings-presentation.cpp:178
+#: elder-terms-vte/src/main.cpp:1303
 msgid "SFTP"
 msgstr "SFTP"
 
-#: shared/src/settings-widget/settings-presentation.cpp:100
+#: shared/src/settings-widget/settings-presentation.cpp:104
 msgid "System default"
 msgstr "सिस्टम डिफ़ॉल्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:101
+#: shared/src/settings-widget/settings-presentation.cpp:105
 msgid "English"
 msgstr "अंग्रेजी"
 
-#: shared/src/settings-widget/settings-presentation.cpp:102
+#: shared/src/settings-widget/settings-presentation.cpp:106
 msgid "العربية"
 msgstr "العربية"
 
-#: shared/src/settings-widget/settings-presentation.cpp:103
+#: shared/src/settings-widget/settings-presentation.cpp:107
 msgid "Español"
 msgstr "Español"
 
-#: shared/src/settings-widget/settings-presentation.cpp:104
+#: shared/src/settings-widget/settings-presentation.cpp:108
 msgid "Français"
 msgstr "Français"
 
-#: shared/src/settings-widget/settings-presentation.cpp:105
+#: shared/src/settings-widget/settings-presentation.cpp:109
 msgid "हिन्दी"
 msgstr "हिन्दी"
 
-#: shared/src/settings-widget/settings-presentation.cpp:106
+#: shared/src/settings-widget/settings-presentation.cpp:110
 msgid "日本語"
 msgstr "日本語"
 
-#: shared/src/settings-widget/settings-presentation.cpp:107
+#: shared/src/settings-widget/settings-presentation.cpp:111
 msgid "한국어"
 msgstr "한국어"
 
-#: shared/src/settings-widget/settings-presentation.cpp:108
+#: shared/src/settings-widget/settings-presentation.cpp:112
 msgid "Português"
 msgstr "Português"
 
-#: shared/src/settings-widget/settings-presentation.cpp:109
+#: shared/src/settings-widget/settings-presentation.cpp:113
 msgid "Русский"
 msgstr "Русский"
 
-#: shared/src/settings-widget/settings-presentation.cpp:110
+#: shared/src/settings-widget/settings-presentation.cpp:114
 msgid "中文"
 msgstr "中文"
 
-#: shared/src/settings-widget/settings-presentation.cpp:112
+#: shared/src/settings-widget/settings-presentation.cpp:116
 msgid "Simple startup"
 msgstr "सरल स्टार्टअप"
 
-#: shared/src/settings-widget/settings-presentation.cpp:114
+#: shared/src/settings-widget/settings-presentation.cpp:118
 msgid "Background only"
 msgstr "केवल पृष्ठभूमि में"
 
-#: shared/src/settings-widget/settings-presentation.cpp:116
+#: shared/src/settings-widget/settings-presentation.cpp:120
 msgid "System tray only"
 msgstr "केवल सिस्टम ट्रे"
 
-#: shared/src/settings-widget/settings-presentation.cpp:118
+#: shared/src/settings-widget/settings-presentation.cpp:122
 msgid "System tray and main window"
 msgstr "सिस्टम ट्रे और मुख्य विंडो"
 
-#: shared/src/settings-widget/settings-presentation.cpp:119
-#: shared/src/settings-widget/settings-presentation.cpp:124
+#: shared/src/settings-widget/settings-presentation.cpp:123
+#: shared/src/settings-widget/settings-presentation.cpp:128
 msgid "Auto"
 msgstr "स्वचालित"
 
-#: shared/src/settings-widget/settings-presentation.cpp:120
+#: shared/src/settings-widget/settings-presentation.cpp:124
 msgid "BS"
 msgstr "BS"
 
-#: shared/src/settings-widget/settings-presentation.cpp:121
+#: shared/src/settings-widget/settings-presentation.cpp:125
 msgid "DEL"
 msgstr "DEL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:122
+#: shared/src/settings-widget/settings-presentation.cpp:126
 msgid "Normal"
 msgstr "सामान्य"
 
-#: shared/src/settings-widget/settings-presentation.cpp:123
+#: shared/src/settings-widget/settings-presentation.cpp:127
 msgid "TRS80"
 msgstr "TRS80"
 
-#: shared/src/settings-widget/settings-presentation.cpp:125
+#: shared/src/settings-widget/settings-presentation.cpp:129
 msgid "CR"
 msgstr "CR"
 
-#: shared/src/settings-widget/settings-presentation.cpp:126
+#: shared/src/settings-widget/settings-presentation.cpp:130
 msgid "LF"
 msgstr "LF"
 
-#: shared/src/settings-widget/settings-presentation.cpp:127
+#: shared/src/settings-widget/settings-presentation.cpp:131
 msgid "CRLF"
 msgstr "CRLF"
 
-#: shared/src/settings-widget/settings-presentation.cpp:128
-#: shared/src/settings-widget/settings-presentation.cpp:137
+#: shared/src/settings-widget/settings-presentation.cpp:132
+#: shared/src/settings-widget/settings-presentation.cpp:141
 msgid "None"
 msgstr "कोई नहीं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:130
+#: shared/src/settings-widget/settings-presentation.cpp:134
 msgid "Device path"
 msgstr "डिवाइस पथ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:132
+#: shared/src/settings-widget/settings-presentation.cpp:136
 msgid "Stable device identity"
 msgstr "स्थिर डिवाइस पहचान"
 
-#: shared/src/settings-widget/settings-presentation.cpp:134
+#: shared/src/settings-widget/settings-presentation.cpp:138
 msgid "Physical USB port"
 msgstr "भौतिक USB पोर्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:135
+#: shared/src/settings-widget/settings-presentation.cpp:139
 msgid "Even"
 msgstr "यहां तक कि"
 
-#: shared/src/settings-widget/settings-presentation.cpp:136
+#: shared/src/settings-widget/settings-presentation.cpp:140
 msgid "Odd"
 msgstr "अजीब"
 
-#: shared/src/settings-widget/settings-presentation.cpp:139
+#: shared/src/settings-widget/settings-presentation.cpp:143
 msgid "XON/XOFF (software)"
 msgstr "XON/XOFF (सॉफ़्टवेयर)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:141
+#: shared/src/settings-widget/settings-presentation.cpp:145
 msgid "RTS/CTS (hardware)"
 msgstr "RTS/CTS (हार्डवेयर)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:143
+#: shared/src/settings-widget/settings-presentation.cpp:147
 msgid "DCD (Data Carrier Detect)"
 msgstr "DCD (डेटा कैरियर डिटेक्ट)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:145
+#: shared/src/settings-widget/settings-presentation.cpp:149
 msgid "CTS (Clear to Send)"
 msgstr "CTS (भेजने के लिए साफ़)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:147
+#: shared/src/settings-widget/settings-presentation.cpp:151
 msgid "DSR (Data Set Ready)"
 msgstr "DSR (डेटा सेट तैयार)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:149
+#: shared/src/settings-widget/settings-presentation.cpp:153
 msgid "Ignore (do not monitor)"
 msgstr "अनदेखा करें (निगरानी न करें)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:151
+#: shared/src/settings-widget/settings-presentation.cpp:155
 msgid "Raw bytes (before character conversion)"
 msgstr "कच्चे बाइट्स (वर्ण रूपांतरण से पहले)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:153
+#: shared/src/settings-widget/settings-presentation.cpp:157
 msgid "UTF-8 text (after character conversion)"
 msgstr "UTF-8 पाठ (वर्ण रूपांतरण के बाद)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:164
+#: shared/src/settings-widget/settings-presentation.cpp:168
 msgid "General"
 msgstr "सामान्य"
 
-#: shared/src/settings-widget/settings-presentation.cpp:174
-#: elder-terms-vte/src/main-window.ui:370
+#: shared/src/settings-widget/settings-presentation.cpp:170
+#: elder-terms-vte/src/sftp/sftp-window.cpp:1557
+msgid "Local"
+msgstr "स्थानीय"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+#: elder-terms-vte/src/main-window.ui:402
 #: elder-terms-vte/src/terminal-session.cpp:225
 msgid "Terminal"
 msgstr "टर्मिनल"
 
-#: shared/src/settings-widget/settings-presentation.cpp:176
+#: shared/src/settings-widget/settings-presentation.cpp:182
 msgid "Macro"
 msgstr "मैक्रो"
 
-#: shared/src/settings-widget/settings-presentation.cpp:178
-#: elder-terms-vte/src/main-window.ui:35
+#: shared/src/settings-widget/settings-presentation.cpp:184
+#: elder-terms-vte/src/main-window.ui:49
 msgid "Transfer"
 msgstr "स्थानांतरण"
 
-#: shared/src/settings-widget/settings-presentation.cpp:180
+#: shared/src/settings-widget/settings-presentation.cpp:186
 msgid "Logging"
 msgstr "लॉगिंग"
 
-#: shared/src/settings-widget/settings-presentation.cpp:182
+#: shared/src/settings-widget/settings-presentation.cpp:188
 msgid "Apply"
 msgstr "लागू करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:184
-#: elder-terms/src/main.cpp:469 elder-terms/src/main-window.ui:190
+#: shared/src/settings-widget/settings-presentation.cpp:190
+#: elder-terms/src/main.cpp:483 elder-terms/src/main.cpp:752
+#: elder-terms/src/main-window.ui:221
 msgid "Save"
 msgstr "सहेजें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:186
-#: elder-terms/src/main.cpp:468 elder-terms/src/main.cpp:1402
-#: elder-terms/src/main.cpp:1625 elder-terms-vte/src/main.cpp:820
-#: elder-terms-vte/src/main-window.ui:233
-#: elder-terms-vte/src/main-window.ui:310
+#: shared/src/settings-widget/settings-presentation.cpp:192
+#: elder-terms/src/main.cpp:482 elder-terms/src/main.cpp:550
+#: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1682
+#: elder-terms/src/main.cpp:1905 elder-terms-vte/src/main.cpp:890
+#: elder-terms-vte/src/main-window.ui:265
+#: elder-terms-vte/src/main-window.ui:342
 #: elder-terms-vte/src/sftp/sftp-main.cpp:109
 #: elder-terms-vte/src/sftp/sftp-window.cpp:696
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1843
 msgid "Cancel"
 msgstr "रद्द करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:188
+#: shared/src/settings-widget/settings-presentation.cpp:194
 msgid "Reset"
 msgstr "रीसेट करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:190
+#: shared/src/settings-widget/settings-presentation.cpp:196
+#: elder-terms-vte/src/main.cpp:889
+msgid "Select file"
+msgstr "फ़ाइल चुनें"
+
+#: shared/src/settings-widget/settings-presentation.cpp:198
+#: elder-terms-vte/src/main.cpp:891
+msgid "Open"
+msgstr "खोलें"
+
+#: shared/src/settings-widget/settings-presentation.cpp:200
 msgid "Select Primary Terminal Font"
 msgstr "प्राथमिक टर्मिनल फ़ॉन्ट चुनें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:192
+#: shared/src/settings-widget/settings-presentation.cpp:202
 msgid "Select Secondary Terminal Font"
 msgstr "द्वितीयक टर्मिनल फ़ॉन्ट चुनें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:194
+#: shared/src/settings-widget/settings-presentation.cpp:204
 msgid "Enabled"
 msgstr "सक्षम"
 
-#: shared/src/settings-widget/settings-presentation.cpp:196
+#: shared/src/settings-widget/settings-presentation.cpp:206
 msgid "Disabled"
 msgstr "अक्षम"
 
-#: shared/src/settings-widget/settings-presentation.cpp:198
+#: shared/src/settings-widget/settings-presentation.cpp:208
 msgid "Custom font"
 msgstr "कस्टम फ़ॉन्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:200
+#: shared/src/settings-widget/settings-presentation.cpp:210
 msgid "No color"
 msgstr "कोई रंग नहीं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:202
+#: shared/src/settings-widget/settings-presentation.cpp:212
 msgid "Custom color"
 msgstr "कस्टम रंग"
 
-#: shared/src/settings-widget/settings-presentation.cpp:204
+#: shared/src/settings-widget/settings-presentation.cpp:214
 msgid "Press a key combination"
 msgstr "कुंजी संयोजन दबाएँ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:206
+#: shared/src/settings-widget/settings-presentation.cpp:216
 msgid "Clear key binding"
 msgstr "कुंजी बाइंडिंग साफ़ करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:208
+#: shared/src/settings-widget/settings-presentation.cpp:218
 msgid "Use global default"
 msgstr "वैश्विक डिफ़ॉल्ट का उपयोग करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:210
+#: shared/src/settings-widget/settings-presentation.cpp:220
 msgid "Use built-in default"
 msgstr "अंतर्निहित डिफ़ॉल्ट का उपयोग करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:212
+#: shared/src/settings-widget/settings-presentation.cpp:222
 msgid "Macro rules"
 msgstr "मैक्रो नियम"
 
-#: shared/src/settings-widget/settings-presentation.cpp:214
+#: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "Rule ID"
 msgstr "नियम आईडी"
 
-#: shared/src/settings-widget/settings-presentation.cpp:216
+#: shared/src/settings-widget/settings-presentation.cpp:226
 msgid "Regular expression"
 msgstr "नियमित अभिव्यक्ति"
 
-#: shared/src/settings-widget/settings-presentation.cpp:218
+#: shared/src/settings-widget/settings-presentation.cpp:228
 msgid "Action"
 msgstr "कार्रवाई"
 
-#: shared/src/settings-widget/settings-presentation.cpp:220
+#: shared/src/settings-widget/settings-presentation.cpp:230
 msgid "Text to send"
 msgstr "भेजने के लिए टेक्स्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:222
+#: shared/src/settings-widget/settings-presentation.cpp:232
 msgid "Command"
 msgstr "कमांड"
 
-#: shared/src/settings-widget/settings-presentation.cpp:224
+#: shared/src/settings-widget/settings-presentation.cpp:234
 msgid "Arguments"
 msgstr "तर्क"
 
-#: shared/src/settings-widget/settings-presentation.cpp:226
+#: shared/src/settings-widget/settings-presentation.cpp:236
 msgid "Add rule"
 msgstr "नियम जोड़ें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:228
+#: shared/src/settings-widget/settings-presentation.cpp:238
 msgid "Remove rule"
 msgstr "नियम हटाएं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:230
+#: shared/src/settings-widget/settings-presentation.cpp:240
 msgid "Move up"
 msgstr "ऊपर जाएं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:232
+#: shared/src/settings-widget/settings-presentation.cpp:242
 msgid "Move down"
 msgstr "नीचे जाएं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:234
+#: shared/src/settings-widget/settings-presentation.cpp:244
 msgid "Send text"
 msgstr "टेक्स्ट भेजें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:236
+#: shared/src/settings-widget/settings-presentation.cpp:246
 msgid "Run command"
 msgstr "कमांड चलाएँ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:238
+#: shared/src/settings-widget/settings-presentation.cpp:248
 msgid "Add argument"
 msgstr "तर्क जोड़ें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:240
+#: shared/src/settings-widget/settings-presentation.cpp:250
 msgid "Remove argument"
 msgstr "तर्क हटाएं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:242
+#: shared/src/settings-widget/settings-presentation.cpp:252
 msgid "No device"
 msgstr "कोई डिवाइस नहीं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:244
+#: shared/src/settings-widget/settings-presentation.cpp:254
 msgid "Stable ID"
 msgstr "स्थिर ID"
 
-#: shared/src/settings-widget/settings-presentation.cpp:248
+#: shared/src/settings-widget/settings-presentation.cpp:258
 msgid "Current device node"
 msgstr "वर्तमान डिवाइस नोड"
 
-#: shared/src/settings-widget/settings-presentation.cpp:250
+#: shared/src/settings-widget/settings-presentation.cpp:260
 msgid "Unavailable"
 msgstr "अनुपलब्ध"
 
-#: shared/src/settings-widget/settings-presentation.cpp:278
+#: shared/src/settings-widget/settings-presentation.cpp:288
 msgid "Global default"
 msgstr "वैश्विक डिफ़ॉल्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:279
+#: shared/src/settings-widget/settings-presentation.cpp:289
 msgid "Built-in default"
 msgstr "अंतर्निहित डिफ़ॉल्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:283
+#: shared/src/settings-widget/settings-presentation.cpp:293
 #, c-format
 msgid "%s (global default)"
 msgstr "%s (वैश्विक डिफ़ॉल्ट)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:284
+#: shared/src/settings-widget/settings-presentation.cpp:294
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s (अंतर्निहित डिफ़ॉल्ट)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:295
+#: shared/src/settings-widget/settings-presentation.cpp:305
 msgid "Enter a whole number"
 msgstr "एक पूर्ण संख्या दर्ज करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:298
+#: shared/src/settings-widget/settings-presentation.cpp:308
 msgid "Enter a number"
 msgstr "एक नंबर दर्ज करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:309
+#: shared/src/settings-widget/settings-presentation.cpp:319
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "मान %s और %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:318
+#: shared/src/settings-widget/settings-presentation.cpp:328
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "में Ctrl, Shift, Alt, या Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:321
+#: shared/src/settings-widget/settings-presentation.cpp:331
 msgid "Contains an empty token"
 msgstr "में एक खाली टोकन है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:330
+#: shared/src/settings-widget/settings-presentation.cpp:340
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "में एक अज्ञात संशोधक शामिल है: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:343
+#: shared/src/settings-widget/settings-presentation.cpp:353
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "में एक डुप्लिकेट संशोधक शामिल है: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:351
+#: shared/src/settings-widget/settings-presentation.cpp:361
 msgid "Does not contain a key"
 msgstr "इसमें कोई कुंजी नहीं है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:358
+#: shared/src/settings-widget/settings-presentation.cpp:368
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "में एक अज्ञात कुंजी है: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:366
+#: shared/src/settings-widget/settings-presentation.cpp:376
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "ज़ूम इन और ज़ूम आउट करने के लिए अलग-अलग कुंजी बाइंडिंग का उपयोग करना चाहिए"
 
-#: shared/src/settings-widget/settings-presentation.cpp:369
+#: shared/src/settings-widget/settings-presentation.cpp:379
 msgid "Must not be empty"
 msgstr "खाली नहीं होना चाहिए"
 
-#: shared/src/settings-widget/settings-presentation.cpp:372
+#: shared/src/settings-widget/settings-presentation.cpp:382
 msgid "The character encoding is not supported"
 msgstr "वर्ण एन्कोडिंग समर्थित नहीं है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:375
+#: shared/src/settings-widget/settings-presentation.cpp:385
 msgid "Contains a NUL byte"
 msgstr "में एक NUL बाइट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:378
+#: shared/src/settings-widget/settings-presentation.cpp:390
+msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
+msgstr "default दर्ज करें या निरपेक्ष पथ वाली मौजूदा .oga, .ogg या .wav फ़ाइल चुनें"
+
+#: shared/src/settings-widget/settings-presentation.cpp:393
 msgid "Contains an unmatched closing brace"
 msgstr "में एक बेजोड़ समापन ब्रेस शामिल है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:381
+#: shared/src/settings-widget/settings-presentation.cpp:396
 msgid "Contains an unmatched opening brace"
 msgstr "इसमें एक बेजोड़ ओपनिंग ब्रेस शामिल है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:384
+#: shared/src/settings-widget/settings-presentation.cpp:399
 msgid "Contains an unknown placeholder"
 msgstr "में एक अज्ञात प्लेसहोल्डर शामिल है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:387
+#: shared/src/settings-widget/settings-presentation.cpp:402
 msgid "Must be relative to the log base directory"
 msgstr "लॉग बेस निर्देशिका"
 
-#: shared/src/settings-widget/settings-presentation.cpp:390
+#: shared/src/settings-widget/settings-presentation.cpp:405
 msgid "Must not contain parent directory traversal"
 msgstr "में मूल निर्देशिका ट्रैवर्सल शामिल नहीं होना चाहिए"
 
-#: shared/src/settings-widget/settings-presentation.cpp:393
+#: shared/src/settings-widget/settings-presentation.cpp:408
 msgid "Must name a log file"
 msgstr "लॉग फ़ाइल का नाम अवश्य रखें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:395
+#: shared/src/settings-widget/settings-presentation.cpp:410
 msgid "Invalid value"
 msgstr "अमान्य मान"
 
-#: elder-terms/src/main.cpp:223
+#: elder-terms/src/main.cpp:242
 msgid "Global shortcuts are unavailable"
 msgstr "वैश्विक शॉर्टकट अनुपलब्ध हैं"
 
-#: elder-terms/src/main.cpp:232
+#: elder-terms/src/main.cpp:251
 msgid ""
 "One or more configured global shortcuts could not be registered and will not "
 "work. Check whether your desktop environment supports global shortcuts."
@@ -661,123 +694,145 @@ msgstr ""
 "एक या अधिक कॉन्फ़िगर किए गए वैश्विक शॉर्टकट पंजीकृत नहीं किए जा सके और काम नहीं करेंगे। "
 "जांचें कि क्या आपका डेस्कटॉप वातावरण वैश्विक शॉर्टकट का समर्थन करता है।"
 
-#: elder-terms/src/main.cpp:236 elder-terms-vte/src/main-window.ui:319
-#: elder-terms-vte/src/main-window.cpp:1595
+#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:351
+#: elder-terms-vte/src/main-window.cpp:1602
 msgid "OK"
 msgstr "ठीक है"
 
-#: elder-terms/src/main.cpp:276
+#: elder-terms/src/main.cpp:295
 msgid "Restart to apply display language?"
 msgstr "प्रदर्शन भाषा लागू करने के लिए पुनः आरंभ करें?"
 
-#: elder-terms/src/main.cpp:279
+#: elder-terms/src/main.cpp:298
 msgid ""
 "The display language change will take effect after elder-terms restarts."
 msgstr "प्रदर्शन भाषा परिवर्तन elder-terms पुनरारंभ होने के बाद प्रभावी होगा।"
 
-#: elder-terms/src/main.cpp:282
+#: elder-terms/src/main.cpp:301
 msgid "Later"
 msgstr "बाद में"
 
-#: elder-terms/src/main.cpp:284
+#: elder-terms/src/main.cpp:303
 msgid "Restart now"
 msgstr "अभी पुनः प्रारंभ करें"
 
-#: elder-terms/src/main.cpp:412
-msgid "Failed to save global defaults"
-msgstr "वैश्विक डिफ़ॉल्ट सहेजने में विफल"
+#: elder-terms/src/main.cpp:432
+msgid "Failed to save connection defaults"
+msgstr "कनेक्शन डिफ़ॉल्ट सहेजे नहीं जा सके"
 
-#: elder-terms/src/main.cpp:449 elder-terms/src/main-window.ui:173
-msgid "Global defaults"
-msgstr "वैश्विक डिफ़ॉल्ट"
+#: elder-terms/src/main.cpp:463 elder-terms/src/main-window.ui:204
+msgid "Connection defaults"
+msgstr "कनेक्शन डिफ़ॉल्ट"
 
-#: elder-terms/src/main.cpp:706
+#: elder-terms/src/main.cpp:550
+msgid "Close"
+msgstr "बंद करें"
+
+#: elder-terms/src/main.cpp:627
+msgid "Failed to save application settings"
+msgstr "एप्लिकेशन सेटिंग सहेजी नहीं जा सकीं"
+
+#: elder-terms/src/main.cpp:668
+#, c-format
+msgid "Version %s"
+msgstr "संस्करण %s"
+
+#: elder-terms/src/main.cpp:712 elder-terms/src/main.cpp:737
+#: elder-terms/src/main-window.ui:61 elder-terms-vte/src/main-window.ui:67
+msgid "Application"
+msgstr "एप्लिकेशन"
+
+#: elder-terms/src/main.cpp:740
+msgid "About"
+msgstr "परिचय"
+
+#: elder-terms/src/main.cpp:986
 #, c-format
 msgid "Open connection %s"
 msgstr "कनेक्शन खोलें %s"
 
-#: elder-terms/src/main.cpp:733 elder-terms/src/tray-backend.cpp:371
-#: elder-terms/src/tray-backend.cpp:390 elder-terms/src/tray-backend.cpp:860
+#: elder-terms/src/main.cpp:1013 elder-terms/src/tray-backend.cpp:373
+#: elder-terms/src/tray-backend.cpp:400 elder-terms/src/tray-backend.cpp:907
 msgid "Open elder-terms"
 msgstr "खोलें elder-terms"
 
-#: elder-terms/src/main.cpp:788 elder-terms/src/main.cpp:1337
+#: elder-terms/src/main.cpp:1068 elder-terms/src/main.cpp:1617
 msgid "Failed to load connection"
 msgstr "कनेक्शन लोड करने में विफल"
 
-#: elder-terms/src/main.cpp:835
+#: elder-terms/src/main.cpp:1115
 msgid "New connection"
 msgstr "नया कनेक्शन"
 
-#: elder-terms/src/main.cpp:836
+#: elder-terms/src/main.cpp:1116
 #, c-format
 msgid "New connection %d"
 msgstr "नया कनेक्शन %d"
 
-#: elder-terms/src/main.cpp:1014 elder-terms/src/main.cpp:1031
+#: elder-terms/src/main.cpp:1294 elder-terms/src/main.cpp:1311
 msgid "Failed to monitor connections"
 msgstr "कनेक्शन की निगरानी करने में विफल"
 
-#: elder-terms/src/main.cpp:1027
+#: elder-terms/src/main.cpp:1307
 msgid "Unknown file monitor error"
 msgstr "अज्ञात फ़ाइल मॉनिटर त्रुटि"
 
-#: elder-terms/src/main.cpp:1179
+#: elder-terms/src/main.cpp:1459
 msgid "Failed to create startup profile"
 msgstr "स्टार्टअप प्रोफ़ाइल बनाने में विफल"
 
-#: elder-terms/src/main.cpp:1236 elder-terms/src/main.cpp:1302
+#: elder-terms/src/main.cpp:1516 elder-terms/src/main.cpp:1582
 #, c-format
 msgid "Failed to start %s"
 msgstr "प्रारंभ करने में विफल %s"
 
-#: elder-terms/src/main.cpp:1243
+#: elder-terms/src/main.cpp:1523
 #, c-format
 msgid "The %s executable was not found"
 msgstr "%s निष्पादन योग्य नहीं मिला"
 
-#: elder-terms/src/main.cpp:1271
+#: elder-terms/src/main.cpp:1551
 msgid "Unknown process launch error"
 msgstr "अज्ञात प्रक्रिया लॉन्च त्रुटि"
 
-#: elder-terms/src/main.cpp:1397
+#: elder-terms/src/main.cpp:1677
 msgid "Discard changes?"
 msgstr "परिवर्तन खारिज करें?"
 
-#: elder-terms/src/main.cpp:1400
+#: elder-terms/src/main.cpp:1680
 msgid "The current connection has changes that have not been applied."
 msgstr "वर्तमान कनेक्शन में ऐसे परिवर्तन हैं जिन्हें लागू नहीं किया गया है।"
 
-#: elder-terms/src/main.cpp:1404
+#: elder-terms/src/main.cpp:1684
 msgid "Discard"
 msgstr "त्यागें"
 
-#: elder-terms/src/main.cpp:1557
+#: elder-terms/src/main.cpp:1837
 msgid "Failed to duplicate connection"
 msgstr "कनेक्शन डुप्लिकेट करने में विफल"
 
-#: elder-terms/src/main.cpp:1591
+#: elder-terms/src/main.cpp:1871
 msgid "Failed to delete connection"
 msgstr "कनेक्शन हटाने में विफल"
 
-#: elder-terms/src/main.cpp:1618
+#: elder-terms/src/main.cpp:1898
 msgid "Delete connection?"
 msgstr "कनेक्शन हटाएँ?"
 
-#: elder-terms/src/main.cpp:1620
+#: elder-terms/src/main.cpp:1900
 #, c-format
 msgid "The connection \"%s\" will be permanently deleted."
 msgstr "कनेक्शन \"%s\" स्थायी रूप से हटा दिया जाएगा।"
 
-#: elder-terms/src/main.cpp:1627 elder-terms/src/main-window.ui:27
+#: elder-terms/src/main.cpp:1907 elder-terms/src/main-window.ui:27
 msgid "Delete"
 msgstr "हटाएँ"
 
-#: elder-terms/src/main.cpp:1668 elder-terms/src/main.cpp:1681
+#: elder-terms/src/main.cpp:1948 elder-terms/src/main.cpp:1961
 msgid "Failed to rename connection"
 msgstr "कनेक्शन का नाम बदलने में विफल"
 
-#: elder-terms/src/main.cpp:1777
+#: elder-terms/src/main.cpp:2057
 msgid "Failed to save connection"
 msgstr "कनेक्शन सहेजने में विफल"
 
@@ -789,19 +844,31 @@ msgstr "नाम बदलें"
 msgid "Duplicate"
 msgstr "डुप्लिकेट"
 
-#: elder-terms/src/main-window.ui:69
+#: elder-terms/src/main-window.ui:35 elder-terms/src/tray-backend.cpp:377
+#: elder-terms/src/tray-backend.cpp:404 elder-terms/src/tray-backend.cpp:909
+#: elder-terms-vte/src/main-window.ui:8
+msgid "Application settings"
+msgstr "एप्लिकेशन सेटिंग"
+
+#: elder-terms/src/main-window.ui:41 elder-terms/src/tray-backend.cpp:381
+#: elder-terms/src/tray-backend.cpp:408 elder-terms/src/tray-backend.cpp:911
+#: elder-terms-vte/src/main-window.ui:14
+msgid "About elder-terms"
+msgstr "elder-terms के बारे में"
+
+#: elder-terms/src/main-window.ui:100
 msgid "Terminal entries"
 msgstr "टर्मिनल प्रविष्टियाँ"
 
-#: elder-terms/src/main-window.ui:125
+#: elder-terms/src/main-window.ui:156
 msgid "Select a connection or create a new one."
 msgstr "एक कनेक्शन चुनें या एक नया कनेक्शन बनाएं।"
 
-#: elder-terms/src/main-window.ui:167
+#: elder-terms/src/main-window.ui:198
 msgid "New"
 msgstr "नया"
 
-#: elder-terms/src/main-window.ui:197
+#: elder-terms/src/main-window.ui:228
 msgid "Launch"
 msgstr "लॉन्च"
 
@@ -868,21 +935,25 @@ msgstr "चेतावनी: कनेक्शन प्रोफ़ाइल
 msgid "Warning: failed to delete connection profile %s: %s"
 msgstr "चेतावनी: कनेक्शन प्रोफ़ाइल %s को हटाने में विफल: %s"
 
-#: elder-terms/src/tray-backend.cpp:374 elder-terms/src/tray-backend.cpp:393
-#: elder-terms/src/tray-backend.cpp:861
+#: elder-terms/src/tray-backend.cpp:384 elder-terms/src/tray-backend.cpp:411
+#: elder-terms/src/tray-backend.cpp:912
 msgid "Quit"
 msgstr "छोड़ें"
 
-#: elder-terms-vte/src/main.cpp:182
+#: elder-terms-vte/src/main.cpp:226
+msgid "Failed to open elder-terms"
+msgstr "elder-terms नहीं खोला जा सका"
+
+#: elder-terms-vte/src/main.cpp:234
 msgid "Macro command failed"
 msgstr "मैक्रो कमांड विफल"
 
-#: elder-terms-vte/src/main.cpp:223
+#: elder-terms-vte/src/main.cpp:275
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:277
 msgid "SSH Host Key"
 msgstr "SSH होस्ट कुंजी"
 
-#: elder-terms-vte/src/main.cpp:225
+#: elder-terms-vte/src/main.cpp:277
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%d\n"
@@ -895,138 +966,130 @@ msgstr ""
 "फ़िंगरप्रिंट: %s\n"
 "इस होस्ट कुंजी को स्वीकार करें और सहेजें?"
 
-#: elder-terms-vte/src/main.cpp:237 elder-terms-vte/src/main-window.ui:274
+#: elder-terms-vte/src/main.cpp:289 elder-terms-vte/src/main-window.ui:306
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:472
 msgid "SSH Authentication"
 msgstr "SSH प्रमाणीकरण"
 
-#: elder-terms-vte/src/main.cpp:238 elder-terms-vte/src/main-window.ui:282
+#: elder-terms-vte/src/main.cpp:290 elder-terms-vte/src/main-window.ui:314
 msgid "Password:"
 msgstr "पासवर्ड:"
 
-#: elder-terms-vte/src/main.cpp:253
+#: elder-terms-vte/src/main.cpp:305
 msgid "SSH prompt accepted"
 msgstr "SSH संकेत स्वीकृत"
 
-#: elder-terms-vte/src/main.cpp:254
+#: elder-terms-vte/src/main.cpp:306
 msgid "SSH prompt cancelled"
 msgstr "SSH संकेत रद्द"
 
-#: elder-terms-vte/src/main.cpp:641 elder-terms-vte/src/main.cpp:645
-#: elder-terms-vte/src/main-window.ui:18
+#: elder-terms-vte/src/main.cpp:699 elder-terms-vte/src/main.cpp:703
+#: elder-terms-vte/src/main-window.ui:32
 msgid "Settings"
 msgstr "सेटिंग्स"
 
-#: elder-terms-vte/src/main.cpp:819
-msgid "Select file"
-msgstr "फ़ाइल चुनें"
-
-#: elder-terms-vte/src/main.cpp:821
-msgid "Open"
-msgstr "खोलें"
-
-#: elder-terms-vte/src/main.cpp:907 elder-terms-vte/src/main.cpp:917
-#: elder-terms-vte/src/main.cpp:942 elder-terms-vte/src/main.cpp:952
+#: elder-terms-vte/src/main.cpp:977 elder-terms-vte/src/main.cpp:987
+#: elder-terms-vte/src/main.cpp:1012 elder-terms-vte/src/main.cpp:1022
 msgid "Transfer unavailable"
 msgstr "स्थानांतरण अनुपलब्ध"
 
-#: elder-terms-vte/src/main.cpp:1054 elder-terms-vte/src/main.cpp:1076
+#: elder-terms-vte/src/main.cpp:1124 elder-terms-vte/src/main.cpp:1146
 msgid "BREAK unavailable"
 msgstr "BREAK उपलब्ध नहीं है"
 
-#: elder-terms-vte/src/main.cpp:1060
+#: elder-terms-vte/src/main.cpp:1130
 msgid "Sending BREAK"
 msgstr "BREAK भेजा जा रहा है"
 
-#: elder-terms-vte/src/main.cpp:1096 elder-terms-vte/src/main.cpp:1618
+#: elder-terms-vte/src/main.cpp:1166 elder-terms-vte/src/main.cpp:1715
 msgid "Text send unavailable"
 msgstr "पाठ संदेश अनुपलब्ध है"
 
-#: elder-terms-vte/src/main.cpp:1104
+#: elder-terms-vte/src/main.cpp:1174
 msgid "Text (Send)"
 msgstr "टेक्स्ट (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1182 elder-terms-vte/src/main.cpp:1213
+#: elder-terms-vte/src/main.cpp:1252 elder-terms-vte/src/main.cpp:1283
 msgid "SFTP unavailable"
 msgstr "SFTP अनुपलब्ध"
 
-#: elder-terms-vte/src/main.cpp:1257
+#: elder-terms-vte/src/main.cpp:1327
 msgid "Log recording"
 msgstr "लॉग रिकॉर्डिंग"
 
-#: elder-terms-vte/src/main.cpp:1303
+#: elder-terms-vte/src/main.cpp:1373
 msgid "ZMODEM (send)"
 msgstr "ZMODEM (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1310
+#: elder-terms-vte/src/main.cpp:1380
 msgid "YMODEM (send)"
 msgstr "YMODEM (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1317
+#: elder-terms-vte/src/main.cpp:1387
 msgid "XMODEM 1K (send)"
 msgstr "XMODEM 1K (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1326
+#: elder-terms-vte/src/main.cpp:1396
 msgid "XMODEM (send)"
 msgstr "XMODEM (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1336
+#: elder-terms-vte/src/main.cpp:1406
 msgid "ZMODEM (receive)"
 msgstr "ZMODEM (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1343
+#: elder-terms-vte/src/main.cpp:1413
 msgid "YMODEM-g (receive)"
 msgstr "YMODEM-g (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1351
+#: elder-terms-vte/src/main.cpp:1421
 msgid "YMODEM (receive)"
 msgstr "YMODEM (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1360
+#: elder-terms-vte/src/main.cpp:1430
 msgid "XMODEM CRC (receive)"
 msgstr "XMODEM CRC (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1369
+#: elder-terms-vte/src/main.cpp:1439
 msgid "XMODEM (receive)"
 msgstr "XMODEM (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1598
+#: elder-terms-vte/src/main.cpp:1695
 msgid "Hyperlink command failed"
 msgstr "हाइपरलिंक कमांड विफल"
 
-#: elder-terms-vte/src/main-window.ui:138
-#: elder-terms-vte/src/main-window.cpp:1496
+#: elder-terms-vte/src/main-window.ui:170
+#: elder-terms-vte/src/main-window.cpp:1503
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1899
 msgid "Disconnected"
 msgstr "डिस्कनेक्ट हो गया"
 
-#: elder-terms-vte/src/main-window.ui:193
+#: elder-terms-vte/src/main-window.ui:225
 msgid "Transferring..."
 msgstr "स्थानांतरण..."
 
-#: elder-terms-vte/src/main-window.cpp:330
+#: elder-terms-vte/src/main-window.cpp:329
 msgid "Copy"
 msgstr "प्रतिलिपि"
 
-#: elder-terms-vte/src/main-window.cpp:334
+#: elder-terms-vte/src/main-window.cpp:333
 msgid "Paste"
 msgstr "पेस्ट करें"
 
-#: elder-terms-vte/src/main-window.cpp:340
+#: elder-terms-vte/src/main-window.cpp:339
 msgid "Send BREAK"
 msgstr "BREAK भेजें"
 
-#: elder-terms-vte/src/main-window.cpp:1083
+#: elder-terms-vte/src/main-window.cpp:1085
 #, c-format
 msgid "%s (Disconnected)"
 msgstr "%s (डिसकनेक्ट)"
 
-#: elder-terms-vte/src/main-window.cpp:1519
+#: elder-terms-vte/src/main-window.cpp:1526
 msgid "SSH connection failed"
 msgstr "SSH कनेक्शन विफल"
 
-#: elder-terms-vte/src/main-window.cpp:1521
+#: elder-terms-vte/src/main-window.cpp:1528
 #, c-format
 msgid ""
 "SSH connection failed:\n"
@@ -1035,7 +1098,7 @@ msgstr ""
 "SSH कनेक्शन विफल:\n"
 "%s"
 
-#: elder-terms-vte/src/main-window.cpp:1595
+#: elder-terms-vte/src/main-window.cpp:1602
 #: elder-terms-vte/src/sftp/sftp-main.cpp:111
 msgid "Accept"
 msgstr "स्वीकार करें"
@@ -1192,10 +1255,6 @@ msgstr "संशोधित"
 msgid "Remote"
 msgstr "रिमोट"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1557
-msgid "Local"
-msgstr "स्थानीय"
-
 #: elder-terms-vte/src/sftp/sftp-window.cpp:1589
 msgid "Up"
 msgstr "ऊपर"
@@ -1237,7 +1296,7 @@ msgstr "प्रारंभ %s प्राप्त करें"
 msgid "Text send failed"
 msgstr "पाठ भेजना विफल"
 
-#: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:541
+#: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:549
 msgid "local terminal"
 msgstr "स्थानीय टर्मिनल"
 
@@ -1402,3 +1461,9 @@ msgstr "ssh: (अज्ञात)"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
 msgid "telnet: (unknown)"
 msgstr "टेलनेट: (अज्ञात)"
+
+#~ msgid "Failed to save global defaults"
+#~ msgstr "वैश्विक डिफ़ॉल्ट सहेजने में विफल"
+
+#~ msgid "Global defaults"
+#~ msgstr "वैश्विक डिफ़ॉल्ट"

@@ -33,6 +33,7 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"general", "exterior_background",
                       N_("Title and status bar background")},
     SettingLabelEntry{"general", "background", N_("Content background")},
+    SettingLabelEntry{"local", "command_line", N_("Startup command")},
     SettingLabelEntry{"terminal", "encoding", N_("Character encoding")},
     SettingLabelEntry{"terminal", "backspace_code", N_("Backspace code")},
     SettingLabelEntry{"terminal", "cursor_key_mode", N_("Cursor key mode")},
@@ -50,6 +51,9 @@ static constexpr std::array setting_labels{
                       N_("Close window when session ends")},
     SettingLabelEntry{"terminal", "show_border",
                       N_("Show window side borders")},
+    SettingLabelEntry{"terminal", "border_width",
+                      N_("Window side border width (px)")},
+    SettingLabelEntry{"terminal", "bell_sound", N_("BEL sound")},
     SettingLabelEntry{"terminal", "zoom_in_key", N_("Zoom in shortcut")},
     SettingLabelEntry{"terminal", "zoom_out_key", N_("Zoom out shortcut")},
     SettingLabelEntry{"terminal", "send_break_key",
@@ -162,6 +166,8 @@ const char *settings_ui_text(SettingsUiText text) {
   switch (text) {
   case SettingsUiText::general_tab:
     return _("General");
+  case SettingsUiText::local_tab:
+    return _("Local");
   case SettingsUiText::telnet_tab:
     return _("TELNET");
   case SettingsUiText::serial_tab:
@@ -186,6 +192,10 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Cancel");
   case SettingsUiText::reset:
     return _("Reset");
+  case SettingsUiText::select_file:
+    return _("Select file");
+  case SettingsUiText::open:
+    return _("Open");
   case SettingsUiText::select_primary_terminal_font:
     return _("Select Primary Terminal Font");
   case SettingsUiText::select_secondary_terminal_font:
@@ -373,6 +383,11 @@ std::string settings_validation_message(const std::string &reason) {
   }
   if (reason == "contains a NUL byte") {
     return _("Contains a NUL byte");
+  }
+  if (reason ==
+      "must be default or an existing absolute .oga, .ogg, or .wav file") {
+    return _(
+        "Enter default or select an existing absolute .oga, .ogg, or .wav file");
   }
   if (reason == "contains an unmatched closing brace") {
     return _("Contains an unmatched closing brace");

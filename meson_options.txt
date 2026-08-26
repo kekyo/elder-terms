@@ -11,3 +11,10 @@ option(
   value: true,
   description: 'Build test executables and fixtures',
 )
+
+option(
+  'application_version',
+  type: 'string',
+  value: '',
+  description: 'Version embedded in the running elder-terms applications',
+)

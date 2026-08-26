@@ -52,7 +52,9 @@ interface AppliedStore {
   readonly [key: string]: string;
   readonly name: string;
   readonly auto_close: string;
+  readonly bell_sound: string;
   readonly show_border: string;
+  readonly border_width: string;
   readonly backspace_code: string;
   readonly background: string;
   readonly cursor_key_mode: string;
@@ -71,6 +73,7 @@ interface AppliedStore {
   readonly log_enabled: string;
   readonly log_file_name_format: string;
   readonly log_mode: string;
+  readonly local_command_line: string;
   readonly open_application: string;
   readonly open_connection: string;
   readonly ssh_address: string;
@@ -266,6 +269,13 @@ const showTransferPage = async (app: GtkApp): Promise<void> => {
   await waitForResult(async () => {
     const basePath = await app.getById('settings_transfer_base_path_entry');
     expect((await basePath.info()).states).toContain('showing');
+  });
+};
+
+const showLocalPage = async (app: GtkApp): Promise<void> => {
+  await waitForResult(async () => {
+    const commandLine = await app.getById('settings_local_command_line_entry');
+    expect((await commandLine.info()).states).toContain('showing');
   });
 };
 
@@ -712,7 +722,14 @@ describe.concurrent('shared settings widget', () => {
     const cases = [
       {
         args: [] as const,
-        expected: ['General', 'Terminal', 'Transfer', 'Logging', 'Macro'],
+        expected: [
+          'General',
+          'Local',
+          'Terminal',
+          'Transfer',
+          'Logging',
+          'Macro',
+        ],
       },
       {
         args: ['--type=telnet'] as const,
@@ -838,12 +855,13 @@ describe.concurrent('shared settings widget', () => {
             id: 'global_settings_general_page',
             labels: [
               'Connection type',
-              'Display language',
-              'Startup mode',
-              'Open application shortcut',
               'Title and status bar background',
               'Content background',
             ],
+          },
+          {
+            id: 'global_settings_local_page',
+            labels: ['Startup command'],
           },
           {
             id: 'global_settings_telnet_page',
@@ -893,6 +911,7 @@ describe.concurrent('shared settings widget', () => {
               'Secondary font family',
               'Close window when session ends',
               'Show window side borders',
+              'Window side border width (px)',
               'Zoom in shortcut',
               'Zoom out shortcut',
               'Send BREAK shortcut',
@@ -940,6 +959,7 @@ describe.concurrent('shared settings widget', () => {
       async ({ app }) => {
         expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual([
           '一般',
+          'ローカル',
           'TELNET',
           'シリアル',
           'SSH',
@@ -953,12 +973,13 @@ describe.concurrent('shared settings widget', () => {
             id: 'global_settings_general_page',
             labels: [
               '接続方式',
-              '表示言語',
-              '起動モード',
-              'アプリケーションを開くショートカット',
               'タイトル／ステータスバーの背景',
               'コンテンツの背景',
             ],
+          },
+          {
+            id: 'global_settings_local_page',
+            labels: ['起動コマンド'],
           },
           {
             id: 'global_settings_telnet_page',
@@ -1009,6 +1030,7 @@ describe.concurrent('shared settings widget', () => {
               'セカンダリフォントファミリー',
               'セッション終了時にウィンドウを閉じる',
               'ウィンドウの左右にボーダーを表示する',
+              'ウィンドウ左右のボーダー幅（px）',
               '拡大ショートカット',
               '縮小ショートカット',
               'BREAK送信ショートカット',
@@ -1269,6 +1291,124 @@ describe.concurrent('shared settings widget', () => {
     });
   });
 
+  it('matches Local visual fixtures for default, configured, and runtime settings', async (context) => {
+    const cases: readonly SettingVisualCase[] = [
+      {
+        args: ['--page=local'],
+        assert: async (app) => {
+          const commandLine = expectElementKind(
+            await app.getById('settings_local_command_line_entry'),
+            'entry'
+          );
+          expect(await commandLine.text()).toBe('');
+          await waitForEntryPlaceholder(
+            app,
+            'settings_local_command_line_entry',
+            'Built-in default'
+          );
+          await expectSensitive(commandLine);
+        },
+        differsFrom: undefined,
+        fixtureName: 'settings-widget-local-page-default-editable',
+        pageId: 'settings_local_page',
+        prepare: showLocalPage,
+      },
+      {
+        args: ['--page=local', '--local-command-line=/bin/bash --noprofile'],
+        assert: async (app) => {
+          expect(
+            await expectElementKind(
+              await app.getById('settings_local_command_line_entry'),
+              'entry'
+            ).text()
+          ).toBe('/bin/bash --noprofile');
+        },
+        differsFrom: 'settings-widget-local-page-default-editable',
+        fixtureName: 'settings-widget-local-command-bash',
+        pageId: 'settings_local_page',
+        prepare: showLocalPage,
+      },
+      {
+        args: [
+          '--page=local',
+          '--runtime',
+          '--local-command-line=/bin/bash --noprofile',
+        ],
+        assert: async (app) => {
+          await expectInsensitive(
+            await app.getById('settings_local_command_line_entry')
+          );
+        },
+        differsFrom: 'settings-widget-local-command-bash',
+        fixtureName: 'settings-widget-local-page-runtime',
+        pageId: 'settings_local_page',
+        prepare: showLocalPage,
+      },
+    ];
+
+    for (const testCase of cases) {
+      await runSharedGtkTest(
+        context,
+        testCase.args,
+        async ({ app, directory }) => {
+          await testCase.prepare(app);
+          await testCase.assert(app);
+          await expectPageVisualFixture(app, testCase, directory);
+        }
+      );
+    }
+  });
+
+  it('edits, validates, and restores inheritance for the Local startup command', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=local', '--global=local.command_line=global-process', '--save'],
+      async ({ app }) => {
+        await showLocalPage(app);
+        const commandLine = expectElementKind(
+          await app.getById('settings_local_command_line_entry'),
+          'entry'
+        );
+        const apply = await app.getById('settings_apply_button');
+        const save = await app.getById('settings_save_button');
+        await expectInheritedEntry(
+          app,
+          'settings_local_command_line_entry',
+          'global-process (global default)'
+        );
+
+        await commandLine.setText("broken '");
+        await waitForChangedState(app, 'CHANGED dirty=true valid=false');
+        await expectInsensitive(apply);
+        await expectInsensitive(save);
+
+        await commandLine.setText('connection-process');
+        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
+        await expectSensitive(apply);
+        await expectSensitive(save);
+        await expectElementKind(apply, 'button').click();
+        const explicit = await waitForAppliedStore(app);
+        expect(explicit.local_command_line).toBe('connection-process');
+        expect(explicit.local_command_line_source).toBe('override');
+        expect(explicit.local_command_line_explicit).toBe('true');
+
+        await commandLine.setText('');
+        await waitForEntryPlaceholder(
+          app,
+          'settings_local_command_line_entry',
+          'global-process (global default)'
+        );
+        await expectElementKind(apply, 'button').click();
+        await waitForResult(async () => {
+          const inherited = await waitForAppliedStore(app);
+          expect(inherited.local_command_line).toBe('global-process');
+          expect(inherited.local_command_line_source).toBe('global');
+          expect(inherited.local_command_line_explicit).toBe('false');
+        });
+      }
+    );
+  });
+
   it('edits, validates, and resets the connection launch hotkey', async (context) => {
     await runSharedGtkTest(context, ['--page=general'], async ({ app }) => {
       const hotkey = expectElementKind(
@@ -1359,6 +1499,11 @@ describe.concurrent('shared settings widget', () => {
             app,
             'settings_terminal_scrollback_lines_entry',
             '10000 (built-in default)'
+          );
+          await waitForEntryPlaceholder(
+            app,
+            'settings_terminal_border_width_entry',
+            '4 (built-in default)'
           );
           expect(
             await expectElementKind(
@@ -2797,6 +2942,7 @@ describe.concurrent('shared settings widget', () => {
         '--zoom=1.25',
         '--auto-close=false',
         '--show-border=true',
+        '--border-width=7',
         '--send-break-key=shift+F11',
       ],
       async ({ app, directory }) => {
@@ -2826,6 +2972,10 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_terminal_show_border_combo'),
           'comboBox'
         );
+        const borderWidth = expectElementKind(
+          await app.getById('settings_terminal_border_width_entry'),
+          'entry'
+        );
         const zoomInKey = expectElementKind(
           await app.getById('settings_terminal_zoom_in_key_entry'),
           'entry'
@@ -2852,6 +3002,7 @@ describe.concurrent('shared settings widget', () => {
           'settings_terminal_show_border_combo',
           'Enabled'
         );
+        await expectNumericEntryValue(borderWidth, 7);
         expect(await zoomInKey.text()).toBe('');
         expect(await zoomOutKey.text()).toBe('');
         expect(await sendBreakKey.text()).toBe('shift+F11');
@@ -2914,6 +3065,7 @@ describe.concurrent('shared settings widget', () => {
         await setNumericEntryValue(zoom, 1.1);
         await autoClose.selectChildAt(1);
         await showBorder.selectChildAt(2);
+        await setNumericEntryValue(borderWidth, 6);
         await showTerminalKeyBindings(app);
         await captureKeyBinding(app, zoomInKey, ['alt'], 'Up');
         await captureKeyBinding(app, sendBreakKey, ['shift'], 'F12');
@@ -2940,6 +3092,7 @@ describe.concurrent('shared settings widget', () => {
         expect(Number(store.zoom)).toBeCloseTo(1.1);
         expect(store.auto_close).toBe('true');
         expect(store.show_border).toBe('false');
+        expect(store.border_width).toBe('6');
         expect(store.zoom_in_key).toBe('alt+Up');
         expect(store.zoom_out_key).toBe('');
         expect(store.send_break_key).toBe('shift+F12');
@@ -3294,6 +3447,108 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
+  it('validates and applies a custom terminal BEL sound file', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal', '--save'],
+      async ({ app, directory }) => {
+        await showTerminalPage(app);
+        const bellSound = expectElementKind(
+          await app.getById('settings_terminal_bell_sound_entry'),
+          'entry'
+        );
+        const apply = await app.getById('settings_apply_button');
+        const save = await app.getById('settings_save_button');
+
+        expect(await bellSound.text()).toBe('');
+        await waitForEntryPlaceholder(
+          app,
+          'settings_terminal_bell_sound_entry',
+          'default (built-in default)'
+        );
+
+        await bellSound.setText('relative.wav');
+        await waitForChangedState(app, 'CHANGED dirty=true valid=false');
+        await expectInsensitive(apply);
+        await expectInsensitive(save);
+
+        const soundPath = join(directory, 'bell.wav');
+        await writeFile(soundPath, 'test');
+        await bellSound.setText(soundPath);
+        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
+        await expectSensitive(apply);
+        await expectSensitive(save);
+        await expectElementKind(apply, 'button').click();
+        expect((await waitForAppliedStore(app)).bell_sound).toBe(soundPath);
+      }
+    );
+  });
+
+  it('selects a terminal BEL sound file through a cancellable chooser', async (context) => {
+    const root = await mkdtemp(join(tmpdir(), 'elder-terms-bell-sound-'));
+    const soundPath = join(root, 'selected-bell.ogg');
+    try {
+      await writeFile(soundPath, 'test');
+      await runSharedGtkTest(
+        context,
+        ['--page=terminal', '--save', `--bell-sound-dialog-file=${soundPath}`],
+        async ({ app }) => {
+          await showTerminalPage(app);
+          const bellSound = expectElementKind(
+            await app.getById('settings_terminal_bell_sound_entry'),
+            'entry'
+          );
+          const scrollbar = expectElementKind(
+            await app.getById('settings_terminal_page_scrollbar'),
+            'scrollbar'
+          );
+          const range = await scrollbar.valueInfo();
+          await scrollbar.setValue(range.maximum);
+
+          const browse = expectElementKind(
+            await app.getById('settings_terminal_bell_sound_browse_button'),
+            'button'
+          );
+          await waitForResult(async () => {
+            expect((await browse.info()).states).toContain('showing');
+          });
+
+          await browse.click();
+          await waitForResult(async () => {
+            expect(await app.getWindowCount()).toBe(2);
+          });
+          expectElementKind(
+            await app.getById('settings_terminal_bell_sound_dialog'),
+            'container'
+          );
+          await app.input.pressKey('Escape');
+          await waitForResult(async () => {
+            expect(await app.getWindowCount()).toBe(1);
+            expect(await bellSound.text()).toBe('');
+          });
+
+          await browse.click();
+          await expectElementKind(
+            await app.getById('settings_terminal_bell_sound_open_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(await app.getWindowCount()).toBe(1);
+            expect(await bellSound.text()).toBe(soundPath);
+          });
+          await waitForChangedState(app, 'CHANGED dirty=true valid=true');
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          expect((await waitForAppliedStore(app)).bell_sound).toBe(soundPath);
+        }
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('accepts only terminal scrollback sizes from 1000 through 100000', async (context) => {
     await runSharedGtkTest(
       context,
@@ -3339,6 +3594,53 @@ describe.concurrent('shared settings widget', () => {
         expect((await waitForAppliedStore(app)).scrollback_lines).toBe(
           '100000'
         );
+      }
+    );
+  });
+
+  it('accepts only terminal border widths from 1 through 1000 pixels', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal', '--save'],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        const borderWidth = expectElementKind(
+          await app.getById('settings_terminal_border_width_entry'),
+          'entry'
+        );
+        const apply = await app.getById('settings_apply_button');
+        const save = await app.getById('settings_save_button');
+
+        await waitForEntryPlaceholder(
+          app,
+          'settings_terminal_border_width_entry',
+          '4 (built-in default)'
+        );
+        await borderWidth.setText('0');
+        await waitForEntryIconTooltip(
+          app,
+          'settings_terminal_border_width_entry',
+          'Value must be between 1 and 1000'
+        );
+        await expectInsensitive(apply);
+        await expectInsensitive(save);
+
+        await borderWidth.setText('1001');
+        await waitForEntryIconTooltip(
+          app,
+          'settings_terminal_border_width_entry',
+          'Value must be between 1 and 1000'
+        );
+        await expectInsensitive(apply);
+        await expectInsensitive(save);
+
+        await borderWidth.setText('1000');
+        await waitForResult(async () => {
+          await expectSensitive(apply);
+          await expectSensitive(save);
+        });
+        await expectElementKind(apply, 'button').click();
+        expect((await waitForAppliedStore(app)).border_width).toBe('1000');
       }
     );
   });
@@ -3519,12 +3821,14 @@ describe.concurrent('shared settings widget', () => {
       '--global=terminal.zoom=1.25',
       '--global=terminal.auto_close=true',
       '--global=terminal.show_border=true',
+      '--global=terminal.border_width=9',
       '--global=terminal.encoding=CP932',
       '--global=terminal.backspace_code=del',
       '--global=terminal.cursor_key_mode=normal',
       '--global=terminal.zoom_in_key=alt+plus',
       '--global=terminal.zoom_out_key=alt+minus',
       '--global=terminal.send_break_key=alt+F12',
+      '--global=local.command_line=global-process',
       '--global=telnet.address=global.telnet.test',
       '--global=telnet.port=2323',
       '--global=telnet.terminal_type=vt220',
@@ -3567,12 +3871,14 @@ describe.concurrent('shared settings widget', () => {
         'zoom',
         'auto_close',
         'show_border',
+        'border_width',
         'encoding',
         'backspace_code',
         'cursor_key_mode',
         'zoom_in_key',
         'zoom_out_key',
         'send_break_key',
+        'local_command_line',
         'telnet_address',
         'telnet_port',
         'telnet_terminal_type',
@@ -3637,6 +3943,11 @@ describe.concurrent('shared settings widget', () => {
       );
       await expectInheritedEntry(
         app,
+        'settings_terminal_border_width_entry',
+        '9 (global default)'
+      );
+      await expectInheritedEntry(
+        app,
         'settings_terminal_encoding_entry',
         'CP932 (global default)'
       );
@@ -3676,6 +3987,12 @@ describe.concurrent('shared settings widget', () => {
       expectElementKind(
         await app.getById('settings_terminal_send_break_key_reset_button'),
         'button'
+      );
+
+      await expectInheritedEntry(
+        app,
+        'settings_local_command_line_entry',
+        'global-process (global default)'
       );
 
       await selectSettingsTab(app, 'Serial');
@@ -4272,6 +4589,7 @@ describe.concurrent('shared settings widget', () => {
       async ({ app }) => {
         expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual([
           'General',
+          'Local',
           'TELNET',
           'Serial',
           'SSH',
@@ -4289,30 +4607,19 @@ describe.concurrent('shared settings widget', () => {
         expect(
           generalIds.has('global_settings_general_open_connection_entry')
         ).toBe(false);
+        expect(
+          generalIds.has('global_settings_general_ui_language_combo')
+        ).toBe(false);
+        expect(
+          generalIds.has('global_settings_general_startup_mode_combo')
+        ).toBe(false);
+        expect(
+          generalIds.has('global_settings_general_open_application_entry')
+        ).toBe(false);
         await expect(app.getById('settings_notebook')).rejects.toThrow();
         expectElementKind(
           await app.getById('global_settings_general_type_combo'),
           'comboBox'
-        );
-        await expectSelectedComboValue(
-          app,
-          'global_settings_general_ui_language_combo',
-          'System default'
-        );
-        await expectSelectedComboValue(
-          app,
-          'global_settings_general_startup_mode_combo',
-          'Simple startup (built-in default)'
-        );
-        const openApplication = expectElementKind(
-          await app.getById('global_settings_general_open_application_entry'),
-          'entry'
-        );
-        expect(await openApplication.text()).toBe('');
-        await waitForEntryPlaceholder(
-          app,
-          'global_settings_general_open_application_entry',
-          'ctrl+alt+t (built-in default)'
         );
         await selectSettingsTab(app, 'SSH', 'global_settings');
         await waitForResult(async () => {
@@ -4345,152 +4652,6 @@ describe.concurrent('shared settings widget', () => {
         expect(store.width_explicit).toBe('true');
         expect(store.height_source).toBe('built-in');
         expect(store.height_explicit).toBe('false');
-      }
-    );
-  }, 60_000);
-
-  it('edits global-only UI language, startup, and application hotkey settings', async (context) => {
-    await runSharedGtkTest(
-      context,
-      ['--global-mode', '--page=general'],
-      async ({ app }) => {
-        await expect(
-          app.getById('settings_general_startup_mode_combo')
-        ).rejects.toThrow();
-        await expect(
-          app.getById('settings_general_ui_language_combo')
-        ).rejects.toThrow();
-        const uiLanguage = expectElementKind(
-          await app.getById('global_settings_general_ui_language_combo'),
-          'comboBox'
-        );
-        expect(
-          await comboOptionNames(
-            app,
-            'global_settings_general_ui_language_combo'
-          )
-        ).toEqual([
-          'System default',
-          'English',
-          'العربية',
-          'Español',
-          'Français',
-          'हिन्दी',
-          '日本語',
-          '한국어',
-          'Português',
-          'Русский',
-          '中文',
-        ]);
-        await uiLanguage.selectChildAt(6);
-        await expectSelectedComboValue(
-          app,
-          'global_settings_general_ui_language_combo',
-          '日本語'
-        );
-        const startupMode = expectElementKind(
-          await app.getById('global_settings_general_startup_mode_combo'),
-          'comboBox'
-        );
-        expect(
-          await comboOptionNames(
-            app,
-            'global_settings_general_startup_mode_combo'
-          )
-        ).toEqual([
-          'Simple startup (built-in default)',
-          'Simple startup',
-          'Background only',
-          'System tray only',
-          'System tray and main window',
-        ]);
-        await startupMode.selectChildAt(2);
-        await expectSelectedComboValue(
-          app,
-          'global_settings_general_startup_mode_combo',
-          'Background only'
-        );
-
-        const openApplication = expectElementKind(
-          await app.getById('global_settings_general_open_application_entry'),
-          'entry'
-        );
-        await captureKeyBinding(
-          app,
-          openApplication,
-          ['control', 'shift'],
-          'y'
-        );
-        await expectEntryText(openApplication, 'ctrl+shift+y');
-        await expectElementKind(
-          await app.getById('global_settings_apply_button'),
-          'button'
-        ).click();
-        const configured = await waitForAppliedStore(app);
-        expect(configured.ui_language).toBe('ja');
-        expect(configured.startup_mode).toBe('background');
-        expect(configured.open_application).toBe('ctrl+shift+y');
-        expect(configured.ui_language_explicit).toBe('true');
-        expect(configured.startup_mode_explicit).toBe('true');
-        expect(configured.open_application_explicit).toBe('true');
-      }
-    );
-
-    await runSharedGtkTest(
-      context,
-      ['--global-mode', '--page=general', '--global=general.ui_language=ja'],
-      async ({ app }) => {
-        const uiLanguage = expectElementKind(
-          await app.getById('global_settings_general_ui_language_combo'),
-          'comboBox'
-        );
-        await uiLanguage.selectChildAt(0);
-        await expectSelectedComboValue(
-          app,
-          'global_settings_general_ui_language_combo',
-          'System default'
-        );
-        await expectElementKind(
-          await app.getById('global_settings_apply_button'),
-          'button'
-        ).click();
-        const system = await waitForAppliedStore(app);
-        expect(system.ui_language).toBe('system');
-        expect(system.ui_language_explicit).toBe('false');
-      }
-    );
-
-    await runSharedGtkTest(
-      context,
-      ['--global-mode', '--page=general', '--global=general.open_application='],
-      async ({ app }) => {
-        const openApplication = expectElementKind(
-          await app.getById('global_settings_general_open_application_entry'),
-          'entry'
-        );
-        await waitForEntryPlaceholder(
-          app,
-          'global_settings_general_open_application_entry',
-          'Disabled'
-        );
-        await expectElementKind(
-          await app.getById(
-            'global_settings_general_open_application_reset_button'
-          ),
-          'button'
-        ).click();
-        await waitForEntryPlaceholder(
-          app,
-          'global_settings_general_open_application_entry',
-          'ctrl+alt+t (built-in default)'
-        );
-        await expectElementKind(
-          await app.getById('global_settings_apply_button'),
-          'button'
-        ).click();
-        const reset = await waitForAppliedStore(app);
-        expect(reset.open_application).toBe('ctrl+alt+t');
-        expect(reset.open_application_explicit).toBe('false');
       }
     );
   }, 60_000);

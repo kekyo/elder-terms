@@ -31,6 +31,7 @@ struct FixtureOptions {
   bool has_save = false;
   bool show_actions = true;
   bool global_mode = false;
+  std::string bell_sound_dialog_file;
   std::string page = "general";
   std::vector<ConfigAssignment> connection_assignments;
   std::vector<ConfigAssignment> global_assignments;
@@ -40,6 +41,7 @@ struct FixtureOptions {
 struct FixtureState {
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
   std::optional<elder_terms::SettingsStore> rebase_store;
+  std::string bell_sound_dialog_file;
   GtkWidget *window = nullptr;
 };
 
@@ -102,6 +104,10 @@ static FixtureOptions parse_options(int argc, char **argv) {
       append_connection_assignment(
           &options, "general", "open_connection",
           option_value(argument, "--open-connection="));
+    } else if (starts_with(argument, "--local-command-line=")) {
+      append_connection_assignment(
+          &options, "local", "command_line",
+          option_value(argument, "--local-command-line="));
     } else if (starts_with(argument, "--width=")) {
       append_connection_assignment(
           &options, "terminal", "width", option_value(argument, "--width="));
@@ -131,6 +137,10 @@ static FixtureOptions parse_options(int argc, char **argv) {
       append_connection_assignment(
           &options, "terminal", "show_border",
           option_value(argument, "--show-border="));
+    } else if (starts_with(argument, "--border-width=")) {
+      append_connection_assignment(
+          &options, "terminal", "border_width",
+          option_value(argument, "--border-width="));
     } else if (starts_with(argument, "--exterior-background=")) {
       append_connection_assignment(
           &options, "general", "exterior_background",
@@ -169,6 +179,9 @@ static FixtureOptions parse_options(int argc, char **argv) {
           option_value(argument, "--send-break-key="));
     } else if (starts_with(argument, "--page=")) {
       options.page = option_value(argument, "--page=");
+    } else if (starts_with(argument, "--bell-sound-dialog-file=")) {
+      options.bell_sound_dialog_file =
+          option_value(argument, "--bell-sound-dialog-file=");
     } else if (starts_with(argument, "--telnet-address=")) {
       append_connection_assignment(
           &options, "telnet", "address",
@@ -411,6 +424,21 @@ static GtkWidget *find_widget_by_name(GtkWidget *widget,
   return nullptr;
 }
 
+static void select_bell_sound_dialog_file(GtkButton *, gpointer data) {
+  const auto *file = static_cast<const std::string *>(data);
+  GList *windows = gtk_window_list_toplevels();
+  for (GList *window = windows; window != nullptr; window = window->next) {
+    GtkWidget *dialog = find_widget_by_name(
+        GTK_WIDGET(window->data), "settings_terminal_bell_sound_dialog");
+    if (dialog == nullptr || !GTK_IS_FILE_CHOOSER(dialog)) {
+      continue;
+    }
+    gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), file->c_str());
+    break;
+  }
+  g_list_free(windows);
+}
+
 static void print_color_picker_alpha(GtkWidget *window,
                                      const std::string &id,
                                      const char *name) {
@@ -593,6 +621,8 @@ static void print_store(const char *prefix,
       elder_terms::terminal_display_settings(store);
   const elder_terms::TerminalFontFamilies font_families =
       elder_terms::terminal_font_families(store);
+  const elder_terms::TerminalBellSettings bell =
+      elder_terms::terminal_bell_settings(store);
   const std::string exterior_background =
       elder_terms::setting_string_value_or_default(
           store,
@@ -618,6 +648,10 @@ static void print_store(const char *prefix,
       elder_terms::serial_connection_settings(store);
   const elder_terms::TerminalLogSettings log =
       elder_terms::terminal_log_settings(store);
+  const std::string local_command_line =
+      elder_terms::setting_string_value_or_default(
+          store, elder_terms::local_command_line_setting_key(),
+          std::string());
   std::string macro_ids;
   for (const elder_terms::MacroRule &rule : store.macro_rules) {
     if (!macro_ids.empty()) {
@@ -651,8 +685,13 @@ static void print_store(const char *prefix,
                    text_settings.return_code)
             << " auto_close="
             << (elder_terms::terminal_auto_close(store) ? "true" : "false")
+            << " bell_sound="
+            << (bell.sound_file.has_value() ? bell.sound_file->string()
+                                            : "default")
             << " show_border="
             << (elder_terms::terminal_show_border(store) ? "true" : "false")
+            << " border_width="
+            << elder_terms::terminal_border_width(store)
             << " exterior_background=" << exterior_background
             << " background=" << background
             << " zoom_in_key="
@@ -661,6 +700,7 @@ static void print_store(const char *prefix,
             << elder_terms::terminal_zoom_out_key(store)
             << " send_break_key="
             << elder_terms::terminal_send_break_key(store)
+            << " local_command_line=" << local_command_line
             << " telnet_address=" << telnet.address
             << " telnet_port=" << telnet.port
             << " telnet_terminal_type=" << telnet.terminal_type
@@ -743,8 +783,12 @@ static void print_store(const char *prefix,
       elder_terms::terminal_font_fallback_family_setting_key());
   print_setting_metadata(store, "auto_close",
                          elder_terms::terminal_auto_close_setting_key());
+  print_setting_metadata(store, "bell_sound",
+                         elder_terms::terminal_bell_sound_setting_key());
   print_setting_metadata(store, "show_border",
                          elder_terms::terminal_show_border_setting_key());
+  print_setting_metadata(store, "border_width",
+                         elder_terms::terminal_border_width_setting_key());
   print_setting_metadata(
       store, "exterior_background",
       elder_terms::general_exterior_background_setting_key());
@@ -764,6 +808,8 @@ static void print_store(const char *prefix,
                          elder_terms::terminal_zoom_out_key_setting_key());
   print_setting_metadata(store, "send_break_key",
                          elder_terms::terminal_send_break_key_setting_key());
+  print_setting_metadata(store, "local_command_line",
+                         elder_terms::local_command_line_setting_key());
   print_setting_metadata(store, "telnet_address",
                          elder_terms::telnet_address_setting_key());
   print_setting_metadata(store, "telnet_port",
@@ -865,6 +911,7 @@ int main(int argc, char **argv) {
     const elder_terms_settings_widget_fixture::FixtureOptions options =
         elder_terms_settings_widget_fixture::parse_options(argc, argv);
     elder_terms_settings_widget_fixture::FixtureState state;
+    state.bell_sound_dialog_file = options.bell_sound_dialog_file;
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     state.window = window;
@@ -940,6 +987,18 @@ int main(int argc, char **argv) {
         GTK_BOX(contents),
         elder_terms::settings_widget_root(state.settings_widget), TRUE, TRUE,
         0);
+    if (!state.bell_sound_dialog_file.empty()) {
+      GtkWidget *browse_button =
+          elder_terms_settings_widget_fixture::find_widget_by_name(
+              window, "settings_terminal_bell_sound_browse_button");
+      if (browse_button != nullptr) {
+        g_signal_connect_after(
+            browse_button, "clicked",
+            G_CALLBACK(elder_terms_settings_widget_fixture::
+                           select_bell_sound_dialog_file),
+            &state.bell_sound_dialog_file);
+      }
+    }
     if (state.rebase_store.has_value()) {
       GtkWidget *rebase_button =
           gtk_button_new_with_label("Rebase test fallbacks");

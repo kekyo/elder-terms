@@ -72,6 +72,10 @@ struct TrayIconPixmap {
 struct TrayBackendCallbacks {
   /** Opens or presents the launcher window. */
   std::function<void(const TrayActivationContext &)> activate;
+  /** Opens the application-level settings page. */
+  std::function<void()> application_settings;
+  /** Opens the application information page. */
+  std::function<void()> about;
   /** Requests an explicit application quit. */
   std::function<void()> quit;
   /** Reports changes to tray discovery and host availability. */

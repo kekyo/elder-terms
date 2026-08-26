@@ -1,4 +1,5 @@
 gtk_dep = dependency('gtk+-3.0')
+canberra_dep = dependency('libcanberra')
 gio_dep = dependency('gio-2.0')
 liburing_dep = dependency('liburing')
 libudev_dep = dependency('libudev')
@@ -58,6 +59,8 @@ elder_terms_sources = [
   'src/sftp/sftp-transfer-engine.cpp',
   'src/sftp/sftp-window.cpp',
   'src/terminal-connection-phase.cpp',
+  'src/terminal-bell.cpp',
+  'src/terminal-bell-player.cpp',
   'src/terminal-font.cpp',
   'src/terminal-hyperlink-resolver.cpp',
   'src/terminal-log.cpp',
@@ -97,6 +100,7 @@ executable(
   ],
   dependencies: [
     elder_terms_dep,
+    canberra_dep,
     gio_dep,
     gtk_dep,
     liburing_dep,
@@ -204,6 +208,20 @@ terminal_font_test = executable(
 )
 
 test('terminal-font-test', terminal_font_test)
+
+terminal_bell_test = executable(
+  'terminal-bell-test',
+  [
+    'tests/cpp/terminal-bell-test.cpp',
+    'src/terminal-bell.cpp',
+  ],
+  include_directories: include_directories('src'),
+  dependencies: [
+    elder_terms_dep,
+  ],
+)
+
+test('terminal-bell-test', terminal_bell_test)
 
 terminal_macro_runner_test = executable(
   'terminal-macro-runner-test',

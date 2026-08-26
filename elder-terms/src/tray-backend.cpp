@@ -33,6 +33,8 @@ static constexpr char dbus_menu_interface[] = "com.canonical.dbusmenu";
 static constexpr int dbus_menu_revision = 1;
 static constexpr int open_menu_item_id = 1;
 static constexpr int quit_menu_item_id = 2;
+static constexpr int application_settings_menu_item_id = 3;
+static constexpr int about_menu_item_id = 4;
 static constexpr std::array<int, 8> tray_icon_sizes = {
     16, 22, 24, 32, 48, 64, 128, 256,
 };
@@ -371,6 +373,14 @@ static GVariant *build_menu_layout() {
           build_menu_item(open_menu_item_id, _("Open elder-terms"))));
   g_variant_builder_add_value(
       &children,
+      g_variant_new_variant(build_menu_item(
+          application_settings_menu_item_id, _("Application settings"))));
+  g_variant_builder_add_value(
+      &children,
+      g_variant_new_variant(build_menu_item(
+          about_menu_item_id, _("About elder-terms"))));
+  g_variant_builder_add_value(
+      &children,
       g_variant_new_variant(build_menu_item(quit_menu_item_id, _("Quit"))));
   GVariant *root =
       g_variant_new("(i@a{sv}@av)", 0,
@@ -388,6 +398,14 @@ build_menu_group_properties(const std::vector<int> &ids) {
       g_variant_builder_add(
           &builder, "(i@a{sv})", id,
           build_menu_item_properties(_("Open elder-terms")));
+    } else if (id == application_settings_menu_item_id) {
+      g_variant_builder_add(
+          &builder, "(i@a{sv})", id,
+          build_menu_item_properties(_("Application settings")));
+    } else if (id == about_menu_item_id) {
+      g_variant_builder_add(
+          &builder, "(i@a{sv})", id,
+          build_menu_item_properties(_("About elder-terms")));
     } else if (id == quit_menu_item_id) {
       g_variant_builder_add(&builder, "(i@a{sv})", id,
                             build_menu_item_properties(_("Quit")));
@@ -425,6 +443,21 @@ static void quit_backend(TrayBackendImplementation *implementation) {
   }
 }
 
+static void open_application_settings_backend(
+    TrayBackendImplementation *implementation) {
+  if (implementation != nullptr && !implementation->destroyed &&
+      implementation->options.callbacks.application_settings) {
+    implementation->options.callbacks.application_settings();
+  }
+}
+
+static void open_about_backend(TrayBackendImplementation *implementation) {
+  if (implementation != nullptr && !implementation->destroyed &&
+      implementation->options.callbacks.about) {
+    implementation->options.callbacks.about();
+  }
+}
+
 static void handle_menu_event(TrayBackendImplementation *implementation,
                               int item_id, const char *event_id,
                               std::uint32_t timestamp) {
@@ -434,6 +467,10 @@ static void handle_menu_event(TrayBackendImplementation *implementation,
   if (item_id == open_menu_item_id) {
     activate_backend(implementation,
                      build_tray_activation_context(timestamp));
+  } else if (item_id == application_settings_menu_item_id) {
+    open_application_settings_backend(implementation);
+  } else if (item_id == about_menu_item_id) {
+    open_about_backend(implementation);
   } else if (item_id == quit_menu_item_id) {
     quit_backend(implementation);
   }
@@ -826,6 +863,16 @@ static void on_status_icon_open(GtkMenuItem *, gpointer user_data) {
       build_tray_activation_context(gtk_get_current_event_time()));
 }
 
+static void on_status_icon_application_settings(GtkMenuItem *,
+                                                gpointer user_data) {
+  open_application_settings_backend(
+      static_cast<TrayBackendImplementation *>(user_data));
+}
+
+static void on_status_icon_about(GtkMenuItem *, gpointer user_data) {
+  open_about_backend(static_cast<TrayBackendImplementation *>(user_data));
+}
+
 static void on_status_icon_quit(GtkMenuItem *, gpointer user_data) {
   quit_backend(static_cast<TrayBackendImplementation *>(user_data));
 }
@@ -858,9 +905,17 @@ static void create_xembed_backend(
 
   GtkWidget *open_item =
       gtk_menu_item_new_with_label(_("Open elder-terms"));
+  GtkWidget *application_settings_item =
+      gtk_menu_item_new_with_label(_("Application settings"));
+  GtkWidget *about_item =
+      gtk_menu_item_new_with_label(_("About elder-terms"));
   GtkWidget *quit_item = gtk_menu_item_new_with_label(_("Quit"));
   gtk_menu_shell_append(GTK_MENU_SHELL(implementation->status_menu),
                         open_item);
+  gtk_menu_shell_append(GTK_MENU_SHELL(implementation->status_menu),
+                        application_settings_item);
+  gtk_menu_shell_append(GTK_MENU_SHELL(implementation->status_menu),
+                        about_item);
   gtk_menu_shell_append(GTK_MENU_SHELL(implementation->status_menu),
                         quit_item);
   gtk_widget_show_all(implementation->status_menu);
@@ -871,6 +926,11 @@ static void create_xembed_backend(
                    G_CALLBACK(on_status_icon_popup), implementation);
   g_signal_connect(open_item, "activate",
                    G_CALLBACK(on_status_icon_open), implementation);
+  g_signal_connect(application_settings_item, "activate",
+                   G_CALLBACK(on_status_icon_application_settings),
+                   implementation);
+  g_signal_connect(about_item, "activate",
+                   G_CALLBACK(on_status_icon_about), implementation);
   g_signal_connect(quit_item, "activate",
                    G_CALLBACK(on_status_icon_quit), implementation);
   implementation->embedded_signal_id = g_signal_connect(

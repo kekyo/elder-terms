@@ -62,6 +62,11 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
           builder, "connection_name_renderer", GTK_TYPE_CELL_RENDERER_TEXT)),
       .connection_context_menu =
           required_widget(builder, "connection_context_menu"),
+      .application_menu_button =
+          required_widget(builder, "application_menu_button"),
+      .application_settings_menu_item =
+          required_widget(builder, "application_settings_menu_item"),
+      .about_menu_item = required_widget(builder, "about_menu_item"),
       .rename_connection_menu_item =
           required_widget(builder, "rename_connection_menu_item"),
       .duplicate_connection_menu_item =
@@ -85,6 +90,9 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
       result.connection_list == nullptr || result.connection_store == nullptr ||
       result.connection_name_renderer == nullptr ||
       result.connection_context_menu == nullptr ||
+      result.application_menu_button == nullptr ||
+      result.application_settings_menu_item == nullptr ||
+      result.about_menu_item == nullptr ||
       result.rename_connection_menu_item == nullptr ||
       result.duplicate_connection_menu_item == nullptr ||
       result.delete_connection_menu_item == nullptr ||

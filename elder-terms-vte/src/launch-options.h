@@ -31,6 +31,8 @@ struct TestOptions {
   bool shared_sftp_disconnected = false;
   /** True when opening fixture SFTP leaves main-window focus on Transfer. */
   bool focus_transfer_on_sftp_open = false;
+  /** True when the test harness should emulate a maximized window resize. */
+  bool maximize_window = false;
 };
 
 /**

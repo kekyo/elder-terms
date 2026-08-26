@@ -97,6 +97,12 @@ using elder_terms::TerminalReturnCode;
 using elder_terms::TerminalTextSettings;
 using elder_terms::terminal_auto_close;
 using elder_terms::terminal_backspace_code_setting_key;
+using elder_terms::terminal_border_width;
+using elder_terms::terminal_border_width_setting_key;
+using elder_terms::TerminalBellSettings;
+using elder_terms::terminal_bell_settings;
+using elder_terms::terminal_bell_sound_is_valid;
+using elder_terms::terminal_bell_sound_setting_key;
 using elder_terms::terminal_connection_profile;
 using elder_terms::terminal_cursor_key_mode_setting_key;
 using elder_terms::terminal_cursor_key_mode_to_string;
@@ -210,6 +216,10 @@ static void test_default_settings() {
               "default terminal auto-close should be enabled");
   expect_true(!terminal_show_border(store),
               "terminal window side borders should be disabled by default");
+  expect_true(terminal_border_width(store) == 4,
+              "default terminal window side-border width should be 4 pixels");
+  expect_true(!terminal_bell_settings(store).sound_file.has_value(),
+              "the default terminal bell should retain VTE's built-in beep");
   const GeneralColorSettings colors = general_color_settings(store);
   expect_true(!colors.exterior_background.has_value(),
               "default exterior background should remain theme-controlled");
@@ -299,6 +309,117 @@ static void test_default_settings() {
               "default local cursor keys should use normal sequences");
 }
 
+static void test_local_command_line_setting_round_trip_and_layering() {
+  const elder_terms::SettingKey command_line_key =
+      elder_terms::local_command_line_setting_key();
+  expect_true(command_line_key.section == "local" &&
+                  command_line_key.name == "command_line",
+              "the local startup command should use [local] command_line");
+
+  const SettingsStore defaults =
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
+  expect_true(elder_terms::setting_string_value_or_default(
+                  defaults, command_line_key, "missing") == "",
+              "the built-in local command line should select the user shell");
+  const TerminalConnectionProfile default_profile =
+      required_terminal_connection_profile(defaults);
+  const LocalShellConnectionSettings default_local =
+      std::get<LocalShellConnectionSettings>(default_profile.settings);
+  expect_true(default_local.argv.empty(),
+              "the default local process arguments should defer to the user "
+              "shell");
+
+  const std::filesystem::path global_path =
+      temporary_config_path("global-local-command-line");
+  const std::filesystem::path connection_path =
+      temporary_config_path("connection-local-command-line");
+  const std::filesystem::path startup_path =
+      temporary_config_path("startup-local-command-line");
+  const std::filesystem::path saved_path =
+      temporary_config_path("saved-local-command-line");
+  write_config(global_path,
+               "[local]\n"
+               "command_line=global-shell --global\n");
+  write_config(connection_path,
+               "[general]\n"
+               "type=local\n"
+               "\n"
+               "[local]\n"
+               "command_line=connection-shell 'connection value'\n");
+  write_config(startup_path,
+               "[local]\n"
+               "command_line=startup-shell --startup\n");
+
+  const SettingsLoadResult loaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = startup_path,
+          .global_config_path = global_path,
+      },
+      1.0);
+  expect_true(loaded.loaded,
+              "a layered local startup command should load successfully");
+  expect_true(elder_terms::setting_string_value_or_default(
+                  loaded.store, command_line_key, "") ==
+                  "startup-shell --startup",
+              "startup settings should override the connection local "
+              "command");
+  expect_true(setting_value_source(loaded.store, command_line_key) ==
+                  SettingValueSource::override,
+              "a startup local command should be reported as an override");
+  expect_true(setting_fallback_source(loaded.store, command_line_key) ==
+                  SettingValueSource::global,
+              "an overridden local command should retain its global source");
+  expect_true(std::get<std::string>(setting_fallback_value(
+                  loaded.store, command_line_key,
+                  elder_terms::SettingValue{std::string()})) ==
+                  "global-shell --global",
+              "an overridden local command should retain its global value");
+  const TerminalConnectionProfile configured_profile =
+      required_terminal_connection_profile(loaded.store);
+  const LocalShellConnectionSettings configured_local =
+      std::get<LocalShellConnectionSettings>(configured_profile.settings);
+  expect_true(configured_local.argv ==
+                  std::vector<std::string>{"startup-shell", "--startup"},
+              "the effective local command line should be parsed into exact "
+              "process arguments");
+
+  const SettingsSaveResult saved = save_settings(loaded.store, saved_path);
+  expect_true(saved.saved, "the local startup command should save");
+  expect_true(read_config(saved_path).find(
+                  "command_line=startup-shell --startup") !=
+                  std::string::npos,
+              "the saved connection should retain its local startup command");
+
+  write_config(connection_path,
+               "[general]\n"
+               "type=local\n"
+               "\n"
+               "[local]\n"
+               "command_line=broken 'command line\n");
+  const SettingsLoadResult invalid = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  expect_true(warnings_contain(
+                  invalid.warnings,
+                  "invalid configuration value [local] command_line"),
+              "an invalid local command line should emit a precise warning");
+  expect_true(elder_terms::setting_string_value_or_default(
+                  invalid.store, command_line_key, "") ==
+                  "global-shell --global",
+              "an invalid local command should use the global fallback");
+
+  remove_config(global_path);
+  remove_config(connection_path);
+  remove_config(startup_path);
+  remove_config(saved_path);
+}
+
 static SettingsLoadResult
 load_terminal_scrollback_lines(const std::string &name,
                                const std::string &value) {
@@ -375,6 +496,76 @@ static void test_terminal_scrollback_lines_range_and_round_trip() {
   expect_true(terminal_display_settings(reloaded.store).scrollback_lines ==
                   54321,
               "terminal scrollback should survive saving and reloading");
+}
+
+static SettingsLoadResult load_terminal_border_width(const std::string &name,
+                                                      const std::string &value) {
+  const std::filesystem::path path = temporary_config_path(name);
+  write_config(path, "[terminal]\nborder_width=" + value + "\n");
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+  return result;
+}
+
+static void test_terminal_border_width_range_and_round_trip() {
+  const SettingsLoadResult minimum =
+      load_terminal_border_width("border-width-minimum", "1");
+  expect_true(terminal_border_width(minimum.store) == 1,
+              "minimum terminal border width should be accepted");
+  expect_true(minimum.warnings.empty(),
+              "minimum terminal border width should not emit warnings");
+
+  const SettingsLoadResult maximum =
+      load_terminal_border_width("border-width-maximum", "1000");
+  expect_true(terminal_border_width(maximum.store) == 1000,
+              "maximum terminal border width should be accepted");
+  expect_true(maximum.warnings.empty(),
+              "maximum terminal border width should not emit warnings");
+
+  const SettingsLoadResult below_minimum =
+      load_terminal_border_width("border-width-below-minimum", "0");
+  expect_true(terminal_border_width(below_minimum.store) == 4,
+              "terminal border width below the minimum should use the default");
+  expect_true(warnings_contain(
+                  below_minimum.warnings,
+                  "invalid configuration value [terminal] border_width"),
+              "terminal border width below the minimum should emit a warning");
+
+  const SettingsLoadResult above_maximum =
+      load_terminal_border_width("border-width-above-maximum", "1001");
+  expect_true(terminal_border_width(above_maximum.store) == 4,
+              "terminal border width above the maximum should use the default");
+  expect_true(warnings_contain(
+                  above_maximum.warnings,
+                  "invalid configuration value [terminal] border_width"),
+              "terminal border width above the maximum should emit a warning");
+
+  const std::filesystem::path saved_path =
+      temporary_config_path("border-width-round-trip");
+  SettingsStore configured = minimum.store;
+  expect_true(set_explicit_setting_value(
+                  &configured, terminal_border_width_setting_key(),
+                  elder_terms::SettingValue{gint64{12}}),
+              "valid terminal border width should be accepted in memory");
+  const SettingsSaveResult saved = save_settings(configured, saved_path);
+  expect_true(saved.saved, "terminal border width settings should save");
+  expect_true(read_config(saved_path).find("border_width=12") !=
+                  std::string::npos,
+              "saved settings should include terminal border width");
+  const SettingsLoadResult reloaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = saved_path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(saved_path);
+  expect_true(terminal_border_width(reloaded.store) == 12,
+              "terminal border width should survive saving and reloading");
 }
 
 static void test_terminal_font_family_settings_round_trip_and_layering() {
@@ -488,6 +679,128 @@ static void test_terminal_font_family_defaults_override_global_fonts() {
   expect_true(content.find("font_fallback_family=default") !=
                   std::string::npos,
               "the default fallback font should be persisted");
+}
+
+static void test_terminal_bell_sound_validation_and_round_trip() {
+  const std::filesystem::path wav_path =
+      temporary_config_path("terminal-bell-wav").replace_extension(".wav");
+  const std::filesystem::path oga_path =
+      temporary_config_path("terminal-bell-oga").replace_extension(".oga");
+  const std::filesystem::path ogg_path =
+      temporary_config_path("terminal-bell-ogg").replace_extension(".ogg");
+  const std::filesystem::path mp3_path =
+      temporary_config_path("terminal-bell-mp3").replace_extension(".mp3");
+  write_config(wav_path, "test");
+  write_config(oga_path, "test");
+  write_config(ogg_path, "test");
+  write_config(mp3_path, "test");
+
+  const elder_terms::SettingKey bell_key =
+      terminal_bell_sound_setting_key();
+  expect_true(bell_key.section == "terminal" &&
+                  bell_key.name == "bell_sound",
+              "the terminal bell should use [terminal] bell_sound");
+
+  std::string reason;
+  expect_true(terminal_bell_sound_is_valid("default", &reason),
+              "the built-in terminal bell value should be accepted");
+  expect_true(terminal_bell_sound_is_valid(wav_path.string(), &reason),
+              "an existing WAV terminal bell should be accepted");
+  expect_true(terminal_bell_sound_is_valid(oga_path.string(), &reason),
+              "an existing Ogg Vorbis .oga terminal bell should be accepted");
+  expect_true(terminal_bell_sound_is_valid(ogg_path.string(), &reason),
+              "an existing Ogg Vorbis .ogg terminal bell should be accepted");
+  expect_true(!terminal_bell_sound_is_valid("relative.wav", &reason),
+              "a relative terminal bell path should be rejected");
+  expect_true(!terminal_bell_sound_is_valid(mp3_path.string(), &reason),
+              "an unsupported terminal bell extension should be rejected");
+  expect_true(!terminal_bell_sound_is_valid(
+                  (wav_path.parent_path() / "missing.wav").string(), &reason),
+              "a missing terminal bell file should be rejected");
+
+  SettingsStore store =
+      create_default_settings(default_terminal_display_settings(1.0),
+                              "elder-terms");
+  expect_true(set_explicit_setting_value(
+                  &store, terminal_bell_sound_setting_key(),
+                  elder_terms::SettingValue{wav_path.string()}),
+              "a custom terminal bell should be accepted by the settings store");
+  const TerminalBellSettings bell = terminal_bell_settings(store);
+  expect_true(bell.sound_file ==
+                  std::optional<std::filesystem::path>{wav_path},
+              "the custom terminal bell path should be exposed as a path");
+
+  const std::filesystem::path config_path =
+      temporary_config_path("terminal-bell-round-trip");
+  const SettingsSaveResult saved = save_settings(store, config_path);
+  expect_true(saved.saved, "custom terminal bell settings should save");
+  expect_true(read_config(config_path).find("bell_sound=" +
+                                            wav_path.string()) !=
+                  std::string::npos,
+              "a custom terminal bell path should be persisted");
+  const SettingsLoadResult reloaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = config_path,
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  expect_true(terminal_bell_settings(reloaded.store).sound_file ==
+                  std::optional<std::filesystem::path>{wav_path},
+              "a custom terminal bell should survive saving and reloading");
+
+  expect_true(set_explicit_setting_value(
+                  &store, terminal_bell_sound_setting_key(),
+                  elder_terms::SettingValue{std::string("default")}),
+              "an explicit built-in terminal bell should be accepted");
+  expect_true(!terminal_bell_settings(store).sound_file.has_value(),
+              "an explicit default should restore VTE's built-in beep");
+
+  const std::filesystem::path global_path =
+      temporary_config_path("global-terminal-bell");
+  const std::filesystem::path connection_path =
+      temporary_config_path("connection-terminal-bell");
+  write_config(global_path,
+               "[terminal]\n"
+               "bell_sound=" +
+                   oga_path.string() + "\n");
+  write_config(connection_path, "");
+  SettingsLoadResult layered = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  expect_true(terminal_bell_settings(layered.store).sound_file ==
+                  std::optional<std::filesystem::path>{oga_path},
+              "a connection should inherit the global terminal bell");
+  expect_true(setting_value_source(layered.store, bell_key) ==
+                  SettingValueSource::global,
+              "an inherited terminal bell should report its global source");
+
+  write_config(connection_path,
+               "[terminal]\n"
+               "bell_sound=default\n");
+  layered = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = global_path,
+      },
+      1.0);
+  expect_true(!terminal_bell_settings(layered.store).sound_file.has_value(),
+              "an explicit default should override a global custom bell");
+  expect_true(setting_value_source(layered.store, bell_key) ==
+                  SettingValueSource::override,
+              "an explicit default terminal bell should remain an override");
+
+  remove_config(config_path);
+  remove_config(global_path);
+  remove_config(connection_path);
+  remove_config(wav_path);
+  remove_config(oga_path);
+  remove_config(ogg_path);
+  remove_config(mp3_path);
 }
 
 static void test_general_color_settings() {
@@ -1987,6 +2300,9 @@ static void test_public_setting_keys() {
   expect_true(terminal_show_border_setting_key().section == "terminal" &&
                   terminal_show_border_setting_key().name == "show_border",
               "terminal border key should use [terminal] show_border");
+  expect_true(terminal_border_width_setting_key().section == "terminal" &&
+                  terminal_border_width_setting_key().name == "border_width",
+              "terminal border width key should use [terminal] border_width");
   expect_true(terminal_zoom_in_key_setting_key().section == "terminal" &&
                   terminal_zoom_in_key_setting_key().name == "zoom_in_key",
               "terminal zoom-in key should use [terminal] zoom_in_key");
@@ -2218,6 +2534,8 @@ static void test_save_settings_omits_default_values() {
                     elder_terms::SettingValue{false});
   set_setting_value(&store, terminal_show_border_setting_key(),
                     elder_terms::SettingValue{true});
+  set_setting_value(&store, terminal_border_width_setting_key(),
+                    elder_terms::SettingValue{gint64{6}});
   set_setting_value(&store, terminal_zoom_in_key_setting_key(),
                     elder_terms::SettingValue{std::string("alt+Up")});
   set_setting_value(&store, terminal_send_break_key_setting_key(),
@@ -2254,6 +2572,8 @@ static void test_save_settings_omits_default_values() {
               "saved settings should include non-default auto-close");
   expect_true(content.find("show_border=true") != std::string::npos,
               "saved settings should include enabled terminal borders");
+  expect_true(content.find("border_width=6") != std::string::npos,
+              "saved settings should include non-default terminal border width");
   expect_true(content.find("zoom_in_key=alt+Up") != std::string::npos,
               "saved settings should include non-default zoom-in key");
   expect_true(content.find("send_break_key=shift+F12") != std::string::npos,
@@ -3565,11 +3885,17 @@ int main() {
   try {
     elder_terms_settings_test::test_default_settings();
     elder_terms_settings_test::
+        test_local_command_line_setting_round_trip_and_layering();
+    elder_terms_settings_test::
         test_terminal_scrollback_lines_range_and_round_trip();
+    elder_terms_settings_test::
+        test_terminal_border_width_range_and_round_trip();
     elder_terms_settings_test::
         test_terminal_font_family_settings_round_trip_and_layering();
     elder_terms_settings_test::
         test_terminal_font_family_defaults_override_global_fonts();
+    elder_terms_settings_test::
+        test_terminal_bell_sound_validation_and_round_trip();
     elder_terms_settings_test::test_connection_name_settings();
     elder_terms_settings_test::test_general_color_settings();
     elder_terms_settings_test::

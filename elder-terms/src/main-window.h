@@ -28,6 +28,12 @@ struct LauncherMainWindow {
   GtkCellRenderer *connection_name_renderer = nullptr;
   /** Context menu for a saved connection. */
   GtkWidget *connection_context_menu = nullptr;
+  /** Header menu containing application-level commands. */
+  GtkWidget *application_menu_button = nullptr;
+  /** Opens the application-level settings page. */
+  GtkWidget *application_settings_menu_item = nullptr;
+  /** Opens the application information page. */
+  GtkWidget *about_menu_item = nullptr;
   /** Starts in-place editing of a saved connection name. */
   GtkWidget *rename_connection_menu_item = nullptr;
   /** Duplicates a saved connection. */
@@ -44,7 +50,7 @@ struct LauncherMainWindow {
   GtkWidget *action_row = nullptr;
   /** Creates a new connection draft. */
   GtkWidget *new_button = nullptr;
-  /** Opens the global defaults editor. */
+  /** Opens the connection defaults editor. */
   GtkWidget *global_defaults_button = nullptr;
   /** Saves the selected connection draft. */
   GtkWidget *apply_button = nullptr;

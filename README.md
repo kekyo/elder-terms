@@ -65,6 +65,7 @@ connections, inspired by personal computing in the 1990s.
   incompatible newline codes.
 - Shows indicators at the bottom of the terminal so you can reminisce about
   analog modems.
+- Uses either the built-in beep or a custom WAV/Ogg Vorbis sound for BEL.
 - Changes the font size with keyboard shortcuts or the mouse wheel.
 - Customizes the window exterior colors and terminal background for each
   connection.
@@ -162,8 +163,10 @@ in the list take precedence.
 
 1. Built-in defaults: Defaults provided by elder-terms itself. They are
    determined by the connection type and other factors.
-2. Settings saved in INI files: `global.ini`, shown as "Global defaults",
-   overrides the built-in defaults, and each connection's INI file overrides
+2. Settings saved in INI files: Connection values in `global.ini`, edited with
+   "Connection defaults", override the built-in defaults, and each
+   connection's INI file overrides `global.ini`. Application-wide settings are
+   edited separately with "Application settings" and are also stored in
    `global.ini`. These settings are preserved for the next launch.
 3. Launch-session settings: If you launch a connection with unsaved changes in
    the launcher, those changes are passed to the connection window as a
@@ -185,6 +188,29 @@ the connection's INI file, while "Apply" affects only the current session.
 Clearing a text field or selecting the default item in a selection field
 removes the explicit value, causing the setting to inherit the global or
 built-in default again.
+
+## Local Startup Process
+
+For a Local connection, "Startup command" on the Local tab selects the process
+that `elder-terms-vte` starts in the terminal. The setting takes effect the next
+time the connection is opened and is read-only in a running terminal.
+
+When this field is empty, it inherits the global or built-in default. The
+built-in default starts the user's shell specified by `SHELL`, with no
+additional arguments. If `SHELL` is unset or empty, `/bin/sh` is used.
+
+The value is split into an executable and arguments using shell-style quoting,
+but the process is started directly without a shell. Environment-variable
+expansion, globbing, redirection, and pipelines are therefore not performed.
+Start a shell explicitly when those features are required, for example:
+
+```ini
+[local]
+command_line=/bin/sh -lc 'exec tmux new-session -A -s elder-terms'
+```
+
+The same `[local]` setting can be saved as a global default or overridden for
+an individual connection. Clearing "Startup command" restores inheritance.
 
 ## Selecting a Serial Device
 
@@ -372,6 +398,26 @@ When editing the INI file directly, specify the value as follows:
 scrollback_lines=20000
 ```
 
+## Configuring the BEL Sound
+
+"BEL sound" on the "Terminal" tab selects the sound played when the terminal
+receives BEL. The built-in `default` value keeps VTE's existing simple beep.
+
+For a custom sound, enter the absolute path of an existing file or use the
+"Select file" button to choose it. Supported formats are Ogg Vorbis (`.oga`,
+with the legacy `.ogg` extension also accepted) and WAV (PCM).
+
+```ini
+[terminal]
+bell_sound=/home/user/.local/share/sounds/terminal-bell.oga
+```
+
+Connection settings can inherit the global default. If the global default uses
+a custom sound, set `bell_sound=default` on one connection to restore the
+built-in beep for that connection. If libcanberra cannot start playback,
+elder-terms falls back to the built-in beep until the settings are applied
+again.
+
 ## Configuring Font Families
 
 Scroll down on the "Terminal" tab to specify primary and secondary font
@@ -406,16 +452,16 @@ set the corresponding value to `default`.
 ## Configuring Hotkeys
 
 Hotkeys work only while the elder-terms launcher is running. In environments
-with a system tray, you can keep the launcher in the tray by setting "Startup
-mode" under "Global defaults" to "System tray only" or "System tray and main
-window".
+with a system tray, you can keep the launcher in the tray by opening the
+application menu, selecting "Application settings", and setting "Startup mode"
+to "System tray only" or "System tray and main window".
 
 ![System tray](./images/system-tray.png)
 
 The deb package and Meson installation install an XDG autostart entry that
 starts elder-terms when you log in to the desktop. Whether autostart shows the
-launcher and keeps it in the system tray follows "Startup mode" under "Global
-defaults", so hotkeys are available immediately after login.
+launcher and keeps it in the system tray follows "Startup mode" under
+"Application settings", so hotkeys are available immediately after login.
 
 To disable autostart, use your desktop environment's startup-application
 settings. You can also override the system-wide autostart entry by placing a
@@ -425,8 +471,8 @@ source tree does not install the autostart entry.
 
 Assigning a key combination to "Open connection shortcut" for a connection
 lets you open it directly with that hotkey even while the launcher is hidden.
-"Open application shortcut" under "Global defaults" shows the launcher; its
-default is `Ctrl+Alt+T`.
+"Open application shortcut" under "Application settings" shows the launcher;
+its default is `Ctrl+Alt+T`.
 
 ### Hotkey Limitations on Wayland
 
@@ -467,14 +513,21 @@ changed.
 
 ## Configuring the Display Language
 
-"Display language" under "Global defaults" lets you select the system default,
-English, Arabic, Spanish, French, Hindi, Japanese, Korean, Portuguese, Russian,
-or Simplified Chinese.
+"Display language" under "Application settings" lets you select the system
+default, English, Arabic, Spanish, French, Hindi, Japanese, Korean, Portuguese,
+Russian, or Simplified Chinese.
 
 The display language is loaded when elder-terms starts, so you must restart
 elder-terms after saving a change. Select "Restart now" in the dialog shown
 when you save, or restart it manually later. Terminal and SFTP windows that are
 already open do not change language immediately either.
+
+## Checking the Running Version
+
+Open the application menu in either the launcher or a terminal window and
+select "About elder-terms". Both entries open the same launcher-owned dialog,
+whose "About" page shows the version embedded in the running build or deb
+package.
 
 > Note: The elder-terms project owner is a native Japanese speaker who
 > understands Japanese and English but cannot read any of the other languages.
@@ -519,7 +572,7 @@ Macros (automatic macros) monitor text received from the remote host with
 regular expressions. When a match is found, they either send text to the host
 or run a specified command. They are available for local terminal, TELNET,
 serial, and SSH connections, but cannot be defined for SFTP connections or
-Global defaults.
+Connection defaults.
 
 In text to send, commands, and command arguments, `${0}` refers to the entire
 regular-expression match, `${1}` and `${2}` refer to numbered captures, and
@@ -637,13 +690,14 @@ URI escapes are not executed.
 Configuration files are stored under the XDG user configuration directory. In
 a typical environment where `XDG_CONFIG_HOME` is not set, their locations are:
 
-- Global defaults: `~/.config/elder-terms/global.ini`
+- Global settings (application settings and connection defaults):
+  `~/.config/elder-terms/global.ini`
 - Connection settings:
   `~/.config/elder-terms/connections/<connection-name>.ini`
 
 When `XDG_CONFIG_HOME` is set, its value replaces `~/.config` in the paths
-above. Connection settings inherit the Global defaults, and values changed for
-an individual connection take precedence over them.
+above. Connection settings inherit the connection defaults in the global file,
+and values changed for an individual connection take precedence over them.
 
 ---
 
@@ -655,7 +709,7 @@ gettext, and the development packages for the libraries used by elder-terms:
 ```bash
 sudo apt update
 sudo apt install build-essential git meson ninja-build pkg-config gettext \
-  libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libx11-dev \
+  libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev \
   libxkbcommon-dev liburing-dev libudev-dev libssh-dev libvte-2.91-dev
 ```
 

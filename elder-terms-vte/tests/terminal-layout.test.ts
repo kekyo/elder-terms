@@ -88,7 +88,7 @@ describe.concurrent('elder-terms-vte terminal layout', () => {
       const configPath = join(directory, 'window-side-borders.ini');
       await writeFile(
         configPath,
-        '[general]\nexterior_background=#800000\n\n[terminal]\nshow_border=true\n',
+        '[general]\nexterior_background=#800000\n\n[terminal]\nshow_border=true\nborder_width=7\n',
         'utf8'
       );
 
@@ -109,8 +109,8 @@ describe.concurrent('elder-terms-vte terminal layout', () => {
                 (await app.getById('terminal_scroller')).capture(),
               ]);
 
-            expect(startCapture.bounds.width).toBe(2);
-            expect(endCapture.bounds.width).toBe(2);
+            expect(startCapture.bounds.width).toBe(7);
+            expect(endCapture.bounds.width).toBe(7);
             expect(startCapture.bounds.x).toBe(rootCapture.bounds.x);
             expect(startCapture.bounds.y).toBe(rootCapture.bounds.y);
             expect(startCapture.bounds.height).toBe(rootCapture.bounds.height);

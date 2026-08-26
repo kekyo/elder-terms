@@ -33,6 +33,8 @@
 #include "sftp/sftp-fixture-client.h"
 #include "sftp/sftp-paths.h"
 #include "sftp/sftp-window.h"
+#include "terminal-bell-player.h"
+#include "terminal-bell.h"
 #include "terminal-hyperlink-resolver.h"
 #include "terminal-layout.h"
 #include "terminal-log.h"
@@ -52,6 +54,9 @@ struct ApplicationState {
   elder_terms::TerminalLogState *log_state = nullptr;
   elder_terms::TerminalMacroRunnerState *macro_runner = nullptr;
   elder_terms::TerminalHyperlinkResolverState *hyperlink_resolver = nullptr;
+  elder_terms::TerminalBellPlayer *bell_player = nullptr;
+  elder_terms::TerminalBellState *bell_state = nullptr;
+  gulong bell_signal_id = 0;
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
   std::optional<cardio::promise<void>> shutdown_task;
   std::optional<cardio::promise<void>> ssh_prompt_fixture_task;
@@ -101,6 +106,13 @@ static void start_shared_sftp_connection_check(ApplicationState *state);
 static void update_application_session_identity(ApplicationState *state);
 static void update_application_terminal_presentation(
     ApplicationState *state);
+
+static void on_terminal_bell(VteTerminal *, gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state != nullptr) {
+    elder_terms::ring_terminal_bell(state->bell_state);
+  }
+}
 
 static void on_external_command_error_response(GtkDialog *dialog, gint,
                                                gpointer) {
@@ -173,6 +185,46 @@ static bool spawn_external_command(ApplicationState *state,
     return false;
   }
   return true;
+}
+
+static std::string resolve_launcher_executable() {
+  const char *configured = g_getenv("ELDER_TERMS_LAUNCHER_PATH");
+  if (configured != nullptr && configured[0] != '\0') {
+    return configured;
+  }
+
+  std::error_code read_error;
+  const std::filesystem::path executable =
+      std::filesystem::read_symlink("/proc/self/exe", read_error);
+  if (!read_error) {
+    const std::filesystem::path private_directory =
+        executable.parent_path().parent_path();
+    const std::filesystem::path candidates[] = {
+        private_directory / "launcher" / "elder-terms",
+        private_directory / "elder-terms" / "elder-terms",
+    };
+    for (const std::filesystem::path &candidate : candidates) {
+      if (g_file_test(candidate.c_str(), G_FILE_TEST_IS_EXECUTABLE)) {
+        return candidate.string();
+      }
+    }
+  }
+
+  char *found = g_find_program_in_path("elder-terms");
+  if (found == nullptr) {
+    return "elder-terms";
+  }
+  const std::string result = found;
+  g_free(found);
+  return result;
+}
+
+static void request_launcher_application_page(ApplicationState *state,
+                                              const char *option) {
+  (void)spawn_external_command(
+      state, resolve_launcher_executable(), {option},
+      "application dialog request", _("Failed to open elder-terms"),
+      "application_dialog_request_error");
 }
 
 static void spawn_macro_command(ApplicationState *state, std::string command,
@@ -529,6 +581,9 @@ static void schedule_settings_dialog_close(ApplicationState *state) {
 static void apply_runtime_settings(ApplicationState *state,
                                    const elder_terms::SettingsStore &store) {
   state->settings_store = store;
+  elder_terms::apply_terminal_bell_settings(
+      state->bell_state,
+      elder_terms::terminal_bell_settings(state->settings_store));
   elder_terms::replace_terminal_macro_runner_rules(
       state->macro_runner, state->settings_store.macro_rules);
   const elder_terms::GeneralColorSettings colors =
@@ -580,6 +635,9 @@ static void apply_runtime_settings(ApplicationState *state,
   elder_terms::apply_terminal_key_bindings(
       state->layout_state,
       elder_terms::terminal_key_bindings(state->settings_store));
+  elder_terms::apply_terminal_border_width(
+      state->layout_state,
+      elder_terms::terminal_border_width(state->settings_store));
   elder_terms::apply_terminal_border_visibility(
       state->layout_state,
       elder_terms::terminal_show_border(state->settings_store));
@@ -692,6 +750,18 @@ static void open_settings_dialog(ApplicationState *state) {
 
 static void on_settings_button_clicked(GtkButton *, gpointer user_data) {
   open_settings_dialog(static_cast<ApplicationState *>(user_data));
+}
+
+static void on_application_settings_menu_item_activate(GtkMenuItem *,
+                                                       gpointer user_data) {
+  request_launcher_application_page(
+      static_cast<ApplicationState *>(user_data),
+      "--application-settings");
+}
+
+static void on_about_menu_item_activate(GtkMenuItem *, gpointer user_data) {
+  request_launcher_application_page(
+      static_cast<ApplicationState *>(user_data), "--about");
 }
 
 static gboolean emit_transfer_dialog_current_folder_uri(gpointer data) {
@@ -1440,6 +1510,9 @@ int main(int argc, char **argv) {
       .log_state = nullptr,
       .macro_runner = nullptr,
       .hyperlink_resolver = nullptr,
+      .bell_player = nullptr,
+      .bell_state = nullptr,
+      .bell_signal_id = 0,
       .dispatcher_group = &dispatcher_group,
       .shutdown_task = std::nullopt,
       .ssh_prompt_fixture_task = std::nullopt,
@@ -1468,6 +1541,30 @@ int main(int argc, char **argv) {
       .settings_widget = nullptr,
       .log_enabled_menu_item = nullptr,
   };
+
+  app_state.bell_player = elder_terms::create_terminal_bell_player();
+  app_state.bell_state = elder_terms::create_terminal_bell({
+      .set_audible = [vte_terminal](bool audible) {
+        vte_terminal_set_audible_bell(vte_terminal,
+                                      audible ? TRUE : FALSE);
+      },
+      .cancel_playback = [&app_state]() {
+        elder_terms::cancel_terminal_bell_playback(app_state.bell_player);
+      },
+      .play_file = [&app_state](const std::filesystem::path &sound_file) {
+        return elder_terms::play_terminal_bell_file(app_state.bell_player,
+                                                    sound_file);
+      },
+      .warning = [](std::string message) {
+        std::cerr << "Warning: " << message << '\n';
+      },
+  });
+  app_state.bell_signal_id =
+      g_signal_connect(vte_terminal, "bell", G_CALLBACK(on_terminal_bell),
+                       &app_state);
+  elder_terms::apply_terminal_bell_settings(
+      app_state.bell_state,
+      elder_terms::terminal_bell_settings(app_state.settings_store));
 
   app_state.log_state = elder_terms::create_terminal_log({
       .settings = elder_terms::terminal_log_settings(app_state.settings_store),
@@ -1652,6 +1749,7 @@ int main(int argc, char **argv) {
   app_state.layout_state = elder_terms::create_terminal_layout(
     *main_window, launch_options.test, terminal_display_settings,
     elder_terms::terminal_show_border(app_state.settings_store),
+    elder_terms::terminal_border_width(app_state.settings_store),
     terminal_font_families, terminal_key_bindings,
     {
       .grid_size_changed = [&app_state](glong columns, glong rows) {
@@ -1681,6 +1779,12 @@ int main(int argc, char **argv) {
   g_signal_connect(
     main_window->settings_button, "clicked",
     G_CALLBACK(on_settings_button_clicked), &app_state);
+  g_signal_connect(
+    main_window->application_settings_menu_item, "activate",
+    G_CALLBACK(on_application_settings_menu_item_activate), &app_state);
+  g_signal_connect(
+    main_window->about_menu_item, "activate",
+    G_CALLBACK(on_about_menu_item_activate), &app_state);
 
   bool session_started = false;
   if (!launch_options.test.fixture && app_state.session_state != nullptr) {
@@ -1732,6 +1836,13 @@ int main(int argc, char **argv) {
   elder_terms::destroy_terminal_macro_runner(app_state.macro_runner);
   app_state.shutdown_task.reset();
   elder_terms::destroy_terminal_log(app_state.log_state);
+  if (app_state.bell_signal_id != 0 &&
+      g_signal_handler_is_connected(vte_terminal,
+                                    app_state.bell_signal_id)) {
+    g_signal_handler_disconnect(vte_terminal, app_state.bell_signal_id);
+  }
+  elder_terms::destroy_terminal_bell(app_state.bell_state);
+  elder_terms::destroy_terminal_bell_player(app_state.bell_player);
   elder_terms::release_main_window(&*main_window);
   elder_terms::destroy_terminal_hyperlink_resolver(
       app_state.hyperlink_resolver);

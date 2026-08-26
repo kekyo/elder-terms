@@ -161,6 +161,23 @@ const openGlobalDefaults = async (app: GtkApp) => {
   return dialog;
 };
 
+const openApplicationDialogPage = async (
+  app: GtkApp,
+  itemId: 'application_settings_menu_item' | 'about_menu_item'
+): Promise<void> => {
+  await expectElementKind(
+    await app.getById('application_menu_button'),
+    'toggleButton'
+  ).click();
+  const item = await waitForResult(async () => {
+    const candidate = expectElementKind(await app.getById(itemId), 'menuItem');
+    expect((await candidate.info()).states).toContain('showing');
+    return candidate;
+  });
+  await item.click();
+  await waitForWindowCount(app, 2);
+};
+
 const selectedSettingsTabName = async (
   app: GtkApp,
   idPrefix: string
@@ -333,6 +350,97 @@ const readLaunchCapture = async (path: string): Promise<LaunchCapture> =>
   JSON.parse(await readFile(path, 'utf8')) as LaunchCapture;
 
 describe('elder-terms main window', () => {
+  it('opens application settings and version information in one dialog', async (context) => {
+    await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
+      await openApplicationDialogPage(app, 'application_settings_menu_item');
+      expectElementKind(await app.getById('application_dialog'), 'window');
+      expect(await selectedSettingsTabName(app, 'application_dialog')).toBe(
+        'Application'
+      );
+      expectElementKind(
+        await app.getById('application_settings_ui_language_combo'),
+        'comboBox'
+      );
+      expectElementKind(
+        await app.getById('application_settings_startup_mode_combo'),
+        'comboBox'
+      );
+      expectElementKind(
+        await app.getById('application_settings_open_application_entry'),
+        'entry'
+      );
+      await expectElementKind(
+        await app.getById('application_dialog_cancel_button'),
+        'button'
+      ).click();
+      await waitForWindowCount(app, 1);
+
+      await openApplicationDialogPage(app, 'about_menu_item');
+      expect(await selectedSettingsTabName(app, 'application_dialog')).toBe(
+        'About'
+      );
+      expect(
+        await expectElementKind(
+          await app.getById('application_about_version_label'),
+          'label'
+        ).text()
+      ).toBe('Version 0.0.1');
+    });
+  });
+
+  it('saves application settings without replacing connection defaults', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await prepareProfiles(connections);
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[general]\nstartup_mode=window\nopen_application=\n\n[terminal]\nwidth=91\n'
+        );
+      },
+      async ({ app, configHome }) => {
+        expect(
+          (await (await app.getById('global_defaults_button')).info()).name
+        ).toBe('Connection defaults');
+        await openApplicationDialogPage(app, 'application_settings_menu_item');
+        await expectElementKind(
+          await app.getById('application_settings_startup_mode_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectElementKind(
+          await app.getById('application_dialog_save_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+
+        const saved = await readFile(
+          join(configHome, 'elder-terms', 'global.ini'),
+          'utf8'
+        );
+        expect(saved).toContain('startup_mode=background');
+        expect(saved).toContain('width=91');
+      }
+    );
+  });
+
+  it('opens the About page directly from a forwarded command line', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app }) => {
+        await waitForWindowCount(app, 1);
+        expectElementKind(await app.getById('application_dialog'), 'window');
+        expect(await selectedSettingsTabName(app, 'application_dialog')).toBe(
+          'About'
+        );
+      },
+      {
+        args: ['--about'],
+        env: {},
+      }
+    );
+  });
+
   it('publishes a runtime icon and desktop identity for its main window', async (context) => {
     await runLauncherGtkTest(
       context,
@@ -378,7 +486,7 @@ describe('elder-terms main window', () => {
       async ({ app }) => {
         expect(
           (await (await app.getById('global_defaults_button')).info()).name
-        ).toBe('グローバル既定値');
+        ).toBe('接続の既定値');
       }
     );
   });
@@ -396,7 +504,7 @@ describe('elder-terms main window', () => {
       async ({ app }) => {
         expect(
           (await (await app.getById('global_defaults_button')).info()).name
-        ).toBe('Global defaults');
+        ).toBe('Connection defaults');
       },
       {
         args: [],
@@ -424,7 +532,7 @@ describe('elder-terms main window', () => {
         ).toBe('接続を選択するか、新しい接続を作成してください。');
         expect(
           (await (await app.getById('global_defaults_button')).info()).name
-        ).toBe('グローバル既定値');
+        ).toBe('接続の既定値');
         expect((await (await app.getById('apply_button')).info()).name).toBe(
           '保存'
         );
@@ -444,10 +552,11 @@ describe('elder-terms main window', () => {
 
         const dialog = await openGlobalDefaults(app);
         await waitForResult(async () => {
-          expect((await dialog.x11Info()).title).toBe('グローバル既定値');
+          expect((await dialog.x11Info()).title).toBe('接続の既定値');
           expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual(
             [
               '一般',
+              'ローカル',
               'TELNET',
               'シリアル',
               'SSH',
@@ -481,14 +590,14 @@ describe('elder-terms main window', () => {
       context,
       prepareProfiles,
       async ({ app, configHome }) => {
-        await openGlobalDefaults(app);
+        await openApplicationDialogPage(app, 'application_settings_menu_item');
         const language = expectElementKind(
-          await app.getById('global_settings_general_ui_language_combo'),
+          await app.getById('application_settings_ui_language_combo'),
           'comboBox'
         );
         await language.selectChildAt(6);
         await expectElementKind(
-          await app.getById('global_defaults_save_button'),
+          await app.getById('application_dialog_save_button'),
           'button'
         ).click();
 
@@ -513,7 +622,7 @@ describe('elder-terms main window', () => {
         ).toContain('ui_language=ja');
         expect(
           (await (await app.getById('global_defaults_button')).info()).name
-        ).toBe('Global defaults');
+        ).toBe('Connection defaults');
       }
     );
   });
@@ -531,15 +640,15 @@ describe('elder-terms main window', () => {
       async ({ app }) => {
         expect(
           (await (await app.getById('global_defaults_button')).info()).name
-        ).toBe('グローバル既定値');
-        await openGlobalDefaults(app);
+        ).toBe('接続の既定値');
+        await openApplicationDialogPage(app, 'application_settings_menu_item');
         const language = expectElementKind(
-          await app.getById('global_settings_general_ui_language_combo'),
+          await app.getById('application_settings_ui_language_combo'),
           'comboBox'
         );
         await language.selectChildAt(0);
         await expectElementKind(
-          await app.getById('global_defaults_save_button'),
+          await app.getById('application_dialog_save_button'),
           'button'
         ).click();
 
@@ -558,7 +667,7 @@ describe('elder-terms main window', () => {
         await waitForResult(async () => {
           expect(
             (await (await app.getById('global_defaults_button')).info()).name
-          ).toBe('Global defaults');
+          ).toBe('Connection defaults');
         });
       },
       {
@@ -580,13 +689,13 @@ describe('elder-terms main window', () => {
       );
       await width.setText('99');
 
-      await openGlobalDefaults(app);
+      await openApplicationDialogPage(app, 'application_settings_menu_item');
       await expectElementKind(
-        await app.getById('global_settings_general_ui_language_combo'),
+        await app.getById('application_settings_ui_language_combo'),
         'comboBox'
       ).selectChildAt(6);
       await expectElementKind(
-        await app.getById('global_defaults_save_button'),
+        await app.getById('application_dialog_save_button'),
         'button'
       ).click();
       await waitForWindowCount(app, 2);
@@ -808,7 +917,7 @@ describe('elder-terms main window', () => {
           await app.getById('connect_button'),
           'button'
         );
-        expect((await globalButton.info()).name).toBe('Global defaults');
+        expect((await globalButton.info()).name).toBe('Connection defaults');
 
         await waitForResult(async () => {
           const [newCapture, globalCapture, applyCapture, launchCapture] =
@@ -847,6 +956,7 @@ describe('elder-terms main window', () => {
           expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual(
             [
               'General',
+              'Local',
               'TELNET',
               'Serial',
               'SSH',
@@ -989,11 +1099,6 @@ describe('elder-terms main window', () => {
       },
       async ({ app }) => {
         await openGlobalDefaults(app);
-        const language = expectElementKind(
-          await app.getById('global_settings_general_ui_language_combo'),
-          'comboBox'
-        );
-        await language.selectChildAt(6);
         await selectSettingsTab(app, 'global_settings', 'Terminal');
         const width = expectElementKind(
           await app.getById('global_settings_terminal_width_entry'),

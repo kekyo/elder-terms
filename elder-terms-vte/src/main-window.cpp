@@ -20,7 +20,6 @@
 namespace elder_terms {
 
 static constexpr int indicator_icon_pixel_size = 18;
-static constexpr int frame_border_width = 2;
 static constexpr guint transfer_progress_pulse_period_ms = 120;
 static constexpr const char *terminal_dim_overlay_style_class =
     "terminal-dim-overlay";
@@ -421,6 +420,9 @@ static bool main_window_has_required_widgets(const MainWindow &main_window) {
   return main_window.window != nullptr && main_window.header_bar != nullptr &&
          main_window.settings_button != nullptr &&
          main_window.transfer_button != nullptr &&
+         main_window.application_menu_button != nullptr &&
+         main_window.application_settings_menu_item != nullptr &&
+         main_window.about_menu_item != nullptr &&
          main_window.root_box != nullptr &&
          main_window.frame_start_border != nullptr &&
          main_window.frame_end_border != nullptr &&
@@ -1257,6 +1259,12 @@ std::optional<MainWindow> load_main_window() {
       required_widget(main_window.builder, "settings_button");
   main_window.transfer_button =
       required_widget(main_window.builder, "transfer_button");
+  main_window.application_menu_button =
+      required_widget(main_window.builder, "application_menu_button");
+  main_window.application_settings_menu_item = required_widget(
+      main_window.builder, "application_settings_menu_item");
+  main_window.about_menu_item =
+      required_widget(main_window.builder, "about_menu_item");
   main_window.root_box = required_widget(main_window.builder, "root_box");
   main_window.frame_start_border =
       required_widget(main_window.builder, "frame_start_border");
@@ -1319,7 +1327,6 @@ std::optional<MainWindow> load_main_window() {
   }
   for (GtkWidget *border : {main_window.frame_start_border,
                             main_window.frame_end_border}) {
-    gtk_widget_set_size_request(border, frame_border_width, -1);
     gtk_widget_set_vexpand(border, TRUE);
     update_widget_style_class(border, frame_border_style_class, true);
   }

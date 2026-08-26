@@ -8,6 +8,7 @@ namespace elder_terms {
 
 enum class SettingsUiText {
   general_tab,
+  local_tab,
   telnet_tab,
   serial_tab,
   ssh_tab,
@@ -20,6 +21,8 @@ enum class SettingsUiText {
   save,
   cancel,
   reset,
+  select_file,
+  open,
   select_primary_terminal_font,
   select_secondary_terminal_font,
   enabled,

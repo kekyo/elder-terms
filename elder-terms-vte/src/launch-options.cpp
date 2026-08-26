@@ -73,6 +73,12 @@ LaunchOptions parse_launch_options(int *argc, char **argv) {
       continue;
     }
 
+    if (argument == "--test-maximize-window") {
+      options.test.maximize_window = true;
+      ++index;
+      continue;
+    }
+
     static constexpr const char ssh_prompt_option[] =
         "--test-ssh-prompt=";
     if (argument.rfind(ssh_prompt_option, 0) == 0) {

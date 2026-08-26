@@ -228,6 +228,8 @@ describe('elder-terms tray lifecycle', () => {
           '[]',
         ]);
         expect(layout).toContain('Open elder-terms');
+        expect(layout).toContain('Application settings');
+        expect(layout).toContain('About elder-terms');
         await callSessionBus(app, [
           '--dest',
           busName,
@@ -241,6 +243,29 @@ describe('elder-terms tray lifecycle', () => {
           '0',
         ]);
         await waitForWindowCount(app, 1);
+
+        await closeWindowWithAccelerator(app);
+        await waitForWindowCount(app, 0);
+        await callSessionBus(app, [
+          '--dest',
+          busName,
+          '--object-path',
+          '/StatusNotifierMenu',
+          '--method',
+          'com.canonical.dbusmenu.Event',
+          '4',
+          'clicked',
+          '<0>',
+          '0',
+        ]);
+        await waitForWindowCount(app, 1);
+        expectElementKind(await app.getById('application_dialog'), 'window');
+        expect(
+          await expectElementKind(
+            await app.getById('application_about_version_label'),
+            'label'
+          ).text()
+        ).toBe('Version 0.0.1');
       },
       {
         args: [],

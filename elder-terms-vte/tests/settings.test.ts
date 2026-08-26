@@ -2071,6 +2071,12 @@ describe.concurrent('elder-terms-vte settings', () => {
         'settings_terminal_show_border_combo',
         'Disabled (built-in default)'
       );
+      expect(
+        await expectElementKind(
+          await app.getById('settings_terminal_border_width_entry'),
+          'entry'
+        ).text()
+      ).toBe('');
       await expectElementKind(
         await app.getById('settings_terminal_show_border_combo'),
         'comboBox'
@@ -2085,9 +2091,9 @@ describe.concurrent('elder-terms-vte settings', () => {
         const layout = await readTerminalGridLayout(app);
         expectWindowCellSize(layout, defaultColumns, defaultRows);
         await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
-        expect(layout.hints.baseWidth).toBe(initialLayout.hints.baseWidth + 4);
+        expect(layout.hints.baseWidth).toBe(initialLayout.hints.baseWidth + 8);
         expect(layout.mainBounds.width).toBe(
-          initialLayout.mainBounds.width + 4
+          initialLayout.mainBounds.width + 8
         );
         return layout;
       });
@@ -2099,9 +2105,40 @@ describe.concurrent('elder-terms-vte settings', () => {
           endBorder.capture()
         ),
       ]);
-      expect(startCapture.bounds.width).toBe(2);
-      expect(endCapture.bounds.width).toBe(2);
+      expect(startCapture.bounds.width).toBe(4);
+      expect(endCapture.bounds.width).toBe(4);
       expectWindowCellSize(borderedLayout, defaultColumns, defaultRows);
+
+      await openSettingsDialog(app);
+      await showTerminalSettingsPage(app);
+      await expectSelectedComboValue(
+        app,
+        'settings_terminal_show_border_combo',
+        'Enabled'
+      );
+      await expectElementKind(
+        await app.getById('settings_terminal_border_width_entry'),
+        'entry'
+      ).setText('7');
+      await expectElementKind(
+        await app.getById('settings_apply_button'),
+        'button'
+      ).click();
+      await expectSettingsDialogClosed(app);
+
+      const widenedLayout = await waitForResult(async () => {
+        const layout = await readTerminalGridLayout(app);
+        expectWindowCellSize(layout, defaultColumns, defaultRows);
+        await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+        expect(layout.hints.baseWidth).toBe(initialLayout.hints.baseWidth + 14);
+        expect(layout.mainBounds.width).toBe(
+          initialLayout.mainBounds.width + 14
+        );
+        return layout;
+      });
+      expect((await startBorder.capture()).bounds.width).toBe(7);
+      expect((await endBorder.capture()).bounds.width).toBe(7);
+      expectWindowCellSize(widenedLayout, defaultColumns, defaultRows);
 
       await openSettingsDialog(app);
       await showTerminalSettingsPage(app);
