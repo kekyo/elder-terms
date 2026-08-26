@@ -487,6 +487,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     const containerfile = readFileSync(`${recordsPath}.containerfile`, 'utf8');
     for (const dependency of [
       'libcanberra-dev',
+      'libcanberra-pulse',
       'libgtk-3-dev',
       'libssh-dev',
       'libudev-dev',

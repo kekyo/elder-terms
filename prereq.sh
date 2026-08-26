@@ -37,6 +37,7 @@ dpkg-dev
 gettext
 hicolor-icon-theme
 libcanberra-dev
+libcanberra-pulse
 libgtk-3-dev
 libssh-dev
 libudev-dev
