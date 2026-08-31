@@ -1686,6 +1686,52 @@ describe('elder-terms main window', () => {
     }
   });
 
+  it('routes an FTP profile to the dedicated FTP application', async (context) => {
+    const fakeVte = await createFakeVte();
+    const fakeFtp = await createFakeVte(true);
+    try {
+      await runLauncherGtkTest(
+        context,
+        async (connections) => {
+          await writeFile(
+            join(connections, 'Legacy files.ini'),
+            [
+              '[general]',
+              'type=ftp',
+              '',
+              '[ftp]',
+              'address=ftp.example',
+              '',
+            ].join('\n')
+          );
+        },
+        async ({ app, connections }) => {
+          const list = await app.getById('connection_list');
+          await doubleClickConnectionRow(app, list, 0);
+          await waitForResult(async () => {
+            const capture = await readLaunchCapture(fakeFtp.capture);
+            expect(capture.args).toEqual([
+              '-c',
+              join(connections, 'Legacy files.ini'),
+            ]);
+            expect(capture.startupContent).toBeNull();
+          });
+          await expect(readFile(fakeVte.capture, 'utf8')).rejects.toThrow();
+        },
+        {
+          args: [],
+          env: {
+            ELDER_TERMS_FTP_PATH: fakeFtp.executable,
+            ELDER_TERMS_TEST_CAPTURE: fakeFtp.capture,
+            ELDER_TERMS_VTE_PATH: fakeVte.executable,
+          },
+        }
+      );
+    } finally {
+      await Promise.all([fakeFtp.release(), fakeVte.release()]);
+    }
+  });
+
   it('finds the sibling VTE when launched through a dot path', async (context) => {
     const layout = await createSiblingVteLayout();
     try {

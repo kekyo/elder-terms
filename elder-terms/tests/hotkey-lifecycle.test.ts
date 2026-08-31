@@ -431,9 +431,10 @@ describe('elder-terms application hotkey lifecycle', () => {
     );
   });
 
-  it('launches saved terminal and SFTP connections while resident in the tray', async (context) => {
+  it('launches saved terminal, SFTP, and FTP connections while resident in the tray', async (context) => {
     const fakeVte = await createFakeChild();
     const fakeSftp = await createFakeChild();
+    const fakeFtp = await createFakeChild();
     try {
       await runLauncherGtkTest(
         context,
@@ -455,6 +456,18 @@ describe('elder-terms application hotkey lifecycle', () => {
               '',
             ].join('\n')
           );
+          await writeFile(
+            join(connections, 'Legacy files.ini'),
+            [
+              '[general]',
+              'type=ftp',
+              'open_connection=ctrl+shift+i',
+              '',
+              '[ftp]',
+              'address=ftp.example',
+              '',
+            ].join('\n')
+          );
         },
         async ({ app, connections }) => {
           await waitForWindowCount(app, 0);
@@ -468,18 +481,28 @@ describe('elder-terms application hotkey lifecycle', () => {
             activationToken: null,
             args: ['-c', join(connections, 'Files.ini')],
           });
+          await pressShortcut(app, ['control', 'shift'], 'i');
+          expect(await waitForChildCapture(fakeFtp.capture)).toEqual({
+            activationToken: null,
+            args: ['-c', join(connections, 'Legacy files.ini')],
+          });
           expect(await app.getWindowCount()).toBe(0);
         },
         {
           args: [],
           env: {
+            ELDER_TERMS_FTP_PATH: fakeFtp.executable,
             ELDER_TERMS_SFTP_PATH: fakeSftp.executable,
             ELDER_TERMS_VTE_PATH: fakeVte.executable,
           },
         }
       );
     } finally {
-      await Promise.all([fakeSftp.release(), fakeVte.release()]);
+      await Promise.all([
+        fakeFtp.release(),
+        fakeSftp.release(),
+        fakeVte.release(),
+      ]);
     }
   });
 

@@ -55,8 +55,8 @@ elder_terms_sources = [
   'src/main-window.cpp',
   'src/sftp/sftp-client.cpp',
   'src/sftp/sftp-fixture-client.cpp',
-  'src/sftp/sftp-paths.cpp',
   'src/file-transfer/file-transfer-engine.cpp',
+  'src/file-transfer/file-transfer-paths.cpp',
   'src/file-transfer/file-transfer-window.cpp',
   'src/terminal-connection-phase.cpp',
   'src/terminal-bell.cpp',
@@ -123,8 +123,8 @@ executable(
     'src/sftp/sftp-client.cpp',
     'src/sftp/sftp-fixture-client.cpp',
     'src/sftp/sftp-main.cpp',
-    'src/sftp/sftp-paths.cpp',
     'src/file-transfer/file-transfer-engine.cpp',
+    'src/file-transfer/file-transfer-paths.cpp',
     'src/file-transfer/file-transfer-window.cpp',
     'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
     'src/terminal-sessions/tcp-connector.cpp',
@@ -143,6 +143,38 @@ executable(
     gtk_dep,
     liburing_dep,
     libssh_dep,
+  ],
+  install: true,
+  install_dir: elder_terms_private_install_dir / 'elder-terms-vte',
+  install_rpath: elder_terms_private_install_rpath,
+)
+
+executable(
+  'elder-terms-ftp',
+  [
+    'src/launch-options.cpp',
+    'src/ftp/ftp-client.cpp',
+    'src/ftp/ftp-main.cpp',
+    'src/ftp/ftp-protocol.cpp',
+    'src/sftp/sftp-fixture-client.cpp',
+    'src/file-transfer/file-transfer-engine.cpp',
+    'src/file-transfer/file-transfer-paths.cpp',
+    'src/file-transfer/file-transfer-window.cpp',
+    'src/terminal-sessions/tcp-connector.cpp',
+    'src/widget-background.cpp',
+  ],
+  cpp_args: [
+    '-I' + gestament_include_dir,
+    '-I' + cardio_include_dir,
+    '-DCARDIO_WITH_GLIB=1',
+    '-DCARDIO_WITH_GIO=1',
+    '-DCARDIO_WITH_LINUX_IO_URING=1',
+  ],
+  dependencies: [
+    elder_terms_dep,
+    gio_dep,
+    gtk_dep,
+    liburing_dep,
   ],
   install: true,
   install_dir: elder_terms_private_install_dir / 'elder-terms-vte',
@@ -609,6 +641,12 @@ install_symlink(
 install_symlink(
   'elder-terms-sftp',
   pointing_to: '..' / elder_terms_private_install_dir / 'elder-terms-vte/elder-terms-sftp',
+  install_dir: get_option('bindir'),
+)
+
+install_symlink(
+  'elder-terms-ftp',
+  pointing_to: '..' / elder_terms_private_install_dir / 'elder-terms-vte/elder-terms-ftp',
   install_dir: get_option('bindir'),
 )
 

@@ -29,10 +29,10 @@
 
 #include "launch-options.h"
 #include "main-window.h"
+#include "file-transfer/file-transfer-paths.h"
+#include "file-transfer/file-transfer-window.h"
 #include "sftp/sftp-client.h"
 #include "sftp/sftp-fixture-client.h"
-#include "sftp/sftp-paths.h"
-#include "file-transfer/file-transfer-window.h"
 #include "terminal-bell-player.h"
 #include "terminal-bell.h"
 #include "terminal-hyperlink-resolver.h"
@@ -1210,8 +1210,8 @@ static cardio::promise<void> open_shared_sftp_window_async(
                     state->settings_store),
             .protocol_name = "SFTP",
             .local_directory =
-                elder_terms::resolve_sftp_local_directory(
-                    state->settings_store, settings),
+                elder_terms::resolve_file_transfer_local_directory(
+                    state->settings_store, settings.local_directory),
             .remote_directory = settings.remote_directory,
             .colors =
                 elder_terms::general_color_settings(

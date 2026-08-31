@@ -133,6 +133,7 @@ struct ApplicationState {
   std::optional<std::filesystem::path> monitor_renamed_path;
   std::string vte_executable;
   std::string sftp_executable;
+  std::string ftp_executable;
   std::string launcher_argv0;
   std::vector<ChildLaunch *> child_launches;
   std::vector<ConnectionHotkeyTarget> connection_hotkey_targets;
@@ -1571,13 +1572,16 @@ static void launch_selected_connection(ApplicationState *state) {
   }
   const elder_terms::SettingsStore &draft_store =
       elder_terms::settings_widget_draft_store(state->settings_widget);
-  const bool sftp =
-      elder_terms::general_connection_kind(draft_store) ==
-      elder_terms::ConnectionKind::sftp;
+  const elder_terms::ConnectionKind kind =
+      elder_terms::general_connection_kind(draft_store);
+  const bool sftp = kind == elder_terms::ConnectionKind::sftp;
+  const bool ftp = kind == elder_terms::ConnectionKind::ftp;
   const std::string &executable =
-      sftp ? state->sftp_executable : state->vte_executable;
+      ftp ? state->ftp_executable
+          : sftp ? state->sftp_executable : state->vte_executable;
   const char *executable_name =
-      sftp ? "elder-terms-sftp" : "elder-terms-vte";
+      ftp ? "elder-terms-ftp"
+          : sftp ? "elder-terms-sftp" : "elder-terms-vte";
   const std::string error_summary =
       format_translated_string(_("Failed to start %s"), executable_name);
 
@@ -1618,13 +1622,16 @@ static void launch_saved_connection(
     return;
   }
 
-  const bool sftp =
-      elder_terms::general_connection_kind(loaded.store) ==
-      elder_terms::ConnectionKind::sftp;
+  const elder_terms::ConnectionKind kind =
+      elder_terms::general_connection_kind(loaded.store);
+  const bool sftp = kind == elder_terms::ConnectionKind::sftp;
+  const bool ftp = kind == elder_terms::ConnectionKind::ftp;
   const std::string &executable =
-      sftp ? state->sftp_executable : state->vte_executable;
+      ftp ? state->ftp_executable
+          : sftp ? state->sftp_executable : state->vte_executable;
   const char *executable_name =
-      sftp ? "elder-terms-sftp" : "elder-terms-vte";
+      ftp ? "elder-terms-ftp"
+          : sftp ? "elder-terms-sftp" : "elder-terms-vte";
   const std::vector<std::string> arguments = {
       executable,
       "-c",
@@ -2307,6 +2314,9 @@ static bool initialize_main_window(ApplicationState *state) {
   state->sftp_executable = resolve_child_executable(
       state->launcher_argv0.c_str(), "ELDER_TERMS_SFTP_PATH",
       "elder-terms-sftp");
+  state->ftp_executable = resolve_child_executable(
+      state->launcher_argv0.c_str(), "ELDER_TERMS_FTP_PATH",
+      "elder-terms-ftp");
   start_connection_monitor(state);
   show_empty_details(state);
   state->suppress_selection = true;

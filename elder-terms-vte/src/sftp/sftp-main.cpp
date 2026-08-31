@@ -16,13 +16,13 @@
 #include <elder-terms/settings/application-settings.h>
 #include <elder-terms/settings.h>
 
+#include "../file-transfer/file-transfer-paths.h"
+#include "../file-transfer/file-transfer-window.h"
 #include "../launch-options.h"
 #include "../terminal-session-callbacks.h"
 #include "../terminal-sessions/ssh-session/authenticated-ssh-transport.h"
 #include "sftp-client.h"
 #include "sftp-fixture-client.h"
-#include "sftp-paths.h"
-#include "../file-transfer/file-transfer-window.h"
 
 struct SftpAuthenticationPromptRequest {
   GtkWidget *dialog = nullptr;
@@ -197,8 +197,8 @@ static void open_sftp_application_window(
               elder_terms::general_connection_name(state->settings),
           .protocol_name = "SFTP",
           .local_directory =
-              elder_terms::resolve_sftp_local_directory(
-                  state->settings, state->connection),
+              elder_terms::resolve_file_transfer_local_directory(
+                  state->settings, state->connection.local_directory),
           .remote_directory = state->connection.remote_directory,
           .colors =
               elder_terms::general_color_settings(state->settings),
