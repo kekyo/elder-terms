@@ -85,6 +85,12 @@ interface AppliedStore {
   readonly ui_language: string;
   readonly sftp_local_directory: string;
   readonly sftp_remote_directory: string;
+  readonly ftp_address: string;
+  readonly ftp_port: string;
+  readonly ftp_username: string;
+  readonly ftp_data_connection_mode: string;
+  readonly ftp_local_directory: string;
+  readonly ftp_remote_directory: string;
   readonly telnet_address: string;
   readonly telnet_port: string;
   readonly telnet_terminal_type: string;
@@ -201,6 +207,13 @@ const showSftpPage = async (app: GtkApp): Promise<void> => {
       'settings_sftp_local_directory_entry'
     );
     expect((await localDirectory.info()).states).toContain('showing');
+  });
+};
+
+const showFtpPage = async (app: GtkApp): Promise<void> => {
+  await waitForResult(async () => {
+    const address = await app.getById('settings_ftp_address_entry');
+    expect((await address.info()).states).toContain('showing');
   });
 };
 
@@ -768,6 +781,10 @@ describe.concurrent('shared settings widget', () => {
         args: ['--type=sftp'] as const,
         expected: ['General', 'SSH', 'SFTP'],
       },
+      {
+        args: ['--type=ftp'] as const,
+        expected: ['General', 'FTP'],
+      },
     ] as const;
 
     for (const testCase of cases) {
@@ -882,6 +899,17 @@ describe.concurrent('shared settings widget', () => {
             labels: ['Local directory', 'Remote directory'],
           },
           {
+            id: 'global_settings_ftp_page',
+            labels: [
+              'Address',
+              'Port',
+              'User name',
+              'Data connection mode',
+              'Local directory',
+              'Remote directory',
+            ],
+          },
+          {
             id: 'global_settings_serial_page',
             labels: [
               'Device identification',
@@ -964,6 +992,7 @@ describe.concurrent('shared settings widget', () => {
           'シリアル',
           'SSH',
           'SFTP',
+          'FTP',
           '端末',
           '転送',
           'ログ',
@@ -998,6 +1027,17 @@ describe.concurrent('shared settings widget', () => {
           {
             id: 'global_settings_sftp_page',
             labels: ['ローカルディレクトリ', 'リモートディレクトリ'],
+          },
+          {
+            id: 'global_settings_ftp_page',
+            labels: [
+              'アドレス',
+              'ポート',
+              'ユーザー名',
+              'データ接続方式',
+              'ローカルディレクトリ',
+              'リモートディレクトリ',
+            ],
           },
           {
             id: 'global_settings_serial_page',
@@ -2310,6 +2350,80 @@ describe.concurrent('shared settings widget', () => {
         expect(store.type).toBe('sftp');
         expect(store.sftp_local_directory).toBe('/home/alice/outgoing');
         expect(store.sftp_remote_directory).toBe('/opt/drop');
+      }
+    );
+  });
+
+  it('shows FTP connection controls and applies FTP edits', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ftp',
+        '--type=ftp',
+        '--ftp-address=ftp.example.test',
+        '--ftp-port=2121',
+        '--ftp-username=alice',
+        '--ftp-data-connection-mode=active',
+        '--ftp-local-directory=/home/alice/uploads',
+        '--ftp-remote-directory=/srv/incoming',
+      ],
+      async ({ app }) => {
+        await showFtpPage(app);
+        const address = expectElementKind(
+          await app.getById('settings_ftp_address_entry'),
+          'entry'
+        );
+        const port = expectElementKind(
+          await app.getById('settings_ftp_port_entry'),
+          'entry'
+        );
+        const username = expectElementKind(
+          await app.getById('settings_ftp_username_entry'),
+          'entry'
+        );
+        const dataConnectionMode = expectElementKind(
+          await app.getById('settings_ftp_data_connection_mode_combo'),
+          'comboBox'
+        );
+        const localDirectory = expectElementKind(
+          await app.getById('settings_ftp_local_directory_entry'),
+          'entry'
+        );
+        const remoteDirectory = expectElementKind(
+          await app.getById('settings_ftp_remote_directory_entry'),
+          'entry'
+        );
+
+        expect(await address.text()).toBe('ftp.example.test');
+        expect(await port.text()).toBe('2121');
+        expect(await username.text()).toBe('alice');
+        await expectSelectedComboValue(
+          app,
+          'settings_ftp_data_connection_mode_combo',
+          'Active'
+        );
+        expect(await localDirectory.text()).toBe('/home/alice/uploads');
+        expect(await remoteDirectory.text()).toBe('/srv/incoming');
+
+        await address.setText('after.example.test');
+        await setNumericEntryValue(port, 2021);
+        await username.setText('bob');
+        await dataConnectionMode.selectChildAt(1);
+        await localDirectory.setText('/home/bob/outgoing');
+        await remoteDirectory.setText('/opt/drop');
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+
+        const store = await waitForAppliedStore(app);
+        expect(store.type).toBe('ftp');
+        expect(store.ftp_address).toBe('after.example.test');
+        expect(store.ftp_port).toBe('2021');
+        expect(store.ftp_username).toBe('bob');
+        expect(store.ftp_data_connection_mode).toBe('passive');
+        expect(store.ftp_local_directory).toBe('/home/bob/outgoing');
+        expect(store.ftp_remote_directory).toBe('/opt/drop');
       }
     );
   });
@@ -4594,6 +4708,7 @@ describe.concurrent('shared settings widget', () => {
           'Serial',
           'SSH',
           'SFTP',
+          'FTP',
           'Terminal',
           'Transfer',
           'Logging',

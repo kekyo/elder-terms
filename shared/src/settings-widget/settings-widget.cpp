@@ -35,6 +35,7 @@ static constexpr char serial_device_no_device_choice[] =
     "__elder_terms_no_device";
 static constexpr char ssh_connection_type[] = "ssh";
 static constexpr char sftp_connection_type[] = "sftp";
+static constexpr char ftp_connection_type[] = "ftp";
 static constexpr char zmodem_autostart_enabled[] = "enabled";
 static constexpr char zmodem_autostart_disabled[] = "disabled";
 static constexpr char terminal_text_default[] = "default";
@@ -149,6 +150,13 @@ struct SettingsWidgetState {
   bool ssh_port_valid = true;
   GtkWidget *sftp_local_directory_entry = nullptr;
   GtkWidget *sftp_remote_directory_entry = nullptr;
+  GtkWidget *ftp_address_entry = nullptr;
+  GtkWidget *ftp_port_entry = nullptr;
+  GtkWidget *ftp_username_entry = nullptr;
+  GtkWidget *ftp_data_connection_mode_combo = nullptr;
+  GtkWidget *ftp_local_directory_entry = nullptr;
+  GtkWidget *ftp_remote_directory_entry = nullptr;
+  bool ftp_port_valid = true;
   GtkWidget *serial_device_match_mode_combo = nullptr;
   GtkWidget *serial_device_combo = nullptr;
   GtkWidget *serial_stable_id_value = nullptr;
@@ -1485,6 +1493,7 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
          state->terminal_encoding_valid &&
          state->terminal_bell_sound_valid &&
          state->telnet_port_valid && state->ssh_port_valid &&
+         state->ftp_port_valid &&
          state->serial_baudrate_valid &&
          state->transfer_text_send_rate_valid &&
          terminal_key_binding_inputs_valid(state) &&
@@ -1722,6 +1731,67 @@ static void update_sftp_remote_directory_from_widget(
     SettingsWidgetState *state) {
   update_string_entry(state, state->sftp_remote_directory_entry,
                       sftp_remote_directory_setting_key());
+}
+
+static void update_ftp_address_from_widget(SettingsWidgetState *state) {
+  update_string_entry(state, state->ftp_address_entry,
+                      ftp_address_setting_key());
+}
+
+static void update_ftp_port_from_widget(SettingsWidgetState *state) {
+  const char *text = gtk_entry_get_text(GTK_ENTRY(state->ftp_port_entry));
+  if (trim_ascii_whitespace(text == nullptr ? "" : text).empty()) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 ftp_port_setting_key());
+    state->ftp_port_valid = true;
+    set_entry_validation(state->ftp_port_entry, true, {});
+    sync_cleared_entry(
+        state, state->ftp_port_entry, ftp_port_setting_key(),
+        std::to_string(setting_integer_value_or_default(
+            state->draft_store, ftp_port_setting_key(), 21)));
+    return;
+  }
+  gtk_entry_set_placeholder_text(GTK_ENTRY(state->ftp_port_entry), nullptr);
+  gint64 value = 0;
+  std::string reason;
+  state->ftp_port_valid =
+      parse_integer_entry(state->ftp_port_entry, 1, 65535, &value, &reason);
+  set_entry_validation(state->ftp_port_entry, state->ftp_port_valid, reason);
+  if (state->ftp_port_valid) {
+    set_explicit_setting_value(&state->draft_store, ftp_port_setting_key(),
+                               SettingValue{value});
+  }
+}
+
+static void update_ftp_username_from_widget(SettingsWidgetState *state) {
+  update_string_entry(state, state->ftp_username_entry,
+                      ftp_username_setting_key());
+}
+
+static void
+update_ftp_data_connection_mode_from_widget(SettingsWidgetState *state) {
+  const std::string choice = active_combo_id(
+      state->ftp_data_connection_mode_combo, inherit_choice);
+  if (choice == inherit_choice) {
+    clear_explicit_setting_value(
+        &state->draft_store, ftp_data_connection_mode_setting_key());
+    return;
+  }
+  set_explicit_setting_value(
+      &state->draft_store, ftp_data_connection_mode_setting_key(),
+      SettingValue{choice});
+}
+
+static void
+update_ftp_local_directory_from_widget(SettingsWidgetState *state) {
+  update_string_entry(state, state->ftp_local_directory_entry,
+                      ftp_local_directory_setting_key());
+}
+
+static void
+update_ftp_remote_directory_from_widget(SettingsWidgetState *state) {
+  update_string_entry(state, state->ftp_remote_directory_entry,
+                      ftp_remote_directory_setting_key());
 }
 
 static void update_serial_device_from_widget(SettingsWidgetState *state) {
@@ -2672,6 +2742,8 @@ static void sync_general_type_combo(SettingsWidgetState *state) {
            .label = connection_type_label(ssh_connection_type)},
           {.id = sftp_connection_type,
            .label = connection_type_label(sftp_connection_type)},
+          {.id = ftp_connection_type,
+           .label = connection_type_label(ftp_connection_type)},
       },
       effective);
 }
@@ -2977,6 +3049,8 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
       ssh_connection_settings(state->draft_store);
   const SftpConnectionSettings sftp =
       sftp_connection_settings(state->draft_store);
+  const FtpConnectionSettings ftp =
+      ftp_connection_settings(state->draft_store);
   const SerialConnectionSettings serial =
       serial_connection_settings(state->draft_store);
   const TerminalLogSettings log = terminal_log_settings(state->draft_store);
@@ -3152,6 +3226,50 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
                            state->draft_store,
                            sftp_remote_directory_setting_key(),
                            sftp.remote_directory);
+  }
+  if (state->ftp_address_entry != nullptr) {
+    sync_inheritable_entry(state->ftp_address_entry, state->draft_store,
+                           ftp_address_setting_key(), ftp.address);
+  }
+  if (state->ftp_port_entry != nullptr) {
+    sync_inheritable_entry(state->ftp_port_entry, state->draft_store,
+                           ftp_port_setting_key(),
+                           std::to_string(ftp.port));
+    state->ftp_port_valid = true;
+    set_entry_validation(state->ftp_port_entry, true, {});
+  }
+  if (state->ftp_username_entry != nullptr) {
+    sync_inheritable_entry(state->ftp_username_entry, state->draft_store,
+                           ftp_username_setting_key(), ftp.username);
+  }
+  if (state->ftp_data_connection_mode_combo != nullptr) {
+    const SettingKey key = ftp_data_connection_mode_setting_key();
+    const std::string effective =
+        ftp_data_connection_mode_to_string(ftp.data_connection_mode);
+    const std::string fallback = std::get<std::string>(
+        setting_fallback_value(state->draft_store, key,
+                               SettingValue{std::string("passive")}));
+    populate_inheritable_combo(
+        state->ftp_data_connection_mode_combo, state->draft_store, key,
+        setting_choice_label(key, fallback),
+        {
+            {.id = "passive",
+             .label = setting_choice_label(key, "passive")},
+            {.id = "active", .label = setting_choice_label(key, "active")},
+        },
+        effective);
+  }
+  if (state->ftp_local_directory_entry != nullptr) {
+    sync_inheritable_entry(state->ftp_local_directory_entry,
+                           state->draft_store,
+                           ftp_local_directory_setting_key(),
+                           ftp.local_directory);
+  }
+  if (state->ftp_remote_directory_entry != nullptr) {
+    sync_inheritable_entry(state->ftp_remote_directory_entry,
+                           state->draft_store,
+                           ftp_remote_directory_setting_key(),
+                           ftp.remote_directory);
   }
   sync_serial_device_widgets(state);
   if (state->serial_baudrate_entry != nullptr) {
@@ -4031,6 +4149,62 @@ static void on_sftp_remote_directory_changed(GtkEditable *, gpointer data) {
   notify_changed(state);
 }
 
+static void on_ftp_address_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_ftp_address_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_ftp_port_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_ftp_port_from_widget(state);
+  update_action_sensitivity(state);
+  notify_changed(state);
+}
+
+static void on_ftp_username_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_ftp_username_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_ftp_data_connection_mode_changed(GtkComboBox *,
+                                                gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_ftp_data_connection_mode_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_ftp_local_directory_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_ftp_local_directory_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_ftp_remote_directory_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_ftp_remote_directory_from_widget(state);
+  notify_changed(state);
+}
+
 static void on_serial_device_changed(GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) {
@@ -4714,6 +4888,58 @@ static GtkWidget *create_sftp_page(SettingsWidgetState *state) {
   return page;
 }
 
+static GtkWidget *create_ftp_page(SettingsWidgetState *state) {
+  const std::string page_id = widget_id(state, "ftp_page");
+  GtkWidget *page = create_page_grid(page_id.c_str());
+  const gboolean endpoint_sensitive = state->is_runtime ? FALSE : TRUE;
+
+  state->ftp_address_entry =
+      create_entry(widget_id(state, "ftp_address_entry"));
+  gtk_widget_set_sensitive(state->ftp_address_entry, endpoint_sensitive);
+  g_signal_connect(state->ftp_address_entry, "changed",
+                   G_CALLBACK(on_ftp_address_changed), state);
+  attach_row(page, 0, ftp_address_setting_key(), state->ftp_address_entry);
+
+  state->ftp_port_entry =
+      create_entry(widget_id(state, "ftp_port_entry"));
+  gtk_widget_set_sensitive(state->ftp_port_entry, endpoint_sensitive);
+  g_signal_connect(state->ftp_port_entry, "changed",
+                   G_CALLBACK(on_ftp_port_changed), state);
+  attach_row(page, 1, ftp_port_setting_key(), state->ftp_port_entry);
+
+  state->ftp_username_entry =
+      create_entry(widget_id(state, "ftp_username_entry"));
+  gtk_widget_set_sensitive(state->ftp_username_entry, endpoint_sensitive);
+  g_signal_connect(state->ftp_username_entry, "changed",
+                   G_CALLBACK(on_ftp_username_changed), state);
+  attach_row(page, 2, ftp_username_setting_key(), state->ftp_username_entry);
+
+  state->ftp_data_connection_mode_combo = create_combo_box(
+      widget_id(state, "ftp_data_connection_mode_combo").c_str());
+  gtk_widget_set_sensitive(state->ftp_data_connection_mode_combo,
+                           endpoint_sensitive);
+  g_signal_connect(state->ftp_data_connection_mode_combo, "changed",
+                   G_CALLBACK(on_ftp_data_connection_mode_changed), state);
+  attach_row(page, 3, ftp_data_connection_mode_setting_key(),
+             state->ftp_data_connection_mode_combo);
+
+  state->ftp_local_directory_entry =
+      create_entry(widget_id(state, "ftp_local_directory_entry"));
+  g_signal_connect(state->ftp_local_directory_entry, "changed",
+                   G_CALLBACK(on_ftp_local_directory_changed), state);
+  attach_row(page, 4, ftp_local_directory_setting_key(),
+             state->ftp_local_directory_entry);
+
+  state->ftp_remote_directory_entry =
+      create_entry(widget_id(state, "ftp_remote_directory_entry"));
+  g_signal_connect(state->ftp_remote_directory_entry, "changed",
+                   G_CALLBACK(on_ftp_remote_directory_changed), state);
+  attach_row(page, 5, ftp_remote_directory_setting_key(),
+             state->ftp_remote_directory_entry);
+
+  return page;
+}
+
 static GtkWidget *create_serial_page(SettingsWidgetState *state) {
   const std::string page_id = widget_id(state, "serial_page");
   GtkWidget *page = create_page_grid(page_id.c_str());
@@ -5217,6 +5443,22 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       .connection_types = {sftp_connection_type},
       .page = sftp_page,
       .tab_label = sftp_tab,
+  });
+
+  GtkWidget *ftp_page = create_ftp_page(state);
+  const std::string ftp_tab_id = widget_id(state, "ftp_tab");
+  GtkWidget *ftp_tab = create_tab_button(
+      state, ftp_page, settings_ui_text(SettingsUiText::ftp_tab),
+      ftp_tab_id.c_str());
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), ftp_page, ftp_tab);
+  gtk_widget_show_all(ftp_page);
+  gtk_widget_show_all(ftp_tab);
+  gtk_widget_set_no_show_all(ftp_page, TRUE);
+  gtk_widget_set_no_show_all(ftp_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {ftp_connection_type},
+      .page = ftp_page,
+      .tab_label = ftp_tab,
   });
 
   GtkWidget *terminal_page = create_terminal_page(state);

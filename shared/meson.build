@@ -54,6 +54,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/serial-device.cpp',
   'src/serial-device-event-monitor.cpp',
   'src/settings/application-settings.cpp',
+  'src/settings/ftp-settings.cpp',
   'src/settings/general-settings.cpp',
   'src/settings/hyperlink-settings.cpp',
   'src/settings/local-session-settings.cpp',

@@ -646,6 +646,7 @@ SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
   append_definitions(&definitions, telnet_connection_setting_definitions());
   append_definitions(&definitions, ssh_connection_setting_definitions());
   append_definitions(&definitions, sftp_connection_setting_definitions());
+  append_definitions(&definitions, ftp_connection_setting_definitions());
   append_definitions(&definitions, serial_connection_setting_definitions());
   append_definitions(&definitions, transfer_setting_definitions());
   SettingsStore store = create_settings_store(std::move(definitions));
@@ -746,6 +747,9 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_zoom)
   if (general_settings_select_ssh_connection(result.store) ||
       general_settings_select_sftp_connection(result.store)) {
     append_ssh_connection_warnings(result.store, &result.warnings);
+  }
+  if (general_settings_select_ftp_connection(result.store)) {
+    append_ftp_connection_warnings(result.store, &result.warnings);
   }
   if (general_settings_select_serial_connection(result.store)) {
     append_serial_connection_warnings(result.store, &result.warnings);
@@ -892,7 +896,8 @@ TerminalTextSettings terminal_text_settings(const SettingsStore &store,
 
 std::optional<TerminalConnectionProfile>
 terminal_connection_profile(const SettingsStore &store) {
-  if (general_settings_select_sftp_connection(store)) {
+  if (general_settings_select_sftp_connection(store) ||
+      general_settings_select_ftp_connection(store)) {
     return std::nullopt;
   }
 

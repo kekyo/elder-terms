@@ -13,6 +13,7 @@ enum class SettingsUiText {
   serial_tab,
   ssh_tab,
   sftp_tab,
+  ftp_tab,
   terminal_tab,
   macro_tab,
   transfer_tab,

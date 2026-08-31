@@ -221,6 +221,29 @@ static FixtureOptions parse_options(int argc, char **argv) {
       append_connection_assignment(
           &options, "sftp", "remote_directory",
           option_value(argument, "--sftp-remote-directory="));
+    } else if (starts_with(argument, "--ftp-address=")) {
+      append_connection_assignment(
+          &options, "ftp", "address",
+          option_value(argument, "--ftp-address="));
+    } else if (starts_with(argument, "--ftp-port=")) {
+      append_connection_assignment(
+          &options, "ftp", "port", option_value(argument, "--ftp-port="));
+    } else if (starts_with(argument, "--ftp-username=")) {
+      append_connection_assignment(
+          &options, "ftp", "username",
+          option_value(argument, "--ftp-username="));
+    } else if (starts_with(argument, "--ftp-data-connection-mode=")) {
+      append_connection_assignment(
+          &options, "ftp", "data_connection_mode",
+          option_value(argument, "--ftp-data-connection-mode="));
+    } else if (starts_with(argument, "--ftp-local-directory=")) {
+      append_connection_assignment(
+          &options, "ftp", "local_directory",
+          option_value(argument, "--ftp-local-directory="));
+    } else if (starts_with(argument, "--ftp-remote-directory=")) {
+      append_connection_assignment(
+          &options, "ftp", "remote_directory",
+          option_value(argument, "--ftp-remote-directory="));
     } else if (starts_with(argument, "--serial-device=")) {
       append_connection_assignment(
           &options, "serial", "device",
@@ -543,6 +566,9 @@ connection_type_name(elder_terms::ConnectionKind kind) {
   if (kind == elder_terms::ConnectionKind::sftp) {
     return "sftp";
   }
+  if (kind == elder_terms::ConnectionKind::ftp) {
+    return "ftp";
+  }
   return "local";
 }
 
@@ -644,6 +670,8 @@ static void print_store(const char *prefix,
       elder_terms::ssh_connection_settings(store);
   const elder_terms::SftpConnectionSettings sftp =
       elder_terms::sftp_connection_settings(store);
+  const elder_terms::FtpConnectionSettings ftp =
+      elder_terms::ftp_connection_settings(store);
   const elder_terms::SerialConnectionSettings serial =
       elder_terms::serial_connection_settings(store);
   const elder_terms::TerminalLogSettings log =
@@ -711,6 +739,14 @@ static void print_store(const char *prefix,
             << " ssh_terminal_type=" << ssh.terminal_type
             << " sftp_local_directory=" << sftp.local_directory
             << " sftp_remote_directory=" << sftp.remote_directory
+            << " ftp_address=" << ftp.address
+            << " ftp_port=" << ftp.port
+            << " ftp_username=" << ftp.username
+            << " ftp_data_connection_mode="
+            << elder_terms::ftp_data_connection_mode_to_string(
+                   ftp.data_connection_mode)
+            << " ftp_local_directory=" << ftp.local_directory
+            << " ftp_remote_directory=" << ftp.remote_directory
             << " serial_device=" << serial.device
             << " serial_device_match_mode="
             << elder_terms::serial_device_match_mode_to_string(
@@ -830,6 +866,19 @@ static void print_store(const char *prefix,
                          elder_terms::sftp_local_directory_setting_key());
   print_setting_metadata(store, "sftp_remote_directory",
                          elder_terms::sftp_remote_directory_setting_key());
+  print_setting_metadata(store, "ftp_address",
+                         elder_terms::ftp_address_setting_key());
+  print_setting_metadata(store, "ftp_port",
+                         elder_terms::ftp_port_setting_key());
+  print_setting_metadata(store, "ftp_username",
+                         elder_terms::ftp_username_setting_key());
+  print_setting_metadata(
+      store, "ftp_data_connection_mode",
+      elder_terms::ftp_data_connection_mode_setting_key());
+  print_setting_metadata(store, "ftp_local_directory",
+                         elder_terms::ftp_local_directory_setting_key());
+  print_setting_metadata(store, "ftp_remote_directory",
+                         elder_terms::ftp_remote_directory_setting_key());
   print_setting_metadata(store, "serial_device",
                          elder_terms::serial_device_setting_key());
   print_setting_metadata(

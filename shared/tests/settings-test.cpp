@@ -282,6 +282,20 @@ static void test_default_settings() {
               "default SFTP local directory should use a runtime fallback");
   expect_true(sftp.remote_directory == ".",
               "default SFTP remote directory should use the login directory");
+  const elder_terms::FtpConnectionSettings ftp =
+      elder_terms::ftp_connection_settings(store);
+  expect_true(ftp.address.empty(),
+              "default FTP address should be empty");
+  expect_true(ftp.port == 21, "default FTP port should be 21");
+  expect_true(ftp.username.empty(),
+              "default FTP username should select anonymous login");
+  expect_true(ftp.data_connection_mode ==
+                  elder_terms::FtpDataConnectionMode::passive,
+              "default FTP data connection should be passive");
+  expect_true(ftp.local_directory.empty(),
+              "default FTP local directory should use a runtime fallback");
+  expect_true(ftp.remote_directory == ".",
+              "default FTP remote directory should use the login directory");
   expect_true(elder_terms::general_connection_kind(store) ==
                   elder_terms::ConnectionKind::local_shell,
               "default general connection kind should be local shell");
@@ -1973,6 +1987,93 @@ static void test_sftp_missing_ssh_address_warns() {
               "SFTP without an SSH address should emit a warning");
 }
 
+static void test_ftp_profile_uses_independent_endpoint_and_active_mode() {
+  const std::filesystem::path path = temporary_config_path("ftp-profile");
+  write_config(path,
+               "[general]\n"
+               "type=ftp\n"
+               "\n"
+               "[ftp]\n"
+               "address=ftp.example.test\n"
+               "port=2121\n"
+               "username=alice\n"
+               "data_connection_mode=active\n"
+               "local_directory=/home/alice/uploads\n"
+               "remote_directory=/srv/incoming\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  expect_true(elder_terms::general_connection_kind(result.store) ==
+                  elder_terms::ConnectionKind::ftp,
+              "configured connection should be FTP");
+  expect_true(
+      elder_terms::general_settings_select_ftp_connection(result.store),
+      "FTP selector should recognize the configured connection");
+  expect_true(!terminal_connection_profile(result.store).has_value(),
+              "FTP should not produce a VTE terminal connection profile");
+
+  const elder_terms::FtpConnectionSettings settings =
+      elder_terms::ftp_connection_settings(result.store);
+  expect_true(settings.address == "ftp.example.test",
+              "FTP address should come from the FTP section");
+  expect_true(settings.port == 2121,
+              "FTP port should come from the FTP section");
+  expect_true(settings.username == "alice",
+              "FTP username should come from the FTP section");
+  expect_true(settings.data_connection_mode ==
+                  elder_terms::FtpDataConnectionMode::active,
+              "FTP should load active data connection mode");
+  expect_true(settings.local_directory == "/home/alice/uploads",
+              "FTP local directory should come from the FTP section");
+  expect_true(settings.remote_directory == "/srv/incoming",
+              "FTP remote directory should come from the FTP section");
+}
+
+static void test_invalid_ftp_settings_fall_back_and_warn() {
+  const std::filesystem::path path =
+      temporary_config_path("invalid-ftp-settings");
+  write_config(path,
+               "[general]\n"
+               "type=ftp\n"
+               "\n"
+               "[ftp]\n"
+               "port=0\n"
+               "data_connection_mode=automatic\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  const elder_terms::FtpConnectionSettings settings =
+      elder_terms::ftp_connection_settings(result.store);
+  expect_true(settings.port == 21,
+              "invalid FTP port should fall back to 21");
+  expect_true(settings.data_connection_mode ==
+                  elder_terms::FtpDataConnectionMode::passive,
+              "invalid FTP data mode should fall back to passive");
+  expect_true(warnings_contain(result.warnings,
+                               "invalid configuration value [ftp] port"),
+              "invalid FTP port should emit a warning");
+  expect_true(warnings_contain(
+                  result.warnings,
+                  "invalid configuration value [ftp] data_connection_mode"),
+              "invalid FTP data mode should emit a warning");
+  expect_true(warnings_contain(
+                  result.warnings,
+                  "missing required configuration value [ftp] address"),
+              "missing FTP address should emit a warning");
+}
+
 static void test_invalid_ssh_values_fall_back_and_warn() {
   const std::filesystem::path path =
       temporary_config_path("invalid-ssh-values");
@@ -2371,6 +2472,30 @@ static void test_public_setting_keys() {
           elder_terms::sftp_remote_directory_setting_key().name ==
               "remote_directory",
       "SFTP remote directory key should use [sftp] remote_directory");
+  expect_true(elder_terms::ftp_address_setting_key().section == "ftp" &&
+                  elder_terms::ftp_address_setting_key().name == "address",
+              "FTP address key should use [ftp] address");
+  expect_true(elder_terms::ftp_port_setting_key().section == "ftp" &&
+                  elder_terms::ftp_port_setting_key().name == "port",
+              "FTP port key should use [ftp] port");
+  expect_true(elder_terms::ftp_username_setting_key().section == "ftp" &&
+                  elder_terms::ftp_username_setting_key().name == "username",
+              "FTP username key should use [ftp] username");
+  expect_true(
+      elder_terms::ftp_data_connection_mode_setting_key().section == "ftp" &&
+          elder_terms::ftp_data_connection_mode_setting_key().name ==
+              "data_connection_mode",
+      "FTP data mode key should use [ftp] data_connection_mode");
+  expect_true(
+      elder_terms::ftp_local_directory_setting_key().section == "ftp" &&
+          elder_terms::ftp_local_directory_setting_key().name ==
+              "local_directory",
+      "FTP local directory key should use [ftp] local_directory");
+  expect_true(
+      elder_terms::ftp_remote_directory_setting_key().section == "ftp" &&
+          elder_terms::ftp_remote_directory_setting_key().name ==
+              "remote_directory",
+      "FTP remote directory key should use [ftp] remote_directory");
   expect_true(serial_device_setting_key().section == "serial",
               "serial device key should use the serial section");
   expect_true(serial_device_setting_key().name == "device",
@@ -3921,6 +4046,9 @@ int main() {
     elder_terms_settings_test::
         test_sftp_profile_uses_ssh_endpoint_without_terminal_profile();
     elder_terms_settings_test::test_sftp_missing_ssh_address_warns();
+    elder_terms_settings_test::
+        test_ftp_profile_uses_independent_endpoint_and_active_mode();
+    elder_terms_settings_test::test_invalid_ftp_settings_fall_back_and_warn();
     elder_terms_settings_test::test_serial_profile();
     elder_terms_settings_test::test_serial_ignore_carrier_profile();
     elder_terms_settings_test::test_transfer_base_path_setting();

@@ -18,6 +18,7 @@ static constexpr char telnet_connection_type[] = "telnet";
 static constexpr char ssh_connection_type[] = "ssh";
 static constexpr char serial_connection_type[] = "serial";
 static constexpr char sftp_connection_type[] = "sftp";
+static constexpr char ftp_connection_type[] = "ftp";
 
 static bool validate_connection_type(const SettingValue &value,
                                      std::string *reason) {
@@ -25,8 +26,9 @@ static bool validate_connection_type(const SettingValue &value,
   if (text == nullptr ||
       (*text != local_connection_type && *text != telnet_connection_type &&
        *text != ssh_connection_type &&
-       *text != serial_connection_type && *text != sftp_connection_type)) {
-    *reason = "must be local, telnet, ssh, serial, or sftp";
+       *text != serial_connection_type && *text != sftp_connection_type &&
+       *text != ftp_connection_type)) {
+    *reason = "must be local, telnet, ssh, serial, sftp, or ftp";
     return false;
   }
   return true;
@@ -195,6 +197,9 @@ ConnectionKind general_connection_kind(const SettingsStore &store) {
   if (configured == sftp_connection_type) {
     return ConnectionKind::sftp;
   }
+  if (configured == ftp_connection_type) {
+    return ConnectionKind::ftp;
+  }
   return ConnectionKind::local_shell;
 }
 
@@ -237,6 +242,10 @@ bool general_settings_select_ssh_connection(const SettingsStore &store) {
 
 bool general_settings_select_sftp_connection(const SettingsStore &store) {
   return general_connection_kind(store) == ConnectionKind::sftp;
+}
+
+bool general_settings_select_ftp_connection(const SettingsStore &store) {
+  return general_connection_kind(store) == ConnectionKind::ftp;
 }
 
 } // namespace elder_terms
