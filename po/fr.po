@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-31 23:15+0900\n"
+"POT-Creation-Date: 2026-09-01 04:34+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: French\n"
@@ -447,18 +447,19 @@ msgid "Apply"
 msgstr "Appliquer"
 
 #: shared/src/settings-widget/settings-presentation.cpp:204
-#: elder-terms/src/main.cpp:483 elder-terms/src/main.cpp:752
+#: elder-terms/src/main.cpp:484 elder-terms/src/main.cpp:753
 #: elder-terms/src/main-window.ui:221
 msgid "Save"
 msgstr "Enregistrer"
 
 #: shared/src/settings-widget/settings-presentation.cpp:206
-#: elder-terms/src/main.cpp:482 elder-terms/src/main.cpp:550
-#: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1682
-#: elder-terms/src/main.cpp:1905 elder-terms-vte/src/main.cpp:881
+#: elder-terms/src/main.cpp:483 elder-terms/src/main.cpp:551
+#: elder-terms/src/main.cpp:752 elder-terms/src/main.cpp:1689
+#: elder-terms/src/main.cpp:1912 elder-terms-vte/src/main.cpp:881
 #: elder-terms-vte/src/main-window.ui:248
 #: elder-terms-vte/src/main-window.ui:325
 #: elder-terms-vte/src/sftp/sftp-main.cpp:109
+#: elder-terms-vte/src/ftp/ftp-main.cpp:101
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:697
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1849
 msgid "Cancel"
@@ -707,11 +708,11 @@ msgstr "Doit nommer un fichier journal"
 msgid "Invalid value"
 msgstr "Valeur invalide"
 
-#: elder-terms/src/main.cpp:242
+#: elder-terms/src/main.cpp:243
 msgid "Global shortcuts are unavailable"
 msgstr "Les raccourcis globaux ne sont pas disponibles"
 
-#: elder-terms/src/main.cpp:251
+#: elder-terms/src/main.cpp:252
 msgid ""
 "One or more configured global shortcuts could not be registered and will not "
 "work. Check whether your desktop environment supports global shortcuts."
@@ -720,149 +721,149 @@ msgstr ""
 "et ne fonctionneront pas. Vérifiez si votre environnement de bureau prend en "
 "charge les raccourcis globaux."
 
-#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:334
+#: elder-terms/src/main.cpp:256 elder-terms-vte/src/main-window.ui:334
 #: elder-terms-vte/src/main-window.cpp:1599
 msgid "OK"
 msgstr "OK"
 
-#: elder-terms/src/main.cpp:295
+#: elder-terms/src/main.cpp:296
 msgid "Restart to apply display language?"
 msgstr "Redémarrer pour appliquer la langue d'affichage ?"
 
-#: elder-terms/src/main.cpp:298
+#: elder-terms/src/main.cpp:299
 msgid ""
 "The display language change will take effect after elder-terms restarts."
 msgstr ""
 "Le changement de langue d'affichage prendra effet après le redémarrage de "
 "elder-terms."
 
-#: elder-terms/src/main.cpp:301
+#: elder-terms/src/main.cpp:302
 msgid "Later"
 msgstr "Plus tard"
 
-#: elder-terms/src/main.cpp:303
+#: elder-terms/src/main.cpp:304
 msgid "Restart now"
 msgstr "Redémarrer maintenant"
 
-#: elder-terms/src/main.cpp:432
+#: elder-terms/src/main.cpp:433
 msgid "Failed to save connection defaults"
 msgstr "Échec de l’enregistrement des paramètres de connexion par défaut"
 
-#: elder-terms/src/main.cpp:463 elder-terms/src/main-window.ui:204
+#: elder-terms/src/main.cpp:464 elder-terms/src/main-window.ui:204
 msgid "Connection defaults"
 msgstr "Paramètres de connexion par défaut"
 
-#: elder-terms/src/main.cpp:550
+#: elder-terms/src/main.cpp:551
 msgid "Close"
 msgstr "Fermer"
 
-#: elder-terms/src/main.cpp:627
+#: elder-terms/src/main.cpp:628
 msgid "Failed to save application settings"
 msgstr "Échec de l’enregistrement des paramètres de l’application"
 
-#: elder-terms/src/main.cpp:668
+#: elder-terms/src/main.cpp:669
 #, c-format
 msgid "Version %s"
 msgstr "Version %s"
 
-#: elder-terms/src/main.cpp:712 elder-terms/src/main.cpp:737
+#: elder-terms/src/main.cpp:713 elder-terms/src/main.cpp:738
 #: elder-terms/src/main-window.ui:61 elder-terms-vte/src/main-window.ui:33
 msgid "Application"
 msgstr "Application"
 
-#: elder-terms/src/main.cpp:740
+#: elder-terms/src/main.cpp:741
 msgid "About"
 msgstr "À propos"
 
-#: elder-terms/src/main.cpp:986
+#: elder-terms/src/main.cpp:987
 #, c-format
 msgid "Open connection %s"
 msgstr "Connexion ouverte %s"
 
-#: elder-terms/src/main.cpp:1013 elder-terms/src/tray-backend.cpp:373
+#: elder-terms/src/main.cpp:1014 elder-terms/src/tray-backend.cpp:373
 #: elder-terms/src/tray-backend.cpp:400 elder-terms/src/tray-backend.cpp:907
 msgid "Open elder-terms"
 msgstr "Ouvert elder-terms"
 
-#: elder-terms/src/main.cpp:1068 elder-terms/src/main.cpp:1617
+#: elder-terms/src/main.cpp:1069 elder-terms/src/main.cpp:1621
 msgid "Failed to load connection"
 msgstr "Échec du chargement de la connexion"
 
-#: elder-terms/src/main.cpp:1115
+#: elder-terms/src/main.cpp:1116
 msgid "New connection"
 msgstr "Nouvelle connexion"
 
-#: elder-terms/src/main.cpp:1116
+#: elder-terms/src/main.cpp:1117
 #, c-format
 msgid "New connection %d"
 msgstr "Nouvelle connexion %d"
 
-#: elder-terms/src/main.cpp:1294 elder-terms/src/main.cpp:1311
+#: elder-terms/src/main.cpp:1295 elder-terms/src/main.cpp:1312
 msgid "Failed to monitor connections"
 msgstr "Échec de la surveillance des connexions"
 
-#: elder-terms/src/main.cpp:1307
+#: elder-terms/src/main.cpp:1308
 msgid "Unknown file monitor error"
 msgstr "Erreur de surveillance de fichiers inconnue"
 
-#: elder-terms/src/main.cpp:1459
+#: elder-terms/src/main.cpp:1460
 msgid "Failed to create startup profile"
 msgstr "Échec de la création du profil de démarrage"
 
-#: elder-terms/src/main.cpp:1516 elder-terms/src/main.cpp:1582
+#: elder-terms/src/main.cpp:1517 elder-terms/src/main.cpp:1586
 #, c-format
 msgid "Failed to start %s"
 msgstr "Échec du démarrage de %s"
 
-#: elder-terms/src/main.cpp:1523
+#: elder-terms/src/main.cpp:1524
 #, c-format
 msgid "The %s executable was not found"
 msgstr "L'exécutable %s est introuvable"
 
-#: elder-terms/src/main.cpp:1551
+#: elder-terms/src/main.cpp:1552
 msgid "Unknown process launch error"
 msgstr "Erreur de lancement de processus inconnue"
 
-#: elder-terms/src/main.cpp:1677
+#: elder-terms/src/main.cpp:1684
 msgid "Discard changes?"
 msgstr "Supprimer les modifications ?"
 
-#: elder-terms/src/main.cpp:1680
+#: elder-terms/src/main.cpp:1687
 msgid "The current connection has changes that have not been applied."
 msgstr ""
 "La connexion actuelle comporte des modifications qui n'ont pas été "
 "appliquées."
 
-#: elder-terms/src/main.cpp:1684
+#: elder-terms/src/main.cpp:1691
 msgid "Discard"
 msgstr "Supprimer"
 
-#: elder-terms/src/main.cpp:1837
+#: elder-terms/src/main.cpp:1844
 msgid "Failed to duplicate connection"
 msgstr "Échec de la duplication de la connexion"
 
-#: elder-terms/src/main.cpp:1871
+#: elder-terms/src/main.cpp:1878
 msgid "Failed to delete connection"
 msgstr "Échec de la suppression de la connexion"
 
-#: elder-terms/src/main.cpp:1898
+#: elder-terms/src/main.cpp:1905
 msgid "Delete connection?"
 msgstr "Supprimer la connexion ?"
 
-#: elder-terms/src/main.cpp:1900
+#: elder-terms/src/main.cpp:1907
 #, c-format
 msgid "The connection \"%s\" will be permanently deleted."
 msgstr "La connexion « %s » sera définitivement supprimée."
 
-#: elder-terms/src/main.cpp:1907 elder-terms/src/main-window.ui:27
+#: elder-terms/src/main.cpp:1914 elder-terms/src/main-window.ui:27
 msgid "Delete"
 msgstr "Supprimer"
 
-#: elder-terms/src/main.cpp:1948 elder-terms/src/main.cpp:1961
+#: elder-terms/src/main.cpp:1955 elder-terms/src/main.cpp:1968
 msgid "Failed to rename connection"
 msgstr "Échec du renommage de la connexion"
 
-#: elder-terms/src/main.cpp:2057
+#: elder-terms/src/main.cpp:2064
 msgid "Failed to save connection"
 msgstr "Échec de l'enregistrement de la connexion"
 
@@ -1143,6 +1144,23 @@ msgstr "Continuer"
 #: elder-terms-vte/src/sftp/sftp-main.cpp:180
 msgid "Failed to start SFTP"
 msgstr "Échec du démarrage de SFTP"
+
+#: elder-terms-vte/src/ftp/ftp-main.cpp:100
+msgid "FTP authentication"
+msgstr "Authentification FTP"
+
+#: elder-terms-vte/src/ftp/ftp-main.cpp:102
+msgid "Connect"
+msgstr "Se connecter"
+
+#: elder-terms-vte/src/ftp/ftp-main.cpp:110
+#, c-format
+msgid "Enter the password for %s on %s."
+msgstr "Saisissez le mot de passe de %s sur %s."
+
+#: elder-terms-vte/src/ftp/ftp-main.cpp:164
+msgid "Failed to start FTP"
+msgstr "Échec du démarrage de FTP"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:171
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:178

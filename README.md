@@ -16,8 +16,8 @@
 
 ## What Is This?
 
-elder-terms is a GTK terminal for serial, TELNET, local shell, SSH, and SFTP
-connections, inspired by personal computing in the 1990s.
+elder-terms is a GTK terminal for serial, TELNET, local shell, SSH, SFTP, and
+FTP connections, inspired by personal computing in the 1990s.
 
 ### Basic Terminal
 
@@ -43,11 +43,15 @@ connections, inspired by personal computing in the 1990s.
 
 ![SFTP window](./images/sftp.png)
 
+### FTP
+
+FTP uses the same two-pane file-transfer window as SFTP.
+
 ## Features
 
 - Provides a simple, no-frills terminal with everything you need, using Linux
   GTK/`libvte`.
-- Supports local terminals, SSH, and SFTP as well as serial and TELNET
+- Supports local terminals, SSH, SFTP, and FTP as well as serial and TELNET
   connections, bringing that familiar terminal experience into the present.
 - Lets you manage multiple connections and launch terminals from the launcher.
 - Stores all connection settings in INI files, which you can freely edit with
@@ -57,9 +61,10 @@ connections, inspired by personal computing in the 1990s.
 - Remembers the terminal's rows and columns for each connection.
 - Lets you explicitly specify the terminal type, such as `xterm` or
   `xterm-256color`, for TELNET and SSH.
-- Supports X/Y/ZMODEM file transfers for all connection types except local
-  terminals. Automatic transfers can be enabled for ZMODEM.
+- Supports X/Y/ZMODEM file transfers for TELNET, serial, and SSH terminal
+  connections. Automatic transfers can be enabled for ZMODEM.
 - Transfers files to and from the host of an SSH connection over SFTP.
+- Transfers files over FTP using passive or active data connections.
 - Supports pasting text and sending text files. You can specify the send rate
   and newline handling to avoid overflowing the host's buffer or using
   incompatible newline codes.
@@ -189,6 +194,83 @@ the connection's INI file, while "Apply" affects only the current session.
 Clearing a text field or selecting the default item in a selection field
 removes the explicit value, causing the setting to inherit the global or
 built-in default again.
+
+## Using FTP
+
+Create a connection in the launcher and select `FTP` as its connection type.
+The FTP tab contains the server address, control port, user name, data
+connection mode, and initial local and remote directories. The default control
+port is 21 and the default data connection mode is `Passive (recommended)`.
+
+An empty user name selects anonymous login and sends `anonymous@` as the
+password. A named user is prompted for a hidden password every time the FTP
+window starts; the password is not stored in the connection settings. After
+login, FTP uses the same two-pane file browser and transfer controls as SFTP.
+
+FTP sends commands, user names, passwords, directory listings, and file data
+without encryption. elder-terms implements the base
+[FTP protocol (RFC 959)](https://www.rfc-editor.org/rfc/rfc959) and does not
+implement [FTP over TLS (RFC 4217)](https://www.rfc-editor.org/rfc/rfc4217),
+so FTPS is not supported. Prefer SFTP unless the network and server are
+trusted.
+
+### FTP Data Connections
+
+FTP keeps one control connection open and creates a separate data connection
+for each directory listing or file transfer. The `Data connection mode`
+setting chooses which side initiates that data connection:
+
+- `Passive (recommended)`: elder-terms connects to a port selected by the
+  server. It tries `EPSV` first and, on IPv4, falls back to `PASV` when the
+  server does not support `EPSV`. This normally works best through client-side
+  NAT and firewalls because both connections are outbound. For `PASV`, the
+  advertised host address is ignored and the control-connection peer is used,
+  following the FTP security guidance in
+  [RFC 2577](https://www.rfc-editor.org/rfc/rfc2577).
+- `Active`: elder-terms listens on a local port and the server connects back to
+  it. It tries `EPRT` first and, on IPv4, falls back to `PORT`. An inbound data
+  connection must reach the client, so firewall and NAT configuration may be
+  required. A data connection from a host other than the control-connection
+  peer is rejected.
+
+`EPSV` and `EPRT` are the IPv4/IPv6-capable extended commands defined by
+[RFC 2428](https://www.rfc-editor.org/rfc/rfc2428). `PASV` and `PORT` are the
+traditional IPv4 fallbacks. These are command variants within passive and
+active operation, not additional data connection modes. The IP family is
+selected when the server address is resolved. Proxy traversal and configurable
+data-port ranges are not separate options in elder-terms.
+
+### FTP Operation Ordering and Compatibility
+
+Opening a directory node and every other remote operation starts
+asynchronously, so the GTK window remains responsive. Each FTP window uses one
+authenticated control connection rather than a pool of control connections.
+Operations wait in FIFO order, and one operation retains its turn through its
+data transfer and the server's final completion reply. A directory request
+made while another request is active is therefore queued instead of being
+interleaved with it.
+
+elder-terms negotiates binary transfer mode and prefers `MLSD` listings when
+the server advertises the standardized `MLST`/`MLSD` extensions from
+[RFC 3659](https://www.rfc-editor.org/rfc/rfc3659). It falls back to common
+Unix-style and DOS-style `LIST` output for older servers. Unusual
+server-specific `LIST` formats may not be recognized. FTP does not expose the
+SFTP features for symbolic links, POSIX permissions, or timestamp updates.
+
+The corresponding INI settings have the following form:
+
+```ini
+[general]
+type=ftp
+
+[ftp]
+address=ftp.example.com
+port=21
+username=
+data_connection_mode=passive
+local_directory=
+remote_directory=.
+```
 
 ## Local Startup Process
 
@@ -520,8 +602,8 @@ Portuguese, Russian, or Simplified Chinese.
 
 The display language is loaded when elder-terms starts, so you must restart
 elder-terms after saving a change. Select "Restart now" in the dialog shown
-when you save, or restart it manually later. Terminal and SFTP windows that are
-already open do not change language immediately either.
+when you save, or restart it manually later. Terminal, SFTP, and FTP windows
+that are already open do not change language immediately either.
 
 ## Checking the Running Version
 
@@ -572,8 +654,8 @@ character encoding has been converted for display.
 Macros (automatic macros) monitor text received from the remote host with
 regular expressions. When a match is found, they either send text to the host
 or run a specified command. They are available for local terminal, TELNET,
-serial, and SSH connections, but cannot be defined for SFTP connections or
-Connection defaults.
+serial, and SSH connections, but cannot be defined for SFTP or FTP connections
+or Connection defaults.
 
 In text to send, commands, and command arguments, `${0}` refers to the entire
 regular-expression match, `${1}` and `${2}` refer to numbered captures, and
@@ -753,8 +835,8 @@ npm run build
 ```
 
 Run the built launcher from the repository root with the following command.
-The launcher automatically detects the terminal and SFTP executables in the
-same build directory.
+The launcher automatically detects the terminal, SFTP, and FTP executables in
+the same build directory.
 
 ```bash
 ./.build/elder-terms/elder-terms
@@ -774,7 +856,7 @@ npm run test
 
 ## Building deb Packages
 
-The package-building scripts combine the launcher, terminal, and SFTP
+The package-building scripts combine the launcher, terminal, SFTP, and FTP
 executables; dedicated shared library and UI data; translation catalogs;
 desktop and XDG autostart entries; icons; documentation; and license notices
 into a single `elder-terms` deb package.

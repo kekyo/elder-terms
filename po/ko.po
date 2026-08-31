@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-31 23:15+0900\n"
+"POT-Creation-Date: 2026-09-01 04:34+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Korean\n"
@@ -447,18 +447,19 @@ msgid "Apply"
 msgstr "적용"
 
 #: shared/src/settings-widget/settings-presentation.cpp:204
-#: elder-terms/src/main.cpp:483 elder-terms/src/main.cpp:752
+#: elder-terms/src/main.cpp:484 elder-terms/src/main.cpp:753
 #: elder-terms/src/main-window.ui:221
 msgid "Save"
 msgstr "저장"
 
 #: shared/src/settings-widget/settings-presentation.cpp:206
-#: elder-terms/src/main.cpp:482 elder-terms/src/main.cpp:550
-#: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1682
-#: elder-terms/src/main.cpp:1905 elder-terms-vte/src/main.cpp:881
+#: elder-terms/src/main.cpp:483 elder-terms/src/main.cpp:551
+#: elder-terms/src/main.cpp:752 elder-terms/src/main.cpp:1689
+#: elder-terms/src/main.cpp:1912 elder-terms-vte/src/main.cpp:881
 #: elder-terms-vte/src/main-window.ui:248
 #: elder-terms-vte/src/main-window.ui:325
 #: elder-terms-vte/src/sftp/sftp-main.cpp:109
+#: elder-terms-vte/src/ftp/ftp-main.cpp:101
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:697
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1849
 msgid "Cancel"
@@ -705,11 +706,11 @@ msgstr "로그 파일 이름을 지정해야 합니다."
 msgid "Invalid value"
 msgstr "잘못된 값"
 
-#: elder-terms/src/main.cpp:242
+#: elder-terms/src/main.cpp:243
 msgid "Global shortcuts are unavailable"
 msgstr "전역 단축키를 사용할 수 없습니다."
 
-#: elder-terms/src/main.cpp:251
+#: elder-terms/src/main.cpp:252
 msgid ""
 "One or more configured global shortcuts could not be registered and will not "
 "work. Check whether your desktop environment supports global shortcuts."
@@ -717,145 +718,145 @@ msgstr ""
 "하나 이상의 구성된 전역 바로가기를 등록할 수 없으며 작동하지 않습니다. 데스크"
 "탑 환경이 전역 바로가기를 지원하는지 확인하세요."
 
-#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:334
+#: elder-terms/src/main.cpp:256 elder-terms-vte/src/main-window.ui:334
 #: elder-terms-vte/src/main-window.cpp:1599
 msgid "OK"
 msgstr "확인"
 
-#: elder-terms/src/main.cpp:295
+#: elder-terms/src/main.cpp:296
 msgid "Restart to apply display language?"
 msgstr "표시 언어를 적용하려면 다시 시작하시겠습니까?"
 
-#: elder-terms/src/main.cpp:298
+#: elder-terms/src/main.cpp:299
 msgid ""
 "The display language change will take effect after elder-terms restarts."
 msgstr "표시 언어 변경은 elder-terms이(가) 다시 시작된 후에 적용됩니다."
 
-#: elder-terms/src/main.cpp:301
+#: elder-terms/src/main.cpp:302
 msgid "Later"
 msgstr "나중에"
 
-#: elder-terms/src/main.cpp:303
+#: elder-terms/src/main.cpp:304
 msgid "Restart now"
 msgstr "지금 다시 시작"
 
-#: elder-terms/src/main.cpp:432
+#: elder-terms/src/main.cpp:433
 msgid "Failed to save connection defaults"
 msgstr "연결 기본값을 저장하지 못했습니다"
 
-#: elder-terms/src/main.cpp:463 elder-terms/src/main-window.ui:204
+#: elder-terms/src/main.cpp:464 elder-terms/src/main-window.ui:204
 msgid "Connection defaults"
 msgstr "연결 기본값"
 
-#: elder-terms/src/main.cpp:550
+#: elder-terms/src/main.cpp:551
 msgid "Close"
 msgstr "닫기"
 
-#: elder-terms/src/main.cpp:627
+#: elder-terms/src/main.cpp:628
 msgid "Failed to save application settings"
 msgstr "애플리케이션 설정을 저장하지 못했습니다"
 
-#: elder-terms/src/main.cpp:668
+#: elder-terms/src/main.cpp:669
 #, c-format
 msgid "Version %s"
 msgstr "버전 %s"
 
-#: elder-terms/src/main.cpp:712 elder-terms/src/main.cpp:737
+#: elder-terms/src/main.cpp:713 elder-terms/src/main.cpp:738
 #: elder-terms/src/main-window.ui:61 elder-terms-vte/src/main-window.ui:33
 msgid "Application"
 msgstr "애플리케이션"
 
-#: elder-terms/src/main.cpp:740
+#: elder-terms/src/main.cpp:741
 msgid "About"
 msgstr "정보"
 
-#: elder-terms/src/main.cpp:986
+#: elder-terms/src/main.cpp:987
 #, c-format
 msgid "Open connection %s"
 msgstr "연결 열기 %s"
 
-#: elder-terms/src/main.cpp:1013 elder-terms/src/tray-backend.cpp:373
+#: elder-terms/src/main.cpp:1014 elder-terms/src/tray-backend.cpp:373
 #: elder-terms/src/tray-backend.cpp:400 elder-terms/src/tray-backend.cpp:907
 msgid "Open elder-terms"
 msgstr "열기 elder-terms"
 
-#: elder-terms/src/main.cpp:1068 elder-terms/src/main.cpp:1617
+#: elder-terms/src/main.cpp:1069 elder-terms/src/main.cpp:1621
 msgid "Failed to load connection"
 msgstr "연결을 로드하지 못했습니다."
 
-#: elder-terms/src/main.cpp:1115
+#: elder-terms/src/main.cpp:1116
 msgid "New connection"
 msgstr "새 연결"
 
-#: elder-terms/src/main.cpp:1116
+#: elder-terms/src/main.cpp:1117
 #, c-format
 msgid "New connection %d"
 msgstr "새 연결 %d"
 
-#: elder-terms/src/main.cpp:1294 elder-terms/src/main.cpp:1311
+#: elder-terms/src/main.cpp:1295 elder-terms/src/main.cpp:1312
 msgid "Failed to monitor connections"
 msgstr "연결 모니터링 실패"
 
-#: elder-terms/src/main.cpp:1307
+#: elder-terms/src/main.cpp:1308
 msgid "Unknown file monitor error"
 msgstr "알 수 없는 파일 모니터 오류"
 
-#: elder-terms/src/main.cpp:1459
+#: elder-terms/src/main.cpp:1460
 msgid "Failed to create startup profile"
 msgstr "시작 프로필을 생성하지 못했습니다."
 
-#: elder-terms/src/main.cpp:1516 elder-terms/src/main.cpp:1582
+#: elder-terms/src/main.cpp:1517 elder-terms/src/main.cpp:1586
 #, c-format
 msgid "Failed to start %s"
 msgstr "%s"
 
-#: elder-terms/src/main.cpp:1523
+#: elder-terms/src/main.cpp:1524
 #, c-format
 msgid "The %s executable was not found"
 msgstr "%s 실행 파일을 찾을 수 없습니다."
 
-#: elder-terms/src/main.cpp:1551
+#: elder-terms/src/main.cpp:1552
 msgid "Unknown process launch error"
 msgstr "알 수 없는 프로세스 시작 오류"
 
-#: elder-terms/src/main.cpp:1677
+#: elder-terms/src/main.cpp:1684
 msgid "Discard changes?"
 msgstr "변경 사항을 취소하시겠습니까?"
 
-#: elder-terms/src/main.cpp:1680
+#: elder-terms/src/main.cpp:1687
 msgid "The current connection has changes that have not been applied."
 msgstr "현재 연결에 적용되지 않은 변경 사항이 있습니다."
 
-#: elder-terms/src/main.cpp:1684
+#: elder-terms/src/main.cpp:1691
 msgid "Discard"
 msgstr "폐기"
 
-#: elder-terms/src/main.cpp:1837
+#: elder-terms/src/main.cpp:1844
 msgid "Failed to duplicate connection"
 msgstr "연결을 복제하지 못했습니다."
 
-#: elder-terms/src/main.cpp:1871
+#: elder-terms/src/main.cpp:1878
 msgid "Failed to delete connection"
 msgstr "연결을 삭제하지 못했습니다."
 
-#: elder-terms/src/main.cpp:1898
+#: elder-terms/src/main.cpp:1905
 msgid "Delete connection?"
 msgstr "연결을 삭제하시겠습니까?"
 
-#: elder-terms/src/main.cpp:1900
+#: elder-terms/src/main.cpp:1907
 #, c-format
 msgid "The connection \"%s\" will be permanently deleted."
 msgstr "연결 \"%s\"이(가) 영구적으로 삭제됩니다."
 
-#: elder-terms/src/main.cpp:1907 elder-terms/src/main-window.ui:27
+#: elder-terms/src/main.cpp:1914 elder-terms/src/main-window.ui:27
 msgid "Delete"
 msgstr "삭제"
 
-#: elder-terms/src/main.cpp:1948 elder-terms/src/main.cpp:1961
+#: elder-terms/src/main.cpp:1955 elder-terms/src/main.cpp:1968
 msgid "Failed to rename connection"
 msgstr "연결 이름을 바꾸지 못했습니다."
 
-#: elder-terms/src/main.cpp:2057
+#: elder-terms/src/main.cpp:2064
 msgid "Failed to save connection"
 msgstr "연결을 저장하지 못했습니다."
 
@@ -1132,6 +1133,23 @@ msgstr "계속"
 #: elder-terms-vte/src/sftp/sftp-main.cpp:180
 msgid "Failed to start SFTP"
 msgstr "SFTP"
+
+#: elder-terms-vte/src/ftp/ftp-main.cpp:100
+msgid "FTP authentication"
+msgstr "FTP 인증"
+
+#: elder-terms-vte/src/ftp/ftp-main.cpp:102
+msgid "Connect"
+msgstr "연결"
+
+#: elder-terms-vte/src/ftp/ftp-main.cpp:110
+#, c-format
+msgid "Enter the password for %s on %s."
+msgstr "%s 사용자의 %s 서버 비밀번호를 입력하세요."
+
+#: elder-terms-vte/src/ftp/ftp-main.cpp:164
+msgid "Failed to start FTP"
+msgstr "FTP를 시작하지 못했습니다"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:171
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:178
