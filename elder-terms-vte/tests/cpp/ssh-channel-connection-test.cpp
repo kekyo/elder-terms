@@ -826,28 +826,29 @@ exercise_sftp_client_async(
     const std::shared_ptr<elder_terms::AuthenticatedSshTransport>
         &transport,
     cardio::cancellation cancellation) {
-  std::shared_ptr<elder_terms::SftpClient> client =
+  std::shared_ptr<elder_terms::RemoteFileClient> client =
       co_await elder_terms::open_sftp_client_async(transport,
                                                    cancellation);
   expect_true(client != nullptr, "SFTP client was not created");
-  const std::string canonical =
-      co_await client->canonicalize_path_async(".", cancellation);
-  expect_true(!canonical.empty() && canonical.front() == '/',
+  const elder_terms::RemoteDirectorySnapshot snapshot =
+      co_await client->load_directory_async(".", cancellation);
+  expect_true(!snapshot.canonical_path.empty() &&
+                  snapshot.canonical_path.front() == '/',
               "SFTP root was not canonicalized");
 
-  const std::vector<elder_terms::SftpFileAttributes> entries =
-      co_await client->list_directory_async(".", cancellation);
+  const std::vector<elder_terms::RemoteFileAttributes> &entries =
+      snapshot.entries;
   const auto server_file = std::find_if(
       entries.begin(), entries.end(),
-      [](const elder_terms::SftpFileAttributes &entry) {
+      [](const elder_terms::RemoteFileAttributes &entry) {
         return entry.name == "server.txt" &&
-               entry.type == elder_terms::SftpFileType::regular;
+               entry.type == elder_terms::RemoteFileType::regular;
       });
   const auto server_link = std::find_if(
       entries.begin(), entries.end(),
-      [](const elder_terms::SftpFileAttributes &entry) {
+      [](const elder_terms::RemoteFileAttributes &entry) {
         return entry.name == "server-link" &&
-               entry.type == elder_terms::SftpFileType::symbolic_link;
+               entry.type == elder_terms::RemoteFileType::symbolic_link;
       });
   expect_true(server_file != entries.end() &&
                   server_link != entries.end(),
@@ -857,7 +858,7 @@ exercise_sftp_client_async(
           "server.txt",
       "SFTP symbolic-link target did not match");
 
-  std::unique_ptr<elder_terms::SftpFileReader> reader =
+  std::unique_ptr<elder_terms::RemoteFileReader> reader =
       std::move(co_await client->open_read_async("server.txt",
                                                  cancellation));
   std::array<std::byte, 128> buffer{};
@@ -871,7 +872,7 @@ exercise_sftp_client_async(
       "SFTP file read did not return server content");
 
   const std::string uploaded_content = "SFTP uploaded payload";
-  std::unique_ptr<elder_terms::SftpFileWriter> writer =
+  std::unique_ptr<elder_terms::RemoteFileWriter> writer =
       std::move(co_await client->open_write_async("uploaded.txt", 0600,
                                                   cancellation));
   co_await writer->write_all_async(byte_span(uploaded_content),
@@ -879,14 +880,24 @@ exercise_sftp_client_async(
   co_await writer->close_async(cancellation);
   writer.reset();
   co_await client->set_attributes_async(
-      "uploaded.txt", 0640, 1'700'002'000, 1'700'002'123,
+      "uploaded.txt",
+      elder_terms::RemoteFileAttributes{
+          .name = {},
+          .path = {},
+          .type = elder_terms::RemoteFileType::other,
+          .size = 0,
+          .permissions = 0640,
+          .access_time_unix_seconds = 1'700'002'000,
+          .modification_time_unix_seconds = 1'700'002'123,
+      },
       cancellation);
-  const std::optional<elder_terms::SftpFileAttributes> uploaded =
+  const std::optional<elder_terms::RemoteFileAttributes> uploaded =
       co_await client->lstat_async("uploaded.txt", cancellation);
   expect_true(uploaded.has_value() &&
-                  uploaded->type == elder_terms::SftpFileType::regular &&
+                  uploaded->type == elder_terms::RemoteFileType::regular &&
                   uploaded->size == uploaded_content.size() &&
-                  (uploaded->permissions & 0777U) == 0640U &&
+                  uploaded->permissions.has_value() &&
+                  (*uploaded->permissions & 0777U) == 0640U &&
                   uploaded->modification_time_unix_seconds ==
                       1'700'002'123,
               "SFTP write or metadata update did not persist");

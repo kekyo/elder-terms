@@ -1088,7 +1088,7 @@ describe.concurrent('elder-terms-vte main window', () => {
             expect(await app.getWindowCount()).toBe(2);
             expect(
               await expectElementKind(
-                await app.getById('sftp_remote_path_entry'),
+                await app.getById('file_transfer_remote_path_entry'),
                 'entry'
               ).text()
             ).toBe('/remote');
@@ -1100,7 +1100,7 @@ describe.concurrent('elder-terms-vte main window', () => {
             async () => app.capture()
           );
           const sftpWindow = expectElementKind(
-            await app.getById('sftp_window'),
+            await app.getById('file_transfer_window'),
             'window'
           );
 
@@ -1124,7 +1124,8 @@ describe.concurrent('elder-terms-vte main window', () => {
             async () => {
               expect(await app.getWindowCount()).toBe(1);
               expect(
-                (await (await app.getById('sftp_window')).info()).states
+                (await (await app.getById('file_transfer_window')).info())
+                  .states
               ).toContain('showing');
             },
             {
@@ -1135,7 +1136,7 @@ describe.concurrent('elder-terms-vte main window', () => {
 
           await sftpWindow.activate();
           await expectElementKind(
-            await app.getByPath('sftp_window.0.0.3'),
+            await app.getByPath('file_transfer_window.0.0.3'),
             'button'
           ).click();
           await waitForResult(
@@ -1190,15 +1191,15 @@ describe.concurrent('elder-terms-vte main window', () => {
           ).click();
 
           const localPath = expectElementKind(
-            await app.getById('sftp_local_path_entry'),
+            await app.getById('file_transfer_local_path_entry'),
             'entry'
           );
           const remotePath = expectElementKind(
-            await app.getById('sftp_remote_path_entry'),
+            await app.getById('file_transfer_remote_path_entry'),
             'entry'
           );
           const status = expectElementKind(
-            await app.getById('sftp_status_label'),
+            await app.getById('file_transfer_status_label'),
             'label'
           );
           await waitForResult(

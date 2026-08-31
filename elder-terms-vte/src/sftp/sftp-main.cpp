@@ -22,7 +22,7 @@
 #include "sftp-client.h"
 #include "sftp-fixture-client.h"
 #include "sftp-paths.h"
-#include "sftp-window.h"
+#include "../file-transfer/file-transfer-window.h"
 
 struct SftpAuthenticationPromptRequest {
   GtkWidget *dialog = nullptr;
@@ -41,8 +41,8 @@ struct SftpApplicationState {
   elder_terms::SettingsStore settings;
   elder_terms::SftpConnectionSettings connection;
   std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport;
-  std::shared_ptr<elder_terms::SftpClient> client;
-  std::shared_ptr<elder_terms::SftpWindow> window;
+  std::shared_ptr<elder_terms::RemoteFileClient> client;
+  std::shared_ptr<elder_terms::FileTransferWindow> window;
   cardio::cancellation_source stop_source;
   std::optional<cardio::promise<void>> startup_task;
   GtkWidget *startup_error_dialog = nullptr;
@@ -191,10 +191,11 @@ static void show_startup_error(
 
 static void open_sftp_application_window(
     SftpApplicationState *state) {
-  state->window = elder_terms::create_sftp_window(
+  state->window = elder_terms::create_file_transfer_window(
       {
           .connection_name =
               elder_terms::general_connection_name(state->settings),
+          .protocol_name = "SFTP",
           .local_directory =
               elder_terms::resolve_sftp_local_directory(
                   state->settings, state->connection),
@@ -207,7 +208,7 @@ static void open_sftp_application_window(
                 stop_sftp_application(state);
               },
       });
-  elder_terms::show_sftp_window(state->window);
+  elder_terms::show_file_transfer_window(state->window);
 }
 
 static cardio::promise<void>

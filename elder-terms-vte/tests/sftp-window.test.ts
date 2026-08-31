@@ -364,42 +364,44 @@ describe('SFTP window', () => {
         await waitForResult(async () => {
           expect(
             await expectElementKind(
-              await app.getById('sftp_status_label'),
+              await app.getById('file_transfer_status_label'),
               'label'
             ).text()
           ).toBe('準備完了');
         });
         for (const [id, name] of [
-          ['sftp_local_group', 'ローカル'],
-          ['sftp_remote_group', 'リモート'],
-          ['sftp_local_up_button', '上へ'],
-          ['sftp_remote_up_button', '上へ'],
-          ['sftp_local_refresh_button', '更新'],
-          ['sftp_remote_refresh_button', '更新'],
+          ['file_transfer_local_group', 'ローカル'],
+          ['file_transfer_remote_group', 'リモート'],
+          ['file_transfer_local_up_button', '上へ'],
+          ['file_transfer_remote_up_button', '上へ'],
+          ['file_transfer_local_refresh_button', '更新'],
+          ['file_transfer_remote_refresh_button', '更新'],
         ] as const) {
           expect((await (await app.getById(id)).info()).name).toBe(name);
         }
 
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         await openContextMenu(
           app,
           localTree,
           await findRow(localTree, 'hello.txt')
         );
         const send = expectElementKind(
-          await app.getById('sftp_send_item'),
+          await app.getById('file_transfer_send_item'),
           'menuItem'
         );
         expect((await send.info()).name).toBe('送信');
         await send.click();
 
-        const overlay = await app.getById('sftp_transfer_overlay');
+        const overlay = await app.getById('file_transfer_overlay');
         const transferLabel = expectElementKind(
-          await app.getById('sftp_transfer_label'),
+          await app.getById('file_transfer_label'),
           'label'
         );
         const cancel = expectElementKind(
-          await app.getById('sftp_transfer_cancel_button'),
+          await app.getById('file_transfer_cancel_button'),
           'button'
         );
         await expectShowing(overlay);
@@ -414,7 +416,7 @@ describe('SFTP window', () => {
         await waitForResult(async () => {
           expect(
             await expectElementKind(
-              await app.getById('sftp_status_label'),
+              await app.getById('file_transfer_status_label'),
               'label'
             ).text()
           ).toBe('転送をキャンセルしました');
@@ -432,13 +434,15 @@ describe('SFTP window', () => {
       async ({ app, evidence }) => {
         const exteriorComponentBackground = [0x85, 0x27, 0x71] as const;
         const componentBackground = [0x1b, 0x45, 0x65] as const;
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         const localPath = expectElementKind(
-          await app.getById('sftp_local_path_entry'),
+          await app.getById('file_transfer_local_path_entry'),
           'entry'
         );
         const remotePath = expectElementKind(
-          await app.getById('sftp_remote_path_entry'),
+          await app.getById('file_transfer_remote_path_entry'),
           'entry'
         );
         await waitForResult(async () => {
@@ -448,8 +452,8 @@ describe('SFTP window', () => {
         });
         await localPath.setText('/fixture/local');
 
-        const header = await app.getById('sftp_header_bar');
-        const status = await app.getById('sftp_status_bar');
+        const header = await app.getById('file_transfer_header_bar');
+        const status = await app.getById('file_transfer_status_bar');
         expect(capturePixel(await header.capture(), 0.08, 0.5)).toEqual([
           0x7a, 0x24, 0x68,
         ]);
@@ -471,7 +475,9 @@ describe('SFTP window', () => {
         );
         expect(
           capturePixel(
-            await (await app.getById('sftp_local_refresh_button')).capture(),
+            await (
+              await app.getById('file_transfer_local_refresh_button')
+            ).capture(),
             0.15,
             0.5
           )
@@ -502,7 +508,7 @@ describe('SFTP window', () => {
         });
 
         const window = expectElementKind(
-          await app.getById('sftp_window'),
+          await app.getById('file_transfer_window'),
           'window'
         );
         await window.moveTo(16, 16);
@@ -530,17 +536,21 @@ describe('SFTP window', () => {
       async ({ app, evidence, localDirectory }) => {
         expect(await app.getWindowCount()).toBe(1);
         const window = expectElementKind(
-          await app.getById('sftp_window'),
+          await app.getById('file_transfer_window'),
           'window'
         );
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
-        const remoteTree = expectTable(await app.getById('sftp_remote_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
         const localPath = expectElementKind(
-          await app.getById('sftp_local_path_entry'),
+          await app.getById('file_transfer_local_path_entry'),
           'entry'
         );
         const remotePath = expectElementKind(
-          await app.getById('sftp_remote_path_entry'),
+          await app.getById('file_transfer_remote_path_entry'),
           'entry'
         );
 
@@ -564,7 +574,7 @@ describe('SFTP window', () => {
           );
         });
         await expectElementKind(
-          await app.getById('sftp_remote_up_button'),
+          await app.getById('file_transfer_remote_up_button'),
           'button'
         ).click();
         await waitForResult(async () => {
@@ -582,7 +592,9 @@ describe('SFTP window', () => {
 
   it('pads content groups and controls outside the tree lists', async (context) => {
     await runSftpFixture(context, false, [], undefined, async ({ app }) => {
-      const localTree = expectTable(await app.getById('sftp_local_tree'));
+      const localTree = expectTable(
+        await app.getById('file_transfer_local_tree')
+      );
       await findRow(localTree, 'documents');
       const [
         paned,
@@ -596,15 +608,15 @@ describe('SFTP window', () => {
         statusLabel,
       ] = await Promise.all(
         [
-          'sftp_root_paned',
-          'sftp_local_group',
-          'sftp_remote_group',
-          'sftp_local_path_entry',
-          'sftp_local_up_button',
-          'sftp_local_refresh_button',
-          'sftp_local_tree',
-          'sftp_status_bar',
-          'sftp_status_label',
+          'file_transfer_root_paned',
+          'file_transfer_local_group',
+          'file_transfer_remote_group',
+          'file_transfer_local_path_entry',
+          'file_transfer_local_up_button',
+          'file_transfer_local_refresh_button',
+          'file_transfer_local_tree',
+          'file_transfer_status_bar',
+          'file_transfer_status_label',
         ].map(async (id) => (await app.getById(id)).capture())
       );
 
@@ -670,7 +682,9 @@ describe('SFTP window', () => {
           'inside\n'
         );
 
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         const documentsRow = await findRow(localTree, 'documents');
         const initialRowCount = await localTree.getRowCount();
         await clickTreeExpander(app, localTree, documentsRow);
@@ -702,7 +716,9 @@ describe('SFTP window', () => {
           recursive: true,
         });
 
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         const documentsRow = await findRow(localTree, 'documents');
         const initialRowCount = await localTree.getRowCount();
 
@@ -758,7 +774,9 @@ describe('SFTP window', () => {
         '\n'
       ),
       async ({ app, localDirectory }) => {
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         await findRow(localTree, 'documents');
         await Promise.all([
           ...Array.from({ length: 10 }, (_, index) =>
@@ -777,7 +795,7 @@ describe('SFTP window', () => {
           ),
         ]);
         await expectElementKind(
-          await app.getById('sftp_local_refresh_button'),
+          await app.getById('file_transfer_local_refresh_button'),
           'button'
         ).click();
         await waitForResult(async () => {
@@ -887,9 +905,11 @@ describe('SFTP window', () => {
           })
         );
 
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         await expectElementKind(
-          await app.getById('sftp_local_refresh_button'),
+          await app.getById('file_transfer_local_refresh_button'),
           'button'
         ).click();
         await waitForResult(async () => {
@@ -943,9 +963,11 @@ describe('SFTP window', () => {
         '',
       ].join('\n'),
       async ({ app, evidence, localDirectory }) => {
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         const verticalScrollbar = expectElementKind(
-          await app.getById('sftp_local_vertical_scrollbar'),
+          await app.getById('file_transfer_local_vertical_scrollbar'),
           'scrollbar'
         );
         await findRow(localTree, 'hello.txt');
@@ -967,7 +989,7 @@ describe('SFTP window', () => {
           ),
         ]);
         await expectElementKind(
-          await app.getById('sftp_local_refresh_button'),
+          await app.getById('file_transfer_local_refresh_button'),
           'button'
         ).click();
         await waitForResult(async () => {
@@ -1068,15 +1090,19 @@ describe('SFTP window', () => {
       [],
       undefined,
       async ({ app, localDirectory }) => {
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
-        const remoteTree = expectTable(await app.getById('sftp_remote_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
         await openContextMenu(
           app,
           localTree,
           await findRow(localTree, 'hello.txt')
         );
         const send = expectElementKind(
-          await app.getById('sftp_send_item'),
+          await app.getById('file_transfer_send_item'),
           'menuItem'
         );
         await expectShowing(send);
@@ -1084,7 +1110,7 @@ describe('SFTP window', () => {
         await waitForResult(async () => {
           expect(
             await expectElementKind(
-              await app.getById('sftp_status_label'),
+              await app.getById('file_transfer_status_label'),
               'label'
             ).text()
           ).toBe('Sent 1 item');
@@ -1099,7 +1125,7 @@ describe('SFTP window', () => {
           await findRow(remoteTree, 'readme.txt')
         );
         const receive = expectElementKind(
-          await app.getById('sftp_receive_item'),
+          await app.getById('file_transfer_receive_item'),
           'menuItem'
         );
         await expectShowing(receive);
@@ -1107,7 +1133,7 @@ describe('SFTP window', () => {
         await waitForResult(async () => {
           expect(
             await expectElementKind(
-              await app.getById('sftp_status_label'),
+              await app.getById('file_transfer_status_label'),
               'label'
             ).text()
           ).toBe('Received 1 item');
@@ -1128,14 +1154,16 @@ describe('SFTP window', () => {
       async ({ app, evidence }) => {
         const background = [0x18, 0x3c, 0x58] as const;
         const componentBackground = [0x1b, 0x45, 0x65] as const;
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         await openContextMenu(
           app,
           localTree,
           await findRow(localTree, 'hello.txt')
         );
         const sendItem = expectElementKind(
-          await app.getById('sftp_send_item'),
+          await app.getById('file_transfer_send_item'),
           'menuItem'
         );
         expect(capturePixel(await sendItem.capture(), 0.8, 0.5)).toEqual(
@@ -1143,12 +1171,12 @@ describe('SFTP window', () => {
         );
         await sendItem.click();
 
-        const overlay = await app.getById('sftp_transfer_overlay');
-        const dim = await app.getById('sftp_dim_overlay');
+        const overlay = await app.getById('file_transfer_overlay');
+        const dim = await app.getById('file_transfer_dim_overlay');
         await expectShowing(overlay);
         await expectShowing(dim);
         for (const [widgetId, horizontalRatio] of [
-          ['sftp_transfer_overlay', 0.05],
+          ['file_transfer_overlay', 0.05],
         ] as const) {
           expect(
             capturePixel(
@@ -1159,8 +1187,8 @@ describe('SFTP window', () => {
           ).toEqual(background);
         }
         for (const [widgetId, horizontalRatio] of [
-          ['sftp_transfer_progress', 0.05],
-          ['sftp_transfer_cancel_button', 0.15],
+          ['file_transfer_progress', 0.05],
+          ['file_transfer_cancel_button', 0.15],
         ] as const) {
           expect(
             capturePixel(
@@ -1186,7 +1214,7 @@ describe('SFTP window', () => {
         );
         expect((await localTree.info()).states).not.toContain('sensitive');
         await expectElementKind(
-          await app.getById('sftp_transfer_cancel_button'),
+          await app.getById('file_transfer_cancel_button'),
           'button'
         ).click();
 
@@ -1196,7 +1224,7 @@ describe('SFTP window', () => {
           expect((await localTree.info()).states).toContain('sensitive');
           expect(
             await expectElementKind(
-              await app.getById('sftp_status_label'),
+              await app.getById('file_transfer_status_label'),
               'label'
             ).text()
           ).toBe('Transfer cancelled');

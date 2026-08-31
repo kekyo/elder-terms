@@ -1,4 +1,4 @@
-#include "../../src/sftp/sftp-transfer-engine.h"
+#include "../../src/file-transfer/file-transfer-engine.h"
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -32,7 +32,7 @@ struct TemporaryDirectoryCleanup {
 };
 
 struct FakeNode {
-  elder_terms::SftpFileAttributes attributes;
+  elder_terms::RemoteFileAttributes attributes;
   std::vector<std::byte> content;
   std::string link_target;
 };
@@ -73,7 +73,7 @@ static std::string text(const std::vector<std::byte> &value) {
 
 class FakeSftpClient;
 
-class FakeSftpReader final : public elder_terms::SftpFileReader {
+class FakeSftpReader final : public elder_terms::RemoteFileReader {
 private:
   std::vector<std::byte> content;
   std::size_t offset = 0;
@@ -106,7 +106,7 @@ public:
   }
 };
 
-class FakeSftpWriter final : public elder_terms::SftpFileWriter {
+class FakeSftpWriter final : public elder_terms::RemoteFileWriter {
 private:
   std::shared_ptr<FakeSftpClient> client;
   std::string path;
@@ -131,7 +131,7 @@ public:
 };
 
 class FakeSftpClient final
-    : public elder_terms::SftpClient,
+    : public elder_terms::RemoteFileClient,
       public std::enable_shared_from_this<FakeSftpClient> {
 public:
   std::map<std::string, FakeNode> nodes;
@@ -147,7 +147,7 @@ public:
             {
                 .name = remote_name(normalized),
                 .path = normalized,
-                .type = elder_terms::SftpFileType::directory,
+                .type = elder_terms::RemoteFileType::directory,
                 .size = 0,
                 .permissions = permissions,
                 .access_time_unix_seconds = mtime,
@@ -167,7 +167,7 @@ public:
             {
                 .name = remote_name(normalized),
                 .path = normalized,
-                .type = elder_terms::SftpFileType::regular,
+                .type = elder_terms::RemoteFileType::regular,
                 .size = content.size(),
                 .permissions = permissions,
                 .access_time_unix_seconds = mtime,
@@ -186,7 +186,7 @@ public:
             {
                 .name = remote_name(normalized),
                 .path = normalized,
-                .type = elder_terms::SftpFileType::symbolic_link,
+                .type = elder_terms::RemoteFileType::symbolic_link,
                 .size = target.size(),
                 .permissions = 0777,
                 .access_time_unix_seconds = mtime,
@@ -197,36 +197,42 @@ public:
     };
   }
 
-  cardio::promise<std::string>
-  canonicalize_path_async(std::string path,
-                          cardio::cancellation cancellation) override {
-    cancellation.throw_if_cancellation_requested();
-    co_return normalize_remote_path(path);
+  auto capabilities() const noexcept
+      -> elder_terms::RemoteFileCapabilities override {
+    return {
+        .symbolic_links = true,
+        .permissions = true,
+        .access_time = true,
+        .modification_time = true,
+    };
   }
 
-  cardio::promise<std::vector<elder_terms::SftpFileAttributes>>
-  list_directory_async(std::string path,
+  cardio::promise<elder_terms::RemoteDirectorySnapshot>
+  load_directory_async(std::string path,
                        cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
     const std::string normalized = normalize_remote_path(path);
     const auto directory = nodes.find(normalized);
     if (directory == nodes.end() ||
         directory->second.attributes.type !=
-            elder_terms::SftpFileType::directory) {
+            elder_terms::RemoteFileType::directory) {
       throw std::runtime_error("fake remote directory does not exist");
     }
 
-    std::vector<elder_terms::SftpFileAttributes> result;
+    elder_terms::RemoteDirectorySnapshot result{
+        .canonical_path = normalized,
+        .entries = {},
+    };
     for (const auto &[candidate_path, node] : nodes) {
       if (candidate_path != normalized &&
           remote_parent(candidate_path) == normalized) {
-        result.push_back(node.attributes);
+        result.entries.push_back(node.attributes);
       }
     }
     co_return result;
   }
 
-  cardio::promise<std::optional<elder_terms::SftpFileAttributes>>
+  cardio::promise<std::optional<elder_terms::RemoteFileAttributes>>
   lstat_async(std::string path,
               cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
@@ -244,17 +250,18 @@ public:
     const auto iterator = nodes.find(normalize_remote_path(path));
     if (iterator == nodes.end() ||
         iterator->second.attributes.type !=
-            elder_terms::SftpFileType::symbolic_link) {
+            elder_terms::RemoteFileType::symbolic_link) {
       throw std::runtime_error("fake remote link does not exist");
     }
     co_return iterator->second.link_target;
   }
 
   cardio::promise<void>
-  make_directory_async(std::string path, std::uint32_t permissions,
+  make_directory_async(std::string path,
+                       std::optional<std::uint32_t> permissions,
                        cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
-    add_directory(path, permissions);
+    add_directory(path, permissions.value_or(0755U));
     co_return;
   }
 
@@ -266,7 +273,7 @@ public:
     const auto iterator = nodes.find(normalized);
     if (iterator == nodes.end() ||
         iterator->second.attributes.type ==
-            elder_terms::SftpFileType::directory) {
+            elder_terms::RemoteFileType::directory) {
       throw std::runtime_error("fake remote file does not exist");
     }
     nodes.erase(iterator);
@@ -290,7 +297,7 @@ public:
     const auto iterator = nodes.find(normalized);
     if (iterator == nodes.end() ||
         iterator->second.attributes.type !=
-            elder_terms::SftpFileType::directory) {
+            elder_terms::RemoteFileType::directory) {
       throw std::runtime_error("fake remote directory does not exist");
     }
     nodes.erase(iterator);
@@ -325,42 +332,48 @@ public:
   }
 
   cardio::promise<void>
-  set_attributes_async(std::string path, std::uint32_t permissions,
-                       std::int64_t access_time_unix_seconds,
-                       std::int64_t modification_time_unix_seconds,
+  set_attributes_async(std::string path,
+                       elder_terms::RemoteFileAttributes attributes,
                        cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
     const auto iterator = nodes.find(normalize_remote_path(path));
     if (iterator == nodes.end()) {
       throw std::runtime_error("fake remote item does not exist");
     }
-    iterator->second.attributes.permissions = permissions;
-    iterator->second.attributes.access_time_unix_seconds =
-        access_time_unix_seconds;
-    iterator->second.attributes.modification_time_unix_seconds =
-        modification_time_unix_seconds;
+    if (attributes.permissions.has_value()) {
+      iterator->second.attributes.permissions = attributes.permissions;
+    }
+    if (attributes.access_time_unix_seconds.has_value()) {
+      iterator->second.attributes.access_time_unix_seconds =
+          attributes.access_time_unix_seconds;
+    }
+    if (attributes.modification_time_unix_seconds.has_value()) {
+      iterator->second.attributes.modification_time_unix_seconds =
+          attributes.modification_time_unix_seconds;
+    }
     co_return;
   }
 
-  cardio::promise<std::unique_ptr<elder_terms::SftpFileReader>>
+  cardio::promise<std::unique_ptr<elder_terms::RemoteFileReader>>
   open_read_async(std::string path,
                   cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
     const auto iterator = nodes.find(normalize_remote_path(path));
     if (iterator == nodes.end() ||
         iterator->second.attributes.type !=
-            elder_terms::SftpFileType::regular) {
+            elder_terms::RemoteFileType::regular) {
       throw std::runtime_error("fake remote file does not exist");
     }
     co_return std::make_unique<FakeSftpReader>(iterator->second.content);
   }
 
-  cardio::promise<std::unique_ptr<elder_terms::SftpFileWriter>>
-  open_write_async(std::string path, std::uint32_t permissions,
+  cardio::promise<std::unique_ptr<elder_terms::RemoteFileWriter>>
+  open_write_async(std::string path,
+                   std::optional<std::uint32_t> permissions,
                    cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
     const std::string normalized = normalize_remote_path(path);
-    add_file(normalized, "", permissions);
+    add_file(normalized, "", permissions.value_or(0600U));
     co_return std::make_unique<FakeSftpWriter>(
         shared_from_this(), normalized);
   }
@@ -460,45 +473,45 @@ test_recursive_send_preserves_links_metadata_and_recovers() {
   client->fail_next_write = true;
   int conflict_count = 0;
   int failure_count = 0;
-  elder_terms::SftpTransferProgress last_progress;
+  elder_terms::FileTransferProgress last_progress;
 
-  elder_terms::SftpTransferRequest request{
-      .direction = elder_terms::SftpTransferDirection::send,
+  elder_terms::FileTransferRequest request{
+      .direction = elder_terms::FileTransferDirection::send,
       .source_paths = {(root / "bundle").string()},
       .destination_directory = "/incoming",
       .callbacks =
           {
               .conflict =
                   [&conflict_count](
-                      const elder_terms::SftpTransferConflict &,
+                      const elder_terms::FileTransferConflict &,
                       cardio::cancellation cancellation)
-                  -> cardio::promise<elder_terms::SftpConflictAction> {
+                  -> cardio::promise<elder_terms::FileTransferConflictAction> {
                 cancellation.throw_if_cancellation_requested();
                 ++conflict_count;
-                co_return elder_terms::SftpConflictAction::overwrite;
+                co_return elder_terms::FileTransferConflictAction::overwrite;
               },
               .failure =
                   [&failure_count](
-                      const elder_terms::SftpTransferFailure &failure,
+                      const elder_terms::FileTransferFailure &failure,
                       cardio::cancellation cancellation)
-                  -> cardio::promise<elder_terms::SftpFailureAction> {
+                  -> cardio::promise<elder_terms::FileTransferFailureAction> {
                 cancellation.throw_if_cancellation_requested();
                 expect_true(
                     failure.message.find("injected remote write failure") !=
                         std::string::npos,
                     "send failure did not describe the remote write");
                 ++failure_count;
-                co_return elder_terms::SftpFailureAction::retry;
+                co_return elder_terms::FileTransferFailureAction::retry;
               },
               .progress =
                   [&last_progress](
-                      const elder_terms::SftpTransferProgress &progress) {
+                      const elder_terms::FileTransferProgress &progress) {
                     last_progress = progress;
                   },
           },
   };
 
-  co_await elder_terms::run_sftp_transfer_async(client, std::move(request),
+  co_await elder_terms::run_file_transfer_async(client, std::move(request),
                                                  {});
 
   expect_true(conflict_count == 1,
@@ -511,13 +524,14 @@ test_recursive_send_preserves_links_metadata_and_recovers() {
       "send did not replace the conflicting remote file");
   expect_true(
       client->nodes.at("/incoming/bundle/alpha-link").attributes.type ==
-          elder_terms::SftpFileType::symbolic_link &&
+          elder_terms::RemoteFileType::symbolic_link &&
           client->nodes.at("/incoming/bundle/alpha-link").link_target ==
               "alpha.txt",
       "send followed or lost the local symbolic link");
   const FakeNode &remote_file =
       client->nodes.at("/incoming/bundle/alpha.txt");
-  expect_true((remote_file.attributes.permissions & 0777U) == 0640U,
+  expect_true(remote_file.attributes.permissions.has_value() &&
+                  (*remote_file.attributes.permissions & 0777U) == 0640U,
               "send did not preserve file permissions");
   expect_true(remote_file.attributes.modification_time_unix_seconds ==
                   1'700'000'123,
@@ -548,27 +562,27 @@ test_recursive_receive_preserves_links_and_metadata() {
                    1'700'001'345);
   int conflict_count = 0;
 
-  elder_terms::SftpTransferRequest request{
-      .direction = elder_terms::SftpTransferDirection::receive,
+  elder_terms::FileTransferRequest request{
+      .direction = elder_terms::FileTransferDirection::receive,
       .source_paths = {"/exports/bundle"},
       .destination_directory = root.string(),
       .callbacks =
           {
               .conflict =
                   [&conflict_count](
-                      const elder_terms::SftpTransferConflict &,
+                      const elder_terms::FileTransferConflict &,
                       cardio::cancellation cancellation)
-                  -> cardio::promise<elder_terms::SftpConflictAction> {
+                  -> cardio::promise<elder_terms::FileTransferConflictAction> {
                 cancellation.throw_if_cancellation_requested();
                 ++conflict_count;
-                co_return elder_terms::SftpConflictAction::overwrite;
+                co_return elder_terms::FileTransferConflictAction::overwrite;
               },
               .failure = {},
               .progress = {},
           },
   };
 
-  co_await elder_terms::run_sftp_transfer_async(client, std::move(request),
+  co_await elder_terms::run_file_transfer_async(client, std::move(request),
                                                  {});
 
   expect_true(conflict_count == 1,
@@ -608,8 +622,8 @@ test_cancellation_removes_remote_temporary_file() {
   client->add_directory("/incoming");
   cardio::cancellation_source cancellation_source;
   bool canceled_from_progress = false;
-  elder_terms::SftpTransferRequest request{
-      .direction = elder_terms::SftpTransferDirection::send,
+  elder_terms::FileTransferRequest request{
+      .direction = elder_terms::FileTransferDirection::send,
       .source_paths = {(root / "large.bin").string()},
       .destination_directory = "/incoming",
       .callbacks =
@@ -618,7 +632,7 @@ test_cancellation_removes_remote_temporary_file() {
               .failure = {},
               .progress =
                   [&cancellation_source, &canceled_from_progress](
-                      const elder_terms::SftpTransferProgress &progress) {
+                      const elder_terms::FileTransferProgress &progress) {
                     if (!canceled_from_progress &&
                         progress.transferred_bytes > 0) {
                       canceled_from_progress = true;
@@ -630,7 +644,7 @@ test_cancellation_removes_remote_temporary_file() {
 
   bool canceled = false;
   try {
-    co_await elder_terms::run_sftp_transfer_async(
+    co_await elder_terms::run_file_transfer_async(
         client, std::move(request),
         cancellation_source.get_cancellation());
   } catch (const cardio::canceled_exception &) {
@@ -660,10 +674,10 @@ static cardio::promise<void> test_rejects_parallel_bulk_transfer() {
               "failed to reserve fake transfer slot");
   bool rejected = false;
   try {
-    co_await elder_terms::run_sftp_transfer_async(
+    co_await elder_terms::run_file_transfer_async(
         client,
-        elder_terms::SftpTransferRequest{
-            .direction = elder_terms::SftpTransferDirection::receive,
+        elder_terms::FileTransferRequest{
+            .direction = elder_terms::FileTransferDirection::receive,
             .source_paths = {"/missing"},
             .destination_directory = "/tmp",
             .callbacks = {},

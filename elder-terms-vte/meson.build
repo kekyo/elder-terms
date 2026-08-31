@@ -56,8 +56,8 @@ elder_terms_sources = [
   'src/sftp/sftp-client.cpp',
   'src/sftp/sftp-fixture-client.cpp',
   'src/sftp/sftp-paths.cpp',
-  'src/sftp/sftp-transfer-engine.cpp',
-  'src/sftp/sftp-window.cpp',
+  'src/file-transfer/file-transfer-engine.cpp',
+  'src/file-transfer/file-transfer-window.cpp',
   'src/terminal-connection-phase.cpp',
   'src/terminal-bell.cpp',
   'src/terminal-bell-player.cpp',
@@ -124,8 +124,8 @@ executable(
     'src/sftp/sftp-fixture-client.cpp',
     'src/sftp/sftp-main.cpp',
     'src/sftp/sftp-paths.cpp',
-    'src/sftp/sftp-transfer-engine.cpp',
-    'src/sftp/sftp-window.cpp',
+    'src/file-transfer/file-transfer-engine.cpp',
+    'src/file-transfer/file-transfer-window.cpp',
     'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
     'src/terminal-sessions/tcp-connector.cpp',
     'src/widget-background.cpp',
@@ -297,6 +297,21 @@ activity_indicator_test = executable(
 
 test('activity-indicator-test', activity_indicator_test)
 
+file_transfer_contract_test = executable(
+  'file-transfer-contract-test',
+  'tests/cpp/file-transfer-contract-test.cpp',
+  cpp_args: [
+    '-I' + cardio_include_dir,
+    '-DCARDIO_WITH_GLIB=1',
+    '-DCARDIO_WITH_GIO=1',
+  ],
+  dependencies: [
+    gio_dep,
+  ],
+)
+
+test('file-transfer-contract-test', file_transfer_contract_test)
+
 terminal_connection_phase_test = executable(
   'terminal-connection-phase-test',
   [
@@ -337,7 +352,7 @@ sftp_transfer_engine_test = executable(
   'sftp-transfer-engine-test',
   [
     'tests/cpp/sftp-transfer-engine-test.cpp',
-    'src/sftp/sftp-transfer-engine.cpp',
+    'src/file-transfer/file-transfer-engine.cpp',
   ],
   cpp_args: [
     '-I' + cardio_include_dir,

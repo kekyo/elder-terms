@@ -16,7 +16,7 @@
 namespace elder_terms {
 
 struct SftpFixtureNode {
-  SftpFileAttributes attributes;
+  RemoteFileAttributes attributes;
   std::vector<std::byte> content;
   std::string link_target;
 };
@@ -45,7 +45,7 @@ static std::vector<std::byte> fixture_bytes(
 
 class SftpFixtureClient;
 
-class SftpFixtureReader final : public SftpFileReader {
+class SftpFixtureReader final : public RemoteFileReader {
 private:
   std::vector<std::byte> content;
   std::size_t offset = 0;
@@ -78,7 +78,7 @@ public:
   }
 };
 
-class SftpFixtureWriter final : public SftpFileWriter {
+class SftpFixtureWriter final : public RemoteFileWriter {
 private:
   std::shared_ptr<SftpFixtureClient> client;
   std::string path;
@@ -103,7 +103,7 @@ public:
 };
 
 class SftpFixtureClient final
-    : public SftpClient,
+    : public RemoteFileClient,
       public std::enable_shared_from_this<SftpFixtureClient> {
 public:
   std::map<std::string, SftpFixtureNode> nodes;
@@ -123,7 +123,7 @@ public:
             {
                 .name = fixture_path_name(normalized),
                 .path = normalized,
-                .type = SftpFileType::directory,
+                .type = RemoteFileType::directory,
                 .size = 0,
                 .permissions = permissions,
                 .access_time_unix_seconds = 1'700'000'000,
@@ -142,7 +142,7 @@ public:
             {
                 .name = fixture_path_name(normalized),
                 .path = normalized,
-                .type = SftpFileType::regular,
+                .type = RemoteFileType::regular,
                 .size = content.size(),
                 .permissions = permissions,
                 .access_time_unix_seconds = 1'700'000'000,
@@ -160,7 +160,7 @@ public:
             {
                 .name = fixture_path_name(normalized),
                 .path = normalized,
-                .type = SftpFileType::symbolic_link,
+                .type = RemoteFileType::symbolic_link,
                 .size = target.size(),
                 .permissions = 0777,
                 .access_time_unix_seconds = 1'700'000'000,
@@ -171,42 +171,41 @@ public:
     };
   }
 
-  cardio::promise<std::string>
-  canonicalize_path_async(std::string path,
-                          cardio::cancellation cancellation) override {
+  auto capabilities() const noexcept
+      -> RemoteFileCapabilities override {
+    return {
+        .symbolic_links = true,
+        .permissions = true,
+        .access_time = true,
+        .modification_time = true,
+    };
+  }
+
+  cardio::promise<RemoteDirectorySnapshot>
+  load_directory_async(std::string path,
+                       cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
     const std::string normalized = normalize_fixture_path(path);
     const auto iterator = nodes.find(normalized);
     if (iterator == nodes.end() ||
-        iterator->second.attributes.type != SftpFileType::directory) {
+        iterator->second.attributes.type != RemoteFileType::directory) {
       throw std::runtime_error(
           "Fixture remote directory does not exist");
     }
-    co_return normalized;
-  }
-
-  cardio::promise<std::vector<SftpFileAttributes>>
-  list_directory_async(std::string path,
-                       cardio::cancellation cancellation) override {
-    cancellation.throw_if_cancellation_requested();
-    const std::string normalized = normalize_fixture_path(path);
-    const auto directory = nodes.find(normalized);
-    if (directory == nodes.end() ||
-        directory->second.attributes.type != SftpFileType::directory) {
-      throw std::runtime_error(
-          "Fixture remote directory does not exist");
-    }
-    std::vector<SftpFileAttributes> result;
+    RemoteDirectorySnapshot result{
+        .canonical_path = normalized,
+        .entries = {},
+    };
     for (const auto &[candidate, node] : nodes) {
       if (candidate != normalized &&
           fixture_parent_path(candidate) == normalized) {
-        result.push_back(node.attributes);
+        result.entries.push_back(node.attributes);
       }
     }
     co_return result;
   }
 
-  cardio::promise<std::optional<SftpFileAttributes>>
+  cardio::promise<std::optional<RemoteFileAttributes>>
   lstat_async(std::string path,
               cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
@@ -226,17 +225,18 @@ public:
         nodes.find(normalize_fixture_path(path));
     if (iterator == nodes.end() ||
         iterator->second.attributes.type !=
-            SftpFileType::symbolic_link) {
+            RemoteFileType::symbolic_link) {
       throw std::runtime_error("Fixture remote link does not exist");
     }
     co_return iterator->second.link_target;
   }
 
   cardio::promise<void>
-  make_directory_async(std::string path, std::uint32_t permissions,
+  make_directory_async(std::string path,
+                       std::optional<std::uint32_t> permissions,
                        cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
-    add_directory(path, permissions);
+    add_directory(path, permissions.value_or(0755U));
     co_return;
   }
 
@@ -247,7 +247,7 @@ public:
     const std::string normalized = normalize_fixture_path(path);
     const auto iterator = nodes.find(normalized);
     if (iterator == nodes.end() ||
-        iterator->second.attributes.type == SftpFileType::directory) {
+        iterator->second.attributes.type == RemoteFileType::directory) {
       throw std::runtime_error("Fixture remote file does not exist");
     }
     nodes.erase(iterator);
@@ -271,7 +271,7 @@ public:
     }
     const auto iterator = nodes.find(normalized);
     if (iterator == nodes.end() ||
-        iterator->second.attributes.type != SftpFileType::directory) {
+        iterator->second.attributes.type != RemoteFileType::directory) {
       throw std::runtime_error(
           "Fixture remote directory does not exist");
     }
@@ -309,9 +309,7 @@ public:
 
   cardio::promise<void>
   set_attributes_async(
-      std::string path, std::uint32_t permissions,
-      std::int64_t access_time_unix_seconds,
-      std::int64_t modification_time_unix_seconds,
+      std::string path, RemoteFileAttributes attributes,
       cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
     const auto iterator =
@@ -319,34 +317,41 @@ public:
     if (iterator == nodes.end()) {
       throw std::runtime_error("Fixture remote item does not exist");
     }
-    iterator->second.attributes.permissions = permissions;
-    iterator->second.attributes.access_time_unix_seconds =
-        access_time_unix_seconds;
-    iterator->second.attributes.modification_time_unix_seconds =
-        modification_time_unix_seconds;
+    if (attributes.permissions.has_value()) {
+      iterator->second.attributes.permissions = attributes.permissions;
+    }
+    if (attributes.access_time_unix_seconds.has_value()) {
+      iterator->second.attributes.access_time_unix_seconds =
+          attributes.access_time_unix_seconds;
+    }
+    if (attributes.modification_time_unix_seconds.has_value()) {
+      iterator->second.attributes.modification_time_unix_seconds =
+          attributes.modification_time_unix_seconds;
+    }
     co_return;
   }
 
-  cardio::promise<std::unique_ptr<SftpFileReader>>
+  cardio::promise<std::unique_ptr<RemoteFileReader>>
   open_read_async(std::string path,
                   cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
     const auto iterator =
         nodes.find(normalize_fixture_path(path));
     if (iterator == nodes.end() ||
-        iterator->second.attributes.type != SftpFileType::regular) {
+        iterator->second.attributes.type != RemoteFileType::regular) {
       throw std::runtime_error("Fixture remote file does not exist");
     }
     co_return std::make_unique<SftpFixtureReader>(
         iterator->second.content);
   }
 
-  cardio::promise<std::unique_ptr<SftpFileWriter>>
-  open_write_async(std::string path, std::uint32_t permissions,
+  cardio::promise<std::unique_ptr<RemoteFileWriter>>
+  open_write_async(std::string path,
+                   std::optional<std::uint32_t> permissions,
                    cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
     const std::string normalized = normalize_fixture_path(path);
-    add_file(normalized, "", permissions);
+    add_file(normalized, "", permissions.value_or(0600U));
     co_return std::make_unique<SftpFixtureWriter>(
         shared_from_this(), normalized);
   }
@@ -380,7 +385,7 @@ SftpFixtureWriter::write_all_async(
   node.attributes.size = node.content.size();
 }
 
-std::shared_ptr<SftpClient>
+std::shared_ptr<RemoteFileClient>
 create_sftp_fixture_client(bool pause_writes) {
   auto client =
       std::make_shared<SftpFixtureClient>(pause_writes);

@@ -32,7 +32,7 @@
 #include "sftp/sftp-client.h"
 #include "sftp/sftp-fixture-client.h"
 #include "sftp/sftp-paths.h"
-#include "sftp/sftp-window.h"
+#include "file-transfer/file-transfer-window.h"
 #include "terminal-bell-player.h"
 #include "terminal-bell.h"
 #include "terminal-hyperlink-resolver.h"
@@ -64,8 +64,8 @@ struct ApplicationState {
   std::optional<cardio::promise<void>> sftp_connection_check_task;
   std::optional<cardio::cancellation_source> sftp_cancel_source;
   std::shared_ptr<elder_terms::AuthenticatedSshTransport> sftp_transport;
-  std::shared_ptr<elder_terms::SftpClient> sftp_client;
-  std::shared_ptr<elder_terms::SftpWindow> sftp_window;
+  std::shared_ptr<elder_terms::RemoteFileClient> sftp_client;
+  std::shared_ptr<elder_terms::FileTransferWindow> sftp_window;
   elder_terms::SettingsStore settings_store;
   std::optional<std::filesystem::path> config_path;
   elder_terms::TestOptions test_options;
@@ -330,7 +330,7 @@ static cardio::promise<void> check_shared_sftp_connection_async(
 
   if (state->sftp_transport == transport &&
       state->sftp_window != nullptr) {
-    elder_terms::set_sftp_window_connection_available(
+    elder_terms::set_file_transfer_window_connection_available(
         state->sftp_window, available);
   }
   state->sftp_connection_check_active = false;
@@ -343,14 +343,14 @@ static void start_shared_sftp_connection_check(
     return;
   }
   if (state->test_options.fixture) {
-    elder_terms::set_sftp_window_connection_available(
+    elder_terms::set_file_transfer_window_connection_available(
         state->sftp_window,
         !state->test_options.shared_sftp_disconnected);
     return;
   }
   if (state->sftp_transport == nullptr ||
       !state->sftp_cancel_source.has_value()) {
-    elder_terms::set_sftp_window_connection_available(
+    elder_terms::set_file_transfer_window_connection_available(
         state->sftp_window, false);
     return;
   }
@@ -590,7 +590,7 @@ static void apply_runtime_settings(ApplicationState *state,
   elder_terms::set_main_window_colors(
       state->main_window, colors);
   if (state->sftp_window != nullptr) {
-    elder_terms::set_sftp_window_colors(
+    elder_terms::set_file_transfer_window_colors(
         state->sftp_window, colors);
   }
   const elder_terms::TerminalLogSettings log_settings =
@@ -1189,7 +1189,7 @@ static cardio::promise<void> open_shared_sftp_window_async(
     std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport,
     cardio::cancellation cancellation) {
   try {
-    std::shared_ptr<elder_terms::SftpClient> client;
+    std::shared_ptr<elder_terms::RemoteFileClient> client;
     if (state->test_options.fixture) {
       client = elder_terms::create_sftp_fixture_client(
           state->test_options.sftp_pause_transfer);
@@ -1203,11 +1203,12 @@ static cardio::promise<void> open_shared_sftp_window_async(
         elder_terms::sftp_connection_settings(state->settings_store);
     state->sftp_transport = std::move(transport);
     state->sftp_client = std::move(client);
-    state->sftp_window = elder_terms::create_sftp_window(
+    state->sftp_window = elder_terms::create_file_transfer_window(
         {
             .connection_name =
                 elder_terms::general_connection_name(
                     state->settings_store),
+            .protocol_name = "SFTP",
             .local_directory =
                 elder_terms::resolve_sftp_local_directory(
                     state->settings_store, settings),
@@ -1222,7 +1223,7 @@ static cardio::promise<void> open_shared_sftp_window_async(
                 },
         });
     state->sftp_opening = false;
-    elder_terms::show_sftp_window(state->sftp_window);
+    elder_terms::show_file_transfer_window(state->sftp_window);
     if (state->test_options.focus_transfer_on_sftp_open &&
         state->window != nullptr) {
       gtk_window_set_focus(
@@ -1257,7 +1258,7 @@ static void on_sftp_menu_item_activate(GtkMenuItem *,
     return;
   }
   if (state->sftp_window != nullptr) {
-    elder_terms::present_sftp_window(state->sftp_window);
+    elder_terms::present_file_transfer_window(state->sftp_window);
     return;
   }
   if (state->sftp_opening || !state->connection_active) {

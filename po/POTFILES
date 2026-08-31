@@ -7,7 +7,7 @@ elder-terms-vte/src/main.cpp
 elder-terms-vte/src/main-window.ui
 elder-terms-vte/src/main-window.cpp
 elder-terms-vte/src/sftp/sftp-main.cpp
-elder-terms-vte/src/sftp/sftp-window.cpp
+elder-terms-vte/src/file-transfer/file-transfer-window.cpp
 elder-terms-vte/src/terminal-session.cpp
 elder-terms-vte/src/terminal-text-send-runner.cpp
 elder-terms-vte/src/terminal-transfer-runner.cpp

@@ -12,7 +12,7 @@ namespace elder_terms {
  * @param pause_writes True to keep remote writes pending until cancellation.
  * @returns Initialized fixture client rooted at /remote.
  */
-std::shared_ptr<SftpClient>
+std::shared_ptr<RemoteFileClient>
 create_sftp_fixture_client(bool pause_writes);
 
 } // namespace elder_terms

@@ -1,4 +1,4 @@
-#include "sftp-window.h"
+#include "file-transfer-window.h"
 
 #include <algorithm>
 #include <cstdarg>
@@ -19,8 +19,8 @@
 #define GETTEXT_PACKAGE "elder-terms"
 #include <glib/gi18n-lib.h>
 
+#include "file-transfer-engine.h"
 #include "../widget-background.h"
-#include "sftp-transfer-engine.h"
 
 namespace elder_terms {
 
@@ -43,25 +43,25 @@ static constexpr char local_browser_attributes[] =
     G_FILE_ATTRIBUTE_TIME_ACCESS ","
     G_FILE_ATTRIBUTE_TIME_MODIFIED;
 static constexpr guint transfer_progress_pulse_period_ms = 100;
-static constexpr const char *sftp_exterior_component_style_class =
-    "sftp-exterior-components";
-static constexpr int sftp_content_padding = 12;
-static constexpr int sftp_pane_spacing = 12;
-static constexpr int sftp_control_spacing = 8;
-static constexpr int sftp_tree_expander_minimum_hit_width = 24;
+static constexpr const char *file_transfer_exterior_component_style_class =
+    "file-transfer-exterior-components";
+static constexpr int file_transfer_content_padding = 12;
+static constexpr int file_transfer_pane_spacing = 12;
+static constexpr int file_transfer_control_spacing = 8;
+static constexpr int file_transfer_tree_expander_minimum_hit_width = 24;
 
-enum SftpTreeColumn {
-  sftp_tree_name_column = 0,
-  sftp_tree_size_column = 1,
-  sftp_tree_modified_column = 2,
-  sftp_tree_path_column = 3,
-  sftp_tree_type_column = 4,
-  sftp_tree_loaded_column = 5,
-  sftp_tree_dummy_column = 6,
-  sftp_tree_column_count = 7,
+enum FileTransferTreeColumn {
+  file_transfer_tree_name_column = 0,
+  file_transfer_tree_size_column = 1,
+  file_transfer_tree_modified_column = 2,
+  file_transfer_tree_path_column = 3,
+  file_transfer_tree_type_column = 4,
+  file_transfer_tree_loaded_column = 5,
+  file_transfer_tree_dummy_column = 6,
+  file_transfer_tree_column_count = 7,
 };
 
-struct SftpGObjectDeleter {
+struct FileTransferGObjectDeleter {
   void operator()(void *object) const {
     if (object != nullptr) {
       g_object_unref(object);
@@ -69,22 +69,22 @@ struct SftpGObjectDeleter {
   }
 };
 
-struct SftpGFreeDeleter {
+struct FileTransferGFreeDeleter {
   void operator()(void *value) const {
     g_free(value);
   }
 };
 
 template <typename T>
-using SftpGObjectPtr =
-    std::unique_ptr<T, SftpGObjectDeleter>;
-using SftpGCharPtr = std::unique_ptr<char, SftpGFreeDeleter>;
+using FileTransferGObjectPtr =
+    std::unique_ptr<T, FileTransferGObjectDeleter>;
+using FileTransferGCharPtr = std::unique_ptr<char, FileTransferGFreeDeleter>;
 
-struct SftpWindow;
-static void clear_sftp_window_colors(SftpWindow *window);
+struct FileTransferWindow;
+static void clear_file_transfer_window_colors(FileTransferWindow *window);
 
-struct SftpPaneState {
-  SftpWindow *window = nullptr;
+struct FileTransferPaneState {
+  FileTransferWindow *window = nullptr;
   bool remote = false;
   GtkWidget *frame = nullptr;
   GtkWidget *path_entry = nullptr;
@@ -100,14 +100,14 @@ struct SftpPaneState {
   std::uint64_t generation = 0;
 };
 
-struct SftpChoiceDialogRequest {
+struct FileTransferChoiceDialogRequest {
   GtkWidget *dialog = nullptr;
   std::shared_ptr<cardio::promise_source<int>> source;
   cardio::cancellation_registration cancellation_registration;
   bool completed = false;
 };
 
-struct SftpWindow {
+struct FileTransferWindow {
   GtkWidget *window = nullptr;
   GtkWidget *header_bar = nullptr;
   GtkWidget *root_overlay = nullptr;
@@ -124,9 +124,9 @@ struct SftpWindow {
   GtkCssProvider *background_provider = nullptr;
   GtkCssProvider *component_background_provider = nullptr;
   GtkCssProvider *popup_component_background_provider = nullptr;
-  SftpPaneState local;
-  SftpPaneState remote;
-  std::shared_ptr<SftpClient> client;
+  FileTransferPaneState local;
+  FileTransferPaneState remote;
+  std::shared_ptr<RemoteFileClient> client;
   std::function<void()> closed;
   cardio::cancellation_source stop_source;
   std::optional<cardio::cancellation_source> transfer_cancel_source;
@@ -137,7 +137,7 @@ struct SftpWindow {
   bool transfer_active = false;
   bool destroyed = false;
 
-  ~SftpWindow() {
+  ~FileTransferWindow() {
     (void)stop_source.cancel();
     if (transfer_cancel_source.has_value()) {
       (void)transfer_cancel_source->cancel();
@@ -147,7 +147,7 @@ struct SftpWindow {
       transfer_pulse_source = 0;
     }
     if (window != nullptr && !destroyed) {
-      clear_sftp_window_colors(this);
+      clear_file_transfer_window_colors(this);
       gtk_widget_destroy(window);
     }
     g_clear_object(&exterior_background_provider);
@@ -168,34 +168,35 @@ struct SftpWindow {
 
 static std::string exception_text(std::exception_ptr error) {
   if (!error) {
-    return _("Unknown SFTP failure");
+    return _("Unknown file transfer failure");
   }
   try {
     std::rethrow_exception(error);
   } catch (const std::exception &exception) {
     return exception.what();
   } catch (...) {
-    return _("Unknown SFTP failure");
+    return _("Unknown file transfer failure");
   }
 }
 
-static std::string file_size_text(const SftpFileAttributes &attributes) {
-  if (attributes.type != SftpFileType::regular) {
+static std::string file_size_text(const RemoteFileAttributes &attributes) {
+  if (attributes.type != RemoteFileType::regular) {
     return {};
   }
-  SftpGCharPtr formatted(
+  FileTransferGCharPtr formatted(
       g_format_size(static_cast<guint64>(attributes.size)));
   return formatted == nullptr ? std::string()
                               : std::string(formatted.get());
 }
 
 static std::string modification_time_text(
-    const SftpFileAttributes &attributes) {
-  if (attributes.modification_time_unix_seconds <= 0) {
+    const RemoteFileAttributes &attributes) {
+  if (!attributes.modification_time_unix_seconds.has_value() ||
+      *attributes.modification_time_unix_seconds <= 0) {
     return {};
   }
   const std::time_t seconds = static_cast<std::time_t>(
-      attributes.modification_time_unix_seconds);
+      *attributes.modification_time_unix_seconds);
   std::tm local_time = {};
   if (localtime_r(&seconds, &local_time) == nullptr) {
     return {};
@@ -208,25 +209,25 @@ static std::string modification_time_text(
   return buffer;
 }
 
-static int type_sort_rank(SftpFileType type) {
-  if (type == SftpFileType::directory) {
+static int type_sort_rank(RemoteFileType type) {
+  if (type == RemoteFileType::directory) {
     return 0;
   }
-  if (type == SftpFileType::regular) {
+  if (type == RemoteFileType::regular) {
     return 1;
   }
-  if (type == SftpFileType::symbolic_link) {
+  if (type == RemoteFileType::symbolic_link) {
     return 2;
   }
   return 3;
 }
 
 static void sort_browser_entries(
-    std::vector<SftpFileAttributes> *entries) {
+    std::vector<RemoteFileAttributes> *entries) {
   std::sort(
       entries->begin(), entries->end(),
-      [](const SftpFileAttributes &left,
-         const SftpFileAttributes &right) {
+      [](const RemoteFileAttributes &left,
+         const RemoteFileAttributes &right) {
         const int left_rank = type_sort_rank(left.type);
         const int right_rank = type_sort_rank(right.type);
         if (left_rank != right_rank) {
@@ -241,35 +242,35 @@ static void append_dummy_row(GtkTreeStore *store,
   GtkTreeIter child;
   gtk_tree_store_append(store, &child, parent);
   gtk_tree_store_set(
-      store, &child, sftp_tree_name_column, _("Loading…"),
-      sftp_tree_size_column, "", sftp_tree_modified_column, "",
-      sftp_tree_path_column, "", sftp_tree_type_column,
-      static_cast<int>(SftpFileType::other),
-      sftp_tree_loaded_column, TRUE, sftp_tree_dummy_column, TRUE, -1);
+      store, &child, file_transfer_tree_name_column, _("Loading…"),
+      file_transfer_tree_size_column, "", file_transfer_tree_modified_column, "",
+      file_transfer_tree_path_column, "", file_transfer_tree_type_column,
+      static_cast<int>(RemoteFileType::other),
+      file_transfer_tree_loaded_column, TRUE, file_transfer_tree_dummy_column, TRUE, -1);
 }
 
 static void set_browser_row(
     GtkTreeStore *store, GtkTreeIter *iterator,
-    const SftpFileAttributes &attributes) {
+    const RemoteFileAttributes &attributes) {
   const std::string size = file_size_text(attributes);
   const std::string modified = modification_time_text(attributes);
   gtk_tree_store_set(
-      store, iterator, sftp_tree_name_column,
-      attributes.name.c_str(), sftp_tree_size_column, size.c_str(),
-      sftp_tree_modified_column, modified.c_str(),
-      sftp_tree_path_column, attributes.path.c_str(),
-      sftp_tree_type_column, static_cast<int>(attributes.type),
-      sftp_tree_loaded_column,
-      attributes.type != SftpFileType::directory,
-      sftp_tree_dummy_column, FALSE, -1);
-  if (attributes.type == SftpFileType::directory) {
+      store, iterator, file_transfer_tree_name_column,
+      attributes.name.c_str(), file_transfer_tree_size_column, size.c_str(),
+      file_transfer_tree_modified_column, modified.c_str(),
+      file_transfer_tree_path_column, attributes.path.c_str(),
+      file_transfer_tree_type_column, static_cast<int>(attributes.type),
+      file_transfer_tree_loaded_column,
+      attributes.type != RemoteFileType::directory,
+      file_transfer_tree_dummy_column, FALSE, -1);
+  if (attributes.type == RemoteFileType::directory) {
     append_dummy_row(store, iterator);
   }
 }
 
 static void append_browser_row(
     GtkTreeStore *store, GtkTreeIter *parent,
-    const SftpFileAttributes &attributes) {
+    const RemoteFileAttributes &attributes) {
   GtkTreeIter iterator;
   gtk_tree_store_append(store, &iterator, parent);
   set_browser_row(store, &iterator, attributes);
@@ -277,21 +278,21 @@ static void append_browser_row(
 
 static void append_browser_entries(
     GtkTreeStore *store, GtkTreeIter *parent,
-    std::vector<SftpFileAttributes> entries) {
+    std::vector<RemoteFileAttributes> entries) {
   sort_browser_entries(&entries);
-  for (const SftpFileAttributes &entry : entries) {
+  for (const RemoteFileAttributes &entry : entries) {
     append_browser_row(store, parent, entry);
   }
 }
 
 static void replace_dummy_with_browser_entries(
     GtkTreeStore *store, GtkTreeIter *parent,
-    std::vector<SftpFileAttributes> entries) {
+    std::vector<RemoteFileAttributes> entries) {
   sort_browser_entries(&entries);
   GtkTreeIter dummy;
   if (!gtk_tree_model_iter_children(
           GTK_TREE_MODEL(store), &dummy, parent)) {
-    for (const SftpFileAttributes &entry : entries) {
+    for (const RemoteFileAttributes &entry : entries) {
       append_browser_row(store, parent, entry);
     }
     return;
@@ -365,26 +366,26 @@ close_local_browser_enumerator_async(
       std::move(cancellation));
 }
 
-static SftpFileType local_browser_file_type(GFileInfo *info) {
+static RemoteFileType local_browser_file_type(GFileInfo *info) {
   if (g_file_info_get_is_symlink(info) != FALSE ||
       g_file_info_get_file_type(info) == G_FILE_TYPE_SYMBOLIC_LINK) {
-    return SftpFileType::symbolic_link;
+    return RemoteFileType::symbolic_link;
   }
   if (g_file_info_get_file_type(info) == G_FILE_TYPE_DIRECTORY) {
-    return SftpFileType::directory;
+    return RemoteFileType::directory;
   }
   if (g_file_info_get_file_type(info) == G_FILE_TYPE_REGULAR) {
-    return SftpFileType::regular;
+    return RemoteFileType::regular;
   }
-  return SftpFileType::other;
+  return RemoteFileType::other;
 }
 
-static SftpFileAttributes local_browser_attributes_for(
+static RemoteFileAttributes local_browser_attributes_for(
     GFile *child, GFileInfo *info) {
-  SftpGCharPtr path(g_file_get_path(child));
+  FileTransferGCharPtr path(g_file_get_path(child));
   if (path == nullptr) {
     throw std::runtime_error(
-        _("SFTP local pane only supports native filesystem paths"));
+        _("The local pane only supports native filesystem paths"));
   }
   const char *name = g_file_info_get_name(info);
   return {
@@ -401,32 +402,32 @@ static SftpFileAttributes local_browser_attributes_for(
           g_file_info_has_attribute(info, G_FILE_ATTRIBUTE_UNIX_MODE)
               ? g_file_info_get_attribute_uint32(
                     info, G_FILE_ATTRIBUTE_UNIX_MODE)
-              : 0,
+              : std::optional<std::uint32_t>(),
       .access_time_unix_seconds =
           g_file_info_has_attribute(info, G_FILE_ATTRIBUTE_TIME_ACCESS)
               ? static_cast<std::int64_t>(
                     g_file_info_get_attribute_uint64(
                         info, G_FILE_ATTRIBUTE_TIME_ACCESS))
-              : 0,
+              : std::optional<std::int64_t>(),
       .modification_time_unix_seconds =
           g_file_info_has_attribute(
               info, G_FILE_ATTRIBUTE_TIME_MODIFIED)
               ? static_cast<std::int64_t>(
                     g_file_info_get_attribute_uint64(
                         info, G_FILE_ATTRIBUTE_TIME_MODIFIED))
-              : 0,
+              : std::optional<std::int64_t>(),
   };
 }
 
-static cardio::promise<std::vector<SftpFileAttributes>>
+static cardio::promise<std::vector<RemoteFileAttributes>>
 list_local_browser_directory_async(
     std::string path, cardio::cancellation cancellation) {
-  SftpGObjectPtr<GFile> directory(
+  FileTransferGObjectPtr<GFile> directory(
       g_file_new_for_path(path.c_str()));
-  SftpGObjectPtr<GFileEnumerator> enumerator(
+  FileTransferGObjectPtr<GFileEnumerator> enumerator(
       co_await enumerate_local_browser_async(
           directory.get(), cancellation));
-  std::vector<SftpFileAttributes> entries;
+  std::vector<RemoteFileAttributes> entries;
   for (;;) {
     cancellation.throw_if_cancellation_requested();
     GList *batch = co_await next_local_browser_files_async(
@@ -440,7 +441,7 @@ list_local_browser_directory_async(
       if (name == nullptr || name[0] == '\0') {
         continue;
       }
-      SftpGObjectPtr<GFile> child(
+      FileTransferGObjectPtr<GFile> child(
           g_file_get_child(directory.get(), name));
       entries.push_back(
           local_browser_attributes_for(child.get(), info));
@@ -454,7 +455,7 @@ list_local_browser_directory_async(
 
 static std::string canonical_local_directory(
     const std::string &path) {
-  SftpGCharPtr canonical(
+  FileTransferGCharPtr canonical(
       g_canonicalize_filename(path.c_str(), nullptr));
   if (canonical == nullptr || canonical.get()[0] == '\0') {
     throw std::runtime_error(_("Local directory path is empty"));
@@ -488,7 +489,7 @@ static std::string local_parent_directory(
   return parent.empty() ? path : parent.string();
 }
 
-static void set_sftp_status(SftpWindow *window,
+static void set_file_transfer_status(FileTransferWindow *window,
                             const std::string &text) {
   if (window == nullptr || window->destroyed ||
       window->status_label == nullptr) {
@@ -497,7 +498,7 @@ static void set_sftp_status(SftpWindow *window,
   gtk_label_set_text(GTK_LABEL(window->status_label), text.c_str());
 }
 
-static void update_sftp_sensitivity(SftpWindow *window) {
+static void update_file_transfer_sensitivity(FileTransferWindow *window) {
   if (window == nullptr || window->destroyed) {
     return;
   }
@@ -522,8 +523,8 @@ static void set_widget_visible(GtkWidget *widget, bool visible) {
   }
 }
 
-static gboolean pulse_sftp_transfer_progress(gpointer data) {
-  auto *window = static_cast<SftpWindow *>(data);
+static gboolean pulse_file_transfer_progress(gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
   if (window == nullptr || window->destroyed ||
       !window->transfer_active ||
       window->transfer_progress == nullptr) {
@@ -537,7 +538,7 @@ static gboolean pulse_sftp_transfer_progress(gpointer data) {
   return G_SOURCE_CONTINUE;
 }
 
-static void stop_sftp_transfer_pulse(SftpWindow *window) {
+static void stop_file_transfer_pulse(FileTransferWindow *window) {
   if (window->transfer_pulse_source == 0) {
     return;
   }
@@ -545,7 +546,7 @@ static void stop_sftp_transfer_pulse(SftpWindow *window) {
   window->transfer_pulse_source = 0;
 }
 
-static void set_sftp_transfer_active(SftpWindow *window,
+static void set_file_transfer_active(FileTransferWindow *window,
                                      bool active) {
   window->transfer_active = active;
   set_widget_visible(window->dim_overlay, active);
@@ -560,16 +561,16 @@ static void set_sftp_transfer_active(SftpWindow *window,
     if (window->transfer_pulse_source == 0) {
       window->transfer_pulse_source = g_timeout_add(
           transfer_progress_pulse_period_ms,
-          pulse_sftp_transfer_progress, window);
+          pulse_file_transfer_progress, window);
     }
   } else {
-    stop_sftp_transfer_pulse(window);
+    stop_file_transfer_pulse(window);
   }
-  update_sftp_sensitivity(window);
+  update_file_transfer_sensitivity(window);
 }
 
-static void update_sftp_transfer_progress(
-    SftpWindow *window, const SftpTransferProgress &progress) {
+static void update_file_transfer_progress(
+    FileTransferWindow *window, const FileTransferProgress &progress) {
   if (window == nullptr || window->destroyed ||
       !window->transfer_active) {
     return;
@@ -598,7 +599,7 @@ static void update_sftp_transfer_progress(
                      label.c_str());
 
   if (progress.total_bytes > 0) {
-    stop_sftp_transfer_pulse(window);
+    stop_file_transfer_pulse(window);
     const double fraction = std::min(
         1.0,
         static_cast<double>(progress.transferred_bytes) /
@@ -606,7 +607,7 @@ static void update_sftp_transfer_progress(
     gtk_progress_bar_set_fraction(
         GTK_PROGRESS_BAR(window->transfer_progress), fraction);
   } else if (progress.total_items > 0) {
-    stop_sftp_transfer_pulse(window);
+    stop_file_transfer_pulse(window);
     const double fraction = std::min(
         1.0,
         static_cast<double>(progress.completed_items) /
@@ -617,7 +618,7 @@ static void update_sftp_transfer_progress(
 }
 
 static void complete_choice_dialog(
-    SftpChoiceDialogRequest *request, int response) {
+    FileTransferChoiceDialogRequest *request, int response) {
   if (request == nullptr || request->completed) {
     return;
   }
@@ -634,13 +635,13 @@ static void complete_choice_dialog(
 static void on_choice_dialog_response(
     GtkDialog *, gint response, gpointer data) {
   complete_choice_dialog(
-      static_cast<SftpChoiceDialogRequest *>(data), response);
+      static_cast<FileTransferChoiceDialogRequest *>(data), response);
 }
 
 static gboolean cancel_choice_dialog_idle(gpointer data) {
   auto *weak =
-      static_cast<std::weak_ptr<SftpChoiceDialogRequest> *>(data);
-  const std::shared_ptr<SftpChoiceDialogRequest> request =
+      static_cast<std::weak_ptr<FileTransferChoiceDialogRequest> *>(data);
+  const std::shared_ptr<FileTransferChoiceDialogRequest> request =
       weak->lock();
   delete weak;
   if (request != nullptr) {
@@ -649,14 +650,14 @@ static gboolean cancel_choice_dialog_idle(gpointer data) {
   return G_SOURCE_REMOVE;
 }
 
-static cardio::promise<int> prompt_sftp_choice_async(
-    SftpWindow *window, GtkMessageType type,
+static cardio::promise<int> prompt_file_transfer_choice_async(
+    FileTransferWindow *window, GtkMessageType type,
     const std::string &title, const std::string &detail,
     std::vector<std::pair<std::string, int>> buttons,
     const char *accessible_id,
     cardio::cancellation cancellation) {
   cancellation.throw_if_cancellation_requested();
-  auto request = std::make_shared<SftpChoiceDialogRequest>();
+  auto request = std::make_shared<FileTransferChoiceDialogRequest>();
   request->source =
       std::make_shared<cardio::promise_source<int>>();
   request->dialog = gtk_message_dialog_new(
@@ -677,9 +678,9 @@ static cardio::promise<int> prompt_sftp_choice_async(
       G_CALLBACK(on_choice_dialog_response), request.get());
   request->cancellation_registration =
       cancellation.on_cancellation_requested(
-          [weak = std::weak_ptr<SftpChoiceDialogRequest>(request)]() {
+          [weak = std::weak_ptr<FileTransferChoiceDialogRequest>(request)]() {
             g_idle_add(cancel_choice_dialog_idle,
-                       new std::weak_ptr<SftpChoiceDialogRequest>(
+                       new std::weak_ptr<FileTransferChoiceDialogRequest>(
                            weak));
           });
   gtk_widget_show_all(request->dialog);
@@ -688,59 +689,59 @@ static cardio::promise<int> prompt_sftp_choice_async(
   co_return response;
 }
 
-static cardio::promise<SftpConflictAction>
-prompt_sftp_conflict_async(
-    SftpWindow *window, const SftpTransferConflict &conflict,
+static cardio::promise<FileTransferConflictAction>
+prompt_file_transfer_conflict_async(
+    FileTransferWindow *window, const FileTransferConflict &conflict,
     cardio::cancellation cancellation) {
   std::vector<std::pair<std::string, int>> buttons;
   buttons.emplace_back(_("Cancel"), GTK_RESPONSE_CANCEL);
   buttons.emplace_back(_("Skip"), GTK_RESPONSE_NO);
   buttons.emplace_back(_("Overwrite"), GTK_RESPONSE_YES);
-  auto response_promise = prompt_sftp_choice_async(
+  auto response_promise = prompt_file_transfer_choice_async(
       window, GTK_MESSAGE_QUESTION, _("Destination already exists"),
       format_translated_string(
           _("%s\nThe selected decision applies to all remaining conflicts."),
           conflict.destination_path.c_str()),
-      std::move(buttons), "sftp_conflict_dialog", cancellation);
+      std::move(buttons), "file_transfer_conflict_dialog", cancellation);
   const int response = co_await response_promise;
   if (response == GTK_RESPONSE_YES) {
-    co_return SftpConflictAction::overwrite;
+    co_return FileTransferConflictAction::overwrite;
   }
   if (response == GTK_RESPONSE_NO) {
-    co_return SftpConflictAction::skip;
+    co_return FileTransferConflictAction::skip;
   }
-  co_return SftpConflictAction::cancel;
+  co_return FileTransferConflictAction::cancel;
 }
 
-static cardio::promise<SftpFailureAction>
-prompt_sftp_failure_async(
-    SftpWindow *window, const SftpTransferFailure &failure,
+static cardio::promise<FileTransferFailureAction>
+prompt_file_transfer_failure_async(
+    FileTransferWindow *window, const FileTransferFailure &failure,
     cardio::cancellation cancellation) {
   std::vector<std::pair<std::string, int>> buttons;
   buttons.emplace_back(_("Abort"), GTK_RESPONSE_CANCEL);
   buttons.emplace_back(_("Skip"), GTK_RESPONSE_NO);
   buttons.emplace_back(_("Retry"), GTK_RESPONSE_YES);
-  auto response_promise = prompt_sftp_choice_async(
-      window, GTK_MESSAGE_ERROR, _("SFTP transfer failed"),
+  auto response_promise = prompt_file_transfer_choice_async(
+      window, GTK_MESSAGE_ERROR, _("File transfer failed"),
       format_translated_string(_("%s\n\n%s\n→ %s"), failure.message.c_str(),
                                failure.source_path.c_str(),
                                failure.destination_path.c_str()),
-      std::move(buttons), "sftp_failure_dialog", cancellation);
+      std::move(buttons), "file_transfer_failure_dialog", cancellation);
   const int response = co_await response_promise;
   if (response == GTK_RESPONSE_YES) {
-    co_return SftpFailureAction::retry;
+    co_return FileTransferFailureAction::retry;
   }
   if (response == GTK_RESPONSE_NO) {
-    co_return SftpFailureAction::skip;
+    co_return FileTransferFailureAction::skip;
   }
-  co_return SftpFailureAction::abort;
+  co_return FileTransferFailureAction::abort;
 }
 
 static void on_notice_response(GtkDialog *dialog, gint, gpointer) {
   gtk_widget_destroy(GTK_WIDGET(dialog));
 }
 
-static void show_sftp_error(SftpWindow *window,
+static void show_file_transfer_error(FileTransferWindow *window,
                             const std::string &message) {
   if (window == nullptr || window->destroyed) {
     return;
@@ -749,11 +750,11 @@ static void show_sftp_error(SftpWindow *window,
       GTK_WINDOW(window->window),
       static_cast<GtkDialogFlags>(GTK_DIALOG_DESTROY_WITH_PARENT),
       GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s",
-      _("SFTP operation failed"));
+      _("File transfer operation failed"));
   gtk_message_dialog_format_secondary_text(
       GTK_MESSAGE_DIALOG(dialog), "%s", message.c_str());
   gestament_gtk_assign_accessible_id(
-      dialog, "sftp_operation_error_dialog");
+      dialog, "file_transfer_operation_error_dialog");
   g_signal_connect(dialog, "response",
                    G_CALLBACK(on_notice_response), nullptr);
   gtk_widget_show_all(dialog);
@@ -768,49 +769,51 @@ static void clear_tree_children(GtkTreeStore *store,
   }
 }
 
-static cardio::promise<std::vector<SftpFileAttributes>>
-list_sftp_pane_directory_async(
-    SftpPaneState *pane, std::string path,
+static cardio::promise<RemoteDirectorySnapshot>
+load_file_transfer_pane_directory_async(
+    FileTransferPaneState *pane, std::string path,
     cardio::cancellation cancellation) {
   if (pane->remote) {
-    co_return co_await pane->window->client->list_directory_async(
+    co_return co_await pane->window->client->load_directory_async(
         std::move(path), std::move(cancellation));
   }
-  co_return co_await list_local_browser_directory_async(
-      std::move(path), std::move(cancellation));
+  std::string canonical_path = canonical_local_directory(path);
+  std::vector<RemoteFileAttributes> entries =
+      co_await list_local_browser_directory_async(
+          canonical_path, std::move(cancellation));
+  co_return RemoteDirectorySnapshot{
+      .canonical_path = std::move(canonical_path),
+      .entries = std::move(entries),
+  };
 }
 
-static cardio::promise<void> load_sftp_pane_root_async(
-    SftpPaneState *pane, std::string requested_path) {
-  SftpWindow *window = pane->window;
+static cardio::promise<void> load_file_transfer_pane_root_async(
+    FileTransferPaneState *pane, std::string requested_path) {
+  FileTransferWindow *window = pane->window;
   const std::uint64_t generation = ++pane->generation;
   const cardio::cancellation cancellation =
       window->stop_source.get_cancellation();
   try {
-    std::string path =
-        pane->remote
-            ? co_await window->client->canonicalize_path_async(
-                  std::move(requested_path), cancellation)
-            : canonical_local_directory(requested_path);
-    std::vector<SftpFileAttributes> entries =
-        co_await list_sftp_pane_directory_async(
-            pane, path, cancellation);
+    RemoteDirectorySnapshot snapshot =
+        co_await load_file_transfer_pane_directory_async(
+            pane, std::move(requested_path), cancellation);
     if (window->destroyed || generation != pane->generation) {
       pane->busy = false;
       co_return;
     }
     gtk_tree_store_clear(pane->store);
-    append_browser_entries(pane->store, nullptr, std::move(entries));
-    pane->current_directory = std::move(path);
+    append_browser_entries(
+        pane->store, nullptr, std::move(snapshot.entries));
+    pane->current_directory = std::move(snapshot.canonical_path);
     gtk_entry_set_text(GTK_ENTRY(pane->path_entry),
                        pane->current_directory.c_str());
   } catch (const cardio::canceled_exception &) {
   } catch (...) {
     if (!window->destroyed) {
-      set_sftp_status(window, pane->remote
+      set_file_transfer_status(window, pane->remote
                                   ? _("Failed to load remote directory")
                                   : _("Failed to load local directory"));
-      show_sftp_error(window, exception_text(std::current_exception()));
+      show_file_transfer_error(window, exception_text(std::current_exception()));
       gtk_entry_set_text(GTK_ENTRY(pane->path_entry),
                          pane->current_directory.c_str());
     }
@@ -818,8 +821,8 @@ static cardio::promise<void> load_sftp_pane_root_async(
   pane->busy = false;
 }
 
-static void start_sftp_pane_navigation(
-    SftpPaneState *pane, std::string path) {
+static void start_file_transfer_pane_navigation(
+    FileTransferPaneState *pane, std::string path) {
   if (pane == nullptr || pane->window == nullptr ||
       pane->window->destroyed || pane->busy ||
       (pane->remote &&
@@ -829,18 +832,18 @@ static void start_sftp_pane_navigation(
   pane->task.reset();
   pane->busy = true;
   pane->task.emplace(
-      load_sftp_pane_root_async(pane, std::move(path)));
+      load_file_transfer_pane_root_async(pane, std::move(path)));
 }
 
-static cardio::promise<void> expand_sftp_directory_async(
-    SftpPaneState *pane, GtkTreeRowReference *reference,
+static cardio::promise<void> expand_file_transfer_directory_async(
+    FileTransferPaneState *pane, GtkTreeRowReference *reference,
     std::string path, std::uint64_t generation) {
-  SftpWindow *window = pane->window;
+  FileTransferWindow *window = pane->window;
   const cardio::cancellation cancellation =
       window->stop_source.get_cancellation();
   try {
-    std::vector<SftpFileAttributes> entries =
-        co_await list_sftp_pane_directory_async(
+    RemoteDirectorySnapshot snapshot =
+        co_await load_file_transfer_pane_directory_async(
             pane, std::move(path), cancellation);
     if (window->destroyed || generation != pane->generation ||
         !gtk_tree_row_reference_valid(reference)) {
@@ -855,7 +858,7 @@ static cardio::promise<void> expand_sftp_directory_async(
         gtk_tree_model_get_iter(
             GTK_TREE_MODEL(pane->store), &iterator, tree_path)) {
       replace_dummy_with_browser_entries(
-          pane->store, &iterator, std::move(entries));
+          pane->store, &iterator, std::move(snapshot.entries));
     }
     if (tree_path != nullptr) {
       gtk_tree_path_free(tree_path);
@@ -871,7 +874,7 @@ static cardio::promise<void> expand_sftp_directory_async(
           gtk_tree_model_get_iter(
               GTK_TREE_MODEL(pane->store), &iterator, tree_path)) {
         gtk_tree_store_set(
-            pane->store, &iterator, sftp_tree_loaded_column,
+            pane->store, &iterator, file_transfer_tree_loaded_column,
             FALSE, -1);
         clear_tree_children(pane->store, &iterator);
         append_dummy_row(pane->store, &iterator);
@@ -881,18 +884,18 @@ static cardio::promise<void> expand_sftp_directory_async(
       if (tree_path != nullptr) {
         gtk_tree_path_free(tree_path);
       }
-      set_sftp_status(window, _("Failed to expand directory"));
-      show_sftp_error(window, exception_text(std::current_exception()));
+      set_file_transfer_status(window, _("Failed to expand directory"));
+      show_file_transfer_error(window, exception_text(std::current_exception()));
     }
   }
   gtk_tree_row_reference_free(reference);
   pane->busy = false;
 }
 
-static void on_sftp_row_expanded(
+static void on_file_transfer_row_expanded(
     GtkTreeView *, GtkTreeIter *iterator, GtkTreePath *tree_path,
     gpointer data) {
-  auto *pane = static_cast<SftpPaneState *>(data);
+  auto *pane = static_cast<FileTransferPaneState *>(data);
   if (pane == nullptr || pane->busy ||
       pane->window->destroyed ||
       (pane->remote &&
@@ -902,62 +905,62 @@ static void on_sftp_row_expanded(
   gchar *path = nullptr;
   gboolean loaded = FALSE;
   gboolean dummy = FALSE;
-  gint type = static_cast<gint>(SftpFileType::other);
+  gint type = static_cast<gint>(RemoteFileType::other);
   gtk_tree_model_get(
       GTK_TREE_MODEL(pane->store), iterator,
-      sftp_tree_path_column, &path, sftp_tree_type_column, &type,
-      sftp_tree_loaded_column, &loaded, sftp_tree_dummy_column,
+      file_transfer_tree_path_column, &path, file_transfer_tree_type_column, &type,
+      file_transfer_tree_loaded_column, &loaded, file_transfer_tree_dummy_column,
       &dummy, -1);
   const std::string directory =
       path == nullptr ? std::string() : std::string(path);
   g_free(path);
   if (loaded != FALSE || dummy != FALSE ||
-      type != static_cast<gint>(SftpFileType::directory) ||
+      type != static_cast<gint>(RemoteFileType::directory) ||
       directory.empty()) {
     return;
   }
 
   gtk_tree_store_set(
-      pane->store, iterator, sftp_tree_loaded_column, TRUE, -1);
+      pane->store, iterator, file_transfer_tree_loaded_column, TRUE, -1);
   GtkTreeRowReference *reference =
       gtk_tree_row_reference_new(
           GTK_TREE_MODEL(pane->store), tree_path);
   if (reference == nullptr) {
     gtk_tree_store_set(
-        pane->store, iterator, sftp_tree_loaded_column, FALSE, -1);
+        pane->store, iterator, file_transfer_tree_loaded_column, FALSE, -1);
     return;
   }
   pane->task.reset();
   pane->busy = true;
-  pane->task.emplace(expand_sftp_directory_async(
+  pane->task.emplace(expand_file_transfer_directory_async(
       pane, reference, directory, pane->generation));
 }
 
-static void on_sftp_path_activate(GtkEntry *entry, gpointer data) {
-  auto *pane = static_cast<SftpPaneState *>(data);
+static void on_file_transfer_path_activate(GtkEntry *entry, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
   const char *text = gtk_entry_get_text(entry);
-  start_sftp_pane_navigation(
+  start_file_transfer_pane_navigation(
       pane, text == nullptr ? std::string() : std::string(text));
 }
 
-static void on_sftp_up_clicked(GtkButton *, gpointer data) {
-  auto *pane = static_cast<SftpPaneState *>(data);
+static void on_file_transfer_up_clicked(GtkButton *, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
   const std::string parent =
       pane->remote
           ? remote_parent_directory(pane->current_directory)
           : local_parent_directory(pane->current_directory);
-  start_sftp_pane_navigation(pane, parent);
+  start_file_transfer_pane_navigation(pane, parent);
 }
 
-static void on_sftp_refresh_clicked(GtkButton *, gpointer data) {
-  auto *pane = static_cast<SftpPaneState *>(data);
-  start_sftp_pane_navigation(pane, pane->current_directory);
+static void on_file_transfer_refresh_clicked(GtkButton *, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  start_file_transfer_pane_navigation(pane, pane->current_directory);
 }
 
-static void on_sftp_row_activated(
+static void on_file_transfer_row_activated(
     GtkTreeView *, GtkTreePath *path, GtkTreeViewColumn *,
     gpointer data) {
-  auto *pane = static_cast<SftpPaneState *>(data);
+  auto *pane = static_cast<FileTransferPaneState *>(data);
   GtkTreeIter iterator;
   if (!gtk_tree_model_get_iter(
           GTK_TREE_MODEL(pane->store), &iterator, path)) {
@@ -965,24 +968,24 @@ static void on_sftp_row_activated(
   }
   gchar *item_path = nullptr;
   gboolean dummy = FALSE;
-  gint type = static_cast<gint>(SftpFileType::other);
+  gint type = static_cast<gint>(RemoteFileType::other);
   gtk_tree_model_get(
       GTK_TREE_MODEL(pane->store), &iterator,
-      sftp_tree_path_column, &item_path,
-      sftp_tree_type_column, &type, sftp_tree_dummy_column,
+      file_transfer_tree_path_column, &item_path,
+      file_transfer_tree_type_column, &type, file_transfer_tree_dummy_column,
       &dummy, -1);
   const std::string directory =
       item_path == nullptr ? std::string() : std::string(item_path);
   g_free(item_path);
   if (dummy == FALSE &&
-      type == static_cast<gint>(SftpFileType::directory) &&
+      type == static_cast<gint>(RemoteFileType::directory) &&
       !directory.empty()) {
-    start_sftp_pane_navigation(pane, directory);
+    start_file_transfer_pane_navigation(pane, directory);
   }
 }
 
 static std::vector<std::string>
-selected_sftp_paths(SftpPaneState *pane) {
+selected_file_transfer_paths(FileTransferPaneState *pane) {
   GtkTreeSelection *selection = gtk_tree_view_get_selection(
       GTK_TREE_VIEW(pane->tree));
   GtkTreeModel *model = nullptr;
@@ -998,8 +1001,8 @@ selected_sftp_paths(SftpPaneState *pane) {
     gchar *path = nullptr;
     gboolean dummy = FALSE;
     gtk_tree_model_get(
-        model, &iterator, sftp_tree_path_column, &path,
-        sftp_tree_dummy_column, &dummy, -1);
+        model, &iterator, file_transfer_tree_path_column, &path,
+        file_transfer_tree_dummy_column, &dummy, -1);
     if (dummy == FALSE && path != nullptr && path[0] != '\0') {
       paths.emplace_back(path);
     }
@@ -1011,7 +1014,7 @@ selected_sftp_paths(SftpPaneState *pane) {
   return paths;
 }
 
-static bool is_sftp_tree_expander_extension(
+static bool is_file_transfer_tree_expander_extension(
     GtkTreeView *tree, GtkTreePath *path,
     GtkTreeViewColumn *column, int x) {
   if (!gtk_tree_view_get_show_expanders(tree) ||
@@ -1048,7 +1051,7 @@ static bool is_sftp_tree_expander_extension(
   const int target_width = std::min(
       background_area.width,
       std::max(expander_size,
-               sftp_tree_expander_minimum_hit_width));
+               file_transfer_tree_expander_minimum_hit_width));
   if (target_width <= expander_size) {
     return false;
   }
@@ -1083,7 +1086,7 @@ static bool is_sftp_tree_expander_extension(
   return inside_target && !inside_native_expander;
 }
 
-static gboolean toggle_sftp_tree_expander_extension(
+static gboolean toggle_file_transfer_tree_expander_extension(
     GtkWidget *widget, GdkEventButton *event) {
   auto *tree = GTK_TREE_VIEW(widget);
   if (event->button != GDK_BUTTON_PRIMARY ||
@@ -1100,7 +1103,7 @@ static gboolean toggle_sftp_tree_expander_extension(
     return FALSE;
   }
   const bool inside_extension =
-      is_sftp_tree_expander_extension(
+      is_file_transfer_tree_expander_extension(
           tree, path, column, static_cast<int>(event->x));
   if (inside_extension) {
     if (gtk_tree_view_row_expanded(tree, path)) {
@@ -1114,13 +1117,13 @@ static gboolean toggle_sftp_tree_expander_extension(
   return inside_extension ? TRUE : FALSE;
 }
 
-static gboolean on_sftp_tree_button_press(
+static gboolean on_file_transfer_tree_button_press(
     GtkWidget *widget, GdkEventButton *event, gpointer data) {
-  auto *pane = static_cast<SftpPaneState *>(data);
+  auto *pane = static_cast<FileTransferPaneState *>(data);
   if (event->type != GDK_BUTTON_PRESS || pane == nullptr) {
     return FALSE;
   }
-  if (toggle_sftp_tree_expander_extension(widget, event)) {
+  if (toggle_file_transfer_tree_expander_extension(widget, event)) {
     return TRUE;
   }
   if (event->button != GDK_BUTTON_SECONDARY ||
@@ -1144,7 +1147,7 @@ static gboolean on_sftp_tree_button_press(
   }
   gtk_tree_path_free(path);
   const std::vector<std::string> paths =
-      selected_sftp_paths(pane);
+      selected_file_transfer_paths(pane);
   if (paths.empty()) {
     return FALSE;
   }
@@ -1153,17 +1156,17 @@ static gboolean on_sftp_tree_button_press(
   return TRUE;
 }
 
-static void refresh_sftp_panes(SftpWindow *window) {
-  start_sftp_pane_navigation(
+static void refresh_file_transfer_panes(FileTransferWindow *window) {
+  start_file_transfer_pane_navigation(
       &window->local, window->local.current_directory);
   if (window->connection_available) {
-    start_sftp_pane_navigation(
+    start_file_transfer_pane_navigation(
         &window->remote, window->remote.current_directory);
   }
 }
 
-static cardio::promise<void> run_sftp_window_transfer_async(
-    SftpWindow *window, SftpTransferDirection direction,
+static cardio::promise<void> run_file_transfer_window_transfer_async(
+    FileTransferWindow *window, FileTransferDirection direction,
     std::vector<std::string> sources,
     std::string destination) {
   const std::size_t selected_count = sources.size();
@@ -1171,7 +1174,7 @@ static cardio::promise<void> run_sftp_window_transfer_async(
       window->transfer_cancel_source->get_cancellation();
   bool succeeded = false;
   try {
-    co_await run_sftp_transfer_async(
+    co_await run_file_transfer_async(
         window->client,
         {
             .direction = direction,
@@ -1181,24 +1184,24 @@ static cardio::promise<void> run_sftp_window_transfer_async(
                 {
                     .conflict =
                         [window](
-                            const SftpTransferConflict &conflict,
+                            const FileTransferConflict &conflict,
                             cardio::cancellation callback_cancellation) {
-                          return prompt_sftp_conflict_async(
+                          return prompt_file_transfer_conflict_async(
                               window, conflict,
                               std::move(callback_cancellation));
                         },
                     .failure =
                         [window](
-                            const SftpTransferFailure &failure,
+                            const FileTransferFailure &failure,
                             cardio::cancellation callback_cancellation) {
-                          return prompt_sftp_failure_async(
+                          return prompt_file_transfer_failure_async(
                               window, failure,
                               std::move(callback_cancellation));
                         },
                     .progress =
                         [window](
-                            const SftpTransferProgress &progress) {
-                          update_sftp_transfer_progress(window,
+                            const FileTransferProgress &progress) {
+                          update_file_transfer_progress(window,
                                                         progress);
                         },
                 },
@@ -1207,7 +1210,7 @@ static cardio::promise<void> run_sftp_window_transfer_async(
     succeeded = true;
   } catch (const cardio::canceled_exception &) {
     if (!window->destroyed) {
-      set_sftp_status(window, _("Transfer cancelled"));
+      set_file_transfer_status(window, _("Transfer cancelled"));
     }
   } catch (...) {
     if (!window->destroyed) {
@@ -1215,10 +1218,10 @@ static cardio::promise<void> run_sftp_window_transfer_async(
           exception_text(std::current_exception());
       if (message.find("canceled") != std::string::npos ||
           message.find("cancelled") != std::string::npos) {
-        set_sftp_status(window, _("Transfer cancelled"));
+        set_file_transfer_status(window, _("Transfer cancelled"));
       } else {
-        set_sftp_status(window, _("Transfer failed"));
-        show_sftp_error(window, message);
+        set_file_transfer_status(window, _("Transfer failed"));
+        show_file_transfer_error(window, message);
       }
     }
   }
@@ -1227,37 +1230,37 @@ static cardio::promise<void> run_sftp_window_transfer_async(
     co_return;
   }
   window->transfer_cancel_source.reset();
-  set_sftp_transfer_active(window, false);
+  set_file_transfer_active(window, false);
   if (succeeded) {
     const char *format =
-        direction == SftpTransferDirection::send
+        direction == FileTransferDirection::send
             ? g_dngettext(GETTEXT_PACKAGE, "Sent %zu item", "Sent %zu items",
                           selected_count)
             : g_dngettext(GETTEXT_PACKAGE, "Received %zu item",
                           "Received %zu items", selected_count);
-    set_sftp_status(window,
+    set_file_transfer_status(window,
                     format_translated_string(format, selected_count));
   }
-  refresh_sftp_panes(window);
+  refresh_file_transfer_panes(window);
 }
 
-static void start_sftp_transfer(
-    SftpWindow *window, SftpTransferDirection direction) {
+static void start_file_transfer_transfer(
+    FileTransferWindow *window, FileTransferDirection direction) {
   if (window == nullptr || window->destroyed ||
       window->transfer_active || !window->connection_available) {
     return;
   }
-  SftpPaneState *source =
-      direction == SftpTransferDirection::send
+  FileTransferPaneState *source =
+      direction == FileTransferDirection::send
           ? &window->local
           : &window->remote;
   const std::vector<std::string> sources =
-      selected_sftp_paths(source);
+      selected_file_transfer_paths(source);
   if (sources.empty()) {
     return;
   }
   const std::string destination =
-      direction == SftpTransferDirection::send
+      direction == FileTransferDirection::send
           ? window->remote.current_directory
           : window->local.current_directory;
   if (destination.empty()) {
@@ -1266,24 +1269,24 @@ static void start_sftp_transfer(
 
   window->transfer_task.reset();
   window->transfer_cancel_source.emplace();
-  set_sftp_transfer_active(window, true);
+  set_file_transfer_active(window, true);
   window->transfer_task.emplace(
-      run_sftp_window_transfer_async(
+      run_file_transfer_window_transfer_async(
           window, direction, sources, destination));
 }
 
-static void on_sftp_transfer_item_activate(
+static void on_file_transfer_item_activate(
     GtkMenuItem *, gpointer data) {
-  auto *pane = static_cast<SftpPaneState *>(data);
-  start_sftp_transfer(
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  start_file_transfer_transfer(
       pane->window,
-      pane->remote ? SftpTransferDirection::receive
-                   : SftpTransferDirection::send);
+      pane->remote ? FileTransferDirection::receive
+                   : FileTransferDirection::send);
 }
 
-static void on_sftp_transfer_cancel_clicked(
+static void on_file_transfer_cancel_clicked(
     GtkButton *, gpointer data) {
-  auto *window = static_cast<SftpWindow *>(data);
+  auto *window = static_cast<FileTransferWindow *>(data);
   if (window == nullptr ||
       !window->transfer_cancel_source.has_value()) {
     return;
@@ -1303,12 +1306,12 @@ static gboolean run_closed_callback_idle(gpointer data) {
   return G_SOURCE_REMOVE;
 }
 
-static void on_sftp_window_destroy(GtkWidget *, gpointer data) {
-  auto *window = static_cast<SftpWindow *>(data);
+static void on_file_transfer_window_destroy(GtkWidget *, gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
   if (window == nullptr || window->destroyed) {
     return;
   }
-  clear_sftp_window_colors(window);
+  clear_file_transfer_window_colors(window);
   window->destroyed = true;
   window->window = nullptr;
   window->header_bar = nullptr;
@@ -1319,7 +1322,7 @@ static void on_sftp_window_destroy(GtkWidget *, gpointer data) {
   if (window->transfer_cancel_source.has_value()) {
     (void)window->transfer_cancel_source->cancel();
   }
-  stop_sftp_transfer_pulse(window);
+  stop_file_transfer_pulse(window);
   if (window->closed) {
     g_idle_add(run_closed_callback_idle,
                new std::function<void()>(window->closed));
@@ -1333,34 +1336,34 @@ static GtkWidget *create_toolbar_button(
   return button;
 }
 
-struct SftpTreeCellRendererText {
+struct FileTransferTreeCellRendererText {
   GtkCellRendererText parent_instance;
 };
 
-struct SftpTreeCellRendererTextClass {
+struct FileTransferTreeCellRendererTextClass {
   GtkCellRendererTextClass parent_class;
 };
 
-static void render_sftp_tree_cell_text(
+static void render_file_transfer_tree_cell_text(
     GtkCellRenderer *renderer, cairo_t *cr, GtkWidget *widget,
     const GdkRectangle *background_area,
     const GdkRectangle *cell_area, GtkCellRendererState flags);
 
-G_DEFINE_TYPE(SftpTreeCellRendererText,
-              sftp_tree_cell_renderer_text,
+G_DEFINE_TYPE(FileTransferTreeCellRendererText,
+              file_transfer_tree_cell_renderer_text,
               GTK_TYPE_CELL_RENDERER_TEXT)
 
-static int get_sftp_tree_cell_ink_offset(
+static int get_file_transfer_tree_cell_ink_offset(
     GtkCellRenderer *renderer, GtkWidget *widget,
     const GdkRectangle *cell_area) {
   char *text_value = nullptr;
   g_object_get(renderer, "text", &text_value, nullptr);
-  SftpGCharPtr text(text_value);
+  FileTransferGCharPtr text(text_value);
   if (text == nullptr || text.get()[0] == '\0') {
     return 0;
   }
 
-  SftpGObjectPtr<PangoLayout> layout(
+  FileTransferGObjectPtr<PangoLayout> layout(
       gtk_widget_create_pango_layout(widget, text.get()));
   PangoRectangle ink_rect = {};
   PangoRectangle logical_rect = {};
@@ -1389,11 +1392,11 @@ static int get_sftp_tree_cell_ink_offset(
   return (ink_center_twice - cell_area->height) / 2;
 }
 
-static void render_sftp_tree_cell_text(
+static void render_file_transfer_tree_cell_text(
     GtkCellRenderer *renderer, cairo_t *cr, GtkWidget *widget,
     const GdkRectangle *background_area,
     const GdkRectangle *cell_area, GtkCellRendererState flags) {
-  const int vertical_offset = get_sftp_tree_cell_ink_offset(
+  const int vertical_offset = get_file_transfer_tree_cell_ink_offset(
       renderer, widget, cell_area);
   GdkRectangle adjusted_cell_area = *cell_area;
   adjusted_cell_area.y -= vertical_offset;
@@ -1407,28 +1410,28 @@ static void render_sftp_tree_cell_text(
       cell_area->height);
   cairo_clip(cr);
   GTK_CELL_RENDERER_CLASS(
-      sftp_tree_cell_renderer_text_parent_class)
+      file_transfer_tree_cell_renderer_text_parent_class)
       ->render(renderer, cr, widget, background_area,
                &adjusted_cell_area, flags);
   cairo_restore(cr);
 }
 
-static void sftp_tree_cell_renderer_text_class_init(
-    SftpTreeCellRendererTextClass *renderer_class) {
+static void file_transfer_tree_cell_renderer_text_class_init(
+    FileTransferTreeCellRendererTextClass *renderer_class) {
   GTK_CELL_RENDERER_CLASS(renderer_class)->render =
-      render_sftp_tree_cell_text;
+      render_file_transfer_tree_cell_text;
 }
 
-static void sftp_tree_cell_renderer_text_init(
-    SftpTreeCellRendererText *) {}
+static void file_transfer_tree_cell_renderer_text_init(
+    FileTransferTreeCellRendererText *) {}
 
-struct SftpTreeRowMetrics {
+struct FileTransferTreeRowMetrics {
   int height = 0;
   int vertical_padding = 0;
   float vertical_alignment = 0.5F;
 };
 
-static SftpTreeRowMetrics get_sftp_tree_row_metrics(
+static FileTransferTreeRowMetrics get_file_transfer_tree_row_metrics(
     GtkWidget *tree) {
   static constexpr char row_height_sample[] = "AgÁgjあ漢Ⅳ";
   GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
@@ -1487,11 +1490,11 @@ static SftpTreeRowMetrics get_sftp_tree_row_metrics(
   };
 }
 
-static void append_sftp_tree_column(
+static void append_file_transfer_tree_column(
     GtkWidget *tree, const char *title, int model_column,
-    bool expand, const SftpTreeRowMetrics &row_metrics) {
+    bool expand, const FileTransferTreeRowMetrics &row_metrics) {
   GtkCellRenderer *renderer = GTK_CELL_RENDERER(g_object_new(
-      sftp_tree_cell_renderer_text_get_type(), nullptr));
+      file_transfer_tree_cell_renderer_text_get_type(), nullptr));
   int horizontal_padding = 0;
   gtk_cell_renderer_get_padding(
       renderer, &horizontal_padding, nullptr);
@@ -1516,10 +1519,10 @@ static void append_sftp_tree_column(
   gtk_tree_view_append_column(GTK_TREE_VIEW(tree), column);
 }
 
-static GtkWidget *create_sftp_tree(SftpPaneState *pane,
+static GtkWidget *create_file_transfer_tree(FileTransferPaneState *pane,
                                    const char *accessible_id) {
   pane->store = gtk_tree_store_new(
-      sftp_tree_column_count, G_TYPE_STRING, G_TYPE_STRING,
+      file_transfer_tree_column_count, G_TYPE_STRING, G_TYPE_STRING,
       G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT, G_TYPE_BOOLEAN,
       G_TYPE_BOOLEAN);
   GtkWidget *tree = gtk_tree_view_new_with_model(
@@ -1528,70 +1531,70 @@ static GtkWidget *create_sftp_tree(SftpPaneState *pane,
   gtk_tree_view_set_enable_tree_lines(GTK_TREE_VIEW(tree), TRUE);
   gtk_tree_view_set_rubber_banding(GTK_TREE_VIEW(tree), TRUE);
   gtk_tree_view_set_search_column(
-      GTK_TREE_VIEW(tree), sftp_tree_name_column);
-  const SftpTreeRowMetrics row_metrics =
-      get_sftp_tree_row_metrics(tree);
-  append_sftp_tree_column(
-      tree, _("Name"), sftp_tree_name_column, true, row_metrics);
-  append_sftp_tree_column(
-      tree, _("Size"), sftp_tree_size_column, false, row_metrics);
-  append_sftp_tree_column(
-      tree, _("Modified"), sftp_tree_modified_column, false,
+      GTK_TREE_VIEW(tree), file_transfer_tree_name_column);
+  const FileTransferTreeRowMetrics row_metrics =
+      get_file_transfer_tree_row_metrics(tree);
+  append_file_transfer_tree_column(
+      tree, _("Name"), file_transfer_tree_name_column, true, row_metrics);
+  append_file_transfer_tree_column(
+      tree, _("Size"), file_transfer_tree_size_column, false, row_metrics);
+  append_file_transfer_tree_column(
+      tree, _("Modified"), file_transfer_tree_modified_column, false,
       row_metrics);
   GtkTreeSelection *selection = gtk_tree_view_get_selection(
       GTK_TREE_VIEW(tree));
   gtk_tree_selection_set_mode(selection, GTK_SELECTION_MULTIPLE);
   g_signal_connect(tree, "row-expanded",
-                   G_CALLBACK(on_sftp_row_expanded), pane);
+                   G_CALLBACK(on_file_transfer_row_expanded), pane);
   g_signal_connect(tree, "row-activated",
-                   G_CALLBACK(on_sftp_row_activated), pane);
+                   G_CALLBACK(on_file_transfer_row_activated), pane);
   g_signal_connect(tree, "button-press-event",
-                   G_CALLBACK(on_sftp_tree_button_press), pane);
+                   G_CALLBACK(on_file_transfer_tree_button_press), pane);
   return tree;
 }
 
-static GtkWidget *create_sftp_pane(
-    SftpWindow *window, SftpPaneState *pane, bool remote) {
+static GtkWidget *create_file_transfer_pane(
+    FileTransferWindow *window, FileTransferPaneState *pane, bool remote) {
   pane->window = window;
   pane->remote = remote;
   pane->frame = gtk_frame_new(remote ? _("Remote") : _("Local"));
   gestament_gtk_assign_accessible_id(
       pane->frame,
-      remote ? "sftp_remote_group" : "sftp_local_group");
+      remote ? "file_transfer_remote_group" : "file_transfer_local_group");
   gtk_widget_set_hexpand(pane->frame, TRUE);
   gtk_widget_set_vexpand(pane->frame, TRUE);
   gtk_widget_set_margin_start(
       pane->frame,
-      remote ? sftp_pane_spacing / 2 : sftp_content_padding);
+      remote ? file_transfer_pane_spacing / 2 : file_transfer_content_padding);
   gtk_widget_set_margin_end(
       pane->frame,
-      remote ? sftp_content_padding : sftp_pane_spacing / 2);
-  gtk_widget_set_margin_top(pane->frame, sftp_content_padding);
-  gtk_widget_set_margin_bottom(pane->frame, sftp_content_padding);
+      remote ? file_transfer_content_padding : file_transfer_pane_spacing / 2);
+  gtk_widget_set_margin_top(pane->frame, file_transfer_content_padding);
+  gtk_widget_set_margin_bottom(pane->frame, file_transfer_content_padding);
 
   GtkWidget *box =
-      gtk_box_new(GTK_ORIENTATION_VERTICAL, sftp_control_spacing);
+      gtk_box_new(GTK_ORIENTATION_VERTICAL, file_transfer_control_spacing);
   gtk_container_set_border_width(
-      GTK_CONTAINER(box), sftp_content_padding);
+      GTK_CONTAINER(box), file_transfer_content_padding);
   gtk_container_add(GTK_CONTAINER(pane->frame), box);
 
   GtkWidget *toolbar =
-      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, sftp_control_spacing);
+      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, file_transfer_control_spacing);
   gtk_box_pack_start(GTK_BOX(box), toolbar, FALSE, TRUE, 0);
   pane->path_entry = gtk_entry_new();
   gestament_gtk_assign_accessible_id(
       pane->path_entry,
-      remote ? "sftp_remote_path_entry"
-             : "sftp_local_path_entry");
+      remote ? "file_transfer_remote_path_entry"
+             : "file_transfer_local_path_entry");
   gtk_widget_set_hexpand(pane->path_entry, TRUE);
   gtk_box_pack_start(GTK_BOX(toolbar), pane->path_entry, TRUE, TRUE, 0);
   pane->up_button = create_toolbar_button(
-      _("Up"), remote ? "sftp_remote_up_button"
-                    : "sftp_local_up_button");
+      _("Up"), remote ? "file_transfer_remote_up_button"
+                    : "file_transfer_local_up_button");
   gtk_box_pack_start(GTK_BOX(toolbar), pane->up_button, FALSE, TRUE, 0);
   pane->refresh_button = create_toolbar_button(
-      _("Refresh"), remote ? "sftp_remote_refresh_button"
-                         : "sftp_local_refresh_button");
+      _("Refresh"), remote ? "file_transfer_remote_refresh_button"
+                         : "file_transfer_local_refresh_button");
   gtk_box_pack_start(
       GTK_BOX(toolbar), pane->refresh_button, FALSE, TRUE, 0);
 
@@ -1602,13 +1605,13 @@ static GtkWidget *create_sftp_pane(
   gestament_gtk_assign_accessible_id(
       gtk_scrolled_window_get_vscrollbar(
           GTK_SCROLLED_WINDOW(scroller)),
-      remote ? "sftp_remote_vertical_scrollbar"
-             : "sftp_local_vertical_scrollbar");
+      remote ? "file_transfer_remote_vertical_scrollbar"
+             : "file_transfer_local_vertical_scrollbar");
   gtk_widget_set_hexpand(scroller, TRUE);
   gtk_widget_set_vexpand(scroller, TRUE);
   gtk_box_pack_start(GTK_BOX(box), scroller, TRUE, TRUE, 0);
-  pane->tree = create_sftp_tree(
-      pane, remote ? "sftp_remote_tree" : "sftp_local_tree");
+  pane->tree = create_file_transfer_tree(
+      pane, remote ? "file_transfer_remote_tree" : "file_transfer_local_tree");
   gtk_container_add(GTK_CONTAINER(scroller), pane->tree);
 
   pane->menu = gtk_menu_new();
@@ -1618,49 +1621,49 @@ static GtkWidget *create_sftp_pane(
       remote ? _("Receive") : _("Send"));
   gestament_gtk_assign_accessible_id(
       pane->transfer_item,
-      remote ? "sftp_receive_item" : "sftp_send_item");
+      remote ? "file_transfer_receive_item" : "file_transfer_send_item");
   gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu),
                         pane->transfer_item);
   g_signal_connect(
       pane->transfer_item, "activate",
-      G_CALLBACK(on_sftp_transfer_item_activate), pane);
+      G_CALLBACK(on_file_transfer_item_activate), pane);
   gtk_widget_show_all(pane->menu);
 
   g_signal_connect(
       pane->path_entry, "activate",
-      G_CALLBACK(on_sftp_path_activate), pane);
+      G_CALLBACK(on_file_transfer_path_activate), pane);
   g_signal_connect(
       pane->up_button, "clicked",
-      G_CALLBACK(on_sftp_up_clicked), pane);
+      G_CALLBACK(on_file_transfer_up_clicked), pane);
   g_signal_connect(
       pane->refresh_button, "clicked",
-      G_CALLBACK(on_sftp_refresh_clicked), pane);
+      G_CALLBACK(on_file_transfer_refresh_clicked), pane);
   return pane->frame;
 }
 
-static void apply_sftp_window_style(SftpWindow *window) {
+static void apply_file_transfer_window_style(FileTransferWindow *window) {
   static constexpr char css[] =
-      ".sftp-dim { background-color: rgba(0, 0, 0, 0.42); }"
-      ".sftp-progress { background-color: @theme_bg_color; "
+      ".file-transfer-dim { background-color: rgba(0, 0, 0, 0.42); }"
+      ".file-transfer-progress { background-color: @theme_bg_color; "
       "padding: 10px; }";
   GtkCssProvider *provider = gtk_css_provider_new();
   gtk_css_provider_load_from_data(provider, css, -1, nullptr);
   GtkStyleContext *dim_context =
       gtk_widget_get_style_context(window->dim_overlay);
-  gtk_style_context_add_class(dim_context, "sftp-dim");
+  gtk_style_context_add_class(dim_context, "file-transfer-dim");
   gtk_style_context_add_provider(
       dim_context, GTK_STYLE_PROVIDER(provider),
       GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
   GtkStyleContext *progress_context =
       gtk_widget_get_style_context(window->transfer_overlay);
-  gtk_style_context_add_class(progress_context, "sftp-progress");
+  gtk_style_context_add_class(progress_context, "file-transfer-progress");
   gtk_style_context_add_provider(
       progress_context, GTK_STYLE_PROVIDER(provider),
       GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
   g_object_unref(provider);
 }
 
-static void clear_sftp_window_colors(SftpWindow *window) {
+static void clear_file_transfer_window_colors(FileTransferWindow *window) {
   if (window == nullptr) {
     return;
   }
@@ -1687,10 +1690,10 @@ static void clear_sftp_window_colors(SftpWindow *window) {
   }
   gtk_style_context_remove_class(
       gtk_widget_get_style_context(window->header_bar),
-      sftp_exterior_component_style_class);
+      file_transfer_exterior_component_style_class);
   gtk_style_context_remove_class(
       gtk_widget_get_style_context(window->status_bar),
-      sftp_exterior_component_style_class);
+      file_transfer_exterior_component_style_class);
   if (window->background_provider != nullptr) {
     remove_widget_tree_background_provider(
         window->paned, window->background_provider);
@@ -1720,12 +1723,15 @@ static void clear_sftp_window_colors(SftpWindow *window) {
   }
 }
 
-std::shared_ptr<SftpWindow>
-create_sftp_window(SftpWindowOptions options) {
+std::shared_ptr<FileTransferWindow>
+create_file_transfer_window(FileTransferWindowOptions options) {
   if (options.client == nullptr) {
-    throw std::invalid_argument("SFTP client is required");
+    throw std::invalid_argument("Remote file client is required");
   }
-  auto state = std::make_shared<SftpWindow>();
+  if (options.protocol_name.empty()) {
+    throw std::invalid_argument("File transfer protocol name is required");
+  }
+  auto state = std::make_shared<FileTransferWindow>();
   state->client = std::move(options.client);
   state->closed = std::move(options.closed);
   state->local.current_directory =
@@ -1735,17 +1741,17 @@ create_sftp_window(SftpWindowOptions options) {
 
   state->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   gestament_gtk_assign_accessible_id(
-      state->window, "sftp_window");
+      state->window, "file_transfer_window");
   const std::string title =
       options.connection_name.empty()
-          ? "SFTP"
-          : options.connection_name + " — SFTP";
+          ? options.protocol_name
+          : options.connection_name + " — " + options.protocol_name;
   gtk_window_set_title(GTK_WINDOW(state->window), title.c_str());
   gtk_window_set_default_size(GTK_WINDOW(state->window), 1040, 640);
 
   state->header_bar = gtk_header_bar_new();
   gestament_gtk_assign_accessible_id(
-      state->header_bar, "sftp_header_bar");
+      state->header_bar, "file_transfer_header_bar");
   gtk_header_bar_set_title(
       GTK_HEADER_BAR(state->header_bar), title.c_str());
   gtk_header_bar_set_show_close_button(
@@ -1762,14 +1768,14 @@ create_sftp_window(SftpWindowOptions options) {
 
   state->paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
   gestament_gtk_assign_accessible_id(
-      state->paned, "sftp_root_paned");
+      state->paned, "file_transfer_root_paned");
   gtk_widget_set_hexpand(state->paned, TRUE);
   gtk_widget_set_vexpand(state->paned, TRUE);
   gtk_box_pack_start(GTK_BOX(content), state->paned, TRUE, TRUE, 0);
   GtkWidget *local =
-      create_sftp_pane(state.get(), &state->local, false);
+      create_file_transfer_pane(state.get(), &state->local, false);
   GtkWidget *remote =
-      create_sftp_pane(state.get(), &state->remote, true);
+      create_file_transfer_pane(state.get(), &state->remote, true);
   gtk_paned_pack1(GTK_PANED(state->paned), local, TRUE, FALSE);
   gtk_paned_pack2(GTK_PANED(state->paned), remote, TRUE, FALSE);
   gtk_paned_set_position(GTK_PANED(state->paned), 520);
@@ -1778,32 +1784,32 @@ create_sftp_window(SftpWindowOptions options) {
   gtk_event_box_set_visible_window(
       GTK_EVENT_BOX(state->status_bar), TRUE);
   gestament_gtk_assign_accessible_id(
-      state->status_bar, "sftp_status_bar");
+      state->status_bar, "file_transfer_status_bar");
   GtkWidget *status_content =
       gtk_box_new(
-          GTK_ORIENTATION_HORIZONTAL, sftp_control_spacing);
+          GTK_ORIENTATION_HORIZONTAL, file_transfer_control_spacing);
   gtk_widget_set_margin_start(
-      status_content, sftp_content_padding);
+      status_content, file_transfer_content_padding);
   gtk_widget_set_margin_end(
-      status_content, sftp_content_padding);
+      status_content, file_transfer_content_padding);
   gtk_widget_set_margin_top(
-      status_content, sftp_control_spacing);
+      status_content, file_transfer_control_spacing);
   gtk_widget_set_margin_bottom(
-      status_content, sftp_control_spacing);
+      status_content, file_transfer_control_spacing);
   gtk_container_add(
       GTK_CONTAINER(state->status_bar), status_content);
   gtk_box_pack_start(
       GTK_BOX(content), state->status_bar, FALSE, TRUE, 0);
   state->status_label = gtk_label_new(_("Ready"));
   gestament_gtk_assign_accessible_id(
-      state->status_label, "sftp_status_label");
+      state->status_label, "file_transfer_status_label");
   gtk_label_set_xalign(GTK_LABEL(state->status_label), 0.0F);
   gtk_box_pack_start(
       GTK_BOX(status_content), state->status_label, TRUE, TRUE, 0);
 
   state->dim_overlay = gtk_event_box_new();
   gestament_gtk_assign_accessible_id(
-      state->dim_overlay, "sftp_dim_overlay");
+      state->dim_overlay, "file_transfer_dim_overlay");
   gtk_widget_set_no_show_all(state->dim_overlay, TRUE);
   gtk_widget_set_visible(state->dim_overlay, FALSE);
   gtk_widget_set_halign(state->dim_overlay, GTK_ALIGN_FILL);
@@ -1814,7 +1820,7 @@ create_sftp_window(SftpWindowOptions options) {
   state->transfer_overlay =
       gtk_frame_new(nullptr);
   gestament_gtk_assign_accessible_id(
-      state->transfer_overlay, "sftp_transfer_overlay");
+      state->transfer_overlay, "file_transfer_overlay");
   gtk_widget_set_no_show_all(state->transfer_overlay, TRUE);
   gtk_widget_set_visible(state->transfer_overlay, FALSE);
   gtk_widget_set_halign(state->transfer_overlay, GTK_ALIGN_CENTER);
@@ -1822,20 +1828,20 @@ create_sftp_window(SftpWindowOptions options) {
   gtk_widget_set_margin_top(state->transfer_overlay, 18);
   GtkWidget *transfer_box =
       gtk_box_new(
-          GTK_ORIENTATION_VERTICAL, sftp_control_spacing);
+          GTK_ORIENTATION_VERTICAL, file_transfer_control_spacing);
   gtk_container_set_border_width(
-      GTK_CONTAINER(transfer_box), sftp_content_padding);
+      GTK_CONTAINER(transfer_box), file_transfer_content_padding);
   gtk_container_add(GTK_CONTAINER(state->transfer_overlay),
                     transfer_box);
   state->transfer_label = gtk_label_new(_("Preparing transfer…"));
   gestament_gtk_assign_accessible_id(
-      state->transfer_label, "sftp_transfer_label");
+      state->transfer_label, "file_transfer_label");
   gtk_label_set_xalign(GTK_LABEL(state->transfer_label), 0.0F);
   gtk_box_pack_start(
       GTK_BOX(transfer_box), state->transfer_label, FALSE, TRUE, 0);
   state->transfer_progress = gtk_progress_bar_new();
   gestament_gtk_assign_accessible_id(
-      state->transfer_progress, "sftp_transfer_progress");
+      state->transfer_progress, "file_transfer_progress");
   gtk_widget_set_size_request(state->transfer_progress, 280, -1);
   gtk_box_pack_start(
       GTK_BOX(transfer_box), state->transfer_progress, FALSE, TRUE, 0);
@@ -1843,7 +1849,7 @@ create_sftp_window(SftpWindowOptions options) {
       gtk_button_new_with_label(_("Cancel"));
   gestament_gtk_assign_accessible_id(
       state->transfer_cancel_button,
-      "sftp_transfer_cancel_button");
+      "file_transfer_cancel_button");
   gtk_widget_set_halign(
       state->transfer_cancel_button, GTK_ALIGN_END);
   gtk_box_pack_start(
@@ -1852,23 +1858,23 @@ create_sftp_window(SftpWindowOptions options) {
   gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay),
                           state->transfer_overlay);
 
-  apply_sftp_window_style(state.get());
-  set_sftp_window_colors(state, options.colors);
+  apply_file_transfer_window_style(state.get());
+  set_file_transfer_window_colors(state, options.colors);
   g_signal_connect(
       state->transfer_cancel_button, "clicked",
-      G_CALLBACK(on_sftp_transfer_cancel_clicked), state.get());
+      G_CALLBACK(on_file_transfer_cancel_clicked), state.get());
   g_signal_connect(state->window, "destroy",
-                   G_CALLBACK(on_sftp_window_destroy), state.get());
-  update_sftp_sensitivity(state.get());
+                   G_CALLBACK(on_file_transfer_window_destroy), state.get());
+  update_file_transfer_sensitivity(state.get());
   return state;
 }
 
-GtkWidget *sftp_window_widget(
-    const std::shared_ptr<SftpWindow> &window) noexcept {
+GtkWidget *file_transfer_window_widget(
+    const std::shared_ptr<FileTransferWindow> &window) noexcept {
   return window == nullptr ? nullptr : window->window;
 }
 
-void show_sftp_window(const std::shared_ptr<SftpWindow> &window) {
+void show_file_transfer_window(const std::shared_ptr<FileTransferWindow> &window) {
   if (window == nullptr || window->window == nullptr ||
       window->destroyed) {
     return;
@@ -1878,15 +1884,15 @@ void show_sftp_window(const std::shared_ptr<SftpWindow> &window) {
   set_widget_visible(window->transfer_overlay, false);
   if (!window->initial_load_started) {
     window->initial_load_started = true;
-    start_sftp_pane_navigation(
+    start_file_transfer_pane_navigation(
         &window->local, window->local.current_directory);
-    start_sftp_pane_navigation(
+    start_file_transfer_pane_navigation(
         &window->remote, window->remote.current_directory);
   }
 }
 
-void set_sftp_window_connection_available(
-    const std::shared_ptr<SftpWindow> &window, bool available) {
+void set_file_transfer_window_connection_available(
+    const std::shared_ptr<FileTransferWindow> &window, bool available) {
   if (window == nullptr || window->destroyed ||
       window->connection_available == available) {
     return;
@@ -1896,24 +1902,24 @@ void set_sftp_window_connection_available(
     if (window->transfer_cancel_source.has_value()) {
       (void)window->transfer_cancel_source->cancel();
     }
-    set_sftp_status(window.get(), _("Disconnected"));
+    set_file_transfer_status(window.get(), _("Disconnected"));
   }
-  update_sftp_sensitivity(window.get());
+  update_file_transfer_sensitivity(window.get());
 }
 
-void set_sftp_window_colors(
-    const std::shared_ptr<SftpWindow> &window,
+void set_file_transfer_window_colors(
+    const std::shared_ptr<FileTransferWindow> &window,
     const GeneralColorSettings &settings) {
   if (window == nullptr || window->destroyed) {
     return;
   }
 
-  clear_sftp_window_colors(window.get());
+  clear_file_transfer_window_colors(window.get());
   if (settings.exterior_background.has_value()) {
     window->exterior_background_provider =
         create_widget_background_provider(
             settings.exterior_background.value(),
-            "SFTP exterior");
+            "File transfer exterior");
     gtk_style_context_add_provider(
         gtk_widget_get_style_context(window->header_bar),
         GTK_STYLE_PROVIDER(window->exterior_background_provider),
@@ -1925,17 +1931,17 @@ void set_sftp_window_colors(
     window->exterior_component_background_provider =
         create_scoped_widget_component_background_provider(
             settings.exterior_background.value(),
-            sftp_exterior_component_style_class,
-            "SFTP exterior controls");
+            file_transfer_exterior_component_style_class,
+            "File transfer exterior controls");
     GdkScreen *screen = gtk_widget_get_screen(window->window);
     if (window->exterior_component_background_provider != nullptr &&
         screen != nullptr) {
       gtk_style_context_add_class(
           gtk_widget_get_style_context(window->header_bar),
-          sftp_exterior_component_style_class);
+          file_transfer_exterior_component_style_class);
       gtk_style_context_add_class(
           gtk_widget_get_style_context(window->status_bar),
-          sftp_exterior_component_style_class);
+          file_transfer_exterior_component_style_class);
       gtk_style_context_add_provider_for_screen(
           screen,
           GTK_STYLE_PROVIDER(
@@ -1949,7 +1955,7 @@ void set_sftp_window_colors(
   if (settings.background.has_value()) {
     window->background_provider =
         create_widget_background_provider(
-            settings.background.value(), "SFTP browser");
+            settings.background.value(), "File transfer browser");
     add_widget_tree_background_provider(
         window->paned, window->background_provider);
     add_widget_tree_background_provider_at_priority(
@@ -1958,7 +1964,7 @@ void set_sftp_window_colors(
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
     window->component_background_provider =
         create_widget_component_background_provider(
-            settings.background.value(), "SFTP controls");
+            settings.background.value(), "File transfer controls");
     add_widget_tree_background_provider_at_priority(
         window->paned, window->component_background_provider,
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
@@ -1968,7 +1974,7 @@ void set_sftp_window_colors(
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
     window->popup_component_background_provider =
         create_widget_popup_component_background_provider(
-            settings.background.value(), "SFTP popups");
+            settings.background.value(), "File transfer popups");
     GdkScreen *screen = gtk_widget_get_screen(window->window);
     if (window->popup_component_background_provider != nullptr &&
         screen != nullptr) {
@@ -1984,8 +1990,8 @@ void set_sftp_window_colors(
   }
 }
 
-void present_sftp_window(
-    const std::shared_ptr<SftpWindow> &window) {
+void present_file_transfer_window(
+    const std::shared_ptr<FileTransferWindow> &window) {
   if (window == nullptr || window->window == nullptr ||
       window->destroyed) {
     return;
