@@ -172,6 +172,16 @@ telnet_protocol_test = executable(
 
 test('telnet-protocol-test', telnet_protocol_test)
 
+ftp_protocol_test = executable(
+  'ftp-protocol-test',
+  [
+    'tests/cpp/ftp-protocol-test.cpp',
+    'src/ftp/ftp-protocol.cpp',
+  ],
+)
+
+test('ftp-protocol-test', ftp_protocol_test)
+
 terminal_text_codec_test = executable(
   'terminal-text-codec-test',
   [
