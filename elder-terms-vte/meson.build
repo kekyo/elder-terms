@@ -182,6 +182,29 @@ ftp_protocol_test = executable(
 
 test('ftp-protocol-test', ftp_protocol_test)
 
+ftp_client_test = executable(
+  'ftp-client-test',
+  [
+    'tests/cpp/ftp-client-test.cpp',
+    'src/ftp/ftp-client.cpp',
+    'src/ftp/ftp-protocol.cpp',
+    'src/terminal-sessions/tcp-connector.cpp',
+  ],
+  cpp_args: [
+    '-I' + cardio_include_dir,
+    '-DCARDIO_WITH_GLIB=1',
+    '-DCARDIO_WITH_GIO=1',
+    '-DCARDIO_WITH_LINUX_IO_URING=1',
+  ],
+  dependencies: [
+    elder_terms_dep,
+    gio_dep,
+    liburing_dep,
+  ],
+)
+
+test('ftp-client-test', ftp_client_test)
+
 terminal_text_codec_test = executable(
   'terminal-text-codec-test',
   [
