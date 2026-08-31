@@ -120,9 +120,10 @@ the launcher's list to open it. There it is:
 
 ![Local terminal](./images/local-terminal.png)
 
-Click the gear icon at the top of the terminal to change its settings. Clicking
-"Apply" applies the changes only to the currently running terminal. Clicking
-"Save" remembers the settings and uses them the next time the terminal starts.
+Open the menu at the top-right of the terminal and select "Settings" to change
+its settings. Clicking "Apply" applies the changes only to the currently
+running terminal. Clicking "Save" remembers the settings and uses them the next
+time the terminal starts.
 
 ![Settings (Terminal)](./images/settings-terminal.png)
 
@@ -453,8 +454,8 @@ set the corresponding value to `default`.
 
 Hotkeys work only while the elder-terms launcher is running. In environments
 with a system tray, you can keep the launcher in the tray by opening the
-application menu, selecting "Application settings", and setting "Startup mode"
-to "System tray only" or "System tray and main window".
+launcher's application menu, selecting "Application settings", and setting
+"Startup mode" to "System tray only" or "System tray and main window".
 
 ![System tray](./images/system-tray.png)
 
@@ -513,9 +514,9 @@ changed.
 
 ## Configuring the Display Language
 
-"Display language" under "Application settings" lets you select the system
-default, English, Arabic, Spanish, French, Hindi, Japanese, Korean, Portuguese,
-Russian, or Simplified Chinese.
+"Display language" under the launcher's "Application settings" lets you select
+the system default, English, Arabic, Spanish, French, Hindi, Japanese, Korean,
+Portuguese, Russian, or Simplified Chinese.
 
 The display language is loaded when elder-terms starts, so you must restart
 elder-terms after saving a change. Select "Restart now" in the dialog shown
