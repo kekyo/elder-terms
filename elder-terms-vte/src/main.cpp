@@ -219,10 +219,9 @@ static std::string resolve_launcher_executable() {
   return result;
 }
 
-static void request_launcher_application_page(ApplicationState *state,
-                                              const char *option) {
+static void request_launcher_about_page(ApplicationState *state) {
   (void)spawn_external_command(
-      state, resolve_launcher_executable(), {option},
+      state, resolve_launcher_executable(), {"--about"},
       "application dialog request", _("Failed to open elder-terms"),
       "application_dialog_request_error");
 }
@@ -748,20 +747,12 @@ static void open_settings_dialog(ApplicationState *state) {
                                gtk_get_current_event_time());
 }
 
-static void on_settings_button_clicked(GtkButton *, gpointer user_data) {
+static void on_settings_menu_item_activate(GtkMenuItem *, gpointer user_data) {
   open_settings_dialog(static_cast<ApplicationState *>(user_data));
 }
 
-static void on_application_settings_menu_item_activate(GtkMenuItem *,
-                                                       gpointer user_data) {
-  request_launcher_application_page(
-      static_cast<ApplicationState *>(user_data),
-      "--application-settings");
-}
-
 static void on_about_menu_item_activate(GtkMenuItem *, gpointer user_data) {
-  request_launcher_application_page(
-      static_cast<ApplicationState *>(user_data), "--about");
+  request_launcher_about_page(static_cast<ApplicationState *>(user_data));
 }
 
 static gboolean emit_transfer_dialog_current_folder_uri(gpointer data) {
@@ -1777,11 +1768,8 @@ int main(int argc, char **argv) {
     main_window->window, "focus-in-event",
     G_CALLBACK(on_main_window_focus_in), &app_state);
   g_signal_connect(
-    main_window->settings_button, "clicked",
-    G_CALLBACK(on_settings_button_clicked), &app_state);
-  g_signal_connect(
-    main_window->application_settings_menu_item, "activate",
-    G_CALLBACK(on_application_settings_menu_item_activate), &app_state);
+    main_window->settings_menu_item, "activate",
+    G_CALLBACK(on_settings_menu_item_activate), &app_state);
   g_signal_connect(
     main_window->about_menu_item, "activate",
     G_CALLBACK(on_about_menu_item_activate), &app_state);

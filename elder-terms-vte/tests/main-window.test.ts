@@ -4,7 +4,12 @@ import { createServer, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
-import type { GtkApp, GtkCapture, GtkToggleButtonElement } from 'gestament';
+import type {
+  GtkApp,
+  GtkCapture,
+  GtkToggleButtonElement,
+  GtkWidgetElement,
+} from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import {
@@ -102,16 +107,16 @@ const writeXdgDownloadDirectory = async (
   return { configHome, downloads, home };
 };
 
-const expectTransferButtonVisibleLeftOfSettings = async (
+const expectTransferButtonVisibleLeftOfApplicationMenu = async (
   app: GtkApp
 ): Promise<GtkToggleButtonElement> => {
   const transferButton = expectElementKind(
     await app.getById('transfer_button'),
     'toggleButton'
   );
-  const settingsButton = expectElementKind(
-    await app.getById('settings_button'),
-    'button'
+  const applicationMenuButton = expectElementKind(
+    await app.getById('application_menu_button'),
+    'toggleButton'
   );
   await waitForResult(
     async () => {
@@ -127,8 +132,10 @@ const expectTransferButtonVisibleLeftOfSettings = async (
   );
 
   const transferCapture = await transferButton.capture();
-  const settingsCapture = await settingsButton.capture();
-  expect(transferCapture.bounds.x).toBeLessThan(settingsCapture.bounds.x);
+  const applicationMenuCapture = await applicationMenuButton.capture();
+  expect(transferCapture.bounds.x).toBeLessThan(
+    applicationMenuCapture.bounds.x
+  );
   return transferButton;
 };
 
@@ -167,7 +174,8 @@ const expectTransferButtonInsensitive = async (
 };
 
 const openZmodemSendDialog = async (app: GtkApp): Promise<void> => {
-  const transferButton = await expectTransferButtonVisibleLeftOfSettings(app);
+  const transferButton =
+    await expectTransferButtonVisibleLeftOfApplicationMenu(app);
   await expectTransferButtonSensitive(transferButton);
   await transferButton.click();
 
@@ -250,8 +258,21 @@ const readClipboardText = async (app: GtkApp): Promise<string> => {
   return result.stdout.toString();
 };
 
+const clickWidget = async (
+  app: GtkApp,
+  widget: GtkWidgetElement
+): Promise<void> => {
+  const { bounds } = await widget.capture();
+  await app.input.moveMouseTo(
+    Math.trunc(bounds.x + bounds.width / 2),
+    Math.trunc(bounds.y + bounds.height / 2)
+  );
+  await app.input.setMouseButton('left', true);
+  await app.input.setMouseButton('left', false);
+};
+
 describe.concurrent('elder-terms-vte main window', () => {
-  it('requests launcher-owned application settings and About pages', async (context) => {
+  it('opens runtime settings from the first application menu item and requests the launcher-owned About page', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const launcher = join(directory, 'elder-terms-launcher');
       const capture = join(directory, 'application-dialog-requests.txt');
@@ -265,30 +286,51 @@ describe.concurrent('elder-terms-vte main window', () => {
         context,
         ['--test-fixture'],
         async (app) => {
+          await expect(app.getById('settings_button')).rejects.toThrow();
+          await expect(
+            app.getById('application_settings_menu_item')
+          ).rejects.toThrow();
+
           const menu = expectElementKind(
             await app.getById('application_menu_button'),
             'toggleButton'
           );
-          await menu.click();
-          await expectElementKind(
-            await app.getById('application_settings_menu_item'),
+          await clickWidget(app, menu);
+          const settingsItem = expectElementKind(
+            await app.getById('settings_menu_item'),
             'menuItem'
-          ).click();
-          await waitForResult(async () => {
-            expect(await readFile(capture, 'utf8')).toBe(
-              '--application-settings\n'
-            );
-          });
-
-          await menu.click();
-          await expectElementKind(
+          );
+          const aboutItem = expectElementKind(
             await app.getById('about_menu_item'),
             'menuItem'
-          ).click();
+          );
+          const settingsInfo = await settingsItem.info();
+          const aboutInfo = await aboutItem.info();
+          expect(settingsInfo.name).toBe('Settings');
+          expect(settingsInfo.states).toContain('showing');
+          expect(aboutInfo.name).toBe('About elder-terms');
+          expect(aboutInfo.states).toContain('showing');
+          expect((await settingsItem.capture()).bounds.y).toBeLessThan(
+            (await aboutItem.capture()).bounds.y
+          );
+
+          await settingsItem.click();
           await waitForResult(async () => {
-            expect(await readFile(capture, 'utf8')).toBe(
-              '--application-settings\n--about\n'
+            expectElementKind(await app.getById('settings_dialog'), 'window');
+            expectElementKind(
+              await app.getById('settings_widget_root'),
+              'container'
             );
+          });
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
+
+          await clickWidget(app, menu);
+          await aboutItem.click();
+          await waitForResult(async () => {
+            expect(await readFile(capture, 'utf8')).toBe('--about\n');
           });
         },
         {
@@ -370,7 +412,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         'label'
       );
 
-      await expectTransferButtonVisibleLeftOfSettings(app);
+      await expectTransferButtonVisibleLeftOfApplicationMenu(app);
       expect(await statusLabel.text()).toBe('local terminal');
       expect(await connIndicatorLabel.text()).toBe('CONN');
       expect(await logIndicatorLabel.text()).toBe('LOG');
@@ -635,7 +677,7 @@ describe.concurrent('elder-terms-vte main window', () => {
       );
 
       await runGtkTest(context, ['-c', configPath], async (app) => {
-        await expectTransferButtonVisibleLeftOfSettings(app);
+        await expectTransferButtonVisibleLeftOfApplicationMenu(app);
       });
     });
   });
@@ -938,7 +980,7 @@ describe.concurrent('elder-terms-vte main window', () => {
           await waitForActivityIndicatorImageState(app, 'conn', 'on');
 
           const transferButton =
-            await expectTransferButtonVisibleLeftOfSettings(app);
+            await expectTransferButtonVisibleLeftOfApplicationMenu(app);
           await expectTransferButtonSensitive(transferButton);
           await transferButton.click();
 
@@ -1018,7 +1060,7 @@ describe.concurrent('elder-terms-vte main window', () => {
             'window'
           );
           const transferButton =
-            await expectTransferButtonVisibleLeftOfSettings(app);
+            await expectTransferButtonVisibleLeftOfApplicationMenu(app);
           await expectTransferButtonSensitive(transferButton);
           await transferButton.click();
           const sftpItem = await waitForResult(
@@ -1140,7 +1182,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         ['--test-fixture', '--test-shared-sftp-disconnected', '-c', configPath],
         async (app) => {
           const transferButton =
-            await expectTransferButtonVisibleLeftOfSettings(app);
+            await expectTransferButtonVisibleLeftOfApplicationMenu(app);
           await transferButton.click();
           await expectElementKind(
             await app.getById('transfer_sftp_item'),
@@ -1213,7 +1255,7 @@ describe.concurrent('elder-terms-vte main window', () => {
           await waitForActivityIndicatorImageState(app, 'conn', 'on');
 
           const transferButton =
-            await expectTransferButtonVisibleLeftOfSettings(app);
+            await expectTransferButtonVisibleLeftOfApplicationMenu(app);
           await expectTransferButtonSensitive(transferButton);
 
           acceptedSocket?.end();

@@ -68,14 +68,12 @@ struct MainWindow {
   GtkWidget *window = nullptr;
   /** Header bar widget. */
   GtkWidget *header_bar = nullptr;
-  /** Button that opens the runtime settings dialog. */
-  GtkWidget *settings_button = nullptr;
   /** Button that opens the file transfer menu. */
   GtkWidget *transfer_button = nullptr;
   /** Button that opens application-level commands. */
   GtkWidget *application_menu_button = nullptr;
-  /** Requests the launcher-owned application settings page. */
-  GtkWidget *application_settings_menu_item = nullptr;
+  /** Menu item that opens the runtime settings dialog. */
+  GtkWidget *settings_menu_item = nullptr;
   /** Requests the launcher-owned application information page. */
   GtkWidget *about_menu_item = nullptr;
   /** Root container inside the window. */
