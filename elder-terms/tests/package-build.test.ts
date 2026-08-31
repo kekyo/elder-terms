@@ -107,7 +107,7 @@ Priority: optional
 Architecture: ${debianArchitecture}
 Maintainer: elder-terms packager <packager@localhost>
 Depends: libc6, dbus-user-session, hicolor-icon-theme
-Description: GTK terminal for serial, TELNET, local shell, SSH, and SFTP connections
+Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP connections
 `
   );
 
@@ -116,9 +116,12 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, and SFTP connect
     'usr/lib/elder-terms/launcher/elder-terms',
     'usr/lib/elder-terms/elder-terms-vte/elder-terms-vte',
     'usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp',
+    'usr/lib/elder-terms/elder-terms-vte/elder-terms-ftp',
   ];
   for (const executablePath of executablePaths) {
-    copyFileSync('/bin/true', join(stageRoot, executablePath));
+    if (executablePath !== omittedPath) {
+      copyFileSync('/bin/true', join(stageRoot, executablePath));
+    }
   }
 
   const textFiles = new Map<string, string>([
@@ -161,6 +164,10 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, and SFTP connect
   symlinkSync(
     '../lib/elder-terms/elder-terms-vte/elder-terms-sftp',
     join(stageRoot, 'usr/bin/elder-terms-sftp')
+  );
+  symlinkSync(
+    '../lib/elder-terms/elder-terms-vte/elder-terms-ftp',
+    join(stageRoot, 'usr/bin/elder-terms-ftp')
   );
 };
 
@@ -543,15 +550,26 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     const badStage = join(temporaryRoot, 'bad-stage');
     const goodPackage = join(temporaryRoot, 'elder-terms-good.deb');
     const badPackage = join(temporaryRoot, 'elder-terms-bad.deb');
+    const missingFtpStage = join(temporaryRoot, 'missing-ftp-stage');
+    const missingFtpPackage = join(
+      temporaryRoot,
+      'elder-terms-missing-ftp.deb'
+    );
     createPackageStage(goodStage, debianArchitecture, undefined);
     createPackageStage(
       badStage,
       debianArchitecture,
       'usr/share/applications/net.kekyo.elder-terms-vte.desktop'
     );
+    createPackageStage(
+      missingFtpStage,
+      debianArchitecture,
+      'usr/lib/elder-terms/elder-terms-vte/elder-terms-ftp'
+    );
     for (const [stage, output] of [
       [goodStage, goodPackage],
       [badStage, badPackage],
+      [missingFtpStage, missingFtpPackage],
     ]) {
       const built = run(dpkgDeb, [
         '--root-owner-group',
@@ -575,6 +593,15 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     expect(badValidation.status).not.toBe(0);
     expect(badValidation.stderr).toContain(
       'usr/share/applications/net.kekyo.elder-terms-vte.desktop'
+    );
+
+    const missingFtpValidation = runSourced(
+      'VERSION=1.2.3\nvalidate_deb_package "$2" "$3"',
+      [missingFtpPackage, canonicalArchitecture!]
+    );
+    expect(missingFtpValidation.status).not.toBe(0);
+    expect(missingFtpValidation.stderr).toContain(
+      'usr/lib/elder-terms/elder-terms-vte/elder-terms-ftp'
     );
   });
 
@@ -629,6 +656,14 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
           'elder-terms/elder-terms-vte/elder-terms-sftp'
         ),
       ],
+      [
+        'bin/elder-terms-ftp',
+        join(
+          '..',
+          libraryDirectory,
+          'elder-terms/elder-terms-vte/elder-terms-ftp'
+        ),
+      ],
     ]);
     for (const [linkPath, expectedTarget] of expectedLinks) {
       const path = join(installedRoot, linkPath);
@@ -641,6 +676,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       join(libraryDirectory, 'elder-terms/launcher/main-window.ui'),
       join(libraryDirectory, 'elder-terms/elder-terms-vte/elder-terms-vte'),
       join(libraryDirectory, 'elder-terms/elder-terms-vte/elder-terms-sftp'),
+      join(libraryDirectory, 'elder-terms/elder-terms-vte/elder-terms-ftp'),
       join(libraryDirectory, 'elder-terms/elder-terms-vte/main-window.ui'),
       join(libraryDirectory, 'elder-terms/elder-terms-vte/green-on.png'),
       join(libraryDirectory, 'elder-terms/elder-terms-vte/green-off.png'),

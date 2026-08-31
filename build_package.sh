@@ -7,7 +7,7 @@ PROJECT_ROOT=$(CDPATH= cd -- "$PROJECT_ROOT" && pwd)
 ARTIFACT_ROOT="$PROJECT_ROOT/artifacts"
 DEB_ARTIFACT_ROOT="$ARTIFACT_ROOT/deb"
 PACKAGE_NAME=elder-terms
-PACKAGE_DESCRIPTION="GTK terminal for serial, TELNET, local shell, SSH, and SFTP connections."
+PACKAGE_DESCRIPTION="GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP connections."
 DEFAULT_MAINTAINER="elder-terms packager <packager@localhost>"
 DEFAULT_PARALLEL_JOB_CAP=14
 
@@ -401,6 +401,7 @@ validate_deb_package() {
 		usr/lib/elder-terms/launcher/main-window.ui \
 		usr/lib/elder-terms/elder-terms-vte/elder-terms-vte \
 		usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp \
+		usr/lib/elder-terms/elder-terms-vte/elder-terms-ftp \
 		usr/lib/elder-terms/elder-terms-vte/main-window.ui \
 		usr/lib/elder-terms/elder-terms-vte/green-on.png \
 		usr/lib/elder-terms/elder-terms-vte/green-off.png \
@@ -420,12 +421,15 @@ validate_deb_package() {
 		'../lib/elder-terms/elder-terms-vte/elder-terms-vte'
 	assert_symlink "$tmp_dir/usr/bin/elder-terms-sftp" \
 		'../lib/elder-terms/elder-terms-vte/elder-terms-sftp'
+	assert_symlink "$tmp_dir/usr/bin/elder-terms-ftp" \
+		'../lib/elder-terms/elder-terms-vte/elder-terms-ftp'
 
 	for elf_path in \
 		usr/lib/elder-terms/libelder-terms.so \
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/elder-terms-vte/elder-terms-vte \
-		usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp; do
+		usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp \
+		usr/lib/elder-terms/elder-terms-vte/elder-terms-ftp; do
 		elf_name=$(printf '%s' "$elf_path" | tr '/' '-')
 		assert_elf_architecture \
 			"$tmp_dir/$elf_path" "$expected_arch" "$tmp_dir/readelf-$elf_name.txt"

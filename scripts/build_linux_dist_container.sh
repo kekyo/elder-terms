@@ -82,7 +82,8 @@ calculate_shlibdeps() {
 			"$private_dir/libelder-terms.so" \
 			"$private_dir/launcher/elder-terms" \
 			"$private_dir/elder-terms-vte/elder-terms-vte" \
-			"$private_dir/elder-terms-vte/elder-terms-sftp" |
+			"$private_dir/elder-terms-vte/elder-terms-sftp" \
+			"$private_dir/elder-terms-vte/elder-terms-ftp" |
 			sed -n 's/^shlibs:Depends=//p'
 	)
 	rm -rf "$tmp_dir"
@@ -95,7 +96,8 @@ validate_dynamic_links() {
 	for executable_path in \
 		/usr/lib/elder-terms/launcher/elder-terms \
 		/usr/lib/elder-terms/elder-terms-vte/elder-terms-vte \
-		/usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp; do
+		/usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp \
+		/usr/lib/elder-terms/elder-terms-vte/elder-terms-ftp; do
 		link_report=$(ldd "$executable_path")
 		case $link_report in
 		*'not found'*)
@@ -133,6 +135,7 @@ validate_installed_package() {
 		/usr/lib/elder-terms/launcher/main-window.ui \
 		/usr/lib/elder-terms/elder-terms-vte/elder-terms-vte \
 		/usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp \
+		/usr/lib/elder-terms/elder-terms-vte/elder-terms-ftp \
 		/usr/lib/elder-terms/elder-terms-vte/main-window.ui \
 		/usr/lib/elder-terms/elder-terms-vte/green-on.png \
 		/usr/lib/elder-terms/elder-terms-vte/green-off.png \
@@ -150,6 +153,8 @@ validate_installed_package() {
 		'../lib/elder-terms/elder-terms-vte/elder-terms-vte'
 	assert_symlink /usr/bin/elder-terms-sftp \
 		'../lib/elder-terms/elder-terms-vte/elder-terms-sftp'
+	assert_symlink /usr/bin/elder-terms-ftp \
+		'../lib/elder-terms/elder-terms-vte/elder-terms-ftp'
 	validate_dynamic_links
 	printf '%s\n' "Installed package validated: $package_path"
 }
@@ -235,6 +240,7 @@ for staged_file in \
 	usr/lib/elder-terms/launcher/main-window.ui \
 	usr/lib/elder-terms/elder-terms-vte/elder-terms-vte \
 	usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp \
+	usr/lib/elder-terms/elder-terms-vte/elder-terms-ftp \
 	usr/lib/elder-terms/elder-terms-vte/main-window.ui \
 	usr/lib/elder-terms/elder-terms-vte/green-on.png \
 	usr/lib/elder-terms/elder-terms-vte/green-off.png \
@@ -252,3 +258,5 @@ assert_symlink "$stage_dir/usr/bin/elder-terms-vte" \
 	'../lib/elder-terms/elder-terms-vte/elder-terms-vte'
 assert_symlink "$stage_dir/usr/bin/elder-terms-sftp" \
 	'../lib/elder-terms/elder-terms-vte/elder-terms-sftp'
+assert_symlink "$stage_dir/usr/bin/elder-terms-ftp" \
+	'../lib/elder-terms/elder-terms-vte/elder-terms-ftp'
