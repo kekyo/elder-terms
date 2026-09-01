@@ -26,6 +26,8 @@ struct InlinePromptWidgets {
   GtkWidget *cancel_button;
   /** Button accepting the prompt. */
   GtkWidget *accept_button;
+  /** Optional button selecting a third response, or null for two choices. */
+  GtkWidget *alternative_button = nullptr;
 };
 
 /**
@@ -46,6 +48,10 @@ struct InlinePromptRequest {
   bool echo;
   /** True when the rejecting button is visible. */
   bool cancel_visible;
+  /** Text displayed by the optional third-response button. */
+  std::string alternative_label = {};
+  /** True when the third-response button is visible. */
+  bool alternative_visible = false;
 };
 
 /**
@@ -56,6 +62,8 @@ struct InlinePromptResponse {
   bool accepted = false;
   /** Submitted text, or an empty string when no input was required. */
   std::string text;
+  /** True when the optional third response was selected. */
+  bool alternative = false;
 };
 
 /**
@@ -88,6 +96,8 @@ create_inline_prompt_controller(InlinePromptWidgets widgets);
  * @param request Presentation and input requirements.
  * @param cancellation Cancellation signal for the pending question.
  * @returns Accepted response, or a rejected response after cancellation.
+ * @throws std::invalid_argument when a third response is requested from a
+ * controller without an alternative button.
  */
 cardio::promise<InlinePromptResponse> prompt_inline_async(
     const std::shared_ptr<InlinePromptController> &controller,

@@ -1,6 +1,7 @@
 #include "inline-prompt.h"
 
 #include <memory>
+#include <stdexcept>
 #include <utility>
 
 #include <gestament/gtk.h>
@@ -144,6 +145,15 @@ create_inline_prompt_widgets(const std::string &accessible_id_prefix) {
   gtk_widget_set_receives_default(accept, TRUE);
   gtk_container_add(GTK_CONTAINER(actions), accept);
 
+  GtkWidget *alternative = gtk_button_new_with_label("");
+  gestament_gtk_assign_accessible_id(
+      alternative,
+      accessible_id(accessible_id_prefix, "alternative_button").c_str());
+  gtk_widget_set_visible(alternative, FALSE);
+  gtk_widget_set_no_show_all(alternative, TRUE);
+  gtk_container_add(GTK_CONTAINER(actions), alternative);
+  gtk_box_reorder_child(GTK_BOX(actions), alternative, 1);
+
   InlinePromptWidgets widgets{
       .panel = panel,
       .background = background,
@@ -152,6 +162,7 @@ create_inline_prompt_widgets(const std::string &accessible_id_prefix) {
       .entry = entry,
       .cancel_button = cancel,
       .accept_button = accept,
+      .alternative_button = alternative,
   };
   return widgets;
 }
@@ -198,6 +209,12 @@ static void on_inline_prompt_cancel_clicked(GtkButton *, gpointer data) {
   complete_inline_prompt(static_cast<InlinePromptController *>(data), {});
 }
 
+static void on_inline_prompt_alternative_clicked(GtkButton *, gpointer data) {
+  complete_inline_prompt(
+      static_cast<InlinePromptController *>(data),
+      {.accepted = false, .text = {}, .alternative = true});
+}
+
 static void on_inline_prompt_entry_activated(GtkEntry *, gpointer data) {
   on_inline_prompt_accept_clicked(nullptr, data);
 }
@@ -216,6 +233,11 @@ create_inline_prompt_controller(InlinePromptWidgets widgets) {
   g_signal_connect(widgets.cancel_button, "clicked",
                    G_CALLBACK(on_inline_prompt_cancel_clicked),
                    controller.get());
+  if (widgets.alternative_button != nullptr) {
+    g_signal_connect(widgets.alternative_button, "clicked",
+                     G_CALLBACK(on_inline_prompt_alternative_clicked),
+                     controller.get());
+  }
   g_signal_connect(widgets.entry, "activate",
                    G_CALLBACK(on_inline_prompt_entry_activated),
                    controller.get());
@@ -227,6 +249,11 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
     InlinePromptRequest request, cardio::cancellation cancellation) {
   if (controller == nullptr || cancellation.is_cancellation_requested()) {
     co_return InlinePromptResponse{};
+  }
+  if (request.alternative_visible &&
+      controller->widgets.alternative_button == nullptr) {
+    throw std::invalid_argument(
+        "Inline prompt alternative button is unavailable");
   }
 
   cancel_inline_prompt(controller);
@@ -265,6 +292,10 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
                        request.accept_label.c_str());
   gtk_button_set_label(GTK_BUTTON(controller->widgets.cancel_button),
                        request.cancel_label.c_str());
+  if (controller->widgets.alternative_button != nullptr) {
+    gtk_button_set_label(GTK_BUTTON(controller->widgets.alternative_button),
+                         request.alternative_label.c_str());
+  }
   gtk_entry_set_text(GTK_ENTRY(controller->widgets.entry), "");
   gtk_entry_set_visibility(GTK_ENTRY(controller->widgets.entry), request.echo);
 
@@ -278,6 +309,12 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
                          request.cancel_visible);
   gtk_widget_set_no_show_all(controller->widgets.cancel_button,
                              !request.cancel_visible);
+  if (controller->widgets.alternative_button != nullptr) {
+    gtk_widget_set_visible(controller->widgets.alternative_button,
+                           request.alternative_visible);
+    gtk_widget_set_no_show_all(controller->widgets.alternative_button,
+                               !request.alternative_visible);
+  }
   gtk_widget_grab_focus(request.input_required
                             ? controller->widgets.entry
                             : controller->widgets.accept_button);

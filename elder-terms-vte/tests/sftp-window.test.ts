@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -1220,6 +1221,72 @@ describe('SFTP window', () => {
             await readFile(join(localDirectory, 'readme.txt'), 'utf8')
           ).toBe('hello from remote\n');
         });
+      }
+    );
+  });
+
+  it('keeps transfer failure recovery inside the file transfer window', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      undefined,
+      async ({ app, localDirectory }) => {
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
+        await chmod(localDirectory, 0o555);
+        try {
+          await openContextMenu(
+            app,
+            remoteTree,
+            await findRow(remoteTree, 'readme.txt')
+          );
+          await expectElementKind(
+            await app.getById('file_transfer_receive_item'),
+            'menuItem'
+          ).click();
+
+          const promptPanel = await app.getById('file_transfer_prompt_panel');
+          await expectShowing(promptPanel);
+          expect(await app.getWindowCount()).toBe(1);
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_prompt_title_label'),
+              'label'
+            ).text()
+          ).toBe('File transfer failed');
+          for (const [widgetId, label] of [
+            ['file_transfer_prompt_cancel_button', 'Abort'],
+            ['file_transfer_prompt_alternative_button', 'Skip'],
+            ['file_transfer_prompt_accept_button', 'Retry'],
+          ] as const) {
+            const button = expectElementKind(
+              await app.getById(widgetId),
+              'button'
+            );
+            await expectShowing(button);
+            expect((await button.info()).name).toBe(label);
+          }
+
+          await expectElementKind(
+            await app.getById('file_transfer_cancel_button'),
+            'button'
+          ).click();
+          await expectHidden(promptPanel);
+          await expectHidden(await app.getById('file_transfer_overlay'));
+          await waitForResult(async () => {
+            expect(
+              await expectElementKind(
+                await app.getById('file_transfer_status_label'),
+                'label'
+              ).text()
+            ).toBe('Transfer cancelled');
+          });
+          expect(await app.getWindowCount()).toBe(1);
+        } finally {
+          await chmod(localDirectory, 0o755);
+        }
       }
     );
   });

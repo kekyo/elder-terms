@@ -233,6 +233,20 @@ static void passive_server(int control_fd) {
 
   expect_command(control_fd, "DELE /canonical-first/zebra.txt");
   write_all(control_fd, "250 File removed\r\n");
+
+  Listener rejected_listener = create_loopback_listener();
+  expect_command(control_fd, "EPSV");
+  write_all(control_fd, "229 Entering Extended Passive Mode (|||" +
+                            std::to_string(rejected_listener.port) +
+                            "|)\r\n");
+  int rejected_data_fd = accept_connection(rejected_listener.fd);
+  close_fd(&rejected_listener.fd);
+  expect_command(control_fd, "STOR /denied.txt");
+  write_all(control_fd, "550 Permission denied\r\n");
+  close_fd(&rejected_data_fd);
+
+  expect_command(control_fd, "DELE /after-denial.txt");
+  write_all(control_fd, "250 Control connection remains usable\r\n");
 }
 
 static std::pair<std::string, std::uint16_t>
@@ -450,6 +464,18 @@ run_passive_client(std::uint16_t port,
   co_await reader->close_async(cancellation);
   co_await remove_task;
   expect(content == "content", "FTP RETR returned incorrect bytes");
+
+  bool write_rejected = false;
+  try {
+    (void)co_await client->open_write_async(
+        "/denied.txt", std::nullopt, cancellation);
+  } catch (const std::runtime_error &error) {
+    write_rejected = std::string(error.what()).find("550") !=
+                     std::string::npos;
+  }
+  expect(write_rejected,
+         "FTP STOR rejection should complete with the server status");
+  co_await client->remove_file_async("/after-denial.txt", cancellation);
 
   bool rejected_injection = false;
   try {

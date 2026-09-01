@@ -108,13 +108,6 @@ struct FileTransferPaneState {
   std::uint64_t generation = 0;
 };
 
-struct FileTransferChoiceDialogRequest {
-  GtkWidget *dialog = nullptr;
-  std::shared_ptr<cardio::promise_source<int>> source;
-  cardio::cancellation_registration cancellation_registration;
-  bool completed = false;
-};
-
 struct FileTransferWindow {
   GtkWidget *window = nullptr;
   GtkWidget *header_bar = nullptr;
@@ -647,75 +640,29 @@ static void update_file_transfer_progress(
   }
 }
 
-static void complete_choice_dialog(
-    FileTransferChoiceDialogRequest *request, int response) {
-  if (request == nullptr || request->completed) {
-    return;
-  }
-  request->completed = true;
-  request->cancellation_registration = {};
-  if (request->dialog != nullptr) {
-    GtkWidget *dialog = std::exchange(request->dialog, nullptr);
-    g_signal_handlers_disconnect_by_data(dialog, request);
-    gtk_widget_destroy(dialog);
-  }
-  (void)request->source->try_resolve(response);
-}
-
-static void on_choice_dialog_response(
-    GtkDialog *, gint response, gpointer data) {
-  complete_choice_dialog(
-      static_cast<FileTransferChoiceDialogRequest *>(data), response);
-}
-
-static gboolean cancel_choice_dialog_idle(gpointer data) {
-  auto *weak =
-      static_cast<std::weak_ptr<FileTransferChoiceDialogRequest> *>(data);
-  const std::shared_ptr<FileTransferChoiceDialogRequest> request =
-      weak->lock();
-  delete weak;
-  if (request != nullptr) {
-    complete_choice_dialog(request.get(), GTK_RESPONSE_CANCEL);
-  }
-  return G_SOURCE_REMOVE;
-}
-
-static cardio::promise<int> prompt_file_transfer_choice_async(
-    FileTransferWindow *window, GtkMessageType type,
-    const std::string &title, const std::string &detail,
-    std::vector<std::pair<std::string, int>> buttons,
-    const char *accessible_id,
+static cardio::promise<InlinePromptResponse>
+prompt_file_transfer_choice_async(
+    FileTransferWindow *window, const std::string &title,
+    const std::string &detail, const std::string &cancel_label,
+    const std::string &alternative_label,
+    const std::string &accept_label,
     cardio::cancellation cancellation) {
   cancellation.throw_if_cancellation_requested();
-  auto request = std::make_shared<FileTransferChoiceDialogRequest>();
-  request->source =
-      std::make_shared<cardio::promise_source<int>>();
-  request->dialog = gtk_message_dialog_new(
-      GTK_WINDOW(window->window),
-      static_cast<GtkDialogFlags>(
-          GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
-      type, GTK_BUTTONS_NONE, "%s", title.c_str());
-  gtk_message_dialog_format_secondary_text(
-      GTK_MESSAGE_DIALOG(request->dialog), "%s", detail.c_str());
-  gestament_gtk_assign_accessible_id(
-      request->dialog, accessible_id);
-  for (const auto &[label, response] : buttons) {
-    gtk_dialog_add_button(
-        GTK_DIALOG(request->dialog), label.c_str(), response);
-  }
-  g_signal_connect(
-      request->dialog, "response",
-      G_CALLBACK(on_choice_dialog_response), request.get());
-  request->cancellation_registration =
-      cancellation.on_cancellation_requested(
-          [weak = std::weak_ptr<FileTransferChoiceDialogRequest>(request)]() {
-            g_idle_add(cancel_choice_dialog_idle,
-                       new std::weak_ptr<FileTransferChoiceDialogRequest>(
-                           weak));
-          });
-  gtk_widget_show_all(request->dialog);
-  const int response = co_await request->source->get_promise();
-  request->cancellation_registration = {};
+  InlinePromptResponse response = co_await prompt_inline_async(
+      window->prompt,
+      {
+          .title = title,
+          .message = detail,
+          .accept_label = accept_label,
+          .cancel_label = cancel_label,
+          .input_required = false,
+          .echo = false,
+          .cancel_visible = true,
+          .alternative_label = alternative_label,
+          .alternative_visible = true,
+      },
+      cancellation);
+  cancellation.throw_if_cancellation_requested();
   co_return response;
 }
 
@@ -723,21 +670,17 @@ static cardio::promise<FileTransferConflictAction>
 prompt_file_transfer_conflict_async(
     FileTransferWindow *window, const FileTransferConflict &conflict,
     cardio::cancellation cancellation) {
-  std::vector<std::pair<std::string, int>> buttons;
-  buttons.emplace_back(_("Cancel"), GTK_RESPONSE_CANCEL);
-  buttons.emplace_back(_("Skip"), GTK_RESPONSE_NO);
-  buttons.emplace_back(_("Overwrite"), GTK_RESPONSE_YES);
-  auto response_promise = prompt_file_transfer_choice_async(
-      window, GTK_MESSAGE_QUESTION, _("Destination already exists"),
-      format_translated_string(
-          _("%s\nThe selected decision applies to all remaining conflicts."),
-          conflict.destination_path.c_str()),
-      std::move(buttons), "file_transfer_conflict_dialog", cancellation);
-  const int response = co_await response_promise;
-  if (response == GTK_RESPONSE_YES) {
+  const InlinePromptResponse response =
+      co_await prompt_file_transfer_choice_async(
+          window, _("Destination already exists"),
+          format_translated_string(
+              _("%s\nThe selected decision applies to all remaining conflicts."),
+              conflict.destination_path.c_str()),
+          _("Cancel"), _("Skip"), _("Overwrite"), cancellation);
+  if (response.accepted) {
     co_return FileTransferConflictAction::overwrite;
   }
-  if (response == GTK_RESPONSE_NO) {
+  if (response.alternative) {
     co_return FileTransferConflictAction::skip;
   }
   co_return FileTransferConflictAction::cancel;
@@ -747,21 +690,18 @@ static cardio::promise<FileTransferFailureAction>
 prompt_file_transfer_failure_async(
     FileTransferWindow *window, const FileTransferFailure &failure,
     cardio::cancellation cancellation) {
-  std::vector<std::pair<std::string, int>> buttons;
-  buttons.emplace_back(_("Abort"), GTK_RESPONSE_CANCEL);
-  buttons.emplace_back(_("Skip"), GTK_RESPONSE_NO);
-  buttons.emplace_back(_("Retry"), GTK_RESPONSE_YES);
-  auto response_promise = prompt_file_transfer_choice_async(
-      window, GTK_MESSAGE_ERROR, _("File transfer failed"),
-      format_translated_string(_("%s\n\n%s\n→ %s"), failure.message.c_str(),
-                               failure.source_path.c_str(),
-                               failure.destination_path.c_str()),
-      std::move(buttons), "file_transfer_failure_dialog", cancellation);
-  const int response = co_await response_promise;
-  if (response == GTK_RESPONSE_YES) {
+  const InlinePromptResponse response =
+      co_await prompt_file_transfer_choice_async(
+          window, _("File transfer failed"),
+          format_translated_string(_("%s\n\n%s\n→ %s"),
+                                   failure.message.c_str(),
+                                   failure.source_path.c_str(),
+                                   failure.destination_path.c_str()),
+          _("Abort"), _("Skip"), _("Retry"), cancellation);
+  if (response.accepted) {
     co_return FileTransferFailureAction::retry;
   }
-  if (response == GTK_RESPONSE_NO) {
+  if (response.alternative) {
     co_return FileTransferFailureAction::skip;
   }
   co_return FileTransferFailureAction::abort;
