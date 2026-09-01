@@ -296,7 +296,8 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
     gtk_button_set_label(GTK_BUTTON(controller->widgets.alternative_button),
                          request.alternative_label.c_str());
   }
-  gtk_entry_set_text(GTK_ENTRY(controller->widgets.entry), "");
+  gtk_entry_set_text(GTK_ENTRY(controller->widgets.entry),
+                     request.initial_text.c_str());
   gtk_entry_set_visibility(GTK_ENTRY(controller->widgets.entry), request.echo);
 
   gtk_widget_set_no_show_all(controller->widgets.panel, FALSE);

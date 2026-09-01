@@ -21,6 +21,12 @@ enum class FileTransferDirection {
   receive,
 };
 
+/** Filesystem endpoint containing an item operated on by the browser. */
+enum class FileTransferEndpoint {
+  local,
+  remote,
+};
+
 /**
  * Decision applied to every conflict remaining in one transfer batch.
  */
@@ -130,5 +136,24 @@ cardio::promise<void>
 run_file_transfer_async(std::shared_ptr<RemoteFileClient> client,
                         FileTransferRequest request,
                         cardio::cancellation cancellation);
+
+/**
+ * Renames one local or remote browser item without replacing another item.
+ *
+ * @param client Initialized remote file client. Required for a remote item.
+ * @param endpoint Filesystem containing the item.
+ * @param source_path Existing item path.
+ * @param destination_path New sibling path.
+ * @param cancellation Operation cancellation signal.
+ *
+ * @remarks
+ * The destination is checked before the protocol rename operation. Services
+ * that do not provide an atomic no-replace rename can still race with an
+ * independent writer after that check.
+ */
+cardio::promise<void> rename_file_transfer_item_async(
+    std::shared_ptr<RemoteFileClient> client,
+    FileTransferEndpoint endpoint, std::string source_path,
+    std::string destination_path, cardio::cancellation cancellation);
 
 } // namespace elder_terms

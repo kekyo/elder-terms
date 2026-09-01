@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createGtkAppLauncher, type GtkApp } from 'gestament';
+import {
+  createGtkAppLauncher,
+  type GtkApp,
+  type GtkTableElement,
+} from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { describe, expect, it } from 'vitest';
 import { createTestEvidence, expectElementKind } from './test-helpers';
@@ -111,9 +115,58 @@ describe('FTP window', () => {
       expect((await app.getById('file_transfer_local_tree')).kind).toBe(
         'table'
       );
-      expect((await app.getById('file_transfer_remote_tree')).kind).toBe(
-        'table'
+      const remoteTreeElement = await app.getById('file_transfer_remote_tree');
+      expect(remoteTreeElement.kind).toBe('table');
+      const remoteTree = remoteTreeElement as GtkTableElement;
+      const readmeRow = await waitForResult(async () => {
+        const rows = await remoteTree.getRowCount();
+        for (let row = 0; row < rows; row += 1) {
+          const cell = await remoteTree.cellAt(row, 0);
+          if ((await cell?.info())?.name === 'readme.txt') {
+            return row;
+          }
+        }
+        throw new Error('FTP remote file was not listed');
+      });
+      await remoteTree.selectRow(readmeRow);
+      const readmeCell = await remoteTree.cellAt(readmeRow, 0);
+      const readmeBounds = (await readmeCell?.capture())?.bounds;
+      if (readmeBounds === undefined) {
+        throw new Error('FTP remote file did not expose bounds');
+      }
+      await app.input.moveMouseTo(
+        Math.round(readmeBounds.x + readmeBounds.width / 2),
+        Math.round(readmeBounds.y + readmeBounds.height / 2)
       );
+      await app.input.setMouseButton('right', true);
+      await app.input.setMouseButton('right', false);
+
+      const rename = expectElementKind(
+        await app.getById('file_transfer_remote_rename_item'),
+        'menuItem'
+      );
+      expect((await rename.info()).states).toContain('showing');
+      await rename.click();
+      const renameEntry = expectElementKind(
+        await app.getById('file_transfer_prompt_entry'),
+        'entry'
+      );
+      expect(await renameEntry.text()).toBe('readme.txt');
+      await renameEntry.setText('ftp-guide.txt');
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        const rows = await remoteTree.getRowCount();
+        for (let row = 0; row < rows; row += 1) {
+          const cell = await remoteTree.cellAt(row, 0);
+          if ((await cell?.info())?.name === 'ftp-guide.txt') {
+            return;
+          }
+        }
+        throw new Error('FTP remote rename was not reflected in the tree');
+      });
     } finally {
       try {
         await evidence.flushOutputs(apps, launcher);

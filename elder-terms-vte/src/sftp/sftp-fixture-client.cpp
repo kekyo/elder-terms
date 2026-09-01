@@ -287,15 +287,39 @@ public:
         normalize_fixture_path(source_path);
     const std::string destination =
         normalize_fixture_path(destination_path);
-    const auto iterator = nodes.find(source);
-    if (iterator == nodes.end() || nodes.contains(destination)) {
+    if (!nodes.contains(source) || nodes.contains(destination)) {
       throw std::runtime_error("Fixture remote rename failed");
     }
-    SftpFixtureNode node = std::move(iterator->second);
-    nodes.erase(iterator);
-    node.attributes.name = fixture_path_name(destination);
-    node.attributes.path = destination;
-    nodes.emplace(destination, std::move(node));
+    const std::string descendant_prefix = source + "/";
+    std::vector<std::pair<std::string, SftpFixtureNode>> renamed;
+    for (const auto &[candidate, node] : nodes) {
+      if (candidate != source &&
+          !candidate.starts_with(descendant_prefix)) {
+        continue;
+      }
+      const std::string renamed_path =
+          destination + candidate.substr(source.size());
+      if (nodes.contains(renamed_path) &&
+          renamed_path != candidate &&
+          !renamed_path.starts_with(descendant_prefix)) {
+        throw std::runtime_error("Fixture remote rename failed");
+      }
+      SftpFixtureNode renamed_node = node;
+      renamed_node.attributes.name = fixture_path_name(renamed_path);
+      renamed_node.attributes.path = renamed_path;
+      renamed.emplace_back(renamed_path, std::move(renamed_node));
+    }
+    for (auto iterator = nodes.begin(); iterator != nodes.end();) {
+      if (iterator->first == source ||
+          iterator->first.starts_with(descendant_prefix)) {
+        iterator = nodes.erase(iterator);
+      } else {
+        ++iterator;
+      }
+    }
+    for (auto &[renamed_path, node] : renamed) {
+      nodes.emplace(std::move(renamed_path), std::move(node));
+    }
     co_return;
   }
 

@@ -42,6 +42,8 @@ struct InlinePromptRequest {
   std::string accept_label;
   /** Text displayed by the rejecting button. */
   std::string cancel_label;
+  /** Initial text displayed when a text response is required. */
+  std::string initial_text = {};
   /** True when the prompt collects a text response. */
   bool input_required;
   /** True when entered text may be displayed. */

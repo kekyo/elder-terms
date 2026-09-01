@@ -234,6 +234,14 @@ static void passive_server(int control_fd) {
   expect_command(control_fd, "DELE /canonical-first/zebra.txt");
   write_all(control_fd, "250 File removed\r\n");
 
+  expect_command(control_fd, "RNFR /canonical-first/old-name.txt");
+  expect_no_control_command(control_fd);
+  write_all(control_fd, "350 Ready for destination name\r\n");
+  expect_command(control_fd, "RNTO /canonical-first/new-name.txt");
+  write_all(control_fd, "250 Rename successful\r\n");
+  expect_command(control_fd, "DELE /after-rename.txt");
+  write_all(control_fd, "250 Queued command completed\r\n");
+
   Listener rejected_listener = create_loopback_listener();
   expect_command(control_fd, "EPSV");
   write_all(control_fd, "229 Entering Extended Passive Mode (|||" +
@@ -464,6 +472,14 @@ run_passive_client(std::uint16_t port,
   co_await reader->close_async(cancellation);
   co_await remove_task;
   expect(content == "content", "FTP RETR returned incorrect bytes");
+
+  cardio::promise<void> rename_task = client->rename_async(
+      "/canonical-first/old-name.txt",
+      "/canonical-first/new-name.txt", cancellation);
+  cardio::promise<void> remove_after_rename_task =
+      client->remove_file_async("/after-rename.txt", cancellation);
+  co_await rename_task;
+  co_await remove_after_rename_task;
 
   bool write_rejected = false;
   try {

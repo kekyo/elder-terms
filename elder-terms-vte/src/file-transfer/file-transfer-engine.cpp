@@ -1292,4 +1292,43 @@ run_file_transfer_async(std::shared_ptr<RemoteFileClient> client,
   }
 }
 
+cardio::promise<void> rename_file_transfer_item_async(
+    std::shared_ptr<RemoteFileClient> client,
+    FileTransferEndpoint endpoint, std::string source_path,
+    std::string destination_path, cardio::cancellation cancellation) {
+  if (source_path.empty() || destination_path.empty()) {
+    throw std::invalid_argument("File rename paths must not be empty");
+  }
+  cancellation.throw_if_cancellation_requested();
+
+  if (endpoint == FileTransferEndpoint::remote) {
+    if (client == nullptr) {
+      throw std::invalid_argument("Remote file client is required");
+    }
+    if ((co_await client->lstat_async(destination_path, cancellation))
+            .has_value()) {
+      throw std::runtime_error("Destination already exists");
+    }
+    co_await client->rename_async(std::move(source_path),
+                                  std::move(destination_path),
+                                  cancellation);
+    co_return;
+  }
+
+  GObjectPtr<GFile> source(g_file_new_for_path(source_path.c_str()));
+  GObjectPtr<GFile> destination(
+      g_file_new_for_path(destination_path.c_str()));
+  if ((co_await query_optional_local_attributes_async(
+           destination.get(), cancellation))
+          .has_value()) {
+    throw std::runtime_error("Destination already exists");
+  }
+  if (!(co_await query_optional_local_attributes_async(source.get(),
+                                                       cancellation))
+           .has_value()) {
+    throw std::runtime_error("Source item does not exist");
+  }
+  co_await move_local_async(source.get(), destination.get(), cancellation);
+}
+
 } // namespace elder_terms

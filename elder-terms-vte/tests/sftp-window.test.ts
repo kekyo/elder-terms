@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import {
+  access,
   chmod,
   mkdir,
   mkdtemp,
@@ -1286,6 +1287,146 @@ describe('SFTP window', () => {
           expect(
             await readFile(join(localDirectory, 'readme.txt'), 'utf8')
           ).toBe('hello from remote\n');
+        });
+      }
+    );
+  });
+
+  it('renames local and remote files and directories from the pane context menus', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      undefined,
+      async ({ app, localDirectory }) => {
+        await writeFile(
+          join(localDirectory, 'documents', 'inside.txt'),
+          'inside local directory\n'
+        );
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
+        const prompt = await app.getById('file_transfer_prompt_panel');
+        const promptEntry = expectElementKind(
+          await app.getById('file_transfer_prompt_entry'),
+          'entry'
+        );
+        const promptAccept = expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        );
+
+        await openContextMenu(
+          app,
+          localTree,
+          await findRow(localTree, 'hello.txt')
+        );
+        const localRename = expectElementKind(
+          await app.getById('file_transfer_local_rename_item'),
+          'menuItem'
+        );
+        await expectShowing(localRename);
+        expect((await localRename.info()).name).toBe('Rename');
+        await localRename.click();
+        await expectShowing(prompt);
+        expect(await promptEntry.text()).toBe('hello.txt');
+        await promptEntry.setText('greeting.txt');
+        await promptAccept.click();
+        await waitForResult(async () => {
+          expect(
+            await findRow(localTree, 'greeting.txt')
+          ).toBeGreaterThanOrEqual(0);
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Renamed "hello.txt" to "greeting.txt"');
+        });
+        expect(
+          await readFile(join(localDirectory, 'greeting.txt'), 'utf8')
+        ).toBe('hello from local\n');
+        await expect(
+          access(join(localDirectory, 'hello.txt'))
+        ).rejects.toThrow();
+
+        await openContextMenu(
+          app,
+          localTree,
+          await findRow(localTree, 'documents')
+        );
+        await localRename.click();
+        expect(await promptEntry.text()).toBe('documents');
+        await promptEntry.setText('notes');
+        await promptAccept.click();
+        await waitForResult(async () => {
+          expect(await findRow(localTree, 'notes')).toBeGreaterThanOrEqual(0);
+        });
+        expect(
+          await readFile(join(localDirectory, 'notes', 'inside.txt'), 'utf8')
+        ).toBe('inside local directory\n');
+        await expect(
+          access(join(localDirectory, 'documents'))
+        ).rejects.toThrow();
+
+        await openContextMenu(
+          app,
+          remoteTree,
+          await findRow(remoteTree, 'readme.txt')
+        );
+        const remoteRename = expectElementKind(
+          await app.getById('file_transfer_remote_rename_item'),
+          'menuItem'
+        );
+        await remoteRename.click();
+        expect(await promptEntry.text()).toBe('readme.txt');
+        await promptEntry.setText('guide.txt');
+        await promptAccept.click();
+        await waitForResult(async () => {
+          expect(await findRow(remoteTree, 'guide.txt')).toBeGreaterThanOrEqual(
+            0
+          );
+        });
+
+        await openContextMenu(
+          app,
+          remoteTree,
+          await findRow(remoteTree, 'archive')
+        );
+        await remoteRename.click();
+        expect(await promptEntry.text()).toBe('archive');
+        await promptEntry.setText('history');
+        await promptAccept.click();
+        await waitForResult(async () => {
+          expect(await findRow(remoteTree, 'history')).toBeGreaterThanOrEqual(
+            0
+          );
+        });
+
+        const remotePath = expectElementKind(
+          await app.getById('file_transfer_remote_path_entry'),
+          'entry'
+        );
+        const remotePathBounds = (await remotePath.capture()).bounds;
+        await app.input.moveMouseTo(
+          Math.trunc(remotePathBounds.x + remotePathBounds.width / 2),
+          Math.trunc(remotePathBounds.y + remotePathBounds.height / 2)
+        );
+        await app.input.setMouseButton('left', true);
+        await app.input.setMouseButton('left', false);
+        await waitForResult(async () => {
+          expect((await remotePath.info()).states).toContain('focused');
+        });
+        await remotePath.setText('/remote/history');
+        await app.input.pressKey('Return');
+        await waitForResult(async () => {
+          expect(await remotePath.text()).toBe('/remote/history');
+          expect(await findRow(remoteTree, 'old.log')).toBeGreaterThanOrEqual(
+            0
+          );
         });
       }
     );
