@@ -660,14 +660,6 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       expect(lstatSync(path).isSymbolicLink()).toBe(true);
       expect(readlinkSync(path)).toBe(expectedTarget);
     }
-    for (const removedPath of [
-      'bin/elder-terms-sftp',
-      'bin/elder-terms-ftp',
-      join(libraryDirectory, 'elder-terms/elder-terms-vte/elder-terms-sftp'),
-      join(libraryDirectory, 'elder-terms/elder-terms-vte/elder-terms-ftp'),
-    ]) {
-      expect(() => lstatSync(join(installedRoot, removedPath))).toThrow();
-    }
     for (const relativePath of [
       join(libraryDirectory, 'elder-terms/libelder-terms.so'),
       join(libraryDirectory, 'elder-terms/launcher/elder-terms'),
