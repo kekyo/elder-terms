@@ -58,6 +58,8 @@ struct TerminalLayoutState {
   bool font_resize_guard_active = false;
   bool font_zoom_anchor_active = false;
   bool font_zoom_pending = false;
+  bool layout_grid_guard_active = false;
+  bool layout_geometry_update_pending = false;
   bool break_key_pressed = false;
   bool show_border = false;
   gint border_width = 0;
@@ -210,9 +212,9 @@ static int hinted_height_for_grid(TerminalLayoutState *state, glong rows) {
          static_cast<int>(rows) * state->hints.height_inc;
 }
 
-static bool font_grid_is_locked(TerminalLayoutState *state) {
+static bool terminal_grid_is_locked(TerminalLayoutState *state) {
   return state->font_resize_guard_active || state->font_zoom_pending ||
-         state->font_zoom_source != 0;
+         state->font_zoom_source != 0 || state->layout_grid_guard_active;
 }
 
 static void update_fixture_grid_status(TerminalLayoutState *state) {
@@ -329,9 +331,11 @@ static void update_window_size(TerminalLayoutState *state) {
   if (!update_geometry(state)) {
     return;
   }
+  state->layout_geometry_update_pending = false;
   if (state->realized && window_state_is_snapped(state->window_state)) {
     // Snapped allocations are temporary: notify the backend without replacing
     // the normal-window grid that should be restored later.
+    state->layout_grid_guard_active = false;
     notify_current_terminal_grid_size(state);
     return;
   }
@@ -618,7 +622,7 @@ static void on_terminal_resize_window(VteTerminal *, guint columns, guint rows,
     return;
   }
 
-  if (font_grid_is_locked(state)) {
+  if (terminal_grid_is_locked(state)) {
     ensure_terminal_grid_size(state, state->desired_columns,
                               state->desired_rows);
   } else {
@@ -658,12 +662,21 @@ static void sync_window_size(TerminalLayoutState *state) {
       window_allocation.width == expected_width &&
       window_allocation.height == expected_height;
   VteTerminal *terminal = VTE_TERMINAL(state->terminal);
-  if (font_grid_is_locked(state)) {
-    // Keep font-driven allocations from becoming a terminal grid resize.
+  if (terminal_grid_is_locked(state)) {
+    // Keep font- and layout-driven allocations from becoming a grid resize.
     ensure_terminal_grid_size(state, state->desired_columns,
                               state->desired_rows);
+    const bool layout_target_reached =
+        window_allocation.width ==
+            hinted_width_for_grid(state, state->desired_columns) &&
+        window_allocation.height ==
+            hinted_height_for_grid(state, state->desired_rows);
     resize_window_to_hinted_grid(state, state->desired_columns,
                                  state->desired_rows);
+    if (state->layout_grid_guard_active &&
+        !state->layout_geometry_update_pending && layout_target_reached) {
+      state->layout_grid_guard_active = false;
+    }
     if (state->options.fixture) {
       g_timeout_add(50, feed_fixture_idle, state);
     }
@@ -999,6 +1012,8 @@ void apply_terminal_border_visibility(TerminalLayoutState *state,
     return;
   }
 
+  state->layout_grid_guard_active = true;
+  state->layout_geometry_update_pending = true;
   set_border_visibility(state, show_border);
   queue_window_size_update(state);
 }
@@ -1010,6 +1025,8 @@ void apply_terminal_border_width(TerminalLayoutState *state,
     return;
   }
 
+  state->layout_grid_guard_active = true;
+  state->layout_geometry_update_pending = true;
   set_border_width(state, border_width);
   queue_window_size_update(state);
 }
