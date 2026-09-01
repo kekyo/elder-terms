@@ -195,6 +195,27 @@ Clearing a text field or selecting the default item in a selection field
 removes the explicit value, causing the setting to inherit the global or
 built-in default again.
 
+## Managing Items in SFTP and FTP
+
+SFTP and FTP use the same two-pane file browser. Select an item in either the
+local or remote pane and right-click it to open the item menu. Multiple items
+can be selected with `Ctrl`+click or a drag rectangle before opening the menu.
+
+- `Rename` is available when exactly one file or directory is selected. Enter
+  the new name in the window overlay. The item stays in its current directory,
+  and an existing item is never overwritten.
+- `Delete` is available for one or more selected files and directories. The
+  confirmation overlay lists the effective deletion roots before anything is
+  removed. A non-empty directory is deleted recursively. If both a directory
+  and one of its descendants are selected, the descendant is covered by that
+  directory and is not listed or processed twice.
+
+Deletion is permanent and does not use the desktop trash. In the local pane
+and over SFTP, deleting a symbolic link removes the link itself without
+following its target. Rename and deletion run asynchronously; the browser is
+temporarily covered by a progress overlay and is refreshed when the operation
+finishes.
+
 ## Using FTP
 
 Create a connection in the launcher and select `FTP` as its connection type.
