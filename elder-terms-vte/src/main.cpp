@@ -1184,10 +1184,33 @@ static void on_shared_sftp_window_closed(ApplicationState *state) {
   maybe_shutdown_application(state);
 }
 
+static void create_shared_sftp_window(ApplicationState *state) {
+  const elder_terms::SftpConnectionSettings settings =
+      elder_terms::sftp_connection_settings(state->settings_store);
+  state->sftp_window = elder_terms::create_file_transfer_window(
+      {
+          .connection_name =
+              elder_terms::general_connection_name(state->settings_store),
+          .protocol_name = "SFTP",
+          .local_directory =
+              elder_terms::resolve_file_transfer_local_directory(
+                  state->settings_store, settings.local_directory),
+          .remote_directory = settings.remote_directory,
+          .colors =
+              elder_terms::general_color_settings(state->settings_store),
+          .closed =
+              [state]() {
+                on_shared_sftp_window_closed(state);
+              },
+      });
+  elder_terms::show_file_transfer_window(state->sftp_window);
+}
+
 static cardio::promise<void> open_shared_sftp_window_async(
     ApplicationState *state,
     std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport,
     cardio::cancellation cancellation) {
+  std::string failure;
   try {
     std::shared_ptr<elder_terms::RemoteFileClient> client;
     if (state->test_options.fixture) {
@@ -1198,32 +1221,11 @@ static cardio::promise<void> open_shared_sftp_window_async(
           transport, cancellation);
     }
     cancellation.throw_if_cancellation_requested();
-
-    const elder_terms::SftpConnectionSettings settings =
-        elder_terms::sftp_connection_settings(state->settings_store);
     state->sftp_transport = std::move(transport);
     state->sftp_client = std::move(client);
-    state->sftp_window = elder_terms::create_file_transfer_window(
-        {
-            .connection_name =
-                elder_terms::general_connection_name(
-                    state->settings_store),
-            .protocol_name = "SFTP",
-            .local_directory =
-                elder_terms::resolve_file_transfer_local_directory(
-                    state->settings_store, settings.local_directory),
-            .remote_directory = settings.remote_directory,
-            .colors =
-                elder_terms::general_color_settings(
-                    state->settings_store),
-            .client = state->sftp_client,
-            .closed =
-                [state]() {
-                  on_shared_sftp_window_closed(state);
-                },
-        });
+    elder_terms::attach_file_transfer_window_client(
+        state->sftp_window, state->sftp_client);
     state->sftp_opening = false;
-    elder_terms::show_file_transfer_window(state->sftp_window);
     if (state->test_options.focus_transfer_on_sftp_open &&
         state->window != nullptr) {
       gtk_window_set_focus(
@@ -1237,8 +1239,9 @@ static cardio::promise<void> open_shared_sftp_window_async(
     co_return;
   } catch (const cardio::canceled_exception &) {
   } catch (const std::exception &error) {
+    failure = error.what();
     std::cerr << "Warning: failed to open shared SFTP window: "
-              << error.what() << '\n';
+              << failure << '\n';
     if (state->window != nullptr) {
       elder_terms::set_main_window_status_text(
           state->main_window, _("SFTP unavailable"));
@@ -1247,7 +1250,11 @@ static cardio::promise<void> open_shared_sftp_window_async(
 
   state->sftp_opening = false;
   state->sftp_client.reset();
-  state->sftp_transport.reset();
+  if (!failure.empty() && state->sftp_window != nullptr) {
+    co_await elder_terms::show_file_transfer_window_connection_error_async(
+        state->sftp_window, _("Failed to start SFTP"), std::move(failure),
+        std::move(cancellation));
+  }
   maybe_shutdown_application(state);
 }
 
@@ -1284,6 +1291,7 @@ static void on_sftp_menu_item_activate(GtkMenuItem *,
   state->sftp_cancel_source.emplace();
   state->sftp_transport = transport;
   state->sftp_opening = true;
+  create_shared_sftp_window(state);
   state->sftp_open_task.reset();
   state->sftp_open_task.emplace(
       open_shared_sftp_window_async(

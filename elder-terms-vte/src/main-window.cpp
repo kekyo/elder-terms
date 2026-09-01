@@ -15,6 +15,7 @@
 #include <glib/gi18n-lib.h>
 
 #include "main-window.h"
+#include "inline-prompt.h"
 #include "widget-background.h"
 
 namespace elder_terms {
@@ -40,12 +41,6 @@ static constexpr const char *main_exterior_component_style_class =
 static constexpr const char *settings_background_style_class =
     "settings-background";
 static constexpr const char *gtk_color_button_style_class = "color";
-static constexpr const char *ssh_prompt_background_style_class =
-    "ssh-prompt-background";
-static constexpr const char *ssh_prompt_title_style_class =
-    "ssh-prompt-title";
-static constexpr const char *ssh_prompt_message_style_class =
-    "ssh-prompt-message";
 static constexpr const char *main_window_css =
     ".terminal-dim-overlay {"
     "  background-color: rgba(0, 0, 0, 0.35);"
@@ -61,16 +56,6 @@ static constexpr const char *main_window_css =
     "}"
     ".transfer-progress-notice-label {"
     "  color: #ffff00;"
-    "}"
-    ".ssh-prompt-background {"
-    "  background-color: rgba(48, 48, 48, 0.96);"
-    "}"
-    ".ssh-prompt-title {"
-    "  color: #ffffff;"
-    "  font-weight: bold;"
-    "}"
-    ".ssh-prompt-message {"
-    "  color: #ffffff;"
     "}";
 static constexpr const char *indicator_on_icon_file_name = "green-on.png";
 static constexpr const char *indicator_off_icon_file_name = "green-off.png";
@@ -112,21 +97,6 @@ struct ClipboardTargetsRequest {
 struct ClipboardTextRequest {
   std::function<bool()> can_paste;
   std::function<void(std::string utf8_text)> paste;
-};
-
-struct MainWindowSshPromptRequest {
-  std::shared_ptr<cardio::promise_source<SshUserPromptResponse>> source;
-  cardio::cancellation_registration cancellation_registration;
-  bool input_required = false;
-};
-
-struct MainWindowSshPromptState {
-  GtkWidget *panel = nullptr;
-  GtkWidget *title_label = nullptr;
-  GtkWidget *message_label = nullptr;
-  GtkWidget *entry = nullptr;
-  GtkWidget *accept_button = nullptr;
-  std::shared_ptr<MainWindowSshPromptRequest> request;
 };
 
 struct MainWindowTransferProgressState {
@@ -1048,30 +1018,6 @@ static void apply_main_window_style(MainWindow *main_window) {
                                  GTK_STYLE_PROVIDER(provider),
                                  GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
-  GtkStyleContext *ssh_prompt_background_context =
-      gtk_widget_get_style_context(main_window->ssh_prompt_background);
-  gtk_style_context_add_class(ssh_prompt_background_context,
-                              ssh_prompt_background_style_class);
-  gtk_style_context_add_provider(ssh_prompt_background_context,
-                                 GTK_STYLE_PROVIDER(provider),
-                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-
-  GtkStyleContext *ssh_prompt_title_context =
-      gtk_widget_get_style_context(main_window->ssh_prompt_title_label);
-  gtk_style_context_add_class(ssh_prompt_title_context,
-                              ssh_prompt_title_style_class);
-  gtk_style_context_add_provider(ssh_prompt_title_context,
-                                 GTK_STYLE_PROVIDER(provider),
-                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-
-  GtkStyleContext *ssh_prompt_message_context =
-      gtk_widget_get_style_context(main_window->ssh_prompt_message_label);
-  gtk_style_context_add_class(ssh_prompt_message_context,
-                              ssh_prompt_message_style_class);
-  gtk_style_context_add_provider(ssh_prompt_message_context,
-                                 GTK_STYLE_PROVIDER(provider),
-                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-
   g_object_unref(provider);
 }
 
@@ -1120,55 +1066,6 @@ static void set_main_window_terminal_dim_visible(MainWindow *main_window,
   if (visible) {
     gtk_widget_show_all(main_window->terminal_dim_overlay);
   }
-}
-
-static void hide_main_window_ssh_prompt(MainWindowSshPromptState *state) {
-  if (state == nullptr || state->panel == nullptr) {
-    return;
-  }
-
-  gtk_entry_set_text(GTK_ENTRY(state->entry), "");
-  gtk_widget_set_visible(state->entry, false);
-  gtk_widget_set_no_show_all(state->entry, true);
-  gtk_widget_set_visible(state->panel, false);
-  gtk_widget_set_no_show_all(state->panel, true);
-}
-
-static void complete_main_window_ssh_prompt(
-    MainWindowSshPromptState *state, SshUserPromptResponse response) {
-  if (state == nullptr || state->request == nullptr) {
-    return;
-  }
-
-  std::shared_ptr<MainWindowSshPromptRequest> request =
-      std::exchange(state->request, nullptr);
-  request->cancellation_registration = {};
-  hide_main_window_ssh_prompt(state);
-  (void)request->source->try_resolve(std::move(response));
-}
-
-static void on_ssh_prompt_accept_clicked(GtkButton *, gpointer data) {
-  auto *state = static_cast<MainWindowSshPromptState *>(data);
-  if (state == nullptr || state->request == nullptr) {
-    return;
-  }
-
-  std::string text;
-  if (state->request->input_required) {
-    const char *entry_text = gtk_entry_get_text(GTK_ENTRY(state->entry));
-    text = entry_text == nullptr ? "" : entry_text;
-  }
-  complete_main_window_ssh_prompt(
-      state, {.accepted = true, .text = std::move(text)});
-}
-
-static void on_ssh_prompt_cancel_clicked(GtkButton *, gpointer data) {
-  complete_main_window_ssh_prompt(
-      static_cast<MainWindowSshPromptState *>(data), {});
-}
-
-static void on_ssh_prompt_entry_activated(GtkEntry *, gpointer data) {
-  on_ssh_prompt_accept_clicked(nullptr, data);
 }
 
 static void on_transfer_cancel_clicked(GtkButton *, gpointer data) {
@@ -1337,24 +1234,16 @@ std::optional<MainWindow> load_main_window() {
                                 main_window.terminal_overlay);
   install_terminal_dim_overlay_input_pass_through(
       main_window.terminal_dim_overlay);
-  main_window.ssh_prompt_state = std::make_shared<MainWindowSshPromptState>(
-      MainWindowSshPromptState{
+  main_window.ssh_prompt = create_inline_prompt_controller(
+      {
           .panel = main_window.ssh_prompt_panel,
+          .background = main_window.ssh_prompt_background,
           .title_label = main_window.ssh_prompt_title_label,
           .message_label = main_window.ssh_prompt_message_label,
           .entry = main_window.ssh_prompt_entry,
+          .cancel_button = main_window.ssh_prompt_cancel_button,
           .accept_button = main_window.ssh_prompt_accept_button,
-          .request = nullptr,
       });
-  g_signal_connect(main_window.ssh_prompt_accept_button, "clicked",
-                   G_CALLBACK(on_ssh_prompt_accept_clicked),
-                   main_window.ssh_prompt_state.get());
-  g_signal_connect(main_window.ssh_prompt_cancel_button, "clicked",
-                   G_CALLBACK(on_ssh_prompt_cancel_clicked),
-                   main_window.ssh_prompt_state.get());
-  g_signal_connect(main_window.ssh_prompt_entry, "activate",
-                   G_CALLBACK(on_ssh_prompt_entry_activated),
-                   main_window.ssh_prompt_state.get());
   main_window.transfer_progress_state =
       std::make_shared<MainWindowTransferProgressState>(
           MainWindowTransferProgressState{
@@ -1557,66 +1446,37 @@ void focus_main_window_terminal_if_interactive(MainWindow *main_window) {
 cardio::promise<SshUserPromptResponse> prompt_main_window_ssh_async(
     MainWindow *main_window, const SshUserPrompt &prompt,
     cardio::cancellation cancellation) {
-  if (main_window == nullptr || main_window->ssh_prompt_state == nullptr ||
+  if (main_window == nullptr || main_window->ssh_prompt == nullptr ||
       cancellation.is_cancellation_requested()) {
     co_return SshUserPromptResponse{};
   }
 
-  cancel_main_window_ssh_prompt(main_window);
-  std::shared_ptr<MainWindowSshPromptState> state =
-      main_window->ssh_prompt_state;
-  auto source =
-      std::make_shared<cardio::promise_source<SshUserPromptResponse>>();
-  cardio::promise<SshUserPromptResponse> response = source->get_promise();
-  auto request = std::make_shared<MainWindowSshPromptRequest>();
-  request->source = source;
-  request->input_required = prompt.input_required;
-  state->request = request;
-
-  const std::weak_ptr<MainWindowSshPromptState> weak_state = state;
-  const std::weak_ptr<MainWindowSshPromptRequest> weak_request = request;
-  request->cancellation_registration =
-      cancellation.on_cancellation_requested(
-          [weak_state, weak_request, source]() {
-            std::shared_ptr<MainWindowSshPromptState> current_state =
-                weak_state.lock();
-            std::shared_ptr<MainWindowSshPromptRequest> current_request =
-                weak_request.lock();
-            if (current_state != nullptr && current_request != nullptr &&
-                current_state->request == current_request) {
-              complete_main_window_ssh_prompt(current_state.get(), {});
-              return;
-            }
-            (void)source->try_resolve({});
-          });
-
-  gtk_label_set_text(GTK_LABEL(state->title_label),
-                     prompt.title.empty() ? _("SSH") : prompt.title.c_str());
-  gtk_label_set_text(GTK_LABEL(state->message_label),
-                     prompt.message.c_str());
-  gtk_button_set_label(
-      GTK_BUTTON(state->accept_button),
-      prompt.kind == SshUserPromptKind::host_key ? _("Accept") : _("OK"));
-  gtk_entry_set_text(GTK_ENTRY(state->entry), "");
-  gtk_entry_set_visibility(GTK_ENTRY(state->entry), prompt.echo);
-
   set_main_window_terminal_interactive(main_window, false);
-  gtk_widget_set_no_show_all(state->panel, false);
-  gtk_widget_show_all(state->panel);
-  gtk_widget_set_no_show_all(state->panel, true);
-  gtk_widget_set_visible(state->entry, prompt.input_required);
-  gtk_widget_set_no_show_all(state->entry, !prompt.input_required);
-  gtk_widget_grab_focus(prompt.input_required ? state->entry
-                                             : state->accept_button);
-
-  co_return co_await response;
+  InlinePromptResponse response = co_await prompt_inline_async(
+      main_window->ssh_prompt,
+      {
+          .title = prompt.title.empty() ? _("SSH") : prompt.title,
+          .message = prompt.message,
+          .accept_label = prompt.kind == SshUserPromptKind::host_key
+                              ? _("Accept")
+                              : _("OK"),
+          .cancel_label = _("Cancel"),
+          .input_required = prompt.input_required,
+          .echo = prompt.echo,
+          .cancel_visible = true,
+      },
+      std::move(cancellation));
+  co_return SshUserPromptResponse{
+      .accepted = response.accepted,
+      .text = std::move(response.text),
+  };
 }
 
 void cancel_main_window_ssh_prompt(MainWindow *main_window) {
-  if (main_window == nullptr || main_window->ssh_prompt_state == nullptr) {
+  if (main_window == nullptr || main_window->ssh_prompt == nullptr) {
     return;
   }
-  complete_main_window_ssh_prompt(main_window->ssh_prompt_state.get(), {});
+  cancel_inline_prompt(main_window->ssh_prompt);
 }
 
 void set_main_window_transfer_progress_visible(MainWindow *main_window,

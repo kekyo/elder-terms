@@ -20,7 +20,7 @@
 
 namespace elder_terms {
 
-struct MainWindowSshPromptState;
+struct InlinePromptController;
 struct MainWindowTransferProgressState;
 
 /**
@@ -180,8 +180,8 @@ struct MainWindow {
   /** Current backend connection lifecycle phase. */
   TerminalSessionConnectionPhase connection_phase =
       TerminalSessionConnectionPhase::disconnected;
-  /** Stable controller for SSH prompt signals and pending responses. */
-  std::shared_ptr<MainWindowSshPromptState> ssh_prompt_state;
+  /** Shared inline controller for SSH prompt signals and pending responses. */
+  std::shared_ptr<InlinePromptController> ssh_prompt;
   /** Stable controller for transfer progress actions. */
   std::shared_ptr<MainWindowTransferProgressState> transfer_progress_state;
 };

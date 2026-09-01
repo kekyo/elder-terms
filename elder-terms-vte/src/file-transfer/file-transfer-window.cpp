@@ -83,6 +83,14 @@ using FileTransferGCharPtr = std::unique_ptr<char, FileTransferGFreeDeleter>;
 struct FileTransferWindow;
 static void clear_file_transfer_window_colors(FileTransferWindow *window);
 
+enum class FileTransferConnectionState {
+  connecting,
+  authenticating,
+  ready,
+  failed,
+  disconnected,
+};
+
 struct FileTransferPaneState {
   FileTransferWindow *window = nullptr;
   bool remote = false;
@@ -117,6 +125,8 @@ struct FileTransferWindow {
   GtkWidget *transfer_label = nullptr;
   GtkWidget *transfer_progress = nullptr;
   GtkWidget *transfer_cancel_button = nullptr;
+  GtkWidget *prompt_panel = nullptr;
+  GtkWidget *prompt_background = nullptr;
   GtkWidget *status_bar = nullptr;
   GtkWidget *status_label = nullptr;
   GtkCssProvider *exterior_background_provider = nullptr;
@@ -127,17 +137,23 @@ struct FileTransferWindow {
   FileTransferPaneState local;
   FileTransferPaneState remote;
   std::shared_ptr<RemoteFileClient> client;
+  std::shared_ptr<InlinePromptController> prompt;
   std::function<void()> closed;
   cardio::cancellation_source stop_source;
   std::optional<cardio::cancellation_source> transfer_cancel_source;
   std::optional<cardio::promise<void>> transfer_task;
   guint transfer_pulse_source = 0;
-  bool initial_load_started = false;
-  bool connection_available = true;
+  FileTransferConnectionState connection_state =
+      FileTransferConnectionState::connecting;
+  bool shown = false;
+  bool local_load_started = false;
+  bool remote_load_started = false;
+  bool connection_available = false;
   bool transfer_active = false;
   bool destroyed = false;
 
   ~FileTransferWindow() {
+    cancel_inline_prompt(prompt);
     (void)stop_source.cancel();
     if (transfer_cancel_source.has_value()) {
       (void)transfer_cancel_source->cancel();
@@ -523,6 +539,21 @@ static void set_widget_visible(GtkWidget *widget, bool visible) {
   }
 }
 
+static void update_file_transfer_overlay_presentation(
+    FileTransferWindow *window) {
+  if (window == nullptr || window->destroyed) {
+    return;
+  }
+  const bool connection_blocked =
+      window->connection_state == FileTransferConnectionState::connecting ||
+      window->connection_state ==
+          FileTransferConnectionState::authenticating ||
+      window->connection_state == FileTransferConnectionState::failed;
+  set_widget_visible(window->dim_overlay,
+                     connection_blocked || window->transfer_active);
+  set_widget_visible(window->transfer_overlay, window->transfer_active);
+}
+
 static gboolean pulse_file_transfer_progress(gpointer data) {
   auto *window = static_cast<FileTransferWindow *>(data);
   if (window == nullptr || window->destroyed ||
@@ -549,8 +580,7 @@ static void stop_file_transfer_pulse(FileTransferWindow *window) {
 static void set_file_transfer_active(FileTransferWindow *window,
                                      bool active) {
   window->transfer_active = active;
-  set_widget_visible(window->dim_overlay, active);
-  set_widget_visible(window->transfer_overlay, active);
+  update_file_transfer_overlay_presentation(window);
   gtk_widget_set_sensitive(window->transfer_cancel_button,
                            active ? TRUE : FALSE);
   if (active) {
@@ -1311,6 +1341,7 @@ static void on_file_transfer_window_destroy(GtkWidget *, gpointer data) {
   if (window == nullptr || window->destroyed) {
     return;
   }
+  cancel_inline_prompt(window->prompt);
   clear_file_transfer_window_colors(window);
   window->destroyed = true;
   window->window = nullptr;
@@ -1700,6 +1731,8 @@ static void clear_file_transfer_window_colors(FileTransferWindow *window) {
     remove_widget_tree_background_provider(
         window->transfer_overlay,
         window->background_provider);
+    remove_widget_tree_background_provider(
+        window->prompt_panel, window->background_provider);
     g_clear_object(&window->background_provider);
   }
   if (window->component_background_provider != nullptr) {
@@ -1708,6 +1741,8 @@ static void clear_file_transfer_window_colors(FileTransferWindow *window) {
     remove_widget_tree_background_provider(
         window->transfer_overlay,
         window->component_background_provider);
+    remove_widget_tree_background_provider(
+        window->prompt_panel, window->component_background_provider);
     g_clear_object(&window->component_background_provider);
   }
   if (window->popup_component_background_provider != nullptr) {
@@ -1725,14 +1760,10 @@ static void clear_file_transfer_window_colors(FileTransferWindow *window) {
 
 std::shared_ptr<FileTransferWindow>
 create_file_transfer_window(FileTransferWindowOptions options) {
-  if (options.client == nullptr) {
-    throw std::invalid_argument("Remote file client is required");
-  }
   if (options.protocol_name.empty()) {
     throw std::invalid_argument("File transfer protocol name is required");
   }
   auto state = std::make_shared<FileTransferWindow>();
-  state->client = std::move(options.client);
   state->closed = std::move(options.closed);
   state->local.current_directory =
       std::move(options.local_directory);
@@ -1800,7 +1831,7 @@ create_file_transfer_window(FileTransferWindowOptions options) {
       GTK_CONTAINER(state->status_bar), status_content);
   gtk_box_pack_start(
       GTK_BOX(content), state->status_bar, FALSE, TRUE, 0);
-  state->status_label = gtk_label_new(_("Ready"));
+  state->status_label = gtk_label_new(_("Connecting"));
   gestament_gtk_assign_accessible_id(
       state->status_label, "file_transfer_status_label");
   gtk_label_set_xalign(GTK_LABEL(state->status_label), 0.0F);
@@ -1858,6 +1889,14 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay),
                           state->transfer_overlay);
 
+  const InlinePromptWidgets prompt_widgets =
+      create_inline_prompt_widgets("file_transfer_prompt");
+  state->prompt_panel = prompt_widgets.panel;
+  state->prompt_background = prompt_widgets.background;
+  state->prompt = create_inline_prompt_controller(prompt_widgets);
+  gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay),
+                          state->prompt_panel);
+
   apply_file_transfer_window_style(state.get());
   set_file_transfer_window_colors(state, options.colors);
   g_signal_connect(
@@ -1879,15 +1918,95 @@ void show_file_transfer_window(const std::shared_ptr<FileTransferWindow> &window
       window->destroyed) {
     return;
   }
+  window->shown = true;
   gtk_widget_show_all(window->window);
-  set_widget_visible(window->dim_overlay, false);
-  set_widget_visible(window->transfer_overlay, false);
-  if (!window->initial_load_started) {
-    window->initial_load_started = true;
+  update_file_transfer_overlay_presentation(window.get());
+  if (!window->local_load_started) {
+    window->local_load_started = true;
     start_file_transfer_pane_navigation(
         &window->local, window->local.current_directory);
+  }
+  if (window->connection_state == FileTransferConnectionState::ready &&
+      !window->remote_load_started) {
+    window->remote_load_started = true;
     start_file_transfer_pane_navigation(
         &window->remote, window->remote.current_directory);
+  }
+}
+
+void attach_file_transfer_window_client(
+    const std::shared_ptr<FileTransferWindow> &window,
+    std::shared_ptr<RemoteFileClient> client) {
+  if (window == nullptr || window->destroyed) {
+    return;
+  }
+  if (client == nullptr) {
+    throw std::invalid_argument("Remote file client is required");
+  }
+  if (window->client != nullptr) {
+    throw std::logic_error("Remote file client is already attached");
+  }
+  window->client = std::move(client);
+  window->connection_available = true;
+  window->connection_state = FileTransferConnectionState::ready;
+  set_file_transfer_status(window.get(), _("Ready"));
+  update_file_transfer_overlay_presentation(window.get());
+  update_file_transfer_sensitivity(window.get());
+  if (window->shown && !window->remote_load_started) {
+    window->remote_load_started = true;
+    start_file_transfer_pane_navigation(
+        &window->remote, window->remote.current_directory);
+  }
+}
+
+cardio::promise<InlinePromptResponse> prompt_file_transfer_window_async(
+    const std::shared_ptr<FileTransferWindow> &window,
+    InlinePromptRequest request, cardio::cancellation cancellation) {
+  if (window == nullptr || window->destroyed || window->prompt == nullptr ||
+      cancellation.is_cancellation_requested()) {
+    co_return InlinePromptResponse{};
+  }
+  window->connection_state = FileTransferConnectionState::authenticating;
+  set_file_transfer_status(window.get(), _("Authenticating"));
+  update_file_transfer_overlay_presentation(window.get());
+  InlinePromptResponse response = co_await prompt_inline_async(
+      window->prompt, std::move(request), std::move(cancellation));
+  if (!window->destroyed &&
+      window->connection_state ==
+          FileTransferConnectionState::authenticating) {
+    window->connection_state = FileTransferConnectionState::connecting;
+    set_file_transfer_status(window.get(), _("Connecting"));
+    update_file_transfer_overlay_presentation(window.get());
+  }
+  co_return response;
+}
+
+cardio::promise<void> show_file_transfer_window_connection_error_async(
+    const std::shared_ptr<FileTransferWindow> &window, std::string title,
+    std::string message, cardio::cancellation cancellation) {
+  if (window == nullptr || window->destroyed || window->prompt == nullptr ||
+      cancellation.is_cancellation_requested()) {
+    co_return;
+  }
+  window->connection_available = false;
+  window->connection_state = FileTransferConnectionState::failed;
+  set_file_transfer_status(window.get(), _("Connection failed"));
+  update_file_transfer_sensitivity(window.get());
+  update_file_transfer_overlay_presentation(window.get());
+  const InlinePromptResponse response = co_await prompt_inline_async(
+      window->prompt,
+      {
+          .title = std::move(title),
+          .message = std::move(message),
+          .accept_label = _("Close"),
+          .cancel_label = _("Cancel"),
+          .input_required = false,
+          .echo = false,
+          .cancel_visible = false,
+      },
+      std::move(cancellation));
+  if (response.accepted && !window->destroyed && window->window != nullptr) {
+    gtk_widget_destroy(window->window);
   }
 }
 
@@ -1898,12 +2017,18 @@ void set_file_transfer_window_connection_available(
     return;
   }
   window->connection_available = available;
+  window->connection_state = available
+                                 ? FileTransferConnectionState::ready
+                                 : FileTransferConnectionState::disconnected;
   if (!available) {
     if (window->transfer_cancel_source.has_value()) {
       (void)window->transfer_cancel_source->cancel();
     }
     set_file_transfer_status(window.get(), _("Disconnected"));
+  } else {
+    set_file_transfer_status(window.get(), _("Ready"));
   }
+  update_file_transfer_overlay_presentation(window.get());
   update_file_transfer_sensitivity(window.get());
 }
 
@@ -1962,6 +2087,9 @@ void set_file_transfer_window_colors(
         window->transfer_overlay,
         window->background_provider,
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+    add_widget_tree_background_provider_at_priority(
+        window->prompt_panel, window->background_provider,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
     window->component_background_provider =
         create_widget_component_background_provider(
             settings.background.value(), "File transfer controls");
@@ -1971,6 +2099,9 @@ void set_file_transfer_window_colors(
     add_widget_tree_background_provider_at_priority(
         window->transfer_overlay,
         window->component_background_provider,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
+    add_widget_tree_background_provider_at_priority(
+        window->prompt_panel, window->component_background_provider,
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
     window->popup_component_background_provider =
         create_widget_popup_component_background_provider(

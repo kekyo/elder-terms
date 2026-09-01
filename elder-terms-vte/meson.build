@@ -50,6 +50,7 @@ libxyzm_async_static_library = libxyzm_static_libraries[1]
 telnet_protocol_source = 'src/terminal-sessions/telnet-session/telnet-protocol.cpp'
 elder_terms_sources = [
   'src/activity-indicator.cpp',
+  'src/inline-prompt.cpp',
   'src/launch-options.cpp',
   'src/main.cpp',
   'src/main-window.cpp',
@@ -119,6 +120,7 @@ executable(
 executable(
   'elder-terms-sftp',
   [
+    'src/inline-prompt.cpp',
     'src/launch-options.cpp',
     'src/sftp/sftp-client.cpp',
     'src/sftp/sftp-fixture-client.cpp',
@@ -152,6 +154,7 @@ executable(
 executable(
   'elder-terms-ftp',
   [
+    'src/inline-prompt.cpp',
     'src/launch-options.cpp',
     'src/ftp/ftp-client.cpp',
     'src/ftp/ftp-main.cpp',

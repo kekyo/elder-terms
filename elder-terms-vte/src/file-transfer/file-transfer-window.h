@@ -8,6 +8,7 @@
 
 #include <elder-terms/settings.h>
 
+#include "../inline-prompt.h"
 #include "remote-file-client.h"
 
 namespace elder_terms {
@@ -26,8 +27,6 @@ struct FileTransferWindowOptions {
   std::string remote_directory;
   /** Initial exterior and browser background colors. */
   GeneralColorSettings colors;
-  /** Initialized remote service used by browsing and transfers. */
-  std::shared_ptr<RemoteFileClient> client;
   /** Called asynchronously after the GTK window is destroyed. */
   std::function<void()> closed;
 };
@@ -40,7 +39,7 @@ struct FileTransferWindow;
 /**
  * Creates a VTE-independent dual-pane remote file browser.
  *
- * @param options Protocol label, paths, client, and lifecycle callback.
+ * @param options Protocol label, paths, colors, and lifecycle callback.
  * @returns Owned file-transfer window state.
  */
 std::shared_ptr<FileTransferWindow>
@@ -61,6 +60,41 @@ GtkWidget *file_transfer_window_widget(
  * @param window File-transfer window state.
  */
 void show_file_transfer_window(const std::shared_ptr<FileTransferWindow> &window);
+
+/**
+ * Attaches an authenticated remote service and starts remote browsing.
+ *
+ * @param window File-transfer window waiting for its remote service.
+ * @param client Initialized remote service used by browsing and transfers.
+ * @remarks A remote service may only be attached once.
+ */
+void attach_file_transfer_window_client(
+    const std::shared_ptr<FileTransferWindow> &window,
+    std::shared_ptr<RemoteFileClient> client);
+
+/**
+ * Collects authentication input inside the file-transfer surface.
+ *
+ * @param window File-transfer window hosting the prompt.
+ * @param request Presentation and input requirements.
+ * @param cancellation Authentication cancellation signal.
+ * @returns Accepted response, or a rejected response after cancellation.
+ */
+cardio::promise<InlinePromptResponse> prompt_file_transfer_window_async(
+    const std::shared_ptr<FileTransferWindow> &window,
+    InlinePromptRequest request, cardio::cancellation cancellation);
+
+/**
+ * Shows a connection failure inside the file-transfer surface until closed.
+ *
+ * @param window File-transfer window hosting the error.
+ * @param title Short connection failure heading.
+ * @param message Detailed failure text.
+ * @param cancellation Application shutdown cancellation signal.
+ */
+cardio::promise<void> show_file_transfer_window_connection_error_async(
+    const std::shared_ptr<FileTransferWindow> &window, std::string title,
+    std::string message, cardio::cancellation cancellation);
 
 /**
  * Enables or disables remote operations after transport state changes.

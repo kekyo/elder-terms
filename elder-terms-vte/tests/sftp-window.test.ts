@@ -60,6 +60,7 @@ const japaneseTestEnvironment = {
 const runSftpFixtureWithEnvironment = async (
   context: TestContext,
   pauseTransfer: boolean,
+  launchArguments: readonly string[],
   generalSettings: readonly string[],
   gtkCss: string | undefined,
   environment: Readonly<Record<string, string>>,
@@ -124,7 +125,7 @@ const runSftpFixtureWithEnvironment = async (
         onSystemOutput: evidence.recordSystemOutputEvent,
         xvfbTrayHost: true,
       });
-      const args = ['--test-fixture', '-c', configPath];
+      const args = [...launchArguments, '--test-fixture', '-c', configPath];
       if (pauseTransfer) {
         args.unshift('--test-sftp-pause-transfer');
       }
@@ -160,6 +161,7 @@ const runSftpFixture = async (
   runSftpFixtureWithEnvironment(
     context,
     pauseTransfer,
+    [],
     generalSettings,
     gtkCss,
     {},
@@ -358,6 +360,7 @@ describe('SFTP window', () => {
       context,
       true,
       [],
+      [],
       undefined,
       japaneseTestEnvironment,
       async ({ app }) => {
@@ -420,6 +423,69 @@ describe('SFTP window', () => {
               'label'
             ).text()
           ).toBe('転送をキャンセルしました');
+        });
+      }
+    );
+  });
+
+  it('authenticates inside the file transfer window before loading remote files', async (context) => {
+    await runSftpFixtureWithEnvironment(
+      context,
+      false,
+      ['--test-ssh-prompt=password'],
+      [],
+      undefined,
+      {},
+      async ({ app }) => {
+        expect(await app.getWindowCount()).toBe(1);
+        const window = expectElementKind(
+          await app.getById('file_transfer_window'),
+          'window'
+        );
+        const prompt = expectElementKind(
+          await app.getById('file_transfer_prompt_panel'),
+          'container'
+        );
+        const entry = expectElementKind(
+          await app.getById('file_transfer_prompt_entry'),
+          'entry'
+        );
+        await expectShowing(window);
+        await expectShowing(prompt);
+        await expectShowing(entry);
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_title_label'),
+            'label'
+          ).text()
+        ).toBe('SSH Authentication');
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_status_label'),
+            'label'
+          ).text()
+        ).toBe('Authenticating');
+
+        await entry.setText('fixture-secret');
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        ).click();
+
+        await expectHidden(prompt);
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Ready');
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_remote_path_entry'),
+              'entry'
+            ).text()
+          ).toBe('/remote');
         });
       }
     );
@@ -565,6 +631,16 @@ describe('SFTP window', () => {
           0
         );
 
+        const remotePathBounds = (await remotePath.capture()).bounds;
+        await app.input.moveMouseTo(
+          Math.trunc(remotePathBounds.x + remotePathBounds.width / 2),
+          Math.trunc(remotePathBounds.y + remotePathBounds.height / 2)
+        );
+        await app.input.setMouseButton('left', true);
+        await app.input.setMouseButton('left', false);
+        await waitForResult(async () => {
+          expect((await remotePath.info()).states).toContain('focused');
+        });
         await remotePath.setText('/remote/archive');
         await app.input.pressKey('Return');
         await waitForResult(async () => {

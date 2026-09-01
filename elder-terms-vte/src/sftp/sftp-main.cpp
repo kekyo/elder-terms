@@ -5,7 +5,6 @@
 #include <string>
 #include <utility>
 
-#include <gestament/gtk.h>
 #include <gtk/gtk.h>
 
 #define GETTEXT_PACKAGE "elder-terms"
@@ -24,17 +23,6 @@
 #include "sftp-client.h"
 #include "sftp-fixture-client.h"
 
-struct SftpAuthenticationPromptRequest {
-  GtkWidget *dialog = nullptr;
-  GtkWidget *entry = nullptr;
-  bool input_required = false;
-  std::shared_ptr<
-      cardio::promise_source<elder_terms::SshUserPromptResponse>>
-      source;
-  cardio::cancellation_registration cancellation_registration;
-  bool completed = false;
-};
-
 struct SftpApplicationState {
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
   elder_terms::LaunchOptions launch_options;
@@ -45,115 +33,8 @@ struct SftpApplicationState {
   std::shared_ptr<elder_terms::FileTransferWindow> window;
   cardio::cancellation_source stop_source;
   std::optional<cardio::promise<void>> startup_task;
-  GtkWidget *startup_error_dialog = nullptr;
   bool shutting_down = false;
 };
-
-static void complete_authentication_prompt(
-    SftpAuthenticationPromptRequest *request, bool accepted) {
-  if (request == nullptr || request->completed) {
-    return;
-  }
-  request->completed = true;
-  request->cancellation_registration = {};
-  std::string text;
-  if (accepted && request->input_required &&
-      request->entry != nullptr) {
-    const char *value =
-        gtk_entry_get_text(GTK_ENTRY(request->entry));
-    text = value == nullptr ? std::string() : std::string(value);
-  }
-  if (request->dialog != nullptr) {
-    GtkWidget *dialog = std::exchange(request->dialog, nullptr);
-    g_signal_handlers_disconnect_by_data(dialog, request);
-    gtk_widget_destroy(dialog);
-  }
-  (void)request->source->try_resolve(
-      {
-          .accepted = accepted,
-          .text = std::move(text),
-      });
-}
-
-static void on_authentication_prompt_response(
-    GtkDialog *, gint response, gpointer data) {
-  complete_authentication_prompt(
-      static_cast<SftpAuthenticationPromptRequest *>(data),
-      response == GTK_RESPONSE_ACCEPT);
-}
-
-static gboolean cancel_authentication_prompt_idle(gpointer data) {
-  auto *weak = static_cast<
-      std::weak_ptr<SftpAuthenticationPromptRequest> *>(data);
-  const std::shared_ptr<SftpAuthenticationPromptRequest> request =
-      weak->lock();
-  delete weak;
-  if (request != nullptr) {
-    complete_authentication_prompt(request.get(), false);
-  }
-  return G_SOURCE_REMOVE;
-}
-
-static cardio::promise<elder_terms::SshUserPromptResponse>
-prompt_sftp_authentication_async(
-    const elder_terms::SshUserPrompt &prompt,
-    cardio::cancellation cancellation) {
-  cancellation.throw_if_cancellation_requested();
-  auto request =
-      std::make_shared<SftpAuthenticationPromptRequest>();
-  request->source = std::make_shared<
-      cardio::promise_source<elder_terms::SshUserPromptResponse>>();
-  request->input_required = prompt.input_required;
-  request->dialog = gtk_dialog_new_with_buttons(
-      prompt.title.c_str(), nullptr,
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL), _("Cancel"),
-      GTK_RESPONSE_CANCEL,
-      prompt.input_required ? _("Continue") : _("Accept"),
-      GTK_RESPONSE_ACCEPT, nullptr);
-  gestament_gtk_assign_accessible_id(
-      request->dialog, "sftp_ssh_prompt_dialog");
-  gtk_window_set_default_size(
-      GTK_WINDOW(request->dialog), 440, -1);
-  GtkWidget *content = gtk_dialog_get_content_area(
-      GTK_DIALOG(request->dialog));
-  gtk_container_set_border_width(GTK_CONTAINER(content), 14);
-  GtkWidget *message = gtk_label_new(prompt.message.c_str());
-  gestament_gtk_assign_accessible_id(
-      message, "sftp_ssh_prompt_message");
-  gtk_label_set_xalign(GTK_LABEL(message), 0.0F);
-  gtk_label_set_line_wrap(GTK_LABEL(message), TRUE);
-  gtk_label_set_selectable(GTK_LABEL(message), TRUE);
-  gtk_box_pack_start(GTK_BOX(content), message, TRUE, TRUE, 0);
-  if (prompt.input_required) {
-    request->entry = gtk_entry_new();
-    gestament_gtk_assign_accessible_id(
-        request->entry, "sftp_ssh_prompt_entry");
-    gtk_entry_set_visibility(
-        GTK_ENTRY(request->entry), prompt.echo ? TRUE : FALSE);
-    gtk_box_pack_start(
-        GTK_BOX(content), request->entry, FALSE, TRUE, 8);
-  }
-  g_signal_connect(
-      request->dialog, "response",
-      G_CALLBACK(on_authentication_prompt_response), request.get());
-  request->cancellation_registration =
-      cancellation.on_cancellation_requested(
-          [weak = std::weak_ptr<SftpAuthenticationPromptRequest>(
-               request)]() {
-            g_idle_add(
-                cancel_authentication_prompt_idle,
-                new std::weak_ptr<SftpAuthenticationPromptRequest>(
-                    weak));
-          });
-  gtk_widget_show_all(request->dialog);
-  if (request->entry != nullptr) {
-    gtk_widget_grab_focus(request->entry);
-  }
-  elder_terms::SshUserPromptResponse response =
-      co_await request->source->get_promise();
-  request->cancellation_registration = {};
-  co_return response;
-}
 
 static void stop_sftp_application(SftpApplicationState *state) {
   if (state == nullptr || state->shutting_down) {
@@ -164,33 +45,7 @@ static void stop_sftp_application(SftpApplicationState *state) {
   state->dispatcher_group->shutdown();
 }
 
-static void on_startup_error_response(
-    GtkDialog *dialog, gint, gpointer data) {
-  auto *state = static_cast<SftpApplicationState *>(data);
-  state->startup_error_dialog = nullptr;
-  gtk_widget_destroy(GTK_WIDGET(dialog));
-  stop_sftp_application(state);
-}
-
-static void show_startup_error(
-    SftpApplicationState *state, const std::string &message) {
-  std::cerr << message << '\n';
-  state->startup_error_dialog = gtk_message_dialog_new(
-      nullptr, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR,
-      GTK_BUTTONS_CLOSE, "%s", _("Failed to start SFTP"));
-  gtk_message_dialog_format_secondary_text(
-      GTK_MESSAGE_DIALOG(state->startup_error_dialog), "%s",
-      message.c_str());
-  gestament_gtk_assign_accessible_id(
-      state->startup_error_dialog, "sftp_startup_error_dialog");
-  g_signal_connect(
-      state->startup_error_dialog, "response",
-      G_CALLBACK(on_startup_error_response), state);
-  gtk_widget_show_all(state->startup_error_dialog);
-}
-
-static void open_sftp_application_window(
-    SftpApplicationState *state) {
+static void create_sftp_application_window(SftpApplicationState *state) {
   state->window = elder_terms::create_file_transfer_window(
       {
           .connection_name =
@@ -200,9 +55,7 @@ static void open_sftp_application_window(
               elder_terms::resolve_file_transfer_local_directory(
                   state->settings, state->connection.local_directory),
           .remote_directory = state->connection.remote_directory,
-          .colors =
-              elder_terms::general_color_settings(state->settings),
-          .client = state->client,
+          .colors = elder_terms::general_color_settings(state->settings),
           .closed =
               [state]() {
                 stop_sftp_application(state);
@@ -211,8 +64,39 @@ static void open_sftp_application_window(
   elder_terms::show_file_transfer_window(state->window);
 }
 
+static cardio::promise<elder_terms::SshUserPromptResponse>
+prompt_sftp_authentication_async(
+    SftpApplicationState *state,
+    const elder_terms::SshUserPrompt &prompt,
+    cardio::cancellation cancellation) {
+  elder_terms::InlinePromptResponse response =
+      co_await elder_terms::prompt_file_transfer_window_async(
+          state->window,
+          {
+              .title = prompt.title.empty() ? _("SSH") : prompt.title,
+              .message = prompt.message,
+              .accept_label =
+                  prompt.kind == elder_terms::SshUserPromptKind::host_key
+                      ? _("Accept")
+                      : _("OK"),
+              .cancel_label = _("Cancel"),
+              .input_required = prompt.input_required,
+              .echo = prompt.echo,
+              .cancel_visible = true,
+          },
+          std::move(cancellation));
+  if (!response.accepted) {
+    (void)state->stop_source.cancel();
+  }
+  co_return elder_terms::SshUserPromptResponse{
+      .accepted = response.accepted,
+      .text = std::move(response.text),
+  };
+}
+
 static cardio::promise<void>
 start_sftp_application_async(SftpApplicationState *state) {
+  std::string failure;
   try {
     const cardio::cancellation cancellation =
         state->stop_source.get_cancellation();
@@ -225,10 +109,10 @@ start_sftp_application_async(SftpApplicationState *state) {
         .output = {},
         .zmodem_auto_start = {},
         .ssh_prompt =
-            [](const elder_terms::SshUserPrompt &prompt,
-               cardio::cancellation prompt_cancellation) {
+            [state](const elder_terms::SshUserPrompt &prompt,
+                    cardio::cancellation prompt_cancellation) {
               return prompt_sftp_authentication_async(
-                  prompt, std::move(prompt_cancellation));
+                  state, prompt, std::move(prompt_cancellation));
             },
     };
     state->transport =
@@ -241,14 +125,64 @@ start_sftp_application_async(SftpApplicationState *state) {
             cancellation);
     state->client = co_await elder_terms::open_sftp_client_async(
         state->transport, cancellation);
-    open_sftp_application_window(state);
+    elder_terms::attach_file_transfer_window_client(
+        state->window, state->client);
+    co_return;
   } catch (const cardio::canceled_exception &) {
     stop_sftp_application(state);
+    co_return;
   } catch (const std::exception &exception) {
-    if (!state->shutting_down) {
-      show_startup_error(state, exception.what());
+    failure = exception.what();
+  }
+
+  if (!state->shutting_down) {
+    std::cerr << failure << '\n';
+    co_await elder_terms::show_file_transfer_window_connection_error_async(
+        state->window, _("Failed to start SFTP"), std::move(failure),
+        state->stop_source.get_cancellation());
+  }
+}
+
+static elder_terms::SshUserPrompt fixture_sftp_prompt(
+    const std::string &fixture) {
+  if (fixture == "host-key") {
+    return {
+        .kind = elder_terms::SshUserPromptKind::host_key,
+        .title = _("SSH Host Key"),
+        .message = _("Accept the fixture SSH host key?"),
+        .input_required = false,
+        .echo = false,
+    };
+  }
+  return {
+      .kind = elder_terms::SshUserPromptKind::password,
+      .title = _("SSH Authentication"),
+      .message = _("Password:"),
+      .input_required = true,
+      .echo = false,
+  };
+}
+
+static cardio::promise<void>
+start_sftp_fixture_async(SftpApplicationState *state) {
+  const cardio::cancellation cancellation =
+      state->stop_source.get_cancellation();
+  if (state->launch_options.test.ssh_prompt.has_value()) {
+    const elder_terms::SshUserPromptResponse response =
+        co_await prompt_sftp_authentication_async(
+            state,
+            fixture_sftp_prompt(*state->launch_options.test.ssh_prompt),
+            cancellation);
+    if (!response.accepted) {
+      stop_sftp_application(state);
+      co_return;
     }
   }
+  cancellation.throw_if_cancellation_requested();
+  state->client = elder_terms::create_sftp_fixture_client(
+      state->launch_options.test.sftp_pause_transfer);
+  elder_terms::attach_file_transfer_window_client(
+      state->window, state->client);
 }
 
 int main(int argc, char **argv) {
@@ -291,13 +225,18 @@ int main(int argc, char **argv) {
   state.connection =
       elder_terms::sftp_connection_settings(settings_result.store);
 
+  create_sftp_application_window(&state);
   if (state.launch_options.test.fixture) {
-    state.client = elder_terms::create_sftp_fixture_client(
-        state.launch_options.test.sftp_pause_transfer);
-    open_sftp_application_window(&state);
+    if (state.launch_options.test.ssh_prompt.has_value()) {
+      state.startup_task.emplace(start_sftp_fixture_async(&state));
+    } else {
+      state.client = elder_terms::create_sftp_fixture_client(
+          state.launch_options.test.sftp_pause_transfer);
+      elder_terms::attach_file_transfer_window_client(
+          state.window, state.client);
+    }
   } else {
-    state.startup_task.emplace(
-        start_sftp_application_async(&state));
+    state.startup_task.emplace(start_sftp_application_async(&state));
   }
 
   dispatcher.park();

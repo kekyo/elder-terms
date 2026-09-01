@@ -35,6 +35,7 @@ describe('FTP window', () => {
           '',
           '[ftp]',
           'address=fixture.example',
+          'username=fixture-user',
           `local_directory=${localDirectory}`,
           'remote_directory=/remote',
           '',
@@ -56,11 +57,34 @@ describe('FTP window', () => {
       });
       apps.push(app);
 
+      expect(await app.getWindowCount()).toBe(1);
       const window = expectElementKind(
         await app.getById('file_transfer_window'),
         'window'
       );
       expect((await window.info()).name).toBe('Fixture FTP — FTP');
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_title_label'),
+          'label'
+        ).text()
+      ).toBe('FTP authentication');
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_status_label'),
+          'label'
+        ).text()
+      ).toBe('Authenticating');
+      const passwordEntry = expectElementKind(
+        await app.getById('file_transfer_prompt_entry'),
+        'entry'
+      );
+      await passwordEntry.setText('fixture-secret');
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+
       await waitForResult(async () => {
         expect(
           await expectElementKind(
