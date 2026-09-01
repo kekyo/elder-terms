@@ -835,8 +835,8 @@ npm run build
 ```
 
 Run the built launcher from the repository root with the following command.
-The launcher automatically detects the terminal, SFTP, and FTP executables in
-the same build directory.
+The launcher automatically detects the terminal and shared SFTP/FTP file
+transfer executables in the same build directory.
 
 ```bash
 ./.build/elder-terms/elder-terms
@@ -856,10 +856,10 @@ npm run test
 
 ## Building deb Packages
 
-The package-building scripts combine the launcher, terminal, SFTP, and FTP
-executables; dedicated shared library and UI data; translation catalogs;
-desktop and XDG autostart entries; icons; documentation; and license notices
-into a single `elder-terms` deb package.
+The package-building scripts combine the launcher, terminal, and shared
+SFTP/FTP file transfer executables; dedicated shared library and UI data;
+translation catalogs; desktop and XDG autostart entries; icons;
+documentation; and license notices into a single `elder-terms` deb package.
 
 The following package combinations are supported:
 
