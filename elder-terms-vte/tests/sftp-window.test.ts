@@ -507,6 +507,9 @@ describe('SFTP window', () => {
         const localTree = expectTable(
           await app.getById('file_transfer_local_tree')
         );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
         const localPath = expectElementKind(
           await app.getById('file_transfer_local_path_entry'),
           'entry'
@@ -519,6 +522,9 @@ describe('SFTP window', () => {
           expect(await findRow(localTree, 'hello.txt')).toBeGreaterThanOrEqual(
             0
           );
+          expect(
+            await findRow(remoteTree, 'readme.txt')
+          ).toBeGreaterThanOrEqual(0);
         });
         await localPath.setText('/fixture/local');
 
@@ -552,6 +558,66 @@ describe('SFTP window', () => {
             0.5
           )
         ).toEqual(componentBackground);
+
+        const localSelectedRow = await findRow(localTree, 'hello.txt');
+        const localUnselectedRow = await findRow(localTree, 'documents');
+        await clickTreeRowAtHorizontalOffset(
+          app,
+          localTree,
+          localSelectedRow,
+          Math.trunc((await localTree.capture()).bounds.width / 2)
+        );
+        await waitForResult(async () => {
+          expect(
+            (await (await localTree.cellAt(localSelectedRow, 0))?.info())
+              ?.states
+          ).toContain('selected');
+        });
+        expect(
+          capturePixel(
+            await (await localTree.cellAt(localSelectedRow, 0))!.capture(),
+            0.9,
+            0.5
+          )
+        ).not.toEqual(
+          capturePixel(
+            await (await localTree.cellAt(localUnselectedRow, 0))!.capture(),
+            0.9,
+            0.5
+          )
+        );
+
+        const remoteSelectedRow = await findRow(remoteTree, 'readme.txt');
+        const remoteUnselectedRow = await findRow(remoteTree, 'archive');
+        await clickTreeRowAtHorizontalOffset(
+          app,
+          remoteTree,
+          remoteSelectedRow,
+          Math.trunc((await remoteTree.capture()).bounds.width / 2)
+        );
+        await waitForResult(async () => {
+          expect(
+            (await (await remoteTree.cellAt(remoteSelectedRow, 0))?.info())
+              ?.states
+          ).toContain('selected');
+        });
+        expect(
+          capturePixel(
+            await (await remoteTree.cellAt(remoteSelectedRow, 0))!.capture(),
+            0.9,
+            0.5
+          )
+        ).not.toEqual(
+          capturePixel(
+            await (await remoteTree.cellAt(remoteUnselectedRow, 0))!.capture(),
+            0.9,
+            0.5
+          )
+        );
+        await Promise.all([
+          localTree.deselectRow(localSelectedRow),
+          remoteTree.deselectRow(remoteSelectedRow),
+        ]);
 
         const treeCapture = await localTree.capture();
         await app.input.moveMouseTo(

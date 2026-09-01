@@ -15,6 +15,10 @@ static constexpr double component_highlight_lightness_delta = 0.20;
 // opaque custom background there would temporarily cover the visible rows.
 static constexpr char widget_background_selectors[] =
     "*:not(undershoot):not(overshoot)";
+// The application-priority base color also wins over the theme's selected
+// color, so restore an explicit visible surface for selection states.
+static constexpr char widget_background_highlight_selectors[] =
+    "*:selected, *:selected *";
 static constexpr char component_background_selectors[] =
     "notebook > header > tabs > tab, "
     "button, "
@@ -196,8 +200,15 @@ static RgbColor derive_component_background(const RgbColor &color,
 
 GtkCssProvider *create_widget_background_provider(
     const RgbColor &color, const char *target_name) {
-  return create_background_provider(
-      color, widget_background_selectors, target_name);
+  const RgbColor highlight_background =
+      derive_component_background(
+          color, component_highlight_lightness_delta);
+  const std::string css =
+      rgb_color_css(color, widget_background_selectors) +
+      "\n" +
+      rgb_color_css(highlight_background,
+                    widget_background_highlight_selectors);
+  return create_css_provider(css, target_name);
 }
 
 GtkCssProvider *create_widget_component_background_provider(
