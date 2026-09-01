@@ -156,4 +156,32 @@ cardio::promise<void> rename_file_transfer_item_async(
     FileTransferEndpoint endpoint, std::string source_path,
     std::string destination_path, cardio::cancellation cancellation);
 
+/**
+ * Removes duplicate paths and paths covered by another selected ancestor.
+ *
+ * @param endpoint Filesystem containing the selected paths.
+ * @param paths Selected item paths in display order.
+ * @returns Original path strings reduced to independent deletion roots.
+ */
+std::vector<std::string> normalize_file_transfer_delete_paths(
+    FileTransferEndpoint endpoint, std::vector<std::string> paths);
+
+/**
+ * Recursively deletes selected local or remote items.
+ *
+ * @param client Initialized remote file client. Required for remote items.
+ * @param endpoint Filesystem containing the items.
+ * @param paths Selected item paths. Duplicate descendants are ignored.
+ * @param cancellation Operation cancellation signal.
+ *
+ * @remarks
+ * Symbolic links are deleted without following their stored targets. Empty,
+ * current-directory, parent-directory, and root paths are rejected before any
+ * item is removed.
+ */
+cardio::promise<void> delete_file_transfer_items_async(
+    std::shared_ptr<RemoteFileClient> client,
+    FileTransferEndpoint endpoint, std::vector<std::string> paths,
+    cardio::cancellation cancellation);
+
 } // namespace elder_terms

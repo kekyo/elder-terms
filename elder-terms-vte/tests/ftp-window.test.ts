@@ -167,6 +167,60 @@ describe('FTP window', () => {
         }
         throw new Error('FTP remote rename was not reflected in the tree');
       });
+
+      const renamedRow = await waitForResult(async () => {
+        const rows = await remoteTree.getRowCount();
+        for (let row = 0; row < rows; row += 1) {
+          const cell = await remoteTree.cellAt(row, 0);
+          if ((await cell?.info())?.name === 'ftp-guide.txt') {
+            return row;
+          }
+        }
+        throw new Error('FTP renamed file was not listed');
+      });
+      await remoteTree.selectRow(renamedRow);
+      const renamedCell = await remoteTree.cellAt(renamedRow, 0);
+      const renamedBounds = (await renamedCell?.capture())?.bounds;
+      if (renamedBounds === undefined) {
+        throw new Error('FTP renamed file did not expose bounds');
+      }
+      await app.input.moveMouseTo(
+        Math.round(renamedBounds.x + renamedBounds.width / 2),
+        Math.round(renamedBounds.y + renamedBounds.height / 2)
+      );
+      await app.input.setMouseButton('right', true);
+      await app.input.setMouseButton('right', false);
+      const remove = expectElementKind(
+        await app.getById('file_transfer_remote_delete_item'),
+        'menuItem'
+      );
+      expect((await remove.info()).states).toContain('showing');
+      await remove.click();
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_title_label'),
+          'label'
+        ).text()
+      ).toBe('Delete selected item?');
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        const rows = await remoteTree.getRowCount();
+        for (let row = 0; row < rows; row += 1) {
+          const cell = await remoteTree.cellAt(row, 0);
+          if ((await cell?.info())?.name === 'ftp-guide.txt') {
+            throw new Error('FTP deleted file was still listed');
+          }
+        }
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_status_label'),
+            'label'
+          ).text()
+        ).toBe('Deleted 1 item');
+      });
     } finally {
       try {
         await evidence.flushOutputs(apps, launcher);

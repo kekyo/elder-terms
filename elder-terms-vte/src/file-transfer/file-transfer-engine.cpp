@@ -14,6 +14,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -1329,6 +1330,133 @@ cardio::promise<void> rename_file_transfer_item_async(
     throw std::runtime_error("Source item does not exist");
   }
   co_await move_local_async(source.get(), destination.get(), cancellation);
+}
+
+struct FileTransferDeletePath {
+  std::string original;
+  std::string comparison;
+};
+
+static bool remote_path_contains_parent_reference(
+    const std::string &path) {
+  std::size_t begin = 0;
+  while (begin <= path.size()) {
+    const std::size_t end = path.find('/', begin);
+    const std::string_view component(
+        path.data() + begin,
+        (end == std::string::npos ? path.size() : end) - begin);
+    if (component == "..") {
+      return true;
+    }
+    if (end == std::string::npos) {
+      return false;
+    }
+    begin = end + 1;
+  }
+  return false;
+}
+
+static std::string file_transfer_delete_comparison_path(
+    FileTransferEndpoint endpoint, const std::string &path) {
+  if (endpoint == FileTransferEndpoint::local) {
+    return std::filesystem::path(path).lexically_normal().generic_string();
+  }
+  if (endpoint != FileTransferEndpoint::remote) {
+    throw std::invalid_argument("Unknown file transfer endpoint");
+  }
+  std::string result = path;
+  while (result.size() > 1 && result.back() == '/') {
+    result.pop_back();
+  }
+  return result;
+}
+
+static bool protected_file_transfer_delete_path(
+    FileTransferEndpoint endpoint, const std::string &path) {
+  if (path.empty() || path == "." || path == ".." || path == "/") {
+    return true;
+  }
+  if (endpoint == FileTransferEndpoint::remote) {
+    return path.find_first_not_of('/') == std::string::npos ||
+           remote_path_contains_parent_reference(path);
+  }
+  const std::filesystem::path local(path);
+  return local.has_root_path() && local == local.root_path();
+}
+
+static bool file_transfer_delete_path_is_descendant(
+    const std::string &candidate, const std::string &ancestor) {
+  if (candidate == ancestor || candidate.size() <= ancestor.size()) {
+    return false;
+  }
+  if (ancestor == "/") {
+    return candidate.front() == '/';
+  }
+  return candidate.starts_with(ancestor) &&
+         candidate[ancestor.size()] == '/';
+}
+
+std::vector<std::string> normalize_file_transfer_delete_paths(
+    FileTransferEndpoint endpoint, std::vector<std::string> paths) {
+  std::vector<FileTransferDeletePath> candidates;
+  candidates.reserve(paths.size());
+  for (std::string &path : paths) {
+    std::string comparison =
+        file_transfer_delete_comparison_path(endpoint, path);
+    if (protected_file_transfer_delete_path(endpoint, comparison)) {
+      throw std::invalid_argument("Refusing to delete a protected path");
+    }
+    candidates.push_back({
+        .original = std::move(path),
+        .comparison = std::move(comparison),
+    });
+  }
+
+  std::vector<std::string> result;
+  for (std::size_t index = 0; index < candidates.size(); ++index) {
+    const FileTransferDeletePath &candidate = candidates[index];
+    const bool duplicate = std::any_of(
+        candidates.begin(), candidates.begin() + index,
+        [&candidate](const FileTransferDeletePath &other) {
+          return other.comparison == candidate.comparison;
+        });
+    if (duplicate) {
+      continue;
+    }
+    const bool covered = std::any_of(
+        candidates.begin(), candidates.end(),
+        [&candidate](const FileTransferDeletePath &other) {
+          return file_transfer_delete_path_is_descendant(
+              candidate.comparison, other.comparison);
+        });
+    if (!covered) {
+      result.push_back(candidate.original);
+    }
+  }
+  return result;
+}
+
+cardio::promise<void> delete_file_transfer_items_async(
+    std::shared_ptr<RemoteFileClient> client,
+    FileTransferEndpoint endpoint, std::vector<std::string> paths,
+    cardio::cancellation cancellation) {
+  paths = normalize_file_transfer_delete_paths(endpoint, std::move(paths));
+  if (paths.empty()) {
+    throw std::invalid_argument(
+        "At least one file deletion path is required");
+  }
+  if (endpoint == FileTransferEndpoint::remote && client == nullptr) {
+    throw std::invalid_argument("Remote file client is required");
+  }
+  cancellation.throw_if_cancellation_requested();
+  for (const std::string &path : paths) {
+    if (endpoint == FileTransferEndpoint::remote) {
+      co_await remove_remote_tree_async(client, path, cancellation);
+    } else {
+      GObjectPtr<GFile> file(g_file_new_for_path(path.c_str()));
+      co_await remove_local_tree_async(file.get(), cancellation);
+    }
+  }
 }
 
 } // namespace elder_terms

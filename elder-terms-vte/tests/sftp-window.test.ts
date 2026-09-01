@@ -6,6 +6,7 @@ import {
   mkdtemp,
   readFile,
   rm,
+  symlink,
   utimes,
   writeFile,
 } from 'node:fs/promises';
@@ -285,7 +286,9 @@ const openContextMenu = async (
   table: GtkTableElement,
   row: number
 ): Promise<void> => {
-  await table.selectRow(row);
+  if (!(await table.selectedRows()).includes(row)) {
+    await table.selectRow(row);
+  }
   const cell = await table.cellAt(row, 0);
   const bounds = (await cell?.capture())?.bounds;
   if (bounds === undefined) {
@@ -1427,6 +1430,170 @@ describe('SFTP window', () => {
           expect(await findRow(remoteTree, 'old.log')).toBeGreaterThanOrEqual(
             0
           );
+        });
+      }
+    );
+  });
+
+  it('deletes selected local and remote trees without following symbolic links', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      undefined,
+      async ({ app, localDirectory }) => {
+        await mkdir(join(localDirectory, 'delete-tree'));
+        await writeFile(
+          join(localDirectory, 'delete-tree', 'child.txt'),
+          'delete child\n'
+        );
+        await writeFile(
+          join(localDirectory, 'keep-target.txt'),
+          'keep target\n'
+        );
+        await writeFile(join(localDirectory, 'cancel-delete.txt'), 'keep me\n');
+        await symlink('keep-target.txt', join(localDirectory, 'delete-link'));
+
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
+        await expectElementKind(
+          await app.getById('file_transfer_local_refresh_button'),
+          'button'
+        ).click();
+        const cancelDeleteRow = await findRow(localTree, 'cancel-delete.txt');
+        await findRow(localTree, 'delete-tree');
+        await findRow(localTree, 'delete-link');
+
+        await openContextMenu(app, localTree, cancelDeleteRow);
+        const localDelete = expectElementKind(
+          await app.getById('file_transfer_local_delete_item'),
+          'menuItem'
+        );
+        await expectShowing(localDelete);
+        expect((await localDelete.info()).name).toBe('Delete');
+        await localDelete.click();
+        const prompt = await app.getById('file_transfer_prompt_panel');
+        await expectShowing(prompt);
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_title_label'),
+            'label'
+          ).text()
+        ).toBe('Delete selected item?');
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_message_label'),
+            'label'
+          ).text()
+        ).toContain('cancel-delete.txt');
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_cancel_button'),
+          'button'
+        ).click();
+        await expectHidden(prompt);
+        await access(join(localDirectory, 'cancel-delete.txt'));
+
+        for (const row of await localTree.selectedRows()) {
+          await localTree.deselectRow(row);
+        }
+        const deleteTreeRow = await findRow(localTree, 'delete-tree');
+        const deleteLinkRow = await findRow(localTree, 'delete-link');
+        await localTree.selectRow(deleteTreeRow);
+        await localTree.selectRow(deleteLinkRow);
+        expect(await localTree.selectedRows()).toHaveLength(2);
+        await openContextMenu(app, localTree, deleteTreeRow);
+        await localDelete.click();
+        const localMessage = await expectElementKind(
+          await app.getById('file_transfer_prompt_message_label'),
+          'label'
+        ).text();
+        expect(localMessage).toContain('delete-tree');
+        expect(localMessage).toContain('delete-link');
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Deleted 2 items');
+          const rows = await localTree.getRowCount();
+          for (let row = 0; row < rows; row += 1) {
+            const name = (await (await localTree.cellAt(row, 0))?.info())?.name;
+            expect(name).not.toBe('delete-tree');
+            expect(name).not.toBe('delete-link');
+          }
+        });
+        await expect(
+          access(join(localDirectory, 'delete-tree'))
+        ).rejects.toThrow();
+        await expect(
+          access(join(localDirectory, 'delete-link'))
+        ).rejects.toThrow();
+        expect(
+          await readFile(join(localDirectory, 'keep-target.txt'), 'utf8')
+        ).toBe('keep target\n');
+
+        const archiveRow = await findRow(remoteTree, 'archive');
+        await clickTreeExpander(app, remoteTree, archiveRow);
+        const oldLogRow = await findRow(remoteTree, 'old.log');
+        const latestRow = await findRow(remoteTree, 'latest');
+        for (const row of await remoteTree.selectedRows()) {
+          await remoteTree.deselectRow(row);
+        }
+        await remoteTree.selectRow(archiveRow);
+        await remoteTree.selectRow(oldLogRow);
+        await remoteTree.selectRow(latestRow);
+        expect(await remoteTree.selectedRows()).toHaveLength(3);
+        await openContextMenu(app, remoteTree, archiveRow);
+        const remoteDelete = expectElementKind(
+          await app.getById('file_transfer_remote_delete_item'),
+          'menuItem'
+        );
+        await remoteDelete.click();
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_title_label'),
+            'label'
+          ).text()
+        ).toBe('Delete selected items?');
+        const remoteMessage = await expectElementKind(
+          await app.getById('file_transfer_prompt_message_label'),
+          'label'
+        ).text();
+        expect(remoteMessage).toContain('archive');
+        expect(remoteMessage).toContain('latest');
+        expect(remoteMessage).not.toContain('old.log');
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Deleted 2 items');
+          const names: string[] = [];
+          const rows = await remoteTree.getRowCount();
+          for (let row = 0; row < rows; row += 1) {
+            const name = (await (await remoteTree.cellAt(row, 0))?.info())
+              ?.name;
+            if (name !== undefined) {
+              names.push(name);
+            }
+          }
+          expect(names).not.toContain('archive');
+          expect(names).not.toContain('latest');
+          expect(names).toContain('readme.txt');
         });
       }
     );

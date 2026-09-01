@@ -103,6 +103,7 @@ struct FileTransferPaneState {
   GtkWidget *menu = nullptr;
   GtkWidget *transfer_item = nullptr;
   GtkWidget *rename_item = nullptr;
+  GtkWidget *delete_item = nullptr;
   std::string current_directory;
   std::optional<cardio::promise<void>> task;
   bool busy = false;
@@ -536,6 +537,10 @@ static void update_file_transfer_sensitivity(FileTransferWindow *window) {
   gtk_widget_set_sensitive(window->local.rename_item, idle);
   gtk_widget_set_sensitive(
       window->remote.rename_item,
+      idle && window->connection_available);
+  gtk_widget_set_sensitive(window->local.delete_item, idle);
+  gtk_widget_set_sensitive(
+      window->remote.delete_item,
       idle && window->connection_available);
 }
 
@@ -1195,6 +1200,7 @@ static gboolean on_file_transfer_tree_button_press(
   }
   gtk_widget_set_sensitive(pane->rename_item,
                            items.size() == 1 ? TRUE : FALSE);
+  gtk_widget_set_sensitive(pane->delete_item, TRUE);
   gtk_menu_popup_at_pointer(GTK_MENU(pane->menu),
                             reinterpret_cast<GdkEvent *>(event));
   return TRUE;
@@ -1263,13 +1269,13 @@ prompt_file_transfer_rename_name_async(
 }
 
 static cardio::promise<void>
-show_file_transfer_rename_error_async(
-    FileTransferWindow *window, std::string message,
+show_file_transfer_browser_action_error_async(
+    FileTransferWindow *window, std::string title, std::string message,
     cardio::cancellation cancellation) {
   (void)co_await prompt_inline_async(
       window->prompt,
       {
-          .title = _("Failed to rename item"),
+          .title = std::move(title),
           .message = std::move(message),
           .accept_label = _("Close"),
           .cancel_label = _("Cancel"),
@@ -1335,8 +1341,8 @@ static cardio::promise<void> run_file_transfer_rename_async(
     const std::string message = exception_text(failure);
     set_file_transfer_browser_action_phase(window, true, false, {});
     set_file_transfer_status(window, _("Rename failed"));
-    co_await show_file_transfer_rename_error_async(
-        window, message, cancellation);
+    co_await show_file_transfer_browser_action_error_async(
+        window, _("Failed to rename item"), message, cancellation);
     if (!window->destroyed) {
       set_file_transfer_browser_action_phase(window, false, false, {});
       start_file_transfer_pane_navigation(pane, pane->current_directory);
@@ -1364,6 +1370,174 @@ static void start_file_transfer_rename(FileTransferPaneState *pane) {
 static void on_file_transfer_rename_item_activate(
     GtkMenuItem *, gpointer data) {
   start_file_transfer_rename(
+      static_cast<FileTransferPaneState *>(data));
+}
+
+static std::vector<FileTransferSelectedItem>
+normalize_file_transfer_delete_items(
+    const FileTransferPaneState *pane,
+    const std::vector<FileTransferSelectedItem> &items) {
+  std::vector<std::string> paths;
+  paths.reserve(items.size());
+  for (const FileTransferSelectedItem &item : items) {
+    paths.push_back(item.path);
+  }
+  const std::vector<std::string> normalized_paths =
+      normalize_file_transfer_delete_paths(
+          pane->remote ? FileTransferEndpoint::remote
+                       : FileTransferEndpoint::local,
+          std::move(paths));
+  std::vector<FileTransferSelectedItem> result;
+  result.reserve(normalized_paths.size());
+  for (const std::string &path : normalized_paths) {
+    const auto item = std::find_if(
+        items.begin(), items.end(), [&path](const auto &candidate) {
+          return candidate.path == path;
+        });
+    if (item == items.end()) {
+      throw std::logic_error(
+          "Normalized deletion path has no selected item");
+    }
+    result.push_back(*item);
+  }
+  return result;
+}
+
+static std::string file_transfer_delete_confirmation_message(
+    const std::vector<FileTransferSelectedItem> &items) {
+  std::string item_list;
+  for (const FileTransferSelectedItem &item : items) {
+    if (!item_list.empty()) {
+      item_list += '\n';
+    }
+    item_list += "• " + item.name;
+  }
+  return std::string(
+             _("The following items will be permanently deleted:")) +
+         "\n\n" + item_list + "\n\n" +
+         _("Directories and their contents will be deleted. This cannot be "
+           "undone.");
+}
+
+static cardio::promise<bool> prompt_file_transfer_delete_async(
+    FileTransferWindow *window,
+    const std::vector<FileTransferSelectedItem> &items,
+    cardio::cancellation cancellation) {
+  const char *title = g_dngettext(
+      GETTEXT_PACKAGE, "Delete selected item?", "Delete selected items?",
+      items.size());
+  const InlinePromptResponse response = co_await prompt_inline_async(
+      window->prompt,
+      {
+          .title = title,
+          .message = file_transfer_delete_confirmation_message(items),
+          .accept_label = _("Delete"),
+          .cancel_label = _("Cancel"),
+          .input_required = false,
+          .echo = false,
+          .cancel_visible = true,
+      },
+      cancellation);
+  cancellation.throw_if_cancellation_requested();
+  co_return response.accepted;
+}
+
+static cardio::promise<void> run_file_transfer_delete_async(
+    FileTransferPaneState *pane,
+    std::vector<FileTransferSelectedItem> selected_items) {
+  FileTransferWindow *window = pane->window;
+  const cardio::cancellation cancellation =
+      window->stop_source.get_cancellation();
+  bool cancelled = false;
+  std::exception_ptr failure;
+  try {
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    std::vector<FileTransferSelectedItem> items =
+        normalize_file_transfer_delete_items(pane, selected_items);
+    if (items.empty()) {
+      throw std::invalid_argument(
+          "At least one file deletion item is required");
+    }
+    if (!(co_await prompt_file_transfer_delete_async(
+            window, items, cancellation))) {
+      if (!window->destroyed) {
+        set_file_transfer_browser_action_phase(window, false, false, {});
+        set_file_transfer_status(window, _("Ready"));
+      }
+      co_return;
+    }
+    if (window->destroyed) {
+      co_return;
+    }
+
+    std::vector<std::string> paths;
+    paths.reserve(items.size());
+    for (const FileTransferSelectedItem &item : items) {
+      paths.push_back(item.path);
+    }
+    set_file_transfer_browser_action_phase(
+        window, true, true, _("Deleting…"));
+    co_await delete_file_transfer_items_async(
+        window->client,
+        pane->remote ? FileTransferEndpoint::remote
+                     : FileTransferEndpoint::local,
+        std::move(paths), cancellation);
+    if (window->destroyed) {
+      co_return;
+    }
+    set_file_transfer_browser_action_phase(window, false, false, {});
+    const char *format = g_dngettext(
+        GETTEXT_PACKAGE, "Deleted %zu item", "Deleted %zu items",
+        items.size());
+    set_file_transfer_status(
+        window, format_translated_string(format, items.size()));
+    start_file_transfer_pane_navigation(pane, pane->current_directory);
+  } catch (const cardio::canceled_exception &) {
+    cancelled = true;
+  } catch (...) {
+    failure = std::current_exception();
+  }
+
+  if (window->destroyed) {
+    co_return;
+  }
+  if (cancelled) {
+    set_file_transfer_browser_action_phase(window, false, false, {});
+    set_file_transfer_status(window, _("Delete cancelled"));
+  } else if (failure != nullptr) {
+    const std::string message = exception_text(failure);
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    set_file_transfer_status(window, _("Delete failed"));
+    co_await show_file_transfer_browser_action_error_async(
+        window, _("Failed to delete selected items"), message,
+        cancellation);
+    if (!window->destroyed) {
+      set_file_transfer_browser_action_phase(window, false, false, {});
+      start_file_transfer_pane_navigation(pane, pane->current_directory);
+    }
+  }
+}
+
+static void start_file_transfer_delete(FileTransferPaneState *pane) {
+  if (pane == nullptr || pane->window == nullptr ||
+      pane->window->destroyed || pane->window->transfer_active ||
+      pane->window->browser_action_active ||
+      (pane->remote && !pane->window->connection_available)) {
+    return;
+  }
+  std::vector<FileTransferSelectedItem> items =
+      selected_file_transfer_items(pane);
+  if (items.empty()) {
+    return;
+  }
+  pane->window->browser_action_task.reset();
+  pane->window->browser_action_task.emplace(
+      run_file_transfer_delete_async(pane, std::move(items)));
+}
+
+static void on_file_transfer_delete_item_activate(
+    GtkMenuItem *, gpointer data) {
+  start_file_transfer_delete(
       static_cast<FileTransferPaneState *>(data));
 }
 
@@ -1851,6 +2025,15 @@ static GtkWidget *create_file_transfer_pane(
   g_signal_connect(
       pane->rename_item, "activate",
       G_CALLBACK(on_file_transfer_rename_item_activate), pane);
+  pane->delete_item = gtk_menu_item_new_with_label(_("Delete"));
+  gestament_gtk_assign_accessible_id(
+      pane->delete_item,
+      remote ? "file_transfer_remote_delete_item"
+             : "file_transfer_local_delete_item");
+  gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu), pane->delete_item);
+  g_signal_connect(
+      pane->delete_item, "activate",
+      G_CALLBACK(on_file_transfer_delete_item_activate), pane);
   gtk_widget_show_all(pane->menu);
 
   g_signal_connect(
