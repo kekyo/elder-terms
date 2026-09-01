@@ -400,8 +400,7 @@ validate_deb_package() {
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/launcher/main-window.ui \
 		usr/lib/elder-terms/elder-terms-vte/elder-terms-vte \
-		usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp \
-		usr/lib/elder-terms/elder-terms-vte/elder-terms-ftp \
+		usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer \
 		usr/lib/elder-terms/elder-terms-vte/main-window.ui \
 		usr/lib/elder-terms/elder-terms-vte/green-on.png \
 		usr/lib/elder-terms/elder-terms-vte/green-off.png \
@@ -419,17 +418,14 @@ validate_deb_package() {
 		'../lib/elder-terms/launcher/elder-terms'
 	assert_symlink "$tmp_dir/usr/bin/elder-terms-vte" \
 		'../lib/elder-terms/elder-terms-vte/elder-terms-vte'
-	assert_symlink "$tmp_dir/usr/bin/elder-terms-sftp" \
-		'../lib/elder-terms/elder-terms-vte/elder-terms-sftp'
-	assert_symlink "$tmp_dir/usr/bin/elder-terms-ftp" \
-		'../lib/elder-terms/elder-terms-vte/elder-terms-ftp'
+	assert_symlink "$tmp_dir/usr/bin/elder-terms-file-transfer" \
+		'../lib/elder-terms/elder-terms-vte/elder-terms-file-transfer'
 
 	for elf_path in \
 		usr/lib/elder-terms/libelder-terms.so \
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/elder-terms-vte/elder-terms-vte \
-		usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp \
-		usr/lib/elder-terms/elder-terms-vte/elder-terms-ftp; do
+		usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer; do
 		elf_name=$(printf '%s' "$elf_path" | tr '/' '-')
 		assert_elf_architecture \
 			"$tmp_dir/$elf_path" "$expected_arch" "$tmp_dir/readelf-$elf_name.txt"

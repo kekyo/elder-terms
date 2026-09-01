@@ -433,8 +433,7 @@ describe('elder-terms application hotkey lifecycle', () => {
 
   it('launches saved terminal, SFTP, and FTP connections while resident in the tray', async (context) => {
     const fakeVte = await createFakeChild();
-    const fakeSftp = await createFakeChild();
-    const fakeFtp = await createFakeChild();
+    const fakeFileTransfer = await createFakeChild();
     try {
       await runLauncherGtkTest(
         context,
@@ -477,12 +476,13 @@ describe('elder-terms application hotkey lifecycle', () => {
             args: ['-c', join(connections, 'Alpha.ini')],
           });
           await pressShortcut(app, ['control', 'shift'], 'u');
-          expect(await waitForChildCapture(fakeSftp.capture)).toEqual({
+          expect(await waitForChildCapture(fakeFileTransfer.capture)).toEqual({
             activationToken: null,
             args: ['-c', join(connections, 'Files.ini')],
           });
+          await rm(fakeFileTransfer.capture);
           await pressShortcut(app, ['control', 'shift'], 'i');
-          expect(await waitForChildCapture(fakeFtp.capture)).toEqual({
+          expect(await waitForChildCapture(fakeFileTransfer.capture)).toEqual({
             activationToken: null,
             args: ['-c', join(connections, 'Legacy files.ini')],
           });
@@ -491,18 +491,13 @@ describe('elder-terms application hotkey lifecycle', () => {
         {
           args: [],
           env: {
-            ELDER_TERMS_FTP_PATH: fakeFtp.executable,
-            ELDER_TERMS_SFTP_PATH: fakeSftp.executable,
+            ELDER_TERMS_FILE_TRANSFER_PATH: fakeFileTransfer.executable,
             ELDER_TERMS_VTE_PATH: fakeVte.executable,
           },
         }
       );
     } finally {
-      await Promise.all([
-        fakeFtp.release(),
-        fakeSftp.release(),
-        fakeVte.release(),
-      ]);
+      await Promise.all([fakeFileTransfer.release(), fakeVte.release()]);
     }
   });
 

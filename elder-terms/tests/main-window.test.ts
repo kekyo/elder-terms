@@ -1640,9 +1640,9 @@ describe('elder-terms main window', () => {
     }
   });
 
-  it('routes an SFTP profile to the dedicated SFTP application', async (context) => {
+  it('routes an SFTP profile to the file transfer application', async (context) => {
     const fakeVte = await createFakeVte();
-    const fakeSftp = await createFakeVte(true);
+    const fakeFileTransfer = await createFakeVte(true);
     try {
       await runLauncherGtkTest(
         context,
@@ -1663,7 +1663,7 @@ describe('elder-terms main window', () => {
           const list = await app.getById('connection_list');
           await doubleClickConnectionRow(app, list, 0);
           await waitForResult(async () => {
-            const capture = await readLaunchCapture(fakeSftp.capture);
+            const capture = await readLaunchCapture(fakeFileTransfer.capture);
             expect(capture.args).toEqual([
               '-c',
               join(connections, 'Files.ini'),
@@ -1675,20 +1675,20 @@ describe('elder-terms main window', () => {
         {
           args: [],
           env: {
-            ELDER_TERMS_SFTP_PATH: fakeSftp.executable,
-            ELDER_TERMS_TEST_CAPTURE: fakeSftp.capture,
+            ELDER_TERMS_FILE_TRANSFER_PATH: fakeFileTransfer.executable,
+            ELDER_TERMS_TEST_CAPTURE: fakeFileTransfer.capture,
             ELDER_TERMS_VTE_PATH: fakeVte.executable,
           },
         }
       );
     } finally {
-      await Promise.all([fakeSftp.release(), fakeVte.release()]);
+      await Promise.all([fakeFileTransfer.release(), fakeVte.release()]);
     }
   });
 
-  it('routes an FTP profile to the dedicated FTP application', async (context) => {
+  it('routes an FTP profile to the file transfer application', async (context) => {
     const fakeVte = await createFakeVte();
-    const fakeFtp = await createFakeVte(true);
+    const fakeFileTransfer = await createFakeVte(true);
     try {
       await runLauncherGtkTest(
         context,
@@ -1709,7 +1709,7 @@ describe('elder-terms main window', () => {
           const list = await app.getById('connection_list');
           await doubleClickConnectionRow(app, list, 0);
           await waitForResult(async () => {
-            const capture = await readLaunchCapture(fakeFtp.capture);
+            const capture = await readLaunchCapture(fakeFileTransfer.capture);
             expect(capture.args).toEqual([
               '-c',
               join(connections, 'Legacy files.ini'),
@@ -1721,14 +1721,14 @@ describe('elder-terms main window', () => {
         {
           args: [],
           env: {
-            ELDER_TERMS_FTP_PATH: fakeFtp.executable,
-            ELDER_TERMS_TEST_CAPTURE: fakeFtp.capture,
+            ELDER_TERMS_FILE_TRANSFER_PATH: fakeFileTransfer.executable,
+            ELDER_TERMS_TEST_CAPTURE: fakeFileTransfer.capture,
             ELDER_TERMS_VTE_PATH: fakeVte.executable,
           },
         }
       );
     } finally {
-      await Promise.all([fakeFtp.release(), fakeVte.release()]);
+      await Promise.all([fakeFileTransfer.release(), fakeVte.release()]);
     }
   });
 

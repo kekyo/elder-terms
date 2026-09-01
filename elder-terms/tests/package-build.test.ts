@@ -115,8 +115,7 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     'usr/lib/elder-terms/libelder-terms.so',
     'usr/lib/elder-terms/launcher/elder-terms',
     'usr/lib/elder-terms/elder-terms-vte/elder-terms-vte',
-    'usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp',
-    'usr/lib/elder-terms/elder-terms-vte/elder-terms-ftp',
+    'usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer',
   ];
   for (const executablePath of executablePaths) {
     if (executablePath !== omittedPath) {
@@ -162,12 +161,8 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     join(stageRoot, 'usr/bin/elder-terms-vte')
   );
   symlinkSync(
-    '../lib/elder-terms/elder-terms-vte/elder-terms-sftp',
-    join(stageRoot, 'usr/bin/elder-terms-sftp')
-  );
-  symlinkSync(
-    '../lib/elder-terms/elder-terms-vte/elder-terms-ftp',
-    join(stageRoot, 'usr/bin/elder-terms-ftp')
+    '../lib/elder-terms/elder-terms-vte/elder-terms-file-transfer',
+    join(stageRoot, 'usr/bin/elder-terms-file-transfer')
   );
 };
 
@@ -550,10 +545,13 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     const badStage = join(temporaryRoot, 'bad-stage');
     const goodPackage = join(temporaryRoot, 'elder-terms-good.deb');
     const badPackage = join(temporaryRoot, 'elder-terms-bad.deb');
-    const missingFtpStage = join(temporaryRoot, 'missing-ftp-stage');
-    const missingFtpPackage = join(
+    const missingFileTransferStage = join(
       temporaryRoot,
-      'elder-terms-missing-ftp.deb'
+      'missing-file-transfer-stage'
+    );
+    const missingFileTransferPackage = join(
+      temporaryRoot,
+      'elder-terms-missing-file-transfer.deb'
     );
     createPackageStage(goodStage, debianArchitecture, undefined);
     createPackageStage(
@@ -562,14 +560,14 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'usr/share/applications/net.kekyo.elder-terms-vte.desktop'
     );
     createPackageStage(
-      missingFtpStage,
+      missingFileTransferStage,
       debianArchitecture,
-      'usr/lib/elder-terms/elder-terms-vte/elder-terms-ftp'
+      'usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer'
     );
     for (const [stage, output] of [
       [goodStage, goodPackage],
       [badStage, badPackage],
-      [missingFtpStage, missingFtpPackage],
+      [missingFileTransferStage, missingFileTransferPackage],
     ]) {
       const built = run(dpkgDeb, [
         '--root-owner-group',
@@ -595,13 +593,13 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'usr/share/applications/net.kekyo.elder-terms-vte.desktop'
     );
 
-    const missingFtpValidation = runSourced(
+    const missingFileTransferValidation = runSourced(
       'VERSION=1.2.3\nvalidate_deb_package "$2" "$3"',
-      [missingFtpPackage, canonicalArchitecture!]
+      [missingFileTransferPackage, canonicalArchitecture!]
     );
-    expect(missingFtpValidation.status).not.toBe(0);
-    expect(missingFtpValidation.stderr).toContain(
-      'usr/lib/elder-terms/elder-terms-vte/elder-terms-ftp'
+    expect(missingFileTransferValidation.status).not.toBe(0);
+    expect(missingFileTransferValidation.stderr).toContain(
+      'usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer'
     );
   });
 
@@ -649,19 +647,11 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
         ),
       ],
       [
-        'bin/elder-terms-sftp',
+        'bin/elder-terms-file-transfer',
         join(
           '..',
           libraryDirectory,
-          'elder-terms/elder-terms-vte/elder-terms-sftp'
-        ),
-      ],
-      [
-        'bin/elder-terms-ftp',
-        join(
-          '..',
-          libraryDirectory,
-          'elder-terms/elder-terms-vte/elder-terms-ftp'
+          'elder-terms/elder-terms-vte/elder-terms-file-transfer'
         ),
       ],
     ]);
@@ -670,13 +660,23 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       expect(lstatSync(path).isSymbolicLink()).toBe(true);
       expect(readlinkSync(path)).toBe(expectedTarget);
     }
+    for (const removedPath of [
+      'bin/elder-terms-sftp',
+      'bin/elder-terms-ftp',
+      join(libraryDirectory, 'elder-terms/elder-terms-vte/elder-terms-sftp'),
+      join(libraryDirectory, 'elder-terms/elder-terms-vte/elder-terms-ftp'),
+    ]) {
+      expect(() => lstatSync(join(installedRoot, removedPath))).toThrow();
+    }
     for (const relativePath of [
       join(libraryDirectory, 'elder-terms/libelder-terms.so'),
       join(libraryDirectory, 'elder-terms/launcher/elder-terms'),
       join(libraryDirectory, 'elder-terms/launcher/main-window.ui'),
       join(libraryDirectory, 'elder-terms/elder-terms-vte/elder-terms-vte'),
-      join(libraryDirectory, 'elder-terms/elder-terms-vte/elder-terms-sftp'),
-      join(libraryDirectory, 'elder-terms/elder-terms-vte/elder-terms-ftp'),
+      join(
+        libraryDirectory,
+        'elder-terms/elder-terms-vte/elder-terms-file-transfer'
+      ),
       join(libraryDirectory, 'elder-terms/elder-terms-vte/main-window.ui'),
       join(libraryDirectory, 'elder-terms/elder-terms-vte/green-on.png'),
       join(libraryDirectory, 'elder-terms/elder-terms-vte/green-off.png'),

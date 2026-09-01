@@ -30,7 +30,10 @@ import {
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
 const sftpAppPath = fileURLToPath(
-  new URL('../../.build/elder-terms-vte/elder-terms-sftp', import.meta.url)
+  new URL(
+    '../../.build/elder-terms-vte/elder-terms-file-transfer',
+    import.meta.url
+  )
 );
 const sftpConnectionColorsFixturePath = fileURLToPath(
   new URL('./fixtures/sftp-connection-colors.png', import.meta.url)

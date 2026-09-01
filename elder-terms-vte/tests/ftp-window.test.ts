@@ -8,7 +8,10 @@ import { describe, expect, it } from 'vitest';
 import { createTestEvidence, expectElementKind } from './test-helpers';
 
 const ftpAppPath = fileURLToPath(
-  new URL('../../.build/elder-terms-vte/elder-terms-ftp', import.meta.url)
+  new URL(
+    '../../.build/elder-terms-vte/elder-terms-file-transfer',
+    import.meta.url
+  )
 );
 
 describe('FTP window', () => {
