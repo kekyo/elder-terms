@@ -115,14 +115,18 @@ prompt_sftp_authentication_async(
               .input_required = prompt.input_required,
               .echo = prompt.echo,
               .cancel_visible = true,
+              .accept_visible = prompt.accept_visible,
+              .alternative_label = _("Reset and Connect"),
+              .alternative_visible = prompt.host_key_reset_available,
           },
           std::move(cancellation));
-  if (!response.accepted) {
+  if (!response.accepted && !response.alternative) {
     (void)state->stop_source.cancel();
   }
   co_return elder_terms::SshUserPromptResponse{
       .accepted = response.accepted,
       .text = std::move(response.text),
+      .reset_host_key = response.alternative,
   };
 }
 
@@ -178,6 +182,35 @@ start_sftp_application_async(SftpApplicationState *state) {
 
 static elder_terms::SshUserPrompt fixture_sftp_prompt(
     const std::string &fixture) {
+  if (fixture == "changed-host-key") {
+    return {
+        .kind = elder_terms::SshUserPromptKind::host_key,
+        .title = _("SSH Host Key Changed"),
+        .message =
+            _("The SSH host key for fixture.example:2222 has changed.\n"
+              "Verify the fingerprint before resetting the saved key.\n"
+              "Equivalent command:\n"
+              "ssh-keygen -R '[fixture.example]:2222' -f "
+              "'/home/test/.ssh/known_hosts'"),
+        .monospace_message =
+            "+--[ED25519 256]--+\n"
+            "|         .oo..   |\n"
+            "|        . .oo    |\n"
+            "|        oo*o     |\n"
+            "|       .+*=o     |\n"
+            "| o .   .S*+..    |\n"
+            "|= o ... oooo     |\n"
+            "|o. oEo = ..o     |\n"
+            "|   oo.B Oo. .    |\n"
+            "|    . .@o+.      |\n"
+            "+----[SHA256]-----+",
+        .initial_text = {},
+        .input_required = false,
+        .echo = false,
+        .accept_visible = false,
+        .host_key_reset_available = true,
+    };
+  }
   if (fixture == "host-key") {
     return {
         .kind = elder_terms::SshUserPromptKind::host_key,
@@ -230,7 +263,7 @@ start_sftp_fixture_async(SftpApplicationState *state) {
             state,
             fixture_sftp_prompt(*state->launch_options.test.ssh_prompt),
             cancellation);
-    if (!response.accepted) {
+    if (!response.accepted && !response.reset_host_key) {
       stop_sftp_application(state);
       co_return;
     }

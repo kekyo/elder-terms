@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-02 13:20+0900\n"
+"POT-Creation-Date: 2026-09-02 16:52+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Japanese\n"
@@ -135,7 +135,7 @@ msgstr "端末種別"
 
 #: shared/src/settings-widget/settings-presentation.cpp:66
 #: shared/src/settings-widget/settings-presentation.cpp:73
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:335
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:381
 msgid "User name"
 msgstr "ユーザー名"
 
@@ -242,14 +242,14 @@ msgstr "シリアル"
 
 #: shared/src/settings-widget/settings-presentation.cpp:108
 #: shared/src/settings-widget/settings-presentation.cpp:188
-#: elder-terms-vte/src/main-window.cpp:1458
+#: elder-terms-vte/src/main-window.cpp:1469
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:103
 msgid "SSH"
 msgstr "SSH"
 
 #: shared/src/settings-widget/settings-presentation.cpp:109
 #: shared/src/settings-widget/settings-presentation.cpp:190
-#: elder-terms-vte/src/main.cpp:1314
+#: elder-terms-vte/src/main.cpp:1364
 msgid "SFTP"
 msgstr "SFTP"
 
@@ -426,7 +426,7 @@ msgid "Local"
 msgstr "ローカル"
 
 #: shared/src/settings-widget/settings-presentation.cpp:194
-#: elder-terms-vte/src/main-window.ui:385
+#: elder-terms-vte/src/main-window.ui:403
 #: elder-terms-vte/src/terminal-session.cpp:226
 msgid "Terminal"
 msgstr "端末"
@@ -457,12 +457,12 @@ msgstr "保存"
 #: shared/src/settings-widget/settings-presentation.cpp:206
 #: elder-terms/src/main.cpp:482 elder-terms/src/main.cpp:550
 #: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1688
-#: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:892
+#: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:942
 #: elder-terms-vte/src/main-window.ui:248
-#: elder-terms-vte/src/main-window.ui:325
-#: elder-terms-vte/src/main-window.cpp:1466
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:333
+#: elder-terms-vte/src/main-window.ui:336
+#: elder-terms-vte/src/main-window.cpp:1478
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:113
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:379
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:733
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1250
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1281
@@ -477,12 +477,12 @@ msgid "Reset"
 msgstr "リセット"
 
 #: shared/src/settings-widget/settings-presentation.cpp:210
-#: elder-terms-vte/src/main.cpp:891
+#: elder-terms-vte/src/main.cpp:941
 msgid "Select file"
 msgstr "ファイルを選択"
 
 #: shared/src/settings-widget/settings-presentation.cpp:212
-#: elder-terms-vte/src/main.cpp:893
+#: elder-terms-vte/src/main.cpp:943
 msgid "Open"
 msgstr "開く"
 
@@ -727,9 +727,9 @@ msgstr ""
 "動作しません。デスクトップ環境がグローバルショートカットに対応しているか確認"
 "してください。"
 
-#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:334
-#: elder-terms-vte/src/main-window.cpp:1465
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:111
+#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:352
+#: elder-terms-vte/src/main-window.cpp:1477
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
 msgid "OK"
 msgstr "OK"
 
@@ -987,13 +987,43 @@ msgstr "elder-termsを開けませんでした"
 msgid "Macro command failed"
 msgstr "マクロコマンドの実行に失敗しました"
 
-#: elder-terms-vte/src/main.cpp:274
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:183
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:321
+#: elder-terms-vte/src/main.cpp:276
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:188
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
+msgid "SSH Host Key Changed"
+msgstr "SSHホスト鍵の変更"
+
+#: elder-terms-vte/src/main.cpp:279
+msgid ""
+"The SSH host key for fixture.example:2222 has changed.\n"
+"Verify the fingerprint before asking an administrator to run:\n"
+"sudo ssh-keygen -R '[fixture.example]:2222' -f '/etc/ssh/ssh_known_hosts'"
+msgstr ""
+"fixture.example:2222のSSHホスト鍵が変更されました。\n"
+"フィンガープリントを確認してから、管理者に次のコマンドの実行を依頼してく"
+"ださい:\n"
+"sudo ssh-keygen -R '[fixture.example]:2222' -f '/etc/ssh/ssh_known_hosts'"
+
+#: elder-terms-vte/src/main.cpp:284
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:190
+msgid ""
+"The SSH host key for fixture.example:2222 has changed.\n"
+"Verify the fingerprint before resetting the saved key.\n"
+"Equivalent command:\n"
+"ssh-keygen -R '[fixture.example]:2222' -f '/home/test/.ssh/known_hosts'"
+msgstr ""
+"fixture.example:2222のSSHホスト鍵が変更されました。\n"
+"保存済みの鍵をリセットする前にフィンガープリントを確認してください。\n"
+"同等のコマンド:\n"
+"ssh-keygen -R '[fixture.example]:2222' -f '/home/test/.ssh/known_hosts'"
+
+#: elder-terms-vte/src/main.cpp:310
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:217
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
 msgid "SSH Host Key"
 msgstr "SSHホスト鍵"
 
-#: elder-terms-vte/src/main.cpp:276
+#: elder-terms-vte/src/main.cpp:312
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%d\n"
@@ -1006,116 +1036,120 @@ msgstr ""
 "フィンガープリント: %s\n"
 "このホスト鍵を承認して保存しますか？"
 
-#: elder-terms-vte/src/main.cpp:289 elder-terms-vte/src/main.cpp:298
+#: elder-terms-vte/src/main.cpp:337 elder-terms-vte/src/main.cpp:346
 #: elder-terms-vte/src/main-window.ui:289
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:193
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:202
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:260
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:438
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:519
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:239
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:248
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:273
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:922
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1003
 msgid "SSH Authentication"
 msgstr "SSH認証"
 
-#: elder-terms-vte/src/main.cpp:290
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:194
+#: elder-terms-vte/src/main.cpp:338
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:240
 msgid "User name for fixture.example:"
 msgstr "fixture.exampleのユーザー名:"
 
-#: elder-terms-vte/src/main.cpp:299 elder-terms-vte/src/main-window.ui:297
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:203
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:338
+#: elder-terms-vte/src/main.cpp:347 elder-terms-vte/src/main-window.ui:297
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:249
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:384
 msgid "Password:"
 msgstr "パスワード:"
 
-#: elder-terms-vte/src/main.cpp:315
+#: elder-terms-vte/src/main.cpp:364
+msgid "SSH host key reset requested"
+msgstr "SSHホスト鍵のリセットを要求しました"
+
+#: elder-terms-vte/src/main.cpp:365
 msgid "SSH prompt accepted"
 msgstr "SSHプロンプトを承認しました"
 
-#: elder-terms-vte/src/main.cpp:316
+#: elder-terms-vte/src/main.cpp:366
 msgid "SSH prompt cancelled"
 msgstr "SSHプロンプトをキャンセルしました"
 
-#: elder-terms-vte/src/main.cpp:709 elder-terms-vte/src/main.cpp:713
+#: elder-terms-vte/src/main.cpp:759 elder-terms-vte/src/main.cpp:763
 #: elder-terms-vte/src/main-window.ui:8
 msgid "Settings"
 msgstr "設定"
 
-#: elder-terms-vte/src/main.cpp:979 elder-terms-vte/src/main.cpp:989
-#: elder-terms-vte/src/main.cpp:1014 elder-terms-vte/src/main.cpp:1024
+#: elder-terms-vte/src/main.cpp:1029 elder-terms-vte/src/main.cpp:1039
+#: elder-terms-vte/src/main.cpp:1064 elder-terms-vte/src/main.cpp:1074
 msgid "Transfer unavailable"
 msgstr "転送を利用できません"
 
-#: elder-terms-vte/src/main.cpp:1126 elder-terms-vte/src/main.cpp:1148
+#: elder-terms-vte/src/main.cpp:1176 elder-terms-vte/src/main.cpp:1198
 msgid "BREAK unavailable"
 msgstr "BREAKを利用できません"
 
-#: elder-terms-vte/src/main.cpp:1132
+#: elder-terms-vte/src/main.cpp:1182
 msgid "Sending BREAK"
 msgstr "BREAKを送信中"
 
-#: elder-terms-vte/src/main.cpp:1168 elder-terms-vte/src/main.cpp:1726
+#: elder-terms-vte/src/main.cpp:1218 elder-terms-vte/src/main.cpp:1776
 msgid "Text send unavailable"
 msgstr "テキスト送信を利用できません"
 
-#: elder-terms-vte/src/main.cpp:1176
+#: elder-terms-vte/src/main.cpp:1226
 msgid "Text (Send)"
 msgstr "テキスト（送信）"
 
-#: elder-terms-vte/src/main.cpp:1258 elder-terms-vte/src/main.cpp:1293
+#: elder-terms-vte/src/main.cpp:1308 elder-terms-vte/src/main.cpp:1343
 msgid "SFTP unavailable"
 msgstr "SFTPを利用できません"
 
-#: elder-terms-vte/src/main.cpp:1266
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:173
+#: elder-terms-vte/src/main.cpp:1316
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:178
 msgid "Failed to start SFTP"
 msgstr "SFTPの起動に失敗しました"
 
-#: elder-terms-vte/src/main.cpp:1338
+#: elder-terms-vte/src/main.cpp:1388
 msgid "Log recording"
 msgstr "ログ記録"
 
-#: elder-terms-vte/src/main.cpp:1384
+#: elder-terms-vte/src/main.cpp:1434
 msgid "ZMODEM (send)"
 msgstr "ZMODEM（送信）"
 
-#: elder-terms-vte/src/main.cpp:1391
+#: elder-terms-vte/src/main.cpp:1441
 msgid "YMODEM (send)"
 msgstr "YMODEM（送信）"
 
-#: elder-terms-vte/src/main.cpp:1398
+#: elder-terms-vte/src/main.cpp:1448
 msgid "XMODEM 1K (send)"
 msgstr "XMODEM 1K（送信）"
 
-#: elder-terms-vte/src/main.cpp:1407
+#: elder-terms-vte/src/main.cpp:1457
 msgid "XMODEM (send)"
 msgstr "XMODEM（送信）"
 
-#: elder-terms-vte/src/main.cpp:1417
+#: elder-terms-vte/src/main.cpp:1467
 msgid "ZMODEM (receive)"
 msgstr "ZMODEM（受信）"
 
-#: elder-terms-vte/src/main.cpp:1424
+#: elder-terms-vte/src/main.cpp:1474
 msgid "YMODEM-g (receive)"
 msgstr "YMODEM-g（受信）"
 
-#: elder-terms-vte/src/main.cpp:1432
+#: elder-terms-vte/src/main.cpp:1482
 msgid "YMODEM (receive)"
 msgstr "YMODEM（受信）"
 
-#: elder-terms-vte/src/main.cpp:1441
+#: elder-terms-vte/src/main.cpp:1491
 msgid "XMODEM CRC (receive)"
 msgstr "XMODEM CRC（受信）"
 
-#: elder-terms-vte/src/main.cpp:1450
+#: elder-terms-vte/src/main.cpp:1500
 msgid "XMODEM (receive)"
 msgstr "XMODEM（受信）"
 
-#: elder-terms-vte/src/main.cpp:1706
+#: elder-terms-vte/src/main.cpp:1756
 msgid "Hyperlink command failed"
 msgstr "ハイパーリンクコマンドの実行に失敗しました"
 
 #: elder-terms-vte/src/main-window.ui:153
-#: elder-terms-vte/src/main-window.cpp:1389
+#: elder-terms-vte/src/main-window.cpp:1400
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2403
 msgid "Disconnected"
 msgstr "切断されました"
@@ -1136,16 +1170,16 @@ msgstr "貼り付け"
 msgid "Send BREAK"
 msgstr "BREAKを送信"
 
-#: elder-terms-vte/src/main-window.cpp:1030
+#: elder-terms-vte/src/main-window.cpp:1032
 #, c-format
 msgid "%s (Disconnected)"
 msgstr "%s（切断）"
 
-#: elder-terms-vte/src/main-window.cpp:1412
+#: elder-terms-vte/src/main-window.cpp:1423
 msgid "SSH connection failed"
 msgstr "SSH接続に失敗しました"
 
-#: elder-terms-vte/src/main-window.cpp:1414
+#: elder-terms-vte/src/main-window.cpp:1425
 #, c-format
 msgid ""
 "SSH connection failed:\n"
@@ -1154,40 +1188,45 @@ msgstr ""
 "SSH接続に失敗しました:\n"
 "%s"
 
-#: elder-terms-vte/src/main-window.cpp:1462
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:107
+#: elder-terms-vte/src/main-window.cpp:1474
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:108
 msgid "Accept"
 msgstr "承認"
 
-#: elder-terms-vte/src/main-window.cpp:1464
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:110
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:332
+#: elder-terms-vte/src/main-window.cpp:1476
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:111
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:378
 msgid "Connect"
 msgstr "接続"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:184
+#: elder-terms-vte/src/main-window.cpp:1484
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:119
+msgid "Reset and Connect"
+msgstr "リセットして接続"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:218
 msgid "Accept the fixture SSH host key?"
 msgstr "テスト用SSHホスト鍵を承認しますか？"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:309
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:355
 #, c-format
 msgid "Enter the user name and password for %s."
 msgstr "%sのユーザー名とパスワードを入力して下さい。"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:311
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:357
 msgid "To log in anonymously, enter anonymous as the user name."
 msgstr "匿名でログインする場合は、ユーザー名に anonymous と入力して下さい。"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:314
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:253
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:360
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
 msgid "User name must not be empty."
 msgstr "ユーザー名を空にすることは出来ません。"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:329
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:375
 msgid "FTP authentication"
 msgstr "FTP認証"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:395
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:441
 msgid "Failed to start FTP"
 msgstr "FTPの起動に失敗しました"
 
@@ -1482,25 +1521,91 @@ msgstr "BREAKの送信に失敗しました"
 msgid "serial: (unknown)"
 msgstr "シリアル:（不明）"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:80
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:675
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:82
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1159
 msgid "SSH session has no socket"
 msgstr "SSHセッションにソケットがありません"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:250
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:263
 #, c-format
 msgid "User name for %s:"
 msgstr "%sのユーザー名:"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:268
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:281
 msgid "SSH user name was not provided"
 msgstr "SSHユーザー名が入力されませんでした"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:289
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:545
+msgid "Failed to start ssh-keygen"
+msgstr "ssh-keygenの起動に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:546
+#, c-format
+msgid "Failed to start ssh-keygen: %s"
+msgstr "ssh-keygenの起動に失敗しました: %s"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:683
 msgid "unknown"
 msgstr "不明"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:309
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:711
+#, c-format
+msgid ""
+"The SSH host key type for %s:%u differs from the saved key.\n"
+"This can indicate a man-in-the-middle attack. Verify the fingerprint before "
+"continuing.\n"
+"Key type: %s\n"
+"Fingerprint: %s"
+msgstr ""
+"%s:%uのSSHホスト鍵の種類が保存済みの鍵と異なります。\n"
+"中間者攻撃の可能性があります。続行する前にフィンガープリントを確認してく"
+"ださい。\n"
+"鍵の種類: %s\n"
+"フィンガープリント: %s"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:715
+#, c-format
+msgid ""
+"The SSH host key for %s:%u has changed.\n"
+"This can indicate a man-in-the-middle attack. Verify the fingerprint before "
+"continuing.\n"
+"Key type: %s\n"
+"Fingerprint: %s"
+msgstr ""
+"%s:%uのSSHホスト鍵が変更されました。\n"
+"中間者攻撃の可能性があります。続行する前にフィンガープリントを確認してく"
+"ださい。\n"
+"鍵の種類: %s\n"
+"フィンガープリント: %s"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:726
+msgid ""
+"Choose Reset and Connect only if this change is expected. ssh-keygen will "
+"preserve a backup of the saved per-user file.\n"
+"Equivalent command:"
+msgstr ""
+"この変更が想定内の場合に限り、「リセットして接続」を選択してください。"
+"ssh-keygenは保存済みのユーザー用ファイルのバックアップを保持します。\n"
+"同等のコマンド:"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:730
+msgid ""
+"The conflicting key is in a system-wide known_hosts file and cannot be reset "
+"automatically. Ask an administrator to verify the change and run:"
+msgstr ""
+"競合する鍵はシステム共通のknown_hostsファイルにあるため、自動的にはリ"
+"セットできません。管理者に変更の確認と次のコマンドの実行を依頼してくださ"
+"い:"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:734
+msgid ""
+"The conflicting known_hosts entry could not be located automatically. Verify "
+"the change and run the appropriate command before reconnecting:"
+msgstr ""
+"競合するknown_hostsエントリーの場所を自動判定できませんでした。変更を確"
+"認し、再接続する前に適切なコマンドを実行してください:"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:743
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%u\n"
@@ -1511,125 +1616,133 @@ msgstr ""
 "鍵の種類: %s\n"
 "フィンガープリント: %s"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:315
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:749
 msgid "The known_hosts file does not exist and will be created."
 msgstr "known_hostsファイルが存在しないため作成します。"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:318
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:752
 msgid "Accept and save this host key?"
 msgstr "このホスト鍵を承認して保存しますか？"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:341
-msgid "SSH host key changed; connection rejected"
-msgstr "SSHホスト鍵が変更されたため、接続を拒否しました"
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:773
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:798
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:833
+msgid "SSH host key was not reset"
+msgstr "SSHホスト鍵はリセットされませんでした"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:345
-msgid "SSH host key type differs from known_hosts; connection rejected"
-msgstr "SSHホスト鍵の種類がknown_hostsと異なるため、接続を拒否しました"
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:790
+msgid "Failed to reset SSH host key"
+msgstr "SSHホスト鍵のリセットに失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:348
-msgid "Failed to check SSH host key"
-msgstr "SSHホスト鍵の確認に失敗しました"
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:791
+#, c-format
+msgid "Failed to reset SSH host key: %s"
+msgstr "SSHホスト鍵のリセットに失敗しました: %s"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:356
-msgid "SSH host key was not accepted"
-msgstr "SSHホスト鍵が承認されませんでした"
-
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:359
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:795
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:843
 msgid "Failed to save SSH host key"
 msgstr "SSHホスト鍵の保存に失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:391
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:813
+msgid "Failed to check SSH host key"
+msgstr "SSHホスト鍵の確認に失敗しました"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:840
+msgid "SSH host key was not accepted"
+msgstr "SSHホスト鍵が承認されませんでした"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:875
 msgid "SSH Key Passphrase"
 msgstr "SSH鍵のパスフレーズ"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:393
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:877
 #, c-format
 msgid "Passphrase for %s (attempt %u of %u):"
 msgstr "%sのパスフレーズ（%u/%u回目）:"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:440
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:924
 #, c-format
 msgid "Password for %s (attempt %u of %u):"
 msgstr "%sのパスワード（%u/%u回目）:"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:461
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:945
 msgid "SSH password authentication failed"
 msgstr "SSHパスワード認証に失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:486
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:970
 msgid "SSH authentication response:"
 msgstr "SSH認証への応答:"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:546
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1030
 msgid "SSH keyboard-interactive authentication failed"
 msgstr "SSHキーボードインタラクティブ認証に失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:565
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1049
 msgid "SSH authentication negotiation failed"
 msgstr "SSH認証のネゴシエーションに失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:570
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1054
 msgid "Failed to list SSH authentication methods"
 msgstr "SSH認証方法の取得に失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:581
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1065
 msgid "SSH public-key authentication failed"
 msgstr "SSH公開鍵認証に失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:603
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1087
 msgid "Failed to refresh SSH authentication methods"
 msgstr "SSH認証方法の更新に失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:616
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1100
 msgid "SSH server did not accept an available authentication method"
 msgstr "SSHサーバーは利用可能な認証方法を受け入れませんでした"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:772
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1080
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1256
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1564
 msgid "SSH transport is closed"
 msgstr "SSHトランスポートは閉じられています"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:970
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1454
 msgid "Failed to allocate SSH session"
 msgstr "SSHセッションの割り当てに失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:976
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1460
 msgid "Failed to set SSH host"
 msgstr "SSHホストの設定に失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:981
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1465
 msgid "Failed to parse SSH configuration"
 msgstr "SSH設定の解析に失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:990
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1474
 msgid "Failed to configure SSH endpoint"
 msgstr "SSHエンドポイントの設定に失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:996
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1480
 msgid "Failed to configure SSH user name"
 msgstr "SSHユーザー名の設定に失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1002
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1486
 msgid "Failed to configure SSH known_hosts"
 msgstr "SSHのknown_hostsの設定に失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1008
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1492
 msgid "Failed to attach SSH socket"
 msgstr "SSHソケットの割り当てに失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1018
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1502
 msgid "Failed to configure SSH callbacks"
 msgstr "SSHコールバックの設定に失敗しました"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1176
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1660
 msgid "SSH transport is required"
 msgstr "SSHトランスポートが必要です"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1230
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1299
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1337
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1357
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1714
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1783
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1821
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1841
 msgid "SSH channel is closed"
 msgstr "SSHチャネルは閉じられています"
 
@@ -1640,6 +1753,12 @@ msgstr "ssh:（不明）"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
 msgid "telnet: (unknown)"
 msgstr "telnet:（不明）"
+
+#~ msgid "SSH host key changed; connection rejected"
+#~ msgstr "SSHホスト鍵が変更されたため、接続を拒否しました"
+
+#~ msgid "SSH host key type differs from known_hosts; connection rejected"
+#~ msgstr "SSHホスト鍵の種類がknown_hostsと異なるため、接続を拒否しました"
 
 #~ msgid "Continue"
 #~ msgstr "続行"

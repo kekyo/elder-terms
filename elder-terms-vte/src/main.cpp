@@ -268,7 +268,43 @@ static cardio::promise<void>
 run_ssh_prompt_fixture_async(ApplicationState *state,
                              const std::string &fixture) {
   elder_terms::SshUserPrompt prompt;
-  if (fixture == "host-key") {
+  if (fixture == "changed-host-key" ||
+      fixture == "changed-global-host-key") {
+    const bool global_key = fixture == "changed-global-host-key";
+    prompt = {
+        .kind = elder_terms::SshUserPromptKind::host_key,
+        .title = _("SSH Host Key Changed"),
+        .message =
+            global_key
+                ? _("The SSH host key for fixture.example:2222 has changed.\n"
+                    "Verify the fingerprint before asking an administrator "
+                    "to run:\n"
+                    "sudo ssh-keygen -R '[fixture.example]:2222' -f "
+                    "'/etc/ssh/ssh_known_hosts'")
+                : _("The SSH host key for fixture.example:2222 has changed.\n"
+                    "Verify the fingerprint before resetting the saved key.\n"
+                    "Equivalent command:\n"
+                    "ssh-keygen -R '[fixture.example]:2222' -f "
+                    "'/home/test/.ssh/known_hosts'"),
+        .monospace_message =
+            "+--[ED25519 256]--+\n"
+            "|         .oo..   |\n"
+            "|        . .oo    |\n"
+            "|        oo*o     |\n"
+            "|       .+*=o     |\n"
+            "| o .   .S*+..    |\n"
+            "|= o ... oooo     |\n"
+            "|o. oEo = ..o     |\n"
+            "|   oo.B Oo. .    |\n"
+            "|    . .@o+.      |\n"
+            "+----[SHA256]-----+",
+        .initial_text = {},
+        .input_required = false,
+        .echo = false,
+        .accept_visible = false,
+        .host_key_reset_available = !global_key,
+    };
+  } else if (fixture == "host-key") {
     prompt = {
         .kind = elder_terms::SshUserPromptKind::host_key,
         .title = _("SSH Host Key"),
@@ -324,8 +360,10 @@ run_ssh_prompt_fixture_async(ApplicationState *state,
   }
   elder_terms::set_main_window_status_text(
       state->main_window,
-      response.accepted ? _("SSH prompt accepted")
-                        : _("SSH prompt cancelled"));
+      response.reset_host_key
+          ? _("SSH host key reset requested")
+          : response.accepted ? _("SSH prompt accepted")
+                              : _("SSH prompt cancelled"));
 }
 
 static cardio::promise<void>

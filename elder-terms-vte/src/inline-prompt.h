@@ -70,6 +70,8 @@ struct InlinePromptRequest {
   bool secondary_echo = false;
   /** True when the rejecting button is visible. */
   bool cancel_visible;
+  /** True when the accepting button is visible. */
+  bool accept_visible = true;
   /** Text displayed by the optional third-response button. */
   std::string alternative_label = {};
   /** True when the third-response button is visible. */
@@ -120,8 +122,9 @@ create_inline_prompt_controller(InlinePromptWidgets widgets);
  * @param request Presentation and input requirements.
  * @param cancellation Cancellation signal for the pending question.
  * @returns Accepted response, or a rejected response after cancellation.
- * @throws std::invalid_argument when a requested preformatted message,
- * secondary input, or third response is unavailable from the controller.
+ * @throws std::invalid_argument when no action is visible, or when a requested
+ * preformatted message, secondary input, or third response is unavailable
+ * from the controller.
  */
 cardio::promise<InlinePromptResponse> prompt_inline_async(
     const std::shared_ptr<InlinePromptController> &controller,

@@ -225,7 +225,7 @@ deb_arch=$(dpkg-architecture -qDEB_HOST_ARCH)
 control_dir="$stage_dir/DEBIAN"
 mkdir -p "$control_dir"
 shlib_depends=$(calculate_shlibdeps)
-runtime_depends='dbus-user-session, hicolor-icon-theme, libcanberra-pulse'
+runtime_depends='dbus-user-session, hicolor-icon-theme, libcanberra-pulse, openssh-client'
 write_control_file "$control_dir/control" "$shlib_depends, $runtime_depends"
 chmod 0644 "$control_dir/control"
 

@@ -390,7 +390,7 @@ validate_deb_package() {
 		fail "Unexpected Version field in $package_path"
 	depends_value=$(dpkg-deb -f "$package_path" Depends)
 	[ -n "$depends_value" ] || fail "Missing Depends field in $package_path"
-	for required_dependency in dbus-user-session hicolor-icon-theme; do
+	for required_dependency in dbus-user-session hicolor-icon-theme openssh-client; do
 		assert_deb_dependency "$depends_value" "$required_dependency"
 	done
 

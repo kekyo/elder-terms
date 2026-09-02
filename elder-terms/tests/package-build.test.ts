@@ -80,7 +80,8 @@ const expectSuccess = (
 const createPackageStage = (
   stageRoot: string,
   debianArchitecture: string,
-  omittedPath: string | undefined
+  omittedPath: string | undefined,
+  includeOpenSshClient: boolean
 ): void => {
   const directories = [
     'DEBIAN',
@@ -106,7 +107,7 @@ Section: x11
 Priority: optional
 Architecture: ${debianArchitecture}
 Maintainer: elder-terms packager <packager@localhost>
-Depends: libc6, dbus-user-session, hicolor-icon-theme
+Depends: libc6, dbus-user-session, hicolor-icon-theme${includeOpenSshClient ? ', openssh-client' : ''}
 Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP connections
 `
   );
@@ -553,21 +554,38 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       temporaryRoot,
       'elder-terms-missing-file-transfer.deb'
     );
-    createPackageStage(goodStage, debianArchitecture, undefined);
+    const missingOpenSshClientStage = join(
+      temporaryRoot,
+      'missing-openssh-client-stage'
+    );
+    const missingOpenSshClientPackage = join(
+      temporaryRoot,
+      'elder-terms-missing-openssh-client.deb'
+    );
+    createPackageStage(goodStage, debianArchitecture, undefined, true);
     createPackageStage(
       badStage,
       debianArchitecture,
-      'usr/share/applications/net.kekyo.elder-terms-vte.desktop'
+      'usr/share/applications/net.kekyo.elder-terms-vte.desktop',
+      true
     );
     createPackageStage(
       missingFileTransferStage,
       debianArchitecture,
-      'usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer'
+      'usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer',
+      true
+    );
+    createPackageStage(
+      missingOpenSshClientStage,
+      debianArchitecture,
+      undefined,
+      false
     );
     for (const [stage, output] of [
       [goodStage, goodPackage],
       [badStage, badPackage],
       [missingFileTransferStage, missingFileTransferPackage],
+      [missingOpenSshClientStage, missingOpenSshClientPackage],
     ]) {
       const built = run(dpkgDeb, [
         '--root-owner-group',
@@ -601,6 +619,13 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     expect(missingFileTransferValidation.stderr).toContain(
       'usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer'
     );
+
+    const missingOpenSshClientValidation = runSourced(
+      'VERSION=1.2.3\nvalidate_deb_package "$2" "$3"',
+      [missingOpenSshClientPackage, canonicalArchitecture!]
+    );
+    expect(missingOpenSshClientValidation.status).not.toBe(0);
+    expect(missingOpenSshClientValidation.stderr).toContain('openssh-client');
   });
 
   it('installs package data and resolvable public commands through Meson', () => {

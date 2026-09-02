@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-02 13:20+0900\n"
+"POT-Creation-Date: 2026-09-02 16:52+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Hindi\n"
@@ -135,7 +135,7 @@ msgstr "टर्मिनल प्रकार"
 
 #: shared/src/settings-widget/settings-presentation.cpp:66
 #: shared/src/settings-widget/settings-presentation.cpp:73
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:335
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:381
 msgid "User name"
 msgstr "उपयोगकर्ता नाम"
 
@@ -242,14 +242,14 @@ msgstr "सीरियल"
 
 #: shared/src/settings-widget/settings-presentation.cpp:108
 #: shared/src/settings-widget/settings-presentation.cpp:188
-#: elder-terms-vte/src/main-window.cpp:1458
+#: elder-terms-vte/src/main-window.cpp:1469
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:103
 msgid "SSH"
 msgstr "SSH"
 
 #: shared/src/settings-widget/settings-presentation.cpp:109
 #: shared/src/settings-widget/settings-presentation.cpp:190
-#: elder-terms-vte/src/main.cpp:1314
+#: elder-terms-vte/src/main.cpp:1364
 msgid "SFTP"
 msgstr "SFTP"
 
@@ -426,7 +426,7 @@ msgid "Local"
 msgstr "स्थानीय"
 
 #: shared/src/settings-widget/settings-presentation.cpp:194
-#: elder-terms-vte/src/main-window.ui:385
+#: elder-terms-vte/src/main-window.ui:403
 #: elder-terms-vte/src/terminal-session.cpp:226
 msgid "Terminal"
 msgstr "टर्मिनल"
@@ -457,12 +457,12 @@ msgstr "सहेजें"
 #: shared/src/settings-widget/settings-presentation.cpp:206
 #: elder-terms/src/main.cpp:482 elder-terms/src/main.cpp:550
 #: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1688
-#: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:892
+#: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:942
 #: elder-terms-vte/src/main-window.ui:248
-#: elder-terms-vte/src/main-window.ui:325
-#: elder-terms-vte/src/main-window.cpp:1466
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:333
+#: elder-terms-vte/src/main-window.ui:336
+#: elder-terms-vte/src/main-window.cpp:1478
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:113
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:379
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:733
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1250
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1281
@@ -477,12 +477,12 @@ msgid "Reset"
 msgstr "रीसेट करें"
 
 #: shared/src/settings-widget/settings-presentation.cpp:210
-#: elder-terms-vte/src/main.cpp:891
+#: elder-terms-vte/src/main.cpp:941
 msgid "Select file"
 msgstr "फ़ाइल चुनें"
 
 #: shared/src/settings-widget/settings-presentation.cpp:212
-#: elder-terms-vte/src/main.cpp:893
+#: elder-terms-vte/src/main.cpp:943
 msgid "Open"
 msgstr "खोलें"
 
@@ -724,9 +724,9 @@ msgstr ""
 "एक या अधिक कॉन्फ़िगर किए गए वैश्विक शॉर्टकट पंजीकृत नहीं किए जा सके और काम नहीं करेंगे। "
 "जांचें कि क्या आपका डेस्कटॉप वातावरण वैश्विक शॉर्टकट का समर्थन करता है।"
 
-#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:334
-#: elder-terms-vte/src/main-window.cpp:1465
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:111
+#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:352
+#: elder-terms-vte/src/main-window.cpp:1477
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
 msgid "OK"
 msgstr "ठीक है"
 
@@ -984,13 +984,36 @@ msgstr "elder-terms नहीं खोला जा सका"
 msgid "Macro command failed"
 msgstr "मैक्रो कमांड विफल"
 
-#: elder-terms-vte/src/main.cpp:274
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:183
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:321
+#: elder-terms-vte/src/main.cpp:276
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:188
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
+#, fuzzy
+msgid "SSH Host Key Changed"
+msgstr "SSH होस्ट कुंजी"
+
+#: elder-terms-vte/src/main.cpp:279
+msgid ""
+"The SSH host key for fixture.example:2222 has changed.\n"
+"Verify the fingerprint before asking an administrator to run:\n"
+"sudo ssh-keygen -R '[fixture.example]:2222' -f '/etc/ssh/ssh_known_hosts'"
+msgstr ""
+
+#: elder-terms-vte/src/main.cpp:284
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:190
+msgid ""
+"The SSH host key for fixture.example:2222 has changed.\n"
+"Verify the fingerprint before resetting the saved key.\n"
+"Equivalent command:\n"
+"ssh-keygen -R '[fixture.example]:2222' -f '/home/test/.ssh/known_hosts'"
+msgstr ""
+
+#: elder-terms-vte/src/main.cpp:310
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:217
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
 msgid "SSH Host Key"
 msgstr "SSH होस्ट कुंजी"
 
-#: elder-terms-vte/src/main.cpp:276
+#: elder-terms-vte/src/main.cpp:312
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%d\n"
@@ -1003,116 +1026,121 @@ msgstr ""
 "फ़िंगरप्रिंट: %s\n"
 "इस होस्ट कुंजी को स्वीकार करें और सहेजें?"
 
-#: elder-terms-vte/src/main.cpp:289 elder-terms-vte/src/main.cpp:298
+#: elder-terms-vte/src/main.cpp:337 elder-terms-vte/src/main.cpp:346
 #: elder-terms-vte/src/main-window.ui:289
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:193
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:202
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:260
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:438
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:519
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:239
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:248
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:273
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:922
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1003
 msgid "SSH Authentication"
 msgstr "SSH प्रमाणीकरण"
 
-#: elder-terms-vte/src/main.cpp:290
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:194
+#: elder-terms-vte/src/main.cpp:338
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:240
 msgid "User name for fixture.example:"
 msgstr "fixture.example के लिए उपयोगकर्ता नाम:"
 
-#: elder-terms-vte/src/main.cpp:299 elder-terms-vte/src/main-window.ui:297
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:203
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:338
+#: elder-terms-vte/src/main.cpp:347 elder-terms-vte/src/main-window.ui:297
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:249
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:384
 msgid "Password:"
 msgstr "पासवर्ड:"
 
-#: elder-terms-vte/src/main.cpp:315
+#: elder-terms-vte/src/main.cpp:364
+#, fuzzy
+msgid "SSH host key reset requested"
+msgstr "SSH होस्ट कुंजी स्वीकार नहीं की गई"
+
+#: elder-terms-vte/src/main.cpp:365
 msgid "SSH prompt accepted"
 msgstr "SSH संकेत स्वीकृत"
 
-#: elder-terms-vte/src/main.cpp:316
+#: elder-terms-vte/src/main.cpp:366
 msgid "SSH prompt cancelled"
 msgstr "SSH संकेत रद्द"
 
-#: elder-terms-vte/src/main.cpp:709 elder-terms-vte/src/main.cpp:713
+#: elder-terms-vte/src/main.cpp:759 elder-terms-vte/src/main.cpp:763
 #: elder-terms-vte/src/main-window.ui:8
 msgid "Settings"
 msgstr "सेटिंग्स"
 
-#: elder-terms-vte/src/main.cpp:979 elder-terms-vte/src/main.cpp:989
-#: elder-terms-vte/src/main.cpp:1014 elder-terms-vte/src/main.cpp:1024
+#: elder-terms-vte/src/main.cpp:1029 elder-terms-vte/src/main.cpp:1039
+#: elder-terms-vte/src/main.cpp:1064 elder-terms-vte/src/main.cpp:1074
 msgid "Transfer unavailable"
 msgstr "स्थानांतरण अनुपलब्ध"
 
-#: elder-terms-vte/src/main.cpp:1126 elder-terms-vte/src/main.cpp:1148
+#: elder-terms-vte/src/main.cpp:1176 elder-terms-vte/src/main.cpp:1198
 msgid "BREAK unavailable"
 msgstr "BREAK उपलब्ध नहीं है"
 
-#: elder-terms-vte/src/main.cpp:1132
+#: elder-terms-vte/src/main.cpp:1182
 msgid "Sending BREAK"
 msgstr "BREAK भेजा जा रहा है"
 
-#: elder-terms-vte/src/main.cpp:1168 elder-terms-vte/src/main.cpp:1726
+#: elder-terms-vte/src/main.cpp:1218 elder-terms-vte/src/main.cpp:1776
 msgid "Text send unavailable"
 msgstr "पाठ संदेश अनुपलब्ध है"
 
-#: elder-terms-vte/src/main.cpp:1176
+#: elder-terms-vte/src/main.cpp:1226
 msgid "Text (Send)"
 msgstr "टेक्स्ट (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1258 elder-terms-vte/src/main.cpp:1293
+#: elder-terms-vte/src/main.cpp:1308 elder-terms-vte/src/main.cpp:1343
 msgid "SFTP unavailable"
 msgstr "SFTP अनुपलब्ध"
 
-#: elder-terms-vte/src/main.cpp:1266
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:173
+#: elder-terms-vte/src/main.cpp:1316
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:178
 msgid "Failed to start SFTP"
 msgstr "प्रारंभ करने में विफल SFTP"
 
-#: elder-terms-vte/src/main.cpp:1338
+#: elder-terms-vte/src/main.cpp:1388
 msgid "Log recording"
 msgstr "लॉग रिकॉर्डिंग"
 
-#: elder-terms-vte/src/main.cpp:1384
+#: elder-terms-vte/src/main.cpp:1434
 msgid "ZMODEM (send)"
 msgstr "ZMODEM (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1391
+#: elder-terms-vte/src/main.cpp:1441
 msgid "YMODEM (send)"
 msgstr "YMODEM (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1398
+#: elder-terms-vte/src/main.cpp:1448
 msgid "XMODEM 1K (send)"
 msgstr "XMODEM 1K (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1407
+#: elder-terms-vte/src/main.cpp:1457
 msgid "XMODEM (send)"
 msgstr "XMODEM (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1417
+#: elder-terms-vte/src/main.cpp:1467
 msgid "ZMODEM (receive)"
 msgstr "ZMODEM (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1424
+#: elder-terms-vte/src/main.cpp:1474
 msgid "YMODEM-g (receive)"
 msgstr "YMODEM-g (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1432
+#: elder-terms-vte/src/main.cpp:1482
 msgid "YMODEM (receive)"
 msgstr "YMODEM (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1441
+#: elder-terms-vte/src/main.cpp:1491
 msgid "XMODEM CRC (receive)"
 msgstr "XMODEM CRC (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1450
+#: elder-terms-vte/src/main.cpp:1500
 msgid "XMODEM (receive)"
 msgstr "XMODEM (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1706
+#: elder-terms-vte/src/main.cpp:1756
 msgid "Hyperlink command failed"
 msgstr "हाइपरलिंक कमांड विफल"
 
 #: elder-terms-vte/src/main-window.ui:153
-#: elder-terms-vte/src/main-window.cpp:1389
+#: elder-terms-vte/src/main-window.cpp:1400
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2403
 msgid "Disconnected"
 msgstr "डिस्कनेक्ट हो गया"
@@ -1133,16 +1161,16 @@ msgstr "पेस्ट करें"
 msgid "Send BREAK"
 msgstr "BREAK भेजें"
 
-#: elder-terms-vte/src/main-window.cpp:1030
+#: elder-terms-vte/src/main-window.cpp:1032
 #, c-format
 msgid "%s (Disconnected)"
 msgstr "%s (डिसकनेक्ट)"
 
-#: elder-terms-vte/src/main-window.cpp:1412
+#: elder-terms-vte/src/main-window.cpp:1423
 msgid "SSH connection failed"
 msgstr "SSH कनेक्शन विफल"
 
-#: elder-terms-vte/src/main-window.cpp:1414
+#: elder-terms-vte/src/main-window.cpp:1425
 #, c-format
 msgid ""
 "SSH connection failed:\n"
@@ -1151,40 +1179,45 @@ msgstr ""
 "SSH कनेक्शन विफल:\n"
 "%s"
 
-#: elder-terms-vte/src/main-window.cpp:1462
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:107
+#: elder-terms-vte/src/main-window.cpp:1474
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:108
 msgid "Accept"
 msgstr "स्वीकार करें"
 
-#: elder-terms-vte/src/main-window.cpp:1464
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:110
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:332
+#: elder-terms-vte/src/main-window.cpp:1476
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:111
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:378
 msgid "Connect"
 msgstr "कनेक्ट करें"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:184
+#: elder-terms-vte/src/main-window.cpp:1484
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:119
+msgid "Reset and Connect"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:218
 msgid "Accept the fixture SSH host key?"
 msgstr "क्या परीक्षण SSH होस्ट कुंजी स्वीकार करें?"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:309
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:355
 #, c-format
 msgid "Enter the user name and password for %s."
 msgstr "%s के लिए उपयोगकर्ता नाम और पासवर्ड दर्ज करें।"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:311
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:357
 msgid "To log in anonymously, enter anonymous as the user name."
 msgstr "अनाम रूप से लॉग इन करने के लिए, उपयोगकर्ता नाम के रूप में anonymous दर्ज करें।"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:314
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:253
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:360
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
 msgid "User name must not be empty."
 msgstr "उपयोगकर्ता नाम खाली नहीं होना चाहिए।"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:329
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:375
 msgid "FTP authentication"
 msgstr "FTP प्रमाणीकरण"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:395
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:441
 msgid "Failed to start FTP"
 msgstr "FTP शुरू करने में विफल"
 
@@ -1482,25 +1515,74 @@ msgstr "BREAK भेजना विफल रहा"
 msgid "serial: (unknown)"
 msgstr "सीरियल: (अज्ञात)"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:80
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:675
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:82
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1159
 msgid "SSH session has no socket"
 msgstr "SSH सत्र में कोई सॉकेट नहीं है"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:250
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:263
 #, c-format
 msgid "User name for %s:"
 msgstr "%s के लिए उपयोगकर्ता नाम:"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:268
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:281
 msgid "SSH user name was not provided"
 msgstr "SSH उपयोगकर्ता नाम प्रदान नहीं किया गया"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:289
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:545
+#, fuzzy
+msgid "Failed to start ssh-keygen"
+msgstr "प्रारंभ करने में विफल %s"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:546
+#, fuzzy, c-format
+msgid "Failed to start ssh-keygen: %s"
+msgstr "प्रारंभ करने में विफल %s"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:683
 msgid "unknown"
 msgstr "अज्ञात"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:309
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:711
+#, c-format
+msgid ""
+"The SSH host key type for %s:%u differs from the saved key.\n"
+"This can indicate a man-in-the-middle attack. Verify the fingerprint before "
+"continuing.\n"
+"Key type: %s\n"
+"Fingerprint: %s"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:715
+#, c-format
+msgid ""
+"The SSH host key for %s:%u has changed.\n"
+"This can indicate a man-in-the-middle attack. Verify the fingerprint before "
+"continuing.\n"
+"Key type: %s\n"
+"Fingerprint: %s"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:726
+msgid ""
+"Choose Reset and Connect only if this change is expected. ssh-keygen will "
+"preserve a backup of the saved per-user file.\n"
+"Equivalent command:"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:730
+msgid ""
+"The conflicting key is in a system-wide known_hosts file and cannot be reset "
+"automatically. Ask an administrator to verify the change and run:"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:734
+msgid ""
+"The conflicting known_hosts entry could not be located automatically. Verify "
+"the change and run the appropriate command before reconnecting:"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:743
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%u\n"
@@ -1511,125 +1593,135 @@ msgstr ""
 "कुंजी प्रकार: %s\n"
 "फ़िंगरप्रिंट: %s"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:315
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:749
 msgid "The known_hosts file does not exist and will be created."
 msgstr "Known_hosts फ़ाइल मौजूद नहीं है और बनाई जाएगी।"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:318
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:752
 msgid "Accept and save this host key?"
 msgstr "इस होस्ट कुंजी को स्वीकार करें और सहेजें?"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:341
-msgid "SSH host key changed; connection rejected"
-msgstr "SSH होस्ट कुंजी बदल गई; कनेक्शन अस्वीकृत"
-
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:345
-msgid "SSH host key type differs from known_hosts; connection rejected"
-msgstr "SSH होस्ट कुंजी प्रकार ज्ञात_होस्ट से भिन्न है; कनेक्शन अस्वीकृत"
-
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:348
-msgid "Failed to check SSH host key"
-msgstr "SSH होस्ट कुंजी"
-
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:356
-msgid "SSH host key was not accepted"
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:773
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:798
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:833
+#, fuzzy
+msgid "SSH host key was not reset"
 msgstr "SSH होस्ट कुंजी स्वीकार नहीं की गई"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:359
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:790
+#, fuzzy
+msgid "Failed to reset SSH host key"
+msgstr "SSH होस्ट कुंजी सहेजने में विफल"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:791
+#, fuzzy, c-format
+msgid "Failed to reset SSH host key: %s"
+msgstr "SSH होस्ट कुंजी सहेजने में विफल"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:795
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:843
 msgid "Failed to save SSH host key"
 msgstr "SSH होस्ट कुंजी सहेजने में विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:391
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:813
+msgid "Failed to check SSH host key"
+msgstr "SSH होस्ट कुंजी"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:840
+msgid "SSH host key was not accepted"
+msgstr "SSH होस्ट कुंजी स्वीकार नहीं की गई"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:875
 msgid "SSH Key Passphrase"
 msgstr "SSH कुंजी पासफ़्रेज़"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:393
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:877
 #, c-format
 msgid "Passphrase for %s (attempt %u of %u):"
 msgstr "%s के लिए पासफ़्रेज़ (%u का %u प्रयास करें):"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:440
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:924
 #, c-format
 msgid "Password for %s (attempt %u of %u):"
 msgstr "%s के लिए पासवर्ड (%u का %u प्रयास करें):"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:461
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:945
 msgid "SSH password authentication failed"
 msgstr "SSH पासवर्ड प्रमाणीकरण विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:486
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:970
 msgid "SSH authentication response:"
 msgstr "SSH प्रमाणीकरण प्रतिक्रिया:"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:546
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1030
 msgid "SSH keyboard-interactive authentication failed"
 msgstr "SSH कीबोर्ड-इंटरैक्टिव प्रमाणीकरण विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:565
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1049
 msgid "SSH authentication negotiation failed"
 msgstr "SSH प्रमाणीकरण वार्ता विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:570
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1054
 msgid "Failed to list SSH authentication methods"
 msgstr "SSH प्रमाणीकरण विधियों को सूचीबद्ध करने में विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:581
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1065
 msgid "SSH public-key authentication failed"
 msgstr "SSH सार्वजनिक-कुंजी प्रमाणीकरण विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:603
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1087
 msgid "Failed to refresh SSH authentication methods"
 msgstr "SSH प्रमाणीकरण विधियों को ताज़ा करने में विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:616
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1100
 msgid "SSH server did not accept an available authentication method"
 msgstr "SSH सर्वर ने उपलब्ध प्रमाणीकरण विधि स्वीकार नहीं की"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:772
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1080
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1256
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1564
 msgid "SSH transport is closed"
 msgstr "SSH परिवहन बंद है"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:970
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1454
 msgid "Failed to allocate SSH session"
 msgstr "SSH सत्र"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:976
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1460
 msgid "Failed to set SSH host"
 msgstr "SSH होस्ट"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:981
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1465
 msgid "Failed to parse SSH configuration"
 msgstr "SSH कॉन्फ़िगरेशन को पार्स करने में विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:990
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1474
 msgid "Failed to configure SSH endpoint"
 msgstr "SSH एंडपॉइंट"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:996
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1480
 msgid "Failed to configure SSH user name"
 msgstr "SSH उपयोगकर्ता नाम कॉन्फ़िगर करने में विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1002
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1486
 msgid "Failed to configure SSH known_hosts"
 msgstr "SSH ज्ञात_होस्ट"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1008
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1492
 msgid "Failed to attach SSH socket"
 msgstr "SSH सॉकेट संलग्न करने में विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1018
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1502
 msgid "Failed to configure SSH callbacks"
 msgstr "SSH कॉलबैक कॉन्फ़िगर करने में विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1176
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1660
 msgid "SSH transport is required"
 msgstr "SSH परिवहन आवश्यक है"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1230
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1299
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1337
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1357
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1714
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1783
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1821
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1841
 msgid "SSH channel is closed"
 msgstr "SSH चैनल बंद है"
 
@@ -1640,6 +1732,12 @@ msgstr "ssh: (अज्ञात)"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
 msgid "telnet: (unknown)"
 msgstr "टेलनेट: (अज्ञात)"
+
+#~ msgid "SSH host key changed; connection rejected"
+#~ msgstr "SSH होस्ट कुंजी बदल गई; कनेक्शन अस्वीकृत"
+
+#~ msgid "SSH host key type differs from known_hosts; connection rejected"
+#~ msgstr "SSH होस्ट कुंजी प्रकार ज्ञात_होस्ट से भिन्न है; कनेक्शन अस्वीकृत"
 
 #~ msgid "Continue"
 #~ msgstr "जारी रखें"

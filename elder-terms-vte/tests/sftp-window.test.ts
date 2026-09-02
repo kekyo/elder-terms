@@ -583,6 +583,50 @@ describe('SFTP window', () => {
     );
   });
 
+  it('offers changed SSH host-key reset inside the file transfer window', async (context) => {
+    await runSftpFixtureWithEnvironment(
+      context,
+      false,
+      ['--test-ssh-prompt=changed-host-key'],
+      [],
+      undefined,
+      {},
+      async ({ app }) => {
+        const cancel = expectElementKind(
+          await app.getById('file_transfer_prompt_cancel_button'),
+          'button'
+        );
+        const reset = expectElementKind(
+          await app.getById('file_transfer_prompt_alternative_button'),
+          'button'
+        );
+        await expectHidden(
+          await app.getById('file_transfer_prompt_accept_button')
+        );
+        await expectShowing(cancel);
+        await expectShowing(reset);
+        expect((await cancel.info()).states).toContain('focused');
+        expect((await reset.info()).name).toBe('Reset and Connect');
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_message_label'),
+            'label'
+          ).text()
+        ).toContain('ssh-keygen -R');
+
+        await reset.click();
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Ready');
+        });
+      }
+    );
+  });
+
   it('applies configured exterior and browser RGB backgrounds', async (context) => {
     await runSftpFixture(
       context,

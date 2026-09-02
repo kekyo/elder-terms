@@ -24,7 +24,9 @@
 #include <thread>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
+#include <gio/gio.h>
 #include <glib.h>
 #include <libssh/callbacks.h>
 #include <libssh/libssh.h>
@@ -216,6 +218,17 @@ static std::string effective_username(ssh_session session) {
   return username;
 }
 
+static std::string effective_ssh_path(ssh_session session,
+                                      enum ssh_options_e option) {
+  char *value = nullptr;
+  if (ssh_options_get(session, option, &value) != SSH_OK || value == nullptr) {
+    return {};
+  }
+  const std::string path = expanded_identity_path(value);
+  ssh_string_free_char(value);
+  return path;
+}
+
 static cardio::promise<std::optional<SshUserPromptResponse>>
 request_ssh_prompt_async(const TerminalSessionCallbacks &callbacks,
                          const SshUserPrompt &prompt,
@@ -225,7 +238,7 @@ request_ssh_prompt_async(const TerminalSessionCallbacks &callbacks,
   }
   SshUserPromptResponse response =
       co_await callbacks.ssh_prompt(prompt, cancellation);
-  if (!response.accepted) {
+  if (!response.accepted && !response.reset_host_key) {
     co_return std::nullopt;
   }
   co_return response;
@@ -491,9 +504,174 @@ static std::string host_key_random_art(ssh_key key,
   return result;
 }
 
+struct SshKeygenResult {
+  int exit_status = -1;
+  std::string standard_output;
+  std::string standard_error;
+};
+
+struct ChangedHostKeyPlan {
+  std::string target;
+  std::string known_hosts_file;
+  bool reset_available = false;
+  bool system_wide = false;
+};
+
+static cardio::promise<SshKeygenResult>
+run_ssh_keygen_async(std::vector<std::string> arguments,
+                     cardio::cancellation cancellation) {
+  std::vector<const gchar *> argv;
+  argv.reserve(arguments.size() + 1);
+  for (const std::string &argument : arguments) {
+    argv.push_back(argument.c_str());
+  }
+  argv.push_back(nullptr);
+
+  GError *error = nullptr;
+  GSubprocess *raw_process = g_subprocess_newv(
+      argv.data(),
+      static_cast<GSubprocessFlags>(G_SUBPROCESS_FLAGS_STDOUT_PIPE |
+                                    G_SUBPROCESS_FLAGS_STDERR_PIPE),
+      &error);
+  if (raw_process == nullptr) {
+    const std::string detail =
+        error == nullptr || error->message == nullptr ? std::string()
+                                                      : error->message;
+    if (error != nullptr) {
+      g_error_free(error);
+    }
+    throw std::runtime_error(
+        detail.empty()
+            ? std::string(_("Failed to start ssh-keygen"))
+            : format_translated_string(_("Failed to start ssh-keygen: %s"),
+                                       detail.c_str()));
+  }
+  const std::shared_ptr<GSubprocess> process(
+      raw_process,
+      [](GSubprocess *value) {
+        g_object_unref(value);
+      });
+
+  co_return co_await cardio::gio::submit<SshKeygenResult>(
+      [process](GCancellable *cancellable, GAsyncReadyCallback callback,
+                gpointer user_data) {
+        g_subprocess_communicate_utf8_async(
+            process.get(), nullptr, cancellable, callback, user_data);
+      },
+      [process](GObject *, GAsyncResult *result, GError **finish_error) {
+        char *standard_output = nullptr;
+        char *standard_error = nullptr;
+        const gboolean communicated = g_subprocess_communicate_utf8_finish(
+            process.get(), result, &standard_output, &standard_error,
+            finish_error);
+        SshKeygenResult command_result{
+            .exit_status = communicated &&
+                                   g_subprocess_get_if_exited(process.get())
+                               ? g_subprocess_get_exit_status(process.get())
+                               : -1,
+            .standard_output =
+                standard_output == nullptr ? std::string() : standard_output,
+            .standard_error =
+                standard_error == nullptr ? std::string() : standard_error,
+        };
+        g_free(standard_output);
+        g_free(standard_error);
+        if (!communicated && finish_error != nullptr &&
+            *finish_error == nullptr) {
+          g_set_error_literal(finish_error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                              "ssh-keygen communication failed");
+        }
+        return command_result;
+      },
+      std::move(cancellation));
+}
+
+static std::string known_hosts_target(const SshEndpointSettings &settings) {
+  return settings.port == 22
+             ? settings.address
+             : "[" + settings.address + "]:" +
+                   std::to_string(static_cast<unsigned int>(settings.port));
+}
+
+static std::string shell_quote(const std::string &value) {
+  std::string result = "'";
+  for (const char character : value) {
+    if (character == '\'') {
+      result += "'\\''";
+    } else {
+      result += character;
+    }
+  }
+  result += "'";
+  return result;
+}
+
+static std::string host_key_reset_command(const ChangedHostKeyPlan &plan) {
+  return std::string(plan.system_wide ? "sudo " : "") +
+         "ssh-keygen -R " + shell_quote(plan.target) + " -f " +
+         shell_quote(plan.known_hosts_file);
+}
+
+static cardio::promise<bool>
+known_hosts_contains_target_async(const std::string &known_hosts_file,
+                                  const std::string &target,
+                                  cardio::cancellation cancellation) {
+  if (known_hosts_file.empty()) {
+    co_return false;
+  }
+
+  // OpenSSH performs the canonical known_hosts matching needed for hashed
+  // names and [host]:port entries.
+  // https://man.openbsd.org/ssh-keygen
+  std::vector<std::string> arguments{
+      "/usr/bin/ssh-keygen", "-F", target, "-f", known_hosts_file};
+  const SshKeygenResult result = co_await run_ssh_keygen_async(
+      std::move(arguments), std::move(cancellation));
+  co_return result.exit_status == 0 && !result.standard_output.empty();
+}
+
+static cardio::promise<ChangedHostKeyPlan>
+changed_host_key_plan_async(ssh_session session,
+                            const SshEndpointSettings &settings,
+                            cardio::cancellation cancellation) {
+  const std::string target = known_hosts_target(settings);
+  const std::string user_file =
+      effective_ssh_path(session, SSH_OPTIONS_KNOWNHOSTS);
+  const std::string global_file =
+      effective_ssh_path(session, SSH_OPTIONS_GLOBAL_KNOWNHOSTS);
+
+  if (co_await known_hosts_contains_target_async(user_file, target,
+                                                 cancellation)) {
+    co_return ChangedHostKeyPlan{
+        .target = target,
+        .known_hosts_file = user_file,
+        .reset_available = true,
+        .system_wide = false,
+    };
+  }
+  if (co_await known_hosts_contains_target_async(global_file, target,
+                                                 cancellation)) {
+    co_return ChangedHostKeyPlan{
+        .target = target,
+        .known_hosts_file = global_file,
+        .reset_available = false,
+        .system_wide = true,
+    };
+  }
+
+  // A source that cannot be identified is never modified automatically.
+  co_return ChangedHostKeyPlan{
+      .target = target,
+      .known_hosts_file = user_file.empty() ? global_file : user_file,
+      .reset_available = false,
+      .system_wide = user_file.empty() && !global_file.empty(),
+  };
+}
+
 static std::optional<SshUserPrompt>
 host_key_prompt(ssh_session session, const SshEndpointSettings &settings,
-                enum ssh_known_hosts_e status) {
+                enum ssh_known_hosts_e status,
+                const ChangedHostKeyPlan *changed_plan) {
   ssh_key server_key = nullptr;
   if (ssh_get_server_publickey(session, &server_key) != SSH_OK) {
     return std::nullopt;
@@ -524,26 +702,101 @@ host_key_prompt(ssh_session session, const SshEndpointSettings &settings,
     return std::nullopt;
   }
 
-  std::string message = format_translated_string(
-      _("Unknown SSH host key for %s:%u\nKey type: %s\nFingerprint: %s"),
-      settings.address.c_str(), static_cast<unsigned int>(settings.port),
-      key_type.c_str(),
-      fingerprint.c_str());
-  if (status == SSH_KNOWN_HOSTS_NOT_FOUND) {
+  const bool changed = status == SSH_KNOWN_HOSTS_CHANGED ||
+                       status == SSH_KNOWN_HOSTS_OTHER;
+  std::string message;
+  if (changed) {
+    const char *format =
+        status == SSH_KNOWN_HOSTS_OTHER
+            ? _("The SSH host key type for %s:%u differs from the saved "
+                "key.\nThis can indicate a man-in-the-middle attack. Verify "
+                "the fingerprint before continuing.\nKey type: "
+                "%s\nFingerprint: %s")
+            : _("The SSH host key for %s:%u has changed.\nThis can indicate "
+                "a man-in-the-middle attack. Verify the fingerprint before "
+                "continuing.\nKey type: %s\nFingerprint: %s");
+    message = format_translated_string(
+        format, settings.address.c_str(),
+        static_cast<unsigned int>(settings.port), key_type.c_str(),
+        fingerprint.c_str());
+    if (changed_plan != nullptr) {
+      message += "\n\n";
+      const std::string command = host_key_reset_command(*changed_plan);
+      if (changed_plan->reset_available) {
+        message += _("Choose Reset and Connect only if this change is "
+                     "expected. ssh-keygen will preserve a backup of the "
+                     "saved per-user file.\nEquivalent command:");
+      } else if (changed_plan->system_wide) {
+        message += _("The conflicting key is in a system-wide known_hosts "
+                     "file and cannot be reset automatically. Ask an "
+                     "administrator to verify the change and run:");
+      } else {
+        message += _("The conflicting known_hosts entry could not be located "
+                     "automatically. Verify the change and run the appropriate "
+                     "command before reconnecting:");
+      }
+      message += "\n";
+      message += command;
+    }
+  } else {
+    message = format_translated_string(
+        _("Unknown SSH host key for %s:%u\nKey type: %s\nFingerprint: %s"),
+        settings.address.c_str(),
+        static_cast<unsigned int>(settings.port), key_type.c_str(),
+        fingerprint.c_str());
+    if (status == SSH_KNOWN_HOSTS_NOT_FOUND) {
+      message += "\n";
+      message += _("The known_hosts file does not exist and will be created.");
+    }
     message += "\n";
-    message += _("The known_hosts file does not exist and will be created.");
+    message += _("Accept and save this host key?");
   }
-  message += "\n";
-  message += _("Accept and save this host key?");
   return SshUserPrompt{
       .kind = SshUserPromptKind::host_key,
-      .title = _("SSH Host Key"),
+      .title = changed ? _("SSH Host Key Changed") : _("SSH Host Key"),
       .message = std::move(message),
       .monospace_message = std::move(random_art),
       .initial_text = {},
       .input_required = false,
       .echo = false,
+      .accept_visible = !changed,
+      .host_key_reset_available =
+          changed && changed_plan != nullptr && changed_plan->reset_available,
   };
+}
+
+static cardio::promise<void>
+reset_changed_host_key_async(ssh_session session,
+                             const ChangedHostKeyPlan &plan,
+                             cardio::cancellation cancellation) {
+  if (!plan.reset_available || plan.known_hosts_file.empty()) {
+    throw std::runtime_error(_("SSH host key was not reset"));
+  }
+
+  // ssh-keygen -R also handles hashed host names and preserves CA/revocation
+  // marker lines while creating the recoverable .old file.
+  // https://github.com/openssh/openssh-portable/blob/master/hostfile.c
+  std::vector<std::string> arguments{
+      "/usr/bin/ssh-keygen", "-R", plan.target, "-f",
+      plan.known_hosts_file};
+  const SshKeygenResult result = co_await run_ssh_keygen_async(
+      std::move(arguments), std::move(cancellation));
+  if (result.exit_status != 0) {
+    const std::string detail = result.standard_error.empty()
+                                   ? result.standard_output
+                                   : result.standard_error;
+    throw std::runtime_error(
+        detail.empty()
+            ? std::string(_("Failed to reset SSH host key"))
+            : format_translated_string(_("Failed to reset SSH host key: %s"),
+                                       detail.c_str()));
+  }
+  if (ssh_session_update_known_hosts(session) != SSH_OK) {
+    throw ssh_failure(session, _("Failed to save SSH host key"));
+  }
+  if (ssh_session_is_known_server(session) != SSH_KNOWN_HOSTS_OK) {
+    throw std::runtime_error(_("SSH host key was not reset"));
+  }
 }
 
 static cardio::promise<void>
@@ -556,23 +809,34 @@ verify_host_key_async(ssh_session session,
   if (status == SSH_KNOWN_HOSTS_OK) {
     co_return;
   }
-  if (status == SSH_KNOWN_HOSTS_CHANGED) {
-    throw std::runtime_error(
-        _("SSH host key changed; connection rejected"));
-  }
-  if (status == SSH_KNOWN_HOSTS_OTHER) {
-    throw std::runtime_error(
-        _("SSH host key type differs from known_hosts; connection rejected"));
-  }
   if (status == SSH_KNOWN_HOSTS_ERROR) {
     throw ssh_failure(session, _("Failed to check SSH host key"));
   }
 
-  const std::optional<SshUserPrompt> prompt =
-      host_key_prompt(session, settings, status);
-  if (!prompt.has_value() ||
-      !(co_await request_ssh_prompt_async(callbacks, *prompt, cancellation))
-           .has_value()) {
+  const bool changed = status == SSH_KNOWN_HOSTS_CHANGED ||
+                       status == SSH_KNOWN_HOSTS_OTHER;
+  std::optional<ChangedHostKeyPlan> changed_plan;
+  if (changed) {
+    changed_plan = co_await changed_host_key_plan_async(
+        session, settings, cancellation);
+  }
+  const std::optional<SshUserPrompt> prompt = host_key_prompt(
+      session, settings, status,
+      changed_plan.has_value() ? &*changed_plan : nullptr);
+  const std::optional<SshUserPromptResponse> response =
+      prompt.has_value()
+          ? co_await request_ssh_prompt_async(callbacks, *prompt, cancellation)
+          : std::nullopt;
+  if (changed) {
+    if (!changed_plan.has_value() || !response.has_value() ||
+        !response->reset_host_key || !changed_plan->reset_available) {
+      throw std::runtime_error(_("SSH host key was not reset"));
+    }
+    co_await reset_changed_host_key_async(session, *changed_plan,
+                                          cancellation);
+    co_return;
+  }
+  if (!response.has_value() || !response->accepted) {
     throw std::runtime_error(_("SSH host key was not accepted"));
   }
   if (ssh_session_update_known_hosts(session) != SSH_OK) {

@@ -39,6 +39,10 @@ struct SshUserPrompt {
   bool input_required = true;
   /** True when entered text may be displayed instead of masked. */
   bool echo = false;
+  /** True when the ordinary accepting action may be displayed. */
+  bool accept_visible = true;
+  /** True when the user may replace a changed per-user host-key entry. */
+  bool host_key_reset_available = false;
 };
 
 /**
@@ -49,6 +53,8 @@ struct SshUserPromptResponse {
   bool accepted = false;
   /** Text collected from the prompt entry, if any. */
   std::string text;
+  /** True when the changed host-key reset action was selected. */
+  bool reset_host_key = false;
 };
 
 } // namespace elder_terms

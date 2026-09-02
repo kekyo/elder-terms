@@ -104,6 +104,8 @@ struct MainWindow {
   GtkWidget *ssh_prompt_entry = nullptr;
   /** Button that rejects the active SSH prompt. */
   GtkWidget *ssh_prompt_cancel_button = nullptr;
+  /** Button that resets a changed per-user SSH host key. */
+  GtkWidget *ssh_prompt_alternative_button = nullptr;
   /** Button that accepts the active SSH prompt. */
   GtkWidget *ssh_prompt_accept_button = nullptr;
   /** Inline disconnected notice shown on the terminal surface. */

@@ -406,6 +406,7 @@ static bool main_window_has_required_widgets(const MainWindow &main_window) {
          main_window.ssh_prompt_monospace_message_label != nullptr &&
          main_window.ssh_prompt_entry != nullptr &&
          main_window.ssh_prompt_cancel_button != nullptr &&
+         main_window.ssh_prompt_alternative_button != nullptr &&
          main_window.ssh_prompt_accept_button != nullptr &&
          main_window.disconnected_notice != nullptr &&
          main_window.disconnected_notice_background != nullptr &&
@@ -1189,6 +1190,8 @@ std::optional<MainWindow> load_main_window() {
       required_widget(main_window.builder, "ssh_prompt_entry");
   main_window.ssh_prompt_cancel_button =
       required_widget(main_window.builder, "ssh_prompt_cancel_button");
+  main_window.ssh_prompt_alternative_button =
+      required_widget(main_window.builder, "ssh_prompt_alternative_button");
   main_window.ssh_prompt_accept_button =
       required_widget(main_window.builder, "ssh_prompt_accept_button");
   main_window.disconnected_notice =
@@ -1250,6 +1253,7 @@ std::optional<MainWindow> load_main_window() {
           .entry = main_window.ssh_prompt_entry,
           .cancel_button = main_window.ssh_prompt_cancel_button,
           .accept_button = main_window.ssh_prompt_accept_button,
+          .alternative_button = main_window.ssh_prompt_alternative_button,
       });
   main_window.transfer_progress_state =
       std::make_shared<MainWindowTransferProgressState>(
@@ -1476,11 +1480,15 @@ cardio::promise<SshUserPromptResponse> prompt_main_window_ssh_async(
           .input_required = prompt.input_required,
           .echo = prompt.echo,
           .cancel_visible = true,
+          .accept_visible = prompt.accept_visible,
+          .alternative_label = _("Reset and Connect"),
+          .alternative_visible = prompt.host_key_reset_available,
       },
       std::move(cancellation));
   co_return SshUserPromptResponse{
       .accepted = response.accepted,
       .text = std::move(response.text),
+      .reset_host_key = response.alternative,
   };
 }
 

@@ -134,6 +134,10 @@ create_inline_prompt_widgets(const std::string &accessible_id_prefix) {
   gtk_label_set_xalign(GTK_LABEL(title), 0.0F);
   gtk_box_pack_start(GTK_BOX(content), title, FALSE, TRUE, 0);
 
+  GtkWidget *message_columns =
+      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 16);
+  gtk_box_pack_start(GTK_BOX(content), message_columns, FALSE, TRUE, 0);
+
   GtkWidget *message = gtk_label_new("");
   gestament_gtk_assign_accessible_id(
       message,
@@ -142,7 +146,9 @@ create_inline_prompt_widgets(const std::string &accessible_id_prefix) {
   gtk_label_set_line_wrap(GTK_LABEL(message), TRUE);
   gtk_label_set_max_width_chars(GTK_LABEL(message), 56);
   gtk_label_set_selectable(GTK_LABEL(message), TRUE);
-  gtk_box_pack_start(GTK_BOX(content), message, FALSE, TRUE, 0);
+  gtk_widget_set_hexpand(message, TRUE);
+  gtk_widget_set_valign(message, GTK_ALIGN_START);
+  gtk_box_pack_start(GTK_BOX(message_columns), message, TRUE, TRUE, 0);
 
   GtkWidget *monospace_message = gtk_label_new("");
   gestament_gtk_assign_accessible_id(
@@ -152,9 +158,11 @@ create_inline_prompt_widgets(const std::string &accessible_id_prefix) {
   gtk_label_set_xalign(GTK_LABEL(monospace_message), 0.0F);
   gtk_label_set_selectable(GTK_LABEL(monospace_message), TRUE);
   gtk_widget_set_direction(monospace_message, GTK_TEXT_DIR_LTR);
+  gtk_widget_set_valign(monospace_message, GTK_ALIGN_START);
   gtk_widget_set_visible(monospace_message, FALSE);
   gtk_widget_set_no_show_all(monospace_message, TRUE);
-  gtk_box_pack_start(GTK_BOX(content), monospace_message, FALSE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(message_columns), monospace_message, FALSE,
+                     TRUE, 0);
 
   GtkWidget *entry_label = gtk_label_new("");
   gestament_gtk_assign_accessible_id(
@@ -206,6 +214,8 @@ create_inline_prompt_widgets(const std::string &accessible_id_prefix) {
   gestament_gtk_assign_accessible_id(
       cancel,
       accessible_id(accessible_id_prefix, "cancel_button").c_str());
+  gtk_widget_set_can_default(cancel, TRUE);
+  gtk_widget_set_receives_default(cancel, TRUE);
   gtk_container_add(GTK_CONTAINER(actions), cancel);
 
   GtkWidget *accept = gtk_button_new_with_label(_("OK"));
@@ -378,6 +388,10 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
   if (controller == nullptr || cancellation.is_cancellation_requested()) {
     co_return InlinePromptResponse{};
   }
+  if (!request.accept_visible && !request.cancel_visible &&
+      !request.alternative_visible) {
+    throw std::invalid_argument("Inline prompt has no visible action");
+  }
   if (request.alternative_visible &&
       controller->widgets.alternative_button == nullptr) {
     throw std::invalid_argument(
@@ -427,6 +441,9 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
                      request.title.c_str());
   gtk_label_set_text(GTK_LABEL(controller->widgets.message_label),
                      request.message.c_str());
+  gtk_label_set_max_width_chars(
+      GTK_LABEL(controller->widgets.message_label),
+      request.monospace_message.empty() ? 56 : 38);
   if (controller->widgets.monospace_message_label != nullptr) {
     gtk_label_set_text(
         GTK_LABEL(controller->widgets.monospace_message_label),
@@ -497,15 +514,27 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
                          request.cancel_visible);
   gtk_widget_set_no_show_all(controller->widgets.cancel_button,
                              !request.cancel_visible);
+  gtk_widget_set_visible(controller->widgets.accept_button,
+                         request.accept_visible);
+  gtk_widget_set_no_show_all(controller->widgets.accept_button,
+                             !request.accept_visible);
   if (controller->widgets.alternative_button != nullptr) {
     gtk_widget_set_visible(controller->widgets.alternative_button,
                            request.alternative_visible);
     gtk_widget_set_no_show_all(controller->widgets.alternative_button,
                                !request.alternative_visible);
   }
+  GtkWidget *default_action = request.accept_visible
+                                  ? controller->widgets.accept_button
+                              : request.cancel_visible
+                                  ? controller->widgets.cancel_button
+                              : request.alternative_visible
+                                  ? controller->widgets.alternative_button
+                                  : nullptr;
+  gtk_widget_grab_default(default_action);
   gtk_widget_grab_focus(request.input_required
                             ? controller->widgets.entry
-                            : controller->widgets.accept_button);
+                            : default_action);
 
   co_return co_await response;
 }
