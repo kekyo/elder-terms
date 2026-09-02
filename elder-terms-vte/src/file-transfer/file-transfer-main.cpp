@@ -102,6 +102,7 @@ prompt_sftp_authentication_async(
           {
               .title = prompt.title.empty() ? _("SSH") : prompt.title,
               .message = prompt.message,
+              .monospace_message = prompt.monospace_message,
               .accept_label =
                   prompt.kind == elder_terms::SshUserPromptKind::host_key
                       ? _("Accept")
@@ -182,6 +183,18 @@ static elder_terms::SshUserPrompt fixture_sftp_prompt(
         .kind = elder_terms::SshUserPromptKind::host_key,
         .title = _("SSH Host Key"),
         .message = _("Accept the fixture SSH host key?"),
+        .monospace_message =
+            "+--[ED25519 256]--+\n"
+            "|         .oo..   |\n"
+            "|        . .oo    |\n"
+            "|        oo*o     |\n"
+            "|       .+*=o     |\n"
+            "| o .   .S*+..    |\n"
+            "|= o ... oooo     |\n"
+            "|o. oEo = ..o     |\n"
+            "|   oo.B Oo. .    |\n"
+            "|    . .@o+.      |\n"
+            "+----[SHA256]-----+",
         .initial_text = {},
         .input_required = false,
         .echo = false,

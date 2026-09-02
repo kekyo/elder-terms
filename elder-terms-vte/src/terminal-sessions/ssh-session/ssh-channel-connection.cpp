@@ -275,6 +275,222 @@ request_ssh_username_async(ssh_session session,
   }
 }
 
+static bool read_ssh_binary_field(const unsigned char *data,
+                                  std::size_t data_size,
+                                  std::size_t *offset,
+                                  const unsigned char **field,
+                                  std::size_t *field_size) {
+  if (data == nullptr || offset == nullptr || field == nullptr ||
+      field_size == nullptr || *offset > data_size ||
+      data_size - *offset < 4) {
+    return false;
+  }
+  const std::size_t size =
+      (static_cast<std::size_t>(data[*offset]) << 24U) |
+      (static_cast<std::size_t>(data[*offset + 1]) << 16U) |
+      (static_cast<std::size_t>(data[*offset + 2]) << 8U) |
+      static_cast<std::size_t>(data[*offset + 3]);
+  *offset += 4;
+  if (size > data_size - *offset) {
+    return false;
+  }
+  *field = data + *offset;
+  *field_size = size;
+  *offset += size;
+  return true;
+}
+
+static unsigned int ssh_mpint_bit_size(const unsigned char *value,
+                                       std::size_t size) {
+  while (size > 0 && *value == 0) {
+    ++value;
+    --size;
+  }
+  if (size == 0) {
+    return 0;
+  }
+  unsigned int most_significant_byte_bits = 0;
+  for (unsigned char current = *value; current != 0; current >>= 1U) {
+    ++most_significant_byte_bits;
+  }
+  return static_cast<unsigned int>((size - 1) * 8) +
+         most_significant_byte_bits;
+}
+
+static unsigned int rsa_key_size(ssh_key key, bool certificate) {
+  char *encoded = nullptr;
+  if (ssh_pki_export_pubkey_base64(key, &encoded) != SSH_OK ||
+      encoded == nullptr) {
+    return 0;
+  }
+  gsize decoded_size = 0;
+  guchar *decoded = g_base64_decode(encoded, &decoded_size);
+  ssh_string_free_char(encoded);
+  if (decoded == nullptr) {
+    return 0;
+  }
+
+  std::size_t offset = 0;
+  const unsigned char *field = nullptr;
+  std::size_t field_size = 0;
+  bool valid = read_ssh_binary_field(decoded, decoded_size, &offset, &field,
+                                     &field_size);
+  if (valid && certificate) {
+    valid = read_ssh_binary_field(decoded, decoded_size, &offset, &field,
+                                  &field_size);
+  }
+  if (valid) {
+    valid = read_ssh_binary_field(decoded, decoded_size, &offset, &field,
+                                  &field_size);
+  }
+  if (valid) {
+    valid = read_ssh_binary_field(decoded, decoded_size, &offset, &field,
+                                  &field_size);
+  }
+  const unsigned int result =
+      valid ? ssh_mpint_bit_size(field, field_size) : 0;
+  g_free(decoded);
+  return result;
+}
+
+static std::string random_art_key_type(enum ssh_keytypes_e type) {
+  switch (type) {
+  case SSH_KEYTYPE_DSS:
+    return "DSA";
+  case SSH_KEYTYPE_RSA:
+  case SSH_KEYTYPE_RSA1:
+    return "RSA";
+  case SSH_KEYTYPE_ECDSA_P256:
+  case SSH_KEYTYPE_ECDSA_P384:
+  case SSH_KEYTYPE_ECDSA_P521:
+    return "ECDSA";
+  case SSH_KEYTYPE_ED25519:
+    return "ED25519";
+  case SSH_KEYTYPE_DSS_CERT01:
+    return "DSA-CERT";
+  case SSH_KEYTYPE_RSA_CERT01:
+    return "RSA-CERT";
+  case SSH_KEYTYPE_ECDSA_P256_CERT01:
+  case SSH_KEYTYPE_ECDSA_P384_CERT01:
+  case SSH_KEYTYPE_ECDSA_P521_CERT01:
+    return "ECDSA-CERT";
+  case SSH_KEYTYPE_ED25519_CERT01:
+    return "ED25519-CERT";
+  case SSH_KEYTYPE_SK_ECDSA:
+    return "ECDSA-SK";
+  case SSH_KEYTYPE_SK_ECDSA_CERT01:
+    return "ECDSA-SK-CERT";
+  case SSH_KEYTYPE_SK_ED25519:
+    return "ED25519-SK";
+  case SSH_KEYTYPE_SK_ED25519_CERT01:
+    return "ED25519-SK-CERT";
+  case SSH_KEYTYPE_UNKNOWN:
+    return "UNKNOWN";
+  default:
+    return "UNKNOWN";
+  }
+}
+
+static unsigned int random_art_key_size(ssh_key key,
+                                        enum ssh_keytypes_e type) {
+  switch (type) {
+  case SSH_KEYTYPE_DSS:
+  case SSH_KEYTYPE_DSS_CERT01:
+    return 1024;
+  case SSH_KEYTYPE_RSA:
+  case SSH_KEYTYPE_RSA1:
+    return rsa_key_size(key, false);
+  case SSH_KEYTYPE_RSA_CERT01:
+    return rsa_key_size(key, true);
+  case SSH_KEYTYPE_ECDSA_P256:
+  case SSH_KEYTYPE_ECDSA_P256_CERT01:
+  case SSH_KEYTYPE_SK_ECDSA:
+  case SSH_KEYTYPE_SK_ECDSA_CERT01:
+    return 256;
+  case SSH_KEYTYPE_ECDSA_P384:
+  case SSH_KEYTYPE_ECDSA_P384_CERT01:
+    return 384;
+  case SSH_KEYTYPE_ECDSA_P521:
+  case SSH_KEYTYPE_ECDSA_P521_CERT01:
+    return 521;
+  case SSH_KEYTYPE_ED25519:
+  case SSH_KEYTYPE_ED25519_CERT01:
+  case SSH_KEYTYPE_SK_ED25519:
+  case SSH_KEYTYPE_SK_ED25519_CERT01:
+    return 256;
+  case SSH_KEYTYPE_UNKNOWN:
+    return 0;
+  default:
+    return 0;
+  }
+}
+
+static std::string random_art_border(const std::string &label) {
+  static constexpr std::size_t field_width = 17;
+  const std::size_t left_padding = (field_width - label.size()) / 2;
+  return "+" + std::string(left_padding, '-') + label +
+         std::string(field_width - left_padding - label.size(), '-') + "+";
+}
+
+static std::string host_key_random_art(ssh_key key,
+                                       enum ssh_keytypes_e type,
+                                       const unsigned char *hash,
+                                       std::size_t hash_size) {
+  static constexpr std::size_t field_width = 17;
+  static constexpr std::size_t field_height = 9;
+  static constexpr char symbols[] = " .o+=*BOX@%&#/^SE";
+  std::array<std::array<unsigned char, field_width>, field_height> field{};
+  std::size_t x = field_width / 2;
+  std::size_t y = field_height / 2;
+  const std::size_t start_x = x;
+  const std::size_t start_y = y;
+
+  // Match OpenSSH's canonical RandomArt walk so users can compare this panel
+  // directly with `ssh-keygen -lv` output.
+  // https://github.com/openssh/openssh-portable/blob/master/sshkey.c
+  for (std::size_t index = 0; index < hash_size; ++index) {
+    unsigned char input = hash[index];
+    for (int move = 0; move < 4; ++move) {
+      x = (input & 1U) != 0 ? std::min(x + 1, field_width - 1)
+                            : (x == 0 ? 0 : x - 1);
+      y = (input & 2U) != 0 ? std::min(y + 1, field_height - 1)
+                            : (y == 0 ? 0 : y - 1);
+      if (field[y][x] < sizeof(symbols) - 3) {
+        ++field[y][x];
+      }
+      input >>= 2U;
+    }
+  }
+  field[start_y][start_x] = sizeof(symbols) - 3;
+  field[y][x] = sizeof(symbols) - 2;
+
+  const std::string type_name = random_art_key_type(type);
+  const unsigned int key_size = random_art_key_size(key, type);
+  std::string top_label = "[" + type_name;
+  if (key_size != 0) {
+    top_label += " " + std::to_string(key_size);
+  }
+  top_label += "]";
+  if (top_label.size() > field_width) {
+    top_label = "[" + type_name + "]";
+  }
+  if (top_label.size() > field_width) {
+    top_label.resize(field_width);
+  }
+
+  std::string result = random_art_border(top_label);
+  for (const auto &row : field) {
+    result += "\n|";
+    for (const unsigned char value : row) {
+      result += symbols[value];
+    }
+    result += "|";
+  }
+  result += "\n";
+  result += random_art_border("[SHA256]");
+  return result;
+}
+
 static std::optional<SshUserPrompt>
 host_key_prompt(ssh_session session, const SshEndpointSettings &settings,
                 enum ssh_known_hosts_e status) {
@@ -283,13 +499,14 @@ host_key_prompt(ssh_session session, const SshEndpointSettings &settings,
     return std::nullopt;
   }
 
-  const char *key_type_name =
-      ssh_key_type_to_char(ssh_key_type(server_key));
+  const enum ssh_keytypes_e server_key_type = ssh_key_type(server_key);
+  const char *key_type_name = ssh_key_type_to_char(server_key_type);
   const std::string key_type =
       key_type_name == nullptr ? _("unknown") : key_type_name;
   unsigned char *hash = nullptr;
   std::size_t hash_size = 0;
   std::string fingerprint;
+  std::string random_art;
   if (ssh_get_publickey_hash(server_key, SSH_PUBLICKEY_HASH_SHA256, &hash,
                              &hash_size) == SSH_OK) {
     char *text =
@@ -298,6 +515,8 @@ host_key_prompt(ssh_session session, const SshEndpointSettings &settings,
       fingerprint = text;
       ssh_string_free_char(text);
     }
+    random_art =
+        host_key_random_art(server_key, server_key_type, hash, hash_size);
     ssh_clean_pubkey_hash(&hash);
   }
   ssh_key_free(server_key);
@@ -320,6 +539,7 @@ host_key_prompt(ssh_session session, const SshEndpointSettings &settings,
       .kind = SshUserPromptKind::host_key,
       .title = _("SSH Host Key"),
       .message = std::move(message),
+      .monospace_message = std::move(random_art),
       .initial_text = {},
       .input_required = false,
       .echo = false,

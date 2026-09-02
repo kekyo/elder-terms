@@ -17,6 +17,8 @@ static constexpr const char *inline_prompt_title_style_class =
     "inline-prompt-title";
 static constexpr const char *inline_prompt_message_style_class =
     "inline-prompt-message";
+static constexpr const char *inline_prompt_monospace_message_style_class =
+    "inline-prompt-monospace-message";
 static constexpr const char *inline_prompt_css =
     ".inline-prompt-background {"
     "  background-color: rgba(48, 48, 48, 0.96);"
@@ -27,6 +29,10 @@ static constexpr const char *inline_prompt_css =
     "}"
     ".inline-prompt-message {"
     "  color: #ffffff;"
+    "}"
+    ".inline-prompt-monospace-message {"
+    "  color: #ffffff;"
+    "  font-family: monospace;"
     "}";
 
 struct InlinePromptPendingRequest {
@@ -71,6 +77,16 @@ static void apply_inline_prompt_style(const InlinePromptWidgets &widgets) {
   gtk_style_context_add_provider(message_context,
                                  GTK_STYLE_PROVIDER(provider),
                                  GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  if (widgets.monospace_message_label != nullptr) {
+    GtkStyleContext *monospace_message_context =
+        gtk_widget_get_style_context(widgets.monospace_message_label);
+    gtk_style_context_add_class(
+        monospace_message_context,
+        inline_prompt_monospace_message_style_class);
+    gtk_style_context_add_provider(
+        monospace_message_context, GTK_STYLE_PROVIDER(provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  }
   for (GtkWidget *label : {widgets.entry_label,
                            widgets.secondary_entry_label}) {
     if (label == nullptr) {
@@ -127,6 +143,18 @@ create_inline_prompt_widgets(const std::string &accessible_id_prefix) {
   gtk_label_set_max_width_chars(GTK_LABEL(message), 56);
   gtk_label_set_selectable(GTK_LABEL(message), TRUE);
   gtk_box_pack_start(GTK_BOX(content), message, FALSE, TRUE, 0);
+
+  GtkWidget *monospace_message = gtk_label_new("");
+  gestament_gtk_assign_accessible_id(
+      monospace_message,
+      accessible_id(accessible_id_prefix,
+                    "monospace_message_label").c_str());
+  gtk_label_set_xalign(GTK_LABEL(monospace_message), 0.0F);
+  gtk_label_set_selectable(GTK_LABEL(monospace_message), TRUE);
+  gtk_widget_set_direction(monospace_message, GTK_TEXT_DIR_LTR);
+  gtk_widget_set_visible(monospace_message, FALSE);
+  gtk_widget_set_no_show_all(monospace_message, TRUE);
+  gtk_box_pack_start(GTK_BOX(content), monospace_message, FALSE, TRUE, 0);
 
   GtkWidget *entry_label = gtk_label_new("");
   gestament_gtk_assign_accessible_id(
@@ -202,6 +230,7 @@ create_inline_prompt_widgets(const std::string &accessible_id_prefix) {
       .background = background,
       .title_label = title,
       .message_label = message,
+      .monospace_message_label = monospace_message,
       .entry_label = entry_label,
       .entry = entry,
       .secondary_entry_label = secondary_entry_label,
@@ -220,6 +249,14 @@ static void hide_inline_prompt(InlinePromptController *controller) {
   gtk_entry_set_text(GTK_ENTRY(controller->widgets.entry), "");
   gtk_widget_set_visible(controller->widgets.entry, FALSE);
   gtk_widget_set_no_show_all(controller->widgets.entry, TRUE);
+  if (controller->widgets.monospace_message_label != nullptr) {
+    gtk_label_set_text(
+        GTK_LABEL(controller->widgets.monospace_message_label), "");
+    gtk_widget_set_visible(controller->widgets.monospace_message_label,
+                           FALSE);
+    gtk_widget_set_no_show_all(controller->widgets.monospace_message_label,
+                               TRUE);
+  }
   if (controller->widgets.entry_label != nullptr) {
     gtk_widget_set_visible(controller->widgets.entry_label, FALSE);
     gtk_widget_set_no_show_all(controller->widgets.entry_label, TRUE);
@@ -346,6 +383,11 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
     throw std::invalid_argument(
         "Inline prompt alternative button is unavailable");
   }
+  if (!request.monospace_message.empty() &&
+      controller->widgets.monospace_message_label == nullptr) {
+    throw std::invalid_argument(
+        "Inline prompt monospace message label is unavailable");
+  }
   if (request.secondary_input_required &&
       controller->widgets.secondary_entry == nullptr) {
     throw std::invalid_argument(
@@ -385,6 +427,11 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
                      request.title.c_str());
   gtk_label_set_text(GTK_LABEL(controller->widgets.message_label),
                      request.message.c_str());
+  if (controller->widgets.monospace_message_label != nullptr) {
+    gtk_label_set_text(
+        GTK_LABEL(controller->widgets.monospace_message_label),
+        request.monospace_message.c_str());
+  }
   gtk_button_set_label(GTK_BUTTON(controller->widgets.accept_button),
                        request.accept_label.c_str());
   gtk_button_set_label(GTK_BUTTON(controller->widgets.cancel_button),
@@ -416,6 +463,13 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
   gtk_widget_set_no_show_all(controller->widgets.panel, FALSE);
   gtk_widget_show_all(controller->widgets.panel);
   gtk_widget_set_no_show_all(controller->widgets.panel, TRUE);
+  if (controller->widgets.monospace_message_label != nullptr) {
+    const bool visible = !request.monospace_message.empty();
+    gtk_widget_set_visible(controller->widgets.monospace_message_label,
+                           visible);
+    gtk_widget_set_no_show_all(controller->widgets.monospace_message_label,
+                               !visible);
+  }
   gtk_widget_set_visible(controller->widgets.entry, request.input_required);
   gtk_widget_set_no_show_all(controller->widgets.entry,
                              !request.input_required);

@@ -279,6 +279,18 @@ run_ssh_prompt_fixture_async(ApplicationState *state,
               "Accept and save this host key?"),
             "fixture.example", 22, "ssh-ed25519",
             "SHA256:fixture-host-key"),
+        .monospace_message =
+            "+--[ED25519 256]--+\n"
+            "|         .oo..   |\n"
+            "|        . .oo    |\n"
+            "|        oo*o     |\n"
+            "|       .+*=o     |\n"
+            "| o .   .S*+..    |\n"
+            "|= o ... oooo     |\n"
+            "|o. oEo = ..o     |\n"
+            "|   oo.B Oo. .    |\n"
+            "|    . .@o+.      |\n"
+            "+----[SHA256]-----+",
         .initial_text = {},
         .input_required = false,
         .echo = false,

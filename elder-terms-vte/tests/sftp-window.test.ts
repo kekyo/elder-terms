@@ -544,6 +544,45 @@ describe('SFTP window', () => {
     );
   });
 
+  it('shows SSH host-key random art inside the file transfer window', async (context) => {
+    await runSftpFixtureWithEnvironment(
+      context,
+      false,
+      ['--test-ssh-prompt=host-key'],
+      [],
+      undefined,
+      {},
+      async ({ app }) => {
+        const prompt = expectElementKind(
+          await app.getById('file_transfer_prompt_panel'),
+          'container'
+        );
+        const randomArt = expectElementKind(
+          await app.getById('file_transfer_prompt_monospace_message_label'),
+          'label'
+        );
+        await expectShowing(prompt);
+        await expectShowing(randomArt);
+        expect(await randomArt.text()).toContain('[ED25519 256]');
+        expect(await randomArt.text()).toContain('[SHA256]');
+
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        ).click();
+        await expectHidden(prompt);
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Ready');
+        });
+      }
+    );
+  });
+
   it('applies configured exterior and browser RGB backgrounds', async (context) => {
     await runSftpFixture(
       context,

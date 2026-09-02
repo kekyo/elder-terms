@@ -46,6 +46,7 @@ enum class ServerAuthMode {
 struct ServerOptions {
   ServerAuthMode auth_mode = ServerAuthMode::none;
   std::filesystem::path host_key_path;
+  std::filesystem::path host_public_key_path;
   std::filesystem::path authorized_key_path;
   std::string username = "test-user";
   std::string password = "test-password";
@@ -206,6 +207,56 @@ static void generate_key_pair(const std::filesystem::path &private_key_path,
   if (::chmod(private_key_path.c_str(), S_IRUSR | S_IWUSR) != 0) {
     throw std::runtime_error("failed to protect SSH test private key");
   }
+}
+
+static std::string
+openssh_random_art(const std::filesystem::path &public_key_path) {
+  const std::string public_key = public_key_path.string();
+  gchar *standard_output = nullptr;
+  gchar *standard_error = nullptr;
+  gint wait_status = 0;
+  GError *error = nullptr;
+  gchar *arguments[] = {
+      const_cast<gchar *>("/usr/bin/ssh-keygen"),
+      const_cast<gchar *>("-l"),
+      const_cast<gchar *>("-v"),
+      const_cast<gchar *>("-E"),
+      const_cast<gchar *>("sha256"),
+      const_cast<gchar *>("-f"),
+      const_cast<gchar *>(public_key.c_str()),
+      nullptr,
+  };
+  const gboolean spawned = g_spawn_sync(
+      nullptr, arguments, nullptr, G_SPAWN_DEFAULT, nullptr, nullptr,
+      &standard_output, &standard_error, &wait_status, &error);
+  const std::string failure =
+      error != nullptr && error->message != nullptr
+          ? error->message
+          : standard_error != nullptr ? standard_error : "unknown error";
+  g_clear_error(&error);
+  g_free(standard_error);
+  if (spawned == FALSE ||
+      g_spawn_check_wait_status(wait_status, &error) == FALSE) {
+    const std::string status_failure =
+        error != nullptr && error->message != nullptr ? error->message
+                                                      : failure;
+    g_clear_error(&error);
+    g_free(standard_output);
+    throw std::runtime_error("failed to obtain OpenSSH random art: " +
+                             status_failure);
+  }
+
+  std::string output = standard_output == nullptr ? "" : standard_output;
+  g_free(standard_output);
+  const std::size_t art_start = output.find("\n+");
+  expect_true(art_start != std::string::npos,
+              "OpenSSH did not print host-key random art");
+  output.erase(0, art_start + 1);
+  while (!output.empty() &&
+         (output.back() == '\n' || output.back() == '\r')) {
+    output.pop_back();
+  }
+  return output;
 }
 
 static int on_none_auth(ssh_session, const char *user, void *userdata) {
@@ -933,6 +984,8 @@ exercise_sftp_client_async(
 static void run_client_case(const ServerOptions &server_options,
                             const ClientCase &client_case) {
   ChildServer server = start_server(server_options);
+  const std::string expected_random_art =
+      openssh_random_art(server_options.host_public_key_path);
   std::vector<elder_terms::SshUserPromptKind> prompts;
   std::vector<elder_terms::TerminalSessionConnectionPhase> phases;
   std::exception_ptr async_error;
@@ -962,8 +1015,9 @@ static void run_client_case(const ServerOptions &server_options,
           .zmodem_auto_start = {},
           .ssh_prompt =
               [&prompts,
-               &client_case](const elder_terms::SshUserPrompt &prompt,
-                             cardio::cancellation cancellation)
+               &client_case,
+               &expected_random_art](const elder_terms::SshUserPrompt &prompt,
+                                     cardio::cancellation cancellation)
               -> cardio::promise<elder_terms::SshUserPromptResponse> {
             cancellation.throw_if_cancellation_requested();
             prompts.push_back(prompt.kind);
@@ -980,6 +1034,12 @@ static void run_client_case(const ServerOptions &server_options,
             } else if (prompt.kind !=
                        elder_terms::SshUserPromptKind::host_key) {
               response.text = client_case.authentication_answer;
+            } else {
+              expect_true(prompt.monospace_message == expected_random_art,
+                          "SSH host-key prompt random art did not match "
+                          "OpenSSH\nExpected:\n" +
+                              expected_random_art + "\nActual:\n" +
+                              prompt.monospace_message);
             }
             co_return response;
           },
@@ -1143,6 +1203,7 @@ static void test_supported_authentication_and_shell_channel() {
   ServerOptions options;
   options.auth_mode = ServerAuthMode::none;
   options.host_key_path = host_private_key;
+  options.host_public_key_path = host_public_key;
   run_client_case(
       options,
       ClientCase{

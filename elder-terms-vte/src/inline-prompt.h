@@ -20,6 +20,8 @@ struct InlinePromptWidgets {
   GtkWidget *title_label;
   /** Full prompt message. */
   GtkWidget *message_label;
+  /** Optional preformatted prompt message rendered in a monospace font. */
+  GtkWidget *monospace_message_label = nullptr;
   /** Optional label describing the primary text response. */
   GtkWidget *entry_label = nullptr;
   /** Optional text response entry. */
@@ -44,6 +46,8 @@ struct InlinePromptRequest {
   std::string title;
   /** Full prompt message. */
   std::string message;
+  /** Optional preformatted text displayed in a monospace font. */
+  std::string monospace_message = {};
   /** Text displayed by the accepting button. */
   std::string accept_label;
   /** Text displayed by the rejecting button. */
@@ -116,8 +120,8 @@ create_inline_prompt_controller(InlinePromptWidgets widgets);
  * @param request Presentation and input requirements.
  * @param cancellation Cancellation signal for the pending question.
  * @returns Accepted response, or a rejected response after cancellation.
- * @throws std::invalid_argument when a requested secondary input or third
- * response is unavailable from the controller.
+ * @throws std::invalid_argument when a requested preformatted message,
+ * secondary input, or third response is unavailable from the controller.
  */
 cardio::promise<InlinePromptResponse> prompt_inline_async(
     const std::shared_ptr<InlinePromptController> &controller,

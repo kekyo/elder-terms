@@ -31,6 +31,8 @@ struct SshUserPrompt {
   std::string title;
   /** Full question and security context displayed to the user. */
   std::string message;
+  /** Optional preformatted security context displayed in a monospace font. */
+  std::string monospace_message = {};
   /** Initial text displayed in the response entry. */
   std::string initial_text;
   /** True when the panel must collect a text response. */

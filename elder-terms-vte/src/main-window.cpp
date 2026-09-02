@@ -403,6 +403,7 @@ static bool main_window_has_required_widgets(const MainWindow &main_window) {
          main_window.ssh_prompt_background != nullptr &&
          main_window.ssh_prompt_title_label != nullptr &&
          main_window.ssh_prompt_message_label != nullptr &&
+         main_window.ssh_prompt_monospace_message_label != nullptr &&
          main_window.ssh_prompt_entry != nullptr &&
          main_window.ssh_prompt_cancel_button != nullptr &&
          main_window.ssh_prompt_accept_button != nullptr &&
@@ -1180,6 +1181,10 @@ std::optional<MainWindow> load_main_window() {
       required_widget(main_window.builder, "ssh_prompt_title_label");
   main_window.ssh_prompt_message_label =
       required_widget(main_window.builder, "ssh_prompt_message_label");
+  main_window.ssh_prompt_monospace_message_label = required_widget(
+      main_window.builder, "ssh_prompt_monospace_message_label");
+  gtk_widget_set_direction(main_window.ssh_prompt_monospace_message_label,
+                           GTK_TEXT_DIR_LTR);
   main_window.ssh_prompt_entry =
       required_widget(main_window.builder, "ssh_prompt_entry");
   main_window.ssh_prompt_cancel_button =
@@ -1240,6 +1245,8 @@ std::optional<MainWindow> load_main_window() {
           .background = main_window.ssh_prompt_background,
           .title_label = main_window.ssh_prompt_title_label,
           .message_label = main_window.ssh_prompt_message_label,
+          .monospace_message_label =
+              main_window.ssh_prompt_monospace_message_label,
           .entry = main_window.ssh_prompt_entry,
           .cancel_button = main_window.ssh_prompt_cancel_button,
           .accept_button = main_window.ssh_prompt_accept_button,
@@ -1457,6 +1464,7 @@ cardio::promise<SshUserPromptResponse> prompt_main_window_ssh_async(
       {
           .title = prompt.title.empty() ? _("SSH") : prompt.title,
           .message = prompt.message,
+          .monospace_message = prompt.monospace_message,
           .accept_label =
               prompt.kind == SshUserPromptKind::host_key
                   ? _("Accept")

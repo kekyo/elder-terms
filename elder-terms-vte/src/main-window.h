@@ -98,6 +98,8 @@ struct MainWindow {
   GtkWidget *ssh_prompt_title_label = nullptr;
   /** Question text inside the SSH prompt panel. */
   GtkWidget *ssh_prompt_message_label = nullptr;
+  /** Preformatted security context inside the SSH prompt panel. */
+  GtkWidget *ssh_prompt_monospace_message_label = nullptr;
   /** Maskable response entry inside the SSH prompt panel. */
   GtkWidget *ssh_prompt_entry = nullptr;
   /** Button that rejects the active SSH prompt. */

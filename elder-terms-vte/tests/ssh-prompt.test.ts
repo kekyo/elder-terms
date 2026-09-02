@@ -81,6 +81,13 @@ describe.concurrent('SSH prompt overlay', () => {
             'label'
           ).text()
         ).toContain('SHA256:fixture-host-key');
+        const randomArt = expectElementKind(
+          await app.getById('ssh_prompt_monospace_message_label'),
+          'label'
+        );
+        await expectShowing(randomArt);
+        expect(await randomArt.text()).toContain('[ED25519 256]');
+        expect(await randomArt.text()).toContain('[SHA256]');
         expect(
           (await (await app.getById('ssh_prompt_accept_button')).info()).name
         ).toBe('承認');
@@ -112,12 +119,18 @@ describe.concurrent('SSH prompt overlay', () => {
           await app.getById('ssh_prompt_entry'),
           'entry'
         );
+        const randomArt = expectElementKind(
+          await app.getById('ssh_prompt_monospace_message_label'),
+          'label'
+        );
         const dim = await app.getById('terminal_dim_overlay');
 
         await expectShowing(panel);
         await expectShowing(dim);
         await expectHidden(entry);
+        await expectShowing(randomArt);
         expect(await message.text()).toContain('SHA256:fixture-host-key');
+        expect((await randomArt.text()).split('\n')).toHaveLength(11);
         await expectPromptInsideTerminalOverlay(app, panel);
         await expectOnlyMainWindow(app);
 
