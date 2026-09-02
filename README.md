@@ -113,15 +113,15 @@ elder-terms
 
 ## Basic Usage
 
-First, create a connection entry for a local terminal. This is a terminal that
-starts a shell such as `bash`, much like the terminal you normally use.
+On the first launch, elder-terms automatically creates a connection entry named
+`Local terminal`. It starts a shell such as `bash`, much like the terminal you
+normally use.
 
 ![Local terminal](./images/launcher.png)
 
-Creating one is easy. Click the "New" button at the bottom of the launcher,
-change the name from "New connection" to whatever you like, and click "Save".
-You now have an entry that starts a local terminal. Double-click the entry in
-the launcher's list to open it. There it is:
+Double-click the entry in the launcher's list to open it. To create another
+connection, click "New" at the bottom of the launcher, change the name from
+"New connection" to whatever you like, and click "Save". There it is:
 
 ![Local terminal](./images/local-terminal.png)
 
