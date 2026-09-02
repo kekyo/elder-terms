@@ -2371,6 +2371,10 @@ static void on_application_startup(GApplication *,
       elder_terms::default_connection_directory();
   state->global_config_path =
       elder_terms::default_global_config_path();
+  const elder_terms::InitialConnectionProfileResult initial_profile =
+      elder_terms::create_initial_local_terminal_profile(
+          state->connection_directory);
+  print_warnings(initial_profile.warnings);
   elder_terms::SettingsLoadResult global_settings =
       elder_terms::load_global_settings(state->global_config_path, 1.0);
   print_warnings(global_settings.warnings);

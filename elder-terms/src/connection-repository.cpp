@@ -15,6 +15,7 @@
 namespace elder_terms {
 
 static constexpr gdouble default_terminal_zoom = 1.0;
+static constexpr char initial_local_terminal_name[] = "Local terminal";
 
 static std::string trim_ascii_whitespace(const std::string &value) {
   const auto first = std::find_if_not(
@@ -81,6 +82,31 @@ static void remove_temporary_file(const std::filesystem::path &path) {
 std::filesystem::path default_connection_directory() {
   return std::filesystem::path(g_get_user_config_dir()) / "elder-terms" /
          "connections";
+}
+
+InitialConnectionProfileResult create_initial_local_terminal_profile(
+    const std::filesystem::path &directory) {
+  InitialConnectionProfileResult result;
+  std::error_code exists_error;
+  if (std::filesystem::exists(directory, exists_error)) {
+    return result;
+  }
+  if (exists_error) {
+    result.warnings.push_back(file_error(
+        _("Warning: failed to inspect connection directory %s: %s"),
+        directory, exists_error));
+    return result;
+  }
+
+  const SettingsStore store = create_default_settings(
+      default_terminal_display_settings(default_terminal_zoom),
+      initial_local_terminal_name);
+  ConnectionSaveResult saved = save_connection_profile(
+      directory, std::nullopt, initial_local_terminal_name, store);
+  result.created = saved.saved;
+  result.path = std::move(saved.path);
+  result.warnings = std::move(saved.warnings);
+  return result;
 }
 
 std::vector<ConnectionProfile>

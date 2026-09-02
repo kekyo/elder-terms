@@ -350,6 +350,45 @@ const readLaunchCapture = async (path: string): Promise<LaunchCapture> =>
   JSON.parse(await readFile(path, 'utf8')) as LaunchCapture;
 
 describe('elder-terms main window', () => {
+  it('creates a default local terminal on the first launch', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await rm(connections, { recursive: true });
+      },
+      async ({ app }) => {
+        const list = await app.getById('connection_list');
+        await waitForResult(async () => {
+          expect(await connectionRowCount(list)).toBe(1);
+        });
+        await selectConnectionRow(app, list, 0);
+
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('settings_general_name_entry'),
+              'entry'
+            ).text()
+          ).toBe('Local terminal');
+        });
+        await expectSelectedComboValue(
+          app,
+          'settings_general_type_combo',
+          'Local shell (built-in default)'
+        );
+        expect(
+          await expectElementKind(
+            await app.getById('settings_terminal_width_entry'),
+            'entry'
+          ).text()
+        ).toBe('');
+        await expectInsensitive(
+          expectElementKind(await app.getById('apply_button'), 'button')
+        );
+      }
+    );
+  });
+
   it('opens application settings and version information in one dialog', async (context) => {
     await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
       await openApplicationDialogPage(app, 'application_settings_menu_item');

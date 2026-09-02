@@ -66,12 +66,36 @@ struct ConnectionDeleteResult {
 };
 
 /**
+ * Result of creating the connection profile supplied on the first launch.
+ */
+struct InitialConnectionProfileResult {
+  /** True when the initial profile was created. */
+  bool created = false;
+  /** Created INI path, or an empty path when no profile was created. */
+  std::filesystem::path path;
+  /** Failure diagnostics. */
+  std::vector<std::string> warnings;
+};
+
+/**
  * Returns the XDG connection profile directory.
  *
  * @returns `$XDG_CONFIG_HOME/elder-terms/connections`, using GLib's fallback
  * when XDG_CONFIG_HOME is unset.
  */
 std::filesystem::path default_connection_directory();
+
+/**
+ * Creates the built-in default local-terminal profile on the first launch.
+ *
+ * @param directory Connection profile directory.
+ * @returns Creation status, created path, and diagnostics.
+ *
+ * @remarks The profile is created only when the directory path does not
+ * already exist. An existing directory is left unchanged, even when empty.
+ */
+InitialConnectionProfileResult create_initial_local_terminal_profile(
+    const std::filesystem::path &directory);
 
 /**
  * Lists regular `.ini` connection profiles in ascending name order.
