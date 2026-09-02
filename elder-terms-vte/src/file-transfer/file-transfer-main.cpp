@@ -49,12 +49,17 @@ struct FtpApplicationState {
   bool shutting_down = false;
 };
 
+struct FtpRuntimeCredentials {
+  std::string username;
+  std::string password;
+};
+
 static std::string format_message(const char *format,
-                                  const std::string &first,
-                                  const std::string &second) {
-  gchar *value = g_strdup_printf(format, first.c_str(), second.c_str());
-  const std::string result = value == nullptr ? std::string() : value;
-  g_free(value);
+                                  const std::string &value) {
+  gchar *formatted = g_strdup_printf(format, value.c_str());
+  const std::string result =
+      formatted == nullptr ? std::string() : formatted;
+  g_free(formatted);
   return result;
 }
 
@@ -270,28 +275,67 @@ static void create_ftp_application_window(FtpApplicationState *state) {
   elder_terms::show_file_transfer_window(state->window);
 }
 
-static cardio::promise<std::optional<std::string>>
-prompt_ftp_password_async(FtpApplicationState *state,
-                          cardio::cancellation cancellation) {
-  elder_terms::InlinePromptResponse response =
-      co_await elder_terms::prompt_file_transfer_window_async(
-          state->window,
-          {
-              .title = _("FTP authentication"),
-              .message = format_message(
-                  _("Enter the password for %s on %s."),
-                  state->connection.username, state->connection.address),
-              .accept_label = _("Connect"),
-              .cancel_label = _("Cancel"),
-              .input_required = true,
-              .echo = false,
-              .cancel_visible = true,
-          },
-          std::move(cancellation));
-  if (!response.accepted) {
-    co_return std::nullopt;
+static std::string initial_ftp_username(
+    const elder_terms::FtpConnectionSettings &connection) {
+  if (!connection.username.empty()) {
+    return connection.username;
   }
-  co_return std::move(response.text);
+  const char *current_username = g_get_user_name();
+  return current_username == nullptr ? std::string()
+                                     : std::string(current_username);
+}
+
+static std::string ftp_authentication_message(
+    const elder_terms::FtpConnectionSettings &connection,
+    bool username_missing) {
+  std::string message = format_message(
+      _("Enter the user name and password for %s."), connection.address);
+  message += "\n\n";
+  message += _("To log in anonymously, enter anonymous as the user name.");
+  if (username_missing) {
+    message += "\n\n";
+    message += _("User name must not be empty.");
+  }
+  return message;
+}
+
+static cardio::promise<std::optional<FtpRuntimeCredentials>>
+prompt_ftp_credentials_async(FtpApplicationState *state,
+                             cardio::cancellation cancellation) {
+  std::string username = initial_ftp_username(state->connection);
+  bool username_missing = false;
+  while (true) {
+    elder_terms::InlinePromptResponse response =
+        co_await elder_terms::prompt_file_transfer_window_async(
+            state->window,
+            {
+                .title = _("FTP authentication"),
+                .message = ftp_authentication_message(
+                    state->connection, username_missing),
+                .accept_label = _("Connect"),
+                .cancel_label = _("Cancel"),
+                .initial_text = username,
+                .input_label = _("User name"),
+                .input_required = true,
+                .echo = true,
+                .secondary_input_label = _("Password:"),
+                .secondary_input_required = true,
+                .secondary_echo = false,
+                .cancel_visible = true,
+            },
+            cancellation);
+    if (!response.accepted) {
+      co_return std::nullopt;
+    }
+    username = std::move(response.text);
+    if (username.find_first_not_of(" \t\r\n") != std::string::npos) {
+      co_return FtpRuntimeCredentials{
+          .username = std::move(username),
+          .password = std::move(response.secondary_text),
+      };
+    }
+    username_missing = true;
+  }
 }
 
 static cardio::promise<void>
@@ -300,23 +344,21 @@ start_ftp_application_async(FtpApplicationState *state) {
   try {
     const cardio::cancellation cancellation =
         state->stop_source.get_cancellation();
-    std::string password;
-    if (!state->connection.username.empty()) {
-      std::optional<std::string> prompted =
-          co_await prompt_ftp_password_async(state, cancellation);
-      if (!prompted.has_value()) {
-        stop_ftp_application(state);
-        co_return;
-      }
-      password = std::move(*prompted);
+    std::optional<FtpRuntimeCredentials> credentials =
+        co_await prompt_ftp_credentials_async(state, cancellation);
+    if (!credentials.has_value()) {
+      stop_ftp_application(state);
+      co_return;
     }
     if (state->fixture) {
       state->client = elder_terms::create_sftp_fixture_client(false);
     } else {
+      elder_terms::FtpConnectionSettings connection = state->connection;
+      connection.username = std::move(credentials->username);
       state->client = co_await elder_terms::open_ftp_client_async(
           {
-              .connection = state->connection,
-              .password = std::move(password),
+              .connection = std::move(connection),
+              .password = std::move(credentials->password),
           },
           cancellation);
     }
@@ -351,13 +393,7 @@ static int run_ftp_application(
       elder_terms::ftp_connection_settings(settings_result.store);
 
   create_ftp_application_window(&state);
-  if (state.fixture && state.connection.username.empty()) {
-    state.client = elder_terms::create_sftp_fixture_client(false);
-    elder_terms::attach_file_transfer_window_client(
-        state.window, state.client);
-  } else {
-    state.startup_task.emplace(start_ftp_application_async(&state));
-  }
+  state.startup_task.emplace(start_ftp_application_async(&state));
 
   dispatcher.park();
   (void)state.stop_source.cancel();

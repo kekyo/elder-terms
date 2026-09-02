@@ -894,18 +894,12 @@ public:
 
   static cardio::promise<std::shared_ptr<RemoteFileClient>> open_async(
       FtpClientOpenOptions options, cardio::cancellation cancellation) {
+    validate_ftp_argument(options.connection.username, "username", false);
+    validate_ftp_argument(options.password, "password", true);
     if (options.connection.address.empty() || options.connection.port <= 0 ||
         options.connection.port > 65535) {
       throw std::invalid_argument("FTP endpoint is invalid");
     }
-    const bool anonymous = options.connection.username.empty();
-    const std::string username =
-        anonymous ? std::string("anonymous") : options.connection.username;
-    const std::string password =
-        anonymous && options.password.empty() ? std::string("anonymous@")
-                                               : options.password;
-    validate_ftp_argument(username, "username", false);
-    validate_ftp_argument(password, "password", true);
 
     auto state = std::make_shared<FtpSessionState>(
         options.connection.data_connection_mode);
@@ -924,10 +918,10 @@ public:
       }
 
       FtpReply login = co_await state->command_async(
-          "USER " + username, cancellation);
+          "USER " + options.connection.username, cancellation);
       if (login.code == 331) {
         login = co_await state->command_async(
-            "PASS " + password, cancellation);
+            "PASS " + options.password, cancellation);
       }
       require_positive_completion(login, "FTP login");
 

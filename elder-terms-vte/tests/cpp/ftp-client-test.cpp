@@ -516,13 +516,13 @@ run_active_client(std::uint16_t port,
               {
                   .address = "127.0.0.1",
                   .port = port,
-                  .username = {},
+                  .username = "anonymous",
                   .data_connection_mode =
                       elder_terms::FtpDataConnectionMode::active,
                   .local_directory = {},
                   .remote_directory = "/",
               },
-          .password = {},
+          .password = "anonymous@",
       },
       cancellation);
   const elder_terms::RemoteDirectorySnapshot snapshot =
@@ -530,6 +530,38 @@ run_active_client(std::uint16_t port,
   expect(snapshot.canonical_path == "/" && snapshot.entries.size() == 1 &&
              snapshot.entries[0].name == "active.txt",
          "active PORT fallback did not load the directory");
+}
+
+static void rejects_implicit_anonymous_login() {
+  cardio::dispatcher_group_glib dispatcher_group;
+  cardio::dispatcher_host_glib dispatcher(dispatcher_group);
+  bool rejected = false;
+  auto task = [&]() -> cardio::promise<void> {
+    try {
+      (void)co_await elder_terms::open_ftp_client_async(
+          {
+              .connection =
+                  {
+                      .address = {},
+                      .port = 21,
+                      .username = {},
+                      .data_connection_mode =
+                          elder_terms::FtpDataConnectionMode::passive,
+                      .local_directory = {},
+                      .remote_directory = {},
+                  },
+              .password = {},
+          },
+          {});
+    } catch (const std::invalid_argument &exception) {
+      rejected = std::string(exception.what()) == "Invalid FTP username";
+    }
+    dispatcher_group.shutdown();
+  }();
+  dispatcher.park();
+  task.unsafe_result();
+  expect(rejected,
+         "an empty FTP username should not select anonymous login");
 }
 
 static void run_case(ServerFunction server_function, bool passive) {
@@ -590,6 +622,7 @@ int main() {
         elder_terms_ftp_client_test::passive_server, true);
     elder_terms_ftp_client_test::run_case(
         elder_terms_ftp_client_test::active_server, false);
+    elder_terms_ftp_client_test::rejects_implicit_anonymous_login();
   } catch (const std::exception &exception) {
     std::cerr << "ftp-client-test: FAIL: " << exception.what() << '\n';
     return 1;

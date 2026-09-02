@@ -33,6 +33,7 @@ struct InlinePromptPendingRequest {
   std::shared_ptr<cardio::promise_source<InlinePromptResponse>> source;
   cardio::cancellation_registration cancellation_registration;
   bool input_required = false;
+  bool secondary_input_required = false;
 };
 
 struct InlinePromptController {
@@ -70,6 +71,17 @@ static void apply_inline_prompt_style(const InlinePromptWidgets &widgets) {
   gtk_style_context_add_provider(message_context,
                                  GTK_STYLE_PROVIDER(provider),
                                  GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  for (GtkWidget *label : {widgets.entry_label,
+                           widgets.secondary_entry_label}) {
+    if (label == nullptr) {
+      continue;
+    }
+    GtkStyleContext *context = gtk_widget_get_style_context(label);
+    gtk_style_context_add_class(context,
+                                inline_prompt_message_style_class);
+    gtk_style_context_add_provider(context, GTK_STYLE_PROVIDER(provider),
+                                   GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  }
   g_object_unref(provider);
 }
 
@@ -116,6 +128,15 @@ create_inline_prompt_widgets(const std::string &accessible_id_prefix) {
   gtk_label_set_selectable(GTK_LABEL(message), TRUE);
   gtk_box_pack_start(GTK_BOX(content), message, FALSE, TRUE, 0);
 
+  GtkWidget *entry_label = gtk_label_new("");
+  gestament_gtk_assign_accessible_id(
+      entry_label,
+      accessible_id(accessible_id_prefix, "entry_label").c_str());
+  gtk_label_set_xalign(GTK_LABEL(entry_label), 0.0F);
+  gtk_widget_set_visible(entry_label, FALSE);
+  gtk_widget_set_no_show_all(entry_label, TRUE);
+  gtk_box_pack_start(GTK_BOX(content), entry_label, FALSE, TRUE, 0);
+
   GtkWidget *entry = gtk_entry_new();
   gestament_gtk_assign_accessible_id(
       entry, accessible_id(accessible_id_prefix, "entry").c_str());
@@ -125,6 +146,28 @@ create_inline_prompt_widgets(const std::string &accessible_id_prefix) {
   gtk_entry_set_activates_default(GTK_ENTRY(entry), TRUE);
   gtk_widget_set_hexpand(entry, TRUE);
   gtk_box_pack_start(GTK_BOX(content), entry, FALSE, TRUE, 0);
+
+  GtkWidget *secondary_entry_label = gtk_label_new("");
+  gestament_gtk_assign_accessible_id(
+      secondary_entry_label,
+      accessible_id(accessible_id_prefix,
+                    "secondary_entry_label").c_str());
+  gtk_label_set_xalign(GTK_LABEL(secondary_entry_label), 0.0F);
+  gtk_widget_set_visible(secondary_entry_label, FALSE);
+  gtk_widget_set_no_show_all(secondary_entry_label, TRUE);
+  gtk_box_pack_start(GTK_BOX(content), secondary_entry_label,
+                     FALSE, TRUE, 0);
+
+  GtkWidget *secondary_entry = gtk_entry_new();
+  gestament_gtk_assign_accessible_id(
+      secondary_entry,
+      accessible_id(accessible_id_prefix, "secondary_entry").c_str());
+  gtk_widget_set_visible(secondary_entry, FALSE);
+  gtk_widget_set_no_show_all(secondary_entry, TRUE);
+  gtk_entry_set_visibility(GTK_ENTRY(secondary_entry), FALSE);
+  gtk_entry_set_activates_default(GTK_ENTRY(secondary_entry), TRUE);
+  gtk_widget_set_hexpand(secondary_entry, TRUE);
+  gtk_box_pack_start(GTK_BOX(content), secondary_entry, FALSE, TRUE, 0);
 
   GtkWidget *actions = gtk_button_box_new(GTK_ORIENTATION_HORIZONTAL);
   gtk_box_set_spacing(GTK_BOX(actions), 8);
@@ -159,7 +202,10 @@ create_inline_prompt_widgets(const std::string &accessible_id_prefix) {
       .background = background,
       .title_label = title,
       .message_label = message,
+      .entry_label = entry_label,
       .entry = entry,
+      .secondary_entry_label = secondary_entry_label,
+      .secondary_entry = secondary_entry,
       .cancel_button = cancel,
       .accept_button = accept,
       .alternative_button = alternative,
@@ -174,6 +220,20 @@ static void hide_inline_prompt(InlinePromptController *controller) {
   gtk_entry_set_text(GTK_ENTRY(controller->widgets.entry), "");
   gtk_widget_set_visible(controller->widgets.entry, FALSE);
   gtk_widget_set_no_show_all(controller->widgets.entry, TRUE);
+  if (controller->widgets.entry_label != nullptr) {
+    gtk_widget_set_visible(controller->widgets.entry_label, FALSE);
+    gtk_widget_set_no_show_all(controller->widgets.entry_label, TRUE);
+  }
+  if (controller->widgets.secondary_entry != nullptr) {
+    gtk_entry_set_text(GTK_ENTRY(controller->widgets.secondary_entry), "");
+    gtk_widget_set_visible(controller->widgets.secondary_entry, FALSE);
+    gtk_widget_set_no_show_all(controller->widgets.secondary_entry, TRUE);
+  }
+  if (controller->widgets.secondary_entry_label != nullptr) {
+    gtk_widget_set_visible(controller->widgets.secondary_entry_label, FALSE);
+    gtk_widget_set_no_show_all(controller->widgets.secondary_entry_label,
+                               TRUE);
+  }
   gtk_widget_set_visible(controller->widgets.panel, FALSE);
   gtk_widget_set_no_show_all(controller->widgets.panel, TRUE);
 }
@@ -196,13 +256,25 @@ static void on_inline_prompt_accept_clicked(GtkButton *, gpointer data) {
     return;
   }
   std::string text;
+  std::string secondary_text;
   if (controller->request->input_required) {
     const char *entry_text =
         gtk_entry_get_text(GTK_ENTRY(controller->widgets.entry));
     text = entry_text == nullptr ? std::string() : std::string(entry_text);
   }
+  if (controller->request->secondary_input_required) {
+    const char *entry_text = gtk_entry_get_text(
+        GTK_ENTRY(controller->widgets.secondary_entry));
+    secondary_text =
+        entry_text == nullptr ? std::string() : std::string(entry_text);
+  }
   complete_inline_prompt(
-      controller, {.accepted = true, .text = std::move(text)});
+      controller,
+      {
+          .accepted = true,
+          .text = std::move(text),
+          .secondary_text = std::move(secondary_text),
+      });
 }
 
 static void on_inline_prompt_cancel_clicked(GtkButton *, gpointer data) {
@@ -212,11 +284,25 @@ static void on_inline_prompt_cancel_clicked(GtkButton *, gpointer data) {
 static void on_inline_prompt_alternative_clicked(GtkButton *, gpointer data) {
   complete_inline_prompt(
       static_cast<InlinePromptController *>(data),
-      {.accepted = false, .text = {}, .alternative = true});
+      {
+          .accepted = false,
+          .text = {},
+          .secondary_text = {},
+          .alternative = true,
+      });
 }
 
-static void on_inline_prompt_entry_activated(GtkEntry *, gpointer data) {
-  on_inline_prompt_accept_clicked(nullptr, data);
+static void on_inline_prompt_entry_activated(GtkEntry *entry, gpointer data) {
+  auto *controller = static_cast<InlinePromptController *>(data);
+  if (controller == nullptr || controller->request == nullptr) {
+    return;
+  }
+  if (entry == GTK_ENTRY(controller->widgets.entry) &&
+      controller->request->secondary_input_required) {
+    gtk_widget_grab_focus(controller->widgets.secondary_entry);
+    return;
+  }
+  on_inline_prompt_accept_clicked(nullptr, controller);
 }
 
 std::shared_ptr<InlinePromptController>
@@ -241,6 +327,11 @@ create_inline_prompt_controller(InlinePromptWidgets widgets) {
   g_signal_connect(widgets.entry, "activate",
                    G_CALLBACK(on_inline_prompt_entry_activated),
                    controller.get());
+  if (widgets.secondary_entry != nullptr) {
+    g_signal_connect(widgets.secondary_entry, "activate",
+                     G_CALLBACK(on_inline_prompt_entry_activated),
+                     controller.get());
+  }
   return controller;
 }
 
@@ -255,12 +346,18 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
     throw std::invalid_argument(
         "Inline prompt alternative button is unavailable");
   }
+  if (request.secondary_input_required &&
+      controller->widgets.secondary_entry == nullptr) {
+    throw std::invalid_argument(
+        "Inline prompt secondary entry is unavailable");
+  }
 
   cancel_inline_prompt(controller);
   auto pending = std::make_shared<InlinePromptPendingRequest>();
   pending->source =
       std::make_shared<cardio::promise_source<InlinePromptResponse>>();
   pending->input_required = request.input_required;
+  pending->secondary_input_required = request.secondary_input_required;
   cardio::promise<InlinePromptResponse> response =
       pending->source->get_promise();
   controller->request = pending;
@@ -299,6 +396,22 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
   gtk_entry_set_text(GTK_ENTRY(controller->widgets.entry),
                      request.initial_text.c_str());
   gtk_entry_set_visibility(GTK_ENTRY(controller->widgets.entry), request.echo);
+  gtk_entry_set_activates_default(GTK_ENTRY(controller->widgets.entry),
+                                  !request.secondary_input_required);
+  if (controller->widgets.entry_label != nullptr) {
+    gtk_label_set_text(GTK_LABEL(controller->widgets.entry_label),
+                       request.input_label.c_str());
+  }
+  if (controller->widgets.secondary_entry != nullptr) {
+    gtk_entry_set_text(GTK_ENTRY(controller->widgets.secondary_entry),
+                       request.secondary_initial_text.c_str());
+    gtk_entry_set_visibility(GTK_ENTRY(controller->widgets.secondary_entry),
+                             request.secondary_echo);
+  }
+  if (controller->widgets.secondary_entry_label != nullptr) {
+    gtk_label_set_text(GTK_LABEL(controller->widgets.secondary_entry_label),
+                       request.secondary_input_label.c_str());
+  }
 
   gtk_widget_set_no_show_all(controller->widgets.panel, FALSE);
   gtk_widget_show_all(controller->widgets.panel);
@@ -306,6 +419,26 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
   gtk_widget_set_visible(controller->widgets.entry, request.input_required);
   gtk_widget_set_no_show_all(controller->widgets.entry,
                              !request.input_required);
+  if (controller->widgets.entry_label != nullptr) {
+    const bool visible =
+        request.input_required && !request.input_label.empty();
+    gtk_widget_set_visible(controller->widgets.entry_label, visible);
+    gtk_widget_set_no_show_all(controller->widgets.entry_label, !visible);
+  }
+  if (controller->widgets.secondary_entry != nullptr) {
+    gtk_widget_set_visible(controller->widgets.secondary_entry,
+                           request.secondary_input_required);
+    gtk_widget_set_no_show_all(controller->widgets.secondary_entry,
+                               !request.secondary_input_required);
+  }
+  if (controller->widgets.secondary_entry_label != nullptr) {
+    const bool visible = request.secondary_input_required &&
+                         !request.secondary_input_label.empty();
+    gtk_widget_set_visible(controller->widgets.secondary_entry_label,
+                           visible);
+    gtk_widget_set_no_show_all(controller->widgets.secondary_entry_label,
+                               !visible);
+  }
   gtk_widget_set_visible(controller->widgets.cancel_button,
                          request.cancel_visible);
   gtk_widget_set_no_show_all(controller->widgets.cancel_button,

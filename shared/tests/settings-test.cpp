@@ -288,7 +288,7 @@ static void test_default_settings() {
               "default FTP address should be empty");
   expect_true(ftp.port == 21, "default FTP port should be 21");
   expect_true(ftp.username.empty(),
-              "default FTP username should select anonymous login");
+              "default FTP username should defer to the runtime user prompt");
   expect_true(ftp.data_connection_mode ==
                   elder_terms::FtpDataConnectionMode::passive,
               "default FTP data connection should be passive");

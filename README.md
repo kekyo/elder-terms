@@ -223,10 +223,13 @@ The FTP tab contains the server address, control port, user name, data
 connection mode, and initial local and remote directories. The default control
 port is 21 and the default data connection mode is `Passive (recommended)`.
 
-An empty user name selects anonymous login and sends `anonymous@` as the
-password. A named user is prompted for a hidden password every time the FTP
-window starts; the password is not stored in the connection settings. After
-login, FTP uses the same two-pane file browser and transfer controls as SFTP.
+Every time the FTP window starts, its authentication panel asks for the user
+name and hidden password together. The configured user name is prefilled; if
+it is empty, the current operating-system user name is prefilled instead. For
+anonymous login, enter `anonymous` explicitly and enter the password expected
+by the server. No anonymous credentials are supplied automatically, and the
+entered password is not stored in the connection settings. After login, FTP
+uses the same two-pane file browser and transfer controls as SFTP.
 
 FTP sends commands, user names, passwords, directory listings, and file data
 without encryption. elder-terms implements the base

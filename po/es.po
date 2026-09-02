@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-01 23:29+0900\n"
+"POT-Creation-Date: 2026-09-02 10:39+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Spanish\n"
@@ -135,6 +135,7 @@ msgstr "Tipo de terminal"
 
 #: shared/src/settings-widget/settings-presentation.cpp:66
 #: shared/src/settings-widget/settings-presentation.cpp:73
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:327
 msgid "User name"
 msgstr "Nombre de usuario"
 
@@ -242,6 +243,7 @@ msgstr "Serie"
 #: shared/src/settings-widget/settings-presentation.cpp:108
 #: shared/src/settings-widget/settings-presentation.cpp:188
 #: elder-terms-vte/src/main-window.cpp:1458
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
 msgid "SSH"
 msgstr "SSH"
 
@@ -459,6 +461,8 @@ msgstr "Guardar"
 #: elder-terms-vte/src/main-window.ui:248
 #: elder-terms-vte/src/main-window.ui:325
 #: elder-terms-vte/src/main-window.cpp:1463
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:118
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:325
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:733
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1250
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1281
@@ -725,6 +729,7 @@ msgstr ""
 
 #: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:334
 #: elder-terms-vte/src/main-window.cpp:1462
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:117
 msgid "OK"
 msgstr "OK"
 
@@ -987,6 +992,7 @@ msgid "Macro command failed"
 msgstr "Error en el comando de macro"
 
 #: elder-terms-vte/src/main.cpp:274
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:187
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:277
 msgid "SSH Host Key"
 msgstr "SSH Clave de host"
@@ -1005,12 +1011,15 @@ msgstr ""
 "¿Aceptar y guardar esta clave de host?"
 
 #: elder-terms-vte/src/main.cpp:288 elder-terms-vte/src/main-window.ui:289
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:195
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:472
 msgid "SSH Authentication"
 msgstr "SSH Autenticación"
 
 #: elder-terms-vte/src/main.cpp:289 elder-terms-vte/src/main-window.ui:297
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:196
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:330
 msgid "Password:"
 msgstr "Contraseña:"
 
@@ -1053,6 +1062,7 @@ msgid "SFTP unavailable"
 msgstr "SFTP no disponible"
 
 #: elder-terms-vte/src/main.cpp:1255
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:177
 msgid "Failed to start SFTP"
 msgstr "Error al iniciar SFTP"
 
@@ -1141,8 +1151,38 @@ msgstr ""
 "%s"
 
 #: elder-terms-vte/src/main-window.cpp:1461
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:116
 msgid "Accept"
 msgstr "Aceptar"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:188
+msgid "Accept the fixture SSH host key?"
+msgstr "¿Aceptar la clave de host SSH de prueba?"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:301
+#, c-format
+msgid "Enter the user name and password for %s."
+msgstr "Introduzca el nombre de usuario y la contraseña para %s."
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:303
+msgid "To log in anonymously, enter anonymous as the user name."
+msgstr "Para iniciar sesión de forma anónima, introduzca anonymous como nombre de usuario."
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:306
+msgid "User name must not be empty."
+msgstr "El nombre de usuario no debe estar vacío."
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:321
+msgid "FTP authentication"
+msgstr "Autenticación FTP"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:324
+msgid "Connect"
+msgstr "Conectar"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:387
+msgid "Failed to start FTP"
+msgstr "No se pudo iniciar FTP"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:191
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:198
@@ -1261,7 +1301,9 @@ msgstr "Cambiar nombre del elemento"
 msgid ""
 "Names must not be empty, '.', or '..', and must not contain '/' or line "
 "breaks."
-msgstr "Los nombres no pueden estar vacíos, ser '.' o '..', ni contener '/' o saltos de línea."
+msgstr ""
+"Los nombres no pueden estar vacíos, ser '.' o '..', ni contener '/' o saltos "
+"de línea."
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1306
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1465
@@ -1297,7 +1339,9 @@ msgstr "Los siguientes elementos se eliminarán permanentemente:"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1418
 msgid "Directories and their contents will be deleted. This cannot be undone."
-msgstr "Los directorios y su contenido se eliminarán. Esta acción no se puede deshacer."
+msgstr ""
+"Los directorios y su contenido se eliminarán. Esta acción no se puede "
+"deshacer."
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1427
 msgid "Delete selected item?"
@@ -1588,16 +1632,6 @@ msgstr "telnet: (desconocido)"
 
 #~ msgid "Continue"
 #~ msgstr "Continuar"
-
-#~ msgid "FTP authentication"
-#~ msgstr "Autenticación FTP"
-
-#, c-format
-#~ msgid "Enter the password for %s on %s."
-#~ msgstr "Introduzca la contraseña de %s en %s."
-
-#~ msgid "Failed to start FTP"
-#~ msgstr "No se pudo iniciar FTP"
 
 #~ msgid "Unknown SFTP failure"
 #~ msgstr "Desconocido SFTP falla"

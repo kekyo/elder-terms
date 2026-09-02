@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-01 23:29+0900\n"
+"POT-Creation-Date: 2026-09-02 10:39+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Japanese\n"
@@ -135,6 +135,7 @@ msgstr "端末種別"
 
 #: shared/src/settings-widget/settings-presentation.cpp:66
 #: shared/src/settings-widget/settings-presentation.cpp:73
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:327
 msgid "User name"
 msgstr "ユーザー名"
 
@@ -242,6 +243,7 @@ msgstr "シリアル"
 #: shared/src/settings-widget/settings-presentation.cpp:108
 #: shared/src/settings-widget/settings-presentation.cpp:188
 #: elder-terms-vte/src/main-window.cpp:1458
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
 msgid "SSH"
 msgstr "SSH"
 
@@ -459,6 +461,8 @@ msgstr "保存"
 #: elder-terms-vte/src/main-window.ui:248
 #: elder-terms-vte/src/main-window.ui:325
 #: elder-terms-vte/src/main-window.cpp:1463
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:118
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:325
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:733
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1250
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1281
@@ -725,6 +729,7 @@ msgstr ""
 
 #: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:334
 #: elder-terms-vte/src/main-window.cpp:1462
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:117
 msgid "OK"
 msgstr "OK"
 
@@ -983,6 +988,7 @@ msgid "Macro command failed"
 msgstr "マクロコマンドの実行に失敗しました"
 
 #: elder-terms-vte/src/main.cpp:274
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:187
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:277
 msgid "SSH Host Key"
 msgstr "SSHホスト鍵"
@@ -1001,12 +1007,15 @@ msgstr ""
 "このホスト鍵を承認して保存しますか？"
 
 #: elder-terms-vte/src/main.cpp:288 elder-terms-vte/src/main-window.ui:289
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:195
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:472
 msgid "SSH Authentication"
 msgstr "SSH認証"
 
 #: elder-terms-vte/src/main.cpp:289 elder-terms-vte/src/main-window.ui:297
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:196
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:330
 msgid "Password:"
 msgstr "パスワード:"
 
@@ -1049,6 +1058,7 @@ msgid "SFTP unavailable"
 msgstr "SFTPを利用できません"
 
 #: elder-terms-vte/src/main.cpp:1255
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:177
 msgid "Failed to start SFTP"
 msgstr "SFTPの起動に失敗しました"
 
@@ -1137,8 +1147,38 @@ msgstr ""
 "%s"
 
 #: elder-terms-vte/src/main-window.cpp:1461
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:116
 msgid "Accept"
 msgstr "承認"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:188
+msgid "Accept the fixture SSH host key?"
+msgstr "テスト用SSHホスト鍵を承認しますか？"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:301
+#, c-format
+msgid "Enter the user name and password for %s."
+msgstr "%sのユーザー名とパスワードを入力して下さい。"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:303
+msgid "To log in anonymously, enter anonymous as the user name."
+msgstr "匿名でログインする場合は、ユーザー名に anonymous と入力して下さい。"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:306
+msgid "User name must not be empty."
+msgstr "ユーザー名を空にすることは出来ません。"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:321
+msgid "FTP authentication"
+msgstr "FTP認証"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:324
+msgid "Connect"
+msgstr "接続"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:387
+msgid "Failed to start FTP"
+msgstr "FTPの起動に失敗しました"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:191
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:198
@@ -1257,7 +1297,8 @@ msgstr "項目の名前を変更"
 msgid ""
 "Names must not be empty, '.', or '..', and must not contain '/' or line "
 "breaks."
-msgstr "名前を空、'.'、'..'には出来ません。また、'/'や改行を含めることも出来ません。"
+msgstr ""
+"名前を空、'.'、'..'には出来ません。また、'/'や改行を含めることも出来ません。"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1306
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1465
@@ -1578,16 +1619,6 @@ msgstr "telnet:（不明）"
 
 #~ msgid "Continue"
 #~ msgstr "続行"
-
-#~ msgid "FTP authentication"
-#~ msgstr "FTP認証"
-
-#, c-format
-#~ msgid "Enter the password for %s on %s."
-#~ msgstr "ユーザー%sのパスワードを入力してください（接続先: %s）。"
-
-#~ msgid "Failed to start FTP"
-#~ msgstr "FTPの起動に失敗しました"
 
 #~ msgid "Unknown SFTP failure"
 #~ msgstr "不明なSFTPエラー"

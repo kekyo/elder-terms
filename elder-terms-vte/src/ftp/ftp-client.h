@@ -14,7 +14,7 @@ namespace elder_terms {
 struct FtpClientOpenOptions {
   /** Stored endpoint, identity, and data-connection settings. */
   FtpConnectionSettings connection;
-  /** Runtime-only password, or empty for an empty/anonymous password. */
+  /** Runtime-only password, or empty when the server accepts one. */
   std::string password;
 };
 
@@ -26,8 +26,8 @@ struct FtpClientOpenOptions {
  * @returns Initialized remote file client using one serialized control
  * connection.
  *
- * @remarks FTPS is intentionally unsupported. An empty username selects the
- * conventional `anonymous` / `anonymous@` credentials.
+ * @remarks FTPS is intentionally unsupported. The username must be explicit;
+ * anonymous login uses the literal username `anonymous` supplied by the user.
  */
 cardio::promise<std::shared_ptr<RemoteFileClient>>
 open_ftp_client_async(FtpClientOpenOptions options,

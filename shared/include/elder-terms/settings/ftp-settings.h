@@ -24,7 +24,7 @@ struct FtpConnectionSettings {
   std::string address;
   /** FTP control connection TCP port. */
   gint64 port;
-  /** Remote username, or empty for anonymous login. */
+  /** Remote username, or empty to prefill the current operating-system user. */
   std::string username;
   /** Data-channel establishment strategy. */
   FtpDataConnectionMode data_connection_mode =

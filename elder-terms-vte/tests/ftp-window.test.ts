@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -78,12 +78,35 @@ describe('FTP window', () => {
       ).toBe('FTP authentication');
       expect(
         await expectElementKind(
+          await app.getById('file_transfer_prompt_message_label'),
+          'label'
+        ).text()
+      ).toContain('To log in anonymously, enter anonymous as the user name.');
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_entry_label'),
+          'label'
+        ).text()
+      ).toBe('User name');
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_secondary_entry_label'),
+          'label'
+        ).text()
+      ).toBe('Password:');
+      expect(
+        await expectElementKind(
           await app.getById('file_transfer_status_label'),
           'label'
         ).text()
       ).toBe('Authenticating');
-      const passwordEntry = expectElementKind(
+      const usernameEntry = expectElementKind(
         await app.getById('file_transfer_prompt_entry'),
+        'entry'
+      );
+      expect(await usernameEntry.text()).toBe('fixture-user');
+      const passwordEntry = expectElementKind(
+        await app.getById('file_transfer_prompt_secondary_entry'),
         'entry'
       );
       await passwordEntry.setText('fixture-secret');
@@ -220,6 +243,103 @@ describe('FTP window', () => {
             'label'
           ).text()
         ).toBe('Deleted 1 item');
+      });
+    } finally {
+      try {
+        await evidence.flushOutputs(apps, launcher);
+      } finally {
+        if (launcher !== undefined) {
+          await launcher.release();
+        }
+        await evidence.release();
+        await rm(directory, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('requires an explicit user name and defaults it to the current user', async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'elder-terms-ftp-auth-'));
+    const evidence = createTestEvidence(context);
+    const apps: GtkApp[] = [];
+    let launcher: ReturnType<typeof createGtkAppLauncher> | undefined;
+    try {
+      const configHome = join(directory, 'xdg-config');
+      const localDirectory = join(directory, 'local');
+      const configPath = join(directory, 'ftp.ini');
+      await Promise.all([
+        mkdir(configHome, { recursive: true }),
+        mkdir(localDirectory, { recursive: true }),
+      ]);
+      await writeFile(
+        configPath,
+        [
+          '[general]',
+          'name=Fixture FTP authentication',
+          'type=ftp',
+          '',
+          '[ftp]',
+          'address=fixture.example',
+          `local_directory=${localDirectory}`,
+          'remote_directory=/remote',
+          '',
+        ].join('\n')
+      );
+
+      launcher = createGtkAppLauncher({
+        appPath: ftpAppPath,
+        env: {
+          LANGUAGE: 'en',
+          LC_ALL: 'C.UTF-8',
+          XDG_CONFIG_HOME: configHome,
+        },
+        onSystemOutput: evidence.recordSystemOutputEvent,
+        xvfbTrayHost: true,
+      });
+      const app = await launcher.launch(['--test-fixture', '-c', configPath], {
+        onOutput: evidence.recordAppOutputEvent,
+      });
+      apps.push(app);
+
+      const usernameEntry = expectElementKind(
+        await app.getById('file_transfer_prompt_entry'),
+        'entry'
+      );
+      const passwordEntry = expectElementKind(
+        await app.getById('file_transfer_prompt_secondary_entry'),
+        'entry'
+      );
+      await waitForResult(async () => {
+        expect(await usernameEntry.text()).toBe(userInfo().username);
+      });
+
+      await usernameEntry.setText('');
+      await passwordEntry.setText('anonymous@example.invalid');
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_message_label'),
+            'label'
+          ).text()
+        ).toContain('User name must not be empty.');
+      });
+
+      await usernameEntry.setText('anonymous');
+      await passwordEntry.setText('anonymous@example.invalid');
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_status_label'),
+            'label'
+          ).text()
+        ).toBe('Ready');
       });
     } finally {
       try {
