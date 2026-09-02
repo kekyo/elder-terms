@@ -102,8 +102,12 @@ struct ChildServer {
 
 struct ClientCase {
   ServerAuthMode auth_mode = ServerAuthMode::none;
+  std::string setting_username = "test-user";
+  std::string expected_initial_username = "test-user";
+  std::string prompted_username = "test-user";
   std::filesystem::path identity_file;
   std::filesystem::path known_hosts_file;
+  std::filesystem::path config_file;
   std::string authentication_answer;
   std::vector<elder_terms::SshUserPromptKind> expected_prompts;
 };
@@ -967,8 +971,14 @@ static void run_client_case(const ServerOptions &server_options,
                 .accepted = true,
                 .text = {},
             };
-            if (prompt.kind !=
-                elder_terms::SshUserPromptKind::host_key) {
+            if (prompt.kind == elder_terms::SshUserPromptKind::username) {
+              expect_true(
+                  prompt.initial_text ==
+                      client_case.expected_initial_username,
+                  "SSH username prompt initial value did not match");
+              response.text = client_case.prompted_username;
+            } else if (prompt.kind !=
+                       elder_terms::SshUserPromptKind::host_key) {
               response.text = client_case.authentication_answer;
             }
             co_return response;
@@ -979,7 +989,7 @@ static void run_client_case(const ServerOptions &server_options,
               {
                   .address = "127.0.0.1",
                   .port = server.port,
-                  .username = server_options.username,
+                  .username = client_case.setting_username,
                   .identity_file = client_case.identity_file.string(),
               },
           .terminal_type = server_options.terminal_type,
@@ -991,6 +1001,7 @@ static void run_client_case(const ServerOptions &server_options,
               elder_terms::SshChannelConnectionOptions{
                   .known_hosts_file =
                       client_case.known_hosts_file.string(),
+                  .config_file = client_case.config_file.string(),
               },
               cancellation_source.get_cancellation());
       std::unique_ptr<elder_terms::SshChannelConnection> connection =
@@ -1022,6 +1033,10 @@ static void run_client_case(const ServerOptions &server_options,
           connection->authenticated_transport();
       expect_true(transport != nullptr,
                   "SSH channel should expose its authenticated transport");
+      expect_true(
+          transport->endpoint_settings().username ==
+              client_case.prompted_username,
+          "SSH transport should expose the prompted username");
       connection->close();
       connection.reset();
       expect_true(
@@ -1102,6 +1117,8 @@ static void test_supported_authentication_and_shell_channel() {
       .path = root,
   };
   std::filesystem::create_directories(root / ".ssh");
+  expect_true(::setenv("HOME", root.c_str(), 1) == 0,
+              "failed to isolate the SSH client home directory");
   (void)::unsetenv("SSH_AUTH_SOCK");
   const std::filesystem::path known_hosts_file =
       root / ".ssh" / "known_hosts";
@@ -1132,8 +1149,10 @@ static void test_supported_authentication_and_shell_channel() {
           .auth_mode = ServerAuthMode::none,
           .identity_file = {},
           .known_hosts_file = known_hosts_file,
+          .config_file = {},
           .authentication_answer = {},
           .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
               elder_terms::SshUserPromptKind::host_key,
           },
       });
@@ -1154,8 +1173,10 @@ static void test_supported_authentication_and_shell_channel() {
           .auth_mode = ServerAuthMode::password,
           .identity_file = {},
           .known_hosts_file = known_hosts_file,
+          .config_file = {},
           .authentication_answer = options.password,
           .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
               elder_terms::SshUserPromptKind::host_key,
               elder_terms::SshUserPromptKind::password,
           },
@@ -1170,8 +1191,10 @@ static void test_supported_authentication_and_shell_channel() {
           .auth_mode = ServerAuthMode::public_key,
           .identity_file = plain_private_key,
           .known_hosts_file = known_hosts_file,
+          .config_file = {},
           .authentication_answer = {},
           .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
               elder_terms::SshUserPromptKind::host_key,
           },
       });
@@ -1183,8 +1206,10 @@ static void test_supported_authentication_and_shell_channel() {
           .auth_mode = ServerAuthMode::public_key,
           .identity_file = encrypted_private_key,
           .known_hosts_file = known_hosts_file,
+          .config_file = {},
           .authentication_answer = "key-passphrase",
           .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
               elder_terms::SshUserPromptKind::host_key,
               elder_terms::SshUserPromptKind::private_key_passphrase,
           },
@@ -1198,14 +1223,62 @@ static void test_supported_authentication_and_shell_channel() {
           .auth_mode = ServerAuthMode::keyboard_interactive,
           .identity_file = {},
           .known_hosts_file = known_hosts_file,
+          .config_file = {},
           .authentication_answer = options.password,
           .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
               elder_terms::SshUserPromptKind::host_key,
               elder_terms::SshUserPromptKind::keyboard_interactive,
           },
       });
 
-  expect_true(line_count(known_hosts_file) == 5,
+  options.auth_mode = ServerAuthMode::none;
+  options.username = "selected-config-user";
+  {
+    std::ofstream config(root / ".ssh" / "config");
+    config << "Host 127.0.0.1\n"
+              "  User config-user\n";
+  }
+  run_client_case(
+      options,
+      ClientCase{
+          .auth_mode = ServerAuthMode::none,
+          .setting_username = {},
+          .expected_initial_username = "config-user",
+          .prompted_username = options.username,
+          .identity_file = {},
+          .known_hosts_file = known_hosts_file,
+          .config_file = root / ".ssh" / "config",
+          .authentication_answer = {},
+          .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
+              elder_terms::SshUserPromptKind::host_key,
+          },
+      });
+
+  std::filesystem::remove(root / ".ssh" / "config");
+  const char *current_username = g_get_user_name();
+  expect_true(current_username != nullptr && current_username[0] != '\0',
+              "current operating-system username is unavailable");
+  options.username = current_username;
+  run_client_case(
+      options,
+      ClientCase{
+          .auth_mode = ServerAuthMode::none,
+          .setting_username = {},
+          .expected_initial_username = current_username,
+          .prompted_username = current_username,
+          .identity_file = {},
+          .known_hosts_file = known_hosts_file,
+          .config_file = {},
+          .authentication_answer = {},
+          .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
+              elder_terms::SshUserPromptKind::host_key,
+          },
+      });
+
+  expect_true(line_count(known_hosts_file) == 7,
               "accepted SSH host keys were not saved in the isolated home");
 }
 

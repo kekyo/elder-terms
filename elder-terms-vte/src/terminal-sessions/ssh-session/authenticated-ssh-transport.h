@@ -24,6 +24,11 @@ struct AuthenticatedSshTransportOptions {
    * Explicit known_hosts file, or an empty string to use libssh defaults.
    */
   std::string known_hosts_file;
+  /**
+   * Explicit SSH client configuration file, or an empty string to use the
+   * libssh defaults.
+   */
+  std::string config_file;
 };
 
 /**

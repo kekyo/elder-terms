@@ -905,11 +905,32 @@ describe.concurrent('elder-terms-vte main window', () => {
         const configPath = join(directory, 'ssh-negotiation-failure.ini');
         await writeFile(
           configPath,
-          `[general]\ntype=ssh\n\n[terminal]\nauto_close=true\n\n[ssh]\naddress=127.0.0.1\nport=${port}\n`,
+          `[general]\ntype=ssh\n\n[terminal]\nauto_close=true\n\n[ssh]\naddress=127.0.0.1\nport=${port}\nusername=negotiation-user\n`,
           'utf8'
         );
 
         await runGtkTest(context, ['-c', configPath], async (app) => {
+          const usernamePanel = await app.getById('ssh_prompt_panel');
+          await waitForResult(
+            async () => {
+              expect((await usernamePanel.info()).states).toContain('showing');
+            },
+            {
+              message: 'SSH user name prompt should be visible',
+              timeoutMs: 5_000,
+            }
+          );
+          expect(
+            await expectElementKind(
+              await app.getById('ssh_prompt_entry'),
+              'entry'
+            ).text()
+          ).toBe('negotiation-user');
+          await expectElementKind(
+            await app.getById('ssh_prompt_accept_button'),
+            'button'
+          ).click();
+
           const socket = await waitForResult(
             async () => {
               expect(acceptedSocket).not.toBeUndefined();

@@ -1457,10 +1457,14 @@ cardio::promise<SshUserPromptResponse> prompt_main_window_ssh_async(
       {
           .title = prompt.title.empty() ? _("SSH") : prompt.title,
           .message = prompt.message,
-          .accept_label = prompt.kind == SshUserPromptKind::host_key
-                              ? _("Accept")
-                              : _("OK"),
+          .accept_label =
+              prompt.kind == SshUserPromptKind::host_key
+                  ? _("Accept")
+                  : prompt.kind == SshUserPromptKind::username
+                        ? _("Connect")
+                        : _("OK"),
           .cancel_label = _("Cancel"),
+          .initial_text = prompt.initial_text,
           .input_required = prompt.input_required,
           .echo = prompt.echo,
           .cancel_visible = true,

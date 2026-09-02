@@ -195,6 +195,27 @@ Clearing a text field or selecting the default item in a selection field
 removes the explicit value, causing the setting to inherit the global or
 built-in default again.
 
+## Using SSH and SFTP
+
+When an SSH terminal or a dedicated SFTP window starts, a user-name panel is
+shown before the SSH connection is opened. The initial value is selected in
+this order: the user name in the connection settings, the matching `User`
+value in `~/.ssh/config`, and the current operating-system user name. You can
+change it for this connection without changing the saved settings. An empty
+user name is not accepted.
+
+The user name is requested separately because a password is not always
+needed. SSH first tries the configured private key, then credentials available
+through SSH Agent or default identity files. An encrypted configured key opens
+a passphrase panel. The
+password or keyboard-interactive panel is shown only when the server offers
+that method and an earlier method has not completed authentication. All of
+these methods authenticate the user name selected in the first panel.
+
+An SFTP window opened from an already authenticated SSH terminal reuses that
+terminal's SSH connection, including its selected user name and authentication,
+and therefore does not ask for them again.
+
 ## Managing Items in SFTP and FTP
 
 SFTP and FTP use the same two-pane file browser. Select an item in either the

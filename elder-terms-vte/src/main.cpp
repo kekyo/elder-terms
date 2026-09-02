@@ -279,14 +279,25 @@ run_ssh_prompt_fixture_async(ApplicationState *state,
               "Accept and save this host key?"),
             "fixture.example", 22, "ssh-ed25519",
             "SHA256:fixture-host-key"),
+        .initial_text = {},
         .input_required = false,
         .echo = false,
+    };
+  } else if (fixture == "username") {
+    prompt = {
+        .kind = elder_terms::SshUserPromptKind::username,
+        .title = _("SSH Authentication"),
+        .message = _("User name for fixture.example:"),
+        .initial_text = "configured-user",
+        .input_required = true,
+        .echo = true,
     };
   } else {
     prompt = {
         .kind = elder_terms::SshUserPromptKind::password,
         .title = _("SSH Authentication"),
         .message = _("Password:"),
+        .initial_text = {},
         .input_required = true,
         .echo = false,
     };

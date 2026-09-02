@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-02 10:39+0900\n"
+"POT-Creation-Date: 2026-09-02 13:20+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Chinese\n"
@@ -135,7 +135,7 @@ msgstr "终端类型"
 
 #: shared/src/settings-widget/settings-presentation.cpp:66
 #: shared/src/settings-widget/settings-presentation.cpp:73
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:327
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:335
 msgid "User name"
 msgstr "用户名"
 
@@ -243,13 +243,13 @@ msgstr "串口"
 #: shared/src/settings-widget/settings-presentation.cpp:108
 #: shared/src/settings-widget/settings-presentation.cpp:188
 #: elder-terms-vte/src/main-window.cpp:1458
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:103
 msgid "SSH"
 msgstr "SSH"
 
 #: shared/src/settings-widget/settings-presentation.cpp:109
 #: shared/src/settings-widget/settings-presentation.cpp:190
-#: elder-terms-vte/src/main.cpp:1303
+#: elder-terms-vte/src/main.cpp:1314
 msgid "SFTP"
 msgstr "SFTP"
 
@@ -427,7 +427,7 @@ msgstr "本地"
 
 #: shared/src/settings-widget/settings-presentation.cpp:194
 #: elder-terms-vte/src/main-window.ui:385
-#: elder-terms-vte/src/terminal-session.cpp:225
+#: elder-terms-vte/src/terminal-session.cpp:226
 msgid "Terminal"
 msgstr "终端"
 
@@ -457,12 +457,12 @@ msgstr "保存"
 #: shared/src/settings-widget/settings-presentation.cpp:206
 #: elder-terms/src/main.cpp:482 elder-terms/src/main.cpp:550
 #: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1688
-#: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:881
+#: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:892
 #: elder-terms-vte/src/main-window.ui:248
 #: elder-terms-vte/src/main-window.ui:325
-#: elder-terms-vte/src/main-window.cpp:1463
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:118
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:325
+#: elder-terms-vte/src/main-window.cpp:1466
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:333
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:733
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1250
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1281
@@ -477,12 +477,12 @@ msgid "Reset"
 msgstr "重置"
 
 #: shared/src/settings-widget/settings-presentation.cpp:210
-#: elder-terms-vte/src/main.cpp:880
+#: elder-terms-vte/src/main.cpp:891
 msgid "Select file"
 msgstr "选择文件"
 
 #: shared/src/settings-widget/settings-presentation.cpp:212
-#: elder-terms-vte/src/main.cpp:882
+#: elder-terms-vte/src/main.cpp:893
 msgid "Open"
 msgstr "打开"
 
@@ -725,8 +725,8 @@ msgstr ""
 "全局快捷方式。"
 
 #: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:334
-#: elder-terms-vte/src/main-window.cpp:1462
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:117
+#: elder-terms-vte/src/main-window.cpp:1465
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:111
 msgid "OK"
 msgstr "好的"
 
@@ -985,8 +985,8 @@ msgid "Macro command failed"
 msgstr "宏命令失败"
 
 #: elder-terms-vte/src/main.cpp:274
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:187
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:277
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:183
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:321
 msgid "SSH Host Key"
 msgstr "SSH 主机密钥"
 
@@ -1003,103 +1003,111 @@ msgstr ""
 "指纹：%s\n"
 "接受并保存此主机密钥吗？"
 
-#: elder-terms-vte/src/main.cpp:288 elder-terms-vte/src/main-window.ui:289
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:195
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:472
+#: elder-terms-vte/src/main.cpp:289 elder-terms-vte/src/main.cpp:298
+#: elder-terms-vte/src/main-window.ui:289
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:193
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:202
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:260
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:438
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:519
 msgid "SSH Authentication"
 msgstr "SSH 身份验证"
 
-#: elder-terms-vte/src/main.cpp:289 elder-terms-vte/src/main-window.ui:297
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:196
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:330
+#: elder-terms-vte/src/main.cpp:290
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:194
+msgid "User name for fixture.example:"
+msgstr "fixture.example 的用户名："
+
+#: elder-terms-vte/src/main.cpp:299 elder-terms-vte/src/main-window.ui:297
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:203
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:338
 msgid "Password:"
 msgstr "密码："
 
-#: elder-terms-vte/src/main.cpp:304
+#: elder-terms-vte/src/main.cpp:315
 msgid "SSH prompt accepted"
 msgstr "SSH 提示已接受"
 
-#: elder-terms-vte/src/main.cpp:305
+#: elder-terms-vte/src/main.cpp:316
 msgid "SSH prompt cancelled"
 msgstr "SSH 提示已取消"
 
-#: elder-terms-vte/src/main.cpp:698 elder-terms-vte/src/main.cpp:702
+#: elder-terms-vte/src/main.cpp:709 elder-terms-vte/src/main.cpp:713
 #: elder-terms-vte/src/main-window.ui:8
 msgid "Settings"
 msgstr "设置"
 
-#: elder-terms-vte/src/main.cpp:968 elder-terms-vte/src/main.cpp:978
-#: elder-terms-vte/src/main.cpp:1003 elder-terms-vte/src/main.cpp:1013
+#: elder-terms-vte/src/main.cpp:979 elder-terms-vte/src/main.cpp:989
+#: elder-terms-vte/src/main.cpp:1014 elder-terms-vte/src/main.cpp:1024
 msgid "Transfer unavailable"
 msgstr "转账不可用"
 
-#: elder-terms-vte/src/main.cpp:1115 elder-terms-vte/src/main.cpp:1137
+#: elder-terms-vte/src/main.cpp:1126 elder-terms-vte/src/main.cpp:1148
 msgid "BREAK unavailable"
 msgstr "BREAK 不可用"
 
-#: elder-terms-vte/src/main.cpp:1121
+#: elder-terms-vte/src/main.cpp:1132
 msgid "Sending BREAK"
 msgstr "正在发送 BREAK"
 
-#: elder-terms-vte/src/main.cpp:1157 elder-terms-vte/src/main.cpp:1715
+#: elder-terms-vte/src/main.cpp:1168 elder-terms-vte/src/main.cpp:1726
 msgid "Text send unavailable"
 msgstr "文本发送不可用"
 
-#: elder-terms-vte/src/main.cpp:1165
+#: elder-terms-vte/src/main.cpp:1176
 msgid "Text (Send)"
 msgstr "文本（发送）"
 
-#: elder-terms-vte/src/main.cpp:1247 elder-terms-vte/src/main.cpp:1282
+#: elder-terms-vte/src/main.cpp:1258 elder-terms-vte/src/main.cpp:1293
 msgid "SFTP unavailable"
 msgstr "SFTP 不可用"
 
-#: elder-terms-vte/src/main.cpp:1255
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:177
+#: elder-terms-vte/src/main.cpp:1266
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:173
 msgid "Failed to start SFTP"
 msgstr "启动失败 SFTP"
 
-#: elder-terms-vte/src/main.cpp:1327
+#: elder-terms-vte/src/main.cpp:1338
 msgid "Log recording"
 msgstr "日志记录"
 
-#: elder-terms-vte/src/main.cpp:1373
+#: elder-terms-vte/src/main.cpp:1384
 msgid "ZMODEM (send)"
 msgstr "ZMODEM（发送）"
 
-#: elder-terms-vte/src/main.cpp:1380
+#: elder-terms-vte/src/main.cpp:1391
 msgid "YMODEM (send)"
 msgstr "YMODEM（发送）"
 
-#: elder-terms-vte/src/main.cpp:1387
+#: elder-terms-vte/src/main.cpp:1398
 msgid "XMODEM 1K (send)"
 msgstr "XMODEM 1K（发送）"
 
-#: elder-terms-vte/src/main.cpp:1396
+#: elder-terms-vte/src/main.cpp:1407
 msgid "XMODEM (send)"
 msgstr "XMODEM（发送）"
 
-#: elder-terms-vte/src/main.cpp:1406
+#: elder-terms-vte/src/main.cpp:1417
 msgid "ZMODEM (receive)"
 msgstr "ZMODEM（接收）"
 
-#: elder-terms-vte/src/main.cpp:1413
+#: elder-terms-vte/src/main.cpp:1424
 msgid "YMODEM-g (receive)"
 msgstr "YMODEM-g（接收）"
 
-#: elder-terms-vte/src/main.cpp:1421
+#: elder-terms-vte/src/main.cpp:1432
 msgid "YMODEM (receive)"
 msgstr "YMODEM（接收）"
 
-#: elder-terms-vte/src/main.cpp:1430
+#: elder-terms-vte/src/main.cpp:1441
 msgid "XMODEM CRC (receive)"
 msgstr "XMODEM CRC（接收）"
 
-#: elder-terms-vte/src/main.cpp:1439
+#: elder-terms-vte/src/main.cpp:1450
 msgid "XMODEM (receive)"
 msgstr "XMODEM（接收）"
 
-#: elder-terms-vte/src/main.cpp:1695
+#: elder-terms-vte/src/main.cpp:1706
 msgid "Hyperlink command failed"
 msgstr "超链接命令失败"
 
@@ -1143,37 +1151,40 @@ msgstr ""
 "SSH 连接失败：\n"
 "%s"
 
-#: elder-terms-vte/src/main-window.cpp:1461
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:116
+#: elder-terms-vte/src/main-window.cpp:1462
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:107
 msgid "Accept"
 msgstr "接受"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:188
+#: elder-terms-vte/src/main-window.cpp:1464
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:110
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:332
+msgid "Connect"
+msgstr "连接"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:184
 msgid "Accept the fixture SSH host key?"
 msgstr "是否接受测试用 SSH 主机密钥？"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:301
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:309
 #, c-format
 msgid "Enter the user name and password for %s."
 msgstr "请输入 %s 的用户名和密码。"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:303
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:311
 msgid "To log in anonymously, enter anonymous as the user name."
 msgstr "如需匿名登录，请输入 anonymous 作为用户名。"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:306
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:314
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:253
 msgid "User name must not be empty."
 msgstr "用户名不能为空。"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:321
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:329
 msgid "FTP authentication"
 msgstr "FTP 身份验证"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:324
-msgid "Connect"
-msgstr "连接"
-
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:387
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:395
 msgid "Failed to start FTP"
 msgstr "无法启动 FTP"
 
@@ -1468,15 +1479,24 @@ msgid "serial: (unknown)"
 msgstr "序列号：（未知）"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:80
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:627
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:675
 msgid "SSH session has no socket"
 msgstr "SSH 会话没有套接字"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:245
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:250
+#, c-format
+msgid "User name for %s:"
+msgstr "%s 的用户名："
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:268
+msgid "SSH user name was not provided"
+msgstr "未提供 SSH 用户名"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:289
 msgid "unknown"
 msgstr "未知"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:265
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:309
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%u\n"
@@ -1487,121 +1507,125 @@ msgstr ""
 "钥匙类型：%s\n"
 "指纹：%s"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:271
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:315
 msgid "The known_hosts file does not exist and will be created."
 msgstr "known_hosts 文件不存在，将被创建。"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:274
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:318
 msgid "Accept and save this host key?"
 msgstr "接受并保存此主机密钥吗？"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:296
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:341
 msgid "SSH host key changed; connection rejected"
 msgstr "SSH 主机密钥已更改；连接被拒绝"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:300
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:345
 msgid "SSH host key type differs from known_hosts; connection rejected"
 msgstr "SSH 主机密钥类型与known_hosts 不同；连接被拒绝"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:303
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:348
 msgid "Failed to check SSH host key"
 msgstr "无法检查 SSH 主机密钥"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:311
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:356
 msgid "SSH host key was not accepted"
 msgstr "SSH 主机密钥未被接受"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:314
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:359
 msgid "Failed to save SSH host key"
 msgstr "无法保存 SSH 主机密钥"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:346
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:391
 msgid "SSH Key Passphrase"
 msgstr "SSH 密钥密码"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:348
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:393
 #, c-format
 msgid "Passphrase for %s (attempt %u of %u):"
 msgstr "%s 的密码（尝试 %u 或 %u）："
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:394
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:440
 #, c-format
 msgid "Password for %s (attempt %u of %u):"
 msgstr "%s 的密码（尝试 %u 或 %u）："
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:414
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:461
 msgid "SSH password authentication failed"
 msgstr "SSH 密码验证失败"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:439
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:486
 msgid "SSH authentication response:"
 msgstr "SSH 身份验证响应："
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:498
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:546
 msgid "SSH keyboard-interactive authentication failed"
 msgstr "SSH 键盘交互身份验证失败"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:517
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:565
 msgid "SSH authentication negotiation failed"
 msgstr "SSH 身份验证协商失败"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:522
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:570
 msgid "Failed to list SSH authentication methods"
 msgstr "无法列出 SSH 身份验证方法"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:533
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:581
 msgid "SSH public-key authentication failed"
 msgstr "SSH 公钥验证失败"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:555
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:603
 msgid "Failed to refresh SSH authentication methods"
 msgstr "无法刷新 SSH 身份验证方法"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:568
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:616
 msgid "SSH server did not accept an available authentication method"
 msgstr "SSH 服务器不接受可用的身份验证方法"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:724
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1024
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:772
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1080
 msgid "SSH transport is closed"
 msgstr "SSH 运输已关闭"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:926
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:970
 msgid "Failed to allocate SSH session"
 msgstr "无法分配 SSH 会话"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:932
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:976
 msgid "Failed to set SSH host"
 msgstr "无法设置 SSH 主机"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:935
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:981
 msgid "Failed to parse SSH configuration"
 msgstr "无法解析 SSH 配置"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:944
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:990
 msgid "Failed to configure SSH endpoint"
 msgstr "无法配置 SSH 端点"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:949
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:996
+msgid "Failed to configure SSH user name"
+msgstr "无法配置 SSH 用户名"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1002
 msgid "Failed to configure SSH known_hosts"
 msgstr "无法配置 SSHknown_hosts"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:952
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1008
 msgid "Failed to attach SSH socket"
 msgstr "无法连接 SSH 套接字"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:962
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1018
 msgid "Failed to configure SSH callbacks"
 msgstr "无法配置 SSH 回调"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1120
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1176
 msgid "SSH transport is required"
 msgstr "SSH 需要运输"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1174
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1243
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1281
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1301
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1230
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1299
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1337
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1357
 msgid "SSH channel is closed"
 msgstr "SSH 通道已关闭"
 

@@ -139,6 +139,47 @@ describe.concurrent('SSH prompt overlay', () => {
     );
   });
 
+  it('prefills a visible SSH user name before authentication', async (context) => {
+    await runGtkTest(
+      context,
+      ['--test-fixture', '--test-ssh-prompt=username'],
+      async (app) => {
+        const panel = expectElementKind(
+          await app.getById('ssh_prompt_panel'),
+          'container'
+        );
+        const entry = expectElementKind(
+          await app.getById('ssh_prompt_entry'),
+          'entry'
+        );
+        await expectShowing(panel);
+        await expectShowing(entry);
+        expect(await entry.text()).toBe('configured-user');
+        expect(
+          await expectElementKind(
+            await app.getById('ssh_prompt_message_label'),
+            'label'
+          ).text()
+        ).toBe('User name for fixture.example:');
+
+        await entry.setText('runtime-user');
+        await expectElementKind(
+          await app.getById('ssh_prompt_accept_button'),
+          'button'
+        ).click();
+        await expectHidden(panel);
+        await toPass(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('status_label'),
+              'label'
+            ).text()
+          ).toBe('SSH prompt accepted');
+        });
+      }
+    );
+  });
+
   it('collects a password and restores VTE focus after authentication', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'colored-ssh-prompt.ini');

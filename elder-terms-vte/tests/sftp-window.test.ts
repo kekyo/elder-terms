@@ -499,6 +499,51 @@ describe('SFTP window', () => {
     );
   });
 
+  it('prefills the SSH user name inside the file transfer window', async (context) => {
+    await runSftpFixtureWithEnvironment(
+      context,
+      false,
+      ['--test-ssh-prompt=username'],
+      [],
+      undefined,
+      {},
+      async ({ app }) => {
+        const prompt = expectElementKind(
+          await app.getById('file_transfer_prompt_panel'),
+          'container'
+        );
+        const entry = expectElementKind(
+          await app.getById('file_transfer_prompt_entry'),
+          'entry'
+        );
+        await expectShowing(prompt);
+        await expectShowing(entry);
+        expect(await entry.text()).toBe('configured-user');
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_message_label'),
+            'label'
+          ).text()
+        ).toBe('User name for fixture.example:');
+
+        await entry.setText('runtime-user');
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        ).click();
+        await expectHidden(prompt);
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Ready');
+        });
+      }
+    );
+  });
+
   it('applies configured exterior and browser RGB backgrounds', async (context) => {
     await runSftpFixture(
       context,

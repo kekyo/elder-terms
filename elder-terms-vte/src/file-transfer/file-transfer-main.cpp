@@ -105,8 +105,12 @@ prompt_sftp_authentication_async(
               .accept_label =
                   prompt.kind == elder_terms::SshUserPromptKind::host_key
                       ? _("Accept")
-                      : _("OK"),
+                      : prompt.kind ==
+                                elder_terms::SshUserPromptKind::username
+                            ? _("Connect")
+                            : _("OK"),
               .cancel_label = _("Cancel"),
+              .initial_text = prompt.initial_text,
               .input_required = prompt.input_required,
               .echo = prompt.echo,
               .cancel_visible = true,
@@ -148,6 +152,7 @@ start_sftp_application_async(SftpApplicationState *state) {
             {
                 .known_hosts_file =
                     state->launch_options.test.ssh_known_hosts_file,
+                .config_file = {},
             },
             cancellation);
     state->client = co_await elder_terms::open_sftp_client_async(
@@ -177,14 +182,26 @@ static elder_terms::SshUserPrompt fixture_sftp_prompt(
         .kind = elder_terms::SshUserPromptKind::host_key,
         .title = _("SSH Host Key"),
         .message = _("Accept the fixture SSH host key?"),
+        .initial_text = {},
         .input_required = false,
         .echo = false,
+    };
+  }
+  if (fixture == "username") {
+    return {
+        .kind = elder_terms::SshUserPromptKind::username,
+        .title = _("SSH Authentication"),
+        .message = _("User name for fixture.example:"),
+        .initial_text = "configured-user",
+        .input_required = true,
+        .echo = true,
     };
   }
   return {
       .kind = elder_terms::SshUserPromptKind::password,
       .title = _("SSH Authentication"),
       .message = _("Password:"),
+      .initial_text = {},
       .input_required = true,
       .echo = false,
   };

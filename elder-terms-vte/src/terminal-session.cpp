@@ -60,6 +60,7 @@ struct TerminalSessionBackendCreator {
                                        SshChannelConnectionOptions{
                                            .known_hosts_file =
                                                options.ssh_known_hosts_file,
+                                           .config_file = {},
                                        });
   }
 };

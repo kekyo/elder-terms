@@ -8,6 +8,8 @@ namespace elder_terms {
  * Identifies the SSH operation requiring user input.
  */
 enum class SshUserPromptKind {
+  /** User name selected before opening the SSH transport. */
+  username,
   /** Confirmation before saving an unknown server host key. */
   host_key,
   /** Password authentication requested by the server. */
@@ -29,6 +31,8 @@ struct SshUserPrompt {
   std::string title;
   /** Full question and security context displayed to the user. */
   std::string message;
+  /** Initial text displayed in the response entry. */
+  std::string initial_text;
   /** True when the panel must collect a text response. */
   bool input_required = true;
   /** True when entered text may be displayed instead of masked. */

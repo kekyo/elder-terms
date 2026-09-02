@@ -231,6 +231,50 @@ request_ssh_prompt_async(const TerminalSessionCallbacks &callbacks,
   co_return response;
 }
 
+static cardio::promise<std::string>
+request_ssh_username_async(ssh_session session,
+                           const SshEndpointSettings &settings,
+                           const TerminalSessionCallbacks &callbacks,
+                           cardio::cancellation cancellation) {
+  std::string username = effective_username(session);
+  if (username.empty()) {
+    const char *current_username = g_get_user_name();
+    if (current_username != nullptr) {
+      username = current_username;
+    }
+  }
+
+  bool username_missing = false;
+  while (true) {
+    std::string message = format_translated_string(
+        _("User name for %s:"), settings.address.c_str());
+    if (username_missing) {
+      message += "\n\n";
+      message += _("User name must not be empty.");
+    }
+    const std::optional<SshUserPromptResponse> response =
+        co_await request_ssh_prompt_async(
+            callbacks,
+            {
+                .kind = SshUserPromptKind::username,
+                .title = _("SSH Authentication"),
+                .message = std::move(message),
+                .initial_text = username,
+                .input_required = true,
+                .echo = true,
+            },
+            cancellation);
+    if (!response.has_value()) {
+      throw std::runtime_error(_("SSH user name was not provided"));
+    }
+    username = response->text;
+    if (username.find_first_not_of(" \t\r\n") != std::string::npos) {
+      co_return username;
+    }
+    username_missing = true;
+  }
+}
+
 static std::optional<SshUserPrompt>
 host_key_prompt(ssh_session session, const SshEndpointSettings &settings,
                 enum ssh_known_hosts_e status) {
@@ -276,6 +320,7 @@ host_key_prompt(ssh_session session, const SshEndpointSettings &settings,
       .kind = SshUserPromptKind::host_key,
       .title = _("SSH Host Key"),
       .message = std::move(message),
+      .initial_text = {},
       .input_required = false,
       .echo = false,
   };
@@ -348,6 +393,7 @@ authenticate_private_key_async(ssh_session session,
                     _("Passphrase for %s (attempt %u of %u):"),
                     settings.identity_file.c_str(), attempt,
                     maximum_passphrase_attempts),
+                .initial_text = {},
                 .input_required = true,
                 .echo = false,
             },
@@ -393,6 +439,7 @@ authenticate_password_async(ssh_session session,
                 .message = format_translated_string(
                     _("Password for %s (attempt %u of %u):"), target.c_str(),
                     attempt, maximum_attempts),
+                .initial_text = {},
                 .input_required = true,
                 .echo = false,
             },
@@ -472,6 +519,7 @@ authenticate_keyboard_interactive_async(
                     .title = _("SSH Authentication"),
                     .message = keyboard_interactive_message(
                         name, instruction, prompt),
+                    .initial_text = {},
                     .input_required = true,
                     .echo = echo != 0,
                 },
@@ -914,15 +962,11 @@ AuthenticatedSshTransport::connect_async(
     AuthenticatedSshTransportOptions options,
     cardio::cancellation cancellation) {
   cardio::io_uring io(64);
-  int socket_fd = co_await connect_tcp_socket_async(
-      io, settings.address, static_cast<std::uint16_t>(settings.port),
-      cancellation);
-
+  int socket_fd = -1;
   auto transport_impl = std::make_unique<Impl>();
   transport_impl->endpoint = settings;
   transport_impl->session = ssh_new();
   if (transport_impl->session == nullptr) {
-    (void)::close(socket_fd);
     throw std::runtime_error(_("Failed to allocate SSH session"));
   }
   ssh_session session = transport_impl->session;
@@ -931,7 +975,9 @@ AuthenticatedSshTransport::connect_async(
                         settings.address.c_str()) != SSH_OK) {
       throw ssh_failure(session, _("Failed to set SSH host"));
     }
-    if (ssh_options_parse_config(session, nullptr) != SSH_OK) {
+    const char *config_file =
+        options.config_file.empty() ? nullptr : options.config_file.c_str();
+    if (ssh_options_parse_config(session, config_file) != SSH_OK) {
       throw ssh_failure(session, _("Failed to parse SSH configuration"));
     }
     const unsigned int port = static_cast<unsigned int>(settings.port);
@@ -943,11 +989,21 @@ AuthenticatedSshTransport::connect_async(
                          settings.username.c_str()) != SSH_OK)) {
       throw ssh_failure(session, _("Failed to configure SSH endpoint"));
     }
+    const std::string username = co_await request_ssh_username_async(
+        session, settings, callbacks, cancellation);
+    if (ssh_options_set(session, SSH_OPTIONS_USER,
+                        username.c_str()) != SSH_OK) {
+      throw ssh_failure(session, _("Failed to configure SSH user name"));
+    }
+    transport_impl->endpoint.username = username;
     if (!options.known_hosts_file.empty() &&
         ssh_options_set(session, SSH_OPTIONS_KNOWNHOSTS,
                         options.known_hosts_file.c_str()) != SSH_OK) {
       throw ssh_failure(session, _("Failed to configure SSH known_hosts"));
     }
+    socket_fd = co_await connect_tcp_socket_async(
+        io, settings.address, static_cast<std::uint16_t>(settings.port),
+        cancellation);
     if (ssh_options_set(session, SSH_OPTIONS_FD, &socket_fd) != SSH_OK) {
       throw ssh_failure(session, _("Failed to attach SSH socket"));
     }
@@ -970,15 +1026,15 @@ AuthenticatedSshTransport::connect_async(
       callbacks.connection_phase(
           TerminalSessionConnectionPhase::verifying_host);
     }
-    co_await verify_host_key_async(session, settings, callbacks,
-                                   cancellation);
+    co_await verify_host_key_async(session, transport_impl->endpoint,
+                                   callbacks, cancellation);
 
     if (callbacks.connection_phase) {
       callbacks.connection_phase(
           TerminalSessionConnectionPhase::authenticating);
     }
-    co_await authenticate_session_async(session, settings, callbacks,
-                                        cancellation);
+    co_await authenticate_session_async(
+        session, transport_impl->endpoint, callbacks, cancellation);
 
     transport_impl->initialize_waiter();
     transport_impl->start_worker();
