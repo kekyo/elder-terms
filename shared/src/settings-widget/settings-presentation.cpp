@@ -278,8 +278,12 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("IP address");
   case SettingsUiText::reverse_fqdn:
     return _("Reverse FQDN");
-  case SettingsUiText::tcp_ports:
-    return _("TCP ports");
+  case SettingsUiText::ssh_sftp_port_column:
+    return _("SSH/SFTP(22)");
+  case SettingsUiText::telnet_port_column:
+    return _("TELNET(23)");
+  case SettingsUiText::ftp_port_column:
+    return _("FTP(21)");
   case SettingsUiText::scanning:
     return _("Scanning…");
   case SettingsUiText::scan_complete:

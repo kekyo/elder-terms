@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-03 12:22+0900\n"
+"POT-Creation-Date: 2026-09-03 15:54+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Arabic\n"
@@ -620,124 +620,132 @@ msgid "Reverse FQDN"
 msgstr "اسم FQDN العكسي"
 
 #: shared/src/settings-widget/settings-presentation.cpp:282
-msgid "TCP ports"
-msgstr "منافذ TCP"
+msgid "SSH/SFTP(22)"
+msgstr "SSH/SFTP(22)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:284
+msgid "TELNET(23)"
+msgstr "TELNET(23)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:286
+msgid "FTP(21)"
+msgstr "FTP(21)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:288
 msgid "Scanning…"
 msgstr "جارٍ الفحص…"
 
-#: shared/src/settings-widget/settings-presentation.cpp:286
+#: shared/src/settings-widget/settings-presentation.cpp:290
 msgid "Scan complete"
 msgstr "اكتمل الفحص"
 
-#: shared/src/settings-widget/settings-presentation.cpp:288
+#: shared/src/settings-widget/settings-presentation.cpp:292
 msgid "Scan failed"
 msgstr "فشل الفحص"
 
-#: shared/src/settings-widget/settings-presentation.cpp:316
+#: shared/src/settings-widget/settings-presentation.cpp:320
 msgid "Global default"
 msgstr "الافتراضي العالمي"
 
-#: shared/src/settings-widget/settings-presentation.cpp:317
+#: shared/src/settings-widget/settings-presentation.cpp:321
 msgid "Built-in default"
 msgstr "الافتراضي المدمج"
 
-#: shared/src/settings-widget/settings-presentation.cpp:321
+#: shared/src/settings-widget/settings-presentation.cpp:325
 #, c-format
 msgid "%s (global default)"
 msgstr "%s (الافتراضي العام)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:322
+#: shared/src/settings-widget/settings-presentation.cpp:326
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s (الافتراضي المضمن)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:333
+#: shared/src/settings-widget/settings-presentation.cpp:337
 msgid "Enter a whole number"
 msgstr "أدخل رقمًا صحيحًا"
 
-#: shared/src/settings-widget/settings-presentation.cpp:336
+#: shared/src/settings-widget/settings-presentation.cpp:340
 msgid "Enter a number"
 msgstr "أدخل رقمًا"
 
-#: shared/src/settings-widget/settings-presentation.cpp:347
+#: shared/src/settings-widget/settings-presentation.cpp:351
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "يجب أن تتراوح القيمة بين %s و%s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:356
+#: shared/src/settings-widget/settings-presentation.cpp:360
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "يجب أن يتضمن Ctrl أو Shift أو Alt أو Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:359
+#: shared/src/settings-widget/settings-presentation.cpp:363
 msgid "Contains an empty token"
 msgstr "يحتوي على رمز مميز فارغ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:368
+#: shared/src/settings-widget/settings-presentation.cpp:372
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "يحتوي على مُعدِّل غير معروف: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:381
+#: shared/src/settings-widget/settings-presentation.cpp:385
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "يحتوي على معدل مكرر: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:389
+#: shared/src/settings-widget/settings-presentation.cpp:393
 msgid "Does not contain a key"
 msgstr "لا يحتوي على مفتاح"
 
-#: shared/src/settings-widget/settings-presentation.cpp:396
+#: shared/src/settings-widget/settings-presentation.cpp:400
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "يحتوي على مفتاح غير معروف: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:404
+#: shared/src/settings-widget/settings-presentation.cpp:408
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "يجب أن يستخدم التكبير والتصغير روابط مفاتيح مختلفة"
 
-#: shared/src/settings-widget/settings-presentation.cpp:407
+#: shared/src/settings-widget/settings-presentation.cpp:411
 msgid "Must not be empty"
 msgstr "يجب ألا يكون فارغًا"
 
-#: shared/src/settings-widget/settings-presentation.cpp:410
+#: shared/src/settings-widget/settings-presentation.cpp:414
 msgid "The character encoding is not supported"
 msgstr "ترميز الأحرف غير مدعوم"
 
-#: shared/src/settings-widget/settings-presentation.cpp:413
+#: shared/src/settings-widget/settings-presentation.cpp:417
 msgid "Contains a NUL byte"
 msgstr "يحتوي على NUL بايت"
 
-#: shared/src/settings-widget/settings-presentation.cpp:418
+#: shared/src/settings-widget/settings-presentation.cpp:422
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
 msgstr "أدخل default أو حدد ملف .oga أو .ogg أو .wav موجودًا بمسار مطلق"
 
-#: shared/src/settings-widget/settings-presentation.cpp:421
+#: shared/src/settings-widget/settings-presentation.cpp:425
 msgid "Contains an unmatched closing brace"
 msgstr "يحتوي على قوس إغلاق لا مثيل له"
 
-#: shared/src/settings-widget/settings-presentation.cpp:424
+#: shared/src/settings-widget/settings-presentation.cpp:428
 msgid "Contains an unmatched opening brace"
 msgstr "يحتوي على قوس افتتاحي لا مثيل له"
 
-#: shared/src/settings-widget/settings-presentation.cpp:427
+#: shared/src/settings-widget/settings-presentation.cpp:431
 msgid "Contains an unknown placeholder"
 msgstr "يحتوي على عنصر نائب غير معروف"
 
-#: shared/src/settings-widget/settings-presentation.cpp:430
+#: shared/src/settings-widget/settings-presentation.cpp:434
 msgid "Must be relative to the log base directory"
 msgstr "يجب أن يكون مرتبطًا بالدليل الأساسي للسجل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:433
+#: shared/src/settings-widget/settings-presentation.cpp:437
 msgid "Must not contain parent directory traversal"
 msgstr "يجب ألا يحتوي على اجتياز الدليل الأصلي"
 
-#: shared/src/settings-widget/settings-presentation.cpp:436
+#: shared/src/settings-widget/settings-presentation.cpp:440
 msgid "Must name a log file"
 msgstr "يجب تسمية ملف السجل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:438
+#: shared/src/settings-widget/settings-presentation.cpp:442
 msgid "Invalid value"
 msgstr "قيمة غير صالحة"
 
@@ -1784,6 +1792,9 @@ msgstr "ssh: (غير معروف)"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
 msgid "telnet: (unknown)"
 msgstr "التلنت: (غير معروف)"
+
+#~ msgid "TCP ports"
+#~ msgstr "منافذ TCP"
 
 #~ msgid "SSH host key changed; connection rejected"
 #~ msgstr "SSH تم تغيير مفتاح المضيف؛ تم رفض الاتصال"

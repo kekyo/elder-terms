@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-03 12:22+0900\n"
+"POT-Creation-Date: 2026-09-03 15:54+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Russian\n"
@@ -620,128 +620,136 @@ msgid "Reverse FQDN"
 msgstr "Обратное FQDN-имя"
 
 #: shared/src/settings-widget/settings-presentation.cpp:282
-msgid "TCP ports"
-msgstr "TCP-порты"
+msgid "SSH/SFTP(22)"
+msgstr "SSH/SFTP(22)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:284
+msgid "TELNET(23)"
+msgstr "TELNET(23)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:286
+msgid "FTP(21)"
+msgstr "FTP(21)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:288
 msgid "Scanning…"
 msgstr "Сканирование…"
 
-#: shared/src/settings-widget/settings-presentation.cpp:286
+#: shared/src/settings-widget/settings-presentation.cpp:290
 msgid "Scan complete"
 msgstr "Сканирование завершено"
 
-#: shared/src/settings-widget/settings-presentation.cpp:288
+#: shared/src/settings-widget/settings-presentation.cpp:292
 msgid "Scan failed"
 msgstr "Ошибка сканирования"
 
-#: shared/src/settings-widget/settings-presentation.cpp:316
+#: shared/src/settings-widget/settings-presentation.cpp:320
 msgid "Global default"
 msgstr "Глобальное значение по умолчанию"
 
-#: shared/src/settings-widget/settings-presentation.cpp:317
+#: shared/src/settings-widget/settings-presentation.cpp:321
 msgid "Built-in default"
 msgstr "Встроенный по умолчанию"
 
-#: shared/src/settings-widget/settings-presentation.cpp:321
+#: shared/src/settings-widget/settings-presentation.cpp:325
 #, c-format
 msgid "%s (global default)"
 msgstr "%s (глобальное значение по умолчанию)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:322
+#: shared/src/settings-widget/settings-presentation.cpp:326
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s (встроено по умолчанию)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:333
+#: shared/src/settings-widget/settings-presentation.cpp:337
 msgid "Enter a whole number"
 msgstr "Введите целое число"
 
-#: shared/src/settings-widget/settings-presentation.cpp:336
+#: shared/src/settings-widget/settings-presentation.cpp:340
 msgid "Enter a number"
 msgstr "Введите номер"
 
-#: shared/src/settings-widget/settings-presentation.cpp:347
+#: shared/src/settings-widget/settings-presentation.cpp:351
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "Значение должно быть между %s и %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:356
+#: shared/src/settings-widget/settings-presentation.cpp:360
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "Должен включать Ctrl, Shift, Alt или Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:359
+#: shared/src/settings-widget/settings-presentation.cpp:363
 msgid "Contains an empty token"
 msgstr "Содержит пустой токен"
 
-#: shared/src/settings-widget/settings-presentation.cpp:368
+#: shared/src/settings-widget/settings-presentation.cpp:372
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "Содержит неизвестный модификатор: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:381
+#: shared/src/settings-widget/settings-presentation.cpp:385
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "Содержит повторяющийся модификатор: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:389
+#: shared/src/settings-widget/settings-presentation.cpp:393
 msgid "Does not contain a key"
 msgstr "Не содержит ключа"
 
-#: shared/src/settings-widget/settings-presentation.cpp:396
+#: shared/src/settings-widget/settings-presentation.cpp:400
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "Содержит неизвестный ключ: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:404
+#: shared/src/settings-widget/settings-presentation.cpp:408
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr ""
 "Для увеличения и уменьшения масштаба необходимо использовать разные "
 "сочетания клавиш"
 
-#: shared/src/settings-widget/settings-presentation.cpp:407
+#: shared/src/settings-widget/settings-presentation.cpp:411
 msgid "Must not be empty"
 msgstr "Не должно быть пустым"
 
-#: shared/src/settings-widget/settings-presentation.cpp:410
+#: shared/src/settings-widget/settings-presentation.cpp:414
 msgid "The character encoding is not supported"
 msgstr "Кодировка символов не поддерживается"
 
-#: shared/src/settings-widget/settings-presentation.cpp:413
+#: shared/src/settings-widget/settings-presentation.cpp:417
 msgid "Contains a NUL byte"
 msgstr "Содержит байт NUL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:418
+#: shared/src/settings-widget/settings-presentation.cpp:422
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
 msgstr ""
 "Введите default или выберите существующий файл .oga, .ogg или .wav с "
 "абсолютным путём"
 
-#: shared/src/settings-widget/settings-presentation.cpp:421
+#: shared/src/settings-widget/settings-presentation.cpp:425
 msgid "Contains an unmatched closing brace"
 msgstr "Содержит несовпадающую закрывающую скобку"
 
-#: shared/src/settings-widget/settings-presentation.cpp:424
+#: shared/src/settings-widget/settings-presentation.cpp:428
 msgid "Contains an unmatched opening brace"
 msgstr "Содержит несовпадающую открывающую скобку"
 
-#: shared/src/settings-widget/settings-presentation.cpp:427
+#: shared/src/settings-widget/settings-presentation.cpp:431
 msgid "Contains an unknown placeholder"
 msgstr "Содержит неизвестный заполнитель"
 
-#: shared/src/settings-widget/settings-presentation.cpp:430
+#: shared/src/settings-widget/settings-presentation.cpp:434
 msgid "Must be relative to the log base directory"
 msgstr "Должно быть относительно базового каталога журнала"
 
-#: shared/src/settings-widget/settings-presentation.cpp:433
+#: shared/src/settings-widget/settings-presentation.cpp:437
 msgid "Must not contain parent directory traversal"
 msgstr "Не должен содержать обход родительского каталога"
 
-#: shared/src/settings-widget/settings-presentation.cpp:436
+#: shared/src/settings-widget/settings-presentation.cpp:440
 msgid "Must name a log file"
 msgstr "Файл журнала должен называться"
 
-#: shared/src/settings-widget/settings-presentation.cpp:438
+#: shared/src/settings-widget/settings-presentation.cpp:442
 msgid "Invalid value"
 msgstr "Недопустимое значение"
 
@@ -1779,6 +1787,9 @@ msgstr "ssh: (неизвестно)"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
 msgid "telnet: (unknown)"
 msgstr "телнет: (неизвестно)"
+
+#~ msgid "TCP ports"
+#~ msgstr "TCP-порты"
 
 #~ msgid "SSH host key changed; connection rejected"
 #~ msgstr "SSH ключ хоста изменен; соединение отклонено"

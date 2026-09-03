@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-03 12:22+0900\n"
+"POT-Creation-Date: 2026-09-03 15:54+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Hindi\n"
@@ -619,124 +619,132 @@ msgid "Reverse FQDN"
 msgstr "रिवर्स FQDN"
 
 #: shared/src/settings-widget/settings-presentation.cpp:282
-msgid "TCP ports"
-msgstr "TCP पोर्ट"
+msgid "SSH/SFTP(22)"
+msgstr "SSH/SFTP(22)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:284
+msgid "TELNET(23)"
+msgstr "TELNET(23)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:286
+msgid "FTP(21)"
+msgstr "FTP(21)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:288
 msgid "Scanning…"
 msgstr "स्कैन हो रहा है…"
 
-#: shared/src/settings-widget/settings-presentation.cpp:286
+#: shared/src/settings-widget/settings-presentation.cpp:290
 msgid "Scan complete"
 msgstr "स्कैन पूरा हुआ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:288
+#: shared/src/settings-widget/settings-presentation.cpp:292
 msgid "Scan failed"
 msgstr "स्कैन विफल"
 
-#: shared/src/settings-widget/settings-presentation.cpp:316
+#: shared/src/settings-widget/settings-presentation.cpp:320
 msgid "Global default"
 msgstr "वैश्विक डिफ़ॉल्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:317
+#: shared/src/settings-widget/settings-presentation.cpp:321
 msgid "Built-in default"
 msgstr "अंतर्निहित डिफ़ॉल्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:321
+#: shared/src/settings-widget/settings-presentation.cpp:325
 #, c-format
 msgid "%s (global default)"
 msgstr "%s (वैश्विक डिफ़ॉल्ट)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:322
+#: shared/src/settings-widget/settings-presentation.cpp:326
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s (अंतर्निहित डिफ़ॉल्ट)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:333
+#: shared/src/settings-widget/settings-presentation.cpp:337
 msgid "Enter a whole number"
 msgstr "एक पूर्ण संख्या दर्ज करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:336
+#: shared/src/settings-widget/settings-presentation.cpp:340
 msgid "Enter a number"
 msgstr "एक नंबर दर्ज करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:347
+#: shared/src/settings-widget/settings-presentation.cpp:351
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "मान %s और %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:356
+#: shared/src/settings-widget/settings-presentation.cpp:360
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "में Ctrl, Shift, Alt, या Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:359
+#: shared/src/settings-widget/settings-presentation.cpp:363
 msgid "Contains an empty token"
 msgstr "में एक खाली टोकन है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:368
+#: shared/src/settings-widget/settings-presentation.cpp:372
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "में एक अज्ञात संशोधक शामिल है: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:381
+#: shared/src/settings-widget/settings-presentation.cpp:385
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "में एक डुप्लिकेट संशोधक शामिल है: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:389
+#: shared/src/settings-widget/settings-presentation.cpp:393
 msgid "Does not contain a key"
 msgstr "इसमें कोई कुंजी नहीं है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:396
+#: shared/src/settings-widget/settings-presentation.cpp:400
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "में एक अज्ञात कुंजी है: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:404
+#: shared/src/settings-widget/settings-presentation.cpp:408
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "ज़ूम इन और ज़ूम आउट करने के लिए अलग-अलग कुंजी बाइंडिंग का उपयोग करना चाहिए"
 
-#: shared/src/settings-widget/settings-presentation.cpp:407
+#: shared/src/settings-widget/settings-presentation.cpp:411
 msgid "Must not be empty"
 msgstr "खाली नहीं होना चाहिए"
 
-#: shared/src/settings-widget/settings-presentation.cpp:410
+#: shared/src/settings-widget/settings-presentation.cpp:414
 msgid "The character encoding is not supported"
 msgstr "वर्ण एन्कोडिंग समर्थित नहीं है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:413
+#: shared/src/settings-widget/settings-presentation.cpp:417
 msgid "Contains a NUL byte"
 msgstr "में एक NUL बाइट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:418
+#: shared/src/settings-widget/settings-presentation.cpp:422
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
 msgstr "default दर्ज करें या निरपेक्ष पथ वाली मौजूदा .oga, .ogg या .wav फ़ाइल चुनें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:421
+#: shared/src/settings-widget/settings-presentation.cpp:425
 msgid "Contains an unmatched closing brace"
 msgstr "में एक बेजोड़ समापन ब्रेस शामिल है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:424
+#: shared/src/settings-widget/settings-presentation.cpp:428
 msgid "Contains an unmatched opening brace"
 msgstr "इसमें एक बेजोड़ ओपनिंग ब्रेस शामिल है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:427
+#: shared/src/settings-widget/settings-presentation.cpp:431
 msgid "Contains an unknown placeholder"
 msgstr "में एक अज्ञात प्लेसहोल्डर शामिल है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:430
+#: shared/src/settings-widget/settings-presentation.cpp:434
 msgid "Must be relative to the log base directory"
 msgstr "लॉग बेस निर्देशिका"
 
-#: shared/src/settings-widget/settings-presentation.cpp:433
+#: shared/src/settings-widget/settings-presentation.cpp:437
 msgid "Must not contain parent directory traversal"
 msgstr "में मूल निर्देशिका ट्रैवर्सल शामिल नहीं होना चाहिए"
 
-#: shared/src/settings-widget/settings-presentation.cpp:436
+#: shared/src/settings-widget/settings-presentation.cpp:440
 msgid "Must name a log file"
 msgstr "लॉग फ़ाइल का नाम अवश्य रखें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:438
+#: shared/src/settings-widget/settings-presentation.cpp:442
 msgid "Invalid value"
 msgstr "अमान्य मान"
 
@@ -1765,6 +1773,9 @@ msgstr "ssh: (अज्ञात)"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
 msgid "telnet: (unknown)"
 msgstr "टेलनेट: (अज्ञात)"
+
+#~ msgid "TCP ports"
+#~ msgstr "TCP पोर्ट"
 
 #~ msgid "SSH host key changed; connection rejected"
 #~ msgstr "SSH होस्ट कुंजी बदल गई; कनेक्शन अस्वीकृत"

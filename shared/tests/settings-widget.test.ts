@@ -2505,8 +2505,17 @@ describe.concurrent('shared settings widget', () => {
         await waitForResult(async () => {
           expect(await results.getRowCount()).toBe(1);
         });
-        expect(await results.getColumnCount()).toBe(3);
-        const expectedCells = ['192.0.2.25', 'router.example.test', '21, 23'];
+        expect(await results.getColumnCount()).toBe(5);
+        for (const heading of ['SSH/SFTP(22)', 'TELNET(23)', 'FTP(21)']) {
+          expect(await dialog.findText(heading)).toBeDefined();
+        }
+        const expectedCells = [
+          '192.0.2.25',
+          'router.example.test',
+          '',
+          '✓',
+          '✓',
+        ];
         for (let column = 0; column < expectedCells.length; column += 1) {
           const cell = await results.cellAt(0, column);
           expect((await cell?.info())?.name).toBe(expectedCells[column]);
@@ -2592,6 +2601,10 @@ describe.concurrent('shared settings widget', () => {
           'table'
         );
         expect(await results.getRowCount()).toBe(256);
+        for (const [column, expected] of ['✓', '', ''].entries()) {
+          const cell = await results.cellAt(0, column + 2);
+          expect((await cell?.info())?.name).toBe(expected);
+        }
         await expectElementKind(
           await app.getById('settings_ip_scan_cancel_button'),
           'button'

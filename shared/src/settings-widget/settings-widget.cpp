@@ -199,7 +199,9 @@ struct SettingsWidgetState {
 enum IpScanResultColumn {
   ip_scan_address_column,
   ip_scan_reverse_fqdn_column,
-  ip_scan_tcp_ports_column,
+  ip_scan_ssh_sftp_column,
+  ip_scan_telnet_column,
+  ip_scan_ftp_column,
   ip_scan_result_column_count,
 };
 
@@ -4808,16 +4810,9 @@ static GtkWidget *create_local_page(SettingsWidgetState *state) {
   return page;
 }
 
-static std::string
-format_ip_scan_tcp_ports(const std::vector<std::uint16_t> &ports) {
-  std::ostringstream stream;
-  for (std::size_t index = 0; index < ports.size(); ++index) {
-    if (index != 0) {
-      stream << ", ";
-    }
-    stream << ports[index];
-  }
-  return stream.str();
+static const char *ip_scan_check_mark_for_port(
+    const std::vector<std::uint16_t> &ports, std::uint16_t port) {
+  return std::find(ports.begin(), ports.end(), port) != ports.end() ? "✓" : "";
 }
 
 static void update_ip_scan_result(
@@ -4836,11 +4831,15 @@ static void update_ip_scan_result(
   } else {
     iterator = existing->second;
   }
-  const std::string ports = format_ip_scan_tcp_ports(entry.open_ports);
   gtk_list_store_set(dialog_state->result_store, &iterator,
                      ip_scan_address_column, entry.address.c_str(),
                      ip_scan_reverse_fqdn_column, entry.reverse_fqdn.c_str(),
-                     ip_scan_tcp_ports_column, ports.c_str(), -1);
+                     ip_scan_ssh_sftp_column,
+                     ip_scan_check_mark_for_port(entry.open_ports, 22),
+                     ip_scan_telnet_column,
+                     ip_scan_check_mark_for_port(entry.open_ports, 23),
+                     ip_scan_ftp_column,
+                     ip_scan_check_mark_for_port(entry.open_ports, 21), -1);
 }
 
 static void update_ip_scan_progress(
@@ -5023,7 +5022,7 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
 
   GtkListStore *result_store = gtk_list_store_new(
       ip_scan_result_column_count, G_TYPE_STRING, G_TYPE_STRING,
-      G_TYPE_STRING);
+      G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
   GtkWidget *results =
       gtk_tree_view_new_with_model(GTK_TREE_MODEL(result_store));
   dialog_state->results = results;
@@ -5039,8 +5038,15 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
                         settings_ui_text(SettingsUiText::reverse_fqdn),
                         ip_scan_reverse_fqdn_column, true);
   append_ip_scan_column(GTK_TREE_VIEW(results),
-                        settings_ui_text(SettingsUiText::tcp_ports),
-                        ip_scan_tcp_ports_column, false);
+                        settings_ui_text(
+                            SettingsUiText::ssh_sftp_port_column),
+                        ip_scan_ssh_sftp_column, false);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::telnet_port_column),
+                        ip_scan_telnet_column, false);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::ftp_port_column),
+                        ip_scan_ftp_column, false);
   g_signal_connect(results, "row-activated",
                    G_CALLBACK(on_ip_scan_result_activated),
                    dialog_state.get());

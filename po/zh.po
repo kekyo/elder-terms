@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-03 12:22+0900\n"
+"POT-Creation-Date: 2026-09-03 15:54+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Chinese\n"
@@ -619,124 +619,132 @@ msgid "Reverse FQDN"
 msgstr "反向 FQDN"
 
 #: shared/src/settings-widget/settings-presentation.cpp:282
-msgid "TCP ports"
-msgstr "TCP 端口"
+msgid "SSH/SFTP(22)"
+msgstr "SSH/SFTP(22)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:284
+msgid "TELNET(23)"
+msgstr "TELNET(23)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:286
+msgid "FTP(21)"
+msgstr "FTP(21)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:288
 msgid "Scanning…"
 msgstr "正在扫描…"
 
-#: shared/src/settings-widget/settings-presentation.cpp:286
+#: shared/src/settings-widget/settings-presentation.cpp:290
 msgid "Scan complete"
 msgstr "扫描完成"
 
-#: shared/src/settings-widget/settings-presentation.cpp:288
+#: shared/src/settings-widget/settings-presentation.cpp:292
 msgid "Scan failed"
 msgstr "扫描失败"
 
-#: shared/src/settings-widget/settings-presentation.cpp:316
+#: shared/src/settings-widget/settings-presentation.cpp:320
 msgid "Global default"
 msgstr "全局默认"
 
-#: shared/src/settings-widget/settings-presentation.cpp:317
+#: shared/src/settings-widget/settings-presentation.cpp:321
 msgid "Built-in default"
 msgstr "内置默认值"
 
-#: shared/src/settings-widget/settings-presentation.cpp:321
+#: shared/src/settings-widget/settings-presentation.cpp:325
 #, c-format
 msgid "%s (global default)"
 msgstr "%s （全局默认）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:322
+#: shared/src/settings-widget/settings-presentation.cpp:326
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s （内置默认值）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:333
+#: shared/src/settings-widget/settings-presentation.cpp:337
 msgid "Enter a whole number"
 msgstr "输入整数"
 
-#: shared/src/settings-widget/settings-presentation.cpp:336
+#: shared/src/settings-widget/settings-presentation.cpp:340
 msgid "Enter a number"
 msgstr "输入数字"
 
-#: shared/src/settings-widget/settings-presentation.cpp:347
+#: shared/src/settings-widget/settings-presentation.cpp:351
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "值必须介于 %s 和 %s 之间"
 
-#: shared/src/settings-widget/settings-presentation.cpp:356
+#: shared/src/settings-widget/settings-presentation.cpp:360
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "必须包括 Ctrl、Shift、Alt 或 Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:359
+#: shared/src/settings-widget/settings-presentation.cpp:363
 msgid "Contains an empty token"
 msgstr "包含空标记"
 
-#: shared/src/settings-widget/settings-presentation.cpp:368
+#: shared/src/settings-widget/settings-presentation.cpp:372
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "包含未知修饰符：%s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:381
+#: shared/src/settings-widget/settings-presentation.cpp:385
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "包含重复修饰符： %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:389
+#: shared/src/settings-widget/settings-presentation.cpp:393
 msgid "Does not contain a key"
 msgstr "不包含键"
 
-#: shared/src/settings-widget/settings-presentation.cpp:396
+#: shared/src/settings-widget/settings-presentation.cpp:400
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "包含未知密钥：%s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:404
+#: shared/src/settings-widget/settings-presentation.cpp:408
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "放大和缩小必须使用不同的键绑定"
 
-#: shared/src/settings-widget/settings-presentation.cpp:407
+#: shared/src/settings-widget/settings-presentation.cpp:411
 msgid "Must not be empty"
 msgstr "不能为空"
 
-#: shared/src/settings-widget/settings-presentation.cpp:410
+#: shared/src/settings-widget/settings-presentation.cpp:414
 msgid "The character encoding is not supported"
 msgstr "不支持字符编码"
 
-#: shared/src/settings-widget/settings-presentation.cpp:413
+#: shared/src/settings-widget/settings-presentation.cpp:417
 msgid "Contains a NUL byte"
 msgstr "包含 NUL 字节"
 
-#: shared/src/settings-widget/settings-presentation.cpp:418
+#: shared/src/settings-widget/settings-presentation.cpp:422
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
 msgstr "输入 default，或选择使用绝对路径的现有 .oga、.ogg 或 .wav 文件"
 
-#: shared/src/settings-widget/settings-presentation.cpp:421
+#: shared/src/settings-widget/settings-presentation.cpp:425
 msgid "Contains an unmatched closing brace"
 msgstr "包含不匹配的右大括号"
 
-#: shared/src/settings-widget/settings-presentation.cpp:424
+#: shared/src/settings-widget/settings-presentation.cpp:428
 msgid "Contains an unmatched opening brace"
 msgstr "包含不匹配的左大括号"
 
-#: shared/src/settings-widget/settings-presentation.cpp:427
+#: shared/src/settings-widget/settings-presentation.cpp:431
 msgid "Contains an unknown placeholder"
 msgstr "包含未知占位符"
 
-#: shared/src/settings-widget/settings-presentation.cpp:430
+#: shared/src/settings-widget/settings-presentation.cpp:434
 msgid "Must be relative to the log base directory"
 msgstr "必须相对于日志基目录"
 
-#: shared/src/settings-widget/settings-presentation.cpp:433
+#: shared/src/settings-widget/settings-presentation.cpp:437
 msgid "Must not contain parent directory traversal"
 msgstr "不得包含父目录遍历"
 
-#: shared/src/settings-widget/settings-presentation.cpp:436
+#: shared/src/settings-widget/settings-presentation.cpp:440
 msgid "Must name a log file"
 msgstr "必须命名日志文件"
 
-#: shared/src/settings-widget/settings-presentation.cpp:438
+#: shared/src/settings-widget/settings-presentation.cpp:442
 msgid "Invalid value"
 msgstr "无效值"
 
@@ -1761,6 +1769,9 @@ msgstr "ssh：（未知）"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
 msgid "telnet: (unknown)"
 msgstr "远程登录：（未知）"
+
+#~ msgid "TCP ports"
+#~ msgstr "TCP 端口"
 
 #~ msgid "SSH host key changed; connection rejected"
 #~ msgstr "SSH 主机密钥已更改；连接被拒绝"

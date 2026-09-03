@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-03 12:22+0900\n"
+"POT-Creation-Date: 2026-09-03 15:54+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Japanese\n"
@@ -619,126 +619,134 @@ msgid "Reverse FQDN"
 msgstr "逆引きFQDN"
 
 #: shared/src/settings-widget/settings-presentation.cpp:282
-msgid "TCP ports"
-msgstr "TCPポート"
+msgid "SSH/SFTP(22)"
+msgstr "SSH/SFTP(22)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:284
+msgid "TELNET(23)"
+msgstr "TELNET(23)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:286
+msgid "FTP(21)"
+msgstr "FTP(21)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:288
 msgid "Scanning…"
 msgstr "スキャン中…"
 
-#: shared/src/settings-widget/settings-presentation.cpp:286
+#: shared/src/settings-widget/settings-presentation.cpp:290
 msgid "Scan complete"
 msgstr "スキャン完了"
 
-#: shared/src/settings-widget/settings-presentation.cpp:288
+#: shared/src/settings-widget/settings-presentation.cpp:292
 msgid "Scan failed"
 msgstr "スキャン失敗"
 
-#: shared/src/settings-widget/settings-presentation.cpp:316
+#: shared/src/settings-widget/settings-presentation.cpp:320
 msgid "Global default"
 msgstr "グローバル既定値"
 
-#: shared/src/settings-widget/settings-presentation.cpp:317
+#: shared/src/settings-widget/settings-presentation.cpp:321
 msgid "Built-in default"
 msgstr "組み込み既定値"
 
-#: shared/src/settings-widget/settings-presentation.cpp:321
+#: shared/src/settings-widget/settings-presentation.cpp:325
 #, c-format
 msgid "%s (global default)"
 msgstr "%s（グローバル既定値）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:322
+#: shared/src/settings-widget/settings-presentation.cpp:326
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s（組み込み既定値）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:333
+#: shared/src/settings-widget/settings-presentation.cpp:337
 msgid "Enter a whole number"
 msgstr "整数を入力してください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:336
+#: shared/src/settings-widget/settings-presentation.cpp:340
 msgid "Enter a number"
 msgstr "数値を入力してください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:347
+#: shared/src/settings-widget/settings-presentation.cpp:351
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "値は%sから%sの範囲で入力してください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:356
+#: shared/src/settings-widget/settings-presentation.cpp:360
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "Ctrl、Shift、Alt、Super のいずれかを含めてください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:359
+#: shared/src/settings-widget/settings-presentation.cpp:363
 msgid "Contains an empty token"
 msgstr "空の要素が含まれています"
 
-#: shared/src/settings-widget/settings-presentation.cpp:368
+#: shared/src/settings-widget/settings-presentation.cpp:372
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "不明な修飾キーが含まれています: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:381
+#: shared/src/settings-widget/settings-presentation.cpp:385
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "修飾キーが重複しています: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:389
+#: shared/src/settings-widget/settings-presentation.cpp:393
 msgid "Does not contain a key"
 msgstr "キーを含めてください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:396
+#: shared/src/settings-widget/settings-presentation.cpp:400
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "不明なキーが含まれています: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:404
+#: shared/src/settings-widget/settings-presentation.cpp:408
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "拡大と縮小には異なるキー割り当てを指定してください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:407
+#: shared/src/settings-widget/settings-presentation.cpp:411
 msgid "Must not be empty"
 msgstr "空にはできません"
 
-#: shared/src/settings-widget/settings-presentation.cpp:410
+#: shared/src/settings-widget/settings-presentation.cpp:414
 msgid "The character encoding is not supported"
 msgstr "この文字エンコーディングには対応していません"
 
-#: shared/src/settings-widget/settings-presentation.cpp:413
+#: shared/src/settings-widget/settings-presentation.cpp:417
 msgid "Contains a NUL byte"
 msgstr "NULバイトが含まれています"
 
-#: shared/src/settings-widget/settings-presentation.cpp:418
+#: shared/src/settings-widget/settings-presentation.cpp:422
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
 msgstr ""
 "defaultを入力するか、既存の.oga、.ogg、.wavファイルを絶対パスで指定してくださ"
 "い"
 
-#: shared/src/settings-widget/settings-presentation.cpp:421
+#: shared/src/settings-widget/settings-presentation.cpp:425
 msgid "Contains an unmatched closing brace"
 msgstr "対応する開始波括弧のない終了波括弧が含まれています"
 
-#: shared/src/settings-widget/settings-presentation.cpp:424
+#: shared/src/settings-widget/settings-presentation.cpp:428
 msgid "Contains an unmatched opening brace"
 msgstr "対応する終了波括弧のない開始波括弧が含まれています"
 
-#: shared/src/settings-widget/settings-presentation.cpp:427
+#: shared/src/settings-widget/settings-presentation.cpp:431
 msgid "Contains an unknown placeholder"
 msgstr "不明なプレースホルダーが含まれています"
 
-#: shared/src/settings-widget/settings-presentation.cpp:430
+#: shared/src/settings-widget/settings-presentation.cpp:434
 msgid "Must be relative to the log base directory"
 msgstr "ログのベースディレクトリからの相対パスにしてください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:433
+#: shared/src/settings-widget/settings-presentation.cpp:437
 msgid "Must not contain parent directory traversal"
 msgstr "親ディレクトリへの移動は指定できません"
 
-#: shared/src/settings-widget/settings-presentation.cpp:436
+#: shared/src/settings-widget/settings-presentation.cpp:440
 msgid "Must name a log file"
 msgstr "ログファイル名を指定してください"
 
-#: shared/src/settings-widget/settings-presentation.cpp:438
+#: shared/src/settings-widget/settings-presentation.cpp:442
 msgid "Invalid value"
 msgstr "無効な値です"
 
@@ -1785,6 +1793,9 @@ msgstr "ssh:（不明）"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
 msgid "telnet: (unknown)"
 msgstr "telnet:（不明）"
+
+#~ msgid "TCP ports"
+#~ msgstr "TCPポート"
 
 #~ msgid "SSH host key changed; connection rejected"
 #~ msgstr "SSHホスト鍵が変更されたため、接続を拒否しました"
