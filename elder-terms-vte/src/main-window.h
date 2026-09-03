@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <gtk/gtk.h>
 
@@ -48,14 +49,23 @@ struct MainWindowTerminalBreakCallbacks {
   std::function<void()> send;
 };
 
-/** Handles activation of an OSC 8 hyperlink from the terminal. */
+/** Candidate link values at one Ctrl+left-click position. */
+struct MainWindowTerminalHyperlinkCandidates {
+  /** Complete OSC 8 target at the pointer, when present. */
+  std::optional<std::string> osc8_target;
+  /** Visible substrings in configured terminal-text pattern order. */
+  std::vector<std::optional<std::string>> terminal_text;
+};
+
+/** Handles activation of a recognized terminal link. */
 struct MainWindowTerminalHyperlinkCallbacks {
   /**
-   * Receives the raw OSC 8 target under a Ctrl+left click.
+   * Receives OSC 8 and visible-text candidates under a Ctrl+left click.
    *
-   * @returns True when the target was accepted and the event was consumed.
+   * @returns True when a candidate was accepted and the event was consumed.
    */
-  std::function<bool(std::string target)> activate;
+  std::function<bool(MainWindowTerminalHyperlinkCandidates candidates)>
+      activate;
 };
 
 /**
@@ -236,13 +246,17 @@ void set_main_window_terminal_break_callbacks(
     MainWindow *main_window, MainWindowTerminalBreakCallbacks callbacks);
 
 /**
- * Configures Ctrl+left-click OSC 8 hyperlink activation.
+ * Configures Ctrl+left-click terminal link recognition and activation.
  *
  * @param main_window Main window containing the VTE terminal.
+ * @param terminal_text_patterns Ordered PCRE2 patterns used by the VTE
+ * adapter for visible-text highlighting and candidate extraction.
  * @param callbacks Hyperlink activation callback.
  */
 void set_main_window_terminal_hyperlink_callbacks(
-    MainWindow *main_window, MainWindowTerminalHyperlinkCallbacks callbacks);
+    MainWindow *main_window,
+    const std::vector<std::string> &terminal_text_patterns,
+    MainWindowTerminalHyperlinkCallbacks callbacks);
 
 /**
  * Records activity against one status-bar activity indicator.

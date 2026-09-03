@@ -1646,11 +1646,28 @@ int main(int argc, char **argv) {
   const bool hyperlink_actions_enabled =
       app_state.settings_store.hyperlink_actions_enabled &&
       !app_state.settings_store.hyperlink_rules.empty();
+  const std::vector<elder_terms::HyperlinkActionRule> hyperlink_rules =
+      hyperlink_actions_enabled
+          ? app_state.settings_store.hyperlink_rules
+          : std::vector<elder_terms::HyperlinkActionRule>{};
   app_state.hyperlink_resolver =
       elder_terms::create_terminal_hyperlink_resolver(
-          app_state.settings_store.hyperlink_rules);
+          hyperlink_rules);
+  const bool osc8_actions_enabled =
+      std::any_of(hyperlink_rules.begin(), hyperlink_rules.end(),
+                  [](const elder_terms::HyperlinkActionRule &rule) {
+                    return rule.recognition_source ==
+                           elder_terms::HyperlinkRecognitionSource::osc8;
+                  });
+  std::vector<std::string> terminal_text_patterns;
+  for (const elder_terms::HyperlinkActionRule &rule : hyperlink_rules) {
+    if (rule.recognition_source ==
+        elder_terms::HyperlinkRecognitionSource::terminal_text) {
+      terminal_text_patterns.push_back(rule.pattern);
+    }
+  }
   vte_terminal_set_allow_hyperlink(
-      vte_terminal, hyperlink_actions_enabled ? TRUE : FALSE);
+      vte_terminal, osc8_actions_enabled ? TRUE : FALSE);
   elder_terms::set_main_window_activity_indicator_connection_kind(
       &*main_window, connection_profile->kind);
 
@@ -1742,17 +1759,35 @@ int main(int argc, char **argv) {
       });
   elder_terms::set_main_window_terminal_hyperlink_callbacks(
       &*main_window,
+      terminal_text_patterns,
       {
           .activate =
-              [&app_state](std::string target) {
-                const std::optional<elder_terms::TerminalHyperlinkAction>
-                    action = elder_terms::resolve_terminal_hyperlink(
-                        app_state.hyperlink_resolver, target);
-                if (!action.has_value()) {
+              [&app_state](
+                  elder_terms::MainWindowTerminalHyperlinkCandidates
+                      candidates) {
+                const std::optional<
+                    elder_terms::TerminalHyperlinkResolution>
+                    resolution = elder_terms::resolve_terminal_hyperlink(
+                        app_state.hyperlink_resolver,
+                        elder_terms::TerminalHyperlinkCandidates{
+                            .osc8_target =
+                                std::move(candidates.osc8_target),
+                            .terminal_text =
+                                std::move(candidates.terminal_text),
+                        });
+                if (!resolution.has_value()) {
                   return false;
                 }
+                if (!resolution->action.has_value()) {
+                  show_external_command_error(
+                      &app_state, "hyperlink command",
+                      _("Hyperlink command failed"),
+                      "hyperlink_command_error_dialog", resolution->error);
+                  return true;
+                }
                 (void)spawn_external_command(
-                    &app_state, action->command, action->arguments,
+                    &app_state, resolution->action->command,
+                    resolution->action->arguments,
                     "hyperlink command", _("Hyperlink command failed"),
                     "hyperlink_command_error_dialog");
                 return true;

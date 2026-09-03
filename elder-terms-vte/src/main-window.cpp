@@ -1,14 +1,19 @@
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <gdk/gdk.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gestament/gtk.h>
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
 #include <vte/vte.h>
 
 #define GETTEXT_PACKAGE "elder-terms"
@@ -70,6 +75,11 @@ static constexpr const char *terminal_context_menu_state_key =
 static constexpr const char *terminal_context_paste_query_generation_key =
     "terminal-context-paste-query-generation";
 
+struct TerminalTextMatcher {
+  std::size_t candidate_index = 0;
+  VteRegex *regex = nullptr;
+};
+
 struct TerminalContextMenuState {
   VteTerminal *terminal = nullptr;
   GtkWidget *menu = nullptr;
@@ -80,6 +90,8 @@ struct TerminalContextMenuState {
   MainWindowTerminalPasteCallbacks paste_callbacks;
   MainWindowTerminalBreakCallbacks break_callbacks;
   MainWindowTerminalHyperlinkCallbacks hyperlink_callbacks;
+  std::size_t terminal_text_candidate_count = 0;
+  std::vector<TerminalTextMatcher> terminal_text_matchers;
 };
 
 struct ClipboardTargetsRequest {
@@ -253,12 +265,44 @@ static gboolean on_terminal_button_press(GtkWidget *, GdkEventButton *event,
       event->button == GDK_BUTTON_PRIMARY &&
       (event->state & relevant_modifiers) == GDK_CONTROL_MASK;
   if (hyperlink_activation && state->hyperlink_callbacks.activate) {
-    gchar *target = vte_terminal_hyperlink_check_event(
+    gchar *osc8_target = vte_terminal_hyperlink_check_event(
         state->terminal, reinterpret_cast<GdkEvent *>(event));
-    if (target != nullptr) {
+    std::vector<std::optional<std::string>> terminal_text(
+        state->terminal_text_candidate_count);
+    if (!state->terminal_text_matchers.empty()) {
+      std::vector<VteRegex *> regexes;
+      regexes.reserve(state->terminal_text_matchers.size());
+      for (const TerminalTextMatcher &matcher :
+           state->terminal_text_matchers) {
+        regexes.push_back(matcher.regex);
+      }
+      std::vector<char *> matches(regexes.size(), nullptr);
+      (void)vte_terminal_event_check_regex_simple(
+          state->terminal, reinterpret_cast<GdkEvent *>(event),
+          regexes.data(), regexes.size(), 0, matches.data());
+      for (std::size_t index = 0; index < matches.size(); ++index) {
+        if (matches[index] != nullptr) {
+          terminal_text[state->terminal_text_matchers[index]
+                            .candidate_index] = matches[index];
+        }
+        g_free(matches[index]);
+      }
+    }
+    MainWindowTerminalHyperlinkCandidates candidates{
+        .osc8_target = osc8_target == nullptr
+                           ? std::nullopt
+                           : std::optional<std::string>(osc8_target),
+        .terminal_text = std::move(terminal_text),
+    };
+    g_free(osc8_target);
+    if (candidates.osc8_target.has_value() ||
+        std::any_of(candidates.terminal_text.begin(),
+                    candidates.terminal_text.end(),
+                    [](const std::optional<std::string> &candidate) {
+                      return candidate.has_value();
+                    })) {
       const bool activated =
-          state->hyperlink_callbacks.activate(std::string(target));
-      g_free(target);
+          state->hyperlink_callbacks.activate(std::move(candidates));
       if (activated) {
         return GDK_EVENT_STOP;
       }
@@ -285,6 +329,9 @@ static gboolean on_terminal_button_press(GtkWidget *, GdkEventButton *event,
 
 static void destroy_terminal_context_menu_state(gpointer data) {
   auto *state = static_cast<TerminalContextMenuState *>(data);
+  for (const TerminalTextMatcher &matcher : state->terminal_text_matchers) {
+    vte_regex_unref(matcher.regex);
+  }
   gtk_widget_destroy(state->menu);
   g_object_unref(state->menu);
   delete state;
@@ -1347,7 +1394,9 @@ void set_main_window_terminal_break_callbacks(
 }
 
 void set_main_window_terminal_hyperlink_callbacks(
-    MainWindow *main_window, MainWindowTerminalHyperlinkCallbacks callbacks) {
+    MainWindow *main_window,
+    const std::vector<std::string> &terminal_text_patterns,
+    MainWindowTerminalHyperlinkCallbacks callbacks) {
   if (main_window == nullptr || main_window->terminal_overlay == nullptr) {
     return;
   }
@@ -1356,6 +1405,32 @@ void set_main_window_terminal_hyperlink_callbacks(
       G_OBJECT(main_window->terminal_overlay),
       terminal_context_menu_state_key));
   if (state != nullptr) {
+    vte_terminal_match_remove_all(state->terminal);
+    for (const TerminalTextMatcher &matcher : state->terminal_text_matchers) {
+      vte_regex_unref(matcher.regex);
+    }
+    state->terminal_text_matchers.clear();
+    state->terminal_text_candidate_count = terminal_text_patterns.size();
+    for (std::size_t index = 0; index < terminal_text_patterns.size();
+         ++index) {
+      const std::string &pattern = terminal_text_patterns[index];
+      GError *error = nullptr;
+      VteRegex *regex = vte_regex_new_for_match(
+          pattern.c_str(), static_cast<gssize>(pattern.size()),
+          PCRE2_MULTILINE | PCRE2_UCP | PCRE2_NEVER_BACKSLASH_C,
+          &error);
+      g_clear_error(&error);
+      if (regex == nullptr) {
+        continue;
+      }
+      const int tag =
+          vte_terminal_match_add_regex(state->terminal, regex, 0);
+      vte_terminal_match_set_cursor_name(state->terminal, tag, "pointer");
+      state->terminal_text_matchers.push_back({
+          .candidate_index = index,
+          .regex = regex,
+      });
+    }
     state->hyperlink_callbacks = std::move(callbacks);
   }
 }
