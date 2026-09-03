@@ -108,9 +108,11 @@ struct IpScannerCallbacks {
  * @param interfaces IPv4 interface addresses and masks.
  * @return Merged inclusive address ranges and their total size.
  *
- * @remarks Network and broadcast addresses are intentionally retained, so a
- * /24 produces all 256 addresses. Interfaces with non-contiguous masks are
- * counted and ignored.
+ * @remarks Network and broadcast addresses are intentionally retained. A
+ * range with at most eight host bits is scanned in full. For a wider range,
+ * excess upper host bits are fixed to zero and only its first 256 addresses
+ * are included. A loopback interface contributes only its assigned address.
+ * Interfaces with non-contiguous masks are counted and ignored.
  */
 ELDER_TERMS_API Ipv4ScanPlan
 create_ipv4_scan_plan(const std::vector<Ipv4InterfaceAddress> &interfaces);

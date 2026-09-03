@@ -63,19 +63,59 @@ static void scan_plan_includes_complete_ranges_and_merges_overlaps() {
          "non-contiguous IPv4 netmask was not ignored");
 }
 
-static void scan_plan_counts_the_full_ipv4_space() {
+static void scan_plan_limits_wide_networks_to_the_first_eight_host_bits() {
   const elder_terms::Ipv4ScanPlan plan = elder_terms::create_ipv4_scan_plan({
       {
           .address = ipv4(203, 0, 113, 5),
           .netmask = 0,
       },
+      {
+          .address = ipv4(172, 20, 55, 4),
+          .netmask = ipv4(255, 255, 0, 0),
+      },
+      {
+          .address = ipv4(192, 0, 3, 200),
+          .netmask = ipv4(255, 255, 254, 0),
+      },
   });
 
-  expect(plan.ranges.size() == 1 && plan.ranges[0].first == 0 &&
-             plan.ranges[0].last == UINT32_MAX,
-         "/0 did not produce the complete IPv4 range");
-  expect(plan.total_addresses == UINT64_C(4294967296),
-         "/0 address count overflowed");
+  expect(plan.ranges.size() == 3,
+         "wide IPv4 ranges were not kept as separate first /24 ranges");
+  expect(plan.ranges[0].first == ipv4(0, 0, 0, 0) &&
+             plan.ranges[0].last == ipv4(0, 0, 0, 255),
+         "/0 was not limited with its upper host bits set to zero");
+  expect(plan.ranges[1].first == ipv4(172, 20, 0, 0) &&
+             plan.ranges[1].last == ipv4(172, 20, 0, 255),
+         "/16 was not limited with its upper host bits set to zero");
+  expect(plan.ranges[2].first == ipv4(192, 0, 2, 0) &&
+             plan.ranges[2].last == ipv4(192, 0, 2, 255),
+         "/23 was not limited with its upper host bit set to zero");
+  expect(plan.total_addresses == 768,
+         "limited IPv4 scan plan has an incorrect address count");
+}
+
+static void scan_plan_uses_only_assigned_loopback_addresses() {
+  const elder_terms::Ipv4ScanPlan plan = elder_terms::create_ipv4_scan_plan({
+      {
+          .address = ipv4(127, 0, 0, 1),
+          .netmask = ipv4(255, 0, 0, 0),
+      },
+      {
+          .address = ipv4(127, 42, 1, 9),
+          .netmask = ipv4(255, 0, 0, 0),
+      },
+  });
+
+  expect(plan.ranges.size() == 2,
+         "separate assigned loopback addresses were merged into a subnet");
+  expect(plan.ranges[0].first == ipv4(127, 0, 0, 1) &&
+             plan.ranges[0].last == ipv4(127, 0, 0, 1),
+         "primary loopback address was not limited to its assigned address");
+  expect(plan.ranges[1].first == ipv4(127, 42, 1, 9) &&
+             plan.ranges[1].last == ipv4(127, 42, 1, 9),
+         "loopback alias was not limited to its assigned address");
+  expect(plan.total_addresses == 2,
+         "loopback scan plan contains unassigned addresses");
 }
 
 static void complete_with_shutdown(
@@ -379,7 +419,10 @@ int main() {
   try {
     elder_terms_ip_scanner_test::
         scan_plan_includes_complete_ranges_and_merges_overlaps();
-    elder_terms_ip_scanner_test::scan_plan_counts_the_full_ipv4_space();
+    elder_terms_ip_scanner_test::
+        scan_plan_limits_wide_networks_to_the_first_eight_host_bits();
+    elder_terms_ip_scanner_test::
+        scan_plan_uses_only_assigned_loopback_addresses();
     elder_terms_ip_scanner_test::
         scan_reports_open_standard_ports_and_reverse_names();
     elder_terms_ip_scanner_test::scan_limits_concurrent_hosts();

@@ -44,9 +44,17 @@ struct PortProbeResult {
   std::exception_ptr error;
 };
 
+static constexpr std::uint32_t ipv4_loopback_network = UINT32_C(0x7f000000);
+static constexpr std::uint32_t ipv4_loopback_mask = UINT32_C(0xff000000);
+static constexpr std::uint32_t maximum_scan_host_mask = UINT32_C(0x000000ff);
+
 static bool is_contiguous_ipv4_netmask(std::uint32_t netmask) {
   const std::uint32_t host_mask = ~netmask;
   return (host_mask & (host_mask + 1U)) == 0;
+}
+
+static bool is_ipv4_loopback_address(std::uint32_t address) {
+  return (address & ipv4_loopback_mask) == ipv4_loopback_network;
 }
 
 static bool ranges_touch_or_overlap(const Ipv4ScanRange &left,
@@ -68,7 +76,15 @@ create_ipv4_scan_plan(const std::vector<Ipv4InterfaceAddress> &interfaces) {
       ++result.ignored_interface_count;
       continue;
     }
-    const std::uint32_t host_mask = ~interface_address.netmask;
+    if (is_ipv4_loopback_address(interface_address.address)) {
+      result.ranges.push_back({
+          .first = interface_address.address,
+          .last = interface_address.address,
+      });
+      continue;
+    }
+    const std::uint32_t host_mask =
+        std::min(~interface_address.netmask, maximum_scan_host_mask);
     const std::uint32_t first =
         interface_address.address & interface_address.netmask;
     result.ranges.push_back({
