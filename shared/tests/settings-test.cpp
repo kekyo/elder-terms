@@ -3859,11 +3859,15 @@ static void test_global_hyperlink_actions_override_built_in_defaults() {
                "enabled=true\n"
                "\n"
                "[hyperlink.second]\n"
+               "source=terminal-text\n"
                "regex=^open:(?<path>.+):(?<line>[0-9]+)$\n"
                "command=second-tool\n"
                "arguments=--line;${line};${path|uri-decode};\n"
+               "path_validation=existing-local-path\n"
+               "path=${path|uri-decode}\n"
                "\n"
                "[hyperlink.first]\n"
+               "source=osc8\n"
                "regex=^first:(?<value>.+)$\n"
                "command=first-tool\n"
                "arguments=${value};\n");
@@ -3880,7 +3884,16 @@ static void test_global_hyperlink_actions_override_built_in_defaults() {
               "connection files must not disable global hyperlink actions");
   expect_true(loaded.store.hyperlink_rules.size() == 2 &&
                   loaded.store.hyperlink_rules[0].id == "second" &&
-                  loaded.store.hyperlink_rules[1].id == "first",
+                  loaded.store.hyperlink_rules[0].recognition_source ==
+                      elder_terms::HyperlinkRecognitionSource::terminal_text &&
+                  loaded.store.hyperlink_rules[0].path_validation ==
+                      elder_terms::HyperlinkPathValidation::
+                          existing_local_path &&
+                  loaded.store.hyperlink_rules[0].path_template ==
+                      "${path|uri-decode}" &&
+                  loaded.store.hyperlink_rules[1].id == "first" &&
+                  loaded.store.hyperlink_rules[1].recognition_source ==
+                      elder_terms::HyperlinkRecognitionSource::osc8,
               "global hyperlink section order should define priority");
   expect_true(loaded.store.hyperlink_settings_configured,
               "custom global hyperlink actions should be marked configured");
@@ -3903,9 +3916,13 @@ static void test_global_hyperlink_actions_override_built_in_defaults() {
       &editable.store, false,
       {elder_terms::HyperlinkActionRule{
           .id = "replacement",
+          .recognition_source =
+              elder_terms::HyperlinkRecognitionSource::terminal_text,
           .pattern = "^replacement:(?<value>.+)$",
           .command = "replacement-tool",
           .arguments = {"${value}"},
+          .path_validation = elder_terms::HyperlinkPathValidation::none,
+          .path_template = {},
       }});
   expect_true(elder_terms::settings_store_is_dirty(editable.store),
               "replacing hyperlink actions should mark the store dirty");
@@ -3919,9 +3936,21 @@ static void test_hyperlink_defaults_disable_and_invalid_rules() {
   const SettingsStore defaults = create_default_settings(
       default_terminal_display_settings(1.0), "defaults");
   expect_true(defaults.hyperlink_actions_enabled &&
-                  defaults.hyperlink_rules.size() == 2 &&
+                  defaults.hyperlink_rules.size() == 4 &&
+                  defaults.hyperlink_rules[0].id == "http-url-osc8" &&
+                  defaults.hyperlink_rules[0].recognition_source ==
+                      elder_terms::HyperlinkRecognitionSource::osc8 &&
+                  defaults.hyperlink_rules[0].command == "xdg-open" &&
+                  defaults.hyperlink_rules[0].arguments ==
+                      std::vector<std::string>{"${0}"} &&
+                  defaults.hyperlink_rules[1].id == "http-url-text" &&
+                  defaults.hyperlink_rules[1].recognition_source ==
+                      elder_terms::HyperlinkRecognitionSource::terminal_text &&
+                  defaults.hyperlink_rules[2].id == "vscode-line-column" &&
+                  defaults.hyperlink_rules[3].id == "vscode-line" &&
                   !defaults.hyperlink_settings_configured,
-              "VS Code hyperlink actions should be built in by default");
+              "URL and VS Code hyperlink actions should be built in by "
+              "default");
 
   const std::filesystem::path disabled_path =
       temporary_config_path("disabled-hyperlinks");
@@ -3942,11 +3971,13 @@ static void test_hyperlink_defaults_disable_and_invalid_rules() {
                "enabled=true\n"
                "\n"
                "[hyperlink.bad]\n"
+               "source=terminal-text\n"
                "regex=^bad:(?<path>.+)$\n"
                "command=bad-tool\n"
                "arguments=${path|shell};\n"
                "\n"
                "[hyperlink.valid]\n"
+               "source=osc8\n"
                "regex=^valid:(?<path>.+)$\n"
                "command=valid-tool\n"
                "arguments=${path|uri-decode};\n");
@@ -3958,6 +3989,38 @@ static void test_hyperlink_defaults_disable_and_invalid_rules() {
   expect_true(warnings_contain(invalid.warnings,
                                "invalid hyperlink [hyperlink.bad]"),
               "invalid hyperlink rules should emit a warning");
+
+  std::string validation_reason;
+  expect_true(
+      !elder_terms::hyperlink_action_rule_is_valid(
+          elder_terms::HyperlinkActionRule{
+              .id = "empty-text-match",
+              .recognition_source =
+                  elder_terms::HyperlinkRecognitionSource::terminal_text,
+              .pattern = ".*",
+              .command = "tool",
+              .arguments = {},
+              .path_validation =
+                  elder_terms::HyperlinkPathValidation::none,
+              .path_template = {},
+          },
+          &validation_reason),
+      "terminal text rules must not accept empty matches");
+  expect_true(
+      !elder_terms::hyperlink_action_rule_is_valid(
+          elder_terms::HyperlinkActionRule{
+              .id = "missing-path-template",
+              .recognition_source =
+                  elder_terms::HyperlinkRecognitionSource::osc8,
+              .pattern = "^file:(?<path>.+)$",
+              .command = "tool",
+              .arguments = {"${path}"},
+              .path_validation = elder_terms::HyperlinkPathValidation::
+                  existing_local_path,
+              .path_template = {},
+          },
+          &validation_reason),
+      "path validation must name the expanded value to inspect");
 
   remove_config(disabled_path);
   remove_config(invalid_path);

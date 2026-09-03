@@ -28,20 +28,80 @@ static std::string trim_ascii_whitespace(const std::string &value) {
 std::vector<HyperlinkActionRule> default_hyperlink_action_rules() {
   return {
       {
+          .id = "http-url-osc8",
+          .recognition_source = HyperlinkRecognitionSource::osc8,
+          .pattern = R"(^https?://[^\s<>"']+$)",
+          .command = "xdg-open",
+          .arguments = {"${0}"},
+          .path_validation = HyperlinkPathValidation::none,
+          .path_template = {},
+      },
+      {
+          .id = "http-url-text",
+          .recognition_source = HyperlinkRecognitionSource::terminal_text,
+          .pattern = R"(https?://[^\s<>"']+)",
+          .command = "xdg-open",
+          .arguments = {"${0}"},
+          .path_validation = HyperlinkPathValidation::none,
+          .path_template = {},
+      },
+      {
           .id = "vscode-line-column",
+          .recognition_source = HyperlinkRecognitionSource::osc8,
           .pattern = R"(^vscode://file(?<path>/[^:\r\n]+):(?<line>[1-9][0-9]*):(?<column>[1-9][0-9]*)$)",
           .command = "code",
           .arguments = {"--reuse-window", "--goto",
                         "${path|uri-decode}:${line}:${column}"},
+          .path_validation = HyperlinkPathValidation::none,
+          .path_template = {},
       },
       {
           .id = "vscode-line",
+          .recognition_source = HyperlinkRecognitionSource::osc8,
           .pattern = R"(^vscode://file(?<path>/[^:\r\n]+):(?<line>[1-9][0-9]*)$)",
           .command = "code",
           .arguments = {"--reuse-window", "--goto",
                         "${path|uri-decode}:${line}"},
+          .path_validation = HyperlinkPathValidation::none,
+          .path_template = {},
       },
   };
+}
+
+const char *hyperlink_recognition_source_to_string(
+    HyperlinkRecognitionSource source) {
+  return source == HyperlinkRecognitionSource::terminal_text
+             ? "terminal-text"
+             : "osc8";
+}
+
+std::optional<HyperlinkRecognitionSource>
+hyperlink_recognition_source_from_string(const std::string &value) {
+  if (value == "osc8") {
+    return HyperlinkRecognitionSource::osc8;
+  }
+  if (value == "terminal-text") {
+    return HyperlinkRecognitionSource::terminal_text;
+  }
+  return std::nullopt;
+}
+
+const char *hyperlink_path_validation_to_string(
+    HyperlinkPathValidation validation) {
+  return validation == HyperlinkPathValidation::existing_local_path
+             ? "existing-local-path"
+             : "none";
+}
+
+std::optional<HyperlinkPathValidation>
+hyperlink_path_validation_from_string(const std::string &value) {
+  if (value == "none") {
+    return HyperlinkPathValidation::none;
+  }
+  if (value == "existing-local-path") {
+    return HyperlinkPathValidation::existing_local_path;
+  }
+  return std::nullopt;
 }
 
 bool hyperlink_action_rule_id_is_valid(const std::string &id,
@@ -81,18 +141,44 @@ bool hyperlink_action_rule_is_valid(const HyperlinkActionRule &rule,
   }
 
   RegularExpressionState *regex =
-      create_regular_expression(rule.pattern, false, reason);
+      create_regular_expression(
+          rule.pattern,
+          rule.recognition_source ==
+              HyperlinkRecognitionSource::terminal_text,
+          reason);
   if (regex == nullptr) {
     return false;
   }
 
-  const bool valid = std::all_of(
+  if (rule.recognition_source ==
+      HyperlinkRecognitionSource::terminal_text) {
+    std::string match_reason;
+    if (search_regular_expression(regex, {}, &match_reason).has_value()) {
+      *reason = "terminal text expression must not match empty text";
+      destroy_regular_expression(regex);
+      return false;
+    }
+  }
+
+  bool valid = std::all_of(
       rule.arguments.begin(), rule.arguments.end(),
       [regex, reason](const std::string &argument) {
         return regex_capture_template_is_valid(
             argument, regex,
             RegexCaptureTemplateOptions{.allow_uri_decode = true}, reason);
       });
+  if (valid && rule.path_validation ==
+                   HyperlinkPathValidation::existing_local_path) {
+    if (rule.path_template.empty()) {
+      *reason = "path template must not be empty when path validation is "
+                "enabled";
+      valid = false;
+    } else {
+      valid = regex_capture_template_is_valid(
+          rule.path_template, regex,
+          RegexCaptureTemplateOptions{.allow_uri_decode = true}, reason);
+    }
+  }
   destroy_regular_expression(regex);
   return valid;
 }

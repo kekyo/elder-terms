@@ -89,9 +89,9 @@ struct SettingEntry {
 struct SettingsStore {
   /** Registered setting entries. */
   std::vector<SettingEntry> entries;
-  /** True when OSC 8 hyperlink command activation is enabled. */
+  /** True when terminal link recognition and command activation is enabled. */
   bool hyperlink_actions_enabled = true;
-  /** Effective ordered OSC 8 hyperlink command rules. */
+  /** Effective ordered link recognition and command rules. */
   std::vector<HyperlinkActionRule> hyperlink_rules;
   /** True when global.ini explicitly configures hyperlink actions. */
   bool hyperlink_settings_configured = false;
@@ -132,10 +132,10 @@ ELDER_TERMS_API void set_macro_rules(SettingsStore *store,
                                      std::vector<MacroRule> rules);
 
 /**
- * Replaces the global OSC 8 hyperlink action settings.
+ * Replaces the global terminal link action settings.
  *
  * @param store Target settings store.
- * @param enabled Whether OSC 8 hyperlink activation is enabled.
+ * @param enabled Whether terminal link activation is enabled.
  * @param rules New ordered rule collection.
  */
 ELDER_TERMS_API void

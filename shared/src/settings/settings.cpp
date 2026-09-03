@@ -275,6 +275,12 @@ load_hyperlink_rules_from_key_file(GKeyFile *key_file,
         g_key_file_has_key(key_file, group.c_str(), "command", nullptr);
     const bool has_arguments =
         g_key_file_has_key(key_file, group.c_str(), "arguments", nullptr);
+    const bool has_source =
+        g_key_file_has_key(key_file, group.c_str(), "source", nullptr);
+    const bool has_path_validation = g_key_file_has_key(
+        key_file, group.c_str(), "path_validation", nullptr);
+    const bool has_path =
+        g_key_file_has_key(key_file, group.c_str(), "path", nullptr);
     if (!has_regex) {
       warn_invalid_hyperlink(warnings, group, "missing regex");
       continue;
@@ -300,6 +306,39 @@ load_hyperlink_rules_from_key_file(GKeyFile *key_file,
         }
         g_strfreev(arguments);
       }
+    }
+    if (error == nullptr && has_source) {
+      const std::string source =
+          key_file_string(key_file, group, "source", &error);
+      if (error == nullptr) {
+        const std::optional<HyperlinkRecognitionSource> parsed =
+            hyperlink_recognition_source_from_string(source);
+        if (!parsed.has_value()) {
+          warn_invalid_hyperlink(warnings, group,
+                                 "unsupported source: " + source);
+          continue;
+        }
+        rule.recognition_source = *parsed;
+      }
+    }
+    if (error == nullptr && has_path_validation) {
+      const std::string validation =
+          key_file_string(key_file, group, "path_validation", &error);
+      if (error == nullptr) {
+        const std::optional<HyperlinkPathValidation> parsed =
+            hyperlink_path_validation_from_string(validation);
+        if (!parsed.has_value()) {
+          warn_invalid_hyperlink(
+              warnings, group,
+              "unsupported path validation: " + validation);
+          continue;
+        }
+        rule.path_validation = *parsed;
+      }
+    }
+    if (error == nullptr && has_path) {
+      rule.path_template =
+          key_file_string(key_file, group, "path", &error);
     }
     if (error != nullptr) {
       warn_invalid_hyperlink(warnings, group, glib_error_message(error));
@@ -363,21 +402,30 @@ static void load_hyperlink_settings_from_key_file(
 static void set_key_file_hyperlink_rule(GKeyFile *key_file,
                                         const HyperlinkActionRule &rule) {
   const std::string group = "hyperlink." + rule.id;
+  g_key_file_set_string(
+      key_file, group.c_str(), "source",
+      hyperlink_recognition_source_to_string(rule.recognition_source));
   g_key_file_set_string(key_file, group.c_str(), "regex",
                         rule.pattern.c_str());
   g_key_file_set_string(key_file, group.c_str(), "command",
                         rule.command.c_str());
-  if (rule.arguments.empty()) {
-    return;
+  if (!rule.arguments.empty()) {
+    std::vector<const gchar *> arguments;
+    arguments.reserve(rule.arguments.size());
+    for (const std::string &argument : rule.arguments) {
+      arguments.push_back(argument.c_str());
+    }
+    g_key_file_set_string_list(key_file, group.c_str(), "arguments",
+                               arguments.data(), arguments.size());
   }
 
-  std::vector<const gchar *> arguments;
-  arguments.reserve(rule.arguments.size());
-  for (const std::string &argument : rule.arguments) {
-    arguments.push_back(argument.c_str());
+  if (rule.path_validation != HyperlinkPathValidation::none) {
+    g_key_file_set_string(
+        key_file, group.c_str(), "path_validation",
+        hyperlink_path_validation_to_string(rule.path_validation));
+    g_key_file_set_string(key_file, group.c_str(), "path",
+                          rule.path_template.c_str());
   }
-  g_key_file_set_string_list(key_file, group.c_str(), "arguments",
-                             arguments.data(), arguments.size());
 }
 
 static bool load_settings_file(SettingsStore *store,
