@@ -13,8 +13,6 @@ gestament_include_dir = run_command(
   check: true,
 ).stdout().strip()
 make_program = find_program('make')
-cardio_root_dir = meson.project_source_root() / 'deps/cardio'
-cardio_include_dir = cardio_root_dir / 'include'
 libxyzm_root_dir = meson.project_source_root() / 'deps/libxyzm'
 libxyzm_include_dir = libxyzm_root_dir / 'include'
 libxyzm_build_dir = meson.current_build_dir()
@@ -93,13 +91,10 @@ executable(
   elder_terms_sources,
   cpp_args: [
     '-I' + gestament_include_dir,
-    '-I' + cardio_include_dir,
     '-I' + libxyzm_include_dir,
-    '-DCARDIO_WITH_GLIB=1',
-    '-DCARDIO_WITH_GIO=1',
-    '-DCARDIO_WITH_LINUX_IO_URING=1',
   ],
   dependencies: [
+    cardio_dep,
     elder_terms_dep,
     canberra_dep,
     gio_dep,
@@ -136,12 +131,9 @@ executable(
   ],
   cpp_args: [
     '-I' + gestament_include_dir,
-    '-I' + cardio_include_dir,
-    '-DCARDIO_WITH_GLIB=1',
-    '-DCARDIO_WITH_GIO=1',
-    '-DCARDIO_WITH_LINUX_IO_URING=1',
   ],
   dependencies: [
+    cardio_dep,
     elder_terms_dep,
     gio_dep,
     gtk_dep,
@@ -194,13 +186,8 @@ ftp_client_test = executable(
     'src/ftp/ftp-protocol.cpp',
     'src/terminal-sessions/tcp-connector.cpp',
   ],
-  cpp_args: [
-    '-I' + cardio_include_dir,
-    '-DCARDIO_WITH_GLIB=1',
-    '-DCARDIO_WITH_GIO=1',
-    '-DCARDIO_WITH_LINUX_IO_URING=1',
-  ],
   dependencies: [
+    cardio_dep,
     elder_terms_dep,
     gio_dep,
     liburing_dep,
@@ -294,12 +281,8 @@ terminal_text_send_runner_test = executable(
     'src/terminal-text-send-runner.cpp',
     'src/terminal-sessions/terminal-text-codec.cpp',
   ],
-  cpp_args: [
-    '-I' + cardio_include_dir,
-    '-DCARDIO_WITH_GLIB=1',
-    '-DCARDIO_WITH_GIO=1',
-  ],
   dependencies: [
+    cardio_dep,
     elder_terms_dep,
     gio_dep,
   ],
@@ -310,11 +293,8 @@ test('terminal-text-send-runner-test', terminal_text_send_runner_test)
 cardio_lifetime_test = executable(
   'cardio-lifetime-test',
   'tests/cpp/cardio-lifetime-test.cpp',
-  cpp_args: [
-    '-I' + cardio_include_dir,
-    '-DCARDIO_WITH_GLIB=1',
-  ],
   dependencies: [
+    cardio_dep,
     gio_dep,
   ],
 )
@@ -337,12 +317,8 @@ test('activity-indicator-test', activity_indicator_test)
 file_transfer_contract_test = executable(
   'file-transfer-contract-test',
   'tests/cpp/file-transfer-contract-test.cpp',
-  cpp_args: [
-    '-I' + cardio_include_dir,
-    '-DCARDIO_WITH_GLIB=1',
-    '-DCARDIO_WITH_GIO=1',
-  ],
   dependencies: [
+    cardio_dep,
     gio_dep,
   ],
 )
@@ -368,13 +344,8 @@ ssh_channel_connection_test = executable(
     'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
     'src/terminal-sessions/tcp-connector.cpp',
   ],
-  cpp_args: [
-    '-I' + cardio_include_dir,
-    '-DCARDIO_WITH_GLIB=1',
-    '-DCARDIO_WITH_GIO=1',
-    '-DCARDIO_WITH_LINUX_IO_URING=1',
-  ],
   dependencies: [
+    cardio_dep,
     elder_terms_dep,
     gio_dep,
     libssh_dep,
@@ -391,12 +362,8 @@ sftp_transfer_engine_test = executable(
     'tests/cpp/sftp-transfer-engine-test.cpp',
     'src/file-transfer/file-transfer-engine.cpp',
   ],
-  cpp_args: [
-    '-I' + cardio_include_dir,
-    '-DCARDIO_WITH_GLIB=1',
-    '-DCARDIO_WITH_GIO=1',
-  ],
   dependencies: [
+    cardio_dep,
     gio_dep,
   ],
 )
@@ -411,12 +378,10 @@ terminal_transfer_runner_test = executable(
     'src/terminal-transfer-runner.cpp',
   ],
   cpp_args: [
-    '-I' + cardio_include_dir,
     '-I' + libxyzm_include_dir,
-    '-DCARDIO_WITH_GLIB=1',
-    '-DCARDIO_WITH_GIO=1',
   ],
   dependencies: [
+    cardio_dep,
     gio_dep,
   ],
   link_with: [
@@ -446,13 +411,8 @@ terminal_log_test = executable(
     'tests/cpp/terminal-log-test.cpp',
     'src/terminal-log.cpp',
   ],
-  cpp_args: [
-    '-I' + cardio_include_dir,
-    '-DCARDIO_WITH_GLIB=1',
-    '-DCARDIO_WITH_GIO=1',
-    '-DCARDIO_WITH_LINUX_IO_URING=1',
-  ],
   dependencies: [
+    cardio_dep,
     elder_terms_dep,
     gio_dep,
     liburing_dep,

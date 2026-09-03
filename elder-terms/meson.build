@@ -3,9 +3,6 @@ elder_terms_launcher_gtk_dep = dependency('gtk+-3.0')
 elder_terms_launcher_gio_dep = dependency('gio-2.0')
 elder_terms_launcher_gdk_pixbuf_dep = dependency('gdk-pixbuf-2.0')
 elder_terms_launcher_x11_dep = dependency('x11')
-elder_terms_launcher_cardio_include_dir = (
-  meson.project_source_root() / 'deps/cardio/include'
-)
 elder_terms_launcher_gestament_config = find_program('gestament-config')
 elder_terms_launcher_gestament_include_dir = run_command(
   elder_terms_launcher_gestament_config,
@@ -39,12 +36,10 @@ elder_terms_launcher = executable(
   ],
   cpp_args: [
     '-I' + elder_terms_launcher_gestament_include_dir,
-    '-I' + elder_terms_launcher_cardio_include_dir,
-    '-DCARDIO_WITH_GLIB=1',
-    '-DCARDIO_WITH_GIO=1',
   ],
   include_directories: elder_terms_launcher_include_dir,
   dependencies: [
+    cardio_dep,
     elder_terms_dep,
     elder_terms_launcher_gdk_pixbuf_dep,
     elder_terms_launcher_gio_dep,
@@ -89,12 +84,8 @@ elder_terms_tray_backend_test = executable(
     'tests/tray-backend-test.cpp',
   ],
   include_directories: elder_terms_launcher_include_dir,
-  cpp_args: [
-    '-I' + elder_terms_launcher_cardio_include_dir,
-    '-DCARDIO_WITH_GLIB=1',
-    '-DCARDIO_WITH_GIO=1',
-  ],
   dependencies: [
+    cardio_dep,
     elder_terms_launcher_gdk_pixbuf_dep,
     elder_terms_launcher_gio_dep,
     elder_terms_launcher_gtk_dep,
@@ -113,12 +104,8 @@ elder_terms_hotkey_backend_test = executable(
     'tests/hotkey-backend-test.cpp',
   ],
   include_directories: elder_terms_launcher_include_dir,
-  cpp_args: [
-    '-I' + elder_terms_launcher_cardio_include_dir,
-    '-DCARDIO_WITH_GLIB=1',
-    '-DCARDIO_WITH_GIO=1',
-  ],
   dependencies: [
+    cardio_dep,
     elder_terms_dep,
     elder_terms_launcher_gio_dep,
     elder_terms_launcher_gtk_dep,

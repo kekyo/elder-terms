@@ -80,6 +80,7 @@ elder_terms_library = shared_library(
   elder_terms_shared_sources,
   include_directories: elder_terms_shared_include_dir,
   dependencies: [
+    cardio_dep,
     elder_terms_shared_glib_dep,
     elder_terms_shared_gio_dep,
     elder_terms_shared_gtk_dep,
@@ -94,6 +95,7 @@ elder_terms_library = shared_library(
   link_depends: elder_terms_symbol_map,
   install: true,
   install_dir: elder_terms_private_install_dir,
+  install_rpath: '$ORIGIN',
 )
 
 elder_terms_dep = declare_dependency(
@@ -108,6 +110,36 @@ elder_terms_dep = declare_dependency(
 )
 
 if get_option('build_tests')
+elder_terms_cpp_compiler = meson.get_compiler('cpp')
+elder_terms_dl_dep = elder_terms_cpp_compiler.find_library('dl')
+elder_terms_cardio_test_include_dir = include_directories(
+  '../deps/cardio/tests',
+)
+
+elder_terms_cardio_runtime_test_module = shared_module(
+  'elder-terms-cardio-runtime-test-module',
+  '../deps/cardio/tests/cardio_shared_plugin.cpp',
+  include_directories: elder_terms_cardio_test_include_dir,
+  dependencies: cardio_dep,
+)
+
+elder_terms_cardio_runtime_test = executable(
+  'elder-terms-cardio-runtime-test',
+  '../deps/cardio/tests/cardio_shared_host_test.cpp',
+  include_directories: elder_terms_cardio_test_include_dir,
+  dependencies: [
+    cardio_dep,
+    elder_terms_dl_dep,
+  ],
+)
+
+test(
+  'elder-terms-cardio-runtime-test',
+  elder_terms_cardio_runtime_test,
+  args: elder_terms_cardio_runtime_test_module.full_path(),
+  depends: elder_terms_cardio_runtime_test_module,
+)
+
 elder_terms_shared_test = executable(
   'elder-terms-shared-test',
   'tests/settings-test.cpp',
