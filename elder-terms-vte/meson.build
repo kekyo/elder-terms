@@ -54,6 +54,7 @@ elder_terms_sources = [
   'src/main-window.cpp',
   'src/sftp/sftp-client.cpp',
   'src/sftp/sftp-fixture-client.cpp',
+  'src/file-transfer/file-hash.cpp',
   'src/file-transfer/file-transfer-engine.cpp',
   'src/file-transfer/file-transfer-paths.cpp',
   'src/file-transfer/file-transfer-window.cpp',
@@ -121,6 +122,7 @@ executable(
     'src/ftp/ftp-protocol.cpp',
     'src/sftp/sftp-client.cpp',
     'src/sftp/sftp-fixture-client.cpp',
+    'src/file-transfer/file-hash.cpp',
     'src/file-transfer/file-transfer-engine.cpp',
     'src/file-transfer/file-transfer-main.cpp',
     'src/file-transfer/file-transfer-paths.cpp',
@@ -324,6 +326,20 @@ file_transfer_contract_test = executable(
 )
 
 test('file-transfer-contract-test', file_transfer_contract_test)
+
+file_hash_test = executable(
+  'file-hash-test',
+  [
+    'tests/cpp/file-hash-test.cpp',
+    'src/file-transfer/file-hash.cpp',
+  ],
+  dependencies: [
+    cardio_dep,
+    gio_dep,
+  ],
+)
+
+test('file-hash-test', file_hash_test)
 
 terminal_connection_phase_test = executable(
   'terminal-connection-phase-test',
