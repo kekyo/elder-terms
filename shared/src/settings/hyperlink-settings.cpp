@@ -4,8 +4,7 @@
 #include <cctype>
 #include <string>
 
-#include <glib.h>
-
+#include <elder-terms/settings/regular-expression.h>
 #include <elder-terms/settings/regex-capture-template.h>
 
 namespace elder_terms {
@@ -81,14 +80,9 @@ bool hyperlink_action_rule_is_valid(const HyperlinkActionRule &rule,
     return false;
   }
 
-  GError *error = nullptr;
-  GRegex *regex = g_regex_new(rule.pattern.c_str(), G_REGEX_DEFAULT,
-                              G_REGEX_MATCH_DEFAULT, &error);
+  RegularExpressionState *regex =
+      create_regular_expression(rule.pattern, false, reason);
   if (regex == nullptr) {
-    *reason = error == nullptr || error->message == nullptr
-                  ? "invalid regular expression"
-                  : std::string(error->message);
-    g_clear_error(&error);
     return false;
   }
 
@@ -99,7 +93,7 @@ bool hyperlink_action_rule_is_valid(const HyperlinkActionRule &rule,
             argument, regex,
             RegexCaptureTemplateOptions{.allow_uri_decode = true}, reason);
       });
-  g_regex_unref(regex);
+  destroy_regular_expression(regex);
   return valid;
 }
 

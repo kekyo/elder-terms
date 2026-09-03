@@ -4,6 +4,7 @@ elder_terms_shared_gtk_dep = dependency('gtk+-3.0')
 elder_terms_shared_gdk_pixbuf_dep = dependency('gdk-pixbuf-2.0')
 elder_terms_shared_libudev_dep = dependency('libudev')
 elder_terms_shared_xkbcommon_dep = dependency('xkbcommon')
+elder_terms_shared_pcre2_dep = dependency('libpcre2-8')
 elder_terms_shared_include_dir = include_directories('include')
 elder_terms_symbol_map = meson.current_source_dir() / 'elder-terms.map'
 elder_terms_gnome = import('gnome')
@@ -61,6 +62,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/settings/local-session-settings.cpp',
   'src/settings/log-settings.cpp',
   'src/settings/macro-settings.cpp',
+  'src/settings/regular-expression.cpp',
   'src/settings/regex-capture-template.cpp',
   'src/settings/serial-settings.cpp',
   'src/settings/settings.cpp',
@@ -88,6 +90,7 @@ elder_terms_library = shared_library(
     elder_terms_shared_gdk_pixbuf_dep,
     elder_terms_shared_libudev_dep,
     elder_terms_shared_xkbcommon_dep,
+    elder_terms_shared_pcre2_dep,
   ],
   gnu_symbol_visibility: 'inlineshidden',
   link_args: [

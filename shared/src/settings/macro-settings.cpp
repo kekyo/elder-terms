@@ -4,8 +4,7 @@
 #include <cctype>
 #include <string>
 
-#include <glib.h>
-
+#include <elder-terms/settings/regular-expression.h>
 #include <elder-terms/settings/regex-capture-template.h>
 
 namespace elder_terms {
@@ -26,8 +25,9 @@ static std::string trim_ascii_whitespace(const std::string &value) {
   return std::string(first, last);
 }
 
-static bool macro_template_is_valid(const std::string &value, GRegex *regex,
-                                    std::string *reason) {
+static bool macro_template_is_valid(
+    const std::string &value, const RegularExpressionState *regex,
+    std::string *reason) {
   return regex_capture_template_is_valid(
       value, regex,
       RegexCaptureTemplateOptions{.allow_uri_decode = false}, reason);
@@ -59,14 +59,9 @@ bool macro_rule_is_valid(const MacroRule &rule, std::string *reason) {
     return false;
   }
 
-  GError *error = nullptr;
-  GRegex *regex = g_regex_new(rule.pattern.c_str(), G_REGEX_DEFAULT,
-                              G_REGEX_MATCH_DEFAULT, &error);
+  RegularExpressionState *regex =
+      create_regular_expression(rule.pattern, false, reason);
   if (regex == nullptr) {
-    *reason = error == nullptr || error->message == nullptr
-                  ? "invalid regular expression"
-                  : std::string(error->message);
-    g_clear_error(&error);
     return false;
   }
 
@@ -92,7 +87,7 @@ bool macro_rule_is_valid(const MacroRule &rule, std::string *reason) {
     }
   }
 
-  g_regex_unref(regex);
+  destroy_regular_expression(regex);
   return valid;
 }
 

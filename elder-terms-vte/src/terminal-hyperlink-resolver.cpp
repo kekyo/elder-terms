@@ -7,8 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include <glib.h>
-
+#include <elder-terms/settings/regular-expression.h>
 #include <elder-terms/settings/regex-capture-template.h>
 
 namespace elder_terms {
@@ -17,7 +16,7 @@ static constexpr std::size_t maximum_hyperlink_target_bytes = 8192;
 
 struct CompiledHyperlinkRule {
   HyperlinkActionRule rule;
-  std::shared_ptr<GRegex> regex;
+  std::shared_ptr<RegularExpressionState> regex;
 };
 
 struct TerminalHyperlinkResolverState {
@@ -34,31 +33,28 @@ compile_hyperlink_rules(std::vector<HyperlinkActionRule> rules) {
       continue;
     }
 
-    GError *error = nullptr;
-    GRegex *regex = g_regex_new(rule.pattern.c_str(), G_REGEX_DEFAULT,
-                                G_REGEX_MATCH_DEFAULT, &error);
-    g_clear_error(&error);
+    RegularExpressionState *regex =
+        create_regular_expression(rule.pattern, false, &reason);
     if (regex == nullptr) {
       continue;
     }
     compiled.push_back({
         .rule = std::move(rule),
-        .regex = std::shared_ptr<GRegex>(regex, g_regex_unref),
+        .regex = std::shared_ptr<RegularExpressionState>(
+            regex, destroy_regular_expression),
     });
   }
   return compiled;
 }
 
-static bool match_covers_target(GMatchInfo *match, std::size_t target_size) {
-  gint start = -1;
-  gint end = -1;
-  return g_match_info_fetch_pos(match, 0, &start, &end) != FALSE &&
-         start == 0 && end >= 0 &&
-         static_cast<std::size_t>(end) == target_size;
+static bool match_covers_target(const RegularExpressionMatch &match,
+                                std::size_t target_size) {
+  return match.start == 0 && match.end == target_size;
 }
 
 static std::optional<TerminalHyperlinkAction>
-expand_hyperlink_action(const HyperlinkActionRule &rule, GMatchInfo *match) {
+expand_hyperlink_action(const HyperlinkActionRule &rule,
+                        const RegularExpressionMatch *match) {
   TerminalHyperlinkAction action{
       .command = rule.command,
       .arguments = {},
@@ -94,20 +90,13 @@ resolve_terminal_hyperlink(TerminalHyperlinkResolverState *state,
   }
 
   for (const CompiledHyperlinkRule &rule : state->rules) {
-    GMatchInfo *match = nullptr;
-    GError *error = nullptr;
-    const gboolean matched = g_regex_match_full(
-        rule.regex.get(), target.data(), static_cast<gssize>(target.size()), 0,
-        G_REGEX_MATCH_DEFAULT, &match, &error);
-    g_clear_error(&error);
-    if (matched != FALSE && match_covers_target(match, target.size())) {
+    std::string reason;
+    const std::optional<RegularExpressionMatch> match =
+        search_regular_expression(rule.regex.get(), target, &reason);
+    if (match.has_value() && match_covers_target(*match, target.size())) {
       const std::optional<TerminalHyperlinkAction> action =
-          expand_hyperlink_action(rule.rule, match);
-      g_match_info_free(match);
+          expand_hyperlink_action(rule.rule, &*match);
       return action;
-    }
-    if (match != nullptr) {
-      g_match_info_free(match);
     }
   }
   return std::nullopt;

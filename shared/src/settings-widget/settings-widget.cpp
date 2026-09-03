@@ -22,6 +22,7 @@
 #include <elder-terms/key-binding-input-widget.h>
 #include <elder-terms/serial-device-event-monitor.h>
 #include <elder-terms/settings/general-settings.h>
+#include <elder-terms/settings/regular-expression.h>
 
 #include "settings-presentation.h"
 
@@ -2218,19 +2219,14 @@ static void update_macro_validation(SettingsWidgetState *state) {
   if (!regex_valid) {
     regex_reason = "regular expression must not be empty";
   } else {
-    GError *error = nullptr;
-    GRegex *regex = g_regex_new(rule->pattern.c_str(), G_REGEX_DEFAULT,
-                                G_REGEX_MATCH_DEFAULT, &error);
+    RegularExpressionState *regex =
+        create_regular_expression(rule->pattern, false, &regex_reason);
     if (regex == nullptr) {
       regex_valid = false;
-      regex_reason = error == nullptr || error->message == nullptr
-                         ? "invalid regular expression"
-                         : std::string(error->message);
     }
     if (regex != nullptr) {
-      g_regex_unref(regex);
+      destroy_regular_expression(regex);
     }
-    g_clear_error(&error);
   }
   set_entry_validation(state->macro_regex_entry, regex_valid, regex_reason);
 

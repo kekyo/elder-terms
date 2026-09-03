@@ -1,4 +1,5 @@
 #include <elder-terms/settings.h>
+#include <elder-terms/settings/regular-expression.h>
 
 #include <algorithm>
 #include <chrono>
@@ -4004,6 +4005,40 @@ static void test_save_empty_global_settings_creates_parent_directory() {
   std::filesystem::remove_all(root, remove_error);
 }
 
+static void test_regular_expression_reports_project_owned_matches() {
+  std::string reason;
+  elder_terms::RegularExpressionState *regex =
+      elder_terms::create_regular_expression(
+          R"((?<scheme>https?)://(?<host>[\p{L}0-9.-]+))", false,
+          &reason);
+  expect_true(regex != nullptr,
+              "a valid PCRE2 expression should compile: " + reason);
+  expect_true(elder_terms::regular_expression_capture_exists(regex, "0") &&
+                  elder_terms::regular_expression_capture_exists(
+                      regex, "scheme") &&
+                  elder_terms::regular_expression_capture_exists(regex,
+                                                                  "host") &&
+                  !elder_terms::regular_expression_capture_exists(
+                      regex, "missing"),
+              "compiled expressions should report available captures");
+
+  const std::optional<elder_terms::RegularExpressionMatch> match =
+      elder_terms::search_regular_expression(
+          regex, "Open https://example.みんな now", &reason);
+  expect_true(match.has_value(),
+              "a matching UTF-8 subject should produce a match: " + reason);
+  expect_true(match->start == 5 && match->end == 30,
+              "match offsets should use UTF-8 byte positions");
+  expect_true(elder_terms::regular_expression_capture(*match, "0") ==
+                      std::optional<std::string>{"https://example.みんな"} &&
+                  elder_terms::regular_expression_capture(*match, "scheme") ==
+                      std::optional<std::string>{"https"} &&
+                  elder_terms::regular_expression_capture(*match, "host") ==
+                      std::optional<std::string>{"example.みんな"},
+              "matches should expose numbered and named captures");
+  elder_terms::destroy_regular_expression(regex);
+}
+
 } // namespace elder_terms_settings_test
 
 int main() {
@@ -4088,6 +4123,8 @@ int main() {
         test_hyperlink_defaults_disable_and_invalid_rules();
     elder_terms_settings_test::test_missing_global_settings_are_optional();
     elder_terms_settings_test::test_save_empty_global_settings_creates_parent_directory();
+    elder_terms_settings_test::
+        test_regular_expression_reports_project_owned_matches();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;
