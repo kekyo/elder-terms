@@ -1,6 +1,7 @@
 #include <elder-terms/settings-widget.h>
 
 #include <clocale>
+#include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
@@ -32,6 +33,7 @@ struct FixtureOptions {
   bool show_actions = true;
   bool global_mode = false;
   std::string bell_sound_dialog_file;
+  std::string ip_scan_mode;
   std::string page = "general";
   std::vector<ConfigAssignment> connection_assignments;
   std::vector<ConfigAssignment> global_assignments;
@@ -182,6 +184,8 @@ static FixtureOptions parse_options(int argc, char **argv) {
     } else if (starts_with(argument, "--bell-sound-dialog-file=")) {
       options.bell_sound_dialog_file =
           option_value(argument, "--bell-sound-dialog-file=");
+    } else if (starts_with(argument, "--ip-scan=")) {
+      options.ip_scan_mode = option_value(argument, "--ip-scan=");
     } else if (starts_with(argument, "--telnet-address=")) {
       append_connection_assignment(
           &options, "telnet", "address",
@@ -396,6 +400,42 @@ static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
   });
   load_assignments(&store, connection_assignments);
   return store;
+}
+
+static std::uint32_t ipv4(unsigned int first, unsigned int second,
+                          unsigned int third, unsigned int fourth) {
+  return (first << 24U) | (second << 16U) | (third << 8U) | fourth;
+}
+
+static cardio::promise<std::string>
+pending_reverse_lookup(std::uint32_t, cardio::cancellation cancellation) {
+  co_await cardio::promises::delay(60000, std::move(cancellation));
+  co_return "router.example.test";
+}
+
+static elder_terms::IpScannerDependencies
+create_ip_scanner_dependencies(const std::string &mode) {
+  if (mode != "complete" && mode != "pending") {
+    throw std::invalid_argument("unknown IP scan fixture mode: " + mode);
+  }
+  elder_terms::IpScannerDependencies dependencies{
+      .interfaces = {{
+          .address = ipv4(192, 0, 2, 25),
+          .netmask = UINT32_MAX,
+      }},
+      .maximum_concurrent_hosts = 1,
+      .probe_port = [](std::uint32_t, std::uint16_t port,
+                       cardio::cancellation) {
+        return cardio::resolved(port == 21 || port == 23);
+      },
+      .reverse_lookup = [](std::uint32_t, cardio::cancellation) {
+        return cardio::resolved(std::string("router.example.test"));
+      },
+  };
+  if (mode == "pending") {
+    dependencies.reverse_lookup = pending_reverse_lookup;
+  }
+  return dependencies;
 }
 
 static GtkWidget *find_notebook(GtkWidget *widget) {
@@ -957,6 +997,9 @@ int main(int argc, char **argv) {
     }
     gtk_disable_setlocale();
     gtk_init(&argc, &argv);
+    cardio::dispatcher_group_glib dispatcher_group;
+    cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);
+    (void)dispatcher;
     const elder_terms_settings_widget_fixture::FixtureOptions options =
         elder_terms_settings_widget_fixture::parse_options(argc, argv);
     elder_terms_settings_widget_fixture::FixtureState state;
@@ -1028,6 +1071,13 @@ int main(int argc, char **argv) {
         .id_prefix = options.global_mode ? "global_settings" : "settings",
         .callbacks = std::move(callbacks),
     };
+    if (!options.ip_scan_mode.empty()) {
+      widget_options.ip_scanner_dependencies_factory =
+          [mode = options.ip_scan_mode]() {
+            return elder_terms_settings_widget_fixture::
+                create_ip_scanner_dependencies(mode);
+          };
+    }
     state.settings_widget =
         elder_terms::create_settings_widget(std::move(widget_options));
     GtkWidget *contents = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -1079,6 +1129,7 @@ int main(int argc, char **argv) {
     std::cout << "READY\n";
     std::cout.flush();
     gtk_main();
+    dispatcher_group.shutdown();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

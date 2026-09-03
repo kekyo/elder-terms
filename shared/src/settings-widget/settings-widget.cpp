@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <exception>
 #include <iomanip>
 #include <limits>
 #include <memory>
@@ -69,6 +70,8 @@ struct ConnectionSettingsPage {
   GtkWidget *tab_label = nullptr;
 };
 
+struct IpScanDialogState;
+
 struct SettingsWidgetState {
   SettingsStore applied_store;
   SettingsStore draft_store;
@@ -78,6 +81,10 @@ struct SettingsWidgetState {
   bool show_actions = true;
   bool synchronizing = false;
   SettingsWidgetCallbacks callbacks;
+  SettingsWidgetIpScannerDependenciesFactory
+      ip_scanner_dependencies_factory;
+  std::shared_ptr<IpScanDialogState> ip_scan_dialog;
+  std::optional<cardio::promise<void>> ip_scan_task;
   GtkWidget *root = nullptr;
   GtkWidget *notebook = nullptr;
   GtkWidget *general_name_entry = nullptr;
@@ -186,6 +193,23 @@ struct SettingsWidgetState {
   GtkWidget *save_button = nullptr;
   GtkWidget *cancel_button = nullptr;
   std::vector<ConnectionSettingsPage> connection_pages;
+};
+
+enum IpScanResultColumn {
+  ip_scan_address_column,
+  ip_scan_reverse_fqdn_column,
+  ip_scan_tcp_ports_column,
+  ip_scan_result_column_count,
+};
+
+struct IpScanDialogState {
+  SettingsWidgetState *owner = nullptr;
+  GtkWidget *dialog = nullptr;
+  GtkWidget *results = nullptr;
+  GtkWidget *progress = nullptr;
+  GtkWidget *target_entry = nullptr;
+  GtkListStore *result_store = nullptr;
+  cardio::cancellation_source cancellation_source;
 };
 
 static void sync_serial_device_widgets(SettingsWidgetState *state);
@@ -4781,6 +4805,306 @@ static GtkWidget *create_local_page(SettingsWidgetState *state) {
   return page;
 }
 
+static std::string
+format_ip_scan_tcp_ports(const std::vector<std::uint16_t> &ports) {
+  std::ostringstream stream;
+  for (std::size_t index = 0; index < ports.size(); ++index) {
+    if (index != 0) {
+      stream << ", ";
+    }
+    stream << ports[index];
+  }
+  return stream.str();
+}
+
+static bool find_ip_scan_result(GtkListStore *store,
+                                const std::string &address,
+                                GtkTreeIter *result) {
+  GtkTreeModel *model = GTK_TREE_MODEL(store);
+  GtkTreeIter current;
+  if (gtk_tree_model_get_iter_first(model, &current) == FALSE) {
+    return false;
+  }
+  do {
+    gchar *current_address = nullptr;
+    gtk_tree_model_get(model, &current, ip_scan_address_column,
+                       &current_address, -1);
+    const bool matches = current_address != nullptr &&
+                         address == current_address;
+    g_free(current_address);
+    if (matches) {
+      *result = current;
+      return true;
+    }
+  } while (gtk_tree_model_iter_next(model, &current) != FALSE);
+  return false;
+}
+
+static void update_ip_scan_result(
+    const std::shared_ptr<IpScanDialogState> &dialog_state,
+    const IpScanEntry &entry) {
+  if (dialog_state->result_store == nullptr) {
+    return;
+  }
+  GtkTreeIter iterator;
+  if (!find_ip_scan_result(dialog_state->result_store, entry.address,
+                           &iterator)) {
+    gtk_list_store_append(dialog_state->result_store, &iterator);
+  }
+  const std::string ports = format_ip_scan_tcp_ports(entry.open_ports);
+  gtk_list_store_set(dialog_state->result_store, &iterator,
+                     ip_scan_address_column, entry.address.c_str(),
+                     ip_scan_reverse_fqdn_column, entry.reverse_fqdn.c_str(),
+                     ip_scan_tcp_ports_column, ports.c_str(), -1);
+}
+
+static void update_ip_scan_progress(
+    const std::shared_ptr<IpScanDialogState> &dialog_state,
+    const IpScanProgress &progress) {
+  if (dialog_state->progress == nullptr) {
+    return;
+  }
+  const gdouble fraction =
+      progress.total_addresses == 0
+          ? 0.0
+          : std::min(
+                1.0,
+                static_cast<gdouble>(progress.completed_addresses) /
+                    static_cast<gdouble>(progress.total_addresses));
+  gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(dialog_state->progress),
+                                fraction);
+  gtk_progress_bar_set_text(GTK_PROGRESS_BAR(dialog_state->progress),
+                            settings_ui_text(SettingsUiText::scanning));
+}
+
+static void complete_ip_scan(
+    const std::shared_ptr<IpScanDialogState> &dialog_state) {
+  if (dialog_state->progress == nullptr) {
+    return;
+  }
+  gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(dialog_state->progress),
+                                1.0);
+  gtk_progress_bar_set_text(GTK_PROGRESS_BAR(dialog_state->progress),
+                            settings_ui_text(SettingsUiText::scan_complete));
+}
+
+static void fail_ip_scan(
+    const std::shared_ptr<IpScanDialogState> &dialog_state,
+    const std::string &message) {
+  if (dialog_state->progress == nullptr) {
+    return;
+  }
+  gtk_progress_bar_set_text(GTK_PROGRESS_BAR(dialog_state->progress),
+                            settings_ui_text(SettingsUiText::scan_failed));
+  gtk_widget_set_tooltip_text(dialog_state->progress, message.c_str());
+}
+
+static cardio::promise<void> run_ip_scan_dialog_async(
+    std::shared_ptr<IpScanDialogState> dialog_state,
+    IpScannerDependencies dependencies) {
+  try {
+    IpScannerCallbacks callbacks{
+        .entry_changed = [dialog_state](const IpScanEntry &entry) {
+          update_ip_scan_result(dialog_state, entry);
+        },
+        .progress_changed =
+            [dialog_state](const IpScanProgress &progress) {
+              update_ip_scan_progress(dialog_state, progress);
+            },
+        .completed = [dialog_state]() { complete_ip_scan(dialog_state); },
+    };
+    co_await scan_ipv4_hosts_async(
+        std::move(dependencies), std::move(callbacks),
+        dialog_state->cancellation_source.get_cancellation());
+  } catch (const cardio::canceled_exception &) {
+  } catch (const std::exception &error) {
+    fail_ip_scan(dialog_state, error.what());
+  }
+}
+
+static void detach_ip_scan_dialog(IpScanDialogState *dialog_state) {
+  SettingsWidgetState *owner = dialog_state->owner;
+  dialog_state->owner = nullptr;
+  dialog_state->dialog = nullptr;
+  dialog_state->results = nullptr;
+  dialog_state->progress = nullptr;
+  dialog_state->target_entry = nullptr;
+  dialog_state->result_store = nullptr;
+  if (owner != nullptr && owner->ip_scan_dialog.get() == dialog_state) {
+    owner->ip_scan_dialog.reset();
+  }
+}
+
+static void on_ip_scan_dialog_destroy(GtkWidget *, gpointer data) {
+  auto *dialog_state = static_cast<IpScanDialogState *>(data);
+  (void)dialog_state->cancellation_source.cancel();
+  detach_ip_scan_dialog(dialog_state);
+}
+
+static void on_ip_scan_dialog_response(GtkDialog *dialog, gint, gpointer data) {
+  auto *dialog_state = static_cast<IpScanDialogState *>(data);
+  (void)dialog_state->cancellation_source.cancel();
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+}
+
+static void on_ip_scan_result_activated(GtkTreeView *tree_view,
+                                        GtkTreePath *path,
+                                        GtkTreeViewColumn *, gpointer data) {
+  auto *dialog_state = static_cast<IpScanDialogState *>(data);
+  GtkTreeIter iterator;
+  GtkTreeModel *model = gtk_tree_view_get_model(tree_view);
+  if (dialog_state->target_entry == nullptr || model == nullptr ||
+      gtk_tree_model_get_iter(model, &iterator, path) == FALSE) {
+    return;
+  }
+
+  gchar *address = nullptr;
+  gtk_tree_model_get(model, &iterator, ip_scan_address_column, &address, -1);
+  if (address == nullptr) {
+    return;
+  }
+  (void)dialog_state->cancellation_source.cancel();
+  gtk_entry_set_text(GTK_ENTRY(dialog_state->target_entry), address);
+  g_free(address);
+  if (dialog_state->dialog != nullptr) {
+    gtk_widget_destroy(dialog_state->dialog);
+  }
+}
+
+static void append_ip_scan_column(GtkTreeView *tree_view, const char *title,
+                                  int model_column, bool expand) {
+  GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
+  GtkTreeViewColumn *column = gtk_tree_view_column_new_with_attributes(
+      title, renderer, "text", model_column, nullptr);
+  gtk_tree_view_column_set_expand(column, expand ? TRUE : FALSE);
+  gtk_tree_view_append_column(tree_view, column);
+}
+
+static std::shared_ptr<IpScanDialogState>
+create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
+  auto dialog_state = std::make_shared<IpScanDialogState>();
+  dialog_state->owner = state;
+  dialog_state->target_entry = target_entry;
+  GtkWidget *toplevel = gtk_widget_get_toplevel(state->root);
+  GtkWindow *parent =
+      GTK_IS_WINDOW(toplevel) ? GTK_WINDOW(toplevel) : nullptr;
+  GtkWidget *dialog = gtk_dialog_new_with_buttons(
+      settings_ui_text(SettingsUiText::ip_scan), parent,
+      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
+                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      settings_ui_text(SettingsUiText::cancel), GTK_RESPONSE_CANCEL,
+      nullptr);
+  dialog_state->dialog = dialog;
+  assign_accessible_id(dialog, widget_id(state, "ip_scan_dialog").c_str());
+  gtk_window_set_default_size(GTK_WINDOW(dialog), 640, 360);
+  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
+  GtkWidget *cancel_button = gtk_dialog_get_widget_for_response(
+      GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
+  assign_accessible_id(
+      cancel_button, widget_id(state, "ip_scan_cancel_button").c_str());
+
+  GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+  gtk_widget_set_margin_top(panel, 12);
+  gtk_widget_set_margin_bottom(panel, 12);
+  gtk_widget_set_margin_start(panel, 12);
+  gtk_widget_set_margin_end(panel, 12);
+  gtk_box_pack_start(
+      GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), panel, TRUE,
+      TRUE, 0);
+
+  GtkListStore *result_store = gtk_list_store_new(
+      ip_scan_result_column_count, G_TYPE_STRING, G_TYPE_STRING,
+      G_TYPE_STRING);
+  GtkWidget *results =
+      gtk_tree_view_new_with_model(GTK_TREE_MODEL(result_store));
+  dialog_state->results = results;
+  dialog_state->result_store = result_store;
+  g_object_unref(result_store);
+  assign_accessible_id(results,
+                       widget_id(state, "ip_scan_results").c_str());
+  gtk_tree_view_set_activate_on_single_click(GTK_TREE_VIEW(results), FALSE);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::ip_address),
+                        ip_scan_address_column, false);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::reverse_fqdn),
+                        ip_scan_reverse_fqdn_column, true);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::tcp_ports),
+                        ip_scan_tcp_ports_column, false);
+  g_signal_connect(results, "row-activated",
+                   G_CALLBACK(on_ip_scan_result_activated),
+                   dialog_state.get());
+
+  GtkWidget *scroller = gtk_scrolled_window_new(nullptr, nullptr);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroller),
+                                 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+  gtk_container_add(GTK_CONTAINER(scroller), results);
+  gtk_box_pack_start(GTK_BOX(panel), scroller, TRUE, TRUE, 0);
+
+  dialog_state->progress = gtk_progress_bar_new();
+  assign_accessible_id(
+      dialog_state->progress,
+      widget_id(state, "ip_scan_progress").c_str());
+  gtk_progress_bar_set_show_text(GTK_PROGRESS_BAR(dialog_state->progress),
+                                 TRUE);
+  gtk_progress_bar_set_text(GTK_PROGRESS_BAR(dialog_state->progress),
+                            settings_ui_text(SettingsUiText::scanning));
+  gtk_box_pack_start(GTK_BOX(panel), dialog_state->progress, FALSE, FALSE, 0);
+
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(on_ip_scan_dialog_response),
+                   dialog_state.get());
+  g_signal_connect(dialog, "destroy", G_CALLBACK(on_ip_scan_dialog_destroy),
+                   dialog_state.get());
+  gtk_widget_show_all(dialog);
+  gtk_window_present(GTK_WINDOW(dialog));
+  return dialog_state;
+}
+
+static void on_ip_scan_clicked(GtkButton *button, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->ip_scan_dialog != nullptr &&
+      state->ip_scan_dialog->dialog != nullptr) {
+    gtk_window_present(GTK_WINDOW(state->ip_scan_dialog->dialog));
+    return;
+  }
+  auto *target_entry = static_cast<GtkWidget *>(
+      g_object_get_data(G_OBJECT(button), "elder-terms-ip-scan-entry"));
+  if (target_entry == nullptr) {
+    return;
+  }
+
+  state->ip_scan_task.reset();
+  state->ip_scan_dialog = create_ip_scan_dialog(state, target_entry);
+  try {
+    IpScannerDependencies dependencies =
+        state->ip_scanner_dependencies_factory
+            ? state->ip_scanner_dependencies_factory()
+            : create_system_ip_scanner_dependencies();
+    state->ip_scan_task.emplace(run_ip_scan_dialog_async(
+        state->ip_scan_dialog, std::move(dependencies)));
+  } catch (const std::exception &error) {
+    fail_ip_scan(state->ip_scan_dialog, error.what());
+  }
+}
+
+static GtkWidget *create_ip_scan_address_row(SettingsWidgetState *state,
+                                             GtkWidget *entry,
+                                             const char *id_suffix,
+                                             gboolean sensitive) {
+  GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_box_pack_start(GTK_BOX(row), entry, TRUE, TRUE, 0);
+  GtkWidget *button =
+      gtk_button_new_with_label(settings_ui_text(SettingsUiText::ip_scan));
+  assign_accessible_id(button, widget_id(state, id_suffix).c_str());
+  gtk_widget_set_sensitive(button, sensitive);
+  g_object_set_data(G_OBJECT(button), "elder-terms-ip-scan-entry", entry);
+  g_signal_connect(button, "clicked", G_CALLBACK(on_ip_scan_clicked), state);
+  gtk_box_pack_start(GTK_BOX(row), button, FALSE, FALSE, 0);
+  return row;
+}
+
 static GtkWidget *create_telnet_page(SettingsWidgetState *state) {
   const std::string page_id = widget_id(state, "telnet_page");
   GtkWidget *page = create_page_grid(page_id.c_str());
@@ -4791,8 +5115,10 @@ static GtkWidget *create_telnet_page(SettingsWidgetState *state) {
                            state->is_runtime ? FALSE : TRUE);
   g_signal_connect(state->telnet_address_entry, "changed",
                    G_CALLBACK(on_telnet_address_changed), state);
-  attach_row(page, 0, telnet_address_setting_key(),
-             state->telnet_address_entry);
+  GtkWidget *address_row = create_ip_scan_address_row(
+      state, state->telnet_address_entry, "telnet_ip_scan_button",
+      state->is_runtime ? FALSE : TRUE);
+  attach_row(page, 0, telnet_address_setting_key(), address_row);
 
   state->telnet_port_entry =
       create_entry(widget_id(state, "telnet_port_entry"));
@@ -4826,7 +5152,9 @@ static GtkWidget *create_ssh_page(SettingsWidgetState *state) {
   gtk_widget_set_sensitive(state->ssh_address_entry, sensitive);
   g_signal_connect(state->ssh_address_entry, "changed",
                    G_CALLBACK(on_ssh_address_changed), state);
-  attach_row(page, 0, ssh_address_setting_key(), state->ssh_address_entry);
+  GtkWidget *address_row = create_ip_scan_address_row(
+      state, state->ssh_address_entry, "ssh_ip_scan_button", sensitive);
+  attach_row(page, 0, ssh_address_setting_key(), address_row);
 
   state->ssh_port_entry =
       create_entry(widget_id(state, "ssh_port_entry"));
@@ -4898,7 +5226,10 @@ static GtkWidget *create_ftp_page(SettingsWidgetState *state) {
   gtk_widget_set_sensitive(state->ftp_address_entry, endpoint_sensitive);
   g_signal_connect(state->ftp_address_entry, "changed",
                    G_CALLBACK(on_ftp_address_changed), state);
-  attach_row(page, 0, ftp_address_setting_key(), state->ftp_address_entry);
+  GtkWidget *address_row = create_ip_scan_address_row(
+      state, state->ftp_address_entry, "ftp_ip_scan_button",
+      endpoint_sensitive);
+  attach_row(page, 0, ftp_address_setting_key(), address_row);
 
   state->ftp_port_entry =
       create_entry(widget_id(state, "ftp_port_entry"));
@@ -5339,6 +5670,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   state->is_runtime = options.is_runtime;
   state->show_actions = options.show_actions;
   state->callbacks = std::move(options.callbacks);
+  state->ip_scanner_dependencies_factory =
+      std::move(options.ip_scanner_dependencies_factory);
   state->synchronizing = true;
 
   state->root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -5748,6 +6081,17 @@ void destroy_settings_widget(SettingsWidgetState *state) {
   }
 
   state->serial_device_event_monitor.reset();
+  if (state->ip_scan_dialog != nullptr) {
+    const std::shared_ptr<IpScanDialogState> dialog_state =
+        state->ip_scan_dialog;
+    dialog_state->owner = nullptr;
+    (void)dialog_state->cancellation_source.cancel();
+    if (dialog_state->dialog != nullptr) {
+      gtk_widget_destroy(dialog_state->dialog);
+    }
+    state->ip_scan_dialog.reset();
+  }
+  state->ip_scan_task.reset();
   if (state->terminal_bell_sound_dialog != nullptr) {
     gtk_widget_destroy(state->terminal_bell_sound_dialog);
   }

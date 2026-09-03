@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include <elder-terms/export.h>
+
 namespace elder_terms {
 
 /**
@@ -110,7 +112,7 @@ struct IpScannerCallbacks {
  * /24 produces all 256 addresses. Interfaces with non-contiguous masks are
  * counted and ignored.
  */
-Ipv4ScanPlan
+ELDER_TERMS_API Ipv4ScanPlan
 create_ipv4_scan_plan(const std::vector<Ipv4InterfaceAddress> &interfaces);
 
 /**
@@ -125,7 +127,7 @@ create_ipv4_scan_plan(const std::vector<Ipv4InterfaceAddress> &interfaces);
  * DNS is attempted only for hosts with at least one open port. A discovered
  * host is reported before its reverse lookup completes.
  */
-cardio::promise<void>
+ELDER_TERMS_API cardio::promise<void>
 scan_ipv4_hosts_async(IpScannerDependencies dependencies,
                       IpScannerCallbacks callbacks,
                       cardio::cancellation cancellation);
@@ -139,7 +141,7 @@ scan_ipv4_hosts_async(IpScannerDependencies dependencies,
  * @param cancellation Caller cancellation signal.
  * @return Promise resolving true only when the connection succeeds.
  */
-cardio::promise<bool>
+ELDER_TERMS_API cardio::promise<bool>
 probe_ipv4_tcp_port_async(std::uint32_t address, std::uint16_t port,
                           std::uint64_t timeout_milliseconds,
                           cardio::cancellation cancellation);
@@ -150,6 +152,7 @@ probe_ipv4_tcp_port_async(std::uint32_t address, std::uint16_t port,
  * @return Dependencies using getifaddrs and asynchronous GIO network calls.
  * @throws std::system_error When the network interface list cannot be read.
  */
-IpScannerDependencies create_system_ip_scanner_dependencies();
+ELDER_TERMS_API IpScannerDependencies
+create_system_ip_scanner_dependencies();
 
 } // namespace elder_terms

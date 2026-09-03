@@ -5,6 +5,7 @@
 #include <gtk/gtk.h>
 
 #include <elder-terms/export.h>
+#include <elder-terms/ip-scanner.h>
 #include <elder-terms/settings.h>
 
 namespace elder_terms {
@@ -41,6 +42,14 @@ using SettingsWidgetCancelCallback = std::function<void()>;
  * Called after the settings draft or its validation state changes.
  */
 using SettingsWidgetChangedCallback = std::function<void()>;
+
+/**
+ * Creates scanner dependencies when an IP scan dialog is opened.
+ *
+ * @returns Scanner dependencies for one dialog invocation.
+ */
+using SettingsWidgetIpScannerDependenciesFactory =
+    std::function<IpScannerDependencies()>;
 
 /**
  * Called when the user saves settings from the widget.
@@ -81,6 +90,12 @@ struct SettingsWidgetOptions {
   std::string id_prefix = "settings";
   /** Optional callbacks emitted by the widget. */
   SettingsWidgetCallbacks callbacks;
+  /**
+   * Optional scanner dependency factory.
+   *
+   * @remarks When empty, the widget scans the host machine's IPv4 interfaces.
+   */
+  SettingsWidgetIpScannerDependenciesFactory ip_scanner_dependencies_factory = {};
 };
 
 /**

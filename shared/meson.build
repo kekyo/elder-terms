@@ -103,6 +103,7 @@ elder_terms_dep = declare_dependency(
   include_directories: elder_terms_shared_include_dir,
   link_with: elder_terms_library,
   dependencies: [
+    cardio_dep,
     elder_terms_shared_glib_dep,
     elder_terms_shared_gio_dep,
     elder_terms_shared_gtk_dep,
@@ -167,6 +168,7 @@ elder_terms_ip_scanner_test = executable(
     'src/ip-scanner.cpp',
     'tests/ip-scanner-test.cpp',
   ],
+  include_directories: elder_terms_shared_include_dir,
   dependencies: [
     cardio_dep,
     elder_terms_shared_gio_dep,

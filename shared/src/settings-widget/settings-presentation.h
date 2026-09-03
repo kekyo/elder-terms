@@ -55,6 +55,13 @@ enum class SettingsUiText {
   serial_usb_serial,
   serial_current_node,
   unavailable,
+  ip_scan,
+  ip_address,
+  reverse_fqdn,
+  tcp_ports,
+  scanning,
+  scan_complete,
+  scan_failed,
 };
 
 const char *settings_ui_text(SettingsUiText text);

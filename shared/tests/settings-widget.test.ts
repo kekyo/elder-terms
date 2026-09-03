@@ -217,6 +217,30 @@ const showFtpPage = async (app: GtkApp): Promise<void> => {
   });
 };
 
+const doubleClickTableRow = async (
+  app: GtkApp,
+  table: GtkWidgetElement,
+  row: number
+): Promise<void> => {
+  if (table.kind !== 'table') {
+    throw new Error(`Expected a GTK table, received ${table.kind}`);
+  }
+  const cell = await table.cellAt(row, 0);
+  const bounds = (await cell?.capture())?.bounds;
+  expect(bounds).toBeDefined();
+  if (bounds === undefined) {
+    return;
+  }
+  await app.input.moveMouseTo(
+    Math.round(bounds.x + bounds.width / 2),
+    Math.round(bounds.y + bounds.height / 2)
+  );
+  for (let click = 0; click < 2; click += 1) {
+    await app.input.setMouseButton('left', true);
+    await app.input.setMouseButton('left', false);
+  }
+};
+
 const showSerialPage = async (app: GtkApp): Promise<void> => {
   await waitForResult(async () => {
     const device = await app.getById('settings_serial_device_combo');
@@ -2424,6 +2448,179 @@ describe.concurrent('shared settings widget', () => {
         expect(store.ftp_data_connection_mode).toBe('passive');
         expect(store.ftp_local_directory).toBe('/home/bob/outgoing');
         expect(store.ftp_remote_directory).toBe('/opt/drop');
+      }
+    );
+  });
+
+  it('offers IP scan beside every network address setting', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=ssh', '--type=sftp'],
+      async ({ app }) => {
+        await showSshPage(app);
+        for (const id of [
+          'settings_telnet_ip_scan_button',
+          'settings_ssh_ip_scan_button',
+          'settings_ftp_ip_scan_button',
+        ]) {
+          const button = expectElementKind(await app.getById(id), 'button');
+          expect((await button.info()).name).toBe('IP scan');
+          await expectSensitive(button);
+        }
+      }
+    );
+  });
+
+  it('shows completed IP scan results without changing the address on cancel', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ftp',
+        '--type=ftp',
+        '--ftp-address=before.example.test',
+        '--ip-scan=complete',
+      ],
+      async ({ app, directory }) => {
+        await showFtpPage(app);
+        await expectElementKind(
+          await app.getById('settings_ftp_ip_scan_button'),
+          'button'
+        ).click();
+
+        const dialog = expectElementKind(
+          await app.getById('settings_ip_scan_dialog'),
+          'window'
+        );
+        expect((await dialog.info()).states).toContain('modal');
+        const results = expectElementKind(
+          await app.getById('settings_ip_scan_results'),
+          'table'
+        );
+        await waitForResult(async () => {
+          expect(await results.getRowCount()).toBe(1);
+        });
+        expect(await results.getColumnCount()).toBe(3);
+        const expectedCells = ['192.0.2.25', 'router.example.test', '21, 23'];
+        for (let column = 0; column < expectedCells.length; column += 1) {
+          const cell = await results.cellAt(0, column);
+          expect((await cell?.info())?.name).toBe(expectedCells[column]);
+        }
+        const progress = expectElementKind(
+          await app.getById('settings_ip_scan_progress'),
+          'progressBar'
+        );
+        await waitForResult(async () => {
+          const value = await progress.valueInfo();
+          expect(value.value).toBe(value.maximum);
+        });
+        const dialogCapture = await dialog.capture();
+        expect(dialogCapture.clipped).toBe(false);
+        await expectCaptureToMatchFixture(
+          dialogCapture,
+          'settings-widget-ip-scan-dialog',
+          fixturePath('settings-widget-ip-scan-dialog'),
+          directory,
+          visualComparisonOptions
+        );
+
+        await expectElementKind(
+          await app.getById('settings_ip_scan_cancel_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(await app.findById('settings_ip_scan_dialog')).toBeUndefined();
+        });
+        expect(
+          await expectElementKind(
+            await app.getById('settings_ftp_address_entry'),
+            'entry'
+          ).text()
+        ).toBe('before.example.test');
+      }
+    );
+  });
+
+  it('cancels an active IP scan without changing the address', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=telnet',
+        '--type=telnet',
+        '--telnet-address=before.example.test',
+        '--ip-scan=pending',
+      ],
+      async ({ app }) => {
+        await showTelnetPage(app);
+        await expectElementKind(
+          await app.getById('settings_telnet_ip_scan_button'),
+          'button'
+        ).click();
+        const progress = expectElementKind(
+          await app.getById('settings_ip_scan_progress'),
+          'progressBar'
+        );
+        await waitForResult(async () => {
+          const value = await progress.valueInfo();
+          expect(value.value).toBeLessThan(value.maximum);
+        });
+        await expectElementKind(
+          await app.getById('settings_ip_scan_cancel_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(await app.findById('settings_ip_scan_dialog')).toBeUndefined();
+        });
+        expect(
+          await expectElementKind(
+            await app.getById('settings_telnet_address_entry'),
+            'entry'
+          ).text()
+        ).toBe('before.example.test');
+      }
+    );
+  });
+
+  it('uses a discovered IP from an active scan for SFTP', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ssh',
+        '--type=sftp',
+        '--ssh-address=before.example.test',
+        '--ip-scan=pending',
+      ],
+      async ({ app }) => {
+        await showSshPage(app);
+        await expectElementKind(
+          await app.getById('settings_ssh_ip_scan_button'),
+          'button'
+        ).click();
+        const results = expectElementKind(
+          await app.getById('settings_ip_scan_results'),
+          'table'
+        );
+        await waitForResult(async () => {
+          expect(await results.getRowCount()).toBe(1);
+        });
+        await doubleClickTableRow(app, results, 0);
+        await waitForResult(async () => {
+          expect(await app.findById('settings_ip_scan_dialog')).toBeUndefined();
+        });
+        expect(
+          await expectElementKind(
+            await app.getById('settings_ssh_address_entry'),
+            'entry'
+          ).text()
+        ).toBe('192.0.2.25');
+
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        const store = await waitForAppliedStore(app);
+        expect(store.type).toBe('sftp');
+        expect(store.ssh_address).toBe('192.0.2.25');
+        expect(store.ssh_port).toBe('22');
       }
     );
   });

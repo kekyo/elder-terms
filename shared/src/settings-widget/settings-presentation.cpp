@@ -272,6 +272,20 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Current device node");
   case SettingsUiText::unavailable:
     return _("Unavailable");
+  case SettingsUiText::ip_scan:
+    return _("IP scan");
+  case SettingsUiText::ip_address:
+    return _("IP address");
+  case SettingsUiText::reverse_fqdn:
+    return _("Reverse FQDN");
+  case SettingsUiText::tcp_ports:
+    return _("TCP ports");
+  case SettingsUiText::scanning:
+    return _("Scanning…");
+  case SettingsUiText::scan_complete:
+    return _("Scan complete");
+  case SettingsUiText::scan_failed:
+    return _("Scan failed");
   }
   return "";
 }

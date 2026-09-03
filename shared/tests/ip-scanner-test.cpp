@@ -1,4 +1,4 @@
-#include "../src/ip-scanner.h"
+#include <elder-terms/ip-scanner.h>
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
