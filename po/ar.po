@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-02 16:52+0900\n"
+"POT-Creation-Date: 2026-09-03 12:22+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Arabic\n"
@@ -427,7 +427,7 @@ msgid "Local"
 msgstr "محلي"
 
 #: shared/src/settings-widget/settings-presentation.cpp:194
-#: elder-terms-vte/src/main-window.ui:403
+#: elder-terms-vte/src/main-window.ui:426
 #: elder-terms-vte/src/terminal-session.cpp:226
 msgid "Terminal"
 msgstr "الطرفية"
@@ -460,7 +460,7 @@ msgstr "حفظ"
 #: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1688
 #: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:942
 #: elder-terms-vte/src/main-window.ui:248
-#: elder-terms-vte/src/main-window.ui:336
+#: elder-terms-vte/src/main-window.ui:359
 #: elder-terms-vte/src/main-window.cpp:1478
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:113
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:379
@@ -607,109 +607,137 @@ msgstr "عقدة الجهاز الحالية"
 msgid "Unavailable"
 msgstr "غير متاح"
 
-#: shared/src/settings-widget/settings-presentation.cpp:302
+#: shared/src/settings-widget/settings-presentation.cpp:276
+msgid "IP scan"
+msgstr "فحص IP"
+
+#: shared/src/settings-widget/settings-presentation.cpp:278
+msgid "IP address"
+msgstr "عنوان IP"
+
+#: shared/src/settings-widget/settings-presentation.cpp:280
+msgid "Reverse FQDN"
+msgstr "اسم FQDN العكسي"
+
+#: shared/src/settings-widget/settings-presentation.cpp:282
+msgid "TCP ports"
+msgstr "منافذ TCP"
+
+#: shared/src/settings-widget/settings-presentation.cpp:284
+msgid "Scanning…"
+msgstr "جارٍ الفحص…"
+
+#: shared/src/settings-widget/settings-presentation.cpp:286
+msgid "Scan complete"
+msgstr "اكتمل الفحص"
+
+#: shared/src/settings-widget/settings-presentation.cpp:288
+msgid "Scan failed"
+msgstr "فشل الفحص"
+
+#: shared/src/settings-widget/settings-presentation.cpp:316
 msgid "Global default"
 msgstr "الافتراضي العالمي"
 
-#: shared/src/settings-widget/settings-presentation.cpp:303
+#: shared/src/settings-widget/settings-presentation.cpp:317
 msgid "Built-in default"
 msgstr "الافتراضي المدمج"
 
-#: shared/src/settings-widget/settings-presentation.cpp:307
+#: shared/src/settings-widget/settings-presentation.cpp:321
 #, c-format
 msgid "%s (global default)"
 msgstr "%s (الافتراضي العام)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:308
+#: shared/src/settings-widget/settings-presentation.cpp:322
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s (الافتراضي المضمن)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:319
+#: shared/src/settings-widget/settings-presentation.cpp:333
 msgid "Enter a whole number"
 msgstr "أدخل رقمًا صحيحًا"
 
-#: shared/src/settings-widget/settings-presentation.cpp:322
+#: shared/src/settings-widget/settings-presentation.cpp:336
 msgid "Enter a number"
 msgstr "أدخل رقمًا"
 
-#: shared/src/settings-widget/settings-presentation.cpp:333
+#: shared/src/settings-widget/settings-presentation.cpp:347
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "يجب أن تتراوح القيمة بين %s و%s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:342
+#: shared/src/settings-widget/settings-presentation.cpp:356
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "يجب أن يتضمن Ctrl أو Shift أو Alt أو Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:345
+#: shared/src/settings-widget/settings-presentation.cpp:359
 msgid "Contains an empty token"
 msgstr "يحتوي على رمز مميز فارغ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:354
+#: shared/src/settings-widget/settings-presentation.cpp:368
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "يحتوي على مُعدِّل غير معروف: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:367
+#: shared/src/settings-widget/settings-presentation.cpp:381
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "يحتوي على معدل مكرر: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:375
+#: shared/src/settings-widget/settings-presentation.cpp:389
 msgid "Does not contain a key"
 msgstr "لا يحتوي على مفتاح"
 
-#: shared/src/settings-widget/settings-presentation.cpp:382
+#: shared/src/settings-widget/settings-presentation.cpp:396
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "يحتوي على مفتاح غير معروف: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:390
+#: shared/src/settings-widget/settings-presentation.cpp:404
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "يجب أن يستخدم التكبير والتصغير روابط مفاتيح مختلفة"
 
-#: shared/src/settings-widget/settings-presentation.cpp:393
+#: shared/src/settings-widget/settings-presentation.cpp:407
 msgid "Must not be empty"
 msgstr "يجب ألا يكون فارغًا"
 
-#: shared/src/settings-widget/settings-presentation.cpp:396
+#: shared/src/settings-widget/settings-presentation.cpp:410
 msgid "The character encoding is not supported"
 msgstr "ترميز الأحرف غير مدعوم"
 
-#: shared/src/settings-widget/settings-presentation.cpp:399
+#: shared/src/settings-widget/settings-presentation.cpp:413
 msgid "Contains a NUL byte"
 msgstr "يحتوي على NUL بايت"
 
-#: shared/src/settings-widget/settings-presentation.cpp:404
+#: shared/src/settings-widget/settings-presentation.cpp:418
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
 msgstr "أدخل default أو حدد ملف .oga أو .ogg أو .wav موجودًا بمسار مطلق"
 
-#: shared/src/settings-widget/settings-presentation.cpp:407
+#: shared/src/settings-widget/settings-presentation.cpp:421
 msgid "Contains an unmatched closing brace"
 msgstr "يحتوي على قوس إغلاق لا مثيل له"
 
-#: shared/src/settings-widget/settings-presentation.cpp:410
+#: shared/src/settings-widget/settings-presentation.cpp:424
 msgid "Contains an unmatched opening brace"
 msgstr "يحتوي على قوس افتتاحي لا مثيل له"
 
-#: shared/src/settings-widget/settings-presentation.cpp:413
+#: shared/src/settings-widget/settings-presentation.cpp:427
 msgid "Contains an unknown placeholder"
 msgstr "يحتوي على عنصر نائب غير معروف"
 
-#: shared/src/settings-widget/settings-presentation.cpp:416
+#: shared/src/settings-widget/settings-presentation.cpp:430
 msgid "Must be relative to the log base directory"
 msgstr "يجب أن يكون مرتبطًا بالدليل الأساسي للسجل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:419
+#: shared/src/settings-widget/settings-presentation.cpp:433
 msgid "Must not contain parent directory traversal"
 msgstr "يجب ألا يحتوي على اجتياز الدليل الأصلي"
 
-#: shared/src/settings-widget/settings-presentation.cpp:422
+#: shared/src/settings-widget/settings-presentation.cpp:436
 msgid "Must name a log file"
 msgstr "يجب تسمية ملف السجل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:424
+#: shared/src/settings-widget/settings-presentation.cpp:438
 msgid "Invalid value"
 msgstr "قيمة غير صالحة"
 
@@ -725,7 +753,7 @@ msgstr ""
 "لا يمكن تسجيل واحد أو أكثر من الاختصارات العامة التي تم تكوينها ولن تعمل. "
 "تحقق مما إذا كانت بيئة سطح المكتب لديك تدعم الاختصارات العامة."
 
-#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:352
+#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:375
 #: elder-terms-vte/src/main-window.cpp:1477
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
 msgid "OK"
@@ -909,65 +937,70 @@ msgstr "جديد"
 msgid "Launch"
 msgstr "إطلاق"
 
-#: elder-terms/src/connection-repository.cpp:60
+#: elder-terms/src/connection-repository.cpp:61
 #, c-format
 msgid "Warning: failed to create temporary file %s: %s"
 msgstr "تحذير: فشل في إنشاء ملف مؤقت %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:67
+#: elder-terms/src/connection-repository.cpp:68
 #, c-format
 msgid "Warning: failed to close temporary file %s: %s"
 msgstr "تحذير: فشل في إغلاق الملف المؤقت %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:124
+#: elder-terms/src/connection-repository.cpp:96
+#, c-format
+msgid "Warning: failed to inspect connection directory %s: %s"
+msgstr "تحذير: تعذر فحص دليل الاتصالات %s: %s"
+
+#: elder-terms/src/connection-repository.cpp:150
 msgid "Connection name must not be empty"
 msgstr "يجب ألا يكون اسم الاتصال فارغًا"
 
-#: elder-terms/src/connection-repository.cpp:128
+#: elder-terms/src/connection-repository.cpp:154
 msgid "Connection name must not be a relative path"
 msgstr "يجب ألا يكون اسم الاتصال مسارًا نسبيًا"
 
-#: elder-terms/src/connection-repository.cpp:133
+#: elder-terms/src/connection-repository.cpp:159
 msgid "Connection name must not contain a path separator"
 msgstr "يجب ألا يحتوي اسم الاتصال على فاصل مسار"
 
-#: elder-terms/src/connection-repository.cpp:145
+#: elder-terms/src/connection-repository.cpp:171
 msgid "A connection with this name already exists"
 msgstr "يوجد بالفعل اتصال بهذا الاسم"
 
-#: elder-terms/src/connection-repository.cpp:171
+#: elder-terms/src/connection-repository.cpp:197
 #, c-format
 msgid "Warning: failed to create connection directory %s: %s"
 msgstr "تحذير: فشل في إنشاء دليل الاتصال %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:181
-#: elder-terms/src/connection-repository.cpp:267
+#: elder-terms/src/connection-repository.cpp:207
+#: elder-terms/src/connection-repository.cpp:293
 #, c-format
 msgid "Warning: %s"
 msgstr "تحذير: %s"
 
-#: elder-terms/src/connection-repository.cpp:207
+#: elder-terms/src/connection-repository.cpp:233
 #, c-format
 msgid "Warning: failed to replace connection profile %s: %s"
 msgstr "تحذير: فشل في استبدال ملف تعريف الاتصال %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:227
+#: elder-terms/src/connection-repository.cpp:253
 #, c-format
 msgid "Warning: failed to prepare connection rename %s: %s"
 msgstr "تحذير: فشل إعداد إعادة تسمية الاتصال %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:238
-#: elder-terms/src/connection-repository.cpp:289
+#: elder-terms/src/connection-repository.cpp:264
+#: elder-terms/src/connection-repository.cpp:315
 #, c-format
 msgid "Warning: failed to rename connection profile %s: %s"
 msgstr "تحذير: فشل في إعادة تسمية ملف تعريف الاتصال %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:244
+#: elder-terms/src/connection-repository.cpp:270
 #, c-format
 msgid "Warning: failed to restore connection profile %s: %s"
 msgstr "تحذير: فشل في استعادة ملف تعريف الاتصال %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:309
+#: elder-terms/src/connection-repository.cpp:335
 #, c-format
 msgid "Warning: failed to delete connection profile %s: %s"
 msgstr "تحذير: فشل حذف ملف تعريف الاتصال %s: %s"
@@ -1042,7 +1075,7 @@ msgstr "SSH المصادقة"
 msgid "User name for fixture.example:"
 msgstr "اسم المستخدم لـ fixture.example:"
 
-#: elder-terms-vte/src/main.cpp:347 elder-terms-vte/src/main-window.ui:297
+#: elder-terms-vte/src/main.cpp:347 elder-terms-vte/src/main-window.ui:303
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:249
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:384
 msgid "Password:"

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-02 16:52+0900\n"
+"POT-Creation-Date: 2026-09-03 12:22+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Korean\n"
@@ -426,7 +426,7 @@ msgid "Local"
 msgstr "로컬"
 
 #: shared/src/settings-widget/settings-presentation.cpp:194
-#: elder-terms-vte/src/main-window.ui:403
+#: elder-terms-vte/src/main-window.ui:426
 #: elder-terms-vte/src/terminal-session.cpp:226
 msgid "Terminal"
 msgstr "터미널"
@@ -459,7 +459,7 @@ msgstr "저장"
 #: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1688
 #: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:942
 #: elder-terms-vte/src/main-window.ui:248
-#: elder-terms-vte/src/main-window.ui:336
+#: elder-terms-vte/src/main-window.ui:359
 #: elder-terms-vte/src/main-window.cpp:1478
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:113
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:379
@@ -606,110 +606,138 @@ msgstr "현재 장치 노드"
 msgid "Unavailable"
 msgstr "사용할 수 없음"
 
-#: shared/src/settings-widget/settings-presentation.cpp:302
+#: shared/src/settings-widget/settings-presentation.cpp:276
+msgid "IP scan"
+msgstr "IP 스캔"
+
+#: shared/src/settings-widget/settings-presentation.cpp:278
+msgid "IP address"
+msgstr "IP 주소"
+
+#: shared/src/settings-widget/settings-presentation.cpp:280
+msgid "Reverse FQDN"
+msgstr "역방향 FQDN"
+
+#: shared/src/settings-widget/settings-presentation.cpp:282
+msgid "TCP ports"
+msgstr "TCP 포트"
+
+#: shared/src/settings-widget/settings-presentation.cpp:284
+msgid "Scanning…"
+msgstr "스캔 중…"
+
+#: shared/src/settings-widget/settings-presentation.cpp:286
+msgid "Scan complete"
+msgstr "스캔 완료"
+
+#: shared/src/settings-widget/settings-presentation.cpp:288
+msgid "Scan failed"
+msgstr "스캔 실패"
+
+#: shared/src/settings-widget/settings-presentation.cpp:316
 msgid "Global default"
 msgstr "전역 기본값"
 
-#: shared/src/settings-widget/settings-presentation.cpp:303
+#: shared/src/settings-widget/settings-presentation.cpp:317
 msgid "Built-in default"
 msgstr "기본 제공"
 
-#: shared/src/settings-widget/settings-presentation.cpp:307
+#: shared/src/settings-widget/settings-presentation.cpp:321
 #, c-format
 msgid "%s (global default)"
 msgstr "%s(전역 기본값)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:308
+#: shared/src/settings-widget/settings-presentation.cpp:322
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s(내장 기본값)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:319
+#: shared/src/settings-widget/settings-presentation.cpp:333
 msgid "Enter a whole number"
 msgstr "정수를 입력하세요."
 
-#: shared/src/settings-widget/settings-presentation.cpp:322
+#: shared/src/settings-widget/settings-presentation.cpp:336
 msgid "Enter a number"
 msgstr "숫자를 입력하세요"
 
-#: shared/src/settings-widget/settings-presentation.cpp:333
+#: shared/src/settings-widget/settings-presentation.cpp:347
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "값은 %s에서 %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:342
+#: shared/src/settings-widget/settings-presentation.cpp:356
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "Ctrl, Shift, Alt 또는 Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:345
+#: shared/src/settings-widget/settings-presentation.cpp:359
 msgid "Contains an empty token"
 msgstr "빈 토큰이 포함되어 있습니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:354
+#: shared/src/settings-widget/settings-presentation.cpp:368
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "알 수 없는 수정자가 포함되어 있습니다: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:367
+#: shared/src/settings-widget/settings-presentation.cpp:381
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "중복 수정자를 포함합니다: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:375
+#: shared/src/settings-widget/settings-presentation.cpp:389
 msgid "Does not contain a key"
 msgstr "키가 포함되어 있지 않습니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:382
+#: shared/src/settings-widget/settings-presentation.cpp:396
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "알 수 없는 키가 포함되어 있습니다: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:390
+#: shared/src/settings-widget/settings-presentation.cpp:404
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "확대 및 축소는 다른 키 바인딩을 사용해야 합니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:393
+#: shared/src/settings-widget/settings-presentation.cpp:407
 msgid "Must not be empty"
 msgstr "비워둘 수 없습니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:396
+#: shared/src/settings-widget/settings-presentation.cpp:410
 msgid "The character encoding is not supported"
 msgstr "문자 인코딩은 지원되지 않습니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:399
+#: shared/src/settings-widget/settings-presentation.cpp:413
 msgid "Contains a NUL byte"
 msgstr "NUL 바이트"
 
-#: shared/src/settings-widget/settings-presentation.cpp:404
+#: shared/src/settings-widget/settings-presentation.cpp:418
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
 msgstr ""
 "default를 입력하거나 절대 경로의 기존 .oga, .ogg 또는 .wav 파일을 선택하세요"
 
-#: shared/src/settings-widget/settings-presentation.cpp:407
+#: shared/src/settings-widget/settings-presentation.cpp:421
 msgid "Contains an unmatched closing brace"
 msgstr "일치하지 않는 닫는 중괄호가 포함되어 있습니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:410
+#: shared/src/settings-widget/settings-presentation.cpp:424
 msgid "Contains an unmatched opening brace"
 msgstr "일치하지 않는 여는 중괄호를 포함합니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:413
+#: shared/src/settings-widget/settings-presentation.cpp:427
 msgid "Contains an unknown placeholder"
 msgstr "알 수 없는 자리 표시자가 포함되어 있습니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:416
+#: shared/src/settings-widget/settings-presentation.cpp:430
 msgid "Must be relative to the log base directory"
 msgstr "로그 기본 디렉터리에 상대적이어야 합니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:419
+#: shared/src/settings-widget/settings-presentation.cpp:433
 msgid "Must not contain parent directory traversal"
 msgstr "상위 디렉터리 순회를 포함하면 안 됩니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:422
+#: shared/src/settings-widget/settings-presentation.cpp:436
 msgid "Must name a log file"
 msgstr "로그 파일 이름을 지정해야 합니다."
 
-#: shared/src/settings-widget/settings-presentation.cpp:424
+#: shared/src/settings-widget/settings-presentation.cpp:438
 msgid "Invalid value"
 msgstr "잘못된 값"
 
@@ -725,7 +753,7 @@ msgstr ""
 "하나 이상의 구성된 전역 바로가기를 등록할 수 없으며 작동하지 않습니다. 데스크"
 "탑 환경이 전역 바로가기를 지원하는지 확인하세요."
 
-#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:352
+#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:375
 #: elder-terms-vte/src/main-window.cpp:1477
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
 msgid "OK"
@@ -909,65 +937,70 @@ msgstr "새로운"
 msgid "Launch"
 msgstr "출시"
 
-#: elder-terms/src/connection-repository.cpp:60
+#: elder-terms/src/connection-repository.cpp:61
 #, c-format
 msgid "Warning: failed to create temporary file %s: %s"
 msgstr "경고: 임시 파일 %s을(를) 생성하지 못했습니다: %s"
 
-#: elder-terms/src/connection-repository.cpp:67
+#: elder-terms/src/connection-repository.cpp:68
 #, c-format
 msgid "Warning: failed to close temporary file %s: %s"
 msgstr "경고: 임시 파일을 닫지 못했습니다. %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:124
+#: elder-terms/src/connection-repository.cpp:96
+#, c-format
+msgid "Warning: failed to inspect connection directory %s: %s"
+msgstr "경고: 연결 디렉터리 %s 검사 실패: %s"
+
+#: elder-terms/src/connection-repository.cpp:150
 msgid "Connection name must not be empty"
 msgstr "연결 이름은 비워둘 수 없습니다."
 
-#: elder-terms/src/connection-repository.cpp:128
+#: elder-terms/src/connection-repository.cpp:154
 msgid "Connection name must not be a relative path"
 msgstr "연결 이름은 상대 경로가 아니어야 합니다."
 
-#: elder-terms/src/connection-repository.cpp:133
+#: elder-terms/src/connection-repository.cpp:159
 msgid "Connection name must not contain a path separator"
 msgstr "연결 이름에는 경로 구분 기호가 포함되어서는 안 됩니다."
 
-#: elder-terms/src/connection-repository.cpp:145
+#: elder-terms/src/connection-repository.cpp:171
 msgid "A connection with this name already exists"
 msgstr "이 이름을 가진 연결이 이미 존재합니다."
 
-#: elder-terms/src/connection-repository.cpp:171
+#: elder-terms/src/connection-repository.cpp:197
 #, c-format
 msgid "Warning: failed to create connection directory %s: %s"
 msgstr "경고: 연결 디렉터리를 생성하지 못했습니다. %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:181
-#: elder-terms/src/connection-repository.cpp:267
+#: elder-terms/src/connection-repository.cpp:207
+#: elder-terms/src/connection-repository.cpp:293
 #, c-format
 msgid "Warning: %s"
 msgstr "경고: %s"
 
-#: elder-terms/src/connection-repository.cpp:207
+#: elder-terms/src/connection-repository.cpp:233
 #, c-format
 msgid "Warning: failed to replace connection profile %s: %s"
 msgstr "경고: 연결 프로필을 교체하지 못했습니다. %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:227
+#: elder-terms/src/connection-repository.cpp:253
 #, c-format
 msgid "Warning: failed to prepare connection rename %s: %s"
 msgstr "경고: 연결 이름 변경을 준비하지 못했습니다. %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:238
-#: elder-terms/src/connection-repository.cpp:289
+#: elder-terms/src/connection-repository.cpp:264
+#: elder-terms/src/connection-repository.cpp:315
 #, c-format
 msgid "Warning: failed to rename connection profile %s: %s"
 msgstr "경고: 연결 프로필 이름을 바꾸지 못했습니다. %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:244
+#: elder-terms/src/connection-repository.cpp:270
 #, c-format
 msgid "Warning: failed to restore connection profile %s: %s"
 msgstr "경고: 연결 프로필을 복원하지 못했습니다. %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:309
+#: elder-terms/src/connection-repository.cpp:335
 #, c-format
 msgid "Warning: failed to delete connection profile %s: %s"
 msgstr "경고: 연결 프로필을 삭제하지 못했습니다. %s: %s"
@@ -1042,7 +1075,7 @@ msgstr "SSH 인증"
 msgid "User name for fixture.example:"
 msgstr "fixture.example의 사용자 이름:"
 
-#: elder-terms-vte/src/main.cpp:347 elder-terms-vte/src/main-window.ui:297
+#: elder-terms-vte/src/main.cpp:347 elder-terms-vte/src/main-window.ui:303
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:249
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:384
 msgid "Password:"

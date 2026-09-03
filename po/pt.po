@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-02 16:52+0900\n"
+"POT-Creation-Date: 2026-09-03 12:22+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Portuguese\n"
@@ -426,7 +426,7 @@ msgid "Local"
 msgstr "Local"
 
 #: shared/src/settings-widget/settings-presentation.cpp:194
-#: elder-terms-vte/src/main-window.ui:403
+#: elder-terms-vte/src/main-window.ui:426
 #: elder-terms-vte/src/terminal-session.cpp:226
 msgid "Terminal"
 msgstr "Terminal"
@@ -459,7 +459,7 @@ msgstr "Salvar"
 #: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1688
 #: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:942
 #: elder-terms-vte/src/main-window.ui:248
-#: elder-terms-vte/src/main-window.ui:336
+#: elder-terms-vte/src/main-window.ui:359
 #: elder-terms-vte/src/main-window.cpp:1478
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:113
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:379
@@ -606,111 +606,139 @@ msgstr "Nó de dispositivo atual"
 msgid "Unavailable"
 msgstr "Indisponível"
 
-#: shared/src/settings-widget/settings-presentation.cpp:302
+#: shared/src/settings-widget/settings-presentation.cpp:276
+msgid "IP scan"
+msgstr "Varredura de IP"
+
+#: shared/src/settings-widget/settings-presentation.cpp:278
+msgid "IP address"
+msgstr "Endereço IP"
+
+#: shared/src/settings-widget/settings-presentation.cpp:280
+msgid "Reverse FQDN"
+msgstr "FQDN reverso"
+
+#: shared/src/settings-widget/settings-presentation.cpp:282
+msgid "TCP ports"
+msgstr "Portas TCP"
+
+#: shared/src/settings-widget/settings-presentation.cpp:284
+msgid "Scanning…"
+msgstr "Verificando…"
+
+#: shared/src/settings-widget/settings-presentation.cpp:286
+msgid "Scan complete"
+msgstr "Varredura concluída"
+
+#: shared/src/settings-widget/settings-presentation.cpp:288
+msgid "Scan failed"
+msgstr "Falha na varredura"
+
+#: shared/src/settings-widget/settings-presentation.cpp:316
 msgid "Global default"
 msgstr "Padrão global"
 
-#: shared/src/settings-widget/settings-presentation.cpp:303
+#: shared/src/settings-widget/settings-presentation.cpp:317
 msgid "Built-in default"
 msgstr "Padrão integrado"
 
-#: shared/src/settings-widget/settings-presentation.cpp:307
+#: shared/src/settings-widget/settings-presentation.cpp:321
 #, c-format
 msgid "%s (global default)"
 msgstr "%s (padrão global)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:308
+#: shared/src/settings-widget/settings-presentation.cpp:322
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s (padrão integrado)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:319
+#: shared/src/settings-widget/settings-presentation.cpp:333
 msgid "Enter a whole number"
 msgstr "Insira um número inteiro"
 
-#: shared/src/settings-widget/settings-presentation.cpp:322
+#: shared/src/settings-widget/settings-presentation.cpp:336
 msgid "Enter a number"
 msgstr "Insira um número"
 
-#: shared/src/settings-widget/settings-presentation.cpp:333
+#: shared/src/settings-widget/settings-presentation.cpp:347
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "O valor deve estar entre %s e %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:342
+#: shared/src/settings-widget/settings-presentation.cpp:356
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "Deve incluir Ctrl, Shift, Alt ou Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:345
+#: shared/src/settings-widget/settings-presentation.cpp:359
 msgid "Contains an empty token"
 msgstr "Contém um token vazio"
 
-#: shared/src/settings-widget/settings-presentation.cpp:354
+#: shared/src/settings-widget/settings-presentation.cpp:368
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "Contém um modificador desconhecido: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:367
+#: shared/src/settings-widget/settings-presentation.cpp:381
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "Contém um modificador duplicado: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:375
+#: shared/src/settings-widget/settings-presentation.cpp:389
 msgid "Does not contain a key"
 msgstr "Não contém uma chave"
 
-#: shared/src/settings-widget/settings-presentation.cpp:382
+#: shared/src/settings-widget/settings-presentation.cpp:396
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "Contém uma chave desconhecida: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:390
+#: shared/src/settings-widget/settings-presentation.cpp:404
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "Aumentar e diminuir zoom devem usar combinações de teclas diferentes"
 
-#: shared/src/settings-widget/settings-presentation.cpp:393
+#: shared/src/settings-widget/settings-presentation.cpp:407
 msgid "Must not be empty"
 msgstr "Não deve estar vazio"
 
-#: shared/src/settings-widget/settings-presentation.cpp:396
+#: shared/src/settings-widget/settings-presentation.cpp:410
 msgid "The character encoding is not supported"
 msgstr "A codificação de caracteres não é suportada"
 
-#: shared/src/settings-widget/settings-presentation.cpp:399
+#: shared/src/settings-widget/settings-presentation.cpp:413
 msgid "Contains a NUL byte"
 msgstr "Contém um byte NUL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:404
+#: shared/src/settings-widget/settings-presentation.cpp:418
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
 msgstr ""
 "Digite default ou selecione um arquivo .oga, .ogg ou .wav existente com "
 "caminho absoluto"
 
-#: shared/src/settings-widget/settings-presentation.cpp:407
+#: shared/src/settings-widget/settings-presentation.cpp:421
 msgid "Contains an unmatched closing brace"
 msgstr "Contém uma chave de fechamento incomparável"
 
-#: shared/src/settings-widget/settings-presentation.cpp:410
+#: shared/src/settings-widget/settings-presentation.cpp:424
 msgid "Contains an unmatched opening brace"
 msgstr "Contém uma chave de abertura incomparável"
 
-#: shared/src/settings-widget/settings-presentation.cpp:413
+#: shared/src/settings-widget/settings-presentation.cpp:427
 msgid "Contains an unknown placeholder"
 msgstr "Contém um espaço reservado desconhecido"
 
-#: shared/src/settings-widget/settings-presentation.cpp:416
+#: shared/src/settings-widget/settings-presentation.cpp:430
 msgid "Must be relative to the log base directory"
 msgstr "Deve ser relativo ao diretório base de log"
 
-#: shared/src/settings-widget/settings-presentation.cpp:419
+#: shared/src/settings-widget/settings-presentation.cpp:433
 msgid "Must not contain parent directory traversal"
 msgstr "Não deve conter passagem do diretório pai"
 
-#: shared/src/settings-widget/settings-presentation.cpp:422
+#: shared/src/settings-widget/settings-presentation.cpp:436
 msgid "Must name a log file"
 msgstr "Deve nomear um arquivo de log"
 
-#: shared/src/settings-widget/settings-presentation.cpp:424
+#: shared/src/settings-widget/settings-presentation.cpp:438
 msgid "Invalid value"
 msgstr "Valor inválido"
 
@@ -727,7 +755,7 @@ msgstr ""
 "funcionarão. Verifique se o seu ambiente de área de trabalho oferece suporte "
 "a atalhos globais."
 
-#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:352
+#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:375
 #: elder-terms-vte/src/main-window.cpp:1477
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
 msgid "OK"
@@ -913,65 +941,70 @@ msgstr "Novo"
 msgid "Launch"
 msgstr "Lançamento"
 
-#: elder-terms/src/connection-repository.cpp:60
+#: elder-terms/src/connection-repository.cpp:61
 #, c-format
 msgid "Warning: failed to create temporary file %s: %s"
 msgstr "Aviso: falha ao criar arquivo temporário %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:67
+#: elder-terms/src/connection-repository.cpp:68
 #, c-format
 msgid "Warning: failed to close temporary file %s: %s"
 msgstr "Aviso: falha ao fechar o arquivo temporário %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:124
+#: elder-terms/src/connection-repository.cpp:96
+#, c-format
+msgid "Warning: failed to inspect connection directory %s: %s"
+msgstr "Aviso: falha ao inspecionar o diretório de conexões %s: %s"
+
+#: elder-terms/src/connection-repository.cpp:150
 msgid "Connection name must not be empty"
 msgstr "O nome da conexão não deve estar vazio"
 
-#: elder-terms/src/connection-repository.cpp:128
+#: elder-terms/src/connection-repository.cpp:154
 msgid "Connection name must not be a relative path"
 msgstr "O nome da conexão não deve ser um caminho relativo"
 
-#: elder-terms/src/connection-repository.cpp:133
+#: elder-terms/src/connection-repository.cpp:159
 msgid "Connection name must not contain a path separator"
 msgstr "O nome da conexão não deve conter um separador de caminho"
 
-#: elder-terms/src/connection-repository.cpp:145
+#: elder-terms/src/connection-repository.cpp:171
 msgid "A connection with this name already exists"
 msgstr "Já existe uma conexão com este nome"
 
-#: elder-terms/src/connection-repository.cpp:171
+#: elder-terms/src/connection-repository.cpp:197
 #, c-format
 msgid "Warning: failed to create connection directory %s: %s"
 msgstr "Aviso: falha ao criar o diretório de conexão %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:181
-#: elder-terms/src/connection-repository.cpp:267
+#: elder-terms/src/connection-repository.cpp:207
+#: elder-terms/src/connection-repository.cpp:293
 #, c-format
 msgid "Warning: %s"
 msgstr "Aviso: %s"
 
-#: elder-terms/src/connection-repository.cpp:207
+#: elder-terms/src/connection-repository.cpp:233
 #, c-format
 msgid "Warning: failed to replace connection profile %s: %s"
 msgstr "Aviso: falha ao substituir o perfil de conexão %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:227
+#: elder-terms/src/connection-repository.cpp:253
 #, c-format
 msgid "Warning: failed to prepare connection rename %s: %s"
 msgstr "Aviso: falha ao preparar a renomeação da conexão %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:238
-#: elder-terms/src/connection-repository.cpp:289
+#: elder-terms/src/connection-repository.cpp:264
+#: elder-terms/src/connection-repository.cpp:315
 #, c-format
 msgid "Warning: failed to rename connection profile %s: %s"
 msgstr "Aviso: falha ao renomear o perfil de conexão %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:244
+#: elder-terms/src/connection-repository.cpp:270
 #, c-format
 msgid "Warning: failed to restore connection profile %s: %s"
 msgstr "Aviso: falha ao restaurar o perfil de conexão %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:309
+#: elder-terms/src/connection-repository.cpp:335
 #, c-format
 msgid "Warning: failed to delete connection profile %s: %s"
 msgstr "Aviso: falha ao excluir o perfil de conexão %s: %s"
@@ -1046,7 +1079,7 @@ msgstr "SSH Autenticação"
 msgid "User name for fixture.example:"
 msgstr "Nome de utilizador para fixture.example:"
 
-#: elder-terms-vte/src/main.cpp:347 elder-terms-vte/src/main-window.ui:297
+#: elder-terms-vte/src/main.cpp:347 elder-terms-vte/src/main-window.ui:303
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:249
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:384
 msgid "Password:"

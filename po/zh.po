@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-02 16:52+0900\n"
+"POT-Creation-Date: 2026-09-03 12:22+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Chinese\n"
@@ -426,7 +426,7 @@ msgid "Local"
 msgstr "本地"
 
 #: shared/src/settings-widget/settings-presentation.cpp:194
-#: elder-terms-vte/src/main-window.ui:403
+#: elder-terms-vte/src/main-window.ui:426
 #: elder-terms-vte/src/terminal-session.cpp:226
 msgid "Terminal"
 msgstr "终端"
@@ -459,7 +459,7 @@ msgstr "保存"
 #: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1688
 #: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:942
 #: elder-terms-vte/src/main-window.ui:248
-#: elder-terms-vte/src/main-window.ui:336
+#: elder-terms-vte/src/main-window.ui:359
 #: elder-terms-vte/src/main-window.cpp:1478
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:113
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:379
@@ -606,109 +606,137 @@ msgstr "当前设备节点"
 msgid "Unavailable"
 msgstr "不可用"
 
-#: shared/src/settings-widget/settings-presentation.cpp:302
+#: shared/src/settings-widget/settings-presentation.cpp:276
+msgid "IP scan"
+msgstr "IP 扫描"
+
+#: shared/src/settings-widget/settings-presentation.cpp:278
+msgid "IP address"
+msgstr "IP 地址"
+
+#: shared/src/settings-widget/settings-presentation.cpp:280
+msgid "Reverse FQDN"
+msgstr "反向 FQDN"
+
+#: shared/src/settings-widget/settings-presentation.cpp:282
+msgid "TCP ports"
+msgstr "TCP 端口"
+
+#: shared/src/settings-widget/settings-presentation.cpp:284
+msgid "Scanning…"
+msgstr "正在扫描…"
+
+#: shared/src/settings-widget/settings-presentation.cpp:286
+msgid "Scan complete"
+msgstr "扫描完成"
+
+#: shared/src/settings-widget/settings-presentation.cpp:288
+msgid "Scan failed"
+msgstr "扫描失败"
+
+#: shared/src/settings-widget/settings-presentation.cpp:316
 msgid "Global default"
 msgstr "全局默认"
 
-#: shared/src/settings-widget/settings-presentation.cpp:303
+#: shared/src/settings-widget/settings-presentation.cpp:317
 msgid "Built-in default"
 msgstr "内置默认值"
 
-#: shared/src/settings-widget/settings-presentation.cpp:307
+#: shared/src/settings-widget/settings-presentation.cpp:321
 #, c-format
 msgid "%s (global default)"
 msgstr "%s （全局默认）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:308
+#: shared/src/settings-widget/settings-presentation.cpp:322
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s （内置默认值）"
 
-#: shared/src/settings-widget/settings-presentation.cpp:319
+#: shared/src/settings-widget/settings-presentation.cpp:333
 msgid "Enter a whole number"
 msgstr "输入整数"
 
-#: shared/src/settings-widget/settings-presentation.cpp:322
+#: shared/src/settings-widget/settings-presentation.cpp:336
 msgid "Enter a number"
 msgstr "输入数字"
 
-#: shared/src/settings-widget/settings-presentation.cpp:333
+#: shared/src/settings-widget/settings-presentation.cpp:347
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "值必须介于 %s 和 %s 之间"
 
-#: shared/src/settings-widget/settings-presentation.cpp:342
+#: shared/src/settings-widget/settings-presentation.cpp:356
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "必须包括 Ctrl、Shift、Alt 或 Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:345
+#: shared/src/settings-widget/settings-presentation.cpp:359
 msgid "Contains an empty token"
 msgstr "包含空标记"
 
-#: shared/src/settings-widget/settings-presentation.cpp:354
+#: shared/src/settings-widget/settings-presentation.cpp:368
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "包含未知修饰符：%s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:367
+#: shared/src/settings-widget/settings-presentation.cpp:381
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "包含重复修饰符： %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:375
+#: shared/src/settings-widget/settings-presentation.cpp:389
 msgid "Does not contain a key"
 msgstr "不包含键"
 
-#: shared/src/settings-widget/settings-presentation.cpp:382
+#: shared/src/settings-widget/settings-presentation.cpp:396
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "包含未知密钥：%s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:390
+#: shared/src/settings-widget/settings-presentation.cpp:404
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "放大和缩小必须使用不同的键绑定"
 
-#: shared/src/settings-widget/settings-presentation.cpp:393
+#: shared/src/settings-widget/settings-presentation.cpp:407
 msgid "Must not be empty"
 msgstr "不能为空"
 
-#: shared/src/settings-widget/settings-presentation.cpp:396
+#: shared/src/settings-widget/settings-presentation.cpp:410
 msgid "The character encoding is not supported"
 msgstr "不支持字符编码"
 
-#: shared/src/settings-widget/settings-presentation.cpp:399
+#: shared/src/settings-widget/settings-presentation.cpp:413
 msgid "Contains a NUL byte"
 msgstr "包含 NUL 字节"
 
-#: shared/src/settings-widget/settings-presentation.cpp:404
+#: shared/src/settings-widget/settings-presentation.cpp:418
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
 msgstr "输入 default，或选择使用绝对路径的现有 .oga、.ogg 或 .wav 文件"
 
-#: shared/src/settings-widget/settings-presentation.cpp:407
+#: shared/src/settings-widget/settings-presentation.cpp:421
 msgid "Contains an unmatched closing brace"
 msgstr "包含不匹配的右大括号"
 
-#: shared/src/settings-widget/settings-presentation.cpp:410
+#: shared/src/settings-widget/settings-presentation.cpp:424
 msgid "Contains an unmatched opening brace"
 msgstr "包含不匹配的左大括号"
 
-#: shared/src/settings-widget/settings-presentation.cpp:413
+#: shared/src/settings-widget/settings-presentation.cpp:427
 msgid "Contains an unknown placeholder"
 msgstr "包含未知占位符"
 
-#: shared/src/settings-widget/settings-presentation.cpp:416
+#: shared/src/settings-widget/settings-presentation.cpp:430
 msgid "Must be relative to the log base directory"
 msgstr "必须相对于日志基目录"
 
-#: shared/src/settings-widget/settings-presentation.cpp:419
+#: shared/src/settings-widget/settings-presentation.cpp:433
 msgid "Must not contain parent directory traversal"
 msgstr "不得包含父目录遍历"
 
-#: shared/src/settings-widget/settings-presentation.cpp:422
+#: shared/src/settings-widget/settings-presentation.cpp:436
 msgid "Must name a log file"
 msgstr "必须命名日志文件"
 
-#: shared/src/settings-widget/settings-presentation.cpp:424
+#: shared/src/settings-widget/settings-presentation.cpp:438
 msgid "Invalid value"
 msgstr "无效值"
 
@@ -724,7 +752,7 @@ msgstr ""
 "一个或多个已配置的全局快捷方式无法注册并且无法工作。检查您的桌面环境是否支持"
 "全局快捷方式。"
 
-#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:352
+#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:375
 #: elder-terms-vte/src/main-window.cpp:1477
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
 msgid "OK"
@@ -908,65 +936,70 @@ msgstr "新"
 msgid "Launch"
 msgstr "启动"
 
-#: elder-terms/src/connection-repository.cpp:60
+#: elder-terms/src/connection-repository.cpp:61
 #, c-format
 msgid "Warning: failed to create temporary file %s: %s"
 msgstr "警告：无法创建临时文件 %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:67
+#: elder-terms/src/connection-repository.cpp:68
 #, c-format
 msgid "Warning: failed to close temporary file %s: %s"
 msgstr "警告：无法关闭临时文件 %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:124
+#: elder-terms/src/connection-repository.cpp:96
+#, c-format
+msgid "Warning: failed to inspect connection directory %s: %s"
+msgstr "警告：无法检查连接目录 %s：%s"
+
+#: elder-terms/src/connection-repository.cpp:150
 msgid "Connection name must not be empty"
 msgstr "连接名称不能为空"
 
-#: elder-terms/src/connection-repository.cpp:128
+#: elder-terms/src/connection-repository.cpp:154
 msgid "Connection name must not be a relative path"
 msgstr "连接名称不能是相对路径"
 
-#: elder-terms/src/connection-repository.cpp:133
+#: elder-terms/src/connection-repository.cpp:159
 msgid "Connection name must not contain a path separator"
 msgstr "连接名称不得包含路径分隔符"
 
-#: elder-terms/src/connection-repository.cpp:145
+#: elder-terms/src/connection-repository.cpp:171
 msgid "A connection with this name already exists"
 msgstr "具有此名称的连接已存在"
 
-#: elder-terms/src/connection-repository.cpp:171
+#: elder-terms/src/connection-repository.cpp:197
 #, c-format
 msgid "Warning: failed to create connection directory %s: %s"
 msgstr "警告：无法创建连接目录 %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:181
-#: elder-terms/src/connection-repository.cpp:267
+#: elder-terms/src/connection-repository.cpp:207
+#: elder-terms/src/connection-repository.cpp:293
 #, c-format
 msgid "Warning: %s"
 msgstr "警告：%s"
 
-#: elder-terms/src/connection-repository.cpp:207
+#: elder-terms/src/connection-repository.cpp:233
 #, c-format
 msgid "Warning: failed to replace connection profile %s: %s"
 msgstr "警告：无法替换连接配置文件 %s： %s"
 
-#: elder-terms/src/connection-repository.cpp:227
+#: elder-terms/src/connection-repository.cpp:253
 #, c-format
 msgid "Warning: failed to prepare connection rename %s: %s"
 msgstr "警告：无法准备连接重命名 %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:238
-#: elder-terms/src/connection-repository.cpp:289
+#: elder-terms/src/connection-repository.cpp:264
+#: elder-terms/src/connection-repository.cpp:315
 #, c-format
 msgid "Warning: failed to rename connection profile %s: %s"
 msgstr "警告：无法重命名连接配置文件 %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:244
+#: elder-terms/src/connection-repository.cpp:270
 #, c-format
 msgid "Warning: failed to restore connection profile %s: %s"
 msgstr "警告：无法恢复连接配置文件 %s：%s"
 
-#: elder-terms/src/connection-repository.cpp:309
+#: elder-terms/src/connection-repository.cpp:335
 #, c-format
 msgid "Warning: failed to delete connection profile %s: %s"
 msgstr "警告：删除连接配置文件 %s 失败：%s"
@@ -1041,7 +1074,7 @@ msgstr "SSH 身份验证"
 msgid "User name for fixture.example:"
 msgstr "fixture.example 的用户名："
 
-#: elder-terms-vte/src/main.cpp:347 elder-terms-vte/src/main-window.ui:297
+#: elder-terms-vte/src/main.cpp:347 elder-terms-vte/src/main-window.ui:303
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:249
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:384
 msgid "Password:"

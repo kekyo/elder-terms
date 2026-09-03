@@ -195,6 +195,25 @@ Clearing a text field or selecting the default item in a selection field
 removes the explicit value, causing the setting to inherit the global or
 built-in default again.
 
+## Finding a Host with IP Scan
+
+The TELNET, SSH/SFTP, and FTP settings place an "IP scan" button beside the
+address field. Opening it immediately scans the IPv4 ranges of all configured
+network interfaces for the standard FTP (21), SSH/SFTP (22), and TELNET (23)
+TCP ports. For example, a `/24` interface scans every address whose final octet
+is 0 through 255.
+
+Discovered hosts appear as the scan proceeds, together with their reverse DNS
+name when available and a comma-separated list of open ports. The progress bar
+shows how much of the combined range has been checked. Double-click a row to
+stop the scan, close the dialog, and copy that numeric IP address into the
+setting. Click "Cancel" to stop and close the scan without changing the
+address.
+
+Only locally configured IPv4 ranges are scanned. Interfaces without an IPv4
+address are skipped, and large ranges or slow reverse DNS responses may take
+some time to finish.
+
 ## Using SSH and SFTP
 
 When an SSH terminal or a dedicated SFTP window starts, a user-name panel is
