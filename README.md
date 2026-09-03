@@ -201,7 +201,9 @@ The TELNET, SSH/SFTP, and FTP settings place an "IP scan" button beside the
 address field. Opening it immediately scans the IPv4 ranges of all configured
 network interfaces for the standard FTP (21), SSH/SFTP (22), and TELNET (23)
 TCP ports. For example, a `/24` interface scans every address whose final octet
-is 0 through 255.
+is 0 through 255. A range wider than `/24` is limited to its first 256
+addresses by treating the additional upper host bits as zero. For example, an
+address on `172.20.0.0/16` scans `172.20.0.0` through `172.20.0.255`.
 
 Discovered hosts appear as the scan proceeds, together with their reverse DNS
 name when available and a comma-separated list of open ports. The progress bar
@@ -211,8 +213,9 @@ setting. Click "Cancel" to stop and close the scan without changing the
 address.
 
 Only locally configured IPv4 ranges are scanned. Interfaces without an IPv4
-address are skipped, and large ranges or slow reverse DNS responses may take
-some time to finish.
+address are skipped. Loopback interfaces scan only their assigned addresses,
+rather than the whole loopback range. Slow reverse DNS responses may still
+take some time to finish.
 
 ## Using SSH and SFTP
 
