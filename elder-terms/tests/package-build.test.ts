@@ -81,7 +81,8 @@ const createPackageStage = (
   stageRoot: string,
   debianArchitecture: string,
   omittedPath: string | undefined,
-  includeOpenSshClient: boolean
+  includeOpenSshClient: boolean,
+  includeXdgUtils: boolean
 ): void => {
   const directories = [
     'DEBIAN',
@@ -107,7 +108,7 @@ Section: x11
 Priority: optional
 Architecture: ${debianArchitecture}
 Maintainer: elder-terms packager <packager@localhost>
-Depends: libc6, dbus-user-session, hicolor-icon-theme${includeOpenSshClient ? ', openssh-client' : ''}
+Depends: libc6, dbus-user-session, hicolor-icon-theme${includeOpenSshClient ? ', openssh-client' : ''}${includeXdgUtils ? ', xdg-utils' : ''}
 Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP connections
 `
   );
@@ -297,6 +298,9 @@ exit 0
     expect(invocation).toContain('-Dapplication_version=1.2.3-test');
     expect(readFileSync(pkgConfigInvocationPath, 'utf8').split('\n')).toContain(
       '--exists libcanberra'
+    );
+    expect(readFileSync(pkgConfigInvocationPath, 'utf8').split('\n')).toContain(
+      '--exists libpcre2-8'
     );
   });
 
@@ -492,6 +496,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'libcanberra-dev',
       'libcanberra-pulse',
       'libgtk-3-dev',
+      'libpcre2-dev',
       'libssh-dev',
       'libudev-dev',
       'liburing-dev',
@@ -562,23 +567,38 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       temporaryRoot,
       'elder-terms-missing-openssh-client.deb'
     );
-    createPackageStage(goodStage, debianArchitecture, undefined, true);
+    const missingXdgUtilsStage = join(temporaryRoot, 'missing-xdg-utils-stage');
+    const missingXdgUtilsPackage = join(
+      temporaryRoot,
+      'elder-terms-missing-xdg-utils.deb'
+    );
+    createPackageStage(goodStage, debianArchitecture, undefined, true, true);
     createPackageStage(
       badStage,
       debianArchitecture,
       'usr/share/applications/net.kekyo.elder-terms-vte.desktop',
+      true,
       true
     );
     createPackageStage(
       missingFileTransferStage,
       debianArchitecture,
       'usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer',
+      true,
       true
     );
     createPackageStage(
       missingOpenSshClientStage,
       debianArchitecture,
       undefined,
+      false,
+      true
+    );
+    createPackageStage(
+      missingXdgUtilsStage,
+      debianArchitecture,
+      undefined,
+      true,
       false
     );
     for (const [stage, output] of [
@@ -586,6 +606,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       [badStage, badPackage],
       [missingFileTransferStage, missingFileTransferPackage],
       [missingOpenSshClientStage, missingOpenSshClientPackage],
+      [missingXdgUtilsStage, missingXdgUtilsPackage],
     ]) {
       const built = run(dpkgDeb, [
         '--root-owner-group',
@@ -626,6 +647,13 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     );
     expect(missingOpenSshClientValidation.status).not.toBe(0);
     expect(missingOpenSshClientValidation.stderr).toContain('openssh-client');
+
+    const missingXdgUtilsValidation = runSourced(
+      'VERSION=1.2.3\nvalidate_deb_package "$2" "$3"',
+      [missingXdgUtilsPackage, canonicalArchitecture!]
+    );
+    expect(missingXdgUtilsValidation.status).not.toBe(0);
+    expect(missingXdgUtilsValidation.stderr).toContain('xdg-utils');
   });
 
   it('installs package data and resolvable public commands through Meson', () => {
