@@ -81,8 +81,9 @@ FTP uses the same two-pane file-transfer window as SFTP.
 - Starts the launcher automatically and can keep it running in the system tray.
 - Monitors received text with regular expressions and defines rules that
   automatically send text or run a specified command.
-- Opens OSC 8 hyperlinks by holding `Ctrl` and left-clicking, passing paths and
-  line numbers extracted by regular expressions to any command.
+- Recognizes OSC 8 targets or visible terminal text as links. Hold `Ctrl` and
+  left-click to open HTTP(S) URLs or run a command configured with regular
+  expression captures.
 - Records logs to files and organizes them into directories by connection and
   date and time.
 - Supports multilingual display (English, Arabic, Spanish, French, Hindi,
@@ -772,68 +773,83 @@ Commands are launched directly without a shell, so shell syntax such as pipes
 and redirections is not interpreted. Specify each required value as a separate
 item in `arguments`.
 
-## Configuring OSC 8 Hyperlinks
+## Configuring Terminal Link Actions
 
-Hyperlinks displayed by a program on the remote host using OSC 8 escape
-sequences can be opened with an external command by holding `Ctrl` and
-left-clicking. elder-terms matches the complete raw OSC 8 target against
-regular expressions and runs only the first rule that matches the entire
-target.
+Hold `Ctrl` and left-click a recognized link to run its configured external
+command. A rule can inspect either the target of an OSC 8 escape sequence or a
+matching substring in visible terminal text. Rules are evaluated in their
+displayed order, and only the first matching rule is run.
 
-When `global.ini` has no hyperlink configuration, built-in rules open the
-following formats:
+Open "Application settings" from the launcher's application menu and select
+the "Links" page to enable or disable link actions, add and remove rules,
+change their order, edit command arguments, and restore the built-in defaults.
+The settings apply to every connection.
 
-```text
-vscode://file/absolute/path:line
-vscode://file/absolute/path:line:column
-```
+When no explicit link configuration exists, the built-in rules recognize:
 
-These launch `code --reuse-window --goto /absolute/path:line` or
-`code --reuse-window --goto /absolute/path:line:column`, respectively. URI
-escapes in the path, such as `%20`, are decoded before the path is passed as a
-command argument.
+- HTTP and HTTPS URLs in OSC 8 targets and visible terminal text, opened with
+  `xdg-open` in the desktop's default application.
+- OSC 8 targets in `vscode://file/absolute/path:line` and
+  `vscode://file/absolute/path:line:column` form, opened with `code
+  --reuse-window --goto`.
 
-To change the command and arguments, add rules to the global configuration
-file at `~/.config/elder-terms/global.ini`. For example, the following rule
-extracts a path and line number from a custom OSC target:
+URI escapes in captures, such as `%20`, can be decoded before a value is
+passed to the command. "Restore defaults" removes the explicit link settings,
+so later built-in default changes also take effect.
+
+Each rule selects one recognition source:
+
+- "OSC 8 target" applies the regular expression to the complete raw target.
+- "Visible terminal text" finds a matching substring under the pointer. The
+  expression must not match an empty string.
+
+Regular expressions use [PCRE2 pattern
+syntax](https://www.pcre.org/current/doc/html/pcre2pattern.html). The command
+is a fixed executable name or path. It is launched directly without a shell,
+so pipes, redirections, and other shell syntax are not interpreted. Capture
+templates are expanded only in arguments and in the optional validation path.
+
+Path validation can be set to "Existing local file or directory". In that
+mode, the expanded path must be absolute and must name an existing regular
+file or directory on the computer running elder-terms; otherwise the command
+is not run. Relative paths are rejected because terminal display text does not
+provide a reliable local working directory, particularly for remote sessions.
+
+The same settings can be edited in `~/.config/elder-terms/global.ini`. This
+example recognizes an absolute local source path followed by a line number:
 
 ```ini
 [hyperlink]
 enabled=true
 
-[hyperlink.custom-editor]
-regex=^editor://open(?<path>/[^:]+):(?<line>[1-9][0-9]*)$
-command=my-editor
-arguments=--line;${line};${path|uri-decode};
+[hyperlink.local-source]
+source=terminal-text
+regex=(?<path>/[^\s:]+):(?<line>[1-9][0-9]*)
+command=code
+arguments=--reuse-window;--goto;${path}:${line};
+path_validation=existing-local-path
+path=${path}
 ```
 
-`[hyperlink.<rule-id>]` sections are evaluated in file order. Rule IDs may
-contain letters, digits, `-`, and `_`. `regex` must match the entire OSC 8
-target. `command` is a fixed executable name or path and does not expand
-captures.
+`source` is `osc8` or `terminal-text` and defaults to `osc8` when omitted.
+`path_validation` is `none` or `existing-local-path`; `path` is required for
+the latter. `[hyperlink.<rule-id>]` sections are evaluated in file order. Rule
+IDs may contain letters, digits, `-`, and `_`.
 
 `arguments` is semicolon-delimited, and each item becomes a separate command
-argument. Within each argument, `${0}` refers to the entire match, `${1}` and
-`${2}` refer to numbered captures, and `${name}` refers to a named capture.
-Adding `|uri-decode`, as in `${path|uri-decode}`, decodes URI escapes in that
-capture. Write a literal `$` as `$$`.
+argument. `${0}` refers to the entire match, `${1}` and `${2}` to numbered
+captures, and `${name}` to a named capture. `${path|uri-decode}` decodes URI
+escapes in that capture. Write a literal `$` as `$$`.
 
-Defining any explicit hyperlink configuration replaces the built-in VS Code
-rules with the custom rules. To disable all hyperlink actions, use:
+Defining any explicit link configuration manually replaces all built-in
+rules. To disable all link actions, set `[hyperlink]` `enabled=false`. This
+configuration is global only; link sections in connection settings or
+temporary launch profiles are ignored.
 
-```ini
-[hyperlink]
-enabled=false
-```
-
-This configuration is global only. `[hyperlink]` and `[hyperlink.*]` sections
-in connection settings or temporary launch profiles are ignored.
-
-Commands are launched without a shell, with `command` and each `arguments`
-item passed unchanged as a separate `argv` element. Because OSC 8 targets may
-be supplied by the remote host, restrict each regular expression to only the
-formats you intend to accept. Invalid rules, undefined captures, and invalid
-URI escapes are not executed.
+OSC 8 targets and visible text may be supplied by a remote host. Restrict each
+regular expression to the formats you intend to accept. Invalid rules,
+undefined captures, invalid URI escapes, and failed path validation do not run
+the command.
 
 ## INI File Locations
 
@@ -860,7 +876,8 @@ gettext, and the development packages for the libraries used by elder-terms:
 sudo apt update
 sudo apt install build-essential git meson ninja-build pkg-config gettext \
   libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev \
-  libxkbcommon-dev liburing-dev libudev-dev libssh-dev libvte-2.91-dev
+  libxkbcommon-dev liburing-dev libudev-dev libpcre2-dev libssh-dev \
+  libvte-2.91-dev xdg-utils
 ```
 
 Node.js 20 or later is also required. The Node.js package provided by your
