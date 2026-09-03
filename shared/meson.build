@@ -51,6 +51,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/key-binding.cpp',
   'src/key-binding-input-widget.cpp',
   'src/localization.cpp',
+  'src/ip-scanner.cpp',
   'src/serial-device.cpp',
   'src/serial-device-event-monitor.cpp',
   'src/settings/application-settings.cpp',
@@ -159,6 +160,20 @@ elder_terms_serial_device_test = executable(
 )
 
 test('elder-terms-serial-device-test', elder_terms_serial_device_test)
+
+elder_terms_ip_scanner_test = executable(
+  'elder-terms-ip-scanner-test',
+  [
+    'src/ip-scanner.cpp',
+    'tests/ip-scanner-test.cpp',
+  ],
+  dependencies: [
+    cardio_dep,
+    elder_terms_shared_gio_dep,
+  ],
+)
+
+test('elder-terms-ip-scanner-test', elder_terms_ip_scanner_test)
 
 executable(
   'elder-terms-settings-widget-fixture',
