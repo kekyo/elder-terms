@@ -714,7 +714,7 @@ static void open_application_dialog(ApplicationState *state,
                                GTK_WINDOW(state->main_window->window));
   gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
   gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
-  gtk_window_set_default_size(GTK_WINDOW(dialog), 600, 320);
+  gtk_window_set_default_size(GTK_WINDOW(dialog), 900, 620);
 
   GtkWidget *notebook = gtk_notebook_new();
   gestament_gtk_assign_accessible_id(notebook,

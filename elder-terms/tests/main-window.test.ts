@@ -462,6 +462,105 @@ describe('elder-terms main window', () => {
     );
   });
 
+  it('edits, disables, saves, and resets terminal link rules', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await prepareProfiles(connections);
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[terminal]\nwidth=91\n',
+          'utf8'
+        );
+      },
+      async ({ app, configHome }) => {
+        const globalConfigPath = join(configHome, 'elder-terms', 'global.ini');
+        await openApplicationDialogPage(app, 'application_settings_menu_item');
+        await selectSettingsTab(app, 'application_settings', 'Links');
+
+        const save = expectElementKind(
+          await app.getById('application_dialog_save_button'),
+          'button'
+        );
+        await expectElementKind(
+          await app.getById('application_settings_link_add_button'),
+          'button'
+        ).click();
+        await expectInsensitive(save);
+
+        const id = expectElementKind(
+          await app.getById('application_settings_link_id_entry'),
+          'entry'
+        );
+        const source = expectElementKind(
+          await app.getById('application_settings_link_source_combo'),
+          'comboBox'
+        );
+        const regex = expectElementKind(
+          await app.getById('application_settings_link_regex_entry'),
+          'entry'
+        );
+        const command = expectElementKind(
+          await app.getById('application_settings_link_command_entry'),
+          'entry'
+        );
+        expect(await id.text()).toBe('rule1');
+        await id.setText('local-file');
+        await source.selectChildAt(1);
+        await regex.setText('^file:(?<path>/[^ ]+)$');
+        await command.setText('xdg-open');
+        await expectElementKind(
+          await app.getById('application_settings_link_argument_add_button'),
+          'button'
+        ).click();
+        await expectElementKind(
+          await app.getById('application_settings_link_argument_0_entry'),
+          'entry'
+        ).setText('${path}');
+        await expectElementKind(
+          await app.getById('application_settings_link_validation_combo'),
+          'comboBox'
+        ).selectChildAt(1);
+        await expectElementKind(
+          await app.getById('application_settings_link_path_entry'),
+          'entry'
+        ).setText('${path}');
+        await expectElementKind(
+          await app.getById('application_settings_link_enabled_combo'),
+          'comboBox'
+        ).selectChildAt(1);
+        await expectSensitive(save);
+        await save.click();
+        await waitForWindowCount(app, 1);
+
+        const configured = await readFile(globalConfigPath, 'utf8');
+        expect(configured).toContain('[hyperlink]\nenabled=false');
+        expect(configured).toContain('[hyperlink.local-file]');
+        expect(configured).toContain('source=terminal-text');
+        expect(configured).toContain('command=xdg-open');
+        expect(configured).toContain('path_validation=existing-local-path');
+        expect(configured).toContain('path=${path}');
+        expect(configured).toContain('width=91');
+
+        await openApplicationDialogPage(app, 'application_settings_menu_item');
+        await selectSettingsTab(app, 'application_settings', 'Links');
+        await expectElementKind(
+          await app.getById('application_settings_link_reset_button'),
+          'button'
+        ).click();
+        await expectElementKind(
+          await app.getById('application_dialog_save_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+
+        const reset = await readFile(globalConfigPath, 'utf8');
+        expect(reset).not.toContain('[hyperlink');
+        expect(reset).toContain('width=91');
+      }
+    );
+  });
+
   it('opens the About page directly from a forwarded command line', async (context) => {
     await runLauncherGtkTest(
       context,

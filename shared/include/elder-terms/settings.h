@@ -270,8 +270,9 @@ save_global_settings(const SettingsStore &store,
  * @param global_config_path Target global.ini path.
  * @returns Save status and warnings.
  *
- * @remarks Display language, startup mode, and the application shortcut are
- * updated while every unrelated key already present in the file is retained.
+ * @remarks Display language, startup mode, the application shortcut, and
+ * changed terminal link actions are updated while every unrelated key already
+ * present in the file is retained.
  */
 ELDER_TERMS_API SettingsSaveResult save_application_settings(
     const SettingsStore &store,

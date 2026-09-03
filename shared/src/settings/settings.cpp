@@ -831,6 +831,32 @@ static void update_application_key_file_value(
                         value.c_str());
 }
 
+static void update_application_hyperlink_settings(
+    GKeyFile *key_file, const SettingsStore &store) {
+  if (!store.hyperlink_settings_dirty) {
+    return;
+  }
+
+  gsize group_count = 0;
+  gchar **groups = g_key_file_get_groups(key_file, &group_count);
+  for (gsize index = 0; index < group_count; ++index) {
+    const std::string group = groups[index];
+    if (group == "hyperlink" || group.starts_with("hyperlink.")) {
+      (void)g_key_file_remove_group(key_file, group.c_str(), nullptr);
+    }
+  }
+  g_strfreev(groups);
+
+  if (!store.hyperlink_settings_configured) {
+    return;
+  }
+  g_key_file_set_boolean(key_file, "hyperlink", "enabled",
+                         store.hyperlink_actions_enabled ? TRUE : FALSE);
+  for (const HyperlinkActionRule &rule : store.hyperlink_rules) {
+    set_key_file_hyperlink_rule(key_file, rule);
+  }
+}
+
 SettingsSaveResult save_application_settings(
     const SettingsStore &store,
     const std::filesystem::path &global_config_path) {
@@ -860,6 +886,7 @@ SettingsSaveResult save_application_settings(
       key_file, store, application_startup_mode_setting_key());
   update_application_key_file_value(
       key_file, store, application_open_hotkey_setting_key());
+  update_application_hyperlink_settings(key_file, store);
   return write_global_settings_key_file(key_file, global_config_path);
 }
 

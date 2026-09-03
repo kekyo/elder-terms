@@ -143,6 +143,14 @@ set_hyperlink_actions(SettingsStore *store, bool enabled,
                       std::vector<HyperlinkActionRule> rules);
 
 /**
+ * Restores the built-in terminal link actions and removes their explicit
+ * global configuration on the next save.
+ *
+ * @param store Target settings store.
+ */
+ELDER_TERMS_API void reset_hyperlink_actions(SettingsStore *store);
+
+/**
  * Loads all registered keys from a parsed GLib key file.
  *
  * @param store Target settings store.

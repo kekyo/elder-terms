@@ -3845,6 +3845,8 @@ static void test_global_hyperlink_actions_override_built_in_defaults() {
       temporary_config_path("global-hyperlinks");
   const std::filesystem::path saved_path =
       temporary_config_path("saved-global-hyperlinks");
+  const std::filesystem::path application_saved_path =
+      temporary_config_path("application-saved-hyperlinks");
 
   write_config(connection_path,
                "[hyperlink]\n"
@@ -3927,9 +3929,41 @@ static void test_global_hyperlink_actions_override_built_in_defaults() {
   expect_true(elder_terms::settings_store_is_dirty(editable.store),
               "replacing hyperlink actions should mark the store dirty");
 
+  write_config(application_saved_path,
+               "[terminal]\n"
+               "width=91\n"
+               "\n"
+               "[hyperlink.old]\n"
+               "regex=^old$\n"
+               "command=old-tool\n");
+  const SettingsSaveResult application_saved =
+      elder_terms::save_application_settings(editable.store,
+                                             application_saved_path);
+  const std::string custom_content = read_config(application_saved_path);
+  expect_true(application_saved.saved &&
+                  custom_content.find("[hyperlink.replacement]") !=
+                      std::string::npos &&
+                  custom_content.find("[hyperlink.old]") ==
+                      std::string::npos &&
+                  custom_content.find("width=91") != std::string::npos,
+              "application settings should replace changed link rules and "
+              "preserve unrelated global defaults");
+
+  elder_terms::reset_hyperlink_actions(&editable.store);
+  const SettingsSaveResult reset_saved =
+      elder_terms::save_application_settings(editable.store,
+                                             application_saved_path);
+  const std::string reset_content = read_config(application_saved_path);
+  expect_true(reset_saved.saved &&
+                  reset_content.find("[hyperlink") == std::string::npos &&
+                  reset_content.find("width=91") != std::string::npos,
+              "restoring built-in link rules should remove explicit link "
+              "groups and preserve unrelated global defaults");
+
   remove_config(connection_path);
   remove_config(global_path);
   remove_config(saved_path);
+  remove_config(application_saved_path);
 }
 
 static void test_hyperlink_defaults_disable_and_invalid_rules() {

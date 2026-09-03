@@ -6,6 +6,10 @@
 #include <elder-terms/key-binding-input-widget.h>
 #include <elder-terms/settings/application-settings.h>
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
+#include "hyperlink-settings-editor.h"
 #include "settings-presentation.h"
 
 namespace elder_terms {
@@ -38,6 +42,7 @@ struct ApplicationSettingsWidgetState {
   GtkWidget *startup_mode_combo = nullptr;
   KeyBindingInputWidgetState *open_application_input = nullptr;
   GtkWidget *open_application_reset_button = nullptr;
+  HyperlinkSettingsEditorState *hyperlink_editor = nullptr;
 };
 
 static void assign_accessible_id(GtkWidget *widget, const char *id) {
@@ -253,22 +258,25 @@ create_application_settings_widget(ApplicationSettingsWidgetOptions options) {
   state->id_prefix = std::move(options.id_prefix);
   state->changed = std::move(options.changed);
 
-  state->root = gtk_grid_new();
-  gtk_grid_set_row_spacing(GTK_GRID(state->root), 12);
-  gtk_grid_set_column_spacing(GTK_GRID(state->root), 16);
-  gtk_widget_set_margin_top(state->root, 20);
-  gtk_widget_set_margin_bottom(state->root, 20);
-  gtk_widget_set_margin_start(state->root, 20);
-  gtk_widget_set_margin_end(state->root, 20);
+  state->root = gtk_notebook_new();
   assign_accessible_id(state->root,
-                       widget_id(state, "root").c_str());
+                       widget_id(state, "notebook").c_str());
+  GtkWidget *general_page = gtk_grid_new();
+  gtk_grid_set_row_spacing(GTK_GRID(general_page), 12);
+  gtk_grid_set_column_spacing(GTK_GRID(general_page), 16);
+  gtk_widget_set_margin_top(general_page, 20);
+  gtk_widget_set_margin_bottom(general_page, 20);
+  gtk_widget_set_margin_start(general_page, 20);
+  gtk_widget_set_margin_end(general_page, 20);
+  assign_accessible_id(general_page,
+                       widget_id(state, "general_page").c_str());
 
   state->ui_language_combo = gtk_combo_box_text_new();
   assign_accessible_id(state->ui_language_combo,
                        widget_id(state, "ui_language_combo").c_str());
   g_signal_connect(state->ui_language_combo, "changed",
                    G_CALLBACK(on_ui_language_changed), state);
-  attach_row(state->root, 0, application_ui_language_setting_key(),
+  attach_row(general_page, 0, application_ui_language_setting_key(),
              state->ui_language_combo);
 
   state->startup_mode_combo = gtk_combo_box_text_new();
@@ -276,7 +284,7 @@ create_application_settings_widget(ApplicationSettingsWidgetOptions options) {
                        widget_id(state, "startup_mode_combo").c_str());
   g_signal_connect(state->startup_mode_combo, "changed",
                    G_CALLBACK(on_startup_mode_changed), state);
-  attach_row(state->root, 1, application_startup_mode_setting_key(),
+  attach_row(general_page, 1, application_startup_mode_setting_key(),
              state->startup_mode_combo);
 
   state->open_application_input = create_key_binding_input_widget({
@@ -298,8 +306,20 @@ create_application_settings_widget(ApplicationSettingsWidgetOptions options) {
                    G_CALLBACK(on_hotkey_reset_clicked), state);
   gtk_box_pack_start(GTK_BOX(hotkey_row),
                      state->open_application_reset_button, FALSE, FALSE, 0);
-  attach_row(state->root, 2, application_open_hotkey_setting_key(),
+  attach_row(general_page, 2, application_open_hotkey_setting_key(),
              hotkey_row);
+
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->root), general_page,
+                           gtk_label_new(_("General")));
+  state->hyperlink_editor = create_hyperlink_settings_editor({
+      .store = &state->draft_store,
+      .id_prefix = state->id_prefix,
+      .changed = [state]() { notify_changed(state); },
+  });
+  gtk_notebook_append_page(
+      GTK_NOTEBOOK(state->root),
+      hyperlink_settings_editor_root(state->hyperlink_editor),
+      gtk_label_new(_("Links")));
 
   sync_widgets(state);
   return state;
@@ -320,7 +340,8 @@ bool application_settings_widget_is_dirty(
 bool application_settings_widget_is_valid(
     const ApplicationSettingsWidgetState *state) {
   return state != nullptr && key_binding_input_widget_is_valid(
-                                 state->open_application_input);
+                                 state->open_application_input) &&
+         hyperlink_settings_editor_is_valid(state->hyperlink_editor);
 }
 
 GtkWidget *application_settings_widget_root(
@@ -334,6 +355,7 @@ void destroy_application_settings_widget(
     return;
   }
   destroy_key_binding_input_widget(state->open_application_input);
+  destroy_hyperlink_settings_editor(state->hyperlink_editor);
   if (state->root != nullptr && gtk_widget_get_parent(state->root) == nullptr) {
     gtk_widget_destroy(state->root);
   }

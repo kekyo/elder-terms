@@ -75,6 +75,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/settings/transfer-settings.cpp',
   'src/settings-widget/settings-presentation.cpp',
   'src/settings-widget/application-settings-widget.cpp',
+  'src/settings-widget/hyperlink-settings-editor.cpp',
   'src/settings-widget/settings-widget.cpp',
 ]
 

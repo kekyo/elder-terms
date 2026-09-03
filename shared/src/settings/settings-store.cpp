@@ -131,6 +131,20 @@ void set_hyperlink_actions(SettingsStore *store, bool enabled,
   store->hyperlink_settings_dirty = true;
 }
 
+void reset_hyperlink_actions(SettingsStore *store) {
+  const std::vector<HyperlinkActionRule> defaults =
+      default_hyperlink_action_rules();
+  if (store->hyperlink_actions_enabled &&
+      store->hyperlink_rules == defaults &&
+      !store->hyperlink_settings_configured) {
+    return;
+  }
+  store->hyperlink_actions_enabled = true;
+  store->hyperlink_rules = defaults;
+  store->hyperlink_settings_configured = false;
+  store->hyperlink_settings_dirty = true;
+}
+
 void load_settings_store_from_key_file(SettingsStore *store,
                                        GKeyFile *key_file,
                                        std::vector<std::string> *warnings) {
