@@ -21,5 +21,6 @@ int main(int argc, char **argv) {
   }
 
   std::cout << dgettext("elder-terms", "Settings") << '\n';
+  std::cout << dgettext("elder-terms", "Links") << '\n';
   return localization.requested_language_applied ? 0 : 1;
 }

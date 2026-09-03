@@ -16,21 +16,21 @@ const localizationFixturePath = fileURLToPath(
 );
 
 const translations = [
-  { language: 'ar', settings: 'الإعدادات' },
-  { language: 'es', settings: 'Configuración' },
-  { language: 'fr', settings: 'Paramètres' },
-  { language: 'hi', settings: 'सेटिंग्स' },
-  { language: 'ja', settings: '設定' },
-  { language: 'ko', settings: '설정' },
-  { language: 'pt', settings: 'Configurações' },
-  { language: 'ru', settings: 'Настройки' },
-  { language: 'zh', settings: '设置' },
+  { language: 'ar', settings: 'الإعدادات', links: 'الروابط' },
+  { language: 'es', settings: 'Configuración', links: 'Enlaces' },
+  { language: 'fr', settings: 'Paramètres', links: 'Liens' },
+  { language: 'hi', settings: 'सेटिंग्स', links: 'लिंक' },
+  { language: 'ja', settings: '設定', links: 'リンク' },
+  { language: 'ko', settings: '설정', links: '링크' },
+  { language: 'pt', settings: 'Configurações', links: 'Links' },
+  { language: 'ru', settings: 'Настройки', links: 'Ссылки' },
+  { language: 'zh', settings: '设置', links: '链接' },
 ] as const;
 
 describe('localization message catalogs', () => {
   it.each(translations)(
     'loads the $language catalog through the configured UI language',
-    async ({ language, settings }) => {
+    async ({ language, settings, links }) => {
       const directory = await mkdtemp(
         join(tmpdir(), 'elder-terms-localization-')
       );
@@ -53,7 +53,7 @@ describe('localization message catalogs', () => {
           }
         );
 
-        expect(stdout.trim()).toBe(settings);
+        expect(stdout.trim()).toBe(`${settings}\n${links}`);
       } finally {
         await rm(directory, { recursive: true, force: true });
       }

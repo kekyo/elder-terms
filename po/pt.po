@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-03 15:54+0900\n"
+"POT-Creation-Date: 2026-09-04 06:30+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Portuguese\n"
@@ -242,7 +242,7 @@ msgstr "Serial"
 
 #: shared/src/settings-widget/settings-presentation.cpp:108
 #: shared/src/settings-widget/settings-presentation.cpp:188
-#: elder-terms-vte/src/main-window.cpp:1469
+#: elder-terms-vte/src/main-window.cpp:1544
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:103
 msgid "SSH"
 msgstr "SSH"
@@ -417,6 +417,7 @@ msgid "UTF-8 text (after character conversion)"
 msgstr "UTF-8 texto (após conversão de caracteres)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:180
+#: shared/src/settings-widget/application-settings-widget.cpp:313
 msgid "General"
 msgstr "Geral"
 
@@ -460,7 +461,7 @@ msgstr "Salvar"
 #: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:942
 #: elder-terms-vte/src/main-window.ui:248
 #: elder-terms-vte/src/main-window.ui:359
-#: elder-terms-vte/src/main-window.cpp:1478
+#: elder-terms-vte/src/main-window.cpp:1553
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:113
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:379
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:733
@@ -495,10 +496,12 @@ msgid "Select Secondary Terminal Font"
 msgstr "Selecionar fonte secundária do terminal"
 
 #: shared/src/settings-widget/settings-presentation.cpp:218
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:751
 msgid "Enabled"
 msgstr "Habilitado"
 
 #: shared/src/settings-widget/settings-presentation.cpp:220
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:753
 msgid "Disabled"
 msgstr "Desativado"
 
@@ -539,6 +542,7 @@ msgid "Rule ID"
 msgstr "ID da regra"
 
 #: shared/src/settings-widget/settings-presentation.cpp:240
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:673
 msgid "Regular expression"
 msgstr "Expressão regular"
 
@@ -551,10 +555,12 @@ msgid "Text to send"
 msgstr "Texto para enviar"
 
 #: shared/src/settings-widget/settings-presentation.cpp:246
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:683
 msgid "Command"
 msgstr "Comando"
 
 #: shared/src/settings-widget/settings-presentation.cpp:248
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:699
 msgid "Arguments"
 msgstr "Argumentos"
 
@@ -567,10 +573,12 @@ msgid "Remove rule"
 msgstr "Remover regra"
 
 #: shared/src/settings-widget/settings-presentation.cpp:254
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:629
 msgid "Move up"
 msgstr "Subir"
 
 #: shared/src/settings-widget/settings-presentation.cpp:256
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:634
 msgid "Move down"
 msgstr "Mover para baixo"
 
@@ -583,10 +591,12 @@ msgid "Run command"
 msgstr "Execute o comando"
 
 #: shared/src/settings-widget/settings-presentation.cpp:262
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:691
 msgid "Add argument"
 msgstr "Adicionar argumento"
 
 #: shared/src/settings-widget/settings-presentation.cpp:264
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:267
 msgid "Remove argument"
 msgstr "Remover argumento"
 
@@ -750,6 +760,86 @@ msgstr "Deve nomear um arquivo de log"
 msgid "Invalid value"
 msgstr "Valor inválido"
 
+#: shared/src/settings-widget/application-settings-widget.cpp:322
+msgid "Links"
+msgstr "Links"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:175
+msgid "Identifier must be unique"
+msgstr "O identificador deve ser único"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:261
+msgid "Move argument up"
+msgstr "Mover argumento para cima"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:264
+msgid "Move argument down"
+msgstr "Mover argumento para baixo"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:603
+msgid "Rules"
+msgstr "Regras"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:621
+msgid "Add"
+msgstr "Adicionar"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:624
+msgid "Remove"
+msgstr "Remover"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:658
+msgid "Identifier"
+msgstr "Identificador"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:662
+msgid "OSC 8 target"
+msgstr "Destino OSC 8"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:664
+msgid "Visible terminal text"
+msgstr "Texto visível do terminal"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:667
+msgid "Recognition source"
+msgstr "Origem do reconhecimento"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:679
+msgid ""
+"The command is executed directly without a shell. Capture templates are "
+"expanded only in arguments."
+msgstr "O comando é executado diretamente sem um shell. Os modelos de captura são expandidos apenas nos argumentos."
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:703
+msgid "Do not validate"
+msgstr "Não validar"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:706
+msgid "Existing local file or directory"
+msgstr "Arquivo ou diretório local existente"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:709
+msgid "Path validation"
+msgstr "Validação de caminho"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:715
+msgid ""
+"Path validation requires an absolute expanded path. Relative paths are "
+"rejected."
+msgstr "A validação de caminho requer um caminho absoluto expandido. Caminhos relativos são rejeitados."
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:719
+msgid "Path template"
+msgstr "Modelo de caminho"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:747
+msgid "Link actions"
+msgstr "Ações de link"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:765
+msgid "Restore defaults"
+msgstr "Restaurar padrões"
+
 #: elder-terms/src/main.cpp:242
 msgid "Global shortcuts are unavailable"
 msgstr "Os atalhos globais não estão disponíveis"
@@ -764,7 +854,7 @@ msgstr ""
 "a atalhos globais."
 
 #: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:375
-#: elder-terms-vte/src/main-window.cpp:1477
+#: elder-terms-vte/src/main-window.cpp:1552
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
 msgid "OK"
 msgstr "OK"
@@ -1124,7 +1214,7 @@ msgstr "BREAK indisponível"
 msgid "Sending BREAK"
 msgstr "Enviando BREAK"
 
-#: elder-terms-vte/src/main.cpp:1218 elder-terms-vte/src/main.cpp:1776
+#: elder-terms-vte/src/main.cpp:1218 elder-terms-vte/src/main.cpp:1811
 msgid "Text send unavailable"
 msgstr "Envio de texto indisponível"
 
@@ -1181,12 +1271,12 @@ msgstr "XMODEM CRC (receber)"
 msgid "XMODEM (receive)"
 msgstr "XMODEM (receber)"
 
-#: elder-terms-vte/src/main.cpp:1756
+#: elder-terms-vte/src/main.cpp:1784 elder-terms-vte/src/main.cpp:1791
 msgid "Hyperlink command failed"
 msgstr "Comando de hiperlink falhou"
 
 #: elder-terms-vte/src/main-window.ui:153
-#: elder-terms-vte/src/main-window.cpp:1400
+#: elder-terms-vte/src/main-window.cpp:1475
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2403
 msgid "Disconnected"
 msgstr "Desconectado"
@@ -1195,28 +1285,28 @@ msgstr "Desconectado"
 msgid "Transferring..."
 msgstr "Transferindo..."
 
-#: elder-terms-vte/src/main-window.cpp:299
+#: elder-terms-vte/src/main-window.cpp:346
 msgid "Copy"
 msgstr "Copiar"
 
-#: elder-terms-vte/src/main-window.cpp:303
+#: elder-terms-vte/src/main-window.cpp:350
 msgid "Paste"
 msgstr "Cole"
 
-#: elder-terms-vte/src/main-window.cpp:309
+#: elder-terms-vte/src/main-window.cpp:356
 msgid "Send BREAK"
 msgstr "Enviar BREAK"
 
-#: elder-terms-vte/src/main-window.cpp:1032
+#: elder-terms-vte/src/main-window.cpp:1079
 #, c-format
 msgid "%s (Disconnected)"
 msgstr "%s (Desconectado)"
 
-#: elder-terms-vte/src/main-window.cpp:1423
+#: elder-terms-vte/src/main-window.cpp:1498
 msgid "SSH connection failed"
 msgstr "SSH conexão falhou"
 
-#: elder-terms-vte/src/main-window.cpp:1425
+#: elder-terms-vte/src/main-window.cpp:1500
 #, c-format
 msgid ""
 "SSH connection failed:\n"
@@ -1225,18 +1315,18 @@ msgstr ""
 "SSH conexão falhou:\n"
 "%s"
 
-#: elder-terms-vte/src/main-window.cpp:1474
+#: elder-terms-vte/src/main-window.cpp:1549
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:108
 msgid "Accept"
 msgstr "Aceitar"
 
-#: elder-terms-vte/src/main-window.cpp:1476
+#: elder-terms-vte/src/main-window.cpp:1551
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:111
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:378
 msgid "Connect"
 msgstr "Ligar"
 
-#: elder-terms-vte/src/main-window.cpp:1484
+#: elder-terms-vte/src/main-window.cpp:1559
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:119
 msgid "Reset and Connect"
 msgstr ""

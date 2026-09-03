@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-03 15:54+0900\n"
+"POT-Creation-Date: 2026-09-04 06:30+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Chinese\n"
@@ -242,7 +242,7 @@ msgstr "串口"
 
 #: shared/src/settings-widget/settings-presentation.cpp:108
 #: shared/src/settings-widget/settings-presentation.cpp:188
-#: elder-terms-vte/src/main-window.cpp:1469
+#: elder-terms-vte/src/main-window.cpp:1544
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:103
 msgid "SSH"
 msgstr "SSH"
@@ -417,6 +417,7 @@ msgid "UTF-8 text (after character conversion)"
 msgstr "UTF-8 文本（字符转换后）"
 
 #: shared/src/settings-widget/settings-presentation.cpp:180
+#: shared/src/settings-widget/application-settings-widget.cpp:313
 msgid "General"
 msgstr "一般"
 
@@ -460,7 +461,7 @@ msgstr "保存"
 #: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:942
 #: elder-terms-vte/src/main-window.ui:248
 #: elder-terms-vte/src/main-window.ui:359
-#: elder-terms-vte/src/main-window.cpp:1478
+#: elder-terms-vte/src/main-window.cpp:1553
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:113
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:379
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:733
@@ -495,10 +496,12 @@ msgid "Select Secondary Terminal Font"
 msgstr "选择辅助终端字体"
 
 #: shared/src/settings-widget/settings-presentation.cpp:218
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:751
 msgid "Enabled"
 msgstr "已启用"
 
 #: shared/src/settings-widget/settings-presentation.cpp:220
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:753
 msgid "Disabled"
 msgstr "已禁用"
 
@@ -539,6 +542,7 @@ msgid "Rule ID"
 msgstr "规则 ID"
 
 #: shared/src/settings-widget/settings-presentation.cpp:240
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:673
 msgid "Regular expression"
 msgstr "正则表达式"
 
@@ -551,10 +555,12 @@ msgid "Text to send"
 msgstr "要发送的文本"
 
 #: shared/src/settings-widget/settings-presentation.cpp:246
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:683
 msgid "Command"
 msgstr "命令"
 
 #: shared/src/settings-widget/settings-presentation.cpp:248
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:699
 msgid "Arguments"
 msgstr "参数"
 
@@ -567,10 +573,12 @@ msgid "Remove rule"
 msgstr "删除规则"
 
 #: shared/src/settings-widget/settings-presentation.cpp:254
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:629
 msgid "Move up"
 msgstr "向上移动"
 
 #: shared/src/settings-widget/settings-presentation.cpp:256
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:634
 msgid "Move down"
 msgstr "下移"
 
@@ -583,10 +591,12 @@ msgid "Run command"
 msgstr "运行命令"
 
 #: shared/src/settings-widget/settings-presentation.cpp:262
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:691
 msgid "Add argument"
 msgstr "添加参数"
 
 #: shared/src/settings-widget/settings-presentation.cpp:264
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:267
 msgid "Remove argument"
 msgstr "删除参数"
 
@@ -748,6 +758,86 @@ msgstr "必须命名日志文件"
 msgid "Invalid value"
 msgstr "无效值"
 
+#: shared/src/settings-widget/application-settings-widget.cpp:322
+msgid "Links"
+msgstr "链接"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:175
+msgid "Identifier must be unique"
+msgstr "标识符必须唯一"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:261
+msgid "Move argument up"
+msgstr "上移参数"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:264
+msgid "Move argument down"
+msgstr "下移参数"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:603
+msgid "Rules"
+msgstr "规则"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:621
+msgid "Add"
+msgstr "添加"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:624
+msgid "Remove"
+msgstr "移除"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:658
+msgid "Identifier"
+msgstr "标识符"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:662
+msgid "OSC 8 target"
+msgstr "OSC 8 目标"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:664
+msgid "Visible terminal text"
+msgstr "可见终端文本"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:667
+msgid "Recognition source"
+msgstr "识别来源"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:679
+msgid ""
+"The command is executed directly without a shell. Capture templates are "
+"expanded only in arguments."
+msgstr "命令不经过 shell 而直接执行。捕获模板仅在参数中展开。"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:703
+msgid "Do not validate"
+msgstr "不验证"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:706
+msgid "Existing local file or directory"
+msgstr "现有的本地文件或目录"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:709
+msgid "Path validation"
+msgstr "路径验证"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:715
+msgid ""
+"Path validation requires an absolute expanded path. Relative paths are "
+"rejected."
+msgstr "路径验证需要展开后的绝对路径。相对路径将被拒绝。"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:719
+msgid "Path template"
+msgstr "路径模板"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:747
+msgid "Link actions"
+msgstr "链接操作"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:765
+msgid "Restore defaults"
+msgstr "恢复默认值"
+
 #: elder-terms/src/main.cpp:242
 msgid "Global shortcuts are unavailable"
 msgstr "全局快捷方式不可用"
@@ -761,7 +851,7 @@ msgstr ""
 "全局快捷方式。"
 
 #: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:375
-#: elder-terms-vte/src/main-window.cpp:1477
+#: elder-terms-vte/src/main-window.cpp:1552
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
 msgid "OK"
 msgstr "好的"
@@ -1119,7 +1209,7 @@ msgstr "BREAK 不可用"
 msgid "Sending BREAK"
 msgstr "正在发送 BREAK"
 
-#: elder-terms-vte/src/main.cpp:1218 elder-terms-vte/src/main.cpp:1776
+#: elder-terms-vte/src/main.cpp:1218 elder-terms-vte/src/main.cpp:1811
 msgid "Text send unavailable"
 msgstr "文本发送不可用"
 
@@ -1176,12 +1266,12 @@ msgstr "XMODEM CRC（接收）"
 msgid "XMODEM (receive)"
 msgstr "XMODEM（接收）"
 
-#: elder-terms-vte/src/main.cpp:1756
+#: elder-terms-vte/src/main.cpp:1784 elder-terms-vte/src/main.cpp:1791
 msgid "Hyperlink command failed"
 msgstr "超链接命令失败"
 
 #: elder-terms-vte/src/main-window.ui:153
-#: elder-terms-vte/src/main-window.cpp:1400
+#: elder-terms-vte/src/main-window.cpp:1475
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2403
 msgid "Disconnected"
 msgstr "已断开连接"
@@ -1190,28 +1280,28 @@ msgstr "已断开连接"
 msgid "Transferring..."
 msgstr "正在传输..."
 
-#: elder-terms-vte/src/main-window.cpp:299
+#: elder-terms-vte/src/main-window.cpp:346
 msgid "Copy"
 msgstr "复制"
 
-#: elder-terms-vte/src/main-window.cpp:303
+#: elder-terms-vte/src/main-window.cpp:350
 msgid "Paste"
 msgstr "粘贴"
 
-#: elder-terms-vte/src/main-window.cpp:309
+#: elder-terms-vte/src/main-window.cpp:356
 msgid "Send BREAK"
 msgstr "发送 BREAK"
 
-#: elder-terms-vte/src/main-window.cpp:1032
+#: elder-terms-vte/src/main-window.cpp:1079
 #, c-format
 msgid "%s (Disconnected)"
 msgstr "%s（断开连接）"
 
-#: elder-terms-vte/src/main-window.cpp:1423
+#: elder-terms-vte/src/main-window.cpp:1498
 msgid "SSH connection failed"
 msgstr "SSH 连接失败"
 
-#: elder-terms-vte/src/main-window.cpp:1425
+#: elder-terms-vte/src/main-window.cpp:1500
 #, c-format
 msgid ""
 "SSH connection failed:\n"
@@ -1220,18 +1310,18 @@ msgstr ""
 "SSH 连接失败：\n"
 "%s"
 
-#: elder-terms-vte/src/main-window.cpp:1474
+#: elder-terms-vte/src/main-window.cpp:1549
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:108
 msgid "Accept"
 msgstr "接受"
 
-#: elder-terms-vte/src/main-window.cpp:1476
+#: elder-terms-vte/src/main-window.cpp:1551
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:111
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:378
 msgid "Connect"
 msgstr "连接"
 
-#: elder-terms-vte/src/main-window.cpp:1484
+#: elder-terms-vte/src/main-window.cpp:1559
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:119
 msgid "Reset and Connect"
 msgstr ""
