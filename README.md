@@ -206,11 +206,11 @@ addresses by treating the additional upper host bits as zero. For example, an
 address on `172.20.0.0/16` scans `172.20.0.0` through `172.20.0.255`.
 
 Discovered hosts appear as the scan proceeds, together with their reverse DNS
-name when available and a comma-separated list of open ports. The progress bar
-shows how much of the combined range has been checked. Double-click a row to
-stop the scan, close the dialog, and copy that numeric IP address into the
-setting. Click "Cancel" to stop and close the scan without changing the
-address.
+name when available. The SSH/SFTP (22), TELNET (23), and FTP (21) columns show
+a check mark when the corresponding port was found. The progress bar shows how
+much of the combined range has been checked. Double-click a row to stop the
+scan, close the dialog, and copy that numeric IP address into the setting.
+Click "Cancel" to stop and close the scan without changing the address.
 
 Only locally configured IPv4 ranges are scanned. Interfaces without an IPv4
 address are skipped. Loopback interfaces scan only their assigned addresses,
