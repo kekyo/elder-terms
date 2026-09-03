@@ -413,9 +413,16 @@ pending_reverse_lookup(std::uint32_t, cardio::cancellation cancellation) {
   co_return "router.example.test";
 }
 
+static cardio::promise<bool>
+delayed_burst_probe(std::uint32_t, std::uint16_t port,
+                    cardio::cancellation cancellation) {
+  co_await cardio::promises::delay(500, std::move(cancellation));
+  co_return port == 22;
+}
+
 static elder_terms::IpScannerDependencies
 create_ip_scanner_dependencies(const std::string &mode) {
-  if (mode != "complete" && mode != "pending") {
+  if (mode != "complete" && mode != "pending" && mode != "burst") {
     throw std::invalid_argument("unknown IP scan fixture mode: " + mode);
   }
   elder_terms::IpScannerDependencies dependencies{
@@ -434,6 +441,17 @@ create_ip_scanner_dependencies(const std::string &mode) {
   };
   if (mode == "pending") {
     dependencies.reverse_lookup = pending_reverse_lookup;
+  } else if (mode == "burst") {
+    dependencies.interfaces = {{
+        .address = ipv4(198, 51, 102, 7),
+        .netmask = ipv4(255, 255, 252, 0),
+    }};
+    dependencies.maximum_concurrent_hosts = 32;
+    dependencies.probe_port = delayed_burst_probe;
+    dependencies.reverse_lookup = [](std::uint32_t,
+                                     cardio::cancellation) {
+      return cardio::resolved(std::string());
+    };
   }
   return dependencies;
 }

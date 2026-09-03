@@ -13,6 +13,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -209,6 +210,8 @@ struct IpScanDialogState {
   GtkWidget *progress = nullptr;
   GtkWidget *target_entry = nullptr;
   GtkListStore *result_store = nullptr;
+  std::unordered_map<std::string, GtkTreeIter> result_rows;
+  int displayed_progress_percent = -1;
   cardio::cancellation_source cancellation_source;
 };
 
@@ -4817,29 +4820,6 @@ format_ip_scan_tcp_ports(const std::vector<std::uint16_t> &ports) {
   return stream.str();
 }
 
-static bool find_ip_scan_result(GtkListStore *store,
-                                const std::string &address,
-                                GtkTreeIter *result) {
-  GtkTreeModel *model = GTK_TREE_MODEL(store);
-  GtkTreeIter current;
-  if (gtk_tree_model_get_iter_first(model, &current) == FALSE) {
-    return false;
-  }
-  do {
-    gchar *current_address = nullptr;
-    gtk_tree_model_get(model, &current, ip_scan_address_column,
-                       &current_address, -1);
-    const bool matches = current_address != nullptr &&
-                         address == current_address;
-    g_free(current_address);
-    if (matches) {
-      *result = current;
-      return true;
-    }
-  } while (gtk_tree_model_iter_next(model, &current) != FALSE);
-  return false;
-}
-
 static void update_ip_scan_result(
     const std::shared_ptr<IpScanDialogState> &dialog_state,
     const IpScanEntry &entry) {
@@ -4847,9 +4827,14 @@ static void update_ip_scan_result(
     return;
   }
   GtkTreeIter iterator;
-  if (!find_ip_scan_result(dialog_state->result_store, entry.address,
-                           &iterator)) {
+  const auto existing = dialog_state->result_rows.find(entry.address);
+  if (existing == dialog_state->result_rows.end()) {
     gtk_list_store_append(dialog_state->result_store, &iterator);
+    // GtkListStore iterators remain valid while their rows exist. Rows are
+    // never removed during a scan, so reverse DNS updates can use this index.
+    dialog_state->result_rows.emplace(entry.address, iterator);
+  } else {
+    iterator = existing->second;
   }
   const std::string ports = format_ip_scan_tcp_ports(entry.open_ports);
   gtk_list_store_set(dialog_state->result_store, &iterator,
@@ -4871,6 +4856,15 @@ static void update_ip_scan_progress(
                 1.0,
                 static_cast<gdouble>(progress.completed_addresses) /
                     static_cast<gdouble>(progress.total_addresses));
+  const int percent =
+      progress.completed_addresses >= progress.total_addresses &&
+              progress.total_addresses != 0
+          ? 100
+          : static_cast<int>(fraction * 100.0);
+  if (dialog_state->displayed_progress_percent == percent) {
+    return;
+  }
+  dialog_state->displayed_progress_percent = percent;
   gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(dialog_state->progress),
                                 fraction);
   gtk_progress_bar_set_text(GTK_PROGRESS_BAR(dialog_state->progress),
@@ -4882,6 +4876,7 @@ static void complete_ip_scan(
   if (dialog_state->progress == nullptr) {
     return;
   }
+  dialog_state->displayed_progress_percent = 100;
   gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(dialog_state->progress),
                                 1.0);
   gtk_progress_bar_set_text(GTK_PROGRESS_BAR(dialog_state->progress),
@@ -4930,14 +4925,27 @@ static void detach_ip_scan_dialog(IpScanDialogState *dialog_state) {
   dialog_state->progress = nullptr;
   dialog_state->target_entry = nullptr;
   dialog_state->result_store = nullptr;
+  dialog_state->result_rows.clear();
   if (owner != nullptr && owner->ip_scan_dialog.get() == dialog_state) {
     owner->ip_scan_dialog.reset();
   }
 }
 
-static void on_ip_scan_dialog_destroy(GtkWidget *, gpointer data) {
+static void restore_ip_scan_dialog_parent(GtkWidget *dialog) {
+  if (dialog == nullptr || !GTK_IS_WINDOW(dialog)) {
+    return;
+  }
+  GtkWindow *parent = gtk_window_get_transient_for(GTK_WINDOW(dialog));
+  if (parent != nullptr &&
+      !gtk_widget_in_destruction(GTK_WIDGET(parent))) {
+    gtk_widget_set_sensitive(GTK_WIDGET(parent), TRUE);
+  }
+}
+
+static void on_ip_scan_dialog_destroy(GtkWidget *dialog, gpointer data) {
   auto *dialog_state = static_cast<IpScanDialogState *>(data);
   (void)dialog_state->cancellation_source.cancel();
+  restore_ip_scan_dialog_parent(dialog);
   detach_ip_scan_dialog(dialog_state);
 }
 
@@ -4990,12 +4998,13 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
       GTK_IS_WINDOW(toplevel) ? GTK_WINDOW(toplevel) : nullptr;
   GtkWidget *dialog = gtk_dialog_new_with_buttons(
       settings_ui_text(SettingsUiText::ip_scan), parent,
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
-                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      GTK_DIALOG_DESTROY_WITH_PARENT,
       settings_ui_text(SettingsUiText::cancel), GTK_RESPONSE_CANCEL,
       nullptr);
   dialog_state->dialog = dialog;
   assign_accessible_id(dialog, widget_id(state, "ip_scan_dialog").c_str());
+  gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
+  gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
   gtk_window_set_default_size(GTK_WINDOW(dialog), 640, 360);
   gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
   GtkWidget *cancel_button = gtk_dialog_get_widget_for_response(
@@ -5057,6 +5066,9 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
                    dialog_state.get());
   g_signal_connect(dialog, "destroy", G_CALLBACK(on_ip_scan_dialog_destroy),
                    dialog_state.get());
+  if (parent != nullptr) {
+    gtk_widget_set_sensitive(GTK_WIDGET(parent), FALSE);
+  }
   gtk_widget_show_all(dialog);
   gtk_window_present(GTK_WINDOW(dialog));
   return dialog_state;

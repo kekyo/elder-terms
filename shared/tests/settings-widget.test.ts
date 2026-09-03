@@ -2482,6 +2482,11 @@ describe.concurrent('shared settings widget', () => {
       ],
       async ({ app, directory }) => {
         await showFtpPage(app);
+        const parent = expectElementKind(
+          await app.getById('settings_widget_test_window'),
+          'window'
+        );
+        await expectSensitive(parent);
         await expectElementKind(
           await app.getById('settings_ftp_ip_scan_button'),
           'button'
@@ -2491,7 +2496,8 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_ip_scan_dialog'),
           'window'
         );
-        expect((await dialog.info()).states).toContain('modal');
+        expect((await dialog.info()).states).not.toContain('modal');
+        await expectInsensitive(parent);
         const results = expectElementKind(
           await app.getById('settings_ip_scan_results'),
           'table'
@@ -2530,12 +2536,66 @@ describe.concurrent('shared settings widget', () => {
         await waitForResult(async () => {
           expect(await app.findById('settings_ip_scan_dialog')).toBeUndefined();
         });
+        await expectSensitive(parent);
         expect(
           await expectElementKind(
             await app.getById('settings_ftp_address_entry'),
             'entry'
           ).text()
         ).toBe('before.example.test');
+      }
+    );
+  });
+
+  it('keeps a wide active IP scan bounded and responsive while resizing', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=telnet', '--type=telnet', '--ip-scan=burst'],
+      async ({ app }) => {
+        await showTelnetPage(app);
+        await expectElementKind(
+          await app.getById('settings_telnet_ip_scan_button'),
+          'button'
+        ).click();
+        const dialog = expectElementKind(
+          await app.getById('settings_ip_scan_dialog'),
+          'window'
+        );
+        const progress = expectElementKind(
+          await app.getById('settings_ip_scan_progress'),
+          'progressBar'
+        );
+        const initialValue = await progress.valueInfo();
+        expect(initialValue.value).toBeLessThan(initialValue.maximum);
+
+        const initialBounds = await dialog.bounds();
+        await dialog.resizeTo(
+          initialBounds.width + 120,
+          initialBounds.height + 80
+        );
+        await waitForResult(async () => {
+          const resizedBounds = await dialog.bounds();
+          expect(resizedBounds.width).toBeGreaterThanOrEqual(
+            initialBounds.width + 100
+          );
+          expect(resizedBounds.height).toBeGreaterThanOrEqual(
+            initialBounds.height + 60
+          );
+        });
+
+        await waitForResult(async () => {
+          const value = await progress.valueInfo();
+          expect(value.value).toBe(value.maximum);
+        });
+        const results = expectElementKind(
+          await app.getById('settings_ip_scan_results'),
+          'table'
+        );
+        expect(await results.getRowCount()).toBe(256);
+        await expectElementKind(
+          await app.getById('settings_ip_scan_cancel_button'),
+          'button'
+        ).click();
       }
     );
   });
