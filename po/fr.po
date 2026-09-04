@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-04 06:30+0900\n"
+"POT-Creation-Date: 2026-09-04 11:49+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: French\n"
@@ -135,7 +135,7 @@ msgstr "Type de borne"
 
 #: shared/src/settings-widget/settings-presentation.cpp:66
 #: shared/src/settings-widget/settings-presentation.cpp:73
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:381
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
 msgid "User name"
 msgstr "Nom d'utilisateur"
 
@@ -243,13 +243,13 @@ msgstr "Série"
 #: shared/src/settings-widget/settings-presentation.cpp:108
 #: shared/src/settings-widget/settings-presentation.cpp:188
 #: elder-terms-vte/src/main-window.cpp:1544
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:103
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:139
 msgid "SSH"
 msgstr "SSH"
 
 #: shared/src/settings-widget/settings-presentation.cpp:109
 #: shared/src/settings-widget/settings-presentation.cpp:190
-#: elder-terms-vte/src/main.cpp:1364
+#: elder-terms-vte/src/main.cpp:1394
 msgid "SFTP"
 msgstr "SFTP"
 
@@ -422,7 +422,7 @@ msgid "General"
 msgstr "Général"
 
 #: shared/src/settings-widget/settings-presentation.cpp:182
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1947
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2072
 msgid "Local"
 msgstr "Local"
 
@@ -458,18 +458,19 @@ msgstr "Enregistrer"
 #: shared/src/settings-widget/settings-presentation.cpp:206
 #: elder-terms/src/main.cpp:482 elder-terms/src/main.cpp:550
 #: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1688
-#: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:942
+#: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:944
 #: elder-terms-vte/src/main-window.ui:248
 #: elder-terms-vte/src/main-window.ui:359
 #: elder-terms-vte/src/main-window.cpp:1553
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:113
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:379
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:733
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1250
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1281
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1435
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2256
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2378
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:149
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:416
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:749
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1273
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1304
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1461
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1560
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2394
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2516
 msgid "Cancel"
 msgstr "Annuler"
 
@@ -478,12 +479,12 @@ msgid "Reset"
 msgstr "Réinitialiser"
 
 #: shared/src/settings-widget/settings-presentation.cpp:210
-#: elder-terms-vte/src/main.cpp:941
+#: elder-terms-vte/src/main.cpp:943
 msgid "Select file"
 msgstr "Sélectionnez le fichier"
 
 #: shared/src/settings-widget/settings-presentation.cpp:212
-#: elder-terms-vte/src/main.cpp:943
+#: elder-terms-vte/src/main.cpp:945
 msgid "Open"
 msgstr "Ouvert"
 
@@ -809,7 +810,9 @@ msgstr "Source de reconnaissance"
 msgid ""
 "The command is executed directly without a shell. Capture templates are "
 "expanded only in arguments."
-msgstr "La commande est exécutée directement sans shell. Les modèles de capture ne sont développés que dans les arguments."
+msgstr ""
+"La commande est exécutée directement sans shell. Les modèles de capture ne "
+"sont développés que dans les arguments."
 
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:703
 msgid "Do not validate"
@@ -827,7 +830,9 @@ msgstr "Validation du chemin"
 msgid ""
 "Path validation requires an absolute expanded path. Relative paths are "
 "rejected."
-msgstr "La validation du chemin nécessite un chemin absolu après développement. Les chemins relatifs sont rejetés."
+msgstr ""
+"La validation du chemin nécessite un chemin absolu après développement. Les "
+"chemins relatifs sont rejetés."
 
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:719
 msgid "Path template"
@@ -856,7 +861,7 @@ msgstr ""
 
 #: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:375
 #: elder-terms-vte/src/main-window.cpp:1552
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:112
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:148
 msgid "OK"
 msgstr "OK"
 
@@ -888,8 +893,9 @@ msgid "Connection defaults"
 msgstr "Paramètres de connexion par défaut"
 
 #: elder-terms/src/main.cpp:550
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1280
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2377
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1303
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1460
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2515
 msgid "Close"
 msgstr "Fermer"
 
@@ -992,8 +998,8 @@ msgid "The connection \"%s\" will be permanently deleted."
 msgstr "La connexion « %s » sera définitivement supprimée."
 
 #: elder-terms/src/main.cpp:1913 elder-terms/src/main-window.ui:27
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1434
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2028
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1559
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2165
 msgid "Delete"
 msgstr "Supprimer"
 
@@ -1006,8 +1012,8 @@ msgid "Failed to save connection"
 msgstr "Échec de l'enregistrement de la connexion"
 
 #: elder-terms/src/main-window.ui:15
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1249
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2019
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1272
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2156
 msgid "Rename"
 msgstr "Renommer"
 
@@ -1120,30 +1126,30 @@ msgstr "Avertissement : échec de la suppression du profil de connexion %s : %
 msgid "Quit"
 msgstr "Quitter"
 
-#: elder-terms-vte/src/main.cpp:225
+#: elder-terms-vte/src/main.cpp:227
 msgid "Failed to open elder-terms"
 msgstr "Impossible d’ouvrir elder-terms"
 
-#: elder-terms-vte/src/main.cpp:233
+#: elder-terms-vte/src/main.cpp:235
 msgid "Macro command failed"
 msgstr "Échec de la commande macro"
 
-#: elder-terms-vte/src/main.cpp:276
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:188
+#: elder-terms-vte/src/main.cpp:278
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:224
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
 #, fuzzy
 msgid "SSH Host Key Changed"
 msgstr "SSH Clé d'hôte"
 
-#: elder-terms-vte/src/main.cpp:279
+#: elder-terms-vte/src/main.cpp:281
 msgid ""
 "The SSH host key for fixture.example:2222 has changed.\n"
 "Verify the fingerprint before asking an administrator to run:\n"
 "sudo ssh-keygen -R '[fixture.example]:2222' -f '/etc/ssh/ssh_known_hosts'"
 msgstr ""
 
-#: elder-terms-vte/src/main.cpp:284
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:190
+#: elder-terms-vte/src/main.cpp:286
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:226
 msgid ""
 "The SSH host key for fixture.example:2222 has changed.\n"
 "Verify the fingerprint before resetting the saved key.\n"
@@ -1151,13 +1157,13 @@ msgid ""
 "ssh-keygen -R '[fixture.example]:2222' -f '/home/test/.ssh/known_hosts'"
 msgstr ""
 
-#: elder-terms-vte/src/main.cpp:310
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:217
+#: elder-terms-vte/src/main.cpp:312
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:253
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
 msgid "SSH Host Key"
 msgstr "SSH Clé d'hôte"
 
-#: elder-terms-vte/src/main.cpp:312
+#: elder-terms-vte/src/main.cpp:314
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%d\n"
@@ -1170,122 +1176,122 @@ msgstr ""
 "Empreinte digitale : %s\n"
 "Accepter et enregistrer cette clé d'hôte ?"
 
-#: elder-terms-vte/src/main.cpp:337 elder-terms-vte/src/main.cpp:346
+#: elder-terms-vte/src/main.cpp:339 elder-terms-vte/src/main.cpp:348
 #: elder-terms-vte/src/main-window.ui:289
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:239
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:248
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:275
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:284
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:273
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:922
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1003
 msgid "SSH Authentication"
 msgstr "SSH Authentification"
 
-#: elder-terms-vte/src/main.cpp:338
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:240
+#: elder-terms-vte/src/main.cpp:340
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:276
 msgid "User name for fixture.example:"
 msgstr "Nom d’utilisateur pour fixture.example :"
 
-#: elder-terms-vte/src/main.cpp:347 elder-terms-vte/src/main-window.ui:303
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:249
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:384
+#: elder-terms-vte/src/main.cpp:349 elder-terms-vte/src/main-window.ui:303
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:285
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:421
 msgid "Password:"
 msgstr "Mot de passe :"
 
-#: elder-terms-vte/src/main.cpp:364
+#: elder-terms-vte/src/main.cpp:366
 #, fuzzy
 msgid "SSH host key reset requested"
 msgstr "SSH la clé d'hôte n'a pas été acceptée"
 
-#: elder-terms-vte/src/main.cpp:365
+#: elder-terms-vte/src/main.cpp:367
 msgid "SSH prompt accepted"
 msgstr "SSH invite acceptée"
 
-#: elder-terms-vte/src/main.cpp:366
+#: elder-terms-vte/src/main.cpp:368
 msgid "SSH prompt cancelled"
 msgstr "SSH invite annulée"
 
-#: elder-terms-vte/src/main.cpp:759 elder-terms-vte/src/main.cpp:763
+#: elder-terms-vte/src/main.cpp:761 elder-terms-vte/src/main.cpp:765
 #: elder-terms-vte/src/main-window.ui:8
 msgid "Settings"
 msgstr "Paramètres"
 
-#: elder-terms-vte/src/main.cpp:1029 elder-terms-vte/src/main.cpp:1039
-#: elder-terms-vte/src/main.cpp:1064 elder-terms-vte/src/main.cpp:1074
+#: elder-terms-vte/src/main.cpp:1031 elder-terms-vte/src/main.cpp:1041
+#: elder-terms-vte/src/main.cpp:1066 elder-terms-vte/src/main.cpp:1076
 msgid "Transfer unavailable"
 msgstr "Transfert indisponible"
 
-#: elder-terms-vte/src/main.cpp:1176 elder-terms-vte/src/main.cpp:1198
+#: elder-terms-vte/src/main.cpp:1178 elder-terms-vte/src/main.cpp:1200
 msgid "BREAK unavailable"
 msgstr "BREAK indisponible"
 
-#: elder-terms-vte/src/main.cpp:1182
+#: elder-terms-vte/src/main.cpp:1184
 msgid "Sending BREAK"
 msgstr "Envoi de BREAK"
 
-#: elder-terms-vte/src/main.cpp:1218 elder-terms-vte/src/main.cpp:1811
+#: elder-terms-vte/src/main.cpp:1220 elder-terms-vte/src/main.cpp:1841
 msgid "Text send unavailable"
 msgstr "Envoi de SMS indisponible"
 
-#: elder-terms-vte/src/main.cpp:1226
+#: elder-terms-vte/src/main.cpp:1228
 msgid "Text (Send)"
 msgstr "Texte (Envoyer)"
 
-#: elder-terms-vte/src/main.cpp:1308 elder-terms-vte/src/main.cpp:1343
+#: elder-terms-vte/src/main.cpp:1338 elder-terms-vte/src/main.cpp:1373
 msgid "SFTP unavailable"
 msgstr "SFTP indisponible"
 
-#: elder-terms-vte/src/main.cpp:1316
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:178
+#: elder-terms-vte/src/main.cpp:1346
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:214
 msgid "Failed to start SFTP"
 msgstr "Échec du démarrage de SFTP"
 
-#: elder-terms-vte/src/main.cpp:1388
+#: elder-terms-vte/src/main.cpp:1418
 msgid "Log recording"
 msgstr "Enregistrement du journal"
 
-#: elder-terms-vte/src/main.cpp:1434
+#: elder-terms-vte/src/main.cpp:1464
 msgid "ZMODEM (send)"
 msgstr "ZMODEM (envoyer)"
 
-#: elder-terms-vte/src/main.cpp:1441
+#: elder-terms-vte/src/main.cpp:1471
 msgid "YMODEM (send)"
 msgstr "YMODEM (envoyer)"
 
-#: elder-terms-vte/src/main.cpp:1448
+#: elder-terms-vte/src/main.cpp:1478
 msgid "XMODEM 1K (send)"
 msgstr "XMODEM 1K (envoyer)"
 
-#: elder-terms-vte/src/main.cpp:1457
+#: elder-terms-vte/src/main.cpp:1487
 msgid "XMODEM (send)"
 msgstr "XMODEM (envoyer)"
 
-#: elder-terms-vte/src/main.cpp:1467
+#: elder-terms-vte/src/main.cpp:1497
 msgid "ZMODEM (receive)"
 msgstr "ZMODEM (recevoir)"
 
-#: elder-terms-vte/src/main.cpp:1474
+#: elder-terms-vte/src/main.cpp:1504
 msgid "YMODEM-g (receive)"
 msgstr "YMODEM-g (recevoir)"
 
-#: elder-terms-vte/src/main.cpp:1482
+#: elder-terms-vte/src/main.cpp:1512
 msgid "YMODEM (receive)"
 msgstr "YMODEM (recevoir)"
 
-#: elder-terms-vte/src/main.cpp:1491
+#: elder-terms-vte/src/main.cpp:1521
 msgid "XMODEM CRC (receive)"
 msgstr "XMODEM CRC (recevoir)"
 
-#: elder-terms-vte/src/main.cpp:1500
+#: elder-terms-vte/src/main.cpp:1530
 msgid "XMODEM (receive)"
 msgstr "XMODEM (recevoir)"
 
-#: elder-terms-vte/src/main.cpp:1784 elder-terms-vte/src/main.cpp:1791
+#: elder-terms-vte/src/main.cpp:1814 elder-terms-vte/src/main.cpp:1821
 msgid "Hyperlink command failed"
 msgstr "Échec de la commande de l’hyperlien"
 
 #: elder-terms-vte/src/main-window.ui:153
 #: elder-terms-vte/src/main-window.cpp:1475
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2403
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2541
 msgid "Disconnected"
 msgstr "Déconnecté"
 
@@ -1324,96 +1330,96 @@ msgstr ""
 "%s"
 
 #: elder-terms-vte/src/main-window.cpp:1549
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:108
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:144
 msgid "Accept"
 msgstr "Accepter"
 
 #: elder-terms-vte/src/main-window.cpp:1551
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:111
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:378
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:147
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:415
 msgid "Connect"
 msgstr "Se connecter"
 
 #: elder-terms-vte/src/main-window.cpp:1559
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:119
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:155
 msgid "Reset and Connect"
 msgstr ""
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:218
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:254
 msgid "Accept the fixture SSH host key?"
 msgstr "Accepter la clé d’hôte SSH de test ?"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:355
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:392
 #, c-format
 msgid "Enter the user name and password for %s."
 msgstr "Saisissez le nom d’utilisateur et le mot de passe pour %s."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:357
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:394
 msgid "To log in anonymously, enter anonymous as the user name."
 msgstr ""
 "Pour vous connecter anonymement, saisissez anonymous comme nom d’utilisateur."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:360
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:397
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
 msgid "User name must not be empty."
 msgstr "Le nom d’utilisateur ne doit pas être vide."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:375
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:412
 msgid "FTP authentication"
 msgstr "Authentification FTP"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:441
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:478
 msgid "Failed to start FTP"
 msgstr "Échec du démarrage de FTP"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:191
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:198
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:194
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:201
 msgid "Unknown file transfer failure"
 msgstr "Échec inconnu du transfert de fichiers"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:265
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:268
 msgid "Loading…"
 msgstr "Chargement…"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:408
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:411
 msgid "The local pane only supports native filesystem paths"
 msgstr ""
 "Le volet local prend uniquement en charge les chemins du système de fichiers "
 "natif"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:481
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:484
 msgid "Local directory path is empty"
 msgstr "Le chemin du répertoire local est vide"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:609
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2243
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:620
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2381
 msgid "Preparing transfer…"
 msgstr "Préparation du transfert…"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:663
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:679
 #, c-format
 msgid "Transferring %zu of %zu — %s"
 msgstr "Transfert de %zu de %zu — %s"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:666
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:682
 #, c-format
 msgid "Transferring %zu of %zu"
 msgstr "Transfert de %zu de %zu"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:670
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:686
 #, c-format
 msgid "Transferring — %s"
 msgstr "Transfert — %s"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:673
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:689
 msgid "Transferring"
 msgstr "Transfert de"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:729
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:745
 msgid "Destination already exists"
 msgstr "La destination existe déjà"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:731
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:747
 #, c-format
 msgid ""
 "%s\n"
@@ -1422,20 +1428,20 @@ msgstr ""
 "%s\n"
 "La décision choisie s'applique à tous les conflits restants."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:733
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:754
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:749
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:770
 msgid "Skip"
 msgstr "Sauter"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:733
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:749
 msgid "Overwrite"
 msgstr "Remplacer"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:749
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:765
 msgid "File transfer failed"
 msgstr "Échec du transfert de fichiers"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:750
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:766
 #, c-format
 msgid ""
 "%s\n"
@@ -1448,40 +1454,40 @@ msgstr ""
 "%s\n"
 "→ %s"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:754
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:770
 msgid "Abort"
 msgstr "Abandonner"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:754
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:770
 msgid "Retry"
 msgstr "Réessayer"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:777
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:793
 msgid "File transfer operation failed"
 msgstr "Échec de l’opération de transfert de fichiers"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:838
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:854
 msgid "Failed to load remote directory"
 msgstr "Échec du chargement du répertoire distant"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:839
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:855
 msgid "Failed to load local directory"
 msgstr "Échec du chargement du répertoire local"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:911
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:927
 msgid "Failed to expand directory"
 msgstr "Échec de l'extension du répertoire"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1239
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1262
 #, c-format
 msgid "Enter a new name for \"%s\"."
 msgstr "Saisissez un nouveau nom pour « %s »."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1247
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1270
 msgid "Rename item"
 msgstr "Renommer l’élément"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1266
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1289
 msgid ""
 "Names must not be empty, '.', or '..', and must not contain '/' or line "
 "breaks."
@@ -1489,139 +1495,167 @@ msgstr ""
 "Les noms ne doivent pas être vides, être '.' ou '..', ni contenir '/' ou des "
 "sauts de ligne."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1306
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1465
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2328
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2405
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1329
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1590
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2466
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2543
 msgid "Ready"
 msgstr "Prêt"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1313
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1336
 msgid "Renaming…"
 msgstr "Renommage…"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1325
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1348
 #, c-format
 msgid "Renamed \"%s\" to \"%s\""
 msgstr "« %s » a été renommé en « %s »"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1339
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1362
 msgid "Rename cancelled"
 msgstr "Renommage annulé"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1343
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1366
 msgid "Rename failed"
 msgstr "Échec du renommage"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1345
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1368
 msgid "Failed to rename item"
 msgstr "Échec du renommage de l’élément"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1416
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1415
+msgid "Calculating hash values…"
+msgstr "Calcul des valeurs de hachage…"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1435
+msgid "Hash calculation cancelled"
+msgstr "Calcul des valeurs de hachage annulé"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1441
+msgid "Hash calculation failed"
+msgstr "Échec du calcul des valeurs de hachage"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1443
+msgid "Failed to calculate hash values"
+msgstr "Impossible de calculer les valeurs de hachage"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1452
+msgid "Hash calculation complete"
+msgstr "Calcul des valeurs de hachage terminé"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1457
+msgid "File hash values"
+msgstr "Valeurs de hachage du fichier"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1541
 msgid "The following items will be permanently deleted:"
 msgstr "Les éléments suivants seront définitivement supprimés :"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1418
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1543
 msgid "Directories and their contents will be deleted. This cannot be undone."
 msgstr ""
 "Les répertoires et leur contenu seront supprimés. Cette action est "
 "irréversible."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1427
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1552
 msgid "Delete selected item?"
 msgid_plural "Delete selected items?"
 msgstr[0] "Supprimer l’élément sélectionné ?"
 msgstr[1] "Supprimer les éléments sélectionnés ?"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1479
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1604
 msgid "Deleting…"
 msgstr "Suppression…"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1490
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1615
 #, c-format
 msgid "Deleted %zu item"
 msgid_plural "Deleted %zu items"
 msgstr[0] "%zu élément supprimé"
 msgstr[1] "%zu éléments supprimés"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1506
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1631
 msgid "Delete cancelled"
 msgstr "Suppression annulée"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1510
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1635
 msgid "Delete failed"
 msgstr "Échec de la suppression"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1512
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1637
 msgid "Failed to delete selected items"
 msgstr "Échec de la suppression des éléments sélectionnés"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1598
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1606
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1723
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1731
 msgid "Transfer cancelled"
 msgstr "Transfert annulé"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1608
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1733
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:445
 msgid "Transfer failed"
 msgstr "Échec du transfert"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1622
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1747
 #, c-format
 msgid "Sent %zu item"
 msgid_plural "Sent %zu items"
 msgstr[0] "%zu élément envoyé"
 msgstr[1] "%zu éléments envoyés"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1624
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1749
 #, c-format
 msgid "Received %zu item"
 msgid_plural "Received %zu items"
 msgstr[0] "%zu élément reçu"
 msgstr[1] "%zu éléments reçus"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1925
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2050
 msgid "Name"
 msgstr "Nom"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1927
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2052
 msgid "Size"
 msgstr "Taille"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1929
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2054
 msgid "Modified"
 msgstr "Modifié"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1947
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2072
 msgid "Remote"
 msgstr "Télécommande"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1979
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2104
 msgid "Up"
 msgstr "Plus"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1983
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2108
 msgid "Refresh"
 msgstr "Actualiser"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2008
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2133
 msgid "Receive"
 msgstr "Recevoir"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2008
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2133
 msgid "Send"
 msgstr "Envoyer"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2210
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2354
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2144
+msgid "Calculate Hash Values"
+msgstr "Calculer les valeurs de hachage"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2348
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2492
 msgid "Connecting"
 msgstr "Connexion"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2346
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2484
 msgid "Authenticating"
 msgstr "Authentification"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2369
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2507
 msgid "Connection failed"
 msgstr "Échec de la connexion"
 
@@ -1667,7 +1701,7 @@ msgid "serial: (unknown)"
 msgstr "série : (inconnu)"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:82
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1159
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1181
 msgid "SSH session has no socket"
 msgstr "SSH n'a pas de socket"
 
@@ -1828,51 +1862,69 @@ msgstr "Échec de l'actualisation des méthodes d'authentification SSH"
 msgid "SSH server did not accept an available authentication method"
 msgstr "SSH n'a pas accepté une méthode d'authentification disponible"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1256
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1564
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1278
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1578
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1727
 msgid "SSH transport is closed"
 msgstr "SSH le transport est terminé"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1454
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1479
 msgid "Failed to allocate SSH session"
 msgstr "Échec de l'allocation de SSH session"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1460
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1485
 msgid "Failed to set SSH host"
 msgstr "Échec de la définition de l'hôte SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1465
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1490
 msgid "Failed to parse SSH configuration"
 msgstr "Échec de l'analyse de la configuration SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1474
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1499
 msgid "Failed to configure SSH endpoint"
 msgstr "Échec de la configuration du point de terminaison SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1480
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1505
 msgid "Failed to configure SSH user name"
 msgstr "Échec de la configuration du nom d’utilisateur SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1486
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1511
 msgid "Failed to configure SSH known_hosts"
 msgstr "Échec de la configuration de SSH known_hosts"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1492
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1517
 msgid "Failed to attach SSH socket"
 msgstr "Échec de la connexion du socket SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1502
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1527
 msgid "Failed to configure SSH callbacks"
 msgstr "Échec de la configuration des rappels SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1660
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1581
+#, fuzzy
+msgid "SSH command is required"
+msgstr "SSH un transport est requis"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1676
+msgid "SSH command output is too large"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1681
+msgid "SSH command error output is too large"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1688
+msgid "SSH command did not return an exit status"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1823
 msgid "SSH transport is required"
 msgstr "SSH un transport est requis"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1714
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1783
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1821
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1841
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1877
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1946
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1984
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2004
 msgid "SSH channel is closed"
 msgstr "SSH le canal est fermé"
 

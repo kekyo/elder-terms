@@ -22,5 +22,13 @@ int main(int argc, char **argv) {
 
   std::cout << dgettext("elder-terms", "Settings") << '\n';
   std::cout << dgettext("elder-terms", "Links") << '\n';
+  std::cout << dgettext("elder-terms", "Calculating hash values…") << '\n';
+  std::cout << dgettext("elder-terms", "Hash calculation cancelled") << '\n';
+  std::cout << dgettext("elder-terms", "Hash calculation failed") << '\n';
+  std::cout << dgettext("elder-terms", "Failed to calculate hash values")
+            << '\n';
+  std::cout << dgettext("elder-terms", "Hash calculation complete") << '\n';
+  std::cout << dgettext("elder-terms", "File hash values") << '\n';
+  std::cout << dgettext("elder-terms", "Calculate Hash Values") << '\n';
   return localization.requested_language_applied ? 0 : 1;
 }
