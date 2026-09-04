@@ -253,6 +253,24 @@ can be selected with `Ctrl`+click or a drag rectangle before opening the menu.
   removed. A non-empty directory is deleted recursively. If both a directory
   and one of its descendants are selected, the descendant is covered by that
   directory and is not listed or processed twice.
+- `Calculate Hash Values` is available when exactly one regular file is
+  selected. For a local file, elder-terms calculates MD5, SHA-1, and SHA-256
+  internally. For a remote file over SFTP, the SSH server must permit command
+  execution and make `md5sum`, `sha1sum`, and `sha256sum` available in the
+  connected account's command search path. Calculation fails if these
+  conditions are not met. Hash calculation for remote files over FTP is not
+  supported; hash calculation in the local pane remains available.
+
+On a Debian or Ubuntu SFTP server, the required commands are provided by the
+[`coreutils` package for Debian](https://packages.debian.org/stable/coreutils)
+or the
+[`coreutils` package for Ubuntu](https://packages.ubuntu.com/search?keywords=coreutils&searchon=names&suite=all&section=all).
+Install it on the server as follows:
+
+```shell
+sudo apt update
+sudo apt install coreutils
+```
 
 Deletion is permanent and does not use the desktop trash. In the local pane
 and over SFTP, deleting a symbolic link removes the link itself without
