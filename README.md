@@ -798,12 +798,13 @@ command. A rule can inspect either the target of an OSC 8 escape sequence or a
 matching substring in visible terminal text. Rules are evaluated in their
 displayed order, and only the first matching rule is run.
 
-Open "Application settings" from the launcher's application menu and select
-the "Links" page to enable or disable link actions, add and remove rules,
-change their order, edit command arguments, and restore the built-in defaults.
-The settings apply to every connection.
+Select a connection in the launcher and open its "Links" tab to enable or
+disable link actions, add and remove rules, change their order, edit command
+arguments, and restore the built-in defaults. The same tab is available from
+the settings dialog in a running terminal. Link settings are saved separately
+for each connection.
 
-When no explicit link configuration exists, the built-in rules recognize:
+When a connection defines no link rules, the built-in rules recognize:
 
 - HTTP and HTTPS URLs in OSC 8 targets and visible terminal text, opened with
   `xdg-open` in the desktop's default application.
@@ -812,8 +813,8 @@ When no explicit link configuration exists, the built-in rules recognize:
   --reuse-window --goto`.
 
 URI escapes in captures, such as `%20`, can be decoded before a value is
-passed to the command. "Restore defaults" removes the explicit link settings,
-so later built-in default changes also take effect.
+passed to the command. "Restore defaults" removes the connection's explicit
+link settings, so later built-in default changes also take effect.
 
 Each rule selects one recognition source:
 
@@ -833,7 +834,7 @@ file or directory on the computer running elder-terms; otherwise the command
 is not run. Relative paths are rejected because terminal display text does not
 provide a reliable local working directory, particularly for remote sessions.
 
-The same settings can be edited in `~/.config/elder-terms/global.ini`. This
+The same settings can be edited directly in a connection's INI file. This
 example recognizes an absolute local source path followed by a line number:
 
 ```ini
@@ -859,10 +860,12 @@ argument. `${0}` refers to the entire match, `${1}` and `${2}` to numbered
 captures, and `${name}` to a named capture. `${path|uri-decode}` decodes URI
 escapes in that capture. Write a literal `$` as `$$`.
 
-Defining any explicit link configuration manually replaces all built-in
-rules. To disable all link actions, set `[hyperlink]` `enabled=false`. This
-configuration is global only; link sections in connection settings or
-temporary launch profiles are ignored.
+Defining at least one `[hyperlink.<rule-id>]` section replaces all built-in
+rules for that connection. When no rule section is defined, the built-in rules
+apply. To disable all link actions, set `[hyperlink]` `enabled=false` in the
+connection file. Link sections in `global.ini` are ignored. A temporary launch
+profile similarly uses its own rules, or the built-in rules when it defines
+none.
 
 OSC 8 targets and visible text may be supplied by a remote host. Restrict each
 regular expression to the formats you intend to accept. Invalid rules,
