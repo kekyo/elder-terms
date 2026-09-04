@@ -981,6 +981,59 @@ describe('SFTP window', () => {
     );
   });
 
+  it('keeps remote metadata columns visible after opening a directory', async (context) => {
+    await runSftpFixture(context, false, [], undefined, async ({ app }) => {
+      const remoteTree = expectTable(
+        await app.getById('file_transfer_remote_tree')
+      );
+      const archiveRow = await findRow(remoteTree, 'archive');
+      const archiveCell = await remoteTree.cellAt(archiveRow, 0);
+      const archiveCapture = await archiveCell?.capture();
+      if (archiveCapture === undefined) {
+        throw new Error('SFTP remote directory did not expose bounds');
+      }
+      await app.input.moveMouseTo(
+        Math.round(archiveCapture.bounds.x + archiveCapture.bounds.width / 2),
+        Math.round(archiveCapture.bounds.y + archiveCapture.bounds.height / 2)
+      );
+      await app.input.setMouseButton('left', true);
+      await app.input.setMouseButton('left', false);
+      await app.input.setMouseButton('left', true);
+      await app.input.setMouseButton('left', false);
+      const remotePath = expectElementKind(
+        await app.getById('file_transfer_remote_path_entry'),
+        'entry'
+      );
+      await waitForResult(async () => {
+        expect(await remotePath.text()).toBe('/remote/archive');
+      });
+      const longFileRow = await findRow(
+        remoteTree,
+        'long-remote-filename-that-keeps-extending-until-the-name-column-needs-more-space-than-the-file-transfer-pane-allows.log'
+      );
+
+      expect(await remoteTree.getColumnCount()).toBe(3);
+      const sizeCell = await remoteTree.cellAt(longFileRow, 1);
+      const modifiedCell = await remoteTree.cellAt(longFileRow, 2);
+      if (sizeCell === undefined || modifiedCell === undefined) {
+        throw new Error('SFTP remote metadata cells were not exposed');
+      }
+      expect((await sizeCell.info()).name).toBe('17 bytes');
+      expect((await modifiedCell.info()).name).toMatch(
+        /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/
+      );
+
+      const treeCapture = await remoteTree.capture();
+      const sizeCapture = await sizeCell.capture();
+      const modifiedCapture = await modifiedCell.capture();
+      expect(sizeCapture.bounds.width).toBeGreaterThanOrEqual(40);
+      expect(modifiedCapture.bounds.width).toBeGreaterThanOrEqual(96);
+      expect(
+        modifiedCapture.bounds.x + modifiedCapture.bounds.width
+      ).toBeLessThanOrEqual(treeCapture.bounds.x + treeCapture.bounds.width);
+    });
+  });
+
   it('opens and closes a directory from the enlarged expander target', async (context) => {
     await runSftpFixture(
       context,

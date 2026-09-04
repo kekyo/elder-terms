@@ -198,6 +198,85 @@ describe('FTP window', () => {
       const remoteTreeElement = await app.getById('file_transfer_remote_tree');
       expect(remoteTreeElement.kind).toBe('table');
       const remoteTree = remoteTreeElement as GtkTableElement;
+      const archiveRow = await waitForResult(async () => {
+        const rows = await remoteTree.getRowCount();
+        for (let row = 0; row < rows; row += 1) {
+          const cell = await remoteTree.cellAt(row, 0);
+          if ((await cell?.info())?.name === 'archive') {
+            return row;
+          }
+        }
+        throw new Error('FTP remote directory was not listed');
+      });
+      const archiveCell = await remoteTree.cellAt(archiveRow, 0);
+      const archiveBounds = (await archiveCell?.capture())?.bounds;
+      if (archiveBounds === undefined) {
+        throw new Error('FTP remote directory did not expose bounds');
+      }
+      const remoteTreeBounds = (await remoteTree.capture()).bounds;
+      await app.input.moveMouseTo(
+        Math.round(archiveBounds.x + archiveBounds.width / 2),
+        Math.round(archiveBounds.y + archiveBounds.height / 2)
+      );
+      await app.input.setMouseButton('left', true);
+      await app.input.setMouseButton('left', false);
+      await app.input.setMouseButton('left', true);
+      await app.input.setMouseButton('left', false);
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_remote_path_entry'),
+            'entry'
+          ).text()
+        ).toBe('/remote/archive');
+      });
+      const longFileRow = await waitForResult(async () => {
+        const rows = await remoteTree.getRowCount();
+        for (let row = 0; row < rows; row += 1) {
+          const cell = await remoteTree.cellAt(row, 0);
+          if (
+            (await cell?.info())?.name ===
+            'long-remote-filename-that-keeps-extending-until-the-name-column-needs-more-space-than-the-file-transfer-pane-allows.log'
+          ) {
+            return row;
+          }
+        }
+        throw new Error('FTP expanded remote file was not listed');
+      });
+      expect(await remoteTree.getColumnCount()).toBe(3);
+      const longFileSizeCell = await remoteTree.cellAt(longFileRow, 1);
+      const longFileModifiedCell = await remoteTree.cellAt(longFileRow, 2);
+      if (
+        longFileSizeCell === undefined ||
+        longFileModifiedCell === undefined
+      ) {
+        throw new Error('FTP remote metadata cells were not exposed');
+      }
+      expect((await longFileSizeCell.info()).name).toBe('17 bytes');
+      expect((await longFileModifiedCell.info()).name).toMatch(
+        /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/
+      );
+      const longFileSizeCapture = await longFileSizeCell.capture();
+      const longFileModifiedCapture = await longFileModifiedCell.capture();
+      expect(longFileSizeCapture.bounds.width).toBeGreaterThanOrEqual(40);
+      expect(longFileModifiedCapture.bounds.width).toBeGreaterThanOrEqual(96);
+      expect(
+        longFileModifiedCapture.bounds.x + longFileModifiedCapture.bounds.width
+      ).toBeLessThanOrEqual(remoteTreeBounds.x + remoteTreeBounds.width);
+
+      await expectElementKind(
+        await app.getById('file_transfer_remote_up_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_remote_path_entry'),
+            'entry'
+          ).text()
+        ).toBe('/remote');
+      });
+
       const readmeRow = await waitForResult(async () => {
         const rows = await remoteTree.getRowCount();
         for (let row = 0; row < rows; row += 1) {

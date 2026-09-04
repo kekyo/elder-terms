@@ -416,6 +416,10 @@ create_sftp_fixture_client(bool pause_writes) {
   client->add_directory("/");
   client->add_directory("/remote");
   client->add_directory("/remote/archive");
+  client->add_file(
+      "/remote/archive/long-remote-filename-that-keeps-extending-until-the-"
+      "name-column-needs-more-space-than-the-file-transfer-pane-allows.log",
+      "long remote file\n");
   client->add_file("/remote/archive/old.log", "old remote log\n");
   client->add_file("/remote/readme.txt", "hello from remote\n");
   client->add_link("/remote/latest", "readme.txt");

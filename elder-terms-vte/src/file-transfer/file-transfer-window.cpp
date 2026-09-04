@@ -2004,7 +2004,8 @@ static FileTransferTreeRowMetrics get_file_transfer_tree_row_metrics(
 
 static void append_file_transfer_tree_column(
     GtkWidget *tree, const char *title, int model_column,
-    bool expand, const FileTransferTreeRowMetrics &row_metrics) {
+    bool expand, const char *width_sample,
+    const FileTransferTreeRowMetrics &row_metrics) {
   GtkCellRenderer *renderer = GTK_CELL_RENDERER(g_object_new(
       file_transfer_tree_cell_renderer_text_get_type(), nullptr));
   int horizontal_padding = 0;
@@ -2021,11 +2022,22 @@ static void append_file_transfer_tree_column(
       row_metrics.vertical_alignment);
   gtk_cell_renderer_set_fixed_size(
       renderer, -1, row_metrics.height);
+  int fixed_width = 1;
+  if (!expand) {
+    g_object_set(renderer, "text", width_sample, nullptr);
+    int minimum_width = 0;
+    gtk_cell_renderer_get_preferred_width(
+        renderer, tree, &minimum_width, &fixed_width);
+    g_object_set(renderer, "text", "", nullptr);
+  }
   GtkTreeViewColumn *column =
       gtk_tree_view_column_new_with_attributes(
           title, renderer, "text", model_column, nullptr);
   gtk_tree_view_column_set_sizing(
       column, GTK_TREE_VIEW_COLUMN_FIXED);
+  // The name column receives the remaining width. Explicit widths keep long
+  // names loaded later from pushing the metadata columns outside the pane.
+  gtk_tree_view_column_set_fixed_width(column, fixed_width);
   gtk_tree_view_column_set_resizable(column, TRUE);
   gtk_tree_view_column_set_expand(column, expand ? TRUE : FALSE);
   gtk_tree_view_append_column(GTK_TREE_VIEW(tree), column);
@@ -2047,12 +2059,13 @@ static GtkWidget *create_file_transfer_tree(FileTransferPaneState *pane,
   const FileTransferTreeRowMetrics row_metrics =
       get_file_transfer_tree_row_metrics(tree);
   append_file_transfer_tree_column(
-      tree, _("Name"), file_transfer_tree_name_column, true, row_metrics);
+      tree, _("Name"), file_transfer_tree_name_column, true, "", row_metrics);
   append_file_transfer_tree_column(
-      tree, _("Size"), file_transfer_tree_size_column, false, row_metrics);
+      tree, _("Size"), file_transfer_tree_size_column, false,
+      "999.9 EiB", row_metrics);
   append_file_transfer_tree_column(
       tree, _("Modified"), file_transfer_tree_modified_column, false,
-      row_metrics);
+      "0000-00-00 00:00", row_metrics);
   GtkTreeSelection *selection = gtk_tree_view_get_selection(
       GTK_TREE_VIEW(tree));
   gtk_tree_selection_set_mode(selection, GTK_SELECTION_MULTIPLE);
