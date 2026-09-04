@@ -373,9 +373,7 @@ static void load_hyperlink_settings_from_key_file(
     SettingsStore *store, GKeyFile *key_file,
     std::vector<std::string> *warnings) {
   const bool has_root = g_key_file_has_group(key_file, "hyperlink");
-  if (!has_root && !key_file_has_hyperlink_rule_group(key_file)) {
-    return;
-  }
+  const bool has_rules = key_file_has_hyperlink_rule_group(key_file);
 
   bool enabled = true;
   if (has_root &&
@@ -395,7 +393,7 @@ static void load_hyperlink_settings_from_key_file(
   store->hyperlink_actions_enabled = enabled;
   store->hyperlink_rules =
       load_hyperlink_rules_from_key_file(key_file, warnings);
-  store->hyperlink_settings_configured = true;
+  store->hyperlink_settings_configured = has_root || has_rules;
   store->hyperlink_settings_dirty = false;
 }
 
@@ -467,7 +465,7 @@ static bool load_settings_file(SettingsStore *store,
                           nullptr);
   }
   load_settings_store_from_key_file(store, key_file, warnings);
-  if (exclude_connection_settings) {
+  if (!exclude_connection_settings) {
     load_hyperlink_settings_from_key_file(store, key_file, warnings);
   }
   if (macro_rules != nullptr) {
@@ -553,11 +551,12 @@ static GKeyFile *serialize_settings(const SettingsStore &store,
     for (const MacroRule &rule : store.macro_rules) {
       set_key_file_macro_rule(key_file, rule);
     }
-  } else if (store.hyperlink_settings_configured) {
-    g_key_file_set_boolean(key_file, "hyperlink", "enabled",
-                           store.hyperlink_actions_enabled ? TRUE : FALSE);
-    for (const HyperlinkActionRule &rule : store.hyperlink_rules) {
-      set_key_file_hyperlink_rule(key_file, rule);
+    if (store.hyperlink_settings_configured) {
+      g_key_file_set_boolean(key_file, "hyperlink", "enabled",
+                             store.hyperlink_actions_enabled ? TRUE : FALSE);
+      for (const HyperlinkActionRule &rule : store.hyperlink_rules) {
+        set_key_file_hyperlink_rule(key_file, rule);
+      }
     }
   }
   return key_file;
@@ -676,10 +675,7 @@ create_global_default_settings(TerminalDisplaySettings terminal_defaults) {
     definitions.push_back(std::move(entry.definition));
   }
   append_definitions(&definitions, application_setting_definitions());
-  SettingsStore global = create_settings_store(std::move(definitions));
-  global.hyperlink_actions_enabled = connection.hyperlink_actions_enabled;
-  global.hyperlink_rules = std::move(connection.hyperlink_rules);
-  return global;
+  return create_settings_store(std::move(definitions));
 }
 
 SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
@@ -697,10 +693,7 @@ SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
   append_definitions(&definitions, ftp_connection_setting_definitions());
   append_definitions(&definitions, serial_connection_setting_definitions());
   append_definitions(&definitions, transfer_setting_definitions());
-  SettingsStore store = create_settings_store(std::move(definitions));
-  store.hyperlink_actions_enabled = true;
-  store.hyperlink_rules = default_hyperlink_action_rules();
-  return store;
+  return create_settings_store(std::move(definitions));
 }
 
 std::filesystem::path default_global_config_path() {
@@ -751,12 +744,6 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_zoom)
         load_global_settings(options.global_config_path.value(),
                              default_terminal_zoom);
     rebase_settings_store_fallbacks(&result.store, global.store);
-    result.store.hyperlink_actions_enabled =
-        global.store.hyperlink_actions_enabled;
-    result.store.hyperlink_rules = global.store.hyperlink_rules;
-    result.store.hyperlink_settings_configured =
-        global.store.hyperlink_settings_configured;
-    result.store.hyperlink_settings_dirty = false;
     result.warnings.insert(result.warnings.end(), global.warnings.begin(),
                            global.warnings.end());
   }
@@ -831,32 +818,6 @@ static void update_application_key_file_value(
                         value.c_str());
 }
 
-static void update_application_hyperlink_settings(
-    GKeyFile *key_file, const SettingsStore &store) {
-  if (!store.hyperlink_settings_dirty) {
-    return;
-  }
-
-  gsize group_count = 0;
-  gchar **groups = g_key_file_get_groups(key_file, &group_count);
-  for (gsize index = 0; index < group_count; ++index) {
-    const std::string group = groups[index];
-    if (group == "hyperlink" || group.starts_with("hyperlink.")) {
-      (void)g_key_file_remove_group(key_file, group.c_str(), nullptr);
-    }
-  }
-  g_strfreev(groups);
-
-  if (!store.hyperlink_settings_configured) {
-    return;
-  }
-  g_key_file_set_boolean(key_file, "hyperlink", "enabled",
-                         store.hyperlink_actions_enabled ? TRUE : FALSE);
-  for (const HyperlinkActionRule &rule : store.hyperlink_rules) {
-    set_key_file_hyperlink_rule(key_file, rule);
-  }
-}
-
 SettingsSaveResult save_application_settings(
     const SettingsStore &store,
     const std::filesystem::path &global_config_path) {
@@ -886,7 +847,6 @@ SettingsSaveResult save_application_settings(
       key_file, store, application_startup_mode_setting_key());
   update_application_key_file_value(
       key_file, store, application_open_hotkey_setting_key());
-  update_application_hyperlink_settings(key_file, store);
   return write_global_settings_key_file(key_file, global_config_path);
 }
 

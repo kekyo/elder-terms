@@ -235,6 +235,67 @@ static void spawn_macro_command(ApplicationState *state, std::string command,
       _("Macro command failed"), "macro_command_error_dialog");
 }
 
+static void apply_terminal_hyperlink_settings(ApplicationState *state) {
+  const std::vector<elder_terms::HyperlinkActionRule> rules =
+      elder_terms::effective_hyperlink_action_rules(state->settings_store);
+  elder_terms::destroy_terminal_hyperlink_resolver(
+      state->hyperlink_resolver);
+  state->hyperlink_resolver =
+      elder_terms::create_terminal_hyperlink_resolver(rules);
+
+  const bool osc8_actions_enabled =
+      std::any_of(rules.begin(), rules.end(),
+                  [](const elder_terms::HyperlinkActionRule &rule) {
+                    return rule.recognition_source ==
+                           elder_terms::HyperlinkRecognitionSource::osc8;
+                  });
+  vte_terminal_set_allow_hyperlink(
+      VTE_TERMINAL(state->main_window->terminal),
+      osc8_actions_enabled ? TRUE : FALSE);
+
+  std::vector<std::string> terminal_text_patterns;
+  for (const elder_terms::HyperlinkActionRule &rule : rules) {
+    if (rule.recognition_source ==
+        elder_terms::HyperlinkRecognitionSource::terminal_text) {
+      terminal_text_patterns.push_back(rule.pattern);
+    }
+  }
+  elder_terms::set_main_window_terminal_hyperlink_callbacks(
+      state->main_window, terminal_text_patterns,
+      {
+          .activate =
+              [state](elder_terms::MainWindowTerminalHyperlinkCandidates
+                          candidates) {
+                const std::optional<
+                    elder_terms::TerminalHyperlinkResolution>
+                    resolution = elder_terms::resolve_terminal_hyperlink(
+                        state->hyperlink_resolver,
+                        elder_terms::TerminalHyperlinkCandidates{
+                            .osc8_target =
+                                std::move(candidates.osc8_target),
+                            .terminal_text =
+                                std::move(candidates.terminal_text),
+                        });
+                if (!resolution.has_value()) {
+                  return false;
+                }
+                if (!resolution->action.has_value()) {
+                  show_external_command_error(
+                      state, "hyperlink command",
+                      _("Hyperlink command failed"),
+                      "hyperlink_command_error_dialog", resolution->error);
+                  return true;
+                }
+                (void)spawn_external_command(
+                    state, resolution->action->command,
+                    resolution->action->arguments, "hyperlink command",
+                    _("Hyperlink command failed"),
+                    "hyperlink_command_error_dialog");
+                return true;
+              },
+      });
+}
+
 static std::string format_translated_string(const char *format, ...) {
   va_list arguments;
   va_start(arguments, format);
@@ -648,6 +709,7 @@ static void apply_runtime_settings(ApplicationState *state,
       elder_terms::terminal_bell_settings(state->settings_store));
   elder_terms::replace_terminal_macro_runner_rules(
       state->macro_runner, state->settings_store.macro_rules);
+  apply_terminal_hyperlink_settings(state);
   const elder_terms::GeneralColorSettings colors =
       elder_terms::general_color_settings(state->settings_store);
   elder_terms::set_main_window_colors(
@@ -1673,31 +1735,6 @@ int main(int argc, char **argv) {
     elder_terms::terminal_font_families(app_state.settings_store);
   const auto terminal_key_bindings =
     elder_terms::terminal_key_bindings(app_state.settings_store);
-  const bool hyperlink_actions_enabled =
-      app_state.settings_store.hyperlink_actions_enabled &&
-      !app_state.settings_store.hyperlink_rules.empty();
-  const std::vector<elder_terms::HyperlinkActionRule> hyperlink_rules =
-      hyperlink_actions_enabled
-          ? app_state.settings_store.hyperlink_rules
-          : std::vector<elder_terms::HyperlinkActionRule>{};
-  app_state.hyperlink_resolver =
-      elder_terms::create_terminal_hyperlink_resolver(
-          hyperlink_rules);
-  const bool osc8_actions_enabled =
-      std::any_of(hyperlink_rules.begin(), hyperlink_rules.end(),
-                  [](const elder_terms::HyperlinkActionRule &rule) {
-                    return rule.recognition_source ==
-                           elder_terms::HyperlinkRecognitionSource::osc8;
-                  });
-  std::vector<std::string> terminal_text_patterns;
-  for (const elder_terms::HyperlinkActionRule &rule : hyperlink_rules) {
-    if (rule.recognition_source ==
-        elder_terms::HyperlinkRecognitionSource::terminal_text) {
-      terminal_text_patterns.push_back(rule.pattern);
-    }
-  }
-  vte_terminal_set_allow_hyperlink(
-      vte_terminal, osc8_actions_enabled ? TRUE : FALSE);
   elder_terms::set_main_window_activity_indicator_connection_kind(
       &*main_window, connection_profile->kind);
 
@@ -1787,42 +1824,7 @@ int main(int argc, char **argv) {
                                     std::move(arguments));
               },
       });
-  elder_terms::set_main_window_terminal_hyperlink_callbacks(
-      &*main_window,
-      terminal_text_patterns,
-      {
-          .activate =
-              [&app_state](
-                  elder_terms::MainWindowTerminalHyperlinkCandidates
-                      candidates) {
-                const std::optional<
-                    elder_terms::TerminalHyperlinkResolution>
-                    resolution = elder_terms::resolve_terminal_hyperlink(
-                        app_state.hyperlink_resolver,
-                        elder_terms::TerminalHyperlinkCandidates{
-                            .osc8_target =
-                                std::move(candidates.osc8_target),
-                            .terminal_text =
-                                std::move(candidates.terminal_text),
-                        });
-                if (!resolution.has_value()) {
-                  return false;
-                }
-                if (!resolution->action.has_value()) {
-                  show_external_command_error(
-                      &app_state, "hyperlink command",
-                      _("Hyperlink command failed"),
-                      "hyperlink_command_error_dialog", resolution->error);
-                  return true;
-                }
-                (void)spawn_external_command(
-                    &app_state, resolution->action->command,
-                    resolution->action->arguments,
-                    "hyperlink command", _("Hyperlink command failed"),
-                    "hyperlink_command_error_dialog");
-                return true;
-              },
-      });
+  apply_terminal_hyperlink_settings(&app_state);
   elder_terms::set_main_window_terminal_paste_callbacks(
       &*main_window,
       {

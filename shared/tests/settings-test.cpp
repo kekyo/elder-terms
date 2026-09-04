@@ -3838,25 +3838,17 @@ static void test_invalid_connection_macros_warn_and_are_ignored() {
               "invalid macro rules should emit a warning");
 }
 
-static void test_global_hyperlink_actions_override_built_in_defaults() {
+static void test_connection_hyperlink_actions_override_built_in_defaults() {
   const std::filesystem::path connection_path =
       temporary_config_path("connection-hyperlinks");
   const std::filesystem::path global_path =
       temporary_config_path("global-hyperlinks");
+  const std::filesystem::path startup_path =
+      temporary_config_path("startup-hyperlinks");
   const std::filesystem::path saved_path =
-      temporary_config_path("saved-global-hyperlinks");
-  const std::filesystem::path application_saved_path =
-      temporary_config_path("application-saved-hyperlinks");
+      temporary_config_path("saved-connection-hyperlinks");
 
   write_config(connection_path,
-               "[hyperlink]\n"
-               "enabled=false\n"
-               "\n"
-               "[hyperlink.ignored_connection]\n"
-               "regex=^ignored:(?<value>.+)$\n"
-               "command=ignored\n"
-               "arguments=${value};\n");
-  write_config(global_path,
                "[hyperlink]\n"
                "enabled=true\n"
                "\n"
@@ -3872,6 +3864,17 @@ static void test_global_hyperlink_actions_override_built_in_defaults() {
                "source=osc8\n"
                "regex=^first:(?<value>.+)$\n"
                "command=first-tool\n"
+               "arguments=${value};\n"
+               "\n"
+               "[terminal]\n"
+               "width=91\n");
+  write_config(global_path,
+               "[hyperlink]\n"
+               "enabled=false\n"
+               "\n"
+               "[hyperlink.ignored_global]\n"
+               "regex=^ignored:(?<value>.+)$\n"
+               "command=ignored\n"
                "arguments=${value};\n");
 
   const SettingsLoadResult loaded = load_settings(
@@ -3883,7 +3886,7 @@ static void test_global_hyperlink_actions_override_built_in_defaults() {
       1.0);
   expect_true(loaded.loaded, "valid hyperlink actions should load");
   expect_true(loaded.store.hyperlink_actions_enabled,
-              "connection files must not disable global hyperlink actions");
+              "global files must not disable connection hyperlink actions");
   expect_true(loaded.store.hyperlink_rules.size() == 2 &&
                   loaded.store.hyperlink_rules[0].id == "second" &&
                   loaded.store.hyperlink_rules[0].recognition_source ==
@@ -3896,26 +3899,38 @@ static void test_global_hyperlink_actions_override_built_in_defaults() {
                   loaded.store.hyperlink_rules[1].id == "first" &&
                   loaded.store.hyperlink_rules[1].recognition_source ==
                       elder_terms::HyperlinkRecognitionSource::osc8,
-              "global hyperlink section order should define priority");
+              "connection hyperlink section order should define priority");
   expect_true(loaded.store.hyperlink_settings_configured,
-              "custom global hyperlink actions should be marked configured");
+              "custom connection hyperlink actions should be marked configured");
   expect_true(!elder_terms::settings_store_is_dirty(loaded.store),
               "loaded hyperlink actions should start clean");
 
-  SettingsLoadResult editable = load_global_settings(global_path, 1.0);
+  const SettingsLoadResult global = load_global_settings(global_path, 1.0);
+  expect_true(global.store.hyperlink_rules.empty() &&
+                  !global.store.hyperlink_settings_configured &&
+                  elder_terms::effective_hyperlink_action_rules(global.store)
+                          .size() == 4,
+              "global hyperlink sections should be ignored");
+
   const SettingsSaveResult saved =
-      save_global_settings(editable.store, saved_path);
-  expect_true(saved.saved, "global hyperlink actions should save");
-  const SettingsLoadResult reloaded = load_global_settings(saved_path, 1.0);
+      save_settings(loaded.store, saved_path);
+  expect_true(saved.saved, "connection hyperlink actions should save");
+  SettingsLoadResult reloaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = saved_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = std::nullopt,
+      },
+      1.0);
   expect_true(reloaded.store.hyperlink_actions_enabled ==
-                      editable.store.hyperlink_actions_enabled &&
+                      loaded.store.hyperlink_actions_enabled &&
                   reloaded.store.hyperlink_rules ==
-                      editable.store.hyperlink_rules &&
+                      loaded.store.hyperlink_rules &&
                   reloaded.store.hyperlink_settings_configured,
-              "global hyperlink actions should round trip");
+              "connection hyperlink actions should round trip");
 
   elder_terms::set_hyperlink_actions(
-      &editable.store, false,
+      &reloaded.store, false,
       {elder_terms::HyperlinkActionRule{
           .id = "replacement",
           .recognition_source =
@@ -3926,62 +3941,72 @@ static void test_global_hyperlink_actions_override_built_in_defaults() {
           .path_validation = elder_terms::HyperlinkPathValidation::none,
           .path_template = {},
       }});
-  expect_true(elder_terms::settings_store_is_dirty(editable.store),
+  expect_true(elder_terms::settings_store_is_dirty(reloaded.store),
               "replacing hyperlink actions should mark the store dirty");
 
-  write_config(application_saved_path,
-               "[terminal]\n"
-               "width=91\n"
-               "\n"
-               "[hyperlink.old]\n"
-               "regex=^old$\n"
-               "command=old-tool\n");
-  const SettingsSaveResult application_saved =
-      elder_terms::save_application_settings(editable.store,
-                                             application_saved_path);
-  const std::string custom_content = read_config(application_saved_path);
-  expect_true(application_saved.saved &&
+  const SettingsSaveResult replaced = save_settings(reloaded.store, saved_path);
+  const std::string custom_content = read_config(saved_path);
+  expect_true(replaced.saved &&
                   custom_content.find("[hyperlink.replacement]") !=
                       std::string::npos &&
-                  custom_content.find("[hyperlink.old]") ==
+                  custom_content.find("[hyperlink.http-url-osc8]") ==
                       std::string::npos &&
                   custom_content.find("width=91") != std::string::npos,
-              "application settings should replace changed link rules and "
-              "preserve unrelated global defaults");
+              "connection settings should save only explicitly configured "
+              "link rules");
 
-  elder_terms::reset_hyperlink_actions(&editable.store);
+  elder_terms::reset_hyperlink_actions(&reloaded.store);
   const SettingsSaveResult reset_saved =
-      elder_terms::save_application_settings(editable.store,
-                                             application_saved_path);
-  const std::string reset_content = read_config(application_saved_path);
+      save_settings(reloaded.store, saved_path);
+  const std::string reset_content = read_config(saved_path);
   expect_true(reset_saved.saved &&
                   reset_content.find("[hyperlink") == std::string::npos &&
                   reset_content.find("width=91") != std::string::npos,
               "restoring built-in link rules should remove explicit link "
-              "groups and preserve unrelated global defaults");
+              "groups and preserve unrelated connection settings");
+
+  write_config(startup_path, "[terminal]\nheight=31\n");
+  const SettingsLoadResult startup_defaults = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = startup_path,
+          .global_config_path = global_path,
+      },
+      1.0);
+  const std::vector<elder_terms::HyperlinkActionRule> startup_rules =
+      elder_terms::effective_hyperlink_action_rules(startup_defaults.store);
+  expect_true(startup_defaults.store.hyperlink_rules.empty() &&
+                  !startup_defaults.store.hyperlink_settings_configured &&
+                  startup_rules.size() == 4 &&
+                  startup_rules[0].id == "http-url-osc8",
+              "a startup profile without link rules should replace connection "
+              "rules with built-in defaults");
 
   remove_config(connection_path);
   remove_config(global_path);
+  remove_config(startup_path);
   remove_config(saved_path);
-  remove_config(application_saved_path);
 }
 
 static void test_hyperlink_defaults_disable_and_invalid_rules() {
   const SettingsStore defaults = create_default_settings(
       default_terminal_display_settings(1.0), "defaults");
+  const std::vector<elder_terms::HyperlinkActionRule> default_rules =
+      elder_terms::effective_hyperlink_action_rules(defaults);
   expect_true(defaults.hyperlink_actions_enabled &&
-                  defaults.hyperlink_rules.size() == 4 &&
-                  defaults.hyperlink_rules[0].id == "http-url-osc8" &&
-                  defaults.hyperlink_rules[0].recognition_source ==
+                  defaults.hyperlink_rules.empty() &&
+                  default_rules.size() == 4 &&
+                  default_rules[0].id == "http-url-osc8" &&
+                  default_rules[0].recognition_source ==
                       elder_terms::HyperlinkRecognitionSource::osc8 &&
-                  defaults.hyperlink_rules[0].command == "xdg-open" &&
-                  defaults.hyperlink_rules[0].arguments ==
+                  default_rules[0].command == "xdg-open" &&
+                  default_rules[0].arguments ==
                       std::vector<std::string>{"${0}"} &&
-                  defaults.hyperlink_rules[1].id == "http-url-text" &&
-                  defaults.hyperlink_rules[1].recognition_source ==
+                  default_rules[1].id == "http-url-text" &&
+                  default_rules[1].recognition_source ==
                       elder_terms::HyperlinkRecognitionSource::terminal_text &&
-                  defaults.hyperlink_rules[2].id == "vscode-line-column" &&
-                  defaults.hyperlink_rules[3].id == "vscode-line" &&
+                  default_rules[2].id == "vscode-line-column" &&
+                  default_rules[3].id == "vscode-line" &&
                   !defaults.hyperlink_settings_configured,
               "URL and VS Code hyperlink actions should be built in by "
               "default");
@@ -3991,12 +4016,38 @@ static void test_hyperlink_defaults_disable_and_invalid_rules() {
   write_config(disabled_path,
                "[hyperlink]\n"
                "enabled=false\n");
-  const SettingsLoadResult disabled =
-      load_global_settings(disabled_path, 1.0);
+  const SettingsLoadResult disabled = load_settings(
+      SettingsLoadOptions{
+          .config_path = disabled_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = std::nullopt,
+      },
+      1.0);
   expect_true(!disabled.store.hyperlink_actions_enabled &&
                   disabled.store.hyperlink_rules.empty() &&
-                  disabled.store.hyperlink_settings_configured,
+                  disabled.store.hyperlink_settings_configured &&
+                  elder_terms::effective_hyperlink_action_rules(disabled.store)
+                      .empty(),
               "an explicit disabled section should suppress built-in rules");
+
+  const std::filesystem::path empty_path =
+      temporary_config_path("empty-hyperlinks");
+  write_config(empty_path,
+               "[hyperlink]\n"
+               "enabled=true\n");
+  const SettingsLoadResult empty = load_settings(
+      SettingsLoadOptions{
+          .config_path = empty_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = std::nullopt,
+      },
+      1.0);
+  expect_true(empty.store.hyperlink_rules.empty() &&
+                  empty.store.hyperlink_settings_configured &&
+                  elder_terms::effective_hyperlink_action_rules(empty.store)
+                          .size() == 4,
+              "built-in rules should apply when no connection rule is "
+              "defined");
 
   const std::filesystem::path invalid_path =
       temporary_config_path("invalid-hyperlinks");
@@ -4015,9 +4066,17 @@ static void test_hyperlink_defaults_disable_and_invalid_rules() {
                "regex=^valid:(?<path>.+)$\n"
                "command=valid-tool\n"
                "arguments=${path|uri-decode};\n");
-  const SettingsLoadResult invalid = load_global_settings(invalid_path, 1.0);
+  const SettingsLoadResult invalid = load_settings(
+      SettingsLoadOptions{
+          .config_path = invalid_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = std::nullopt,
+      },
+      1.0);
   expect_true(invalid.store.hyperlink_rules.size() == 1 &&
-                  invalid.store.hyperlink_rules[0].id == "valid",
+                  invalid.store.hyperlink_rules[0].id == "valid" &&
+                  elder_terms::effective_hyperlink_action_rules(invalid.store)
+                          .size() == 1,
               "invalid custom rules should not restore built-in actions or "
               "disable valid custom rules");
   expect_true(warnings_contain(invalid.warnings,
@@ -4057,6 +4116,7 @@ static void test_hyperlink_defaults_disable_and_invalid_rules() {
       "path validation must name the expanded value to inspect");
 
   remove_config(disabled_path);
+  remove_config(empty_path);
   remove_config(invalid_path);
 }
 
@@ -4215,7 +4275,7 @@ int main() {
     elder_terms_settings_test::test_connection_macro_settings_round_trip_and_layering();
     elder_terms_settings_test::test_invalid_connection_macros_warn_and_are_ignored();
     elder_terms_settings_test::
-        test_global_hyperlink_actions_override_built_in_defaults();
+        test_connection_hyperlink_actions_override_built_in_defaults();
     elder_terms_settings_test::
         test_hyperlink_defaults_disable_and_invalid_rules();
     elder_terms_settings_test::test_missing_global_settings_are_optional();

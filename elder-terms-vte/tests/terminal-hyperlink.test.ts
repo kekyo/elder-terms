@@ -21,6 +21,7 @@ describe.concurrent('elder-terms-vte terminal links', () => {
       const shellPath = join(directory, 'osc-link-shell.sh');
       const shellReadyPath = join(directory, 'shell-ready.txt');
       const shellReleasePath = join(directory, 'shell-release.txt');
+      const configPath = join(directory, 'connection.ini');
 
       await writeFile(
         actionPath,
@@ -51,7 +52,7 @@ describe.concurrent('elder-terms-vte terminal links', () => {
       );
       await chmod(shellPath, 0o755);
 
-      const globalSettings = [
+      const connectionSettings = [
         '[hyperlink]',
         'enabled=true',
         '',
@@ -61,11 +62,12 @@ describe.concurrent('elder-terms-vte terminal links', () => {
         'arguments=--goto;${path|uri-decode}:${line}:${column};two words;',
         '',
       ].join('\n');
+      await writeFile(configPath, connectionSettings, 'utf8');
 
       try {
         await runGtkTest(
           context,
-          [],
+          ['-c', configPath],
           async (app) => {
             await waitForResult(
               async () => {
@@ -108,7 +110,6 @@ describe.concurrent('elder-terms-vte terminal links', () => {
           },
           {
             env: { SHELL: shellPath },
-            globalSettings,
           }
         );
       } finally {

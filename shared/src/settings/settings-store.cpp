@@ -132,17 +132,24 @@ void set_hyperlink_actions(SettingsStore *store, bool enabled,
 }
 
 void reset_hyperlink_actions(SettingsStore *store) {
-  const std::vector<HyperlinkActionRule> defaults =
-      default_hyperlink_action_rules();
   if (store->hyperlink_actions_enabled &&
-      store->hyperlink_rules == defaults &&
+      store->hyperlink_rules.empty() &&
       !store->hyperlink_settings_configured) {
     return;
   }
   store->hyperlink_actions_enabled = true;
-  store->hyperlink_rules = defaults;
+  store->hyperlink_rules.clear();
   store->hyperlink_settings_configured = false;
   store->hyperlink_settings_dirty = true;
+}
+
+std::vector<HyperlinkActionRule>
+effective_hyperlink_action_rules(const SettingsStore &store) {
+  if (!store.hyperlink_actions_enabled) {
+    return {};
+  }
+  return store.hyperlink_rules.empty() ? default_hyperlink_action_rules()
+                                       : store.hyperlink_rules;
 }
 
 void load_settings_store_from_key_file(SettingsStore *store,
