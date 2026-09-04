@@ -504,6 +504,8 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'libxkbcommon-dev',
       'meson',
       'npm',
+      'openssh-client',
+      'xdg-utils',
     ]) {
       expect(containerfile).toContain(dependency);
     }

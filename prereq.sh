@@ -50,7 +50,9 @@ meson
 ninja-build
 nodejs
 npm
+openssh-client
 pkg-config
+xdg-utils
 EOF
 }
 
