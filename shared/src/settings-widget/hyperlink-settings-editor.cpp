@@ -736,12 +736,20 @@ create_hyperlink_settings_editor(HyperlinkSettingsEditorOptions options) {
   state->store = options.store;
   state->id_prefix = std::move(options.id_prefix);
   state->changed = std::move(options.changed);
-  state->root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
-  gtk_widget_set_margin_top(state->root, 16);
-  gtk_widget_set_margin_bottom(state->root, 16);
-  gtk_widget_set_margin_start(state->root, 16);
-  gtk_widget_set_margin_end(state->root, 16);
+  state->root = gtk_scrolled_window_new(nullptr, nullptr);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(state->root),
+                                 GTK_POLICY_AUTOMATIC,
+                                 GTK_POLICY_AUTOMATIC);
+  gtk_widget_set_hexpand(state->root, TRUE);
+  gtk_widget_set_vexpand(state->root, TRUE);
   assign_accessible_id(state->root, widget_id(state, "link_page"));
+
+  GtkWidget *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_set_margin_top(content, 16);
+  gtk_widget_set_margin_bottom(content, 16);
+  gtk_widget_set_margin_start(content, 16);
+  gtk_widget_set_margin_end(content, 16);
+  gtk_container_add(GTK_CONTAINER(state->root), content);
 
   GtkWidget *top = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_box_pack_start(GTK_BOX(top), create_label(_("Link actions")), FALSE,
@@ -768,14 +776,14 @@ create_hyperlink_settings_editor(HyperlinkSettingsEditorOptions options) {
   g_signal_connect(state->reset_button, "clicked",
                    G_CALLBACK(on_reset_clicked), state);
   gtk_box_pack_start(GTK_BOX(top), state->reset_button, FALSE, FALSE, 0);
-  gtk_box_pack_start(GTK_BOX(state->root), top, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(content), top, FALSE, FALSE, 0);
 
   GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
   gtk_widget_set_hexpand(paned, TRUE);
   gtk_widget_set_vexpand(paned, TRUE);
   gtk_paned_pack1(GTK_PANED(paned), create_rule_panel(state), FALSE, FALSE);
   gtk_paned_pack2(GTK_PANED(paned), create_rule_editor(state), TRUE, FALSE);
-  gtk_box_pack_start(GTK_BOX(state->root), paned, TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(content), paned, TRUE, TRUE, 0);
 
   if (state->store != nullptr && !state->store->hyperlink_rules.empty()) {
     state->selected_rule = 0;
@@ -787,6 +795,21 @@ create_hyperlink_settings_editor(HyperlinkSettingsEditorOptions options) {
 GtkWidget *hyperlink_settings_editor_root(
     HyperlinkSettingsEditorState *state) {
   return state == nullptr ? nullptr : state->root;
+}
+
+void sync_hyperlink_settings_editor(HyperlinkSettingsEditorState *state) {
+  if (state == nullptr || state->store == nullptr) {
+    return;
+  }
+  const bool previous_synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  gtk_combo_box_set_active_id(
+      GTK_COMBO_BOX(state->enabled_combo),
+      state->store->hyperlink_actions_enabled ? "enabled" : "disabled");
+  state->selected_rule = state->store->hyperlink_rules.empty() ? -1 : 0;
+  state->next_rule_number = 1;
+  rebuild_rule_list(state);
+  state->synchronizing = previous_synchronizing;
 }
 
 bool hyperlink_settings_editor_is_valid(

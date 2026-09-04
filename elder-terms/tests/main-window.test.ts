@@ -408,6 +408,16 @@ describe('elder-terms main window', () => {
         await app.getById('application_settings_open_application_entry'),
         'entry'
       );
+      expectElementKind(
+        await app.getById('application_settings_general_page'),
+        'container'
+      );
+      await expect(
+        app.getById('application_settings_notebook')
+      ).rejects.toThrow();
+      await expect(
+        app.getById('application_settings_link_add_button')
+      ).rejects.toThrow();
       await expectElementKind(
         await app.getById('application_dialog_cancel_button'),
         'button'
@@ -462,7 +472,7 @@ describe('elder-terms main window', () => {
     );
   });
 
-  it('edits, disables, saves, and resets terminal link rules', async (context) => {
+  it('edits, disables, saves, and resets terminal link rules per connection', async (context) => {
     await runLauncherGtkTest(
       context,
       async (connections) => {
@@ -473,35 +483,45 @@ describe('elder-terms main window', () => {
           'utf8'
         );
       },
-      async ({ app, configHome }) => {
+      async ({ app, configHome, connections }) => {
         const globalConfigPath = join(configHome, 'elder-terms', 'global.ini');
-        await openApplicationDialogPage(app, 'application_settings_menu_item');
-        await selectSettingsTab(app, 'application_settings', 'Links');
+        const connectionConfigPath = join(connections, 'Alpha.ini');
+        const list = await app.getById('connection_list');
+        await selectConnectionRow(app, list, 0);
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('settings_general_name_entry'),
+              'entry'
+            ).text()
+          ).toBe('Alpha');
+        });
+        await selectSettingsTab(app, 'settings', 'Links');
 
         const save = expectElementKind(
-          await app.getById('application_dialog_save_button'),
+          await app.getById('apply_button'),
           'button'
         );
         await expectElementKind(
-          await app.getById('application_settings_link_add_button'),
+          await app.getById('settings_link_add_button'),
           'button'
         ).click();
         await expectInsensitive(save);
 
         const id = expectElementKind(
-          await app.getById('application_settings_link_id_entry'),
+          await app.getById('settings_link_id_entry'),
           'entry'
         );
         const source = expectElementKind(
-          await app.getById('application_settings_link_source_combo'),
+          await app.getById('settings_link_source_combo'),
           'comboBox'
         );
         const regex = expectElementKind(
-          await app.getById('application_settings_link_regex_entry'),
+          await app.getById('settings_link_regex_entry'),
           'entry'
         );
         const command = expectElementKind(
-          await app.getById('application_settings_link_command_entry'),
+          await app.getById('settings_link_command_entry'),
           'entry'
         );
         expect(await id.text()).toBe('rule1');
@@ -510,53 +530,60 @@ describe('elder-terms main window', () => {
         await regex.setText('^file:(?<path>/[^ ]+)$');
         await command.setText('xdg-open');
         await expectElementKind(
-          await app.getById('application_settings_link_argument_add_button'),
+          await app.getById('settings_link_argument_add_button'),
           'button'
         ).click();
         await expectElementKind(
-          await app.getById('application_settings_link_argument_0_entry'),
+          await app.getById('settings_link_argument_0_entry'),
           'entry'
         ).setText('${path}');
         await expectElementKind(
-          await app.getById('application_settings_link_validation_combo'),
+          await app.getById('settings_link_validation_combo'),
           'comboBox'
         ).selectChildAt(1);
         await expectElementKind(
-          await app.getById('application_settings_link_path_entry'),
+          await app.getById('settings_link_path_entry'),
           'entry'
         ).setText('${path}');
         await expectElementKind(
-          await app.getById('application_settings_link_enabled_combo'),
+          await app.getById('settings_link_enabled_combo'),
           'comboBox'
         ).selectChildAt(1);
         await expectSensitive(save);
         await save.click();
-        await waitForWindowCount(app, 1);
 
-        const configured = await readFile(globalConfigPath, 'utf8');
-        expect(configured).toContain('[hyperlink]\nenabled=false');
+        let configured = '';
+        await waitForResult(async () => {
+          configured = await readFile(connectionConfigPath, 'utf8');
+          expect(configured).toContain('[hyperlink]\nenabled=false');
+        });
         expect(configured).toContain('[hyperlink.local-file]');
+        expect(configured).not.toContain('[hyperlink.http-url-osc8]');
         expect(configured).toContain('source=terminal-text');
         expect(configured).toContain('command=xdg-open');
         expect(configured).toContain('path_validation=existing-local-path');
         expect(configured).toContain('path=${path}');
-        expect(configured).toContain('width=91');
+        expect(configured).toContain('width=88');
+        const globalConfigured = await readFile(globalConfigPath, 'utf8');
+        expect(globalConfigured).not.toContain('[hyperlink');
+        expect(globalConfigured).toContain('width=91');
 
-        await openApplicationDialogPage(app, 'application_settings_menu_item');
-        await selectSettingsTab(app, 'application_settings', 'Links');
+        await selectSettingsTab(app, 'settings', 'Links');
         await expectElementKind(
-          await app.getById('application_settings_link_reset_button'),
+          await app.getById('settings_link_reset_button'),
           'button'
         ).click();
         await expectElementKind(
-          await app.getById('application_dialog_save_button'),
+          await app.getById('apply_button'),
           'button'
         ).click();
-        await waitForWindowCount(app, 1);
 
-        const reset = await readFile(globalConfigPath, 'utf8');
-        expect(reset).not.toContain('[hyperlink');
-        expect(reset).toContain('width=91');
+        let reset = '';
+        await waitForResult(async () => {
+          reset = await readFile(connectionConfigPath, 'utf8');
+          expect(reset).not.toContain('[hyperlink');
+        });
+        expect(reset).toContain('width=88');
       }
     );
   });

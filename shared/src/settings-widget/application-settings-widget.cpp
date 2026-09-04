@@ -9,7 +9,6 @@
 #define GETTEXT_PACKAGE "elder-terms"
 #include <glib/gi18n-lib.h>
 
-#include "hyperlink-settings-editor.h"
 #include "settings-presentation.h"
 
 namespace elder_terms {
@@ -42,7 +41,6 @@ struct ApplicationSettingsWidgetState {
   GtkWidget *startup_mode_combo = nullptr;
   KeyBindingInputWidgetState *open_application_input = nullptr;
   GtkWidget *open_application_reset_button = nullptr;
-  HyperlinkSettingsEditorState *hyperlink_editor = nullptr;
 };
 
 static void assign_accessible_id(GtkWidget *widget, const char *id) {
@@ -258,10 +256,8 @@ create_application_settings_widget(ApplicationSettingsWidgetOptions options) {
   state->id_prefix = std::move(options.id_prefix);
   state->changed = std::move(options.changed);
 
-  state->root = gtk_notebook_new();
-  assign_accessible_id(state->root,
-                       widget_id(state, "notebook").c_str());
   GtkWidget *general_page = gtk_grid_new();
+  state->root = general_page;
   gtk_grid_set_row_spacing(GTK_GRID(general_page), 12);
   gtk_grid_set_column_spacing(GTK_GRID(general_page), 16);
   gtk_widget_set_margin_top(general_page, 20);
@@ -309,18 +305,6 @@ create_application_settings_widget(ApplicationSettingsWidgetOptions options) {
   attach_row(general_page, 2, application_open_hotkey_setting_key(),
              hotkey_row);
 
-  gtk_notebook_append_page(GTK_NOTEBOOK(state->root), general_page,
-                           gtk_label_new(_("General")));
-  state->hyperlink_editor = create_hyperlink_settings_editor({
-      .store = &state->draft_store,
-      .id_prefix = state->id_prefix,
-      .changed = [state]() { notify_changed(state); },
-  });
-  gtk_notebook_append_page(
-      GTK_NOTEBOOK(state->root),
-      hyperlink_settings_editor_root(state->hyperlink_editor),
-      gtk_label_new(_("Links")));
-
   sync_widgets(state);
   return state;
 }
@@ -340,8 +324,7 @@ bool application_settings_widget_is_dirty(
 bool application_settings_widget_is_valid(
     const ApplicationSettingsWidgetState *state) {
   return state != nullptr && key_binding_input_widget_is_valid(
-                                 state->open_application_input) &&
-         hyperlink_settings_editor_is_valid(state->hyperlink_editor);
+                                 state->open_application_input);
 }
 
 GtkWidget *application_settings_widget_root(
@@ -355,7 +338,6 @@ void destroy_application_settings_widget(
     return;
   }
   destroy_key_binding_input_widget(state->open_application_input);
-  destroy_hyperlink_settings_editor(state->hyperlink_editor);
   if (state->root != nullptr && gtk_widget_get_parent(state->root) == nullptr) {
     gtk_widget_destroy(state->root);
   }

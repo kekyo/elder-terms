@@ -24,6 +24,7 @@
 #include <elder-terms/settings/general-settings.h>
 #include <elder-terms/settings/regular-expression.h>
 
+#include "hyperlink-settings-editor.h"
 #include "settings-presentation.h"
 
 namespace elder_terms {
@@ -144,6 +145,7 @@ struct SettingsWidgetState {
   GtkWidget *macro_remove_button = nullptr;
   GtkWidget *macro_move_up_button = nullptr;
   GtkWidget *macro_move_down_button = nullptr;
+  HyperlinkSettingsEditorState *hyperlink_editor = nullptr;
   int selected_macro = -1;
   unsigned int next_macro_number = 1;
   GtkWidget *telnet_address_entry = nullptr;
@@ -1528,7 +1530,9 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
          state->transfer_text_send_rate_valid &&
          terminal_key_binding_inputs_valid(state) &&
          connection_hotkey_input_valid(state) &&
-         state->log_file_name_format_valid && macro_rules_are_valid(state);
+         state->log_file_name_format_valid && macro_rules_are_valid(state) &&
+         (state->hyperlink_editor == nullptr ||
+          hyperlink_settings_editor_is_valid(state->hyperlink_editor));
 }
 
 static void notify_changed(SettingsWidgetState *state) {
@@ -3448,6 +3452,9 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
   }
   if (state->macro_list != nullptr) {
     rebuild_macro_list(state);
+  }
+  if (state->hyperlink_editor != nullptr) {
+    sync_hyperlink_settings_editor(state->hyperlink_editor);
   }
   if (state->notebook != nullptr) {
     update_connection_pages(state);
@@ -5880,6 +5887,33 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
         .page = macro_page,
         .tab_label = macro_tab,
     });
+
+    state->hyperlink_editor = create_hyperlink_settings_editor({
+        .store = &state->draft_store,
+        .id_prefix = state->id_prefix,
+        .changed = [state]() {
+          update_action_sensitivity(state);
+          notify_changed(state);
+        },
+    });
+    GtkWidget *link_page =
+        hyperlink_settings_editor_root(state->hyperlink_editor);
+    const std::string link_tab_id = widget_id(state, "link_tab");
+    GtkWidget *link_tab = create_tab_button(
+        state, link_page, settings_ui_text(SettingsUiText::links_tab),
+        link_tab_id.c_str());
+    gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), link_page,
+                             link_tab);
+    gtk_widget_show_all(link_page);
+    gtk_widget_show_all(link_tab);
+    gtk_widget_set_no_show_all(link_page, TRUE);
+    gtk_widget_set_no_show_all(link_tab, TRUE);
+    state->connection_pages.push_back({
+        .connection_types = {local_connection_type, telnet_connection_type,
+                             serial_connection_type, ssh_connection_type},
+        .page = link_page,
+        .tab_label = link_tab,
+    });
   }
 
   if (state->show_actions) {
@@ -6114,6 +6148,7 @@ void destroy_settings_widget(SettingsWidgetState *state) {
   destroy_key_binding_input_widget(state->terminal_send_break_key_input);
   destroy_key_binding_input_widget(
       state->general_open_connection_input);
+  destroy_hyperlink_settings_editor(state->hyperlink_editor);
   if (state->root != nullptr && gtk_widget_get_parent(state->root) == nullptr) {
     gtk_widget_destroy(state->root);
   }

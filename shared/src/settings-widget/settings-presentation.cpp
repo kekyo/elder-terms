@@ -194,6 +194,8 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Terminal");
   case SettingsUiText::macro_tab:
     return _("Macro");
+  case SettingsUiText::links_tab:
+    return _("Links");
   case SettingsUiText::transfer_tab:
     return _("Transfer");
   case SettingsUiText::logging_tab:

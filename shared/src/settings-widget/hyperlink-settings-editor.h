@@ -23,6 +23,8 @@ create_hyperlink_settings_editor(HyperlinkSettingsEditorOptions options);
 GtkWidget *hyperlink_settings_editor_root(
     HyperlinkSettingsEditorState *state);
 
+void sync_hyperlink_settings_editor(HyperlinkSettingsEditorState *state);
+
 bool hyperlink_settings_editor_is_valid(
     const HyperlinkSettingsEditorState *state);
 

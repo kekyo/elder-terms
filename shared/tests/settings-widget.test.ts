@@ -766,6 +766,7 @@ describe.concurrent('shared settings widget', () => {
           'Transfer',
           'Logging',
           'Macro',
+          'Links',
         ],
       },
       {
@@ -777,6 +778,7 @@ describe.concurrent('shared settings widget', () => {
           'Transfer',
           'Logging',
           'Macro',
+          'Links',
         ],
       },
       {
@@ -788,6 +790,7 @@ describe.concurrent('shared settings widget', () => {
           'Transfer',
           'Logging',
           'Macro',
+          'Links',
         ],
       },
       {
@@ -799,6 +802,7 @@ describe.concurrent('shared settings widget', () => {
           'Transfer',
           'Logging',
           'Macro',
+          'Links',
         ],
       },
       {
