@@ -1423,6 +1423,156 @@ describe('SFTP window', () => {
     );
   });
 
+  it('shows local and remote file hashes from the pane context menus', async (context) => {
+    await runSftpFixture(context, false, [], undefined, async ({ app }) => {
+      const localTree = expectTable(
+        await app.getById('file_transfer_local_tree')
+      );
+      const remoteTree = expectTable(
+        await app.getById('file_transfer_remote_tree')
+      );
+      await openContextMenu(
+        app,
+        localTree,
+        await findRow(localTree, 'hello.txt')
+      );
+      await expectElementKind(
+        await app.getById('file_transfer_local_hash_item'),
+        'menuItem'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_title_label'),
+            'label'
+          ).text()
+        ).toBe('File hash values');
+      });
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_message_label'),
+          'label'
+        ).text()
+      ).toBe('hello.txt');
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_monospace_message_label'),
+          'label'
+        ).text()
+      ).toBe(
+        [
+          'MD5: 7670ba85103f6872fca913c4b8b7f34d',
+          'SHA1: 62ad614351bea67cc944128bf51c398b51d172a2',
+          'SHA256: 8c669207eccffd4b0d14436f7ae3beaef38cc0606b2fe72afde93b1759567668',
+        ].join('\n')
+      );
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+      await expectHidden(await app.getById('file_transfer_prompt_panel'));
+
+      await openContextMenu(
+        app,
+        remoteTree,
+        await findRow(remoteTree, 'readme.txt')
+      );
+      await expectElementKind(
+        await app.getById('file_transfer_remote_hash_item'),
+        'menuItem'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_title_label'),
+            'label'
+          ).text()
+        ).toBe('File hash values');
+      });
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_message_label'),
+          'label'
+        ).text()
+      ).toBe('readme.txt');
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_monospace_message_label'),
+          'label'
+        ).text()
+      ).toBe(
+        [
+          'MD5: f840a57e7c2e27409f9a22366c97aa38',
+          'SHA1: 4e9891113f487a51fda4942050b67e650e6db5eb',
+          'SHA256: d79bda8bec3b76fa69692436f1d8ce37a168df014f925dd1fc18c58a550d05a9',
+        ].join('\n')
+      );
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_status_label'),
+            'label'
+          ).text()
+        ).toBe('Hash calculation complete');
+      });
+    });
+  });
+
+  it('animates and cancels a long-running remote hash calculation', async (context) => {
+    await runSftpFixture(context, true, [], undefined, async ({ app }) => {
+      const remoteTree = expectTable(
+        await app.getById('file_transfer_remote_tree')
+      );
+      await openContextMenu(
+        app,
+        remoteTree,
+        await findRow(remoteTree, 'readme.txt')
+      );
+      await expectElementKind(
+        await app.getById('file_transfer_remote_hash_item'),
+        'menuItem'
+      ).click();
+
+      await expectShowing(await app.getById('file_transfer_overlay'));
+      await expectShowing(await app.getById('file_transfer_dim_overlay'));
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_label'),
+          'label'
+        ).text()
+      ).toBe('Calculating hash values…');
+      const progress = expectElementKind(
+        await app.getById('file_transfer_progress'),
+        'progressBar'
+      );
+      const initialProgressImage = (await progress.capture()).image;
+      await waitForResult(async () => {
+        expect(
+          (await progress.capture()).image.equals(initialProgressImage)
+        ).toBe(false);
+      });
+
+      await expectElementKind(
+        await app.getById('file_transfer_cancel_button'),
+        'button'
+      ).click();
+      await expectHidden(await app.getById('file_transfer_overlay'));
+      await expectHidden(await app.getById('file_transfer_dim_overlay'));
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_status_label'),
+            'label'
+          ).text()
+        ).toBe('Hash calculation cancelled');
+      });
+    });
+  });
+
   it('renames local and remote files and directories from the pane context menus', async (context) => {
     await runSftpFixture(
       context,

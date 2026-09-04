@@ -102,6 +102,7 @@ struct FileTransferPaneState {
   GtkTreeStore *store = nullptr;
   GtkWidget *menu = nullptr;
   GtkWidget *transfer_item = nullptr;
+  GtkWidget *hash_item = nullptr;
   GtkWidget *rename_item = nullptr;
   GtkWidget *delete_item = nullptr;
   std::string current_directory;
@@ -139,6 +140,8 @@ struct FileTransferWindow {
   FileTransferPaneState remote;
   std::shared_ptr<RemoteFileClient> client;
   std::shared_ptr<InlinePromptController> prompt;
+  std::function<cardio::promise<FileHashes>(
+      std::string, cardio::cancellation)> remote_file_hash;
   std::function<void()> closed;
   cardio::cancellation_source stop_source;
   std::optional<cardio::cancellation_source> transfer_cancel_source;
@@ -534,6 +537,14 @@ static void update_file_transfer_sensitivity(FileTransferWindow *window) {
   gtk_widget_set_sensitive(
       window->remote.transfer_item,
       idle && window->connection_available);
+  if (window->local.hash_item != nullptr) {
+    gtk_widget_set_sensitive(window->local.hash_item, idle);
+  }
+  if (window->remote.hash_item != nullptr) {
+    gtk_widget_set_sensitive(
+        window->remote.hash_item,
+        idle && window->connection_available);
+  }
   gtk_widget_set_sensitive(window->local.rename_item, idle);
   gtk_widget_set_sensitive(
       window->remote.rename_item,
@@ -627,8 +638,13 @@ static void set_file_transfer_browser_action_phase(
     const std::string &progress_label) {
   window->browser_action_active = active;
   window->browser_action_progress = active && show_progress;
+  const bool cancellable =
+      window->transfer_active ||
+      window->transfer_cancel_source.has_value();
   set_widget_visible(window->transfer_cancel_button,
-                     window->transfer_active);
+                     cancellable);
+  gtk_widget_set_sensitive(window->transfer_cancel_button,
+                           cancellable);
   if (window->browser_action_progress) {
     gtk_label_set_text(GTK_LABEL(window->transfer_label),
                        progress_label.c_str());
@@ -1200,6 +1216,13 @@ static gboolean on_file_transfer_tree_button_press(
   }
   gtk_widget_set_sensitive(pane->rename_item,
                            items.size() == 1 ? TRUE : FALSE);
+  if (pane->hash_item != nullptr) {
+    const bool hashable =
+        items.size() == 1 &&
+        items.front().type == RemoteFileType::regular;
+    gtk_widget_set_sensitive(pane->hash_item,
+                             hashable ? TRUE : FALSE);
+  }
   gtk_widget_set_sensitive(pane->delete_item, TRUE);
   gtk_menu_popup_at_pointer(GTK_MENU(pane->menu),
                             reinterpret_cast<GdkEvent *>(event));
@@ -1370,6 +1393,108 @@ static void start_file_transfer_rename(FileTransferPaneState *pane) {
 static void on_file_transfer_rename_item_activate(
     GtkMenuItem *, gpointer data) {
   start_file_transfer_rename(
+      static_cast<FileTransferPaneState *>(data));
+}
+
+static std::string file_transfer_hash_message(
+    const FileHashes &hashes) {
+  return "MD5: " + hashes.md5 + "\nSHA1: " + hashes.sha1 +
+         "\nSHA256: " + hashes.sha256;
+}
+
+static cardio::promise<void> run_file_transfer_hash_async(
+    FileTransferPaneState *pane, FileTransferSelectedItem item) {
+  FileTransferWindow *window = pane->window;
+  const cardio::cancellation hash_cancellation =
+      window->transfer_cancel_source->get_cancellation();
+  std::optional<FileHashes> hashes;
+  bool cancelled = false;
+  std::exception_ptr failure;
+  try {
+    set_file_transfer_browser_action_phase(
+        window, true, true, _("Calculating hash values…"));
+    if (pane->remote) {
+      hashes = co_await window->remote_file_hash(
+          item.path, hash_cancellation);
+    } else {
+      hashes = co_await calculate_local_file_hashes_async(
+          item.path, hash_cancellation);
+    }
+  } catch (const cardio::canceled_exception &) {
+    cancelled = true;
+  } catch (...) {
+    failure = std::current_exception();
+  }
+
+  if (window->destroyed) {
+    co_return;
+  }
+  window->transfer_cancel_source.reset();
+  if (cancelled) {
+    set_file_transfer_browser_action_phase(window, false, false, {});
+    set_file_transfer_status(window, _("Hash calculation cancelled"));
+    co_return;
+  }
+  if (failure != nullptr) {
+    const std::string message = exception_text(failure);
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    set_file_transfer_status(window, _("Hash calculation failed"));
+    co_await show_file_transfer_browser_action_error_async(
+        window, _("Failed to calculate hash values"), message,
+        window->stop_source.get_cancellation());
+    if (!window->destroyed) {
+      set_file_transfer_browser_action_phase(window, false, false, {});
+    }
+    co_return;
+  }
+
+  set_file_transfer_browser_action_phase(window, true, false, {});
+  set_file_transfer_status(window, _("Hash calculation complete"));
+  try {
+    (void)co_await prompt_inline_async(
+        window->prompt,
+        {
+            .title = _("File hash values"),
+            .message = item.name,
+            .monospace_message = file_transfer_hash_message(*hashes),
+            .accept_label = _("Close"),
+            .cancel_label = _("Cancel"),
+            .input_required = false,
+            .echo = false,
+            .cancel_visible = false,
+        },
+        window->stop_source.get_cancellation());
+  } catch (const cardio::canceled_exception &) {
+  }
+  if (!window->destroyed) {
+    set_file_transfer_browser_action_phase(window, false, false, {});
+  }
+}
+
+static void start_file_transfer_hash(FileTransferPaneState *pane) {
+  if (pane == nullptr || pane->window == nullptr ||
+      pane->window->destroyed || pane->window->transfer_active ||
+      pane->window->browser_action_active ||
+      (pane->remote &&
+       (!pane->window->connection_available ||
+        !pane->window->remote_file_hash))) {
+    return;
+  }
+  const std::vector<FileTransferSelectedItem> items =
+      selected_file_transfer_items(pane);
+  if (items.size() != 1 ||
+      items.front().type != RemoteFileType::regular) {
+    return;
+  }
+  pane->window->browser_action_task.reset();
+  pane->window->transfer_cancel_source.emplace();
+  pane->window->browser_action_task.emplace(
+      run_file_transfer_hash_async(pane, items.front()));
+}
+
+static void on_file_transfer_hash_item_activate(
+    GtkMenuItem *, gpointer data) {
+  start_file_transfer_hash(
       static_cast<FileTransferPaneState *>(data));
 }
 
@@ -2014,6 +2139,18 @@ static GtkWidget *create_file_transfer_pane(
   g_signal_connect(
       pane->transfer_item, "activate",
       G_CALLBACK(on_file_transfer_item_activate), pane);
+  if (!remote || window->remote_file_hash) {
+    pane->hash_item =
+        gtk_menu_item_new_with_label(_("Calculate Hash Values"));
+    gestament_gtk_assign_accessible_id(
+        pane->hash_item,
+        remote ? "file_transfer_remote_hash_item"
+               : "file_transfer_local_hash_item");
+    gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu), pane->hash_item);
+    g_signal_connect(
+        pane->hash_item, "activate",
+        G_CALLBACK(on_file_transfer_hash_item_activate), pane);
+  }
   gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu),
                         gtk_separator_menu_item_new());
   pane->rename_item = gtk_menu_item_new_with_label(_("Rename"));
@@ -2140,6 +2277,7 @@ create_file_transfer_window(FileTransferWindowOptions options) {
     throw std::invalid_argument("File transfer protocol name is required");
   }
   auto state = std::make_shared<FileTransferWindow>();
+  state->remote_file_hash = std::move(options.remote_file_hash);
   state->closed = std::move(options.closed);
   state->local.current_directory =
       std::move(options.local_directory);

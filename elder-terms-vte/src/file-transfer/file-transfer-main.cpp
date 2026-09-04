@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -21,6 +22,7 @@
 #include "../sftp/sftp-fixture-client.h"
 #include "../terminal-session-callbacks.h"
 #include "../terminal-sessions/ssh-session/authenticated-ssh-transport.h"
+#include "file-hash.h"
 #include "file-transfer-paths.h"
 #include "file-transfer-window.h"
 
@@ -34,6 +36,7 @@ struct SftpApplicationState {
   std::shared_ptr<elder_terms::FileTransferWindow> window;
   cardio::cancellation_source stop_source;
   std::optional<cardio::promise<void>> startup_task;
+  cardio::primitives::manually_conditional fixture_hash_gate{false};
   bool shutting_down = false;
 };
 
@@ -72,6 +75,33 @@ static void stop_sftp_application(SftpApplicationState *state) {
   state->dispatcher_group->shutdown();
 }
 
+static cardio::promise<elder_terms::FileHashes>
+calculate_sftp_file_hashes_async(
+    SftpApplicationState *state, std::string path,
+    cardio::cancellation cancellation) {
+  if (!state->launch_options.test.fixture) {
+    if (state->transport == nullptr) {
+      throw std::runtime_error("SSH transport is not connected");
+    }
+    co_return co_await elder_terms::calculate_ssh_file_hashes_async(
+        state->transport, std::move(path), std::move(cancellation));
+  }
+
+  if (state->launch_options.test.sftp_pause_transfer) {
+    co_await state->fixture_hash_gate.wait(cancellation);
+  }
+  cancellation.throw_if_cancellation_requested();
+  if (path != "/remote/readme.txt") {
+    throw std::runtime_error("Fixture remote file is unavailable");
+  }
+  co_return elder_terms::FileHashes{
+      .md5 = "f840a57e7c2e27409f9a22366c97aa38",
+      .sha1 = "4e9891113f487a51fda4942050b67e650e6db5eb",
+      .sha256 =
+          "d79bda8bec3b76fa69692436f1d8ce37a168df014f925dd1fc18c58a550d05a9",
+  };
+}
+
 static void create_sftp_application_window(SftpApplicationState *state) {
   state->window = elder_terms::create_file_transfer_window(
       {
@@ -82,6 +112,12 @@ static void create_sftp_application_window(SftpApplicationState *state) {
               elder_terms::resolve_file_transfer_local_directory(
                   state->settings, state->connection.local_directory),
           .remote_directory = state->connection.remote_directory,
+          .remote_file_hash =
+              [state](std::string path,
+                      cardio::cancellation cancellation) {
+                return calculate_sftp_file_hashes_async(
+                    state, std::move(path), std::move(cancellation));
+              },
           .colors = elder_terms::general_color_settings(state->settings),
           .closed =
               [state]() {
@@ -329,6 +365,7 @@ static void create_ftp_application_window(FtpApplicationState *state) {
               elder_terms::resolve_file_transfer_local_directory(
                   state->settings, state->connection.local_directory),
           .remote_directory = state->connection.remote_directory,
+          .remote_file_hash = {},
           .colors = elder_terms::general_color_settings(state->settings),
           .closed =
               [state]() {

@@ -8,6 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -29,6 +30,7 @@
 
 #include "launch-options.h"
 #include "main-window.h"
+#include "file-transfer/file-hash.h"
 #include "file-transfer/file-transfer-paths.h"
 #include "file-transfer/file-transfer-window.h"
 #include "sftp/sftp-client.h"
@@ -1245,6 +1247,28 @@ static void on_shared_sftp_window_closed(ApplicationState *state) {
   maybe_shutdown_application(state);
 }
 
+static cardio::promise<elder_terms::FileHashes>
+calculate_shared_sftp_file_hashes_async(
+    ApplicationState *state, std::string path,
+    cardio::cancellation cancellation) {
+  if (!state->test_options.fixture) {
+    co_return co_await elder_terms::calculate_ssh_file_hashes_async(
+        state->sftp_transport, std::move(path),
+        std::move(cancellation));
+  }
+
+  cancellation.throw_if_cancellation_requested();
+  if (path != "/remote/readme.txt") {
+    throw std::runtime_error("Fixture remote file is unavailable");
+  }
+  co_return elder_terms::FileHashes{
+      .md5 = "f840a57e7c2e27409f9a22366c97aa38",
+      .sha1 = "4e9891113f487a51fda4942050b67e650e6db5eb",
+      .sha256 =
+          "d79bda8bec3b76fa69692436f1d8ce37a168df014f925dd1fc18c58a550d05a9",
+  };
+}
+
 static void create_shared_sftp_window(ApplicationState *state) {
   const elder_terms::SftpConnectionSettings settings =
       elder_terms::sftp_connection_settings(state->settings_store);
@@ -1257,6 +1281,12 @@ static void create_shared_sftp_window(ApplicationState *state) {
               elder_terms::resolve_file_transfer_local_directory(
                   state->settings_store, settings.local_directory),
           .remote_directory = settings.remote_directory,
+          .remote_file_hash =
+              [state](std::string path,
+                      cardio::cancellation cancellation) {
+                return calculate_shared_sftp_file_hashes_async(
+                    state, std::move(path), std::move(cancellation));
+              },
           .colors =
               elder_terms::general_color_settings(state->settings_store),
           .closed =

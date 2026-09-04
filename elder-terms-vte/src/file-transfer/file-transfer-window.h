@@ -9,6 +9,7 @@
 #include <elder-terms/settings.h>
 
 #include "../inline-prompt.h"
+#include "file-hash.h"
 #include "remote-file-client.h"
 
 namespace elder_terms {
@@ -25,6 +26,9 @@ struct FileTransferWindowOptions {
   std::string local_directory;
   /** Initial remote directory. */
   std::string remote_directory;
+  /** Calculates hashes for a remote regular file, or empty if unsupported. */
+  std::function<cardio::promise<FileHashes>(
+      std::string, cardio::cancellation)> remote_file_hash;
   /** Initial exterior and browser background colors. */
   GeneralColorSettings colors;
   /** Called asynchronously after the GTK window is destroyed. */

@@ -135,9 +135,66 @@ describe('FTP window', () => {
           ).text()
         ).toBe('Ready');
       });
-      expect((await app.getById('file_transfer_local_tree')).kind).toBe(
-        'table'
+      const localTreeElement = await app.getById('file_transfer_local_tree');
+      expect(localTreeElement.kind).toBe('table');
+      const localTree = localTreeElement as GtkTableElement;
+      const localFileRow = await waitForResult(async () => {
+        const rows = await localTree.getRowCount();
+        for (let row = 0; row < rows; row += 1) {
+          const cell = await localTree.cellAt(row, 0);
+          if ((await cell?.info())?.name === 'local.txt') {
+            return row;
+          }
+        }
+        throw new Error('FTP local file was not listed');
+      });
+      await localTree.selectRow(localFileRow);
+      const localFileCell = await localTree.cellAt(localFileRow, 0);
+      const localFileBounds = (await localFileCell?.capture())?.bounds;
+      if (localFileBounds === undefined) {
+        throw new Error('FTP local file did not expose bounds');
+      }
+      await app.input.moveMouseTo(
+        Math.round(localFileBounds.x + localFileBounds.width / 2),
+        Math.round(localFileBounds.y + localFileBounds.height / 2)
       );
+      await app.input.setMouseButton('right', true);
+      await app.input.setMouseButton('right', false);
+      await expectElementKind(
+        await app.getById('file_transfer_local_hash_item'),
+        'menuItem'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_title_label'),
+            'label'
+          ).text()
+        ).toBe('File hash values');
+      });
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_message_label'),
+          'label'
+        ).text()
+      ).toBe('local.txt');
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_monospace_message_label'),
+          'label'
+        ).text()
+      ).toBe(
+        [
+          'MD5: 47fb4296aacb9541c949c92d015f2d86',
+          'SHA1: feb10f467848ecd032895fd1da1f7ec052b4b504',
+          'SHA256: 3396c739f6e425babf76d33999d0fe3afcf3157b1ce2e68afc33968d49c72b94',
+        ].join('\n')
+      );
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+
       const remoteTreeElement = await app.getById('file_transfer_remote_tree');
       expect(remoteTreeElement.kind).toBe('table');
       const remoteTree = remoteTreeElement as GtkTableElement;
@@ -164,6 +221,9 @@ describe('FTP window', () => {
       await app.input.setMouseButton('right', true);
       await app.input.setMouseButton('right', false);
 
+      expect(
+        await app.findById('file_transfer_remote_hash_item')
+      ).toBeUndefined();
       const rename = expectElementKind(
         await app.getById('file_transfer_remote_rename_item'),
         'menuItem'
