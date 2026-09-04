@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import {
   chmod,
   mkdir,
@@ -390,6 +391,16 @@ describe('elder-terms main window', () => {
   });
 
   it('opens application settings and version information in one dialog', async (context) => {
+    const version = spawnSync(
+      'npx',
+      ['--no-install', 'screw-up', 'format', '-e', '{version}', '-f'],
+      {
+        cwd: fileURLToPath(new URL('../..', import.meta.url)),
+        encoding: 'utf8',
+      }
+    );
+    expect(version.status, version.stderr).toBe(0);
+    expect(version.stdout.trim()).not.toBe('');
     await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
       await openApplicationDialogPage(app, 'application_settings_menu_item');
       expectElementKind(await app.getById('application_dialog'), 'window');
@@ -433,9 +444,69 @@ describe('elder-terms main window', () => {
           await app.getById('application_about_version_label'),
           'label'
         ).text()
-      ).toBe('Version 0.0.1');
+      ).toBe(`Version ${version.stdout.trim()}`);
     });
   });
+
+  for (const { language, env, tabNames } of [
+    { language: 'English', env: {}, tabNames: ['Application', 'About'] },
+    {
+      language: 'Japanese',
+      env: japaneseTestEnvironment,
+      tabNames: ['アプリケーション', '情報'],
+    },
+  ]) {
+    it(`opens a compact application dialog in ${language}`, async (context) => {
+      await runLauncherGtkTest(
+        context,
+        prepareProfiles,
+        async ({ app }) => {
+          for (const itemId of [
+            'application_settings_menu_item',
+            'about_menu_item',
+          ] as const) {
+            await openApplicationDialogPage(app, itemId);
+            const dialog = expectElementKind(
+              await app.getById('application_dialog'),
+              'window'
+            );
+            const bounds = await dialog.bounds();
+            expect(bounds.width).toBeGreaterThanOrEqual(600);
+            expect(bounds.width).toBeLessThanOrEqual(660);
+            expect(bounds.height).toBeGreaterThanOrEqual(340);
+            expect(bounds.height).toBeLessThanOrEqual(420);
+
+            const tabs = expectElementKind(
+              await app.getById('application_dialog_notebook'),
+              'tabList'
+            );
+            for (const [page, tabName] of tabNames.entries()) {
+              await tabs.selectChildAt(page);
+              expect(
+                await selectedSettingsTabName(app, 'application_dialog')
+              ).toBe(tabName);
+              const pageBounds = await dialog.bounds();
+              expect(pageBounds.width).toBe(bounds.width);
+              expect(pageBounds.height).toBe(bounds.height);
+              expect(
+                (
+                  await (
+                    await app.getById('application_dialog_cancel_button')
+                  ).info()
+                ).states
+              ).toContain('showing');
+            }
+            await expectElementKind(
+              await app.getById('application_dialog_cancel_button'),
+              'button'
+            ).click();
+            await waitForWindowCount(app, 1);
+          }
+        },
+        { args: [], env }
+      );
+    });
+  }
 
   it('saves application settings without replacing connection defaults', async (context) => {
     await runLauncherGtkTest(

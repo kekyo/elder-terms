@@ -33,7 +33,11 @@ configure_file(
 
 elder_terms_application_version = get_option('application_version')
 if elder_terms_application_version == ''
-  elder_terms_application_version = meson.project_version()
+  elder_terms_application_version = run_command(
+    files('../build_package.sh'),
+    '--print-version',
+    check: true,
+  ).stdout().strip()
 endif
 elder_terms_application_version_configuration = configuration_data()
 elder_terms_application_version_configuration.set_quoted(

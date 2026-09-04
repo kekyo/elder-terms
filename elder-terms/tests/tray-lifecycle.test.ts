@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -260,12 +260,22 @@ describe('elder-terms tray lifecycle', () => {
         ]);
         await waitForWindowCount(app, 1);
         expectElementKind(await app.getById('application_dialog'), 'window');
+        const version = spawnSync(
+          'npx',
+          ['--no-install', 'screw-up', 'format', '-e', '{version}', '-f'],
+          {
+            cwd: fileURLToPath(new URL('../..', import.meta.url)),
+            encoding: 'utf8',
+          }
+        );
+        expect(version.status, version.stderr).toBe(0);
+        expect(version.stdout.trim()).not.toBe('');
         expect(
           await expectElementKind(
             await app.getById('application_about_version_label'),
             'label'
           ).text()
-        ).toBe('Version 0.0.1');
+        ).toBe(`Version ${version.stdout.trim()}`);
       },
       {
         args: [],
