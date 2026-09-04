@@ -1,4 +1,5 @@
 #include "../../src/terminal-sessions/ssh-session/ssh-channel-connection.h"
+#include "../../src/file-transfer/file-hash.h"
 #include "../../src/sftp/sftp-client.h"
 
 #include <arpa/inet.h>
@@ -58,6 +59,7 @@ struct ServerOptions {
   int resized_rows = 37;
   std::string payload = "SSH integration payload";
   std::filesystem::path sftp_root;
+  std::string expected_exec_command;
 };
 
 struct ServerState {
@@ -65,14 +67,18 @@ struct ServerState {
   ssh_key authorized_key = nullptr;
   ssh_channel channel = nullptr;
   ssh_channel sftp_channel = nullptr;
+  ssh_channel exec_channel = nullptr;
   ssh_channel_callbacks_struct channel_callbacks{};
   ssh_channel_callbacks_struct sftp_channel_callbacks{};
+  ssh_channel_callbacks_struct exec_channel_callbacks{};
   ssh_event event = nullptr;
   pid_t sftp_server_pid = -1;
   int sftp_server_input_fd = -1;
   int sftp_server_output_fd = -1;
   bool sftp_requested = false;
   bool sftp_started = false;
+  bool exec_requested = false;
+  bool exec_response_sent = false;
   bool none_requested = false;
   bool password_requested = false;
   bool password_accepted = false;
@@ -94,6 +100,7 @@ struct ServerState {
   int resized_columns = 0;
   int resized_rows = 0;
   std::string payload;
+  std::string exec_command;
 };
 
 struct ChildServer {
@@ -639,11 +646,48 @@ static int on_window_change(ssh_session, ssh_channel, int columns, int rows,
   return 0;
 }
 
+static int on_exec_request(ssh_session, ssh_channel channel,
+                           const char *command, void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  state->exec_requested = true;
+  state->exec_command = command == nullptr ? "" : command;
+  if (state->options.expected_exec_command.empty() ||
+      state->exec_command != state->options.expected_exec_command) {
+    return 1;
+  }
+
+  const std::string output =
+      "38adb9eb75e100197e43a3626662315a  -\n"
+      "543d35939ab278c16ab479a9e39a1580ebc49413  -\n"
+      "7588cf1ef3681d5379f11b15bd4bf803d9a7fd22dc77cd6c15242c5265d196ff  -\n";
+  const int written = ssh_channel_write(
+      channel, output.data(), static_cast<std::uint32_t>(output.size()));
+  state->exec_response_sent =
+      written == static_cast<int>(output.size()) &&
+      ssh_channel_request_send_exit_status(channel, 0) == SSH_OK &&
+      ssh_channel_send_eof(channel) == SSH_OK;
+  return state->exec_response_sent ? 0 : 1;
+}
+
 static ssh_channel on_channel_open(ssh_session session, void *userdata) {
   auto *state = static_cast<ServerState *>(userdata);
   ssh_channel channel = ssh_channel_new(session);
   if (channel == nullptr) {
     return nullptr;
+  }
+  if (state->channel != nullptr && state->sftp_channel != nullptr) {
+    state->exec_channel = channel;
+    state->exec_channel_callbacks.userdata = state;
+    state->exec_channel_callbacks.channel_exec_request_function =
+        on_exec_request;
+    ssh_callbacks_init(&state->exec_channel_callbacks);
+    if (ssh_set_channel_callbacks(
+            channel, &state->exec_channel_callbacks) != SSH_OK) {
+      ssh_channel_free(channel);
+      state->exec_channel = nullptr;
+      return nullptr;
+    }
+    return channel;
   }
   if (state->channel != nullptr) {
     state->sftp_channel = channel;
@@ -725,6 +769,11 @@ static int validate_server_state(const ServerState &state) {
   if (!state.options.sftp_root.empty() &&
       (!state.sftp_requested || !state.sftp_started)) {
     return 34;
+  }
+  if (!state.options.expected_exec_command.empty() &&
+      (!state.exec_requested || !state.exec_response_sent ||
+       state.exec_command != state.options.expected_exec_command)) {
+    return 35;
   }
 
   switch (state.options.auth_mode) {
@@ -877,6 +926,10 @@ static int run_server_process(const ServerOptions &options, int port_fd,
   if (state.sftp_channel != nullptr) {
     ssh_channel_free(state.sftp_channel);
     state.sftp_channel = nullptr;
+  }
+  if (state.exec_channel != nullptr) {
+    ssh_channel_free(state.exec_channel);
+    state.exec_channel = nullptr;
   }
   ssh_disconnect(session);
   ssh_free(session);
@@ -1248,6 +1301,19 @@ static int run_client_case(const ServerOptions &server_options,
             transport.use_count() == 1,
             "SFTP client retained the authenticated transport after close");
       }
+      if (!server_options.expected_exec_command.empty()) {
+        const elder_terms::FileHashes hashes =
+            co_await elder_terms::calculate_ssh_file_hashes_async(
+                transport, "/server's payload.txt",
+                cancellation_source.get_cancellation());
+        expect_true(
+            hashes.md5 == "38adb9eb75e100197e43a3626662315a" &&
+                hashes.sha1 ==
+                    "543d35939ab278c16ab479a9e39a1580ebc49413" &&
+                hashes.sha256 ==
+                    "7588cf1ef3681d5379f11b15bd4bf803d9a7fd22dc77cd6c15242c5265d196ff",
+            "SSH file hash values did not match the server response");
+      }
       const unsigned char release = 1;
       expect_true(write_all_fd(server.release_fd, &release, sizeof(release)),
                   "failed to release the SSH test server");
@@ -1385,6 +1451,10 @@ static void test_supported_authentication_and_shell_channel() {
 
   options.auth_mode = ServerAuthMode::password;
   options.sftp_root = root / "sftp-root";
+  options.expected_exec_command =
+      "LC_ALL=C md5sum < '/server'\"'\"'s payload.txt' && "
+      "LC_ALL=C sha1sum < '/server'\"'\"'s payload.txt' && "
+      "LC_ALL=C sha256sum < '/server'\"'\"'s payload.txt'";
   std::filesystem::create_directories(options.sftp_root);
   {
     std::ofstream file(options.sftp_root / "server.txt",
@@ -1410,6 +1480,7 @@ static void test_supported_authentication_and_shell_channel() {
 
   options.auth_mode = ServerAuthMode::public_key;
   options.sftp_root.clear();
+  options.expected_exec_command.clear();
   options.authorized_key_path = plain_public_key;
   run_client_case(
       options,
