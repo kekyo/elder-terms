@@ -275,6 +275,12 @@ load_hyperlink_rules_from_key_file(GKeyFile *key_file,
         g_key_file_has_key(key_file, group.c_str(), "command", nullptr);
     const bool has_arguments =
         g_key_file_has_key(key_file, group.c_str(), "arguments", nullptr);
+    const bool has_source =
+        g_key_file_has_key(key_file, group.c_str(), "source", nullptr);
+    const bool has_path_validation = g_key_file_has_key(
+        key_file, group.c_str(), "path_validation", nullptr);
+    const bool has_path =
+        g_key_file_has_key(key_file, group.c_str(), "path", nullptr);
     if (!has_regex) {
       warn_invalid_hyperlink(warnings, group, "missing regex");
       continue;
@@ -300,6 +306,39 @@ load_hyperlink_rules_from_key_file(GKeyFile *key_file,
         }
         g_strfreev(arguments);
       }
+    }
+    if (error == nullptr && has_source) {
+      const std::string source =
+          key_file_string(key_file, group, "source", &error);
+      if (error == nullptr) {
+        const std::optional<HyperlinkRecognitionSource> parsed =
+            hyperlink_recognition_source_from_string(source);
+        if (!parsed.has_value()) {
+          warn_invalid_hyperlink(warnings, group,
+                                 "unsupported source: " + source);
+          continue;
+        }
+        rule.recognition_source = *parsed;
+      }
+    }
+    if (error == nullptr && has_path_validation) {
+      const std::string validation =
+          key_file_string(key_file, group, "path_validation", &error);
+      if (error == nullptr) {
+        const std::optional<HyperlinkPathValidation> parsed =
+            hyperlink_path_validation_from_string(validation);
+        if (!parsed.has_value()) {
+          warn_invalid_hyperlink(
+              warnings, group,
+              "unsupported path validation: " + validation);
+          continue;
+        }
+        rule.path_validation = *parsed;
+      }
+    }
+    if (error == nullptr && has_path) {
+      rule.path_template =
+          key_file_string(key_file, group, "path", &error);
     }
     if (error != nullptr) {
       warn_invalid_hyperlink(warnings, group, glib_error_message(error));
@@ -334,9 +373,7 @@ static void load_hyperlink_settings_from_key_file(
     SettingsStore *store, GKeyFile *key_file,
     std::vector<std::string> *warnings) {
   const bool has_root = g_key_file_has_group(key_file, "hyperlink");
-  if (!has_root && !key_file_has_hyperlink_rule_group(key_file)) {
-    return;
-  }
+  const bool has_rules = key_file_has_hyperlink_rule_group(key_file);
 
   bool enabled = true;
   if (has_root &&
@@ -356,28 +393,37 @@ static void load_hyperlink_settings_from_key_file(
   store->hyperlink_actions_enabled = enabled;
   store->hyperlink_rules =
       load_hyperlink_rules_from_key_file(key_file, warnings);
-  store->hyperlink_settings_configured = true;
+  store->hyperlink_settings_configured = has_root || has_rules;
   store->hyperlink_settings_dirty = false;
 }
 
 static void set_key_file_hyperlink_rule(GKeyFile *key_file,
                                         const HyperlinkActionRule &rule) {
   const std::string group = "hyperlink." + rule.id;
+  g_key_file_set_string(
+      key_file, group.c_str(), "source",
+      hyperlink_recognition_source_to_string(rule.recognition_source));
   g_key_file_set_string(key_file, group.c_str(), "regex",
                         rule.pattern.c_str());
   g_key_file_set_string(key_file, group.c_str(), "command",
                         rule.command.c_str());
-  if (rule.arguments.empty()) {
-    return;
+  if (!rule.arguments.empty()) {
+    std::vector<const gchar *> arguments;
+    arguments.reserve(rule.arguments.size());
+    for (const std::string &argument : rule.arguments) {
+      arguments.push_back(argument.c_str());
+    }
+    g_key_file_set_string_list(key_file, group.c_str(), "arguments",
+                               arguments.data(), arguments.size());
   }
 
-  std::vector<const gchar *> arguments;
-  arguments.reserve(rule.arguments.size());
-  for (const std::string &argument : rule.arguments) {
-    arguments.push_back(argument.c_str());
+  if (rule.path_validation != HyperlinkPathValidation::none) {
+    g_key_file_set_string(
+        key_file, group.c_str(), "path_validation",
+        hyperlink_path_validation_to_string(rule.path_validation));
+    g_key_file_set_string(key_file, group.c_str(), "path",
+                          rule.path_template.c_str());
   }
-  g_key_file_set_string_list(key_file, group.c_str(), "arguments",
-                             arguments.data(), arguments.size());
 }
 
 static bool load_settings_file(SettingsStore *store,
@@ -419,7 +465,7 @@ static bool load_settings_file(SettingsStore *store,
                           nullptr);
   }
   load_settings_store_from_key_file(store, key_file, warnings);
-  if (exclude_connection_settings) {
+  if (!exclude_connection_settings) {
     load_hyperlink_settings_from_key_file(store, key_file, warnings);
   }
   if (macro_rules != nullptr) {
@@ -505,11 +551,12 @@ static GKeyFile *serialize_settings(const SettingsStore &store,
     for (const MacroRule &rule : store.macro_rules) {
       set_key_file_macro_rule(key_file, rule);
     }
-  } else if (store.hyperlink_settings_configured) {
-    g_key_file_set_boolean(key_file, "hyperlink", "enabled",
-                           store.hyperlink_actions_enabled ? TRUE : FALSE);
-    for (const HyperlinkActionRule &rule : store.hyperlink_rules) {
-      set_key_file_hyperlink_rule(key_file, rule);
+    if (store.hyperlink_settings_configured) {
+      g_key_file_set_boolean(key_file, "hyperlink", "enabled",
+                             store.hyperlink_actions_enabled ? TRUE : FALSE);
+      for (const HyperlinkActionRule &rule : store.hyperlink_rules) {
+        set_key_file_hyperlink_rule(key_file, rule);
+      }
     }
   }
   return key_file;
@@ -628,10 +675,7 @@ create_global_default_settings(TerminalDisplaySettings terminal_defaults) {
     definitions.push_back(std::move(entry.definition));
   }
   append_definitions(&definitions, application_setting_definitions());
-  SettingsStore global = create_settings_store(std::move(definitions));
-  global.hyperlink_actions_enabled = connection.hyperlink_actions_enabled;
-  global.hyperlink_rules = std::move(connection.hyperlink_rules);
-  return global;
+  return create_settings_store(std::move(definitions));
 }
 
 SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
@@ -646,12 +690,10 @@ SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
   append_definitions(&definitions, telnet_connection_setting_definitions());
   append_definitions(&definitions, ssh_connection_setting_definitions());
   append_definitions(&definitions, sftp_connection_setting_definitions());
+  append_definitions(&definitions, ftp_connection_setting_definitions());
   append_definitions(&definitions, serial_connection_setting_definitions());
   append_definitions(&definitions, transfer_setting_definitions());
-  SettingsStore store = create_settings_store(std::move(definitions));
-  store.hyperlink_actions_enabled = true;
-  store.hyperlink_rules = default_hyperlink_action_rules();
-  return store;
+  return create_settings_store(std::move(definitions));
 }
 
 std::filesystem::path default_global_config_path() {
@@ -702,12 +744,6 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_zoom)
         load_global_settings(options.global_config_path.value(),
                              default_terminal_zoom);
     rebase_settings_store_fallbacks(&result.store, global.store);
-    result.store.hyperlink_actions_enabled =
-        global.store.hyperlink_actions_enabled;
-    result.store.hyperlink_rules = global.store.hyperlink_rules;
-    result.store.hyperlink_settings_configured =
-        global.store.hyperlink_settings_configured;
-    result.store.hyperlink_settings_dirty = false;
     result.warnings.insert(result.warnings.end(), global.warnings.begin(),
                            global.warnings.end());
   }
@@ -746,6 +782,9 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_zoom)
   if (general_settings_select_ssh_connection(result.store) ||
       general_settings_select_sftp_connection(result.store)) {
     append_ssh_connection_warnings(result.store, &result.warnings);
+  }
+  if (general_settings_select_ftp_connection(result.store)) {
+    append_ftp_connection_warnings(result.store, &result.warnings);
   }
   if (general_settings_select_serial_connection(result.store)) {
     append_serial_connection_warnings(result.store, &result.warnings);
@@ -892,7 +931,8 @@ TerminalTextSettings terminal_text_settings(const SettingsStore &store,
 
 std::optional<TerminalConnectionProfile>
 terminal_connection_profile(const SettingsStore &store) {
-  if (general_settings_select_sftp_connection(store)) {
+  if (general_settings_select_sftp_connection(store) ||
+      general_settings_select_ftp_connection(store)) {
     return std::nullopt;
   }
 

@@ -1,4 +1,5 @@
 #include "../../src/terminal-sessions/ssh-session/ssh-channel-connection.h"
+#include "../../src/file-transfer/file-hash.h"
 #include "../../src/sftp/sftp-client.h"
 
 #include <arpa/inet.h>
@@ -21,6 +22,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -46,6 +48,7 @@ enum class ServerAuthMode {
 struct ServerOptions {
   ServerAuthMode auth_mode = ServerAuthMode::none;
   std::filesystem::path host_key_path;
+  std::filesystem::path host_public_key_path;
   std::filesystem::path authorized_key_path;
   std::string username = "test-user";
   std::string password = "test-password";
@@ -56,6 +59,7 @@ struct ServerOptions {
   int resized_rows = 37;
   std::string payload = "SSH integration payload";
   std::filesystem::path sftp_root;
+  std::string expected_exec_command;
 };
 
 struct ServerState {
@@ -63,14 +67,18 @@ struct ServerState {
   ssh_key authorized_key = nullptr;
   ssh_channel channel = nullptr;
   ssh_channel sftp_channel = nullptr;
+  ssh_channel exec_channel = nullptr;
   ssh_channel_callbacks_struct channel_callbacks{};
   ssh_channel_callbacks_struct sftp_channel_callbacks{};
+  ssh_channel_callbacks_struct exec_channel_callbacks{};
   ssh_event event = nullptr;
   pid_t sftp_server_pid = -1;
   int sftp_server_input_fd = -1;
   int sftp_server_output_fd = -1;
   bool sftp_requested = false;
   bool sftp_started = false;
+  bool exec_requested = false;
+  bool exec_response_sent = false;
   bool none_requested = false;
   bool password_requested = false;
   bool password_accepted = false;
@@ -92,6 +100,7 @@ struct ServerState {
   int resized_columns = 0;
   int resized_rows = 0;
   std::string payload;
+  std::string exec_command;
 };
 
 struct ChildServer {
@@ -102,10 +111,21 @@ struct ChildServer {
 
 struct ClientCase {
   ServerAuthMode auth_mode = ServerAuthMode::none;
-  std::filesystem::path identity_file;
-  std::filesystem::path known_hosts_file;
-  std::string authentication_answer;
-  std::vector<elder_terms::SshUserPromptKind> expected_prompts;
+  std::string setting_username = "test-user";
+  std::string expected_initial_username = "test-user";
+  std::string prompted_username = "test-user";
+  std::filesystem::path identity_file = {};
+  std::filesystem::path known_hosts_file = {};
+  std::filesystem::path config_file = {};
+  std::filesystem::path conflicting_host_public_key = {};
+  std::filesystem::path conflicting_known_hosts_file = {};
+  std::string authentication_answer = {};
+  std::string expected_host_key_command_marker = {};
+  std::string expected_failure = {};
+  bool request_host_key_reset = false;
+  bool expected_host_key_reset_available = false;
+  bool preserve_protected_host_markers = false;
+  std::vector<elder_terms::SshUserPromptKind> expected_prompts = {};
 };
 
 struct ClientTimeout {
@@ -202,6 +222,141 @@ static void generate_key_pair(const std::filesystem::path &private_key_path,
   if (::chmod(private_key_path.c_str(), S_IRUSR | S_IWUSR) != 0) {
     throw std::runtime_error("failed to protect SSH test private key");
   }
+}
+
+static std::string
+openssh_random_art(const std::filesystem::path &public_key_path) {
+  const std::string public_key = public_key_path.string();
+  gchar *standard_output = nullptr;
+  gchar *standard_error = nullptr;
+  gint wait_status = 0;
+  GError *error = nullptr;
+  gchar *arguments[] = {
+      const_cast<gchar *>("/usr/bin/ssh-keygen"),
+      const_cast<gchar *>("-l"),
+      const_cast<gchar *>("-v"),
+      const_cast<gchar *>("-E"),
+      const_cast<gchar *>("sha256"),
+      const_cast<gchar *>("-f"),
+      const_cast<gchar *>(public_key.c_str()),
+      nullptr,
+  };
+  const gboolean spawned = g_spawn_sync(
+      nullptr, arguments, nullptr, G_SPAWN_DEFAULT, nullptr, nullptr,
+      &standard_output, &standard_error, &wait_status, &error);
+  const std::string failure =
+      error != nullptr && error->message != nullptr
+          ? error->message
+          : standard_error != nullptr ? standard_error : "unknown error";
+  g_clear_error(&error);
+  g_free(standard_error);
+  if (spawned == FALSE ||
+      g_spawn_check_wait_status(wait_status, &error) == FALSE) {
+    const std::string status_failure =
+        error != nullptr && error->message != nullptr ? error->message
+                                                      : failure;
+    g_clear_error(&error);
+    g_free(standard_output);
+    throw std::runtime_error("failed to obtain OpenSSH random art: " +
+                             status_failure);
+  }
+
+  std::string output = standard_output == nullptr ? "" : standard_output;
+  g_free(standard_output);
+  const std::size_t art_start = output.find("\n+");
+  expect_true(art_start != std::string::npos,
+              "OpenSSH did not print host-key random art");
+  output.erase(0, art_start + 1);
+  while (!output.empty() &&
+         (output.back() == '\n' || output.back() == '\r')) {
+    output.pop_back();
+  }
+  return output;
+}
+
+static std::string read_text_file(const std::filesystem::path &path) {
+  std::ifstream file(path, std::ios::binary);
+  return std::string(std::istreambuf_iterator<char>(file),
+                     std::istreambuf_iterator<char>());
+}
+
+static std::string public_key_material(const std::string &public_key) {
+  const std::size_t key_data_start = public_key.find_first_of(" \t");
+  expect_true(key_data_start != std::string::npos,
+              "public key type was missing");
+  const std::size_t key_data_end =
+      public_key.find_first_of(" \t\r\n", key_data_start + 1);
+  return public_key.substr(0, key_data_end);
+}
+
+static std::string known_hosts_target(const std::string &address, int port) {
+  return port == 22 ? address
+                    : "[" + address + "]:" + std::to_string(port);
+}
+
+static void install_conflicting_host_key(
+    const std::filesystem::path &known_hosts_file,
+    const std::filesystem::path &public_key_file,
+    const std::string &address, int port) {
+  const std::string public_key = read_text_file(public_key_file);
+  expect_true(!public_key.empty(), "conflicting public key was empty");
+  std::ofstream output(known_hosts_file, std::ios::app);
+  output << known_hosts_target(address, port) << ' ' << public_key;
+  expect_true(output.good(), "failed to install conflicting host key");
+}
+
+static void install_protected_host_markers(
+    const std::filesystem::path &known_hosts_file,
+    const std::filesystem::path &public_key_file,
+    const std::string &address, int port) {
+  const std::string public_key = read_text_file(public_key_file);
+  std::ofstream output(known_hosts_file, std::ios::app);
+  output << "@cert-authority " << known_hosts_target(address, port) << ' '
+         << public_key;
+  output << "@revoked " << known_hosts_target(address, port) << ' '
+         << public_key;
+  expect_true(output.good(), "failed to install protected host-key markers");
+}
+
+static std::string known_hosts_entries(
+    const std::filesystem::path &known_hosts_file,
+    const std::string &target) {
+  const std::string file = known_hosts_file.string();
+  gchar *standard_output = nullptr;
+  gchar *standard_error = nullptr;
+  gint wait_status = 0;
+  GError *error = nullptr;
+  gchar *arguments[] = {
+      const_cast<gchar *>("/usr/bin/ssh-keygen"),
+      const_cast<gchar *>("-F"),
+      const_cast<gchar *>(target.c_str()),
+      const_cast<gchar *>("-f"),
+      const_cast<gchar *>(file.c_str()),
+      nullptr,
+  };
+  const gboolean spawned = g_spawn_sync(
+      nullptr, arguments, nullptr, G_SPAWN_DEFAULT, nullptr, nullptr,
+      &standard_output, &standard_error, &wait_status, &error);
+  const std::string failure =
+      error != nullptr && error->message != nullptr
+          ? error->message
+          : standard_error != nullptr ? standard_error : "unknown error";
+  g_clear_error(&error);
+  g_free(standard_error);
+  if (spawned == FALSE ||
+      g_spawn_check_wait_status(wait_status, &error) == FALSE) {
+    const std::string status_failure =
+        error != nullptr && error->message != nullptr ? error->message
+                                                      : failure;
+    g_clear_error(&error);
+    g_free(standard_output);
+    throw std::runtime_error("failed to find OpenSSH known_hosts entry: " +
+                             status_failure);
+  }
+  const std::string output =
+      standard_output == nullptr ? std::string() : standard_output;
+  g_free(standard_output);
+  return output;
 }
 
 static int on_none_auth(ssh_session, const char *user, void *userdata) {
@@ -491,11 +646,48 @@ static int on_window_change(ssh_session, ssh_channel, int columns, int rows,
   return 0;
 }
 
+static int on_exec_request(ssh_session, ssh_channel channel,
+                           const char *command, void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  state->exec_requested = true;
+  state->exec_command = command == nullptr ? "" : command;
+  if (state->options.expected_exec_command.empty() ||
+      state->exec_command != state->options.expected_exec_command) {
+    return 1;
+  }
+
+  const std::string output =
+      "38adb9eb75e100197e43a3626662315a  -\n"
+      "543d35939ab278c16ab479a9e39a1580ebc49413  -\n"
+      "7588cf1ef3681d5379f11b15bd4bf803d9a7fd22dc77cd6c15242c5265d196ff  -\n";
+  const int written = ssh_channel_write(
+      channel, output.data(), static_cast<std::uint32_t>(output.size()));
+  state->exec_response_sent =
+      written == static_cast<int>(output.size()) &&
+      ssh_channel_request_send_exit_status(channel, 0) == SSH_OK &&
+      ssh_channel_send_eof(channel) == SSH_OK;
+  return state->exec_response_sent ? 0 : 1;
+}
+
 static ssh_channel on_channel_open(ssh_session session, void *userdata) {
   auto *state = static_cast<ServerState *>(userdata);
   ssh_channel channel = ssh_channel_new(session);
   if (channel == nullptr) {
     return nullptr;
+  }
+  if (state->channel != nullptr && state->sftp_channel != nullptr) {
+    state->exec_channel = channel;
+    state->exec_channel_callbacks.userdata = state;
+    state->exec_channel_callbacks.channel_exec_request_function =
+        on_exec_request;
+    ssh_callbacks_init(&state->exec_channel_callbacks);
+    if (ssh_set_channel_callbacks(
+            channel, &state->exec_channel_callbacks) != SSH_OK) {
+      ssh_channel_free(channel);
+      state->exec_channel = nullptr;
+      return nullptr;
+    }
+    return channel;
   }
   if (state->channel != nullptr) {
     state->sftp_channel = channel;
@@ -577,6 +769,11 @@ static int validate_server_state(const ServerState &state) {
   if (!state.options.sftp_root.empty() &&
       (!state.sftp_requested || !state.sftp_started)) {
     return 34;
+  }
+  if (!state.options.expected_exec_command.empty() &&
+      (!state.exec_requested || !state.exec_response_sent ||
+       state.exec_command != state.options.expected_exec_command)) {
+    return 35;
   }
 
   switch (state.options.auth_mode) {
@@ -730,6 +927,10 @@ static int run_server_process(const ServerOptions &options, int port_fd,
     ssh_channel_free(state.sftp_channel);
     state.sftp_channel = nullptr;
   }
+  if (state.exec_channel != nullptr) {
+    ssh_channel_free(state.exec_channel);
+    state.exec_channel = nullptr;
+  }
   ssh_disconnect(session);
   ssh_free(session);
   ssh_bind_free(bind);
@@ -826,28 +1027,29 @@ exercise_sftp_client_async(
     const std::shared_ptr<elder_terms::AuthenticatedSshTransport>
         &transport,
     cardio::cancellation cancellation) {
-  std::shared_ptr<elder_terms::SftpClient> client =
+  std::shared_ptr<elder_terms::RemoteFileClient> client =
       co_await elder_terms::open_sftp_client_async(transport,
                                                    cancellation);
   expect_true(client != nullptr, "SFTP client was not created");
-  const std::string canonical =
-      co_await client->canonicalize_path_async(".", cancellation);
-  expect_true(!canonical.empty() && canonical.front() == '/',
+  const elder_terms::RemoteDirectorySnapshot snapshot =
+      co_await client->load_directory_async(".", cancellation);
+  expect_true(!snapshot.canonical_path.empty() &&
+                  snapshot.canonical_path.front() == '/',
               "SFTP root was not canonicalized");
 
-  const std::vector<elder_terms::SftpFileAttributes> entries =
-      co_await client->list_directory_async(".", cancellation);
+  const std::vector<elder_terms::RemoteFileAttributes> &entries =
+      snapshot.entries;
   const auto server_file = std::find_if(
       entries.begin(), entries.end(),
-      [](const elder_terms::SftpFileAttributes &entry) {
+      [](const elder_terms::RemoteFileAttributes &entry) {
         return entry.name == "server.txt" &&
-               entry.type == elder_terms::SftpFileType::regular;
+               entry.type == elder_terms::RemoteFileType::regular;
       });
   const auto server_link = std::find_if(
       entries.begin(), entries.end(),
-      [](const elder_terms::SftpFileAttributes &entry) {
+      [](const elder_terms::RemoteFileAttributes &entry) {
         return entry.name == "server-link" &&
-               entry.type == elder_terms::SftpFileType::symbolic_link;
+               entry.type == elder_terms::RemoteFileType::symbolic_link;
       });
   expect_true(server_file != entries.end() &&
                   server_link != entries.end(),
@@ -857,7 +1059,7 @@ exercise_sftp_client_async(
           "server.txt",
       "SFTP symbolic-link target did not match");
 
-  std::unique_ptr<elder_terms::SftpFileReader> reader =
+  std::unique_ptr<elder_terms::RemoteFileReader> reader =
       std::move(co_await client->open_read_async("server.txt",
                                                  cancellation));
   std::array<std::byte, 128> buffer{};
@@ -871,7 +1073,7 @@ exercise_sftp_client_async(
       "SFTP file read did not return server content");
 
   const std::string uploaded_content = "SFTP uploaded payload";
-  std::unique_ptr<elder_terms::SftpFileWriter> writer =
+  std::unique_ptr<elder_terms::RemoteFileWriter> writer =
       std::move(co_await client->open_write_async("uploaded.txt", 0600,
                                                   cancellation));
   co_await writer->write_all_async(byte_span(uploaded_content),
@@ -879,14 +1081,24 @@ exercise_sftp_client_async(
   co_await writer->close_async(cancellation);
   writer.reset();
   co_await client->set_attributes_async(
-      "uploaded.txt", 0640, 1'700'002'000, 1'700'002'123,
+      "uploaded.txt",
+      elder_terms::RemoteFileAttributes{
+          .name = {},
+          .path = {},
+          .type = elder_terms::RemoteFileType::other,
+          .size = 0,
+          .permissions = 0640,
+          .access_time_unix_seconds = 1'700'002'000,
+          .modification_time_unix_seconds = 1'700'002'123,
+      },
       cancellation);
-  const std::optional<elder_terms::SftpFileAttributes> uploaded =
+  const std::optional<elder_terms::RemoteFileAttributes> uploaded =
       co_await client->lstat_async("uploaded.txt", cancellation);
   expect_true(uploaded.has_value() &&
-                  uploaded->type == elder_terms::SftpFileType::regular &&
+                  uploaded->type == elder_terms::RemoteFileType::regular &&
                   uploaded->size == uploaded_content.size() &&
-                  (uploaded->permissions & 0777U) == 0640U &&
+                  uploaded->permissions.has_value() &&
+                  (*uploaded->permissions & 0777U) == 0640U &&
                   uploaded->modification_time_unix_seconds ==
                       1'700'002'123,
               "SFTP write or metadata update did not persist");
@@ -915,9 +1127,25 @@ exercise_sftp_client_async(
   client->end_transfer();
 }
 
-static void run_client_case(const ServerOptions &server_options,
-                            const ClientCase &client_case) {
+static int run_client_case(const ServerOptions &server_options,
+                           const ClientCase &client_case) {
   ChildServer server = start_server(server_options);
+  if (!client_case.conflicting_host_public_key.empty()) {
+    const std::filesystem::path target_file =
+        client_case.conflicting_known_hosts_file.empty()
+            ? client_case.known_hosts_file
+            : client_case.conflicting_known_hosts_file;
+    install_conflicting_host_key(target_file,
+                                 client_case.conflicting_host_public_key,
+                                 "127.0.0.1", server.port);
+    if (client_case.preserve_protected_host_markers) {
+      install_protected_host_markers(
+          target_file, client_case.conflicting_host_public_key,
+          "127.0.0.1", server.port);
+    }
+  }
+  const std::string expected_random_art =
+      openssh_random_art(server_options.host_public_key_path);
   std::vector<elder_terms::SshUserPromptKind> prompts;
   std::vector<elder_terms::TerminalSessionConnectionPhase> phases;
   std::exception_ptr async_error;
@@ -947,18 +1175,58 @@ static void run_client_case(const ServerOptions &server_options,
           .zmodem_auto_start = {},
           .ssh_prompt =
               [&prompts,
-               &client_case](const elder_terms::SshUserPrompt &prompt,
-                             cardio::cancellation cancellation)
+               &server,
+               &client_case,
+               &expected_random_art](const elder_terms::SshUserPrompt &prompt,
+                                     cardio::cancellation cancellation)
               -> cardio::promise<elder_terms::SshUserPromptResponse> {
             cancellation.throw_if_cancellation_requested();
             prompts.push_back(prompt.kind);
             elder_terms::SshUserPromptResponse response{
                 .accepted = true,
                 .text = {},
+                .reset_host_key = false,
             };
-            if (prompt.kind !=
-                elder_terms::SshUserPromptKind::host_key) {
+            if (prompt.kind == elder_terms::SshUserPromptKind::username) {
+              expect_true(
+                  prompt.initial_text ==
+                      client_case.expected_initial_username,
+                  "SSH username prompt initial value did not match");
+              response.text = client_case.prompted_username;
+            } else if (prompt.kind !=
+                       elder_terms::SshUserPromptKind::host_key) {
               response.text = client_case.authentication_answer;
+            } else {
+              expect_true(prompt.monospace_message == expected_random_art,
+                          "SSH host-key prompt random art did not match "
+                          "OpenSSH\nExpected:\n" +
+                              expected_random_art + "\nActual:\n" +
+                              prompt.monospace_message);
+              expect_true(
+                  prompt.host_key_reset_available ==
+                      client_case.expected_host_key_reset_available,
+                  "SSH host-key reset availability did not match");
+              if (!client_case.expected_host_key_command_marker.empty()) {
+                const std::filesystem::path expected_known_hosts_file =
+                    client_case.conflicting_known_hosts_file.empty()
+                        ? client_case.known_hosts_file
+                        : client_case.conflicting_known_hosts_file;
+                expect_true(
+                    prompt.message.find(
+                        client_case.expected_host_key_command_marker) !=
+                        std::string::npos &&
+                        prompt.message.find(known_hosts_target(
+                            "127.0.0.1", server.port)) !=
+                            std::string::npos &&
+                        prompt.message.find(
+                            expected_known_hosts_file.string()) !=
+                            std::string::npos,
+                    "SSH host-key reset command was not displayed");
+              }
+              if (client_case.request_host_key_reset) {
+                response.accepted = false;
+                response.reset_host_key = true;
+              }
             }
             co_return response;
           },
@@ -968,7 +1236,7 @@ static void run_client_case(const ServerOptions &server_options,
               {
                   .address = "127.0.0.1",
                   .port = server.port,
-                  .username = server_options.username,
+                  .username = client_case.setting_username,
                   .identity_file = client_case.identity_file.string(),
               },
           .terminal_type = server_options.terminal_type,
@@ -980,6 +1248,7 @@ static void run_client_case(const ServerOptions &server_options,
               elder_terms::SshChannelConnectionOptions{
                   .known_hosts_file =
                       client_case.known_hosts_file.string(),
+                  .config_file = client_case.config_file.string(),
               },
               cancellation_source.get_cancellation());
       std::unique_ptr<elder_terms::SshChannelConnection> connection =
@@ -1011,6 +1280,10 @@ static void run_client_case(const ServerOptions &server_options,
           connection->authenticated_transport();
       expect_true(transport != nullptr,
                   "SSH channel should expose its authenticated transport");
+      expect_true(
+          transport->endpoint_settings().username ==
+              client_case.prompted_username,
+          "SSH transport should expose the prompted username");
       connection->close();
       connection.reset();
       expect_true(
@@ -1027,6 +1300,19 @@ static void run_client_case(const ServerOptions &server_options,
         expect_true(
             transport.use_count() == 1,
             "SFTP client retained the authenticated transport after close");
+      }
+      if (!server_options.expected_exec_command.empty()) {
+        const elder_terms::FileHashes hashes =
+            co_await elder_terms::calculate_ssh_file_hashes_async(
+                transport, "/server's payload.txt",
+                cancellation_source.get_cancellation());
+        expect_true(
+            hashes.md5 == "38adb9eb75e100197e43a3626662315a" &&
+                hashes.sha1 ==
+                    "543d35939ab278c16ab479a9e39a1580ebc49413" &&
+                hashes.sha256 ==
+                    "7588cf1ef3681d5379f11b15bd4bf803d9a7fd22dc77cd6c15242c5265d196ff",
+            "SSH file hash values did not match the server response");
       }
       const unsigned char release = 1;
       expect_true(write_all_fd(server.release_fd, &release, sizeof(release)),
@@ -1047,6 +1333,30 @@ static void run_client_case(const ServerOptions &server_options,
     timeout.source_id = 0;
   }
   const int server_result = wait_for_server(&server);
+  if (!client_case.expected_failure.empty()) {
+    expect_true(async_error != nullptr,
+                "SSH connection unexpectedly succeeded");
+    try {
+      std::rethrow_exception(async_error);
+    } catch (const std::exception &error) {
+      expect_true(
+          std::string(error.what()).find(client_case.expected_failure) !=
+              std::string::npos,
+          "SSH failure did not describe the rejected host key: " +
+              std::string(error.what()));
+    }
+    expect_true(server_result != 0,
+                "SSH server unexpectedly authenticated a rejected host key");
+    expect_true(prompts == client_case.expected_prompts,
+                "SSH rejected host-key prompt sequence did not match");
+    expect_true(
+        phases ==
+            std::vector<elder_terms::TerminalSessionConnectionPhase>{
+                elder_terms::TerminalSessionConnectionPhase::verifying_host,
+            },
+        "SSH rejected host-key phases did not match");
+    return server.port;
+  }
   if (async_error) {
     try {
       std::rethrow_exception(async_error);
@@ -1070,6 +1380,7 @@ static void run_client_case(const ServerOptions &server_options,
               elder_terms::TerminalSessionConnectionPhase::opening_shell,
           },
       "SSH connection phases did not match");
+  return server.port;
 }
 
 static std::size_t line_count(const std::filesystem::path &path) {
@@ -1091,6 +1402,8 @@ static void test_supported_authentication_and_shell_channel() {
       .path = root,
   };
   std::filesystem::create_directories(root / ".ssh");
+  expect_true(::setenv("HOME", root.c_str(), 1) == 0,
+              "failed to isolate the SSH client home directory");
   (void)::unsetenv("SSH_AUTH_SOCK");
   const std::filesystem::path known_hosts_file =
       root / ".ssh" / "known_hosts";
@@ -1099,6 +1412,10 @@ static void test_supported_authentication_and_shell_channel() {
       root / "ssh_host_ed25519_key";
   const std::filesystem::path host_public_key =
       root / "ssh_host_ed25519_key.pub";
+  const std::filesystem::path changed_host_private_key =
+      root / "ssh_host_changed_ed25519_key";
+  const std::filesystem::path changed_host_public_key =
+      root / "ssh_host_changed_ed25519_key.pub";
   const std::filesystem::path plain_private_key =
       root / ".ssh" / "id_plain";
   const std::filesystem::path plain_public_key =
@@ -1108,6 +1425,8 @@ static void test_supported_authentication_and_shell_channel() {
   const std::filesystem::path encrypted_public_key =
       root / ".ssh" / "id_encrypted.pub";
   generate_key_pair(host_private_key, host_public_key, nullptr);
+  generate_key_pair(changed_host_private_key, changed_host_public_key,
+                    nullptr);
   generate_key_pair(plain_private_key, plain_public_key, nullptr);
   generate_key_pair(encrypted_private_key, encrypted_public_key,
                     "key-passphrase");
@@ -1115,20 +1434,27 @@ static void test_supported_authentication_and_shell_channel() {
   ServerOptions options;
   options.auth_mode = ServerAuthMode::none;
   options.host_key_path = host_private_key;
+  options.host_public_key_path = host_public_key;
   run_client_case(
       options,
       ClientCase{
           .auth_mode = ServerAuthMode::none,
           .identity_file = {},
           .known_hosts_file = known_hosts_file,
+          .config_file = {},
           .authentication_answer = {},
           .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
               elder_terms::SshUserPromptKind::host_key,
           },
       });
 
   options.auth_mode = ServerAuthMode::password;
   options.sftp_root = root / "sftp-root";
+  options.expected_exec_command =
+      "LC_ALL=C md5sum < '/server'\"'\"'s payload.txt' && "
+      "LC_ALL=C sha1sum < '/server'\"'\"'s payload.txt' && "
+      "LC_ALL=C sha256sum < '/server'\"'\"'s payload.txt'";
   std::filesystem::create_directories(options.sftp_root);
   {
     std::ofstream file(options.sftp_root / "server.txt",
@@ -1143,8 +1469,10 @@ static void test_supported_authentication_and_shell_channel() {
           .auth_mode = ServerAuthMode::password,
           .identity_file = {},
           .known_hosts_file = known_hosts_file,
+          .config_file = {},
           .authentication_answer = options.password,
           .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
               elder_terms::SshUserPromptKind::host_key,
               elder_terms::SshUserPromptKind::password,
           },
@@ -1152,6 +1480,7 @@ static void test_supported_authentication_and_shell_channel() {
 
   options.auth_mode = ServerAuthMode::public_key;
   options.sftp_root.clear();
+  options.expected_exec_command.clear();
   options.authorized_key_path = plain_public_key;
   run_client_case(
       options,
@@ -1159,8 +1488,10 @@ static void test_supported_authentication_and_shell_channel() {
           .auth_mode = ServerAuthMode::public_key,
           .identity_file = plain_private_key,
           .known_hosts_file = known_hosts_file,
+          .config_file = {},
           .authentication_answer = {},
           .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
               elder_terms::SshUserPromptKind::host_key,
           },
       });
@@ -1172,8 +1503,10 @@ static void test_supported_authentication_and_shell_channel() {
           .auth_mode = ServerAuthMode::public_key,
           .identity_file = encrypted_private_key,
           .known_hosts_file = known_hosts_file,
+          .config_file = {},
           .authentication_answer = "key-passphrase",
           .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
               elder_terms::SshUserPromptKind::host_key,
               elder_terms::SshUserPromptKind::private_key_passphrase,
           },
@@ -1187,14 +1520,147 @@ static void test_supported_authentication_and_shell_channel() {
           .auth_mode = ServerAuthMode::keyboard_interactive,
           .identity_file = {},
           .known_hosts_file = known_hosts_file,
+          .config_file = {},
           .authentication_answer = options.password,
           .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
               elder_terms::SshUserPromptKind::host_key,
               elder_terms::SshUserPromptKind::keyboard_interactive,
           },
       });
 
-  expect_true(line_count(known_hosts_file) == 5,
+  options.auth_mode = ServerAuthMode::none;
+  options.username = "selected-config-user";
+  {
+    std::ofstream config(root / ".ssh" / "config");
+    config << "Host 127.0.0.1\n"
+              "  User config-user\n";
+  }
+  run_client_case(
+      options,
+      ClientCase{
+          .auth_mode = ServerAuthMode::none,
+          .setting_username = {},
+          .expected_initial_username = "config-user",
+          .prompted_username = options.username,
+          .identity_file = {},
+          .known_hosts_file = known_hosts_file,
+          .config_file = root / ".ssh" / "config",
+          .authentication_answer = {},
+          .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
+              elder_terms::SshUserPromptKind::host_key,
+          },
+      });
+
+  std::filesystem::remove(root / ".ssh" / "config");
+  const char *current_username = g_get_user_name();
+  expect_true(current_username != nullptr && current_username[0] != '\0',
+              "current operating-system username is unavailable");
+  options.username = current_username;
+  run_client_case(
+      options,
+      ClientCase{
+          .auth_mode = ServerAuthMode::none,
+          .setting_username = {},
+          .expected_initial_username = current_username,
+          .prompted_username = current_username,
+          .identity_file = {},
+          .known_hosts_file = known_hosts_file,
+          .config_file = {},
+          .authentication_answer = {},
+          .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
+              elder_terms::SshUserPromptKind::host_key,
+          },
+      });
+
+  options.auth_mode = ServerAuthMode::none;
+  options.username = "test-user";
+  options.host_key_path = changed_host_private_key;
+  options.host_public_key_path = changed_host_public_key;
+  const int changed_host_port = run_client_case(
+      options,
+      ClientCase{
+          .auth_mode = ServerAuthMode::none,
+          .identity_file = {},
+          .known_hosts_file = known_hosts_file,
+          .config_file = {},
+          .conflicting_host_public_key = host_public_key,
+          .authentication_answer = {},
+          .expected_host_key_command_marker = "ssh-keygen -R",
+          .request_host_key_reset = true,
+          .expected_host_key_reset_available = true,
+          .preserve_protected_host_markers = true,
+          .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
+              elder_terms::SshUserPromptKind::host_key,
+          },
+      });
+  const std::string changed_target =
+      known_hosts_target("127.0.0.1", changed_host_port);
+  const std::string changed_entry =
+      known_hosts_entries(known_hosts_file, changed_target);
+  const std::string changed_public_key_text =
+      read_text_file(changed_host_public_key);
+  expect_true(
+      changed_entry.find(public_key_material(changed_public_key_text)) !=
+          std::string::npos,
+              "reset SSH host key was not replaced with the current key");
+  const std::filesystem::path known_hosts_backup =
+      known_hosts_file.string() + ".old";
+  const std::string backed_up_entry =
+      known_hosts_entries(known_hosts_backup, changed_target);
+  const std::string original_public_key_text =
+      read_text_file(host_public_key);
+  expect_true(
+      backed_up_entry.find(public_key_material(original_public_key_text)) !=
+          std::string::npos,
+      "ssh-keygen did not preserve the replaced known_hosts entry");
+  const std::string reset_known_hosts_text = read_text_file(known_hosts_file);
+  expect_true(
+      reset_known_hosts_text.find("@cert-authority " + changed_target + " ") !=
+              std::string::npos &&
+          reset_known_hosts_text.find("@revoked " + changed_target + " ") !=
+              std::string::npos,
+      "ssh-keygen did not preserve protected known_hosts marker entries");
+
+  const std::filesystem::path global_known_hosts_file =
+      root / "ssh_global_known_hosts";
+  const std::filesystem::path global_user_known_hosts_file =
+      root / ".ssh" / "global-test-known_hosts";
+  const std::filesystem::path global_config_file =
+      root / ".ssh" / "global-config";
+  {
+    std::ofstream config(global_config_file);
+    config << "Host 127.0.0.1\n"
+              "  GlobalKnownHostsFile "
+           << global_known_hosts_file.string() << "\n";
+  }
+  run_client_case(
+      options,
+      ClientCase{
+          .auth_mode = ServerAuthMode::none,
+          .identity_file = {},
+          .known_hosts_file = global_user_known_hosts_file,
+          .config_file = global_config_file,
+          .conflicting_host_public_key = host_public_key,
+          .conflicting_known_hosts_file = global_known_hosts_file,
+          .authentication_answer = {},
+          .expected_host_key_command_marker = "sudo ssh-keygen -R",
+          .expected_failure = "SSH host key was not reset",
+          .request_host_key_reset = false,
+          .expected_host_key_reset_available = false,
+          .expected_prompts = {
+              elder_terms::SshUserPromptKind::username,
+              elder_terms::SshUserPromptKind::host_key,
+          },
+      });
+  expect_true(!std::filesystem::exists(
+                  global_known_hosts_file.string() + ".old"),
+              "global SSH known_hosts was modified automatically");
+
+  expect_true(line_count(known_hosts_file) == 10,
               "accepted SSH host keys were not saved in the isolated home");
 }
 

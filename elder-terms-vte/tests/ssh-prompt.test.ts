@@ -81,6 +81,13 @@ describe.concurrent('SSH prompt overlay', () => {
             'label'
           ).text()
         ).toContain('SHA256:fixture-host-key');
+        const randomArt = expectElementKind(
+          await app.getById('ssh_prompt_monospace_message_label'),
+          'label'
+        );
+        await expectShowing(randomArt);
+        expect(await randomArt.text()).toContain('[ED25519 256]');
+        expect(await randomArt.text()).toContain('[SHA256]');
         expect(
           (await (await app.getById('ssh_prompt_accept_button')).info()).name
         ).toBe('承認');
@@ -112,12 +119,18 @@ describe.concurrent('SSH prompt overlay', () => {
           await app.getById('ssh_prompt_entry'),
           'entry'
         );
+        const randomArt = expectElementKind(
+          await app.getById('ssh_prompt_monospace_message_label'),
+          'label'
+        );
         const dim = await app.getById('terminal_dim_overlay');
 
         await expectShowing(panel);
         await expectShowing(dim);
         await expectHidden(entry);
+        await expectShowing(randomArt);
         expect(await message.text()).toContain('SHA256:fixture-host-key');
+        expect((await randomArt.text()).split('\n')).toHaveLength(11);
         await expectPromptInsideTerminalOverlay(app, panel);
         await expectOnlyMainWindow(app);
 
@@ -127,6 +140,162 @@ describe.concurrent('SSH prompt overlay', () => {
         ).click();
         await expectHidden(panel);
         await expectShowing(dim);
+        await toPass(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('status_label'),
+              'label'
+            ).text()
+          ).toBe('SSH prompt accepted');
+        });
+      }
+    );
+  });
+
+  it('offers an explicit reset in a compact window while defaulting to cancel', async (context) => {
+    await runGtkTest(
+      context,
+      ['--test-fixture', '--test-ssh-prompt=changed-host-key'],
+      async (app) => {
+        const title = expectElementKind(
+          await app.getById('ssh_prompt_title_label'),
+          'label'
+        );
+        const message = expectElementKind(
+          await app.getById('ssh_prompt_message_label'),
+          'label'
+        );
+        const cancel = expectElementKind(
+          await app.getById('ssh_prompt_cancel_button'),
+          'button'
+        );
+        const accept = expectElementKind(
+          await app.getById('ssh_prompt_accept_button'),
+          'button'
+        );
+        const reset = expectElementKind(
+          await app.getById('ssh_prompt_alternative_button'),
+          'button'
+        );
+        const mainWindow = expectElementKind(
+          await app.getById('main_window'),
+          'window'
+        );
+        const overlay = await app.getById('terminal_overlay');
+
+        const initialBounds = await mainWindow.bounds();
+        const initialOverlayCapture = await overlay.capture();
+        await mainWindow.resizeTo(
+          initialBounds.width,
+          initialBounds.height - 130
+        );
+        await toPass(async () => {
+          expect((await overlay.capture()).bounds.height).toBeLessThanOrEqual(
+            initialOverlayCapture.bounds.height - 100
+          );
+        });
+
+        await expectShowing(title);
+        await expectShowing(cancel);
+        await expectHidden(accept);
+        await expectShowing(reset);
+        expect((await cancel.info()).states).toContain('focused');
+        expect((await reset.info()).name).toBe('Reset and Connect');
+        expect(await message.text()).toContain('ssh-keygen -R');
+        expect(await message.text()).toContain('[fixture.example]:2222');
+        expect(await message.text()).toContain('/home/test/.ssh/known_hosts');
+        const [titleCapture, cancelCapture, resetCapture, overlayCapture] =
+          await Promise.all([
+            title.capture(),
+            cancel.capture(),
+            reset.capture(),
+            overlay.capture(),
+          ]);
+        for (const actionCapture of [
+          titleCapture,
+          cancelCapture,
+          resetCapture,
+        ]) {
+          expect(actionCapture.bounds.y).toBeGreaterThanOrEqual(
+            overlayCapture.bounds.y
+          );
+          expect(
+            actionCapture.bounds.y + actionCapture.bounds.height
+          ).toBeLessThanOrEqual(
+            overlayCapture.bounds.y + overlayCapture.bounds.height
+          );
+        }
+        await app.input.moveMouseTo(
+          Math.round(resetCapture.bounds.x + resetCapture.bounds.width / 2),
+          Math.round(resetCapture.bounds.y + resetCapture.bounds.height / 2)
+        );
+        await app.input.setMouseButton('left', true);
+        await app.input.setMouseButton('left', false);
+        await toPass(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('status_label'),
+              'label'
+            ).text()
+          ).toBe('SSH host key reset requested');
+        });
+      }
+    );
+  });
+
+  it('blocks automatic reset for a changed global host key', async (context) => {
+    await runGtkTest(
+      context,
+      ['--test-fixture', '--test-ssh-prompt=changed-global-host-key'],
+      async (app) => {
+        const message = expectElementKind(
+          await app.getById('ssh_prompt_message_label'),
+          'label'
+        );
+        const cancel = expectElementKind(
+          await app.getById('ssh_prompt_cancel_button'),
+          'button'
+        );
+
+        await expectShowing(cancel);
+        await expectHidden(await app.getById('ssh_prompt_accept_button'));
+        await expectHidden(await app.getById('ssh_prompt_alternative_button'));
+        expect((await cancel.info()).states).toContain('focused');
+        expect(await message.text()).toContain('sudo ssh-keygen -R');
+        expect(await message.text()).toContain('/etc/ssh/ssh_known_hosts');
+      }
+    );
+  });
+
+  it('prefills a visible SSH user name before authentication', async (context) => {
+    await runGtkTest(
+      context,
+      ['--test-fixture', '--test-ssh-prompt=username'],
+      async (app) => {
+        const panel = expectElementKind(
+          await app.getById('ssh_prompt_panel'),
+          'container'
+        );
+        const entry = expectElementKind(
+          await app.getById('ssh_prompt_entry'),
+          'entry'
+        );
+        await expectShowing(panel);
+        await expectShowing(entry);
+        expect(await entry.text()).toBe('configured-user');
+        expect(
+          await expectElementKind(
+            await app.getById('ssh_prompt_message_label'),
+            'label'
+          ).text()
+        ).toBe('User name for fixture.example:');
+
+        await entry.setText('runtime-user');
+        await expectElementKind(
+          await app.getById('ssh_prompt_accept_button'),
+          'button'
+        ).click();
+        await expectHidden(panel);
         await toPass(async () => {
           expect(
             await expectElementKind(

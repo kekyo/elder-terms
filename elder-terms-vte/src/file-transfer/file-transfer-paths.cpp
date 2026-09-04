@@ -1,4 +1,4 @@
-#include "sftp-paths.h"
+#include "file-transfer-paths.h"
 
 #include <filesystem>
 #include <optional>
@@ -41,16 +41,13 @@ static std::optional<std::string> native_path(
   return result;
 }
 
-std::string resolve_sftp_local_directory(
-    const SettingsStore &store,
-    const SftpConnectionSettings &settings) {
-  if (const auto configured =
-          native_path(settings.local_directory);
+std::string resolve_file_transfer_local_directory(
+    const SettingsStore &store, const std::string &configured_directory) {
+  if (const auto configured = native_path(configured_directory);
       configured.has_value()) {
     return configured.value();
   }
-  if (const auto transfer =
-          native_path(transfer_base_path(store));
+  if (const auto transfer = native_path(transfer_base_path(store));
       transfer.has_value()) {
     return transfer.value();
   }

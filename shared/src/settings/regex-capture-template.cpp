@@ -1,10 +1,9 @@
 #include <elder-terms/settings/regex-capture-template.h>
 
-#include <algorithm>
-#include <cctype>
-#include <limits>
 #include <optional>
 #include <string>
+
+#include <glib.h>
 
 namespace elder_terms {
 
@@ -12,28 +11,6 @@ struct CapturePlaceholder {
   std::string capture;
   bool uri_decode = false;
 };
-
-static std::optional<int>
-decimal_capture_number(const std::string &capture) {
-  if (capture.empty() ||
-      !std::all_of(capture.begin(), capture.end(), [](unsigned char value) {
-        return std::isdigit(value) != 0;
-      })) {
-    return std::nullopt;
-  }
-
-  unsigned int number = 0;
-  for (unsigned char value : capture) {
-    const unsigned int digit = static_cast<unsigned int>(value - '0');
-    if (number >
-        (static_cast<unsigned int>(std::numeric_limits<int>::max()) - digit) /
-            10) {
-      return std::nullopt;
-    }
-    number = number * 10 + digit;
-  }
-  return static_cast<int>(number);
-}
 
 static std::optional<CapturePlaceholder> parse_capture_placeholder(
     const std::string &placeholder, RegexCaptureTemplateOptions options,
@@ -73,18 +50,8 @@ static std::optional<CapturePlaceholder> parse_capture_placeholder(
   return result;
 }
 
-static bool capture_exists(const CapturePlaceholder &placeholder,
-                           GRegex *regex) {
-  const std::optional<int> number =
-      decimal_capture_number(placeholder.capture);
-  if (number.has_value()) {
-    return *number <= g_regex_get_capture_count(regex);
-  }
-  return g_regex_get_string_number(regex, placeholder.capture.c_str()) >= 0;
-}
-
 bool regex_capture_template_is_valid(
-    const std::string &value, GRegex *regex,
+    const std::string &value, const RegularExpressionState *regex,
     RegexCaptureTemplateOptions options, std::string *reason) {
   if (regex == nullptr) {
     *reason = "regular expression is unavailable";
@@ -116,7 +83,7 @@ bool regex_capture_template_is_valid(
     if (!placeholder.has_value()) {
       return false;
     }
-    if (!capture_exists(*placeholder, regex)) {
+    if (!regular_expression_capture_exists(regex, placeholder->capture)) {
       *reason = "references an unknown capture: " + placeholder->capture;
       return false;
     }
@@ -126,23 +93,18 @@ bool regex_capture_template_is_valid(
 }
 
 static std::optional<std::string>
-fetch_capture(const CapturePlaceholder &placeholder, GMatchInfo *match,
-              std::string *reason) {
-  const std::optional<int> number =
-      decimal_capture_number(placeholder.capture);
-  gchar *matched = number.has_value()
-                       ? g_match_info_fetch(match, *number)
-                       : g_match_info_fetch_named(
-                             match, placeholder.capture.c_str());
-  if (matched == nullptr) {
+fetch_capture(const CapturePlaceholder &placeholder,
+              const RegularExpressionMatch *match, std::string *reason) {
+  const std::optional<std::string> matched =
+      regular_expression_capture(*match, placeholder.capture);
+  if (!matched.has_value()) {
     *reason = "failed to read capture: " + placeholder.capture;
     return std::nullopt;
   }
 
   std::string result;
   if (placeholder.uri_decode) {
-    gchar *decoded = g_uri_unescape_string(matched, nullptr);
-    g_free(matched);
+    gchar *decoded = g_uri_unescape_string(matched->c_str(), nullptr);
     if (decoded == nullptr) {
       *reason = "capture contains invalid URI escaping: " +
                 placeholder.capture;
@@ -153,13 +115,13 @@ fetch_capture(const CapturePlaceholder &placeholder, GMatchInfo *match,
     return result;
   }
 
-  result = matched;
-  g_free(matched);
+  result = *matched;
   return result;
 }
 
 std::optional<std::string>
-expand_regex_capture_template(const std::string &value, GMatchInfo *match,
+expand_regex_capture_template(const std::string &value,
+                              const RegularExpressionMatch *match,
                               RegexCaptureTemplateOptions options,
                               std::string *reason) {
   if (match == nullptr) {

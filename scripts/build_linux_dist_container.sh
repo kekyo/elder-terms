@@ -82,7 +82,7 @@ calculate_shlibdeps() {
 			"$private_dir/libelder-terms.so" \
 			"$private_dir/launcher/elder-terms" \
 			"$private_dir/elder-terms-vte/elder-terms-vte" \
-			"$private_dir/elder-terms-vte/elder-terms-sftp" |
+			"$private_dir/elder-terms-vte/elder-terms-file-transfer" |
 			sed -n 's/^shlibs:Depends=//p'
 	)
 	rm -rf "$tmp_dir"
@@ -95,7 +95,7 @@ validate_dynamic_links() {
 	for executable_path in \
 		/usr/lib/elder-terms/launcher/elder-terms \
 		/usr/lib/elder-terms/elder-terms-vte/elder-terms-vte \
-		/usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp; do
+		/usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer; do
 		link_report=$(ldd "$executable_path")
 		case $link_report in
 		*'not found'*)
@@ -132,7 +132,7 @@ validate_installed_package() {
 		/usr/lib/elder-terms/launcher/elder-terms \
 		/usr/lib/elder-terms/launcher/main-window.ui \
 		/usr/lib/elder-terms/elder-terms-vte/elder-terms-vte \
-		/usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp \
+		/usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer \
 		/usr/lib/elder-terms/elder-terms-vte/main-window.ui \
 		/usr/lib/elder-terms/elder-terms-vte/green-on.png \
 		/usr/lib/elder-terms/elder-terms-vte/green-off.png \
@@ -148,8 +148,8 @@ validate_installed_package() {
 		'../lib/elder-terms/launcher/elder-terms'
 	assert_symlink /usr/bin/elder-terms-vte \
 		'../lib/elder-terms/elder-terms-vte/elder-terms-vte'
-	assert_symlink /usr/bin/elder-terms-sftp \
-		'../lib/elder-terms/elder-terms-vte/elder-terms-sftp'
+	assert_symlink /usr/bin/elder-terms-file-transfer \
+		'../lib/elder-terms/elder-terms-vte/elder-terms-file-transfer'
 	validate_dynamic_links
 	printf '%s\n' "Installed package validated: $package_path"
 }
@@ -193,6 +193,7 @@ for pkg_config_module in \
 	gdk-pixbuf-2.0 \
 	gtk+-3.0 \
 	libcanberra \
+	libpcre2-8 \
 	libssh \
 	libudev \
 	liburing \
@@ -225,7 +226,7 @@ deb_arch=$(dpkg-architecture -qDEB_HOST_ARCH)
 control_dir="$stage_dir/DEBIAN"
 mkdir -p "$control_dir"
 shlib_depends=$(calculate_shlibdeps)
-runtime_depends='dbus-user-session, hicolor-icon-theme, libcanberra-pulse'
+runtime_depends='dbus-user-session, hicolor-icon-theme, libcanberra-pulse, openssh-client, xdg-utils'
 write_control_file "$control_dir/control" "$shlib_depends, $runtime_depends"
 chmod 0644 "$control_dir/control"
 
@@ -234,7 +235,7 @@ for staged_file in \
 	usr/lib/elder-terms/launcher/elder-terms \
 	usr/lib/elder-terms/launcher/main-window.ui \
 	usr/lib/elder-terms/elder-terms-vte/elder-terms-vte \
-	usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp \
+	usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer \
 	usr/lib/elder-terms/elder-terms-vte/main-window.ui \
 	usr/lib/elder-terms/elder-terms-vte/green-on.png \
 	usr/lib/elder-terms/elder-terms-vte/green-off.png \
@@ -250,5 +251,5 @@ assert_symlink "$stage_dir/usr/bin/elder-terms" \
 	'../lib/elder-terms/launcher/elder-terms'
 assert_symlink "$stage_dir/usr/bin/elder-terms-vte" \
 	'../lib/elder-terms/elder-terms-vte/elder-terms-vte'
-assert_symlink "$stage_dir/usr/bin/elder-terms-sftp" \
-	'../lib/elder-terms/elder-terms-vte/elder-terms-sftp'
+assert_symlink "$stage_dir/usr/bin/elder-terms-file-transfer" \
+	'../lib/elder-terms/elder-terms-vte/elder-terms-file-transfer'

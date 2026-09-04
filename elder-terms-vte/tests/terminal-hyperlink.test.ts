@@ -12,7 +12,7 @@ import {
 const shellQuote = (value: string): string =>
   `'${value.split("'").join("'\\''")}'`;
 
-describe.concurrent('elder-terms-vte OSC 8 hyperlinks', () => {
+describe.concurrent('elder-terms-vte terminal links', () => {
   it('runs the configured argv after Ctrl+clicking an OSC 8 link', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const actionPath = join(directory, 'record-link-action.sh');
@@ -21,6 +21,7 @@ describe.concurrent('elder-terms-vte OSC 8 hyperlinks', () => {
       const shellPath = join(directory, 'osc-link-shell.sh');
       const shellReadyPath = join(directory, 'shell-ready.txt');
       const shellReleasePath = join(directory, 'shell-release.txt');
+      const configPath = join(directory, 'connection.ini');
 
       await writeFile(
         actionPath,
@@ -51,7 +52,7 @@ describe.concurrent('elder-terms-vte OSC 8 hyperlinks', () => {
       );
       await chmod(shellPath, 0o755);
 
-      const globalSettings = [
+      const connectionSettings = [
         '[hyperlink]',
         'enabled=true',
         '',
@@ -61,11 +62,12 @@ describe.concurrent('elder-terms-vte OSC 8 hyperlinks', () => {
         'arguments=--goto;${path|uri-decode}:${line}:${column};two words;',
         '',
       ].join('\n');
+      await writeFile(configPath, connectionSettings, 'utf8');
 
       try {
         await runGtkTest(
           context,
-          [],
+          ['-c', configPath],
           async (app) => {
             await waitForResult(
               async () => {
@@ -108,7 +110,99 @@ describe.concurrent('elder-terms-vte OSC 8 hyperlinks', () => {
           },
           {
             env: { SHELL: shellPath },
-            globalSettings,
+          }
+        );
+      } finally {
+        await writeFile(shellReleasePath, 'release\n', 'utf8');
+      }
+    });
+  });
+
+  it('opens a visible HTTP URL with the built-in xdg-open rule', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const actionPath = join(directory, 'xdg-open');
+      const actionTemporaryPath = join(directory, 'url.tmp');
+      const actionArgumentsPath = join(directory, 'url.txt');
+      const shellPath = join(directory, 'plain-url-shell.sh');
+      const shellReadyPath = join(directory, 'shell-ready.txt');
+      const shellReleasePath = join(directory, 'shell-release.txt');
+
+      await writeFile(
+        actionPath,
+        [
+          '#!/bin/sh',
+          `printf '%s\n' "$1" > ${shellQuote(actionTemporaryPath)}`,
+          `mv ${shellQuote(actionTemporaryPath)} ${shellQuote(
+            actionArgumentsPath
+          )}`,
+          '',
+        ].join('\n'),
+        'utf8'
+      );
+      await chmod(actionPath, 0o755);
+
+      await writeFile(
+        shellPath,
+        [
+          '#!/bin/sh',
+          "printf 'https://example.test/docs\\r\\n'",
+          `printf ready > ${shellQuote(shellReadyPath)}`,
+          `while [ ! -f ${shellQuote(shellReleasePath)} ]; do sleep 0.02; done`,
+          '',
+        ].join('\n'),
+        'utf8'
+      );
+      await chmod(shellPath, 0o755);
+
+      try {
+        await runGtkTest(
+          context,
+          [],
+          async (app) => {
+            await waitForResult(
+              async () => {
+                expect(await readFile(shellReadyPath, 'utf8')).toBe('ready');
+              },
+              {
+                message: 'local shell should emit the visible URL',
+                timeoutMs: 5_000,
+              }
+            );
+
+            const terminal = await app.getById('terminal_view');
+            const { bounds } = await terminal.capture();
+            const linkX = Math.trunc(
+              bounds.x + (bounds.width / defaultColumns) * 1.5
+            );
+            const linkY = Math.trunc(
+              bounds.y + (bounds.height / defaultRows) * 0.5
+            );
+
+            await waitForResult(
+              async () => {
+                await app.input.moveMouseTo(linkX, linkY);
+                await app.input.setModifier('control', true);
+                try {
+                  await app.input.setMouseButton('left', true);
+                  await app.input.setMouseButton('left', false);
+                } finally {
+                  await app.input.setModifier('control', false);
+                }
+                expect(await readFile(actionArgumentsPath, 'utf8')).toBe(
+                  'https://example.test/docs\n'
+                );
+              },
+              {
+                message: 'Ctrl+click should run xdg-open for the visible URL',
+                timeoutMs: 5_000,
+              }
+            );
+          },
+          {
+            env: {
+              PATH: `${directory}:${process.env.PATH ?? ''}`,
+              SHELL: shellPath,
+            },
           }
         );
       } finally {

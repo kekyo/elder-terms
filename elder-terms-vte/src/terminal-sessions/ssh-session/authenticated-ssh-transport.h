@@ -24,6 +24,21 @@ struct AuthenticatedSshTransportOptions {
    * Explicit known_hosts file, or an empty string to use libssh defaults.
    */
   std::string known_hosts_file;
+  /**
+   * Explicit SSH client configuration file, or an empty string to use the
+   * libssh defaults.
+   */
+  std::string config_file;
+};
+
+/** Result returned by one non-interactive SSH command. */
+struct SshCommandResult {
+  /** Bytes written to the command's standard output. */
+  std::string standard_output;
+  /** Bytes written to the command's standard error. */
+  std::string standard_error;
+  /** Exit status reported by the remote process. */
+  int exit_status = -1;
 };
 
 /**
@@ -90,6 +105,18 @@ public:
    */
   cardio::promise<bool>
   is_connected_async(cardio::cancellation cancellation);
+
+  /**
+   * Runs one command on a new non-interactive SSH session channel.
+   *
+   * @param command Command interpreted by the remote SSH server.
+   * @param cancellation Operation cancellation signal.
+   * @returns Captured standard output, standard error, and exit status.
+   * @remarks Standard output and standard error are each limited to 64 KiB.
+   */
+  cardio::promise<SshCommandResult>
+  execute_command_async(std::string command,
+                        cardio::cancellation cancellation);
 
   /**
    * Returns the immutable endpoint used to authenticate this transport.

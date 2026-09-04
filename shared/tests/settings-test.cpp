@@ -1,4 +1,5 @@
 #include <elder-terms/settings.h>
+#include <elder-terms/settings/regular-expression.h>
 
 #include <algorithm>
 #include <chrono>
@@ -282,6 +283,20 @@ static void test_default_settings() {
               "default SFTP local directory should use a runtime fallback");
   expect_true(sftp.remote_directory == ".",
               "default SFTP remote directory should use the login directory");
+  const elder_terms::FtpConnectionSettings ftp =
+      elder_terms::ftp_connection_settings(store);
+  expect_true(ftp.address.empty(),
+              "default FTP address should be empty");
+  expect_true(ftp.port == 21, "default FTP port should be 21");
+  expect_true(ftp.username.empty(),
+              "default FTP username should defer to the runtime user prompt");
+  expect_true(ftp.data_connection_mode ==
+                  elder_terms::FtpDataConnectionMode::passive,
+              "default FTP data connection should be passive");
+  expect_true(ftp.local_directory.empty(),
+              "default FTP local directory should use a runtime fallback");
+  expect_true(ftp.remote_directory == ".",
+              "default FTP remote directory should use the login directory");
   expect_true(elder_terms::general_connection_kind(store) ==
                   elder_terms::ConnectionKind::local_shell,
               "default general connection kind should be local shell");
@@ -1973,6 +1988,93 @@ static void test_sftp_missing_ssh_address_warns() {
               "SFTP without an SSH address should emit a warning");
 }
 
+static void test_ftp_profile_uses_independent_endpoint_and_active_mode() {
+  const std::filesystem::path path = temporary_config_path("ftp-profile");
+  write_config(path,
+               "[general]\n"
+               "type=ftp\n"
+               "\n"
+               "[ftp]\n"
+               "address=ftp.example.test\n"
+               "port=2121\n"
+               "username=alice\n"
+               "data_connection_mode=active\n"
+               "local_directory=/home/alice/uploads\n"
+               "remote_directory=/srv/incoming\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  expect_true(elder_terms::general_connection_kind(result.store) ==
+                  elder_terms::ConnectionKind::ftp,
+              "configured connection should be FTP");
+  expect_true(
+      elder_terms::general_settings_select_ftp_connection(result.store),
+      "FTP selector should recognize the configured connection");
+  expect_true(!terminal_connection_profile(result.store).has_value(),
+              "FTP should not produce a VTE terminal connection profile");
+
+  const elder_terms::FtpConnectionSettings settings =
+      elder_terms::ftp_connection_settings(result.store);
+  expect_true(settings.address == "ftp.example.test",
+              "FTP address should come from the FTP section");
+  expect_true(settings.port == 2121,
+              "FTP port should come from the FTP section");
+  expect_true(settings.username == "alice",
+              "FTP username should come from the FTP section");
+  expect_true(settings.data_connection_mode ==
+                  elder_terms::FtpDataConnectionMode::active,
+              "FTP should load active data connection mode");
+  expect_true(settings.local_directory == "/home/alice/uploads",
+              "FTP local directory should come from the FTP section");
+  expect_true(settings.remote_directory == "/srv/incoming",
+              "FTP remote directory should come from the FTP section");
+}
+
+static void test_invalid_ftp_settings_fall_back_and_warn() {
+  const std::filesystem::path path =
+      temporary_config_path("invalid-ftp-settings");
+  write_config(path,
+               "[general]\n"
+               "type=ftp\n"
+               "\n"
+               "[ftp]\n"
+               "port=0\n"
+               "data_connection_mode=automatic\n");
+
+  const SettingsLoadResult result = load_settings(
+      SettingsLoadOptions{
+          .config_path = std::optional<std::filesystem::path>{path},
+          .startup_config_path = std::nullopt,
+      },
+      1.0);
+  remove_config(path);
+
+  const elder_terms::FtpConnectionSettings settings =
+      elder_terms::ftp_connection_settings(result.store);
+  expect_true(settings.port == 21,
+              "invalid FTP port should fall back to 21");
+  expect_true(settings.data_connection_mode ==
+                  elder_terms::FtpDataConnectionMode::passive,
+              "invalid FTP data mode should fall back to passive");
+  expect_true(warnings_contain(result.warnings,
+                               "invalid configuration value [ftp] port"),
+              "invalid FTP port should emit a warning");
+  expect_true(warnings_contain(
+                  result.warnings,
+                  "invalid configuration value [ftp] data_connection_mode"),
+              "invalid FTP data mode should emit a warning");
+  expect_true(warnings_contain(
+                  result.warnings,
+                  "missing required configuration value [ftp] address"),
+              "missing FTP address should emit a warning");
+}
+
 static void test_invalid_ssh_values_fall_back_and_warn() {
   const std::filesystem::path path =
       temporary_config_path("invalid-ssh-values");
@@ -2371,6 +2473,30 @@ static void test_public_setting_keys() {
           elder_terms::sftp_remote_directory_setting_key().name ==
               "remote_directory",
       "SFTP remote directory key should use [sftp] remote_directory");
+  expect_true(elder_terms::ftp_address_setting_key().section == "ftp" &&
+                  elder_terms::ftp_address_setting_key().name == "address",
+              "FTP address key should use [ftp] address");
+  expect_true(elder_terms::ftp_port_setting_key().section == "ftp" &&
+                  elder_terms::ftp_port_setting_key().name == "port",
+              "FTP port key should use [ftp] port");
+  expect_true(elder_terms::ftp_username_setting_key().section == "ftp" &&
+                  elder_terms::ftp_username_setting_key().name == "username",
+              "FTP username key should use [ftp] username");
+  expect_true(
+      elder_terms::ftp_data_connection_mode_setting_key().section == "ftp" &&
+          elder_terms::ftp_data_connection_mode_setting_key().name ==
+              "data_connection_mode",
+      "FTP data mode key should use [ftp] data_connection_mode");
+  expect_true(
+      elder_terms::ftp_local_directory_setting_key().section == "ftp" &&
+          elder_terms::ftp_local_directory_setting_key().name ==
+              "local_directory",
+      "FTP local directory key should use [ftp] local_directory");
+  expect_true(
+      elder_terms::ftp_remote_directory_setting_key().section == "ftp" &&
+          elder_terms::ftp_remote_directory_setting_key().name ==
+              "remote_directory",
+      "FTP remote directory key should use [ftp] remote_directory");
   expect_true(serial_device_setting_key().section == "serial",
               "serial device key should use the serial section");
   expect_true(serial_device_setting_key().name == "device",
@@ -3712,34 +3838,43 @@ static void test_invalid_connection_macros_warn_and_are_ignored() {
               "invalid macro rules should emit a warning");
 }
 
-static void test_global_hyperlink_actions_override_built_in_defaults() {
+static void test_connection_hyperlink_actions_override_built_in_defaults() {
   const std::filesystem::path connection_path =
       temporary_config_path("connection-hyperlinks");
   const std::filesystem::path global_path =
       temporary_config_path("global-hyperlinks");
+  const std::filesystem::path startup_path =
+      temporary_config_path("startup-hyperlinks");
   const std::filesystem::path saved_path =
-      temporary_config_path("saved-global-hyperlinks");
+      temporary_config_path("saved-connection-hyperlinks");
 
   write_config(connection_path,
-               "[hyperlink]\n"
-               "enabled=false\n"
-               "\n"
-               "[hyperlink.ignored_connection]\n"
-               "regex=^ignored:(?<value>.+)$\n"
-               "command=ignored\n"
-               "arguments=${value};\n");
-  write_config(global_path,
                "[hyperlink]\n"
                "enabled=true\n"
                "\n"
                "[hyperlink.second]\n"
+               "source=terminal-text\n"
                "regex=^open:(?<path>.+):(?<line>[0-9]+)$\n"
                "command=second-tool\n"
                "arguments=--line;${line};${path|uri-decode};\n"
+               "path_validation=existing-local-path\n"
+               "path=${path|uri-decode}\n"
                "\n"
                "[hyperlink.first]\n"
+               "source=osc8\n"
                "regex=^first:(?<value>.+)$\n"
                "command=first-tool\n"
+               "arguments=${value};\n"
+               "\n"
+               "[terminal]\n"
+               "width=91\n");
+  write_config(global_path,
+               "[hyperlink]\n"
+               "enabled=false\n"
+               "\n"
+               "[hyperlink.ignored_global]\n"
+               "regex=^ignored:(?<value>.+)$\n"
+               "command=ignored\n"
                "arguments=${value};\n");
 
   const SettingsLoadResult loaded = load_settings(
@@ -3751,63 +3886,168 @@ static void test_global_hyperlink_actions_override_built_in_defaults() {
       1.0);
   expect_true(loaded.loaded, "valid hyperlink actions should load");
   expect_true(loaded.store.hyperlink_actions_enabled,
-              "connection files must not disable global hyperlink actions");
+              "global files must not disable connection hyperlink actions");
   expect_true(loaded.store.hyperlink_rules.size() == 2 &&
                   loaded.store.hyperlink_rules[0].id == "second" &&
-                  loaded.store.hyperlink_rules[1].id == "first",
-              "global hyperlink section order should define priority");
+                  loaded.store.hyperlink_rules[0].recognition_source ==
+                      elder_terms::HyperlinkRecognitionSource::terminal_text &&
+                  loaded.store.hyperlink_rules[0].path_validation ==
+                      elder_terms::HyperlinkPathValidation::
+                          existing_local_path &&
+                  loaded.store.hyperlink_rules[0].path_template ==
+                      "${path|uri-decode}" &&
+                  loaded.store.hyperlink_rules[1].id == "first" &&
+                  loaded.store.hyperlink_rules[1].recognition_source ==
+                      elder_terms::HyperlinkRecognitionSource::osc8,
+              "connection hyperlink section order should define priority");
   expect_true(loaded.store.hyperlink_settings_configured,
-              "custom global hyperlink actions should be marked configured");
+              "custom connection hyperlink actions should be marked configured");
   expect_true(!elder_terms::settings_store_is_dirty(loaded.store),
               "loaded hyperlink actions should start clean");
 
-  SettingsLoadResult editable = load_global_settings(global_path, 1.0);
+  const SettingsLoadResult global = load_global_settings(global_path, 1.0);
+  expect_true(global.store.hyperlink_rules.empty() &&
+                  !global.store.hyperlink_settings_configured &&
+                  elder_terms::effective_hyperlink_action_rules(global.store)
+                          .size() == 4,
+              "global hyperlink sections should be ignored");
+
   const SettingsSaveResult saved =
-      save_global_settings(editable.store, saved_path);
-  expect_true(saved.saved, "global hyperlink actions should save");
-  const SettingsLoadResult reloaded = load_global_settings(saved_path, 1.0);
+      save_settings(loaded.store, saved_path);
+  expect_true(saved.saved, "connection hyperlink actions should save");
+  SettingsLoadResult reloaded = load_settings(
+      SettingsLoadOptions{
+          .config_path = saved_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = std::nullopt,
+      },
+      1.0);
   expect_true(reloaded.store.hyperlink_actions_enabled ==
-                      editable.store.hyperlink_actions_enabled &&
+                      loaded.store.hyperlink_actions_enabled &&
                   reloaded.store.hyperlink_rules ==
-                      editable.store.hyperlink_rules &&
+                      loaded.store.hyperlink_rules &&
                   reloaded.store.hyperlink_settings_configured,
-              "global hyperlink actions should round trip");
+              "connection hyperlink actions should round trip");
 
   elder_terms::set_hyperlink_actions(
-      &editable.store, false,
+      &reloaded.store, false,
       {elder_terms::HyperlinkActionRule{
           .id = "replacement",
+          .recognition_source =
+              elder_terms::HyperlinkRecognitionSource::terminal_text,
           .pattern = "^replacement:(?<value>.+)$",
           .command = "replacement-tool",
           .arguments = {"${value}"},
+          .path_validation = elder_terms::HyperlinkPathValidation::none,
+          .path_template = {},
       }});
-  expect_true(elder_terms::settings_store_is_dirty(editable.store),
+  expect_true(elder_terms::settings_store_is_dirty(reloaded.store),
               "replacing hyperlink actions should mark the store dirty");
+
+  const SettingsSaveResult replaced = save_settings(reloaded.store, saved_path);
+  const std::string custom_content = read_config(saved_path);
+  expect_true(replaced.saved &&
+                  custom_content.find("[hyperlink.replacement]") !=
+                      std::string::npos &&
+                  custom_content.find("[hyperlink.http-url-osc8]") ==
+                      std::string::npos &&
+                  custom_content.find("width=91") != std::string::npos,
+              "connection settings should save only explicitly configured "
+              "link rules");
+
+  elder_terms::reset_hyperlink_actions(&reloaded.store);
+  const SettingsSaveResult reset_saved =
+      save_settings(reloaded.store, saved_path);
+  const std::string reset_content = read_config(saved_path);
+  expect_true(reset_saved.saved &&
+                  reset_content.find("[hyperlink") == std::string::npos &&
+                  reset_content.find("width=91") != std::string::npos,
+              "restoring built-in link rules should remove explicit link "
+              "groups and preserve unrelated connection settings");
+
+  write_config(startup_path, "[terminal]\nheight=31\n");
+  const SettingsLoadResult startup_defaults = load_settings(
+      SettingsLoadOptions{
+          .config_path = connection_path,
+          .startup_config_path = startup_path,
+          .global_config_path = global_path,
+      },
+      1.0);
+  const std::vector<elder_terms::HyperlinkActionRule> startup_rules =
+      elder_terms::effective_hyperlink_action_rules(startup_defaults.store);
+  expect_true(startup_defaults.store.hyperlink_rules.empty() &&
+                  !startup_defaults.store.hyperlink_settings_configured &&
+                  startup_rules.size() == 4 &&
+                  startup_rules[0].id == "http-url-osc8",
+              "a startup profile without link rules should replace connection "
+              "rules with built-in defaults");
 
   remove_config(connection_path);
   remove_config(global_path);
+  remove_config(startup_path);
   remove_config(saved_path);
 }
 
 static void test_hyperlink_defaults_disable_and_invalid_rules() {
   const SettingsStore defaults = create_default_settings(
       default_terminal_display_settings(1.0), "defaults");
+  const std::vector<elder_terms::HyperlinkActionRule> default_rules =
+      elder_terms::effective_hyperlink_action_rules(defaults);
   expect_true(defaults.hyperlink_actions_enabled &&
-                  defaults.hyperlink_rules.size() == 2 &&
+                  defaults.hyperlink_rules.empty() &&
+                  default_rules.size() == 4 &&
+                  default_rules[0].id == "http-url-osc8" &&
+                  default_rules[0].recognition_source ==
+                      elder_terms::HyperlinkRecognitionSource::osc8 &&
+                  default_rules[0].command == "xdg-open" &&
+                  default_rules[0].arguments ==
+                      std::vector<std::string>{"${0}"} &&
+                  default_rules[1].id == "http-url-text" &&
+                  default_rules[1].recognition_source ==
+                      elder_terms::HyperlinkRecognitionSource::terminal_text &&
+                  default_rules[2].id == "vscode-line-column" &&
+                  default_rules[3].id == "vscode-line" &&
                   !defaults.hyperlink_settings_configured,
-              "VS Code hyperlink actions should be built in by default");
+              "URL and VS Code hyperlink actions should be built in by "
+              "default");
 
   const std::filesystem::path disabled_path =
       temporary_config_path("disabled-hyperlinks");
   write_config(disabled_path,
                "[hyperlink]\n"
                "enabled=false\n");
-  const SettingsLoadResult disabled =
-      load_global_settings(disabled_path, 1.0);
+  const SettingsLoadResult disabled = load_settings(
+      SettingsLoadOptions{
+          .config_path = disabled_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = std::nullopt,
+      },
+      1.0);
   expect_true(!disabled.store.hyperlink_actions_enabled &&
                   disabled.store.hyperlink_rules.empty() &&
-                  disabled.store.hyperlink_settings_configured,
+                  disabled.store.hyperlink_settings_configured &&
+                  elder_terms::effective_hyperlink_action_rules(disabled.store)
+                      .empty(),
               "an explicit disabled section should suppress built-in rules");
+
+  const std::filesystem::path empty_path =
+      temporary_config_path("empty-hyperlinks");
+  write_config(empty_path,
+               "[hyperlink]\n"
+               "enabled=true\n");
+  const SettingsLoadResult empty = load_settings(
+      SettingsLoadOptions{
+          .config_path = empty_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = std::nullopt,
+      },
+      1.0);
+  expect_true(empty.store.hyperlink_rules.empty() &&
+                  empty.store.hyperlink_settings_configured &&
+                  elder_terms::effective_hyperlink_action_rules(empty.store)
+                          .size() == 4,
+              "built-in rules should apply when no connection rule is "
+              "defined");
 
   const std::filesystem::path invalid_path =
       temporary_config_path("invalid-hyperlinks");
@@ -3816,24 +4056,67 @@ static void test_hyperlink_defaults_disable_and_invalid_rules() {
                "enabled=true\n"
                "\n"
                "[hyperlink.bad]\n"
+               "source=terminal-text\n"
                "regex=^bad:(?<path>.+)$\n"
                "command=bad-tool\n"
                "arguments=${path|shell};\n"
                "\n"
                "[hyperlink.valid]\n"
+               "source=osc8\n"
                "regex=^valid:(?<path>.+)$\n"
                "command=valid-tool\n"
                "arguments=${path|uri-decode};\n");
-  const SettingsLoadResult invalid = load_global_settings(invalid_path, 1.0);
+  const SettingsLoadResult invalid = load_settings(
+      SettingsLoadOptions{
+          .config_path = invalid_path,
+          .startup_config_path = std::nullopt,
+          .global_config_path = std::nullopt,
+      },
+      1.0);
   expect_true(invalid.store.hyperlink_rules.size() == 1 &&
-                  invalid.store.hyperlink_rules[0].id == "valid",
+                  invalid.store.hyperlink_rules[0].id == "valid" &&
+                  elder_terms::effective_hyperlink_action_rules(invalid.store)
+                          .size() == 1,
               "invalid custom rules should not restore built-in actions or "
               "disable valid custom rules");
   expect_true(warnings_contain(invalid.warnings,
                                "invalid hyperlink [hyperlink.bad]"),
               "invalid hyperlink rules should emit a warning");
 
+  std::string validation_reason;
+  expect_true(
+      !elder_terms::hyperlink_action_rule_is_valid(
+          elder_terms::HyperlinkActionRule{
+              .id = "empty-text-match",
+              .recognition_source =
+                  elder_terms::HyperlinkRecognitionSource::terminal_text,
+              .pattern = ".*",
+              .command = "tool",
+              .arguments = {},
+              .path_validation =
+                  elder_terms::HyperlinkPathValidation::none,
+              .path_template = {},
+          },
+          &validation_reason),
+      "terminal text rules must not accept empty matches");
+  expect_true(
+      !elder_terms::hyperlink_action_rule_is_valid(
+          elder_terms::HyperlinkActionRule{
+              .id = "missing-path-template",
+              .recognition_source =
+                  elder_terms::HyperlinkRecognitionSource::osc8,
+              .pattern = "^file:(?<path>.+)$",
+              .command = "tool",
+              .arguments = {"${path}"},
+              .path_validation = elder_terms::HyperlinkPathValidation::
+                  existing_local_path,
+              .path_template = {},
+          },
+          &validation_reason),
+      "path validation must name the expanded value to inspect");
+
   remove_config(disabled_path);
+  remove_config(empty_path);
   remove_config(invalid_path);
 }
 
@@ -3879,6 +4162,40 @@ static void test_save_empty_global_settings_creates_parent_directory() {
   std::filesystem::remove_all(root, remove_error);
 }
 
+static void test_regular_expression_reports_project_owned_matches() {
+  std::string reason;
+  elder_terms::RegularExpressionState *regex =
+      elder_terms::create_regular_expression(
+          R"((?<scheme>https?)://(?<host>[\p{L}0-9.-]+))", false,
+          &reason);
+  expect_true(regex != nullptr,
+              "a valid PCRE2 expression should compile: " + reason);
+  expect_true(elder_terms::regular_expression_capture_exists(regex, "0") &&
+                  elder_terms::regular_expression_capture_exists(
+                      regex, "scheme") &&
+                  elder_terms::regular_expression_capture_exists(regex,
+                                                                  "host") &&
+                  !elder_terms::regular_expression_capture_exists(
+                      regex, "missing"),
+              "compiled expressions should report available captures");
+
+  const std::optional<elder_terms::RegularExpressionMatch> match =
+      elder_terms::search_regular_expression(
+          regex, "Open https://example.みんな now", &reason);
+  expect_true(match.has_value(),
+              "a matching UTF-8 subject should produce a match: " + reason);
+  expect_true(match->start == 5 && match->end == 30,
+              "match offsets should use UTF-8 byte positions");
+  expect_true(elder_terms::regular_expression_capture(*match, "0") ==
+                      std::optional<std::string>{"https://example.みんな"} &&
+                  elder_terms::regular_expression_capture(*match, "scheme") ==
+                      std::optional<std::string>{"https"} &&
+                  elder_terms::regular_expression_capture(*match, "host") ==
+                      std::optional<std::string>{"example.みんな"},
+              "matches should expose numbered and named captures");
+  elder_terms::destroy_regular_expression(regex);
+}
+
 } // namespace elder_terms_settings_test
 
 int main() {
@@ -3921,6 +4238,9 @@ int main() {
     elder_terms_settings_test::
         test_sftp_profile_uses_ssh_endpoint_without_terminal_profile();
     elder_terms_settings_test::test_sftp_missing_ssh_address_warns();
+    elder_terms_settings_test::
+        test_ftp_profile_uses_independent_endpoint_and_active_mode();
+    elder_terms_settings_test::test_invalid_ftp_settings_fall_back_and_warn();
     elder_terms_settings_test::test_serial_profile();
     elder_terms_settings_test::test_serial_ignore_carrier_profile();
     elder_terms_settings_test::test_transfer_base_path_setting();
@@ -3955,11 +4275,13 @@ int main() {
     elder_terms_settings_test::test_connection_macro_settings_round_trip_and_layering();
     elder_terms_settings_test::test_invalid_connection_macros_warn_and_are_ignored();
     elder_terms_settings_test::
-        test_global_hyperlink_actions_override_built_in_defaults();
+        test_connection_hyperlink_actions_override_built_in_defaults();
     elder_terms_settings_test::
         test_hyperlink_defaults_disable_and_invalid_rules();
     elder_terms_settings_test::test_missing_global_settings_are_optional();
     elder_terms_settings_test::test_save_empty_global_settings_creates_parent_directory();
+    elder_terms_settings_test::
+        test_regular_expression_reports_project_owned_matches();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

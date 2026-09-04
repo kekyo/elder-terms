@@ -39,6 +39,7 @@ hicolor-icon-theme
 libcanberra-dev
 libcanberra-pulse
 libgtk-3-dev
+libpcre2-dev
 libssh-dev
 libudev-dev
 liburing-dev
@@ -49,7 +50,9 @@ meson
 ninja-build
 nodejs
 npm
+openssh-client
 pkg-config
+xdg-utils
 EOF
 }
 

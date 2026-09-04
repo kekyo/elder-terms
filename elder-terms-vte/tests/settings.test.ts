@@ -134,12 +134,29 @@ const closeServer = async (server: Server): Promise<void> =>
     });
   });
 
-const openSettingsDialog = async (app: GtkApp): Promise<void> => {
-  const settingsButton = expectElementKind(
-    await app.getById('settings_button'),
-    'button'
+const clickWidget = async (
+  app: GtkApp,
+  widget: GtkWidgetElement
+): Promise<void> => {
+  const { bounds } = await widget.capture();
+  await app.input.moveMouseTo(
+    Math.trunc(bounds.x + bounds.width / 2),
+    Math.trunc(bounds.y + bounds.height / 2)
   );
-  await settingsButton.click();
+  await app.input.setMouseButton('left', true);
+  await app.input.setMouseButton('left', false);
+};
+
+const openSettingsDialog = async (app: GtkApp): Promise<void> => {
+  const applicationMenuButton = expectElementKind(
+    await app.getById('application_menu_button'),
+    'toggleButton'
+  );
+  await clickWidget(app, applicationMenuButton);
+  await expectElementKind(
+    await app.getById('settings_menu_item'),
+    'menuItem'
+  ).click();
   await toPass(async () => {
     expectElementKind(await app.getById('settings_dialog'), 'window');
     expectElementKind(await app.getById('settings_widget_root'), 'container');
@@ -655,16 +672,26 @@ describe.concurrent('elder-terms-vte settings', () => {
         telnetLocalhostConfigPath,
       ],
       async (app) => {
-        const settingsButton = expectElementKind(
-          await app.getById('settings_button'),
-          'button'
+        const applicationMenuButton = expectElementKind(
+          await app.getById('application_menu_button'),
+          'toggleButton'
         );
         const transferButton = expectElementKind(
           await app.getById('transfer_button'),
           'toggleButton'
         );
+        await clickWidget(app, applicationMenuButton);
+        const settingsMenuItem = expectElementKind(
+          await app.getById('settings_menu_item'),
+          'menuItem'
+        );
         await waitForResult(async () => {
-          expect((await settingsButton.info()).description).toBe('設定');
+          expect((await applicationMenuButton.info()).description).toBe(
+            'アプリケーション'
+          );
+          const settingsInfo = await settingsMenuItem.info();
+          expect(settingsInfo.name).toBe('設定');
+          expect(settingsInfo.states).toContain('showing');
           const transferInfo = await transferButton.info();
           expect(transferInfo.description).toBe('転送');
           expect(transferInfo.states).toContain('showing');
@@ -699,6 +726,7 @@ describe.concurrent('elder-terms-vte settings', () => {
           ).text()
         ).toBe('CONN');
 
+        await clickWidget(app, applicationMenuButton);
         await transferButton.click();
         for (const [id, name] of [
           ['transfer_log_enabled_item', 'ログ記録'],
@@ -736,12 +764,22 @@ describe.concurrent('elder-terms-vte settings', () => {
       context,
       ['--test-fixture'],
       async (app) => {
-        const settingsButton = expectElementKind(
-          await app.getById('settings_button'),
-          'button'
+        const applicationMenuButton = expectElementKind(
+          await app.getById('application_menu_button'),
+          'toggleButton'
+        );
+        await clickWidget(app, applicationMenuButton);
+        const settingsMenuItem = expectElementKind(
+          await app.getById('settings_menu_item'),
+          'menuItem'
         );
         await waitForResult(async () => {
-          expect((await settingsButton.info()).description).toBe('Settings');
+          expect((await applicationMenuButton.info()).description).toBe(
+            'Application'
+          );
+          const settingsInfo = await settingsMenuItem.info();
+          expect(settingsInfo.name).toBe('Settings');
+          expect(settingsInfo.states).toContain('showing');
         });
       },
       {
@@ -756,14 +794,6 @@ describe.concurrent('elder-terms-vte settings', () => {
       context,
       ['--test-fixture'],
       async (app) => {
-        const settingsButton = expectElementKind(
-          await app.getById('settings_button'),
-          'button'
-        );
-        await waitForResult(async () => {
-          expect((await settingsButton.info()).description).toBe('設定');
-        });
-
         await openSettingsDialog(app);
         const dialog = expectElementKind(
           await app.getById('settings_dialog'),
@@ -1472,7 +1502,9 @@ describe.concurrent('elder-terms-vte settings', () => {
             ).toEqual(exteriorComponentBackground);
 
             const transferButton = await app.getById('transfer_button');
-            const settingsButton = await app.getById('settings_button');
+            const applicationMenuButton = await app.getById(
+              'application_menu_button'
+            );
             await toPass(async () => {
               expect((await transferButton.info()).states).toContain('showing');
             });
@@ -1480,7 +1512,7 @@ describe.concurrent('elder-terms-vte settings', () => {
               capturePixel(await transferButton.capture(), 0.15, 0.5)
             ).toEqual(exteriorComponentBackground);
             expect(
-              capturePixel(await settingsButton.capture(), 0.15, 0.5)
+              capturePixel(await applicationMenuButton.capture(), 0.15, 0.5)
             ).toEqual(exteriorComponentBackground);
 
             const mainWindow = expectElementKind(
@@ -1872,7 +1904,7 @@ describe.concurrent('elder-terms-vte settings', () => {
     );
   });
 
-  it('opens the runtime settings dialog from the header bar', async (context) => {
+  it('opens the runtime settings dialog from the application menu', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
       await openSettingsDialog(app);
       expect(await selectedSettingsTabName(app)).toBe('General');

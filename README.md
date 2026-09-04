@@ -16,8 +16,8 @@
 
 ## What Is This?
 
-elder-terms is a GTK terminal for serial, TELNET, local shell, SSH, and SFTP
-connections, inspired by personal computing in the 1990s.
+elder-terms is a GTK terminal for serial, TELNET, local shell, SSH, SFTP, and
+FTP connections, inspired by personal computing in the 1990s.
 
 ### Basic Terminal
 
@@ -43,11 +43,15 @@ connections, inspired by personal computing in the 1990s.
 
 ![SFTP window](./images/sftp.png)
 
+### FTP
+
+FTP uses the same two-pane file-transfer window as SFTP.
+
 ## Features
 
 - Provides a simple, no-frills terminal with everything you need, using Linux
   GTK/`libvte`.
-- Supports local terminals, SSH, and SFTP as well as serial and TELNET
+- Supports local terminals, SSH, SFTP, and FTP as well as serial and TELNET
   connections, bringing that familiar terminal experience into the present.
 - Lets you manage multiple connections and launch terminals from the launcher.
 - Stores all connection settings in INI files, which you can freely edit with
@@ -57,9 +61,10 @@ connections, inspired by personal computing in the 1990s.
 - Remembers the terminal's rows and columns for each connection.
 - Lets you explicitly specify the terminal type, such as `xterm` or
   `xterm-256color`, for TELNET and SSH.
-- Supports X/Y/ZMODEM file transfers for all connection types except local
-  terminals. Automatic transfers can be enabled for ZMODEM.
+- Supports X/Y/ZMODEM file transfers for TELNET, serial, and SSH terminal
+  connections. Automatic transfers can be enabled for ZMODEM.
 - Transfers files to and from the host of an SSH connection over SFTP.
+- Transfers files over FTP using passive or active data connections.
 - Supports pasting text and sending text files. You can specify the send rate
   and newline handling to avoid overflowing the host's buffer or using
   incompatible newline codes.
@@ -76,8 +81,9 @@ connections, inspired by personal computing in the 1990s.
 - Starts the launcher automatically and can keep it running in the system tray.
 - Monitors received text with regular expressions and defines rules that
   automatically send text or run a specified command.
-- Opens OSC 8 hyperlinks by holding `Ctrl` and left-clicking, passing paths and
-  line numbers extracted by regular expressions to any command.
+- Recognizes OSC 8 targets or visible terminal text as links. Hold `Ctrl` and
+  left-click to open HTTP(S) URLs or run a command configured with regular
+  expression captures.
 - Records logs to files and organizes them into directories by connection and
   date and time.
 - Supports multilingual display (English, Arabic, Spanish, French, Hindi,
@@ -108,21 +114,22 @@ elder-terms
 
 ## Basic Usage
 
-First, create a connection entry for a local terminal. This is a terminal that
-starts a shell such as `bash`, much like the terminal you normally use.
+On the first launch, elder-terms automatically creates a connection entry named
+`Local terminal`. It starts a shell such as `bash`, much like the terminal you
+normally use.
 
 ![Local terminal](./images/launcher.png)
 
-Creating one is easy. Click the "New" button at the bottom of the launcher,
-change the name from "New connection" to whatever you like, and click "Save".
-You now have an entry that starts a local terminal. Double-click the entry in
-the launcher's list to open it. There it is:
+Double-click the entry in the launcher's list to open it. To create another
+connection, click "New" at the bottom of the launcher, change the name from
+"New connection" to whatever you like, and click "Save". There it is:
 
 ![Local terminal](./images/local-terminal.png)
 
-Click the gear icon at the top of the terminal to change its settings. Clicking
-"Apply" applies the changes only to the currently running terminal. Clicking
-"Save" remembers the settings and uses them the next time the terminal starts.
+Open the menu at the top-right of the terminal and select "Settings" to change
+its settings. Clicking "Apply" applies the changes only to the currently
+running terminal. Clicking "Save" remembers the settings and uses them the next
+time the terminal starts.
 
 ![Settings (Terminal)](./images/settings-terminal.png)
 
@@ -188,6 +195,168 @@ the connection's INI file, while "Apply" affects only the current session.
 Clearing a text field or selecting the default item in a selection field
 removes the explicit value, causing the setting to inherit the global or
 built-in default again.
+
+## Finding a Host with IP Scan
+
+The TELNET, SSH/SFTP, and FTP settings place an "IP scan" button beside the
+address field. Opening it immediately scans the IPv4 ranges of all configured
+network interfaces for the standard FTP (21), SSH/SFTP (22), and TELNET (23)
+TCP ports. For example, a `/24` interface scans every address whose final octet
+is 0 through 255. A range wider than `/24` is limited to its first 256
+addresses by treating the additional upper host bits as zero. For example, an
+address on `172.20.0.0/16` scans `172.20.0.0` through `172.20.0.255`.
+
+Discovered hosts appear as the scan proceeds, together with their reverse DNS
+name when available. The SSH/SFTP (22), TELNET (23), and FTP (21) columns show
+a check mark when the corresponding port was found. The progress bar shows how
+much of the combined range has been checked. Double-click a row to stop the
+scan, close the dialog, and copy that numeric IP address into the setting.
+Click "Cancel" to stop and close the scan without changing the address.
+
+Only locally configured IPv4 ranges are scanned. Interfaces without an IPv4
+address are skipped. Loopback interfaces scan only their assigned addresses,
+rather than the whole loopback range. Slow reverse DNS responses may still
+take some time to finish.
+
+## Using SSH and SFTP
+
+When an SSH terminal or a dedicated SFTP window starts, a user-name panel is
+shown before the SSH connection is opened. The initial value is selected in
+this order: the user name in the connection settings, the matching `User`
+value in `~/.ssh/config`, and the current operating-system user name. You can
+change it for this connection without changing the saved settings. An empty
+user name is not accepted.
+
+The user name is requested separately because a password is not always
+needed. SSH first tries the configured private key, then credentials available
+through SSH Agent or default identity files. An encrypted configured key opens
+a passphrase panel. The
+password or keyboard-interactive panel is shown only when the server offers
+that method and an earlier method has not completed authentication. All of
+these methods authenticate the user name selected in the first panel.
+
+An SFTP window opened from an already authenticated SSH terminal reuses that
+terminal's SSH connection, including its selected user name and authentication,
+and therefore does not ask for them again.
+
+## Managing Items in SFTP and FTP
+
+SFTP and FTP use the same two-pane file browser. Select an item in either the
+local or remote pane and right-click it to open the item menu. Multiple items
+can be selected with `Ctrl`+click or a drag rectangle before opening the menu.
+
+- `Rename` is available when exactly one file or directory is selected. Enter
+  the new name in the window overlay. The item stays in its current directory,
+  and an existing item is never overwritten.
+- `Delete` is available for one or more selected files and directories. The
+  confirmation overlay lists the effective deletion roots before anything is
+  removed. A non-empty directory is deleted recursively. If both a directory
+  and one of its descendants are selected, the descendant is covered by that
+  directory and is not listed or processed twice.
+- `Calculate Hash Values` is available when exactly one regular file is
+  selected. For a local file, elder-terms calculates MD5, SHA-1, and SHA-256
+  internally. For a remote file over SFTP, the SSH server must permit command
+  execution and make `md5sum`, `sha1sum`, and `sha256sum` available in the
+  connected account's command search path. Calculation fails if these
+  conditions are not met. Hash calculation for remote files over FTP is not
+  supported; hash calculation in the local pane remains available.
+
+On a Debian or Ubuntu SFTP server, the required commands are provided by the
+[`coreutils` package for Debian](https://packages.debian.org/stable/coreutils)
+or the
+[`coreutils` package for Ubuntu](https://packages.ubuntu.com/search?keywords=coreutils&searchon=names&suite=all&section=all).
+Install it on the server as follows:
+
+```shell
+sudo apt update
+sudo apt install coreutils
+```
+
+Deletion is permanent and does not use the desktop trash. In the local pane
+and over SFTP, deleting a symbolic link removes the link itself without
+following its target. Rename and deletion run asynchronously; the browser is
+temporarily covered by a progress overlay and is refreshed when the operation
+finishes.
+
+## Using FTP
+
+Create a connection in the launcher and select `FTP` as its connection type.
+The FTP tab contains the server address, control port, user name, data
+connection mode, and initial local and remote directories. The default control
+port is 21 and the default data connection mode is `Passive (recommended)`.
+
+Every time the FTP window starts, its authentication panel asks for the user
+name and hidden password together. The configured user name is prefilled; if
+it is empty, the current operating-system user name is prefilled instead. For
+anonymous login, enter `anonymous` explicitly and enter the password expected
+by the server. No anonymous credentials are supplied automatically, and the
+entered password is not stored in the connection settings. After login, FTP
+uses the same two-pane file browser and transfer controls as SFTP.
+
+FTP sends commands, user names, passwords, directory listings, and file data
+without encryption. elder-terms implements the base
+[FTP protocol (RFC 959)](https://www.rfc-editor.org/rfc/rfc959) and does not
+implement [FTP over TLS (RFC 4217)](https://www.rfc-editor.org/rfc/rfc4217),
+so FTPS is not supported. Prefer SFTP unless the network and server are
+trusted.
+
+### FTP Data Connections
+
+FTP keeps one control connection open and creates a separate data connection
+for each directory listing or file transfer. The `Data connection mode`
+setting chooses which side initiates that data connection:
+
+- `Passive (recommended)`: elder-terms connects to a port selected by the
+  server. It tries `EPSV` first and, on IPv4, falls back to `PASV` when the
+  server does not support `EPSV`. This normally works best through client-side
+  NAT and firewalls because both connections are outbound. For `PASV`, the
+  advertised host address is ignored and the control-connection peer is used,
+  following the FTP security guidance in
+  [RFC 2577](https://www.rfc-editor.org/rfc/rfc2577).
+- `Active`: elder-terms listens on a local port and the server connects back to
+  it. It tries `EPRT` first and, on IPv4, falls back to `PORT`. An inbound data
+  connection must reach the client, so firewall and NAT configuration may be
+  required. A data connection from a host other than the control-connection
+  peer is rejected.
+
+`EPSV` and `EPRT` are the IPv4/IPv6-capable extended commands defined by
+[RFC 2428](https://www.rfc-editor.org/rfc/rfc2428). `PASV` and `PORT` are the
+traditional IPv4 fallbacks. These are command variants within passive and
+active operation, not additional data connection modes. The IP family is
+selected when the server address is resolved. Proxy traversal and configurable
+data-port ranges are not separate options in elder-terms.
+
+### FTP Operation Ordering and Compatibility
+
+Opening a directory node and every other remote operation starts
+asynchronously, so the GTK window remains responsive. Each FTP window uses one
+authenticated control connection rather than a pool of control connections.
+Operations wait in FIFO order, and one operation retains its turn through its
+data transfer and the server's final completion reply. A directory request
+made while another request is active is therefore queued instead of being
+interleaved with it.
+
+elder-terms negotiates binary transfer mode and prefers `MLSD` listings when
+the server advertises the standardized `MLST`/`MLSD` extensions from
+[RFC 3659](https://www.rfc-editor.org/rfc/rfc3659). It falls back to common
+Unix-style and DOS-style `LIST` output for older servers. Unusual
+server-specific `LIST` formats may not be recognized. FTP does not expose the
+SFTP features for symbolic links, POSIX permissions, or timestamp updates.
+
+The corresponding INI settings have the following form:
+
+```ini
+[general]
+type=ftp
+
+[ftp]
+address=ftp.example.com
+port=21
+username=
+data_connection_mode=passive
+local_directory=
+remote_directory=.
+```
 
 ## Local Startup Process
 
@@ -453,8 +622,8 @@ set the corresponding value to `default`.
 
 Hotkeys work only while the elder-terms launcher is running. In environments
 with a system tray, you can keep the launcher in the tray by opening the
-application menu, selecting "Application settings", and setting "Startup mode"
-to "System tray only" or "System tray and main window".
+launcher's application menu, selecting "Application settings", and setting
+"Startup mode" to "System tray only" or "System tray and main window".
 
 ![System tray](./images/system-tray.png)
 
@@ -513,14 +682,14 @@ changed.
 
 ## Configuring the Display Language
 
-"Display language" under "Application settings" lets you select the system
-default, English, Arabic, Spanish, French, Hindi, Japanese, Korean, Portuguese,
-Russian, or Simplified Chinese.
+"Display language" under the launcher's "Application settings" lets you select
+the system default, English, Arabic, Spanish, French, Hindi, Japanese, Korean,
+Portuguese, Russian, or Simplified Chinese.
 
 The display language is loaded when elder-terms starts, so you must restart
 elder-terms after saving a change. Select "Restart now" in the dialog shown
-when you save, or restart it manually later. Terminal and SFTP windows that are
-already open do not change language immediately either.
+when you save, or restart it manually later. Terminal, SFTP, and FTP windows
+that are already open do not change language immediately either.
 
 ## Checking the Running Version
 
@@ -571,8 +740,8 @@ character encoding has been converted for display.
 Macros (automatic macros) monitor text received from the remote host with
 regular expressions. When a match is found, they either send text to the host
 or run a specified command. They are available for local terminal, TELNET,
-serial, and SSH connections, but cannot be defined for SFTP connections or
-Connection defaults.
+serial, and SSH connections, but cannot be defined for SFTP or FTP connections
+or Connection defaults.
 
 In text to send, commands, and command arguments, `${0}` refers to the entire
 regular-expression match, `${1}` and `${2}` refer to numbered captures, and
@@ -622,68 +791,86 @@ Commands are launched directly without a shell, so shell syntax such as pipes
 and redirections is not interpreted. Specify each required value as a separate
 item in `arguments`.
 
-## Configuring OSC 8 Hyperlinks
+## Configuring Terminal Link Actions
 
-Hyperlinks displayed by a program on the remote host using OSC 8 escape
-sequences can be opened with an external command by holding `Ctrl` and
-left-clicking. elder-terms matches the complete raw OSC 8 target against
-regular expressions and runs only the first rule that matches the entire
-target.
+Hold `Ctrl` and left-click a recognized link to run its configured external
+command. A rule can inspect either the target of an OSC 8 escape sequence or a
+matching substring in visible terminal text. Rules are evaluated in their
+displayed order, and only the first matching rule is run.
 
-When `global.ini` has no hyperlink configuration, built-in rules open the
-following formats:
+Select a connection in the launcher and open its "Links" tab to enable or
+disable link actions, add and remove rules, change their order, edit command
+arguments, and restore the built-in defaults. The same tab is available from
+the settings dialog in a running terminal. Link settings are saved separately
+for each connection.
 
-```text
-vscode://file/absolute/path:line
-vscode://file/absolute/path:line:column
-```
+When a connection defines no link rules, the built-in rules recognize:
 
-These launch `code --reuse-window --goto /absolute/path:line` or
-`code --reuse-window --goto /absolute/path:line:column`, respectively. URI
-escapes in the path, such as `%20`, are decoded before the path is passed as a
-command argument.
+- HTTP and HTTPS URLs in OSC 8 targets and visible terminal text, opened with
+  `xdg-open` in the desktop's default application.
+- OSC 8 targets in `vscode://file/absolute/path:line` and
+  `vscode://file/absolute/path:line:column` form, opened with `code
+  --reuse-window --goto`.
 
-To change the command and arguments, add rules to the global configuration
-file at `~/.config/elder-terms/global.ini`. For example, the following rule
-extracts a path and line number from a custom OSC target:
+URI escapes in captures, such as `%20`, can be decoded before a value is
+passed to the command. "Restore defaults" removes the connection's explicit
+link settings, so later built-in default changes also take effect.
+
+Each rule selects one recognition source:
+
+- "OSC 8 target" applies the regular expression to the complete raw target.
+- "Visible terminal text" finds a matching substring under the pointer. The
+  expression must not match an empty string.
+
+Regular expressions use [PCRE2 pattern
+syntax](https://www.pcre.org/current/doc/html/pcre2pattern.html). The command
+is a fixed executable name or path. It is launched directly without a shell,
+so pipes, redirections, and other shell syntax are not interpreted. Capture
+templates are expanded only in arguments and in the optional validation path.
+
+Path validation can be set to "Existing local file or directory". In that
+mode, the expanded path must be absolute and must name an existing regular
+file or directory on the computer running elder-terms; otherwise the command
+is not run. Relative paths are rejected because terminal display text does not
+provide a reliable local working directory, particularly for remote sessions.
+
+The same settings can be edited directly in a connection's INI file. This
+example recognizes an absolute local source path followed by a line number:
 
 ```ini
 [hyperlink]
 enabled=true
 
-[hyperlink.custom-editor]
-regex=^editor://open(?<path>/[^:]+):(?<line>[1-9][0-9]*)$
-command=my-editor
-arguments=--line;${line};${path|uri-decode};
+[hyperlink.local-source]
+source=terminal-text
+regex=(?<path>/[^\s:]+):(?<line>[1-9][0-9]*)
+command=code
+arguments=--reuse-window;--goto;${path}:${line};
+path_validation=existing-local-path
+path=${path}
 ```
 
-`[hyperlink.<rule-id>]` sections are evaluated in file order. Rule IDs may
-contain letters, digits, `-`, and `_`. `regex` must match the entire OSC 8
-target. `command` is a fixed executable name or path and does not expand
-captures.
+`source` is `osc8` or `terminal-text` and defaults to `osc8` when omitted.
+`path_validation` is `none` or `existing-local-path`; `path` is required for
+the latter. `[hyperlink.<rule-id>]` sections are evaluated in file order. Rule
+IDs may contain letters, digits, `-`, and `_`.
 
 `arguments` is semicolon-delimited, and each item becomes a separate command
-argument. Within each argument, `${0}` refers to the entire match, `${1}` and
-`${2}` refer to numbered captures, and `${name}` refers to a named capture.
-Adding `|uri-decode`, as in `${path|uri-decode}`, decodes URI escapes in that
-capture. Write a literal `$` as `$$`.
+argument. `${0}` refers to the entire match, `${1}` and `${2}` to numbered
+captures, and `${name}` to a named capture. `${path|uri-decode}` decodes URI
+escapes in that capture. Write a literal `$` as `$$`.
 
-Defining any explicit hyperlink configuration replaces the built-in VS Code
-rules with the custom rules. To disable all hyperlink actions, use:
+Defining at least one `[hyperlink.<rule-id>]` section replaces all built-in
+rules for that connection. When no rule section is defined, the built-in rules
+apply. To disable all link actions, set `[hyperlink]` `enabled=false` in the
+connection file. Link sections in `global.ini` are ignored. A temporary launch
+profile similarly uses its own rules, or the built-in rules when it defines
+none.
 
-```ini
-[hyperlink]
-enabled=false
-```
-
-This configuration is global only. `[hyperlink]` and `[hyperlink.*]` sections
-in connection settings or temporary launch profiles are ignored.
-
-Commands are launched without a shell, with `command` and each `arguments`
-item passed unchanged as a separate `argv` element. Because OSC 8 targets may
-be supplied by the remote host, restrict each regular expression to only the
-formats you intend to accept. Invalid rules, undefined captures, and invalid
-URI escapes are not executed.
+OSC 8 targets and visible text may be supplied by a remote host. Restrict each
+regular expression to the formats you intend to accept. Invalid rules,
+undefined captures, invalid URI escapes, and failed path validation do not run
+the command.
 
 ## INI File Locations
 
@@ -710,7 +897,8 @@ gettext, and the development packages for the libraries used by elder-terms:
 sudo apt update
 sudo apt install build-essential git meson ninja-build pkg-config gettext \
   libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev \
-  libxkbcommon-dev liburing-dev libudev-dev libssh-dev libvte-2.91-dev
+  libxkbcommon-dev liburing-dev libudev-dev libpcre2-dev libssh-dev \
+  libvte-2.91-dev xdg-utils
 ```
 
 Node.js 20 or later is also required. The Node.js package provided by your
@@ -752,8 +940,8 @@ npm run build
 ```
 
 Run the built launcher from the repository root with the following command.
-The launcher automatically detects the terminal and SFTP executables in the
-same build directory.
+The launcher automatically detects the terminal and shared SFTP/FTP file
+transfer executables in the same build directory.
 
 ```bash
 ./.build/elder-terms/elder-terms
@@ -773,10 +961,10 @@ npm run test
 
 ## Building deb Packages
 
-The package-building scripts combine the launcher, terminal, and SFTP
-executables; dedicated shared library and UI data; translation catalogs;
-desktop and XDG autostart entries; icons; documentation; and license notices
-into a single `elder-terms` deb package.
+The package-building scripts combine the launcher, terminal, and shared
+SFTP/FTP file transfer executables; dedicated shared library and UI data;
+translation catalogs; desktop and XDG autostart entries; icons;
+documentation; and license notices into a single `elder-terms` deb package.
 
 The following package combinations are supported:
 

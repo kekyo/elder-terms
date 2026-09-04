@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import {
   chmod,
   mkdir,
@@ -350,7 +351,56 @@ const readLaunchCapture = async (path: string): Promise<LaunchCapture> =>
   JSON.parse(await readFile(path, 'utf8')) as LaunchCapture;
 
 describe('elder-terms main window', () => {
+  it('creates a default local terminal on the first launch', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await rm(connections, { recursive: true });
+      },
+      async ({ app }) => {
+        const list = await app.getById('connection_list');
+        await waitForResult(async () => {
+          expect(await connectionRowCount(list)).toBe(1);
+        });
+        await selectConnectionRow(app, list, 0);
+
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('settings_general_name_entry'),
+              'entry'
+            ).text()
+          ).toBe('Local terminal');
+        });
+        await expectSelectedComboValue(
+          app,
+          'settings_general_type_combo',
+          'Local shell (built-in default)'
+        );
+        expect(
+          await expectElementKind(
+            await app.getById('settings_terminal_width_entry'),
+            'entry'
+          ).text()
+        ).toBe('');
+        await expectInsensitive(
+          expectElementKind(await app.getById('apply_button'), 'button')
+        );
+      }
+    );
+  });
+
   it('opens application settings and version information in one dialog', async (context) => {
+    const version = spawnSync(
+      'npx',
+      ['--no-install', 'screw-up', 'format', '-e', '{version}', '-f'],
+      {
+        cwd: fileURLToPath(new URL('../..', import.meta.url)),
+        encoding: 'utf8',
+      }
+    );
+    expect(version.status, version.stderr).toBe(0);
+    expect(version.stdout.trim()).not.toBe('');
     await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
       await openApplicationDialogPage(app, 'application_settings_menu_item');
       expectElementKind(await app.getById('application_dialog'), 'window');
@@ -369,6 +419,16 @@ describe('elder-terms main window', () => {
         await app.getById('application_settings_open_application_entry'),
         'entry'
       );
+      expectElementKind(
+        await app.getById('application_settings_general_page'),
+        'container'
+      );
+      await expect(
+        app.getById('application_settings_notebook')
+      ).rejects.toThrow();
+      await expect(
+        app.getById('application_settings_link_add_button')
+      ).rejects.toThrow();
       await expectElementKind(
         await app.getById('application_dialog_cancel_button'),
         'button'
@@ -384,9 +444,69 @@ describe('elder-terms main window', () => {
           await app.getById('application_about_version_label'),
           'label'
         ).text()
-      ).toBe('Version 0.0.1');
+      ).toBe(`Version ${version.stdout.trim()}`);
     });
   });
+
+  for (const { language, env, tabNames } of [
+    { language: 'English', env: {}, tabNames: ['Application', 'About'] },
+    {
+      language: 'Japanese',
+      env: japaneseTestEnvironment,
+      tabNames: ['アプリケーション', '情報'],
+    },
+  ]) {
+    it(`opens a compact application dialog in ${language}`, async (context) => {
+      await runLauncherGtkTest(
+        context,
+        prepareProfiles,
+        async ({ app }) => {
+          for (const itemId of [
+            'application_settings_menu_item',
+            'about_menu_item',
+          ] as const) {
+            await openApplicationDialogPage(app, itemId);
+            const dialog = expectElementKind(
+              await app.getById('application_dialog'),
+              'window'
+            );
+            const bounds = await dialog.bounds();
+            expect(bounds.width).toBeGreaterThanOrEqual(600);
+            expect(bounds.width).toBeLessThanOrEqual(660);
+            expect(bounds.height).toBeGreaterThanOrEqual(340);
+            expect(bounds.height).toBeLessThanOrEqual(420);
+
+            const tabs = expectElementKind(
+              await app.getById('application_dialog_notebook'),
+              'tabList'
+            );
+            for (const [page, tabName] of tabNames.entries()) {
+              await tabs.selectChildAt(page);
+              expect(
+                await selectedSettingsTabName(app, 'application_dialog')
+              ).toBe(tabName);
+              const pageBounds = await dialog.bounds();
+              expect(pageBounds.width).toBe(bounds.width);
+              expect(pageBounds.height).toBe(bounds.height);
+              expect(
+                (
+                  await (
+                    await app.getById('application_dialog_cancel_button')
+                  ).info()
+                ).states
+              ).toContain('showing');
+            }
+            await expectElementKind(
+              await app.getById('application_dialog_cancel_button'),
+              'button'
+            ).click();
+            await waitForWindowCount(app, 1);
+          }
+        },
+        { args: [], env }
+      );
+    });
+  }
 
   it('saves application settings without replacing connection defaults', async (context) => {
     await runLauncherGtkTest(
@@ -419,6 +539,122 @@ describe('elder-terms main window', () => {
         );
         expect(saved).toContain('startup_mode=background');
         expect(saved).toContain('width=91');
+      }
+    );
+  });
+
+  it('edits, disables, saves, and resets terminal link rules per connection', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await prepareProfiles(connections);
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[terminal]\nwidth=91\n',
+          'utf8'
+        );
+      },
+      async ({ app, configHome, connections }) => {
+        const globalConfigPath = join(configHome, 'elder-terms', 'global.ini');
+        const connectionConfigPath = join(connections, 'Alpha.ini');
+        const list = await app.getById('connection_list');
+        await selectConnectionRow(app, list, 0);
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('settings_general_name_entry'),
+              'entry'
+            ).text()
+          ).toBe('Alpha');
+        });
+        await selectSettingsTab(app, 'settings', 'Links');
+
+        const save = expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        );
+        await expectElementKind(
+          await app.getById('settings_link_add_button'),
+          'button'
+        ).click();
+        await expectInsensitive(save);
+
+        const id = expectElementKind(
+          await app.getById('settings_link_id_entry'),
+          'entry'
+        );
+        const source = expectElementKind(
+          await app.getById('settings_link_source_combo'),
+          'comboBox'
+        );
+        const regex = expectElementKind(
+          await app.getById('settings_link_regex_entry'),
+          'entry'
+        );
+        const command = expectElementKind(
+          await app.getById('settings_link_command_entry'),
+          'entry'
+        );
+        expect(await id.text()).toBe('rule1');
+        await id.setText('local-file');
+        await source.selectChildAt(1);
+        await regex.setText('^file:(?<path>/[^ ]+)$');
+        await command.setText('xdg-open');
+        await expectElementKind(
+          await app.getById('settings_link_argument_add_button'),
+          'button'
+        ).click();
+        await expectElementKind(
+          await app.getById('settings_link_argument_0_entry'),
+          'entry'
+        ).setText('${path}');
+        await expectElementKind(
+          await app.getById('settings_link_validation_combo'),
+          'comboBox'
+        ).selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_link_path_entry'),
+          'entry'
+        ).setText('${path}');
+        await expectElementKind(
+          await app.getById('settings_link_enabled_combo'),
+          'comboBox'
+        ).selectChildAt(1);
+        await expectSensitive(save);
+        await save.click();
+
+        let configured = '';
+        await waitForResult(async () => {
+          configured = await readFile(connectionConfigPath, 'utf8');
+          expect(configured).toContain('[hyperlink]\nenabled=false');
+        });
+        expect(configured).toContain('[hyperlink.local-file]');
+        expect(configured).not.toContain('[hyperlink.http-url-osc8]');
+        expect(configured).toContain('source=terminal-text');
+        expect(configured).toContain('command=xdg-open');
+        expect(configured).toContain('path_validation=existing-local-path');
+        expect(configured).toContain('path=${path}');
+        expect(configured).toContain('width=88');
+        const globalConfigured = await readFile(globalConfigPath, 'utf8');
+        expect(globalConfigured).not.toContain('[hyperlink');
+        expect(globalConfigured).toContain('width=91');
+
+        await selectSettingsTab(app, 'settings', 'Links');
+        await expectElementKind(
+          await app.getById('settings_link_reset_button'),
+          'button'
+        ).click();
+        await expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        ).click();
+
+        let reset = '';
+        await waitForResult(async () => {
+          reset = await readFile(connectionConfigPath, 'utf8');
+          expect(reset).not.toContain('[hyperlink');
+        });
+        expect(reset).toContain('width=88');
       }
     );
   });
@@ -561,6 +797,7 @@ describe('elder-terms main window', () => {
               'シリアル',
               'SSH',
               'SFTP',
+              'FTP',
               '端末',
               '転送',
               'ログ',
@@ -961,6 +1198,7 @@ describe('elder-terms main window', () => {
               'Serial',
               'SSH',
               'SFTP',
+              'FTP',
               'Terminal',
               'Transfer',
               'Logging',
@@ -1638,9 +1876,9 @@ describe('elder-terms main window', () => {
     }
   });
 
-  it('routes an SFTP profile to the dedicated SFTP application', async (context) => {
+  it('routes an SFTP profile to the file transfer application', async (context) => {
     const fakeVte = await createFakeVte();
-    const fakeSftp = await createFakeVte(true);
+    const fakeFileTransfer = await createFakeVte(true);
     try {
       await runLauncherGtkTest(
         context,
@@ -1661,7 +1899,7 @@ describe('elder-terms main window', () => {
           const list = await app.getById('connection_list');
           await doubleClickConnectionRow(app, list, 0);
           await waitForResult(async () => {
-            const capture = await readLaunchCapture(fakeSftp.capture);
+            const capture = await readLaunchCapture(fakeFileTransfer.capture);
             expect(capture.args).toEqual([
               '-c',
               join(connections, 'Files.ini'),
@@ -1673,14 +1911,60 @@ describe('elder-terms main window', () => {
         {
           args: [],
           env: {
-            ELDER_TERMS_SFTP_PATH: fakeSftp.executable,
-            ELDER_TERMS_TEST_CAPTURE: fakeSftp.capture,
+            ELDER_TERMS_FILE_TRANSFER_PATH: fakeFileTransfer.executable,
+            ELDER_TERMS_TEST_CAPTURE: fakeFileTransfer.capture,
             ELDER_TERMS_VTE_PATH: fakeVte.executable,
           },
         }
       );
     } finally {
-      await Promise.all([fakeSftp.release(), fakeVte.release()]);
+      await Promise.all([fakeFileTransfer.release(), fakeVte.release()]);
+    }
+  });
+
+  it('routes an FTP profile to the file transfer application', async (context) => {
+    const fakeVte = await createFakeVte();
+    const fakeFileTransfer = await createFakeVte(true);
+    try {
+      await runLauncherGtkTest(
+        context,
+        async (connections) => {
+          await writeFile(
+            join(connections, 'Legacy files.ini'),
+            [
+              '[general]',
+              'type=ftp',
+              '',
+              '[ftp]',
+              'address=ftp.example',
+              '',
+            ].join('\n')
+          );
+        },
+        async ({ app, connections }) => {
+          const list = await app.getById('connection_list');
+          await doubleClickConnectionRow(app, list, 0);
+          await waitForResult(async () => {
+            const capture = await readLaunchCapture(fakeFileTransfer.capture);
+            expect(capture.args).toEqual([
+              '-c',
+              join(connections, 'Legacy files.ini'),
+            ]);
+            expect(capture.startupContent).toBeNull();
+          });
+          await expect(readFile(fakeVte.capture, 'utf8')).rejects.toThrow();
+        },
+        {
+          args: [],
+          env: {
+            ELDER_TERMS_FILE_TRANSFER_PATH: fakeFileTransfer.executable,
+            ELDER_TERMS_TEST_CAPTURE: fakeFileTransfer.capture,
+            ELDER_TERMS_VTE_PATH: fakeVte.executable,
+          },
+        }
+      );
+    } finally {
+      await Promise.all([fakeFileTransfer.release(), fakeVte.release()]);
     }
   });
 

@@ -8,6 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -29,10 +30,11 @@
 
 #include "launch-options.h"
 #include "main-window.h"
+#include "file-transfer/file-hash.h"
+#include "file-transfer/file-transfer-paths.h"
+#include "file-transfer/file-transfer-window.h"
 #include "sftp/sftp-client.h"
 #include "sftp/sftp-fixture-client.h"
-#include "sftp/sftp-paths.h"
-#include "sftp/sftp-window.h"
 #include "terminal-bell-player.h"
 #include "terminal-bell.h"
 #include "terminal-hyperlink-resolver.h"
@@ -64,8 +66,8 @@ struct ApplicationState {
   std::optional<cardio::promise<void>> sftp_connection_check_task;
   std::optional<cardio::cancellation_source> sftp_cancel_source;
   std::shared_ptr<elder_terms::AuthenticatedSshTransport> sftp_transport;
-  std::shared_ptr<elder_terms::SftpClient> sftp_client;
-  std::shared_ptr<elder_terms::SftpWindow> sftp_window;
+  std::shared_ptr<elder_terms::RemoteFileClient> sftp_client;
+  std::shared_ptr<elder_terms::FileTransferWindow> sftp_window;
   elder_terms::SettingsStore settings_store;
   std::optional<std::filesystem::path> config_path;
   elder_terms::TestOptions test_options;
@@ -219,10 +221,9 @@ static std::string resolve_launcher_executable() {
   return result;
 }
 
-static void request_launcher_application_page(ApplicationState *state,
-                                              const char *option) {
+static void request_launcher_about_page(ApplicationState *state) {
   (void)spawn_external_command(
-      state, resolve_launcher_executable(), {option},
+      state, resolve_launcher_executable(), {"--about"},
       "application dialog request", _("Failed to open elder-terms"),
       "application_dialog_request_error");
 }
@@ -232,6 +233,67 @@ static void spawn_macro_command(ApplicationState *state, std::string command,
   (void)spawn_external_command(
       state, std::move(command), std::move(arguments), "macro command",
       _("Macro command failed"), "macro_command_error_dialog");
+}
+
+static void apply_terminal_hyperlink_settings(ApplicationState *state) {
+  const std::vector<elder_terms::HyperlinkActionRule> rules =
+      elder_terms::effective_hyperlink_action_rules(state->settings_store);
+  elder_terms::destroy_terminal_hyperlink_resolver(
+      state->hyperlink_resolver);
+  state->hyperlink_resolver =
+      elder_terms::create_terminal_hyperlink_resolver(rules);
+
+  const bool osc8_actions_enabled =
+      std::any_of(rules.begin(), rules.end(),
+                  [](const elder_terms::HyperlinkActionRule &rule) {
+                    return rule.recognition_source ==
+                           elder_terms::HyperlinkRecognitionSource::osc8;
+                  });
+  vte_terminal_set_allow_hyperlink(
+      VTE_TERMINAL(state->main_window->terminal),
+      osc8_actions_enabled ? TRUE : FALSE);
+
+  std::vector<std::string> terminal_text_patterns;
+  for (const elder_terms::HyperlinkActionRule &rule : rules) {
+    if (rule.recognition_source ==
+        elder_terms::HyperlinkRecognitionSource::terminal_text) {
+      terminal_text_patterns.push_back(rule.pattern);
+    }
+  }
+  elder_terms::set_main_window_terminal_hyperlink_callbacks(
+      state->main_window, terminal_text_patterns,
+      {
+          .activate =
+              [state](elder_terms::MainWindowTerminalHyperlinkCandidates
+                          candidates) {
+                const std::optional<
+                    elder_terms::TerminalHyperlinkResolution>
+                    resolution = elder_terms::resolve_terminal_hyperlink(
+                        state->hyperlink_resolver,
+                        elder_terms::TerminalHyperlinkCandidates{
+                            .osc8_target =
+                                std::move(candidates.osc8_target),
+                            .terminal_text =
+                                std::move(candidates.terminal_text),
+                        });
+                if (!resolution.has_value()) {
+                  return false;
+                }
+                if (!resolution->action.has_value()) {
+                  show_external_command_error(
+                      state, "hyperlink command",
+                      _("Hyperlink command failed"),
+                      "hyperlink_command_error_dialog", resolution->error);
+                  return true;
+                }
+                (void)spawn_external_command(
+                    state, resolution->action->command,
+                    resolution->action->arguments, "hyperlink command",
+                    _("Hyperlink command failed"),
+                    "hyperlink_command_error_dialog");
+                return true;
+              },
+      });
 }
 
 static std::string format_translated_string(const char *format, ...) {
@@ -269,7 +331,43 @@ static cardio::promise<void>
 run_ssh_prompt_fixture_async(ApplicationState *state,
                              const std::string &fixture) {
   elder_terms::SshUserPrompt prompt;
-  if (fixture == "host-key") {
+  if (fixture == "changed-host-key" ||
+      fixture == "changed-global-host-key") {
+    const bool global_key = fixture == "changed-global-host-key";
+    prompt = {
+        .kind = elder_terms::SshUserPromptKind::host_key,
+        .title = _("SSH Host Key Changed"),
+        .message =
+            global_key
+                ? _("The SSH host key for fixture.example:2222 has changed.\n"
+                    "Verify the fingerprint before asking an administrator "
+                    "to run:\n"
+                    "sudo ssh-keygen -R '[fixture.example]:2222' -f "
+                    "'/etc/ssh/ssh_known_hosts'")
+                : _("The SSH host key for fixture.example:2222 has changed.\n"
+                    "Verify the fingerprint before resetting the saved key.\n"
+                    "Equivalent command:\n"
+                    "ssh-keygen -R '[fixture.example]:2222' -f "
+                    "'/home/test/.ssh/known_hosts'"),
+        .monospace_message =
+            "+--[ED25519 256]--+\n"
+            "|         .oo..   |\n"
+            "|        . .oo    |\n"
+            "|        oo*o     |\n"
+            "|       .+*=o     |\n"
+            "| o .   .S*+..    |\n"
+            "|= o ... oooo     |\n"
+            "|o. oEo = ..o     |\n"
+            "|   oo.B Oo. .    |\n"
+            "|    . .@o+.      |\n"
+            "+----[SHA256]-----+",
+        .initial_text = {},
+        .input_required = false,
+        .echo = false,
+        .accept_visible = false,
+        .host_key_reset_available = !global_key,
+    };
+  } else if (fixture == "host-key") {
     prompt = {
         .kind = elder_terms::SshUserPromptKind::host_key,
         .title = _("SSH Host Key"),
@@ -280,14 +378,37 @@ run_ssh_prompt_fixture_async(ApplicationState *state,
               "Accept and save this host key?"),
             "fixture.example", 22, "ssh-ed25519",
             "SHA256:fixture-host-key"),
+        .monospace_message =
+            "+--[ED25519 256]--+\n"
+            "|         .oo..   |\n"
+            "|        . .oo    |\n"
+            "|        oo*o     |\n"
+            "|       .+*=o     |\n"
+            "| o .   .S*+..    |\n"
+            "|= o ... oooo     |\n"
+            "|o. oEo = ..o     |\n"
+            "|   oo.B Oo. .    |\n"
+            "|    . .@o+.      |\n"
+            "+----[SHA256]-----+",
+        .initial_text = {},
         .input_required = false,
         .echo = false,
+    };
+  } else if (fixture == "username") {
+    prompt = {
+        .kind = elder_terms::SshUserPromptKind::username,
+        .title = _("SSH Authentication"),
+        .message = _("User name for fixture.example:"),
+        .initial_text = "configured-user",
+        .input_required = true,
+        .echo = true,
     };
   } else {
     prompt = {
         .kind = elder_terms::SshUserPromptKind::password,
         .title = _("SSH Authentication"),
         .message = _("Password:"),
+        .initial_text = {},
         .input_required = true,
         .echo = false,
     };
@@ -302,8 +423,10 @@ run_ssh_prompt_fixture_async(ApplicationState *state,
   }
   elder_terms::set_main_window_status_text(
       state->main_window,
-      response.accepted ? _("SSH prompt accepted")
-                        : _("SSH prompt cancelled"));
+      response.reset_host_key
+          ? _("SSH host key reset requested")
+          : response.accepted ? _("SSH prompt accepted")
+                              : _("SSH prompt cancelled"));
 }
 
 static cardio::promise<void>
@@ -331,7 +454,7 @@ static cardio::promise<void> check_shared_sftp_connection_async(
 
   if (state->sftp_transport == transport &&
       state->sftp_window != nullptr) {
-    elder_terms::set_sftp_window_connection_available(
+    elder_terms::set_file_transfer_window_connection_available(
         state->sftp_window, available);
   }
   state->sftp_connection_check_active = false;
@@ -344,14 +467,14 @@ static void start_shared_sftp_connection_check(
     return;
   }
   if (state->test_options.fixture) {
-    elder_terms::set_sftp_window_connection_available(
+    elder_terms::set_file_transfer_window_connection_available(
         state->sftp_window,
         !state->test_options.shared_sftp_disconnected);
     return;
   }
   if (state->sftp_transport == nullptr ||
       !state->sftp_cancel_source.has_value()) {
-    elder_terms::set_sftp_window_connection_available(
+    elder_terms::set_file_transfer_window_connection_available(
         state->sftp_window, false);
     return;
   }
@@ -586,12 +709,13 @@ static void apply_runtime_settings(ApplicationState *state,
       elder_terms::terminal_bell_settings(state->settings_store));
   elder_terms::replace_terminal_macro_runner_rules(
       state->macro_runner, state->settings_store.macro_rules);
+  apply_terminal_hyperlink_settings(state);
   const elder_terms::GeneralColorSettings colors =
       elder_terms::general_color_settings(state->settings_store);
   elder_terms::set_main_window_colors(
       state->main_window, colors);
   if (state->sftp_window != nullptr) {
-    elder_terms::set_sftp_window_colors(
+    elder_terms::set_file_transfer_window_colors(
         state->sftp_window, colors);
   }
   const elder_terms::TerminalLogSettings log_settings =
@@ -748,20 +872,12 @@ static void open_settings_dialog(ApplicationState *state) {
                                gtk_get_current_event_time());
 }
 
-static void on_settings_button_clicked(GtkButton *, gpointer user_data) {
+static void on_settings_menu_item_activate(GtkMenuItem *, gpointer user_data) {
   open_settings_dialog(static_cast<ApplicationState *>(user_data));
 }
 
-static void on_application_settings_menu_item_activate(GtkMenuItem *,
-                                                       gpointer user_data) {
-  request_launcher_application_page(
-      static_cast<ApplicationState *>(user_data),
-      "--application-settings");
-}
-
 static void on_about_menu_item_activate(GtkMenuItem *, gpointer user_data) {
-  request_launcher_application_page(
-      static_cast<ApplicationState *>(user_data), "--about");
+  request_launcher_about_page(static_cast<ApplicationState *>(user_data));
 }
 
 static gboolean emit_transfer_dialog_current_folder_uri(gpointer data) {
@@ -1193,12 +1309,63 @@ static void on_shared_sftp_window_closed(ApplicationState *state) {
   maybe_shutdown_application(state);
 }
 
+static cardio::promise<elder_terms::FileHashes>
+calculate_shared_sftp_file_hashes_async(
+    ApplicationState *state, std::string path,
+    cardio::cancellation cancellation) {
+  if (!state->test_options.fixture) {
+    co_return co_await elder_terms::calculate_ssh_file_hashes_async(
+        state->sftp_transport, std::move(path),
+        std::move(cancellation));
+  }
+
+  cancellation.throw_if_cancellation_requested();
+  if (path != "/remote/readme.txt") {
+    throw std::runtime_error("Fixture remote file is unavailable");
+  }
+  co_return elder_terms::FileHashes{
+      .md5 = "f840a57e7c2e27409f9a22366c97aa38",
+      .sha1 = "4e9891113f487a51fda4942050b67e650e6db5eb",
+      .sha256 =
+          "d79bda8bec3b76fa69692436f1d8ce37a168df014f925dd1fc18c58a550d05a9",
+  };
+}
+
+static void create_shared_sftp_window(ApplicationState *state) {
+  const elder_terms::SftpConnectionSettings settings =
+      elder_terms::sftp_connection_settings(state->settings_store);
+  state->sftp_window = elder_terms::create_file_transfer_window(
+      {
+          .connection_name =
+              elder_terms::general_connection_name(state->settings_store),
+          .protocol_name = "SFTP",
+          .local_directory =
+              elder_terms::resolve_file_transfer_local_directory(
+                  state->settings_store, settings.local_directory),
+          .remote_directory = settings.remote_directory,
+          .remote_file_hash =
+              [state](std::string path,
+                      cardio::cancellation cancellation) {
+                return calculate_shared_sftp_file_hashes_async(
+                    state, std::move(path), std::move(cancellation));
+              },
+          .colors =
+              elder_terms::general_color_settings(state->settings_store),
+          .closed =
+              [state]() {
+                on_shared_sftp_window_closed(state);
+              },
+      });
+  elder_terms::show_file_transfer_window(state->sftp_window);
+}
+
 static cardio::promise<void> open_shared_sftp_window_async(
     ApplicationState *state,
     std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport,
     cardio::cancellation cancellation) {
+  std::string failure;
   try {
-    std::shared_ptr<elder_terms::SftpClient> client;
+    std::shared_ptr<elder_terms::RemoteFileClient> client;
     if (state->test_options.fixture) {
       client = elder_terms::create_sftp_fixture_client(
           state->test_options.sftp_pause_transfer);
@@ -1207,31 +1374,11 @@ static cardio::promise<void> open_shared_sftp_window_async(
           transport, cancellation);
     }
     cancellation.throw_if_cancellation_requested();
-
-    const elder_terms::SftpConnectionSettings settings =
-        elder_terms::sftp_connection_settings(state->settings_store);
     state->sftp_transport = std::move(transport);
     state->sftp_client = std::move(client);
-    state->sftp_window = elder_terms::create_sftp_window(
-        {
-            .connection_name =
-                elder_terms::general_connection_name(
-                    state->settings_store),
-            .local_directory =
-                elder_terms::resolve_sftp_local_directory(
-                    state->settings_store, settings),
-            .remote_directory = settings.remote_directory,
-            .colors =
-                elder_terms::general_color_settings(
-                    state->settings_store),
-            .client = state->sftp_client,
-            .closed =
-                [state]() {
-                  on_shared_sftp_window_closed(state);
-                },
-        });
+    elder_terms::attach_file_transfer_window_client(
+        state->sftp_window, state->sftp_client);
     state->sftp_opening = false;
-    elder_terms::show_sftp_window(state->sftp_window);
     if (state->test_options.focus_transfer_on_sftp_open &&
         state->window != nullptr) {
       gtk_window_set_focus(
@@ -1245,8 +1392,9 @@ static cardio::promise<void> open_shared_sftp_window_async(
     co_return;
   } catch (const cardio::canceled_exception &) {
   } catch (const std::exception &error) {
+    failure = error.what();
     std::cerr << "Warning: failed to open shared SFTP window: "
-              << error.what() << '\n';
+              << failure << '\n';
     if (state->window != nullptr) {
       elder_terms::set_main_window_status_text(
           state->main_window, _("SFTP unavailable"));
@@ -1255,7 +1403,11 @@ static cardio::promise<void> open_shared_sftp_window_async(
 
   state->sftp_opening = false;
   state->sftp_client.reset();
-  state->sftp_transport.reset();
+  if (!failure.empty() && state->sftp_window != nullptr) {
+    co_await elder_terms::show_file_transfer_window_connection_error_async(
+        state->sftp_window, _("Failed to start SFTP"), std::move(failure),
+        std::move(cancellation));
+  }
   maybe_shutdown_application(state);
 }
 
@@ -1266,7 +1418,7 @@ static void on_sftp_menu_item_activate(GtkMenuItem *,
     return;
   }
   if (state->sftp_window != nullptr) {
-    elder_terms::present_sftp_window(state->sftp_window);
+    elder_terms::present_file_transfer_window(state->sftp_window);
     return;
   }
   if (state->sftp_opening || !state->connection_active) {
@@ -1292,6 +1444,7 @@ static void on_sftp_menu_item_activate(GtkMenuItem *,
   state->sftp_cancel_source.emplace();
   state->sftp_transport = transport;
   state->sftp_opening = true;
+  create_shared_sftp_window(state);
   state->sftp_open_task.reset();
   state->sftp_open_task.emplace(
       open_shared_sftp_window_async(
@@ -1582,14 +1735,6 @@ int main(int argc, char **argv) {
     elder_terms::terminal_font_families(app_state.settings_store);
   const auto terminal_key_bindings =
     elder_terms::terminal_key_bindings(app_state.settings_store);
-  const bool hyperlink_actions_enabled =
-      app_state.settings_store.hyperlink_actions_enabled &&
-      !app_state.settings_store.hyperlink_rules.empty();
-  app_state.hyperlink_resolver =
-      elder_terms::create_terminal_hyperlink_resolver(
-          app_state.settings_store.hyperlink_rules);
-  vte_terminal_set_allow_hyperlink(
-      vte_terminal, hyperlink_actions_enabled ? TRUE : FALSE);
   elder_terms::set_main_window_activity_indicator_connection_kind(
       &*main_window, connection_profile->kind);
 
@@ -1679,24 +1824,7 @@ int main(int argc, char **argv) {
                                     std::move(arguments));
               },
       });
-  elder_terms::set_main_window_terminal_hyperlink_callbacks(
-      &*main_window,
-      {
-          .activate =
-              [&app_state](std::string target) {
-                const std::optional<elder_terms::TerminalHyperlinkAction>
-                    action = elder_terms::resolve_terminal_hyperlink(
-                        app_state.hyperlink_resolver, target);
-                if (!action.has_value()) {
-                  return false;
-                }
-                (void)spawn_external_command(
-                    &app_state, action->command, action->arguments,
-                    "hyperlink command", _("Hyperlink command failed"),
-                    "hyperlink_command_error_dialog");
-                return true;
-              },
-      });
+  apply_terminal_hyperlink_settings(&app_state);
   elder_terms::set_main_window_terminal_paste_callbacks(
       &*main_window,
       {
@@ -1777,11 +1905,8 @@ int main(int argc, char **argv) {
     main_window->window, "focus-in-event",
     G_CALLBACK(on_main_window_focus_in), &app_state);
   g_signal_connect(
-    main_window->settings_button, "clicked",
-    G_CALLBACK(on_settings_button_clicked), &app_state);
-  g_signal_connect(
-    main_window->application_settings_menu_item, "activate",
-    G_CALLBACK(on_application_settings_menu_item_activate), &app_state);
+    main_window->settings_menu_item, "activate",
+    G_CALLBACK(on_settings_menu_item_activate), &app_state);
   g_signal_connect(
     main_window->about_menu_item, "activate",
     G_CALLBACK(on_about_menu_item_activate), &app_state);

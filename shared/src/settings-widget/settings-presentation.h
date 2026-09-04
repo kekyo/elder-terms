@@ -13,8 +13,10 @@ enum class SettingsUiText {
   serial_tab,
   ssh_tab,
   sftp_tab,
+  ftp_tab,
   terminal_tab,
   macro_tab,
+  links_tab,
   transfer_tab,
   logging_tab,
   apply,
@@ -54,6 +56,15 @@ enum class SettingsUiText {
   serial_usb_serial,
   serial_current_node,
   unavailable,
+  ip_scan,
+  ip_address,
+  reverse_fqdn,
+  ssh_sftp_port_column,
+  telnet_port_column,
+  ftp_port_column,
+  scanning,
+  scan_complete,
+  scan_failed,
 };
 
 const char *settings_ui_text(SettingsUiText text);

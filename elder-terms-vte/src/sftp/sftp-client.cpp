@@ -46,31 +46,31 @@ libssh_sftp_failure(ssh_session session, sftp_session sftp,
   return std::runtime_error(message);
 }
 
-static SftpFileType
+static RemoteFileType
 sftp_file_type(const sftp_attributes attributes) {
   if (attributes == nullptr) {
-    return SftpFileType::other;
+    return RemoteFileType::other;
   }
   switch (attributes->type) {
   case SSH_FILEXFER_TYPE_REGULAR:
-    return SftpFileType::regular;
+    return RemoteFileType::regular;
   case SSH_FILEXFER_TYPE_DIRECTORY:
-    return SftpFileType::directory;
+    return RemoteFileType::directory;
   case SSH_FILEXFER_TYPE_SYMLINK:
-    return SftpFileType::symbolic_link;
+    return RemoteFileType::symbolic_link;
   default:
     break;
   }
   if (S_ISREG(attributes->permissions)) {
-    return SftpFileType::regular;
+    return RemoteFileType::regular;
   }
   if (S_ISDIR(attributes->permissions)) {
-    return SftpFileType::directory;
+    return RemoteFileType::directory;
   }
   if (S_ISLNK(attributes->permissions)) {
-    return SftpFileType::symbolic_link;
+    return RemoteFileType::symbolic_link;
   }
-  return SftpFileType::other;
+  return RemoteFileType::other;
 }
 
 static bool valid_remote_child_name(const std::string &name) {
@@ -105,24 +105,28 @@ static std::string sftp_path_name(const std::string &path) {
              : trimmed.substr(separator + 1);
 }
 
-static SftpFileAttributes
+static RemoteFileAttributes
 portable_attributes(const sftp_attributes attributes,
                     std::string path, std::string name) {
-  return SftpFileAttributes{
+  return RemoteFileAttributes{
       .name = std::move(name),
       .path = std::move(path),
       .type = sftp_file_type(attributes),
       .size = attributes == nullptr ? 0 : attributes->size,
       .permissions =
-          attributes == nullptr ? 0 : attributes->permissions,
+          attributes == nullptr
+              ? std::optional<std::uint32_t>{}
+              : std::optional<std::uint32_t>{attributes->permissions},
       .access_time_unix_seconds =
           attributes == nullptr
-              ? 0
-              : static_cast<std::int64_t>(attributes->atime),
+              ? std::optional<std::int64_t>{}
+              : std::optional<std::int64_t>{
+                    static_cast<std::int64_t>(attributes->atime)},
       .modification_time_unix_seconds =
           attributes == nullptr
-              ? 0
-              : static_cast<std::int64_t>(attributes->mtime),
+              ? std::optional<std::int64_t>{}
+              : std::optional<std::int64_t>{
+                    static_cast<std::int64_t>(attributes->mtime)},
   };
 }
 
@@ -140,7 +144,7 @@ static void run_with_blocking_session(
 }
 
 class LibsshSftpClient final
-    : public SftpClient,
+    : public RemoteFileClient,
       public std::enable_shared_from_this<LibsshSftpClient> {
 private:
   class Reader;
@@ -231,7 +235,7 @@ public:
   LibsshSftpClient(const LibsshSftpClient &) = delete;
   LibsshSftpClient &operator=(const LibsshSftpClient &) = delete;
 
-  static cardio::promise<std::shared_ptr<SftpClient>>
+  static cardio::promise<std::shared_ptr<RemoteFileClient>>
   open_async(std::shared_ptr<AuthenticatedSshTransport> transport,
              cardio::cancellation cancellation) {
     if (transport == nullptr) {
@@ -244,37 +248,34 @@ public:
     co_return client;
   }
 
-  cardio::promise<std::string>
-  canonicalize_path_async(
+  auto capabilities() const noexcept
+      -> RemoteFileCapabilities override {
+    return {
+        .symbolic_links = true,
+        .permissions = true,
+        .access_time = true,
+        .modification_time = true,
+    };
+  }
+
+  cardio::promise<RemoteDirectorySnapshot>
+  load_directory_async(
       std::string path,
       cardio::cancellation cancellation) override {
-    auto result = std::make_shared<std::string>();
+    auto result = std::make_shared<RemoteDirectorySnapshot>();
     co_await run_async(
         [path = std::move(path), result](ssh_session session,
                                          sftp_session sftp) {
-          char *canonical =
-              sftp_canonicalize_path(sftp, path.c_str());
+          char *canonical = sftp_canonicalize_path(sftp, path.c_str());
           if (canonical == nullptr) {
             throw libssh_sftp_failure(
                 session, sftp, "Failed to canonicalize remote path");
           }
-          *result = canonical;
+          result->canonical_path = canonical;
           ssh_string_free_char(canonical);
-        },
-        std::move(cancellation));
-    co_return *result;
-  }
 
-  cardio::promise<std::vector<SftpFileAttributes>>
-  list_directory_async(
-      std::string path,
-      cardio::cancellation cancellation) override {
-    auto result =
-        std::make_shared<std::vector<SftpFileAttributes>>();
-    co_await run_async(
-        [path = std::move(path), result](ssh_session session,
-                                         sftp_session sftp) {
-          sftp_dir directory = sftp_opendir(sftp, path.c_str());
+          sftp_dir directory =
+              sftp_opendir(sftp, result->canonical_path.c_str());
           if (directory == nullptr) {
             throw libssh_sftp_failure(
                 session, sftp, "Failed to open remote directory");
@@ -298,8 +299,9 @@ public:
                       : std::string(attributes->name);
               try {
                 if (name != "." && name != "..") {
-                  result->push_back(portable_attributes(
-                      attributes, sftp_child_path(path, name), name));
+                  result->entries.push_back(portable_attributes(
+                      attributes,
+                      sftp_child_path(result->canonical_path, name), name));
                 }
               } catch (...) {
                 sftp_attributes_free(attributes);
@@ -321,19 +323,19 @@ public:
         },
         std::move(cancellation));
     std::sort(
-        result->begin(), result->end(),
-        [](const SftpFileAttributes &left,
-           const SftpFileAttributes &right) {
+        result->entries.begin(), result->entries.end(),
+        [](const RemoteFileAttributes &left,
+           const RemoteFileAttributes &right) {
           return left.name < right.name;
         });
     co_return std::move(*result);
   }
 
-  cardio::promise<std::optional<SftpFileAttributes>>
+  cardio::promise<std::optional<RemoteFileAttributes>>
   lstat_async(std::string path,
               cardio::cancellation cancellation) override {
     auto result =
-        std::make_shared<std::optional<SftpFileAttributes>>();
+        std::make_shared<std::optional<RemoteFileAttributes>>();
     co_await run_async(
         [path = std::move(path), result](ssh_session session,
                                          sftp_session sftp) {
@@ -378,13 +380,14 @@ public:
 
   cardio::promise<void>
   make_directory_async(
-      std::string path, std::uint32_t permissions,
+      std::string path, std::optional<std::uint32_t> permissions,
       cardio::cancellation cancellation) override {
     co_await run_async(
         [path = std::move(path), permissions](
             ssh_session session, sftp_session sftp) {
           if (sftp_mkdir(sftp, path.c_str(),
-                         static_cast<mode_t>(permissions & 07777U)) !=
+                         static_cast<mode_t>(
+                             permissions.value_or(0755U) & 07777U)) !=
               SSH_OK) {
             throw libssh_sftp_failure(
                 session, sftp, "Failed to create remote directory");
@@ -459,31 +462,45 @@ public:
 
   cardio::promise<void>
   set_attributes_async(
-      std::string path, std::uint32_t permissions,
-      std::int64_t access_time_unix_seconds,
-      std::int64_t modification_time_unix_seconds,
+      std::string path, RemoteFileAttributes attributes,
       cardio::cancellation cancellation) override {
     co_await run_async(
-        [path = std::move(path), permissions,
-         access_time_unix_seconds,
-         modification_time_unix_seconds](
+        [path = std::move(path), attributes = std::move(attributes)](
             ssh_session session, sftp_session sftp) {
-          if (sftp_chmod(
-                  sftp, path.c_str(),
-                  static_cast<mode_t>(permissions & 07777U)) != SSH_OK) {
-            throw libssh_sftp_failure(
-                session, sftp,
-                "Failed to set remote item permissions");
+          if (attributes.permissions.has_value()) {
+            if (sftp_chmod(
+                    sftp, path.c_str(),
+                    static_cast<mode_t>(*attributes.permissions & 07777U)) !=
+                SSH_OK) {
+              throw libssh_sftp_failure(
+                  session, sftp,
+                  "Failed to set remote item permissions");
+            }
           }
+
+          if (!attributes.access_time_unix_seconds.has_value() &&
+              !attributes.modification_time_unix_seconds.has_value()) {
+            return;
+          }
+          sftp_attributes current = sftp_lstat(sftp, path.c_str());
+          if (current == nullptr) {
+            throw libssh_sftp_failure(
+                session, sftp, "Failed to inspect remote item times");
+          }
+          const std::int64_t access_time =
+              attributes.access_time_unix_seconds.value_or(
+                  static_cast<std::int64_t>(current->atime));
+          const std::int64_t modification_time =
+              attributes.modification_time_unix_seconds.value_or(
+                  static_cast<std::int64_t>(current->mtime));
+          sftp_attributes_free(current);
           const timeval times[2] = {
               timeval{
-                  .tv_sec =
-                      static_cast<time_t>(access_time_unix_seconds),
+                  .tv_sec = static_cast<time_t>(access_time),
                   .tv_usec = 0,
               },
               timeval{
-                  .tv_sec = static_cast<time_t>(
-                      modification_time_unix_seconds),
+                  .tv_sec = static_cast<time_t>(modification_time),
                   .tv_usec = 0,
               },
           };
@@ -495,12 +512,13 @@ public:
         std::move(cancellation));
   }
 
-  cardio::promise<std::unique_ptr<SftpFileReader>>
+  cardio::promise<std::unique_ptr<RemoteFileReader>>
   open_read_async(std::string path,
                   cardio::cancellation cancellation) override;
 
-  cardio::promise<std::unique_ptr<SftpFileWriter>>
-  open_write_async(std::string path, std::uint32_t permissions,
+  cardio::promise<std::unique_ptr<RemoteFileWriter>>
+  open_write_async(std::string path,
+                   std::optional<std::uint32_t> permissions,
                    cardio::cancellation cancellation) override;
 
   bool try_begin_transfer() override {
@@ -512,7 +530,7 @@ public:
   }
 };
 
-class LibsshSftpClient::Reader final : public SftpFileReader {
+class LibsshSftpClient::Reader final : public RemoteFileReader {
 private:
   std::shared_ptr<LibsshSftpClient> owner;
   std::shared_ptr<LibsshSftpFileState> state;
@@ -573,7 +591,7 @@ public:
   }
 };
 
-class LibsshSftpClient::Writer final : public SftpFileWriter {
+class LibsshSftpClient::Writer final : public RemoteFileWriter {
 private:
   std::shared_ptr<LibsshSftpClient> owner;
   std::shared_ptr<LibsshSftpFileState> state;
@@ -633,7 +651,7 @@ public:
   }
 };
 
-cardio::promise<std::unique_ptr<SftpFileReader>>
+cardio::promise<std::unique_ptr<RemoteFileReader>>
 LibsshSftpClient::open_read_async(
     std::string path, cardio::cancellation cancellation) {
   auto file_state = std::make_shared<LibsshSftpFileState>();
@@ -652,9 +670,9 @@ LibsshSftpClient::open_read_async(
                                      std::move(file_state));
 }
 
-cardio::promise<std::unique_ptr<SftpFileWriter>>
+cardio::promise<std::unique_ptr<RemoteFileWriter>>
 LibsshSftpClient::open_write_async(
-    std::string path, std::uint32_t permissions,
+    std::string path, std::optional<std::uint32_t> permissions,
     cardio::cancellation cancellation) {
   auto file_state = std::make_shared<LibsshSftpFileState>();
   co_await run_async(
@@ -662,7 +680,7 @@ LibsshSftpClient::open_write_async(
           ssh_session session, sftp_session sftp) {
         file_state->file = sftp_open(
             sftp, path.c_str(), O_WRONLY | O_CREAT | O_TRUNC,
-            static_cast<mode_t>(permissions & 07777U));
+            static_cast<mode_t>(permissions.value_or(0600U) & 07777U));
         if (file_state->file == nullptr) {
           throw libssh_sftp_failure(
               session, sftp, "Failed to open remote file for writing");
@@ -673,7 +691,7 @@ LibsshSftpClient::open_write_async(
                                      std::move(file_state));
 }
 
-cardio::promise<std::shared_ptr<SftpClient>>
+cardio::promise<std::shared_ptr<RemoteFileClient>>
 open_sftp_client_async(
     std::shared_ptr<AuthenticatedSshTransport> transport,
     cardio::cancellation cancellation) {

@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <gtk/gtk.h>
 
@@ -20,7 +21,7 @@
 
 namespace elder_terms {
 
-struct MainWindowSshPromptState;
+struct InlinePromptController;
 struct MainWindowTransferProgressState;
 
 /**
@@ -48,14 +49,23 @@ struct MainWindowTerminalBreakCallbacks {
   std::function<void()> send;
 };
 
-/** Handles activation of an OSC 8 hyperlink from the terminal. */
+/** Candidate link values at one Ctrl+left-click position. */
+struct MainWindowTerminalHyperlinkCandidates {
+  /** Complete OSC 8 target at the pointer, when present. */
+  std::optional<std::string> osc8_target;
+  /** Visible substrings in configured terminal-text pattern order. */
+  std::vector<std::optional<std::string>> terminal_text;
+};
+
+/** Handles activation of a recognized terminal link. */
 struct MainWindowTerminalHyperlinkCallbacks {
   /**
-   * Receives the raw OSC 8 target under a Ctrl+left click.
+   * Receives OSC 8 and visible-text candidates under a Ctrl+left click.
    *
-   * @returns True when the target was accepted and the event was consumed.
+   * @returns True when a candidate was accepted and the event was consumed.
    */
-  std::function<bool(std::string target)> activate;
+  std::function<bool(MainWindowTerminalHyperlinkCandidates candidates)>
+      activate;
 };
 
 /**
@@ -68,14 +78,12 @@ struct MainWindow {
   GtkWidget *window = nullptr;
   /** Header bar widget. */
   GtkWidget *header_bar = nullptr;
-  /** Button that opens the runtime settings dialog. */
-  GtkWidget *settings_button = nullptr;
   /** Button that opens the file transfer menu. */
   GtkWidget *transfer_button = nullptr;
   /** Button that opens application-level commands. */
   GtkWidget *application_menu_button = nullptr;
-  /** Requests the launcher-owned application settings page. */
-  GtkWidget *application_settings_menu_item = nullptr;
+  /** Menu item that opens the runtime settings dialog. */
+  GtkWidget *settings_menu_item = nullptr;
   /** Requests the launcher-owned application information page. */
   GtkWidget *about_menu_item = nullptr;
   /** Root container inside the window. */
@@ -100,10 +108,14 @@ struct MainWindow {
   GtkWidget *ssh_prompt_title_label = nullptr;
   /** Question text inside the SSH prompt panel. */
   GtkWidget *ssh_prompt_message_label = nullptr;
+  /** Preformatted security context inside the SSH prompt panel. */
+  GtkWidget *ssh_prompt_monospace_message_label = nullptr;
   /** Maskable response entry inside the SSH prompt panel. */
   GtkWidget *ssh_prompt_entry = nullptr;
   /** Button that rejects the active SSH prompt. */
   GtkWidget *ssh_prompt_cancel_button = nullptr;
+  /** Button that resets a changed per-user SSH host key. */
+  GtkWidget *ssh_prompt_alternative_button = nullptr;
   /** Button that accepts the active SSH prompt. */
   GtkWidget *ssh_prompt_accept_button = nullptr;
   /** Inline disconnected notice shown on the terminal surface. */
@@ -182,8 +194,8 @@ struct MainWindow {
   /** Current backend connection lifecycle phase. */
   TerminalSessionConnectionPhase connection_phase =
       TerminalSessionConnectionPhase::disconnected;
-  /** Stable controller for SSH prompt signals and pending responses. */
-  std::shared_ptr<MainWindowSshPromptState> ssh_prompt_state;
+  /** Shared inline controller for SSH prompt signals and pending responses. */
+  std::shared_ptr<InlinePromptController> ssh_prompt;
   /** Stable controller for transfer progress actions. */
   std::shared_ptr<MainWindowTransferProgressState> transfer_progress_state;
 };
@@ -234,13 +246,17 @@ void set_main_window_terminal_break_callbacks(
     MainWindow *main_window, MainWindowTerminalBreakCallbacks callbacks);
 
 /**
- * Configures Ctrl+left-click OSC 8 hyperlink activation.
+ * Configures Ctrl+left-click terminal link recognition and activation.
  *
  * @param main_window Main window containing the VTE terminal.
+ * @param terminal_text_patterns Ordered PCRE2 patterns used by the VTE
+ * adapter for visible-text highlighting and candidate extraction.
  * @param callbacks Hyperlink activation callback.
  */
 void set_main_window_terminal_hyperlink_callbacks(
-    MainWindow *main_window, MainWindowTerminalHyperlinkCallbacks callbacks);
+    MainWindow *main_window,
+    const std::vector<std::string> &terminal_text_patterns,
+    MainWindowTerminalHyperlinkCallbacks callbacks);
 
 /**
  * Records activity against one status-bar activity indicator.

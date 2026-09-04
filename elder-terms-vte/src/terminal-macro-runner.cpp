@@ -8,8 +8,7 @@
 #include <variant>
 #include <vector>
 
-#include <glib.h>
-
+#include <elder-terms/settings/regular-expression.h>
 #include <elder-terms/settings/regex-capture-template.h>
 
 namespace elder_terms {
@@ -18,7 +17,7 @@ static constexpr std::size_t maximum_macro_line_bytes = 1024 * 1024;
 
 struct CompiledMacroRule {
   MacroRule rule;
-  std::shared_ptr<GRegex> regex;
+  std::shared_ptr<RegularExpressionState> regex;
 };
 
 struct TerminalMacroRunnerState {
@@ -39,23 +38,23 @@ compile_macro_rules(std::vector<MacroRule> rules) {
       continue;
     }
 
-    GError *error = nullptr;
-    GRegex *regex = g_regex_new(rule.pattern.c_str(), G_REGEX_DEFAULT,
-                                G_REGEX_MATCH_DEFAULT, &error);
-    g_clear_error(&error);
+    RegularExpressionState *regex =
+        create_regular_expression(rule.pattern, false, &reason);
     if (regex == nullptr) {
       continue;
     }
     compiled.push_back({
         .rule = std::move(rule),
-        .regex = std::shared_ptr<GRegex>(regex, g_regex_unref),
+        .regex = std::shared_ptr<RegularExpressionState>(
+            regex, destroy_regular_expression),
     });
   }
   return compiled;
 }
 
 static std::optional<std::string>
-expand_macro_template(const std::string &value, GMatchInfo *match) {
+expand_macro_template(const std::string &value,
+                      const RegularExpressionMatch *match) {
   std::string reason;
   return expand_regex_capture_template(
       value, match,
@@ -64,7 +63,7 @@ expand_macro_template(const std::string &value, GMatchInfo *match) {
 
 static void execute_macro_action(TerminalMacroRunnerState *state,
                                  const MacroAction &action,
-                                 GMatchInfo *match) {
+                                 const RegularExpressionMatch *match) {
   if (const auto *send = std::get_if<MacroSendAction>(&action)) {
     if (state->callbacks.send) {
       const std::optional<std::string> expanded =
@@ -103,19 +102,13 @@ static void match_current_macro_line(TerminalMacroRunnerState *state) {
   }
 
   for (const CompiledMacroRule &rule : state->rules) {
-    GMatchInfo *match = nullptr;
-    const gboolean matched = g_regex_match_full(
-        rule.regex.get(), state->line.data(),
-        static_cast<gssize>(state->line.size()), 0, G_REGEX_MATCH_DEFAULT,
-        &match, nullptr);
-    if (matched != FALSE) {
+    std::string reason;
+    const std::optional<RegularExpressionMatch> match =
+        search_regular_expression(rule.regex.get(), state->line, &reason);
+    if (match.has_value()) {
       state->action_executed = true;
-      execute_macro_action(state, rule.rule.action, match);
-      g_match_info_free(match);
+      execute_macro_action(state, rule.rule.action, &*match);
       return;
-    }
-    if (match != nullptr) {
-      g_match_info_free(match);
     }
   }
 }

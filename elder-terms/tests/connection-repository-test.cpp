@@ -47,6 +47,40 @@ static void test_default_directory_uses_elder_terms_connections() {
               "default directory should be scoped to elder-terms");
 }
 
+static void test_creates_initial_local_terminal_only_before_directory_exists() {
+  const std::filesystem::path root = temporary_directory();
+  const std::filesystem::path directory = root / "connections";
+
+  const elder_terms::InitialConnectionProfileResult created =
+      elder_terms::create_initial_local_terminal_profile(directory);
+  expect_true(created.created &&
+                  created.path == directory / "Local terminal.ini",
+              "first launch should create the initial local terminal");
+  expect_true(created.warnings.empty(),
+              "initial profile creation should not report warnings");
+
+  const auto profiles = elder_terms::list_connection_profiles(directory);
+  expect_true(profiles.size() == 1 &&
+                  profiles.front().name == "Local terminal",
+              "the initial profile should be listed as Local terminal");
+  const elder_terms::SettingsLoadResult loaded =
+      elder_terms::load_connection_profile(created.path);
+  const auto terminal = elder_terms::terminal_connection_profile(loaded.store);
+  expect_true(loaded.loaded && terminal.has_value() &&
+                  terminal->name == "Local terminal" &&
+                  terminal->kind ==
+                      elder_terms::TerminalConnectionKind::local_shell,
+              "the initial profile should load as a default local terminal");
+
+  std::filesystem::remove(created.path);
+  const elder_terms::InitialConnectionProfileResult repeated =
+      elder_terms::create_initial_local_terminal_profile(directory);
+  expect_true(!repeated.created && repeated.warnings.empty() &&
+                  elder_terms::list_connection_profiles(directory).empty(),
+              "an empty existing directory should not recreate the profile");
+  std::filesystem::remove_all(root);
+}
+
 static void test_lists_only_regular_ini_profiles_in_name_order() {
   const std::filesystem::path directory = temporary_directory();
   write_file(directory / "Beta.ini", "");
@@ -186,6 +220,8 @@ int main() {
   try {
     elder_terms_connection_repository_test::
         test_default_directory_uses_elder_terms_connections();
+    elder_terms_connection_repository_test::
+        test_creates_initial_local_terminal_only_before_directory_exists();
     elder_terms_connection_repository_test::
         test_lists_only_regular_ini_profiles_in_name_order();
     elder_terms_connection_repository_test::

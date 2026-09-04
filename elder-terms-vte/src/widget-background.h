@@ -12,6 +12,8 @@ namespace elder_terms {
  * @param color RGB color to paint.
  * @param target_name Diagnostic name used when CSS parsing fails.
  * @returns Owned provider, or null when the CSS could not be loaded.
+ * @remarks Selected descendants receive a stronger lightness adjustment so
+ * selection remains visible when this provider overrides the GTK theme.
  */
 GtkCssProvider *create_widget_background_provider(
     const RgbColor &color, const char *target_name);

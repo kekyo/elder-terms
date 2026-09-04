@@ -6,12 +6,14 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <exception>
 #include <iomanip>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -20,7 +22,9 @@
 #include <elder-terms/key-binding-input-widget.h>
 #include <elder-terms/serial-device-event-monitor.h>
 #include <elder-terms/settings/general-settings.h>
+#include <elder-terms/settings/regular-expression.h>
 
+#include "hyperlink-settings-editor.h"
 #include "settings-presentation.h"
 
 namespace elder_terms {
@@ -35,6 +39,7 @@ static constexpr char serial_device_no_device_choice[] =
     "__elder_terms_no_device";
 static constexpr char ssh_connection_type[] = "ssh";
 static constexpr char sftp_connection_type[] = "sftp";
+static constexpr char ftp_connection_type[] = "ftp";
 static constexpr char zmodem_autostart_enabled[] = "enabled";
 static constexpr char zmodem_autostart_disabled[] = "disabled";
 static constexpr char terminal_text_default[] = "default";
@@ -68,6 +73,8 @@ struct ConnectionSettingsPage {
   GtkWidget *tab_label = nullptr;
 };
 
+struct IpScanDialogState;
+
 struct SettingsWidgetState {
   SettingsStore applied_store;
   SettingsStore draft_store;
@@ -77,6 +84,10 @@ struct SettingsWidgetState {
   bool show_actions = true;
   bool synchronizing = false;
   SettingsWidgetCallbacks callbacks;
+  SettingsWidgetIpScannerDependenciesFactory
+      ip_scanner_dependencies_factory;
+  std::shared_ptr<IpScanDialogState> ip_scan_dialog;
+  std::optional<cardio::promise<void>> ip_scan_task;
   GtkWidget *root = nullptr;
   GtkWidget *notebook = nullptr;
   GtkWidget *general_name_entry = nullptr;
@@ -134,6 +145,7 @@ struct SettingsWidgetState {
   GtkWidget *macro_remove_button = nullptr;
   GtkWidget *macro_move_up_button = nullptr;
   GtkWidget *macro_move_down_button = nullptr;
+  HyperlinkSettingsEditorState *hyperlink_editor = nullptr;
   int selected_macro = -1;
   unsigned int next_macro_number = 1;
   GtkWidget *telnet_address_entry = nullptr;
@@ -149,6 +161,13 @@ struct SettingsWidgetState {
   bool ssh_port_valid = true;
   GtkWidget *sftp_local_directory_entry = nullptr;
   GtkWidget *sftp_remote_directory_entry = nullptr;
+  GtkWidget *ftp_address_entry = nullptr;
+  GtkWidget *ftp_port_entry = nullptr;
+  GtkWidget *ftp_username_entry = nullptr;
+  GtkWidget *ftp_data_connection_mode_combo = nullptr;
+  GtkWidget *ftp_local_directory_entry = nullptr;
+  GtkWidget *ftp_remote_directory_entry = nullptr;
+  bool ftp_port_valid = true;
   GtkWidget *serial_device_match_mode_combo = nullptr;
   GtkWidget *serial_device_combo = nullptr;
   GtkWidget *serial_stable_id_value = nullptr;
@@ -178,6 +197,27 @@ struct SettingsWidgetState {
   GtkWidget *save_button = nullptr;
   GtkWidget *cancel_button = nullptr;
   std::vector<ConnectionSettingsPage> connection_pages;
+};
+
+enum IpScanResultColumn {
+  ip_scan_address_column,
+  ip_scan_reverse_fqdn_column,
+  ip_scan_ssh_sftp_column,
+  ip_scan_telnet_column,
+  ip_scan_ftp_column,
+  ip_scan_result_column_count,
+};
+
+struct IpScanDialogState {
+  SettingsWidgetState *owner = nullptr;
+  GtkWidget *dialog = nullptr;
+  GtkWidget *results = nullptr;
+  GtkWidget *progress = nullptr;
+  GtkWidget *target_entry = nullptr;
+  GtkListStore *result_store = nullptr;
+  std::unordered_map<std::string, GtkTreeIter> result_rows;
+  int displayed_progress_percent = -1;
+  cardio::cancellation_source cancellation_source;
 };
 
 static void sync_serial_device_widgets(SettingsWidgetState *state);
@@ -1485,11 +1525,14 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
          state->terminal_encoding_valid &&
          state->terminal_bell_sound_valid &&
          state->telnet_port_valid && state->ssh_port_valid &&
+         state->ftp_port_valid &&
          state->serial_baudrate_valid &&
          state->transfer_text_send_rate_valid &&
          terminal_key_binding_inputs_valid(state) &&
          connection_hotkey_input_valid(state) &&
-         state->log_file_name_format_valid && macro_rules_are_valid(state);
+         state->log_file_name_format_valid && macro_rules_are_valid(state) &&
+         (state->hyperlink_editor == nullptr ||
+          hyperlink_settings_editor_is_valid(state->hyperlink_editor));
 }
 
 static void notify_changed(SettingsWidgetState *state) {
@@ -1722,6 +1765,67 @@ static void update_sftp_remote_directory_from_widget(
     SettingsWidgetState *state) {
   update_string_entry(state, state->sftp_remote_directory_entry,
                       sftp_remote_directory_setting_key());
+}
+
+static void update_ftp_address_from_widget(SettingsWidgetState *state) {
+  update_string_entry(state, state->ftp_address_entry,
+                      ftp_address_setting_key());
+}
+
+static void update_ftp_port_from_widget(SettingsWidgetState *state) {
+  const char *text = gtk_entry_get_text(GTK_ENTRY(state->ftp_port_entry));
+  if (trim_ascii_whitespace(text == nullptr ? "" : text).empty()) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 ftp_port_setting_key());
+    state->ftp_port_valid = true;
+    set_entry_validation(state->ftp_port_entry, true, {});
+    sync_cleared_entry(
+        state, state->ftp_port_entry, ftp_port_setting_key(),
+        std::to_string(setting_integer_value_or_default(
+            state->draft_store, ftp_port_setting_key(), 21)));
+    return;
+  }
+  gtk_entry_set_placeholder_text(GTK_ENTRY(state->ftp_port_entry), nullptr);
+  gint64 value = 0;
+  std::string reason;
+  state->ftp_port_valid =
+      parse_integer_entry(state->ftp_port_entry, 1, 65535, &value, &reason);
+  set_entry_validation(state->ftp_port_entry, state->ftp_port_valid, reason);
+  if (state->ftp_port_valid) {
+    set_explicit_setting_value(&state->draft_store, ftp_port_setting_key(),
+                               SettingValue{value});
+  }
+}
+
+static void update_ftp_username_from_widget(SettingsWidgetState *state) {
+  update_string_entry(state, state->ftp_username_entry,
+                      ftp_username_setting_key());
+}
+
+static void
+update_ftp_data_connection_mode_from_widget(SettingsWidgetState *state) {
+  const std::string choice = active_combo_id(
+      state->ftp_data_connection_mode_combo, inherit_choice);
+  if (choice == inherit_choice) {
+    clear_explicit_setting_value(
+        &state->draft_store, ftp_data_connection_mode_setting_key());
+    return;
+  }
+  set_explicit_setting_value(
+      &state->draft_store, ftp_data_connection_mode_setting_key(),
+      SettingValue{choice});
+}
+
+static void
+update_ftp_local_directory_from_widget(SettingsWidgetState *state) {
+  update_string_entry(state, state->ftp_local_directory_entry,
+                      ftp_local_directory_setting_key());
+}
+
+static void
+update_ftp_remote_directory_from_widget(SettingsWidgetState *state) {
+  update_string_entry(state, state->ftp_remote_directory_entry,
+                      ftp_remote_directory_setting_key());
 }
 
 static void update_serial_device_from_widget(SettingsWidgetState *state) {
@@ -2119,19 +2223,14 @@ static void update_macro_validation(SettingsWidgetState *state) {
   if (!regex_valid) {
     regex_reason = "regular expression must not be empty";
   } else {
-    GError *error = nullptr;
-    GRegex *regex = g_regex_new(rule->pattern.c_str(), G_REGEX_DEFAULT,
-                                G_REGEX_MATCH_DEFAULT, &error);
+    RegularExpressionState *regex =
+        create_regular_expression(rule->pattern, false, &regex_reason);
     if (regex == nullptr) {
       regex_valid = false;
-      regex_reason = error == nullptr || error->message == nullptr
-                         ? "invalid regular expression"
-                         : std::string(error->message);
     }
     if (regex != nullptr) {
-      g_regex_unref(regex);
+      destroy_regular_expression(regex);
     }
-    g_clear_error(&error);
   }
   set_entry_validation(state->macro_regex_entry, regex_valid, regex_reason);
 
@@ -2672,6 +2771,8 @@ static void sync_general_type_combo(SettingsWidgetState *state) {
            .label = connection_type_label(ssh_connection_type)},
           {.id = sftp_connection_type,
            .label = connection_type_label(sftp_connection_type)},
+          {.id = ftp_connection_type,
+           .label = connection_type_label(ftp_connection_type)},
       },
       effective);
 }
@@ -2977,6 +3078,8 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
       ssh_connection_settings(state->draft_store);
   const SftpConnectionSettings sftp =
       sftp_connection_settings(state->draft_store);
+  const FtpConnectionSettings ftp =
+      ftp_connection_settings(state->draft_store);
   const SerialConnectionSettings serial =
       serial_connection_settings(state->draft_store);
   const TerminalLogSettings log = terminal_log_settings(state->draft_store);
@@ -3153,6 +3256,50 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
                            sftp_remote_directory_setting_key(),
                            sftp.remote_directory);
   }
+  if (state->ftp_address_entry != nullptr) {
+    sync_inheritable_entry(state->ftp_address_entry, state->draft_store,
+                           ftp_address_setting_key(), ftp.address);
+  }
+  if (state->ftp_port_entry != nullptr) {
+    sync_inheritable_entry(state->ftp_port_entry, state->draft_store,
+                           ftp_port_setting_key(),
+                           std::to_string(ftp.port));
+    state->ftp_port_valid = true;
+    set_entry_validation(state->ftp_port_entry, true, {});
+  }
+  if (state->ftp_username_entry != nullptr) {
+    sync_inheritable_entry(state->ftp_username_entry, state->draft_store,
+                           ftp_username_setting_key(), ftp.username);
+  }
+  if (state->ftp_data_connection_mode_combo != nullptr) {
+    const SettingKey key = ftp_data_connection_mode_setting_key();
+    const std::string effective =
+        ftp_data_connection_mode_to_string(ftp.data_connection_mode);
+    const std::string fallback = std::get<std::string>(
+        setting_fallback_value(state->draft_store, key,
+                               SettingValue{std::string("passive")}));
+    populate_inheritable_combo(
+        state->ftp_data_connection_mode_combo, state->draft_store, key,
+        setting_choice_label(key, fallback),
+        {
+            {.id = "passive",
+             .label = setting_choice_label(key, "passive")},
+            {.id = "active", .label = setting_choice_label(key, "active")},
+        },
+        effective);
+  }
+  if (state->ftp_local_directory_entry != nullptr) {
+    sync_inheritable_entry(state->ftp_local_directory_entry,
+                           state->draft_store,
+                           ftp_local_directory_setting_key(),
+                           ftp.local_directory);
+  }
+  if (state->ftp_remote_directory_entry != nullptr) {
+    sync_inheritable_entry(state->ftp_remote_directory_entry,
+                           state->draft_store,
+                           ftp_remote_directory_setting_key(),
+                           ftp.remote_directory);
+  }
   sync_serial_device_widgets(state);
   if (state->serial_baudrate_entry != nullptr) {
     sync_inheritable_entry(state->serial_baudrate_entry,
@@ -3305,6 +3452,9 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
   }
   if (state->macro_list != nullptr) {
     rebuild_macro_list(state);
+  }
+  if (state->hyperlink_editor != nullptr) {
+    sync_hyperlink_settings_editor(state->hyperlink_editor);
   }
   if (state->notebook != nullptr) {
     update_connection_pages(state);
@@ -4031,6 +4181,62 @@ static void on_sftp_remote_directory_changed(GtkEditable *, gpointer data) {
   notify_changed(state);
 }
 
+static void on_ftp_address_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_ftp_address_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_ftp_port_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_ftp_port_from_widget(state);
+  update_action_sensitivity(state);
+  notify_changed(state);
+}
+
+static void on_ftp_username_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_ftp_username_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_ftp_data_connection_mode_changed(GtkComboBox *,
+                                                gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_ftp_data_connection_mode_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_ftp_local_directory_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_ftp_local_directory_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_ftp_remote_directory_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_ftp_remote_directory_from_widget(state);
+  notify_changed(state);
+}
+
 static void on_serial_device_changed(GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) {
@@ -4607,6 +4813,319 @@ static GtkWidget *create_local_page(SettingsWidgetState *state) {
   return page;
 }
 
+static const char *ip_scan_check_mark_for_port(
+    const std::vector<std::uint16_t> &ports, std::uint16_t port) {
+  return std::find(ports.begin(), ports.end(), port) != ports.end() ? "✓" : "";
+}
+
+static void update_ip_scan_result(
+    const std::shared_ptr<IpScanDialogState> &dialog_state,
+    const IpScanEntry &entry) {
+  if (dialog_state->result_store == nullptr) {
+    return;
+  }
+  GtkTreeIter iterator;
+  const auto existing = dialog_state->result_rows.find(entry.address);
+  if (existing == dialog_state->result_rows.end()) {
+    gtk_list_store_append(dialog_state->result_store, &iterator);
+    // GtkListStore iterators remain valid while their rows exist. Rows are
+    // never removed during a scan, so reverse DNS updates can use this index.
+    dialog_state->result_rows.emplace(entry.address, iterator);
+  } else {
+    iterator = existing->second;
+  }
+  gtk_list_store_set(dialog_state->result_store, &iterator,
+                     ip_scan_address_column, entry.address.c_str(),
+                     ip_scan_reverse_fqdn_column, entry.reverse_fqdn.c_str(),
+                     ip_scan_ssh_sftp_column,
+                     ip_scan_check_mark_for_port(entry.open_ports, 22),
+                     ip_scan_telnet_column,
+                     ip_scan_check_mark_for_port(entry.open_ports, 23),
+                     ip_scan_ftp_column,
+                     ip_scan_check_mark_for_port(entry.open_ports, 21), -1);
+}
+
+static void update_ip_scan_progress(
+    const std::shared_ptr<IpScanDialogState> &dialog_state,
+    const IpScanProgress &progress) {
+  if (dialog_state->progress == nullptr) {
+    return;
+  }
+  const gdouble fraction =
+      progress.total_addresses == 0
+          ? 0.0
+          : std::min(
+                1.0,
+                static_cast<gdouble>(progress.completed_addresses) /
+                    static_cast<gdouble>(progress.total_addresses));
+  const int percent =
+      progress.completed_addresses >= progress.total_addresses &&
+              progress.total_addresses != 0
+          ? 100
+          : static_cast<int>(fraction * 100.0);
+  if (dialog_state->displayed_progress_percent == percent) {
+    return;
+  }
+  dialog_state->displayed_progress_percent = percent;
+  gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(dialog_state->progress),
+                                fraction);
+  gtk_progress_bar_set_text(GTK_PROGRESS_BAR(dialog_state->progress),
+                            settings_ui_text(SettingsUiText::scanning));
+}
+
+static void complete_ip_scan(
+    const std::shared_ptr<IpScanDialogState> &dialog_state) {
+  if (dialog_state->progress == nullptr) {
+    return;
+  }
+  dialog_state->displayed_progress_percent = 100;
+  gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(dialog_state->progress),
+                                1.0);
+  gtk_progress_bar_set_text(GTK_PROGRESS_BAR(dialog_state->progress),
+                            settings_ui_text(SettingsUiText::scan_complete));
+}
+
+static void fail_ip_scan(
+    const std::shared_ptr<IpScanDialogState> &dialog_state,
+    const std::string &message) {
+  if (dialog_state->progress == nullptr) {
+    return;
+  }
+  gtk_progress_bar_set_text(GTK_PROGRESS_BAR(dialog_state->progress),
+                            settings_ui_text(SettingsUiText::scan_failed));
+  gtk_widget_set_tooltip_text(dialog_state->progress, message.c_str());
+}
+
+static cardio::promise<void> run_ip_scan_dialog_async(
+    std::shared_ptr<IpScanDialogState> dialog_state,
+    IpScannerDependencies dependencies) {
+  try {
+    IpScannerCallbacks callbacks{
+        .entry_changed = [dialog_state](const IpScanEntry &entry) {
+          update_ip_scan_result(dialog_state, entry);
+        },
+        .progress_changed =
+            [dialog_state](const IpScanProgress &progress) {
+              update_ip_scan_progress(dialog_state, progress);
+            },
+        .completed = [dialog_state]() { complete_ip_scan(dialog_state); },
+    };
+    co_await scan_ipv4_hosts_async(
+        std::move(dependencies), std::move(callbacks),
+        dialog_state->cancellation_source.get_cancellation());
+  } catch (const cardio::canceled_exception &) {
+  } catch (const std::exception &error) {
+    fail_ip_scan(dialog_state, error.what());
+  }
+}
+
+static void detach_ip_scan_dialog(IpScanDialogState *dialog_state) {
+  SettingsWidgetState *owner = dialog_state->owner;
+  dialog_state->owner = nullptr;
+  dialog_state->dialog = nullptr;
+  dialog_state->results = nullptr;
+  dialog_state->progress = nullptr;
+  dialog_state->target_entry = nullptr;
+  dialog_state->result_store = nullptr;
+  dialog_state->result_rows.clear();
+  if (owner != nullptr && owner->ip_scan_dialog.get() == dialog_state) {
+    owner->ip_scan_dialog.reset();
+  }
+}
+
+static void restore_ip_scan_dialog_parent(GtkWidget *dialog) {
+  if (dialog == nullptr || !GTK_IS_WINDOW(dialog)) {
+    return;
+  }
+  GtkWindow *parent = gtk_window_get_transient_for(GTK_WINDOW(dialog));
+  if (parent != nullptr &&
+      !gtk_widget_in_destruction(GTK_WIDGET(parent))) {
+    gtk_widget_set_sensitive(GTK_WIDGET(parent), TRUE);
+  }
+}
+
+static void on_ip_scan_dialog_destroy(GtkWidget *dialog, gpointer data) {
+  auto *dialog_state = static_cast<IpScanDialogState *>(data);
+  (void)dialog_state->cancellation_source.cancel();
+  restore_ip_scan_dialog_parent(dialog);
+  detach_ip_scan_dialog(dialog_state);
+}
+
+static void on_ip_scan_dialog_response(GtkDialog *dialog, gint, gpointer data) {
+  auto *dialog_state = static_cast<IpScanDialogState *>(data);
+  (void)dialog_state->cancellation_source.cancel();
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+}
+
+static void on_ip_scan_result_activated(GtkTreeView *tree_view,
+                                        GtkTreePath *path,
+                                        GtkTreeViewColumn *, gpointer data) {
+  auto *dialog_state = static_cast<IpScanDialogState *>(data);
+  GtkTreeIter iterator;
+  GtkTreeModel *model = gtk_tree_view_get_model(tree_view);
+  if (dialog_state->target_entry == nullptr || model == nullptr ||
+      gtk_tree_model_get_iter(model, &iterator, path) == FALSE) {
+    return;
+  }
+
+  gchar *address = nullptr;
+  gtk_tree_model_get(model, &iterator, ip_scan_address_column, &address, -1);
+  if (address == nullptr) {
+    return;
+  }
+  (void)dialog_state->cancellation_source.cancel();
+  gtk_entry_set_text(GTK_ENTRY(dialog_state->target_entry), address);
+  g_free(address);
+  if (dialog_state->dialog != nullptr) {
+    gtk_widget_destroy(dialog_state->dialog);
+  }
+}
+
+static void append_ip_scan_column(GtkTreeView *tree_view, const char *title,
+                                  int model_column, bool expand) {
+  GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
+  GtkTreeViewColumn *column = gtk_tree_view_column_new_with_attributes(
+      title, renderer, "text", model_column, nullptr);
+  gtk_tree_view_column_set_expand(column, expand ? TRUE : FALSE);
+  gtk_tree_view_append_column(tree_view, column);
+}
+
+static std::shared_ptr<IpScanDialogState>
+create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
+  auto dialog_state = std::make_shared<IpScanDialogState>();
+  dialog_state->owner = state;
+  dialog_state->target_entry = target_entry;
+  GtkWidget *toplevel = gtk_widget_get_toplevel(state->root);
+  GtkWindow *parent =
+      GTK_IS_WINDOW(toplevel) ? GTK_WINDOW(toplevel) : nullptr;
+  GtkWidget *dialog = gtk_dialog_new_with_buttons(
+      settings_ui_text(SettingsUiText::ip_scan), parent,
+      GTK_DIALOG_DESTROY_WITH_PARENT,
+      settings_ui_text(SettingsUiText::cancel), GTK_RESPONSE_CANCEL,
+      nullptr);
+  dialog_state->dialog = dialog;
+  assign_accessible_id(dialog, widget_id(state, "ip_scan_dialog").c_str());
+  gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
+  gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+  gtk_window_set_default_size(GTK_WINDOW(dialog), 640, 360);
+  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
+  GtkWidget *cancel_button = gtk_dialog_get_widget_for_response(
+      GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
+  assign_accessible_id(
+      cancel_button, widget_id(state, "ip_scan_cancel_button").c_str());
+
+  GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+  gtk_widget_set_margin_top(panel, 12);
+  gtk_widget_set_margin_bottom(panel, 12);
+  gtk_widget_set_margin_start(panel, 12);
+  gtk_widget_set_margin_end(panel, 12);
+  gtk_box_pack_start(
+      GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), panel, TRUE,
+      TRUE, 0);
+
+  GtkListStore *result_store = gtk_list_store_new(
+      ip_scan_result_column_count, G_TYPE_STRING, G_TYPE_STRING,
+      G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
+  GtkWidget *results =
+      gtk_tree_view_new_with_model(GTK_TREE_MODEL(result_store));
+  dialog_state->results = results;
+  dialog_state->result_store = result_store;
+  g_object_unref(result_store);
+  assign_accessible_id(results,
+                       widget_id(state, "ip_scan_results").c_str());
+  gtk_tree_view_set_activate_on_single_click(GTK_TREE_VIEW(results), FALSE);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::ip_address),
+                        ip_scan_address_column, false);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::reverse_fqdn),
+                        ip_scan_reverse_fqdn_column, true);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(
+                            SettingsUiText::ssh_sftp_port_column),
+                        ip_scan_ssh_sftp_column, false);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::telnet_port_column),
+                        ip_scan_telnet_column, false);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::ftp_port_column),
+                        ip_scan_ftp_column, false);
+  g_signal_connect(results, "row-activated",
+                   G_CALLBACK(on_ip_scan_result_activated),
+                   dialog_state.get());
+
+  GtkWidget *scroller = gtk_scrolled_window_new(nullptr, nullptr);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroller),
+                                 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+  gtk_container_add(GTK_CONTAINER(scroller), results);
+  gtk_box_pack_start(GTK_BOX(panel), scroller, TRUE, TRUE, 0);
+
+  dialog_state->progress = gtk_progress_bar_new();
+  assign_accessible_id(
+      dialog_state->progress,
+      widget_id(state, "ip_scan_progress").c_str());
+  gtk_progress_bar_set_show_text(GTK_PROGRESS_BAR(dialog_state->progress),
+                                 TRUE);
+  gtk_progress_bar_set_text(GTK_PROGRESS_BAR(dialog_state->progress),
+                            settings_ui_text(SettingsUiText::scanning));
+  gtk_box_pack_start(GTK_BOX(panel), dialog_state->progress, FALSE, FALSE, 0);
+
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(on_ip_scan_dialog_response),
+                   dialog_state.get());
+  g_signal_connect(dialog, "destroy", G_CALLBACK(on_ip_scan_dialog_destroy),
+                   dialog_state.get());
+  if (parent != nullptr) {
+    gtk_widget_set_sensitive(GTK_WIDGET(parent), FALSE);
+  }
+  gtk_widget_show_all(dialog);
+  gtk_window_present(GTK_WINDOW(dialog));
+  return dialog_state;
+}
+
+static void on_ip_scan_clicked(GtkButton *button, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->ip_scan_dialog != nullptr &&
+      state->ip_scan_dialog->dialog != nullptr) {
+    gtk_window_present(GTK_WINDOW(state->ip_scan_dialog->dialog));
+    return;
+  }
+  auto *target_entry = static_cast<GtkWidget *>(
+      g_object_get_data(G_OBJECT(button), "elder-terms-ip-scan-entry"));
+  if (target_entry == nullptr) {
+    return;
+  }
+
+  state->ip_scan_task.reset();
+  state->ip_scan_dialog = create_ip_scan_dialog(state, target_entry);
+  try {
+    IpScannerDependencies dependencies =
+        state->ip_scanner_dependencies_factory
+            ? state->ip_scanner_dependencies_factory()
+            : create_system_ip_scanner_dependencies();
+    state->ip_scan_task.emplace(run_ip_scan_dialog_async(
+        state->ip_scan_dialog, std::move(dependencies)));
+  } catch (const std::exception &error) {
+    fail_ip_scan(state->ip_scan_dialog, error.what());
+  }
+}
+
+static GtkWidget *create_ip_scan_address_row(SettingsWidgetState *state,
+                                             GtkWidget *entry,
+                                             const char *id_suffix,
+                                             gboolean sensitive) {
+  GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_box_pack_start(GTK_BOX(row), entry, TRUE, TRUE, 0);
+  GtkWidget *button =
+      gtk_button_new_with_label(settings_ui_text(SettingsUiText::ip_scan));
+  assign_accessible_id(button, widget_id(state, id_suffix).c_str());
+  gtk_widget_set_sensitive(button, sensitive);
+  g_object_set_data(G_OBJECT(button), "elder-terms-ip-scan-entry", entry);
+  g_signal_connect(button, "clicked", G_CALLBACK(on_ip_scan_clicked), state);
+  gtk_box_pack_start(GTK_BOX(row), button, FALSE, FALSE, 0);
+  return row;
+}
+
 static GtkWidget *create_telnet_page(SettingsWidgetState *state) {
   const std::string page_id = widget_id(state, "telnet_page");
   GtkWidget *page = create_page_grid(page_id.c_str());
@@ -4617,8 +5136,10 @@ static GtkWidget *create_telnet_page(SettingsWidgetState *state) {
                            state->is_runtime ? FALSE : TRUE);
   g_signal_connect(state->telnet_address_entry, "changed",
                    G_CALLBACK(on_telnet_address_changed), state);
-  attach_row(page, 0, telnet_address_setting_key(),
-             state->telnet_address_entry);
+  GtkWidget *address_row = create_ip_scan_address_row(
+      state, state->telnet_address_entry, "telnet_ip_scan_button",
+      state->is_runtime ? FALSE : TRUE);
+  attach_row(page, 0, telnet_address_setting_key(), address_row);
 
   state->telnet_port_entry =
       create_entry(widget_id(state, "telnet_port_entry"));
@@ -4652,7 +5173,9 @@ static GtkWidget *create_ssh_page(SettingsWidgetState *state) {
   gtk_widget_set_sensitive(state->ssh_address_entry, sensitive);
   g_signal_connect(state->ssh_address_entry, "changed",
                    G_CALLBACK(on_ssh_address_changed), state);
-  attach_row(page, 0, ssh_address_setting_key(), state->ssh_address_entry);
+  GtkWidget *address_row = create_ip_scan_address_row(
+      state, state->ssh_address_entry, "ssh_ip_scan_button", sensitive);
+  attach_row(page, 0, ssh_address_setting_key(), address_row);
 
   state->ssh_port_entry =
       create_entry(widget_id(state, "ssh_port_entry"));
@@ -4710,6 +5233,61 @@ static GtkWidget *create_sftp_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_sftp_remote_directory_changed), state);
   attach_row(page, 1, sftp_remote_directory_setting_key(),
              state->sftp_remote_directory_entry);
+
+  return page;
+}
+
+static GtkWidget *create_ftp_page(SettingsWidgetState *state) {
+  const std::string page_id = widget_id(state, "ftp_page");
+  GtkWidget *page = create_page_grid(page_id.c_str());
+  const gboolean endpoint_sensitive = state->is_runtime ? FALSE : TRUE;
+
+  state->ftp_address_entry =
+      create_entry(widget_id(state, "ftp_address_entry"));
+  gtk_widget_set_sensitive(state->ftp_address_entry, endpoint_sensitive);
+  g_signal_connect(state->ftp_address_entry, "changed",
+                   G_CALLBACK(on_ftp_address_changed), state);
+  GtkWidget *address_row = create_ip_scan_address_row(
+      state, state->ftp_address_entry, "ftp_ip_scan_button",
+      endpoint_sensitive);
+  attach_row(page, 0, ftp_address_setting_key(), address_row);
+
+  state->ftp_port_entry =
+      create_entry(widget_id(state, "ftp_port_entry"));
+  gtk_widget_set_sensitive(state->ftp_port_entry, endpoint_sensitive);
+  g_signal_connect(state->ftp_port_entry, "changed",
+                   G_CALLBACK(on_ftp_port_changed), state);
+  attach_row(page, 1, ftp_port_setting_key(), state->ftp_port_entry);
+
+  state->ftp_username_entry =
+      create_entry(widget_id(state, "ftp_username_entry"));
+  gtk_widget_set_sensitive(state->ftp_username_entry, endpoint_sensitive);
+  g_signal_connect(state->ftp_username_entry, "changed",
+                   G_CALLBACK(on_ftp_username_changed), state);
+  attach_row(page, 2, ftp_username_setting_key(), state->ftp_username_entry);
+
+  state->ftp_data_connection_mode_combo = create_combo_box(
+      widget_id(state, "ftp_data_connection_mode_combo").c_str());
+  gtk_widget_set_sensitive(state->ftp_data_connection_mode_combo,
+                           endpoint_sensitive);
+  g_signal_connect(state->ftp_data_connection_mode_combo, "changed",
+                   G_CALLBACK(on_ftp_data_connection_mode_changed), state);
+  attach_row(page, 3, ftp_data_connection_mode_setting_key(),
+             state->ftp_data_connection_mode_combo);
+
+  state->ftp_local_directory_entry =
+      create_entry(widget_id(state, "ftp_local_directory_entry"));
+  g_signal_connect(state->ftp_local_directory_entry, "changed",
+                   G_CALLBACK(on_ftp_local_directory_changed), state);
+  attach_row(page, 4, ftp_local_directory_setting_key(),
+             state->ftp_local_directory_entry);
+
+  state->ftp_remote_directory_entry =
+      create_entry(widget_id(state, "ftp_remote_directory_entry"));
+  g_signal_connect(state->ftp_remote_directory_entry, "changed",
+                   G_CALLBACK(on_ftp_remote_directory_changed), state);
+  attach_row(page, 5, ftp_remote_directory_setting_key(),
+             state->ftp_remote_directory_entry);
 
   return page;
 }
@@ -5113,6 +5691,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   state->is_runtime = options.is_runtime;
   state->show_actions = options.show_actions;
   state->callbacks = std::move(options.callbacks);
+  state->ip_scanner_dependencies_factory =
+      std::move(options.ip_scanner_dependencies_factory);
   state->synchronizing = true;
 
   state->root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -5219,6 +5799,22 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       .tab_label = sftp_tab,
   });
 
+  GtkWidget *ftp_page = create_ftp_page(state);
+  const std::string ftp_tab_id = widget_id(state, "ftp_tab");
+  GtkWidget *ftp_tab = create_tab_button(
+      state, ftp_page, settings_ui_text(SettingsUiText::ftp_tab),
+      ftp_tab_id.c_str());
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), ftp_page, ftp_tab);
+  gtk_widget_show_all(ftp_page);
+  gtk_widget_show_all(ftp_tab);
+  gtk_widget_set_no_show_all(ftp_page, TRUE);
+  gtk_widget_set_no_show_all(ftp_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {ftp_connection_type},
+      .page = ftp_page,
+      .tab_label = ftp_tab,
+  });
+
   GtkWidget *terminal_page = create_terminal_page(state);
   const std::string terminal_tab_id = widget_id(state, "terminal_tab");
   GtkWidget *terminal_tab = create_tab_button(
@@ -5290,6 +5886,33 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
                              serial_connection_type, ssh_connection_type},
         .page = macro_page,
         .tab_label = macro_tab,
+    });
+
+    state->hyperlink_editor = create_hyperlink_settings_editor({
+        .store = &state->draft_store,
+        .id_prefix = state->id_prefix,
+        .changed = [state]() {
+          update_action_sensitivity(state);
+          notify_changed(state);
+        },
+    });
+    GtkWidget *link_page =
+        hyperlink_settings_editor_root(state->hyperlink_editor);
+    const std::string link_tab_id = widget_id(state, "link_tab");
+    GtkWidget *link_tab = create_tab_button(
+        state, link_page, settings_ui_text(SettingsUiText::links_tab),
+        link_tab_id.c_str());
+    gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), link_page,
+                             link_tab);
+    gtk_widget_show_all(link_page);
+    gtk_widget_show_all(link_tab);
+    gtk_widget_set_no_show_all(link_page, TRUE);
+    gtk_widget_set_no_show_all(link_tab, TRUE);
+    state->connection_pages.push_back({
+        .connection_types = {local_connection_type, telnet_connection_type,
+                             serial_connection_type, ssh_connection_type},
+        .page = link_page,
+        .tab_label = link_tab,
     });
   }
 
@@ -5506,6 +6129,17 @@ void destroy_settings_widget(SettingsWidgetState *state) {
   }
 
   state->serial_device_event_monitor.reset();
+  if (state->ip_scan_dialog != nullptr) {
+    const std::shared_ptr<IpScanDialogState> dialog_state =
+        state->ip_scan_dialog;
+    dialog_state->owner = nullptr;
+    (void)dialog_state->cancellation_source.cancel();
+    if (dialog_state->dialog != nullptr) {
+      gtk_widget_destroy(dialog_state->dialog);
+    }
+    state->ip_scan_dialog.reset();
+  }
+  state->ip_scan_task.reset();
   if (state->terminal_bell_sound_dialog != nullptr) {
     gtk_widget_destroy(state->terminal_bell_sound_dialog);
   }
@@ -5514,6 +6148,7 @@ void destroy_settings_widget(SettingsWidgetState *state) {
   destroy_key_binding_input_widget(state->terminal_send_break_key_input);
   destroy_key_binding_input_widget(
       state->general_open_connection_input);
+  destroy_hyperlink_settings_editor(state->hyperlink_editor);
   if (state->root != nullptr && gtk_widget_get_parent(state->root) == nullptr) {
     gtk_widget_destroy(state->root);
   }

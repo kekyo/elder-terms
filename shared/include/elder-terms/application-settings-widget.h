@@ -27,8 +27,8 @@ struct ApplicationSettingsWidgetOptions {
 };
 
 /**
- * Creates an editor for display language, startup mode, and application
- * shortcut settings.
+ * Creates an editor for display language, startup mode, application shortcut,
+ * and terminal link action settings.
  *
  * @param options Initial settings and callback behavior.
  * @returns New widget state owned by the caller.
@@ -67,7 +67,7 @@ ELDER_TERMS_API bool application_settings_widget_is_valid(
  * Returns the root GTK widget for insertion into a container.
  *
  * @param state Application settings widget state.
- * @returns Root GtkGrid widget, or null when state is null.
+ * @returns Root GtkNotebook widget, or null when state is null.
  */
 ELDER_TERMS_API GtkWidget *application_settings_widget_root(
     ApplicationSettingsWidgetState *state);

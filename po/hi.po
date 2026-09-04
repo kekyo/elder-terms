@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-26 00:10+0900\n"
+"POT-Creation-Date: 2026-09-04 11:49+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Hindi\n"
@@ -118,11 +118,13 @@ msgstr "BREAK भेजने का शॉर्टकट"
 
 #: shared/src/settings-widget/settings-presentation.cpp:61
 #: shared/src/settings-widget/settings-presentation.cpp:64
+#: shared/src/settings-widget/settings-presentation.cpp:71
 msgid "Address"
 msgstr "पता"
 
 #: shared/src/settings-widget/settings-presentation.cpp:62
 #: shared/src/settings-widget/settings-presentation.cpp:65
+#: shared/src/settings-widget/settings-presentation.cpp:72
 msgid "Port"
 msgstr "पोर्ट"
 
@@ -132,6 +134,8 @@ msgid "Terminal type"
 msgstr "टर्मिनल प्रकार"
 
 #: shared/src/settings-widget/settings-presentation.cpp:66
+#: shared/src/settings-widget/settings-presentation.cpp:73
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
 msgid "User name"
 msgstr "उपयोगकर्ता नाम"
 
@@ -140,547 +144,702 @@ msgid "Identity file"
 msgstr "पहचान फ़ाइल"
 
 #: shared/src/settings-widget/settings-presentation.cpp:69
+#: shared/src/settings-widget/settings-presentation.cpp:76
 msgid "Local directory"
 msgstr "स्थानीय निर्देशिका"
 
 #: shared/src/settings-widget/settings-presentation.cpp:70
+#: shared/src/settings-widget/settings-presentation.cpp:77
 msgid "Remote directory"
 msgstr "दूरस्थ निर्देशिका"
 
-#: shared/src/settings-widget/settings-presentation.cpp:71
+#: shared/src/settings-widget/settings-presentation.cpp:75
+msgid "Data connection mode"
+msgstr "डेटा कनेक्शन मोड"
+
+#: shared/src/settings-widget/settings-presentation.cpp:78
 msgid "Device"
 msgstr "डिवाइस"
 
-#: shared/src/settings-widget/settings-presentation.cpp:73
+#: shared/src/settings-widget/settings-presentation.cpp:80
 msgid "Device identification"
 msgstr "डिवाइस पहचान"
 
-#: shared/src/settings-widget/settings-presentation.cpp:75
-#: shared/src/settings-widget/settings-presentation.cpp:256
+#: shared/src/settings-widget/settings-presentation.cpp:82
+#: shared/src/settings-widget/settings-presentation.cpp:270
 msgid "USB serial number"
 msgstr "USB सीरियल नंबर"
 
-#: shared/src/settings-widget/settings-presentation.cpp:76
+#: shared/src/settings-widget/settings-presentation.cpp:83
 msgid "Baud rate"
 msgstr "बॉड दर"
 
-#: shared/src/settings-widget/settings-presentation.cpp:77
+#: shared/src/settings-widget/settings-presentation.cpp:84
 msgid "Data bits"
 msgstr "डेटा बिट्स"
 
-#: shared/src/settings-widget/settings-presentation.cpp:78
+#: shared/src/settings-widget/settings-presentation.cpp:85
 msgid "Parity"
 msgstr "समता"
 
-#: shared/src/settings-widget/settings-presentation.cpp:79
+#: shared/src/settings-widget/settings-presentation.cpp:86
 msgid "Stop bits"
 msgstr "स्टॉप बिट्स"
 
-#: shared/src/settings-widget/settings-presentation.cpp:80
+#: shared/src/settings-widget/settings-presentation.cpp:87
 msgid "Flow control"
 msgstr "प्रवाह नियंत्रण"
 
-#: shared/src/settings-widget/settings-presentation.cpp:82
+#: shared/src/settings-widget/settings-presentation.cpp:89
 msgid "Connection monitoring signal"
 msgstr "कनेक्शन मॉनिटरिंग सिग्नल"
 
-#: shared/src/settings-widget/settings-presentation.cpp:84
+#: shared/src/settings-widget/settings-presentation.cpp:91
 msgid "Transfer base directory"
 msgstr "आधार निर्देशिका स्थानांतरित करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:86
+#: shared/src/settings-widget/settings-presentation.cpp:93
 msgid "Text send rate (bytes/s)"
 msgstr "टेक्स्ट भेजने की दर (बाइट्स/सेकेंड)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:88
+#: shared/src/settings-widget/settings-presentation.cpp:95
 msgid "Follow Enter/Return code for text send"
 msgstr "टेक्स्ट भेजते समय Enter/Return कोड का अनुसरण करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:90
+#: shared/src/settings-widget/settings-presentation.cpp:97
 msgid "Automatically start ZMODEM transfers"
 msgstr "स्वचालित रूप से ZMODEM स्थानांतरण प्रारंभ करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:91
+#: shared/src/settings-widget/settings-presentation.cpp:98
 msgid "Enable logging"
 msgstr "लॉगिंग सक्षम करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:92
+#: shared/src/settings-widget/settings-presentation.cpp:99
 msgid "Log directory"
 msgstr "लॉग निर्देशिका"
 
-#: shared/src/settings-widget/settings-presentation.cpp:93
+#: shared/src/settings-widget/settings-presentation.cpp:100
 msgid "File name format"
 msgstr "फ़ाइल नाम प्रारूप"
 
-#: shared/src/settings-widget/settings-presentation.cpp:94
+#: shared/src/settings-widget/settings-presentation.cpp:101
 msgid "Log content"
 msgstr "लॉग सामग्री"
 
-#: shared/src/settings-widget/settings-presentation.cpp:98
+#: shared/src/settings-widget/settings-presentation.cpp:105
 msgid "Local shell"
 msgstr "स्थानीय शेल"
 
-#: shared/src/settings-widget/settings-presentation.cpp:99
-#: shared/src/settings-widget/settings-presentation.cpp:172
+#: shared/src/settings-widget/settings-presentation.cpp:106
+#: shared/src/settings-widget/settings-presentation.cpp:184
 msgid "TELNET"
 msgstr "TELNET"
 
-#: shared/src/settings-widget/settings-presentation.cpp:100
-#: shared/src/settings-widget/settings-presentation.cpp:174
+#: shared/src/settings-widget/settings-presentation.cpp:107
+#: shared/src/settings-widget/settings-presentation.cpp:186
 msgid "Serial"
 msgstr "सीरियल"
 
-#: shared/src/settings-widget/settings-presentation.cpp:101
-#: shared/src/settings-widget/settings-presentation.cpp:176
-#: elder-terms-vte/src/main-window.cpp:1597
+#: shared/src/settings-widget/settings-presentation.cpp:108
+#: shared/src/settings-widget/settings-presentation.cpp:188
+#: elder-terms-vte/src/main-window.cpp:1544
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:139
 msgid "SSH"
 msgstr "SSH"
 
-#: shared/src/settings-widget/settings-presentation.cpp:102
-#: shared/src/settings-widget/settings-presentation.cpp:178
-#: elder-terms-vte/src/main.cpp:1303
+#: shared/src/settings-widget/settings-presentation.cpp:109
+#: shared/src/settings-widget/settings-presentation.cpp:190
+#: elder-terms-vte/src/main.cpp:1394
 msgid "SFTP"
 msgstr "SFTP"
 
-#: shared/src/settings-widget/settings-presentation.cpp:104
+#: shared/src/settings-widget/settings-presentation.cpp:110
+#: shared/src/settings-widget/settings-presentation.cpp:192
+msgid "FTP"
+msgstr "FTP"
+
+#: shared/src/settings-widget/settings-presentation.cpp:112
 msgid "System default"
 msgstr "सिस्टम डिफ़ॉल्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:105
+#: shared/src/settings-widget/settings-presentation.cpp:113
 msgid "English"
 msgstr "अंग्रेजी"
 
-#: shared/src/settings-widget/settings-presentation.cpp:106
+#: shared/src/settings-widget/settings-presentation.cpp:114
 msgid "العربية"
 msgstr "العربية"
 
-#: shared/src/settings-widget/settings-presentation.cpp:107
+#: shared/src/settings-widget/settings-presentation.cpp:115
 msgid "Español"
 msgstr "Español"
 
-#: shared/src/settings-widget/settings-presentation.cpp:108
+#: shared/src/settings-widget/settings-presentation.cpp:116
 msgid "Français"
 msgstr "Français"
 
-#: shared/src/settings-widget/settings-presentation.cpp:109
+#: shared/src/settings-widget/settings-presentation.cpp:117
 msgid "हिन्दी"
 msgstr "हिन्दी"
 
-#: shared/src/settings-widget/settings-presentation.cpp:110
+#: shared/src/settings-widget/settings-presentation.cpp:118
 msgid "日本語"
 msgstr "日本語"
 
-#: shared/src/settings-widget/settings-presentation.cpp:111
+#: shared/src/settings-widget/settings-presentation.cpp:119
 msgid "한국어"
 msgstr "한국어"
 
-#: shared/src/settings-widget/settings-presentation.cpp:112
+#: shared/src/settings-widget/settings-presentation.cpp:120
 msgid "Português"
 msgstr "Português"
 
-#: shared/src/settings-widget/settings-presentation.cpp:113
+#: shared/src/settings-widget/settings-presentation.cpp:121
 msgid "Русский"
 msgstr "Русский"
 
-#: shared/src/settings-widget/settings-presentation.cpp:114
+#: shared/src/settings-widget/settings-presentation.cpp:122
 msgid "中文"
 msgstr "中文"
 
-#: shared/src/settings-widget/settings-presentation.cpp:116
+#: shared/src/settings-widget/settings-presentation.cpp:124
 msgid "Simple startup"
 msgstr "सरल स्टार्टअप"
 
-#: shared/src/settings-widget/settings-presentation.cpp:118
+#: shared/src/settings-widget/settings-presentation.cpp:126
 msgid "Background only"
 msgstr "केवल पृष्ठभूमि में"
 
-#: shared/src/settings-widget/settings-presentation.cpp:120
+#: shared/src/settings-widget/settings-presentation.cpp:128
 msgid "System tray only"
 msgstr "केवल सिस्टम ट्रे"
 
-#: shared/src/settings-widget/settings-presentation.cpp:122
+#: shared/src/settings-widget/settings-presentation.cpp:130
 msgid "System tray and main window"
 msgstr "सिस्टम ट्रे और मुख्य विंडो"
 
-#: shared/src/settings-widget/settings-presentation.cpp:123
-#: shared/src/settings-widget/settings-presentation.cpp:128
+#: shared/src/settings-widget/settings-presentation.cpp:131
+#: shared/src/settings-widget/settings-presentation.cpp:136
 msgid "Auto"
 msgstr "स्वचालित"
 
-#: shared/src/settings-widget/settings-presentation.cpp:124
+#: shared/src/settings-widget/settings-presentation.cpp:132
 msgid "BS"
 msgstr "BS"
 
-#: shared/src/settings-widget/settings-presentation.cpp:125
+#: shared/src/settings-widget/settings-presentation.cpp:133
 msgid "DEL"
 msgstr "DEL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:126
+#: shared/src/settings-widget/settings-presentation.cpp:134
 msgid "Normal"
 msgstr "सामान्य"
 
-#: shared/src/settings-widget/settings-presentation.cpp:127
+#: shared/src/settings-widget/settings-presentation.cpp:135
 msgid "TRS80"
 msgstr "TRS80"
 
-#: shared/src/settings-widget/settings-presentation.cpp:129
+#: shared/src/settings-widget/settings-presentation.cpp:137
 msgid "CR"
 msgstr "CR"
 
-#: shared/src/settings-widget/settings-presentation.cpp:130
+#: shared/src/settings-widget/settings-presentation.cpp:138
 msgid "LF"
 msgstr "LF"
 
-#: shared/src/settings-widget/settings-presentation.cpp:131
+#: shared/src/settings-widget/settings-presentation.cpp:139
 msgid "CRLF"
 msgstr "CRLF"
 
-#: shared/src/settings-widget/settings-presentation.cpp:132
 #: shared/src/settings-widget/settings-presentation.cpp:141
+msgid "Passive (recommended)"
+msgstr "पैसिव (अनुशंसित)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:143
+msgid "Active"
+msgstr "ऐक्टिव"
+
+#: shared/src/settings-widget/settings-presentation.cpp:144
+#: shared/src/settings-widget/settings-presentation.cpp:153
 msgid "None"
 msgstr "कोई नहीं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:134
+#: shared/src/settings-widget/settings-presentation.cpp:146
 msgid "Device path"
 msgstr "डिवाइस पथ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:136
+#: shared/src/settings-widget/settings-presentation.cpp:148
 msgid "Stable device identity"
 msgstr "स्थिर डिवाइस पहचान"
 
-#: shared/src/settings-widget/settings-presentation.cpp:138
+#: shared/src/settings-widget/settings-presentation.cpp:150
 msgid "Physical USB port"
 msgstr "भौतिक USB पोर्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:139
+#: shared/src/settings-widget/settings-presentation.cpp:151
 msgid "Even"
 msgstr "यहां तक कि"
 
-#: shared/src/settings-widget/settings-presentation.cpp:140
+#: shared/src/settings-widget/settings-presentation.cpp:152
 msgid "Odd"
 msgstr "अजीब"
 
-#: shared/src/settings-widget/settings-presentation.cpp:143
+#: shared/src/settings-widget/settings-presentation.cpp:155
 msgid "XON/XOFF (software)"
 msgstr "XON/XOFF (सॉफ़्टवेयर)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:145
+#: shared/src/settings-widget/settings-presentation.cpp:157
 msgid "RTS/CTS (hardware)"
 msgstr "RTS/CTS (हार्डवेयर)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:147
+#: shared/src/settings-widget/settings-presentation.cpp:159
 msgid "DCD (Data Carrier Detect)"
 msgstr "DCD (डेटा कैरियर डिटेक्ट)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:149
+#: shared/src/settings-widget/settings-presentation.cpp:161
 msgid "CTS (Clear to Send)"
 msgstr "CTS (भेजने के लिए साफ़)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:151
+#: shared/src/settings-widget/settings-presentation.cpp:163
 msgid "DSR (Data Set Ready)"
 msgstr "DSR (डेटा सेट तैयार)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:153
+#: shared/src/settings-widget/settings-presentation.cpp:165
 msgid "Ignore (do not monitor)"
 msgstr "अनदेखा करें (निगरानी न करें)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:155
+#: shared/src/settings-widget/settings-presentation.cpp:167
 msgid "Raw bytes (before character conversion)"
 msgstr "कच्चे बाइट्स (वर्ण रूपांतरण से पहले)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:157
+#: shared/src/settings-widget/settings-presentation.cpp:169
 msgid "UTF-8 text (after character conversion)"
 msgstr "UTF-8 पाठ (वर्ण रूपांतरण के बाद)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:168
+#: shared/src/settings-widget/settings-presentation.cpp:180
+#: shared/src/settings-widget/application-settings-widget.cpp:313
 msgid "General"
 msgstr "सामान्य"
 
-#: shared/src/settings-widget/settings-presentation.cpp:170
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1557
+#: shared/src/settings-widget/settings-presentation.cpp:182
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2072
 msgid "Local"
 msgstr "स्थानीय"
 
-#: shared/src/settings-widget/settings-presentation.cpp:180
-#: elder-terms-vte/src/main-window.ui:402
-#: elder-terms-vte/src/terminal-session.cpp:225
+#: shared/src/settings-widget/settings-presentation.cpp:194
+#: elder-terms-vte/src/main-window.ui:426
+#: elder-terms-vte/src/terminal-session.cpp:226
 msgid "Terminal"
 msgstr "टर्मिनल"
 
-#: shared/src/settings-widget/settings-presentation.cpp:182
+#: shared/src/settings-widget/settings-presentation.cpp:196
 msgid "Macro"
 msgstr "मैक्रो"
 
-#: shared/src/settings-widget/settings-presentation.cpp:184
-#: elder-terms-vte/src/main-window.ui:49
+#: shared/src/settings-widget/settings-presentation.cpp:198
+#: elder-terms-vte/src/main-window.ui:50
 msgid "Transfer"
 msgstr "स्थानांतरण"
 
-#: shared/src/settings-widget/settings-presentation.cpp:186
+#: shared/src/settings-widget/settings-presentation.cpp:200
 msgid "Logging"
 msgstr "लॉगिंग"
 
-#: shared/src/settings-widget/settings-presentation.cpp:188
+#: shared/src/settings-widget/settings-presentation.cpp:202
 msgid "Apply"
 msgstr "लागू करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:190
+#: shared/src/settings-widget/settings-presentation.cpp:204
 #: elder-terms/src/main.cpp:483 elder-terms/src/main.cpp:752
 #: elder-terms/src/main-window.ui:221
 msgid "Save"
 msgstr "सहेजें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:192
+#: shared/src/settings-widget/settings-presentation.cpp:206
 #: elder-terms/src/main.cpp:482 elder-terms/src/main.cpp:550
-#: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1682
-#: elder-terms/src/main.cpp:1905 elder-terms-vte/src/main.cpp:890
-#: elder-terms-vte/src/main-window.ui:265
-#: elder-terms-vte/src/main-window.ui:342
-#: elder-terms-vte/src/sftp/sftp-main.cpp:109
-#: elder-terms-vte/src/sftp/sftp-window.cpp:696
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1843
+#: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1688
+#: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:944
+#: elder-terms-vte/src/main-window.ui:248
+#: elder-terms-vte/src/main-window.ui:359
+#: elder-terms-vte/src/main-window.cpp:1553
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:149
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:416
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:749
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1273
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1304
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1461
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1560
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2394
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2516
 msgid "Cancel"
 msgstr "रद्द करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:194
+#: shared/src/settings-widget/settings-presentation.cpp:208
 msgid "Reset"
 msgstr "रीसेट करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:196
-#: elder-terms-vte/src/main.cpp:889
+#: shared/src/settings-widget/settings-presentation.cpp:210
+#: elder-terms-vte/src/main.cpp:943
 msgid "Select file"
 msgstr "फ़ाइल चुनें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:198
-#: elder-terms-vte/src/main.cpp:891
+#: shared/src/settings-widget/settings-presentation.cpp:212
+#: elder-terms-vte/src/main.cpp:945
 msgid "Open"
 msgstr "खोलें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:200
+#: shared/src/settings-widget/settings-presentation.cpp:214
 msgid "Select Primary Terminal Font"
 msgstr "प्राथमिक टर्मिनल फ़ॉन्ट चुनें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:202
+#: shared/src/settings-widget/settings-presentation.cpp:216
 msgid "Select Secondary Terminal Font"
 msgstr "द्वितीयक टर्मिनल फ़ॉन्ट चुनें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:204
+#: shared/src/settings-widget/settings-presentation.cpp:218
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:751
 msgid "Enabled"
 msgstr "सक्षम"
 
-#: shared/src/settings-widget/settings-presentation.cpp:206
+#: shared/src/settings-widget/settings-presentation.cpp:220
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:753
 msgid "Disabled"
 msgstr "अक्षम"
 
-#: shared/src/settings-widget/settings-presentation.cpp:208
+#: shared/src/settings-widget/settings-presentation.cpp:222
 msgid "Custom font"
 msgstr "कस्टम फ़ॉन्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:210
+#: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "No color"
 msgstr "कोई रंग नहीं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:212
+#: shared/src/settings-widget/settings-presentation.cpp:226
 msgid "Custom color"
 msgstr "कस्टम रंग"
 
-#: shared/src/settings-widget/settings-presentation.cpp:214
+#: shared/src/settings-widget/settings-presentation.cpp:228
 msgid "Press a key combination"
 msgstr "कुंजी संयोजन दबाएँ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:216
+#: shared/src/settings-widget/settings-presentation.cpp:230
 msgid "Clear key binding"
 msgstr "कुंजी बाइंडिंग साफ़ करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:218
+#: shared/src/settings-widget/settings-presentation.cpp:232
 msgid "Use global default"
 msgstr "वैश्विक डिफ़ॉल्ट का उपयोग करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:220
+#: shared/src/settings-widget/settings-presentation.cpp:234
 msgid "Use built-in default"
 msgstr "अंतर्निहित डिफ़ॉल्ट का उपयोग करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:222
+#: shared/src/settings-widget/settings-presentation.cpp:236
 msgid "Macro rules"
 msgstr "मैक्रो नियम"
 
-#: shared/src/settings-widget/settings-presentation.cpp:224
+#: shared/src/settings-widget/settings-presentation.cpp:238
 msgid "Rule ID"
 msgstr "नियम आईडी"
 
-#: shared/src/settings-widget/settings-presentation.cpp:226
+#: shared/src/settings-widget/settings-presentation.cpp:240
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:673
 msgid "Regular expression"
 msgstr "नियमित अभिव्यक्ति"
 
-#: shared/src/settings-widget/settings-presentation.cpp:228
+#: shared/src/settings-widget/settings-presentation.cpp:242
 msgid "Action"
 msgstr "कार्रवाई"
 
-#: shared/src/settings-widget/settings-presentation.cpp:230
+#: shared/src/settings-widget/settings-presentation.cpp:244
 msgid "Text to send"
 msgstr "भेजने के लिए टेक्स्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:232
+#: shared/src/settings-widget/settings-presentation.cpp:246
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:683
 msgid "Command"
 msgstr "कमांड"
 
-#: shared/src/settings-widget/settings-presentation.cpp:234
+#: shared/src/settings-widget/settings-presentation.cpp:248
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:699
 msgid "Arguments"
 msgstr "तर्क"
 
-#: shared/src/settings-widget/settings-presentation.cpp:236
+#: shared/src/settings-widget/settings-presentation.cpp:250
 msgid "Add rule"
 msgstr "नियम जोड़ें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:238
+#: shared/src/settings-widget/settings-presentation.cpp:252
 msgid "Remove rule"
 msgstr "नियम हटाएं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:240
+#: shared/src/settings-widget/settings-presentation.cpp:254
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:629
 msgid "Move up"
 msgstr "ऊपर जाएं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:242
+#: shared/src/settings-widget/settings-presentation.cpp:256
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:634
 msgid "Move down"
 msgstr "नीचे जाएं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:244
+#: shared/src/settings-widget/settings-presentation.cpp:258
 msgid "Send text"
 msgstr "टेक्स्ट भेजें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:246
+#: shared/src/settings-widget/settings-presentation.cpp:260
 msgid "Run command"
 msgstr "कमांड चलाएँ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:248
+#: shared/src/settings-widget/settings-presentation.cpp:262
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:691
 msgid "Add argument"
 msgstr "तर्क जोड़ें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:250
+#: shared/src/settings-widget/settings-presentation.cpp:264
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:267
 msgid "Remove argument"
 msgstr "तर्क हटाएं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:252
+#: shared/src/settings-widget/settings-presentation.cpp:266
 msgid "No device"
 msgstr "कोई डिवाइस नहीं"
 
-#: shared/src/settings-widget/settings-presentation.cpp:254
+#: shared/src/settings-widget/settings-presentation.cpp:268
 msgid "Stable ID"
 msgstr "स्थिर ID"
 
-#: shared/src/settings-widget/settings-presentation.cpp:258
+#: shared/src/settings-widget/settings-presentation.cpp:272
 msgid "Current device node"
 msgstr "वर्तमान डिवाइस नोड"
 
-#: shared/src/settings-widget/settings-presentation.cpp:260
+#: shared/src/settings-widget/settings-presentation.cpp:274
 msgid "Unavailable"
 msgstr "अनुपलब्ध"
 
+#: shared/src/settings-widget/settings-presentation.cpp:276
+msgid "IP scan"
+msgstr "IP स्कैन"
+
+#: shared/src/settings-widget/settings-presentation.cpp:278
+msgid "IP address"
+msgstr "IP पता"
+
+#: shared/src/settings-widget/settings-presentation.cpp:280
+msgid "Reverse FQDN"
+msgstr "रिवर्स FQDN"
+
+#: shared/src/settings-widget/settings-presentation.cpp:282
+msgid "SSH/SFTP(22)"
+msgstr "SSH/SFTP(22)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:284
+msgid "TELNET(23)"
+msgstr "TELNET(23)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:286
+msgid "FTP(21)"
+msgstr "FTP(21)"
+
 #: shared/src/settings-widget/settings-presentation.cpp:288
+msgid "Scanning…"
+msgstr "स्कैन हो रहा है…"
+
+#: shared/src/settings-widget/settings-presentation.cpp:290
+msgid "Scan complete"
+msgstr "स्कैन पूरा हुआ"
+
+#: shared/src/settings-widget/settings-presentation.cpp:292
+msgid "Scan failed"
+msgstr "स्कैन विफल"
+
+#: shared/src/settings-widget/settings-presentation.cpp:320
 msgid "Global default"
 msgstr "वैश्विक डिफ़ॉल्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:289
+#: shared/src/settings-widget/settings-presentation.cpp:321
 msgid "Built-in default"
 msgstr "अंतर्निहित डिफ़ॉल्ट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:293
+#: shared/src/settings-widget/settings-presentation.cpp:325
 #, c-format
 msgid "%s (global default)"
 msgstr "%s (वैश्विक डिफ़ॉल्ट)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:294
+#: shared/src/settings-widget/settings-presentation.cpp:326
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s (अंतर्निहित डिफ़ॉल्ट)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:305
+#: shared/src/settings-widget/settings-presentation.cpp:337
 msgid "Enter a whole number"
 msgstr "एक पूर्ण संख्या दर्ज करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:308
+#: shared/src/settings-widget/settings-presentation.cpp:340
 msgid "Enter a number"
 msgstr "एक नंबर दर्ज करें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:319
+#: shared/src/settings-widget/settings-presentation.cpp:351
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "मान %s और %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:328
+#: shared/src/settings-widget/settings-presentation.cpp:360
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "में Ctrl, Shift, Alt, या Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:331
+#: shared/src/settings-widget/settings-presentation.cpp:363
 msgid "Contains an empty token"
 msgstr "में एक खाली टोकन है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:340
+#: shared/src/settings-widget/settings-presentation.cpp:372
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "में एक अज्ञात संशोधक शामिल है: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:353
+#: shared/src/settings-widget/settings-presentation.cpp:385
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "में एक डुप्लिकेट संशोधक शामिल है: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:361
+#: shared/src/settings-widget/settings-presentation.cpp:393
 msgid "Does not contain a key"
 msgstr "इसमें कोई कुंजी नहीं है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:368
+#: shared/src/settings-widget/settings-presentation.cpp:400
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "में एक अज्ञात कुंजी है: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:376
+#: shared/src/settings-widget/settings-presentation.cpp:408
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "ज़ूम इन और ज़ूम आउट करने के लिए अलग-अलग कुंजी बाइंडिंग का उपयोग करना चाहिए"
 
-#: shared/src/settings-widget/settings-presentation.cpp:379
+#: shared/src/settings-widget/settings-presentation.cpp:411
 msgid "Must not be empty"
 msgstr "खाली नहीं होना चाहिए"
 
-#: shared/src/settings-widget/settings-presentation.cpp:382
+#: shared/src/settings-widget/settings-presentation.cpp:414
 msgid "The character encoding is not supported"
 msgstr "वर्ण एन्कोडिंग समर्थित नहीं है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:385
+#: shared/src/settings-widget/settings-presentation.cpp:417
 msgid "Contains a NUL byte"
 msgstr "में एक NUL बाइट"
 
-#: shared/src/settings-widget/settings-presentation.cpp:390
+#: shared/src/settings-widget/settings-presentation.cpp:422
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
 msgstr "default दर्ज करें या निरपेक्ष पथ वाली मौजूदा .oga, .ogg या .wav फ़ाइल चुनें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:393
+#: shared/src/settings-widget/settings-presentation.cpp:425
 msgid "Contains an unmatched closing brace"
 msgstr "में एक बेजोड़ समापन ब्रेस शामिल है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:396
+#: shared/src/settings-widget/settings-presentation.cpp:428
 msgid "Contains an unmatched opening brace"
 msgstr "इसमें एक बेजोड़ ओपनिंग ब्रेस शामिल है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:399
+#: shared/src/settings-widget/settings-presentation.cpp:431
 msgid "Contains an unknown placeholder"
 msgstr "में एक अज्ञात प्लेसहोल्डर शामिल है"
 
-#: shared/src/settings-widget/settings-presentation.cpp:402
+#: shared/src/settings-widget/settings-presentation.cpp:434
 msgid "Must be relative to the log base directory"
 msgstr "लॉग बेस निर्देशिका"
 
-#: shared/src/settings-widget/settings-presentation.cpp:405
+#: shared/src/settings-widget/settings-presentation.cpp:437
 msgid "Must not contain parent directory traversal"
 msgstr "में मूल निर्देशिका ट्रैवर्सल शामिल नहीं होना चाहिए"
 
-#: shared/src/settings-widget/settings-presentation.cpp:408
+#: shared/src/settings-widget/settings-presentation.cpp:440
 msgid "Must name a log file"
 msgstr "लॉग फ़ाइल का नाम अवश्य रखें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:410
+#: shared/src/settings-widget/settings-presentation.cpp:442
 msgid "Invalid value"
 msgstr "अमान्य मान"
+
+#: shared/src/settings-widget/application-settings-widget.cpp:322
+msgid "Links"
+msgstr "लिंक"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:175
+msgid "Identifier must be unique"
+msgstr "पहचानकर्ता अद्वितीय होना चाहिए"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:261
+msgid "Move argument up"
+msgstr "तर्क को ऊपर ले जाएँ"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:264
+msgid "Move argument down"
+msgstr "तर्क को नीचे ले जाएँ"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:603
+msgid "Rules"
+msgstr "नियम"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:621
+msgid "Add"
+msgstr "जोड़ें"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:624
+msgid "Remove"
+msgstr "हटाएँ"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:658
+msgid "Identifier"
+msgstr "पहचानकर्ता"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:662
+msgid "OSC 8 target"
+msgstr "OSC 8 लक्ष्य"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:664
+msgid "Visible terminal text"
+msgstr "दृश्यमान टर्मिनल पाठ"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:667
+msgid "Recognition source"
+msgstr "पहचान स्रोत"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:679
+msgid ""
+"The command is executed directly without a shell. Capture templates are "
+"expanded only in arguments."
+msgstr ""
+"कमांड को शेल के बिना सीधे चलाया जाता है। कैप्चर टेम्पलेट केवल तर्कों में विस्तारित किए जाते हैं।"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:703
+msgid "Do not validate"
+msgstr "सत्यापित न करें"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:706
+msgid "Existing local file or directory"
+msgstr "मौजूदा स्थानीय फ़ाइल या डायरेक्टरी"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:709
+msgid "Path validation"
+msgstr "पथ सत्यापन"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:715
+msgid ""
+"Path validation requires an absolute expanded path. Relative paths are "
+"rejected."
+msgstr ""
+"पथ सत्यापन के लिए विस्तारित निरपेक्ष पथ आवश्यक है। सापेक्ष पथ अस्वीकार किए जाते हैं।"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:719
+msgid "Path template"
+msgstr "पथ टेम्पलेट"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:747
+msgid "Link actions"
+msgstr "लिंक क्रियाएँ"
+
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:765
+msgid "Restore defaults"
+msgstr "डिफ़ॉल्ट पुनर्स्थापित करें"
 
 #: elder-terms/src/main.cpp:242
 msgid "Global shortcuts are unavailable"
@@ -694,8 +853,9 @@ msgstr ""
 "एक या अधिक कॉन्फ़िगर किए गए वैश्विक शॉर्टकट पंजीकृत नहीं किए जा सके और काम नहीं करेंगे। "
 "जांचें कि क्या आपका डेस्कटॉप वातावरण वैश्विक शॉर्टकट का समर्थन करता है।"
 
-#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:351
-#: elder-terms-vte/src/main-window.cpp:1602
+#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:375
+#: elder-terms-vte/src/main-window.cpp:1552
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:148
 msgid "OK"
 msgstr "ठीक है"
 
@@ -725,6 +885,9 @@ msgid "Connection defaults"
 msgstr "कनेक्शन डिफ़ॉल्ट"
 
 #: elder-terms/src/main.cpp:550
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1303
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1460
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2515
 msgid "Close"
 msgstr "बंद करें"
 
@@ -738,7 +901,7 @@ msgid "Version %s"
 msgstr "संस्करण %s"
 
 #: elder-terms/src/main.cpp:712 elder-terms/src/main.cpp:737
-#: elder-terms/src/main-window.ui:61 elder-terms-vte/src/main-window.ui:67
+#: elder-terms/src/main-window.ui:61 elder-terms-vte/src/main-window.ui:33
 msgid "Application"
 msgstr "एप्लिकेशन"
 
@@ -756,7 +919,7 @@ msgstr "कनेक्शन खोलें %s"
 msgid "Open elder-terms"
 msgstr "खोलें elder-terms"
 
-#: elder-terms/src/main.cpp:1068 elder-terms/src/main.cpp:1617
+#: elder-terms/src/main.cpp:1068 elder-terms/src/main.cpp:1620
 msgid "Failed to load connection"
 msgstr "कनेक्शन लोड करने में विफल"
 
@@ -781,7 +944,7 @@ msgstr "अज्ञात फ़ाइल मॉनिटर त्रुटि
 msgid "Failed to create startup profile"
 msgstr "स्टार्टअप प्रोफ़ाइल बनाने में विफल"
 
-#: elder-terms/src/main.cpp:1516 elder-terms/src/main.cpp:1582
+#: elder-terms/src/main.cpp:1516 elder-terms/src/main.cpp:1585
 #, c-format
 msgid "Failed to start %s"
 msgstr "प्रारंभ करने में विफल %s"
@@ -795,48 +958,52 @@ msgstr "%s निष्पादन योग्य नहीं मिला"
 msgid "Unknown process launch error"
 msgstr "अज्ञात प्रक्रिया लॉन्च त्रुटि"
 
-#: elder-terms/src/main.cpp:1677
+#: elder-terms/src/main.cpp:1683
 msgid "Discard changes?"
 msgstr "परिवर्तन खारिज करें?"
 
-#: elder-terms/src/main.cpp:1680
+#: elder-terms/src/main.cpp:1686
 msgid "The current connection has changes that have not been applied."
 msgstr "वर्तमान कनेक्शन में ऐसे परिवर्तन हैं जिन्हें लागू नहीं किया गया है।"
 
-#: elder-terms/src/main.cpp:1684
+#: elder-terms/src/main.cpp:1690
 msgid "Discard"
 msgstr "त्यागें"
 
-#: elder-terms/src/main.cpp:1837
+#: elder-terms/src/main.cpp:1843
 msgid "Failed to duplicate connection"
 msgstr "कनेक्शन डुप्लिकेट करने में विफल"
 
-#: elder-terms/src/main.cpp:1871
+#: elder-terms/src/main.cpp:1877
 msgid "Failed to delete connection"
 msgstr "कनेक्शन हटाने में विफल"
 
-#: elder-terms/src/main.cpp:1898
+#: elder-terms/src/main.cpp:1904
 msgid "Delete connection?"
 msgstr "कनेक्शन हटाएँ?"
 
-#: elder-terms/src/main.cpp:1900
+#: elder-terms/src/main.cpp:1906
 #, c-format
 msgid "The connection \"%s\" will be permanently deleted."
 msgstr "कनेक्शन \"%s\" स्थायी रूप से हटा दिया जाएगा।"
 
-#: elder-terms/src/main.cpp:1907 elder-terms/src/main-window.ui:27
+#: elder-terms/src/main.cpp:1913 elder-terms/src/main-window.ui:27
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1559
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2165
 msgid "Delete"
 msgstr "हटाएँ"
 
-#: elder-terms/src/main.cpp:1948 elder-terms/src/main.cpp:1961
+#: elder-terms/src/main.cpp:1954 elder-terms/src/main.cpp:1967
 msgid "Failed to rename connection"
 msgstr "कनेक्शन का नाम बदलने में विफल"
 
-#: elder-terms/src/main.cpp:2057
+#: elder-terms/src/main.cpp:2063
 msgid "Failed to save connection"
 msgstr "कनेक्शन सहेजने में विफल"
 
 #: elder-terms/src/main-window.ui:15
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1272
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2156
 msgid "Rename"
 msgstr "नाम बदलें"
 
@@ -846,7 +1013,6 @@ msgstr "डुप्लिकेट"
 
 #: elder-terms/src/main-window.ui:35 elder-terms/src/tray-backend.cpp:377
 #: elder-terms/src/tray-backend.cpp:404 elder-terms/src/tray-backend.cpp:909
-#: elder-terms-vte/src/main-window.ui:8
 msgid "Application settings"
 msgstr "एप्लिकेशन सेटिंग"
 
@@ -872,65 +1038,70 @@ msgstr "नया"
 msgid "Launch"
 msgstr "लॉन्च"
 
-#: elder-terms/src/connection-repository.cpp:60
+#: elder-terms/src/connection-repository.cpp:61
 #, c-format
 msgid "Warning: failed to create temporary file %s: %s"
 msgstr "चेतावनी: अस्थायी फ़ाइल बनाने में विफल %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:67
+#: elder-terms/src/connection-repository.cpp:68
 #, c-format
 msgid "Warning: failed to close temporary file %s: %s"
 msgstr "चेतावनी: अस्थायी फ़ाइल बंद करने में विफल %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:124
+#: elder-terms/src/connection-repository.cpp:96
+#, c-format
+msgid "Warning: failed to inspect connection directory %s: %s"
+msgstr "चेतावनी: कनेक्शन निर्देशिका %s की जाँच विफल: %s"
+
+#: elder-terms/src/connection-repository.cpp:150
 msgid "Connection name must not be empty"
 msgstr "कनेक्शन नाम खाली नहीं होना चाहिए"
 
-#: elder-terms/src/connection-repository.cpp:128
+#: elder-terms/src/connection-repository.cpp:154
 msgid "Connection name must not be a relative path"
 msgstr "कनेक्शन नाम सापेक्ष पथ नहीं होना चाहिए"
 
-#: elder-terms/src/connection-repository.cpp:133
+#: elder-terms/src/connection-repository.cpp:159
 msgid "Connection name must not contain a path separator"
 msgstr "कनेक्शन नाम में पथ विभाजक नहीं होना चाहिए"
 
-#: elder-terms/src/connection-repository.cpp:145
+#: elder-terms/src/connection-repository.cpp:171
 msgid "A connection with this name already exists"
 msgstr "इस नाम से एक कनेक्शन पहले से मौजूद है"
 
-#: elder-terms/src/connection-repository.cpp:171
+#: elder-terms/src/connection-repository.cpp:197
 #, c-format
 msgid "Warning: failed to create connection directory %s: %s"
 msgstr "चेतावनी: कनेक्शन निर्देशिका बनाने में विफल %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:181
-#: elder-terms/src/connection-repository.cpp:267
+#: elder-terms/src/connection-repository.cpp:207
+#: elder-terms/src/connection-repository.cpp:293
 #, c-format
 msgid "Warning: %s"
 msgstr "चेतावनी: %s"
 
-#: elder-terms/src/connection-repository.cpp:207
+#: elder-terms/src/connection-repository.cpp:233
 #, c-format
 msgid "Warning: failed to replace connection profile %s: %s"
 msgstr "चेतावनी: कनेक्शन प्रोफ़ाइल को बदलने में विफल %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:227
+#: elder-terms/src/connection-repository.cpp:253
 #, c-format
 msgid "Warning: failed to prepare connection rename %s: %s"
 msgstr "चेतावनी: कनेक्शन तैयार करने में विफल, नाम बदलें %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:238
-#: elder-terms/src/connection-repository.cpp:289
+#: elder-terms/src/connection-repository.cpp:264
+#: elder-terms/src/connection-repository.cpp:315
 #, c-format
 msgid "Warning: failed to rename connection profile %s: %s"
 msgstr "चेतावनी: कनेक्शन प्रोफ़ाइल का नाम बदलने में विफल %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:244
+#: elder-terms/src/connection-repository.cpp:270
 #, c-format
 msgid "Warning: failed to restore connection profile %s: %s"
 msgstr "चेतावनी: कनेक्शन प्रोफ़ाइल को पुनर्स्थापित करने में विफल %s: %s"
 
-#: elder-terms/src/connection-repository.cpp:309
+#: elder-terms/src/connection-repository.cpp:335
 #, c-format
 msgid "Warning: failed to delete connection profile %s: %s"
 msgstr "चेतावनी: कनेक्शन प्रोफ़ाइल %s को हटाने में विफल: %s"
@@ -940,20 +1111,44 @@ msgstr "चेतावनी: कनेक्शन प्रोफ़ाइल
 msgid "Quit"
 msgstr "छोड़ें"
 
-#: elder-terms-vte/src/main.cpp:226
+#: elder-terms-vte/src/main.cpp:227
 msgid "Failed to open elder-terms"
 msgstr "elder-terms नहीं खोला जा सका"
 
-#: elder-terms-vte/src/main.cpp:234
+#: elder-terms-vte/src/main.cpp:235
 msgid "Macro command failed"
 msgstr "मैक्रो कमांड विफल"
 
-#: elder-terms-vte/src/main.cpp:275
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:277
+#: elder-terms-vte/src/main.cpp:278
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:224
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
+#, fuzzy
+msgid "SSH Host Key Changed"
+msgstr "SSH होस्ट कुंजी"
+
+#: elder-terms-vte/src/main.cpp:281
+msgid ""
+"The SSH host key for fixture.example:2222 has changed.\n"
+"Verify the fingerprint before asking an administrator to run:\n"
+"sudo ssh-keygen -R '[fixture.example]:2222' -f '/etc/ssh/ssh_known_hosts'"
+msgstr ""
+
+#: elder-terms-vte/src/main.cpp:286
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:226
+msgid ""
+"The SSH host key for fixture.example:2222 has changed.\n"
+"Verify the fingerprint before resetting the saved key.\n"
+"Equivalent command:\n"
+"ssh-keygen -R '[fixture.example]:2222' -f '/home/test/.ssh/known_hosts'"
+msgstr ""
+
+#: elder-terms-vte/src/main.cpp:312
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:253
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
 msgid "SSH Host Key"
 msgstr "SSH होस्ट कुंजी"
 
-#: elder-terms-vte/src/main.cpp:277
+#: elder-terms-vte/src/main.cpp:314
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%d\n"
@@ -966,130 +1161,151 @@ msgstr ""
 "फ़िंगरप्रिंट: %s\n"
 "इस होस्ट कुंजी को स्वीकार करें और सहेजें?"
 
-#: elder-terms-vte/src/main.cpp:289 elder-terms-vte/src/main-window.ui:306
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:392
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:472
+#: elder-terms-vte/src/main.cpp:339 elder-terms-vte/src/main.cpp:348
+#: elder-terms-vte/src/main-window.ui:289
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:275
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:284
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:273
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:922
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1003
 msgid "SSH Authentication"
 msgstr "SSH प्रमाणीकरण"
 
-#: elder-terms-vte/src/main.cpp:290 elder-terms-vte/src/main-window.ui:314
+#: elder-terms-vte/src/main.cpp:340
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:276
+msgid "User name for fixture.example:"
+msgstr "fixture.example के लिए उपयोगकर्ता नाम:"
+
+#: elder-terms-vte/src/main.cpp:349 elder-terms-vte/src/main-window.ui:303
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:285
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:421
 msgid "Password:"
 msgstr "पासवर्ड:"
 
-#: elder-terms-vte/src/main.cpp:305
+#: elder-terms-vte/src/main.cpp:366
+#, fuzzy
+msgid "SSH host key reset requested"
+msgstr "SSH होस्ट कुंजी स्वीकार नहीं की गई"
+
+#: elder-terms-vte/src/main.cpp:367
 msgid "SSH prompt accepted"
 msgstr "SSH संकेत स्वीकृत"
 
-#: elder-terms-vte/src/main.cpp:306
+#: elder-terms-vte/src/main.cpp:368
 msgid "SSH prompt cancelled"
 msgstr "SSH संकेत रद्द"
 
-#: elder-terms-vte/src/main.cpp:699 elder-terms-vte/src/main.cpp:703
-#: elder-terms-vte/src/main-window.ui:32
+#: elder-terms-vte/src/main.cpp:761 elder-terms-vte/src/main.cpp:765
+#: elder-terms-vte/src/main-window.ui:8
 msgid "Settings"
 msgstr "सेटिंग्स"
 
-#: elder-terms-vte/src/main.cpp:977 elder-terms-vte/src/main.cpp:987
-#: elder-terms-vte/src/main.cpp:1012 elder-terms-vte/src/main.cpp:1022
+#: elder-terms-vte/src/main.cpp:1031 elder-terms-vte/src/main.cpp:1041
+#: elder-terms-vte/src/main.cpp:1066 elder-terms-vte/src/main.cpp:1076
 msgid "Transfer unavailable"
 msgstr "स्थानांतरण अनुपलब्ध"
 
-#: elder-terms-vte/src/main.cpp:1124 elder-terms-vte/src/main.cpp:1146
+#: elder-terms-vte/src/main.cpp:1178 elder-terms-vte/src/main.cpp:1200
 msgid "BREAK unavailable"
 msgstr "BREAK उपलब्ध नहीं है"
 
-#: elder-terms-vte/src/main.cpp:1130
+#: elder-terms-vte/src/main.cpp:1184
 msgid "Sending BREAK"
 msgstr "BREAK भेजा जा रहा है"
 
-#: elder-terms-vte/src/main.cpp:1166 elder-terms-vte/src/main.cpp:1715
+#: elder-terms-vte/src/main.cpp:1220 elder-terms-vte/src/main.cpp:1841
 msgid "Text send unavailable"
 msgstr "पाठ संदेश अनुपलब्ध है"
 
-#: elder-terms-vte/src/main.cpp:1174
+#: elder-terms-vte/src/main.cpp:1228
 msgid "Text (Send)"
 msgstr "टेक्स्ट (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1252 elder-terms-vte/src/main.cpp:1283
+#: elder-terms-vte/src/main.cpp:1338 elder-terms-vte/src/main.cpp:1373
 msgid "SFTP unavailable"
 msgstr "SFTP अनुपलब्ध"
 
-#: elder-terms-vte/src/main.cpp:1327
+#: elder-terms-vte/src/main.cpp:1346
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:214
+msgid "Failed to start SFTP"
+msgstr "प्रारंभ करने में विफल SFTP"
+
+#: elder-terms-vte/src/main.cpp:1418
 msgid "Log recording"
 msgstr "लॉग रिकॉर्डिंग"
 
-#: elder-terms-vte/src/main.cpp:1373
+#: elder-terms-vte/src/main.cpp:1464
 msgid "ZMODEM (send)"
 msgstr "ZMODEM (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1380
+#: elder-terms-vte/src/main.cpp:1471
 msgid "YMODEM (send)"
 msgstr "YMODEM (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1387
+#: elder-terms-vte/src/main.cpp:1478
 msgid "XMODEM 1K (send)"
 msgstr "XMODEM 1K (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1396
+#: elder-terms-vte/src/main.cpp:1487
 msgid "XMODEM (send)"
 msgstr "XMODEM (भेजें)"
 
-#: elder-terms-vte/src/main.cpp:1406
+#: elder-terms-vte/src/main.cpp:1497
 msgid "ZMODEM (receive)"
 msgstr "ZMODEM (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1413
+#: elder-terms-vte/src/main.cpp:1504
 msgid "YMODEM-g (receive)"
 msgstr "YMODEM-g (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1421
+#: elder-terms-vte/src/main.cpp:1512
 msgid "YMODEM (receive)"
 msgstr "YMODEM (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1430
+#: elder-terms-vte/src/main.cpp:1521
 msgid "XMODEM CRC (receive)"
 msgstr "XMODEM CRC (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1439
+#: elder-terms-vte/src/main.cpp:1530
 msgid "XMODEM (receive)"
 msgstr "XMODEM (प्राप्त करें)"
 
-#: elder-terms-vte/src/main.cpp:1695
+#: elder-terms-vte/src/main.cpp:1814 elder-terms-vte/src/main.cpp:1821
 msgid "Hyperlink command failed"
 msgstr "हाइपरलिंक कमांड विफल"
 
-#: elder-terms-vte/src/main-window.ui:170
-#: elder-terms-vte/src/main-window.cpp:1503
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1899
+#: elder-terms-vte/src/main-window.ui:153
+#: elder-terms-vte/src/main-window.cpp:1475
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2541
 msgid "Disconnected"
 msgstr "डिस्कनेक्ट हो गया"
 
-#: elder-terms-vte/src/main-window.ui:225
+#: elder-terms-vte/src/main-window.ui:208
 msgid "Transferring..."
 msgstr "स्थानांतरण..."
 
-#: elder-terms-vte/src/main-window.cpp:329
+#: elder-terms-vte/src/main-window.cpp:346
 msgid "Copy"
 msgstr "प्रतिलिपि"
 
-#: elder-terms-vte/src/main-window.cpp:333
+#: elder-terms-vte/src/main-window.cpp:350
 msgid "Paste"
 msgstr "पेस्ट करें"
 
-#: elder-terms-vte/src/main-window.cpp:339
+#: elder-terms-vte/src/main-window.cpp:356
 msgid "Send BREAK"
 msgstr "BREAK भेजें"
 
-#: elder-terms-vte/src/main-window.cpp:1085
+#: elder-terms-vte/src/main-window.cpp:1079
 #, c-format
 msgid "%s (Disconnected)"
 msgstr "%s (डिसकनेक्ट)"
 
-#: elder-terms-vte/src/main-window.cpp:1526
+#: elder-terms-vte/src/main-window.cpp:1498
 msgid "SSH connection failed"
 msgstr "SSH कनेक्शन विफल"
 
-#: elder-terms-vte/src/main-window.cpp:1528
+#: elder-terms-vte/src/main-window.cpp:1500
 #, c-format
 msgid ""
 "SSH connection failed:\n"
@@ -1098,74 +1314,94 @@ msgstr ""
 "SSH कनेक्शन विफल:\n"
 "%s"
 
-#: elder-terms-vte/src/main-window.cpp:1602
-#: elder-terms-vte/src/sftp/sftp-main.cpp:111
+#: elder-terms-vte/src/main-window.cpp:1549
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:144
 msgid "Accept"
 msgstr "स्वीकार करें"
 
-#: elder-terms-vte/src/sftp/sftp-main.cpp:111
-msgid "Continue"
-msgstr "जारी रखें"
+#: elder-terms-vte/src/main-window.cpp:1551
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:147
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:415
+msgid "Connect"
+msgstr "कनेक्ट करें"
 
-#: elder-terms-vte/src/sftp/sftp-main.cpp:180
-msgid "Failed to start SFTP"
-msgstr "प्रारंभ करने में विफल SFTP"
+#: elder-terms-vte/src/main-window.cpp:1559
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:155
+msgid "Reset and Connect"
+msgstr ""
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:171
-#: elder-terms-vte/src/sftp/sftp-window.cpp:178
-msgid "Unknown SFTP failure"
-msgstr "अज्ञात SFTP विफलता"
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:254
+msgid "Accept the fixture SSH host key?"
+msgstr "क्या परीक्षण SSH होस्ट कुंजी स्वीकार करें?"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:244
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:392
+#, c-format
+msgid "Enter the user name and password for %s."
+msgstr "%s के लिए उपयोगकर्ता नाम और पासवर्ड दर्ज करें।"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:394
+msgid "To log in anonymously, enter anonymous as the user name."
+msgstr "अनाम रूप से लॉग इन करने के लिए, उपयोगकर्ता नाम के रूप में anonymous दर्ज करें।"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:397
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
+msgid "User name must not be empty."
+msgstr "उपयोगकर्ता नाम खाली नहीं होना चाहिए।"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:412
+msgid "FTP authentication"
+msgstr "FTP प्रमाणीकरण"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:478
+msgid "Failed to start FTP"
+msgstr "FTP शुरू करने में विफल"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:194
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:201
+msgid "Unknown file transfer failure"
+msgstr "अज्ञात फ़ाइल स्थानांतरण विफलता"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:268
 msgid "Loading…"
 msgstr "लोड हो रहा है..."
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:387
-msgid "SFTP local pane only supports native filesystem paths"
-msgstr "SFTP स्थानीय फलक केवल मूल फ़ाइल सिस्टम पथों का समर्थन करता है"
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:411
+msgid "The local pane only supports native filesystem paths"
+msgstr "स्थानीय फलक केवल स्थानीय फ़ाइल सिस्टम पथों का समर्थन करता है"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:460
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:484
 msgid "Local directory path is empty"
 msgstr "स्थानीय निर्देशिका पथ खाली है"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:557
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1830
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:620
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2381
 msgid "Preparing transfer…"
 msgstr "स्थानांतरण की तैयारी हो रही है…"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:585
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:679
 #, c-format
 msgid "Transferring %zu of %zu — %s"
 msgstr "%zu का %zu स्थानांतरित करना - %s"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:588
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:682
 #, c-format
 msgid "Transferring %zu of %zu"
 msgstr "%zu का %zu स्थानांतरित करना"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:592
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:686
 #, c-format
 msgid "Transferring — %s"
 msgstr "स्थानांतरण - %s"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:595
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:689
 msgid "Transferring"
 msgstr "स्थानांतरण"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:697
-#: elder-terms-vte/src/sftp/sftp-window.cpp:721
-msgid "Skip"
-msgstr "छोड़ें"
-
-#: elder-terms-vte/src/sftp/sftp-window.cpp:698
-msgid "Overwrite"
-msgstr "अधिलेखित करें"
-
-#: elder-terms-vte/src/sftp/sftp-window.cpp:700
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:745
 msgid "Destination already exists"
 msgstr "गंतव्य पहले से मौजूद है"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:702
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:747
 #, c-format
 msgid ""
 "%s\n"
@@ -1174,19 +1410,20 @@ msgstr ""
 "%s\n"
 "चयनित निर्णय शेष सभी विवादों पर लागू होता है।"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:720
-msgid "Abort"
-msgstr "निरस्त करें"
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:749
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:770
+msgid "Skip"
+msgstr "छोड़ें"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:722
-msgid "Retry"
-msgstr "पुनः प्रयास करें"
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:749
+msgid "Overwrite"
+msgstr "अधिलेखित करें"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:724
-msgid "SFTP transfer failed"
-msgstr "SFTP स्थानांतरण विफल"
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:765
+msgid "File transfer failed"
+msgstr "फ़ाइल स्थानांतरण विफल"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:725
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:766
 #, c-format
 msgid ""
 "%s\n"
@@ -1199,81 +1436,206 @@ msgstr ""
 "%s\n"
 "→ %s"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:752
-msgid "SFTP operation failed"
-msgstr "SFTP ऑपरेशन विफल"
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:770
+msgid "Abort"
+msgstr "निरस्त करें"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:811
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:770
+msgid "Retry"
+msgstr "पुनः प्रयास करें"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:793
+msgid "File transfer operation failed"
+msgstr "फ़ाइल स्थानांतरण कार्रवाई विफल"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:854
 msgid "Failed to load remote directory"
 msgstr "दूरस्थ निर्देशिका लोड करने में विफल"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:812
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:855
 msgid "Failed to load local directory"
 msgstr "स्थानीय निर्देशिका लोड करने में विफल"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:884
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:927
 msgid "Failed to expand directory"
 msgstr "निर्देशिका का विस्तार करने में विफल"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1210
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1218
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1262
+#, c-format
+msgid "Enter a new name for \"%s\"."
+msgstr "\"%s\" के लिए नया नाम दर्ज करें।"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1270
+msgid "Rename item"
+msgstr "आइटम का नाम बदलें"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1289
+msgid ""
+"Names must not be empty, '.', or '..', and must not contain '/' or line "
+"breaks."
+msgstr "नाम खाली, '.' या '..' नहीं हो सकते और उनमें '/' या पंक्ति विराम नहीं हो सकते।"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1329
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1590
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2466
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2543
+msgid "Ready"
+msgstr "तैयार"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1336
+msgid "Renaming…"
+msgstr "नाम बदला जा रहा है…"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1348
+#, c-format
+msgid "Renamed \"%s\" to \"%s\""
+msgstr "\"%s\" का नाम बदलकर \"%s\" किया गया"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1362
+msgid "Rename cancelled"
+msgstr "नाम बदलना रद्द किया गया"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1366
+msgid "Rename failed"
+msgstr "नाम बदलना विफल"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1368
+msgid "Failed to rename item"
+msgstr "आइटम का नाम बदलने में विफल"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1415
+msgid "Calculating hash values…"
+msgstr "हैश मानों की गणना की जा रही है…"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1435
+msgid "Hash calculation cancelled"
+msgstr "हैश मान गणना रद्द की गई"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1441
+msgid "Hash calculation failed"
+msgstr "हैश मान गणना विफल रही"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1443
+msgid "Failed to calculate hash values"
+msgstr "हैश मानों की गणना नहीं हो सकी"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1452
+msgid "Hash calculation complete"
+msgstr "हैश मान गणना पूरी हुई"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1457
+msgid "File hash values"
+msgstr "फ़ाइल हैश मान"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1541
+msgid "The following items will be permanently deleted:"
+msgstr "निम्न आइटम स्थायी रूप से हटा दिए जाएँगे:"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1543
+msgid "Directories and their contents will be deleted. This cannot be undone."
+msgstr "निर्देशिकाएँ और उनकी सामग्री हटा दी जाएँगी। इसे पूर्ववत नहीं किया जा सकता।"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1552
+msgid "Delete selected item?"
+msgid_plural "Delete selected items?"
+msgstr[0] "चयनित आइटम हटाएँ?"
+msgstr[1] "चयनित आइटम हटाएँ?"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1604
+msgid "Deleting…"
+msgstr "हटाया जा रहा है…"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1615
+#, c-format
+msgid "Deleted %zu item"
+msgid_plural "Deleted %zu items"
+msgstr[0] "%zu आइटम हटाया गया"
+msgstr[1] "%zu आइटम हटाए गए"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1631
+msgid "Delete cancelled"
+msgstr "हटाना रद्द किया गया"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1635
+msgid "Delete failed"
+msgstr "हटाना विफल"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1637
+msgid "Failed to delete selected items"
+msgstr "चयनित आइटम हटाने में विफल"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1723
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1731
 msgid "Transfer cancelled"
 msgstr "स्थानांतरण रद्द"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1220
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1733
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:445
 msgid "Transfer failed"
 msgstr "स्थानांतरण विफल"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1234
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1747
 #, c-format
 msgid "Sent %zu item"
 msgid_plural "Sent %zu items"
 msgstr[0] "%zu आइटम भेजा गया"
 msgstr[1] "%zu आइटम भेजे गए"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1236
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1749
 #, c-format
 msgid "Received %zu item"
 msgid_plural "Received %zu items"
 msgstr[0] "%zu आइटम प्राप्त हुआ"
 msgstr[1] "%zu आइटम प्राप्त हुए"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1535
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2050
 msgid "Name"
 msgstr "नाम"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1537
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2052
 msgid "Size"
 msgstr "आकार"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1539
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2054
 msgid "Modified"
 msgstr "संशोधित"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1557
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2072
 msgid "Remote"
 msgstr "रिमोट"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1589
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2104
 msgid "Up"
 msgstr "ऊपर"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1593
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2108
 msgid "Refresh"
 msgstr "ताज़ा करें"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1618
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2133
 msgid "Receive"
 msgstr "प्राप्त करें"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1618
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2133
 msgid "Send"
 msgstr "भेजें"
 
-#: elder-terms-vte/src/sftp/sftp-window.cpp:1797
-msgid "Ready"
-msgstr "तैयार"
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2144
+msgid "Calculate Hash Values"
+msgstr "हैश मानों की गणना करें"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2348
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2492
+msgid "Connecting"
+msgstr "कनेक्ट हो रहा है"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2484
+msgid "Authenticating"
+msgstr "प्रमाणीकरण हो रहा है"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2507
+msgid "Connection failed"
+msgstr "कनेक्शन विफल"
 
 #: elder-terms-vte/src/terminal-text-send-runner.cpp:119
 msgid "Text contained characters that were replaced"
@@ -1316,16 +1678,74 @@ msgstr "BREAK भेजना विफल रहा"
 msgid "serial: (unknown)"
 msgstr "सीरियल: (अज्ञात)"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:80
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:627
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:82
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1181
 msgid "SSH session has no socket"
 msgstr "SSH सत्र में कोई सॉकेट नहीं है"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:245
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:263
+#, c-format
+msgid "User name for %s:"
+msgstr "%s के लिए उपयोगकर्ता नाम:"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:281
+msgid "SSH user name was not provided"
+msgstr "SSH उपयोगकर्ता नाम प्रदान नहीं किया गया"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:545
+#, fuzzy
+msgid "Failed to start ssh-keygen"
+msgstr "प्रारंभ करने में विफल %s"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:546
+#, fuzzy, c-format
+msgid "Failed to start ssh-keygen: %s"
+msgstr "प्रारंभ करने में विफल %s"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:683
 msgid "unknown"
 msgstr "अज्ञात"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:265
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:711
+#, c-format
+msgid ""
+"The SSH host key type for %s:%u differs from the saved key.\n"
+"This can indicate a man-in-the-middle attack. Verify the fingerprint before "
+"continuing.\n"
+"Key type: %s\n"
+"Fingerprint: %s"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:715
+#, c-format
+msgid ""
+"The SSH host key for %s:%u has changed.\n"
+"This can indicate a man-in-the-middle attack. Verify the fingerprint before "
+"continuing.\n"
+"Key type: %s\n"
+"Fingerprint: %s"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:726
+msgid ""
+"Choose Reset and Connect only if this change is expected. ssh-keygen will "
+"preserve a backup of the saved per-user file.\n"
+"Equivalent command:"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:730
+msgid ""
+"The conflicting key is in a system-wide known_hosts file and cannot be reset "
+"automatically. Ask an administrator to verify the change and run:"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:734
+msgid ""
+"The conflicting known_hosts entry could not be located automatically. Verify "
+"the change and run the appropriate command before reconnecting:"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:743
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%u\n"
@@ -1336,121 +1756,153 @@ msgstr ""
 "कुंजी प्रकार: %s\n"
 "फ़िंगरप्रिंट: %s"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:271
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:749
 msgid "The known_hosts file does not exist and will be created."
 msgstr "Known_hosts फ़ाइल मौजूद नहीं है और बनाई जाएगी।"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:274
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:752
 msgid "Accept and save this host key?"
 msgstr "इस होस्ट कुंजी को स्वीकार करें और सहेजें?"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:296
-msgid "SSH host key changed; connection rejected"
-msgstr "SSH होस्ट कुंजी बदल गई; कनेक्शन अस्वीकृत"
-
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:300
-msgid "SSH host key type differs from known_hosts; connection rejected"
-msgstr "SSH होस्ट कुंजी प्रकार ज्ञात_होस्ट से भिन्न है; कनेक्शन अस्वीकृत"
-
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:303
-msgid "Failed to check SSH host key"
-msgstr "SSH होस्ट कुंजी"
-
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:311
-msgid "SSH host key was not accepted"
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:773
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:798
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:833
+#, fuzzy
+msgid "SSH host key was not reset"
 msgstr "SSH होस्ट कुंजी स्वीकार नहीं की गई"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:314
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:790
+#, fuzzy
+msgid "Failed to reset SSH host key"
+msgstr "SSH होस्ट कुंजी सहेजने में विफल"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:791
+#, fuzzy, c-format
+msgid "Failed to reset SSH host key: %s"
+msgstr "SSH होस्ट कुंजी सहेजने में विफल"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:795
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:843
 msgid "Failed to save SSH host key"
 msgstr "SSH होस्ट कुंजी सहेजने में विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:346
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:813
+msgid "Failed to check SSH host key"
+msgstr "SSH होस्ट कुंजी"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:840
+msgid "SSH host key was not accepted"
+msgstr "SSH होस्ट कुंजी स्वीकार नहीं की गई"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:875
 msgid "SSH Key Passphrase"
 msgstr "SSH कुंजी पासफ़्रेज़"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:348
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:877
 #, c-format
 msgid "Passphrase for %s (attempt %u of %u):"
 msgstr "%s के लिए पासफ़्रेज़ (%u का %u प्रयास करें):"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:394
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:924
 #, c-format
 msgid "Password for %s (attempt %u of %u):"
 msgstr "%s के लिए पासवर्ड (%u का %u प्रयास करें):"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:414
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:945
 msgid "SSH password authentication failed"
 msgstr "SSH पासवर्ड प्रमाणीकरण विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:439
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:970
 msgid "SSH authentication response:"
 msgstr "SSH प्रमाणीकरण प्रतिक्रिया:"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:498
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1030
 msgid "SSH keyboard-interactive authentication failed"
 msgstr "SSH कीबोर्ड-इंटरैक्टिव प्रमाणीकरण विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:517
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1049
 msgid "SSH authentication negotiation failed"
 msgstr "SSH प्रमाणीकरण वार्ता विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:522
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1054
 msgid "Failed to list SSH authentication methods"
 msgstr "SSH प्रमाणीकरण विधियों को सूचीबद्ध करने में विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:533
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1065
 msgid "SSH public-key authentication failed"
 msgstr "SSH सार्वजनिक-कुंजी प्रमाणीकरण विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:555
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1087
 msgid "Failed to refresh SSH authentication methods"
 msgstr "SSH प्रमाणीकरण विधियों को ताज़ा करने में विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:568
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1100
 msgid "SSH server did not accept an available authentication method"
 msgstr "SSH सर्वर ने उपलब्ध प्रमाणीकरण विधि स्वीकार नहीं की"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:724
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1024
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1278
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1578
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1727
 msgid "SSH transport is closed"
 msgstr "SSH परिवहन बंद है"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:926
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1479
 msgid "Failed to allocate SSH session"
 msgstr "SSH सत्र"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:932
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1485
 msgid "Failed to set SSH host"
 msgstr "SSH होस्ट"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:935
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1490
 msgid "Failed to parse SSH configuration"
 msgstr "SSH कॉन्फ़िगरेशन को पार्स करने में विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:944
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1499
 msgid "Failed to configure SSH endpoint"
 msgstr "SSH एंडपॉइंट"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:949
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1505
+msgid "Failed to configure SSH user name"
+msgstr "SSH उपयोगकर्ता नाम कॉन्फ़िगर करने में विफल"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1511
 msgid "Failed to configure SSH known_hosts"
 msgstr "SSH ज्ञात_होस्ट"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:952
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1517
 msgid "Failed to attach SSH socket"
 msgstr "SSH सॉकेट संलग्न करने में विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:962
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1527
 msgid "Failed to configure SSH callbacks"
 msgstr "SSH कॉलबैक कॉन्फ़िगर करने में विफल"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1120
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1581
+#, fuzzy
+msgid "SSH command is required"
+msgstr "SSH परिवहन आवश्यक है"
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1676
+msgid "SSH command output is too large"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1681
+msgid "SSH command error output is too large"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1688
+msgid "SSH command did not return an exit status"
+msgstr ""
+
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1823
 msgid "SSH transport is required"
 msgstr "SSH परिवहन आवश्यक है"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1174
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1243
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1281
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1301
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1877
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1946
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1984
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2004
 msgid "SSH channel is closed"
 msgstr "SSH चैनल बंद है"
 
@@ -1461,6 +1913,21 @@ msgstr "ssh: (अज्ञात)"
 #: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
 msgid "telnet: (unknown)"
 msgstr "टेलनेट: (अज्ञात)"
+
+#~ msgid "TCP ports"
+#~ msgstr "TCP पोर्ट"
+
+#~ msgid "SSH host key changed; connection rejected"
+#~ msgstr "SSH होस्ट कुंजी बदल गई; कनेक्शन अस्वीकृत"
+
+#~ msgid "SSH host key type differs from known_hosts; connection rejected"
+#~ msgstr "SSH होस्ट कुंजी प्रकार ज्ञात_होस्ट से भिन्न है; कनेक्शन अस्वीकृत"
+
+#~ msgid "Continue"
+#~ msgstr "जारी रखें"
+
+#~ msgid "Unknown SFTP failure"
+#~ msgstr "अज्ञात SFTP विफलता"
 
 #~ msgid "Failed to save global defaults"
 #~ msgstr "वैश्विक डिफ़ॉल्ट सहेजने में विफल"

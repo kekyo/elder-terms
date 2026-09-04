@@ -68,6 +68,13 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"ssh", "terminal_type", N_("Terminal type")},
     SettingLabelEntry{"sftp", "local_directory", N_("Local directory")},
     SettingLabelEntry{"sftp", "remote_directory", N_("Remote directory")},
+    SettingLabelEntry{"ftp", "address", N_("Address")},
+    SettingLabelEntry{"ftp", "port", N_("Port")},
+    SettingLabelEntry{"ftp", "username", N_("User name")},
+    SettingLabelEntry{"ftp", "data_connection_mode",
+                      N_("Data connection mode")},
+    SettingLabelEntry{"ftp", "local_directory", N_("Local directory")},
+    SettingLabelEntry{"ftp", "remote_directory", N_("Remote directory")},
     SettingLabelEntry{"serial", "device", N_("Device")},
     SettingLabelEntry{"serial", "device_match_mode",
                       N_("Device identification")},
@@ -100,6 +107,7 @@ static constexpr std::array setting_choices{
     SettingChoiceEntry{"general", "type", "serial", N_("Serial")},
     SettingChoiceEntry{"general", "type", "ssh", N_("SSH")},
     SettingChoiceEntry{"general", "type", "sftp", N_("SFTP")},
+    SettingChoiceEntry{"general", "type", "ftp", N_("FTP")},
     SettingChoiceEntry{"general", "ui_language", "system",
                        N_("System default")},
     SettingChoiceEntry{"general", "ui_language", "en", N_("English")},
@@ -129,6 +137,10 @@ static constexpr std::array setting_choices{
     SettingChoiceEntry{"terminal", "return_code", "cr", N_("CR")},
     SettingChoiceEntry{"terminal", "return_code", "lf", N_("LF")},
     SettingChoiceEntry{"terminal", "return_code", "crlf", N_("CRLF")},
+    SettingChoiceEntry{"ftp", "data_connection_mode", "passive",
+                       N_("Passive (recommended)")},
+    SettingChoiceEntry{"ftp", "data_connection_mode", "active",
+                       N_("Active")},
     SettingChoiceEntry{"serial", "parity", "n", N_("None")},
     SettingChoiceEntry{"serial", "device_match_mode", "path",
                        N_("Device path")},
@@ -176,10 +188,14 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("SSH");
   case SettingsUiText::sftp_tab:
     return _("SFTP");
+  case SettingsUiText::ftp_tab:
+    return _("FTP");
   case SettingsUiText::terminal_tab:
     return _("Terminal");
   case SettingsUiText::macro_tab:
     return _("Macro");
+  case SettingsUiText::links_tab:
+    return _("Links");
   case SettingsUiText::transfer_tab:
     return _("Transfer");
   case SettingsUiText::logging_tab:
@@ -258,6 +274,24 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Current device node");
   case SettingsUiText::unavailable:
     return _("Unavailable");
+  case SettingsUiText::ip_scan:
+    return _("IP scan");
+  case SettingsUiText::ip_address:
+    return _("IP address");
+  case SettingsUiText::reverse_fqdn:
+    return _("Reverse FQDN");
+  case SettingsUiText::ssh_sftp_port_column:
+    return _("SSH/SFTP(22)");
+  case SettingsUiText::telnet_port_column:
+    return _("TELNET(23)");
+  case SettingsUiText::ftp_port_column:
+    return _("FTP(21)");
+  case SettingsUiText::scanning:
+    return _("Scanning…");
+  case SettingsUiText::scan_complete:
+    return _("Scan complete");
+  case SettingsUiText::scan_failed:
+    return _("Scan failed");
   }
   return "";
 }

@@ -1,4 +1,4 @@
-#include "sftp-transfer-engine.h"
+#include "file-transfer-engine.h"
 
 #include <unistd.h>
 
@@ -14,6 +14,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -22,7 +23,7 @@
 
 namespace elder_terms {
 
-static constexpr std::size_t sftp_transfer_chunk_size = 64 * 1024;
+static constexpr std::size_t file_transfer_chunk_size = 64 * 1024;
 static constexpr char local_attribute_query[] =
     G_FILE_ATTRIBUTE_STANDARD_NAME ","
     G_FILE_ATTRIBUTE_STANDARD_TYPE ","
@@ -53,7 +54,7 @@ using GCharPtr = std::unique_ptr<char, GFreeDeleter>;
 struct TransferNode {
   std::string source_path;
   std::string destination_path;
-  SftpFileAttributes attributes;
+  RemoteFileAttributes attributes;
   std::string link_target;
   std::vector<TransferNode> children;
   std::uint64_t total_bytes = 0;
@@ -61,10 +62,10 @@ struct TransferNode {
 };
 
 struct TransferRunState {
-  std::shared_ptr<SftpClient> client;
-  SftpTransferRequest request;
-  std::optional<SftpConflictAction> conflict_action;
-  SftpTransferProgress progress;
+  std::shared_ptr<RemoteFileClient> client;
+  FileTransferRequest request;
+  std::optional<FileTransferConflictAction> conflict_action;
+  FileTransferProgress progress;
 };
 
 struct DestinationResolution {
@@ -72,19 +73,19 @@ struct DestinationResolution {
   bool overwrite = false;
 };
 
-class SftpTransferAbort final : public std::runtime_error {
+class FileTransferAbort final : public std::runtime_error {
 public:
-  explicit SftpTransferAbort(const std::string &message)
+  explicit FileTransferAbort(const std::string &message)
       : std::runtime_error(message) {
   }
 };
 
 class TransferSlotGuard {
 private:
-  std::shared_ptr<SftpClient> client;
+  std::shared_ptr<RemoteFileClient> client;
 
 public:
-  explicit TransferSlotGuard(std::shared_ptr<SftpClient> client)
+  explicit TransferSlotGuard(std::shared_ptr<RemoteFileClient> client)
       : client(std::move(client)) {
   }
 
@@ -102,14 +103,14 @@ static std::atomic<std::uint64_t> temporary_path_sequence = 0;
 
 static std::string exception_message(std::exception_ptr error) {
   if (!error) {
-    return "Unknown SFTP transfer failure";
+    return "Unknown file transfer failure";
   }
   try {
     std::rethrow_exception(error);
   } catch (const std::exception &exception) {
     return exception.what();
   } catch (...) {
-    return "Unknown SFTP transfer failure";
+    return "Unknown file transfer failure";
   }
 }
 
@@ -135,7 +136,7 @@ query_local_info_async(GFile *file,
       std::move(cancellation));
 }
 
-static cardio::promise<std::optional<SftpFileAttributes>>
+static cardio::promise<std::optional<RemoteFileAttributes>>
 query_optional_local_attributes_async(
     GFile *file, cardio::cancellation cancellation) {
   try {
@@ -144,26 +145,26 @@ query_optional_local_attributes_async(
     GCharPtr path(g_file_get_path(file));
     if (path == nullptr) {
       throw std::runtime_error(
-          "SFTP local pane only supports native filesystem paths");
+          "The local pane only supports native filesystem paths");
     }
 
     const bool is_link =
         g_file_info_get_is_symlink(info.get()) != FALSE ||
         g_file_info_get_file_type(info.get()) ==
             G_FILE_TYPE_SYMBOLIC_LINK;
-    SftpFileType type = SftpFileType::other;
+    RemoteFileType type = RemoteFileType::other;
     if (is_link) {
-      type = SftpFileType::symbolic_link;
+      type = RemoteFileType::symbolic_link;
     } else if (g_file_info_get_file_type(info.get()) ==
                G_FILE_TYPE_REGULAR) {
-      type = SftpFileType::regular;
+      type = RemoteFileType::regular;
     } else if (g_file_info_get_file_type(info.get()) ==
                G_FILE_TYPE_DIRECTORY) {
-      type = SftpFileType::directory;
+      type = RemoteFileType::directory;
     }
 
     const char *name = g_file_info_get_name(info.get());
-    co_return SftpFileAttributes{
+    co_return RemoteFileAttributes{
         .name = name == nullptr ? std::string() : std::string(name),
         .path = path.get(),
         .type = type,
@@ -178,21 +179,21 @@ query_optional_local_attributes_async(
                 info.get(), G_FILE_ATTRIBUTE_UNIX_MODE)
                 ? g_file_info_get_attribute_uint32(
                       info.get(), G_FILE_ATTRIBUTE_UNIX_MODE)
-                : 0,
+                : std::optional<std::uint32_t>(),
         .access_time_unix_seconds =
             g_file_info_has_attribute(
                 info.get(), G_FILE_ATTRIBUTE_TIME_ACCESS)
                 ? static_cast<std::int64_t>(
                       g_file_info_get_attribute_uint64(
                           info.get(), G_FILE_ATTRIBUTE_TIME_ACCESS))
-                : 0,
+                : std::optional<std::int64_t>(),
         .modification_time_unix_seconds =
             g_file_info_has_attribute(
                 info.get(), G_FILE_ATTRIBUTE_TIME_MODIFIED)
                 ? static_cast<std::int64_t>(
                       g_file_info_get_attribute_uint64(
                           info.get(), G_FILE_ATTRIBUTE_TIME_MODIFIED))
-                : 0,
+                : std::optional<std::int64_t>(),
     };
   } catch (const cardio::gio::gio_error &error) {
     if (is_not_found(error)) {
@@ -347,7 +348,7 @@ write_local_stream_async(GOutputStream *stream,
           },
           std::move(cancellation));
   if (written != buffer.size()) {
-    throw std::runtime_error("Failed to write complete local SFTP chunk");
+    throw std::runtime_error("Failed to write complete local file chunk");
   }
   co_return;
 }
@@ -464,21 +465,32 @@ move_local_async(GFile *source, GFile *destination,
 
 static cardio::promise<void>
 set_local_attributes_async(
-    GFile *file, const SftpFileAttributes &attributes,
+    GFile *file, const RemoteFileAttributes &attributes,
     bool include_permissions, cardio::cancellation cancellation) {
   GObjectPtr<GFileInfo> info(g_file_info_new());
-  if (include_permissions) {
+  bool has_attributes = false;
+  if (include_permissions && attributes.permissions.has_value()) {
     g_file_info_set_attribute_uint32(
-        info.get(), G_FILE_ATTRIBUTE_UNIX_MODE, attributes.permissions);
+        info.get(), G_FILE_ATTRIBUTE_UNIX_MODE, *attributes.permissions);
+    has_attributes = true;
   }
-  g_file_info_set_attribute_uint64(
-      info.get(), G_FILE_ATTRIBUTE_TIME_ACCESS,
-      static_cast<std::uint64_t>(
-          std::max<std::int64_t>(0, attributes.access_time_unix_seconds)));
-  g_file_info_set_attribute_uint64(
-      info.get(), G_FILE_ATTRIBUTE_TIME_MODIFIED,
-      static_cast<std::uint64_t>(std::max<std::int64_t>(
-          0, attributes.modification_time_unix_seconds)));
+  if (attributes.access_time_unix_seconds.has_value()) {
+    g_file_info_set_attribute_uint64(
+        info.get(), G_FILE_ATTRIBUTE_TIME_ACCESS,
+        static_cast<std::uint64_t>(std::max<std::int64_t>(
+            0, *attributes.access_time_unix_seconds)));
+    has_attributes = true;
+  }
+  if (attributes.modification_time_unix_seconds.has_value()) {
+    g_file_info_set_attribute_uint64(
+        info.get(), G_FILE_ATTRIBUTE_TIME_MODIFIED,
+        static_cast<std::uint64_t>(std::max<std::int64_t>(
+            0, *attributes.modification_time_unix_seconds)));
+    has_attributes = true;
+  }
+  if (!has_attributes) {
+    co_return;
+  }
 
   co_await cardio::gio::submit<void>(
       [file, info = info.get()](GCancellable *cancellable,
@@ -502,6 +514,30 @@ set_local_attributes_async(
       std::move(cancellation));
 }
 
+static RemoteFileAttributes supported_remote_attributes(
+    const RemoteFileClient &client,
+    const RemoteFileAttributes &attributes) {
+  RemoteFileAttributes supported = attributes;
+  const RemoteFileCapabilities capabilities = client.capabilities();
+  if (!capabilities.permissions) {
+    supported.permissions.reset();
+  }
+  if (!capabilities.access_time) {
+    supported.access_time_unix_seconds.reset();
+  }
+  if (!capabilities.modification_time) {
+    supported.modification_time_unix_seconds.reset();
+  }
+  return supported;
+}
+
+static bool has_mutable_attributes(
+    const RemoteFileAttributes &attributes) noexcept {
+  return attributes.permissions.has_value() ||
+         attributes.access_time_unix_seconds.has_value() ||
+         attributes.modification_time_unix_seconds.has_value();
+}
+
 static bool valid_child_name(const std::string &name) {
   return !name.empty() && name != "." && name != ".." &&
          name.find('/') == std::string::npos;
@@ -521,7 +557,8 @@ static std::string remote_basename(const std::string &path) {
 static std::string remote_child_path(const std::string &directory,
                                      const std::string &name) {
   if (!valid_child_name(name)) {
-    throw std::runtime_error("SFTP server returned an invalid item name");
+    throw std::runtime_error(
+        "Remote service returned an invalid item name");
   }
   if (directory.empty() || directory == ".") {
     return directory.empty() ? name : "./" + name;
@@ -536,7 +573,8 @@ static std::string remote_child_path(const std::string &directory,
 static std::string local_child_path(const std::string &directory,
                                     const std::string &name) {
   if (!valid_child_name(name)) {
-    throw std::runtime_error("SFTP server returned an invalid item name");
+    throw std::runtime_error(
+        "Remote service returned an invalid item name");
   }
   return (std::filesystem::path(directory) / name).string();
 }
@@ -551,13 +589,13 @@ discover_local_node_async(GFile *file, std::string destination_path,
                           cardio::cancellation cancellation) {
   GObjectPtr<GFileInfo> info(
       co_await query_local_info_async(file, cancellation));
-  const std::optional<SftpFileAttributes> attributes =
+  const std::optional<RemoteFileAttributes> attributes =
       co_await query_optional_local_attributes_async(file, cancellation);
   if (!attributes.has_value()) {
-    throw std::runtime_error("Local SFTP source disappeared");
+    throw std::runtime_error("Local transfer source disappeared");
   }
-  if (attributes->type == SftpFileType::other) {
-    throw std::runtime_error("Unsupported local SFTP source type: " +
+  if (attributes->type == RemoteFileType::other) {
+    throw std::runtime_error("Unsupported local transfer source type: " +
                              attributes->path);
   }
 
@@ -566,15 +604,15 @@ discover_local_node_async(GFile *file, std::string destination_path,
       .destination_path = std::move(destination_path),
       .attributes = *attributes,
       .link_target =
-          attributes->type == SftpFileType::symbolic_link
+          attributes->type == RemoteFileType::symbolic_link
               ? local_link_target(info.get())
               : std::string(),
       .children = {},
       .total_bytes =
-          attributes->type == SftpFileType::regular ? attributes->size : 0,
+          attributes->type == RemoteFileType::regular ? attributes->size : 0,
       .total_items = 1,
   };
-  if (node.attributes.type != SftpFileType::directory) {
+  if (node.attributes.type != RemoteFileType::directory) {
     co_return node;
   }
 
@@ -595,16 +633,16 @@ discover_local_node_async(GFile *file, std::string destination_path,
 
 static cardio::promise<TransferNode>
 discover_remote_node_async(
-    const std::shared_ptr<SftpClient> &client, std::string source_path,
+    const std::shared_ptr<RemoteFileClient> &client, std::string source_path,
     std::string destination_path, cardio::cancellation cancellation) {
-  const std::optional<SftpFileAttributes> attributes =
+  const std::optional<RemoteFileAttributes> attributes =
       co_await client->lstat_async(source_path, cancellation);
   if (!attributes.has_value()) {
-    throw std::runtime_error("Remote SFTP source does not exist: " +
+    throw std::runtime_error("Remote transfer source does not exist: " +
                              source_path);
   }
-  if (attributes->type == SftpFileType::other) {
-    throw std::runtime_error("Unsupported remote SFTP source type: " +
+  if (attributes->type == RemoteFileType::other) {
+    throw std::runtime_error("Unsupported remote transfer source type: " +
                              source_path);
   }
 
@@ -615,29 +653,34 @@ discover_remote_node_async(
       .link_target = {},
       .children = {},
       .total_bytes =
-          attributes->type == SftpFileType::regular ? attributes->size : 0,
+          attributes->type == RemoteFileType::regular ? attributes->size : 0,
       .total_items = 1,
   };
-  if (node.attributes.type == SftpFileType::symbolic_link) {
+  if (node.attributes.type == RemoteFileType::symbolic_link) {
+    if (!client->capabilities().symbolic_links) {
+      throw std::runtime_error(
+          "Remote service reported an unsupported symbolic link");
+    }
     node.link_target =
         co_await client->read_link_async(node.source_path, cancellation);
     co_return node;
   }
-  if (node.attributes.type != SftpFileType::directory) {
+  if (node.attributes.type != RemoteFileType::directory) {
     co_return node;
   }
 
-  std::vector<SftpFileAttributes> children =
-      co_await client->list_directory_async(node.source_path, cancellation);
+  std::vector<RemoteFileAttributes> children =
+      (co_await client->load_directory_async(node.source_path, cancellation))
+          .entries;
   std::sort(children.begin(), children.end(),
-            [](const SftpFileAttributes &left,
-               const SftpFileAttributes &right) {
+            [](const RemoteFileAttributes &left,
+               const RemoteFileAttributes &right) {
               return left.name < right.name;
             });
-  for (const SftpFileAttributes &child : children) {
+  for (const RemoteFileAttributes &child : children) {
     if (!valid_child_name(child.name)) {
       throw std::runtime_error(
-          "SFTP server returned an invalid item name");
+          "Remote service returned an invalid item name");
     }
     TransferNode child_node = co_await discover_remote_node_async(
         client, remote_child_path(node.source_path, child.name),
@@ -667,21 +710,21 @@ static void complete_subtree(TransferRunState *state,
 
 static cardio::promise<void>
 remove_remote_tree_async(
-    const std::shared_ptr<SftpClient> &client, const std::string &path,
+    const std::shared_ptr<RemoteFileClient> &client, const std::string &path,
     cardio::cancellation cancellation) {
-  const std::optional<SftpFileAttributes> attributes =
+  const std::optional<RemoteFileAttributes> attributes =
       co_await client->lstat_async(path, cancellation);
   if (!attributes.has_value()) {
     co_return;
   }
-  if (attributes->type != SftpFileType::directory) {
+  if (attributes->type != RemoteFileType::directory) {
     co_await client->remove_file_async(path, cancellation);
     co_return;
   }
 
-  const std::vector<SftpFileAttributes> children =
-      co_await client->list_directory_async(path, cancellation);
-  for (const SftpFileAttributes &child : children) {
+  const std::vector<RemoteFileAttributes> children =
+      (co_await client->load_directory_async(path, cancellation)).entries;
+  for (const RemoteFileAttributes &child : children) {
     co_await remove_remote_tree_async(
         client, remote_child_path(path, child.name), cancellation);
   }
@@ -691,12 +734,12 @@ remove_remote_tree_async(
 static cardio::promise<void>
 remove_local_tree_async(GFile *file,
                         cardio::cancellation cancellation) {
-  const std::optional<SftpFileAttributes> attributes =
+  const std::optional<RemoteFileAttributes> attributes =
       co_await query_optional_local_attributes_async(file, cancellation);
   if (!attributes.has_value()) {
     co_return;
   }
-  if (attributes->type == SftpFileType::directory) {
+  if (attributes->type == RemoteFileType::directory) {
     const std::vector<std::string> children =
         co_await local_child_names_async(file, cancellation);
     for (const std::string &name : children) {
@@ -710,24 +753,24 @@ remove_local_tree_async(GFile *file,
 static cardio::promise<DestinationResolution>
 resolve_conflict_async(
     TransferRunState *state, const TransferNode &node,
-    std::optional<SftpFileAttributes> destination,
+    std::optional<RemoteFileAttributes> destination,
     cardio::cancellation cancellation) {
   if (!destination.has_value()) {
     co_return DestinationResolution{};
   }
-  if (node.attributes.type == SftpFileType::directory &&
-      destination->type == SftpFileType::directory) {
+  if (node.attributes.type == RemoteFileType::directory &&
+      destination->type == RemoteFileType::directory) {
     co_return DestinationResolution{};
   }
 
   if (!state->conflict_action.has_value()) {
     if (!state->request.callbacks.conflict) {
-      throw SftpTransferAbort(
-          "SFTP destination conflict requires a decision");
+      throw FileTransferAbort(
+          "Destination conflict requires a decision");
     }
     state->conflict_action =
         co_await state->request.callbacks.conflict(
-            SftpTransferConflict{
+            FileTransferConflict{
                 .direction = state->request.direction,
                 .source_path = node.source_path,
                 .destination_path = node.destination_path,
@@ -735,10 +778,10 @@ resolve_conflict_async(
             },
             cancellation);
   }
-  if (*state->conflict_action == SftpConflictAction::cancel) {
-    throw SftpTransferAbort("SFTP transfer canceled at a conflict");
+  if (*state->conflict_action == FileTransferConflictAction::cancel) {
+    throw FileTransferAbort("File transfer canceled at a conflict");
   }
-  if (*state->conflict_action == SftpConflictAction::skip) {
+  if (*state->conflict_action == FileTransferConflictAction::skip) {
     co_return DestinationResolution{
         .proceed = false,
         .overwrite = false,
@@ -760,7 +803,7 @@ static std::string next_temporary_path(const std::string &destination) {
 
 static cardio::promise<std::string>
 available_remote_temporary_path_async(
-    const std::shared_ptr<SftpClient> &client,
+    const std::shared_ptr<RemoteFileClient> &client,
     const std::string &destination,
     cardio::cancellation cancellation) {
   for (std::size_t attempt = 0; attempt < 100; ++attempt) {
@@ -771,7 +814,7 @@ available_remote_temporary_path_async(
     }
   }
   throw std::runtime_error(
-      "Could not reserve a remote SFTP temporary path");
+      "Could not reserve a remote temporary path");
 }
 
 static cardio::promise<std::string>
@@ -788,12 +831,12 @@ available_local_temporary_path_async(
     }
   }
   throw std::runtime_error(
-      "Could not reserve a local SFTP temporary path");
+      "Could not reserve a local temporary path");
 }
 
 static cardio::promise<void>
 cleanup_remote_temporary_file_async(
-    const std::shared_ptr<SftpClient> &client,
+    const std::shared_ptr<RemoteFileClient> &client,
     const std::string &path) {
   try {
     co_await client->remove_file_async(path, {});
@@ -820,16 +863,18 @@ send_regular_file_async(TransferRunState *state,
   GObjectPtr<GFile> source(
       g_file_new_for_path(node.source_path.c_str()));
   GObjectPtr<GFileInputStream> input;
-  std::unique_ptr<SftpFileWriter> output;
+  std::unique_ptr<RemoteFileWriter> output;
   bool temporary_created = false;
   std::exception_ptr failure;
 
   try {
     input.reset(co_await open_local_read_async(source.get(), cancellation));
+    const RemoteFileAttributes attributes = supported_remote_attributes(
+        *state->client, node.attributes);
     output = std::move(co_await state->client->open_write_async(
-        temporary_path, node.attributes.permissions, cancellation));
+        temporary_path, attributes.permissions, cancellation));
     temporary_created = true;
-    std::array<std::byte, sftp_transfer_chunk_size> buffer{};
+    std::array<std::byte, file_transfer_chunk_size> buffer{};
     for (;;) {
       cancellation.throw_if_cancellation_requested();
       const std::size_t size = co_await read_local_stream_async(
@@ -850,10 +895,10 @@ send_regular_file_async(TransferRunState *state,
     input.reset();
     co_await output->close_async(cancellation);
     output.reset();
-    co_await state->client->set_attributes_async(
-        temporary_path, node.attributes.permissions,
-        node.attributes.access_time_unix_seconds,
-        node.attributes.modification_time_unix_seconds, cancellation);
+    if (has_mutable_attributes(attributes)) {
+      co_await state->client->set_attributes_async(
+          temporary_path, attributes, cancellation);
+    }
     if (overwrite) {
       co_await remove_remote_tree_async(
           state->client, node.destination_path, cancellation);
@@ -897,7 +942,7 @@ receive_regular_file_async(TransferRunState *state,
       g_file_new_for_path(temporary_path.c_str()));
   GObjectPtr<GFile> destination(
       g_file_new_for_path(node.destination_path.c_str()));
-  std::unique_ptr<SftpFileReader> input;
+  std::unique_ptr<RemoteFileReader> input;
   GObjectPtr<GFileOutputStream> output;
   bool temporary_created = false;
   std::exception_ptr failure;
@@ -908,7 +953,7 @@ receive_regular_file_async(TransferRunState *state,
     output.reset(
         co_await open_local_replace_async(temporary.get(), cancellation));
     temporary_created = true;
-    std::array<std::byte, sftp_transfer_chunk_size> buffer{};
+    std::array<std::byte, file_transfer_chunk_size> buffer{};
     for (;;) {
       cancellation.throw_if_cancellation_requested();
       const std::size_t size = co_await input->read_async(
@@ -970,7 +1015,7 @@ transfer_node_with_recovery_async(
 static cardio::promise<void>
 send_node_once_async(TransferRunState *state, const TransferNode &node,
                      cardio::cancellation cancellation) {
-  const std::optional<SftpFileAttributes> destination =
+  const std::optional<RemoteFileAttributes> destination =
       co_await state->client->lstat_async(node.destination_path,
                                          cancellation);
   const DestinationResolution resolution =
@@ -981,7 +1026,7 @@ send_node_once_async(TransferRunState *state, const TransferNode &node,
     co_return;
   }
 
-  if (node.attributes.type == SftpFileType::regular) {
+  if (node.attributes.type == RemoteFileType::regular) {
     co_await send_regular_file_async(state, node, resolution.overwrite,
                                      cancellation);
     ++state->progress.completed_items;
@@ -989,7 +1034,11 @@ send_node_once_async(TransferRunState *state, const TransferNode &node,
     co_return;
   }
 
-  if (node.attributes.type == SftpFileType::symbolic_link) {
+  if (node.attributes.type == RemoteFileType::symbolic_link) {
+    if (!state->client->capabilities().symbolic_links) {
+      throw std::runtime_error(
+          "The remote service does not support symbolic links");
+    }
     if (resolution.overwrite) {
       co_await remove_remote_tree_async(
           state->client, node.destination_path, cancellation);
@@ -1006,17 +1055,21 @@ send_node_once_async(TransferRunState *state, const TransferNode &node,
         state->client, node.destination_path, cancellation);
   }
   if (!destination.has_value() || resolution.overwrite) {
+    const RemoteFileAttributes attributes = supported_remote_attributes(
+        *state->client, node.attributes);
     co_await state->client->make_directory_async(
-        node.destination_path, node.attributes.permissions, cancellation);
+        node.destination_path, attributes.permissions, cancellation);
   }
   for (const TransferNode &child : node.children) {
     co_await transfer_node_with_recovery_async(state, child,
                                                 cancellation);
   }
-  co_await state->client->set_attributes_async(
-      node.destination_path, node.attributes.permissions,
-      node.attributes.access_time_unix_seconds,
-      node.attributes.modification_time_unix_seconds, cancellation);
+  const RemoteFileAttributes attributes = supported_remote_attributes(
+      *state->client, node.attributes);
+  if (has_mutable_attributes(attributes)) {
+    co_await state->client->set_attributes_async(
+        node.destination_path, attributes, cancellation);
+  }
   ++state->progress.completed_items;
   publish_progress(state, node.source_path);
 }
@@ -1027,7 +1080,7 @@ receive_node_once_async(TransferRunState *state,
                         cardio::cancellation cancellation) {
   GObjectPtr<GFile> destination(
       g_file_new_for_path(node.destination_path.c_str()));
-  const std::optional<SftpFileAttributes> destination_attributes =
+  const std::optional<RemoteFileAttributes> destination_attributes =
       co_await query_optional_local_attributes_async(destination.get(),
                                                      cancellation);
   const DestinationResolution resolution =
@@ -1038,7 +1091,7 @@ receive_node_once_async(TransferRunState *state,
     co_return;
   }
 
-  if (node.attributes.type == SftpFileType::regular) {
+  if (node.attributes.type == RemoteFileType::regular) {
     co_await receive_regular_file_async(
         state, node, resolution.overwrite, cancellation);
     ++state->progress.completed_items;
@@ -1046,7 +1099,7 @@ receive_node_once_async(TransferRunState *state,
     co_return;
   }
 
-  if (node.attributes.type == SftpFileType::symbolic_link) {
+  if (node.attributes.type == RemoteFileType::symbolic_link) {
     if (resolution.overwrite) {
       co_await remove_local_tree_async(destination.get(), cancellation);
     }
@@ -1091,7 +1144,7 @@ transfer_node_with_recovery_async(
     cancellation.throw_if_cancellation_requested();
     std::exception_ptr failure;
     try {
-      if (state->request.direction == SftpTransferDirection::send) {
+      if (state->request.direction == FileTransferDirection::send) {
         co_await send_node_once_async(state, node, cancellation);
       } else {
         co_await receive_node_once_async(state, node, cancellation);
@@ -1099,7 +1152,7 @@ transfer_node_with_recovery_async(
       co_return;
     } catch (const cardio::canceled_exception &) {
       throw;
-    } catch (const SftpTransferAbort &) {
+    } catch (const FileTransferAbort &) {
       throw;
     } catch (...) {
       failure = std::current_exception();
@@ -1111,23 +1164,23 @@ transfer_node_with_recovery_async(
     if (!state->request.callbacks.failure) {
       std::rethrow_exception(failure);
     }
-    const SftpFailureAction action =
+    const FileTransferFailureAction action =
         co_await state->request.callbacks.failure(
-            SftpTransferFailure{
+            FileTransferFailure{
                 .direction = state->request.direction,
                 .source_path = node.source_path,
                 .destination_path = node.destination_path,
                 .message = exception_message(failure),
             },
             cancellation);
-    if (action == SftpFailureAction::retry) {
+    if (action == FileTransferFailureAction::retry) {
       continue;
     }
-    if (action == SftpFailureAction::skip) {
+    if (action == FileTransferFailureAction::skip) {
       complete_subtree(state, node);
       co_return;
     }
-    throw SftpTransferAbort(exception_message(failure));
+    throw FileTransferAbort(exception_message(failure));
   }
 }
 
@@ -1138,13 +1191,13 @@ discover_selected_source_async(
   for (;;) {
     std::exception_ptr failure;
     try {
-      if (state->request.direction == SftpTransferDirection::send) {
+      if (state->request.direction == FileTransferDirection::send) {
         GObjectPtr<GFile> source(
             g_file_new_for_path(source_path.c_str()));
         GCharPtr basename(g_file_get_basename(source.get()));
         if (basename == nullptr || basename.get()[0] == '\0') {
           throw std::runtime_error(
-              "Selected local SFTP source has no item name");
+              "Selected local transfer source has no item name");
         }
         co_return co_await discover_local_node_async(
             source.get(),
@@ -1156,7 +1209,7 @@ discover_selected_source_async(
       const std::string basename = remote_basename(source_path);
       if (!valid_child_name(basename)) {
         throw std::runtime_error(
-            "Selected remote SFTP source has no valid item name");
+            "Selected remote transfer source has no valid item name");
       }
       co_return co_await discover_remote_node_async(
           state->client, source_path,
@@ -1172,9 +1225,9 @@ discover_selected_source_async(
     if (!state->request.callbacks.failure) {
       std::rethrow_exception(failure);
     }
-    const SftpFailureAction action =
+    const FileTransferFailureAction action =
         co_await state->request.callbacks.failure(
-            SftpTransferFailure{
+            FileTransferFailure{
                 .direction = state->request.direction,
                 .source_path = source_path,
                 .destination_path =
@@ -1182,34 +1235,34 @@ discover_selected_source_async(
                 .message = exception_message(failure),
             },
             cancellation);
-    if (action == SftpFailureAction::retry) {
+    if (action == FileTransferFailureAction::retry) {
       continue;
     }
-    if (action == SftpFailureAction::skip) {
+    if (action == FileTransferFailureAction::skip) {
       co_return std::nullopt;
     }
-    throw SftpTransferAbort(exception_message(failure));
+    throw FileTransferAbort(exception_message(failure));
   }
 }
 
 cardio::promise<void>
-run_sftp_transfer_async(std::shared_ptr<SftpClient> client,
-                        SftpTransferRequest request,
+run_file_transfer_async(std::shared_ptr<RemoteFileClient> client,
+                        FileTransferRequest request,
                         cardio::cancellation cancellation) {
   if (client == nullptr) {
-    throw std::invalid_argument("SFTP client is required");
+    throw std::invalid_argument("Remote file client is required");
   }
   if (request.source_paths.empty()) {
     throw std::invalid_argument(
-        "At least one SFTP source path is required");
+        "At least one file transfer source path is required");
   }
   if (request.destination_directory.empty()) {
     throw std::invalid_argument(
-        "An SFTP destination directory is required");
+        "A file transfer destination directory is required");
   }
   if (!client->try_begin_transfer()) {
     throw std::runtime_error(
-        "An SFTP bulk transfer is already in progress");
+        "A bulk file transfer is already in progress");
   }
   TransferSlotGuard slot(client);
   TransferRunState state{
@@ -1237,6 +1290,172 @@ run_sftp_transfer_async(std::shared_ptr<SftpClient> client,
   for (const TransferNode &node : roots) {
     co_await transfer_node_with_recovery_async(
         &state, node, cancellation);
+  }
+}
+
+cardio::promise<void> rename_file_transfer_item_async(
+    std::shared_ptr<RemoteFileClient> client,
+    FileTransferEndpoint endpoint, std::string source_path,
+    std::string destination_path, cardio::cancellation cancellation) {
+  if (source_path.empty() || destination_path.empty()) {
+    throw std::invalid_argument("File rename paths must not be empty");
+  }
+  cancellation.throw_if_cancellation_requested();
+
+  if (endpoint == FileTransferEndpoint::remote) {
+    if (client == nullptr) {
+      throw std::invalid_argument("Remote file client is required");
+    }
+    if ((co_await client->lstat_async(destination_path, cancellation))
+            .has_value()) {
+      throw std::runtime_error("Destination already exists");
+    }
+    co_await client->rename_async(std::move(source_path),
+                                  std::move(destination_path),
+                                  cancellation);
+    co_return;
+  }
+
+  GObjectPtr<GFile> source(g_file_new_for_path(source_path.c_str()));
+  GObjectPtr<GFile> destination(
+      g_file_new_for_path(destination_path.c_str()));
+  if ((co_await query_optional_local_attributes_async(
+           destination.get(), cancellation))
+          .has_value()) {
+    throw std::runtime_error("Destination already exists");
+  }
+  if (!(co_await query_optional_local_attributes_async(source.get(),
+                                                       cancellation))
+           .has_value()) {
+    throw std::runtime_error("Source item does not exist");
+  }
+  co_await move_local_async(source.get(), destination.get(), cancellation);
+}
+
+struct FileTransferDeletePath {
+  std::string original;
+  std::string comparison;
+};
+
+static bool remote_path_contains_parent_reference(
+    const std::string &path) {
+  std::size_t begin = 0;
+  while (begin <= path.size()) {
+    const std::size_t end = path.find('/', begin);
+    const std::string_view component(
+        path.data() + begin,
+        (end == std::string::npos ? path.size() : end) - begin);
+    if (component == "..") {
+      return true;
+    }
+    if (end == std::string::npos) {
+      return false;
+    }
+    begin = end + 1;
+  }
+  return false;
+}
+
+static std::string file_transfer_delete_comparison_path(
+    FileTransferEndpoint endpoint, const std::string &path) {
+  if (endpoint == FileTransferEndpoint::local) {
+    return std::filesystem::path(path).lexically_normal().generic_string();
+  }
+  if (endpoint != FileTransferEndpoint::remote) {
+    throw std::invalid_argument("Unknown file transfer endpoint");
+  }
+  std::string result = path;
+  while (result.size() > 1 && result.back() == '/') {
+    result.pop_back();
+  }
+  return result;
+}
+
+static bool protected_file_transfer_delete_path(
+    FileTransferEndpoint endpoint, const std::string &path) {
+  if (path.empty() || path == "." || path == ".." || path == "/") {
+    return true;
+  }
+  if (endpoint == FileTransferEndpoint::remote) {
+    return path.find_first_not_of('/') == std::string::npos ||
+           remote_path_contains_parent_reference(path);
+  }
+  const std::filesystem::path local(path);
+  return local.has_root_path() && local == local.root_path();
+}
+
+static bool file_transfer_delete_path_is_descendant(
+    const std::string &candidate, const std::string &ancestor) {
+  if (candidate == ancestor || candidate.size() <= ancestor.size()) {
+    return false;
+  }
+  if (ancestor == "/") {
+    return candidate.front() == '/';
+  }
+  return candidate.starts_with(ancestor) &&
+         candidate[ancestor.size()] == '/';
+}
+
+std::vector<std::string> normalize_file_transfer_delete_paths(
+    FileTransferEndpoint endpoint, std::vector<std::string> paths) {
+  std::vector<FileTransferDeletePath> candidates;
+  candidates.reserve(paths.size());
+  for (std::string &path : paths) {
+    std::string comparison =
+        file_transfer_delete_comparison_path(endpoint, path);
+    if (protected_file_transfer_delete_path(endpoint, comparison)) {
+      throw std::invalid_argument("Refusing to delete a protected path");
+    }
+    candidates.push_back({
+        .original = std::move(path),
+        .comparison = std::move(comparison),
+    });
+  }
+
+  std::vector<std::string> result;
+  for (std::size_t index = 0; index < candidates.size(); ++index) {
+    const FileTransferDeletePath &candidate = candidates[index];
+    const bool duplicate = std::any_of(
+        candidates.begin(), candidates.begin() + index,
+        [&candidate](const FileTransferDeletePath &other) {
+          return other.comparison == candidate.comparison;
+        });
+    if (duplicate) {
+      continue;
+    }
+    const bool covered = std::any_of(
+        candidates.begin(), candidates.end(),
+        [&candidate](const FileTransferDeletePath &other) {
+          return file_transfer_delete_path_is_descendant(
+              candidate.comparison, other.comparison);
+        });
+    if (!covered) {
+      result.push_back(candidate.original);
+    }
+  }
+  return result;
+}
+
+cardio::promise<void> delete_file_transfer_items_async(
+    std::shared_ptr<RemoteFileClient> client,
+    FileTransferEndpoint endpoint, std::vector<std::string> paths,
+    cardio::cancellation cancellation) {
+  paths = normalize_file_transfer_delete_paths(endpoint, std::move(paths));
+  if (paths.empty()) {
+    throw std::invalid_argument(
+        "At least one file deletion path is required");
+  }
+  if (endpoint == FileTransferEndpoint::remote && client == nullptr) {
+    throw std::invalid_argument("Remote file client is required");
+  }
+  cancellation.throw_if_cancellation_requested();
+  for (const std::string &path : paths) {
+    if (endpoint == FileTransferEndpoint::remote) {
+      co_await remove_remote_tree_async(client, path, cancellation);
+    } else {
+      GObjectPtr<GFile> file(g_file_new_for_path(path.c_str()));
+      co_await remove_local_tree_async(file.get(), cancellation);
+    }
   }
 }
 

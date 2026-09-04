@@ -1,9 +1,12 @@
 import { createRequire } from 'node:module';
 import {
+  access,
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
   rm,
+  symlink,
   utimes,
   writeFile,
 } from 'node:fs/promises';
@@ -30,7 +33,10 @@ import {
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
 const sftpAppPath = fileURLToPath(
-  new URL('../../.build/elder-terms-vte/elder-terms-sftp', import.meta.url)
+  new URL(
+    '../../.build/elder-terms-vte/elder-terms-file-transfer',
+    import.meta.url
+  )
 );
 const sftpConnectionColorsFixturePath = fileURLToPath(
   new URL('./fixtures/sftp-connection-colors.png', import.meta.url)
@@ -60,6 +66,7 @@ const japaneseTestEnvironment = {
 const runSftpFixtureWithEnvironment = async (
   context: TestContext,
   pauseTransfer: boolean,
+  launchArguments: readonly string[],
   generalSettings: readonly string[],
   gtkCss: string | undefined,
   environment: Readonly<Record<string, string>>,
@@ -124,7 +131,7 @@ const runSftpFixtureWithEnvironment = async (
         onSystemOutput: evidence.recordSystemOutputEvent,
         xvfbTrayHost: true,
       });
-      const args = ['--test-fixture', '-c', configPath];
+      const args = [...launchArguments, '--test-fixture', '-c', configPath];
       if (pauseTransfer) {
         args.unshift('--test-sftp-pause-transfer');
       }
@@ -160,6 +167,7 @@ const runSftpFixture = async (
   runSftpFixtureWithEnvironment(
     context,
     pauseTransfer,
+    [],
     generalSettings,
     gtkCss,
     {},
@@ -278,7 +286,9 @@ const openContextMenu = async (
   table: GtkTableElement,
   row: number
 ): Promise<void> => {
-  await table.selectRow(row);
+  if (!(await table.selectedRows()).includes(row)) {
+    await table.selectRow(row);
+  }
   const cell = await table.cellAt(row, 0);
   const bounds = (await cell?.capture())?.bounds;
   if (bounds === undefined) {
@@ -358,48 +368,51 @@ describe('SFTP window', () => {
       context,
       true,
       [],
+      [],
       undefined,
       japaneseTestEnvironment,
       async ({ app }) => {
         await waitForResult(async () => {
           expect(
             await expectElementKind(
-              await app.getById('sftp_status_label'),
+              await app.getById('file_transfer_status_label'),
               'label'
             ).text()
           ).toBe('準備完了');
         });
         for (const [id, name] of [
-          ['sftp_local_group', 'ローカル'],
-          ['sftp_remote_group', 'リモート'],
-          ['sftp_local_up_button', '上へ'],
-          ['sftp_remote_up_button', '上へ'],
-          ['sftp_local_refresh_button', '更新'],
-          ['sftp_remote_refresh_button', '更新'],
+          ['file_transfer_local_group', 'ローカル'],
+          ['file_transfer_remote_group', 'リモート'],
+          ['file_transfer_local_up_button', '上へ'],
+          ['file_transfer_remote_up_button', '上へ'],
+          ['file_transfer_local_refresh_button', '更新'],
+          ['file_transfer_remote_refresh_button', '更新'],
         ] as const) {
           expect((await (await app.getById(id)).info()).name).toBe(name);
         }
 
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         await openContextMenu(
           app,
           localTree,
           await findRow(localTree, 'hello.txt')
         );
         const send = expectElementKind(
-          await app.getById('sftp_send_item'),
+          await app.getById('file_transfer_send_item'),
           'menuItem'
         );
         expect((await send.info()).name).toBe('送信');
         await send.click();
 
-        const overlay = await app.getById('sftp_transfer_overlay');
+        const overlay = await app.getById('file_transfer_overlay');
         const transferLabel = expectElementKind(
-          await app.getById('sftp_transfer_label'),
+          await app.getById('file_transfer_label'),
           'label'
         );
         const cancel = expectElementKind(
-          await app.getById('sftp_transfer_cancel_button'),
+          await app.getById('file_transfer_cancel_button'),
           'button'
         );
         await expectShowing(overlay);
@@ -414,10 +427,201 @@ describe('SFTP window', () => {
         await waitForResult(async () => {
           expect(
             await expectElementKind(
-              await app.getById('sftp_status_label'),
+              await app.getById('file_transfer_status_label'),
               'label'
             ).text()
           ).toBe('転送をキャンセルしました');
+        });
+      }
+    );
+  });
+
+  it('authenticates inside the file transfer window before loading remote files', async (context) => {
+    await runSftpFixtureWithEnvironment(
+      context,
+      false,
+      ['--test-ssh-prompt=password'],
+      [],
+      undefined,
+      {},
+      async ({ app }) => {
+        expect(await app.getWindowCount()).toBe(1);
+        const window = expectElementKind(
+          await app.getById('file_transfer_window'),
+          'window'
+        );
+        const prompt = expectElementKind(
+          await app.getById('file_transfer_prompt_panel'),
+          'container'
+        );
+        const entry = expectElementKind(
+          await app.getById('file_transfer_prompt_entry'),
+          'entry'
+        );
+        await expectShowing(window);
+        await expectShowing(prompt);
+        await expectShowing(entry);
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_title_label'),
+            'label'
+          ).text()
+        ).toBe('SSH Authentication');
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_status_label'),
+            'label'
+          ).text()
+        ).toBe('Authenticating');
+
+        await entry.setText('fixture-secret');
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        ).click();
+
+        await expectHidden(prompt);
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Ready');
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_remote_path_entry'),
+              'entry'
+            ).text()
+          ).toBe('/remote');
+        });
+      }
+    );
+  });
+
+  it('prefills the SSH user name inside the file transfer window', async (context) => {
+    await runSftpFixtureWithEnvironment(
+      context,
+      false,
+      ['--test-ssh-prompt=username'],
+      [],
+      undefined,
+      {},
+      async ({ app }) => {
+        const prompt = expectElementKind(
+          await app.getById('file_transfer_prompt_panel'),
+          'container'
+        );
+        const entry = expectElementKind(
+          await app.getById('file_transfer_prompt_entry'),
+          'entry'
+        );
+        await expectShowing(prompt);
+        await expectShowing(entry);
+        expect(await entry.text()).toBe('configured-user');
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_message_label'),
+            'label'
+          ).text()
+        ).toBe('User name for fixture.example:');
+
+        await entry.setText('runtime-user');
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        ).click();
+        await expectHidden(prompt);
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Ready');
+        });
+      }
+    );
+  });
+
+  it('shows SSH host-key random art inside the file transfer window', async (context) => {
+    await runSftpFixtureWithEnvironment(
+      context,
+      false,
+      ['--test-ssh-prompt=host-key'],
+      [],
+      undefined,
+      {},
+      async ({ app }) => {
+        const prompt = expectElementKind(
+          await app.getById('file_transfer_prompt_panel'),
+          'container'
+        );
+        const randomArt = expectElementKind(
+          await app.getById('file_transfer_prompt_monospace_message_label'),
+          'label'
+        );
+        await expectShowing(prompt);
+        await expectShowing(randomArt);
+        expect(await randomArt.text()).toContain('[ED25519 256]');
+        expect(await randomArt.text()).toContain('[SHA256]');
+
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        ).click();
+        await expectHidden(prompt);
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Ready');
+        });
+      }
+    );
+  });
+
+  it('offers changed SSH host-key reset inside the file transfer window', async (context) => {
+    await runSftpFixtureWithEnvironment(
+      context,
+      false,
+      ['--test-ssh-prompt=changed-host-key'],
+      [],
+      undefined,
+      {},
+      async ({ app }) => {
+        const cancel = expectElementKind(
+          await app.getById('file_transfer_prompt_cancel_button'),
+          'button'
+        );
+        const reset = expectElementKind(
+          await app.getById('file_transfer_prompt_alternative_button'),
+          'button'
+        );
+        await expectHidden(
+          await app.getById('file_transfer_prompt_accept_button')
+        );
+        await expectShowing(cancel);
+        await expectShowing(reset);
+        expect((await cancel.info()).states).toContain('focused');
+        expect((await reset.info()).name).toBe('Reset and Connect');
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_message_label'),
+            'label'
+          ).text()
+        ).toContain('ssh-keygen -R');
+
+        await reset.click();
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Ready');
         });
       }
     );
@@ -432,24 +636,32 @@ describe('SFTP window', () => {
       async ({ app, evidence }) => {
         const exteriorComponentBackground = [0x85, 0x27, 0x71] as const;
         const componentBackground = [0x1b, 0x45, 0x65] as const;
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
         const localPath = expectElementKind(
-          await app.getById('sftp_local_path_entry'),
+          await app.getById('file_transfer_local_path_entry'),
           'entry'
         );
         const remotePath = expectElementKind(
-          await app.getById('sftp_remote_path_entry'),
+          await app.getById('file_transfer_remote_path_entry'),
           'entry'
         );
         await waitForResult(async () => {
           expect(await findRow(localTree, 'hello.txt')).toBeGreaterThanOrEqual(
             0
           );
+          expect(
+            await findRow(remoteTree, 'readme.txt')
+          ).toBeGreaterThanOrEqual(0);
         });
         await localPath.setText('/fixture/local');
 
-        const header = await app.getById('sftp_header_bar');
-        const status = await app.getById('sftp_status_bar');
+        const header = await app.getById('file_transfer_header_bar');
+        const status = await app.getById('file_transfer_status_bar');
         expect(capturePixel(await header.capture(), 0.08, 0.5)).toEqual([
           0x7a, 0x24, 0x68,
         ]);
@@ -471,11 +683,73 @@ describe('SFTP window', () => {
         );
         expect(
           capturePixel(
-            await (await app.getById('sftp_local_refresh_button')).capture(),
+            await (
+              await app.getById('file_transfer_local_refresh_button')
+            ).capture(),
             0.15,
             0.5
           )
         ).toEqual(componentBackground);
+
+        const localSelectedRow = await findRow(localTree, 'hello.txt');
+        const localUnselectedRow = await findRow(localTree, 'documents');
+        await clickTreeRowAtHorizontalOffset(
+          app,
+          localTree,
+          localSelectedRow,
+          Math.trunc((await localTree.capture()).bounds.width / 2)
+        );
+        await waitForResult(async () => {
+          expect(
+            (await (await localTree.cellAt(localSelectedRow, 0))?.info())
+              ?.states
+          ).toContain('selected');
+        });
+        expect(
+          capturePixel(
+            await (await localTree.cellAt(localSelectedRow, 0))!.capture(),
+            0.9,
+            0.5
+          )
+        ).not.toEqual(
+          capturePixel(
+            await (await localTree.cellAt(localUnselectedRow, 0))!.capture(),
+            0.9,
+            0.5
+          )
+        );
+
+        const remoteSelectedRow = await findRow(remoteTree, 'readme.txt');
+        const remoteUnselectedRow = await findRow(remoteTree, 'archive');
+        await clickTreeRowAtHorizontalOffset(
+          app,
+          remoteTree,
+          remoteSelectedRow,
+          Math.trunc((await remoteTree.capture()).bounds.width / 2)
+        );
+        await waitForResult(async () => {
+          expect(
+            (await (await remoteTree.cellAt(remoteSelectedRow, 0))?.info())
+              ?.states
+          ).toContain('selected');
+        });
+        expect(
+          capturePixel(
+            await (await remoteTree.cellAt(remoteSelectedRow, 0))!.capture(),
+            0.9,
+            0.5
+          )
+        ).not.toEqual(
+          capturePixel(
+            await (await remoteTree.cellAt(remoteUnselectedRow, 0))!.capture(),
+            0.9,
+            0.5
+          )
+        );
+        await Promise.all([
+          localTree.deselectRow(localSelectedRow),
+          remoteTree.deselectRow(remoteSelectedRow),
+        ]);
 
         const treeCapture = await localTree.capture();
         await app.input.moveMouseTo(
@@ -502,7 +776,7 @@ describe('SFTP window', () => {
         });
 
         const window = expectElementKind(
-          await app.getById('sftp_window'),
+          await app.getById('file_transfer_window'),
           'window'
         );
         await window.moveTo(16, 16);
@@ -530,17 +804,21 @@ describe('SFTP window', () => {
       async ({ app, evidence, localDirectory }) => {
         expect(await app.getWindowCount()).toBe(1);
         const window = expectElementKind(
-          await app.getById('sftp_window'),
+          await app.getById('file_transfer_window'),
           'window'
         );
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
-        const remoteTree = expectTable(await app.getById('sftp_remote_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
         const localPath = expectElementKind(
-          await app.getById('sftp_local_path_entry'),
+          await app.getById('file_transfer_local_path_entry'),
           'entry'
         );
         const remotePath = expectElementKind(
-          await app.getById('sftp_remote_path_entry'),
+          await app.getById('file_transfer_remote_path_entry'),
           'entry'
         );
 
@@ -555,6 +833,16 @@ describe('SFTP window', () => {
           0
         );
 
+        const remotePathBounds = (await remotePath.capture()).bounds;
+        await app.input.moveMouseTo(
+          Math.trunc(remotePathBounds.x + remotePathBounds.width / 2),
+          Math.trunc(remotePathBounds.y + remotePathBounds.height / 2)
+        );
+        await app.input.setMouseButton('left', true);
+        await app.input.setMouseButton('left', false);
+        await waitForResult(async () => {
+          expect((await remotePath.info()).states).toContain('focused');
+        });
         await remotePath.setText('/remote/archive');
         await app.input.pressKey('Return');
         await waitForResult(async () => {
@@ -564,7 +852,7 @@ describe('SFTP window', () => {
           );
         });
         await expectElementKind(
-          await app.getById('sftp_remote_up_button'),
+          await app.getById('file_transfer_remote_up_button'),
           'button'
         ).click();
         await waitForResult(async () => {
@@ -582,7 +870,9 @@ describe('SFTP window', () => {
 
   it('pads content groups and controls outside the tree lists', async (context) => {
     await runSftpFixture(context, false, [], undefined, async ({ app }) => {
-      const localTree = expectTable(await app.getById('sftp_local_tree'));
+      const localTree = expectTable(
+        await app.getById('file_transfer_local_tree')
+      );
       await findRow(localTree, 'documents');
       const [
         paned,
@@ -596,15 +886,15 @@ describe('SFTP window', () => {
         statusLabel,
       ] = await Promise.all(
         [
-          'sftp_root_paned',
-          'sftp_local_group',
-          'sftp_remote_group',
-          'sftp_local_path_entry',
-          'sftp_local_up_button',
-          'sftp_local_refresh_button',
-          'sftp_local_tree',
-          'sftp_status_bar',
-          'sftp_status_label',
+          'file_transfer_root_paned',
+          'file_transfer_local_group',
+          'file_transfer_remote_group',
+          'file_transfer_local_path_entry',
+          'file_transfer_local_up_button',
+          'file_transfer_local_refresh_button',
+          'file_transfer_local_tree',
+          'file_transfer_status_bar',
+          'file_transfer_status_label',
         ].map(async (id) => (await app.getById(id)).capture())
       );
 
@@ -670,7 +960,9 @@ describe('SFTP window', () => {
           'inside\n'
         );
 
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         const documentsRow = await findRow(localTree, 'documents');
         const initialRowCount = await localTree.getRowCount();
         await clickTreeExpander(app, localTree, documentsRow);
@@ -689,6 +981,59 @@ describe('SFTP window', () => {
     );
   });
 
+  it('keeps remote metadata columns visible after opening a directory', async (context) => {
+    await runSftpFixture(context, false, [], undefined, async ({ app }) => {
+      const remoteTree = expectTable(
+        await app.getById('file_transfer_remote_tree')
+      );
+      const archiveRow = await findRow(remoteTree, 'archive');
+      const archiveCell = await remoteTree.cellAt(archiveRow, 0);
+      const archiveCapture = await archiveCell?.capture();
+      if (archiveCapture === undefined) {
+        throw new Error('SFTP remote directory did not expose bounds');
+      }
+      await app.input.moveMouseTo(
+        Math.round(archiveCapture.bounds.x + archiveCapture.bounds.width / 2),
+        Math.round(archiveCapture.bounds.y + archiveCapture.bounds.height / 2)
+      );
+      await app.input.setMouseButton('left', true);
+      await app.input.setMouseButton('left', false);
+      await app.input.setMouseButton('left', true);
+      await app.input.setMouseButton('left', false);
+      const remotePath = expectElementKind(
+        await app.getById('file_transfer_remote_path_entry'),
+        'entry'
+      );
+      await waitForResult(async () => {
+        expect(await remotePath.text()).toBe('/remote/archive');
+      });
+      const longFileRow = await findRow(
+        remoteTree,
+        'long-remote-filename-that-keeps-extending-until-the-name-column-needs-more-space-than-the-file-transfer-pane-allows.log'
+      );
+
+      expect(await remoteTree.getColumnCount()).toBe(3);
+      const sizeCell = await remoteTree.cellAt(longFileRow, 1);
+      const modifiedCell = await remoteTree.cellAt(longFileRow, 2);
+      if (sizeCell === undefined || modifiedCell === undefined) {
+        throw new Error('SFTP remote metadata cells were not exposed');
+      }
+      expect((await sizeCell.info()).name).toBe('17 bytes');
+      expect((await modifiedCell.info()).name).toMatch(
+        /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/
+      );
+
+      const treeCapture = await remoteTree.capture();
+      const sizeCapture = await sizeCell.capture();
+      const modifiedCapture = await modifiedCell.capture();
+      expect(sizeCapture.bounds.width).toBeGreaterThanOrEqual(40);
+      expect(modifiedCapture.bounds.width).toBeGreaterThanOrEqual(96);
+      expect(
+        modifiedCapture.bounds.x + modifiedCapture.bounds.width
+      ).toBeLessThanOrEqual(treeCapture.bounds.x + treeCapture.bounds.width);
+    });
+  });
+
   it('opens and closes a directory from the enlarged expander target', async (context) => {
     await runSftpFixture(
       context,
@@ -702,7 +1047,9 @@ describe('SFTP window', () => {
           recursive: true,
         });
 
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         const documentsRow = await findRow(localTree, 'documents');
         const initialRowCount = await localTree.getRowCount();
 
@@ -758,7 +1105,9 @@ describe('SFTP window', () => {
         '\n'
       ),
       async ({ app, localDirectory }) => {
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         await findRow(localTree, 'documents');
         await Promise.all([
           ...Array.from({ length: 10 }, (_, index) =>
@@ -777,7 +1126,7 @@ describe('SFTP window', () => {
           ),
         ]);
         await expectElementKind(
-          await app.getById('sftp_local_refresh_button'),
+          await app.getById('file_transfer_local_refresh_button'),
           'button'
         ).click();
         await waitForResult(async () => {
@@ -887,9 +1236,11 @@ describe('SFTP window', () => {
           })
         );
 
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         await expectElementKind(
-          await app.getById('sftp_local_refresh_button'),
+          await app.getById('file_transfer_local_refresh_button'),
           'button'
         ).click();
         await waitForResult(async () => {
@@ -943,9 +1294,11 @@ describe('SFTP window', () => {
         '',
       ].join('\n'),
       async ({ app, evidence, localDirectory }) => {
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         const verticalScrollbar = expectElementKind(
-          await app.getById('sftp_local_vertical_scrollbar'),
+          await app.getById('file_transfer_local_vertical_scrollbar'),
           'scrollbar'
         );
         await findRow(localTree, 'hello.txt');
@@ -967,7 +1320,7 @@ describe('SFTP window', () => {
           ),
         ]);
         await expectElementKind(
-          await app.getById('sftp_local_refresh_button'),
+          await app.getById('file_transfer_local_refresh_button'),
           'button'
         ).click();
         await waitForResult(async () => {
@@ -1068,15 +1421,19 @@ describe('SFTP window', () => {
       [],
       undefined,
       async ({ app, localDirectory }) => {
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
-        const remoteTree = expectTable(await app.getById('sftp_remote_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
         await openContextMenu(
           app,
           localTree,
           await findRow(localTree, 'hello.txt')
         );
         const send = expectElementKind(
-          await app.getById('sftp_send_item'),
+          await app.getById('file_transfer_send_item'),
           'menuItem'
         );
         await expectShowing(send);
@@ -1084,7 +1441,7 @@ describe('SFTP window', () => {
         await waitForResult(async () => {
           expect(
             await expectElementKind(
-              await app.getById('sftp_status_label'),
+              await app.getById('file_transfer_status_label'),
               'label'
             ).text()
           ).toBe('Sent 1 item');
@@ -1099,7 +1456,7 @@ describe('SFTP window', () => {
           await findRow(remoteTree, 'readme.txt')
         );
         const receive = expectElementKind(
-          await app.getById('sftp_receive_item'),
+          await app.getById('file_transfer_receive_item'),
           'menuItem'
         );
         await expectShowing(receive);
@@ -1107,7 +1464,7 @@ describe('SFTP window', () => {
         await waitForResult(async () => {
           expect(
             await expectElementKind(
-              await app.getById('sftp_status_label'),
+              await app.getById('file_transfer_status_label'),
               'label'
             ).text()
           ).toBe('Received 1 item');
@@ -1115,6 +1472,526 @@ describe('SFTP window', () => {
             await readFile(join(localDirectory, 'readme.txt'), 'utf8')
           ).toBe('hello from remote\n');
         });
+      }
+    );
+  });
+
+  it('shows local and remote file hashes from the pane context menus', async (context) => {
+    await runSftpFixture(context, false, [], undefined, async ({ app }) => {
+      const localTree = expectTable(
+        await app.getById('file_transfer_local_tree')
+      );
+      const remoteTree = expectTable(
+        await app.getById('file_transfer_remote_tree')
+      );
+      await openContextMenu(
+        app,
+        localTree,
+        await findRow(localTree, 'hello.txt')
+      );
+      await expectElementKind(
+        await app.getById('file_transfer_local_hash_item'),
+        'menuItem'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_title_label'),
+            'label'
+          ).text()
+        ).toBe('File hash values');
+      });
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_message_label'),
+          'label'
+        ).text()
+      ).toBe('hello.txt');
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_monospace_message_label'),
+          'label'
+        ).text()
+      ).toBe(
+        [
+          'MD5: 7670ba85103f6872fca913c4b8b7f34d',
+          'SHA1: 62ad614351bea67cc944128bf51c398b51d172a2',
+          'SHA256: 8c669207eccffd4b0d14436f7ae3beaef38cc0606b2fe72afde93b1759567668',
+        ].join('\n')
+      );
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+      await expectHidden(await app.getById('file_transfer_prompt_panel'));
+
+      await openContextMenu(
+        app,
+        remoteTree,
+        await findRow(remoteTree, 'readme.txt')
+      );
+      await expectElementKind(
+        await app.getById('file_transfer_remote_hash_item'),
+        'menuItem'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_title_label'),
+            'label'
+          ).text()
+        ).toBe('File hash values');
+      });
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_message_label'),
+          'label'
+        ).text()
+      ).toBe('readme.txt');
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_monospace_message_label'),
+          'label'
+        ).text()
+      ).toBe(
+        [
+          'MD5: f840a57e7c2e27409f9a22366c97aa38',
+          'SHA1: 4e9891113f487a51fda4942050b67e650e6db5eb',
+          'SHA256: d79bda8bec3b76fa69692436f1d8ce37a168df014f925dd1fc18c58a550d05a9',
+        ].join('\n')
+      );
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_status_label'),
+            'label'
+          ).text()
+        ).toBe('Hash calculation complete');
+      });
+    });
+  });
+
+  it('animates and cancels a long-running remote hash calculation', async (context) => {
+    await runSftpFixture(context, true, [], undefined, async ({ app }) => {
+      const remoteTree = expectTable(
+        await app.getById('file_transfer_remote_tree')
+      );
+      await openContextMenu(
+        app,
+        remoteTree,
+        await findRow(remoteTree, 'readme.txt')
+      );
+      await expectElementKind(
+        await app.getById('file_transfer_remote_hash_item'),
+        'menuItem'
+      ).click();
+
+      await expectShowing(await app.getById('file_transfer_overlay'));
+      await expectShowing(await app.getById('file_transfer_dim_overlay'));
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_label'),
+          'label'
+        ).text()
+      ).toBe('Calculating hash values…');
+      const progress = expectElementKind(
+        await app.getById('file_transfer_progress'),
+        'progressBar'
+      );
+      const initialProgressImage = (await progress.capture()).image;
+      await waitForResult(async () => {
+        expect(
+          (await progress.capture()).image.equals(initialProgressImage)
+        ).toBe(false);
+      });
+
+      await expectElementKind(
+        await app.getById('file_transfer_cancel_button'),
+        'button'
+      ).click();
+      await expectHidden(await app.getById('file_transfer_overlay'));
+      await expectHidden(await app.getById('file_transfer_dim_overlay'));
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_status_label'),
+            'label'
+          ).text()
+        ).toBe('Hash calculation cancelled');
+      });
+    });
+  });
+
+  it('renames local and remote files and directories from the pane context menus', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      undefined,
+      async ({ app, localDirectory }) => {
+        await writeFile(
+          join(localDirectory, 'documents', 'inside.txt'),
+          'inside local directory\n'
+        );
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
+        const prompt = await app.getById('file_transfer_prompt_panel');
+        const promptEntry = expectElementKind(
+          await app.getById('file_transfer_prompt_entry'),
+          'entry'
+        );
+        const promptAccept = expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        );
+
+        await openContextMenu(
+          app,
+          localTree,
+          await findRow(localTree, 'hello.txt')
+        );
+        const localRename = expectElementKind(
+          await app.getById('file_transfer_local_rename_item'),
+          'menuItem'
+        );
+        await expectShowing(localRename);
+        expect((await localRename.info()).name).toBe('Rename');
+        await localRename.click();
+        await expectShowing(prompt);
+        expect(await promptEntry.text()).toBe('hello.txt');
+        await promptEntry.setText('greeting.txt');
+        await promptAccept.click();
+        await waitForResult(async () => {
+          expect(
+            await findRow(localTree, 'greeting.txt')
+          ).toBeGreaterThanOrEqual(0);
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Renamed "hello.txt" to "greeting.txt"');
+        });
+        expect(
+          await readFile(join(localDirectory, 'greeting.txt'), 'utf8')
+        ).toBe('hello from local\n');
+        await expect(
+          access(join(localDirectory, 'hello.txt'))
+        ).rejects.toThrow();
+
+        await openContextMenu(
+          app,
+          localTree,
+          await findRow(localTree, 'documents')
+        );
+        await localRename.click();
+        expect(await promptEntry.text()).toBe('documents');
+        await promptEntry.setText('notes');
+        await promptAccept.click();
+        await waitForResult(async () => {
+          expect(await findRow(localTree, 'notes')).toBeGreaterThanOrEqual(0);
+        });
+        expect(
+          await readFile(join(localDirectory, 'notes', 'inside.txt'), 'utf8')
+        ).toBe('inside local directory\n');
+        await expect(
+          access(join(localDirectory, 'documents'))
+        ).rejects.toThrow();
+
+        await openContextMenu(
+          app,
+          remoteTree,
+          await findRow(remoteTree, 'readme.txt')
+        );
+        const remoteRename = expectElementKind(
+          await app.getById('file_transfer_remote_rename_item'),
+          'menuItem'
+        );
+        await remoteRename.click();
+        expect(await promptEntry.text()).toBe('readme.txt');
+        await promptEntry.setText('guide.txt');
+        await promptAccept.click();
+        await waitForResult(async () => {
+          expect(await findRow(remoteTree, 'guide.txt')).toBeGreaterThanOrEqual(
+            0
+          );
+        });
+
+        await openContextMenu(
+          app,
+          remoteTree,
+          await findRow(remoteTree, 'archive')
+        );
+        await remoteRename.click();
+        expect(await promptEntry.text()).toBe('archive');
+        await promptEntry.setText('history');
+        await promptAccept.click();
+        await waitForResult(async () => {
+          expect(await findRow(remoteTree, 'history')).toBeGreaterThanOrEqual(
+            0
+          );
+        });
+
+        const remotePath = expectElementKind(
+          await app.getById('file_transfer_remote_path_entry'),
+          'entry'
+        );
+        const remotePathBounds = (await remotePath.capture()).bounds;
+        await app.input.moveMouseTo(
+          Math.trunc(remotePathBounds.x + remotePathBounds.width / 2),
+          Math.trunc(remotePathBounds.y + remotePathBounds.height / 2)
+        );
+        await app.input.setMouseButton('left', true);
+        await app.input.setMouseButton('left', false);
+        await waitForResult(async () => {
+          expect((await remotePath.info()).states).toContain('focused');
+        });
+        await remotePath.setText('/remote/history');
+        await app.input.pressKey('Return');
+        await waitForResult(async () => {
+          expect(await remotePath.text()).toBe('/remote/history');
+          expect(await findRow(remoteTree, 'old.log')).toBeGreaterThanOrEqual(
+            0
+          );
+        });
+      }
+    );
+  });
+
+  it('deletes selected local and remote trees without following symbolic links', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      undefined,
+      async ({ app, localDirectory }) => {
+        await mkdir(join(localDirectory, 'delete-tree'));
+        await writeFile(
+          join(localDirectory, 'delete-tree', 'child.txt'),
+          'delete child\n'
+        );
+        await writeFile(
+          join(localDirectory, 'keep-target.txt'),
+          'keep target\n'
+        );
+        await writeFile(join(localDirectory, 'cancel-delete.txt'), 'keep me\n');
+        await symlink('keep-target.txt', join(localDirectory, 'delete-link'));
+
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
+        await expectElementKind(
+          await app.getById('file_transfer_local_refresh_button'),
+          'button'
+        ).click();
+        const cancelDeleteRow = await findRow(localTree, 'cancel-delete.txt');
+        await findRow(localTree, 'delete-tree');
+        await findRow(localTree, 'delete-link');
+
+        await openContextMenu(app, localTree, cancelDeleteRow);
+        const localDelete = expectElementKind(
+          await app.getById('file_transfer_local_delete_item'),
+          'menuItem'
+        );
+        await expectShowing(localDelete);
+        expect((await localDelete.info()).name).toBe('Delete');
+        await localDelete.click();
+        const prompt = await app.getById('file_transfer_prompt_panel');
+        await expectShowing(prompt);
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_title_label'),
+            'label'
+          ).text()
+        ).toBe('Delete selected item?');
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_message_label'),
+            'label'
+          ).text()
+        ).toContain('cancel-delete.txt');
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_cancel_button'),
+          'button'
+        ).click();
+        await expectHidden(prompt);
+        await access(join(localDirectory, 'cancel-delete.txt'));
+
+        for (const row of await localTree.selectedRows()) {
+          await localTree.deselectRow(row);
+        }
+        const deleteTreeRow = await findRow(localTree, 'delete-tree');
+        const deleteLinkRow = await findRow(localTree, 'delete-link');
+        await localTree.selectRow(deleteTreeRow);
+        await localTree.selectRow(deleteLinkRow);
+        expect(await localTree.selectedRows()).toHaveLength(2);
+        await openContextMenu(app, localTree, deleteTreeRow);
+        await localDelete.click();
+        const localMessage = await expectElementKind(
+          await app.getById('file_transfer_prompt_message_label'),
+          'label'
+        ).text();
+        expect(localMessage).toContain('delete-tree');
+        expect(localMessage).toContain('delete-link');
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Deleted 2 items');
+          const rows = await localTree.getRowCount();
+          for (let row = 0; row < rows; row += 1) {
+            const name = (await (await localTree.cellAt(row, 0))?.info())?.name;
+            expect(name).not.toBe('delete-tree');
+            expect(name).not.toBe('delete-link');
+          }
+        });
+        await expect(
+          access(join(localDirectory, 'delete-tree'))
+        ).rejects.toThrow();
+        await expect(
+          access(join(localDirectory, 'delete-link'))
+        ).rejects.toThrow();
+        expect(
+          await readFile(join(localDirectory, 'keep-target.txt'), 'utf8')
+        ).toBe('keep target\n');
+
+        const archiveRow = await findRow(remoteTree, 'archive');
+        await clickTreeExpander(app, remoteTree, archiveRow);
+        const oldLogRow = await findRow(remoteTree, 'old.log');
+        const latestRow = await findRow(remoteTree, 'latest');
+        for (const row of await remoteTree.selectedRows()) {
+          await remoteTree.deselectRow(row);
+        }
+        await remoteTree.selectRow(archiveRow);
+        await remoteTree.selectRow(oldLogRow);
+        await remoteTree.selectRow(latestRow);
+        expect(await remoteTree.selectedRows()).toHaveLength(3);
+        await openContextMenu(app, remoteTree, archiveRow);
+        const remoteDelete = expectElementKind(
+          await app.getById('file_transfer_remote_delete_item'),
+          'menuItem'
+        );
+        await remoteDelete.click();
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_title_label'),
+            'label'
+          ).text()
+        ).toBe('Delete selected items?');
+        const remoteMessage = await expectElementKind(
+          await app.getById('file_transfer_prompt_message_label'),
+          'label'
+        ).text();
+        expect(remoteMessage).toContain('archive');
+        expect(remoteMessage).toContain('latest');
+        expect(remoteMessage).not.toContain('old.log');
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Deleted 2 items');
+          const names: string[] = [];
+          const rows = await remoteTree.getRowCount();
+          for (let row = 0; row < rows; row += 1) {
+            const name = (await (await remoteTree.cellAt(row, 0))?.info())
+              ?.name;
+            if (name !== undefined) {
+              names.push(name);
+            }
+          }
+          expect(names).not.toContain('archive');
+          expect(names).not.toContain('latest');
+          expect(names).toContain('readme.txt');
+        });
+      }
+    );
+  });
+
+  it('keeps transfer failure recovery inside the file transfer window', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      undefined,
+      async ({ app, localDirectory }) => {
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
+        await chmod(localDirectory, 0o555);
+        try {
+          await openContextMenu(
+            app,
+            remoteTree,
+            await findRow(remoteTree, 'readme.txt')
+          );
+          await expectElementKind(
+            await app.getById('file_transfer_receive_item'),
+            'menuItem'
+          ).click();
+
+          const promptPanel = await app.getById('file_transfer_prompt_panel');
+          await expectShowing(promptPanel);
+          expect(await app.getWindowCount()).toBe(1);
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_prompt_title_label'),
+              'label'
+            ).text()
+          ).toBe('File transfer failed');
+          for (const [widgetId, label] of [
+            ['file_transfer_prompt_cancel_button', 'Abort'],
+            ['file_transfer_prompt_alternative_button', 'Skip'],
+            ['file_transfer_prompt_accept_button', 'Retry'],
+          ] as const) {
+            const button = expectElementKind(
+              await app.getById(widgetId),
+              'button'
+            );
+            await expectShowing(button);
+            expect((await button.info()).name).toBe(label);
+          }
+
+          await expectElementKind(
+            await app.getById('file_transfer_cancel_button'),
+            'button'
+          ).click();
+          await expectHidden(promptPanel);
+          await expectHidden(await app.getById('file_transfer_overlay'));
+          await waitForResult(async () => {
+            expect(
+              await expectElementKind(
+                await app.getById('file_transfer_status_label'),
+                'label'
+              ).text()
+            ).toBe('Transfer cancelled');
+          });
+          expect(await app.getWindowCount()).toBe(1);
+        } finally {
+          await chmod(localDirectory, 0o755);
+        }
       }
     );
   });
@@ -1128,14 +2005,16 @@ describe('SFTP window', () => {
       async ({ app, evidence }) => {
         const background = [0x18, 0x3c, 0x58] as const;
         const componentBackground = [0x1b, 0x45, 0x65] as const;
-        const localTree = expectTable(await app.getById('sftp_local_tree'));
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
         await openContextMenu(
           app,
           localTree,
           await findRow(localTree, 'hello.txt')
         );
         const sendItem = expectElementKind(
-          await app.getById('sftp_send_item'),
+          await app.getById('file_transfer_send_item'),
           'menuItem'
         );
         expect(capturePixel(await sendItem.capture(), 0.8, 0.5)).toEqual(
@@ -1143,12 +2022,12 @@ describe('SFTP window', () => {
         );
         await sendItem.click();
 
-        const overlay = await app.getById('sftp_transfer_overlay');
-        const dim = await app.getById('sftp_dim_overlay');
+        const overlay = await app.getById('file_transfer_overlay');
+        const dim = await app.getById('file_transfer_dim_overlay');
         await expectShowing(overlay);
         await expectShowing(dim);
         for (const [widgetId, horizontalRatio] of [
-          ['sftp_transfer_overlay', 0.05],
+          ['file_transfer_overlay', 0.05],
         ] as const) {
           expect(
             capturePixel(
@@ -1159,8 +2038,8 @@ describe('SFTP window', () => {
           ).toEqual(background);
         }
         for (const [widgetId, horizontalRatio] of [
-          ['sftp_transfer_progress', 0.05],
-          ['sftp_transfer_cancel_button', 0.15],
+          ['file_transfer_progress', 0.05],
+          ['file_transfer_cancel_button', 0.15],
         ] as const) {
           expect(
             capturePixel(
@@ -1186,7 +2065,7 @@ describe('SFTP window', () => {
         );
         expect((await localTree.info()).states).not.toContain('sensitive');
         await expectElementKind(
-          await app.getById('sftp_transfer_cancel_button'),
+          await app.getById('file_transfer_cancel_button'),
           'button'
         ).click();
 
@@ -1196,7 +2075,7 @@ describe('SFTP window', () => {
           expect((await localTree.info()).states).toContain('sensitive');
           expect(
             await expectElementKind(
-              await app.getById('sftp_status_label'),
+              await app.getById('file_transfer_status_label'),
               'label'
             ).text()
           ).toBe('Transfer cancelled');

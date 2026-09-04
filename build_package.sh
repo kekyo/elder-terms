@@ -7,7 +7,7 @@ PROJECT_ROOT=$(CDPATH= cd -- "$PROJECT_ROOT" && pwd)
 ARTIFACT_ROOT="$PROJECT_ROOT/artifacts"
 DEB_ARTIFACT_ROOT="$ARTIFACT_ROOT/deb"
 PACKAGE_NAME=elder-terms
-PACKAGE_DESCRIPTION="GTK terminal for serial, TELNET, local shell, SSH, and SFTP connections."
+PACKAGE_DESCRIPTION="GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP connections."
 DEFAULT_MAINTAINER="elder-terms packager <packager@localhost>"
 DEFAULT_PARALLEL_JOB_CAP=14
 
@@ -390,7 +390,7 @@ validate_deb_package() {
 		fail "Unexpected Version field in $package_path"
 	depends_value=$(dpkg-deb -f "$package_path" Depends)
 	[ -n "$depends_value" ] || fail "Missing Depends field in $package_path"
-	for required_dependency in dbus-user-session hicolor-icon-theme; do
+	for required_dependency in dbus-user-session hicolor-icon-theme openssh-client xdg-utils; do
 		assert_deb_dependency "$depends_value" "$required_dependency"
 	done
 
@@ -400,7 +400,7 @@ validate_deb_package() {
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/launcher/main-window.ui \
 		usr/lib/elder-terms/elder-terms-vte/elder-terms-vte \
-		usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp \
+		usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer \
 		usr/lib/elder-terms/elder-terms-vte/main-window.ui \
 		usr/lib/elder-terms/elder-terms-vte/green-on.png \
 		usr/lib/elder-terms/elder-terms-vte/green-off.png \
@@ -418,14 +418,14 @@ validate_deb_package() {
 		'../lib/elder-terms/launcher/elder-terms'
 	assert_symlink "$tmp_dir/usr/bin/elder-terms-vte" \
 		'../lib/elder-terms/elder-terms-vte/elder-terms-vte'
-	assert_symlink "$tmp_dir/usr/bin/elder-terms-sftp" \
-		'../lib/elder-terms/elder-terms-vte/elder-terms-sftp'
+	assert_symlink "$tmp_dir/usr/bin/elder-terms-file-transfer" \
+		'../lib/elder-terms/elder-terms-vte/elder-terms-file-transfer'
 
 	for elf_path in \
 		usr/lib/elder-terms/libelder-terms.so \
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/elder-terms-vte/elder-terms-vte \
-		usr/lib/elder-terms/elder-terms-vte/elder-terms-sftp; do
+		usr/lib/elder-terms/elder-terms-vte/elder-terms-file-transfer; do
 		elf_name=$(printf '%s' "$elf_path" | tr '/' '-')
 		assert_elf_architecture \
 			"$tmp_dir/$elf_path" "$expected_arch" "$tmp_dir/readelf-$elf_name.txt"

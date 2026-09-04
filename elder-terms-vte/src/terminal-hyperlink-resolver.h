@@ -9,7 +9,7 @@
 namespace elder_terms {
 
 /**
- * External command resolved from one OSC 8 hyperlink target.
+ * External command resolved from one terminal link candidate.
  */
 struct TerminalHyperlinkAction {
   /** Fixed executable name or path from the matching rule. */
@@ -19,12 +19,35 @@ struct TerminalHyperlinkAction {
 };
 
 /**
- * Opaque compiled OSC 8 hyperlink action resolver.
+ * Candidate values found at one terminal pointer position.
+ */
+struct TerminalHyperlinkCandidates {
+  /** Complete OSC 8 target at the pointer, when present. */
+  std::optional<std::string> osc8_target;
+  /**
+   * Visible substrings matched by VTE, in terminal-text rule order. An empty
+   * element means the corresponding rule did not match at the pointer.
+   */
+  std::vector<std::optional<std::string>> terminal_text;
+};
+
+/**
+ * Result of evaluating terminal link candidates against ordered rules.
+ */
+struct TerminalHyperlinkResolution {
+  /** Safe expanded action, or no value when validation rejected the match. */
+  std::optional<TerminalHyperlinkAction> action;
+  /** Human-readable rejection reason when action has no value. */
+  std::string error;
+};
+
+/**
+ * Opaque compiled terminal link action resolver.
  */
 struct TerminalHyperlinkResolverState;
 
 /**
- * Creates a resolver for ordered OSC 8 hyperlink rules.
+ * Creates a resolver for ordered terminal link rules.
  *
  * @param rules Ordered rules, with the first rule having highest priority.
  * @returns New resolver state owned by the caller.
@@ -33,15 +56,16 @@ TerminalHyperlinkResolverState *create_terminal_hyperlink_resolver(
     std::vector<HyperlinkActionRule> rules);
 
 /**
- * Resolves a complete OSC 8 target into an external command.
+ * Resolves OSC 8 and visible-text candidates into an external command.
  *
  * @param state Resolver created by create_terminal_hyperlink_resolver.
- * @param target Raw UTF-8 target returned by VTE.
- * @returns First fully matching action, or no value when none is safe.
+ * @param candidates Candidate values returned by the terminal adapter.
+ * @returns First fully matching and validated result, an error result when all
+ * matching rules are rejected, or no value when no rule matches.
  */
-std::optional<TerminalHyperlinkAction>
+std::optional<TerminalHyperlinkResolution>
 resolve_terminal_hyperlink(TerminalHyperlinkResolverState *state,
-                           const std::string &target);
+                           const TerminalHyperlinkCandidates &candidates);
 
 /**
  * Releases a terminal hyperlink resolver.

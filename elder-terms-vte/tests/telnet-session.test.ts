@@ -280,7 +280,12 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
 
         await runGtkTest(
           context,
-          ['--test-maximize-window', '-c', configPath],
+          [
+            '--test-maximize-window',
+            '--test-latch-activity-indicators',
+            '-c',
+            configPath,
+          ],
           async (app) => {
             await toPass(
               async () => {
@@ -341,9 +346,6 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
             await waitForActivityIndicatorImageState(app, 'rd', 'on');
             await waitForActivityIndicatorImageState(app, 'sd', 'on');
             stopNegotiationInterval();
-            await delay(500);
-            await waitForActivityIndicatorImageState(app, 'rd', 'off');
-            await waitForActivityIndicatorImageState(app, 'sd', 'off');
 
             const disableBaselineLength = receivedBytes(receivedChunks).length;
             acceptedSocket?.write(

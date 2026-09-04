@@ -24,6 +24,8 @@ enum class ConnectionKind {
   serial,
   /** Browses and transfers files over SFTP without a terminal. */
   sftp,
+  /** Browses and transfers files over unencrypted FTP without a terminal. */
+  ftp,
 };
 
 /**
@@ -168,6 +170,15 @@ general_settings_select_ssh_connection(const SettingsStore &store);
  */
 ELDER_TERMS_API bool
 general_settings_select_sftp_connection(const SettingsStore &store);
+
+/**
+ * Checks whether the loaded general settings select the FTP backend.
+ *
+ * @param store Source settings store.
+ * @returns True when [general] type is ftp.
+ */
+ELDER_TERMS_API bool
+general_settings_select_ftp_connection(const SettingsStore &store);
 
 /**
  * Checks whether the loaded general settings select the serial backend.

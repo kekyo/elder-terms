@@ -115,6 +115,7 @@ interface TransferConnection {
   readonly gtkTestOptions: RunGtkTestOptions | undefined;
   readonly launchArguments: readonly string[];
   readonly port: number;
+  readonly username: string | undefined;
   readonly writeConfig: (
     path: string,
     transferBasePath: string,
@@ -650,6 +651,7 @@ const startSocatGnuTelnetd = async (
     gtkTestOptions: undefined,
     launchArguments: [],
     port,
+    username: undefined,
     writeConfig: async (
       path,
       transferBasePath,
@@ -770,6 +772,7 @@ const startSocatOpenSshd = async (
     },
     launchArguments: [`--test-ssh-known-hosts-file=${isolatedKnownHostsPath}`],
     port,
+    username,
     writeConfig: async (
       path,
       transferBasePath,
@@ -1541,6 +1544,27 @@ const waitForTransferConnection = async (
   peerReadyPath: string | undefined
 ): Promise<void> => {
   try {
+    if (connection.username !== undefined) {
+      const promptPanel = await app.getById('ssh_prompt_panel');
+      await waitForResult(
+        async () => {
+          expect((await promptPanel.info()).states).toContain('showing');
+        },
+        {
+          message: 'SSH user name prompt should be visible',
+          timeoutMs: 5_000,
+        }
+      );
+      const usernameEntry = expectElementKind(
+        await app.getById('ssh_prompt_entry'),
+        'entry'
+      );
+      expect(await usernameEntry.text()).toBe(connection.username);
+      await expectElementKind(
+        await app.getById('ssh_prompt_accept_button'),
+        'button'
+      ).click();
+    }
     await waitForActivityIndicatorImageState(app, 'conn', 'on');
     if (peerReadyPath !== undefined) {
       await waitForFileExists(peerReadyPath, 10_000);
