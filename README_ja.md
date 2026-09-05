@@ -36,13 +36,9 @@
 
 ![Colored terminal](./images/colored-terminal.png)
 
-### SFTP
+### FTP/SFTP
 
-![SFTP window](./images/sftp.png)
-
-### FTP
-
-FTPはSFTPと同じ2ペインのファイル転送ウインドウを使用します。
+![FTP/SFTP window](./images/sftp.png)
 
 ## 機能
 
@@ -56,7 +52,7 @@ FTPはSFTPと同じ2ペインのファイル転送ウインドウを使用しま
 - TELNET/SSHで、ターミナル種別 (`xterm`や`xterm-256color`など) を明示的に指定できます。
 - TELNET、シリアル、SSHの各ターミナル接続で、X/Y/ZMODEMファイル送受信をサポートしています。
   ZMODEMなら、自動送受信を有効化出来ます。
-- SFTPで、SSH接続を行うホストとファイルの送受信を実行出来ます。
+- FTP/SFTPで、SSH接続を行うホストとファイルの送受信を実行出来ます。
 - PassiveまたはActiveのデータ接続を使用して、FTPでファイルを送受信出来ます。
 - テキストのペーストやテキストファイルの送信を実行出来ます。
   その際に、送信速度と改行コードの扱いを指定して、ホスト側のバッファオーバーフローや改行コードの不一致を回避出来ます。

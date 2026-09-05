@@ -16,8 +16,7 @@
 
 ## What Is This?
 
-elder-terms is a GTK terminal for serial, TELNET, local shell, SSH, SFTP, and
-FTP connections, inspired by personal computing in the 1990s.
+elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP connections, inspired by personal computing in the 1990s.
 
 ### Basic Terminal
 
@@ -39,13 +38,9 @@ FTP connections, inspired by personal computing in the 1990s.
 
 ![Colored terminal](./images/colored-terminal.png)
 
-### SFTP
+### FTP/SFTP
 
-![SFTP window](./images/sftp.png)
-
-### FTP
-
-FTP uses the same two-pane file-transfer window as SFTP.
+![FTP/SFTP window](./images/sftp.png)
 
 ## Features
 
