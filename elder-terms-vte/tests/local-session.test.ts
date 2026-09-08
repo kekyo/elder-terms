@@ -120,18 +120,6 @@ const createControlledExitShellFixture = async (
   };
 };
 
-const createOutputShellFixture = async (directory: string): Promise<string> => {
-  const shellPath = join(directory, 'output-shell.sh');
-  const output = 'LOCAL_OUTPUT_MARKER '.repeat(40);
-  await writeFile(
-    shellPath,
-    `#!/bin/sh\nprintf '%s\\n' ${shellQuote(output)}\nsleep 1\nexit 0\n`,
-    'utf8'
-  );
-  await chmod(shellPath, 0o755);
-  return shellPath;
-};
-
 const createRepeatingOutputShellFixture = async (
   directory: string
 ): Promise<TriggeredOutputShellFixture> => {
@@ -568,7 +556,7 @@ describe.concurrent('elder-terms-vte local session', () => {
 
   it('feeds local shell output into the VTE terminal', async (context) => {
     await withTemporaryDirectory(async (directory) => {
-      const shellPath = await createOutputShellFixture(directory);
+      const shell = await createControlledExitShellFixture(directory);
       const configPath = join(directory, 'auto-close-disabled.ini');
       await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
 
@@ -592,10 +580,13 @@ describe.concurrent('elder-terms-vte local session', () => {
             'local shell output',
             async () => capture
           );
+          // Keep the shell connected until output is observed; disconnection dims it.
+          await writeFile(shell.releasePath, 'exit\n', 'utf8');
+          await waitForShellExit(shell.markerPath);
         },
         {
           env: {
-            SHELL: shellPath,
+            SHELL: shell.shellPath,
           },
         }
       );
