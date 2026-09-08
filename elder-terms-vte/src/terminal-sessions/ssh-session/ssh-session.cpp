@@ -251,6 +251,7 @@ private:
         const std::size_t read_size = co_await connection->read_async(
             std::span<unsigned char>(buffer.data(), buffer.size()),
             stop_source.get_cancellation());
+        if (stopping) break;
         if (read_size == 0) {
           natural_end = true;
           break;
@@ -269,18 +270,22 @@ private:
     }
 
     const bool should_notify_ended = natural_end && !stopping;
-    stopping = true;
-    connected = false;
-    cancel_modem_transfer_noexcept();
-    cancel_text_send();
-    terminal_io.disconnect_user_input();
-    outgoing.clear();
+    stop();
+    if (should_notify_ended) {
+      notify_connection_phase(TerminalSessionConnectionPhase::disconnected);
+    }
+    // Writers and transfers borrow the channel. Cancel and join them before
+    // closing it, including when this loop reached a natural EOF.
+    if (write_task.has_value()) co_await *write_task;
+    if (transfer_task.has_value()) co_await *transfer_task;
+    if (text_send_task.has_value()) co_await *text_send_task;
+    if (resize_task.has_value()) co_await *resize_task;
+    if (break_task.has_value()) co_await *break_task;
     if (connection != nullptr) {
       connection->close();
       connection.reset();
     }
     if (should_notify_ended) {
-      notify_connection_phase(TerminalSessionConnectionPhase::disconnected);
       notify_ended();
     }
   }
@@ -624,9 +629,6 @@ public:
   }
 
   void stop() override {
-    if (stopping) {
-      return;
-    }
     stopping = true;
     connected = false;
     cancel_modem_transfer_noexcept();
@@ -634,6 +636,10 @@ public:
     terminal_io.disconnect_user_input();
     outgoing.clear();
     (void)stop_source.cancel();
+  }
+
+  cardio::promise<void> wait_stopped_async() override {
+    if (session_task.has_value()) co_await *session_task;
   }
 
   void resize(glong next_columns, glong next_rows) override {

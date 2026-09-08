@@ -1973,6 +1973,143 @@ const pauseTransferAtProgressForCapture = async (
 describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
   registerConnectionTest(
     connectionCases[1],
+    'sshd reconnects in the same window and exchanges new macro responses',
+    async (context) => {
+      await expectRequiredCommands();
+      await withTemporaryDirectory(async (directory) => {
+        const loginScriptPath = join(directory, 'reconnect-login.sh');
+        const configPath = join(directory, 'reconnect.ini');
+        const counterPath = join(directory, 'connection-count');
+        const releasePath = join(directory, 'release');
+        const replyPrefix = join(directory, 'reply-');
+        await createFifo(releasePath);
+        await writeFile(
+          loginScriptPath,
+          [
+            '#!/bin/sh',
+            'stty -echo',
+            'round=0',
+            `if [ -f ${shellQuote(counterPath)} ]; then round=$(cat ${shellQuote(counterPath)}); fi`,
+            'round=$((round + 1))',
+            `printf '%s' "$round" > ${shellQuote(counterPath)}`,
+            'printf "ROUND %s\\n" "$round"',
+            'IFS= read -r reply',
+            `printf '%s' "$reply" > ${shellQuote(replyPrefix)}"$round"`,
+            `IFS= read -r release < ${shellQuote(releasePath)}`,
+            'printf OLD-',
+            '',
+          ].join('\n'),
+          'utf8'
+        );
+        await chmod(loginScriptPath, 0o755);
+        const connection = await startSocatOpenSshd({ loginScriptPath });
+        try {
+          const authorizedKeysPath = join(directory, 'sshd', 'authorized_keys');
+          const authorizedKeys = await readFile(authorizedKeysPath);
+          await writeFile(authorizedKeysPath, '', 'utf8');
+          await connection.writeConfig(configPath, directory, false);
+          const config = await readFile(configPath, 'utf8');
+          await writeFile(
+            configPath,
+            config +
+              '\n[macro.reply]\nregex=^ROUND (?<round>[0-9]+)$\nsend=ACK ${round}\\n\n',
+            'utf8'
+          );
+          await runGtkTest(
+            context,
+            ['-c', configPath, ...connection.launchArguments],
+            async (app, evidence) => {
+              const windowId = (
+                await expectElementKind(
+                  await app.windowAt(0),
+                  'window'
+                ).x11Info()
+              ).windowId;
+              await waitForResult(async () => {
+                expect(
+                  (await (await app.getById('ssh_prompt_panel')).info()).states
+                ).toContain('showing');
+              });
+              await expectElementKind(
+                await app.getById('ssh_prompt_accept_button'),
+                'button'
+              ).click();
+              const retryAuthentication = expectElementKind(
+                await app.getById('reconnect_button'),
+                'button'
+              );
+              await waitForResult(async () => {
+                expect((await retryAuthentication.info()).states).toContain(
+                  'sensitive'
+                );
+                expect(
+                  await expectElementKind(
+                    await app.getById('disconnected_notice_label'),
+                    'label'
+                  ).text()
+                ).toBe(
+                  'SSH connection failed:\nSSH server did not accept an available authentication method'
+                );
+              });
+              // The peer now permits the same key; reconnect must perform a
+              // fresh authentication instead of reusing the failed transport.
+              await writeFile(authorizedKeysPath, authorizedKeys);
+              await retryAuthentication.click();
+              for (let round = 1; round <= 3; round += 1) {
+                await waitForTransferConnection(
+                  app,
+                  evidence,
+                  connection,
+                  undefined
+                );
+                await waitForResult(async () => {
+                  expect(await readFile(`${replyPrefix}${round}`, 'utf8')).toBe(
+                    `ACK ${round}`
+                  );
+                });
+                await waitForActivityIndicatorImageState(app, 'conn', 'on');
+                expect(
+                  (
+                    await expectElementKind(
+                      await app.windowAt(0),
+                      'window'
+                    ).x11Info()
+                  ).windowId
+                ).toBe(windowId);
+                expect(await readFile(counterPath, 'utf8')).toBe(String(round));
+                if (round === 3) break;
+                await writeFile(releasePath, 'close\n', 'utf8');
+                await waitForActivityIndicatorImageState(app, 'conn', 'off');
+                const reconnect = expectElementKind(
+                  await app.getById('reconnect_button'),
+                  'button'
+                );
+                await waitForResult(async () => {
+                  const info = await reconnect.info();
+                  expect(info.states).toContain('showing');
+                  expect(info.states).toContain('sensitive');
+                });
+                const { bounds } = await reconnect.capture();
+                await app.input.moveMouseTo(
+                  Math.trunc(bounds.x + bounds.width / 2),
+                  Math.trunc(bounds.y + bounds.height / 2)
+                );
+                await app.input.setMouseButton('left', true);
+                await app.input.setMouseButton('left', false);
+              }
+            },
+            connection.gtkTestOptions
+          );
+        } finally {
+          await connection.close();
+        }
+      });
+    },
+    90_000
+  );
+
+  registerConnectionTest(
+    connectionCases[1],
     'sshd receives xterm when an RGB background selects the built-in terminal type',
     async (context) => {
       await expectRequiredCommands();

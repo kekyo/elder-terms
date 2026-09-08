@@ -124,6 +124,8 @@ struct MainWindow {
   GtkWidget *disconnected_notice_background = nullptr;
   /** Label inside the inline disconnected notice. */
   GtkWidget *disconnected_notice_label = nullptr;
+  /** Reconnection control inside the disconnected notice. */
+  GtkWidget *reconnect_button = nullptr;
   /** Overlay container for transfer progress and cancellation controls. */
   GtkWidget *transfer_progress_overlay = nullptr;
   /** Inline transfer progress notice shown on the terminal surface. */
@@ -292,9 +294,19 @@ void set_main_window_connection_phase(MainWindow *main_window,
  *
  * @param main_window Main window containing the disconnected notice.
  * @param message Backend failure reason.
+ * @param kind Backend whose failure is being displayed.
  */
 void set_main_window_connection_failure(MainWindow *main_window,
-                                        const std::string &message);
+                                        const std::string &message,
+                                        TerminalConnectionKind kind);
+
+/**
+ * Updates the reconnect button and the overlay's native input handling.
+ * @param main_window Main window containing the disconnected notice.
+ * @param presentation Visibility and readiness derived from session state.
+ */
+void set_main_window_reconnect_presentation(
+    MainWindow *main_window, TerminalReconnectPresentation presentation);
 
 /**
  * Updates only the terminal interactive/read-only presentation.

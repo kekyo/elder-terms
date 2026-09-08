@@ -458,6 +458,7 @@ static bool main_window_has_required_widgets(const MainWindow &main_window) {
          main_window.disconnected_notice != nullptr &&
          main_window.disconnected_notice_background != nullptr &&
          main_window.disconnected_notice_label != nullptr &&
+         main_window.reconnect_button != nullptr &&
          main_window.transfer_progress_overlay != nullptr &&
          main_window.transfer_progress_notice != nullptr &&
          main_window.transfer_progress_notice_background != nullptr &&
@@ -1247,6 +1248,8 @@ std::optional<MainWindow> load_main_window() {
       required_widget(main_window.builder, "disconnected_notice_background");
   main_window.disconnected_notice_label =
       required_widget(main_window.builder, "disconnected_notice_label");
+  main_window.reconnect_button =
+      required_widget(main_window.builder, "reconnect_button");
   main_window.transfer_progress_overlay =
       required_widget(main_window.builder, "transfer_progress_overlay");
   main_window.transfer_progress_notice =
@@ -1488,19 +1491,35 @@ void set_main_window_connection_phase(MainWindow *main_window,
 }
 
 void set_main_window_connection_failure(MainWindow *main_window,
-                                        const std::string &message) {
+                                        const std::string &message,
+                                        TerminalConnectionKind kind) {
   if (main_window == nullptr ||
       main_window->disconnected_notice_label == nullptr) {
     return;
   }
 
-  const std::string text = message.empty()
-                               ? _("SSH connection failed")
-                               : format_translated_string(
-                                     _("SSH connection failed:\n%s"),
-                                     message.c_str());
+  const bool telnet = kind == TerminalConnectionKind::telnet;
+  const std::string text =
+      message.empty()
+          ? (telnet ? _("TELNET connection failed") : _("SSH connection failed"))
+          : format_translated_string(
+                telnet ? _("TELNET connection failed:\n%s")
+                       : _("SSH connection failed:\n%s"),
+                message.c_str());
   gtk_label_set_text(GTK_LABEL(main_window->disconnected_notice_label),
                      text.c_str());
+}
+
+void set_main_window_reconnect_presentation(
+    MainWindow *main_window, TerminalReconnectPresentation presentation) {
+  if (main_window == nullptr || main_window->reconnect_button == nullptr) {
+    return;
+  }
+  gtk_widget_set_visible(main_window->reconnect_button, presentation.visible);
+  gtk_widget_set_sensitive(main_window->reconnect_button, presentation.sensitive);
+  gtk_overlay_set_overlay_pass_through(GTK_OVERLAY(main_window->terminal_overlay),
+                                       main_window->disconnected_notice,
+                                       !presentation.visible);
 }
 
 void set_main_window_terminal_interactive(MainWindow *main_window,

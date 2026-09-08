@@ -12,6 +12,19 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
+#: elder-terms-vte/src/main-window.ui
+msgid "Reconnect"
+msgstr "重新连接"
+
+#: elder-terms-vte/src/main-window.cpp
+msgid "TELNET connection failed"
+msgstr "TELNET 连接失败"
+
+#: elder-terms-vte/src/main-window.cpp
+#, c-format
+msgid "TELNET connection failed:\n%s"
+msgstr "TELNET 连接失败:\n%s"
+
 #: shared/src/settings-widget/settings-presentation.cpp:25
 msgid "Connection name"
 msgstr "连接名称"

@@ -431,6 +431,7 @@ run_ssh_prompt_fixture_async(ApplicationState *state,
 
 static cardio::promise<void>
 stop_application_async(ApplicationState *state) {
+  co_await elder_terms::stop_terminal_session_async(state->session_state);
   co_await elder_terms::stop_terminal_log_async(state->log_state);
   state->terminal_shutdown_complete = true;
   maybe_shutdown_application(state);
@@ -487,11 +488,38 @@ static void start_shared_sftp_connection_check(
           state->sftp_cancel_source->get_cancellation()));
 }
 
+static void update_application_reconnect_presentation(ApplicationState *state) {
+  if (state == nullptr || state->window == nullptr) {
+    return;
+  }
+  const auto profile =
+      elder_terms::terminal_connection_profile(state->settings_store);
+  if (!profile.has_value()) {
+    return;
+  }
+  elder_terms::set_main_window_reconnect_presentation(
+      state->main_window,
+      elder_terms::terminal_reconnect_presentation(
+          profile->kind, state->auto_close, state->connection_phase,
+          elder_terms::terminal_session_can_reconnect(state->session_state),
+          false));
+}
+
+static void on_reconnect_clicked(GtkButton *, gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state == nullptr || state->window == nullptr || state->auto_close) {
+    return;
+  }
+  (void)elder_terms::reconnect_terminal_session(state->session_state);
+}
+
 static void update_application_terminal_presentation(
     ApplicationState *state) {
   if (state == nullptr) {
     return;
   }
+
+  update_application_reconnect_presentation(state);
 
   const bool terminal_interactive =
       state->connection_active && !state->transfer_active &&
@@ -551,6 +579,9 @@ static void set_application_connection_phase(
 
   if (phase == elder_terms::TerminalSessionConnectionPhase::connecting) {
     state->connection_failed = false;
+    elder_terms::replace_terminal_macro_runner_rules(
+        state->macro_runner, state->settings_store.macro_rules);
+    update_application_session_identity(state);
   }
   const elder_terms::TerminalConnectionPresentation presentation =
       elder_terms::terminal_connection_presentation(phase);
@@ -1771,9 +1802,16 @@ int main(int argc, char **argv) {
           },
       .failure =
           [&app_state](std::string message) {
-            app_state.connection_failed = true;
+            const auto profile =
+                elder_terms::terminal_connection_profile(app_state.settings_store);
+            const auto kind = profile.has_value()
+                                  ? profile->kind
+                                  : elder_terms::TerminalConnectionKind::ssh;
+            // Preserve the existing SSH-only exception to automatic closing.
+            app_state.connection_failed =
+                kind == elder_terms::TerminalConnectionKind::ssh;
             elder_terms::set_main_window_connection_failure(
-                app_state.main_window, message);
+                app_state.main_window, message, kind);
           },
       .output =
           [&app_state](std::span<const unsigned char> raw_bytes,
@@ -1794,6 +1832,9 @@ int main(int argc, char **argv) {
             return elder_terms::prompt_main_window_ssh_async(
                 app_state.main_window, prompt, std::move(cancellation));
           },
+      .reconnect_state_changed = [&app_state]() {
+        update_application_reconnect_presentation(&app_state);
+      },
     },
     {
       .ssh_known_hosts_file =
@@ -1901,6 +1942,8 @@ int main(int argc, char **argv) {
   g_signal_connect(
     main_window->window, "destroy",
     G_CALLBACK(on_main_window_destroy), &app_state);
+  g_signal_connect(main_window->reconnect_button, "clicked",
+                   G_CALLBACK(on_reconnect_clicked), &app_state);
   g_signal_connect_after(
     main_window->window, "focus-in-event",
     G_CALLBACK(on_main_window_focus_in), &app_state);

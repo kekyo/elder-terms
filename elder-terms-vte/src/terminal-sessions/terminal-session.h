@@ -39,6 +39,17 @@ public:
   virtual void stop() = 0;
 
   /**
+   * Waits for stopped network work to finish before backend destruction.
+   *
+   * @returns Completion of all operations borrowing this backend's resources.
+   * @remarks Call stop() first and keep the backend alive until completion.
+   * Non-network backends retain their existing synchronous stop behavior.
+   */
+  virtual cardio::promise<void> wait_stopped_async() {
+    co_return;
+  }
+
+  /**
    * Notifies the backend that the VTE grid size changed.
    *
    * @param columns Current VTE column count.

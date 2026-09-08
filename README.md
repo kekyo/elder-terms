@@ -265,6 +265,22 @@ An SFTP window opened from an already authenticated SSH terminal reuses that
 terminal's SSH connection, including its selected user name and authentication,
 and therefore does not ask for them again.
 
+## Reconnecting SSH and TELNET
+
+To keep a disconnected terminal open, turn off "Close window when session ends"
+in its Terminal settings (`[terminal] auto_close=false`). The disconnected
+overlay then offers a "Reconnect" button for SSH and TELNET. It becomes
+clickable after the previous connection's pending work has stopped.
+
+Reconnection uses the latest applied connection settings in the same window
+and preserves scrollback. SSH asks for authentication again through its usual
+panel. If an attempt fails, the overlay shows the new reason and allows another
+attempt. Transfers are not resumed automatically. Closing the window cancels
+an in-progress attempt.
+
+Automatic closing keeps its existing default and behavior. This button is not
+available with automatic closing enabled or for local and serial terminals.
+
 ## Managing Items in SFTP and FTP
 
 SFTP and FTP use the same two-pane file browser. Select an item in either the

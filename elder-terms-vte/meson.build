@@ -350,9 +350,21 @@ terminal_connection_phase_test = executable(
     'src/terminal-connection-phase.cpp',
   ],
   include_directories: include_directories('src'),
+  dependencies: [elder_terms_dep],
 )
 
 test('terminal-connection-phase-test', terminal_connection_phase_test)
+
+terminal_session_reconnect_test = executable(
+  'terminal-session-reconnect-test',
+  [
+    'tests/cpp/terminal-session-reconnect-test.cpp',
+    'src/terminal-session.cpp',
+  ],
+  dependencies: [elder_terms_dep, gtk_dep, cardio_dep, gio_dep],
+)
+
+test('terminal-session-reconnect-test', terminal_session_reconnect_test)
 
 ssh_channel_connection_test = executable(
   'ssh-channel-connection-test',

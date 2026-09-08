@@ -82,6 +82,8 @@ struct TerminalSessionCallbacks {
   TerminalSessionZmodemAutoStartCallback zmodem_auto_start;
   /** Collects all SSH user responses through the terminal overlay. */
   TerminalSessionSshPromptCallback ssh_prompt;
+  /** Called when the session manager's reconnection availability changes. */
+  std::function<void()> reconnect_state_changed = {};
 };
 
 } // namespace elder_terms

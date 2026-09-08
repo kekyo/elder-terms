@@ -59,6 +59,34 @@ bool start_terminal_session(TerminalSessionState *state);
 void stop_terminal_session(TerminalSessionState *state);
 
 /**
+ * Stops a session and joins its backend and pending reconnection work.
+ *
+ * @param state Session state to stop; must remain alive until completion.
+ * @returns Completion after all owned asynchronous work has stopped.
+ * @remarks Await before destroying a started network session. Only one caller
+ * may wait for shutdown at a time.
+ */
+cardio::promise<void> stop_terminal_session_async(TerminalSessionState *state);
+
+/**
+ * Checks whether a disconnected network session has finished its old work.
+ *
+ * @param state Session state to inspect.
+ * @returns True when one new SSH or TELNET connection can be requested.
+ */
+bool terminal_session_can_reconnect(const TerminalSessionState *state);
+
+/**
+ * Requests one new backend using the latest applied connection profile.
+ *
+ * @param state Session state retaining the original terminal and options.
+ * @returns True if accepted; false during connection, cleanup or shutdown.
+ * @remarks The backend is recreated on a later dispatcher turn, retaining the
+ * terminal widget and scrollback. The caller enforces the auto-close UI policy.
+ */
+bool reconnect_terminal_session(TerminalSessionState *state);
+
+/**
  * Notifies the session backend that the VTE grid size changed.
  *
  * @param state Session state created by create_terminal_session.

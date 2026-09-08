@@ -1,4 +1,5 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
@@ -18,6 +19,10 @@ import {
   waitForActivityIndicatorImageState,
 } from './activity-indicator-test-helpers';
 import { startClipboardTextProvider } from './clipboard-test-helpers';
+import {
+  activateTextSend,
+  expectTextSendActive,
+} from './text-send-test-helpers';
 import { expectElementKind } from './test-helpers';
 import {
   defaultColumns,
@@ -29,6 +34,8 @@ import {
 } from './gtk-test-helpers';
 
 const execFileAsync = promisify(execFile);
+const require = createRequire(import.meta.url);
+const { PNG } = require('pngjs') as typeof import('pngjs');
 const clipboardReadHelperPath = fileURLToPath(
   new URL('../../.build/elder-terms-vte/clipboard-read-helper', import.meta.url)
 );
@@ -965,6 +972,553 @@ describe.concurrent('elder-terms-vte main window', () => {
         });
       } finally {
         acceptedSocket?.destroy();
+        await closeServer(server);
+      }
+    });
+  });
+
+  it('reconnects TELNET repeatedly by mouse without losing scrollback or carrying a partial macro line', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const sockets: Socket[] = [];
+      const received: string[] = [];
+      const server = createServer((socket) => {
+        const index = sockets.length;
+        sockets.push(socket);
+        received.push('');
+        socket.on('data', (bytes) => {
+          received[index] += bytes.toString('utf8');
+        });
+        if (index === 0) socket.write('KEEP_SCROLLBACK\r\n');
+        socket.write(`ROUND ${index + 1}\r\n`);
+      });
+      try {
+        const port = await listenOnLocalhost(server);
+        const configPath = join(directory, 'reconnect.ini');
+        const logPath = join(directory, 'session.log');
+        const sourcePath = join(directory, 'interrupted-send.txt');
+        await writeFile(sourcePath, 'STALE'.repeat(100), 'utf8');
+        await writeFile(
+          configPath,
+          [
+            '[general]',
+            'type=telnet',
+            '',
+            '[terminal]',
+            'auto_close=false',
+            'return_code=lf',
+            '',
+            '[telnet]',
+            'address=127.0.0.1',
+            `port=${port}`,
+            '',
+            '[log]',
+            'enabled=true',
+            `base_directory=${directory}`,
+            'file_name_format=session.log',
+            'mode=cooked',
+            '',
+            '[transfer]',
+            'text_send_bytes_per_second=1',
+            '',
+            '[macro.reply]',
+            'regex=^ROUND (?<round>[0-9]+)$',
+            'send=ACK ${round}\\n',
+            '',
+          ].join('\n'),
+          'utf8'
+        );
+
+        await runGtkTest(
+          context,
+          [
+            '-c',
+            configPath,
+            `--test-transfer-source-uri=${pathToFileURL(sourcePath).href}`,
+          ],
+          async (app, evidence) => {
+            const window = expectElementKind(await app.windowAt(0), 'window');
+            const windowId = (await window.x11Info()).windowId;
+            const screen = await app.capture();
+            const screenImage = PNG.sync.read(screen.image);
+            const environment = await app.environment();
+            const frameSize = screenImage.width * screenImage.height * 4;
+            let pendingFrame = Buffer.alloc(0);
+            let latestFrame = Buffer.alloc(0);
+            let frameNumber = 0;
+            let recordingError: Error | undefined;
+            let recordingStderr = '';
+            // Save lossless video and inspect the same captured frame stream.
+            // State transitions below wait for matching frames, not a delay.
+            const recorder = spawn(
+              'ffmpeg',
+              [
+                '-hide_banner',
+                '-loglevel',
+                'error',
+                '-f',
+                'x11grab',
+                '-framerate',
+                '30',
+                '-draw_mouse',
+                '0',
+                '-video_size',
+                `${screenImage.width}x${screenImage.height}`,
+                '-i',
+                environment.DISPLAY ?? '',
+                '-map',
+                '0:v',
+                '-c:v',
+                'ffv1',
+                '-pix_fmt',
+                'bgr0',
+                '-fps_mode',
+                'passthrough',
+                join(evidence.directory, 'telnet-reconnect.mkv'),
+                '-map',
+                '0:v',
+                '-c:v',
+                'rawvideo',
+                '-pix_fmt',
+                'bgr0',
+                '-fps_mode',
+                'passthrough',
+                '-f',
+                'rawvideo',
+                'pipe:1',
+              ],
+              { env: environment, stdio: ['pipe', 'pipe', 'pipe'] }
+            );
+            const recordingFinished = new Promise<number | null>((resolve) => {
+              recorder.once('error', (error) => {
+                recordingError = error;
+                resolve(null);
+              });
+              recorder.once('close', (code) => resolve(code));
+            });
+            recorder.stderr.on('data', (bytes: Buffer) => {
+              recordingStderr += bytes.toString('utf8');
+            });
+            recorder.stdout.on('data', (bytes: Buffer) => {
+              pendingFrame = Buffer.concat([pendingFrame, bytes]);
+              while (pendingFrame.length >= frameSize) {
+                latestFrame = Buffer.from(pendingFrame.subarray(0, frameSize));
+                pendingFrame = pendingFrame.subarray(frameSize);
+                frameNumber += 1;
+              }
+            });
+            const videoStates: {
+              readonly state: string;
+              readonly frame: number;
+            }[] = [];
+            const videoCaptures: GtkCapture[] = [];
+            const expectVideoFrame = async (
+              capture: GtkCapture,
+              state: string
+            ): Promise<void> => {
+              const expected = PNG.sync.read(capture.image);
+              const firstFrame = frameNumber;
+              const frame = await waitForResult(
+                async () => {
+                  if (recordingError !== undefined) throw recordingError;
+                  expect(recorder.exitCode, recordingStderr).toBeNull();
+                  expect(frameNumber).toBeGreaterThan(firstFrame);
+                  let difference = 0;
+                  for (let y = 0; y < expected.height; y += 1) {
+                    for (let x = 0; x < expected.width; x += 1) {
+                      const actualOffset =
+                        ((capture.bounds.y + y) * screenImage.width +
+                          capture.bounds.x +
+                          x) *
+                        4;
+                      const expectedOffset = (y * expected.width + x) * 4;
+                      difference += Math.abs(
+                        latestFrame[actualOffset + 2] -
+                          expected.data[expectedOffset]
+                      );
+                      difference += Math.abs(
+                        latestFrame[actualOffset + 1] -
+                          expected.data[expectedOffset + 1]
+                      );
+                      difference += Math.abs(
+                        latestFrame[actualOffset] -
+                          expected.data[expectedOffset + 2]
+                      );
+                    }
+                  }
+                  expect(
+                    difference / (expected.width * expected.height * 3)
+                  ).toBeLessThan(2);
+                  return frameNumber;
+                },
+                {
+                  message: `recorded video should show ${state}`,
+                  timeoutMs: 10_000,
+                }
+              );
+              videoStates.push({ state, frame });
+              videoCaptures.push(capture);
+            };
+            try {
+              for (let round = 1; round <= 3; round += 1) {
+                await waitForResult(async () => {
+                  expect(sockets).toHaveLength(round);
+                  expect(received[round - 1]).toContain(`ACK ${round}\n`);
+                  if (round > 1) expect(received[round - 1]).not.toContain('S');
+                });
+                await waitForActivityIndicatorImageState(app, 'conn', 'on');
+                await waitForResult(async () => {
+                  expect(
+                    (await (await app.getById('terminal_view')).info()).states
+                  ).toContain('focused');
+                });
+                expect(
+                  (await (await app.getById('disconnected_notice')).info())
+                    .states
+                ).not.toContain('showing');
+                expect(
+                  (
+                    await expectElementKind(
+                      await app.windowAt(0),
+                      'window'
+                    ).x11Info()
+                  ).windowId
+                ).toBe(windowId);
+                await waitForResult(async () => {
+                  expect(await readFile(logPath, 'utf8')).toContain(
+                    `ROUND ${round}`
+                  );
+                });
+                await expectVideoFrame(
+                  (await readTerminalGridLayout(app)).terminalCapture,
+                  `connected-${round}`
+                );
+                await waitForResult(async () => {
+                  expect(
+                    await expectElementKind(
+                      await app.getById('status_label'),
+                      'label'
+                    ).text()
+                  ).toBe(`telnet: 127.0.0.1:${port}`);
+                });
+                if (round === 3) break;
+
+                if (round === 1) {
+                  const transfer = await activateTextSend(app);
+                  await expectTextSendActive(transfer);
+                  await waitForResult(async () =>
+                    expect(received[0]).toContain('S')
+                  );
+                }
+
+                // Leave an unterminated macro input line in the old connection.
+                sockets[round - 1].end('OLD-');
+                await waitForActivityIndicatorImageState(app, 'conn', 'off');
+                const reconnect = expectElementKind(
+                  await app.getById('reconnect_button'),
+                  'button'
+                );
+                await waitForResult(async () => {
+                  const info = await reconnect.info();
+                  expect(info.states).toContain('showing');
+                  expect(info.states).toContain('sensitive');
+                });
+                await expectVideoFrame(
+                  await (await app.getById('disconnected_notice')).capture(),
+                  `disconnected-${round}`
+                );
+                // Native mouse input must reach the button through the overlay.
+                await clickWidget(app, reconnect);
+                for (let click = 0; click < 4; click += 1) {
+                  await app.input.setMouseButton('left', true);
+                  await app.input.setMouseButton('left', false);
+                }
+              }
+
+              const { bounds } = (await readTerminalGridLayout(app))
+                .terminalCapture;
+              await selectTerminalCells(
+                app,
+                bounds,
+                'KEEP_SCROLLBACK'.length,
+                0
+              );
+              await openTerminalContextMenu(app, bounds.x + 20, bounds.y + 10);
+              await expectElementKind(
+                await app.getById('terminal_context_copy_item'),
+                'menuItem'
+              ).click();
+              expect(await readClipboardText(app)).toBe('KEEP_SCROLLBACK');
+              expect(await app.getWindowCount()).toBe(1);
+              expect(videoStates.map(({ state }) => state)).toEqual([
+                'connected-1',
+                'disconnected-1',
+                'connected-2',
+                'disconnected-2',
+                'connected-3',
+              ]);
+              for (let index = 1; index < videoStates.length; index += 1) {
+                expect(videoStates[index].frame).toBeGreaterThan(
+                  videoStates[index - 1].frame
+                );
+              }
+            } finally {
+              recorder.stdin.write('q\n');
+              const code = await recordingFinished;
+              await evidence.log('reconnect video frame assertions', {
+                videoStates,
+                recordingStderr,
+                code,
+              });
+              expect(code, recordingStderr).toBe(0);
+            }
+
+            // Verify the saved video, not only the live analysis stream. Both
+            // outputs pass timestamps through, so frame ordinals are identical.
+            const selection = videoStates
+              .map(({ frame }) => `eq(n\\,${frame - 1})`)
+              .join('+');
+            await execFileAsync('ffmpeg', [
+              '-v',
+              'error',
+              '-i',
+              join(evidence.directory, 'telnet-reconnect.mkv'),
+              '-vf',
+              `select=${selection}`,
+              '-fps_mode',
+              'passthrough',
+              join(evidence.directory, 'reconnect-frame-%d.png'),
+            ]);
+            for (let index = 0; index < videoStates.length; index += 1) {
+              const actual = PNG.sync.read(
+                await readFile(
+                  join(evidence.directory, `reconnect-frame-${index + 1}.png`)
+                )
+              );
+              const capture = videoCaptures[index];
+              const expected = PNG.sync.read(capture.image);
+              let difference = 0;
+              for (let y = 0; y < expected.height; y += 1) {
+                for (let x = 0; x < expected.width; x += 1) {
+                  const actualOffset =
+                    ((capture.bounds.y + y) * actual.width +
+                      capture.bounds.x +
+                      x) *
+                    4;
+                  const expectedOffset = (y * expected.width + x) * 4;
+                  for (let channel = 0; channel < 3; channel += 1) {
+                    difference += Math.abs(
+                      actual.data[actualOffset + channel] -
+                        expected.data[expectedOffset + channel]
+                    );
+                  }
+                }
+              }
+              expect(
+                difference / (expected.width * expected.height * 3),
+                videoStates[index].state
+              ).toBeLessThan(2);
+            }
+          }
+        );
+      } finally {
+        for (const socket of sockets) socket.destroy();
+        await closeServer(server);
+      }
+    });
+  });
+
+  for (const failure of ['negotiation', 'cancel'] as const) {
+    it(`allows another SSH attempt after ${failure} with manual closing`, async (context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const sockets: Socket[] = [];
+        const server = createServer((socket) => {
+          sockets.push(socket);
+          socket.resume();
+        });
+        try {
+          const port = await listenOnLocalhost(server);
+          const configPath = join(directory, 'ssh-reconnect.ini');
+          await writeFile(
+            configPath,
+            `[general]\ntype=ssh\n\n[terminal]\nauto_close=false\n\n[ssh]\naddress=127.0.0.1\nport=${port}\nusername=retry-user\n`,
+            'utf8'
+          );
+          await runGtkTest(context, ['-c', configPath], async (app) => {
+            for (let attempt = 1; attempt <= 2; attempt += 1) {
+              await waitForResult(async () => {
+                expect(
+                  (await (await app.getById('ssh_prompt_panel')).info()).states
+                ).toContain('showing');
+              });
+              await expectElementKind(
+                await app.getById(
+                  failure === 'cancel'
+                    ? 'ssh_prompt_cancel_button'
+                    : 'ssh_prompt_accept_button'
+                ),
+                'button'
+              ).click();
+              if (failure === 'negotiation') {
+                await waitForResult(async () =>
+                  expect(sockets).toHaveLength(attempt)
+                );
+                sockets[attempt - 1].end('not-an-ssh-server\r\n');
+              }
+              const reconnect = expectElementKind(
+                await app.getById('reconnect_button'),
+                'button'
+              );
+              await waitForResult(async () => {
+                const info = await reconnect.info();
+                expect(info.states).toContain('showing');
+                expect(info.states).toContain('sensitive');
+              });
+              expect(await app.getWindowCount()).toBe(1);
+              if (attempt === 1) await clickWidget(app, reconnect);
+            }
+            // Closing during the next authentication prompt must cancel it,
+            // finish the backend work and exit without starting another try.
+            await clickWidget(app, await app.getById('reconnect_button'));
+            await waitForResult(async () => {
+              expect(
+                (await (await app.getById('ssh_prompt_panel')).info()).states
+              ).toContain('showing');
+            });
+            const pending: GtkWidgetElement[] = [
+              expectElementKind(await app.windowAt(0), 'window'),
+            ];
+            let closed = false;
+            while (pending.length !== 0) {
+              const widget = pending.shift() as GtkWidgetElement;
+              if (
+                widget.kind === 'button' &&
+                (await widget.info()).name === 'Close'
+              ) {
+                await widget.click();
+                closed = true;
+                break;
+              }
+              if ('getChildCount' in widget) {
+                const count = await widget.getChildCount();
+                for (let index = 0; index < count; index += 1) {
+                  const child = await widget.childAt(index);
+                  if (child !== undefined) pending.push(child);
+                }
+              }
+            }
+            expect(closed).toBe(true);
+            await waitForResult(async () =>
+              expect((await app.output()).exitCode).toBe(0)
+            );
+            expect(sockets).toHaveLength(failure === 'cancel' ? 0 : 2);
+          });
+        } finally {
+          for (const socket of sockets) socket.destroy();
+          await closeServer(server);
+        }
+      });
+    });
+  }
+
+  for (const autoClose of ['', 'auto_close=true\n']) {
+    it(`preserves TELNET automatic closing after connection refusal with ${autoClose === '' ? 'default' : 'explicit'} settings`, async (context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const server = createServer();
+        const port = await listenOnLocalhost(server);
+        await closeServer(server);
+        const configPath = join(directory, 'refused-auto-close.ini');
+        await writeFile(
+          configPath,
+          `[general]\ntype=telnet\n\n[terminal]\n${autoClose}\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
+          'utf8'
+        );
+        await runGtkTest(context, ['-c', configPath], async (app) => {
+          await waitForResult(async () => {
+            const output = await app.output();
+            expect(output.exitCode).toBe(0);
+            expect(output.exitSignal).toBeNull();
+            expect(output.stderr).toContain('Connection refused');
+          });
+        });
+      });
+    });
+
+    it(`preserves TELNET automatic closing with ${autoClose === '' ? 'default' : 'explicit'} settings`, async (context) => {
+      await withTemporaryDirectory(async (directory) => {
+        let socket: Socket | undefined;
+        const server = createServer((accepted) => {
+          socket = accepted;
+          accepted.resume();
+        });
+        try {
+          const port = await listenOnLocalhost(server);
+          const configPath = join(directory, 'auto-close.ini');
+          await writeFile(
+            configPath,
+            `[general]\ntype=telnet\n\n[terminal]\n${autoClose}\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
+            'utf8'
+          );
+          await runGtkTest(context, ['-c', configPath], async (app) => {
+            await waitForActivityIndicatorImageState(app, 'conn', 'on');
+            expect(socket).not.toBeUndefined();
+            socket?.end();
+            await waitForResult(async () => {
+              expect((await app.output()).exitCode).toBe(0);
+            });
+          });
+        } finally {
+          socket?.destroy();
+          await closeServer(server);
+        }
+      });
+    });
+  }
+
+  it('keeps TELNET reconnection available after repeated connection refusals', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const sockets: Socket[] = [];
+      const server = createServer((socket) => {
+        sockets.push(socket);
+        socket.resume();
+      });
+      try {
+        const port = await listenOnLocalhost(server);
+        const configPath = join(directory, 'refused-reconnect.ini');
+        await writeFile(
+          configPath,
+          `[general]\ntype=telnet\n\n[terminal]\nauto_close=false\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
+          'utf8'
+        );
+        await runGtkTest(context, ['-c', configPath], async (app) => {
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
+          sockets[0].end();
+          await waitForActivityIndicatorImageState(app, 'conn', 'off');
+          await closeServer(server);
+          const reconnect = expectElementKind(
+            await app.getById('reconnect_button'),
+            'button'
+          );
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            await waitForResult(async () => {
+              expect((await reconnect.info()).states).toContain('sensitive');
+            });
+            await clickWidget(app, reconnect);
+            await waitForResult(async () => {
+              expect((await reconnect.info()).states).toContain('showing');
+              expect((await reconnect.info()).states).toContain('sensitive');
+              expect(
+                await expectElementKind(
+                  await app.getById('disconnected_notice_label'),
+                  'label'
+                ).text()
+              ).toMatch(/^TELNET connection failed:\n/);
+            });
+          }
+          expect(sockets).toHaveLength(1);
+          expect(await app.getWindowCount()).toBe(1);
+        });
+      } finally {
+        for (const socket of sockets) socket.destroy();
         await closeServer(server);
       }
     });
