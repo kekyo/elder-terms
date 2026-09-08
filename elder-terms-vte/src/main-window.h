@@ -179,9 +179,15 @@ struct MainWindow {
   std::array<GtkWidget *, activity_indicator_count()> indicator_labels{};
   /** True when the indicator should accept activity events. */
   std::array<bool, activity_indicator_count()> indicator_visible{};
-  /** Shared lit indicator pixbuf. */
+  /** Owned original lit image, retained for tinting and restoring defaults. */
+  GdkPixbuf *indicator_default_on_icon = nullptr;
+  /** Owned original dark image, retained for tinting and restoring defaults. */
+  GdkPixbuf *indicator_default_off_icon = nullptr;
+  /** Applied packed RGB color, or null for the unmodified original images. */
+  std::optional<guint32> indicator_color;
+  /** Owned shared lit indicator pixbuf. */
   GdkPixbuf *indicator_on_icon = nullptr;
-  /** Shared dark indicator pixbuf. */
+  /** Owned shared dark indicator pixbuf. */
   GdkPixbuf *indicator_off_icon = nullptr;
   /** Activity indicator runtime states. */
   std::array<ActivityIndicatorWidget, activity_indicator_count()> indicators{};
@@ -217,6 +223,14 @@ std::optional<MainWindow> load_main_window();
  */
 void set_main_window_colors(MainWindow *main_window,
                             const GeneralColorSettings &settings);
+
+/**
+ * Applies a shared indicator tint without resetting current activity.
+ * @param main_window Window owning indicator images and states.
+ * @param color RGB tint, or null to restore the original green images.
+ */
+void set_main_window_indicator_color(MainWindow *main_window,
+                                      const std::optional<RgbColor> &color);
 
 /**
  * Registers the open runtime settings dialog for connection color updates.

@@ -43,6 +43,7 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"terminal", "scrollback_lines",
                       N_("Scrollback lines")},
     SettingLabelEntry{"terminal", "zoom", N_("Zoom factor")},
+    SettingLabelEntry{"terminal", "indicator_color", N_("Indicator color")},
     SettingLabelEntry{"terminal", "font_primary_family",
                       N_("Primary font family")},
     SettingLabelEntry{"terminal", "font_fallback_family",
@@ -224,6 +225,8 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Custom font");
   case SettingsUiText::no_color:
     return _("No color");
+  case SettingsUiText::default_color:
+    return _("Default color");
   case SettingsUiText::custom_color:
     return _("Custom color");
   case SettingsUiText::press_key_combination:

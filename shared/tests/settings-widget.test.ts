@@ -1,5 +1,12 @@
 import { fileURLToPath } from 'node:url';
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
@@ -963,6 +970,7 @@ describe.concurrent('shared settings widget', () => {
               'Rows',
               'Scrollback lines',
               'Zoom factor',
+              'Indicator color',
               'Primary font family',
               'Secondary font family',
               'Close window when session ends',
@@ -1666,6 +1674,7 @@ describe.concurrent('shared settings widget', () => {
       },
     ];
 
+    const visualErrors: string[] = [];
     for (const testCase of cases) {
       await runSharedGtkTest(
         context,
@@ -1673,10 +1682,248 @@ describe.concurrent('shared settings widget', () => {
         async ({ app, directory }) => {
           await testCase.prepare(app);
           await testCase.assert(app);
-          await expectPageVisualFixture(app, testCase, directory);
+          // Keep every setting's capture when a shared page layout changes.
+          try {
+            await expectPageVisualFixture(app, testCase, directory);
+          } catch (error) {
+            visualErrors.push(`${testCase.fixtureName}: ${String(error)}`);
+          }
         }
       );
     }
+    expect(visualErrors).toEqual([]);
+  });
+
+  it('applies, cancels, saves, and resets the common terminal indicator color', async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'elder-terms-indicator-'));
+    const savedPath = join(directory, 'connection.ini');
+    try {
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=terminal',
+          '--global=terminal.indicator_color=#112233',
+          `--save-file=${savedPath}`,
+        ],
+        async ({ app }) => {
+          await showTerminalPage(app);
+          await showTerminalKeyBindings(app);
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_indicator_color_mode_combo',
+            'Custom color (global default)'
+          );
+          const mode = expectElementKind(
+            await app.getById('settings_terminal_indicator_color_mode_combo'),
+            'comboBox'
+          );
+          await chooseNamedColor(
+            app,
+            'settings_terminal_indicator_color_button',
+            'Red'
+          );
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_indicator_color_mode_combo',
+            'Custom color'
+          );
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            const store = await waitForAppliedStore(app);
+            expect(store.indicator_color).toBe('#E01B24');
+            expect(store.indicator_color_source).toBe('override');
+            expect(store.indicator_color_explicit).toBe('true');
+          });
+          await chooseNamedColor(
+            app,
+            'settings_terminal_indicator_color_button',
+            'Blue'
+          );
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(await readFile(savedPath, 'utf8')).toContain(
+              'indicator_color=#E01B24\n'
+            );
+          });
+          await mode.selectChildAt(1);
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_indicator_color_mode_combo',
+            'Default color'
+          );
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(await readFile(savedPath, 'utf8')).toContain(
+              'indicator_color=default\n'
+            );
+          });
+          await mode.selectChildAt(0);
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(await readFile(savedPath, 'utf8')).not.toContain(
+              'indicator_color='
+            );
+          });
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_indicator_color_mode_combo',
+            'Custom color (global default)'
+          );
+        }
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('edits the global indicator color and keeps an explicit default over an inherited color', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--global-mode', '--page=terminal'],
+      async ({ app }) => {
+        await selectSettingsTab(app, 'Terminal', 'global_settings');
+        const scrollbar = expectElementKind(
+          await app.getById('global_settings_terminal_page_scrollbar'),
+          'scrollbar'
+        );
+        await scrollbar.setValue((await scrollbar.valueInfo()).maximum);
+        await expectSelectedComboValue(
+          app,
+          'global_settings_terminal_indicator_color_mode_combo',
+          'Default color (built-in default)'
+        );
+        await chooseNamedColor(
+          app,
+          'global_settings_terminal_indicator_color_button',
+          'Blue'
+        );
+        await expectElementKind(
+          await app.getById('global_settings_apply_button'),
+          'button'
+        ).click();
+        expect((await waitForAppliedStore(app)).indicator_color).toBe(
+          '#3584E4'
+        );
+      }
+    );
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=terminal',
+        '--global=terminal.indicator_color=#112233',
+        '--indicator-color=default',
+        '--rebase-global=terminal.indicator_color=#445566',
+      ],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_indicator_color_mode_combo',
+          'Default color'
+        );
+        await showTerminalKeyBindings(app);
+        await expectElementKind(
+          await app.getById('rebase_fallbacks_button'),
+          'button'
+        ).click();
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_indicator_color_mode_combo',
+          'Default color'
+        );
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        expect((await waitForAppliedStore(app)).indicator_color).toBe(
+          'default'
+        );
+        await expectElementKind(
+          await app.getById('settings_terminal_indicator_color_mode_combo'),
+          'comboBox'
+        ).selectChildAt(0);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect((await waitForAppliedStore(app)).indicator_color).toBe(
+            '#445566'
+          );
+        });
+      }
+    );
+  });
+
+  it('warns about invalid indicator colors and uses a valid inherited fallback', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=terminal',
+        '--global=terminal.indicator_color=#123abc',
+        '--indicator-color=green',
+        '--allow-invalid-connection-values',
+      ],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        await showTerminalKeyBindings(app);
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_indicator_color_mode_combo',
+          'Custom color (global default)'
+        );
+        expect((await app.output()).stderr).toContain(
+          'invalid configuration value [terminal] indicator_color'
+        );
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        const store = await waitForAppliedStore(app);
+        expect(store.indicator_color).toBe('#123abc');
+        expect(store.indicator_color_explicit).toBe('false');
+      }
+    );
+  });
+
+  it('shows the common indicator color setting in Japanese', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal'],
+      async ({ app, directory }) => {
+        await showTerminalPage(app);
+        await showTerminalKeyBindings(app);
+        await expectPageLabels(app, 'settings_terminal_page', [
+          'インジケーターの色',
+        ]);
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_indicator_color_mode_combo',
+          '既定の色（組み込み既定値）'
+        );
+        await writeFile(
+          join(directory, 'indicator-color-ja.png'),
+          (await (await app.getById('settings_terminal_page')).capture()).image
+        );
+      },
+      { env: japaneseTestEnvironment }
+    );
   });
 
   it('edits inherited, uncolored, and custom General backgrounds with RGB pickers', async (context) => {

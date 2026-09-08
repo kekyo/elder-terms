@@ -32,6 +32,7 @@ struct FixtureOptions {
   bool has_save = false;
   bool show_actions = true;
   bool global_mode = false;
+  bool allow_invalid_connection_values = false;
   std::string save_file;
   std::string bell_sound_dialog_file;
   std::string ip_scan_mode;
@@ -86,7 +87,9 @@ static FixtureOptions parse_options(int argc, char **argv) {
   FixtureOptions options;
   for (int index = 1; index < argc; ++index) {
     const std::string argument = argv[index];
-    if (argument == "--runtime") {
+    if (argument == "--allow-invalid-connection-values") {
+      options.allow_invalid_connection_values = true;
+    } else if (argument == "--runtime") {
       options.is_runtime = true;
     } else if (argument == "--save") {
       options.has_save = true;
@@ -155,6 +158,10 @@ static FixtureOptions parse_options(int argc, char **argv) {
       append_connection_assignment(
           &options, "general", "background",
           option_value(argument, "--background="));
+    } else if (starts_with(argument, "--indicator-color=")) {
+      append_connection_assignment(
+          &options, "terminal", "indicator_color",
+          option_value(argument, "--indicator-color="));
     } else if (starts_with(argument, "--encoding=")) {
       append_connection_assignment(
           &options, "terminal", "encoding",
@@ -351,7 +358,7 @@ static void assign_accessible_id(GtkWidget *widget, const char *id) {
 
 static void load_assignments(
     elder_terms::SettingsStore *store,
-    const std::vector<ConfigAssignment> &assignments) {
+    const std::vector<ConfigAssignment> &assignments, bool allow_invalid_values) {
   GKeyFile *key_file = g_key_file_new();
   for (const ConfigAssignment &assignment : assignments) {
     g_key_file_set_value(key_file, assignment.section.c_str(),
@@ -360,8 +367,11 @@ static void load_assignments(
   std::vector<std::string> warnings;
   elder_terms::load_settings_store_from_key_file(store, key_file, &warnings);
   g_key_file_free(key_file);
-  if (!warnings.empty()) {
+  if (!warnings.empty() && !allow_invalid_values) {
     throw std::invalid_argument(warnings.front());
+  }
+  for (const auto &warning : warnings) {
+    std::cerr << warning << '\n';
   }
 }
 
@@ -385,7 +395,7 @@ create_global_store(const std::vector<ConfigAssignment> &assignments) {
       "elder-terms-settings-widget-fixture-missing-global.ini";
   elder_terms::SettingsStore store =
       elder_terms::load_global_settings(missing_path, 1.0).store;
-  load_assignments(&store, assignments);
+  load_assignments(&store, assignments, false);
   return store;
 }
 
@@ -402,7 +412,8 @@ static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
       .key = "name",
       .value = "fixture",
   });
-  load_assignments(&store, connection_assignments);
+  load_assignments(&store, connection_assignments,
+                    options.allow_invalid_connection_values);
   return store;
 }
 
@@ -820,6 +831,10 @@ static void print_store(const char *prefix,
             << elder_terms::terminal_border_width(store)
             << " exterior_background=" << exterior_background
             << " background=" << background
+            << " indicator_color="
+            << elder_terms::setting_string_value_or_default(
+                   store, elder_terms::make_setting_key("terminal", "indicator_color"),
+                   "default")
             << " zoom_in_key="
             << elder_terms::terminal_zoom_in_key(store)
             << " zoom_out_key="
@@ -928,6 +943,9 @@ static void print_store(const char *prefix,
       elder_terms::general_exterior_background_setting_key());
   print_setting_metadata(store, "background",
                          elder_terms::general_background_setting_key());
+  print_setting_metadata(
+      store, "indicator_color",
+      elder_terms::make_setting_key("terminal", "indicator_color"));
   print_setting_metadata(store, "encoding",
                          elder_terms::terminal_encoding_setting_key());
   print_setting_metadata(store, "backspace_code",

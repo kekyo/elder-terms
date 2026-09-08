@@ -12,6 +12,14 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Indicator color"
+msgstr "指示灯颜色"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Default color"
+msgstr "默认颜色"
+
 #: elder-terms-vte/src/main-window.ui
 msgid "Reconnect"
 msgstr "重新连接"

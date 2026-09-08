@@ -97,6 +97,17 @@ void initialize_activity_indicator_widget(ActivityIndicatorWidget *indicator,
   set_indicator_active(indicator, false);
 }
 
+void replace_activity_indicator_widget_images(ActivityIndicatorWidget *indicator,
+                                               GdkPixbuf *on_icon,
+                                               GdkPixbuf *off_icon) {
+  if (indicator == nullptr) return;
+  indicator->on_icon = on_icon;
+  indicator->off_icon = off_icon;
+  set_indicator_active(indicator,
+      indicator->mode == ActivityIndicatorMode::steady
+          ? indicator->steady_active : indicator->blink_state.active);
+}
+
 void note_activity_indicator_widget(ActivityIndicatorWidget *indicator) {
   if (indicator == nullptr) {
     return;

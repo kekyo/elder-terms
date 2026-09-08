@@ -48,6 +48,7 @@ libxyzm_async_static_library = libxyzm_static_libraries[1]
 telnet_protocol_source = 'src/terminal-sessions/telnet-session/telnet-protocol.cpp'
 elder_terms_sources = [
   'src/activity-indicator.cpp',
+  'src/indicator-color.cpp',
   'src/inline-prompt.cpp',
   'src/launch-options.cpp',
   'src/main.cpp',
@@ -310,9 +311,11 @@ activity_indicator_test = executable(
   [
     'tests/cpp/activity-indicator-test.cpp',
     'src/activity-indicator.cpp',
+    'src/indicator-color.cpp',
   ],
   dependencies: [
     gtk_dep,
+    elder_terms_dep,
   ],
 )
 

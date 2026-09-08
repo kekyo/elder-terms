@@ -12,6 +12,14 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Indicator color"
+msgstr "संकेतकों का रंग"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Default color"
+msgstr "डिफ़ॉल्ट रंग"
+
 #: elder-terms-vte/src/main-window.ui
 msgid "Reconnect"
 msgstr "फिर से कनेक्ट करें"

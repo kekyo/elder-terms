@@ -583,6 +583,77 @@ static void test_terminal_border_width_range_and_round_trip() {
               "terminal border width should survive saving and reloading");
 }
 
+static void test_terminal_indicator_color_round_trip_and_layering() {
+  const auto key = elder_terms::terminal_indicator_color_setting_key();
+  auto defaults = create_default_settings(default_terminal_display_settings(1.0),
+                                           "elder-terms");
+  expect_true(!elder_terms::terminal_indicator_color(defaults).has_value(),
+              "the built-in indicator color should retain the original images");
+  const auto global_path = temporary_config_path("global-indicator-color");
+  const auto path = temporary_config_path("indicator-color");
+  write_config(global_path, "[terminal]\nindicator_color=#123aBC\n");
+  write_config(path, "[terminal]\nauto_close=false\n");
+  const SettingsLoadOptions options{
+      .config_path = path,
+      .startup_config_path = std::nullopt,
+      .global_config_path = global_path,
+  };
+  auto loaded = load_settings(options, 1.0);
+  auto color = elder_terms::terminal_indicator_color(loaded.store);
+  expect_true(color.has_value() && color->red == 0x12 &&
+                  color->green == 0x3a && color->blue == 0xbc,
+              "an inherited indicator color should parse mixed-case RGB");
+  expect_true(setting_value_source(loaded.store, key) == SettingValueSource::global,
+              "an unspecified indicator color should inherit the global color");
+  expect_true(save_settings(loaded.store, path).saved &&
+                  read_config(path).find("indicator_color=") == std::string::npos,
+              "saving a connection should not flatten its inherited color");
+  for (const auto &value : {"#000000", "#FFFFFF", "#ab12Cd", "default"}) {
+    expect_true(set_explicit_setting_value(&loaded.store, key,
+                                           elder_terms::SettingValue{std::string(value)}),
+                "valid RGB and explicit default indicator colors should be accepted");
+    expect_true(save_settings(loaded.store, path).saved,
+                "an explicit indicator color should save");
+    loaded = load_settings(options, 1.0);
+    expect_true(setting_string_value_or_default(loaded.store, key, "missing") == value,
+                "saved indicator colors should survive reload without losing the override");
+    expect_true(setting_value_source(loaded.store, key) == SettingValueSource::override,
+                "an explicit default should suppress the inherited indicator color");
+  }
+  expect_true(!elder_terms::terminal_indicator_color(loaded.store).has_value(),
+              "an explicit default should restore the original images");
+  expect_true(clear_explicit_setting_value(&loaded.store, key),
+              "the indicator color override should be clearable");
+  expect_true(save_settings(loaded.store, path).saved,
+              "clearing an indicator override should save");
+  loaded = load_settings(options, 1.0);
+  expect_true(setting_value_source(loaded.store, key) == SettingValueSource::global &&
+                  setting_string_value_or_default(loaded.store, key, "missing") == "#123aBC",
+              "cleared and reloaded indicator colors should inherit again");
+  for (const auto &value : {"", "green", "none", "#12345", "#1234567", "123456",
+                            "#gg0000", "#-00001", "#12 456", "DEFAULT"}) {
+    write_config(path, std::string("[terminal]\nindicator_color=") + value + "\n");
+    loaded = load_settings(options, 1.0);
+    expect_true(warnings_contain(loaded.warnings,
+                  "invalid configuration value [terminal] indicator_color"),
+                "invalid indicator colors should warn");
+    expect_true(setting_string_value_or_default(loaded.store, key, "missing") == "#123aBC" &&
+                    !setting_has_explicit_value(loaded.store, key),
+                "invalid indicator overrides should retain the valid global fallback");
+    expect_true(!set_explicit_setting_value(&loaded.store, key,
+                                             elder_terms::SettingValue{std::string(value)}),
+                "invalid runtime indicator values should not replace the current color");
+  }
+  write_config(global_path, "[terminal]\nindicator_color=invalid\n");
+  loaded = load_settings(options, 1.0);
+  expect_true(!elder_terms::terminal_indicator_color(loaded.store).has_value(),
+              "invalid colors in every layer should use the original green images");
+  expect_true(!set_explicit_setting_value(&defaults, key, elder_terms::SettingValue{true}),
+              "the indicator color should reject a non-string setting value");
+  remove_config(path);
+  remove_config(global_path);
+}
+
 static void test_terminal_font_family_settings_round_trip_and_layering() {
   const std::filesystem::path global_path =
       temporary_config_path("global-terminal-fonts");
@@ -4201,6 +4272,7 @@ static void test_regular_expression_reports_project_owned_matches() {
 int main() {
   try {
     elder_terms_settings_test::test_default_settings();
+    elder_terms_settings_test::test_terminal_indicator_color_round_trip_and_layering();
     elder_terms_settings_test::
         test_local_command_line_setting_round_trip_and_layering();
     elder_terms_settings_test::

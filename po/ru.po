@@ -13,6 +13,14 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Indicator color"
+msgstr "Цвет индикаторов"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Default color"
+msgstr "Цвет по умолчанию"
+
 #: elder-terms-vte/src/main-window.ui
 msgid "Reconnect"
 msgstr "Подключиться снова"

@@ -20,6 +20,7 @@
 #include <glib/gi18n-lib.h>
 
 #include "main-window.h"
+#include "indicator-color.h"
 #include "inline-prompt.h"
 #include "widget-background.h"
 
@@ -579,6 +580,11 @@ static bool load_indicator_images(MainWindow *main_window) {
       main_window->indicator_off_icon == nullptr) {
     return false;
   }
+
+  main_window->indicator_default_on_icon =
+      GDK_PIXBUF(g_object_ref(main_window->indicator_on_icon));
+  main_window->indicator_default_off_icon =
+      GDK_PIXBUF(g_object_ref(main_window->indicator_off_icon));
 
   for (ActivityIndicatorId indicator : activity_indicator_ids) {
     const std::size_t index = activity_indicator_index(indicator);
@@ -1333,6 +1339,39 @@ std::optional<MainWindow> load_main_window() {
   return main_window;
 }
 
+void set_main_window_indicator_color(MainWindow *main_window,
+                                      const std::optional<RgbColor> &color) {
+  if (main_window == nullptr || main_window->indicator_default_on_icon == nullptr ||
+      main_window->indicator_default_off_icon == nullptr) return;
+  const std::optional<guint32> packed = color.has_value()
+      ? std::optional<guint32>{(static_cast<guint32>(color->red) << 16) |
+                              (static_cast<guint32>(color->green) << 8) | color->blue}
+      : std::nullopt;
+  if (main_window->indicator_color == packed) return;
+  auto *on = color.has_value()
+      ? create_colored_indicator_pixbuf(main_window->indicator_default_on_icon, *color)
+      : GDK_PIXBUF(g_object_ref(main_window->indicator_default_on_icon));
+  auto *off = color.has_value()
+      ? create_colored_indicator_pixbuf(main_window->indicator_default_off_icon, *color)
+      : GDK_PIXBUF(g_object_ref(main_window->indicator_default_off_icon));
+  if (on == nullptr || off == nullptr) {
+    g_clear_object(&on);
+    g_clear_object(&off);
+    g_warning("Could not allocate colored indicator images");
+    return;
+  }
+  auto *old_on = main_window->indicator_on_icon;
+  auto *old_off = main_window->indicator_off_icon;
+  main_window->indicator_on_icon = on;
+  main_window->indicator_off_icon = off;
+  for (auto &indicator : main_window->indicators) {
+    replace_activity_indicator_widget_images(&indicator, on, off);
+  }
+  main_window->indicator_color = packed;
+  g_object_unref(old_on);
+  g_object_unref(old_off);
+}
+
 void set_main_window_colors(MainWindow *main_window,
                             const GeneralColorSettings &settings) {
   if (main_window == nullptr) {
@@ -1761,6 +1800,8 @@ void release_main_window(MainWindow *main_window) {
   clear_main_window_component_background(main_window);
   g_clear_object(&main_window->indicator_on_icon);
   g_clear_object(&main_window->indicator_off_icon);
+  g_clear_object(&main_window->indicator_default_on_icon);
+  g_clear_object(&main_window->indicator_default_off_icon);
   if (main_window->builder != nullptr) {
     g_object_unref(main_window->builder);
   }

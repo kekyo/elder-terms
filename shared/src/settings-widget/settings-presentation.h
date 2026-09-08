@@ -31,6 +31,7 @@ enum class SettingsUiText {
   disabled,
   custom_font,
   no_color,
+  default_color,
   custom_color,
   press_key_combination,
   clear_key_binding,

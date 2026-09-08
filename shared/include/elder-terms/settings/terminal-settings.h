@@ -7,6 +7,7 @@
 
 #include <elder-terms/export.h>
 #include <elder-terms/key-binding.h>
+#include <elder-terms/settings/general-settings.h>
 #include <elder-terms/settings/settings-store.h>
 
 namespace elder_terms {
@@ -94,6 +95,22 @@ ELDER_TERMS_API SettingKey terminal_scrollback_lines_setting_key();
  * @returns Setting key for terminal font scale.
  */
 ELDER_TERMS_API SettingKey terminal_zoom_setting_key();
+
+/**
+ * Returns the setting key for [terminal] indicator_color.
+ *
+ * @returns Setting key shared by every activity indicator in a terminal.
+ */
+ELDER_TERMS_API SettingKey terminal_indicator_color_setting_key();
+
+/**
+ * Extracts the common activity indicator color.
+ *
+ * @param store Source settings store containing validated values.
+ * @returns Custom RGB color, or no value to use the original green images.
+ */
+ELDER_TERMS_API std::optional<RgbColor>
+terminal_indicator_color(const SettingsStore &store);
 
 /**
  * Returns the setting key for [terminal] font_primary_family.

@@ -629,6 +629,26 @@ built-in beep for that connection. If libcanberra cannot start playback,
 elder-terms falls back to the built-in beep until the settings are applied
 again.
 
+## Configuring Indicator Color
+
+Scroll down on the "Terminal" tab to select "Indicator color". One color applies
+to CONN, LOG, SD, RD, and all serial line indicators. Applying a color preserves
+their lit, dark, and blinking states. The lamps retain their shading so that
+lit and dark states remain distinguishable.
+
+Connection defaults can provide a shared color, and each connection can override
+it. Choose "Default color" to restore the original green lamps even when a global
+color is configured, or choose the inherited option to follow connection defaults.
+Save the settings to keep the color after restarting.
+
+```ini
+[terminal]
+indicator_color=#3584E4
+```
+
+The value must be `default` or an RGB color in `#RRGGBB` form. Invalid values
+produce a warning and use the next valid inherited or built-in value.
+
 ## Configuring Font Families
 
 Scroll down on the "Terminal" tab to specify primary and secondary font
