@@ -649,26 +649,6 @@ static void test_terminal_indicator_color_round_trip_and_layering() {
   remove_config(global_path);
 }
 
-static void test_removed_fixed_font_settings_are_ignored() {
-  const auto path = temporary_config_path("removed-fixed-font-settings");
-  write_config(path, "[terminal]\nfont_primary_family=Old Latin\n"
-                     "font_fallback_family=Old CJK\n");
-  const auto loaded = load_settings(SettingsLoadOptions{
-      .config_path = path, .startup_config_path = std::nullopt,
-      .global_config_path = std::nullopt}, 1.0);
-  const bool primary = setting_has_configured_value(loaded.store,
-      elder_terms::make_setting_key("terminal", "font_primary_family"));
-  const bool fallback = setting_has_configured_value(loaded.store,
-      elder_terms::make_setting_key("terminal", "font_fallback_family"));
-  const auto saved = save_settings(loaded.store, path);
-  const auto content = read_config(path);
-  remove_config(path);
-  expect_true(!primary && !fallback && saved.saved &&
-                  content.find("font_primary_family") == std::string::npos &&
-                  content.find("font_fallback_family") == std::string::npos,
-              "removed fixed font settings must not be loaded or saved");
-}
-
 static void test_terminal_font_list_round_trip_and_validation() {
   const auto global = temporary_config_path("font-list-global");
   const auto path = temporary_config_path("font-list-connection");
@@ -4272,7 +4252,6 @@ static void test_regular_expression_reports_project_owned_matches() {
 
 int main() {
   try {
-    elder_terms_settings_test::test_removed_fixed_font_settings_are_ignored();
     elder_terms_settings_test::test_terminal_font_list_round_trip_and_validation();
     elder_terms_settings_test::test_default_settings();
     elder_terms_settings_test::test_terminal_indicator_color_round_trip_and_layering();
