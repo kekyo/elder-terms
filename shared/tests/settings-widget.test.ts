@@ -2657,6 +2657,87 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
+  for (const type of ['ssh', 'sftp', 'telnet', 'ftp']) {
+    for (const mode of ['complete', 'no-name', 'pending']) {
+      it(`selects and persists the ${mode} IP scan result for ${type}`, async (context) => {
+        const section = type === 'sftp' ? 'ssh' : type;
+        const expectedAddress =
+          mode === 'complete' ? 'router.example.test' : '192.0.2.25';
+        const directory = await mkdtemp(join(tmpdir(), 'elder-terms-scan-'));
+        try {
+          await runSharedGtkTest(
+            context,
+            [
+              `--page=${section}`,
+              `--type=${type}`,
+              `--${section}-address=before.example.test`,
+              `--${section}-port=2222`,
+              `--ip-scan=${mode}`,
+              `--save-file=${join(directory, 'connection.ini')}`,
+            ],
+            async ({ app }) => {
+              if (section === 'ssh') {
+                await showSshPage(app);
+              } else if (section === 'telnet') {
+                await showTelnetPage(app);
+              } else {
+                await showFtpPage(app);
+              }
+              await expectElementKind(
+                await app.getById(`settings_${section}_ip_scan_button`),
+                'button'
+              ).click();
+              const results = expectElementKind(
+                await app.getById('settings_ip_scan_results'),
+                'table'
+              );
+              await waitForResult(async () => {
+                expect(await results.getRowCount()).toBe(1);
+                if (mode === 'complete') {
+                  expect(
+                    (await (await results.cellAt(0, 1))?.info())?.name
+                  ).toBe(expectedAddress);
+                }
+              });
+              await doubleClickTableRow(app, results, 0);
+              await waitForResult(async () => {
+                expect(
+                  await app.findById('settings_ip_scan_dialog')
+                ).toBeUndefined();
+              });
+              expect(
+                await expectElementKind(
+                  await app.getById(`settings_${section}_address_entry`),
+                  'entry'
+                ).text()
+              ).toBe(expectedAddress);
+              await expectElementKind(
+                await app.getById('settings_apply_button'),
+                'button'
+              ).click();
+              const applied = await waitForAppliedStore(app);
+              expect(applied[`${section}_address`]).toBe(expectedAddress);
+              expect(applied[`${section}_port`]).toBe('2222');
+              expect(applied.type).toBe(type);
+              expect(applied.name).toBe('fixture');
+              await expectElementKind(
+                await app.getById('settings_save_button'),
+                'button'
+              ).click();
+              const saved = await waitForPrintedStore(app, 'SAVED');
+              expect(saved[`${section}_address`]).toBe(expectedAddress);
+              expect(saved[`${section}_port`]).toBe('2222');
+              expect(saved.type).toBe(type);
+              expect(saved.name).toBe('fixture');
+            }
+          );
+        } finally {
+          await rm(directory, { recursive: true, force: true });
+        }
+      });
+    }
+  }
+
   it('uses a discovered IP from an active scan for SFTP', async (context) => {
     await runSharedGtkTest(
       context,

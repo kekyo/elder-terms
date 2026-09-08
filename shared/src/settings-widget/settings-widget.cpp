@@ -4969,12 +4969,19 @@ static void on_ip_scan_result_activated(GtkTreeView *tree_view,
   }
 
   gchar *address = nullptr;
-  gtk_tree_model_get(model, &iterator, ip_scan_address_column, &address, -1);
+  gchar *resolved_name = nullptr;
+  gtk_tree_model_get(model, &iterator, ip_scan_address_column, &address,
+                     ip_scan_reverse_fqdn_column, &resolved_name, -1);
   if (address == nullptr) {
+    g_free(resolved_name);
     return;
   }
   (void)dialog_state->cancellation_source.cancel();
-  gtk_entry_set_text(GTK_ENTRY(dialog_state->target_entry), address);
+  gtk_entry_set_text(GTK_ENTRY(dialog_state->target_entry),
+                     resolved_name != nullptr && resolved_name[0] != '\0'
+                         ? resolved_name
+                         : address);
+  g_free(resolved_name);
   g_free(address);
   if (dialog_state->dialog != nullptr) {
     gtk_widget_destroy(dialog_state->dialog);

@@ -32,6 +32,7 @@ struct FixtureOptions {
   bool has_save = false;
   bool show_actions = true;
   bool global_mode = false;
+  std::string save_file;
   std::string bell_sound_dialog_file;
   std::string ip_scan_mode;
   std::string page = "general";
@@ -89,6 +90,9 @@ static FixtureOptions parse_options(int argc, char **argv) {
       options.is_runtime = true;
     } else if (argument == "--save") {
       options.has_save = true;
+    } else if (starts_with(argument, "--save-file=")) {
+      options.has_save = true;
+      options.save_file = option_value(argument, "--save-file=");
     } else if (argument == "--hide-actions") {
       options.show_actions = false;
     } else if (argument == "--global-mode") {
@@ -422,7 +426,8 @@ delayed_burst_probe(std::uint32_t, std::uint16_t port,
 
 static elder_terms::IpScannerDependencies
 create_ip_scanner_dependencies(const std::string &mode) {
-  if (mode != "complete" && mode != "pending" && mode != "burst") {
+  if (mode != "complete" && mode != "pending" && mode != "burst" &&
+      mode != "no-name") {
     throw std::invalid_argument("unknown IP scan fixture mode: " + mode);
   }
   elder_terms::IpScannerDependencies dependencies{
@@ -441,6 +446,10 @@ create_ip_scanner_dependencies(const std::string &mode) {
   };
   if (mode == "pending") {
     dependencies.reverse_lookup = pending_reverse_lookup;
+  } else if (mode == "no-name") {
+    dependencies.reverse_lookup = [](std::uint32_t, cardio::cancellation) {
+      return cardio::resolved(std::string());
+    };
   } else if (mode == "burst") {
     dependencies.interfaces = {{
         .address = ipv4(198, 51, 102, 7),
@@ -1037,7 +1046,25 @@ int main(int argc, char **argv) {
         };
     if (options.has_save) {
       callbacks.save =
-          [](const elder_terms::SettingsStore &store) {
+          [path = options.save_file](const elder_terms::SettingsStore &store) {
+            if (!path.empty()) {
+              if (!elder_terms::save_settings(store, path).saved) {
+                return false;
+              }
+              const auto reloaded = elder_terms::load_settings(
+                  {.config_path = path,
+                   .startup_config_path = std::nullopt,
+                   .global_config_path =
+                       std::filesystem::path(path).parent_path() /
+                       "unused-global.ini"},
+                  1.0);
+              if (!reloaded.loaded) {
+                return false;
+              }
+              elder_terms_settings_widget_fixture::print_store(
+                  "SAVED", reloaded.store);
+              return true;
+            }
             elder_terms_settings_widget_fixture::print_store("SAVED", store);
             return true;
           };

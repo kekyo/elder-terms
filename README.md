@@ -205,7 +205,9 @@ Discovered hosts appear as the scan proceeds, together with their reverse DNS
 name when available. The SSH/SFTP (22), TELNET (23), and FTP (21) columns show
 a check mark when the corresponding port was found. The progress bar shows how
 much of the combined range has been checked. Double-click a row to stop the
-scan, close the dialog, and copy that numeric IP address into the setting.
+scan, close the dialog, and copy the resolved name into the setting if it is
+already available. Otherwise, the numeric IP address is used. The connection
+type, port, and entry name are unchanged.
 Click "Cancel" to stop and close the scan without changing the address.
 
 Only locally configured IPv4 ranges are scanned. Interfaces without an IPv4
