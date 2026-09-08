@@ -101,13 +101,9 @@ msgstr "スクロールバッファ行数"
 msgid "Zoom factor"
 msgstr "拡大率"
 
-#: shared/src/settings-widget/settings-presentation.cpp:47
-msgid "Primary font family"
-msgstr "プライマリフォントファミリー"
+msgid "Font families"
+msgstr "フォントファミリー"
 
-#: shared/src/settings-widget/settings-presentation.cpp:49
-msgid "Secondary font family"
-msgstr "セカンダリフォントファミリー"
 
 #: shared/src/settings-widget/settings-presentation.cpp:51
 msgid "Close window when session ends"
@@ -509,13 +505,9 @@ msgstr "ファイルを選択"
 msgid "Open"
 msgstr "開く"
 
-#: shared/src/settings-widget/settings-presentation.cpp:214
-msgid "Select Primary Terminal Font"
-msgstr "プライマリ端末フォントを選択"
+msgid "Select Terminal Font"
+msgstr "端末フォントを選択"
 
-#: shared/src/settings-widget/settings-presentation.cpp:216
-msgid "Select Secondary Terminal Font"
-msgstr "セカンダリ端末フォントを選択"
 
 #: shared/src/settings-widget/settings-presentation.cpp:218
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:751
@@ -527,8 +519,7 @@ msgstr "有効"
 msgid "Disabled"
 msgstr "無効"
 
-#: shared/src/settings-widget/settings-presentation.cpp:222
-msgid "Custom font"
+msgid "Custom fonts"
 msgstr "カスタムフォント"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224

@@ -61,7 +61,6 @@ static constexpr char general_color_custom[] = "custom";
 static constexpr char inherit_choice[] = "inherit";
 static constexpr char boolean_enabled[] = "enabled";
 static constexpr char boolean_disabled[] = "disabled";
-static constexpr char default_font_button_family[] = "Monospace";
 static constexpr gint64 minimum_terminal_scrollback_lines = 1000;
 static constexpr gint64 maximum_terminal_scrollback_lines = 100000;
 static constexpr gint64 minimum_terminal_border_width = 1;
@@ -71,6 +70,14 @@ struct ConnectionSettingsPage {
   std::vector<const char *> connection_types;
   GtkWidget *page = nullptr;
   GtkWidget *tab_label = nullptr;
+};
+
+struct TerminalFontRow {
+  GtkWidget *entry;
+  GtkWidget *choose;
+  GtkWidget *up;
+  GtkWidget *down;
+  GtkWidget *remove;
 };
 
 struct IpScanDialogState;
@@ -106,10 +113,13 @@ struct SettingsWidgetState {
   GtkWidget *terminal_zoom_entry = nullptr;
   GtkWidget *terminal_indicator_color_mode_combo = nullptr;
   GtkWidget *terminal_indicator_color_button = nullptr;
-  GtkWidget *terminal_font_primary_mode_combo = nullptr;
-  GtkWidget *terminal_font_primary_button = nullptr;
-  GtkWidget *terminal_font_fallback_mode_combo = nullptr;
-  GtkWidget *terminal_font_fallback_button = nullptr;
+  GtkWidget *terminal_fonts_mode_combo = nullptr;
+  GtkWidget *terminal_fonts_rows_box = nullptr;
+  GtkWidget *terminal_font_dialog = nullptr;
+  std::size_t terminal_font_dialog_index = 0;
+  std::vector<TerminalFontRow> terminal_font_rows;
+  std::vector<std::string> terminal_font_draft;
+  bool terminal_fonts_valid = true;
   GtkWidget *terminal_auto_close_combo = nullptr;
   GtkWidget *terminal_show_border_combo = nullptr;
   GtkWidget *terminal_border_width_entry = nullptr;
@@ -301,49 +311,6 @@ static GtkWidget *create_entry(const std::string &id) {
   return entry;
 }
 
-static void set_font_button_family(GtkWidget *button,
-                                   const std::string &family) {
-  if (button == nullptr || family.empty()) {
-    return;
-  }
-  PangoFontDescription *font = pango_font_description_new();
-  pango_font_description_set_family(font, family.c_str());
-  gtk_font_chooser_set_font_desc(GTK_FONT_CHOOSER(button), font);
-  pango_font_description_free(font);
-}
-
-static std::optional<std::string> font_button_family(GtkWidget *button) {
-  if (button == nullptr) {
-    return std::nullopt;
-  }
-  PangoFontDescription *font =
-      gtk_font_chooser_get_font_desc(GTK_FONT_CHOOSER(button));
-  if (font == nullptr) {
-    return std::nullopt;
-  }
-  const char *family = pango_font_description_get_family(font);
-  const std::string normalized =
-      trim_ascii_whitespace(family == nullptr ? "" : family);
-  pango_font_description_free(font);
-  return normalized.empty() ? std::nullopt
-                            : std::optional<std::string>{normalized};
-}
-
-static GtkWidget *create_font_family_button(const std::string &id,
-                                            const char *title) {
-  GtkWidget *button = gtk_font_button_new();
-  assign_accessible_id(button, id.c_str());
-  gtk_font_button_set_title(GTK_FONT_BUTTON(button), title);
-  gtk_font_button_set_use_font(GTK_FONT_BUTTON(button), TRUE);
-  gtk_font_button_set_use_size(GTK_FONT_BUTTON(button), FALSE);
-  gtk_font_button_set_show_size(GTK_FONT_BUTTON(button), FALSE);
-  gtk_font_button_set_show_style(GTK_FONT_BUTTON(button), FALSE);
-  gtk_font_chooser_set_level(GTK_FONT_CHOOSER(button),
-                             GTK_FONT_CHOOSER_LEVEL_FAMILY);
-  gtk_widget_set_hexpand(button, TRUE);
-  set_font_button_family(button, default_font_button_family);
-  return button;
-}
 
 static GtkWidget *create_combo_box(const char *id) {
   GtkWidget *combo = gtk_combo_box_text_new();
@@ -399,6 +366,14 @@ static std::string format_setting_value(const SettingValue &value) {
   }
   if (const auto *text = std::get_if<std::string>(&value)) {
     return *text;
+  }
+  if (const auto *list = std::get_if<std::vector<std::string>>(&value)) {
+    std::string text;
+    for (const auto &item : *list) {
+      if (!text.empty()) text += ", ";
+      text += item;
+    }
+    return text;
   }
   return std::get<bool>(value)
              ? settings_ui_text(SettingsUiText::enabled)
@@ -1164,93 +1139,7 @@ static void update_terminal_bell_sound_from_widget(
   }
 }
 
-static void sync_terminal_font_controls(SettingsWidgetState *state) {
-  const TerminalFontFamilies fonts = terminal_font_families(state->draft_store);
-  const std::string primary =
-      fonts.primary_family.value_or(default_font_button_family);
-  const std::string fallback = fonts.fallback_family.value_or(primary);
-
-  const auto populate_mode_combo = [state](GtkWidget *combo,
-                                            const SettingKey &key) {
-    gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(combo));
-    const std::string fallback_value = std::get<std::string>(
-        setting_fallback_value(state->draft_store, key,
-                               SettingValue{std::string()}));
-    const std::string fallback_display =
-        fallback_value.empty()
-            ? std::string()
-            : fallback_value == terminal_font_default
-                  ? settings_ui_text(SettingsUiText::use_built_in_default)
-                  : settings_ui_text(SettingsUiText::custom_font);
-    const std::string inherited = setting_fallback_label(
-        state->draft_store, key, fallback_display);
-    append_combo_option(combo, inherit_choice, inherited.c_str());
-    append_combo_option(
-        combo, terminal_font_default,
-        settings_ui_text(SettingsUiText::use_built_in_default));
-    append_combo_option(combo, terminal_font_custom,
-                        settings_ui_text(SettingsUiText::custom_font));
-
-    const std::string effective = setting_string_value_or_default(
-        state->draft_store, key, std::string());
-    const char *active = inherit_choice;
-    if (setting_has_explicit_value(state->draft_store, key)) {
-      active = effective == terminal_font_default ? terminal_font_default
-                                                   : terminal_font_custom;
-    }
-    gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo), active);
-  };
-
-  populate_mode_combo(state->terminal_font_primary_mode_combo,
-                      terminal_font_primary_family_setting_key());
-  populate_mode_combo(state->terminal_font_fallback_mode_combo,
-                      terminal_font_fallback_family_setting_key());
-  set_font_button_family(state->terminal_font_primary_button, primary);
-  set_font_button_family(state->terminal_font_fallback_button, fallback);
-  gtk_widget_set_sensitive(state->terminal_font_primary_button, TRUE);
-  gtk_widget_set_sensitive(state->terminal_font_fallback_button, TRUE);
-}
-
-static void update_terminal_font_mode_from_widget(
-    SettingsWidgetState *state, GtkWidget *mode_combo,
-    GtkWidget *button, const SettingKey &key) {
-  const std::string choice = active_combo_id(mode_combo, inherit_choice);
-  if (choice == inherit_choice) {
-    clear_explicit_setting_value(&state->draft_store, key);
-  } else if (choice == terminal_font_default) {
-    set_explicit_setting_value(
-        &state->draft_store, key,
-        SettingValue{std::string(terminal_font_default)});
-  } else {
-    const std::optional<std::string> family = font_button_family(button);
-    if (family.has_value()) {
-      set_explicit_setting_value(&state->draft_store, key,
-                                 SettingValue{family.value()});
-    }
-  }
-
-  const bool previous_synchronizing = state->synchronizing;
-  state->synchronizing = true;
-  sync_terminal_font_controls(state);
-  state->synchronizing = previous_synchronizing;
-}
-
-static void update_terminal_font_family_from_widget(
-    SettingsWidgetState *state, GtkWidget *mode_combo,
-    GtkWidget *button, const SettingKey &key) {
-  const std::optional<std::string> family = font_button_family(button);
-  if (!family.has_value()) {
-    return;
-  }
-
-  const bool previous_synchronizing = state->synchronizing;
-  state->synchronizing = true;
-  gtk_combo_box_set_active_id(GTK_COMBO_BOX(mode_combo),
-                              terminal_font_custom);
-  state->synchronizing = previous_synchronizing;
-  set_explicit_setting_value(&state->draft_store, key,
-                             SettingValue{family.value()});
-}
+static void sync_terminal_font_controls(SettingsWidgetState *state);
 
 enum class ColorSettingField {
   exterior_background,
@@ -1547,7 +1436,7 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
          state->terminal_scrollback_lines_valid &&
          state->terminal_border_width_valid && state->terminal_zoom_valid &&
          state->terminal_encoding_valid &&
-         state->terminal_bell_sound_valid &&
+         state->terminal_bell_sound_valid && state->terminal_fonts_valid &&
          state->telnet_port_valid && state->ssh_port_valid &&
          state->ftp_port_valid &&
          state->serial_baudrate_valid &&
@@ -3160,10 +3049,7 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
     state->terminal_zoom_valid = true;
     set_entry_validation(state->terminal_zoom_entry, true, {});
   }
-  if (state->terminal_font_primary_mode_combo != nullptr &&
-      state->terminal_font_fallback_mode_combo != nullptr &&
-      state->terminal_font_primary_button != nullptr &&
-      state->terminal_font_fallback_button != nullptr) {
+  if (state->terminal_fonts_mode_combo != nullptr) {
     sync_terminal_font_controls(state);
   }
   if (state->terminal_auto_close_combo != nullptr) {
@@ -3795,53 +3681,204 @@ static void on_terminal_bell_sound_browse_clicked(GtkButton *,
   gtk_window_present(GTK_WINDOW(dialog));
 }
 
-static void on_terminal_font_primary_mode_changed(GtkComboBox *,
-                                                  gpointer data) {
+static void rebuild_terminal_font_rows(SettingsWidgetState *state);
+
+static void update_terminal_font_draft(SettingsWidgetState *state) {
+  std::string reason;
+  state->terminal_fonts_valid = terminal_font_families_are_valid(
+      state->terminal_font_draft, &reason);
+  for (const auto &row : state->terminal_font_rows) {
+    set_entry_validation(row.entry, state->terminal_fonts_valid, reason);
+  }
+  const bool synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->terminal_fonts_mode_combo),
+      state->terminal_font_draft.empty() ? terminal_font_default : terminal_font_custom);
+  state->synchronizing = synchronizing;
+  if (state->terminal_fonts_valid) {
+    set_explicit_setting_value(&state->draft_store,
+        terminal_font_families_setting_key(), SettingValue{state->terminal_font_draft});
+  }
+  update_action_sensitivity(state);
+}
+
+static void on_terminal_font_entry_changed(GtkEditable *entry, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
-  if (state->synchronizing) {
+  if (state->synchronizing) return;
+  for (std::size_t index = 0; index < state->terminal_font_rows.size(); ++index) {
+    if (state->terminal_font_rows[index].entry == GTK_WIDGET(entry)) {
+      state->terminal_font_draft[index] = gtk_entry_get_text(GTK_ENTRY(entry));
+      update_terminal_font_draft(state);
+      notify_changed(state);
+      return;
+    }
+  }
+}
+
+static void on_terminal_font_dialog_destroy(GtkWidget *, gpointer data) {
+  static_cast<SettingsWidgetState *>(data)->terminal_font_dialog = nullptr;
+}
+
+static void on_terminal_font_dialog_response(GtkDialog *dialog, gint response,
+                                              gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (response == GTK_RESPONSE_OK &&
+      state->terminal_font_dialog_index < state->terminal_font_rows.size()) {
+    auto *font = gtk_font_chooser_get_font_desc(GTK_FONT_CHOOSER(dialog));
+    if (font != nullptr) {
+      const char *family = pango_font_description_get_family(font);
+      if (family != nullptr) {
+        const bool synchronizing = state->synchronizing;
+        state->synchronizing = true;
+        gtk_entry_set_text(GTK_ENTRY(state->terminal_font_rows[
+            state->terminal_font_dialog_index].entry), family);
+        state->terminal_font_draft[state->terminal_font_dialog_index] = family;
+        state->synchronizing = synchronizing;
+        update_terminal_font_draft(state);
+        notify_changed(state);
+      }
+      pango_font_description_free(font);
+    }
+  }
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+}
+
+static void on_terminal_font_row_clicked(GtkButton *button, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  for (std::size_t index = 0; index < state->terminal_font_rows.size(); ++index) {
+    const auto row = state->terminal_font_rows[index];
+    if (row.choose == GTK_WIDGET(button)) {
+      if (state->terminal_font_dialog != nullptr) {
+        gtk_window_present(GTK_WINDOW(state->terminal_font_dialog));
+        return;
+      }
+      auto *toplevel = gtk_widget_get_toplevel(state->root);
+      auto *dialog = gtk_font_chooser_dialog_new(
+          settings_ui_text(SettingsUiText::select_terminal_font),
+          GTK_IS_WINDOW(toplevel) ? GTK_WINDOW(toplevel) : nullptr);
+      state->terminal_font_dialog = dialog;
+      state->terminal_font_dialog_index = index;
+      assign_accessible_id(dialog, widget_id(state, "terminal_font_dialog").c_str());
+      gtk_font_chooser_set_level(GTK_FONT_CHOOSER(dialog), GTK_FONT_CHOOSER_LEVEL_FAMILY);
+      auto *font = pango_font_description_new();
+      const auto family = trim_ascii_whitespace(state->terminal_font_draft[index]);
+      pango_font_description_set_family(font, family.empty() ? "Monospace" : family.c_str());
+      gtk_font_chooser_set_font_desc(GTK_FONT_CHOOSER(dialog), font);
+      pango_font_description_free(font);
+      gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
+      gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+      g_signal_connect(dialog, "response", G_CALLBACK(on_terminal_font_dialog_response), state);
+      g_signal_connect(dialog, "destroy", G_CALLBACK(on_terminal_font_dialog_destroy), state);
+      gtk_widget_show_all(dialog);
+      return;
+    }
+    if (row.up == GTK_WIDGET(button) && index > 0) {
+      std::swap(state->terminal_font_draft[index], state->terminal_font_draft[index - 1]);
+    } else if (row.down == GTK_WIDGET(button) && index + 1 < state->terminal_font_rows.size()) {
+      std::swap(state->terminal_font_draft[index], state->terminal_font_draft[index + 1]);
+    } else if (row.remove == GTK_WIDGET(button)) {
+      state->terminal_font_draft.erase(state->terminal_font_draft.begin() + index);
+    } else {
+      continue;
+    }
+    rebuild_terminal_font_rows(state);
+    update_terminal_font_draft(state);
+    notify_changed(state);
     return;
   }
-  update_terminal_font_mode_from_widget(
-      state, state->terminal_font_primary_mode_combo,
-      state->terminal_font_primary_button,
-      terminal_font_primary_family_setting_key());
+}
+
+static void rebuild_terminal_font_rows(SettingsWidgetState *state) {
+  // A row index may change after reorder/rebase. Close its picker before
+  // replacing rows so no delayed response can modify a different candidate.
+  if (state->terminal_font_dialog != nullptr) gtk_widget_destroy(state->terminal_font_dialog);
+  const bool synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  state->terminal_font_rows.clear();
+  GList *children = gtk_container_get_children(GTK_CONTAINER(state->terminal_fonts_rows_box));
+  for (GList *child = children; child != nullptr; child = child->next) {
+    gtk_widget_destroy(GTK_WIDGET(child->data));
+  }
+  g_list_free(children);
+  for (std::size_t index = 0; index < state->terminal_font_draft.size(); ++index) {
+    auto *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+    const auto suffix = std::to_string(index);
+    auto *entry = create_entry(widget_id(state, ("terminal_font_family_" + suffix).c_str()));
+    gtk_entry_set_text(GTK_ENTRY(entry), state->terminal_font_draft[index].c_str());
+    gtk_box_pack_start(GTK_BOX(box), entry, TRUE, TRUE, 0);
+    g_signal_connect(entry, "changed", G_CALLBACK(on_terminal_font_entry_changed), state);
+    const auto add_button = [state, box, &suffix](const char *id, const char *label, SettingsUiText tooltip) {
+      auto *button = gtk_button_new_with_label(label);
+      assign_accessible_id(button, widget_id(state, (std::string(id) + suffix).c_str()).c_str());
+      gtk_widget_set_tooltip_text(button, settings_ui_text(tooltip));
+      gtk_box_pack_start(GTK_BOX(box), button, FALSE, FALSE, 0);
+      g_signal_connect(button, "clicked", G_CALLBACK(on_terminal_font_row_clicked), state);
+      return button;
+    };
+    TerminalFontRow row{
+      .entry = entry,
+      .choose = add_button("terminal_font_choose_", "…", SettingsUiText::select_terminal_font),
+      .up = add_button("terminal_font_up_", "↑", SettingsUiText::font_move_up),
+      .down = add_button("terminal_font_down_", "↓", SettingsUiText::font_move_down),
+      .remove = add_button("terminal_font_remove_", "×", SettingsUiText::font_remove),
+    };
+    gtk_widget_set_sensitive(row.up, index > 0);
+    gtk_widget_set_sensitive(row.down, index + 1 < state->terminal_font_draft.size());
+    state->terminal_font_rows.push_back(row);
+    gtk_box_pack_start(GTK_BOX(state->terminal_fonts_rows_box), box, FALSE, FALSE, 0);
+  }
+  gtk_widget_show_all(state->terminal_fonts_rows_box);
+  state->synchronizing = synchronizing;
+}
+
+static void sync_terminal_font_controls(SettingsWidgetState *state) {
+  const auto key = terminal_font_families_setting_key();
+  const auto fallback = std::get<std::vector<std::string>>(setting_fallback_value(
+      state->draft_store, key, SettingValue{std::vector<std::string>{}}));
+  const auto inherited = setting_fallback_label(state->draft_store, key,
+      fallback.empty() && setting_fallback_source(state->draft_store, key) == SettingValueSource::built_in
+          ? "" : settings_ui_text(fallback.empty() ? SettingsUiText::use_built_in_default : SettingsUiText::custom_fonts));
+  auto *combo = state->terminal_fonts_mode_combo;
+  gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(combo));
+  append_combo_option(combo, inherit_choice, inherited.c_str());
+  append_combo_option(combo, terminal_font_default, settings_ui_text(SettingsUiText::use_built_in_default));
+  append_combo_option(combo, terminal_font_custom, settings_ui_text(SettingsUiText::custom_fonts));
+  const auto value = std::get<std::vector<std::string>>(setting_value_or_default(
+      state->draft_store, key, SettingValue{std::vector<std::string>{}}));
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo), !setting_has_explicit_value(state->draft_store, key)
+      ? inherit_choice : value.empty() ? terminal_font_default : terminal_font_custom);
+  state->terminal_font_draft = terminal_font_families(state->draft_store).families;
+  state->terminal_fonts_valid = true;
+  rebuild_terminal_font_rows(state);
+}
+
+static void on_terminal_fonts_mode_changed(GtkComboBox *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) return;
+  const auto choice = active_combo_id(state->terminal_fonts_mode_combo, inherit_choice);
+  const auto key = terminal_font_families_setting_key();
+  if (choice == inherit_choice) {
+    clear_explicit_setting_value(&state->draft_store, key);
+  } else if (choice == terminal_font_default) {
+    set_explicit_setting_value(&state->draft_store, key, SettingValue{std::vector<std::string>{}});
+  } else {
+    update_terminal_font_draft(state);
+  }
+  if (choice != terminal_font_custom || state->terminal_fonts_valid) {
+    state->synchronizing = true;
+    sync_terminal_font_controls(state);
+    state->synchronizing = false;
+  }
+  update_action_sensitivity(state);
   notify_changed(state);
 }
 
-static void on_terminal_font_fallback_mode_changed(GtkComboBox *,
-                                                   gpointer data) {
+static void on_terminal_fonts_add_clicked(GtkButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
-  if (state->synchronizing) {
-    return;
-  }
-  update_terminal_font_mode_from_widget(
-      state, state->terminal_font_fallback_mode_combo,
-      state->terminal_font_fallback_button,
-      terminal_font_fallback_family_setting_key());
-  notify_changed(state);
-}
-
-static void on_terminal_font_primary_set(GtkFontButton *, gpointer data) {
-  auto *state = static_cast<SettingsWidgetState *>(data);
-  if (state->synchronizing) {
-    return;
-  }
-  update_terminal_font_family_from_widget(
-      state, state->terminal_font_primary_mode_combo,
-      state->terminal_font_primary_button,
-      terminal_font_primary_family_setting_key());
-  notify_changed(state);
-}
-
-static void on_terminal_font_fallback_set(GtkFontButton *, gpointer data) {
-  auto *state = static_cast<SettingsWidgetState *>(data);
-  if (state->synchronizing) {
-    return;
-  }
-  update_terminal_font_family_from_widget(
-      state, state->terminal_font_fallback_mode_combo,
-      state->terminal_font_fallback_button,
-      terminal_font_fallback_family_setting_key());
+  state->terminal_font_draft.push_back("");
+  rebuild_terminal_font_rows(state);
+  update_terminal_font_draft(state);
+  gtk_widget_grab_focus(state->terminal_font_rows.back().entry);
   notify_changed(state);
 }
 
@@ -4802,43 +4839,28 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   attach_row(page, 14, terminal_send_break_key_setting_key(),
              send_break_row);
 
-  GtkWidget *primary_font_row =
-      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  state->terminal_font_primary_mode_combo = create_combo_box(
-      widget_id(state, "terminal_font_primary_mode_combo").c_str());
-  state->terminal_font_primary_button = create_font_family_button(
-      widget_id(state, "terminal_font_primary_button"),
-      settings_ui_text(SettingsUiText::select_primary_terminal_font));
-  g_signal_connect(state->terminal_font_primary_mode_combo, "changed",
-                   G_CALLBACK(on_terminal_font_primary_mode_changed),
-                   state);
-  g_signal_connect(state->terminal_font_primary_button, "font-set",
-                   G_CALLBACK(on_terminal_font_primary_set), state);
-  gtk_box_pack_start(GTK_BOX(primary_font_row),
-                     state->terminal_font_primary_mode_combo, TRUE, TRUE, 0);
-  gtk_box_pack_start(GTK_BOX(primary_font_row),
-                     state->terminal_font_primary_button, TRUE, TRUE, 0);
-  attach_row(page, 15, terminal_font_primary_family_setting_key(),
-             primary_font_row);
-
-  GtkWidget *fallback_font_row =
-      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  state->terminal_font_fallback_mode_combo = create_combo_box(
-      widget_id(state, "terminal_font_fallback_mode_combo").c_str());
-  state->terminal_font_fallback_button = create_font_family_button(
-      widget_id(state, "terminal_font_fallback_button"),
-      settings_ui_text(SettingsUiText::select_secondary_terminal_font));
-  g_signal_connect(state->terminal_font_fallback_mode_combo, "changed",
-                   G_CALLBACK(on_terminal_font_fallback_mode_changed),
-                   state);
-  g_signal_connect(state->terminal_font_fallback_button, "font-set",
-                   G_CALLBACK(on_terminal_font_fallback_set), state);
-  gtk_box_pack_start(GTK_BOX(fallback_font_row),
-                     state->terminal_font_fallback_mode_combo, TRUE, TRUE, 0);
-  gtk_box_pack_start(GTK_BOX(fallback_font_row),
-                     state->terminal_font_fallback_button, TRUE, TRUE, 0);
-  attach_row(page, 16, terminal_font_fallback_family_setting_key(),
-             fallback_font_row);
+  auto *font_panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+  auto *font_actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  state->terminal_fonts_mode_combo = create_combo_box(
+      widget_id(state, "terminal_fonts_mode_combo").c_str());
+  gtk_box_pack_start(GTK_BOX(font_actions), state->terminal_fonts_mode_combo, TRUE, TRUE, 0);
+  g_signal_connect(state->terminal_fonts_mode_combo, "changed", G_CALLBACK(on_terminal_fonts_mode_changed), state);
+  auto *add_font = gtk_button_new_with_label(settings_ui_text(SettingsUiText::font_add));
+  assign_accessible_id(add_font, widget_id(state, "terminal_fonts_add_button").c_str());
+  g_signal_connect(add_font, "clicked", G_CALLBACK(on_terminal_fonts_add_clicked), state);
+  gtk_box_pack_start(GTK_BOX(font_actions), add_font, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(font_panel), font_actions, FALSE, FALSE, 0);
+  auto *font_scroller = gtk_scrolled_window_new(nullptr, nullptr);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(font_scroller), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(font_scroller), 72);
+  gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(font_scroller), 112);
+  gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(font_scroller), TRUE);
+  assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(font_scroller)),
+      widget_id(state, "terminal_fonts_scrollbar").c_str());
+  state->terminal_fonts_rows_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+  gtk_container_add(GTK_CONTAINER(font_scroller), state->terminal_fonts_rows_box);
+  gtk_box_pack_start(GTK_BOX(font_panel), font_scroller, FALSE, FALSE, 0);
+  attach_row(page, 15, terminal_font_families_setting_key(), font_panel);
 
   GtkWidget *indicator_color_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   state->terminal_indicator_color_mode_combo = create_combo_box(
@@ -4856,7 +4878,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_terminal_indicator_color_set), state);
   gtk_box_pack_start(GTK_BOX(indicator_color_row),
                      state->terminal_indicator_color_button, FALSE, FALSE, 0);
-  attach_row(page, 17, terminal_indicator_color_setting_key(), indicator_color_row);
+  attach_row(page, 16, terminal_indicator_color_setting_key(), indicator_color_row);
 
   return scroller;
 }
@@ -6039,6 +6061,8 @@ void settings_widget_rebase_fallbacks(
   const bool zoom_invalid = !state->terminal_zoom_valid;
   const bool encoding_invalid = !state->terminal_encoding_valid;
   const bool bell_sound_invalid = !state->terminal_bell_sound_valid;
+  const bool fonts_invalid = !state->terminal_fonts_valid;
+  const auto font_draft = state->terminal_font_draft;
   const bool telnet_port_invalid = !state->telnet_port_valid;
   const bool ssh_port_invalid = !state->ssh_port_valid;
   const bool baudrate_invalid = !state->serial_baudrate_valid;
@@ -6075,6 +6099,12 @@ void settings_widget_rebase_fallbacks(
   rebase_settings_store_fallbacks(&state->draft_store, fallbacks);
   state->synchronizing = true;
   sync_widgets_from_draft(state);
+
+  if (fonts_invalid) {
+    state->terminal_font_draft = font_draft;
+    rebuild_terminal_font_rows(state);
+    update_terminal_font_draft(state);
+  }
 
   const auto restore_invalid =
       [](GtkWidget *entry, const std::string &text, bool invalid,
@@ -6211,6 +6241,9 @@ void destroy_settings_widget(SettingsWidgetState *state) {
     state->ip_scan_dialog.reset();
   }
   state->ip_scan_task.reset();
+  if (state->terminal_font_dialog != nullptr) {
+    gtk_widget_destroy(state->terminal_font_dialog);
+  }
   if (state->terminal_bell_sound_dialog != nullptr) {
     gtk_widget_destroy(state->terminal_bell_sound_dialog);
   }

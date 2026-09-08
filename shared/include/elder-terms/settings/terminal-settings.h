@@ -29,14 +29,13 @@ struct TerminalDisplaySettings {
 /**
  * Ordered terminal font families.
  *
- * The fallback family is used after the primary family when the primary font
- * does not contain a requested glyph. Neither value contains a font size.
+ * Later families supply glyphs missing from earlier candidates. Names contain
+ * no size or style information.
  */
 struct TerminalFontFamilies {
-  /** Primary font family, or no value to retain VTE's default family. */
-  std::optional<std::string> primary_family;
-  /** Secondary fallback family, or no value to use normal system fallback. */
-  std::optional<std::string> fallback_family;
+  /** Font family names in descending priority; an empty vector retains VTE's
+   * runtime family when used directly by the renderer. */
+  std::vector<std::string> families;
 };
 
 /**
@@ -113,18 +112,22 @@ ELDER_TERMS_API std::optional<RgbColor>
 terminal_indicator_color(const SettingsStore &store);
 
 /**
- * Returns the setting key for [terminal] font_primary_family.
+ * Returns the setting key for [terminal] font_families.
  *
- * @returns Setting key for the primary terminal font family.
+ * @returns Setting key for the ordered terminal font family list.
  */
-ELDER_TERMS_API SettingKey terminal_font_primary_family_setting_key();
+ELDER_TERMS_API SettingKey terminal_font_families_setting_key();
 
 /**
- * Returns the setting key for [terminal] font_fallback_family.
- *
- * @returns Setting key for the secondary terminal font family.
+ * Validates ordered terminal font family names without requiring installed fonts.
+ * @param families Candidate list; an empty list selects the built-in defaults.
+ * @param reason Receives an explanation when the list is invalid.
+ * @returns True for unique, non-empty UTF-8 names without commas or controls.
+ * @remarks Surrounding whitespace is ignored when detecting empty or duplicate
+ * names. Control characters are rejected even at the edges of a name.
  */
-ELDER_TERMS_API SettingKey terminal_font_fallback_family_setting_key();
+ELDER_TERMS_API bool terminal_font_families_are_valid(
+    const std::vector<std::string> &families, std::string *reason);
 
 /**
  * Returns the setting key for [terminal] auto_close.
@@ -255,7 +258,8 @@ terminal_display_settings(const SettingsStore &store);
  * Extracts the resolved ordered terminal font families from a store.
  *
  * @param store Source settings store.
- * @returns Primary and secondary families without a font size.
+ * @returns Ordered families without a font size. An absent or explicitly empty
+ * list resolves to Noto Sans Mono followed by Monospace.
  */
 ELDER_TERMS_API TerminalFontFamilies
 terminal_font_families(const SettingsStore &store);

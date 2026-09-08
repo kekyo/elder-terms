@@ -101,13 +101,9 @@ msgstr "Líneas del historial"
 msgid "Zoom factor"
 msgstr "Factor de zoom"
 
-#: shared/src/settings-widget/settings-presentation.cpp:47
-msgid "Primary font family"
-msgstr "Familia de fuentes principal"
+msgid "Font families"
+msgstr "Familias de fuentes"
 
-#: shared/src/settings-widget/settings-presentation.cpp:49
-msgid "Secondary font family"
-msgstr "Familia de fuentes secundaria"
 
 #: shared/src/settings-widget/settings-presentation.cpp:51
 msgid "Close window when session ends"
@@ -509,13 +505,9 @@ msgstr "Seleccionar archivo"
 msgid "Open"
 msgstr "Abrir"
 
-#: shared/src/settings-widget/settings-presentation.cpp:214
-msgid "Select Primary Terminal Font"
-msgstr "Seleccionar la fuente principal del terminal"
+msgid "Select Terminal Font"
+msgstr "Seleccionar fuente del terminal"
 
-#: shared/src/settings-widget/settings-presentation.cpp:216
-msgid "Select Secondary Terminal Font"
-msgstr "Seleccionar la fuente secundaria del terminal"
 
 #: shared/src/settings-widget/settings-presentation.cpp:218
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:751
@@ -527,9 +519,8 @@ msgstr "Habilitado"
 msgid "Disabled"
 msgstr "Deshabilitado"
 
-#: shared/src/settings-widget/settings-presentation.cpp:222
-msgid "Custom font"
-msgstr "Fuente personalizada"
+msgid "Custom fonts"
+msgstr "Fuentes personalizadas"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "No color"

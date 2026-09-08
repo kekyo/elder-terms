@@ -80,6 +80,17 @@ static void set_key_file_value(GKeyFile *key_file, const SettingEntry &entry) {
     return;
   }
 
+  if (const auto *list = std::get_if<std::vector<std::string>>(&entry.value)) {
+    std::vector<const char *> values;
+    values.reserve(list->size() + 1);
+    for (const auto &value : *list) {
+      values.push_back(value.c_str());
+    }
+    values.push_back(nullptr);
+    g_key_file_set_string_list(key_file, section, name, values.data(),
+                               list->size());
+    return;
+  }
   g_key_file_set_boolean(key_file, section, name,
                          std::get<bool>(entry.value) ? TRUE : FALSE);
 }

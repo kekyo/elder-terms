@@ -111,9 +111,8 @@ using elder_terms::terminal_display_settings;
 using elder_terms::terminal_encoding_choices;
 using elder_terms::terminal_encoding_name_is_valid;
 using elder_terms::terminal_encoding_setting_key;
-using elder_terms::terminal_font_fallback_family_setting_key;
 using elder_terms::terminal_font_families;
-using elder_terms::terminal_font_primary_family_setting_key;
+using elder_terms::terminal_font_families_setting_key;
 using elder_terms::terminal_height_setting_key;
 using elder_terms::terminal_scrollback_lines_setting_key;
 using elder_terms::terminal_show_border;
@@ -207,12 +206,8 @@ static void test_default_settings() {
               "default terminal scrollback should retain 10000 lines");
   expect_true(display.zoom == 1.2, "default terminal zoom should be retained");
   const TerminalFontFamilies fonts = terminal_font_families(store);
-  expect_true(fonts.primary_family ==
-                  std::optional<std::string>{"Noto Sans Mono"},
-              "the default primary terminal font should be Noto Sans Mono");
-  expect_true(fonts.fallback_family ==
-                  std::optional<std::string>{"Monospace"},
-              "the default fallback terminal font should be Monospace");
+  expect_true(fonts.families == std::vector<std::string>{"Noto Sans Mono", "Monospace"},
+              "the default font list should preserve the built-in order");
   expect_true(terminal_auto_close(store),
               "default terminal auto-close should be enabled");
   expect_true(!terminal_show_border(store),
@@ -654,117 +649,130 @@ static void test_terminal_indicator_color_round_trip_and_layering() {
   remove_config(global_path);
 }
 
-static void test_terminal_font_family_settings_round_trip_and_layering() {
-  const std::filesystem::path global_path =
-      temporary_config_path("global-terminal-fonts");
-  const std::filesystem::path connection_path =
-      temporary_config_path("connection-terminal-fonts");
-  write_config(global_path,
-               "[terminal]\n"
-               "font_primary_family=Global Latin\n"
-               "font_fallback_family=Global CJK\n");
-  write_config(connection_path,
-               "[terminal]\n"
-               "font_primary_family=Connection Latin\n");
-
-  SettingsLoadResult loaded = load_settings(
-      SettingsLoadOptions{
-          .config_path = connection_path,
-          .startup_config_path = std::nullopt,
-          .global_config_path = global_path,
-      },
-      1.0);
-  remove_config(global_path);
-
-  TerminalFontFamilies fonts = terminal_font_families(loaded.store);
-  expect_true(fonts.primary_family ==
-                  std::optional<std::string>{"Connection Latin"},
-              "a connection primary font should override the global font");
-  expect_true(fonts.fallback_family ==
-                  std::optional<std::string>{"Global CJK"},
-              "an unspecified fallback font should inherit the global font");
-  expect_true(setting_value_source(
-                  loaded.store,
-                  terminal_font_primary_family_setting_key()) ==
-                  SettingValueSource::override,
-              "the connection primary font should report an override source");
-  expect_true(setting_value_source(
-                  loaded.store,
-                  terminal_font_fallback_family_setting_key()) ==
-                  SettingValueSource::global,
-              "the inherited fallback font should report a global source");
-
-  expect_true(
-      set_explicit_setting_value(
-          &loaded.store, terminal_font_fallback_family_setting_key(),
-          elder_terms::SettingValue{std::string("Connection CJK")}),
-      "a fallback font family override should be accepted");
-  const SettingsSaveResult save_result =
-      save_settings(loaded.store, connection_path);
-  expect_true(save_result.saved, "terminal font families should save");
-  const std::string content = read_config(connection_path);
-  remove_config(connection_path);
-  expect_true(content.find("font_primary_family=Connection Latin") !=
-                  std::string::npos,
-              "the primary font family should be persisted");
-  expect_true(content.find("font_fallback_family=Connection CJK") !=
-                  std::string::npos,
-              "the fallback font family should be persisted");
+static void test_removed_fixed_font_settings_are_ignored() {
+  const auto path = temporary_config_path("removed-fixed-font-settings");
+  write_config(path, "[terminal]\nfont_primary_family=Old Latin\n"
+                     "font_fallback_family=Old CJK\n");
+  const auto loaded = load_settings(SettingsLoadOptions{
+      .config_path = path, .startup_config_path = std::nullopt,
+      .global_config_path = std::nullopt}, 1.0);
+  const bool primary = setting_has_configured_value(loaded.store,
+      elder_terms::make_setting_key("terminal", "font_primary_family"));
+  const bool fallback = setting_has_configured_value(loaded.store,
+      elder_terms::make_setting_key("terminal", "font_fallback_family"));
+  const auto saved = save_settings(loaded.store, path);
+  const auto content = read_config(path);
+  remove_config(path);
+  expect_true(!primary && !fallback && saved.saved &&
+                  content.find("font_primary_family") == std::string::npos &&
+                  content.find("font_fallback_family") == std::string::npos,
+              "removed fixed font settings must not be loaded or saved");
 }
 
-static void test_terminal_font_family_defaults_override_global_fonts() {
-  const std::filesystem::path global_path =
-      temporary_config_path("global-terminal-font-defaults");
-  const std::filesystem::path connection_path =
-      temporary_config_path("connection-terminal-font-defaults");
-  write_config(global_path,
-               "[terminal]\n"
-               "font_primary_family=Global Latin\n"
-               "font_fallback_family=Global CJK\n");
-  write_config(connection_path,
-               "[terminal]\n"
-               "font_primary_family=default\n"
-               "font_fallback_family=default\n");
+static void test_terminal_font_list_round_trip_and_validation() {
+  const auto global = temporary_config_path("font-list-global");
+  const auto path = temporary_config_path("font-list-connection");
+  const auto key = elder_terms::make_setting_key("terminal", "font_families");
+  const SettingsLoadOptions options{.config_path = path,
+      .startup_config_path = std::nullopt, .global_config_path = global};
+  const auto values = [&key](const SettingsStore &store) {
+    return std::get<std::vector<std::string>>(elder_terms::setting_value_or_default(
+        store, key, elder_terms::SettingValue{std::vector<std::string>{}}));
+  };
+  write_config(global, "[terminal]\nfont_families=Global First;Global Second;\n");
+  write_config(path, "");
+  auto loaded = load_settings(options, 1.0);
+  expect_true(values(loaded.store) == std::vector<std::string>{"Global First", "Global Second"} &&
+                  setting_value_source(loaded.store, key) == SettingValueSource::global,
+              "an absent connection list should inherit the whole global list");
+  expect_true(save_settings(loaded.store, path).saved && read_config(path).empty(),
+              "an inherited list must not be flattened into the connection file");
 
-  const SettingsLoadResult loaded = load_settings(
-      SettingsLoadOptions{
-          .config_path = connection_path,
-          .startup_config_path = std::nullopt,
-          .global_config_path = global_path,
-      },
-      1.0);
-  remove_config(global_path);
+  for (const std::vector<std::string> &list : std::vector<std::vector<std::string>>{
+           {}, {"One"}, {"One", "Two"}, {"One", "Two", "Three", "Four"},
+           {"Semi;colon", "Back\\slash", "Quote\"Face", "日本語"}}) {
+    expect_true(set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{list}),
+                "a valid ordered list, including unknown families, should be accepted");
+    expect_true(save_settings(loaded.store, path).saved, "font lists should save");
+    loaded = load_settings(options, 1.0);
+    expect_true(loaded.warnings.empty() && values(loaded.store) == list &&
+                    setting_has_explicit_value(loaded.store, key),
+                "list order, empty override and escaped names must round-trip");
+  }
 
-  const TerminalFontFamilies fonts = terminal_font_families(loaded.store);
-  expect_true(fonts.primary_family ==
-                  std::optional<std::string>{"Noto Sans Mono"},
-              "an explicit default should restore the built-in primary font");
-  expect_true(fonts.fallback_family ==
-                  std::optional<std::string>{"Monospace"},
-              "an explicit default should restore the built-in fallback font");
-  expect_true(setting_value_source(
-                  loaded.store,
-                  terminal_font_primary_family_setting_key()) ==
-                  SettingValueSource::override,
-              "the default primary font should remain an override");
-  expect_true(setting_value_source(
-                  loaded.store,
-                  terminal_font_fallback_family_setting_key()) ==
-                  SettingValueSource::override,
-              "the default fallback font should remain an override");
+  expect_true(set_explicit_setting_value(&loaded.store, key,
+                  elder_terms::SettingValue{std::vector<std::string>{"  First  ", "Second "}}),
+              "surrounding spaces should be accepted");
+  expect_true(values(loaded.store) == std::vector<std::string>{"First", "Second"},
+              "font family names should be normalized before storage");
+  expect_true(save_settings(loaded.store, path).saved, "normalized lists should save");
+  loaded = load_settings(options, 1.0);
+  expect_true(set_setting_value(&loaded.store, key,
+                  elder_terms::SettingValue{std::vector<std::string>{" First ", "Second"}}) &&
+                  !elder_terms::settings_store_is_dirty(loaded.store),
+              "equivalent normalized lists must not become dirty");
+  for (const std::vector<std::string> &invalid : std::vector<std::vector<std::string>>{
+           {""}, {"One", "", "Two"}, {"   "}, {"One", " One "},
+           {"One,Two"}, {"Line\nBreak"}, {"Tab\tName"}, {"\nLeading"},
+           {std::string("Nul\0Name", 8)}, {"Unicode\xc2\x85"}, {"Invalid\xff"}}) {
+    expect_true(!set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{invalid}) &&
+                    !set_setting_value(&loaded.store, key, elder_terms::SettingValue{invalid}) &&
+                    values(loaded.store) == std::vector<std::string>{"First", "Second"},
+                "invalid font lists must not replace the last valid value");
+  }
+  expect_true(!set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{true}),
+              "font lists must reject scalar values");
+  for (const auto *invalid : {"First;;Second;", "First; First;", "One,Two;", "One\\nTwo;", "Bad\\q;"}) {
+    write_config(path, std::string("[terminal]\nfont_families=") + invalid + "\n");
+    loaded = load_settings(options, 1.0);
+    expect_true(warnings_contain(loaded.warnings, "font_families") &&
+                    values(loaded.store) == std::vector<std::string>{"Global First", "Global Second"},
+                "an invalid file list should warn and inherit the valid global list");
+  }
+  write_config(path, "[terminal]\nfont_families=  First  ; Second ; Third;\n");
+  loaded = load_settings(options, 1.0);
+  expect_true(values(loaded.store) == std::vector<std::string>{"First", "Second", "Third"},
+              "file-loaded lists must be normalized too");
+  clear_explicit_setting_value(&loaded.store, key);
+  expect_true(save_settings(loaded.store, path).saved && read_config(path).empty(),
+              "resetting the list must restore inheritance and remove the key");
+  write_config(global, "[terminal]\nfont_families=Invalid,,Family;\n");
+  loaded = load_settings(options, 1.0);
+  expect_true(warnings_contain(loaded.warnings, "font_families") && values(loaded.store).empty(),
+              "invalid global lists must fall back to the built-in list token");
+  remove_config(path);
+  remove_config(global);
+}
 
-  const SettingsSaveResult save_result =
-      save_settings(loaded.store, connection_path);
-  expect_true(save_result.saved,
-              "explicit terminal font defaults should save");
-  const std::string content = read_config(connection_path);
-  remove_config(connection_path);
-  expect_true(content.find("font_primary_family=default") !=
-                  std::string::npos,
-              "the default primary font should be persisted");
-  expect_true(content.find("font_fallback_family=default") !=
-                  std::string::npos,
-              "the default fallback font should be persisted");
+static void test_terminal_font_list_defaults_and_rebase() {
+  const auto global = temporary_config_path("font-defaults-global");
+  const auto path = temporary_config_path("font-defaults-connection");
+  const auto key = terminal_font_families_setting_key();
+  write_config(global, "[terminal]\nfont_families=Global First;Global Second;\n");
+  write_config(path, "[terminal]\nfont_families=\n");
+  const SettingsLoadOptions options{.config_path = path,
+      .startup_config_path = std::nullopt, .global_config_path = global};
+  auto loaded = load_settings(options, 1.0);
+  expect_true(terminal_font_families(loaded.store).families ==
+                  std::vector<std::string>{"Noto Sans Mono", "Monospace"} &&
+                  setting_has_explicit_value(loaded.store, key),
+              "an explicit empty list must override global fonts with built-ins");
+  expect_true(save_settings(loaded.store, path).saved &&
+                  read_config(path).find("font_families=\n") != std::string::npos,
+              "the explicit built-in list token must be persisted");
+  write_config(global, "[terminal]\nfont_families=Changed Global;\n");
+  const auto fallback = load_global_settings(global, 1.0);
+  rebase_settings_store_fallbacks(&loaded.store, fallback.store);
+  expect_true(terminal_font_families(loaded.store).families ==
+                  std::vector<std::string>{"Noto Sans Mono", "Monospace"} &&
+                  !elder_terms::settings_store_is_dirty(loaded.store),
+              "rebasing an explicit built-in list must preserve the override and dirty state");
+  clear_explicit_setting_value(&loaded.store, key);
+  expect_true(terminal_font_families(loaded.store).families ==
+                  std::vector<std::string>{"Changed Global"},
+              "resetting after rebase must inherit the replacement list");
+  remove_config(path);
+  remove_config(global);
 }
 
 static void test_terminal_bell_sound_validation_and_round_trip() {
@@ -2458,16 +2466,9 @@ static void test_public_setting_keys() {
               "scrollback_lines");
   expect_true(terminal_zoom_setting_key().name == "zoom",
               "terminal zoom key should use the zoom name");
-  expect_true(
-      terminal_font_primary_family_setting_key().section == "terminal" &&
-          terminal_font_primary_family_setting_key().name ==
-              "font_primary_family",
-      "primary font family key should use [terminal] font_primary_family");
-  expect_true(
-      terminal_font_fallback_family_setting_key().section == "terminal" &&
-          terminal_font_fallback_family_setting_key().name ==
-              "font_fallback_family",
-      "fallback font family key should use [terminal] font_fallback_family");
+  expect_true(terminal_font_families_setting_key().section == "terminal" &&
+                  terminal_font_families_setting_key().name == "font_families",
+              "the font list key should use [terminal] font_families");
   expect_true(terminal_auto_close_setting_key().name == "auto_close",
               "terminal auto_close key should use the auto_close name");
   expect_true(terminal_show_border_setting_key().section == "terminal" &&
@@ -4271,6 +4272,8 @@ static void test_regular_expression_reports_project_owned_matches() {
 
 int main() {
   try {
+    elder_terms_settings_test::test_removed_fixed_font_settings_are_ignored();
+    elder_terms_settings_test::test_terminal_font_list_round_trip_and_validation();
     elder_terms_settings_test::test_default_settings();
     elder_terms_settings_test::test_terminal_indicator_color_round_trip_and_layering();
     elder_terms_settings_test::
@@ -4280,9 +4283,7 @@ int main() {
     elder_terms_settings_test::
         test_terminal_border_width_range_and_round_trip();
     elder_terms_settings_test::
-        test_terminal_font_family_settings_round_trip_and_layering();
-    elder_terms_settings_test::
-        test_terminal_font_family_defaults_override_global_fonts();
+        test_terminal_font_list_defaults_and_rebase();
     elder_terms_settings_test::
         test_terminal_bell_sound_validation_and_round_trip();
     elder_terms_settings_test::test_connection_name_settings();

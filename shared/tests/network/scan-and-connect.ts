@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { createGtkAppLauncher, type GtkApp } from 'gestament';
 import { waitForResult } from 'gestament/testing';
+import { editScannedConnection } from './edit-scanned-connection.ts';
 
 const [address, expectedName] = process.argv.slice(2);
 assert(address && expectedName);
 const numericAddress = address
   .split('.')
   .reduce((result, octet) => result * 256 + Number(octet), 0);
-const configPath = '/tmp/scanned-connection.ini';
+let configPath = '/tmp/scanned-connection.ini';
 const environment = {
   LANGUAGE: 'C',
   LC_ALL: 'C.UTF-8',
@@ -83,6 +84,8 @@ try {
   await launcher.release();
 }
 
+configPath = await editScannedConnection(configPath);
+
 // Launch the real terminal from the saved file. Its ordinary GResolver forward
 // lookup must reach the container's resolved stub, without fixture injection.
 // Add only a greeting-response macro to observe real bidirectional terminal I/O;
@@ -108,6 +111,21 @@ try {
     );
   });
   await writeFile('/evidence/terminal.png', (await terminal.capture()).image);
+  const retry = await terminalApp.getById('reconnect_button');
+  assert.equal(retry.kind, 'button');
+  await waitForResult(async () => {
+    const states = (await retry.info()).states;
+    assert(states.includes('showing') && states.includes('sensitive'));
+  });
+  await retry.click();
+  await waitForResult(async () => {
+    assert.equal(await readFile('/evidence/peer-connections.txt', 'utf8'), '2');
+    assert((await retry.info()).states.includes('showing'));
+  });
+  await writeFile(
+    '/evidence/reconnected.png',
+    (await terminal.capture()).image
+  );
   process.stdout.write(`Verified ${address} -> ${expectedName} -> TELNET\n`);
 } finally {
   if (terminalApp !== undefined) {
@@ -117,4 +135,27 @@ try {
     );
   }
   await terminalLauncher.release();
+}
+
+// Reopen the saved file with a fresh process and verify another real session.
+const restartedLauncher = createGtkAppLauncher({
+  appPath: '/workspace/.build/elder-terms-vte/elder-terms-vte',
+  env: environment,
+});
+try {
+  const restarted = await restartedLauncher.launch(['-c', configPath]);
+  await waitForResult(async () => {
+    assert.equal(await readFile('/evidence/peer-connections.txt', 'utf8'), '3');
+    const button = await restarted.getById('reconnect_button');
+    assert((await button.info()).states.includes('showing'));
+  });
+  await writeFile(
+    '/evidence/restarted.png',
+    (await (await restarted.getById('terminal_view')).capture()).image
+  );
+  process.stdout.write(
+    'Verified scan -> XDG edit -> font settings -> save -> reconnect -> restart\n'
+  );
+} finally {
+  await restartedLauncher.release();
 }

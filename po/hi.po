@@ -101,13 +101,9 @@ msgstr "स्क्रॉलबैक पंक्तियाँ"
 msgid "Zoom factor"
 msgstr "ज़ूम कारक"
 
-#: shared/src/settings-widget/settings-presentation.cpp:47
-msgid "Primary font family"
-msgstr "प्राथमिक फ़ॉन्ट परिवार"
+msgid "Font families"
+msgstr "फ़ॉन्ट परिवार"
 
-#: shared/src/settings-widget/settings-presentation.cpp:49
-msgid "Secondary font family"
-msgstr "द्वितीयक फ़ॉन्ट परिवार"
 
 #: shared/src/settings-widget/settings-presentation.cpp:51
 msgid "Close window when session ends"
@@ -509,13 +505,9 @@ msgstr "फ़ाइल चुनें"
 msgid "Open"
 msgstr "खोलें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:214
-msgid "Select Primary Terminal Font"
-msgstr "प्राथमिक टर्मिनल फ़ॉन्ट चुनें"
+msgid "Select Terminal Font"
+msgstr "टर्मिनल फ़ॉन्ट चुनें"
 
-#: shared/src/settings-widget/settings-presentation.cpp:216
-msgid "Select Secondary Terminal Font"
-msgstr "द्वितीयक टर्मिनल फ़ॉन्ट चुनें"
 
 #: shared/src/settings-widget/settings-presentation.cpp:218
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:751
@@ -527,8 +519,7 @@ msgstr "सक्षम"
 msgid "Disabled"
 msgstr "अक्षम"
 
-#: shared/src/settings-widget/settings-presentation.cpp:222
-msgid "Custom font"
+msgid "Custom fonts"
 msgstr "कस्टम फ़ॉन्ट"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224

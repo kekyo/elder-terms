@@ -170,6 +170,9 @@ describe('IP scan on an isolated multicast network', () => {
         expect(output).toContain(
           `Verified ${address} -> ${expected} -> TELNET`
         );
+        expect(output).toContain(
+          'Verified scan -> XDG edit -> font settings -> save -> reconnect -> restart'
+        );
         await writeFile(join(evidence, 'result.txt'), output);
       } finally {
         // Record diagnostics before removing only resources created by this test.

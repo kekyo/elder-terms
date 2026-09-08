@@ -102,13 +102,9 @@ msgstr "Строки буфера прокрутки"
 msgid "Zoom factor"
 msgstr "Коэффициент масштабирования"
 
-#: shared/src/settings-widget/settings-presentation.cpp:47
-msgid "Primary font family"
-msgstr "Основное семейство шрифтов"
+msgid "Font families"
+msgstr "Семейства шрифтов"
 
-#: shared/src/settings-widget/settings-presentation.cpp:49
-msgid "Secondary font family"
-msgstr "Дополнительное семейство шрифтов"
 
 #: shared/src/settings-widget/settings-presentation.cpp:51
 msgid "Close window when session ends"
@@ -510,13 +506,9 @@ msgstr "Выберите файл"
 msgid "Open"
 msgstr "Открыть"
 
-#: shared/src/settings-widget/settings-presentation.cpp:214
-msgid "Select Primary Terminal Font"
-msgstr "Выбрать основной шрифт терминала"
+msgid "Select Terminal Font"
+msgstr "Выбор шрифта терминала"
 
-#: shared/src/settings-widget/settings-presentation.cpp:216
-msgid "Select Secondary Terminal Font"
-msgstr "Выбрать дополнительный шрифт терминала"
 
 #: shared/src/settings-widget/settings-presentation.cpp:218
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:751
@@ -528,9 +520,8 @@ msgstr "Включено"
 msgid "Disabled"
 msgstr "Отключено"
 
-#: shared/src/settings-widget/settings-presentation.cpp:222
-msgid "Custom font"
-msgstr "Пользовательский шрифт"
+msgid "Custom fonts"
+msgstr "Пользовательские шрифты"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "No color"

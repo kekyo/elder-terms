@@ -56,17 +56,20 @@ static void warn_invalid_value(std::vector<std::string> *warnings,
 }
 
 static bool validate_setting_definition(const SettingDefinition &definition,
-                                        const SettingValue &value,
+                                        SettingValue &value,
                                         std::string *reason) {
   if (value.index() != definition.default_value.index()) {
     *reason = "has an incompatible value type";
     return false;
   }
 
-  if (definition.validate == nullptr) {
-    return true;
+  if (definition.validate != nullptr && !definition.validate(value, reason)) {
+    return false;
   }
-  return definition.validate(value, reason);
+  if (definition.normalize != nullptr) {
+    definition.normalize(value);
+  }
+  return true;
 }
 
 static SettingValue read_setting_value(GKeyFile *key_file,
@@ -91,6 +94,18 @@ static SettingValue read_setting_value(GKeyFile *key_file,
     return text;
   }
 
+  if (std::holds_alternative<std::vector<std::string>>(
+          entry.definition.default_value)) {
+    gsize length = 0;
+    gchar **values = g_key_file_get_string_list(key_file, section, name,
+                                               &length, error);
+    std::vector<std::string> result;
+    if (values != nullptr) {
+      result.assign(values, values + length);
+    }
+    g_strfreev(values);
+    return result;
+  }
   return g_key_file_get_boolean(key_file, section, name, error) != FALSE;
 }
 

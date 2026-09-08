@@ -23,12 +23,13 @@ struct SettingKey {
 };
 
 /**
- * Stores a supported scalar setting value.
+ * Stores a supported scalar or ordered string-list setting value.
  *
  * @remarks Numeric settings use either integer or floating-point variants so
  * callers can reject accidental fractional values at the schema boundary.
  */
-using SettingValue = std::variant<gint64, gdouble, std::string, bool>;
+using SettingValue =
+    std::variant<gint64, gdouble, std::string, bool, std::vector<std::string>>;
 
 /**
  * Identifies the active source for a setting value.
@@ -53,6 +54,13 @@ using SettingValueValidator = bool (*)(const SettingValue &value,
                                        std::string *reason);
 
 /**
+ * Canonicalizes an accepted value before storage and dirty comparison.
+ * @param value Validated candidate, modified in place without changing its type.
+ * @remarks Called after semantic validation for both file and runtime updates.
+ */
+using SettingValueNormalizer = void (*)(SettingValue &value);
+
+/**
  * Describes a setting and its fallback value.
  */
 struct SettingDefinition {
@@ -62,6 +70,8 @@ struct SettingDefinition {
   SettingValue default_value;
   /** Optional semantic validation applied after parsing. */
   SettingValueValidator validate = nullptr;
+  /** Optional canonicalization applied only after successful validation. */
+  SettingValueNormalizer normalize = nullptr;
 };
 
 /**

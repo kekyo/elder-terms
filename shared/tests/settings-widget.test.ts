@@ -70,12 +70,8 @@ interface AppliedStore {
   readonly encoding: string;
   readonly exterior_background: string;
   readonly height: string;
-  readonly font_fallback_family: string;
-  readonly font_fallback_family_explicit: string;
-  readonly font_fallback_family_source: string;
-  readonly font_primary_family: string;
-  readonly font_primary_family_explicit: string;
-  readonly font_primary_family_source: string;
+  readonly font_families_explicit: string;
+  readonly font_families_source: string;
   readonly log_base_directory: string;
   readonly log_enabled: string;
   readonly log_file_name_format: string;
@@ -971,8 +967,7 @@ describe.concurrent('shared settings widget', () => {
               'Scrollback lines',
               'Zoom factor',
               'Indicator color',
-              'Primary font family',
-              'Secondary font family',
+              'Font families',
               'Close window when session ends',
               'Show window side borders',
               'Window side border width (px)',
@@ -1102,8 +1097,7 @@ describe.concurrent('shared settings widget', () => {
               '行数',
               'スクロールバッファ行数',
               '拡大率',
-              'プライマリフォントファミリー',
-              'セカンダリフォントファミリー',
+              'フォントファミリー',
               'セッション終了時にウィンドウを閉じる',
               'ウィンドウの左右にボーダーを表示する',
               'ウィンドウ左右のボーダー幅（px）',
@@ -1135,32 +1129,15 @@ describe.concurrent('shared settings widget', () => {
         for (const page of pages) {
           await expectPageLabels(app, page.id, page.labels);
         }
-        const primaryFontMode = expectElementKind(
-          await app.getById('global_settings_terminal_font_primary_mode_combo'),
-          'comboBox'
-        );
-        const fallbackFontMode = expectElementKind(
-          await app.getById(
-            'global_settings_terminal_font_fallback_mode_combo'
-          ),
-          'comboBox'
-        );
-        expect(primaryFontMode.kind).toBe('comboBox');
-        expect(fallbackFontMode.kind).toBe('comboBox');
         await expectSelectedComboValue(
           app,
-          'global_settings_terminal_font_primary_mode_combo',
-          '組み込み既定値'
-        );
-        await expectSelectedComboValue(
-          app,
-          'global_settings_terminal_font_fallback_mode_combo',
+          'global_settings_terminal_fonts_mode_combo',
           '組み込み既定値'
         );
         expect(
           await comboOptionNames(
             app,
-            'global_settings_terminal_font_primary_mode_combo'
+            'global_settings_terminal_fonts_mode_combo'
           )
         ).toEqual([
           '組み込み既定値',
@@ -1692,6 +1669,232 @@ describe.concurrent('shared settings widget', () => {
       );
     }
     expect(visualErrors).toEqual([]);
+  });
+
+  it('saves an ordered font list containing three families', async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'elder-terms-font-list-'));
+    const savedPath = join(directory, 'connection.ini');
+    try {
+      await runSharedGtkTest(
+        context,
+        ['--page=terminal', `--save-file=${savedPath}`],
+        async ({ app }) => {
+          await showTerminalPage(app);
+          await showTerminalKeyBindings(app);
+          await expectElementKind(
+            await app.getById('settings_terminal_fonts_mode_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          await expectElementKind(
+            await app.getById('settings_terminal_fonts_add_button'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_terminal_font_family_2'),
+            'entry'
+          ).setText('IPAGothic');
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForPrintedStore(app, 'SAVED');
+          expect(await readFile(savedPath, 'utf8')).toContain(
+            'font_families=Noto Sans Mono;Monospace;IPAGothic;'
+          );
+        }
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('reorders and removes font candidates as one applied and saved list', async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'elder-terms-font-order-'));
+    const path = join(directory, 'connection.ini');
+    try {
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=terminal',
+          '--connection=terminal.font_families=Monospace;IPAGothic;DejaVu Sans Mono;',
+          `--save-file=${path}`,
+        ],
+        async ({ app }) => {
+          await showTerminalPage(app);
+          await showTerminalKeyBindings(app);
+          await expectElementKind(
+            await app.getById('settings_terminal_font_up_2'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_terminal_font_down_0'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_terminal_font_remove_2'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect((await app.output()).stdout).toContain(
+              'APPLIED_FONTS ["DejaVu Sans Mono","Monospace"]'
+            );
+          });
+          await expectElementKind(
+            await app.getById('settings_terminal_font_family_0'),
+            'entry'
+          ).setText('Unapplied Font');
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForPrintedStore(app, 'SAVED');
+          expect(await readFile(path, 'utf8')).toContain(
+            'font_families=DejaVu Sans Mono;Monospace;'
+          );
+        }
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves invalid font drafts across rebase and resets the whole list', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=terminal',
+        '--global=terminal.font_families=Global One;Global Two;',
+        '--rebase-global=terminal.font_families=Replacement One;Replacement Two;Replacement Three;',
+        '--save',
+      ],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        await showTerminalKeyBindings(app);
+        const mode = expectElementKind(
+          await app.getById('settings_terminal_fonts_mode_combo'),
+          'comboBox'
+        );
+        await mode.selectChildAt(2);
+        const entry = expectElementKind(
+          await app.getById('settings_terminal_font_family_0'),
+          'entry'
+        );
+        for (const invalid of ['', 'Global Two', 'Invalid,Family']) {
+          await entry.setText(invalid);
+          await waitForChangedState(app, 'CHANGED dirty=true valid=false');
+          expect(
+            (await (await app.getById('settings_apply_button')).info()).states
+          ).not.toContain('sensitive');
+        }
+        await expectElementKind(
+          await app.getById('rebase_fallbacks_button'),
+          'button'
+        ).click();
+        expect(
+          await expectElementKind(
+            await app.getById('settings_terminal_font_family_0'),
+            'entry'
+          ).text()
+        ).toBe('Invalid,Family');
+        expect(
+          (await (await app.getById('settings_save_button')).info()).states
+        ).not.toContain('sensitive');
+        await mode.selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect((await app.output()).stdout).toContain(
+            'APPLIED_FONTS ["Noto Sans Mono","Monospace"]'
+          );
+        });
+        await mode.selectChildAt(0);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect((await app.output()).stdout).toContain(
+            'APPLIED_FONTS ["Replacement One","Replacement Two","Replacement Three"]'
+          );
+        });
+      }
+    );
+  });
+
+  it('edits long ordered font lists and shows the list controls in Japanese', async (context) => {
+    const names = Array.from(
+      { length: 12 },
+      (_, index) => `Candidate ${index + 1}`
+    );
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=terminal',
+        `--connection=terminal.font_families=${names.join(';')};`,
+      ],
+      async ({ app, directory }) => {
+        await showTerminalPage(app);
+        await showTerminalKeyBindings(app);
+        const scrollbar = expectElementKind(
+          await app.getById('settings_terminal_fonts_scrollbar'),
+          'scrollbar'
+        );
+        const range = await scrollbar.valueInfo();
+        expect(range.maximum).toBeGreaterThan(range.minimum);
+        await scrollbar.setValue(range.maximum);
+        const last = expectElementKind(
+          await app.getById('settings_terminal_font_family_11'),
+          'entry'
+        );
+        await waitForResult(async () =>
+          expect((await last.info()).states).toContain('showing')
+        );
+        expect(await last.text()).toBe('Candidate 12');
+        await last.setText('Last Font');
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect((await app.output()).stdout).toContain(
+            `APPLIED_FONTS ${JSON.stringify([...names.slice(0, -1), 'Last Font'])}`
+          )
+        );
+        const page = await app.getById('settings_terminal_page');
+        await writeFile(
+          join(directory, 'long-font-list.png'),
+          (await page.capture()).image
+        );
+      }
+    );
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal'],
+      async ({ app, directory }) => {
+        await showTerminalPage(app);
+        await showTerminalKeyBindings(app);
+        await expectPageLabels(app, 'settings_terminal_page', [
+          'フォントファミリー',
+        ]);
+        const add = await app.getById('settings_terminal_fonts_add_button');
+        expect((await add.info()).name).toBe('追加');
+        await writeFile(
+          join(directory, 'font-list-ja.png'),
+          (await (await app.getById('settings_terminal_page')).capture()).image
+        );
+      },
+      { env: japaneseTestEnvironment }
+    );
   });
 
   it('applies, cancels, saves, and resets the common terminal indicator color', async (context) => {
@@ -3822,257 +4025,92 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
-  it('uses three-state terminal font modes and applies, saves, and cancels overrides', async (context) => {
+  it('uses whole-list font modes and selects a family without changing size', async (context) => {
     await runSharedGtkTest(
       context,
       [
         '--page=terminal',
         '--save',
-        '--global=terminal.font_primary_family=Monospace',
-        '--global=terminal.font_fallback_family=IPAGothic',
+        '--global=terminal.font_families=Monospace;IPAGothic;',
       ],
       async ({ app, directory }) => {
         await showTerminalPage(app);
-        const primaryMode = expectElementKind(
-          await app.getById('settings_terminal_font_primary_mode_combo'),
-          'comboBox'
-        );
-        const fallbackMode = expectElementKind(
-          await app.getById('settings_terminal_font_fallback_mode_combo'),
-          'comboBox'
-        );
-        const primaryButton = expectElementKind(
-          await app.getById('settings_terminal_font_primary_button'),
-          'button'
-        );
-        const fallbackButton = expectElementKind(
-          await app.getById('settings_terminal_font_fallback_button'),
-          'button'
-        );
-
+        await showTerminalKeyBindings(app);
         await expectSelectedComboValue(
           app,
-          'settings_terminal_font_primary_mode_combo',
-          'Custom font (global default)'
+          'settings_terminal_fonts_mode_combo',
+          'Custom fonts (global default)'
         );
-        await expectSelectedComboValue(
-          app,
-          'settings_terminal_font_fallback_mode_combo',
-          'Custom font (global default)'
-        );
-        expect(
-          await comboOptionNames(
-            app,
-            'settings_terminal_font_primary_mode_combo'
-          )
-        ).toEqual([
-          'Custom font (global default)',
-          'Use built-in default',
-          'Custom font',
-        ]);
-        expect(
-          await comboOptionNames(
-            app,
-            'settings_terminal_font_fallback_mode_combo'
-          )
-        ).toEqual([
-          'Custom font (global default)',
-          'Use built-in default',
-          'Custom font',
-        ]);
-        await expectSensitive(primaryButton);
-        await expectSensitive(fallbackButton);
-        await waitForResult(async () => {
-          const output = (await app.output()).stdout;
-          expect(output).toContain('primary_present=true');
-          expect(output).toContain('primary_level=0');
-          expect(output).toContain('primary_use_size=false');
-          expect(output).toContain('primary_show_size=false');
-          expect(output).toContain('primary_show_style=false');
-          expect(output).toContain('fallback_present=true');
-          expect(output).toContain('fallback_level=0');
-          expect(output).toContain('fallback_use_size=false');
-          expect(output).toContain('fallback_show_size=false');
-          expect(output).toContain('fallback_show_style=false');
-        });
-
-        const scrollbar = expectElementKind(
-          await app.getById('settings_terminal_page_scrollbar'),
-          'scrollbar'
-        );
-        const scrollbarValue = await scrollbar.valueInfo();
-        expect(scrollbarValue.maximum).toBeGreaterThan(scrollbarValue.minimum);
-        const window = expectElementKind(
-          await app.getById('settings_widget_test_window'),
-          'window'
-        );
-        const windowBounds = await window.bounds();
-        await app.input.moveMouseTo(
-          windowBounds.x + 5,
-          windowBounds.y + windowBounds.height - 5
-        );
-        await scrollbar.setValue(scrollbarValue.maximum);
-        await waitForResult(async () => {
-          expect((await primaryMode.info()).states).toContain('showing');
-          expect((await fallbackMode.info()).states).toContain('showing');
-        });
-        const terminalPage = await app.getById('settings_terminal_page');
-        const terminalPageCapture = await captureWhenVisuallyStable(
-          terminalPage,
+        const page = await app.getById('settings_terminal_page');
+        const capture = await captureWhenVisuallyStable(
+          page,
           'settings-widget-terminal-font-families'
         );
-        expect(terminalPageCapture.clipped).toBe(false);
-        await expectCaptureToMatchFixture(
-          terminalPageCapture,
-          'settings-widget-terminal-font-families',
-          fixturePath('settings-widget-terminal-font-families'),
-          directory,
-          visualComparisonOptions
-        );
-
+        let visualError: unknown;
+        try {
+          await expectCaptureToMatchFixture(
+            capture,
+            'settings-widget-terminal-font-families',
+            fixturePath('settings-widget-terminal-font-families'),
+            directory,
+            visualComparisonOptions
+          );
+        } catch (error) {
+          visualError = error;
+        }
         await confirmSelectedFont(
           app,
-          'settings_terminal_font_primary_button',
-          'Select Primary Terminal Font'
+          'settings_terminal_font_choose_1',
+          'Select Terminal Font'
         );
         await expectSelectedComboValue(
           app,
-          'settings_terminal_font_primary_mode_combo',
-          'Custom font'
+          'settings_terminal_fonts_mode_combo',
+          'Custom fonts'
         );
-        await expectSelectedComboValue(
-          app,
-          'settings_terminal_font_fallback_mode_combo',
-          'Custom font (global default)'
-        );
-        await confirmSelectedFont(
-          app,
-          'settings_terminal_font_fallback_button',
-          'Select Secondary Terminal Font'
-        );
-        await expectSelectedComboValue(
-          app,
-          'settings_terminal_font_primary_mode_combo',
-          'Custom font'
-        );
-        await expectSelectedComboValue(
-          app,
-          'settings_terminal_font_fallback_mode_combo',
-          'Custom font'
-        );
-        await expectSensitive(primaryButton);
-        await expectSensitive(fallbackButton);
-        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
         await expectElementKind(
           await app.getById('settings_apply_button'),
           'button'
         ).click();
-
-        const applied = await waitForAppliedStore(app);
-        expect(applied.font_primary_family).toBe('Monospace');
-        expect(applied.font_primary_family_source).toBe('override');
-        expect(applied.font_primary_family_explicit).toBe('true');
-        expect(applied.font_fallback_family).toBe('IPAGothic');
-        expect(applied.font_fallback_family_source).toBe('override');
-        expect(applied.font_fallback_family_explicit).toBe('true');
-      }
-    );
-
-    await runSharedGtkTest(
-      context,
-      [
-        '--page=terminal',
-        '--global=terminal.font_primary_family=Monospace',
-        '--global=terminal.font_fallback_family=IPAGothic',
-      ],
-      async ({ app }) => {
-        await showTerminalPage(app);
-        const primaryMode = expectElementKind(
-          await app.getById('settings_terminal_font_primary_mode_combo'),
+        let applied = await waitForAppliedStore(app);
+        expect(applied.font_families_explicit).toBe('true');
+        expect(applied.zoom).toBe('1');
+        await waitForResult(async () =>
+          expect((await app.output()).stdout).toContain(
+            'APPLIED_FONTS ["Monospace","IPAGothic"]'
+          )
+        );
+        const mode = expectElementKind(
+          await app.getById('settings_terminal_fonts_mode_combo'),
           'comboBox'
         );
-        const fallbackMode = expectElementKind(
-          await app.getById('settings_terminal_font_fallback_mode_combo'),
-          'comboBox'
-        );
-        await primaryMode.selectChildAt(1);
-        await fallbackMode.selectChildAt(1);
-        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
-        await expectElementKind(
-          await app.getById('settings_apply_button'),
-          'button'
-        ).click();
-
-        const applied = await waitForAppliedStore(app);
-        expect((await app.output()).stdout).toContain(
-          'font_primary_family=Noto Sans Mono font_fallback_family=Monospace'
-        );
-        expect(applied.font_primary_family_source).toBe('override');
-        expect(applied.font_primary_family_explicit).toBe('true');
-        expect(applied.font_fallback_family).toBe('Monospace');
-        expect(applied.font_fallback_family_source).toBe('override');
-        expect(applied.font_fallback_family_explicit).toBe('true');
-      }
-    );
-
-    await runSharedGtkTest(
-      context,
-      [
-        '--page=terminal',
-        '--save',
-        '--font-primary-family=Monospace',
-        '--font-fallback-family=IPAGothic',
-      ],
-      async ({ app }) => {
-        await showTerminalPage(app);
-        const primaryMode = expectElementKind(
-          await app.getById('settings_terminal_font_primary_mode_combo'),
-          'comboBox'
-        );
-        await expectSelectedComboValue(
-          app,
-          'settings_terminal_font_primary_mode_combo',
-          'Custom font'
-        );
-        await primaryMode.selectChildAt(0);
+        await mode.selectChildAt(1);
         await expectElementKind(
           await app.getById('settings_save_button'),
           'button'
         ).click();
-
-        const saved = await waitForPrintedStore(app, 'SAVED');
-        expect((await app.output()).stdout).toContain(
-          'font_primary_family=Noto Sans Mono font_fallback_family=IPAGothic'
+        expect(
+          (await waitForPrintedStore(app, 'SAVED')).font_families_explicit
+        ).toBe('true');
+        await waitForResult(async () =>
+          expect((await app.output()).stdout).toContain(
+            'SAVED_FONTS ["Noto Sans Mono","Monospace"]'
+          )
         );
-        expect(saved.font_primary_family_explicit).toBe('false');
-        expect(saved.font_fallback_family).toBe('IPAGothic');
-        expect(saved.font_fallback_family_explicit).toBe('true');
-      }
-    );
-
-    await runSharedGtkTest(
-      context,
-      ['--page=terminal', '--global=terminal.font_primary_family=Monospace'],
-      async ({ app }) => {
-        await showTerminalPage(app);
-        const primaryMode = expectElementKind(
-          await app.getById('settings_terminal_font_primary_mode_combo'),
-          'comboBox'
-        );
-        await primaryMode.selectChildAt(2);
+        await mode.selectChildAt(0);
         await expectElementKind(
-          await app.getById('settings_cancel_button'),
+          await app.getById('settings_apply_button'),
           'button'
         ).click();
         await waitForResult(async () => {
-          const output = (await app.output()).stdout;
-          expect(output).toContain('CANCELLED');
-          expect(output).not.toContain('APPLIED');
-          expect(output).not.toContain('SAVED');
+          applied = await waitForAppliedStore(app);
+          expect(applied.font_families_explicit).toBe('false');
+          expect(applied.font_families_source).toBe('global');
         });
+        expect(visualError).toBeUndefined();
       }
     );
-  }, 120_000);
+  }, 60_000);
 
   it('applies terminal encoding and special-code selections', async (context) => {
     await runSharedGtkTest(

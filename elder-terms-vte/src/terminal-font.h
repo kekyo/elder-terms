@@ -10,11 +10,10 @@ namespace elder_terms {
  * Creates a terminal font description with ordered family overrides.
  *
  * All non-family fields, including font size, are copied from the runtime
- * base description. When only a fallback family is specified, the runtime
- * family remains first in the Pango family list.
+ * base description. An empty family vector leaves that description unchanged.
  *
  * @param runtime_font VTE's unscaled runtime font description, or null.
- * @param font_families Primary and secondary family overrides.
+ * @param font_families Family names in descending priority.
  * @returns A newly allocated font description. The caller must free it with
  * pango_font_description_free().
  */

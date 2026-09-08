@@ -101,13 +101,9 @@ msgstr "滚动缓冲区行数"
 msgid "Zoom factor"
 msgstr "缩放系数"
 
-#: shared/src/settings-widget/settings-presentation.cpp:47
-msgid "Primary font family"
-msgstr "主字体族"
+msgid "Font families"
+msgstr "字体族"
 
-#: shared/src/settings-widget/settings-presentation.cpp:49
-msgid "Secondary font family"
-msgstr "辅助字体族"
 
 #: shared/src/settings-widget/settings-presentation.cpp:51
 msgid "Close window when session ends"
@@ -509,13 +505,9 @@ msgstr "选择文件"
 msgid "Open"
 msgstr "打开"
 
-#: shared/src/settings-widget/settings-presentation.cpp:214
-msgid "Select Primary Terminal Font"
-msgstr "选择主要终端字体"
+msgid "Select Terminal Font"
+msgstr "选择终端字体"
 
-#: shared/src/settings-widget/settings-presentation.cpp:216
-msgid "Select Secondary Terminal Font"
-msgstr "选择辅助终端字体"
 
 #: shared/src/settings-widget/settings-presentation.cpp:218
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:751
@@ -527,8 +519,7 @@ msgstr "已启用"
 msgid "Disabled"
 msgstr "已禁用"
 
-#: shared/src/settings-widget/settings-presentation.cpp:222
-msgid "Custom font"
+msgid "Custom fonts"
 msgstr "自定义字体"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224

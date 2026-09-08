@@ -102,13 +102,9 @@ msgstr "أسطر سجل التمرير"
 msgid "Zoom factor"
 msgstr "عامل التكبير/التصغير"
 
-#: shared/src/settings-widget/settings-presentation.cpp:47
-msgid "Primary font family"
-msgstr "عائلة الخط الأساسية"
+msgid "Font families"
+msgstr "عائلات الخطوط"
 
-#: shared/src/settings-widget/settings-presentation.cpp:49
-msgid "Secondary font family"
-msgstr "عائلة الخط الثانوية"
 
 #: shared/src/settings-widget/settings-presentation.cpp:51
 msgid "Close window when session ends"
@@ -510,13 +506,9 @@ msgstr "حدد الملف"
 msgid "Open"
 msgstr "فتح"
 
-#: shared/src/settings-widget/settings-presentation.cpp:214
-msgid "Select Primary Terminal Font"
-msgstr "اختر خط الطرفية الأساسي"
+msgid "Select Terminal Font"
+msgstr "اختيار خط الطرفية"
 
-#: shared/src/settings-widget/settings-presentation.cpp:216
-msgid "Select Secondary Terminal Font"
-msgstr "اختر خط الطرفية الثانوي"
 
 #: shared/src/settings-widget/settings-presentation.cpp:218
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:751
@@ -528,9 +520,8 @@ msgstr "ممكّن"
 msgid "Disabled"
 msgstr "معطل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:222
-msgid "Custom font"
-msgstr "خط مخصص"
+msgid "Custom fonts"
+msgstr "خطوط مخصصة"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "No color"

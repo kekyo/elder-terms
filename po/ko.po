@@ -101,13 +101,9 @@ msgstr "스크롤백 줄 수"
 msgid "Zoom factor"
 msgstr "확대/축소 비율"
 
-#: shared/src/settings-widget/settings-presentation.cpp:47
-msgid "Primary font family"
-msgstr "기본 글꼴 모음"
+msgid "Font families"
+msgstr "글꼴 모음"
 
-#: shared/src/settings-widget/settings-presentation.cpp:49
-msgid "Secondary font family"
-msgstr "보조 글꼴 모음"
 
 #: shared/src/settings-widget/settings-presentation.cpp:51
 msgid "Close window when session ends"
@@ -509,13 +505,9 @@ msgstr "파일 선택"
 msgid "Open"
 msgstr "열기"
 
-#: shared/src/settings-widget/settings-presentation.cpp:214
-msgid "Select Primary Terminal Font"
-msgstr "기본 터미널 글꼴 선택"
+msgid "Select Terminal Font"
+msgstr "터미널 글꼴 선택"
 
-#: shared/src/settings-widget/settings-presentation.cpp:216
-msgid "Select Secondary Terminal Font"
-msgstr "보조 터미널 글꼴 선택"
 
 #: shared/src/settings-widget/settings-presentation.cpp:218
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:751
@@ -527,8 +519,7 @@ msgstr "활성화됨"
 msgid "Disabled"
 msgstr "비활성화됨"
 
-#: shared/src/settings-widget/settings-presentation.cpp:222
-msgid "Custom font"
+msgid "Custom fonts"
 msgstr "사용자 지정 글꼴"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224

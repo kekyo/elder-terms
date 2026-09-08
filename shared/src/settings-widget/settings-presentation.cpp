@@ -44,10 +44,7 @@ static constexpr std::array setting_labels{
                       N_("Scrollback lines")},
     SettingLabelEntry{"terminal", "zoom", N_("Zoom factor")},
     SettingLabelEntry{"terminal", "indicator_color", N_("Indicator color")},
-    SettingLabelEntry{"terminal", "font_primary_family",
-                      N_("Primary font family")},
-    SettingLabelEntry{"terminal", "font_fallback_family",
-                      N_("Secondary font family")},
+    SettingLabelEntry{"terminal", "font_families", N_("Font families")},
     SettingLabelEntry{"terminal", "auto_close",
                       N_("Close window when session ends")},
     SettingLabelEntry{"terminal", "show_border",
@@ -213,16 +210,22 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Select file");
   case SettingsUiText::open:
     return _("Open");
-  case SettingsUiText::select_primary_terminal_font:
-    return _("Select Primary Terminal Font");
-  case SettingsUiText::select_secondary_terminal_font:
-    return _("Select Secondary Terminal Font");
+  case SettingsUiText::select_terminal_font:
+    return _("Select Terminal Font");
+  case SettingsUiText::font_add:
+    return _("Add");
+  case SettingsUiText::font_remove:
+    return _("Remove");
+  case SettingsUiText::font_move_up:
+    return _("Move up");
+  case SettingsUiText::font_move_down:
+    return _("Move down");
   case SettingsUiText::enabled:
     return _("Enabled");
   case SettingsUiText::disabled:
     return _("Disabled");
-  case SettingsUiText::custom_font:
-    return _("Custom font");
+  case SettingsUiText::custom_fonts:
+    return _("Custom fonts");
   case SettingsUiText::no_color:
     return _("No color");
   case SettingsUiText::default_color:

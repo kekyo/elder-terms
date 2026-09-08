@@ -6,6 +6,7 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <iomanip>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -103,6 +104,9 @@ static FixtureOptions parse_options(int argc, char **argv) {
     } else if (starts_with(argument, "--global=")) {
       options.global_assignments.push_back(
           parse_assignment(option_value(argument, "--global=")));
+    } else if (starts_with(argument, "--connection=")) {
+      options.connection_assignments.push_back(
+          parse_assignment(option_value(argument, "--connection=")));
     } else if (starts_with(argument, "--rebase-global=")) {
       options.rebase_global_assignments.push_back(
           parse_assignment(option_value(argument, "--rebase-global=")));
@@ -130,14 +134,6 @@ static FixtureOptions parse_options(int argc, char **argv) {
     } else if (starts_with(argument, "--zoom=")) {
       append_connection_assignment(
           &options, "terminal", "zoom", option_value(argument, "--zoom="));
-    } else if (starts_with(argument, "--font-primary-family=")) {
-      append_connection_assignment(
-          &options, "terminal", "font_primary_family",
-          option_value(argument, "--font-primary-family="));
-    } else if (starts_with(argument, "--font-fallback-family=")) {
-      append_connection_assignment(
-          &options, "terminal", "font_fallback_family",
-          option_value(argument, "--font-fallback-family="));
     } else if (starts_with(argument, "--auto-close=")) {
       append_connection_assignment(
           &options, "terminal", "auto_close",
@@ -599,44 +595,6 @@ static void print_color_picker_properties(GtkWidget *window,
   std::cout.flush();
 }
 
-static void print_font_chooser_properties(GtkWidget *window,
-                                          const std::string &id_prefix) {
-  const auto print_chooser = [window, &id_prefix](const char *id_suffix,
-                                                  const char *name) {
-    GtkWidget *widget =
-        find_widget_by_name(window, id_prefix + id_suffix);
-    std::cout << ' ' << name << "_present=";
-    if (widget == nullptr || !GTK_IS_FONT_BUTTON(widget) ||
-        !GTK_IS_FONT_CHOOSER(widget)) {
-      std::cout << "false";
-      return;
-    }
-    std::cout << "true" << ' ' << name << "_level="
-              << static_cast<int>(gtk_font_chooser_get_level(
-                     GTK_FONT_CHOOSER(widget)))
-              << ' ' << name << "_use_size="
-              << (gtk_font_button_get_use_size(GTK_FONT_BUTTON(widget)) !=
-                          FALSE
-                      ? "true"
-                      : "false")
-              << ' ' << name << "_show_size="
-              << (gtk_font_button_get_show_size(GTK_FONT_BUTTON(widget)) !=
-                          FALSE
-                      ? "true"
-                      : "false")
-              << ' ' << name << "_show_style="
-              << (gtk_font_button_get_show_style(GTK_FONT_BUTTON(widget)) !=
-                          FALSE
-                      ? "true"
-                      : "false");
-  };
-
-  std::cout << "FONT_CHOOSERS";
-  print_chooser("_terminal_font_primary_button", "primary");
-  print_chooser("_terminal_font_fallback_button", "fallback");
-  std::cout << '\n';
-  std::cout.flush();
-}
 
 static void select_initial_page(GtkWidget *window,
                                 const std::string &page) {
@@ -806,10 +764,6 @@ static void print_store(const char *prefix,
             << " width=" << display.width << " height=" << display.height
             << " scrollback_lines=" << display.scrollback_lines
             << " zoom=" << display.zoom
-            << " font_primary_family="
-            << font_families.primary_family.value_or("")
-            << " font_fallback_family="
-            << font_families.fallback_family.value_or("")
             << " encoding=" << text_settings.encoding
             << " backspace_code="
             << elder_terms::terminal_backspace_code_to_string(
@@ -925,11 +879,8 @@ static void print_store(const char *prefix,
   print_setting_metadata(store, "zoom",
                          elder_terms::terminal_zoom_setting_key());
   print_setting_metadata(
-      store, "font_primary_family",
-      elder_terms::terminal_font_primary_family_setting_key());
-  print_setting_metadata(
-      store, "font_fallback_family",
-      elder_terms::terminal_font_fallback_family_setting_key());
+      store, "font_families",
+      elder_terms::terminal_font_families_setting_key());
   print_setting_metadata(store, "auto_close",
                          elder_terms::terminal_auto_close_setting_key());
   print_setting_metadata(store, "bell_sound",
@@ -1036,6 +987,12 @@ static void print_store(const char *prefix,
   print_setting_metadata(store, "log_mode",
                          elder_terms::terminal_log_mode_setting_key());
   std::cout << '\n';
+  std::cout << prefix << "_FONTS [";
+  for (std::size_t index = 0; index < font_families.families.size(); ++index) {
+    if (index != 0) std::cout << ',';
+    std::cout << std::quoted(font_families.families[index]);
+  }
+  std::cout << "]\n";
   std::cout.flush();
 }
 
@@ -1217,8 +1174,6 @@ int main(int argc, char **argv) {
     }
     elder_terms_settings_widget_fixture::print_entry_placeholders(window);
     elder_terms_settings_widget_fixture::print_color_picker_properties(
-        window, options.global_mode ? "global_settings" : "settings");
-    elder_terms_settings_widget_fixture::print_font_chooser_properties(
         window, options.global_mode ? "global_settings" : "settings");
     std::cout << "READY\n";
     std::cout.flush();

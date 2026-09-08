@@ -651,19 +651,20 @@ produce a warning and use the next valid inherited or built-in value.
 
 ## Configuring Font Families
 
-Scroll down on the "Terminal" tab to specify primary and secondary font
-families. Each drop-down lets you inherit the global or built-in default,
-explicitly use the built-in default, or select a custom font. Confirming a font
-in the font chooser automatically switches the drop-down to the custom font.
+Scroll down on the "Terminal" tab to edit an ordered list of font families.
+Add or remove rows, and use the up/down buttons to change their priority.
+Each row accepts a family name or opens a font chooser. Long lists scroll
+within the page; there is no two-font limit.
 
-The built-in defaults are `Noto Sans Mono` for the primary font and `Monospace`
-for the secondary font.
+The first family has the highest priority. Later families supply characters
+missing from earlier ones, such as Japanese characters missing from a Latin
+font. Uninstalled family names may be saved and are skipped during fallback.
 
-The primary font is used for normal rendering. The secondary font is used as a
-fallback for characters missing from the primary font. For example, if you
-choose a Latin font as the primary font and a Japanese font as the secondary
-font, kanji, hiragana, and similar characters are rendered with the secondary
-font.
+The drop-down applies to the whole list: inherit the global default, use the
+built-in list (`Noto Sans Mono`, then `Monospace`), or specify a custom list.
+Connection overrides replace the global list rather than extending it.
+Apply changes the current settings, Save persists them, and Cancel discards
+changes made since the last apply.
 
 These settings save only the font families; they do not include font size,
 weight, or style. Font size continues to follow "Zoom factor", `Ctrl`+`=`,
@@ -673,12 +674,15 @@ When editing the INI file directly, specify the values as follows:
 
 ```ini
 [terminal]
-font_primary_family=DejaVu Sans Mono
-font_fallback_family=Noto Sans Mono CJK JP
+font_families=DejaVu Sans Mono;Noto Sans Mono CJK JP;Monospace;
 ```
 
-To explicitly use a built-in default instead of inheriting the global default,
-set the corresponding value to `default`.
+Omit the key to inherit, or use `font_families=` to explicitly restore the
+built-in list. Names are trimmed and must be non-empty and unique, with no
+commas or control characters. Semicolons and backslashes inside a name use
+the [GLib KeyFile escaping rules](https://docs.gtk.org/glib/struct.KeyFile.html)
+(`\;` and `\\`). Invalid lists produce a warning and use the next valid
+inherited or built-in value.
 
 ## Configuring Hotkeys
 
