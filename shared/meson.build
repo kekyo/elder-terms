@@ -57,6 +57,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/key-binding-input-widget.cpp',
   'src/localization.cpp',
   'src/ip-scanner.cpp',
+  'src/ip-scan-name-resolver.cpp',
   'src/serial-device.cpp',
   'src/serial-device-event-monitor.cpp',
   'src/settings/application-settings.cpp',
@@ -174,6 +175,7 @@ elder_terms_ip_scanner_test = executable(
   'elder-terms-ip-scanner-test',
   [
     'src/ip-scanner.cpp',
+    'src/ip-scan-name-resolver.cpp',
     'tests/ip-scanner-test.cpp',
   ],
   include_directories: elder_terms_shared_include_dir,
@@ -182,6 +184,15 @@ elder_terms_ip_scanner_test = executable(
     elder_terms_shared_gio_dep,
   ],
 )
+
+elder_terms_ip_scan_name_resolver_test = executable(
+  'elder-terms-ip-scan-name-resolver-test',
+  ['src/ip-scan-name-resolver.cpp', 'tests/ip-scan-name-resolver-test.cpp'],
+  include_directories: elder_terms_shared_include_dir,
+  dependencies: [cardio_dep, elder_terms_shared_gio_dep],
+)
+test('elder-terms-ip-scan-name-resolver-test',
+     elder_terms_ip_scan_name_resolver_test)
 
 test('elder-terms-ip-scanner-test', elder_terms_ip_scanner_test)
 

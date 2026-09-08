@@ -426,8 +426,22 @@ delayed_burst_probe(std::uint32_t, std::uint16_t port,
 
 static elder_terms::IpScannerDependencies
 create_ip_scanner_dependencies(const std::string &mode) {
+  if (starts_with(mode, "network:")) {
+    const auto target = std::stoul(mode.substr(8));
+    if (target > UINT32_MAX) {
+      throw std::invalid_argument("invalid network fixture IPv4 address");
+    }
+    auto dependencies = elder_terms::create_system_ip_scanner_dependencies();
+    dependencies.interfaces = {{static_cast<std::uint32_t>(target), UINT32_MAX}};
+    // Exercise the explicit multicast path even when the system resolver can
+    // already answer multicast PTR queries. Port probes and D-Bus are real.
+    dependencies.reverse_lookup = [](std::uint32_t, cardio::cancellation) {
+      return cardio::resolved(std::string());
+    };
+    return dependencies;
+  }
   if (mode != "complete" && mode != "pending" && mode != "burst" &&
-      mode != "no-name") {
+      mode != "no-name" && mode != "mdns" && mode != "llmnr") {
     throw std::invalid_argument("unknown IP scan fixture mode: " + mode);
   }
   elder_terms::IpScannerDependencies dependencies{
@@ -443,13 +457,30 @@ create_ip_scanner_dependencies(const std::string &mode) {
       .reverse_lookup = [](std::uint32_t, cardio::cancellation) {
         return cardio::resolved(std::string("router.example.test"));
       },
+      // Fixture completion and cancellation are controlled by the test, not
+      // the production name-lookup deadlines.
+      .name_lookup_timeout = [](std::uint64_t) {
+        return cardio::cancellation_source{};
+      },
   };
   if (mode == "pending") {
     dependencies.reverse_lookup = pending_reverse_lookup;
-  } else if (mode == "no-name") {
+  } else if (mode == "no-name" || mode == "mdns" || mode == "llmnr") {
     dependencies.reverse_lookup = [](std::uint32_t, cardio::cancellation) {
       return cardio::resolved(std::string());
     };
+    dependencies.multicast_lookup =
+        [mode](std::uint32_t, elder_terms::IpScanNameSource source,
+               cardio::cancellation) {
+          std::vector<elder_terms::IpScanNameCandidate> candidates;
+          if (mode == "mdns" && source == elder_terms::IpScanNameSource::mdns) {
+            candidates.push_back({"router.local", 2});
+          } else if (mode == "llmnr" &&
+                     source == elder_terms::IpScanNameSource::llmnr) {
+            candidates.push_back({"router", 2});
+          }
+          return cardio::resolved(std::move(candidates));
+        };
   } else if (mode == "burst") {
     dependencies.interfaces = {{
         .address = ipv4(198, 51, 102, 7),

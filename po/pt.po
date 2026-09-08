@@ -626,8 +626,8 @@ msgid "IP address"
 msgstr "Endereço IP"
 
 #: shared/src/settings-widget/settings-presentation.cpp:280
-msgid "Reverse FQDN"
-msgstr "FQDN reverso"
+msgid "Hostname"
+msgstr "Nome do host"
 
 #: shared/src/settings-widget/settings-presentation.cpp:282
 msgid "SSH/SFTP(22)"

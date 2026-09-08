@@ -201,7 +201,7 @@ struct SettingsWidgetState {
 
 enum IpScanResultColumn {
   ip_scan_address_column,
-  ip_scan_reverse_fqdn_column,
+  ip_scan_resolved_name_column,
   ip_scan_ssh_sftp_column,
   ip_scan_telnet_column,
   ip_scan_ftp_column,
@@ -4836,7 +4836,7 @@ static void update_ip_scan_result(
   }
   gtk_list_store_set(dialog_state->result_store, &iterator,
                      ip_scan_address_column, entry.address.c_str(),
-                     ip_scan_reverse_fqdn_column, entry.reverse_fqdn.c_str(),
+                     ip_scan_resolved_name_column, entry.resolved_name.c_str(),
                      ip_scan_ssh_sftp_column,
                      ip_scan_check_mark_for_port(entry.open_ports, 22),
                      ip_scan_telnet_column,
@@ -4971,7 +4971,7 @@ static void on_ip_scan_result_activated(GtkTreeView *tree_view,
   gchar *address = nullptr;
   gchar *resolved_name = nullptr;
   gtk_tree_model_get(model, &iterator, ip_scan_address_column, &address,
-                     ip_scan_reverse_fqdn_column, &resolved_name, -1);
+                     ip_scan_resolved_name_column, &resolved_name, -1);
   if (address == nullptr) {
     g_free(resolved_name);
     return;
@@ -5045,8 +5045,8 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
                         settings_ui_text(SettingsUiText::ip_address),
                         ip_scan_address_column, false);
   append_ip_scan_column(GTK_TREE_VIEW(results),
-                        settings_ui_text(SettingsUiText::reverse_fqdn),
-                        ip_scan_reverse_fqdn_column, true);
+                        settings_ui_text(SettingsUiText::resolved_name),
+                        ip_scan_resolved_name_column, true);
   append_ip_scan_column(GTK_TREE_VIEW(results),
                         settings_ui_text(
                             SettingsUiText::ssh_sftp_port_column),

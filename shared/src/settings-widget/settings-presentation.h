@@ -58,7 +58,7 @@ enum class SettingsUiText {
   unavailable,
   ip_scan,
   ip_address,
-  reverse_fqdn,
+  resolved_name,
   ssh_sftp_port_column,
   telnet_port_column,
   ftp_port_column,

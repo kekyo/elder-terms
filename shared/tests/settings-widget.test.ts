@@ -2658,11 +2658,17 @@ describe.concurrent('shared settings widget', () => {
   });
 
   for (const type of ['ssh', 'sftp', 'telnet', 'ftp']) {
-    for (const mode of ['complete', 'no-name', 'pending']) {
+    for (const mode of ['complete', 'no-name', 'pending', 'mdns', 'llmnr']) {
       it(`selects and persists the ${mode} IP scan result for ${type}`, async (context) => {
         const section = type === 'sftp' ? 'ssh' : type;
         const expectedAddress =
-          mode === 'complete' ? 'router.example.test' : '192.0.2.25';
+          mode === 'complete'
+            ? 'router.example.test'
+            : mode === 'mdns'
+              ? 'router.local'
+              : mode === 'llmnr'
+                ? 'router'
+                : '192.0.2.25';
         const directory = await mkdtemp(join(tmpdir(), 'elder-terms-scan-'));
         try {
           await runSharedGtkTest(
@@ -2693,7 +2699,7 @@ describe.concurrent('shared settings widget', () => {
               );
               await waitForResult(async () => {
                 expect(await results.getRowCount()).toBe(1);
-                if (mode === 'complete') {
+                if (expectedAddress !== '192.0.2.25') {
                   expect(
                     (await (await results.cellAt(0, 1))?.info())?.name
                   ).toBe(expectedAddress);

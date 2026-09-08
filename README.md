@@ -201,7 +201,7 @@ is 0 through 255. A range wider than `/24` is limited to its first 256
 addresses by treating the additional upper host bits as zero. For example, an
 address on `172.20.0.0/16` scans `172.20.0.0` through `172.20.0.255`.
 
-Discovered hosts appear as the scan proceeds, together with their reverse DNS
+Discovered hosts appear as the scan proceeds, together with their resolved host
 name when available. The SSH/SFTP (22), TELNET (23), and FTP (21) columns show
 a check mark when the corresponding port was found. The progress bar shows how
 much of the combined range has been checked. Double-click a row to stop the
@@ -212,8 +212,18 @@ Click "Cancel" to stop and close the scan without changing the address.
 
 Only locally configured IPv4 ranges are scanned. Interfaces without an IPv4
 address are skipped. Loopback interfaces scan only their assigned addresses,
-rather than the whole loopback range. Slow reverse DNS responses may still
-take some time to finish.
+rather than the whole loopback range. Name lookup uses the system resolver first,
+then mDNS and LLMNR in parallel, preferring mDNS if both return names. It keeps
+`.local` and single-label names unchanged. Name lookup has a shared three-second
+deadline per host, including up to one second for the initial system lookup.
+
+Explicit mDNS/LLMNR lookup requires `systemd-resolved` with those protocols enabled
+on the relevant network interface. Normal hostname resolution must also reach
+`systemd-resolved` to connect using the discovered names. The application does
+not change your system's resolver configuration. If the service or protocol is
+unavailable, scanning still works with system-resolved names or numeric addresses.
+See the [systemd resolver API documentation](https://github.com/systemd/systemd/blob/v257/man/org.freedesktop.resolve1.xml)
+for protocol availability and interface selection requirements.
 
 ## Using SSH and SFTP
 
