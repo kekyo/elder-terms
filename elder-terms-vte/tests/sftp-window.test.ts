@@ -704,20 +704,21 @@ describe('SFTP window', () => {
             (await (await localTree.cellAt(localSelectedRow, 0))?.info())
               ?.states
           ).toContain('selected');
+          // Selection notification can precede GTK's next paint.
+          expect(
+            capturePixel(
+              await (await localTree.cellAt(localSelectedRow, 0))!.capture(),
+              0.9,
+              0.5
+            )
+          ).not.toEqual(
+            capturePixel(
+              await (await localTree.cellAt(localUnselectedRow, 0))!.capture(),
+              0.9,
+              0.5
+            )
+          );
         });
-        expect(
-          capturePixel(
-            await (await localTree.cellAt(localSelectedRow, 0))!.capture(),
-            0.9,
-            0.5
-          )
-        ).not.toEqual(
-          capturePixel(
-            await (await localTree.cellAt(localUnselectedRow, 0))!.capture(),
-            0.9,
-            0.5
-          )
-        );
 
         const remoteSelectedRow = await findRow(remoteTree, 'readme.txt');
         const remoteUnselectedRow = await findRow(remoteTree, 'archive');
@@ -732,20 +733,23 @@ describe('SFTP window', () => {
             (await (await remoteTree.cellAt(remoteSelectedRow, 0))?.info())
               ?.states
           ).toContain('selected');
+          expect(
+            capturePixel(
+              await (await remoteTree.cellAt(remoteSelectedRow, 0))!.capture(),
+              0.9,
+              0.5
+            )
+          ).not.toEqual(
+            capturePixel(
+              await (await remoteTree.cellAt(
+                remoteUnselectedRow,
+                0
+              ))!.capture(),
+              0.9,
+              0.5
+            )
+          );
         });
-        expect(
-          capturePixel(
-            await (await remoteTree.cellAt(remoteSelectedRow, 0))!.capture(),
-            0.9,
-            0.5
-          )
-        ).not.toEqual(
-          capturePixel(
-            await (await remoteTree.cellAt(remoteUnselectedRow, 0))!.capture(),
-            0.9,
-            0.5
-          )
-        );
         await Promise.all([
           localTree.deselectRow(localSelectedRow),
           remoteTree.deselectRow(remoteSelectedRow),
