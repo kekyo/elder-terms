@@ -685,6 +685,10 @@ lets you open it directly with that hotkey even while the launcher is hidden.
 "Open application shortcut" under "Application settings" shows the launcher;
 its default is `Ctrl+Alt+T`.
 
+If a configured hotkey cannot be registered, a warning titled "elder-terms"
+explains that it will not work. The warning text follows the selected display
+language. Closing the warning does not quit the launcher.
+
 ### Hotkey Limitations on Wayland
 
 Wayland sessions require an implementation of the XDG Global Shortcuts portal
