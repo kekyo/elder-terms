@@ -1932,3 +1932,59 @@ msgstr "텔넷: (알 수 없음)"
 
 #~ msgid "Global defaults"
 #~ msgstr "전역 기본값"
+
+#: elder-terms/src/main.cpp
+msgid "Connection changed outside elder-terms"
+msgstr "elder-terms 외부에서 연결이 변경되었습니다"
+
+#: elder-terms/src/main.cpp
+msgid "Reload the file and discard your unsaved changes, or keep editing. Saving kept edits will require confirmation before overwriting the file."
+msgstr "파일을 다시 읽어 저장하지 않은 변경을 버리거나 현재 편집을 유지하세요. 유지한 편집을 저장할 때 파일 덮어쓰기를 확인합니다."
+
+#: elder-terms/src/main.cpp
+msgid "Keep edits"
+msgstr "편집 유지"
+
+#: elder-terms/src/main.cpp
+msgid "Reload from file"
+msgstr "파일에서 다시 읽기"
+
+#: elder-terms/src/main.cpp
+msgid "Overwrite externally changed connection?"
+msgstr "외부에서 변경된 연결을 덮어쓸까요?"
+
+#: elder-terms/src/main.cpp
+msgid "The file changed or was removed outside elder-terms. Save your current edits in its place?"
+msgstr "파일이 elder-terms 외부에서 변경되거나 삭제되었습니다. 현재 편집 내용으로 저장할까요?"
+
+#: elder-terms/src/main-window.ui
+msgid "Edit in text editor"
+msgstr "텍스트 편집기에서 편집"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to open text editor"
+msgstr "텍스트 편집기를 열지 못했습니다"
+
+#: elder-terms/src/main.cpp
+msgid "The text editor could not be started."
+msgstr "텍스트 편집기를 시작하지 못했습니다."
+
+#: elder-terms/src/main.cpp
+msgid "The connection file is no longer available."
+msgstr "연결 파일이 없거나 사용할 수 없습니다."
+
+#: elder-terms/src/main.cpp
+msgid "Set a default application for plain text files in your desktop settings."
+msgstr "데스크톱 설정에서 일반 텍스트 파일의 기본 프로그램을 지정하세요."
+
+#: elder-terms/src/main.cpp
+msgid "Save changes before opening the text editor?"
+msgstr "텍스트 편집기를 열기 전에 변경 사항을 저장할까요?"
+
+#: elder-terms/src/main.cpp
+msgid "Discard and open"
+msgstr "버리고 열기"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open"
+msgstr "저장하고 열기"

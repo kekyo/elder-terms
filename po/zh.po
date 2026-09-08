@@ -1928,3 +1928,59 @@ msgstr "远程登录：（未知）"
 
 #~ msgid "Global defaults"
 #~ msgstr "全局默认值"
+
+#: elder-terms/src/main.cpp
+msgid "Connection changed outside elder-terms"
+msgstr "连接已在 elder-terms 外部更改"
+
+#: elder-terms/src/main.cpp
+msgid "Reload the file and discard your unsaved changes, or keep editing. Saving kept edits will require confirmation before overwriting the file."
+msgstr "重新加载文件并放弃未保存的更改，或保留当前编辑。保存保留的编辑时，需要确认覆盖文件。"
+
+#: elder-terms/src/main.cpp
+msgid "Keep edits"
+msgstr "保留编辑"
+
+#: elder-terms/src/main.cpp
+msgid "Reload from file"
+msgstr "从文件重新加载"
+
+#: elder-terms/src/main.cpp
+msgid "Overwrite externally changed connection?"
+msgstr "覆盖在外部更改的连接？"
+
+#: elder-terms/src/main.cpp
+msgid "The file changed or was removed outside elder-terms. Save your current edits in its place?"
+msgstr "文件已在 elder-terms 外部更改或删除。要用当前编辑内容保存吗？"
+
+#: elder-terms/src/main-window.ui
+msgid "Edit in text editor"
+msgstr "在文本编辑器中编辑"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to open text editor"
+msgstr "无法打开文本编辑器"
+
+#: elder-terms/src/main.cpp
+msgid "The text editor could not be started."
+msgstr "无法启动文本编辑器。"
+
+#: elder-terms/src/main.cpp
+msgid "The connection file is no longer available."
+msgstr "连接文件已不存在或不可用。"
+
+#: elder-terms/src/main.cpp
+msgid "Set a default application for plain text files in your desktop settings."
+msgstr "请在桌面设置中指定纯文本文件的默认应用程序。"
+
+#: elder-terms/src/main.cpp
+msgid "Save changes before opening the text editor?"
+msgstr "打开文本编辑器前保存更改？"
+
+#: elder-terms/src/main.cpp
+msgid "Discard and open"
+msgstr "放弃并打开"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open"
+msgstr "保存并打开"

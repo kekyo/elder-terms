@@ -36,6 +36,8 @@ struct LauncherMainWindow {
   GtkWidget *about_menu_item = nullptr;
   /** Starts in-place editing of a saved connection name. */
   GtkWidget *rename_connection_menu_item = nullptr;
+  /** Opens the selected saved profile in the default text editor. */
+  GtkWidget *edit_connection_menu_item = nullptr;
   /** Duplicates a saved connection. */
   GtkWidget *duplicate_connection_menu_item = nullptr;
   /** Requests deletion of a saved connection. */

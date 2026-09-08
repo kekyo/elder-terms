@@ -1811,8 +1811,7 @@ describe('elder-terms main window', () => {
           expect(Number(await width.text())).toBe(88);
         });
 
-        await width.setText('91');
-        await expectSensitive(apply);
+        await expectInsensitive(apply);
         await writeFile(
           join(connections, 'Alpha.ini'),
           '[terminal]\nwidth=95\n'
@@ -1841,6 +1840,356 @@ describe('elder-terms main window', () => {
           expect(await connectionRowCount(list)).toBe(2);
           expect(Number(await width.text())).toBe(95);
         });
+      }
+    );
+  });
+
+  for (const mode of [
+    'clean',
+    'save',
+    'save-conflict',
+    'discard',
+    'cancel',
+    'save-failure',
+    'launch-failure',
+    'no-editor',
+    'missing-file',
+  ]) {
+    it(`opens a connection in the XDG text editor: ${mode}`, async (context) => {
+      const directory = await mkdtemp(join(tmpdir(), 'elder-terms-editor-'));
+      const applications = join(directory, 'applications');
+      const executable = join(directory, 'editor.mjs');
+      const capturePath = join(directory, 'capture.json');
+      const profileName = "Alpha 日本語 ; $' (test).ini";
+      await mkdir(applications);
+      // Keep MIME recognition available without exposing host applications.
+      await symlink('/usr/share/mime', join(directory, 'mime'));
+      await writeFile(
+        executable,
+        `#!${process.execPath}
+import { readFile, writeFile } from 'node:fs/promises';
+const args = process.argv.slice(2);
+const content = await readFile(args[0], 'utf8');
+await writeFile(${JSON.stringify(capturePath)}, JSON.stringify({ args, content }));
+${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : ''}
+`
+      );
+      await chmod(executable, 0o755);
+      if (mode !== 'no-editor') {
+        await writeFile(
+          join(applications, 'fixture-editor.desktop'),
+          '[Desktop Entry]\nType=Application\nName=Fixture text editor\n' +
+            `Exec="${executable}" %f\nMimeType=text/plain;\nTerminal=false\n` +
+            // Fail the launch request itself, before gio-launch-desktop takes
+            // over. Errors inside the started editor are not returned by GIO.
+            (mode === 'launch-failure'
+              ? `Path=${join(directory, 'missing-working-directory')}\n`
+              : '')
+        );
+      }
+      try {
+        await runLauncherGtkTest(
+          context,
+          async (connections) => {
+            if (mode === 'missing-file') {
+              // Removing the target outside the monitored directory makes
+              // the file disappear specifically between selection and launch.
+              const target = join(directory, 'profile.ini');
+              await writeFile(target, '[terminal]\nwidth=88\n');
+              await symlink(target, join(connections, profileName));
+            } else {
+              await writeFile(
+                join(connections, profileName),
+                '[terminal]\nwidth=88\n'
+              );
+            }
+            await writeFile(
+              join(connections, '..', '..', 'mimeapps.list'),
+              '[Default Applications]\ntext/plain=fixture-editor.desktop;\n'
+            );
+          },
+          async ({ app, connections }) => {
+            const list = await app.getById('connection_list');
+            await selectConnectionRow(app, list, 0);
+            const width = expectElementKind(
+              await app.getById('settings_terminal_width_entry'),
+              'entry'
+            );
+            await waitForResult(async () =>
+              expect(await width.text()).toBe('88')
+            );
+            const dirty = [
+              'save',
+              'save-conflict',
+              'discard',
+              'cancel',
+              'save-failure',
+            ].includes(mode);
+            if (dirty) {
+              await width.setText('91');
+            }
+            if (mode === 'save-conflict') {
+              await writeFile(
+                join(connections, profileName),
+                '[terminal]\nwidth=95\n'
+              );
+              await expectElementKind(
+                await app.getById('external_keep_button'),
+                'button'
+              ).click();
+              expect(await width.text()).toBe('91');
+            }
+            if (mode === 'save-failure') {
+              await chmod(connections, 0o500);
+            }
+            if (mode === 'missing-file') {
+              await rm(join(directory, 'profile.ini'));
+            }
+            try {
+              await rightClickConnectionRow(app, list, 0);
+              await expectElementKind(
+                await app.getById('edit_connection_menu_item'),
+                'menuItem'
+              ).click();
+              if (dirty) {
+                const response =
+                  mode === 'discard'
+                    ? 'discard'
+                    : mode === 'cancel'
+                      ? 'cancel'
+                      : 'save';
+                await expectElementKind(
+                  await app.getById(`editor_${response}_open_button`),
+                  'button'
+                ).click();
+                if (mode === 'save-conflict') {
+                  const overwrite = expectElementKind(
+                    await app.getById('external_overwrite_button'),
+                    'button'
+                  );
+                  expect(
+                    await readFile(join(connections, profileName), 'utf8')
+                  ).toContain('width=95');
+                  await expect(
+                    readFile(capturePath, 'utf8')
+                  ).rejects.toMatchObject({ code: 'ENOENT' });
+                  await overwrite.click();
+                }
+              }
+              if (mode === 'cancel') {
+                await waitForWindowCount(app, 1);
+                expect(await width.text()).toBe('91');
+                await expect(
+                  readFile(capturePath, 'utf8')
+                ).rejects.toMatchObject({ code: 'ENOENT' });
+                expect(
+                  await readFile(join(connections, profileName), 'utf8')
+                ).toContain('width=88');
+              } else if (
+                [
+                  'save-failure',
+                  'launch-failure',
+                  'no-editor',
+                  'missing-file',
+                ].includes(mode)
+              ) {
+                expectElementKind(
+                  await app.getById('operation_error_dialog'),
+                  'infoBar'
+                );
+                expect(await width.text()).toBe(dirty ? '91' : '88');
+                await expect(
+                  readFile(capturePath, 'utf8')
+                ).rejects.toMatchObject({ code: 'ENOENT' });
+                if (mode !== 'missing-file') {
+                  expect(
+                    await readFile(join(connections, profileName), 'utf8')
+                  ).toContain('width=88');
+                }
+              } else {
+                await waitForResult(async () => {
+                  const capture = JSON.parse(
+                    await readFile(capturePath, 'utf8')
+                  );
+                  expect(capture.args).toEqual([
+                    join(connections, profileName),
+                  ]);
+                  expect(capture.content).toContain(
+                    mode === 'save' || mode === 'save-conflict'
+                      ? 'width=91'
+                      : 'width=88'
+                  );
+                });
+                await waitForResult(async () => {
+                  expect(await width.text()).toBe(
+                    mode === 'clean'
+                      ? '95'
+                      : mode === 'save' || mode === 'save-conflict'
+                        ? '91'
+                        : '88'
+                  );
+                  await expectInsensitive(await app.getById('apply_button'));
+                });
+              }
+            } finally {
+              await chmod(connections, 0o700);
+            }
+          },
+          {
+            args: [],
+            env: {
+              XDG_DATA_HOME: directory,
+              XDG_DATA_DIRS: directory,
+              XDG_CONFIG_DIRS: directory,
+            },
+          }
+        );
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
+  }
+
+  for (const saving of ['normal', 'replacement']) {
+    for (const decision of ['reload', 'keep']) {
+      it(`protects dirty edits from ${saving} saves and lets the user ${decision}`, async (context) => {
+        await runLauncherGtkTest(
+          context,
+          prepareProfiles,
+          async ({ app, connections }) => {
+            const { width } = await beginDirtyConnectionEdit(app, 91);
+            const path = join(connections, 'Alpha.ini');
+            if (saving === 'replacement') {
+              const replacement = join(connections, 'replacement.tmp');
+              await writeFile(replacement, '[terminal]\nwidth=95\n');
+              await rename(replacement, path);
+            } else {
+              await writeFile(path, '[terminal]\nwidth=95\n');
+            }
+            await app.getById('external_change_dialog');
+            expect(await width.text()).toBe('91');
+            await expectElementKind(
+              await app.getById(`external_${decision}_button`),
+              'button'
+            ).click();
+            if (decision === 'reload') {
+              await waitForResult(async () => {
+                expect(await width.text()).toBe('95');
+                await expectInsensitive(await app.getById('apply_button'));
+              });
+            } else {
+              expect(await width.text()).toBe('91');
+              const apply = expectElementKind(
+                await app.getById('apply_button'),
+                'button'
+              );
+              await apply.click();
+              await expectElementKind(
+                await app.getById('external_overwrite_cancel_button'),
+                'button'
+              ).click();
+              expect(await readFile(path, 'utf8')).toContain('width=95');
+              expect(await width.text()).toBe('91');
+              await apply.click();
+              await expectElementKind(
+                await app.getById('external_overwrite_button'),
+                'button'
+              ).click();
+              await waitForResult(async () => {
+                expect(await readFile(path, 'utf8')).toContain('width=91');
+                await expectInsensitive(apply);
+              });
+              await waitForWindowCount(app, 1);
+            }
+          }
+        );
+      });
+    }
+  }
+
+  it('retains the last good editor state after a malformed external save', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app, connections }) => {
+        const list = await app.getById('connection_list');
+        await selectConnectionRow(app, list, 0);
+        await selectSettingsTab(app, 'settings', 'Terminal');
+        const width = expectElementKind(
+          await app.getById('settings_terminal_width_entry'),
+          'entry'
+        );
+        await waitForResult(async () => expect(await width.text()).toBe('88'));
+        expect((await width.info()).states).toContain('showing');
+        await writeFile(join(connections, 'Alpha.ini'), '[broken');
+        await app.getById('operation_error_dialog');
+        expect((await width.info()).states).toContain('showing');
+        expect(await width.text()).toBe('88');
+        await app.input.pressKey('Escape');
+        await waitForWindowCount(app, 1);
+        await writeFile(
+          join(connections, 'Alpha.ini'),
+          '[terminal]\nwidth=95\n'
+        );
+        await waitForResult(async () => expect(await width.text()).toBe('95'));
+      }
+    );
+  });
+
+  it('preserves dirty edits when the selected file is removed externally', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app, connections }) => {
+        const { width } = await beginDirtyConnectionEdit(app, 91);
+        await selectSettingsTab(app, 'settings', 'Terminal');
+        expect((await width.info()).states).toContain('showing');
+        const path = join(connections, 'Alpha.ini');
+        await rm(path);
+        await expectElementKind(
+          await app.getById('external_keep_button'),
+          'button'
+        ).click();
+        expect((await width.info()).states).toContain('showing');
+        expect(await width.text()).toBe('91');
+        await expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        ).click();
+        await expectElementKind(
+          await app.getById('external_overwrite_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(await readFile(path, 'utf8')).toContain('width=91');
+          await expectInsensitive(await app.getById('apply_button'));
+        });
+      }
+    );
+  });
+
+  it('does not offer external editing for a new unsaved entry', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async () => {},
+      async ({ app }) => {
+        await expectElementKind(
+          await app.getById('new_button'),
+          'button'
+        ).click();
+        await app.input.pressKey('Escape');
+        await rightClickConnectionRow(
+          app,
+          await app.getById('connection_list'),
+          0
+        );
+        const editor = await app.findById('edit_connection_menu_item');
+        if (editor !== undefined) {
+          const info = await editor.info();
+          expect(
+            info.states.includes('showing') && info.states.includes('sensitive')
+          ).toBe(false);
+        }
       }
     );
   });

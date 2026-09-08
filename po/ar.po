@@ -1952,3 +1952,59 @@ msgstr "التلنت: (غير معروف)"
 
 #~ msgid "Global defaults"
 #~ msgstr "الإعدادات الافتراضية العامة"
+
+#: elder-terms/src/main.cpp
+msgid "Connection changed outside elder-terms"
+msgstr "تم تغيير الاتصال خارج elder-terms"
+
+#: elder-terms/src/main.cpp
+msgid "Reload the file and discard your unsaved changes, or keep editing. Saving kept edits will require confirmation before overwriting the file."
+msgstr "أعد تحميل الملف وتجاهل التغييرات غير المحفوظة، أو احتفظ بالتعديلات. سيتطلب حفظ التعديلات المحتفظ بها تأكيد استبدال الملف."
+
+#: elder-terms/src/main.cpp
+msgid "Keep edits"
+msgstr "الاحتفاظ بالتعديلات"
+
+#: elder-terms/src/main.cpp
+msgid "Reload from file"
+msgstr "إعادة التحميل من الملف"
+
+#: elder-terms/src/main.cpp
+msgid "Overwrite externally changed connection?"
+msgstr "هل تريد استبدال الاتصال الذي تم تغييره خارجيًا؟"
+
+#: elder-terms/src/main.cpp
+msgid "The file changed or was removed outside elder-terms. Save your current edits in its place?"
+msgstr "تم تغيير الملف أو حذفه خارج elder-terms. هل تريد حفظ تعديلاتك الحالية مكانه؟"
+
+#: elder-terms/src/main-window.ui
+msgid "Edit in text editor"
+msgstr "تحرير في محرر نصوص"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to open text editor"
+msgstr "تعذر فتح محرر النصوص"
+
+#: elder-terms/src/main.cpp
+msgid "The text editor could not be started."
+msgstr "تعذر تشغيل محرر النصوص."
+
+#: elder-terms/src/main.cpp
+msgid "The connection file is no longer available."
+msgstr "لم يعد ملف الاتصال متاحًا."
+
+#: elder-terms/src/main.cpp
+msgid "Set a default application for plain text files in your desktop settings."
+msgstr "عيّن تطبيقًا افتراضيًا لملفات النص العادي في إعدادات سطح المكتب."
+
+#: elder-terms/src/main.cpp
+msgid "Save changes before opening the text editor?"
+msgstr "هل تريد حفظ التغييرات قبل فتح محرر النصوص؟"
+
+#: elder-terms/src/main.cpp
+msgid "Discard and open"
+msgstr "تجاهل وفتح"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open"
+msgstr "حفظ وفتح"

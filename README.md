@@ -134,6 +134,25 @@ wrong, simply close the terminal window to discard the changes.
 Most settings are self-explanatory once you try them, but a few need more
 detail. Those settings are described in the following sections.
 
+To edit a saved connection's INI file directly, right-click its entry in the
+launcher and select "Edit in text editor". This uses your desktop's default
+application for plain text files. Save a new entry before using this command.
+If the launcher has unsaved edits, choose whether to save or discard them
+before opening the editor, or cancel to keep editing in the launcher.
+
+Changes saved in an external editor are reloaded automatically, including
+editors that replace the file when saving. If you also have unsaved edits in
+the launcher, choose "Reload from file" to discard them or "Keep edits" to
+preserve them. Saving kept edits asks before overwriting the externally
+changed file. A removed or malformed file leaves the last usable editor state
+intact; correct the file or explicitly save your retained edits to replace it.
+If no text editor is configured or the desktop rejects its launch request,
+elder-terms reports the problem without closing the selected connection.
+Errors inside the editor after the desktop accepts that request must be
+checked in the editor itself; elder-terms does not wait for it to finish.
+See the [desktop launch mechanism](https://github.com/GNOME/glib/blob/2.80.0/gio/gdesktopappinfo.c)
+for the handoff to the desktop's launcher.
+
 It is also useful to remember that `Ctrl`+`=` increases the font size and
 `Ctrl`+`-` decreases it. You can do the same with the mouse wheel while holding
 `Ctrl`.

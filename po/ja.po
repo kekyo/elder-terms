@@ -1954,3 +1954,59 @@ msgstr "telnet:（不明）"
 
 #~ msgid "Global defaults"
 #~ msgstr "グローバル既定値"
+
+#: elder-terms/src/main.cpp
+msgid "Connection changed outside elder-terms"
+msgstr "接続が elder-terms の外部で変更されました"
+
+#: elder-terms/src/main.cpp
+msgid "Reload the file and discard your unsaved changes, or keep editing. Saving kept edits will require confirmation before overwriting the file."
+msgstr "ファイルを再読込して未保存の変更を破棄するか、画面の編集を保持してください。保持した編集を保存する際は、ファイルの上書きを確認します。"
+
+#: elder-terms/src/main.cpp
+msgid "Keep edits"
+msgstr "編集を保持"
+
+#: elder-terms/src/main.cpp
+msgid "Reload from file"
+msgstr "ファイルから再読込"
+
+#: elder-terms/src/main.cpp
+msgid "Overwrite externally changed connection?"
+msgstr "外部で変更された接続を上書きしますか？"
+
+#: elder-terms/src/main.cpp
+msgid "The file changed or was removed outside elder-terms. Save your current edits in its place?"
+msgstr "ファイルが elder-terms の外部で変更または削除されました。現在の編集内容で保存しますか？"
+
+#: elder-terms/src/main-window.ui
+msgid "Edit in text editor"
+msgstr "テキストエディタで編集"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to open text editor"
+msgstr "テキストエディタを開けませんでした"
+
+#: elder-terms/src/main.cpp
+msgid "The text editor could not be started."
+msgstr "テキストエディタを起動できませんでした。"
+
+#: elder-terms/src/main.cpp
+msgid "The connection file is no longer available."
+msgstr "接続ファイルが見つからないか、利用できません。"
+
+#: elder-terms/src/main.cpp
+msgid "Set a default application for plain text files in your desktop settings."
+msgstr "デスクトップの設定で、プレーンテキスト用の既定アプリケーションを指定してください。"
+
+#: elder-terms/src/main.cpp
+msgid "Save changes before opening the text editor?"
+msgstr "テキストエディタを開く前に変更を保存しますか？"
+
+#: elder-terms/src/main.cpp
+msgid "Discard and open"
+msgstr "破棄して開く"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open"
+msgstr "保存して開く"

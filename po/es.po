@@ -1952,3 +1952,59 @@ msgstr "telnet: (desconocido)"
 
 #~ msgid "Global defaults"
 #~ msgstr "Valores predeterminados globales"
+
+#: elder-terms/src/main.cpp
+msgid "Connection changed outside elder-terms"
+msgstr "La conexión cambió fuera de elder-terms"
+
+#: elder-terms/src/main.cpp
+msgid "Reload the file and discard your unsaved changes, or keep editing. Saving kept edits will require confirmation before overwriting the file."
+msgstr "Recargue el archivo y descarte los cambios sin guardar, o conserve la edición. Al guardarla se pedirá confirmación antes de sobrescribir el archivo."
+
+#: elder-terms/src/main.cpp
+msgid "Keep edits"
+msgstr "Conservar edición"
+
+#: elder-terms/src/main.cpp
+msgid "Reload from file"
+msgstr "Recargar desde el archivo"
+
+#: elder-terms/src/main.cpp
+msgid "Overwrite externally changed connection?"
+msgstr "¿Sobrescribir la conexión modificada externamente?"
+
+#: elder-terms/src/main.cpp
+msgid "The file changed or was removed outside elder-terms. Save your current edits in its place?"
+msgstr "El archivo cambió o se eliminó fuera de elder-terms. ¿Guardar la edición actual en su lugar?"
+
+#: elder-terms/src/main-window.ui
+msgid "Edit in text editor"
+msgstr "Editar en un editor de texto"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to open text editor"
+msgstr "No se pudo abrir el editor de texto"
+
+#: elder-terms/src/main.cpp
+msgid "The text editor could not be started."
+msgstr "No se pudo iniciar el editor de texto."
+
+#: elder-terms/src/main.cpp
+msgid "The connection file is no longer available."
+msgstr "El archivo de conexión ya no está disponible."
+
+#: elder-terms/src/main.cpp
+msgid "Set a default application for plain text files in your desktop settings."
+msgstr "Configure una aplicación predeterminada para archivos de texto en los ajustes del escritorio."
+
+#: elder-terms/src/main.cpp
+msgid "Save changes before opening the text editor?"
+msgstr "¿Guardar los cambios antes de abrir el editor de texto?"
+
+#: elder-terms/src/main.cpp
+msgid "Discard and open"
+msgstr "Descartar y abrir"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open"
+msgstr "Guardar y abrir"

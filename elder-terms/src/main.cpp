@@ -80,6 +80,15 @@ struct ChildLaunch {
   std::filesystem::path temporary_startup_path;
 };
 
+// The asynchronous launch borrows its arguments until its completion callback.
+// This context owns them independently of the launcher window's lifetime.
+struct EditorLaunch {
+  ApplicationState *application = nullptr;
+  GAppInfo *app_info = nullptr;
+  gchar *uri = nullptr;
+  GList uris{};
+};
+
 struct ConnectionHotkeyTarget {
   std::string action_id;
   std::string name;
@@ -103,6 +112,14 @@ struct ApplicationState {
   std::filesystem::path global_config_path;
   std::vector<elder_terms::ConnectionProfile> profiles;
   std::optional<std::filesystem::path> selected_path;
+  // Track file contents, not monitor event counts: one save can emit several
+  // events, including replacement of the selected file's inode.
+  std::optional<std::string> observed_file_content;
+  bool external_conflict = false;
+  GtkWidget *external_change_dialog = nullptr;
+  GtkWidget *external_overwrite_dialog = nullptr;
+  GtkWidget *editor_changes_dialog = nullptr;
+  bool open_editor_after_save = false;
   std::string persisted_name;
   std::string draft_name;
   std::string name_error;
@@ -135,6 +152,7 @@ struct ApplicationState {
   std::string file_transfer_executable;
   std::string launcher_argv0;
   std::vector<ChildLaunch *> child_launches;
+  std::vector<EditorLaunch *> editor_launches;
   std::vector<ConnectionHotkeyTarget> connection_hotkey_targets;
   elder_terms::StartupMode startup_mode =
       elder_terms::StartupMode::window;
@@ -330,7 +348,8 @@ static bool editor_is_valid(const ApplicationState *state) {
 static void update_action_sensitivity(ApplicationState *state) {
   const bool valid = editor_is_valid(state);
   gtk_widget_set_sensitive(state->main_window->apply_button,
-                           valid && editor_is_dirty(state));
+                           valid && (editor_is_dirty(state) ||
+                                     state->external_conflict));
   gtk_widget_set_sensitive(state->main_window->connect_button, valid);
   gtk_widget_set_tooltip_text(
       state->main_window->connection_list,
@@ -1050,6 +1069,8 @@ static void show_empty_details(ApplicationState *state) {
   state->has_selection = false;
   state->current_is_new = false;
   state->selected_path.reset();
+  state->observed_file_content.reset();
+  state->external_conflict = false;
   state->persisted_name.clear();
   state->draft_name.clear();
   state->name_error.clear();
@@ -1059,8 +1080,23 @@ static void show_empty_details(ApplicationState *state) {
   update_action_sensitivity(state);
 }
 
+static std::optional<std::string> read_profile_content(
+    const std::filesystem::path &path) {
+  gchar *contents = nullptr;
+  gsize length = 0;
+  if (!g_file_get_contents(path.c_str(), &contents, &length, nullptr)) {
+    return std::nullopt;
+  }
+  std::string result(contents, length);
+  g_free(contents);
+  return result;
+}
+
 static bool load_existing_connection(ApplicationState *state,
                                      const std::filesystem::path &path) {
+  // Observe before parsing, so a concurrent later write cannot be mistaken
+  // for the version already displayed by this load.
+  const auto contents = read_profile_content(path);
   const elder_terms::SettingsLoadResult result =
       elder_terms::load_connection_profile(path);
   print_warnings(result.warnings);
@@ -1072,6 +1108,8 @@ static bool load_existing_connection(ApplicationState *state,
   state->has_selection = true;
   state->current_is_new = false;
   state->selected_path = path;
+  state->observed_file_content = contents;
+  state->external_conflict = false;
   state->persisted_name = path.stem().string();
   state->draft_name = state->persisted_name;
   state->name_error.clear();
@@ -1141,6 +1179,8 @@ static void begin_new_connection(ApplicationState *state) {
   state->has_selection = true;
   state->current_is_new = true;
   state->selected_path.reset();
+  state->observed_file_content.reset();
+  state->external_conflict = false;
   state->persisted_name.clear();
   state->draft_name = next_new_connection_name(state->profiles);
   state->name_error.clear();
@@ -1206,11 +1246,80 @@ static void preserve_current_editor_after_list_refresh(ApplicationState *state) 
     selected = select_matching_row(state, std::nullopt, true);
   } else if (state->has_selection && state->selected_path.has_value()) {
     selected = select_matching_row(state, state->selected_path, false);
+    if (!selected && state->external_conflict) {
+      // An externally removed file must not take its unsaved editor with it.
+      // Keep a selectable row so an explicitly confirmed save can restore it.
+      GtkTreeIter iterator;
+      gtk_list_store_append(state->main_window->connection_store, &iterator);
+      gtk_list_store_set(
+          state->main_window->connection_store, &iterator,
+          connection_name_column, state->draft_name.c_str(),
+          connection_path_column, state->selected_path->c_str(),
+          connection_is_new_column, FALSE, -1);
+      selected = select_matching_row(state, state->selected_path, false);
+    }
   }
   state->suppress_selection = false;
   if (state->has_selection && !selected) {
     show_empty_details(state);
   }
+}
+
+static void on_external_dialog_destroy(GtkWidget *dialog, gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (state->external_change_dialog == dialog) {
+    state->external_change_dialog = nullptr;
+  }
+  if (state->external_overwrite_dialog == dialog) {
+    state->external_overwrite_dialog = nullptr;
+  }
+  if (state->editor_changes_dialog == dialog) {
+    state->editor_changes_dialog = nullptr;
+  }
+}
+
+static void on_external_change_response(GtkDialog *dialog, gint response,
+                                        gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+  if (response == GTK_RESPONSE_ACCEPT && state->selected_path.has_value()) {
+    // Failed parsing or deletion leaves the last usable draft untouched.
+    load_existing_connection(state, state->selected_path.value());
+    preserve_current_editor_after_list_refresh(state);
+    reload_hotkey_actions(state);
+  }
+  update_action_sensitivity(state);
+}
+
+static void show_external_change_dialog(ApplicationState *state) {
+  if (state->external_change_dialog != nullptr ||
+      state->external_overwrite_dialog != nullptr) {
+    return;
+  }
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(state->main_window->window),
+      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
+                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE, "%s",
+      _("Connection changed outside elder-terms"));
+  gtk_message_dialog_format_secondary_text(
+      GTK_MESSAGE_DIALOG(dialog), "%s",
+      _("Reload the file and discard your unsaved changes, or keep editing. "
+        "Saving kept edits will require confirmation before overwriting the file."));
+  GtkWidget *keep = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), _("Keep edits"), GTK_RESPONSE_CANCEL);
+  GtkWidget *reload = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), _("Reload from file"), GTK_RESPONSE_ACCEPT);
+  gestament_gtk_assign_accessible_id(dialog, "external_change_dialog");
+  gestament_gtk_assign_accessible_id(keep, "external_keep_button");
+  gestament_gtk_assign_accessible_id(reload, "external_reload_button");
+  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
+  state->external_change_dialog = dialog;
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(on_external_change_response), state);
+  g_signal_connect(dialog, "destroy",
+                   G_CALLBACK(on_external_dialog_destroy), state);
+  gtk_widget_show_all(dialog);
 }
 
 static gboolean refresh_connections_from_monitor(gpointer user_data) {
@@ -1222,20 +1331,32 @@ static gboolean refresh_connections_from_monitor(gpointer user_data) {
 
   if (state->monitor_reload_selected && state->has_selection &&
       !state->current_is_new) {
-    const auto path = state->monitor_renamed_path.has_value()
-                          ? state->monitor_renamed_path
-                          : state->selected_path;
+    if (state->monitor_renamed_path.has_value()) {
+      state->selected_path = state->monitor_renamed_path;
+      state->persisted_name = state->selected_path->stem().string();
+      if (!state->name_dirty) {
+        state->draft_name = state->persisted_name;
+        elder_terms::settings_widget_set_default_connection_name(
+            state->settings_widget, state->draft_name);
+      }
+    }
+    const auto path = state->selected_path;
     state->monitor_reload_selected = false;
     state->monitor_renamed_path.reset();
-    std::error_code path_error;
-    if (path.has_value() &&
-        std::filesystem::is_regular_file(path.value(), path_error) &&
-        !path_error) {
-      select_existing_connection(state, path.value());
-    } else {
-      populate_profile_rows(state);
-      show_empty_details(state);
+    if (path.has_value()) {
+      const auto contents = read_profile_content(path.value());
+      if (contents != state->observed_file_content) {
+        state->observed_file_content = contents;
+        state->external_conflict = true;
+        if (editor_is_dirty(state)) {
+          show_external_change_dialog(state);
+        } else {
+          load_existing_connection(state, path.value());
+        }
+      }
     }
+    preserve_current_editor_after_list_refresh(state);
+    update_action_sensitivity(state);
     reload_hotkey_actions(state);
     return G_SOURCE_REMOVE;
   }
@@ -1253,6 +1374,13 @@ static void on_connection_directory_changed(GFileMonitor *, GFile *file,
                                             gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
   if (state->shutting_down) {
+    return;
+  }
+
+  // Use the end-of-write hint for normal saves; renamed replacement files
+  // are ready immediately. Attribute changes do not change file contents.
+  if (event == G_FILE_MONITOR_EVENT_CHANGED ||
+      event == G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED) {
     return;
   }
 
@@ -1878,6 +2006,7 @@ static void on_delete_connection_dialog_response(GtkDialog *dialog,
     return;
   }
 
+  state->external_conflict = false;
   preserve_current_editor_after_list_refresh(state);
   reload_hotkey_actions(state);
 }
@@ -2045,14 +2174,68 @@ static void on_new_clicked(GtkButton *, gpointer user_data) {
   begin_new_connection(state);
 }
 
-static void on_apply_clicked(GtkButton *, gpointer user_data) {
-  auto *state = static_cast<ApplicationState *>(user_data);
+static void on_editor_launch_complete(GObject *, GAsyncResult *result,
+                                      gpointer user_data) {
+  auto *launch = static_cast<EditorLaunch *>(user_data);
+  GError *error = nullptr;
+  const bool started =
+      g_app_info_launch_uris_finish(launch->app_info, result, &error);
+  if (launch->application != nullptr) {
+    auto *state = launch->application;
+    auto &launches = state->editor_launches;
+    launches.erase(std::remove(launches.begin(), launches.end(), launch),
+                   launches.end());
+    if (!started && !state->shutting_down) {
+      show_error(state, _("Failed to open text editor"),
+                 {error == nullptr ? _("The text editor could not be started.")
+                                   : error->message});
+    }
+  }
+  g_clear_error(&error);
+  g_object_unref(launch->app_info);
+  g_free(launch->uri);
+  delete launch;
+}
+
+static void launch_selected_profile_editor(ApplicationState *state) {
+  if (state->shutting_down || state->current_is_new ||
+      !state->selected_path.has_value()) {
+    return;
+  }
+  std::error_code path_error;
+  if (!std::filesystem::is_regular_file(state->selected_path.value(),
+                                       path_error) || path_error) {
+    show_error(state, _("Failed to open text editor"),
+               {_("The connection file is no longer available.")});
+    return;
+  }
+
+  // FALSE also admits desktop entries accepting only local filenames (%f).
+  GAppInfo *app_info = g_app_info_get_default_for_type("text/plain", FALSE);
+  if (app_info == nullptr) {
+    show_error(state, _("Failed to open text editor"),
+               {_("Set a default application for plain text files in your desktop settings.")});
+    return;
+  }
+  GFile *file = g_file_new_for_path(state->selected_path->c_str());
+  auto *launch = new EditorLaunch();
+  launch->application = state;
+  launch->app_info = app_info;
+  launch->uri = g_file_get_uri(file);
+  launch->uris.data = launch->uri;
+  g_object_unref(file);
+  state->editor_launches.push_back(launch);
+  g_app_info_launch_uris_async(app_info, &launch->uris, nullptr, nullptr,
+                               on_editor_launch_complete, launch);
+}
+
+static bool save_current_connection(ApplicationState *state) {
   const auto validation = elder_terms::validate_connection_name(
       state->draft_name, state->profiles, state->selected_path);
   if (!validation.valid ||
       !elder_terms::settings_widget_is_valid(state->settings_widget)) {
     update_action_sensitivity(state);
-    return;
+    return false;
   }
   const elder_terms::ConnectionSaveResult result =
       elder_terms::save_connection_profile(
@@ -2061,10 +2244,130 @@ static void on_apply_clicked(GtkButton *, gpointer user_data) {
   print_warnings(result.warnings);
   if (!result.saved) {
     show_error(state, _("Failed to save connection"), result.warnings);
-    return;
+    return false;
   }
   select_existing_connection(state, result.path);
   reload_hotkey_actions(state);
+  return true;
+}
+
+static void on_external_overwrite_response(GtkDialog *dialog, gint response,
+                                           gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  const bool open_editor = state->open_editor_after_save;
+  state->open_editor_after_save = false;
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+  if (response == GTK_RESPONSE_ACCEPT) {
+    if (save_current_connection(state) && open_editor) {
+      launch_selected_profile_editor(state);
+    }
+  }
+}
+
+static void request_save_connection(ApplicationState *state,
+                                    bool open_editor) {
+  // A file change can reach us before its queued monitor notification.
+  if (state->selected_path.has_value() &&
+      read_profile_content(state->selected_path.value()) !=
+          state->observed_file_content) {
+    state->external_conflict = true;
+  }
+  if (!state->external_conflict) {
+    if (save_current_connection(state) && open_editor) {
+      launch_selected_profile_editor(state);
+    }
+    return;
+  }
+  if (state->external_overwrite_dialog != nullptr) {
+    return;
+  }
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(state->main_window->window),
+      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
+                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE, "%s",
+      _("Overwrite externally changed connection?"));
+  gtk_message_dialog_format_secondary_text(
+      GTK_MESSAGE_DIALOG(dialog), "%s",
+      _("The file changed or was removed outside elder-terms. "
+        "Save your current edits in its place?"));
+  GtkWidget *cancel = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), _("Cancel"), GTK_RESPONSE_CANCEL);
+  GtkWidget *overwrite = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), _("Overwrite"), GTK_RESPONSE_ACCEPT);
+  gestament_gtk_assign_accessible_id(dialog, "external_overwrite_dialog");
+  gestament_gtk_assign_accessible_id(cancel, "external_overwrite_cancel_button");
+  gestament_gtk_assign_accessible_id(overwrite, "external_overwrite_button");
+  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
+  state->external_overwrite_dialog = dialog;
+  state->open_editor_after_save = open_editor;
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(on_external_overwrite_response), state);
+  g_signal_connect(dialog, "destroy",
+                   G_CALLBACK(on_external_dialog_destroy), state);
+  gtk_widget_show_all(dialog);
+}
+
+static void on_apply_clicked(GtkButton *, gpointer user_data) {
+  request_save_connection(static_cast<ApplicationState *>(user_data), false);
+}
+
+static void on_editor_changes_response(GtkDialog *dialog, gint response,
+                                       gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+  if (response == GTK_RESPONSE_ACCEPT) {
+    request_save_connection(state, true);
+  } else if (response == GTK_RESPONSE_REJECT &&
+             state->selected_path.has_value() &&
+             load_existing_connection(state, state->selected_path.value())) {
+    preserve_current_editor_after_list_refresh(state);
+    reload_hotkey_actions(state);
+    launch_selected_profile_editor(state);
+  }
+}
+
+static void on_edit_connection_menu_item_activate(GtkMenuItem *,
+                                                  gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  gtk_menu_popdown(GTK_MENU(state->main_window->connection_context_menu));
+  if (state->shutting_down || state->current_is_new ||
+      !state->selected_path.has_value() ||
+      state->context_connection_path != state->selected_path) {
+    return;
+  }
+  if (!editor_is_dirty(state)) {
+    launch_selected_profile_editor(state);
+    return;
+  }
+  if (state->editor_changes_dialog != nullptr) {
+    gtk_window_present(GTK_WINDOW(state->editor_changes_dialog));
+    return;
+  }
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(state->main_window->window),
+      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
+                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE, "%s",
+      _("Save changes before opening the text editor?"));
+  GtkWidget *cancel = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), _("Cancel"), GTK_RESPONSE_CANCEL);
+  GtkWidget *discard = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), _("Discard and open"), GTK_RESPONSE_REJECT);
+  GtkWidget *save = gtk_dialog_add_button(
+      GTK_DIALOG(dialog), _("Save and open"), GTK_RESPONSE_ACCEPT);
+  gtk_widget_set_sensitive(save, editor_is_valid(state));
+  gestament_gtk_assign_accessible_id(dialog, "editor_changes_dialog");
+  gestament_gtk_assign_accessible_id(cancel, "editor_cancel_open_button");
+  gestament_gtk_assign_accessible_id(discard, "editor_discard_open_button");
+  gestament_gtk_assign_accessible_id(save, "editor_save_open_button");
+  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
+  state->editor_changes_dialog = dialog;
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(on_editor_changes_response), state);
+  g_signal_connect(dialog, "destroy",
+                   G_CALLBACK(on_external_dialog_destroy), state);
+  gtk_widget_show_all(dialog);
 }
 
 static void on_connect_clicked(GtkButton *, gpointer user_data) {
@@ -2193,6 +2496,9 @@ static void on_window_destroy(GtkWidget *, gpointer user_data) {
   state->window_destroyed = true;
   state->shutting_down = true;
   stop_connection_monitor(state);
+  for (EditorLaunch *launch : state->editor_launches) {
+    launch->application = nullptr;
+  }
   for (ChildLaunch *launch : state->child_launches) {
     launch->application = nullptr;
     if (!launch->temporary_startup_path.empty()) {
@@ -2257,6 +2563,8 @@ static bool initialize_main_window(ApplicationState *state) {
   g_signal_connect(main_window->rename_connection_menu_item, "activate",
                    G_CALLBACK(on_rename_connection_menu_item_activate),
                    state);
+  g_signal_connect(main_window->edit_connection_menu_item, "activate",
+                   G_CALLBACK(on_edit_connection_menu_item_activate), state);
   g_signal_connect(main_window->duplicate_connection_menu_item, "activate",
                    G_CALLBACK(on_duplicate_connection_menu_item_activate),
                    state);

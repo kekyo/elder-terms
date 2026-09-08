@@ -1956,3 +1956,59 @@ msgstr "telnet : (inconnu)"
 
 #~ msgid "Global defaults"
 #~ msgstr "Valeurs par défaut globales"
+
+#: elder-terms/src/main.cpp
+msgid "Connection changed outside elder-terms"
+msgstr "La connexion a été modifiée en dehors d’elder-terms"
+
+#: elder-terms/src/main.cpp
+msgid "Reload the file and discard your unsaved changes, or keep editing. Saving kept edits will require confirmation before overwriting the file."
+msgstr "Rechargez le fichier en abandonnant les modifications non enregistrées, ou conservez-les. Leur enregistrement nécessitera une confirmation avant d’écraser le fichier."
+
+#: elder-terms/src/main.cpp
+msgid "Keep edits"
+msgstr "Conserver les modifications"
+
+#: elder-terms/src/main.cpp
+msgid "Reload from file"
+msgstr "Recharger depuis le fichier"
+
+#: elder-terms/src/main.cpp
+msgid "Overwrite externally changed connection?"
+msgstr "Écraser la connexion modifiée à l’extérieur ?"
+
+#: elder-terms/src/main.cpp
+msgid "The file changed or was removed outside elder-terms. Save your current edits in its place?"
+msgstr "Le fichier a été modifié ou supprimé en dehors d’elder-terms. Enregistrer les modifications actuelles à sa place ?"
+
+#: elder-terms/src/main-window.ui
+msgid "Edit in text editor"
+msgstr "Modifier dans un éditeur de texte"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to open text editor"
+msgstr "Impossible d’ouvrir l’éditeur de texte"
+
+#: elder-terms/src/main.cpp
+msgid "The text editor could not be started."
+msgstr "L’éditeur de texte n’a pas pu être démarré."
+
+#: elder-terms/src/main.cpp
+msgid "The connection file is no longer available."
+msgstr "Le fichier de connexion n’est plus disponible."
+
+#: elder-terms/src/main.cpp
+msgid "Set a default application for plain text files in your desktop settings."
+msgstr "Définissez une application par défaut pour les fichiers texte dans les paramètres du bureau."
+
+#: elder-terms/src/main.cpp
+msgid "Save changes before opening the text editor?"
+msgstr "Enregistrer les modifications avant d’ouvrir l’éditeur de texte ?"
+
+#: elder-terms/src/main.cpp
+msgid "Discard and open"
+msgstr "Abandonner et ouvrir"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open"
+msgstr "Enregistrer et ouvrir"

@@ -10,6 +10,12 @@
   </object>
   <object class="GtkMenu" id="connection_context_menu">
     <child>
+      <object class="GtkMenuItem" id="edit_connection_menu_item">
+        <property name="visible">True</property>
+        <property name="label" translatable="yes">Edit in text editor</property>
+      </object>
+    </child>
+    <child>
       <object class="GtkMenuItem" id="rename_connection_menu_item">
         <property name="visible">True</property>
         <property name="label" translatable="yes">Rename</property>
