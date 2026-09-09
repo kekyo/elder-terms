@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -38,6 +39,13 @@ struct Options {
   bool hold_first_list = false;
   bool foreign_active = false;
   bool trace = false;
+  bool hold_final = false;
+  bool hold_upload = false;
+  bool reject_store = false;
+  bool final_error = false;
+  bool final_disconnect = false;
+  bool truncated_download = false;
+  bool large_size = false;
   std::string listing = "mlsd";
   int mlsd_error = 0;
 };
@@ -281,6 +289,96 @@ static void serve(int control, Options options) {
       send_text(data.fd, listing);
       data = Socket();
       respond(226, "Listing complete");
+    } else if (verb == "SIZE") {
+      const auto path = local_path(remote_path(argument));
+      if (std::filesystem::is_regular_file(path)) {
+        respond(213, std::to_string(options.large_size ? 4294967313ULL
+                                                     : std::filesystem::file_size(path)));
+      } else {
+        respond(550, "File unavailable");
+      }
+    } else if (verb == "RETR" || verb == "STOR") {
+      const auto path = local_path(remote_path(argument));
+      const bool upload = verb == "STOR";
+      if ((upload && options.reject_store) ||
+          (!upload && !std::filesystem::is_regular_file(path))) {
+        passive = Socket();
+        respond(550, "Transfer refused");
+        continue;
+      }
+      std::fstream file(path, std::ios::binary |
+          (upload ? std::ios::out | std::ios::trunc : std::ios::in));
+      if (!file) {
+        passive = Socket();
+        respond(550, "File unavailable");
+        continue;
+      }
+      respond(150, "Opening binary transfer");
+      Socket data;
+      if (passive.fd >= 0) {
+        data = Socket(::accept4(passive.fd, nullptr, nullptr, SOCK_CLOEXEC));
+        passive = Socket();
+      } else {
+        expect(active_length > 0, "Missing active endpoint");
+        data = Socket(::socket(active.ss_family, SOCK_STREAM | SOCK_CLOEXEC, 0));
+        if (options.foreign_active) {
+          sockaddr_in source{};
+          source.sin_family = AF_INET;
+          source.sin_addr.s_addr = htonl(0x7f000002);
+          expect(::bind(data.fd, reinterpret_cast<sockaddr *>(&source), sizeof(source)) == 0,
+                 "Foreign active data address could not be bound");
+        }
+        expect(::connect(data.fd, reinterpret_cast<sockaddr *>(&active), active_length) == 0,
+               "Active transfer connection failed");
+      }
+      expect(data.fd >= 0, "Transfer connection failed");
+      if (upload && options.hold_upload) {
+        std::cout << "DATA_WAIT" << std::endl;
+        const auto action = read_line(STDIN_FILENO);
+        if (action == "cancel") {
+          auto closing = read_line(control);
+          if (closing == "QUIT") closing = read_line(control);
+          expect(closing.empty(), "Canceled upload must close control");
+          return;
+        }
+        expect(action == "release", "Expected data release");
+      }
+      std::array<char, 16384> buffer;
+      if (upload) {
+        for (;;) {
+          const auto count = ::read(data.fd, buffer.data(), buffer.size());
+          if (count < 0 && errno == EINTR) continue;
+          expect(count >= 0, "Upload data read failed");
+          if (count == 0) break;
+          file.write(buffer.data(), count);
+          expect(bool(file), "Upload file write failed");
+        }
+      } else {
+        auto remaining = std::filesystem::file_size(path);
+        if (options.truncated_download) remaining /= 2;
+        while (remaining > 0) {
+          const auto count = std::min<std::uintmax_t>(remaining, buffer.size());
+          file.read(buffer.data(), static_cast<std::streamsize>(count));
+          expect(file.gcount() == static_cast<std::streamsize>(count), "Download file read failed");
+          send_text(data.fd, {buffer.data(), static_cast<std::size_t>(count)});
+          remaining -= count;
+        }
+      }
+      file.close();
+      data = Socket();
+      if (options.hold_final) {
+        std::cout << "FINAL_WAIT" << std::endl;
+        const auto action = read_line(STDIN_FILENO);
+        if (action == "cancel") {
+          auto closing = read_line(control);
+          if (closing == "QUIT") closing = read_line(control);
+          expect(closing.empty(), "Canceled transfer must close control");
+          return;
+        }
+        expect(action == "release", "Expected final response release");
+      }
+      if (options.final_disconnect) return;
+      respond(options.final_error ? 451 : 226, "Transfer finished");
     } else if (verb == "MLST") {
       const auto target = remote_path(argument);
       if (!std::filesystem::exists(local_path(target)) || target.filename() == "denied") {
@@ -333,6 +431,13 @@ int main(int argc, char **argv) {
       else if (option == "--hold-first-list") options.hold_first_list = true;
       else if (option == "--foreign-active") options.foreign_active = true;
       else if (option == "--trace") options.trace = true;
+      else if (option == "--hold-final") options.hold_final = true;
+      else if (option == "--hold-upload") options.hold_upload = true;
+      else if (option == "--reject-store") options.reject_store = true;
+      else if (option == "--final-error") options.final_error = true;
+      else if (option == "--final-disconnect") options.final_disconnect = true;
+      else if (option == "--truncated-download") options.truncated_download = true;
+      else if (option == "--large-size") options.large_size = true;
       else if (option == "--unix") options.listing = "unix";
       else if (option == "--dos") options.listing = "dos";
       else if (option == "--mlsd-unavailable") options.mlsd_error = 502;

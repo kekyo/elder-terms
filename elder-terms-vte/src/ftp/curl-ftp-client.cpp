@@ -5,6 +5,8 @@
 #include <glib.h>
 
 #include <algorithm>
+#include <array>
+#include <mutex>
 #include <exception>
 #include <memory>
 #include <stdexcept>
@@ -197,6 +199,8 @@ static RemoteDirectorySnapshot directory_snapshot(
 
 // State used by the caller dispatcher. Only request callbacks access their
 // private response buffers on the worker, until perform_async has completed.
+struct CurlStream;
+
 struct CurlClientState {
   std::shared_ptr<CurlFtpSession> session;
   std::string base_url;
@@ -207,6 +211,7 @@ struct CurlClientState {
   bool failed = false;
   bool stopping = false;
   bool transferring = false;
+  std::weak_ptr<CurlStream> active_stream;
 
   void require_open() const {
     if (stopping || failed) throw std::runtime_error("FTP session is closed");
@@ -323,6 +328,316 @@ struct CurlClientState {
   }
 };
 
+struct CurlStream {
+  std::shared_ptr<CurlClientState> client;
+  cardio::primitives::lock_handle operation;
+  cardio::primitives::mutex calls;
+  cardio::cancellation_source cancellation;
+  std::mutex mutex;
+  cardio::primitives::conditional changed;
+  std::array<std::byte, 256 * 1024> buffer{};
+  std::size_t begin = 0;
+  std::size_t count = 0;
+  bool ready = false;
+  bool input_ended = false;
+  bool finished = false;
+  bool abandoned = false;
+  bool acknowledged = false;
+  std::exception_ptr failure;
+
+  CurlStream(std::shared_ptr<CurlClientState> client,
+             cardio::primitives::lock_handle operation)
+      : client(std::move(client)), operation(std::move(operation)) {}
+
+  // Only the caller dispatcher acknowledges or abandons a logical operation.
+  // The worker never releases this lock or touches the client's mutable state.
+  void acknowledge() {
+    if (acknowledged) return;
+    acknowledged = true;
+    client->active_stream.reset();
+    operation.release();
+  }
+
+  void abandon() {
+    if (acknowledged) return;
+    bool done;
+    {
+      const auto lock = std::lock_guard(mutex);
+      abandoned = true;
+      done = finished;
+    }
+    client->failed = true;
+    (void)cancellation.cancel();
+    client->session->resume();
+    if (done) acknowledge();
+    changed.trigger();
+  }
+
+  void require_available() const {
+    if (failure) std::rethrow_exception(failure);
+    if (abandoned) throw cardio::canceled_exception();
+  }
+
+  void append(std::span<const std::byte> bytes) {
+    const auto end = (begin + count) % buffer.size();
+    const auto first = std::min(bytes.size(), buffer.size() - end);
+    std::copy_n(bytes.data(), first, buffer.data() + end);
+    std::copy_n(bytes.data() + first, bytes.size() - first, buffer.data());
+    count += bytes.size();
+  }
+
+  std::size_t take(std::span<std::byte> bytes) {
+    const auto size = std::min(bytes.size(), count);
+    const auto first = std::min(size, buffer.size() - begin);
+    std::copy_n(buffer.data() + begin, first, bytes.data());
+    std::copy_n(buffer.data(), size - first, bytes.data() + first);
+    begin = (begin + size) % buffer.size();
+    count -= size;
+    return size;
+  }
+
+  std::size_t receive(std::span<const std::byte> bytes) {
+    {
+      const auto lock = std::lock_guard(mutex);
+      if (abandoned) return CURL_WRITEFUNC_ERROR;
+      if (bytes.size() > buffer.size()) throw std::runtime_error("FTP receive chunk exceeds buffer capacity");
+      if (bytes.size() > buffer.size() - count) return CURL_WRITEFUNC_PAUSE;
+      append(bytes);
+      ready = true;
+    }
+    changed.trigger();
+    return bytes.size();
+  }
+
+  std::size_t send(std::span<std::byte> bytes) {
+    std::size_t result;
+    {
+      const auto lock = std::lock_guard(mutex);
+      if (abandoned) return CURL_READFUNC_ABORT;
+      ready = true;
+      result = count > 0 ? take(bytes) : input_ended ? 0 : CURL_READFUNC_PAUSE;
+    }
+    changed.trigger();
+    return result;
+  }
+};
+
+// This root owns the stream until curl has stopped using every callback.
+// Completion goes through shared stream state; storing this promise on that
+// state would create a cycle. Client stop also waits for its operation lock.
+static cardio::promise<void> run_stream_async(
+    std::shared_ptr<CurlStream> stream, CurlFtpRequest request) {
+  std::exception_ptr failure;
+  const bool upload = request.upload;
+  try {
+    const auto result = co_await stream->client->perform_async(
+        std::move(request), stream->cancellation.get_cancellation());
+    require_success(upload ? "FTP STOR" : "FTP RETR", result);
+  } catch (...) {
+    failure = std::current_exception();
+  }
+  bool release;
+  bool started;
+  {
+    const auto lock = std::lock_guard(stream->mutex);
+    started = stream->ready;
+    stream->finished = true;
+    stream->failure = failure;
+    release = failure != nullptr || stream->abandoned;
+  }
+  if (failure && started) stream->client->failed = true;
+  if (release) stream->acknowledge();
+  stream->changed.trigger();
+}
+
+static cardio::promise<std::shared_ptr<CurlStream>> open_stream_async(
+    std::shared_ptr<CurlClientState> client, std::string path, bool upload,
+    cardio::cancellation cancellation) {
+  validate_argument(path, "path", false);
+  auto operation = std::move(co_await client->operations.lock(cancellation));
+  client->require_open();
+  auto stream = std::make_shared<CurlStream>(client, std::move(operation));
+  client->active_stream = stream;
+  try {
+    CurlFtpRequest request;
+    request.url = client->file_url(absolute_path(client->directory, path), false);
+    request.upload = upload;
+    if (upload) {
+      request.send = [stream](std::span<std::byte> bytes) { return stream->send(bytes); };
+    } else {
+      request.receive = [stream](std::span<const std::byte> bytes) { return stream->receive(bytes); };
+    }
+    cardio::fire_and_forget(run_stream_async(stream, std::move(request)));
+    for (;;) {
+      cancellation.throw_if_cancellation_requested();
+      cardio::promise<void> changed;
+      bool ready;
+      {
+        const auto lock = std::lock_guard(stream->mutex);
+        stream->require_available();
+        ready = stream->ready || stream->finished;
+        if (!ready) changed = stream->changed.wait(cancellation);
+      }
+      if (ready) co_return stream;
+      co_await changed;
+    }
+  } catch (...) {
+    stream->abandon();
+    throw;
+  }
+}
+
+static cardio::promise<std::size_t> read_stream_async(
+    std::shared_ptr<CurlStream> stream, std::span<std::byte> buffer,
+    cardio::cancellation cancellation) {
+  auto call = std::move(co_await stream->calls.lock(cancellation));
+  try {
+    for (;;) {
+      cancellation.throw_if_cancellation_requested();
+      cardio::promise<void> changed;
+      std::size_t count;
+      bool eof;
+      {
+        const auto lock = std::lock_guard(stream->mutex);
+        stream->require_available();
+        if (buffer.empty()) co_return 0;
+        count = stream->take(buffer);
+        eof = count == 0 && stream->finished;
+        // Register under the buffer lock so a producer cannot signal between
+        // observing an empty buffer and installing the caller-owned waiter.
+        if (count == 0 && !eof) changed = stream->changed.wait(cancellation);
+      }
+      if (count > 0) {
+        stream->client->session->resume();
+        co_return count;
+      }
+      if (eof) {
+        stream->acknowledge();
+        co_return 0;
+      }
+      co_await changed;
+    }
+  } catch (...) {
+    stream->abandon();
+    throw;
+  }
+}
+
+static cardio::promise<void> write_stream_async(
+    std::shared_ptr<CurlStream> stream, std::span<const std::byte> buffer,
+    cardio::cancellation cancellation) {
+  auto call = std::move(co_await stream->calls.lock(cancellation));
+  try {
+    for (;;) {
+      cancellation.throw_if_cancellation_requested();
+      cardio::promise<void> changed;
+      std::size_t count;
+      {
+        const auto lock = std::lock_guard(stream->mutex);
+        stream->require_available();
+        if (stream->input_ended || stream->acknowledged) throw std::runtime_error("FTP writer is closed");
+        if (buffer.empty()) co_return;
+        count = std::min(buffer.size(), stream->buffer.size() - stream->count);
+        stream->append(buffer.first(count));
+        if (count == 0) changed = stream->changed.wait(cancellation);
+      }
+      if (count > 0) {
+        buffer = buffer.subspan(count);
+        stream->client->session->resume();
+      } else {
+        co_await changed;
+      }
+    }
+  } catch (...) {
+    stream->abandon();
+    throw;
+  }
+}
+
+static cardio::promise<void> close_writer_async(
+    std::shared_ptr<CurlStream> stream, cardio::cancellation cancellation) {
+  auto call = std::move(co_await stream->calls.lock(cancellation));
+  try {
+    {
+      const auto lock = std::lock_guard(stream->mutex);
+      stream->require_available();
+      stream->input_ended = true;
+    }
+    stream->client->session->resume();
+    for (;;) {
+      cancellation.throw_if_cancellation_requested();
+      cardio::promise<void> changed;
+      bool finished;
+      {
+        const auto lock = std::lock_guard(stream->mutex);
+        stream->require_available();
+        finished = stream->finished;
+        if (!finished) changed = stream->changed.wait(cancellation);
+      }
+      if (finished) {
+        stream->acknowledge();
+        co_return;
+      }
+      co_await changed;
+    }
+  } catch (...) {
+    stream->abandon();
+    throw;
+  }
+}
+
+static cardio::promise<void> close_reader_async(
+    std::shared_ptr<CurlStream> stream, cardio::cancellation cancellation) {
+  auto call = std::move(co_await stream->calls.lock(cancellation));
+  if (stream->acknowledged) co_return;
+  // Closing RETR before EOF may leave additional completion replies. Preserve
+  // the existing session-abandonment policy and let curl settle the transfer
+  // before releasing its logical operation slot.
+  stream->abandon();
+  for (;;) {
+    cardio::promise<void> changed;
+    bool finished;
+    {
+      const auto lock = std::lock_guard(stream->mutex);
+      finished = stream->finished;
+      if (!finished) changed = stream->changed.wait();
+    }
+    if (finished) {
+      stream->acknowledge();
+      co_return;
+    }
+    co_await changed;
+  }
+}
+
+class CurlFileReader final : public RemoteFileReader {
+  std::shared_ptr<CurlStream> stream;
+public:
+  explicit CurlFileReader(std::shared_ptr<CurlStream> stream) : stream(std::move(stream)) {}
+  ~CurlFileReader() override { stream->abandon(); }
+  cardio::promise<std::size_t> read_async(std::span<std::byte> buffer,
+                                         cardio::cancellation cancellation) override {
+    return read_stream_async(stream, buffer, cancellation);
+  }
+  cardio::promise<void> close_async(cardio::cancellation cancellation) override {
+    return close_reader_async(stream, cancellation);
+  }
+};
+
+class CurlFileWriter final : public RemoteFileWriter {
+  std::shared_ptr<CurlStream> stream;
+public:
+  explicit CurlFileWriter(std::shared_ptr<CurlStream> stream) : stream(std::move(stream)) {}
+  ~CurlFileWriter() override { stream->abandon(); }
+  cardio::promise<void> write_all_async(std::span<const std::byte> buffer,
+                                       cardio::cancellation cancellation) override {
+    return write_stream_async(stream, buffer, cancellation);
+  }
+  cardio::promise<void> close_async(cardio::cancellation cancellation) override {
+    return close_writer_async(stream, cancellation);
+  }
+};
+
 class CurlFileClient final : public RemoteFileClient {
   std::shared_ptr<CurlClientState> state;
 
@@ -347,6 +662,7 @@ public:
   cardio::promise<void> stop_async() {
     const auto state = this->state;
     state->stopping = true;
+    if (auto stream = state->active_stream.lock()) stream->abandon();
     co_await state->session->stop_async();
     // Waiters fail require_open() in FIFO order before dispatcher destruction.
     auto lock = std::move(co_await state->operations.lock());
@@ -433,20 +749,28 @@ public:
 
   cardio::promise<std::unique_ptr<RemoteFileReader>> open_read_async(
       std::string path, cardio::cancellation cancellation) override {
-    (void)path;
-    cancellation.throw_if_cancellation_requested();
-    throw std::runtime_error("libcurl FTP streaming is not implemented");
-    co_return nullptr;
+    const auto state = this->state;
+    auto stream = co_await open_stream_async(state, std::move(path), false, cancellation);
+    try {
+      co_return std::make_unique<CurlFileReader>(stream);
+    } catch (...) {
+      stream->abandon();
+      throw;
+    }
   }
 
   cardio::promise<std::unique_ptr<RemoteFileWriter>> open_write_async(
       std::string path, std::optional<std::uint32_t> permissions,
       cardio::cancellation cancellation) override {
-    (void)path;
     (void)permissions;
-    cancellation.throw_if_cancellation_requested();
-    throw std::runtime_error("libcurl FTP streaming is not implemented");
-    co_return nullptr;
+    const auto state = this->state;
+    auto stream = co_await open_stream_async(state, std::move(path), true, cancellation);
+    try {
+      co_return std::make_unique<CurlFileWriter>(stream);
+    } catch (...) {
+      stream->abandon();
+      throw;
+    }
   }
 
   bool try_begin_transfer() override {

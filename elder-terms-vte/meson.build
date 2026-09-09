@@ -242,6 +242,30 @@ foreach case_name : [
     args: [ftp_test_server, case_name], timeout: 120)
 endforeach
 
+curl_ftp_stream_test = executable(
+  'curl-ftp-stream-test',
+  [
+    'tests/cpp/curl-ftp-stream-test.cpp',
+    'src/ftp/curl-ftp-client.cpp',
+    'src/ftp/curl-ftp-session.cpp',
+    'src/ftp/ftp-protocol.cpp',
+    'src/file-transfer/file-transfer-engine.cpp',
+  ],
+  include_directories: include_directories('src/ftp'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
+)
+
+foreach case_name : [
+  'passive', 'active', 'legacy-passive', 'legacy-active',
+  'backpressure', 'cancel-backpressure', 'held-upload', 'held-download',
+  'cancel-final-upload', 'cancel-final-download', 'store-refused',
+  'upload-error', 'download-error', 'upload-disconnect', 'download-disconnect',
+  'truncated', 'large-size', 'abandon', 'stop-reader', 'engine', 'engine-failure',
+]
+  test('curl-ftp-stream-' + case_name, curl_ftp_stream_test,
+    args: [ftp_test_server, case_name], timeout: 120)
+endforeach
+
 terminal_text_codec_test = executable(
   'terminal-text-codec-test',
   [
