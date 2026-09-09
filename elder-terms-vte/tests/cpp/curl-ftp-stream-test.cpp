@@ -1,4 +1,4 @@
-#include "curl-ftp-client.h"
+#include "ftp-client.h"
 #include "../file-transfer/file-transfer-engine.h"
 
 #include <fcntl.h>
@@ -285,7 +285,7 @@ static cardio::promise<void> abandoned_async(
     expect(prefix[index] == static_cast<std::byte>(index % 251), "RETR prefix differs from the server file");
   }
   auto queued = client->lstat_async("/home/data.txt", {});
-  if (stop) co_await elder_terms::stop_libcurl_ftp_client_async(client);
+  if (stop) co_await elder_terms::stop_ftp_client_async(client);
   else reader.reset();
   bool failed = false;
   try { (void)co_await queued; } catch (const std::runtime_error &) { failed = true; }
@@ -379,7 +379,7 @@ static cardio::promise<void> run_async(
     std::exception_ptr &failure) {
   std::shared_ptr<elder_terms::RemoteFileClient> client;
   try {
-    client = co_await elder_terms::open_libcurl_ftp_client_async({
+    client = co_await elder_terms::open_ftp_client_async({
         .connection = {.address = "127.0.0.1", .port = server.port,
                        .username = "alice", .data_connection_mode =
                            name == "active" || name == "legacy-active"
@@ -393,7 +393,7 @@ static cardio::promise<void> run_async(
     ::close(server.commands);
     server.commands = -1;
   }
-  if (client) co_await elder_terms::stop_libcurl_ftp_client_async(client);
+  if (client) co_await elder_terms::stop_ftp_client_async(client);
   group.shutdown();
 }
 

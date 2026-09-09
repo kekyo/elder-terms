@@ -1,4 +1,4 @@
-#include "curl-ftp-client.h"
+#include "ftp-client.h"
 
 #include <fcntl.h>
 #include <signal.h>
@@ -96,7 +96,7 @@ struct Server {
 static cardio::promise<void> browse_async(
     Server &server, bool active, bool ipv6, bool facts) {
   const auto cancellation = cardio::cancellation{};
-  auto client = co_await elder_terms::open_libcurl_ftp_client_async({
+  auto client = co_await elder_terms::open_ftp_client_async({
       .connection = {.address = ipv6 ? "::1" : "127.0.0.1", .port = server.port,
                      .username = "alice", .data_connection_mode = active
                          ? elder_terms::FtpDataConnectionMode::active
@@ -208,7 +208,7 @@ static cardio::promise<void> browse_async(
   } catch (...) {
     failure = std::current_exception();
   }
-  co_await elder_terms::stop_libcurl_ftp_client_async(client);
+  co_await elder_terms::stop_ftp_client_async(client);
   if (failure) std::rethrow_exception(failure);
 }
 
@@ -247,7 +247,7 @@ static cardio::promise<void> failure_case_async(
     bool rejected = false;
     bool authenticated = false;
     try {
-      client = co_await elder_terms::open_libcurl_ftp_client_async({
+      client = co_await elder_terms::open_ftp_client_async({
           .connection = {.address = "127.0.0.1", .port = server.port,
                          .username = test_case == FailureCase::empty_user ? "" : "alice",
                          .data_connection_mode = test_case == FailureCase::foreign_active
@@ -280,7 +280,7 @@ static cardio::promise<void> failure_case_async(
   } catch (...) {
     failure = std::current_exception();
   }
-  if (client) co_await elder_terms::stop_libcurl_ftp_client_async(client);
+  if (client) co_await elder_terms::stop_ftp_client_async(client);
   group.shutdown();
 }
 
@@ -306,7 +306,7 @@ static cardio::promise<void> fifo_case_async(
     std::exception_ptr &failure) {
   std::shared_ptr<elder_terms::RemoteFileClient> client;
   try {
-    client = co_await elder_terms::open_libcurl_ftp_client_async({
+    client = co_await elder_terms::open_ftp_client_async({
         .connection = {.address = "127.0.0.1", .port = server.port,
                        .username = "alice", .data_connection_mode = elder_terms::FtpDataConnectionMode::passive,
                        .local_directory = {}, .remote_directory = {}},
@@ -340,7 +340,7 @@ static cardio::promise<void> fifo_case_async(
     ::close(server.commands);
     server.commands = -1;
   }
-  if (client) co_await elder_terms::stop_libcurl_ftp_client_async(client);
+  if (client) co_await elder_terms::stop_ftp_client_async(client);
   group.shutdown();
 }
 

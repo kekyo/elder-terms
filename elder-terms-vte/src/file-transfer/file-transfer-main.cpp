@@ -49,6 +49,7 @@ struct FtpApplicationState {
   std::shared_ptr<elder_terms::FileTransferWindow> window;
   cardio::cancellation_source stop_source;
   std::optional<cardio::promise<void>> startup_task;
+  std::optional<cardio::promise<void>> shutdown_task;
   bool shutting_down = false;
 };
 
@@ -346,13 +347,38 @@ static int run_sftp_application(
   return 0;
 }
 
+// Keep the dispatcher alive until authentication, callbacks and the dedicated
+// curl worker have finished. This task is owned by the application state.
+static cardio::promise<void> finish_ftp_application_async(FtpApplicationState *state) {
+  try {
+    if (state->startup_task.has_value()) co_await *state->startup_task;
+  } catch (const cardio::canceled_exception &) {
+  } catch (const std::exception &exception) {
+    std::cerr << exception.what() << '\n';
+  }
+  auto closing = elder_terms::close_file_transfer_window_async(state->window);
+  try {
+    if (state->client && !state->fixture) {
+      co_await elder_terms::stop_ftp_client_async(state->client);
+    }
+  } catch (const std::exception &exception) {
+    std::cerr << exception.what() << '\n';
+  }
+  try {
+    co_await closing;
+  } catch (const std::exception &exception) {
+    std::cerr << exception.what() << '\n';
+  }
+  state->dispatcher_group->shutdown();
+}
+
 static void stop_ftp_application(FtpApplicationState *state) {
   if (state == nullptr || state->shutting_down) {
     return;
   }
   state->shutting_down = true;
   (void)state->stop_source.cancel();
-  state->dispatcher_group->shutdown();
+  state->shutdown_task.emplace(finish_ftp_application_async(state));
 }
 
 static void create_ftp_application_window(FtpApplicationState *state) {
@@ -500,6 +526,7 @@ static int run_ftp_application(
   state.window.reset();
   state.client.reset();
   state.startup_task.reset();
+  state.shutdown_task.reset();
   return 0;
 }
 

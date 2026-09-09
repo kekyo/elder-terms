@@ -122,7 +122,8 @@ executable(
     'src/inline-prompt.cpp',
     'src/launch-options.cpp',
     'src/ftp/ftp-client.cpp',
-    'src/ftp/ftp-protocol.cpp',
+    'src/ftp/curl-ftp-session.cpp',
+    'src/ftp/ftp-metadata.cpp',
     'src/sftp/sftp-client.cpp',
     'src/sftp/sftp-fixture-client.cpp',
     'src/file-transfer/file-hash.cpp',
@@ -145,6 +146,7 @@ executable(
     gtk_dep,
     liburing_dep,
     libssh_dep,
+    libcurl_dep,
   ],
   install: true,
   install_dir: elder_terms_private_install_dir / 'elder-terms-vte',
@@ -174,33 +176,16 @@ telnet_protocol_test = executable(
 
 test('telnet-protocol-test', telnet_protocol_test)
 
-ftp_protocol_test = executable(
-  'ftp-protocol-test',
+ftp_metadata_test = executable(
+  'ftp-metadata-test',
   [
-    'tests/cpp/ftp-protocol-test.cpp',
-    'src/ftp/ftp-protocol.cpp',
+    'tests/cpp/ftp-metadata-test.cpp',
+    'src/ftp/ftp-metadata.cpp',
   ],
+  include_directories: include_directories('src/ftp'),
 )
 
-test('ftp-protocol-test', ftp_protocol_test)
-
-ftp_client_test = executable(
-  'ftp-client-test',
-  [
-    'tests/cpp/ftp-client-test.cpp',
-    'src/ftp/ftp-client.cpp',
-    'src/ftp/ftp-protocol.cpp',
-    'src/terminal-sessions/tcp-connector.cpp',
-  ],
-  dependencies: [
-    cardio_dep,
-    elder_terms_dep,
-    gio_dep,
-    liburing_dep,
-  ],
-)
-
-test('ftp-client-test', ftp_client_test)
+test('ftp-metadata-test', ftp_metadata_test)
 
 curl_ftp_session_test = executable(
   'curl-ftp-session-test',
@@ -224,9 +209,9 @@ curl_ftp_client_test = executable(
   'curl-ftp-client-test',
   [
     'tests/cpp/curl-ftp-client-test.cpp',
-    'src/ftp/curl-ftp-client.cpp',
+    'src/ftp/ftp-client.cpp',
     'src/ftp/curl-ftp-session.cpp',
-    'src/ftp/ftp-protocol.cpp',
+    'src/ftp/ftp-metadata.cpp',
   ],
   include_directories: include_directories('src/ftp'),
   dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
@@ -246,9 +231,9 @@ curl_ftp_stream_test = executable(
   'curl-ftp-stream-test',
   [
     'tests/cpp/curl-ftp-stream-test.cpp',
-    'src/ftp/curl-ftp-client.cpp',
+    'src/ftp/ftp-client.cpp',
     'src/ftp/curl-ftp-session.cpp',
-    'src/ftp/ftp-protocol.cpp',
+    'src/ftp/ftp-metadata.cpp',
     'src/file-transfer/file-transfer-engine.cpp',
   ],
   include_directories: include_directories('src/ftp'),
@@ -265,6 +250,44 @@ foreach case_name : [
   test('curl-ftp-stream-' + case_name, curl_ftp_stream_test,
     args: [ftp_test_server, case_name], timeout: 120)
 endforeach
+
+# Temporary behavioral check; remove after the backend switch is committed.
+ftp_backend_removal_test = executable(
+  'ftp-backend-removal-test',
+  [
+    'tests/cpp/ftp-backend-removal-test.cpp',
+    'src/ftp/ftp-client.cpp',
+    'src/ftp/ftp-metadata.cpp',
+    'src/ftp/curl-ftp-session.cpp',
+  ],
+  include_directories: include_directories('src/ftp'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
+  link_args: ['-Wl,--wrap=curl_global_init'],
+)
+
+test('ftp-backend-removal-test', ftp_backend_removal_test,
+  args: [ftp_test_server], timeout: 120)
+
+file_transfer_window_lifetime_test = executable(
+  'file-transfer-window-lifetime-test',
+  [
+    'tests/cpp/file-transfer-window-lifetime-test.cpp',
+    'src/inline-prompt.cpp',
+    'src/widget-background.cpp',
+    'src/sftp/sftp-fixture-client.cpp',
+    'src/file-transfer/file-hash.cpp',
+    'src/file-transfer/file-transfer-engine.cpp',
+    'src/file-transfer/file-transfer-paths.cpp',
+    'src/file-transfer/file-transfer-window.cpp',
+  ],
+  include_directories: include_directories('src/file-transfer'),
+  cpp_args: ['-I' + gestament_include_dir],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, gtk_dep],
+)
+
+xvfb_run = find_program('xvfb-run')
+test('file-transfer-window-lifetime', xvfb_run,
+  args: ['-a', file_transfer_window_lifetime_test], timeout: 120)
 
 terminal_text_codec_test = executable(
   'terminal-text-codec-test',

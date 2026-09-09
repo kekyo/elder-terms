@@ -126,4 +126,16 @@ void set_file_transfer_window_colors(
  */
 void present_file_transfer_window(const std::shared_ptr<FileTransferWindow> &window);
 
+/**
+ * Closes a file browser and waits for its owned asynchronous work to finish.
+ *
+ * @param window Window retained until browsing, management, and transfer
+ * cleanup has completed.
+ * @returns Completion after all asynchronous work owned by the window ends.
+ * @remarks Keep the caller dispatcher alive until completion. The underlying
+ * remote client must also be stopped by its owner. Repeated calls are allowed.
+ */
+cardio::promise<void>
+close_file_transfer_window_async(std::shared_ptr<FileTransferWindow> window);
+
 } // namespace elder_terms

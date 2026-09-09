@@ -259,6 +259,8 @@ struct CurlWorker {
       require_curl(curl_easy_setopt(easy, CURLOPT_USE_SSL, static_cast<long>(CURLUSESSL_NONE)));
       require_curl(curl_easy_setopt(easy, CURLOPT_USERNAME, options.connection.username.c_str()));
       require_curl(curl_easy_setopt(easy, CURLOPT_PASSWORD, options.password.c_str()));
+      // RFC 2577 describes PASV address substitution attacks. The control peer
+      // is authoritative; only the advertised port is used.
       require_curl(curl_easy_setopt(easy, CURLOPT_FTP_SKIP_PASV_IP, 1L));
       require_curl(curl_easy_setopt(easy, CURLOPT_FTP_USE_EPSV, 1L));
       require_curl(curl_easy_setopt(easy, CURLOPT_FTP_USE_EPRT, 1L));

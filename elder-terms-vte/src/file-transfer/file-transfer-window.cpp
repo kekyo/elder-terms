@@ -2657,4 +2657,26 @@ void present_file_transfer_window(
   gtk_window_present(GTK_WINDOW(window->window));
 }
 
+
+cardio::promise<void> close_file_transfer_window_async(
+    std::shared_ptr<FileTransferWindow> window) {
+  if (!window) co_return;
+  if (window->window && !window->destroyed) gtk_widget_destroy(window->window);
+  // Destroy prevents new operations and cancels existing ones. Their cleanup
+  // may start fresh asynchronous I/O, so a dispatcher shutdown alone cannot
+  // guarantee that these tasks have stopped using the window's state.
+  std::exception_ptr failure;
+  for (auto *task : {&window->transfer_task, &window->browser_action_task,
+                    &window->local.task, &window->remote.task}) {
+    if (!task->has_value()) continue;
+    try {
+      co_await **task;
+    } catch (...) {
+      if (!failure) failure = std::current_exception();
+    }
+  }
+  if (failure) std::rethrow_exception(failure);
+}
+
+
 } // namespace elder_terms
