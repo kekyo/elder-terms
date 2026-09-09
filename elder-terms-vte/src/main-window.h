@@ -181,13 +181,15 @@ struct MainWindow {
   std::array<bool, activity_indicator_count()> indicator_visible{};
   /** Owned original lit image, retained for tinting and restoring defaults. */
   GdkPixbuf *indicator_default_on_icon = nullptr;
-  /** Owned original dark image, retained for tinting and restoring defaults. */
+  /** Owned original gray image, retained for restoring the inactive default. */
   GdkPixbuf *indicator_default_off_icon = nullptr;
-  /** Applied packed RGB color, or null for the unmodified original images. */
+  /** Applied active RGB color, or null for the original green image. */
   std::optional<guint32> indicator_color;
+  /** Applied inactive RGB color, or null for the original gray image. */
+  std::optional<guint32> indicator_off_color;
   /** Owned shared lit indicator pixbuf. */
   GdkPixbuf *indicator_on_icon = nullptr;
-  /** Owned shared dark indicator pixbuf. */
+  /** Owned shared inactive indicator pixbuf. */
   GdkPixbuf *indicator_off_icon = nullptr;
   /** Activity indicator runtime states. */
   std::array<ActivityIndicatorWidget, activity_indicator_count()> indicators{};
@@ -225,12 +227,14 @@ void set_main_window_colors(MainWindow *main_window,
                             const GeneralColorSettings &settings);
 
 /**
- * Applies a shared indicator tint without resetting current activity.
+ * Applies shared active and inactive tints without resetting current activity.
  * @param main_window Window owning indicator images and states.
- * @param color RGB tint, or null to restore the original green images.
+ * @param color Active RGB tint, or null to restore the original green image.
+ * @param off_color Inactive RGB tint, or null to restore the original gray image.
  */
 void set_main_window_indicator_color(MainWindow *main_window,
-                                      const std::optional<RgbColor> &color);
+                                      const std::optional<RgbColor> &color,
+                                      const std::optional<RgbColor> &off_color);
 
 /**
  * Registers the open runtime settings dialog for connection color updates.

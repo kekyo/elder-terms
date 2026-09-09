@@ -43,7 +43,8 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"terminal", "scrollback_lines",
                       N_("Scrollback lines")},
     SettingLabelEntry{"terminal", "zoom", N_("Zoom factor")},
-    SettingLabelEntry{"terminal", "indicator_color", N_("Indicator color")},
+    SettingLabelEntry{"terminal", "indicator_color", N_("Active indicator color")},
+    SettingLabelEntry{"terminal", "indicator_off_color", N_("Inactive indicator color")},
     SettingLabelEntry{"terminal", "font_families", N_("Font families")},
     SettingLabelEntry{"terminal", "auto_close",
                       N_("Close window when session ends")},
@@ -224,8 +225,18 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Enabled");
   case SettingsUiText::disabled:
     return _("Disabled");
-  case SettingsUiText::custom_fonts:
-    return _("Custom fonts");
+  case SettingsUiText::font_inherit_global:
+    return _("Inherited from: global settings");
+  case SettingsUiText::font_inherit_builtin:
+    return _("Inherited from: app defaults");
+  case SettingsUiText::font_app_defaults:
+    return _("App defaults");
+  case SettingsUiText::font_use_app_defaults:
+    return _("Use app defaults");
+  case SettingsUiText::font_specify_connection:
+    return _("Specify for this connection");
+  case SettingsUiText::font_specify:
+    return _("Specify fonts");
   case SettingsUiText::no_color:
     return _("No color");
   case SettingsUiText::default_color:

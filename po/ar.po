@@ -14,8 +14,11 @@ msgstr ""
 "&& n%100<=10 ? 3 : n%100>=11 && n%100<=99 ? 4 : 5);\n"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Indicator color"
-msgstr "لون المؤشرات"
+msgid "Active indicator color"
+msgstr "لون المؤشر النشط"
+
+msgid "Inactive indicator color"
+msgstr "لون المؤشر غير النشط"
 
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Default color"
@@ -520,8 +523,23 @@ msgstr "ممكّن"
 msgid "Disabled"
 msgstr "معطل"
 
-msgid "Custom fonts"
-msgstr "خطوط مخصصة"
+msgid "Inherited from: global settings"
+msgstr "موروث من: الإعدادات العامة"
+
+msgid "Inherited from: app defaults"
+msgstr "موروث من: افتراضيات التطبيق"
+
+msgid "App defaults"
+msgstr "افتراضيات التطبيق"
+
+msgid "Use app defaults"
+msgstr "استخدام افتراضيات التطبيق"
+
+msgid "Specify for this connection"
+msgstr "تحديد لهذا الاتصال"
+
+msgid "Specify fonts"
+msgstr "تحديد الخطوط"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "No color"

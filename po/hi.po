@@ -13,8 +13,11 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Indicator color"
-msgstr "संकेतकों का रंग"
+msgid "Active indicator color"
+msgstr "सक्रिय संकेतक का रंग"
+
+msgid "Inactive indicator color"
+msgstr "निष्क्रिय संकेतक का रंग"
 
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Default color"
@@ -519,8 +522,23 @@ msgstr "सक्षम"
 msgid "Disabled"
 msgstr "अक्षम"
 
-msgid "Custom fonts"
-msgstr "कस्टम फ़ॉन्ट"
+msgid "Inherited from: global settings"
+msgstr "विरासत स्रोत: वैश्विक सेटिंग्स"
+
+msgid "Inherited from: app defaults"
+msgstr "विरासत स्रोत: ऐप डिफ़ॉल्ट"
+
+msgid "App defaults"
+msgstr "ऐप डिफ़ॉल्ट"
+
+msgid "Use app defaults"
+msgstr "ऐप डिफ़ॉल्ट का उपयोग करें"
+
+msgid "Specify for this connection"
+msgstr "इस कनेक्शन के लिए निर्दिष्ट करें"
+
+msgid "Specify fonts"
+msgstr "फ़ॉन्ट निर्दिष्ट करें"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "No color"

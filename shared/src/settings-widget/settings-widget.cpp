@@ -113,6 +113,10 @@ struct SettingsWidgetState {
   GtkWidget *terminal_zoom_entry = nullptr;
   GtkWidget *terminal_indicator_color_mode_combo = nullptr;
   GtkWidget *terminal_indicator_color_button = nullptr;
+  GtkWidget *terminal_indicator_off_color_mode_combo = nullptr;
+  GtkWidget *terminal_indicator_off_color_button = nullptr;
+  GtkWidget *terminal_page_surface = nullptr;
+  GtkWidget *terminal_font_pending_scroll = nullptr;
   GtkWidget *terminal_fonts_mode_combo = nullptr;
   GtkWidget *terminal_fonts_rows_box = nullptr;
   GtkWidget *terminal_font_dialog = nullptr;
@@ -1145,9 +1149,11 @@ enum class ColorSettingField {
   exterior_background,
   background,
   indicator,
+  indicator_off,
 };
 
 static SettingKey color_setting_key(ColorSettingField field) {
+  if (field == ColorSettingField::indicator_off) return terminal_indicator_off_color_setting_key();
   if (field == ColorSettingField::indicator) {
     return terminal_indicator_color_setting_key();
   }
@@ -1158,6 +1164,7 @@ static SettingKey color_setting_key(ColorSettingField field) {
 
 static GtkWidget *color_mode_combo(
     SettingsWidgetState *state, ColorSettingField field) {
+  if (field == ColorSettingField::indicator_off) return state->terminal_indicator_off_color_mode_combo;
   if (field == ColorSettingField::indicator) {
     return state->terminal_indicator_color_mode_combo;
   }
@@ -1168,6 +1175,7 @@ static GtkWidget *color_mode_combo(
 
 static GtkWidget *color_button(
     SettingsWidgetState *state, ColorSettingField field) {
+  if (field == ColorSettingField::indicator_off) return state->terminal_indicator_off_color_button;
   if (field == ColorSettingField::indicator) {
     return state->terminal_indicator_color_button;
   }
@@ -1177,11 +1185,16 @@ static GtkWidget *color_button(
 }
 
 static const char *color_default_value(ColorSettingField field) {
-  return field == ColorSettingField::indicator ? "default" : general_color_none;
+  return field == ColorSettingField::indicator || field == ColorSettingField::indicator_off
+      ? "default" : general_color_none;
 }
 
 static std::optional<RgbColor> color_field_value(
     const SettingsStore &store, ColorSettingField field) {
+  if (field == ColorSettingField::indicator_off) {
+    return terminal_indicator_off_color(store).value_or(
+        RgbColor{.red = 85, .green = 85, .blue = 85});
+  }
   if (field == ColorSettingField::indicator) {
     // The default swatch represents the green lamp; rendering retains the
     // original shaded images when no custom color is configured.
@@ -2616,7 +2629,7 @@ static void populate_boolean_combo(GtkWidget *combo,
 static std::string color_setting_label(ColorSettingField field,
                                        const std::string &value) {
   if (value == color_default_value(field)) {
-    return settings_ui_text(field == ColorSettingField::indicator
+    return settings_ui_text(field == ColorSettingField::indicator || field == ColorSettingField::indicator_off
                                 ? SettingsUiText::default_color
                                 : SettingsUiText::no_color);
   }
@@ -3090,6 +3103,8 @@ static void sync_widgets_from_draft(SettingsWidgetState *state) {
   sync_color_control(state, ColorSettingField::indicator,
                      color_field_value(state->draft_store,
                                        ColorSettingField::indicator));
+  sync_color_control(state, ColorSettingField::indicator_off,
+                     color_field_value(state->draft_store, ColorSettingField::indicator_off));
   if (state->local_command_line_entry != nullptr) {
     sync_inheritable_entry(
         state->local_command_line_entry, state->draft_store,
@@ -3693,11 +3708,17 @@ static void update_terminal_font_draft(SettingsWidgetState *state) {
   const bool synchronizing = state->synchronizing;
   state->synchronizing = true;
   gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->terminal_fonts_mode_combo),
-      state->terminal_font_draft.empty() ? terminal_font_default : terminal_font_custom);
+      state->terminal_font_draft.empty()
+          ? (state->mode == SettingsWidgetMode::global_defaults ? inherit_choice : terminal_font_default)
+          : terminal_font_custom);
   state->synchronizing = synchronizing;
   if (state->terminal_fonts_valid) {
-    set_explicit_setting_value(&state->draft_store,
-        terminal_font_families_setting_key(), SettingValue{state->terminal_font_draft});
+    if (state->terminal_font_draft.empty() && state->mode == SettingsWidgetMode::global_defaults) {
+      clear_explicit_setting_value(&state->draft_store, terminal_font_families_setting_key());
+    } else {
+      set_explicit_setting_value(&state->draft_store,
+          terminal_font_families_setting_key(), SettingValue{state->terminal_font_draft});
+    }
   }
   update_action_sensitivity(state);
 }
@@ -3792,6 +3813,7 @@ static void rebuild_terminal_font_rows(SettingsWidgetState *state) {
   // A row index may change after reorder/rebase. Close its picker before
   // replacing rows so no delayed response can modify a different candidate.
   if (state->terminal_font_dialog != nullptr) gtk_widget_destroy(state->terminal_font_dialog);
+  state->terminal_font_pending_scroll = nullptr;
   const bool synchronizing = state->synchronizing;
   state->synchronizing = true;
   state->terminal_font_rows.clear();
@@ -3833,20 +3855,21 @@ static void rebuild_terminal_font_rows(SettingsWidgetState *state) {
 
 static void sync_terminal_font_controls(SettingsWidgetState *state) {
   const auto key = terminal_font_families_setting_key();
-  const auto fallback = std::get<std::vector<std::string>>(setting_fallback_value(
-      state->draft_store, key, SettingValue{std::vector<std::string>{}}));
-  const auto inherited = setting_fallback_label(state->draft_store, key,
-      fallback.empty() && setting_fallback_source(state->draft_store, key) == SettingValueSource::built_in
-          ? "" : settings_ui_text(fallback.empty() ? SettingsUiText::use_built_in_default : SettingsUiText::custom_fonts));
+  const bool global = state->mode == SettingsWidgetMode::global_defaults;
   auto *combo = state->terminal_fonts_mode_combo;
   gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(combo));
-  append_combo_option(combo, inherit_choice, inherited.c_str());
-  append_combo_option(combo, terminal_font_default, settings_ui_text(SettingsUiText::use_built_in_default));
-  append_combo_option(combo, terminal_font_custom, settings_ui_text(SettingsUiText::custom_fonts));
+  append_combo_option(combo, inherit_choice, settings_ui_text(global
+      ? SettingsUiText::font_app_defaults
+      : setting_fallback_source(state->draft_store, key) == SettingValueSource::global
+          ? SettingsUiText::font_inherit_global : SettingsUiText::font_inherit_builtin));
+  if (!global) append_combo_option(combo, terminal_font_default,
+      settings_ui_text(SettingsUiText::font_use_app_defaults));
+  append_combo_option(combo, terminal_font_custom, settings_ui_text(global
+      ? SettingsUiText::font_specify : SettingsUiText::font_specify_connection));
   const auto value = std::get<std::vector<std::string>>(setting_value_or_default(
       state->draft_store, key, SettingValue{std::vector<std::string>{}}));
   gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo), !setting_has_explicit_value(state->draft_store, key)
-      ? inherit_choice : value.empty() ? terminal_font_default : terminal_font_custom);
+      ? inherit_choice : value.empty() ? (global ? inherit_choice : terminal_font_default) : terminal_font_custom);
   state->terminal_font_draft = terminal_font_families(state->draft_store).families;
   state->terminal_fonts_valid = true;
   rebuild_terminal_font_rows(state);
@@ -3878,7 +3901,36 @@ static void on_terminal_fonts_add_clicked(GtkButton *, gpointer data) {
   state->terminal_font_draft.push_back("");
   rebuild_terminal_font_rows(state);
   update_terminal_font_draft(state);
+  state->terminal_font_pending_scroll = state->terminal_font_rows.back().entry;
   gtk_widget_grab_focus(state->terminal_font_rows.back().entry);
+  notify_changed(state);
+}
+
+static void on_terminal_page_size_allocate(GtkWidget *scroller, GtkAllocation *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  auto *entry = state->terminal_font_pending_scroll;
+  if (entry == nullptr) return;
+  // The scroller's default allocation updates its adjustment bounds first.
+  // Scroll only after the new row has received real coordinates, not a timeout.
+  gint y = 0;
+  if (gtk_widget_translate_coordinates(entry, state->terminal_page_surface, 0, 0, nullptr, &y)) {
+    state->terminal_font_pending_scroll = nullptr;
+    gtk_adjustment_clamp_page(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(scroller)),
+        y, y + gtk_widget_get_allocated_height(entry));
+  }
+}
+
+static void on_terminal_indicator_off_color_mode_changed(GtkComboBox *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) return;
+  update_color_mode_from_widget(state, ColorSettingField::indicator_off);
+  notify_changed(state);
+}
+
+static void on_terminal_indicator_off_color_set(GtkColorButton *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) return;
+  update_color_from_picker(state, ColorSettingField::indicator_off);
   notify_changed(state);
 }
 
@@ -4642,8 +4694,10 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   // Keep the grid margins inside a painted surface instead of exposing the
   // implicit GtkViewport window around the direct scroll child.
   GtkWidget *page_surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  state->terminal_page_surface = page_surface;
   gtk_container_add(GTK_CONTAINER(page_surface), page);
   gtk_container_add(GTK_CONTAINER(scroller), page_surface);
+  g_signal_connect_after(scroller, "size-allocate", G_CALLBACK(on_terminal_page_size_allocate), state);
 
   const std::string encoding_combo_id =
       widget_id(state, "terminal_encoding_combo");
@@ -4850,17 +4904,10 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   g_signal_connect(add_font, "clicked", G_CALLBACK(on_terminal_fonts_add_clicked), state);
   gtk_box_pack_start(GTK_BOX(font_actions), add_font, FALSE, FALSE, 0);
   gtk_box_pack_start(GTK_BOX(font_panel), font_actions, FALSE, FALSE, 0);
-  auto *font_scroller = gtk_scrolled_window_new(nullptr, nullptr);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(font_scroller), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-  gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(font_scroller), 72);
-  gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(font_scroller), 112);
-  gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(font_scroller), TRUE);
-  assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(font_scroller)),
-      widget_id(state, "terminal_fonts_scrollbar").c_str());
   state->terminal_fonts_rows_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
-  gtk_container_add(GTK_CONTAINER(font_scroller), state->terminal_fonts_rows_box);
-  gtk_box_pack_start(GTK_BOX(font_panel), font_scroller, FALSE, FALSE, 0);
-  attach_row(page, 15, terminal_font_families_setting_key(), font_panel);
+  gtk_box_pack_start(GTK_BOX(font_panel), state->terminal_fonts_rows_box, FALSE, FALSE, 0);
+  auto *font_label = attach_row(page, 15, terminal_font_families_setting_key(), font_panel);
+  gtk_widget_set_valign(font_label, GTK_ALIGN_START);
 
   GtkWidget *indicator_color_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   state->terminal_indicator_color_mode_combo = create_combo_box(
@@ -4879,6 +4926,21 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(indicator_color_row),
                      state->terminal_indicator_color_button, FALSE, FALSE, 0);
   attach_row(page, 16, terminal_indicator_color_setting_key(), indicator_color_row);
+
+  auto *off_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  state->terminal_indicator_off_color_mode_combo = create_combo_box(
+      widget_id(state, "terminal_indicator_off_color_mode_combo").c_str());
+  g_signal_connect(state->terminal_indicator_off_color_mode_combo, "changed",
+      G_CALLBACK(on_terminal_indicator_off_color_mode_changed), state);
+  gtk_box_pack_start(GTK_BOX(off_row), state->terminal_indicator_off_color_mode_combo, TRUE, TRUE, 0);
+  state->terminal_indicator_off_color_button = gtk_color_button_new();
+  assign_accessible_id(state->terminal_indicator_off_color_button,
+      widget_id(state, "terminal_indicator_off_color_button").c_str());
+  gtk_color_chooser_set_use_alpha(GTK_COLOR_CHOOSER(state->terminal_indicator_off_color_button), FALSE);
+  g_signal_connect(state->terminal_indicator_off_color_button, "color-set",
+      G_CALLBACK(on_terminal_indicator_off_color_set), state);
+  gtk_box_pack_start(GTK_BOX(off_row), state->terminal_indicator_off_color_button, FALSE, FALSE, 0);
+  attach_row(page, 17, terminal_indicator_off_color_setting_key(), off_row);
 
   return scroller;
 }

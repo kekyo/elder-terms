@@ -14,8 +14,11 @@ msgstr ""
 "n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Indicator color"
-msgstr "Цвет индикаторов"
+msgid "Active indicator color"
+msgstr "Цвет активного индикатора"
+
+msgid "Inactive indicator color"
+msgstr "Цвет неактивного индикатора"
 
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Default color"
@@ -520,8 +523,23 @@ msgstr "Включено"
 msgid "Disabled"
 msgstr "Отключено"
 
-msgid "Custom fonts"
-msgstr "Пользовательские шрифты"
+msgid "Inherited from: global settings"
+msgstr "Источник: глобальные настройки"
+
+msgid "Inherited from: app defaults"
+msgstr "Источник: настройки приложения"
+
+msgid "App defaults"
+msgstr "Настройки приложения"
+
+msgid "Use app defaults"
+msgstr "Использовать настройки приложения"
+
+msgid "Specify for this connection"
+msgstr "Задать для этого подключения"
+
+msgid "Specify fonts"
+msgstr "Задать шрифты"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "No color"

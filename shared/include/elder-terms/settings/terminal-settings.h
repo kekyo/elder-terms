@@ -102,6 +102,17 @@ ELDER_TERMS_API SettingKey terminal_zoom_setting_key();
  */
 ELDER_TERMS_API SettingKey terminal_indicator_color_setting_key();
 
+/** @returns Setting key for the color shared by all inactive indicators. */
+ELDER_TERMS_API SettingKey terminal_indicator_off_color_setting_key();
+
+/**
+ * Extracts the independently configured inactive indicator color.
+ * @param store Source settings containing validated values.
+ * @returns Custom RGB color, or no value to retain the original gray image.
+ */
+ELDER_TERMS_API std::optional<RgbColor>
+terminal_indicator_off_color(const SettingsStore &store);
+
 /**
  * Extracts the common activity indicator color.
  *

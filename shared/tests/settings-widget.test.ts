@@ -171,23 +171,13 @@ const showTerminalPage = async (app: GtkApp): Promise<void> => {
   });
 };
 
-const showTerminalKeyBindings = async (app: GtkApp): Promise<void> => {
+const scrollTerminalPageToBottom = async (app: GtkApp): Promise<void> => {
   const scrollbar = expectElementKind(
     await app.getById('settings_terminal_page_scrollbar'),
     'scrollbar'
   );
   const range = await scrollbar.valueInfo();
   await scrollbar.setValue(range.maximum);
-  await waitForResult(async () => {
-    const zoomIn = await app.getById('settings_terminal_zoom_in_key_entry');
-    const zoomOut = await app.getById('settings_terminal_zoom_out_key_entry');
-    const sendBreak = await app.getById(
-      'settings_terminal_send_break_key_entry'
-    );
-    expect((await zoomIn.info()).states).toContain('showing');
-    expect((await zoomOut.info()).states).toContain('showing');
-    expect((await sendBreak.info()).states).toContain('showing');
-  });
 };
 
 const showTelnetPage = async (app: GtkApp): Promise<void> => {
@@ -966,7 +956,8 @@ describe.concurrent('shared settings widget', () => {
               'Rows',
               'Scrollback lines',
               'Zoom factor',
-              'Indicator color',
+              'Active indicator color',
+              'Inactive indicator color',
               'Font families',
               'Close window when session ends',
               'Show window side borders',
@@ -1132,18 +1123,14 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'global_settings_terminal_fonts_mode_combo',
-          '組み込み既定値'
+          'アプリ標準'
         );
         expect(
           await comboOptionNames(
             app,
             'global_settings_terminal_fonts_mode_combo'
           )
-        ).toEqual([
-          '組み込み既定値',
-          '組み込み既定値を使用',
-          'カスタムフォント',
-        ]);
+        ).toEqual(['アプリ標準', '指定する']);
         expect(
           (await (await app.getById('global_settings_apply_button')).info())
             .name
@@ -1671,6 +1658,224 @@ describe.concurrent('shared settings widget', () => {
     expect(visualErrors).toEqual([]);
   });
 
+  it('identifies the font inheritance source in a single option', async (context) => {
+    for (const global of [false, true]) {
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=terminal',
+          '--save',
+          ...(global ? ['--global=terminal.font_families=Global Font;'] : []),
+          '--rebase-global=terminal.font_families=Rebased Font;',
+        ],
+        async ({ app }) => {
+          await showTerminalPage(app);
+          const id = 'settings_terminal_fonts_mode_combo';
+          expect(await comboOptionNames(app, id)).toEqual([
+            global
+              ? 'Inherited from: global settings'
+              : 'Inherited from: app defaults',
+            'Use app defaults',
+            'Specify for this connection',
+          ]);
+          await expectSelectedComboValue(
+            app,
+            id,
+            global
+              ? 'Inherited from: global settings'
+              : 'Inherited from: app defaults'
+          );
+          await expectElementKind(
+            await app.getById('rebase_fallbacks_button'),
+            'button'
+          ).click();
+          await expectSelectedComboValue(
+            app,
+            id,
+            'Inherited from: global settings'
+          );
+          expect(
+            await expectElementKind(
+              await app.getById('settings_terminal_font_family_0'),
+              'entry'
+            ).text()
+          ).toBe('Rebased Font');
+        }
+      );
+    }
+  });
+
+  it('saves global fonts through two choices and restores app defaults', async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'elder-terms-global-font-'));
+    const path = join(directory, 'global.ini');
+    try {
+      await runSharedGtkTest(
+        context,
+        ['--global-mode', '--page=terminal', `--save-file=${path}`],
+        async ({ app }) => {
+          const id = 'global_settings_terminal_fonts_mode_combo';
+          expect(await comboOptionNames(app, id)).toEqual([
+            'App defaults',
+            'Specify fonts',
+          ]);
+          const mode = expectElementKind(await app.getById(id), 'comboBox');
+          await mode.selectChildAt(1);
+          await expectElementKind(
+            await app.getById('global_settings_terminal_font_family_0'),
+            'entry'
+          ).setText('Global Font');
+          await expectElementKind(
+            await app.getById('global_settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect(await readFile(path, 'utf8')).toContain(
+              'font_families=Global Font;Monospace;'
+            )
+          );
+          await mode.selectChildAt(0);
+          await expectElementKind(
+            await app.getById('global_settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect(await readFile(path, 'utf8')).not.toContain('font_families=')
+          );
+        }
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('aligns the font label with the top and places every candidate in the page', async (context) => {
+    await runSharedGtkTest(context, ['--page=terminal'], async ({ app }) => {
+      await showTerminalPage(app);
+      await scrollTerminalPageToBottom(app);
+      const window = expectElementKind(await app.windowAt(0), 'window');
+      const original = (await window.capture()).bounds;
+      const label = await findDescendantByName(
+        await app.getById('settings_terminal_page'),
+        'label',
+        'Font families'
+      );
+      expect(label).toBeDefined();
+      const mode = await app.getById('settings_terminal_fonts_mode_combo');
+      const labelBounds = (await label!.capture()).bounds;
+      expect(labelBounds.height).toBeLessThanOrEqual(
+        (await mode.capture()).bounds.height
+      );
+      expect(
+        Math.abs(labelBounds.y - (await mode.capture()).bounds.y)
+      ).toBeLessThan(12);
+      const add = expectElementKind(
+        await app.getById('settings_terminal_fonts_add_button'),
+        'button'
+      );
+      await add.click();
+      const third = expectElementKind(
+        await app.getById('settings_terminal_font_family_2'),
+        'entry'
+      );
+      await waitForResult(async () => {
+        expect((await third.info()).states).toContain('showing');
+        expect((await third.info()).states).toContain('focused');
+      });
+      await third.setText('Third Candidate');
+      const outer = expectElementKind(
+        await app.getById('settings_terminal_page_scrollbar'),
+        'scrollbar'
+      );
+      await outer.setValue((await outer.valueInfo()).maximum);
+      const first = (
+        await (await app.getById('settings_terminal_font_family_0')).capture()
+      ).bounds;
+      const last = (await third.capture()).bounds;
+      expect(last.y - first.y).toBeGreaterThan(first.height * 2);
+      expect((await window.capture()).bounds.height).toBe(original.height);
+    });
+  });
+
+  it('saves and resets the inactive color independently of the active color', async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'elder-terms-off-color-'));
+    const path = join(directory, 'connection.ini');
+    try {
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=terminal',
+          '--indicator-color=#FF0000',
+          '--global=terminal.indicator_off_color=#112233',
+          `--save-file=${path}`,
+        ],
+        async ({ app }) => {
+          await showTerminalPage(app);
+          await scrollTerminalPageToBottom(app);
+          const mode = expectElementKind(
+            await app.getById(
+              'settings_terminal_indicator_off_color_mode_combo'
+            ),
+            'comboBox'
+          );
+          await chooseNamedColor(
+            app,
+            'settings_terminal_indicator_off_color_button',
+            'Blue'
+          );
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            const content = await readFile(path, 'utf8');
+            expect(content).toContain('indicator_color=#FF0000\n');
+            expect(content).toContain('indicator_off_color=#3584E4\n');
+          });
+          await chooseNamedColor(
+            app,
+            'settings_terminal_indicator_off_color_button',
+            'Red'
+          );
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect(await readFile(path, 'utf8')).toContain(
+              'indicator_off_color=#3584E4\n'
+            )
+          );
+          await mode.selectChildAt(1);
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect(await readFile(path, 'utf8')).toContain(
+              'indicator_off_color=default\n'
+            )
+          );
+          await mode.selectChildAt(0);
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect(await readFile(path, 'utf8')).not.toContain(
+              'indicator_off_color='
+            )
+          );
+        }
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('saves an ordered font list containing three families', async (context) => {
     const directory = await mkdtemp(join(tmpdir(), 'elder-terms-font-list-'));
     const savedPath = join(directory, 'connection.ini');
@@ -1680,7 +1885,7 @@ describe.concurrent('shared settings widget', () => {
         ['--page=terminal', `--save-file=${savedPath}`],
         async ({ app }) => {
           await showTerminalPage(app);
-          await showTerminalKeyBindings(app);
+          await scrollTerminalPageToBottom(app);
           await expectElementKind(
             await app.getById('settings_terminal_fonts_mode_combo'),
             'comboBox'
@@ -1721,7 +1926,7 @@ describe.concurrent('shared settings widget', () => {
         ],
         async ({ app }) => {
           await showTerminalPage(app);
-          await showTerminalKeyBindings(app);
+          await scrollTerminalPageToBottom(app);
           await expectElementKind(
             await app.getById('settings_terminal_font_up_2'),
             'button'
@@ -1777,7 +1982,7 @@ describe.concurrent('shared settings widget', () => {
       ],
       async ({ app }) => {
         await showTerminalPage(app);
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         const mode = expectElementKind(
           await app.getById('settings_terminal_fonts_mode_combo'),
           'comboBox'
@@ -1844,9 +2049,9 @@ describe.concurrent('shared settings widget', () => {
       ],
       async ({ app, directory }) => {
         await showTerminalPage(app);
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         const scrollbar = expectElementKind(
-          await app.getById('settings_terminal_fonts_scrollbar'),
+          await app.getById('settings_terminal_page_scrollbar'),
           'scrollbar'
         );
         const range = await scrollbar.valueInfo();
@@ -1861,13 +2066,29 @@ describe.concurrent('shared settings widget', () => {
         );
         expect(await last.text()).toBe('Candidate 12');
         await last.setText('Last Font');
+        const window = expectElementKind(await app.windowAt(0), 'window');
+        const originalHeight = (await window.capture()).bounds.height;
+        await expectElementKind(
+          await app.getById('settings_terminal_fonts_add_button'),
+          'button'
+        ).click();
+        const added = expectElementKind(
+          await app.getById('settings_terminal_font_family_12'),
+          'entry'
+        );
+        await waitForResult(async () => {
+          expect((await added.info()).states).toContain('showing');
+          expect((await added.info()).states).toContain('focused');
+        });
+        await added.setText('Added Font');
+        expect((await window.capture()).bounds.height).toBe(originalHeight);
         await expectElementKind(
           await app.getById('settings_apply_button'),
           'button'
         ).click();
         await waitForResult(async () =>
           expect((await app.output()).stdout).toContain(
-            `APPLIED_FONTS ${JSON.stringify([...names.slice(0, -1), 'Last Font'])}`
+            `APPLIED_FONTS ${JSON.stringify([...names.slice(0, -1), 'Last Font', 'Added Font'])}`
           )
         );
         const page = await app.getById('settings_terminal_page');
@@ -1882,12 +2103,15 @@ describe.concurrent('shared settings widget', () => {
       ['--page=terminal'],
       async ({ app, directory }) => {
         await showTerminalPage(app);
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         await expectPageLabels(app, 'settings_terminal_page', [
           'フォントファミリー',
         ]);
         const add = await app.getById('settings_terminal_fonts_add_button');
         expect((await add.info()).name).toBe('追加');
+        expect(
+          await comboOptionNames(app, 'settings_terminal_fonts_mode_combo')
+        ).toEqual(['継承元：アプリ標準', 'アプリ標準に固定', 'この接続で指定']);
         await writeFile(
           join(directory, 'font-list-ja.png'),
           (await (await app.getById('settings_terminal_page')).capture()).image
@@ -1910,7 +2134,7 @@ describe.concurrent('shared settings widget', () => {
         ],
         async ({ app }) => {
           await showTerminalPage(app);
-          await showTerminalKeyBindings(app);
+          await scrollTerminalPageToBottom(app);
           await expectSelectedComboValue(
             app,
             'settings_terminal_indicator_color_mode_combo',
@@ -2040,7 +2264,7 @@ describe.concurrent('shared settings widget', () => {
           'settings_terminal_indicator_color_mode_combo',
           'Default color'
         );
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         await expectElementKind(
           await app.getById('rebase_fallbacks_button'),
           'button'
@@ -2085,7 +2309,7 @@ describe.concurrent('shared settings widget', () => {
       ],
       async ({ app }) => {
         await showTerminalPage(app);
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         await expectSelectedComboValue(
           app,
           'settings_terminal_indicator_color_mode_combo',
@@ -2111,9 +2335,10 @@ describe.concurrent('shared settings widget', () => {
       ['--page=terminal'],
       async ({ app, directory }) => {
         await showTerminalPage(app);
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         await expectPageLabels(app, 'settings_terminal_page', [
-          'インジケーターの色',
+          '点灯時の色',
+          '消灯時の色',
         ]);
         await expectSelectedComboValue(
           app,
@@ -3991,7 +4216,7 @@ describe.concurrent('shared settings widget', () => {
         await autoClose.selectChildAt(1);
         await showBorder.selectChildAt(2);
         await setNumericEntryValue(borderWidth, 6);
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         await captureKeyBinding(app, zoomInKey, ['alt'], 'Up');
         await captureKeyBinding(app, sendBreakKey, ['shift'], 'F12');
         await clearKeyBinding(
@@ -4035,11 +4260,11 @@ describe.concurrent('shared settings widget', () => {
       ],
       async ({ app, directory }) => {
         await showTerminalPage(app);
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         await expectSelectedComboValue(
           app,
           'settings_terminal_fonts_mode_combo',
-          'Custom fonts (global default)'
+          'Inherited from: global settings'
         );
         const page = await app.getById('settings_terminal_page');
         const capture = await captureWhenVisuallyStable(
@@ -4066,7 +4291,7 @@ describe.concurrent('shared settings widget', () => {
         await expectSelectedComboValue(
           app,
           'settings_terminal_fonts_mode_combo',
-          'Custom fonts'
+          'Specify for this connection'
         );
         await expectElementKind(
           await app.getById('settings_apply_button'),
@@ -4411,7 +4636,7 @@ describe.concurrent('shared settings widget', () => {
       ['--page=terminal', '--save'],
       async ({ app }) => {
         await showTerminalPage(app);
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         const zoomInKey = expectElementKind(
           await app.getById('settings_terminal_zoom_in_key_entry'),
           'entry'
@@ -4532,7 +4757,7 @@ describe.concurrent('shared settings widget', () => {
         const apply = await app.getById('settings_apply_button');
         const save = await app.getById('settings_save_button');
 
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         await captureKeyBinding(app, zoomInKey, ['alt'], 'F1');
         await expectEntryText(zoomInKey, 'alt+F1');
         await captureKeyBinding(app, zoomOutKey, ['alt'], 'F1');
@@ -5039,7 +5264,7 @@ describe.concurrent('shared settings widget', () => {
 
         await encoding.setText('CP932');
         await autoClose.selectChildAt(1);
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         await captureKeyBinding(app, zoomIn, ['alt'], 'F1');
         await selectSettingsTab(app, 'TELNET');
         const terminalType = await expectInheritedEntry(
@@ -5234,7 +5459,7 @@ describe.concurrent('shared settings widget', () => {
           await expectInsensitive(save);
         });
 
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         await captureKeyBinding(app, zoomOut, ['alt'], 'F2');
         await waitForResult(async () => {
           await expectSensitive(apply);

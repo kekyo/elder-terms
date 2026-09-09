@@ -1340,19 +1340,27 @@ std::optional<MainWindow> load_main_window() {
 }
 
 void set_main_window_indicator_color(MainWindow *main_window,
-                                      const std::optional<RgbColor> &color) {
+                                      const std::optional<RgbColor> &color,
+                                      const std::optional<RgbColor> &off_color) {
   if (main_window == nullptr || main_window->indicator_default_on_icon == nullptr ||
       main_window->indicator_default_off_icon == nullptr) return;
   const std::optional<guint32> packed = color.has_value()
       ? std::optional<guint32>{(static_cast<guint32>(color->red) << 16) |
                               (static_cast<guint32>(color->green) << 8) | color->blue}
       : std::nullopt;
-  if (main_window->indicator_color == packed) return;
+  const std::optional<guint32> packed_off = off_color.has_value()
+      ? std::optional<guint32>{(static_cast<guint32>(off_color->red) << 16) |
+                              (static_cast<guint32>(off_color->green) << 8) | off_color->blue}
+      : std::nullopt;
+  if (main_window->indicator_color == packed &&
+      main_window->indicator_off_color == packed_off) return;
   auto *on = color.has_value()
       ? create_colored_indicator_pixbuf(main_window->indicator_default_on_icon, *color)
       : GDK_PIXBUF(g_object_ref(main_window->indicator_default_on_icon));
-  auto *off = color.has_value()
-      ? create_colored_indicator_pixbuf(main_window->indicator_default_off_icon, *color)
+  // Use the same shading range for either chosen color. The original dark
+  // template would dim every inactive selection; retain it only for defaults.
+  auto *off = off_color.has_value()
+      ? create_colored_indicator_pixbuf(main_window->indicator_default_on_icon, *off_color)
       : GDK_PIXBUF(g_object_ref(main_window->indicator_default_off_icon));
   if (on == nullptr || off == nullptr) {
     g_clear_object(&on);
@@ -1368,6 +1376,7 @@ void set_main_window_indicator_color(MainWindow *main_window,
     replace_activity_indicator_widget_images(&indicator, on, off);
   }
   main_window->indicator_color = packed;
+  main_window->indicator_off_color = packed_off;
   g_object_unref(old_on);
   g_object_unref(old_off);
 }

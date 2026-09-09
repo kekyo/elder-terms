@@ -13,8 +13,11 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Indicator color"
-msgstr "표시등 색상"
+msgid "Active indicator color"
+msgstr "켜진 표시등 색상"
+
+msgid "Inactive indicator color"
+msgstr "꺼진 표시등 색상"
 
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Default color"
@@ -519,8 +522,23 @@ msgstr "활성화됨"
 msgid "Disabled"
 msgstr "비활성화됨"
 
-msgid "Custom fonts"
-msgstr "사용자 지정 글꼴"
+msgid "Inherited from: global settings"
+msgstr "상속 원본: 전역 설정"
+
+msgid "Inherited from: app defaults"
+msgstr "상속 원본: 앱 기본값"
+
+msgid "App defaults"
+msgstr "앱 기본값"
+
+msgid "Use app defaults"
+msgstr "앱 기본값 사용"
+
+msgid "Specify for this connection"
+msgstr "이 연결에 지정"
+
+msgid "Specify fonts"
+msgstr "글꼴 지정"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "No color"

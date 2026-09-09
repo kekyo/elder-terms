@@ -578,6 +578,44 @@ static void test_terminal_border_width_range_and_round_trip() {
               "terminal border width should survive saving and reloading");
 }
 
+static void test_independent_inactive_indicator_color() {
+  const auto path = temporary_config_path("inactive-color");
+  const auto global = temporary_config_path("inactive-global");
+  const auto on = elder_terms::make_setting_key("terminal", "indicator_color");
+  const auto off = elder_terms::make_setting_key("terminal", "indicator_off_color");
+  const SettingsLoadOptions options{.config_path = path,
+      .startup_config_path = std::nullopt, .global_config_path = global};
+  write_config(global, "[terminal]\nindicator_off_color=#112233\n");
+  write_config(path, "[terminal]\nindicator_color=#FF0000\n");
+  auto loaded = load_settings(options, 1.0);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, off, "missing") == "#112233",
+      "inactive color should inherit independently of the active color");
+  for (const auto &value : {std::string("default"), std::string("#ABCDEF"), std::string("#000000")}) {
+    expect_true(set_explicit_setting_value(&loaded.store, off, elder_terms::SettingValue{value}),
+        "inactive colors should be independently configurable");
+    expect_true(save_settings(loaded.store, path).saved, "inactive color should save");
+    loaded = load_settings(options, 1.0);
+    expect_true(elder_terms::setting_string_value_or_default(loaded.store, off, "missing") == value &&
+        elder_terms::setting_string_value_or_default(loaded.store, on, "missing") == "#FF0000",
+        "saving and reloading the inactive color must not change the active color");
+  }
+  for (const auto *invalid : {"red", "#123", "#1234567", "#GG0000"}) {
+    expect_true(!set_explicit_setting_value(&loaded.store, off, elder_terms::SettingValue{std::string(invalid)}),
+        "invalid inactive color should be rejected");
+  }
+  write_config(path, "[terminal]\nindicator_off_color=invalid\n");
+  loaded = load_settings(options, 1.0);
+  expect_true(warnings_contain(loaded.warnings, "indicator_off_color") &&
+      elder_terms::setting_string_value_or_default(loaded.store, off, "missing") == "#112233",
+      "invalid inactive colors should warn and inherit");
+  write_config(global, "[terminal]\nindicator_off_color=invalid\n");
+  loaded = load_settings(options, 1.0);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, off, "missing") == "default",
+      "invalid inactive colors in all layers should use the original gray lamp");
+  remove_config(path);
+  remove_config(global);
+}
+
 static void test_terminal_indicator_color_round_trip_and_layering() {
   const auto key = elder_terms::terminal_indicator_color_setting_key();
   auto defaults = create_default_settings(default_terminal_display_settings(1.0),
@@ -4252,6 +4290,7 @@ static void test_regular_expression_reports_project_owned_matches() {
 
 int main() {
   try {
+    elder_terms_settings_test::test_independent_inactive_indicator_color();
     elder_terms_settings_test::test_terminal_font_list_round_trip_and_validation();
     elder_terms_settings_test::test_default_settings();
     elder_terms_settings_test::test_terminal_indicator_color_round_trip_and_layering();

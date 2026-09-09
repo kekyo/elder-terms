@@ -13,8 +13,11 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Indicator color"
-msgstr "インジケーターの色"
+msgid "Active indicator color"
+msgstr "点灯時の色"
+
+msgid "Inactive indicator color"
+msgstr "消灯時の色"
 
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Default color"
@@ -519,8 +522,23 @@ msgstr "有効"
 msgid "Disabled"
 msgstr "無効"
 
-msgid "Custom fonts"
-msgstr "カスタムフォント"
+msgid "Inherited from: global settings"
+msgstr "継承元：グローバル設定"
+
+msgid "Inherited from: app defaults"
+msgstr "継承元：アプリ標準"
+
+msgid "App defaults"
+msgstr "アプリ標準"
+
+msgid "Use app defaults"
+msgstr "アプリ標準に固定"
+
+msgid "Specify for this connection"
+msgstr "この接続で指定"
+
+msgid "Specify fonts"
+msgstr "指定する"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "No color"

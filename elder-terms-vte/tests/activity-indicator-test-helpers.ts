@@ -102,7 +102,8 @@ export const expectActivityIndicatorImageState = async (
     }
   } else {
     // A neutral reflection keeps even black lamps distinguishable. Normalize
-    // brightness for the requested color, then check the visible ON/OFF bands.
+    // brightness for the requested color. Custom inactive colors retain the
+    // requested brightness instead of multiplying it by a dark OFF template.
     for (let channel = 0; channel < 3; channel += 1) {
       for (let other = 0; other < 3; other += 1) {
         if (color[channel] - color[other] >= 64) {
@@ -114,7 +115,7 @@ export const expectActivityIndicatorImageState = async (
   const strength =
     color === undefined ? 1 : 0.2 + (0.8 * Math.max(...color)) / 255;
   const normalized = brightness / strength;
-  if (state === 'on') {
+  if (state === 'on' || color !== undefined) {
     expect(normalized).toBeGreaterThan(130);
     expect(normalized).toBeLessThan(200);
   } else {

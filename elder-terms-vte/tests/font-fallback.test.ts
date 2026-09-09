@@ -147,10 +147,7 @@ it('renders missing glyphs with the third ordered family and tolerates unavailab
                   break;
                 }
               }
-              for (const id of [
-                'settings_terminal_page_scrollbar',
-                'settings_terminal_fonts_scrollbar',
-              ]) {
+              for (const id of ['settings_terminal_page_scrollbar']) {
                 const scrollbar = expectElementKind(
                   await app.getById(id),
                   'scrollbar'

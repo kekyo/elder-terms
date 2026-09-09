@@ -13,8 +13,11 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Indicator color"
-msgstr "Cor dos indicadores"
+msgid "Active indicator color"
+msgstr "Cor do indicador ativo"
+
+msgid "Inactive indicator color"
+msgstr "Cor do indicador inativo"
 
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Default color"
@@ -519,8 +522,23 @@ msgstr "Habilitado"
 msgid "Disabled"
 msgstr "Desativado"
 
-msgid "Custom fonts"
-msgstr "Fontes personalizadas"
+msgid "Inherited from: global settings"
+msgstr "Herdado de: configurações globais"
+
+msgid "Inherited from: app defaults"
+msgstr "Herdado de: padrões do aplicativo"
+
+msgid "App defaults"
+msgstr "Padrões do aplicativo"
+
+msgid "Use app defaults"
+msgstr "Usar padrões do aplicativo"
+
+msgid "Specify for this connection"
+msgstr "Especificar para esta conexão"
+
+msgid "Specify fonts"
+msgstr "Especificar fontes"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "No color"

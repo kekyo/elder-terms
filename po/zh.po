@@ -13,8 +13,11 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Indicator color"
-msgstr "指示灯颜色"
+msgid "Active indicator color"
+msgstr "指示灯点亮颜色"
+
+msgid "Inactive indicator color"
+msgstr "指示灯熄灭颜色"
 
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Default color"
@@ -519,8 +522,23 @@ msgstr "已启用"
 msgid "Disabled"
 msgstr "已禁用"
 
-msgid "Custom fonts"
-msgstr "自定义字体"
+msgid "Inherited from: global settings"
+msgstr "继承自：全局设置"
+
+msgid "Inherited from: app defaults"
+msgstr "继承自：应用默认值"
+
+msgid "App defaults"
+msgstr "应用默认值"
+
+msgid "Use app defaults"
+msgstr "固定使用应用默认值"
+
+msgid "Specify for this connection"
+msgstr "为此连接指定"
+
+msgid "Specify fonts"
+msgstr "指定字体"
 
 #: shared/src/settings-widget/settings-presentation.cpp:224
 msgid "No color"

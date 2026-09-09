@@ -41,7 +41,9 @@ const findNamedChild = async (
   return undefined;
 };
 
-const selectBlueIndicatorColor = async (app: GtkApp): Promise<void> => {
+const selectBlueAndGreenIndicatorColors = async (
+  app: GtkApp
+): Promise<void> => {
   await expectElementKind(
     await app.getById('application_menu_button'),
     'toggleButton'
@@ -71,29 +73,34 @@ const selectBlueIndicatorColor = async (app: GtkApp): Promise<void> => {
     'scrollbar'
   );
   await scrollbar.setValue((await scrollbar.valueInfo()).maximum);
-  await expectElementKind(
-    await app.getById('settings_terminal_indicator_color_button'),
-    'button'
-  ).click();
-  const chooser = await waitForResult(async () => {
-    for (let index = 0; index < (await app.getWindowCount()); index += 1) {
-      const window = await app.windowAt(index);
-      if (window !== undefined && (await window.info()).name === 'Pick a Color')
-        return window;
-    }
-    throw new Error('Color chooser has not opened');
-  });
-  await expectElementKind(
-    await findNamedChild(chooser, 'radio', 'Blue'),
-    'radio'
-  ).click();
-  await expectElementKind(
-    await findNamedChild(chooser, 'button', 'Select'),
-    'button'
-  ).click();
+  for (const [id, color] of [
+    ['settings_terminal_indicator_color_button', 'Blue'],
+    ['settings_terminal_indicator_off_color_button', 'Green'],
+  ]) {
+    await expectElementKind(await app.getById(id), 'button').click();
+    const chooser = await waitForResult(async () => {
+      for (let index = 0; index < (await app.getWindowCount()); index++) {
+        const window = await app.windowAt(index);
+        if (
+          window !== undefined &&
+          (await window.info()).name === 'Pick a Color'
+        )
+          return window;
+      }
+      throw new Error('Color chooser has not opened');
+    });
+    await expectElementKind(
+      await findNamedChild(chooser, 'radio', color),
+      'radio'
+    ).click();
+    await expectElementKind(
+      await findNamedChild(chooser, 'button', 'Select'),
+      'button'
+    ).click();
+  }
 };
 
-type VideoIndicatorState = 'red-on' | 'red-off' | 'blue-on' | 'blue-off';
+type VideoIndicatorState = 'red-on' | 'yellow-off' | 'blue-on' | 'green-off';
 
 const expectVideoPixel = (
   pixel: readonly number[],
@@ -101,20 +108,80 @@ const expectVideoPixel = (
   litReference: readonly number[],
   darkReference: readonly number[]
 ): void => {
-  const channel = state.startsWith('red') ? 0 : 2;
-  const other = channel === 0 ? 2 : 0;
-  expect(pixel[channel] - pixel[other], state).toBeGreaterThan(30);
-  expect(pixel[channel] - pixel[1], state).toBeGreaterThan(20);
-  // GTK fades the parent while a modal picker is open. Compare lamps within
-  // the same frame so that a faded dark lamp cannot be mistaken for a lit one.
-  const contrast = litReference[channel] - darkReference[channel];
-  expect(contrast, state).toBeGreaterThan(20);
-  const level = (pixel[channel] - darkReference[channel]) / contrast;
-  if (state.endsWith('-on')) expect(level, state).toBeGreaterThan(0.75);
-  else expect(level, state).toBeLessThan(0.25);
+  // Match the same-frame CONN/LOG references, including GTK's modal fade.
+  const on = state.endsWith('-on');
+  const reference = on ? litReference : darkReference;
+  for (let channel = 0; channel < 3; channel++)
+    expect(Math.abs(pixel[channel] - reference[channel])).toBeLessThan(4);
+  expect(
+    Math.max(
+      ...litReference.map((value, index) =>
+        Math.abs(value - darkReference[index])
+      )
+    )
+  ).toBeGreaterThan(30);
+  const initial = state === 'red-on' || state === 'yellow-off';
+  const litChannel = initial ? 0 : 2;
+  expect(
+    litReference[litChannel] - litReference[initial ? 2 : 0]
+  ).toBeGreaterThan(30);
+  if (initial) {
+    expect(
+      Math.min(darkReference[0], darkReference[1]) - darkReference[2]
+    ).toBeGreaterThan(30);
+  } else {
+    expect(darkReference[1] - darkReference[0]).toBeGreaterThan(30);
+    expect(darkReference[1] - darkReference[2]).toBeGreaterThan(20);
+  }
 };
 
 describe.concurrent('terminal indicator color', () => {
+  for (const [customOn, customOff] of [
+    [true, false],
+    [true, true],
+    [false, true],
+  ]) {
+    it(`keeps inactive lamps independent of the active color: on ${customOn}, off ${customOff}`, async (context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const config = join(directory, 'independent.ini');
+        await writeFile(
+          config,
+          '[general]\ntype=serial\n[serial]\ndevice=/dev/null\n[terminal]\n' +
+            (customOn ? 'indicator_color=#FF0000\n' : '') +
+            (customOff ? 'indicator_off_color=#0000FF\n' : '')
+        );
+        await runGtkTest(
+          context,
+          ['--test-fixture', '-c', config],
+          async (app, evidence) => {
+            for (const id of serialActivityIndicatorIds) {
+              const lamp = await app.getById(`${id}_indicator_image`);
+              const capture = await waitForResult(async () => {
+                const capture = await lamp.capture();
+                const [r, g, b] = capturePixel(capture, 0.5, 0.5);
+                if (id === 'conn') {
+                  if (customOn) expect(r - b).toBeGreaterThan(60);
+                  else expect(g - r).toBeGreaterThan(35);
+                } else if (customOff) {
+                  expect(b - r).toBeGreaterThan(60);
+                  expect(b).toBeGreaterThan(130);
+                } else
+                  expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(
+                    12
+                  );
+                return capture;
+              });
+              await evidence.captureEvidence(
+                `${id}-independent-${customOff}`,
+                async () => capture
+              );
+            }
+          }
+        );
+      });
+    });
+  }
+
   for (const [name, color, channel, rgb] of [
     ['red', '#FF0000', 0, [255, 0, 0]],
     ['blue', '#0000FF', 2, [0, 0, 255]],
@@ -149,7 +216,7 @@ describe.concurrent('terminal indicator color', () => {
                   const image = await widget.capture();
                   expect(image.clipped).toBe(false);
                   const pixel = capturePixel(image, 0.5, 0.5);
-                  if (name === 'red' || name === 'blue') {
+                  if (id === 'conn' && (name === 'red' || name === 'blue')) {
                     for (const other of [0, 1, 2]) {
                       if (other !== channel)
                         expect(pixel[channel] - pixel[other]).toBeGreaterThan(
@@ -165,7 +232,7 @@ describe.concurrent('terminal indicator color', () => {
                   await expectActivityIndicatorImageState(
                     image,
                     id === 'conn' ? 'on' : 'off',
-                    rgb
+                    id === 'conn' ? rgb : undefined
                   );
                   return image;
                 },
@@ -183,8 +250,8 @@ describe.concurrent('terminal indicator color', () => {
               (id) => id !== 'conn'
             )) {
               expect(
-                brightness.get('conn')! - brightness.get(id)!
-              ).toBeGreaterThan(name === 'black' ? 10 : 40);
+                Math.abs(brightness.get('conn')! - brightness.get(id)!)
+              ).toBeGreaterThan(10);
             }
             const window = expectElementKind(await app.windowAt(0), 'window');
             await evidence.captureEvidence(`all-indicators-${name}`, async () =>
@@ -215,7 +282,7 @@ describe.concurrent('terminal indicator color', () => {
             5_000,
             [255, 0, 0]
           );
-          await selectBlueIndicatorColor(app);
+          await selectBlueAndGreenIndicatorColors(app);
           await expectElementKind(
             await app.getById('settings_save_button'),
             'button'
@@ -223,6 +290,9 @@ describe.concurrent('terminal indicator color', () => {
           await waitForResult(async () => {
             expect(await readFile(configPath, 'utf8')).toContain(
               'indicator_color=#3584E4\n'
+            );
+            expect(await readFile(configPath, 'utf8')).toContain(
+              'indicator_off_color=#33D17A\n'
             );
           });
         }
@@ -237,7 +307,7 @@ describe.concurrent('terminal indicator color', () => {
               id,
               id === 'conn' ? 'on' : 'off',
               5_000,
-              [53, 132, 228]
+              id === 'conn' ? [53, 132, 228] : [51, 209, 122]
             );
           }
           const saved = await readFile(configPath, 'utf8');
@@ -286,7 +356,8 @@ describe.concurrent('terminal indicator color', () => {
               ).capture();
               await expectActivityIndicatorImageState(
                 image,
-                id === 'conn' ? 'on' : 'off'
+                id === 'conn' ? 'on' : 'off',
+                id === 'conn' ? undefined : [51, 209, 122]
               );
               return image;
             });
@@ -331,6 +402,7 @@ describe.concurrent('terminal indicator color', () => {
             '[terminal]',
             'auto_close=false',
             'indicator_color=#FF0000',
+            'indicator_off_color=#FFFF00',
             '[macro.reply]',
             'regex=^PING$',
             'send=ACK\\n',
@@ -479,8 +551,8 @@ describe.concurrent('terminal indicator color', () => {
                   expect(received).toContain('ACK');
                 });
                 await expectNextFrame('red-on');
-                if (!latched) await expectNextFrame('red-off');
-                await selectBlueIndicatorColor(app);
+                if (!latched) await expectNextFrame('yellow-off');
+                await selectBlueAndGreenIndicatorColors(app);
                 const dialogBounds = await expectElementKind(
                   await app.getById('settings_dialog'),
                   'window'
@@ -499,11 +571,11 @@ describe.concurrent('terminal indicator color', () => {
                 ).click();
                 await expectNextFrame('blue-on');
                 if (!latched) {
-                  await expectNextFrame('blue-off');
+                  await expectNextFrame('green-off');
                   await expectNextFrame('blue-on');
                   clearInterval(traffic);
                   traffic = undefined;
-                  await expectNextFrame('blue-off');
+                  await expectNextFrame('green-off');
                 }
                 expect(await readFile(configPath, 'utf8')).toBe(config);
               } finally {

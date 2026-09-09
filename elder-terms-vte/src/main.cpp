@@ -746,7 +746,8 @@ static void apply_runtime_settings(ApplicationState *state,
   elder_terms::set_main_window_colors(
       state->main_window, colors);
   elder_terms::set_main_window_indicator_color(
-      state->main_window, elder_terms::terminal_indicator_color(state->settings_store));
+      state->main_window, elder_terms::terminal_indicator_color(state->settings_store),
+      elder_terms::terminal_indicator_off_color(state->settings_store));
   if (state->sftp_window != nullptr) {
     elder_terms::set_file_transfer_window_colors(
         state->sftp_window, colors);
@@ -1689,7 +1690,8 @@ int main(int argc, char **argv) {
       &*main_window,
       elder_terms::general_color_settings(settings_result.store));
   elder_terms::set_main_window_indicator_color(
-      &*main_window, elder_terms::terminal_indicator_color(settings_result.store));
+      &*main_window, elder_terms::terminal_indicator_color(settings_result.store),
+      elder_terms::terminal_indicator_off_color(settings_result.store));
 
   ApplicationState app_state{
       .main_window = &*main_window,

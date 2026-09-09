@@ -631,19 +631,23 @@ again.
 
 ## Configuring Indicator Color
 
-Scroll down on the "Terminal" tab to select "Indicator color". One color applies
-to CONN, LOG, SD, RD, and all serial line indicators. Applying a color preserves
-their lit, dark, and blinking states. The lamps retain their shading so that
-lit and dark states remain distinguishable.
+On the "Terminal" tab, set "Active indicator color" and "Inactive indicator
+color" independently. Each applies to CONN, LOG, SD, RD, and all serial line
+indicators. Applying colors preserves their current states, blinking, and
+latched activity. The lamps retain their shading and highlights; choose
+different colors if you want to distinguish active from inactive lamps.
 
 Connection defaults can provide a shared color, and each connection can override
-it. Choose "Default color" to restore the original green lamps even when a global
-color is configured, or choose the inherited option to follow connection defaults.
-Save the settings to keep the color after restarting.
+it. "Default color" restores green for active lamps and gray for inactive lamps,
+independently of the other color. Configuring only the active color leaves the
+inactive color gray unless a global inactive color is inherited. Choose the
+inherited option to follow connection defaults. Save to keep both colors after
+restarting.
 
 ```ini
 [terminal]
 indicator_color=#3584E4
+indicator_off_color=#808080
 ```
 
 The value must be `default` or an RGB color in `#RRGGBB` form. Invalid values
@@ -653,15 +657,19 @@ produce a warning and use the next valid inherited or built-in value.
 
 Scroll down on the "Terminal" tab to edit an ordered list of font families.
 Add or remove rows, and use the up/down buttons to change their priority.
-Each row accepts a family name or opens a font chooser. Long lists scroll
-within the page; there is no two-font limit.
+Each row accepts a family name or opens a font chooser. Every row is laid out in
+the page, without a separate list scrollbar or a two-row limit. Scroll the
+Terminal page for longer lists; adding a row brings its input into view.
 
 The first family has the highest priority. Later families supply characters
 missing from earlier ones, such as Japanese characters missing from a Latin
 font. Uninstalled family names may be saved and are skipped during fallback.
 
-The drop-down applies to the whole list: inherit the global default, use the
-built-in list (`Noto Sans Mono`, then `Monospace`), or specify a custom list.
+The drop-down applies to the whole list. "Inherited from: global settings" or
+"Inherited from: app defaults" follows the inherited settings, including later
+global changes. "Use app defaults" fixes this connection to `Noto Sans Mono`,
+then `Monospace`, regardless of global settings. "Specify for this connection"
+sets its own list. The global editor offers "App defaults" and "Specify fonts".
 Connection overrides replace the global list rather than extending it.
 Apply changes the current settings, Save persists them, and Cancel discards
 changes made since the last apply.
