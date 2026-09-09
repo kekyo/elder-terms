@@ -215,6 +215,33 @@ foreach case_name : ['receive', 'cancel-final', 'cancel-paused', 'callback-failu
   test('curl-ftp-session-' + case_name, curl_ftp_session_test, args: [case_name], timeout: 120)
 endforeach
 
+ftp_test_server = executable(
+  'ftp-test-server',
+  'tests/cpp/ftp-test-server.cpp',
+)
+
+curl_ftp_client_test = executable(
+  'curl-ftp-client-test',
+  [
+    'tests/cpp/curl-ftp-client-test.cpp',
+    'src/ftp/curl-ftp-client.cpp',
+    'src/ftp/curl-ftp-session.cpp',
+    'src/ftp/ftp-protocol.cpp',
+  ],
+  include_directories: include_directories('src/ftp'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
+)
+
+foreach case_name : [
+  'passive', 'active', 'legacy-passive', 'legacy-active',
+  'ipv6-passive', 'ipv6-active', 'unix', 'dos', 'mlsd-unavailable',
+  'login', 'empty-user', 'unsafe-password', 'denied-listing',
+  'temporary-listing', 'foreign-active', 'fifo',
+]
+  test('curl-ftp-client-' + case_name, curl_ftp_client_test,
+    args: [ftp_test_server, case_name], timeout: 120)
+endforeach
+
 terminal_text_codec_test = executable(
   'terminal-text-codec-test',
   [
