@@ -3674,13 +3674,13 @@ describe.concurrent('shared settings widget', () => {
           await mkdir(join(fixture.sysClassTtyRoot, 'zero', 'device'), {
             recursive: true,
           });
-          await Promise.all([
-            writeFile(
-              join(fixture.sysClassTtyRoot, 'zero', 'device', 'product'),
-              'Other USB\n'
-            ),
-            symlink('/dev/zero', join(fixture.byIdRoot, 'usb-other')),
-          ]);
+          // Publish the device only after its metadata is complete. Creating
+          // the link first can notify the watcher before the product exists.
+          await writeFile(
+            join(fixture.sysClassTtyRoot, 'zero', 'device', 'product'),
+            'Other USB\n'
+          );
+          await symlink('/dev/zero', join(fixture.byIdRoot, 'usb-other'));
           await waitForResult(async () => {
             expect(
               await comboOptionNames(app, 'settings_serial_device_combo')

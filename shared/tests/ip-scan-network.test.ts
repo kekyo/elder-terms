@@ -86,6 +86,11 @@ describe('IP scan on an isolated multicast network', () => {
             'run',
             '--detach',
             '--pull=never',
+            // The container has no GPU devices. Restrict EGL discovery to Mesa
+            // so host-mounted NVIDIA drivers cannot crash its headless Xvfb.
+            // https://github.com/NVIDIA/libglvnd/blob/master/src/EGL/icd_enumeration.md
+            '--env',
+            '__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json',
             '--name',
             name,
             '--hostname',
