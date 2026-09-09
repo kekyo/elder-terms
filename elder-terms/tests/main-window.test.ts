@@ -403,7 +403,10 @@ describe('elder-terms main window', () => {
     expect(version.stdout.trim()).not.toBe('');
     await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
       await openApplicationDialogPage(app, 'application_settings_menu_item');
-      expectElementKind(await app.getById('application_dialog'), 'window');
+      const dialog = expectElementKind(
+        await app.getById('application_dialog'),
+        'window'
+      );
       expect(await selectedSettingsTabName(app, 'application_dialog')).toBe(
         'Application'
       );
@@ -423,12 +426,23 @@ describe('elder-terms main window', () => {
         await app.getById('application_settings_general_page'),
         'container'
       );
-      await expect(
-        app.getById('application_settings_notebook')
-      ).rejects.toThrow();
-      await expect(
-        app.getById('application_settings_link_add_button')
-      ).rejects.toThrow();
+      // Required controls are already present. Inspect the completed dialog
+      // tree directly; a missing-control assertion must not wait for a timeout.
+      const ids: string[] = [];
+      const pending: GtkWidgetElement[] = [dialog];
+      while (pending.length > 0) {
+        const widget = pending.shift()!;
+        ids.push((await widget.info()).accessibleId);
+        if ('getChildCount' in widget) {
+          const count = await widget.getChildCount();
+          for (let index = 0; index < count; index++) {
+            const child = await widget.childAt(index);
+            if (child !== undefined) pending.push(child);
+          }
+        }
+      }
+      expect(ids).not.toContain('application_settings_notebook');
+      expect(ids).not.toContain('application_settings_link_add_button');
       await expectElementKind(
         await app.getById('application_dialog_cancel_button'),
         'button'

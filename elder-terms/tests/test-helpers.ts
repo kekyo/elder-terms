@@ -11,6 +11,7 @@ import {
   type GtkAppEnvironment,
   type GtkCapture,
   type GtkElementOfKind,
+  type GtkSystemOutputEvent,
   type GtkWidgetElement,
   type GtkWidgetKind,
 } from 'gestament';
@@ -382,13 +383,13 @@ export const expectCaptureToMatchFixture = async (
 /**
  * Launches elder-terms with an isolated XDG connection directory.
  *
- * @param _context Vitest context reserved for evidence integration.
+ * @param context Vitest context used to identify failure evidence.
  * @param prepare Creates test profiles before launch.
  * @param body Test body.
  * @param options Additional process options.
  */
 export const runLauncherGtkTest = async (
-  _context: TestContext,
+  context: TestContext,
   prepare: (connections: string) => Promise<void>,
   body: (context: LauncherGtkTestContext) => Promise<void>,
   options: LauncherGtkTestOptions | undefined = undefined
@@ -399,6 +400,7 @@ export const runLauncherGtkTest = async (
   await mkdir(connections, { recursive: true });
   await prepare(connections);
 
+  const systemOutput: GtkSystemOutputEvent[] = [];
   const launcher = createGtkAppLauncher({
     appPath: options?.appPath ?? defaultAppPath,
     env: {
@@ -411,8 +413,12 @@ export const runLauncherGtkTest = async (
       type: 'xvfb',
     },
     xvfbTrayHost: options?.xvfbTrayHost ?? true,
+    onSystemOutput: (event) => {
+      systemOutput.push(event);
+    },
   });
   let x11MapRecorder: X11MapRecorder | undefined;
+  let app: GtkApp | undefined;
   try {
     if (
       options?.recordX11Maps === true ||
@@ -423,8 +429,27 @@ export const runLauncherGtkTest = async (
     for (const hotkey of options?.blockedHotkeys ?? []) {
       await x11MapRecorder?.grabHotkey(hotkey);
     }
-    const app = await launcher.launch([...(options?.args ?? [])]);
+    app = await launcher.launch([...(options?.args ?? [])]);
     await body({ app, configHome, connections, x11MapRecorder });
+  } catch (error) {
+    // Preserve startup evidence before release destroys the display session.
+    // Only display-related environment entries belong in diagnostic output.
+    const [environment, output] = await Promise.allSettled([
+      app?.environment(),
+      app?.output(),
+    ]);
+    const env =
+      environment.status === 'fulfilled' ? environment.value : undefined;
+    console.error('Launcher GTK failure', {
+      test: context.task.name,
+      display: env?.DISPLAY,
+      backend: env?.GDK_BACKEND,
+      sessionType: env?.XDG_SESSION_TYPE,
+      xvfbTrayHost: options?.xvfbTrayHost ?? true,
+      systemOutput,
+      output,
+    });
+    throw error;
   } finally {
     await x11MapRecorder?.stop();
     await launcher.release();
