@@ -50,6 +50,7 @@ enum class PendingActionKind {
   none,
   select,
   new_connection,
+  cancel_new_connection,
   close,
   quit,
   restart,
@@ -179,7 +180,8 @@ enum ConnectionColumns {
 static void update_action_sensitivity(ApplicationState *state);
 static void begin_new_connection(ApplicationState *state);
 static void select_existing_connection(
-    ApplicationState *state, const std::filesystem::path &path);
+    ApplicationState *state, const std::filesystem::path &path,
+    bool start_on_general);
 static void launch_selected_connection(ApplicationState *state);
 static void launch_saved_connection(
     ApplicationState *state, const std::filesystem::path &path,
@@ -1200,6 +1202,7 @@ static void begin_new_connection(ApplicationState *state) {
                                                global_defaults.store);
   elder_terms::update_settings_widget_store(state->settings_widget,
                                              std::move(store));
+  elder_terms::settings_widget_show_general_page(state->settings_widget);
   gtk_stack_set_visible_child_name(GTK_STACK(state->main_window->details_stack),
                                    "settings");
   update_action_sensitivity(state);
@@ -1207,13 +1210,16 @@ static void begin_new_connection(ApplicationState *state) {
 }
 
 static void select_existing_connection(
-    ApplicationState *state, const std::filesystem::path &path) {
+    ApplicationState *state, const std::filesystem::path &path,
+    bool start_on_general) {
   populate_profile_rows(state);
   state->suppress_selection = true;
   const bool found = select_matching_row(state, path, false);
   state->suppress_selection = false;
   if (!found || !load_existing_connection(state, path)) {
     show_empty_details(state);
+  } else if (start_on_general) {
+    elder_terms::settings_widget_show_general_page(state->settings_widget);
   }
 }
 
@@ -1771,9 +1777,12 @@ static void launch_saved_connection(
 static void perform_pending_action(ApplicationState *state,
                                    PendingAction action) {
   if (action.kind == PendingActionKind::select) {
-    select_existing_connection(state, action.path);
+    select_existing_connection(state, action.path, true);
   } else if (action.kind == PendingActionKind::new_connection) {
     begin_new_connection(state);
+  } else if (action.kind == PendingActionKind::cancel_new_connection) {
+    show_empty_details(state);
+    populate_profile_rows(state);
   } else if (action.kind == PendingActionKind::close) {
     gtk_widget_destroy(state->main_window->window);
   } else if (action.kind == PendingActionKind::quit) {
@@ -1866,6 +1875,8 @@ static void on_connection_selection_changed(GtkTreeSelection *,
   }
   if (!load_existing_connection(state, row.path)) {
     restore_current_selection(state);
+  } else {
+    elder_terms::settings_widget_show_general_page(state->settings_widget);
   }
 }
 
@@ -1885,7 +1896,7 @@ static gboolean on_connection_list_button_press(GtkWidget *widget,
     return GDK_EVENT_PROPAGATE;
   }
   const ConnectionRow row = connection_row_at_path(state, path);
-  if (!row.valid || row.is_new) {
+  if (!row.valid) {
     gtk_tree_path_free(path);
     return GDK_EVENT_PROPAGATE;
   }
@@ -1907,11 +1918,24 @@ static gboolean on_connection_list_button_press(GtkWidget *widget,
       gtk_tree_path_free(path);
       return GDK_EVENT_STOP;
     }
+    elder_terms::settings_widget_show_general_page(state->settings_widget);
   }
   gtk_tree_path_free(path);
 
-  state->context_connection_path = row.path;
+  state->context_connection_path =
+      row.is_new ? std::nullopt : std::optional(row.path);
   state->context_connection_name = row.name;
+  gtk_widget_set_visible(state->main_window->save_new_connection_menu_item,
+                         row.is_new);
+  gtk_widget_set_visible(state->main_window->cancel_new_connection_menu_item,
+                         row.is_new);
+  gtk_widget_set_visible(state->main_window->duplicate_connection_menu_item,
+                         !row.is_new);
+  gtk_widget_set_visible(state->main_window->delete_connection_menu_item,
+                         !row.is_new);
+  gtk_menu_item_set_label(
+      GTK_MENU_ITEM(state->main_window->edit_connection_menu_item),
+      row.is_new ? _("Save and open in text editor") : _("Edit in text editor"));
   gtk_widget_grab_focus(widget);
   gtk_menu_popup_at_pointer(
       GTK_MENU(state->main_window->connection_context_menu),
@@ -1921,6 +1945,10 @@ static gboolean on_connection_list_button_press(GtkWidget *widget,
 
 static void start_context_connection_rename(ApplicationState *state) {
   if (state->shutting_down) {
+    return;
+  }
+  if (state->current_is_new && !state->context_connection_path.has_value()) {
+    start_name_editing(state, false);
     return;
   }
   if (!state->context_connection_path.has_value() ||
@@ -1944,6 +1972,18 @@ static void on_rename_connection_menu_item_activate(GtkMenuItem *,
   auto *state = static_cast<ApplicationState *>(user_data);
   gtk_menu_popdown(GTK_MENU(state->main_window->connection_context_menu));
   start_context_connection_rename(state);
+}
+
+static void on_cancel_new_connection_menu_item_activate(GtkMenuItem *,
+                                                        gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  gtk_menu_popdown(GTK_MENU(state->main_window->connection_context_menu));
+  if (!state->shutting_down && state->current_is_new &&
+      !state->context_connection_path.has_value()) {
+    request_discard_confirmation(
+        state, PendingAction{.kind = PendingActionKind::cancel_new_connection,
+                             .path = {}});
+  }
 }
 
 static void on_duplicate_connection_menu_item_activate(GtkMenuItem *,
@@ -1972,7 +2012,7 @@ static void on_duplicate_connection_menu_item_activate(GtkMenuItem *,
     return;
   }
 
-  select_existing_connection(state, result.path);
+  select_existing_connection(state, result.path, true);
   reload_hotkey_actions(state);
 }
 
@@ -2234,6 +2274,12 @@ static bool save_current_connection(ApplicationState *state) {
       state->draft_name, state->profiles, state->selected_path);
   if (!validation.valid ||
       !elder_terms::settings_widget_is_valid(state->settings_widget)) {
+    show_error(
+        state, _("Failed to save connection"),
+        {validation.valid
+             ? _("The settings contain invalid input. "
+                 "Correct the highlighted fields before saving.")
+             : validation.error});
     update_action_sensitivity(state);
     return false;
   }
@@ -2246,7 +2292,7 @@ static bool save_current_connection(ApplicationState *state) {
     show_error(state, _("Failed to save connection"), result.warnings);
     return false;
   }
-  select_existing_connection(state, result.path);
+  select_existing_connection(state, result.path, false);
   reload_hotkey_actions(state);
   return true;
 }
@@ -2312,6 +2358,16 @@ static void on_apply_clicked(GtkButton *, gpointer user_data) {
   request_save_connection(static_cast<ApplicationState *>(user_data), false);
 }
 
+static void on_save_new_connection_menu_item_activate(GtkMenuItem *,
+                                                      gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  gtk_menu_popdown(GTK_MENU(state->main_window->connection_context_menu));
+  if (!state->shutting_down && state->current_is_new &&
+      !state->context_connection_path.has_value()) {
+    request_save_connection(state, false);
+  }
+}
+
 static void on_editor_changes_response(GtkDialog *dialog, gint response,
                                        gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
@@ -2331,9 +2387,15 @@ static void on_edit_connection_menu_item_activate(GtkMenuItem *,
                                                   gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
   gtk_menu_popdown(GTK_MENU(state->main_window->connection_context_menu));
-  if (state->shutting_down || state->current_is_new ||
-      !state->selected_path.has_value() ||
+  if (state->shutting_down ||
       state->context_connection_path != state->selected_path) {
+    return;
+  }
+  if (state->current_is_new) {
+    request_save_connection(state, true);
+    return;
+  }
+  if (!state->selected_path.has_value()) {
     return;
   }
   if (!editor_is_dirty(state)) {
@@ -2562,6 +2624,12 @@ static bool initialize_main_window(ApplicationState *state) {
                    G_CALLBACK(on_connection_list_button_press), state);
   g_signal_connect(main_window->rename_connection_menu_item, "activate",
                    G_CALLBACK(on_rename_connection_menu_item_activate),
+                   state);
+  g_signal_connect(main_window->save_new_connection_menu_item, "activate",
+                   G_CALLBACK(on_save_new_connection_menu_item_activate),
+                   state);
+  g_signal_connect(main_window->cancel_new_connection_menu_item, "activate",
+                   G_CALLBACK(on_cancel_new_connection_menu_item_activate),
                    state);
   g_signal_connect(main_window->edit_connection_menu_item, "activate",
                    G_CALLBACK(on_edit_connection_menu_item_activate), state);

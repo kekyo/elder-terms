@@ -2014,3 +2014,15 @@ msgstr "放弃并打开"
 #: elder-terms/src/main.cpp
 msgid "Save and open"
 msgstr "保存并打开"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open in text editor"
+msgstr "保存并在文本编辑器中打开"
+
+#: elder-terms/src/main-window.ui
+msgid "Cancel new connection"
+msgstr "取消新建连接"
+
+#: elder-terms/src/main.cpp
+msgid "The settings contain invalid input. Correct the highlighted fields before saving."
+msgstr "设置中包含无效输入。请修正突出显示的字段后再保存。"

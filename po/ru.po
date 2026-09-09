@@ -2037,3 +2037,15 @@ msgstr "Отбросить и открыть"
 #: elder-terms/src/main.cpp
 msgid "Save and open"
 msgstr "Сохранить и открыть"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open in text editor"
+msgstr "Сохранить и открыть в текстовом редакторе"
+
+#: elder-terms/src/main-window.ui
+msgid "Cancel new connection"
+msgstr "Отменить создание подключения"
+
+#: elder-terms/src/main.cpp
+msgid "The settings contain invalid input. Correct the highlighted fields before saving."
+msgstr "В настройках есть недопустимые значения. Исправьте выделенные поля перед сохранением."

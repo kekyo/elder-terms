@@ -2040,3 +2040,15 @@ msgstr "破棄して開く"
 #: elder-terms/src/main.cpp
 msgid "Save and open"
 msgstr "保存して開く"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open in text editor"
+msgstr "保存してテキストエディタで開く"
+
+#: elder-terms/src/main-window.ui
+msgid "Cancel new connection"
+msgstr "新規作成を取り消す"
+
+#: elder-terms/src/main.cpp
+msgid "The settings contain invalid input. Correct the highlighted fields before saving."
+msgstr "設定に無効な入力があります。強調表示された項目を修正してから保存してください。"

@@ -2038,3 +2038,15 @@ msgstr "تجاهل وفتح"
 #: elder-terms/src/main.cpp
 msgid "Save and open"
 msgstr "حفظ وفتح"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open in text editor"
+msgstr "حفظ وفتح في محرر النصوص"
+
+#: elder-terms/src/main-window.ui
+msgid "Cancel new connection"
+msgstr "إلغاء الاتصال الجديد"
+
+#: elder-terms/src/main.cpp
+msgid "The settings contain invalid input. Correct the highlighted fields before saving."
+msgstr "تحتوي الإعدادات على إدخال غير صالح. صحح الحقول المميزة قبل الحفظ."

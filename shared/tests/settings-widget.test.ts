@@ -601,13 +601,17 @@ const waitForAppliedStore = async (app: GtkApp): Promise<AppliedStore> =>
   waitForPrintedStore(app, 'APPLIED');
 
 const waitForPrintedStore = async (
-  app: GtkApp,
+  app: Pick<GtkApp, 'output'>,
   prefix: 'APPLIED' | 'REBASED' | 'SAVED'
 ): Promise<AppliedStore> =>
   waitForResult(async () => {
     const output = await app.output();
-    const line = output.stdout
-      .split('\n')
+    const lines = output.stdout.split('\n');
+    // A pipe read can end mid-record. Do not return a truncated result or
+    // an older result while the latest matching record is still arriving.
+    const pending = lines.pop() ?? '';
+    expect(pending.startsWith(`${prefix} `)).toBe(false);
+    const line = lines
       .reverse()
       .find((candidate) => candidate.startsWith(`${prefix} `));
     expect(line).toBeDefined();
@@ -748,6 +752,38 @@ const clearKeyBinding = async (
 };
 
 describe.concurrent('shared settings widget', () => {
+  it('waits for the complete latest settings record when output arrives in chunks', async () => {
+    for (const prefix of ['APPLIED', 'REBASED', 'SAVED'] as const) {
+      for (const previous of [
+        '',
+        `${prefix} serial_parity_source=override serial_parity_explicit=true\n`,
+      ]) {
+        let reads = 0;
+        const store = await waitForPrintedStore(
+          {
+            output: async () => ({
+              stdout:
+                previous +
+                (++reads === 1
+                  ? `${prefix} serial_parity_source=global serial_parity_exp`
+                  : `${prefix} serial_parity_source=global serial_parity_explicit=false\n`),
+              stderr: '',
+              exitCode: null,
+              exitSignal: null,
+              stdoutTruncated: false,
+              stderrTruncated: false,
+            }),
+          },
+          prefix
+        );
+        expect(store).toMatchObject({
+          serial_parity_source: 'global',
+          serial_parity_explicit: 'false',
+        });
+      }
+    }
+  });
+
   it('orders connection settings before Terminal when available', async (context) => {
     const cases = [
       {

@@ -1846,6 +1846,9 @@ describe('elder-terms main window', () => {
 
   for (const mode of [
     'clean',
+    'new',
+    'new-invalid',
+    'new-save-failure',
     'save',
     'save-conflict',
     'discard',
@@ -1860,7 +1863,10 @@ describe('elder-terms main window', () => {
       const applications = join(directory, 'applications');
       const executable = join(directory, 'editor.mjs');
       const capturePath = join(directory, 'capture.json');
-      const profileName = "Alpha 日本語 ; $' (test).ini";
+      const isNew = mode.startsWith('new');
+      const profileName = isNew
+        ? 'New connection.ini'
+        : "Alpha 日本語 ; $' (test).ini";
       await mkdir(applications);
       // Keep MIME recognition available without exposing host applications.
       await symlink('/usr/share/mime', join(directory, 'mime'));
@@ -1891,13 +1897,13 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
         await runLauncherGtkTest(
           context,
           async (connections) => {
-            if (mode === 'missing-file') {
+            if (!isNew && mode === 'missing-file') {
               // Removing the target outside the monitored directory makes
               // the file disappear specifically between selection and launch.
               const target = join(directory, 'profile.ini');
               await writeFile(target, '[terminal]\nwidth=88\n');
               await symlink(target, join(connections, profileName));
-            } else {
+            } else if (!isNew) {
               await writeFile(
                 join(connections, profileName),
                 '[terminal]\nwidth=88\n'
@@ -1910,14 +1916,27 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
           },
           async ({ app, connections }) => {
             const list = await app.getById('connection_list');
-            await selectConnectionRow(app, list, 0);
+            if (isNew) {
+              await expectElementKind(
+                await app.getById('new_button'),
+                'button'
+              ).click();
+              await app.input.pressKey('Escape');
+            } else {
+              await selectConnectionRow(app, list, 0);
+            }
             const width = expectElementKind(
               await app.getById('settings_terminal_width_entry'),
               'entry'
             );
-            await waitForResult(async () =>
-              expect(await width.text()).toBe('88')
-            );
+            if (isNew) {
+              await selectSettingsTab(app, 'settings', 'Terminal');
+              await width.setText(mode === 'new-invalid' ? '0' : '91');
+            } else {
+              await waitForResult(async () =>
+                expect(await width.text()).toBe('88')
+              );
+            }
             const dirty = [
               'save',
               'save-conflict',
@@ -1939,7 +1958,7 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
               ).click();
               expect(await width.text()).toBe('91');
             }
-            if (mode === 'save-failure') {
+            if (mode === 'save-failure' || mode === 'new-save-failure') {
               await chmod(connections, 0o500);
             }
             if (mode === 'missing-file') {
@@ -1947,6 +1966,12 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
             }
             try {
               await rightClickConnectionRow(app, list, 0);
+              expect(
+                (await (await app.getById('edit_connection_menu_item')).info())
+                  .name
+              ).toBe(
+                isNew ? 'Save and open in text editor' : 'Edit in text editor'
+              );
               await expectElementKind(
                 await app.getById('edit_connection_menu_item'),
                 'menuItem'
@@ -1988,20 +2013,59 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
               } else if (
                 [
                   'save-failure',
+                  'new-invalid',
+                  'new-save-failure',
                   'launch-failure',
                   'no-editor',
                   'missing-file',
                 ].includes(mode)
               ) {
-                expectElementKind(
+                const error = expectElementKind(
                   await app.getById('operation_error_dialog'),
                   'infoBar'
                 );
-                expect(await width.text()).toBe(dirty ? '91' : '88');
+                expect(await width.text()).toBe(
+                  mode === 'new-invalid' ? '0' : isNew || dirty ? '91' : '88'
+                );
+                if (mode === 'new-invalid') {
+                  const labels: string[] = [];
+                  const pending: GtkWidgetElement[] = [error];
+                  while (pending.length > 0) {
+                    const widget = pending.pop()!;
+                    if (widget.kind === 'label')
+                      labels.push((await widget.info()).name ?? '');
+                    if ('getChildCount' in widget && 'childAt' in widget) {
+                      for (
+                        let index = 0;
+                        index < (await widget.getChildCount());
+                        index++
+                      ) {
+                        const child = await widget.childAt(index);
+                        if (child !== undefined) pending.push(child);
+                      }
+                    }
+                  }
+                  expect(labels.join('\n')).toMatch(/invalid input/i);
+                }
                 await expect(
                   readFile(capturePath, 'utf8')
                 ).rejects.toMatchObject({ code: 'ENOENT' });
-                if (mode !== 'missing-file') {
+                if (isNew) {
+                  await expect(
+                    readFile(join(connections, profileName), 'utf8')
+                  ).rejects.toMatchObject({ code: 'ENOENT' });
+                  await app.input.pressKey('Escape');
+                  await waitForWindowCount(app, 1);
+                  expect(await connectionRowCount(list)).toBe(1);
+                  await rightClickConnectionRow(app, list, 0);
+                  expect(
+                    (
+                      await (
+                        await app.getById('save_new_connection_menu_item')
+                      ).info()
+                    ).states
+                  ).toContain('showing');
+                } else if (mode !== 'missing-file') {
                   expect(
                     await readFile(join(connections, profileName), 'utf8')
                   ).toContain('width=88');
@@ -2015,7 +2079,7 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
                     join(connections, profileName),
                   ]);
                   expect(capture.content).toContain(
-                    mode === 'save' || mode === 'save-conflict'
+                    isNew || mode === 'save' || mode === 'save-conflict'
                       ? 'width=91'
                       : 'width=88'
                   );
@@ -2024,7 +2088,7 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
                   expect(await width.text()).toBe(
                     mode === 'clean'
                       ? '95'
-                      : mode === 'save' || mode === 'save-conflict'
+                      : isNew || mode === 'save' || mode === 'save-conflict'
                         ? '91'
                         : '88'
                   );
@@ -2168,28 +2232,293 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
     );
   });
 
-  it('does not offer external editing for a new unsaved entry', async (context) => {
+  it('opens General when displaying settings for existing and new connections', async (context) => {
+    await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
+      const list = await app.getById('connection_list');
+      await selectConnectionRow(app, list, 0);
+      await selectSettingsTab(app, 'settings', 'Terminal');
+      await selectConnectionRow(app, list, 1);
+      const width = await app.getById('settings_terminal_width_entry');
+      await waitForResult(async () => {
+        expect(
+          (await (await app.getById('settings_general_name_entry')).info())
+            .states
+        ).toContain('showing');
+        expect((await width.info()).states).not.toContain('showing');
+      });
+      await selectSettingsTab(app, 'settings', 'Terminal');
+      await expectElementKind(
+        await app.getById('new_button'),
+        'button'
+      ).click();
+      await app.input.pressKey('Escape');
+      await waitForResult(async () => {
+        expect(
+          (await (await app.getById('settings_general_name_entry')).info())
+            .states
+        ).toContain('showing');
+        expect((await width.info()).states).not.toContain('showing');
+      });
+      await openGlobalDefaults(app);
+      expect(await selectedSettingsTabName(app, 'global_settings')).toBe(
+        'General'
+      );
+      await selectSettingsTab(app, 'global_settings', 'Terminal');
+      await expectElementKind(
+        await app.getById('global_defaults_cancel_button'),
+        'button'
+      ).click();
+      await waitForWindowCount(app, 1);
+      await openGlobalDefaults(app);
+      expect(await selectedSettingsTabName(app, 'global_settings')).toBe(
+        'General'
+      );
+    });
+  });
+
+  for (const japanese of [false, true]) {
+    it(
+      'offers localized actions for a new unsaved entry: Japanese ' + japanese,
+      async (context) => {
+        await runLauncherGtkTest(
+          context,
+          async () => {},
+          async ({ app }) => {
+            await expectElementKind(
+              await app.getById('new_button'),
+              'button'
+            ).click();
+            await app.input.pressKey('Escape');
+            await rightClickConnectionRow(
+              app,
+              await app.getById('connection_list'),
+              0
+            );
+            for (const [id, name] of [
+              ['save_new_connection_menu_item', japanese ? '保存' : 'Save'],
+              [
+                'edit_connection_menu_item',
+                japanese
+                  ? '保存してテキストエディタで開く'
+                  : 'Save and open in text editor',
+              ],
+              [
+                'rename_connection_menu_item',
+                japanese ? '名前の変更' : 'Rename',
+              ],
+              [
+                'cancel_new_connection_menu_item',
+                japanese ? '新規作成を取り消す' : 'Cancel new connection',
+              ],
+            ]) {
+              const item = await app.getById(id);
+              await waitForResult(async () =>
+                expect((await item.info()).states).toContain('showing')
+              );
+              expect((await item.info()).name).toBe(name);
+              await expectSensitive(item);
+            }
+            for (const id of [
+              'duplicate_connection_menu_item',
+              'delete_connection_menu_item',
+            ]) {
+              const item = await app.findById(id);
+              if (item !== undefined)
+                expect((await item.info()).states).not.toContain('showing');
+            }
+            const directory = fileURLToPath(
+              new URL('../../test-results/launcher/new-entry/', import.meta.url)
+            );
+            await mkdir(directory, { recursive: true });
+            await writeFile(
+              join(directory, japanese ? 'menu-ja.png' : 'menu-en.png'),
+              (await (await app.getById('connection_context_menu')).capture())
+                .image
+            );
+          },
+          { args: [], env: japanese ? japaneseTestEnvironment : {} }
+        );
+      }
+    );
+  }
+
+  it('renames a draft without creating a file and saves it from the context menu', async (context) => {
     await runLauncherGtkTest(
       context,
       async () => {},
-      async ({ app }) => {
+      async ({ app, connections }) => {
         await expectElementKind(
           await app.getById('new_button'),
           'button'
         ).click();
         await app.input.pressKey('Escape');
-        await rightClickConnectionRow(
-          app,
-          await app.getById('connection_list'),
-          0
+        const list = await app.getById('connection_list');
+        const width = expectElementKind(
+          await app.getById('settings_terminal_width_entry'),
+          'entry'
         );
-        const editor = await app.findById('edit_connection_menu_item');
-        if (editor !== undefined) {
-          const info = await editor.info();
-          expect(
-            info.states.includes('showing') && info.states.includes('sensitive')
-          ).toBe(false);
+        await selectSettingsTab(app, 'settings', 'Terminal');
+        await width.setText('91');
+        await rightClickConnectionRow(app, list, 0);
+        await expectElementKind(
+          await app.getById('rename_connection_menu_item'),
+          'menuItem'
+        ).click();
+        await replaceFocusedText(app, 'draft renamed');
+        await app.input.pressKey('Return');
+        for (const name of ['New connection.ini', 'draft renamed.ini']) {
+          await expect(
+            readFile(join(connections, name), 'utf8')
+          ).rejects.toMatchObject({ code: 'ENOENT' });
         }
+        await rightClickConnectionRow(app, list, 0);
+        await expectElementKind(
+          await app.getById('save_new_connection_menu_item'),
+          'menuItem'
+        ).click();
+        await waitForResult(async () => {
+          expect(
+            await readFile(join(connections, 'draft renamed.ini'), 'utf8')
+          ).toContain('width=91');
+          await expectInsensitive(await app.getById('apply_button'));
+        });
+        expect(await connectionRowCount(list)).toBe(1);
+        expect(await selectedSettingsTabName(app, 'settings')).toBe('Terminal');
+        await rightClickConnectionRow(app, list, 0);
+        expect(
+          (await (await app.getById('edit_connection_menu_item')).info()).name
+        ).toBe('Edit in text editor');
+        for (const id of [
+          'duplicate_connection_menu_item',
+          'delete_connection_menu_item',
+        ]) {
+          expect((await (await app.getById(id)).info()).states).toContain(
+            'showing'
+          );
+        }
+        for (const id of [
+          'save_new_connection_menu_item',
+          'cancel_new_connection_menu_item',
+        ]) {
+          const item = await app.findById(id);
+          if (item !== undefined)
+            expect((await item.info()).states).not.toContain('showing');
+        }
+      }
+    );
+  });
+
+  it('confirms cancelling a new connection and removes only the discarded draft', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app, connections }) => {
+        await expectElementKind(
+          await app.getById('new_button'),
+          'button'
+        ).click();
+        await replaceFocusedText(app, 'unsaved draft');
+        await app.input.pressKey('Return');
+        const list = await app.getById('connection_list');
+        const width = expectElementKind(
+          await app.getById('settings_terminal_width_entry'),
+          'entry'
+        );
+        await selectSettingsTab(app, 'settings', 'Terminal');
+        await width.setText('91');
+        await rightClickConnectionRow(app, list, 2);
+        await expectElementKind(
+          await app.getById('cancel_new_connection_menu_item'),
+          'menuItem'
+        ).click();
+        await expectElementKind(
+          await app.getById('cancel_discard_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+        expect(await connectionRowCount(list)).toBe(3);
+        expect(await width.text()).toBe('91');
+        if (list.kind === 'table')
+          expect((await (await list.cellAt(2, 0))?.info())?.name).toBe(
+            'unsaved draft'
+          );
+        await rightClickConnectionRow(app, list, 2);
+        await expectElementKind(
+          await app.getById('cancel_new_connection_menu_item'),
+          'menuItem'
+        ).click();
+        await expectElementKind(
+          await app.getById('discard_changes_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(await connectionRowCount(list)).toBe(2);
+          expect(
+            (await (await app.getById('empty_details_label')).info()).states
+          ).toContain('showing');
+        });
+        expect(await readFile(join(connections, 'Alpha.ini'), 'utf8')).toBe(
+          '[terminal]\nwidth=88\n'
+        );
+        expect(await readFile(join(connections, 'Beta.ini'), 'utf8')).toBe(
+          '[terminal]\nwidth=99\n'
+        );
+        await expect(
+          readFile(join(connections, 'unsaved draft.ini'), 'utf8')
+        ).rejects.toMatchObject({ code: 'ENOENT' });
+      }
+    );
+  });
+
+  it('explains an invalid draft name without saving or losing the draft', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async () => {},
+      async ({ app, connections }) => {
+        await expectElementKind(
+          await app.getById('new_button'),
+          'button'
+        ).click();
+        await replaceFocusedText(app, '');
+        await app.input.pressKey('BackSpace');
+        await app.input.pressKey('Return');
+        const list = await app.getById('connection_list');
+        await rightClickConnectionRow(app, list, 0);
+        await expectElementKind(
+          await app.getById('save_new_connection_menu_item'),
+          'menuItem'
+        ).click();
+        const error = await app.getById('operation_error_dialog');
+        expect((await error.info()).states).toContain('showing');
+        const labels: string[] = [];
+        const pending = [error];
+        while (pending.length > 0) {
+          const widget = pending.pop()!;
+          if (widget.kind === 'label')
+            labels.push((await widget.info()).name ?? '');
+          if ('getChildCount' in widget && 'childAt' in widget) {
+            for (
+              let index = 0;
+              index < (await widget.getChildCount());
+              index++
+            ) {
+              const child = await widget.childAt(index);
+              if (child !== undefined) pending.push(child);
+            }
+          }
+        }
+        expect(labels.join('\n')).toMatch(/name/i);
+        await app.input.pressKey('Escape');
+        await waitForWindowCount(app, 1);
+        expect(await connectionRowCount(list)).toBe(1);
+        await expect(
+          readFile(join(connections, 'New connection.ini'), 'utf8')
+        ).rejects.toMatchObject({ code: 'ENOENT' });
+        await rightClickConnectionRow(app, list, 0);
+        expect(
+          (await (await app.getById('save_new_connection_menu_item')).info())
+            .states
+        ).toContain('showing');
       }
     );
   });

@@ -10,6 +10,12 @@
   </object>
   <object class="GtkMenu" id="connection_context_menu">
     <child>
+      <object class="GtkMenuItem" id="save_new_connection_menu_item">
+        <property name="visible">True</property>
+        <property name="label" translatable="yes">Save</property>
+      </object>
+    </child>
+    <child>
       <object class="GtkMenuItem" id="edit_connection_menu_item">
         <property name="visible">True</property>
         <property name="label" translatable="yes">Edit in text editor</property>
@@ -31,6 +37,12 @@
       <object class="GtkMenuItem" id="delete_connection_menu_item">
         <property name="visible">True</property>
         <property name="label" translatable="yes">Delete</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="cancel_new_connection_menu_item">
+        <property name="visible">True</property>
+        <property name="label" translatable="yes">Cancel new connection</property>
       </object>
     </child>
   </object>

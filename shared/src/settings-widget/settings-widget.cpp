@@ -6092,6 +6092,12 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   return state;
 }
 
+void settings_widget_show_general_page(SettingsWidgetState *state) {
+  if (state != nullptr) {
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(state->notebook), 0);
+  }
+}
+
 void update_settings_widget_store(SettingsWidgetState *state,
                                   SettingsStore store) {
   if (state == nullptr) {

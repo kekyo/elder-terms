@@ -2042,3 +2042,15 @@ msgstr "Abandonner et ouvrir"
 #: elder-terms/src/main.cpp
 msgid "Save and open"
 msgstr "Enregistrer et ouvrir"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open in text editor"
+msgstr "Enregistrer et ouvrir dans l’éditeur de texte"
+
+#: elder-terms/src/main-window.ui
+msgid "Cancel new connection"
+msgstr "Annuler la nouvelle connexion"
+
+#: elder-terms/src/main.cpp
+msgid "The settings contain invalid input. Correct the highlighted fields before saving."
+msgstr "Les paramètres contiennent des valeurs non valides. Corrigez les champs en surbrillance avant d’enregistrer."

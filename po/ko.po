@@ -2018,3 +2018,15 @@ msgstr "버리고 열기"
 #: elder-terms/src/main.cpp
 msgid "Save and open"
 msgstr "저장하고 열기"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open in text editor"
+msgstr "저장하고 텍스트 편집기에서 열기"
+
+#: elder-terms/src/main-window.ui
+msgid "Cancel new connection"
+msgstr "새 연결 만들기 취소"
+
+#: elder-terms/src/main.cpp
+msgid "The settings contain invalid input. Correct the highlighted fields before saving."
+msgstr "설정에 잘못된 입력이 있습니다. 저장하기 전에 강조 표시된 항목을 수정하세요."

@@ -2033,3 +2033,15 @@ msgstr "Descartar e abrir"
 #: elder-terms/src/main.cpp
 msgid "Save and open"
 msgstr "Salvar e abrir"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open in text editor"
+msgstr "Salvar e abrir no editor de texto"
+
+#: elder-terms/src/main-window.ui
+msgid "Cancel new connection"
+msgstr "Cancelar nova conexão"
+
+#: elder-terms/src/main.cpp
+msgid "The settings contain invalid input. Correct the highlighted fields before saving."
+msgstr "As configurações contêm dados inválidos. Corrija os campos destacados antes de salvar."

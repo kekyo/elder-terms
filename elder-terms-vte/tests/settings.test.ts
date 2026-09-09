@@ -874,9 +874,19 @@ describe.concurrent('elder-terms-vte settings', () => {
     });
   });
 
-  it('restores terminal focus after closing runtime settings dialog', async (context) => {
+  it('opens runtime settings on General every time and restores terminal focus after closing', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
       await openSettingsDialog(app);
+      expect(await selectedSettingsTabName(app)).toBe('General');
+      await showTerminalSettingsPage(app);
+      await expectElementKind(
+        await app.getById('settings_cancel_button'),
+        'button'
+      ).click();
+      await expectSettingsDialogClosed(app);
+      await expectTerminalFocused(app);
+      await openSettingsDialog(app);
+      expect(await selectedSettingsTabName(app)).toBe('General');
       await expectElementKind(
         await app.getById('settings_cancel_button'),
         'button'

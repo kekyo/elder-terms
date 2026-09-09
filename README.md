@@ -136,9 +136,18 @@ detail. Those settings are described in the following sections.
 
 To edit a saved connection's INI file directly, right-click its entry in the
 launcher and select "Edit in text editor". This uses your desktop's default
-application for plain text files. Save a new entry before using this command.
-If the launcher has unsaved edits, choose whether to save or discard them
+application for plain text files. For a new unsaved entry, the menu offers
+"Save", "Rename", "Cancel new connection", and "Save and open in text editor".
+Renaming a draft does not create a file. Cancelling creation asks before
+discarding the draft; cancelling that confirmation keeps your edits.
+"Save and open in text editor" saves the entry first. Invalid input or a save
+failure is explained without losing the draft or opening the editor.
+If a saved entry has unsaved edits, choose whether to save or discard them
 before opening the editor, or cancel to keep editing in the launcher.
+
+Selecting a connection, creating a new one, or opening connection settings
+starts on the General tab. Applying or saving settings, or reloading external
+changes into an already open editor, keeps the current tab.
 
 Changes saved in an external editor are reloaded automatically, including
 editors that replace the file when saving. If you also have unsaved edits in

@@ -2020,3 +2020,15 @@ msgstr "छोड़कर खोलें"
 #: elder-terms/src/main.cpp
 msgid "Save and open"
 msgstr "सहेजकर खोलें"
+
+#: elder-terms/src/main.cpp
+msgid "Save and open in text editor"
+msgstr "सहेजें और टेक्स्ट एडिटर में खोलें"
+
+#: elder-terms/src/main-window.ui
+msgid "Cancel new connection"
+msgstr "नया कनेक्शन रद्द करें"
+
+#: elder-terms/src/main.cpp
+msgid "The settings contain invalid input. Correct the highlighted fields before saving."
+msgstr "सेटिंग में अमान्य इनपुट है। सहेजने से पहले हाइलाइट किए गए फ़ील्ड ठीक करें।"
