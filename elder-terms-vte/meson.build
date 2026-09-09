@@ -4,6 +4,7 @@ gio_dep = dependency('gio-2.0')
 liburing_dep = dependency('liburing')
 libudev_dep = dependency('libudev')
 libssh_dep = dependency('libssh')
+libcurl_dep = dependency('libcurl', version: '>=7.88.1')
 vte_dep = dependency('vte-2.91')
 
 gestament_config = find_program('gestament-config')
@@ -200,6 +201,19 @@ ftp_client_test = executable(
 )
 
 test('ftp-client-test', ftp_client_test)
+
+curl_ftp_session_test = executable(
+  'curl-ftp-session-test',
+  [
+    'tests/cpp/curl-ftp-session-test.cpp',
+    'src/ftp/curl-ftp-session.cpp',
+  ],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
+)
+
+foreach case_name : ['receive', 'cancel-final', 'cancel-paused', 'callback-failure', 'unanswered-quit']
+  test('curl-ftp-session-' + case_name, curl_ftp_session_test, args: [case_name], timeout: 120)
+endforeach
 
 terminal_text_codec_test = executable(
   'terminal-text-codec-test',
