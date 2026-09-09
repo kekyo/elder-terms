@@ -251,23 +251,6 @@ foreach case_name : [
     args: [ftp_test_server, case_name], timeout: 120)
 endforeach
 
-# Temporary behavioral check; remove after the backend switch is committed.
-ftp_backend_removal_test = executable(
-  'ftp-backend-removal-test',
-  [
-    'tests/cpp/ftp-backend-removal-test.cpp',
-    'src/ftp/ftp-client.cpp',
-    'src/ftp/ftp-metadata.cpp',
-    'src/ftp/curl-ftp-session.cpp',
-  ],
-  include_directories: include_directories('src/ftp'),
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
-  link_args: ['-Wl,--wrap=curl_global_init'],
-)
-
-test('ftp-backend-removal-test', ftp_backend_removal_test,
-  args: [ftp_test_server], timeout: 120)
-
 file_transfer_window_lifetime_test = executable(
   'file-transfer-window-lifetime-test',
   [
