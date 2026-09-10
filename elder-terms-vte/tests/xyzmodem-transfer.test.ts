@@ -64,6 +64,8 @@ interface TransferFixture {
 }
 
 interface TransferProgressPeerFixture extends TransferFixture {
+  readonly peerReleasePath: string;
+  readonly peerStatusPath: string;
   readonly peerStderrPath: string;
   readonly pauseRequestPath: string;
   readonly pausedPath: string;
@@ -913,6 +915,8 @@ const writeTransferProgressPeerLoginScript = async (
   markerPath: string,
   command: readonly string[]
 ): Promise<void> => {
+  const releasePath = `${markerPath}.release`;
+  await createFifo(releasePath);
   await writeFile(
     path,
     [
@@ -920,7 +924,15 @@ const writeTransferProgressPeerLoginScript = async (
       `cd ${shellQuote(remoteDirectory)} || exit 1`,
       'stty raw -echo -ixon -ixoff -icanon min 1 time 0 2>/dev/null || true',
       `cat ${shellQuote(markerPath)} >/dev/null || exit 1`,
-      `exec ${command.map(shellQuote).join(' ')} 2>xyzm-pause-peer.stderr`,
+      // Final protocol acknowledgement can precede local file finalization.
+      // Keep the login session alive until the test has observed completion.
+      `${command.map(shellQuote).join(' ')} 2>xyzm-pause-peer.stderr`,
+      'status=$?',
+      `printf '%s\\n' "$status" >xyzm-pause-peer.status`,
+      `if [ "$status" -eq 0 ]; then cat ${shellQuote(
+        releasePath
+      )} >/dev/null || exit 1; fi`,
+      'exit "$status"',
       '',
     ].join('\n'),
     'utf8'
@@ -1166,6 +1178,8 @@ const createTransferProgressPeerFixture = async (
   const loginScriptPath = join(directory, 'login.sh');
   const pauseRequestPath = join(directory, 'pause-request.marker');
   const pausedPath = join(directory, 'paused.marker');
+  const peerReleasePath = `${markerPath}.release`;
+  const peerStatusPath = join(remoteDirectory, 'xyzm-pause-peer.status');
   const peerStderrPath = join(remoteDirectory, 'xyzm-pause-peer.stderr');
   const resumePath = join(directory, 'resume.marker');
   await createFifo(markerPath);
@@ -1210,6 +1224,8 @@ const createTransferProgressPeerFixture = async (
       payload,
       payloadPath: sourcePath,
       peerReadyPath: undefined,
+      peerReleasePath,
+      peerStatusPath,
       peerStderrPath,
       sourceUri: pathToFileURL(sourcePath).href,
       transferBasePath: receiveDirectory,
@@ -1263,6 +1279,8 @@ const createTransferProgressPeerFixture = async (
     payload,
     payloadPath: remotePayloadPath,
     peerReadyPath: undefined,
+    peerReleasePath,
+    peerStatusPath,
     peerStderrPath,
     sourceUri: undefined,
     transferBasePath: receiveDirectory,
@@ -2768,10 +2786,28 @@ describe('elder-terms-vte XYZMODEM transfer progress notice e2e', () => {
                 await evidence.log('xyzm pause peer stderr', {
                   error,
                   stderr: await readOptionalTextFile(fixture.peerStderrPath),
+                  status: await readOptionalTextFile(fixture.peerStatusPath),
                 });
+                try {
+                  await evidence.captureEvidence(
+                    'transfer-incomplete',
+                    async () => app.capture()
+                  );
+                } catch (captureError) {
+                  await evidence.log('transfer failure capture unavailable', {
+                    error: captureError,
+                  });
+                }
                 throw error;
               }
               await expectTransferProgressNoticeHidden(app);
+              await waitForResult(async () => {
+                expect(
+                  (await readFile(fixture.peerStatusPath, 'utf8')).trim()
+                ).toBe('0');
+              });
+              await expectDisconnectedNoticeHidden(app);
+              await releaseTransferPeer(fixture);
             });
           } finally {
             await connection.close();
