@@ -38,6 +38,7 @@ gettext
 hicolor-icon-theme
 libcanberra-dev
 libcanberra-pulse
+libcurl4-openssl-dev
 libgtk-3-dev
 libpcre2-dev
 libssh-dev

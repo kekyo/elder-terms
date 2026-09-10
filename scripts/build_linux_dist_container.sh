@@ -193,6 +193,7 @@ for pkg_config_module in \
 	gdk-pixbuf-2.0 \
 	gtk+-3.0 \
 	libcanberra \
+	libcurl \
 	libpcre2-8 \
 	libssh \
 	libudev \

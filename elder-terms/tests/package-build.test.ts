@@ -270,11 +270,12 @@ exit 91
       join(binDirectory, 'pkg-config'),
       `#!/bin/sh
 printf '%s\\n' "$*" >>"$ELDER_TERMS_TEST_PKG_CONFIG_INVOCATION"
+if [ "\${ELDER_TERMS_TEST_MISSING_CURL:-0}" = 1 ] && [ "$*" = "--exists libcurl" ]; then exit 1; fi
 exit 0
 `
     );
 
-    const result = run(containerScript, [], {
+    const environment = {
       ...process.env,
       PATH: `${binDirectory}:${process.env.PATH}`,
       ELDER_TERMS_BUILD_TYPE: 'release',
@@ -286,7 +287,8 @@ exit 0
       ELDER_TERMS_TEST_MESON_INVOCATION: invocationPath,
       ELDER_TERMS_TEST_PKG_CONFIG_INVOCATION: pkgConfigInvocationPath,
       ELDER_TERMS_WORK_DIR: join(temporaryRoot, 'container-work'),
-    });
+    };
+    const result = run(containerScript, [], environment);
     expect(result.status).toBe(91);
     const invocation = readFileSync(invocationPath, 'utf8');
     expect(invocation).toContain('--prefix=/usr');
@@ -302,6 +304,17 @@ exit 0
     expect(readFileSync(pkgConfigInvocationPath, 'utf8').split('\n')).toContain(
       '--exists libpcre2-8'
     );
+
+    rmSync(invocationPath);
+    const missingCurl = run(containerScript, [], {
+      ...environment,
+      ELDER_TERMS_TEST_MISSING_CURL: '1',
+    });
+    expect(missingCurl.status).toBe(1);
+    expect(missingCurl.stderr).toContain(
+      'Missing required pkg-config module: libcurl'
+    );
+    expect(() => lstatSync(invocationPath)).toThrow();
   });
 
   it('disables libxyzm debug information for release package builds', () => {

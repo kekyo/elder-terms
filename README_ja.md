@@ -203,7 +203,7 @@ sudo apt install coreutils
 
 FTPウインドウを起動するたびに、認証パネルでユーザー名と非表示入力のパスワードを同時に尋ねます。設定済みのユーザー名が初期入力され、設定が空の場合は現在のOSユーザー名が初期入力されます。匿名でログインする場合は `anonymous` と明示的に入力し、サーバーが求めるパスワードも入力して下さい。匿名用の認証情報が自動で補われることはなく、入力したパスワードは接続設定に保存されません。ログイン後はSFTPと同じ2ペインのファイルブラウザと転送操作を使用出来ます。
 
-FTPはコマンド、ユーザー名、パスワード、ディレクトリ一覧、ファイルデータを暗号化せずに送信します。elder-termsが実装するのは基本の[FTPプロトコル（RFC 959）](https://www.rfc-editor.org/rfc/rfc959)であり、[FTP over TLS（RFC 4217）](https://www.rfc-editor.org/rfc/rfc4217)は実装しないため、FTPSには対応しません。信頼出来るネットワークとサーバー以外では、SFTPを使用して下さい。
+FTPはコマンド、ユーザー名、パスワード、ディレクトリ一覧、ファイルデータを暗号化せずに送信します。elder-termsは[libcurl](https://curl.se/libcurl/)を使用して[FTP（RFC 959）](https://www.rfc-editor.org/rfc/rfc959)に接続します。[FTP over TLS（RFC 4217）](https://www.rfc-editor.org/rfc/rfc4217)はelder-termsでは有効にしていないため、FTPSには対応しません。信頼出来るネットワークとサーバー以外では、SFTPを使用して下さい。
 
 ### FTPのデータ接続
 
@@ -216,7 +216,7 @@ FTPは一つの制御接続を維持し、ディレクトリ一覧またはフ�
 
 ### FTP操作の順序と互換性
 
-ディレクトリノードを開く操作を含むすべてのリモート操作は非同期に開始するため、GTKウインドウの応答は維持されます。一つのFTPウインドウは、制御接続のプールではなく、一つの認証済み制御接続を使用します。操作はFIFO順に待機し、一つの操作はデータ転送とサーバーの最終完了応答まで順番を保持します。そのため、別の操作中に要求したディレクトリ取得は、制御通信を混在させず待ち行列に入ります。
+ディレクトリノードを開く操作を含むすべてのリモート操作は非同期に開始するため、GTKウインドウの応答は維持されます。各FTPウインドウは専用の認証済みセッションを持ち、可能な場合は制御接続を再利用します。操作はFIFO順に待機し、一つの操作はデータ転送とサーバーの最終完了応答まで順番を保持します。そのため、別の操作中に要求したディレクトリ取得は、制御通信を混在させず待ち行列に入ります。
 
 elder-termsはバイナリ転送モードを選択し、サーバーが[RFC 3659](https://www.rfc-editor.org/rfc/rfc3659)の標準化された `MLST` / `MLSD` 拡張を通知した場合は `MLSD` の一覧を優先します。古いサーバーでは、一般的なUnix形式とDOS形式の `LIST` 出力へフォールバックします。サーバー固有の特殊な `LIST` 形式は認識出来ない場合があります。また、FTPではSFTPが持つシンボリックリンク、POSIXパーミッション、タイムスタンプ更新の各機能を使用出来ません。
 
@@ -592,13 +592,15 @@ OSC 8ターゲットと表示テキストは接続先から与えられる可能
 
 ## セルフビルド
 
+FTPクライアントには、FTPと非同期DNSを有効にした[libcurl](https://curl.se/libcurl/) 7.88.1以降が必要です。
+
 UbuntuまたはDebianでビルドする場合は、C++20対応コンパイラ、Meson、Ninja、gettextと、使用するライブラリの開発パッケージをインストールします。
 
 ```bash
 sudo apt update
 sudo apt install build-essential git meson ninja-build pkg-config gettext \
   libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev \
-  libxkbcommon-dev liburing-dev libudev-dev libpcre2-dev libssh-dev \
+  libxkbcommon-dev liburing-dev libudev-dev libpcre2-dev libssh-dev libcurl4-openssl-dev \
   libvte-2.91-dev xdg-utils
 ```
 

@@ -345,11 +345,11 @@ entered password is not stored in the connection settings. After login, FTP
 uses the same two-pane file browser and transfer controls as SFTP.
 
 FTP sends commands, user names, passwords, directory listings, and file data
-without encryption. elder-terms implements the base
-[FTP protocol (RFC 959)](https://www.rfc-editor.org/rfc/rfc959) and does not
-implement [FTP over TLS (RFC 4217)](https://www.rfc-editor.org/rfc/rfc4217),
-so FTPS is not supported. Prefer SFTP unless the network and server are
-trusted.
+without encryption. elder-terms uses [libcurl](https://curl.se/libcurl/) for
+[FTP (RFC 959)](https://www.rfc-editor.org/rfc/rfc959).
+[FTP over TLS (RFC 4217)](https://www.rfc-editor.org/rfc/rfc4217) is not enabled
+in elder-terms, so FTPS is not supported. Prefer SFTP unless the network and
+server are trusted.
 
 ### FTP Data Connections
 
@@ -380,8 +380,8 @@ data-port ranges are not separate options in elder-terms.
 ### FTP Operation Ordering and Compatibility
 
 Opening a directory node and every other remote operation starts
-asynchronously, so the GTK window remains responsive. Each FTP window uses one
-authenticated control connection rather than a pool of control connections.
+asynchronously, so the GTK window remains responsive. Each FTP window has its
+own authenticated session and reuses its control connection when possible.
 Operations wait in FIFO order, and one operation retains its turn through its
 data transfer and the server's final completion reply. A directory request
 made while another request is active is therefore queued instead of being
@@ -977,6 +977,9 @@ and values changed for an individual connection take precedence over them.
 
 ## Building from Source
 
+The FTP client requires [libcurl](https://curl.se/libcurl/) 7.88.1 or newer
+with FTP and asynchronous DNS support.
+
 To build on Ubuntu or Debian, install a C++20-capable compiler, Meson, Ninja,
 gettext, and the development packages for the libraries used by elder-terms:
 
@@ -984,7 +987,7 @@ gettext, and the development packages for the libraries used by elder-terms:
 sudo apt update
 sudo apt install build-essential git meson ninja-build pkg-config gettext \
   libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev \
-  libxkbcommon-dev liburing-dev libudev-dev libpcre2-dev libssh-dev \
+  libxkbcommon-dev liburing-dev libudev-dev libpcre2-dev libssh-dev libcurl4-openssl-dev \
   libvte-2.91-dev xdg-utils
 ```
 
