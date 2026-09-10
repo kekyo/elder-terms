@@ -527,32 +527,31 @@ static void update_file_transfer_sensitivity(FileTransferWindow *window) {
   }
   const bool idle =
       !window->transfer_active && !window->browser_action_active;
-  gtk_widget_set_sensitive(window->local.frame, idle);
-  gtk_widget_set_sensitive(
-      window->remote.frame,
-      idle && window->connection_available);
-  gtk_widget_set_sensitive(
-      window->local.transfer_item,
-      idle && window->connection_available);
-  gtk_widget_set_sensitive(
-      window->remote.transfer_item,
-      idle && window->connection_available);
+  const bool local_ready = idle && !window->local.busy;
+  const bool remote_ready =
+      idle && !window->remote.busy && window->connection_available;
+  const bool transfer_ready = local_ready && remote_ready;
+  gtk_widget_set_sensitive(window->local.frame, local_ready);
+  gtk_widget_set_sensitive(window->remote.frame, remote_ready);
+  gtk_widget_set_sensitive(window->local.transfer_item, transfer_ready);
+  gtk_widget_set_sensitive(window->remote.transfer_item, transfer_ready);
   if (window->local.hash_item != nullptr) {
-    gtk_widget_set_sensitive(window->local.hash_item, idle);
+    gtk_widget_set_sensitive(window->local.hash_item, local_ready);
   }
   if (window->remote.hash_item != nullptr) {
-    gtk_widget_set_sensitive(
-        window->remote.hash_item,
-        idle && window->connection_available);
+    gtk_widget_set_sensitive(window->remote.hash_item, remote_ready);
   }
-  gtk_widget_set_sensitive(window->local.rename_item, idle);
-  gtk_widget_set_sensitive(
-      window->remote.rename_item,
-      idle && window->connection_available);
-  gtk_widget_set_sensitive(window->local.delete_item, idle);
-  gtk_widget_set_sensitive(
-      window->remote.delete_item,
-      idle && window->connection_available);
+  gtk_widget_set_sensitive(window->local.rename_item, local_ready);
+  gtk_widget_set_sensitive(window->remote.rename_item, remote_ready);
+  gtk_widget_set_sensitive(window->local.delete_item, local_ready);
+  gtk_widget_set_sensitive(window->remote.delete_item, remote_ready);
+}
+
+static void set_file_transfer_pane_busy(FileTransferPaneState *pane, bool busy) {
+  // Transfer completion can precede the directory refresh. Keep stale rows and
+  // paths unavailable until the replacement snapshot has been applied.
+  pane->busy = busy;
+  update_file_transfer_sensitivity(pane->window);
 }
 
 static void set_widget_visible(GtkWidget *widget, bool visible) {
@@ -838,7 +837,7 @@ static cardio::promise<void> load_file_transfer_pane_root_async(
         co_await load_file_transfer_pane_directory_async(
             pane, std::move(requested_path), cancellation);
     if (window->destroyed || generation != pane->generation) {
-      pane->busy = false;
+      set_file_transfer_pane_busy(pane, false);
       co_return;
     }
     gtk_tree_store_clear(pane->store);
@@ -858,7 +857,7 @@ static cardio::promise<void> load_file_transfer_pane_root_async(
                          pane->current_directory.c_str());
     }
   }
-  pane->busy = false;
+  set_file_transfer_pane_busy(pane, false);
 }
 
 static void start_file_transfer_pane_navigation(
@@ -870,7 +869,7 @@ static void start_file_transfer_pane_navigation(
     return;
   }
   pane->task.reset();
-  pane->busy = true;
+  set_file_transfer_pane_busy(pane, true);
   pane->task.emplace(
       load_file_transfer_pane_root_async(pane, std::move(path)));
 }
@@ -888,7 +887,7 @@ static cardio::promise<void> expand_file_transfer_directory_async(
     if (window->destroyed || generation != pane->generation ||
         !gtk_tree_row_reference_valid(reference)) {
       gtk_tree_row_reference_free(reference);
-      pane->busy = false;
+      set_file_transfer_pane_busy(pane, false);
       co_return;
     }
     GtkTreePath *tree_path =
@@ -929,7 +928,7 @@ static cardio::promise<void> expand_file_transfer_directory_async(
     }
   }
   gtk_tree_row_reference_free(reference);
-  pane->busy = false;
+  set_file_transfer_pane_busy(pane, false);
 }
 
 static void on_file_transfer_row_expanded(
@@ -971,7 +970,7 @@ static void on_file_transfer_row_expanded(
     return;
   }
   pane->task.reset();
-  pane->busy = true;
+  set_file_transfer_pane_busy(pane, true);
   pane->task.emplace(expand_file_transfer_directory_async(
       pane, reference, directory, pane->generation));
 }

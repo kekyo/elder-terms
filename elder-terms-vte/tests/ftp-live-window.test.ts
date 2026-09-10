@@ -131,6 +131,8 @@ for (const scenario of [
       );
       launcher = createGtkAppLauncher({
         appPath: ftpAppPath,
+        // Instrumented GTK startup can exceed the driver's default ten seconds.
+        timeoutMs: 60_000,
         env: { LANGUAGE: 'en', LC_ALL: 'C.UTF-8', XDG_CONFIG_HOME: configHome },
         onSystemOutput: evidence.recordSystemOutputEvent,
         xvfbTrayHost: true,
@@ -178,6 +180,7 @@ for (const scenario of [
         ) as GtkTableElement;
         const rowFor = async (tree: GtkTableElement, name: string) =>
           await waitForResult(async () => {
+            expect((await tree.info()).states).toContain('sensitive');
             for (let index = 0; index < (await tree.getRowCount()); index++) {
               if ((await (await tree.cellAt(index, 0))?.info())?.name === name)
                 return index;
@@ -185,9 +188,15 @@ for (const scenario of [
             throw new Error(`Missing FTP row: ${name}`);
           });
         const contextMenu = async (tree: GtkTableElement, name: string) => {
+          await waitForResult(async () => {
+            expect((await localTree.info()).states).toContain('sensitive');
+            expect((await remoteTree.info()).states).toContain('sensitive');
+          });
           const row = await rowFor(tree, name);
           await tree.selectRow(row);
-          const bounds = (await (await tree.cellAt(row, 0))!.capture()).bounds;
+          const cell = await tree.cellAt(row, 0);
+          expect((await cell?.info())?.name).toBe(name);
+          const bounds = (await cell!.capture()).bounds;
           await app.input.moveMouseTo(
             Math.round(bounds.x + bounds.width / 2),
             Math.round(bounds.y + bounds.height / 2)
@@ -334,7 +343,10 @@ for (const scenario of [
             };
             const expectVideoState = async (label: string) => {
               let previousPixels: Buffer | undefined;
-              const pixels = await waitForResult(async () => {
+              const previousFrame = frameNumber;
+              const state = await waitForResult(async () => {
+                if (recordingError) throw recordingError;
+                expect(recorder.exitCode, stderr).toBeNull();
                 const captured = PNG.sync.read((await app.capture()).image);
                 const current = Buffer.alloc(area.width * area.height * 4);
                 for (let y = 0; y < area.height; y++) {
@@ -348,25 +360,29 @@ for (const scenario of [
                 }
                 const previous = previousPixels;
                 previousPixels = current;
-                if (states.length > 0)
-                  expect(current.equals(states[states.length - 1].pixels)).toBe(
-                    false
-                  );
+                if (states.length > 0) {
+                  // A disabled button alone does not show that the progress
+                  // overlay has disappeared from the rendered video.
+                  expect(
+                    difference(
+                      captured.data,
+                      captured.width,
+                      false,
+                      states[states.length - 1].pixels
+                    )
+                  ).toBeGreaterThan(0.2);
+                }
                 expect(previous).toBeDefined();
                 expect(current.equals(previous!)).toBe(true);
-                return current;
-              });
-              const previous = frameNumber;
-              const ordinal = await waitForResult(async () => {
-                if (recordingError) throw recordingError;
-                expect(recorder.exitCode, stderr).toBeNull();
-                expect(frameNumber).toBeGreaterThan(previous);
+                // Recapture when rendering advances before the video catches up.
+                // A transient stable screenshot must not become a permanent target.
+                expect(frameNumber).toBeGreaterThan(previousFrame);
                 expect(
-                  difference(frame, screen.width, true, pixels)
+                  difference(frame, screen.width, true, current)
                 ).toBeLessThan(0.01);
-                return frameNumber;
+                return { frame: frameNumber, label, pixels: current };
               });
-              states.push({ frame: ordinal, label, pixels });
+              states.push(state);
             };
             try {
               await expectVideoState('waiting for the final FTP response');
@@ -489,6 +505,9 @@ for (const scenario of [
             await app.getById('file_transfer_remote_path_entry'),
             'entry'
           );
+          await waitForResult(async () => {
+            expect((await path.info()).states).toContain('sensitive');
+          });
           await path.setText('/home/archive');
           const pathBounds = (await path.capture()).bounds;
           await app.input.moveMouseTo(
@@ -553,6 +572,20 @@ for (const scenario of [
           remaining.some((name) => name.includes('.elder-terms-part-'))
         ).toBe(false);
       }
+    } catch (error) {
+      const app = apps[apps.length - 1];
+      if (app) {
+        try {
+          await evidence.captureEvidence('ftp-failure', async () =>
+            app.capture()
+          );
+        } catch (captureError) {
+          await evidence.log('FTP failure capture unavailable', {
+            error: captureError,
+          });
+        }
+      }
+      throw error;
     } finally {
       try {
         await evidence.log('FTP server events', { events, stderr: serverLog });

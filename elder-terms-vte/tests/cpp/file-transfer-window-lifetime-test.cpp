@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <iostream>
@@ -19,12 +20,15 @@ static void expect(bool condition, const char *message) {
   if (!condition) throw std::runtime_error(message);
 }
 
-// Only directory cancellation is controlled here. Other operations retain the
-// existing fixture's behavior rather than adding another filesystem mock.
+// Directory completion and cancellation are controlled here. Other operations
+// retain the existing fixture's behavior rather than adding another filesystem mock.
 class GatedClient final : public RemoteFileClient {
   std::shared_ptr<RemoteFileClient> delegate = create_sftp_fixture_client(false);
   cardio::primitives::manually_conditional pending{false};
 public:
+  bool complete_listing = false;
+  cardio::primitives::manually_conditional listing_allowed{false};
+  cardio::primitives::manually_conditional pane_enabled{false};
   cardio::primitives::manually_conditional started{false};
   cardio::primitives::manually_conditional cleanup_started{false};
   cardio::primitives::manually_conditional cleanup_allowed{false};
@@ -34,6 +38,10 @@ public:
   cardio::promise<RemoteDirectorySnapshot> load_directory_async(
       std::string path, cardio::cancellation cancellation) override {
     started.raise();
+    if (complete_listing) {
+      co_await listing_allowed.wait(cancellation);
+      co_return RemoteDirectorySnapshot{.canonical_path = "/remote/loaded", .entries = {}};
+    }
     try {
       co_await pending.wait(cancellation);
       throw std::runtime_error("Directory request must be canceled during window close");
@@ -90,6 +98,18 @@ public:
   void end_transfer() override { delegate->end_transfer(); }
 };
 
+static GtkWidget *find_widget(GtkWidget *widget, const char *name) {
+  if (std::strcmp(gtk_widget_get_name(widget), name) == 0) return widget;
+  if (!GTK_IS_CONTAINER(widget)) return nullptr;
+  GList *children = gtk_container_get_children(GTK_CONTAINER(widget));
+  GtkWidget *found = nullptr;
+  for (GList *child = children; child != nullptr && found == nullptr; child = child->next) {
+    found = find_widget(GTK_WIDGET(child->data), name);
+  }
+  g_list_free(children);
+  return found;
+}
+
 static cardio::promise<void> verify_async(
     std::shared_ptr<FileTransferWindow> window, std::shared_ptr<GatedClient> client,
     cardio::dispatcher_group_glib &group, std::exception_ptr &failure) {
@@ -98,17 +118,52 @@ static cardio::promise<void> verify_async(
     show_file_transfer_window(window);
     attach_file_transfer_window_client(window, client);
     co_await client->started.wait();
-    closing.emplace(close_file_transfer_window_async(window));
-    co_await client->cleanup_started.wait();
-    expect(file_transfer_window_widget(window) == nullptr,
-           "Window close must destroy the GTK window before waiting for cleanup");
-    expect(!closing->is_ready(),
-           "Window close must wait for canceled operations to finish cleanup");
-    client->cleanup_allowed.raise();
-    co_await *closing;
-    expect(client->cleanup_finished,
-           "Window close returned before canceled directory cleanup finished");
-    co_await close_file_transfer_window_async(window);
+    GtkWidget *root = file_transfer_window_widget(window);
+    GtkWidget *frame = find_widget(root, "file_transfer_remote_group");
+    GtkWidget *tree = find_widget(root, "file_transfer_remote_tree");
+    GtkWidget *path = find_widget(root, "file_transfer_remote_path_entry");
+    expect(frame != nullptr && tree != nullptr && path != nullptr,
+           "The remote browser must expose its controls");
+    expect(!gtk_widget_is_sensitive(tree) && !gtk_widget_is_sensitive(path),
+           "Directory loading must prevent selecting stale rows or editing an overwritten path");
+    GList *menus = gtk_menu_get_for_attach_widget(tree);
+    expect(menus != nullptr, "The remote browser must expose its context menu");
+    GtkWidget *rename = find_widget(GTK_WIDGET(menus->data), "file_transfer_remote_rename_item");
+    GtkWidget *remove = find_widget(GTK_WIDGET(menus->data), "file_transfer_remote_delete_item");
+    expect(rename != nullptr && remove != nullptr,
+           "The browser context menu must expose rename and delete");
+    expect(!gtk_widget_is_sensitive(rename) && !gtk_widget_is_sensitive(remove),
+           "Directory loading must disable actions in the separately attached menu");
+    if (client->complete_listing) {
+      g_signal_connect(frame, "notify::sensitive",
+          G_CALLBACK(+[](GtkWidget *widget, GParamSpec *, gpointer data) {
+            if (gtk_widget_is_sensitive(widget)) {
+              static_cast<GatedClient *>(data)->pane_enabled.raise();
+            }
+          }), client.get());
+      client->listing_allowed.raise();
+      co_await client->pane_enabled.wait();
+      expect(gtk_widget_is_sensitive(tree) && gtk_widget_is_sensitive(path),
+             "The browser must accept input after directory loading completes");
+      expect(gtk_widget_is_sensitive(rename) && gtk_widget_is_sensitive(remove),
+             "The context menu must become available after directory loading");
+      expect(std::strcmp(gtk_entry_get_text(GTK_ENTRY(path)), "/remote/loaded") == 0,
+             "The canonical path must be applied before input is enabled");
+      closing.emplace(close_file_transfer_window_async(window));
+      co_await *closing;
+    } else {
+      closing.emplace(close_file_transfer_window_async(window));
+      co_await client->cleanup_started.wait();
+      expect(file_transfer_window_widget(window) == nullptr,
+             "Window close must destroy the GTK window before waiting for cleanup");
+      expect(!closing->is_ready(),
+             "Window close must wait for canceled operations to finish cleanup");
+      client->cleanup_allowed.raise();
+      co_await *closing;
+      expect(client->cleanup_finished,
+             "Window close returned before canceled directory cleanup finished");
+      co_await close_file_transfer_window_async(window);
+    }
   } catch (...) {
     failure = std::current_exception();
     client->cleanup_allowed.raise();
@@ -132,16 +187,18 @@ int main(int argc, char **argv) {
   std::copy(pattern.begin(), pattern.end(), path.begin());
   if (::mkdtemp(path.data()) == nullptr) return 1;
   std::exception_ptr failure;
-  {
+  for (const bool complete_listing : {false, true}) {
     cardio::dispatcher_group_glib group;
     cardio::dispatcher_host_glib dispatcher(group);
     auto client = std::make_shared<GatedClient>();
+    client->complete_listing = complete_listing;
     auto window = create_file_transfer_window({
         .connection_name = "Window lifetime", .protocol_name = "FTP",
         .local_directory = path.data(), .remote_directory = "/remote",
         .remote_file_hash = {}, .colors = {}, .closed = {}});
     auto task = verify_async(window, client, group, failure);
     dispatcher.park();
+    if (failure) break;
   }
   std::filesystem::remove_all(path.data());
   try {
