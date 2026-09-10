@@ -68,7 +68,7 @@ public:
   virtual void resume() = 0;
 
   /**
-   * Cancels work and asynchronously waits for all curl cleanup to finish.
+   * Cancels work and asynchronously waits for curl and worker dispatcher cleanup.
    * @remarks The caller's dispatcher must remain alive until this completes.
    */
   virtual cardio::promise<void> stop_async() = 0;

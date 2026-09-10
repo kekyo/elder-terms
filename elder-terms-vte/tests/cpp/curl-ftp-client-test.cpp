@@ -230,7 +230,7 @@ static void run_case(const std::string &executable,
   std::exception_ptr failure;
   {
     cardio::dispatcher_group_glib group;
-    cardio::dispatcher_host_glib dispatcher(group);
+    cardio::dispatcher_host_glib_auto dispatcher(group);
     auto task = run_async(server, active, ipv6, facts, group, failure);
     dispatcher.park();
   }
@@ -294,7 +294,7 @@ static void run_failure_case(const std::string &executable, FailureCase test_cas
   std::exception_ptr failure;
   {
     cardio::dispatcher_group_glib group;
-    cardio::dispatcher_host_glib dispatcher(group);
+    cardio::dispatcher_host_glib_auto dispatcher(group);
     auto task = failure_case_async(server, test_case, group, failure);
     dispatcher.park();
   }
@@ -349,7 +349,7 @@ static void run_fifo_case(const std::string &executable) {
   std::exception_ptr failure;
   {
     cardio::dispatcher_group_glib group;
-    cardio::dispatcher_host_glib dispatcher(group);
+    cardio::dispatcher_host_glib_auto dispatcher(group);
     auto task = fifo_case_async(server, group, failure);
     dispatcher.park();
   }

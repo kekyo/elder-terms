@@ -251,6 +251,41 @@ foreach case_name : [
     args: [ftp_test_server, case_name], timeout: 120)
 endforeach
 
+ftp_client_lifetime_test = executable(
+  'ftp-client-lifetime-test',
+  [
+    'tests/cpp/ftp-client-lifetime-test.cpp',
+    'src/ftp/ftp-client.cpp',
+    'src/ftp/curl-ftp-session.cpp',
+    'src/ftp/ftp-metadata.cpp',
+  ],
+  include_directories: include_directories('src/ftp'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
+)
+
+foreach case_name : ['normal', 'login', 'cancel']
+  test('ftp-client-lifetime-' + case_name, ftp_client_lifetime_test,
+    args: [ftp_test_server, case_name], timeout: 120)
+endforeach
+
+ftp_runtime_capabilities_test = executable(
+  'ftp-runtime-capabilities-test',
+  [
+    'tests/cpp/ftp-runtime-capabilities-test.cpp',
+    'src/ftp/ftp-client.cpp',
+    'src/ftp/curl-ftp-session.cpp',
+    'src/ftp/ftp-metadata.cpp',
+  ],
+  include_directories: include_directories('src/ftp'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
+  link_args: ['-Wl,--wrap=curl_version_info'],
+)
+
+foreach case_name : ['supported', 'no-dns', 'no-ftp', 'old-version']
+  test('ftp-runtime-capabilities-' + case_name, ftp_runtime_capabilities_test,
+    args: [ftp_test_server, case_name], timeout: 120)
+endforeach
+
 file_transfer_window_lifetime_test = executable(
   'file-transfer-window-lifetime-test',
   [

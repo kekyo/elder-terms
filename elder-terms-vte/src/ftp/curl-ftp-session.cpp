@@ -1,11 +1,13 @@
 #include "curl-ftp-session.h"
 
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <condition_variable>
 #include <cstring>
 #include <deque>
@@ -13,6 +15,7 @@
 #include <mutex>
 #include <set>
 #include <stdexcept>
+#include <system_error>
 #include <utility>
 
 namespace elder_terms {
@@ -378,17 +381,49 @@ static cardio::promise<void> bound_shutdown_async(
   }
 }
 
+struct CurlOwnedDescriptor {
+  int fd = -1;
+
+  CurlOwnedDescriptor() = default;
+  explicit CurlOwnedDescriptor(int fd) : fd(fd) {}
+  CurlOwnedDescriptor(CurlOwnedDescriptor &&other) noexcept
+      : fd(std::exchange(other.fd, -1)) {}
+  CurlOwnedDescriptor(const CurlOwnedDescriptor &) = delete;
+  CurlOwnedDescriptor &operator=(const CurlOwnedDescriptor &) = delete;
+  ~CurlOwnedDescriptor() { reset(); }
+
+  void reset() noexcept {
+    if (fd >= 0) (void)::close(std::exchange(fd, -1));
+  }
+};
+
 class CurlFtpSessionAdapter final : public CurlFtpSession {
   std::shared_ptr<CurlWorker> worker;
+  CurlOwnedDescriptor thread_exit_read;
   cardio::promise<void> worker_task;
   cardio::primitives::mutex stop_mutex;
   bool stopped = false;
 
 public:
   explicit CurlFtpSessionAdapter(std::shared_ptr<CurlWorker> worker)
-      : worker(std::move(worker)),
-        worker_task(observe_worker_async(this->worker,
-            cardio::promises::start_new([state = this->worker] { state->run(); }))) {}
+      : worker(std::move(worker)) {
+    int descriptors[2];
+    if (::pipe2(descriptors, O_CLOEXEC | O_NONBLOCK) != 0) {
+      throw std::system_error(errno, std::generic_category(), "FTP worker exit pipe");
+    }
+    thread_exit_read.fd = descriptors[0];
+    worker_task = observe_worker_async(this->worker,
+        cardio::promises::start_new(
+            [state = this->worker,
+             exit_writer = CurlOwnedDescriptor(descriptors[1])]() mutable {
+              // start_new resolves before destroying its local dispatcher.
+              // Thread-local destruction follows that teardown and releases
+              // the pipe only after the callable's captured state is gone.
+              thread_local auto exit_signal = std::move(exit_writer);
+              (void)exit_signal;
+              state->run();
+            }));
+  }
 
   ~CurlFtpSessionAdapter() override {
     worker->request_stop();
@@ -422,6 +457,10 @@ public:
       } catch (...) {
         failure = std::current_exception();
       }
+      // No bytes are written: hangup signals worker dispatcher teardown.
+      // A failed thread start also closes the callable's owned writer.
+      co_await cardio::from_fd(thread_exit_read.fd, cardio::fd_event::read);
+      thread_exit_read.reset();
       (void)timer_cancel.cancel();
       co_await deadline;
       stopped = true;
@@ -435,7 +474,14 @@ open_curl_ftp_session_async(FtpClientOpenOptions options) {
   static const CurlGlobal global;
   (void)global;
   const curl_version_info_data *version = curl_version_info(CURLVERSION_NOW);
-  if (!(version->features & CURL_VERSION_ASYNCHDNS)) {
+  if (version->version_num < 0x075801 || version->age < CURLVERSION_ELEVENTH) {
+    throw std::runtime_error("FTP requires libcurl 7.88.1 or newer");
+  }
+  bool asynchronous_dns = false;
+  for (const char *const *feature = version->feature_names; feature && *feature; ++feature) {
+    asynchronous_dns = asynchronous_dns || std::string_view(*feature) == "AsynchDNS";
+  }
+  if (!asynchronous_dns) {
     throw std::runtime_error("FTP requires libcurl with asynchronous DNS");
   }
   bool ftp = false;

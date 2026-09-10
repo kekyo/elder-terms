@@ -315,7 +315,7 @@ static void run_case(Case test_case) {
   std::exception_ptr failure;
   {
     cardio::dispatcher_group_glib group;
-    cardio::dispatcher_host_glib dispatcher(group);
+    cardio::dispatcher_host_glib_auto dispatcher(group);
     auto task = execute_case_async(port, sync[0], test_case, failure, group);
     dispatcher.park();
   }

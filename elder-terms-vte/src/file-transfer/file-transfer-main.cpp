@@ -510,7 +510,8 @@ static int run_ftp_application(
     const elder_terms::SettingsLoadResult &settings_result,
     bool fixture) {
   cardio::dispatcher_group_glib dispatcher_group;
-  cardio::dispatcher_host_glib dispatcher(dispatcher_group);
+  // Worker completions must wake the GLib context even before it starts waiting.
+  cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);
   FtpApplicationState state;
   state.dispatcher_group = &dispatcher_group;
   state.fixture = fixture;

@@ -415,7 +415,7 @@ static void run_case(const std::string &executable, const std::string &name) {
   std::exception_ptr failure;
   {
     cardio::dispatcher_group_glib group;
-    cardio::dispatcher_host_glib dispatcher(group);
+    cardio::dispatcher_host_glib_auto dispatcher(group);
     auto task = run_async(server, name, group, failure);
     dispatcher.park();
   }
