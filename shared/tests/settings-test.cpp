@@ -2135,6 +2135,50 @@ static void test_ftp_profile_uses_independent_endpoint_and_active_mode() {
               "FTP remote directory should come from the FTP section");
 }
 
+static void test_ftp_tls_settings_preserve_invalid_input_and_inheritance() {
+  const auto mode_key = elder_terms::make_setting_key("ftp", "tls_mode");
+  const auto ca_key = elder_terms::make_setting_key("ftp", "ca_file");
+  auto global = elder_terms::create_settings_store(elder_terms::ftp_connection_setting_definitions());
+  auto *ini = g_key_file_new();
+  g_key_file_set_string(ini, "ftp", "tls_mode", "explict");
+  std::vector<std::string> warnings;
+  elder_terms::load_settings_store_from_key_file(&global, ini, &warnings);
+  g_key_file_unref(ini);
+  expect_true(elder_terms::setting_string_value_or_default(global, mode_key, "missing") == "explict",
+              "Invalid TLS mode must remain available for correction instead of becoming plain FTP");
+  auto connection = elder_terms::create_settings_store(elder_terms::ftp_connection_setting_definitions());
+  elder_terms::rebase_settings_store_fallbacks(&connection, global);
+  expect_true(elder_terms::setting_value_source(connection, mode_key) == elder_terms::SettingValueSource::global,
+              "Invalid global TLS setting must retain its source");
+  expect_true(elder_terms::set_explicit_setting_value(&connection, mode_key, std::string("explicit")),
+              "Valid connection override must correct invalid inherited TLS mode");
+  expect_true(elder_terms::ftp_connection_settings(connection).validation_errors.empty(),
+              "Valid override must clear the inherited connection error");
+  auto copy = connection;
+  elder_terms::clear_explicit_setting_value(&copy, mode_key);
+  expect_true(!elder_terms::ftp_connection_settings(copy).validation_errors.empty(),
+              "Clearing the override must restore the inherited connection error");
+  const auto path = temporary_config_path("invalid-ftps-roundtrip");
+  expect_true(save_settings(global, path).saved, "Invalid TLS settings must remain editable after saving");
+  const auto reloaded = load_settings(SettingsLoadOptions{.config_path = path, .startup_config_path = std::nullopt}, 1.0);
+  remove_config(path);
+  expect_true(!elder_terms::ftp_connection_settings(reloaded.store).validation_errors.empty(),
+              "Saving and reloading must not turn invalid TLS into plain FTP");
+  expect_true(elder_terms::setting_string_value_or_default(copy, mode_key, "missing") == "explict",
+              "Clearing the override must restore the invalid inherited setting");
+  expect_true(elder_terms::setting_string_value_or_default(connection, mode_key, "missing") == "explicit",
+              "Editing a copy must not mutate the original TLS settings");
+  expect_true(elder_terms::set_explicit_setting_value(&global, ca_key, std::string("/tmp/company.pem")),
+              "Absolute CA bundle must be accepted");
+  elder_terms::rebase_settings_store_fallbacks(&connection, global);
+  expect_true(elder_terms::set_explicit_setting_value(&connection, ca_key, std::string()),
+              "Empty explicit CA must select the system trust store");
+  expect_true(elder_terms::setting_has_explicit_value(connection, ca_key),
+              "System CA override must not disappear into inheritance");
+  expect_true(!elder_terms::set_explicit_setting_value(&connection, ca_key, std::string("relative.pem")),
+              "Relative CA paths must be rejected");
+}
+
 static void test_invalid_ftp_settings_fall_back_and_warn() {
   const std::filesystem::path path =
       temporary_config_path("invalid-ftp-settings");
@@ -4334,6 +4378,7 @@ int main() {
     elder_terms_settings_test::
         test_ftp_profile_uses_independent_endpoint_and_active_mode();
     elder_terms_settings_test::test_invalid_ftp_settings_fall_back_and_warn();
+    elder_terms_settings_test::test_ftp_tls_settings_preserve_invalid_input_and_inheritance();
     elder_terms_settings_test::test_serial_profile();
     elder_terms_settings_test::test_serial_ignore_carrier_profile();
     elder_terms_settings_test::test_transfer_base_path_setting();

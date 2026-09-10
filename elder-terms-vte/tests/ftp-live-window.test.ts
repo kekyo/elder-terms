@@ -41,6 +41,7 @@ const { PNG } = require('pngjs') as typeof import('pngjs');
 
 for (const scenario of [
   'passive',
+  'ftps-explicit',
   'active',
   'login-refused',
   'cancel-final',
@@ -63,6 +64,28 @@ for (const scenario of [
       const remoteRoot = join(directory, 'remote');
       const remote = join(remoteRoot, 'home');
       const configPath = join(directory, 'ftp.ini');
+      const ftps = scenario === 'ftps-explicit';
+      const certificate = join(directory, 'certificate.pem');
+      const privateKey = join(directory, 'private-key.pem');
+      if (ftps) {
+        await execute('openssl', [
+          'req',
+          '-x509',
+          '-newkey',
+          'rsa:2048',
+          '-noenc',
+          '-keyout',
+          privateKey,
+          '-out',
+          certificate,
+          '-days',
+          '1',
+          '-subj',
+          '/CN=localhost',
+          '-addext',
+          'subjectAltName=IP:127.0.0.1',
+        ]);
+      }
       const closingDownload = scenario === 'close-final-download';
       const held =
         scenario === 'cancel-final' || scenario.startsWith('close-final');
@@ -88,6 +111,9 @@ for (const scenario of [
         [
           remoteRoot,
           '--trace',
+          ...(ftps
+            ? ['--tls=explicit', `--cert=${certificate}`, `--key=${privateKey}`]
+            : []),
           ...(held ? ['--hold-final'] : []),
           ...(scenario === 'login-refused' ? ['--reject-login'] : []),
         ],
@@ -123,6 +149,7 @@ for (const scenario of [
           'address=127.0.0.1',
           `port=${ready.slice(6)}`,
           'username=alice',
+          ...(ftps ? ['tls_mode=explicit', `ca_file=${certificate}`] : []),
           `data_connection_mode=${scenario === 'active' ? 'active' : 'passive'}`,
           `local_directory=${local}`,
           'remote_directory=/home',

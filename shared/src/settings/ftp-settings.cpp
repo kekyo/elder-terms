@@ -46,8 +46,34 @@ static bool validate_data_connection_mode(const SettingValue &value,
   return true;
 }
 
+static bool validate_tls_mode(const SettingValue &value, std::string *reason) {
+  const auto &text = std::get<std::string>(value);
+  if (text == "none" || text == "explicit" || text == "implicit") return true;
+  *reason = "must be none, explicit, or implicit";
+  return false;
+}
+
+static bool validate_ca_file(const SettingValue &value, std::string *reason) {
+  const auto &text = std::get<std::string>(value);
+  if (text.empty() || (text.front() == '/' && text.find('\0') == std::string::npos)) return true;
+  *reason = "must be an absolute PEM CA bundle path or empty";
+  return false;
+}
+
 static SettingKey ftp_key(const char *name) {
   return make_setting_key(ftp_section, name);
+}
+
+SettingKey ftp_tls_mode_setting_key() { return ftp_key("tls_mode"); }
+SettingKey ftp_ca_file_setting_key() { return ftp_key("ca_file"); }
+
+const char *ftp_tls_mode_to_string(FtpTlsMode mode) {
+  switch (mode) {
+  case FtpTlsMode::none: return "none";
+  case FtpTlsMode::explicit_tls: return "explicit";
+  case FtpTlsMode::implicit_tls: return "implicit";
+  }
+  return "invalid";
 }
 
 SettingKey ftp_address_setting_key() {
@@ -83,6 +109,17 @@ const char *ftp_data_connection_mode_to_string(
 
 std::vector<SettingDefinition> ftp_connection_setting_definitions() {
   return {
+      {.key = ftp_tls_mode_setting_key(), .default_value = std::string("none"),
+       .validate = validate_tls_mode, .retain_invalid = true},
+      {.key = ftp_ca_file_setting_key(), .default_value = std::string(),
+       .validate = validate_ca_file, .retain_invalid = true},
+      {.key = ftp_key("tls_min_version"), .default_value = std::string("1.2"), .retain_invalid = true},
+      {.key = ftp_key("tls_max_version"), .default_value = std::string("default"), .retain_invalid = true},
+      {.key = ftp_key("tls_auth_order"), .default_value = std::string("tls"), .retain_invalid = true},
+      {.key = ftp_key("tls_compatibility"), .default_value = std::string("standard"), .retain_invalid = true},
+      {.key = ftp_key("tls_cipher_list"), .default_value = std::string(), .retain_invalid = true},
+      {.key = ftp_key("tls13_cipher_list"), .default_value = std::string(), .retain_invalid = true},
+      {.key = ftp_key("certificate_error_action"), .default_value = std::string("reject"), .retain_invalid = true},
       {
           .key = ftp_address_setting_key(),
           .default_value = SettingValue{std::string()},
@@ -133,6 +170,21 @@ FtpConnectionSettings ftp_connection_settings(const SettingsStore &store) {
       store, ftp_data_connection_mode_setting_key(),
       passive_data_connection_mode);
 
+  const auto tls = setting_string_value_or_default(store, ftp_tls_mode_setting_key(), "none");
+  std::vector<std::string> errors;
+  for (const auto &entry : store.entries) {
+    const auto &key = entry.definition.key;
+    if (key.section == "ftp" && key.name != "tls_mode" &&
+        (key.name.starts_with("tls_") || key.name == "tls13_cipher_list" || key.name == "certificate_error_action") &&
+        entry.value != entry.definition.default_value) {
+      errors.push_back("[ftp] " + key.name + ": non-default values are not implemented yet");
+    }
+    if (entry.definition.key.section == "ftp" && !entry.validation_error.empty()) {
+      const auto source = setting_value_source(store, entry.definition.key);
+      errors.push_back("[ftp] " + entry.definition.key.name + " (" +
+          (source == SettingValueSource::global ? "global" : "connection") + "): " + entry.validation_error);
+    }
+  }
   return {
       .address = std::move(address),
       .port = setting_integer_value_or_default(
@@ -147,6 +199,10 @@ FtpConnectionSettings ftp_connection_settings(const SettingsStore &store) {
       .remote_directory = setting_string_value_or_default(
           store, ftp_remote_directory_setting_key(),
           default_ftp_remote_directory),
+      .tls_mode = tls == "explicit" ? FtpTlsMode::explicit_tls :
+          tls == "implicit" ? FtpTlsMode::implicit_tls : FtpTlsMode::none,
+      .ca_file = setting_string_value_or_default(store, ftp_ca_file_setting_key(), ""),
+      .validation_errors = std::move(errors),
   };
 }
 

@@ -1,3 +1,8 @@
+#include <openssl/ssl.h>
+#include <signal.h>
+#include <memory>
+#include <thread>
+#include <syncstream>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -18,22 +23,46 @@ namespace elder_terms_ftp_test_server {
 
 struct Socket {
   int fd = -1;
+  SSL *tls = nullptr;
 
   explicit Socket(int fd = -1) : fd(fd) {}
   Socket(const Socket &) = delete;
   Socket &operator=(const Socket &) = delete;
-  Socket(Socket &&other) noexcept : fd(std::exchange(other.fd, -1)) {}
+  Socket(Socket &&other) noexcept : fd(std::exchange(other.fd, -1)),
+      tls(std::exchange(other.tls, nullptr)) {}
   Socket &operator=(Socket &&other) noexcept {
-    if (fd >= 0) ::close(fd);
+    close();
     fd = std::exchange(other.fd, -1);
+    tls = std::exchange(other.tls, nullptr);
     return *this;
   }
-  ~Socket() { if (fd >= 0) ::close(fd); }
+  ~Socket() { close(); }
+  void close() {
+    if (tls) { (void)SSL_shutdown(tls); SSL_free(tls); tls = nullptr; }
+    if (fd >= 0) ::close(std::exchange(fd, -1));
+  }
+  bool secure(SSL_CTX *context) {
+    tls = SSL_new(context);
+    return tls && SSL_set_fd(tls, fd) == 1 && SSL_accept(tls) == 1;
+  }
+  ssize_t read(void *bytes, std::size_t length) const {
+    return tls ? SSL_read(tls, bytes, static_cast<int>(length)) : ::read(fd, bytes, length);
+  }
+  ssize_t write(const void *bytes, std::size_t length) const {
+    return tls ? SSL_write(tls, bytes, static_cast<int>(length))
+               : ::send(fd, bytes, length, MSG_NOSIGNAL);
+  }
 };
 
 struct Options {
   std::filesystem::path root;
   bool ipv6 = false;
+  std::string tls_mode;
+  std::string cert;
+  std::string key;
+  bool reject_auth = false;
+  bool reject_protection = false;
+  bool break_data_tls = false;
   bool legacy_data = false;
   bool reject_login = false;
   bool hold_first_list = false;
@@ -54,20 +83,21 @@ static void expect(bool condition, const std::string &message) {
   if (!condition) throw std::runtime_error(message);
 }
 
-static void send_text(int fd, std::string_view text) {
+static void send_text(const Socket &socket, std::string_view text) {
   while (!text.empty()) {
-    const auto count = ::send(fd, text.data(), text.size(), MSG_NOSIGNAL);
+    const auto count = socket.write(text.data(), text.size());
     if (count < 0 && errno == EINTR) continue;
     expect(count > 0, "FTP test server send failed");
     text.remove_prefix(static_cast<std::size_t>(count));
   }
 }
 
-static std::string read_line(int fd) {
+template <typename Reader>
+static std::string read_line_with(Reader read) {
   std::string text;
   char ch;
   for (;;) {
-    const auto count = ::read(fd, &ch, 1);
+    const auto count = read(&ch, 1);
     if (count < 0 && errno == EINTR) continue;
     if (count <= 0) return {};
     if (ch == '\n') {
@@ -77,6 +107,13 @@ static std::string read_line(int fd) {
     text += ch;
     expect(text.size() <= 65536, "FTP test command exceeds limit");
   }
+}
+
+static std::string read_line(int fd) {
+  return read_line_with([fd](void *bytes, std::size_t size) { return ::read(fd, bytes, size); });
+}
+static std::string read_line(const Socket &socket) {
+  return read_line_with([&socket](void *bytes, std::size_t size) { return socket.read(bytes, size); });
 }
 
 static std::pair<Socket, unsigned> listen_local(bool ipv6) {
@@ -124,12 +161,14 @@ static std::string facts(const std::filesystem::path &path,
       ";modify=20240102030405; " + name + "\r\n";
 }
 
-static void serve(int control, Options options) {
+static void serve(Socket &control, Options options, SSL_CTX *context) {
   std::filesystem::path cwd = "/home";
   std::filesystem::path rename_from;
   Socket passive;
   sockaddr_storage active{};
   socklen_t active_length = 0;
+  bool protected_data = false;
+  if (options.tls_mode == "implicit" && !control.secure(context)) return;
   bool logged_in = false;
   bool valid_user = false;
   const auto remote_path = [&](const std::string &argument) {
@@ -153,9 +192,19 @@ static void serve(int control, Options options) {
     const auto argument = separator == std::string::npos ? std::string() : command.substr(separator + 1);
     // Credentials must never appear in test evidence.
     if (options.trace) {
-      std::clog << "COMMAND " << (verb == "PASS" ? "PASS [hidden]" : command) << std::endl;
+      std::osyncstream(std::clog) << "COMMAND " << (verb == "PASS" ? "PASS [hidden]" : command) << std::endl;
     }
-    if (verb == "USER") {
+    if (verb == "AUTH") {
+      if (!context || options.reject_auth) { respond(534, "TLS unavailable"); continue; }
+      respond(234, "Start TLS");
+      if (!control.secure(context)) return;
+    } else if (verb == "PBSZ") {
+      respond(control.tls ? 200 : 503, "Buffer size accepted");
+    } else if (verb == "PROT") {
+      protected_data = control.tls && argument == "P" && !options.reject_protection;
+      respond(protected_data ? 200 : 534, "Data protection");
+    } else if (verb == "USER") {
+      expect(!context || control.tls, "Credentials sent without TLS");
       valid_user = argument == "alice";
       respond(valid_user ? 331 : 530, "Identity checked");
     } else if (verb == "PASS") {
@@ -271,6 +320,8 @@ static void serve(int control, Options options) {
         expect(::connect(data.fd, reinterpret_cast<sockaddr *>(&active), active_length) == 0, "Active connection failed");
       }
       expect(data.fd >= 0, "Listing connection failed");
+      expect(!context || protected_data, "Listing must request private data");
+      if (protected_data && (options.break_data_tls || !data.secure(context))) return;
       std::string listing;
       if (verb == "MLSD") listing = "type=cdir; .\r\ntype=pdir; ..\r\n";
       else if (options.listing != "dos") listing = "total 0\r\n";
@@ -286,7 +337,7 @@ static void serve(int control, Options options) {
               std::to_string(directory ? 0 : entry.file_size()) + " Jan 02 2024 " + name + "\r\n";
         }
       }
-      send_text(data.fd, listing);
+      send_text(data, listing);
       data = Socket();
       respond(226, "Listing complete");
     } else if (verb == "SIZE") {
@@ -332,6 +383,8 @@ static void serve(int control, Options options) {
                "Active transfer connection failed");
       }
       expect(data.fd >= 0, "Transfer connection failed");
+      expect(!context || protected_data, "Transfer must request private data");
+      if (protected_data && (options.break_data_tls || !data.secure(context))) return;
       if (upload && options.hold_upload) {
         std::cout << "DATA_WAIT" << std::endl;
         const auto action = read_line(STDIN_FILENO);
@@ -346,7 +399,7 @@ static void serve(int control, Options options) {
       std::array<char, 16384> buffer;
       if (upload) {
         for (;;) {
-          const auto count = ::read(data.fd, buffer.data(), buffer.size());
+          const auto count = data.read(buffer.data(), buffer.size());
           if (count < 0 && errno == EINTR) continue;
           expect(count >= 0, "Upload data read failed");
           if (count == 0) break;
@@ -360,7 +413,7 @@ static void serve(int control, Options options) {
           const auto count = std::min<std::uintmax_t>(remaining, buffer.size());
           file.read(buffer.data(), static_cast<std::streamsize>(count));
           expect(file.gcount() == static_cast<std::streamsize>(count), "Download file read failed");
-          send_text(data.fd, {buffer.data(), static_cast<std::size_t>(count)});
+          send_text(data, {buffer.data(), static_cast<std::size_t>(count)});
           remaining -= count;
         }
       }
@@ -425,7 +478,13 @@ int main(int argc, char **argv) {
     options.root = argv[1];
     for (int index = 2; index < argc; ++index) {
       const std::string option = argv[index];
-      if (option == "--ipv6") options.ipv6 = true;
+      if (option.starts_with("--tls=")) options.tls_mode = option.substr(6);
+      else if (option.starts_with("--cert=")) options.cert = option.substr(7);
+      else if (option.starts_with("--key=")) options.key = option.substr(6);
+      else if (option == "--reject-auth") options.reject_auth = true;
+      else if (option == "--reject-protection") options.reject_protection = true;
+      else if (option == "--break-data-tls") options.break_data_tls = true;
+      else if (option == "--ipv6") options.ipv6 = true;
       else if (option == "--legacy-data") options.legacy_data = true;
       else if (option == "--reject-login") options.reject_login = true;
       else if (option == "--hold-first-list") options.hold_first_list = true;
@@ -445,6 +504,14 @@ int main(int argc, char **argv) {
       else if (option == "--mlsd-temporary") options.mlsd_error = 450;
       else throw std::runtime_error("Unknown FTP test option: " + option);
     }
+    ::signal(SIGPIPE, SIG_IGN);
+    auto context = std::shared_ptr<SSL_CTX>(
+        options.tls_mode.empty() ? nullptr : SSL_CTX_new(TLS_server_method()), SSL_CTX_free);
+    if (!options.tls_mode.empty()) {
+      expect(context && SSL_CTX_use_certificate_chain_file(context.get(), options.cert.c_str()) == 1 &&
+          SSL_CTX_use_PrivateKey_file(context.get(), options.key.c_str(), SSL_FILETYPE_PEM) == 1 &&
+          SSL_CTX_check_private_key(context.get()) == 1, "Test TLS credentials failed");
+    }
     auto [listener, port] = listen_local(options.ipv6);
     std::cout << "READY " << port << std::endl;
     for (;;) {
@@ -453,7 +520,16 @@ int main(int argc, char **argv) {
       expect(control.fd >= 0, "FTP test accept failed");
       // A refused operation may make libcurl reconnect. Filesystem behavior
       // belongs to the session, rather than to one physical TCP connection.
-      serve(control.fd, options);
+      if (context) {
+        // curl may open a new control connection before evicting its cached
+        // one. An idle TLS connection must not block the listener's greeting.
+        std::thread([control = std::move(control), options, context]() mutable {
+          try { serve(control, options, context.get()); }
+          catch (const std::exception &error) { std::cerr << error.what() << std::endl; }
+        }).detach();
+      } else {
+        serve(control, options, nullptr);
+      }
     }
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';

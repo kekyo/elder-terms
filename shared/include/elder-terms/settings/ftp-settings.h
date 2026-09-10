@@ -18,7 +18,17 @@ enum class FtpDataConnectionMode {
   active,
 };
 
-/** Settings for the unencrypted FTP file transfer backend. */
+/** FTP transport encryption. */
+enum class FtpTlsMode {
+  /** Plain FTP. */
+  none,
+  /** Upgrade the FTP control connection before authentication. */
+  explicit_tls,
+  /** Start TLS immediately after establishing TCP. */
+  implicit_tls,
+};
+
+/** Settings for the FTP and FTPS file transfer backend. */
 struct FtpConnectionSettings {
   /** FTP server address or hostname. */
   std::string address;
@@ -33,6 +43,12 @@ struct FtpConnectionSettings {
   std::string local_directory;
   /** Initial remote directory. */
   std::string remote_directory;
+  /** Control and data transport encryption. */
+  FtpTlsMode tls_mode = FtpTlsMode::none;
+  /** Absolute PEM CA bundle, or empty to use the system trust store. */
+  std::string ca_file{};
+  /** Invalid effective settings, including their keys and sources. */
+  std::vector<std::string> validation_errors{};
 };
 
 /**
@@ -51,6 +67,18 @@ ftp_data_connection_mode_to_string(FtpDataConnectionMode mode);
  */
 ELDER_TERMS_API std::vector<SettingDefinition>
 ftp_connection_setting_definitions();
+
+/**
+ * Returns the INI spelling of an FTP TLS mode.
+ * @param mode Transport encryption mode.
+ * @returns none, explicit, or implicit.
+ */
+ELDER_TERMS_API const char *ftp_tls_mode_to_string(FtpTlsMode mode);
+
+/** @returns Setting key for [ftp] tls_mode. */
+ELDER_TERMS_API SettingKey ftp_tls_mode_setting_key();
+/** @returns Setting key for [ftp] ca_file. */
+ELDER_TERMS_API SettingKey ftp_ca_file_setting_key();
 
 /** @returns Setting key for [ftp] address. */
 ELDER_TERMS_API SettingKey ftp_address_setting_key();

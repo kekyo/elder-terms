@@ -40,7 +40,8 @@ static cardio::promise<void> verify_async(
     client = co_await elder_terms::open_ftp_client_async({
         .connection = {.address = "127.0.0.1", .port = port, .username = "alice",
             .data_connection_mode = elder_terms::FtpDataConnectionMode::passive,
-            .local_directory = {}, .remote_directory = "/home"},
+            .local_directory = {}, .remote_directory = "/home",
+            .tls_mode = expected_error == "TLS support" ? elder_terms::FtpTlsMode::explicit_tls : elder_terms::FtpTlsMode::none},
         .password = "secret"}, {});
     expect(expected_error.empty(), "An unsupported FTP runtime was accepted");
     const auto snapshot = co_await client->load_directory_async("/home", {});
@@ -79,7 +80,7 @@ int main(int argc, char **argv) {
     expect(argc == 3, "Expected the FTP server executable and capability scenario");
     const std::string scenario = argv[2];
     expect(scenario == "supported" || scenario == "no-dns" ||
-               scenario == "no-ftp" || scenario == "old-version",
+               scenario == "no-ftp" || scenario == "old-version" || scenario == "no-tls",
            "Unknown runtime capability scenario");
     static const char *const ftp_protocols[] = {"ftp", nullptr};
     static const char *const other_protocols[] = {"http", nullptr};
@@ -95,7 +96,8 @@ int main(int argc, char **argv) {
     reported_version.feature_names = scenario == "no-dns" ? other_features : supported_features;
     const std::string expected_error = scenario == "no-dns" ? "asynchronous DNS"
         : scenario == "no-ftp" ? "without FTP support"
-        : scenario == "old-version" ? "7.88.1 or newer" : "";
+        : scenario == "old-version" ? "7.88.1 or newer"
+        : scenario == "no-tls" ? "TLS support" : "";
 
     directory = "/tmp/elder-terms-ftp-capabilities-XXXXXX";
     expect(::mkdtemp(directory.data()) != nullptr, "Temporary directory creation failed");

@@ -386,7 +386,7 @@ static void create_ftp_application_window(FtpApplicationState *state) {
       {
           .connection_name =
               elder_terms::general_connection_name(state->settings),
-          .protocol_name = "FTP",
+          .protocol_name = state->connection.tls_mode == elder_terms::FtpTlsMode::none ? "FTP" : "FTPS",
           .local_directory =
               elder_terms::resolve_file_transfer_local_directory(
                   state->settings, state->connection.local_directory),
@@ -435,7 +435,8 @@ prompt_ftp_credentials_async(FtpApplicationState *state,
         co_await elder_terms::prompt_file_transfer_window_async(
             state->window,
             {
-                .title = _("FTP authentication"),
+                .title = state->connection.tls_mode == elder_terms::FtpTlsMode::none
+                    ? _("FTP authentication") : _("FTPS authentication"),
                 .message = ftp_authentication_message(
                     state->connection, username_missing),
                 .accept_label = _("Connect"),
@@ -501,7 +502,8 @@ start_ftp_application_async(FtpApplicationState *state) {
   if (!state->shutting_down) {
     std::cerr << failure << '\n';
     co_await elder_terms::show_file_transfer_window_connection_error_async(
-        state->window, _("Failed to start FTP"), std::move(failure),
+        state->window, state->connection.tls_mode == elder_terms::FtpTlsMode::none
+            ? _("Failed to start FTP") : _("Failed to start FTPS"), std::move(failure),
         state->stop_source.get_cancellation());
   }
 }

@@ -72,6 +72,8 @@ struct SettingDefinition {
   SettingValueValidator validate = nullptr;
   /** Optional canonicalization applied only after successful validation. */
   SettingValueNormalizer normalize = nullptr;
+  /** Preserve invalid input and its error for settings that must fail closed. */
+  bool retain_invalid = false;
 };
 
 /**
@@ -91,6 +93,10 @@ struct SettingEntry {
   bool loaded = false;
   /** True after the value is changed in memory. */
   bool dirty = false;
+  /** Validation failure belonging to the current value, or empty. */
+  std::string validation_error{};
+  /** Validation failure restored when an explicit override is cleared. */
+  std::string fallback_validation_error{};
 };
 
 /**

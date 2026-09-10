@@ -259,7 +259,15 @@ struct CurlWorker {
       require_curl(curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, "ftp"));
       require_curl(curl_easy_setopt(easy, CURLOPT_PROXY, ""));
       require_curl(curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L));
-      require_curl(curl_easy_setopt(easy, CURLOPT_USE_SSL, static_cast<long>(CURLUSESSL_NONE)));
+      require_curl(curl_easy_setopt(easy, CURLOPT_USE_SSL, static_cast<long>(options.connection.tls_mode == FtpTlsMode::none ? CURLUSESSL_NONE : CURLUSESSL_ALL)));
+      if (options.connection.tls_mode != FtpTlsMode::none) {
+        require_curl(curl_easy_setopt(easy, CURLOPT_SSL_VERIFYPEER, 1L));
+        require_curl(curl_easy_setopt(easy, CURLOPT_SSL_VERIFYHOST, 2L));
+        require_curl(curl_easy_setopt(easy, CURLOPT_SSLVERSION, (static_cast<long>(CURL_SSLVERSION_TLSv1_2) | static_cast<long>(CURL_SSLVERSION_MAX_DEFAULT))));
+        require_curl(curl_easy_setopt(easy, CURLOPT_FTPSSLAUTH, static_cast<long>(CURLFTPAUTH_TLS)));
+        if (!options.connection.ca_file.empty())
+          require_curl(curl_easy_setopt(easy, CURLOPT_CAINFO, options.connection.ca_file.c_str()));
+      }
       require_curl(curl_easy_setopt(easy, CURLOPT_USERNAME, options.connection.username.c_str()));
       require_curl(curl_easy_setopt(easy, CURLOPT_PASSWORD, options.password.c_str()));
       // RFC 2577 describes PASV address substitution attacks. The control peer
@@ -471,6 +479,10 @@ public:
 
 cardio::promise<std::shared_ptr<CurlFtpSession>>
 open_curl_ftp_session_async(FtpClientOpenOptions options) {
+  if (!options.connection.validation_errors.empty())
+    throw std::invalid_argument(options.connection.validation_errors.front());
+  if (options.connection.tls_mode == FtpTlsMode::implicit_tls)
+    throw std::invalid_argument("Implicit FTPS is not implemented yet");
   static const CurlGlobal global;
   (void)global;
   const curl_version_info_data *version = curl_version_info(CURLVERSION_NOW);
@@ -478,12 +490,16 @@ open_curl_ftp_session_async(FtpClientOpenOptions options) {
     throw std::runtime_error("FTP requires libcurl 7.88.1 or newer");
   }
   bool asynchronous_dns = false;
+  bool ssl = false;
   for (const char *const *feature = version->feature_names; feature && *feature; ++feature) {
+    ssl = ssl || std::string_view(*feature) == "SSL";
     asynchronous_dns = asynchronous_dns || std::string_view(*feature) == "AsynchDNS";
   }
   if (!asynchronous_dns) {
     throw std::runtime_error("FTP requires libcurl with asynchronous DNS");
   }
+  if (options.connection.tls_mode != FtpTlsMode::none && !ssl)
+    throw std::runtime_error("FTPS requires libcurl with TLS support");
   bool ftp = false;
   for (const char *const *protocol = version->protocols; *protocol; ++protocol) {
     ftp = ftp || std::string_view(*protocol) == "ftp";

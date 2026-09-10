@@ -10,7 +10,7 @@
 
 namespace elder_terms {
 
-/** Options used to open one unencrypted FTP session. */
+/** Options used to open one FTP or FTPS session. */
 struct FtpClientOpenOptions {
   /** Stored endpoint, identity, and data-connection settings. */
   FtpConnectionSettings connection;
@@ -19,13 +19,13 @@ struct FtpClientOpenOptions {
 };
 
 /**
- * Opens and authenticates one unencrypted FTP file service session.
+ * Opens and authenticates one FTP or FTPS file service session.
  *
  * @param options Endpoint and runtime authentication values.
  * @param cancellation Operation cancellation signal.
  * @returns Initialized remote file client with serialized logical operations.
  *
- * @remarks FTPS is intentionally unsupported. The username must be explicit;
+ * @remarks The username must be explicit;
  * anonymous login uses the literal username `anonymous` supplied by the user.
  */
 cardio::promise<std::shared_ptr<RemoteFileClient>>

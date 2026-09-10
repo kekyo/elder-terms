@@ -347,9 +347,13 @@ uses the same two-pane file browser and transfer controls as SFTP.
 FTP sends commands, user names, passwords, directory listings, and file data
 without encryption. elder-terms uses [libcurl](https://curl.se/libcurl/) for
 [FTP (RFC 959)](https://www.rfc-editor.org/rfc/rfc959).
-[FTP over TLS (RFC 4217)](https://www.rfc-editor.org/rfc/rfc4217) is not enabled
-in elder-terms, so FTPS is not supported. Prefer SFTP unless the network and
-server are trusted.
+To use [explicit FTPS (RFC 4217)](https://www.rfc-editor.org/rfc/rfc4217), add
+`tls_mode=explicit` to the `[ftp]` section of the connection INI file. The default
+port is 21. FTPS requires TLS 1.2 or newer for both control and data connections,
+verifies the server certificate and host name, and rejects validation failures.
+For a private CA, set `ca_file=/absolute/path/company-ca.pem`; an empty value uses
+the system CA store. FTPS never falls back to plain FTP. TLS settings are currently
+configured through the INI file.
 
 ### FTP Data Connections
 
