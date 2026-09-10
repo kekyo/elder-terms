@@ -196,15 +196,17 @@ static void remove_config(const std::filesystem::path &path) {
 }
 
 static void test_default_settings() {
+  const gdouble default_zoom = 1.2;
   const SettingsStore store =
-      create_default_settings(default_terminal_display_settings(1.2),
+      create_default_settings(default_terminal_display_settings(default_zoom),
                               "elder-terms");
   const TerminalDisplaySettings display = terminal_display_settings(store);
   expect_true(display.width == 80, "default terminal width should be 80");
   expect_true(display.height == 24, "default terminal height should be 24");
   expect_true(display.scrollback_lines == 10000,
               "default terminal scrollback should retain 10000 lines");
-  expect_true(display.zoom == 1.2, "default terminal zoom should be retained");
+  expect_true(display.zoom == default_zoom,
+              "default terminal zoom should be retained");
   const TerminalFontFamilies fonts = terminal_font_families(store);
   expect_true(fonts.families == std::vector<std::string>{"Noto Sans Mono", "Monospace"},
               "the default font list should preserve the built-in order");

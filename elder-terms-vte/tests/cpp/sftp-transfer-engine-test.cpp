@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <ctime>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -431,7 +432,7 @@ static void write_file(const std::filesystem::path &path,
 }
 
 static void set_file_times(const std::filesystem::path &path,
-                           std::int64_t seconds,
+                           std::time_t seconds,
                            int flags = 0) {
   const timespec times[2] = {
       timespec{.tv_sec = seconds, .tv_nsec = 0},
