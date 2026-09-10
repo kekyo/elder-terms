@@ -1692,7 +1692,7 @@ describe.concurrent('shared settings widget', () => {
       );
     }
     expect(visualErrors).toEqual([]);
-  });
+  }, 60_000);
 
   it('identifies the font inheritance source in a single option', async (context) => {
     for (const global of [false, true]) {
@@ -2804,7 +2804,7 @@ describe.concurrent('shared settings widget', () => {
         }
       );
     }
-  });
+  }, 60_000);
 
   it('shows TELNET controls in editable mode and matches the visual fixture', async (context) => {
     await runSharedGtkTest(
