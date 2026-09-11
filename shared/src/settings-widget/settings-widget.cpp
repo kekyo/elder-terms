@@ -1707,8 +1707,7 @@ static void update_ftp_port_from_widget(SettingsWidgetState *state) {
     set_entry_validation(state->ftp_port_entry, true, {});
     sync_cleared_entry(
         state, state->ftp_port_entry, ftp_port_setting_key(),
-        std::to_string(setting_integer_value_or_default(
-            state->draft_store, ftp_port_setting_key(), 21)));
+        std::to_string(ftp_connection_settings(state->draft_store).port));
     return;
   }
   gtk_entry_set_placeholder_text(GTK_ENTRY(state->ftp_port_entry), nullptr);

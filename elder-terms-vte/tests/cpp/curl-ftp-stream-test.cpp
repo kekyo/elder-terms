@@ -20,6 +20,11 @@
 
 namespace elder_terms_curl_ftp_stream_test {
 
+static elder_terms::FtpTlsMode tls_mode = elder_terms::FtpTlsMode::none;
+static std::string tls_name;
+static std::string tls_certificate;
+static std::string tls_key;
+
 static void expect(bool condition, const std::string &message) {
   if (!condition) throw std::runtime_error(message);
 }
@@ -64,6 +69,11 @@ struct Server {
            "Test server pipes failed");
     std::vector<std::string> arguments{executable, directory.string(), "--trace"};
     arguments.insert(arguments.end(), options.begin(), options.end());
+    if (!tls_name.empty()) {
+      arguments.push_back("--tls=" + tls_name);
+      arguments.push_back("--cert=" + tls_certificate);
+      arguments.push_back("--key=" + tls_key);
+    }
     std::vector<char *> pointers;
     for (auto &argument : arguments) pointers.push_back(argument.data());
     pointers.push_back(nullptr);
@@ -379,15 +389,39 @@ static cardio::promise<void> run_async(
     std::exception_ptr &failure) {
   std::shared_ptr<elder_terms::RemoteFileClient> client;
   try {
-    client = co_await elder_terms::open_ftp_client_async({
+    cardio::cancellation_source cancellation;
+    auto opening = elder_terms::open_ftp_client_async({
         .connection = {.address = "127.0.0.1", .port = server.port,
                        .username = "alice", .data_connection_mode =
                            name == "active" || name == "legacy-active"
                                ? elder_terms::FtpDataConnectionMode::active
                                : elder_terms::FtpDataConnectionMode::passive,
-                       .local_directory = {}, .remote_directory = {}},
-        .password = "secret"}, {});
-    co_await scenario_async(client, server, name);
+                       .local_directory = {}, .remote_directory = {},
+                       .tls_mode = tls_mode, .ca_file = tls_certificate},
+        .password = "secret"}, cancellation.get_cancellation());
+    if (name == "cancel-control-tls") {
+      if (opening.is_ready()) client = co_await opening;
+      co_await wait_event_async(server, "TLS_WAIT");
+      (void)cancellation.cancel();
+      release(server, true);
+      bool canceled = false;
+      try { client = co_await opening; } catch (const cardio::canceled_exception &) { canceled = true; }
+      expect(canceled, "TLS authentication must observe cancellation");
+      group.shutdown();
+      co_return;
+    }
+    client = co_await opening;
+    if (name == "cancel-data-tls" || name == "stop-data-tls") {
+      auto listing = client->load_directory_async("/home", cancellation.get_cancellation());
+      co_await wait_event_async(server, "TLS_WAIT");
+      expect(!listing.is_ready(), "Unfinished TLS handshake must not complete listing");
+      if (name == "stop-data-tls") co_await elder_terms::stop_ftp_client_async(client);
+      else (void)cancellation.cancel();
+      release(server, true);
+      bool failed = false;
+      try { (void)co_await listing; } catch (const std::exception &) { failed = true; }
+      expect(failed, "TLS data handshake must settle on stop or cancellation");
+    } else co_await scenario_async(client, server, name);
   } catch (...) {
     failure = std::current_exception();
     ::close(server.commands);
@@ -411,6 +445,8 @@ static void run_case(const std::string &executable, const std::string &name) {
   if (name == "truncated") options.push_back("--truncated-download");
   if (name == "large-size") options.push_back("--large-size");
   if (name == "store-refused") options.push_back("--reject-store");
+  if (name == "cancel-control-tls") options.push_back("--hold-control-tls");
+  if (name == "cancel-data-tls" || name == "stop-data-tls") options.push_back("--hold-data-tls");
   Server server(executable, options);
   std::exception_ptr failure;
   {
@@ -427,7 +463,13 @@ static void run_case(const std::string &executable, const std::string &name) {
 int main(int argc, char **argv) {
   try {
     using namespace elder_terms_curl_ftp_stream_test;
-    expect(argc == 3, "Expected the FTP test server executable path and case name");
+    if (argc == 6) {
+      tls_name = argv[3];
+      tls_mode = tls_name == "implicit" ? elder_terms::FtpTlsMode::implicit_tls : elder_terms::FtpTlsMode::explicit_tls;
+      tls_certificate = argv[4];
+      tls_key = argv[5];
+    }
+    expect(argc == 3 || argc == 6, "Expected the FTP test server executable path and case name");
     std::cout << "curl-ftp-stream-test: " << argv[2] << std::endl;
     run_case(argv[1], argv[2]);
     std::cout << "curl-ftp-stream-test: PASS\n";

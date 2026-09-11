@@ -256,7 +256,7 @@ struct CurlWorker {
       op->cancellation.throw_if_cancellation_requested();
       curl_easy_reset(easy);
       require_curl(curl_easy_setopt(easy, CURLOPT_URL, op->request.url.c_str()));
-      require_curl(curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, "ftp"));
+      require_curl(curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, options.connection.tls_mode == FtpTlsMode::implicit_tls ? "ftps" : "ftp"));
       require_curl(curl_easy_setopt(easy, CURLOPT_PROXY, ""));
       require_curl(curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L));
       require_curl(curl_easy_setopt(easy, CURLOPT_USE_SSL, static_cast<long>(options.connection.tls_mode == FtpTlsMode::none ? CURLUSESSL_NONE : CURLUSESSL_ALL)));
@@ -481,8 +481,6 @@ cardio::promise<std::shared_ptr<CurlFtpSession>>
 open_curl_ftp_session_async(FtpClientOpenOptions options) {
   if (!options.connection.validation_errors.empty())
     throw std::invalid_argument(options.connection.validation_errors.front());
-  if (options.connection.tls_mode == FtpTlsMode::implicit_tls)
-    throw std::invalid_argument("Implicit FTPS is not implemented yet");
   static const CurlGlobal global;
   (void)global;
   const curl_version_info_data *version = curl_version_info(CURLVERSION_NOW);
@@ -501,10 +499,14 @@ open_curl_ftp_session_async(FtpClientOpenOptions options) {
   if (options.connection.tls_mode != FtpTlsMode::none && !ssl)
     throw std::runtime_error("FTPS requires libcurl with TLS support");
   bool ftp = false;
+  bool ftps = false;
   for (const char *const *protocol = version->protocols; *protocol; ++protocol) {
+    ftps = ftps || std::string_view(*protocol) == "ftps";
     ftp = ftp || std::string_view(*protocol) == "ftp";
   }
   if (!ftp) throw std::runtime_error("libcurl was built without FTP support");
+  if (options.connection.tls_mode == FtpTlsMode::implicit_tls && !ftps)
+    throw std::runtime_error("libcurl was built without FTPS support");
   auto worker = std::make_shared<CurlWorker>(std::move(options));
   auto ready = worker->ready.get_promise();
   auto session = std::make_shared<CurlFtpSessionAdapter>(worker);

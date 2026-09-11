@@ -90,6 +90,61 @@ try {
     { name: 'data-tls-failed', flags: ['--break-data-tls'] },
     { name: 'invalid-mode', mode: 'explict', noLogin: true },
   ];
+  for (const mode of ['explicit', 'implicit']) {
+    for (const active of [false, true]) {
+      for (const ipv6 of [false, true]) {
+        cases.push({
+          name:
+            mode +
+            (active ? '-active' : '-passive') +
+            (ipv6 ? '-ipv6' : '-ipv4'),
+          mode,
+          active,
+          ipv6,
+          success: true,
+          flags: ipv6 ? ['--ipv6'] : [],
+        });
+      }
+      cases.push({
+        name: mode + '-legacy-' + active,
+        mode,
+        active,
+        success: true,
+        flags: ['--legacy-data'],
+      });
+    }
+    for (const version of [771, 772]) {
+      cases.push({
+        name: mode + '-reuse-' + version,
+        mode,
+        success: true,
+        flags: ['--require-reuse', '--tls-version=' + version],
+      });
+    }
+    cases.push({
+      name: mode + '-old-tls-rejected',
+      mode,
+      noLogin: true,
+      flags: ['--tls-version=770'],
+    });
+  }
+  for (const mode of ['explicit', 'implicit'])
+    for (const listing of ['unix', 'dos']) {
+      cases.push({
+        name: mode + '-listing-' + listing,
+        mode,
+        success: true,
+        flags: ['--' + listing],
+      });
+    }
+  for (const mode of ['explicit', 'implicit']) {
+    cases.push({
+      name: mode + '-foreign-active',
+      mode,
+      active: true,
+      flags: ['--foreign-active'],
+    });
+  }
   for (const scenario of cases) {
     const directory = join(root, scenario.name);
     await mkdir(join(directory, 'home'), { recursive: true });
@@ -98,7 +153,7 @@ try {
       [
         directory,
         '--trace',
-        '--tls=explicit',
+        `--tls=${scenario.mode === 'implicit' ? 'implicit' : 'explicit'}`,
         `--cert=${scenario.cert ?? cert}`,
         `--key=${scenario.key ?? key}`,
         ...(scenario.flags ?? []),
@@ -111,13 +166,21 @@ try {
       trace += data;
     });
     try {
-      const [ready] = await once(server.stdout, 'data');
+      const [ready] = await Promise.race([
+        once(server.stdout, 'data'),
+        (async () => {
+          const [code] = await exited;
+          throw new Error(
+            'FTPS fixture exited before READY: ' + code + ' ' + trace
+          );
+        })(),
+      ]);
       const match = /^READY (\d+)/.exec(String(ready));
       assert.ok(match, String(ready));
       const ini = join(directory, 'connection.ini');
       await writeFile(
         ini,
-        `[ftp]\naddress=127.0.0.1\nport=${match[1]}\nusername=alice\ntls_mode=${scenario.mode ?? 'explicit'}\nca_file=${scenario.ca ?? cert}\n`
+        `[ftp]\naddress=${scenario.ipv6 ? '::1' : '127.0.0.1'}\nport=${match[1]}\nusername=alice\ndata_connection_mode=${scenario.active ? 'active' : 'passive'}\ntls_mode=${scenario.mode ?? 'explicit'}\nca_file=${scenario.ca ?? cert}\n`
       );
       const result = await run(process.argv[2], [
         ini,
@@ -136,6 +199,22 @@ try {
           trace
         );
       if (scenario.noLogin) assert.ok(!trace.includes('COMMAND USER'), trace);
+      if (scenario.success && scenario.mode) {
+        assert.ok(
+          trace.includes('TLS CONTROL') && trace.includes('TLS DATA'),
+          trace
+        );
+        assert.equal(
+          trace.includes('COMMAND AUTH'),
+          scenario.mode === 'explicit',
+          trace
+        );
+        if (scenario.flags?.includes('--legacy-data'))
+          assert.ok(
+            trace.includes(scenario.active ? 'COMMAND PORT' : 'COMMAND PASV'),
+            trace
+          );
+      }
       if (scenario.success)
         assert.ok(
           trace.includes('COMMAND STOR') && trace.includes('COMMAND RETR'),
@@ -148,6 +227,63 @@ try {
     } finally {
       server.kill();
       await exited;
+    }
+  }
+  for (const mode of ['explicit', 'implicit']) {
+    for (const name of [
+      'passive',
+      'active',
+      'legacy-passive',
+      'legacy-active',
+      'backpressure',
+      'cancel-backpressure',
+      'held-upload',
+      'held-download',
+      'cancel-final-upload',
+      'cancel-final-download',
+      'store-refused',
+      'upload-error',
+      'download-error',
+      'upload-disconnect',
+      'download-disconnect',
+      'truncated',
+      'large-size',
+      'abandon',
+      'stop-reader',
+      'engine',
+      'engine-failure',
+      'cancel-control-tls',
+      'cancel-data-tls',
+      'stop-data-tls',
+    ]) {
+      const result = await run(process.argv[4], [
+        process.argv[3],
+        name,
+        mode,
+        cert,
+        key,
+      ]);
+      if (result.code !== 0) {
+        ++failures;
+        console.error(
+          'FAIL ' + mode + '-stream-' + name + ': ' + result.output
+        );
+      } else console.log('PASS ' + mode + '-stream-' + name);
+    }
+    for (const name of ['normal', 'login', 'cancel']) {
+      const result = await run(process.argv[5], [
+        process.argv[3],
+        name,
+        mode,
+        cert,
+        key,
+      ]);
+      if (result.code !== 0) {
+        ++failures;
+        console.error(
+          'FAIL ' + mode + '-lifetime-' + name + ': ' + result.output
+        );
+      } else console.log('PASS ' + mode + '-lifetime-' + name);
     }
   }
 } finally {

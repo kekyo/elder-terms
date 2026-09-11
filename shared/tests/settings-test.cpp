@@ -2179,6 +2179,33 @@ static void test_ftp_tls_settings_preserve_invalid_input_and_inheritance() {
               "Relative CA paths must be rejected");
 }
 
+static void test_ftp_tls_port_resolution() {
+  using namespace elder_terms;
+  auto global = create_settings_store(ftp_connection_setting_definitions());
+  auto connection = global;
+  expect_true(ftp_connection_settings(connection).port == 21, "Plain FTP defaults to port 21");
+  set_explicit_setting_value(&connection, ftp_tls_mode_setting_key(), std::string("implicit"));
+  expect_true(ftp_connection_settings(connection).port == 990, "Implicit FTPS defaults to port 990");
+  for (const gint64 port : {21, 990, 2121}) {
+    set_explicit_setting_value(&connection, ftp_port_setting_key(), port);
+    set_explicit_setting_value(&connection, ftp_tls_mode_setting_key(), std::string("explicit"));
+    expect_true(ftp_connection_settings(connection).port == port, "Mode changes retain explicit ports");
+    set_explicit_setting_value(&connection, ftp_tls_mode_setting_key(), std::string("implicit"));
+    expect_true(ftp_connection_settings(connection).port == port, "Implicit mode retains explicit ports");
+  }
+  clear_explicit_setting_value(&connection, ftp_port_setting_key());
+  expect_true(ftp_connection_settings(connection).port == 990, "Resetting the port restores the mode default");
+  set_explicit_setting_value(&global, ftp_port_setting_key(), gint64(21));
+  rebase_settings_store_fallbacks(&connection, global);
+  expect_true(ftp_connection_settings(connection).port == 21, "Global port 21 remains explicit for implicit FTPS");
+  set_explicit_setting_value(&global, ftp_port_setting_key(), gint64(2221));
+  rebase_settings_store_fallbacks(&connection, global);
+  expect_true(ftp_connection_settings(connection).port == 2221, "Global custom port is inherited");
+  clear_explicit_setting_value(&global, ftp_port_setting_key());
+  rebase_settings_store_fallbacks(&connection, global);
+  expect_true(ftp_connection_settings(connection).port == 990, "Removing global port restores mode default");
+}
+
 static void test_invalid_ftp_settings_fall_back_and_warn() {
   const std::filesystem::path path =
       temporary_config_path("invalid-ftp-settings");
@@ -4379,6 +4406,7 @@ int main() {
         test_ftp_profile_uses_independent_endpoint_and_active_mode();
     elder_terms_settings_test::test_invalid_ftp_settings_fall_back_and_warn();
     elder_terms_settings_test::test_ftp_tls_settings_preserve_invalid_input_and_inheritance();
+    elder_terms_settings_test::test_ftp_tls_port_resolution();
     elder_terms_settings_test::test_serial_profile();
     elder_terms_settings_test::test_serial_ignore_carrier_profile();
     elder_terms_settings_test::test_transfer_base_path_setting();

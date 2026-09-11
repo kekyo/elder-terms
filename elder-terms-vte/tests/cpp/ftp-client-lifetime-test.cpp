@@ -18,6 +18,11 @@
 
 namespace elder_terms_ftp_client_lifetime_test {
 
+static elder_terms::FtpTlsMode tls_mode = elder_terms::FtpTlsMode::none;
+static std::string tls_name;
+static std::string tls_certificate;
+static std::string tls_key;
+
 static void expect(bool condition, const std::string &message) {
   if (!condition) throw std::runtime_error(message);
 }
@@ -54,6 +59,11 @@ struct Server {
            "Test server pipes failed");
     std::vector<std::string> arguments{executable, directory.string(), "--trace"};
     arguments.insert(arguments.end(), options.begin(), options.end());
+    if (!tls_name.empty()) {
+      arguments.push_back("--tls=" + tls_name);
+      arguments.push_back("--cert=" + tls_certificate);
+      arguments.push_back("--key=" + tls_key);
+    }
     std::vector<char *> pointers;
     for (auto &argument : arguments) pointers.push_back(argument.data());
     pointers.push_back(nullptr);
@@ -144,7 +154,8 @@ static cardio::promise<void> session_async(Server &server, const std::string &mo
           .connection = {.address = "127.0.0.1", .port = server.port,
                          .username = "alice",
                          .data_connection_mode = elder_terms::FtpDataConnectionMode::passive,
-                         .local_directory = {}, .remote_directory = {}},
+                         .local_directory = {}, .remote_directory = {},
+                       .tls_mode = tls_mode, .ca_file = tls_certificate},
           .password = "secret"}, {});
     } catch (const std::runtime_error &error) {
       expect(mode == "login" && std::string(error.what()).find("530") != std::string::npos,
@@ -220,7 +231,13 @@ static cardio::promise<void> repeat_async(
 int main(int argc, char **argv) {
   using namespace elder_terms_ftp_client_lifetime_test;
   try {
-    expect(argc == 3, "Expected FTP server executable and lifetime scenario");
+    if (argc == 6) {
+      tls_name = argv[3];
+      tls_mode = tls_name == "implicit" ? elder_terms::FtpTlsMode::implicit_tls : elder_terms::FtpTlsMode::explicit_tls;
+      tls_certificate = argv[4];
+      tls_key = argv[5];
+    }
+    expect(argc == 3 || argc == 6, "Expected FTP server executable and lifetime scenario");
     const std::string mode = argv[2];
     expect(mode == "normal" || mode == "login" || mode == "cancel", "Unknown lifetime scenario");
     std::vector<std::string> options;

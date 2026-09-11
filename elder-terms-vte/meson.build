@@ -213,9 +213,7 @@ ftps_client_test = executable(
    'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftp-metadata.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
 )
-test('ftps-client-test', find_program('node'),
-  args: [files('tests/ftps-client-runner.mjs'), ftps_client_test, ftp_test_server],
-  timeout: 180)
+
 
 
 curl_ftp_client_test = executable(
@@ -281,6 +279,10 @@ foreach case_name : ['normal', 'login', 'cancel']
     args: [ftp_test_server, case_name], timeout: 120)
 endforeach
 
+test('ftps-client-test', find_program('node'),
+  args: [files('tests/ftps-client-runner.mjs'), ftps_client_test, ftp_test_server,
+         curl_ftp_stream_test, ftp_client_lifetime_test], timeout: 600)
+
 ftp_runtime_capabilities_test = executable(
   'ftp-runtime-capabilities-test',
   [
@@ -294,7 +296,7 @@ ftp_runtime_capabilities_test = executable(
   link_args: ['-Wl,--wrap=curl_version_info'],
 )
 
-foreach case_name : ['supported', 'no-dns', 'no-ftp', 'old-version', 'no-tls']
+foreach case_name : ['supported', 'no-dns', 'no-ftp', 'old-version', 'no-tls', 'no-ftps']
   test('ftp-runtime-capabilities-' + case_name, ftp_runtime_capabilities_test,
     args: [ftp_test_server, case_name], timeout: 120)
 endforeach

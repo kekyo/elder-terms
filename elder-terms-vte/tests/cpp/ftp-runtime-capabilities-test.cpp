@@ -33,7 +33,7 @@ static void expect(bool condition, const char *message) {
 }
 
 static cardio::promise<void> verify_async(
-    unsigned port, const std::string &expected_error,
+    unsigned port, const std::string &expected_error, elder_terms::FtpTlsMode tls_mode,
     cardio::dispatcher_group_glib &group, int &result) {
   std::shared_ptr<elder_terms::RemoteFileClient> client;
   try {
@@ -41,7 +41,7 @@ static cardio::promise<void> verify_async(
         .connection = {.address = "127.0.0.1", .port = port, .username = "alice",
             .data_connection_mode = elder_terms::FtpDataConnectionMode::passive,
             .local_directory = {}, .remote_directory = "/home",
-            .tls_mode = expected_error == "TLS support" ? elder_terms::FtpTlsMode::explicit_tls : elder_terms::FtpTlsMode::none},
+            .tls_mode = tls_mode},
         .password = "secret"}, {});
     expect(expected_error.empty(), "An unsupported FTP runtime was accepted");
     const auto snapshot = co_await client->load_directory_async("/home", {});
@@ -80,11 +80,12 @@ int main(int argc, char **argv) {
     expect(argc == 3, "Expected the FTP server executable and capability scenario");
     const std::string scenario = argv[2];
     expect(scenario == "supported" || scenario == "no-dns" ||
-               scenario == "no-ftp" || scenario == "old-version" || scenario == "no-tls",
+               scenario == "no-ftp" || scenario == "old-version" || scenario == "no-tls" || scenario == "no-ftps",
            "Unknown runtime capability scenario");
     static const char *const ftp_protocols[] = {"ftp", nullptr};
     static const char *const other_protocols[] = {"http", nullptr};
     static const char *const supported_features[] = {"AsynchDNS", "Largefile", "threadsafe", nullptr};
+    static const char *const tls_features[] = {"AsynchDNS", "SSL", nullptr};
     static const char *const other_features[] = {"Largefile", "threadsafe", nullptr};
     // Capabilities are supplied through the documented feature-name array.
     // Other fields retain their zero-initialized values unless needed here.
@@ -93,11 +94,12 @@ int main(int argc, char **argv) {
     reported_version.version_num = scenario == "old-version" ? 0x075600 : 0x075801;
     reported_version.host = "FTP test runtime";
     reported_version.protocols = scenario == "no-ftp" ? other_protocols : ftp_protocols;
-    reported_version.feature_names = scenario == "no-dns" ? other_features : supported_features;
+    reported_version.feature_names = scenario == "no-dns" ? other_features : scenario == "no-ftps" ? tls_features : supported_features;
     const std::string expected_error = scenario == "no-dns" ? "asynchronous DNS"
         : scenario == "no-ftp" ? "without FTP support"
         : scenario == "old-version" ? "7.88.1 or newer"
-        : scenario == "no-tls" ? "TLS support" : "";
+        : scenario == "no-tls" ? "TLS support"
+        : scenario == "no-ftps" ? "FTPS support" : "";
 
     directory = "/tmp/elder-terms-ftp-capabilities-XXXXXX";
     expect(::mkdtemp(directory.data()) != nullptr, "Temporary directory creation failed");
@@ -126,7 +128,9 @@ int main(int argc, char **argv) {
     const unsigned port = std::stoul(ready.substr(6));
     cardio::dispatcher_group_glib group;
     cardio::dispatcher_host_glib_auto dispatcher(group);
-    auto task = verify_async(port, expected_error, group, result);
+    auto task = verify_async(port, expected_error,
+        scenario == "no-tls" ? elder_terms::FtpTlsMode::explicit_tls :
+        scenario == "no-ftps" ? elder_terms::FtpTlsMode::implicit_tls : elder_terms::FtpTlsMode::none, group, result);
     dispatcher.park();
   } catch (const std::exception &error) {
     std::cerr << "FTP runtime capabilities test: " << error.what() << '\n';

@@ -203,7 +203,7 @@ sudo apt install coreutils
 
 FTPウインドウを起動するたびに、認証パネルでユーザー名と非表示入力のパスワードを同時に尋ねます。設定済みのユーザー名が初期入力され、設定が空の場合は現在のOSユーザー名が初期入力されます。匿名でログインする場合は `anonymous` と明示的に入力し、サーバーが求めるパスワードも入力して下さい。匿名用の認証情報が自動で補われることはなく、入力したパスワードは接続設定に保存されません。ログイン後はSFTPと同じ2ペインのファイルブラウザと転送操作を使用出来ます。
 
-FTPはコマンド、ユーザー名、パスワード、ディレクトリ一覧、ファイルデータを暗号化せずに送信します。elder-termsは[libcurl](https://curl.se/libcurl/)を使用して[FTP（RFC 959）](https://www.rfc-editor.org/rfc/rfc959)に接続します。[明示的FTPS（RFC 4217）](https://www.rfc-editor.org/rfc/rfc4217)を使用するには、接続INIの `[ftp]` に `tls_mode=explicit` を追加して下さい。既定ポートは21です。制御・データ接続の両方でTLS 1.2以上を必須とし、証明書と接続先名の検証に失敗した場合は拒否します。独自CAは `ca_file=/absolute/path/company-ca.pem` で指定し、空の場合はシステムCAを使用します。平文FTPへ自動で切り替えることはありません。現段階のTLS設定はINIから指定します。
+FTPはコマンド、ユーザー名、パスワード、ディレクトリ一覧、ファイルデータを暗号化せずに送信します。elder-termsは[libcurl](https://curl.se/libcurl/)を使用して[FTP（RFC 959）](https://www.rfc-editor.org/rfc/rfc959)に接続します。[FTPS](https://everything.curl.dev/ftp/ftps.html)を使用するには、接続INIの `[ftp]` に `tls_mode=explicit` または `tls_mode=implicit` を追加して下さい。明示的FTPSはAUTH TLSで暗号化へ移行し、既定ポートは21です。暗黙的FTPSは接続直後からTLSを使用し、既定ポートは990です。グローバル設定から継承した値を含め、明示指定されたポートが優先されます。両方式でActive／Passive、IPv4／IPv6、データ接続でTLSセッション再利用を要求するサーバーに対応します。制御・データ接続の両方でTLS 1.2以上を必須とし、証明書と接続先名の検証に失敗した場合は拒否します。独自CAは `ca_file=/absolute/path/company-ca.pem` で指定し、空の場合はシステムCAを使用します。平文FTPへ自動で切り替えることはありません。現段階のTLS設定はINIから指定します。
 
 ### FTPのデータ接続
 

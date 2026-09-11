@@ -78,7 +78,7 @@ static std::string endpoint_url(const FtpConnectionSettings &connection) {
                                   curl_url_strerror(code));
     }
   };
-  set(CURLUPART_SCHEME, "ftp");
+  set(CURLUPART_SCHEME, connection.tls_mode == FtpTlsMode::implicit_tls ? "ftps" : "ftp");
   const auto &address = connection.address;
   set(CURLUPART_HOST, address.find(':') != std::string::npos &&
                          !address.starts_with('[') ? "[" + address + "]" : address);

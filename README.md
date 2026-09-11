@@ -347,12 +347,16 @@ uses the same two-pane file browser and transfer controls as SFTP.
 FTP sends commands, user names, passwords, directory listings, and file data
 without encryption. elder-terms uses [libcurl](https://curl.se/libcurl/) for
 [FTP (RFC 959)](https://www.rfc-editor.org/rfc/rfc959).
-To use [explicit FTPS (RFC 4217)](https://www.rfc-editor.org/rfc/rfc4217), add
-`tls_mode=explicit` to the `[ftp]` section of the connection INI file. The default
-port is 21. FTPS requires TLS 1.2 or newer for both control and data connections,
+To use [FTPS](https://everything.curl.dev/ftp/ftps.html), set `tls_mode=explicit`
+or `tls_mode=implicit` in the `[ftp]` section of the connection INI file.
+Explicit FTPS upgrades the control connection with AUTH TLS and defaults to port
+21. Implicit FTPS starts TLS immediately and defaults to port 990. An explicitly
+configured port, including one inherited from global settings, takes precedence. FTPS requires TLS 1.2 or newer for both control and data connections,
 verifies the server certificate and host name, and rejects validation failures.
 For a private CA, set `ca_file=/absolute/path/company-ca.pem`; an empty value uses
-the system CA store. FTPS never falls back to plain FTP. TLS settings are currently
+the system CA store. Both FTPS modes support active and passive data connections,
+IPv4 and IPv6, and servers requiring TLS session reuse for data transfers.
+FTPS never falls back to plain FTP. TLS settings are currently
 configured through the INI file.
 
 ### FTP Data Connections

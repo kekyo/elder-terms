@@ -39,16 +39,27 @@ const execute = promisify(execFile);
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
 
-for (const scenario of [
+for (const testCase of [
   'passive',
   'ftps-explicit',
+  'ftps-implicit',
+  'ftps-cancel-final',
+  'ftps-close-final-upload',
+  'ftps-close-final-download',
   'active',
   'login-refused',
   'cancel-final',
   'close-final',
   'close-final-download',
 ] as const) {
-  it(`uses the real FTP service through its window: ${scenario}`, async (context) => {
+  const scenario = [
+    'ftps-cancel-final',
+    'ftps-close-final-upload',
+    'ftps-close-final-download',
+  ].includes(testCase)
+    ? testCase.slice(5)
+    : testCase;
+  it(`uses the real FTP service through its window: ${testCase}`, async (context) => {
     const directory = await mkdtemp(join(tmpdir(), 'elder-terms-ftp-live-'));
     const evidence = createTestEvidence(context);
     const apps: GtkApp[] = [];
@@ -64,7 +75,11 @@ for (const scenario of [
       const remoteRoot = join(directory, 'remote');
       const remote = join(remoteRoot, 'home');
       const configPath = join(directory, 'ftp.ini');
-      const ftps = scenario === 'ftps-explicit';
+      const ftps = testCase.startsWith('ftps-');
+      const tlsMode =
+        testCase === 'ftps-implicit' || testCase.startsWith('ftps-close-')
+          ? 'implicit'
+          : 'explicit';
       const certificate = join(directory, 'certificate.pem');
       const privateKey = join(directory, 'private-key.pem');
       if (ftps) {
@@ -112,7 +127,11 @@ for (const scenario of [
           remoteRoot,
           '--trace',
           ...(ftps
-            ? ['--tls=explicit', `--cert=${certificate}`, `--key=${privateKey}`]
+            ? [
+                `--tls=${tlsMode}`,
+                `--cert=${certificate}`,
+                `--key=${privateKey}`,
+              ]
             : []),
           ...(held ? ['--hold-final'] : []),
           ...(scenario === 'login-refused' ? ['--reject-login'] : []),
@@ -149,7 +168,7 @@ for (const scenario of [
           'address=127.0.0.1',
           `port=${ready.slice(6)}`,
           'username=alice',
-          ...(ftps ? ['tls_mode=explicit', `ca_file=${certificate}`] : []),
+          ...(ftps ? [`tls_mode=${tlsMode}`, `ca_file=${certificate}`] : []),
           `data_connection_mode=${scenario === 'active' ? 'active' : 'passive'}`,
           `local_directory=${local}`,
           'remote_directory=/home',

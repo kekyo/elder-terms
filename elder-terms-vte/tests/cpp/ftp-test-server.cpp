@@ -63,6 +63,10 @@ struct Options {
   bool reject_auth = false;
   bool reject_protection = false;
   bool break_data_tls = false;
+  bool hold_control_tls = false;
+  bool hold_data_tls = false;
+  bool require_reuse = false;
+  int tls_version = 0;
   bool legacy_data = false;
   bool reject_login = false;
   bool hold_first_list = false;
@@ -168,7 +172,17 @@ static void serve(Socket &control, Options options, SSL_CTX *context) {
   sockaddr_storage active{};
   socklen_t active_length = 0;
   bool protected_data = false;
-  if (options.tls_mode == "implicit" && !control.secure(context)) return;
+  const auto secure_control = [&]() {
+    if (options.hold_control_tls) {
+      std::cout << "TLS_WAIT" << std::endl;
+      if (read_line(STDIN_FILENO) == "cancel") return false;
+    }
+    return control.secure(context);
+  };
+  if (options.tls_mode == "implicit") {
+    if (!secure_control()) return;
+    std::osyncstream(std::clog) << "TLS CONTROL " << SSL_get_version(control.tls) << std::endl;
+  }
   bool logged_in = false;
   bool valid_user = false;
   const auto remote_path = [&](const std::string &argument) {
@@ -197,7 +211,8 @@ static void serve(Socket &control, Options options, SSL_CTX *context) {
     if (verb == "AUTH") {
       if (!context || options.reject_auth) { respond(534, "TLS unavailable"); continue; }
       respond(234, "Start TLS");
-      if (!control.secure(context)) return;
+      if (!secure_control()) return;
+      std::osyncstream(std::clog) << "TLS CONTROL " << SSL_get_version(control.tls) << std::endl;
     } else if (verb == "PBSZ") {
       respond(control.tls ? 200 : 503, "Buffer size accepted");
     } else if (verb == "PROT") {
@@ -321,7 +336,15 @@ static void serve(Socket &control, Options options, SSL_CTX *context) {
       }
       expect(data.fd >= 0, "Listing connection failed");
       expect(!context || protected_data, "Listing must request private data");
-      if (protected_data && (options.break_data_tls || !data.secure(context))) return;
+      if (protected_data) {
+        if (options.hold_data_tls) {
+          std::cout << "TLS_WAIT" << std::endl;
+          if (read_line(STDIN_FILENO) == "cancel") return;
+        }
+        if (options.break_data_tls || !data.secure(context)) return;
+        expect(!options.require_reuse || SSL_session_reused(data.tls), "Data TLS session was not reused");
+        std::osyncstream(std::clog) << "TLS DATA " << SSL_get_version(data.tls) << " " << SSL_get_cipher_name(data.tls) << std::endl;
+      }
       std::string listing;
       if (verb == "MLSD") listing = "type=cdir; .\r\ntype=pdir; ..\r\n";
       else if (options.listing != "dos") listing = "total 0\r\n";
@@ -384,7 +407,15 @@ static void serve(Socket &control, Options options, SSL_CTX *context) {
       }
       expect(data.fd >= 0, "Transfer connection failed");
       expect(!context || protected_data, "Transfer must request private data");
-      if (protected_data && (options.break_data_tls || !data.secure(context))) return;
+      if (protected_data) {
+        if (options.hold_data_tls) {
+          std::cout << "TLS_WAIT" << std::endl;
+          if (read_line(STDIN_FILENO) == "cancel") return;
+        }
+        if (options.break_data_tls || !data.secure(context)) return;
+        expect(!options.require_reuse || SSL_session_reused(data.tls), "Data TLS session was not reused");
+        std::osyncstream(std::clog) << "TLS DATA " << SSL_get_version(data.tls) << " " << SSL_get_cipher_name(data.tls) << std::endl;
+      }
       if (upload && options.hold_upload) {
         std::cout << "DATA_WAIT" << std::endl;
         const auto action = read_line(STDIN_FILENO);
@@ -481,6 +512,10 @@ int main(int argc, char **argv) {
       if (option.starts_with("--tls=")) options.tls_mode = option.substr(6);
       else if (option.starts_with("--cert=")) options.cert = option.substr(7);
       else if (option.starts_with("--key=")) options.key = option.substr(6);
+      else if (option == "--require-reuse") options.require_reuse = true;
+      else if (option.starts_with("--tls-version=")) options.tls_version = std::stoi(option.substr(14));
+      else if (option == "--hold-control-tls") options.hold_control_tls = true;
+      else if (option == "--hold-data-tls") options.hold_data_tls = true;
       else if (option == "--reject-auth") options.reject_auth = true;
       else if (option == "--reject-protection") options.reject_protection = true;
       else if (option == "--break-data-tls") options.break_data_tls = true;
@@ -511,6 +546,16 @@ int main(int argc, char **argv) {
       expect(context && SSL_CTX_use_certificate_chain_file(context.get(), options.cert.c_str()) == 1 &&
           SSL_CTX_use_PrivateKey_file(context.get(), options.key.c_str(), SSL_FILETYPE_PEM) == 1 &&
           SSL_CTX_check_private_key(context.get()) == 1, "Test TLS credentials failed");
+    }
+    if (context) {
+      const unsigned char session_context[] = "elder-terms-ftps";
+      expect(SSL_CTX_set_session_id_context(context.get(), session_context, sizeof(session_context)) == 1,
+             "Cannot initialize test session reuse");
+      if (options.tls_version) {
+        expect(SSL_CTX_set_min_proto_version(context.get(), options.tls_version) == 1 &&
+               SSL_CTX_set_max_proto_version(context.get(), options.tls_version) == 1,
+               "Cannot constrain test TLS version");
+      }
     }
     auto [listener, port] = listen_local(options.ipv6);
     std::cout << "READY " << port << std::endl;

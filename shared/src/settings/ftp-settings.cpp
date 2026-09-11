@@ -187,8 +187,8 @@ FtpConnectionSettings ftp_connection_settings(const SettingsStore &store) {
   }
   return {
       .address = std::move(address),
-      .port = setting_integer_value_or_default(
-          store, ftp_port_setting_key(), default_ftp_port),
+      .port = tls == "implicit" && setting_value_source(store, ftp_port_setting_key()) == SettingValueSource::built_in
+          ? 990 : setting_integer_value_or_default(store, ftp_port_setting_key(), default_ftp_port),
       .username = std::move(username),
       .data_connection_mode =
           data_connection_mode == active_data_connection_mode
