@@ -155,9 +155,13 @@ static int hostname_error(X509 *certificate, const std::string &hostname) {
   const auto flags = X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS |
       (has_address_name ? X509_CHECK_FLAG_NEVER_CHECK_SUBJECT : 0) |
       (length ? X509_CHECK_FLAG_NO_WILDCARDS : 0);
+  // Preserve libcurl's IP/DNS classification before normalizing a DNS dot.
+  // A numeric name whose dot remains after URL parsing must not become an IP SAN target.
+  const auto comparison = !length && hostname.ends_with('.')
+      ? hostname.substr(0, hostname.size() - 1) : hostname;
   const auto matched = length && has_address_name
       ? X509_check_ip(copy.get(), address.data(), length, 0)
-      : X509_check_host(copy.get(), hostname.c_str(), hostname.size(), flags, nullptr);
+      : X509_check_host(copy.get(), comparison.c_str(), comparison.size(), flags, nullptr);
   if (matched < 0) throw std::runtime_error("Cannot verify FTPS certificate hostname");
   return matched == 1 ? X509_V_OK : mismatch;
 }
@@ -237,13 +241,22 @@ std::shared_ptr<FtpCertificatePolicy> create_ftp_certificate_policy(
   if (host.find(':') != std::string::npos && !host.starts_with('[')) host = '[' + host + ']';
   if (curl_url_set(url.get(), CURLUPART_HOST, host.c_str(), 0) != CURLUE_OK)
     throw std::invalid_argument("Invalid FTPS certificate hostname");
+  // Transfers parse the complete URL, which canonicalizes short/hexadecimal
+  // IPv4 forms. Setting only CURLUPART_HOST does not perform that step.
+  if (curl_url_set(url.get(), CURLUPART_SCHEME, "ftp", 0) != CURLUE_OK)
+    throw std::invalid_argument("Cannot normalize FTPS certificate hostname");
+  char *endpoint = nullptr;
+  const auto endpoint_code = curl_url_get(url.get(), CURLUPART_URL, &endpoint, 0);
+  const auto owned_endpoint = std::unique_ptr<char, decltype(&curl_free)>(endpoint, curl_free);
+  if (endpoint_code != CURLUE_OK ||
+      curl_url_set(url.get(), CURLUPART_URL, endpoint, 0) != CURLUE_OK)
+    throw std::invalid_argument("Cannot normalize FTPS certificate hostname");
   char *text = nullptr;
   const auto code = curl_url_get(url.get(), CURLUPART_HOST, &text, CURLU_PUNYCODE);
   const auto owned = std::unique_ptr<char, decltype(&curl_free)>(text, curl_free);
   if (code != CURLUE_OK) throw std::invalid_argument("Cannot normalize FTPS certificate hostname");
   host = text;
   if (host.starts_with('[') && host.ends_with(']')) host = host.substr(1, host.size() - 2);
-  else if (host.ends_with('.')) host.pop_back();
   auto result = std::make_shared<FtpCertificatePolicy>();
   result->address = connection.address;
   result->hostname = std::move(host);

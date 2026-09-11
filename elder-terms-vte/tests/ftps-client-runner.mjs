@@ -319,6 +319,44 @@ try {
     { name: 'data-tls-failed', flags: ['--break-data-tls'] },
     { name: 'invalid-mode', mode: 'explict', noLogin: true },
   ];
+  // Compare standard libcurl verification and the confirmation policy using
+  // the same numeric host forms, CA and server. Dotted DNS names use a
+  // test-only resolver mapping and encrypted directory listing.
+  for (const mode of ['explicit', 'implicit']) {
+    for (const action of ['reject', 'prompt']) {
+      for (const address of ['127.1', '0x7f000001']) {
+        cases.push({
+          name: mode + '-numeric-' + address + '-' + action,
+          mode,
+          address,
+          success: true,
+          confirmations: 0,
+          settings: 'certificate_error_action=' + action + '\n',
+        });
+      }
+      cases.push({
+        name: mode + '-dotted-ip-san-' + action,
+        mode,
+        address: '127.0.0.1.',
+        certificateOnly: true,
+        action,
+        referenceKey: mode + '-ip',
+        settings: 'certificate_error_action=' + action + '\n',
+      });
+      const numericDns = join(root, 'dns-is-not-ip.pem');
+      cases.push({
+        name: mode + '-dotted-dns-san-' + action,
+        mode,
+        address: '127.0.0.1.',
+        certificateOnly: true,
+        action,
+        referenceKey: mode + '-dns',
+        cert: numericDns,
+        ca: numericDns,
+        settings: 'certificate_error_action=' + action + '\n',
+      });
+    }
+  }
   for (const mode of ['explicit', 'implicit']) {
     for (const active of [false, true]) {
       for (const ipv6 of [false, true]) {
@@ -645,6 +683,7 @@ try {
       },
     });
   }
+  const hostnameReferences = new Map();
   for (const scenario of cases) {
     const directory = join(root, scenario.name);
     await mkdir(join(directory, 'home'), { recursive: true });
@@ -680,7 +719,7 @@ try {
       const ini = join(directory, 'connection.ini');
       await writeFile(
         ini,
-        `[ftp]\naddress=${scenario.ipv6 ? '::1' : '127.0.0.1'}\nport=${match[1]}\nusername=alice\nlocal_directory=${directory}\ndata_connection_mode=${scenario.active ? 'active' : 'passive'}\ntls_mode=${scenario.mode ?? 'explicit'}\nca_file=${scenario.ca ?? cert}\n${scenario.settings ?? ''}`
+        `[ftp]\naddress=${scenario.address ?? (scenario.ipv6 ? '::1' : '127.0.0.1')}\nport=${match[1]}\nusername=alice\nlocal_directory=${directory}\ndata_connection_mode=${scenario.active ? 'active' : 'passive'}\ntls_mode=${scenario.mode ?? 'explicit'}\nca_file=${scenario.ca ?? cert}\n${scenario.settings ?? ''}`
       );
       const followupArgs = [];
       if (scenario.followup) {
@@ -702,12 +741,54 @@ try {
             (scenario.followup.success ? 'success' : 'failure')
         );
       }
-      const result = await run(process.argv[2], [
-        ini,
-        scenario.result ?? (scenario.success ? 'success' : 'failure'),
-        ...followupArgs,
-      ]);
+      if (scenario.certificateOnly && scenario.action === 'prompt') {
+        assert.ok(
+          hostnameReferences.has(scenario.referenceKey),
+          'Missing standard libcurl reference'
+        );
+        scenario.success = hostnameReferences.get(scenario.referenceKey);
+      }
+      const result = scenario.certificateOnly
+        ? await run(process.argv[7], [
+            scenario.mode,
+            scenario.address,
+            match[1],
+            scenario.ca ?? cert,
+            scenario.action,
+            scenario.action === 'reject'
+              ? 'reference'
+              : scenario.success
+                ? 'success'
+                : 'failure',
+          ])
+        : await run(process.argv[2], [
+            ini,
+            scenario.result ?? (scenario.success ? 'success' : 'failure'),
+            ...followupArgs,
+          ]);
       assert.equal(result.code, 0, result.output + trace);
+      if (scenario.certificateOnly) {
+        const code = /^RESULT curl (\d+)$/m.exec(result.output);
+        assert.ok(code, result.output);
+        assert.ok(['0', '60'].includes(code[1]), result.output);
+        scenario.success = code[1] === '0';
+        scenario.noLogin = !scenario.success;
+        scenario.error = scenario.success ? undefined : 'curl 60';
+        scenario.confirmations =
+          scenario.action === 'prompt' && !scenario.success ? 1 : 0;
+        if (scenario.action === 'reject') {
+          hostnameReferences.set(scenario.referenceKey, scenario.success);
+          const other =
+            scenario.mode +
+            (scenario.referenceKey.endsWith('-ip') ? '-dns' : '-ip');
+          if (hostnameReferences.has(other))
+            assert.equal(
+              Number(hostnameReferences.get(other)) + Number(scenario.success),
+              1,
+              'The numeric host must match exactly one of the IP and DNS certificate identities'
+            );
+        }
+      }
       if (['wrong-host', 'expired', 'untrusted'].includes(scenario.name))
         assert.ok(result.output.includes('curl 60'), result.output);
       if (scenario.name === 'invalid-mode')
@@ -794,7 +875,7 @@ try {
             trace
           );
       }
-      if (scenario.success)
+      if (scenario.success && !scenario.certificateOnly)
         assert.ok(
           trace.includes('COMMAND STOR') && trace.includes('COMMAND RETR'),
           trace

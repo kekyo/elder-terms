@@ -286,9 +286,15 @@ ftps_certificate_policy_test = executable(
   dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
   install: false)
 
+ftps_hostname_test = executable(
+  'ftps-hostname-test',
+  ['tests/cpp/ftps-hostname-test.cpp', 'src/ftp/ftps-certificate.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  install: false)
+
 test('ftps-client-test', find_program('node'),
   args: [files('tests/ftps-client-runner.mjs'), ftps_client_test, ftp_test_server,
-         curl_ftp_stream_test, ftp_client_lifetime_test, ftps_certificate_policy_test], timeout: 600)
+         curl_ftp_stream_test, ftp_client_lifetime_test, ftps_certificate_policy_test, ftps_hostname_test], timeout: 600)
 
 ftp_runtime_capabilities_test = executable(
   'ftp-runtime-capabilities-test',
