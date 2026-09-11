@@ -133,30 +133,29 @@ prompt_sftp_authentication_async(
     SftpApplicationState *state,
     const elder_terms::SshUserPrompt &prompt,
     cardio::cancellation cancellation) {
-  elder_terms::InlinePromptResponse response =
-      co_await elder_terms::prompt_file_transfer_window_async(
-          state->window,
-          {
-              .title = prompt.title.empty() ? _("SSH") : prompt.title,
-              .message = prompt.message,
-              .monospace_message = prompt.monospace_message,
-              .accept_label =
-                  prompt.kind == elder_terms::SshUserPromptKind::host_key
-                      ? _("Accept")
-                      : prompt.kind ==
-                                elder_terms::SshUserPromptKind::username
-                            ? _("Connect")
-                            : _("OK"),
-              .cancel_label = _("Cancel"),
-              .initial_text = prompt.initial_text,
-              .input_required = prompt.input_required,
-              .echo = prompt.echo,
-              .cancel_visible = true,
-              .accept_visible = prompt.accept_visible,
-              .alternative_label = _("Reset and Connect"),
-              .alternative_visible = prompt.host_key_reset_available,
-          },
-          std::move(cancellation));
+  elder_terms::InlinePromptRequest request{
+      .title = prompt.title.empty() ? _("SSH") : prompt.title,
+      .message = prompt.message,
+      .monospace_message = prompt.monospace_message,
+      .accept_label =
+          prompt.kind == elder_terms::SshUserPromptKind::host_key
+              ? _("Accept")
+              : prompt.kind ==
+                        elder_terms::SshUserPromptKind::username
+                    ? _("Connect")
+                    : _("OK"),
+      .cancel_label = _("Cancel"),
+      .initial_text = prompt.initial_text,
+      .input_required = prompt.input_required,
+      .echo = prompt.echo,
+      .cancel_visible = true,
+      .accept_visible = prompt.accept_visible,
+      .alternative_label = _("Reset and Connect"),
+      .alternative_visible = prompt.host_key_reset_available,
+  };
+  auto pending = elder_terms::prompt_file_transfer_window_async(
+      state->window, std::move(request), std::move(cancellation));
+  elder_terms::InlinePromptResponse response = co_await pending;
   if (!response.accepted && !response.alternative) {
     (void)state->stop_source.cancel();
   }
@@ -188,15 +187,14 @@ start_sftp_application_async(SftpApplicationState *state) {
                   state, prompt, std::move(prompt_cancellation));
             },
     };
-    state->transport =
-        co_await elder_terms::AuthenticatedSshTransport::connect_async(
-            state->connection.endpoint, callbacks,
-            {
-                .known_hosts_file =
-                    state->launch_options.test.ssh_known_hosts_file,
-                .config_file = {},
-            },
-            cancellation);
+    elder_terms::AuthenticatedSshTransportOptions options{
+        .known_hosts_file =
+            state->launch_options.test.ssh_known_hosts_file,
+        .config_file = {},
+    };
+    auto connecting = elder_terms::AuthenticatedSshTransport::connect_async(
+        state->connection.endpoint, callbacks, options, cancellation);
+    state->transport = co_await connecting;
     state->client = co_await elder_terms::open_sftp_client_async(
         state->transport, cancellation);
     elder_terms::attach_file_transfer_window_client(
@@ -295,11 +293,9 @@ start_sftp_fixture_async(SftpApplicationState *state) {
   const cardio::cancellation cancellation =
       state->stop_source.get_cancellation();
   if (state->launch_options.test.ssh_prompt.has_value()) {
+    const auto prompt = fixture_sftp_prompt(*state->launch_options.test.ssh_prompt);
     const elder_terms::SshUserPromptResponse response =
-        co_await prompt_sftp_authentication_async(
-            state,
-            fixture_sftp_prompt(*state->launch_options.test.ssh_prompt),
-            cancellation);
+        co_await prompt_sftp_authentication_async(state, prompt, cancellation);
     if (!response.accepted && !response.reset_host_key) {
       stop_sftp_application(state);
       co_return;
@@ -431,26 +427,25 @@ prompt_ftp_credentials_async(FtpApplicationState *state,
   std::string username = initial_ftp_username(state->connection);
   bool username_missing = false;
   while (true) {
-    elder_terms::InlinePromptResponse response =
-        co_await elder_terms::prompt_file_transfer_window_async(
-            state->window,
-            {
-                .title = state->connection.tls_mode == elder_terms::FtpTlsMode::none
-                    ? _("FTP authentication") : _("FTPS authentication"),
-                .message = ftp_authentication_message(
-                    state->connection, username_missing),
-                .accept_label = _("Connect"),
-                .cancel_label = _("Cancel"),
-                .initial_text = username,
-                .input_label = _("User name"),
-                .input_required = true,
-                .echo = true,
-                .secondary_input_label = _("Password:"),
-                .secondary_input_required = true,
-                .secondary_echo = false,
-                .cancel_visible = true,
-            },
-            cancellation);
+    elder_terms::InlinePromptRequest request{
+        .title = state->connection.tls_mode == elder_terms::FtpTlsMode::none
+            ? _("FTP authentication") : _("FTPS authentication"),
+        .message = ftp_authentication_message(
+            state->connection, username_missing),
+        .accept_label = _("Connect"),
+        .cancel_label = _("Cancel"),
+        .initial_text = username,
+        .input_label = _("User name"),
+        .input_required = true,
+        .echo = true,
+        .secondary_input_label = _("Password:"),
+        .secondary_input_required = true,
+        .secondary_echo = false,
+        .cancel_visible = true,
+    };
+    auto pending = elder_terms::prompt_file_transfer_window_async(
+        state->window, std::move(request), cancellation);
+    elder_terms::InlinePromptResponse response = co_await pending;
     if (!response.accepted) {
       co_return std::nullopt;
     }
@@ -495,11 +490,14 @@ static cardio::promise<bool> confirm_ftp_certificate_async(
   details += "\n" + std::string(_("Valid until:")) + " " + certificate_display_text(failure.not_after);
   details += "\nSHA-256:\n" + failure.sha256.substr(0, 48) + "\n" + failure.sha256.substr(48);
   message += "\n\n" + details;
-  const auto response = co_await elder_terms::confirm_file_transfer_window_async(state->window, {
+  elder_terms::InlinePromptRequest request{
       .title = _("FTPS certificate validation failed"), .message = std::move(message),
       .accept_label = _("Allow for this connection"),
       .cancel_label = _("Abort connection"), .input_required = false, .echo = false,
-      .cancel_visible = true, .default_cancel = true}, cancellation);
+      .cancel_visible = true, .default_cancel = true};
+  auto pending = elder_terms::confirm_file_transfer_window_async(
+      state->window, std::move(request), cancellation);
+  const auto response = co_await pending;
   if (!response.accepted || cancellation.is_cancellation_requested() || state->shutting_down) {
     stop_ftp_application(state);
     co_return false;
@@ -525,15 +523,16 @@ start_ftp_application_async(FtpApplicationState *state) {
     } else {
       elder_terms::FtpConnectionSettings connection = state->connection;
       connection.username = std::move(credentials->username);
-      state->client = co_await elder_terms::open_ftp_client_async(
-          {
-              .connection = std::move(connection),
-              .password = std::move(credentials->password),
-              .confirm_certificate = [state](const elder_terms::FtpCertificateFailure &failure, cardio::cancellation cancellation) {
-                return confirm_ftp_certificate_async(state, failure, cancellation);
-              },
+      elder_terms::FtpClientOpenOptions options{
+          .connection = std::move(connection),
+          .password = std::move(credentials->password),
+          .confirm_certificate = [state](const elder_terms::FtpCertificateFailure &failure, cardio::cancellation cancellation) {
+            return confirm_ftp_certificate_async(state, failure, cancellation);
           },
-          cancellation);
+      };
+      auto opening = elder_terms::open_ftp_client_async(
+          std::move(options), cancellation);
+      state->client = co_await opening;
     }
     elder_terms::attach_file_transfer_window_client(
         state->window, state->client);

@@ -1410,13 +1410,13 @@ msgstr "전송 준비 중…"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:679
 #, c-format
-msgid "Transferring %zu of %zu — %s"
-msgstr "%zu 중 %zu 전송 중 — %s"
+msgid "Transferring %llu of %llu — %s"
+msgstr "%llu 중 %llu 전송 중 — %s"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:682
 #, c-format
-msgid "Transferring %zu of %zu"
-msgstr "%zu 중 %zu"
+msgid "Transferring %llu of %llu"
+msgstr "%llu 중 %llu"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:686
 #, c-format

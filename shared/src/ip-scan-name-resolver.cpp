@@ -32,7 +32,7 @@ connect_resolver_async(const std::shared_ptr<ResolverState> &state,
   }
   try {
     if (state->connection == nullptr) {
-      auto *connection = co_await cardio::gio::submit<GDBusConnection *>(
+      auto connection_task = cardio::gio::submit<GDBusConnection *>(
           [state](GCancellable *signal, GAsyncReadyCallback callback,
                     gpointer data) {
             g_bus_get(state->bus_type, signal, callback, data);
@@ -46,13 +46,14 @@ connect_resolver_async(const std::shared_ptr<ResolverState> &state,
             }
             return connection;
           }, cancellation);
+      auto *connection = co_await connection_task;
       state->connection = std::shared_ptr<GDBusConnection>(connection,
                                                            g_object_unref);
     }
     // A running resolver need not have a D-Bus activation file. In particular,
     // StartServiceByName can fail before checking whether it already has an
     // owner, so check ownership before requesting activation.
-    auto *owner_reply = co_await cardio::gio::submit<GVariant *>(
+    auto owner_reply_task = cardio::gio::submit<GVariant *>(
         [state](GCancellable *signal, GAsyncReadyCallback callback,
                  gpointer data) {
           g_dbus_connection_call(
@@ -66,6 +67,7 @@ connect_resolver_async(const std::shared_ptr<ResolverState> &state,
           return g_dbus_connection_call_finish(state->connection.get(), result,
                                                error);
         }, cancellation);
+    auto *owner_reply = co_await owner_reply_task;
     gboolean has_owner = FALSE;
     g_variant_get(owner_reply, "(b)", &has_owner);
     g_variant_unref(owner_reply);
@@ -73,7 +75,7 @@ connect_resolver_async(const std::shared_ptr<ResolverState> &state,
       state->ready = true;
       co_return state->connection;
     }
-    auto *reply = co_await cardio::gio::submit<GVariant *>(
+    auto reply_task = cardio::gio::submit<GVariant *>(
         [state](GCancellable *signal, GAsyncReadyCallback callback,
                   gpointer data) {
           g_dbus_connection_call(
@@ -87,6 +89,7 @@ connect_resolver_async(const std::shared_ptr<ResolverState> &state,
           return g_dbus_connection_call_finish(state->connection.get(), result,
                                                 error);
         }, cancellation);
+    auto *reply = co_await reply_task;
     guint32 status = 0;
     g_variant_get(reply, "(u)", &status);
     g_variant_unref(reply);
@@ -117,7 +120,7 @@ lookup_multicast_name_async(std::shared_ptr<ResolverState> state,
   const guint64 protocol = source == Source::mdns ? UINT64_C(1) << 3
                                                  : UINT64_C(1) << 1;
   try {
-    auto *raw_reply = co_await cardio::gio::submit<GVariant *>(
+    auto raw_reply_task = cardio::gio::submit<GVariant *>(
         [connection, address, protocol](GCancellable *signal,
                                          GAsyncReadyCallback callback,
                                          gpointer data) {
@@ -137,6 +140,7 @@ lookup_multicast_name_async(std::shared_ptr<ResolverState> state,
         [connection](GObject *, GAsyncResult *result, GError **error) {
           return g_dbus_connection_call_finish(connection.get(), result, error);
         }, cancellation);
+    auto *raw_reply = co_await raw_reply_task;
     auto reply = std::unique_ptr<GVariant, decltype(&g_variant_unref)>(
         raw_reply, g_variant_unref);
     GVariantIter *raw_candidates = nullptr;

@@ -2197,6 +2197,8 @@ static void test_ftp_tls_range_and_inheritance() {
   expect_true(!ftp_connection_settings(connection).validation_errors.empty(), "An inherited maximum below the explicit minimum must fail");
   expect_true(set_explicit_setting_value(&connection, make_setting_key("ftp", "tls_max_version"), std::string("default")), "An explicit backend maximum must replace the inherited cap");
   expect_true(ftp_connection_settings(connection).validation_errors.empty(), "A corrected range must clear the validation error");
+  for (const auto &value : {"TLS_SHA256_SHA256", "TLS_SHA384_SHA384", "TLS_AES_128_GCM_SHA256:TLS_SHA256_SHA256"})
+    expect_true(!set_explicit_setting_value(&connection, ftp_tls13_cipher_list_setting_key(), std::string(value)), "Integrity-only TLS 1.3 suites must be rejected even with legacy compatibility");
   for (const auto &value : {"SSLv2", "SSLv3", "", "1.4"})
     expect_true(!set_explicit_setting_value(&connection, make_setting_key("ftp", "tls_min_version"), std::string(value)), "Unsupported protocol versions must be rejected");
 }

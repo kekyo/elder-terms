@@ -1447,7 +1447,9 @@ describe.concurrent('elder-terms-vte settings', () => {
       let acceptedSocket: Socket | undefined;
       const server = createServer((socket) => {
         acceptedSocket = socket;
-        socket.write('\u001B[2J\u001B[H\u001B[?25l');
+        // Materialize the first row before ED2 so old and new VTE retain the
+        // same single history row and render the same scrollbar position.
+        socket.write(' \u001B[2J\u001B[H\u001B[?25l');
       });
 
       const configHome = join(directory, 'xdg-config');
@@ -1529,9 +1531,23 @@ describe.concurrent('elder-terms-vte settings', () => {
               await app.getById('main_window'),
               'window'
             );
+            // Connection readiness enables the transfer button, whose GTK
+            // transition can outlast the logical connection notification.
             const startupCapture = await evidence.captureEvidence(
               'connection-colors-custom-startup',
-              async () => mainWindow.capture()
+              async () =>
+                await waitForResult(async () => {
+                  const captured = await mainWindow.capture();
+                  const mask = await connectionStatusTextMask(app, captured);
+                  await expectCaptureToMatchFixture(
+                    captured,
+                    'connection-colors-custom-startup-ready',
+                    connectionColorsCustomFixturePath,
+                    evidence,
+                    { masks: [mask] }
+                  );
+                  return captured;
+                })
             );
             // The OS-assigned TELNET port is intentionally visible in the
             // status bar and is asserted exactly outside the visual test.
@@ -1539,6 +1555,68 @@ describe.concurrent('elder-terms-vte settings', () => {
               app,
               startupCapture
             );
+
+            // Assert consecutive recorded frames as well as the screenshot:
+            // enabled controls must keep their final colors after settling.
+            const environment = await app.environment();
+            const area = startupCapture.bounds;
+            const videoPath = join(
+              evidence.directory,
+              'connection-colors-ready.mkv'
+            );
+            await execFileAsync(
+              'ffmpeg',
+              [
+                '-hide_banner',
+                '-loglevel',
+                'error',
+                '-f',
+                'x11grab',
+                '-framerate',
+                '30',
+                '-draw_mouse',
+                '0',
+                '-video_size',
+                `${area.width}x${area.height}`,
+                '-i',
+                `${environment.DISPLAY}+${area.x},${area.y}`,
+                '-frames:v',
+                '3',
+                '-c:v',
+                'ffv1',
+                '-pix_fmt',
+                'bgr0',
+                videoPath,
+              ],
+              { env: environment }
+            );
+            await execFileAsync('ffmpeg', [
+              '-hide_banner',
+              '-loglevel',
+              'error',
+              '-i',
+              videoPath,
+              '-frames:v',
+              '3',
+              join(evidence.directory, 'connection-colors-ready-%d.png'),
+            ]);
+            for (const frame of [1, 2, 3]) {
+              await expectCaptureToMatchFixture(
+                {
+                  ...startupCapture,
+                  image: await readFile(
+                    join(
+                      evidence.directory,
+                      `connection-colors-ready-${frame}.png`
+                    )
+                  ),
+                },
+                `connection-colors-ready-frame-${frame}`,
+                connectionColorsCustomFixturePath,
+                evidence,
+                { masks: [startupStatusMask] }
+              );
+            }
 
             await app.input.moveMouseTo(0, 0);
             await expectElementKind(transferButton, 'toggleButton').click();
@@ -1593,15 +1671,6 @@ describe.concurrent('elder-terms-vte settings', () => {
             const generalTabCapture = await generalTab.capture();
             expect(capturePixel(generalTabCapture, 0.5, 0.15)).toEqual(
               componentBackground
-            );
-            await expectCaptureToMatchFixture(
-              startupCapture,
-              'connection-colors-custom-startup',
-              connectionColorsCustomFixturePath,
-              evidence,
-              {
-                masks: [startupStatusMask],
-              }
             );
             const exteriorColorButton = await app.getById(
               'settings_general_exterior_background_button'

@@ -119,7 +119,9 @@ describe('IP scan on an isolated multicast network', () => {
             '-v',
             `${services}:/resolver-services:ro`,
             '-v',
-            `${config}:/etc/systemd/resolved.conf:ro`,
+            // Distribution drop-ins override resolved.conf. Keep this fixture's
+            // explicit mDNS/LLMNR selection above those defaults.
+            `${config}:/etc/systemd/resolved.conf.d/99-elder-terms-test.conf:ro`,
             '-v',
             `${join(fixtures, 'resolv.conf')}:/etc/resolv.conf:ro`,
             '--entrypoint',
@@ -154,6 +156,29 @@ describe('IP scan on an isolated multicast network', () => {
           'org.freedesktop.resolve1',
           '0',
         ]);
+        // Older resolved versions keep per-link defaults independent of the
+        // global protocol setting. The unavailable case must not start a client
+        // resolver, so only its peer receives per-link configuration.
+        for (const name of protocol === 'unavailable'
+          ? [peer]
+          : [peer, client]) {
+          await podman([
+            'exec',
+            name,
+            'resolvectl',
+            'mdns',
+            'eth0',
+            protocol === 'llmnr' ? 'no' : 'yes',
+          ]);
+          await podman([
+            'exec',
+            name,
+            'resolvectl',
+            'llmnr',
+            'eth0',
+            protocol === 'mdns' ? 'no' : 'yes',
+          ]);
+        }
         const inspection = JSON.parse(await podman(['inspect', peer]));
         const address = inspection[0].NetworkSettings.Networks[network]
           .IPAddress as string;

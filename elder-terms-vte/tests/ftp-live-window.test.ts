@@ -130,25 +130,13 @@ for (const testCase of [
             : 'subjectAltName=IP:127.0.0.1',
         ]);
       }
-      if (testCase === 'ftps-prompt-expired') {
-        const expired = join(directory, 'expired.pem');
-        await execute('openssl', [
-          'x509',
-          '-in',
-          certificate,
-          '-signkey',
-          privateKey,
-          '-days',
-          '-1',
-          '-out',
-          expired,
-        ]);
-        await writeFile(certificate, await readFile(expired));
-      }
-      if (testCase === 'ftps-prompt-future') {
-        const request = join(directory, 'future.csr'),
+      if (
+        testCase === 'ftps-prompt-future' ||
+        testCase === 'ftps-prompt-expired'
+      ) {
+        const request = join(directory, 'dated.csr'),
           config = join(directory, 'ca.cnf'),
-          future = join(directory, 'future.pem');
+          dated = join(directory, 'dated.pem');
         await writeFile(join(directory, 'index'), '');
         await writeFile(join(directory, 'serial'), '01\n');
         await writeFile(
@@ -184,13 +172,17 @@ for (const testCase of [
           '-in',
           request,
           '-out',
-          future,
+          dated,
           '-startdate',
-          '20990101000000Z',
+          testCase === 'ftps-prompt-expired'
+            ? '20000101000000Z'
+            : '20990101000000Z',
           '-enddate',
-          '21000101000000Z',
+          testCase === 'ftps-prompt-expired'
+            ? '20010101000000Z'
+            : '21000101000000Z',
         ]);
-        await writeFile(certificate, await readFile(future));
+        await writeFile(certificate, await readFile(dated));
       }
       if (dataCertificateFailure)
         await execute('openssl', [

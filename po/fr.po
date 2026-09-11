@@ -1428,13 +1428,13 @@ msgstr "Préparation du transfert…"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:679
 #, c-format
-msgid "Transferring %zu of %zu — %s"
-msgstr "Transfert de %zu de %zu — %s"
+msgid "Transferring %llu of %llu — %s"
+msgstr "Transfert de %llu de %llu — %s"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:682
 #, c-format
-msgid "Transferring %zu of %zu"
-msgstr "Transfert de %zu de %zu"
+msgid "Transferring %llu of %llu"
+msgstr "Transfert de %llu de %llu"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:686
 #, c-format

@@ -673,17 +673,17 @@ static cardio::promise<void> test_rejects_parallel_bulk_transfer() {
   client->add_directory("/");
   expect_true(client->try_begin_transfer(),
               "failed to reserve fake transfer slot");
+  // Name the request before co_await for GCC 12 coroutine compatibility.
+  auto request = elder_terms::FileTransferRequest{
+      .direction = elder_terms::FileTransferDirection::receive,
+      .source_paths = {"/missing"},
+      .destination_directory = "/tmp",
+      .callbacks = {},
+  };
   bool rejected = false;
   try {
     co_await elder_terms::run_file_transfer_async(
-        client,
-        elder_terms::FileTransferRequest{
-            .direction = elder_terms::FileTransferDirection::receive,
-            .source_paths = {"/missing"},
-            .destination_directory = "/tmp",
-            .callbacks = {},
-        },
-        {});
+        client, std::move(request), {});
   } catch (const std::runtime_error &error) {
     rejected =
         std::string(error.what()).find("already in progress") !=
@@ -702,7 +702,7 @@ int main() {
   cardio::dispatcher_group_glib dispatcher_group;
   cardio::dispatcher_host_glib dispatcher(dispatcher_group);
   std::exception_ptr error;
-  auto task = [&]() -> cardio::promise<void> {
+  auto task_body = [&]() -> cardio::promise<void> {
     try {
       co_await test_recursive_send_preserves_links_metadata_and_recovers();
       co_await test_recursive_receive_preserves_links_and_metadata();
@@ -712,7 +712,8 @@ int main() {
       error = std::current_exception();
     }
     dispatcher_group.shutdown();
-  }();
+  };
+  auto task = task_body();
 
   dispatcher.park();
   task.unsafe_result();

@@ -1605,28 +1605,28 @@ cardio::promise<SshUserPromptResponse> prompt_main_window_ssh_async(
   }
 
   set_main_window_terminal_interactive(main_window, false);
-  InlinePromptResponse response = co_await prompt_inline_async(
-      main_window->ssh_prompt,
-      {
-          .title = prompt.title.empty() ? _("SSH") : prompt.title,
-          .message = prompt.message,
-          .monospace_message = prompt.monospace_message,
-          .accept_label =
-              prompt.kind == SshUserPromptKind::host_key
-                  ? _("Accept")
-                  : prompt.kind == SshUserPromptKind::username
-                        ? _("Connect")
-                        : _("OK"),
-          .cancel_label = _("Cancel"),
-          .initial_text = prompt.initial_text,
-          .input_required = prompt.input_required,
-          .echo = prompt.echo,
-          .cancel_visible = true,
-          .accept_visible = prompt.accept_visible,
-          .alternative_label = _("Reset and Connect"),
-          .alternative_visible = prompt.host_key_reset_available,
-      },
-      std::move(cancellation));
+  InlinePromptRequest request{
+      .title = prompt.title.empty() ? _("SSH") : prompt.title,
+      .message = prompt.message,
+      .monospace_message = prompt.monospace_message,
+      .accept_label =
+          prompt.kind == SshUserPromptKind::host_key
+              ? _("Accept")
+              : prompt.kind == SshUserPromptKind::username
+                    ? _("Connect")
+                    : _("OK"),
+      .cancel_label = _("Cancel"),
+      .initial_text = prompt.initial_text,
+      .input_required = prompt.input_required,
+      .echo = prompt.echo,
+      .cancel_visible = true,
+      .accept_visible = prompt.accept_visible,
+      .alternative_label = _("Reset and Connect"),
+      .alternative_visible = prompt.host_key_reset_available,
+  };
+  auto pending = prompt_inline_async(
+      main_window->ssh_prompt, std::move(request), std::move(cancellation));
+  InlinePromptResponse response = co_await pending;
   co_return SshUserPromptResponse{
       .accepted = response.accepted,
       .text = std::move(response.text),

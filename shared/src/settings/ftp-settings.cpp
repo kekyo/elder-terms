@@ -108,6 +108,19 @@ static bool validate_tls_cipher_list(const SettingValue &value, std::string *rea
   return true;
 }
 
+static bool validate_tls13_cipher_list(const SettingValue &value, std::string *reason) {
+  if (!validate_tls_cipher_list(value, reason)) return false;
+  const auto &text = std::get<std::string>(value);
+  // OpenSSL 3.5 can negotiate these integrity-only suites at security level 0.
+  // FTPS requires encryption even when legacy compatibility is explicit.
+  if (text.find("TLS_SHA256_SHA256") != std::string::npos ||
+      text.find("TLS_SHA384_SHA384") != std::string::npos) {
+    *reason = "TLS 1.3 cipher suites must encrypt data";
+    return false;
+  }
+  return true;
+}
+
 static bool validate_certificate_error_action(const SettingValue &value, std::string *reason) {
   const auto &text = std::get<std::string>(value);
   if (text == "reject" || text == "prompt") return true;
@@ -180,7 +193,7 @@ std::vector<SettingDefinition> ftp_connection_setting_definitions() {
       {.key = ftp_key("tls_auth_order"), .default_value = std::string("tls"), .validate = validate_tls_auth_order, .retain_invalid = true},
       {.key = ftp_key("tls_compatibility"), .default_value = std::string("standard"), .validate = validate_tls_compatibility, .retain_invalid = true},
       {.key = ftp_key("tls_cipher_list"), .default_value = std::string(), .validate = validate_tls_cipher_list, .retain_invalid = true},
-      {.key = ftp_key("tls13_cipher_list"), .default_value = std::string(), .validate = validate_tls_cipher_list, .retain_invalid = true},
+      {.key = ftp_key("tls13_cipher_list"), .default_value = std::string(), .validate = validate_tls13_cipher_list, .retain_invalid = true},
       {.key = ftp_key("certificate_error_action"), .default_value = std::string("reject"), .validate = validate_certificate_error_action, .retain_invalid = true},
       {
           .key = ftp_address_setting_key(),

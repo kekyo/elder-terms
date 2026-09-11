@@ -2227,7 +2227,9 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
       async ({ app, connections }) => {
         const { width } = await beginDirtyConnectionEdit(app, 91);
         await selectSettingsTab(app, 'settings', 'Terminal');
-        expect((await width.info()).states).toContain('showing');
+        await waitForResult(async () =>
+          expect((await width.info()).states).toContain('showing')
+        );
         const path = join(connections, 'Alpha.ini');
         await rm(path);
         await expectElementKind(
@@ -2799,7 +2801,23 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
               });
               phase = 'reselect saved profile';
               await selectConnectionRow(app, list, 1);
+              await waitForResult(async () => {
+                expect(
+                  await expectElementKind(
+                    await app.getById('settings_ftp_username_entry'),
+                    'entry'
+                  ).text()
+                ).toBe('');
+              });
               await selectConnectionRow(app, list, 0);
+              await waitForResult(async () => {
+                expect(
+                  await expectElementKind(
+                    await app.getById('settings_ftp_username_entry'),
+                    'entry'
+                  ).text()
+                ).toBe('alice');
+              });
               await selectSettingsTab(app, 'settings', 'FTP');
               expect(
                 await expectElementKind(
@@ -2905,11 +2923,27 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
                 await app.getById('file_transfer_send_item'),
                 'menuItem'
               ).click();
-              await waitForResult(async () =>
-                expect(
-                  await readFile(join(remote, 'from-launcher.txt'), 'utf8')
-                ).toBe('FTPS launcher upload\n')
-              );
+              phase = 'upload local file';
+              try {
+                await waitForResult(async () =>
+                  expect(
+                    await readFile(join(remote, 'from-launcher.txt'), 'utf8')
+                  ).toBe('FTPS launcher upload\n')
+                );
+              } catch (error) {
+                const evidence = fileURLToPath(
+                  new URL('../../test-results/launcher/', import.meta.url)
+                );
+                await mkdir(evidence, { recursive: true });
+                await writeFile(
+                  join(
+                    evidence,
+                    `launcher-ftps-${mode}-${legacyPrompt}-failed.png`
+                  ),
+                  (await app.capture()).image
+                );
+                throw error;
+              }
               await waitForResult(async () =>
                 expect(
                   await expectElementKind(
@@ -2993,7 +3027,12 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
           );
         } catch (error) {
           throw new Error(
-            'FTPS launcher failed during ' + phase + ': ' + String(error)
+            'FTPS launcher failed during ' +
+              phase +
+              ': ' +
+              String(error) +
+              '\nFTP fixture trace:\n' +
+              serverLog
           );
         } finally {
           server?.kill('SIGTERM');

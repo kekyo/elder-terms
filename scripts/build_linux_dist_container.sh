@@ -194,6 +194,7 @@ for pkg_config_module in \
 	gtk+-3.0 \
 	libcanberra \
 	libcurl \
+	openssl \
 	libpcre2-8 \
 	libssh \
 	libudev \
@@ -227,7 +228,7 @@ deb_arch=$(dpkg-architecture -qDEB_HOST_ARCH)
 control_dir="$stage_dir/DEBIAN"
 mkdir -p "$control_dir"
 shlib_depends=$(calculate_shlibdeps)
-runtime_depends='dbus-user-session, hicolor-icon-theme, libcanberra-pulse, openssh-client, xdg-utils'
+runtime_depends='ca-certificates, dbus-user-session, hicolor-icon-theme, libcanberra-pulse, openssh-client, xdg-utils'
 write_control_file "$control_dir/control" "$shlib_depends, $runtime_depends"
 chmod 0644 "$control_dir/control"
 

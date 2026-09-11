@@ -89,7 +89,7 @@ static void run_text_send(TerminalTextSendRequest request,
   cardio::dispatcher_host_glib dispatcher(dispatcher_group);
   std::exception_ptr error;
   cardio::cancellation_source cancellation;
-  auto root = [&]() -> cardio::promise<void> {
+  auto root_body = [&]() -> cardio::promise<void> {
     try {
       co_await run_terminal_text_send_async(
           std::move(request), std::move(transport),
@@ -98,7 +98,8 @@ static void run_text_send(TerminalTextSendRequest request,
       error = std::current_exception();
     }
     dispatcher_group.shutdown();
-  }();
+  };
+  auto root = root_body();
   dispatcher.park();
   root.unsafe_result();
   if (error) {

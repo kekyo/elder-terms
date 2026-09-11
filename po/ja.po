@@ -1419,13 +1419,13 @@ msgstr "転送を準備しています…"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:679
 #, c-format
-msgid "Transferring %zu of %zu — %s"
-msgstr "転送中 %zu/%zu — %s"
+msgid "Transferring %llu of %llu — %s"
+msgstr "転送中 %llu/%llu — %s"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:682
 #, c-format
-msgid "Transferring %zu of %zu"
-msgstr "転送中 %zu/%zu"
+msgid "Transferring %llu of %llu"
+msgstr "転送中 %llu/%llu"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:686
 #, c-format

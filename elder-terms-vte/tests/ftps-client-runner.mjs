@@ -19,6 +19,9 @@ const run = async (command, args) => {
 };
 const root = await mkdtemp(join(tmpdir(), 'elder-ftps-'));
 let failures = 0;
+const runtime = await run(process.argv[2], ['--runtime-version']);
+assert.equal(runtime.code, 0, runtime.output);
+const activeFtpsSupported = Number(runtime.output.trim()) >= 0x080000;
 try {
   const cert = join(root, 'cert.pem');
   const key = join(root, 'key.pem');
@@ -61,18 +64,6 @@ try {
   ]);
   assert.equal(wrongResult.code, 0, wrongResult.output);
   const expired = join(root, 'expired.pem');
-  const expiredResult = await run('openssl', [
-    'x509',
-    '-in',
-    cert,
-    '-signkey',
-    key,
-    '-days',
-    '-1',
-    '-out',
-    expired,
-  ]);
-  assert.equal(expiredResult.code, 0, expiredResult.output);
   const alternate = join(root, 'alternate.pem');
   const alternateKey = join(root, 'alternate-key.pem');
   const alternateResult = await run('openssl', [
@@ -123,22 +114,30 @@ try {
     request,
   ]);
   assert.equal(csr.code, 0, csr.output);
-  const signed = await run('openssl', [
-    'ca',
-    '-batch',
-    '-selfsign',
-    '-config',
-    caConfig,
-    '-in',
-    request,
-    '-out',
-    future,
-    '-startdate',
-    '20990101000000Z',
-    '-enddate',
-    '21000101000000Z',
-  ]);
-  assert.equal(signed.code, 0, signed.output);
+  // Keep notBefore earlier than notAfter even for an expired certificate.
+  // OpenSSL 3.5 rejects negative -days values that reverse that ordering.
+  for (const [output, start, end] of [
+    [expired, '20000101000000Z', '20010101000000Z'],
+    [future, '20990101000000Z', '21000101000000Z'],
+  ]) {
+    await writeFile(join(root, 'index'), '');
+    const signed = await run('openssl', [
+      'ca',
+      '-batch',
+      '-selfsign',
+      '-config',
+      caConfig,
+      '-in',
+      request,
+      '-out',
+      output,
+      '-startdate',
+      start,
+      '-enddate',
+      end,
+    ]);
+    assert.equal(signed.code, 0, signed.output);
+  }
   const policyCases = [];
   for (const host of [
     '127.0.0.1',
@@ -667,6 +666,22 @@ try {
         flags: ['--data-cert=' + alternate, '--data-key=' + alternateKey],
         settings: 'certificate_error_action=prompt\n',
       });
+    for (const legacy of [false, true])
+      cases.push({
+        name: mode + '-approve-data-before-preliminary-' + legacy,
+        mode,
+        active: false,
+        success: true,
+        result: 'approve-data',
+        confirmations: 1,
+        flags: [
+          '--data-cert=' + alternate,
+          '--data-key=' + alternateKey,
+          '--upload-tls-before-preliminary',
+          ...(legacy ? ['--legacy-data'] : []),
+        ],
+        settings: 'certificate_error_action=prompt\n',
+      });
     cases.push({
       name: mode + '-new-session-asks-again',
       mode,
@@ -684,7 +699,31 @@ try {
     });
   }
   const hostnameReferences = new Map();
-  for (const scenario of cases) {
+  for (const mode of ['explicit', 'implicit'])
+    for (const cipher of ['TLS_SHA256_SHA256', 'TLS_SHA384_SHA384'])
+      cases.push({
+        name: mode + '-integrity-only-' + cipher,
+        mode,
+        success: false,
+        settings:
+          'tls_compatibility=openssl_legacy\ntls13_cipher_list=TLS_AES_128_GCM_SHA256:' +
+          cipher +
+          '\n',
+        error: 'must encrypt',
+        noLogin: true,
+      });
+  for (let scenario of cases) {
+    if (scenario.active && !activeFtpsSupported)
+      scenario = {
+        ...scenario,
+        success: false,
+        result: 'failure',
+        followup: undefined,
+        error: 'Active FTPS requires libcurl 8.0.0',
+        noLogin: true,
+        confirmations: 0,
+        authOrder: undefined,
+      };
     const directory = join(root, scenario.name);
     await mkdir(join(directory, 'home'), { recursive: true });
     const server = spawn(
@@ -923,7 +962,13 @@ try {
         cert,
         key,
       ]);
-      if (result.code !== 0) {
+      const unsupported =
+        !activeFtpsSupported && ['active', 'legacy-active'].includes(name);
+      const accepted = unsupported
+        ? result.code === 1 &&
+          result.output.includes('Active FTPS requires libcurl 8.0.0')
+        : result.code === 0;
+      if (!accepted) {
         ++failures;
         console.error(
           'FAIL ' + mode + '-stream-' + name + ': ' + result.output

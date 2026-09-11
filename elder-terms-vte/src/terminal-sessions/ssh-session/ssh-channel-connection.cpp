@@ -265,18 +265,16 @@ request_ssh_username_async(ssh_session session,
       message += "\n\n";
       message += _("User name must not be empty.");
     }
+    const auto request_prompt = SshUserPrompt{
+        .kind = SshUserPromptKind::username,
+        .title = _("SSH Authentication"),
+        .message = std::move(message),
+        .initial_text = username,
+        .input_required = true,
+        .echo = true,
+    };
     const std::optional<SshUserPromptResponse> response =
-        co_await request_ssh_prompt_async(
-            callbacks,
-            {
-                .kind = SshUserPromptKind::username,
-                .title = _("SSH Authentication"),
-                .message = std::move(message),
-                .initial_text = username,
-                .input_required = true,
-                .echo = true,
-            },
-            cancellation);
+        co_await request_ssh_prompt_async(callbacks, request_prompt, cancellation);
     if (!response.has_value()) {
       throw std::runtime_error(_("SSH user name was not provided"));
     }
@@ -552,7 +550,7 @@ run_ssh_keygen_async(std::vector<std::string> arguments,
         g_object_unref(value);
       });
 
-  co_return co_await cardio::gio::submit<SshKeygenResult>(
+  auto communicating = cardio::gio::submit<SshKeygenResult>(
       [process](GCancellable *cancellable, GAsyncReadyCallback callback,
                 gpointer user_data) {
         g_subprocess_communicate_utf8_async(
@@ -584,6 +582,7 @@ run_ssh_keygen_async(std::vector<std::string> arguments,
         return command_result;
       },
       std::move(cancellation));
+  co_return co_await communicating;
 }
 
 static std::string known_hosts_target(const SshEndpointSettings &settings) {
@@ -823,10 +822,10 @@ verify_host_key_async(ssh_session session,
   const std::optional<SshUserPrompt> prompt = host_key_prompt(
       session, settings, status,
       changed_plan.has_value() ? &*changed_plan : nullptr);
-  const std::optional<SshUserPromptResponse> response =
-      prompt.has_value()
-          ? co_await request_ssh_prompt_async(callbacks, *prompt, cancellation)
-          : std::nullopt;
+  std::optional<SshUserPromptResponse> response;
+  if (prompt.has_value()) {
+    response = co_await request_ssh_prompt_async(callbacks, *prompt, cancellation);
+  }
   if (changed) {
     if (!changed_plan.has_value() || !response.has_value() ||
         !response->reset_host_key || !changed_plan->reset_available) {
@@ -867,21 +866,19 @@ authenticate_private_key_async(ssh_session session,
   for (unsigned int attempt = 1;
        imported != SSH_OK && attempt <= maximum_passphrase_attempts;
        ++attempt) {
+    const auto request_prompt = SshUserPrompt{
+        .kind = SshUserPromptKind::private_key_passphrase,
+        .title = _("SSH Key Passphrase"),
+        .message = format_translated_string(
+            _("Passphrase for %s (attempt %u of %u):"),
+            settings.identity_file.c_str(), attempt,
+            maximum_passphrase_attempts),
+        .initial_text = {},
+        .input_required = true,
+        .echo = false,
+    };
     const std::optional<SshUserPromptResponse> response =
-        co_await request_ssh_prompt_async(
-            callbacks,
-            {
-                .kind = SshUserPromptKind::private_key_passphrase,
-                .title = _("SSH Key Passphrase"),
-                .message = format_translated_string(
-                    _("Passphrase for %s (attempt %u of %u):"),
-                    settings.identity_file.c_str(), attempt,
-                    maximum_passphrase_attempts),
-                .initial_text = {},
-                .input_required = true,
-                .echo = false,
-            },
-            cancellation);
+        co_await request_ssh_prompt_async(callbacks, request_prompt, cancellation);
     if (!response.has_value()) {
       co_return SSH_AUTH_DENIED;
     }
@@ -914,20 +911,18 @@ authenticate_password_async(ssh_session session,
     if (!username.empty()) {
       target = username + "@" + target;
     }
+    const auto request_prompt = SshUserPrompt{
+        .kind = SshUserPromptKind::password,
+        .title = _("SSH Authentication"),
+        .message = format_translated_string(
+            _("Password for %s (attempt %u of %u):"), target.c_str(),
+            attempt, maximum_attempts),
+        .initial_text = {},
+        .input_required = true,
+        .echo = false,
+    };
     const std::optional<SshUserPromptResponse> response =
-        co_await request_ssh_prompt_async(
-            callbacks,
-            {
-                .kind = SshUserPromptKind::password,
-                .title = _("SSH Authentication"),
-                .message = format_translated_string(
-                    _("Password for %s (attempt %u of %u):"), target.c_str(),
-                    attempt, maximum_attempts),
-                .initial_text = {},
-                .input_required = true,
-                .echo = false,
-            },
-            cancellation);
+        co_await request_ssh_prompt_async(callbacks, request_prompt, cancellation);
     if (!response.has_value()) {
       co_return false;
     }
@@ -995,19 +990,17 @@ authenticate_keyboard_interactive_async(
         char echo = 0;
         const char *prompt = ssh_userauth_kbdint_getprompt(
             session, static_cast<unsigned int>(index), &echo);
+        const auto request_prompt = SshUserPrompt{
+            .kind = SshUserPromptKind::keyboard_interactive,
+            .title = _("SSH Authentication"),
+            .message = keyboard_interactive_message(
+                name, instruction, prompt),
+            .initial_text = {},
+            .input_required = true,
+            .echo = echo != 0,
+        };
         const std::optional<SshUserPromptResponse> response =
-            co_await request_ssh_prompt_async(
-                callbacks,
-                {
-                    .kind = SshUserPromptKind::keyboard_interactive,
-                    .title = _("SSH Authentication"),
-                    .message = keyboard_interactive_message(
-                        name, instruction, prompt),
-                    .initial_text = {},
-                    .input_required = true,
-                    .echo = echo != 0,
-                },
-                cancellation);
+            co_await request_ssh_prompt_async(callbacks, request_prompt, cancellation);
         if (!response.has_value() ||
             ssh_userauth_kbdint_setanswer(
                 session, static_cast<unsigned int>(index),
@@ -1260,15 +1253,20 @@ struct AuthenticatedSshTransport::Impl {
   cardio::promise<T> execute_async(Operation operation,
                                    bool notify_channel_activity,
                                    cardio::cancellation cancellation) {
+    cancellation.throw_if_cancellation_requested();
     auto completion = std::make_shared<SshWorkerCompletion<T>>();
+    auto callback = std::make_shared<Operation>(std::move(operation));
     const bool queued = enqueue(
-        [this, completion, operation = std::move(operation),
+        [this, completion, operation = std::move(callback),
          notify_channel_activity]() mutable {
           try {
-            completion->value.emplace(operation());
+            completion->value.emplace((*operation)());
           } catch (...) {
             completion->error = std::current_exception();
           }
+          // Retire captured owners before waking the caller. Otherwise its
+          // final reference can be released on this worker and join itself.
+          operation.reset();
           if (notify_channel_activity) {
             notify_ssh_event_fd(wakeup_fd);
           }
@@ -1278,12 +1276,26 @@ struct AuthenticatedSshTransport::Impl {
       throw std::runtime_error(_("SSH transport is closed"));
     }
 
-    (void)co_await cardio::from_fd(
-        completion->event_fd,
-        cardio::fd_event::read | cardio::fd_event::error |
-            cardio::fd_event::hangup,
-        std::move(cancellation));
+    std::exception_ptr wait_error;
+    try {
+      (void)co_await cardio::from_fd(
+          completion->event_fd,
+          cardio::fd_event::read | cardio::fd_event::error |
+              cardio::fd_event::hangup,
+          std::move(cancellation));
+    } catch (...) {
+      wait_error = std::current_exception();
+    }
+    if (wait_error) {
+      // The queued operation still owns callback arguments. Keep its caller
+      // alive until the worker retires them, including after cancellation.
+      (void)co_await cardio::from_fd(
+          completion->event_fd,
+          cardio::fd_event::read | cardio::fd_event::error |
+              cardio::fd_event::hangup, {});
+    }
     drain_ssh_event_fd(completion->event_fd);
+    if (wait_error) std::rethrow_exception(wait_error);
     if (completion->error) {
       std::rethrow_exception(completion->error);
     }
@@ -1294,7 +1306,9 @@ struct AuthenticatedSshTransport::Impl {
   cardio::promise<SshWorkerResult>
   execute_ssh_async(Operation operation, bool notify_channel_activity,
                     cardio::cancellation cancellation) {
-    co_return co_await execute_async<SshWorkerResult>(
+    // GCC 12 mishandles owning lambda temporaries inside await expressions.
+    // Construct their promises first, retaining the same asynchronous operation.
+    auto executing = execute_async<SshWorkerResult>(
         [this, operation = std::move(operation)]() mutable {
           const int value = operation();
           const char *detail = ssh_get_error(session);
@@ -1307,6 +1321,7 @@ struct AuthenticatedSshTransport::Impl {
           };
         },
         notify_channel_activity, std::move(cancellation));
+    co_return co_await executing;
   }
 
   cardio::promise<void>
@@ -1449,12 +1464,13 @@ cardio::promise<void> await_transport_ok_async(
 cardio::promise<void> flush_transport_async(
     const std::shared_ptr<AuthenticatedSshTransport> &transport,
     cardio::cancellation cancellation) {
-  co_await await_transport_ok_async(
+  auto flushing = await_transport_ok_async(
       transport,
       [transport]() {
         return ssh_blocking_flush(transport->impl->session, 0);
       },
       "Failed to flush SSH output", true, std::move(cancellation));
+  co_await flushing;
 }
 
 AuthenticatedSshTransport::AuthenticatedSshTransport(
@@ -1595,7 +1611,7 @@ AuthenticatedSshTransport::execute_command_async(
   std::exception_ptr operation_error;
   SshCommandResult command_result;
   try {
-    channel = co_await impl->execute_async<ssh_channel>(
+    auto allocating = impl->execute_async<ssh_channel>(
         [owner, callback_state]() {
           ssh_channel new_channel = ssh_channel_new(owner->impl->session);
           if (new_channel == nullptr) {
@@ -1612,64 +1628,66 @@ AuthenticatedSshTransport::execute_command_async(
           return new_channel;
         },
         false, cancellation);
+    channel = co_await allocating;
     co_await await_transport_ok_async(
         owner, [channel]() { return ssh_channel_open_session(channel); },
         "Failed to open SSH command channel", false, cancellation);
-    co_await await_transport_ok_async(
+    auto executing = await_transport_ok_async(
         owner,
         [channel, command]() {
           return ssh_channel_request_exec(channel, command.c_str());
         },
         "Failed to execute SSH command", false, cancellation);
+    co_await executing;
     co_await flush_transport_async(owner, cancellation);
 
     for (;;) {
       cancellation.throw_if_cancellation_requested();
-      const SshCommandReadResult read_result =
-          co_await impl->execute_async<SshCommandReadResult>(
-              [owner, channel, callback_state]() {
-                SshCommandReadResult result;
-                std::array<char, command_read_size> output_buffer{};
-                std::array<char, command_read_size> error_buffer{};
-                const int error_size = ssh_channel_read_nonblocking(
-                    channel, error_buffer.data(), error_buffer.size(), 1);
-                if (error_size == SSH_ERROR &&
-                    !ssh_result_is_again(owner->impl->session,
-                                         error_size)) {
-                  throw ssh_failure(owner->impl->session,
-                                    "Failed to read SSH command stderr");
-                }
-                const int output_size = ssh_channel_read_nonblocking(
-                    channel, output_buffer.data(), output_buffer.size(), 0);
-                if (output_size == SSH_ERROR &&
-                    !ssh_result_is_again(owner->impl->session,
-                                         output_size)) {
-                  throw ssh_failure(owner->impl->session,
-                                    "Failed to read SSH command stdout");
-                }
-                if (output_size > 0) {
-                  result.standard_output.assign(
-                      output_buffer.data(),
-                      static_cast<std::size_t>(output_size));
-                }
-                if (error_size > 0) {
-                  result.standard_error.assign(
-                      error_buffer.data(),
-                      static_cast<std::size_t>(error_size));
-                }
-                result.poll_flags =
-                    ssh_get_poll_flags(owner->impl->session);
-                result.exit_status = callback_state->exit_status;
-                result.exit_status_received =
-                    callback_state->exit_status_received;
-                result.eof =
-                    output_size <= 0 && error_size <= 0 &&
-                    (ssh_channel_is_eof(channel) != 0 ||
-                     ssh_channel_is_closed(channel) != 0 ||
-                     ssh_channel_is_open(channel) == 0);
-                return result;
-              },
-              false, cancellation);
+      auto reading = impl->execute_async<SshCommandReadResult>(
+          [owner, channel, callback_state]() {
+            SshCommandReadResult result;
+            std::array<char, command_read_size> output_buffer{};
+            std::array<char, command_read_size> error_buffer{};
+            const int error_size = ssh_channel_read_nonblocking(
+                channel, error_buffer.data(), error_buffer.size(), 1);
+            if (error_size == SSH_ERROR &&
+                !ssh_result_is_again(owner->impl->session,
+                                     error_size)) {
+              throw ssh_failure(owner->impl->session,
+                                "Failed to read SSH command stderr");
+            }
+            const int output_size = ssh_channel_read_nonblocking(
+                channel, output_buffer.data(), output_buffer.size(), 0);
+            if (output_size == SSH_ERROR &&
+                !ssh_result_is_again(owner->impl->session,
+                                     output_size)) {
+              throw ssh_failure(owner->impl->session,
+                                "Failed to read SSH command stdout");
+            }
+            if (output_size > 0) {
+              result.standard_output.assign(
+                  output_buffer.data(),
+                  static_cast<std::size_t>(output_size));
+            }
+            if (error_size > 0) {
+              result.standard_error.assign(
+                  error_buffer.data(),
+                  static_cast<std::size_t>(error_size));
+            }
+            result.poll_flags =
+                ssh_get_poll_flags(owner->impl->session);
+            result.exit_status = callback_state->exit_status;
+            result.exit_status_received =
+                callback_state->exit_status_received;
+            result.eof =
+                output_size <= 0 && error_size <= 0 &&
+                (ssh_channel_is_eof(channel) != 0 ||
+                 ssh_channel_is_closed(channel) != 0 ||
+                 ssh_channel_is_open(channel) == 0);
+            return result;
+          },
+          false, cancellation);
+      const SshCommandReadResult read_result = co_await reading;
       if (command_result.standard_output.size() +
               read_result.standard_output.size() >
           command_output_limit) {
@@ -1721,7 +1739,7 @@ AuthenticatedSshTransport::execute_serialized_async(
   cancellation.throw_if_cancellation_requested();
   const std::shared_ptr<AuthenticatedSshTransport> owner =
       shared_from_this();
-  (void)co_await impl->execute_async<bool>(
+  auto executing = impl->execute_async<bool>(
       [owner, operation = std::move(operation)]() {
         if (owner->impl->session == nullptr) {
           throw std::runtime_error(_("SSH transport is closed"));
@@ -1730,6 +1748,7 @@ AuthenticatedSshTransport::execute_serialized_async(
         return true;
       },
       true, {});
+  (void)co_await executing;
   cancellation.throw_if_cancellation_requested();
 }
 
@@ -1829,25 +1848,25 @@ SshChannelConnection::open_async(
 
   auto connection_impl = std::make_unique<Impl>();
   connection_impl->transport = transport;
-  connection_impl->channel =
-      co_await transport->impl->execute_async<ssh_channel>(
-          [transport]() {
-            ssh_channel channel = ssh_channel_new(transport->impl->session);
-            if (channel == nullptr) {
-              throw ssh_failure(transport->impl->session,
-                                "Failed to allocate SSH channel");
-            }
-            transport->impl->channels.push_back(channel);
-            return channel;
-          },
-          false, cancellation);
+  auto allocating = transport->impl->execute_async<ssh_channel>(
+      [transport]() {
+        ssh_channel channel = ssh_channel_new(transport->impl->session);
+        if (channel == nullptr) {
+          throw ssh_failure(transport->impl->session,
+                            "Failed to allocate SSH channel");
+        }
+        transport->impl->channels.push_back(channel);
+        return channel;
+      },
+      false, cancellation);
+  connection_impl->channel = co_await allocating;
   const ssh_channel channel = connection_impl->channel;
 
   try {
     co_await await_transport_ok_async(
         transport, [channel]() { return ssh_channel_open_session(channel); },
         "Failed to open SSH session channel", false, cancellation);
-    co_await await_transport_ok_async(
+    auto requesting_pty = await_transport_ok_async(
         transport,
         [channel, terminal_type, columns, rows]() {
           return ssh_channel_request_pty_size(
@@ -1856,6 +1875,7 @@ SshChannelConnection::open_async(
               clamped_pty_dimension(rows));
         },
         "Failed to request SSH PTY", false, cancellation);
+    co_await requesting_pty;
     co_await await_transport_ok_async(
         transport, [channel]() { return ssh_channel_request_shell(channel); },
         "Failed to request SSH shell", false, cancellation);
@@ -1891,42 +1911,42 @@ SshChannelConnection::read_async(std::span<unsigned char> buffer,
     if (impl->closed) {
       co_return 0;
     }
-    const SshChannelReadResult result =
-        co_await transport->impl->execute_async<SshChannelReadResult>(
-            [transport, channel, buffer, capacity]() {
-              /*
-               * Check the PTY's normal data stream last. A libssh read for one
-               * stream can consume packets for the other stream; checking
-               * stdout last observes data buffered by the stderr check.
-               */
-              for (int is_stderr : {1, 0}) {
-                const int read_size = ssh_channel_read_nonblocking(
-                    channel, buffer.data(), capacity, is_stderr);
-                if (read_size > 0) {
-                  return SshChannelReadResult{
-                      .size = read_size,
-                      .poll_flags =
-                          ssh_get_poll_flags(transport->impl->session),
-                      .eof = false,
-                  };
-                }
-                if (read_size == SSH_ERROR &&
-                    !ssh_result_is_again(transport->impl->session,
-                                         read_size)) {
-                  throw ssh_failure(transport->impl->session,
-                                    "Failed to read SSH channel");
-                }
-              }
+    auto reading = transport->impl->execute_async<SshChannelReadResult>(
+        [transport, channel, buffer, capacity]() {
+          /*
+           * Check the PTY's normal data stream last. A libssh read for one
+           * stream can consume packets for the other stream; checking
+           * stdout last observes data buffered by the stderr check.
+           */
+          for (int is_stderr : {1, 0}) {
+            const int read_size = ssh_channel_read_nonblocking(
+                channel, buffer.data(), capacity, is_stderr);
+            if (read_size > 0) {
               return SshChannelReadResult{
-                  .size = SSH_AGAIN,
+                  .size = read_size,
                   .poll_flags =
                       ssh_get_poll_flags(transport->impl->session),
-                  .eof = ssh_channel_is_eof(channel) != 0 ||
-                         ssh_channel_is_closed(channel) != 0 ||
-                         ssh_channel_is_open(channel) == 0,
+                  .eof = false,
               };
-            },
-            false, cancellation);
+            }
+            if (read_size == SSH_ERROR &&
+                !ssh_result_is_again(transport->impl->session,
+                                     read_size)) {
+              throw ssh_failure(transport->impl->session,
+                                "Failed to read SSH channel");
+            }
+          }
+          return SshChannelReadResult{
+              .size = SSH_AGAIN,
+              .poll_flags =
+                  ssh_get_poll_flags(transport->impl->session),
+              .eof = ssh_channel_is_eof(channel) != 0 ||
+                     ssh_channel_is_closed(channel) != 0 ||
+                     ssh_channel_is_open(channel) == 0,
+          };
+        },
+        false, cancellation);
+    const SshChannelReadResult result = co_await reading;
     if (result.size > 0) {
       co_return static_cast<std::size_t>(result.size);
     }

@@ -108,7 +108,7 @@ Section: x11
 Priority: optional
 Architecture: ${debianArchitecture}
 Maintainer: elder-terms packager <packager@localhost>
-Depends: libc6, dbus-user-session, hicolor-icon-theme${includeOpenSshClient ? ', openssh-client' : ''}${includeXdgUtils ? ', xdg-utils' : ''}
+Depends: libc6, ca-certificates, dbus-user-session, hicolor-icon-theme${includeOpenSshClient ? ', openssh-client' : ''}${includeXdgUtils ? ', xdg-utils' : ''}
 Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP connections
 `
   );
@@ -562,6 +562,8 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     ]).get(debianArchitecture);
     expect(canonicalArchitecture).toBeDefined();
 
+    const missingCaStage = join(temporaryRoot, 'missing-ca-stage');
+    const missingCaPackage = join(temporaryRoot, 'missing-ca.deb');
     const goodStage = join(temporaryRoot, 'good-stage');
     const badStage = join(temporaryRoot, 'bad-stage');
     const goodPackage = join(temporaryRoot, 'elder-terms-good.deb');
@@ -588,6 +590,18 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'elder-terms-missing-xdg-utils.deb'
     );
     createPackageStage(goodStage, debianArchitecture, undefined, true, true);
+    createPackageStage(
+      missingCaStage,
+      debianArchitecture,
+      undefined,
+      true,
+      true
+    );
+    const missingCaControl = join(missingCaStage, 'DEBIAN/control');
+    writeFileSync(
+      missingCaControl,
+      readFileSync(missingCaControl, 'utf8').replace(', ca-certificates', '')
+    );
     createPackageStage(
       badStage,
       debianArchitecture,
@@ -618,6 +632,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     );
     for (const [stage, output] of [
       [goodStage, goodPackage],
+      [missingCaStage, missingCaPackage],
       [badStage, badPackage],
       [missingFileTransferStage, missingFileTransferPackage],
       [missingOpenSshClientStage, missingOpenSshClientPackage],
@@ -637,6 +652,12 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       [goodPackage, canonicalArchitecture!]
     );
     expectSuccess(goodValidation, 'complete deb package was rejected');
+    const missingCaValidation = runSourced(
+      'VERSION=1.2.3\nvalidate_deb_package "$2" "$3"',
+      [missingCaPackage, canonicalArchitecture!]
+    );
+    expect(missingCaValidation.status).not.toBe(0);
+    expect(missingCaValidation.stderr).toContain('ca-certificates');
 
     const badValidation = runSourced(
       'VERSION=1.2.3\nvalidate_deb_package "$2" "$3"',

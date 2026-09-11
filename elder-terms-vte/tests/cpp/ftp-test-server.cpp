@@ -67,6 +67,7 @@ struct Options {
   bool break_data_tls = false;
   bool hold_control_tls = false;
   bool hold_data_tls = false;
+  bool upload_tls_before_preliminary = false;
   bool require_reuse = false;
   int tls_version = 0;
   std::string tls_ciphers;
@@ -393,7 +394,8 @@ static void serve(Socket &control, Options options, SSL_CTX *context, SSL_CTX *d
         respond(550, "File unavailable");
         continue;
       }
-      respond(150, "Opening binary transfer");
+      const bool early_tls = upload && protected_data && options.upload_tls_before_preliminary;
+      if (!early_tls) respond(150, "Opening binary transfer");
       Socket data;
       if (passive.fd >= 0) {
         data = Socket(::accept4(passive.fd, nullptr, nullptr, SOCK_CLOEXEC));
@@ -422,6 +424,7 @@ static void serve(Socket &control, Options options, SSL_CTX *context, SSL_CTX *d
         expect(!options.require_reuse || SSL_session_reused(data.tls), "Data TLS session was not reused");
         std::osyncstream(std::clog) << "TLS DATA " << SSL_get_version(data.tls) << " " << SSL_get_cipher_name(data.tls) << std::endl;
       }
+      if (early_tls) respond(150, "Opening binary transfer");
       if (upload && options.hold_upload) {
         std::cout << "DATA_WAIT" << std::endl;
         const auto action = read_line(STDIN_FILENO);
@@ -524,6 +527,7 @@ int main(int argc, char **argv) {
       else if (option.starts_with("--tls-version=")) options.tls_version = std::stoi(option.substr(14));
       else if (option == "--hold-control-tls") options.hold_control_tls = true;
       else if (option == "--hold-data-tls") options.hold_data_tls = true;
+      else if (option == "--upload-tls-before-preliminary") options.upload_tls_before_preliminary = true;
       else if (option.starts_with("--tls-ciphers=")) options.tls_ciphers = option.substr(14);
       else if (option.starts_with("--tls13-ciphers=")) options.tls13_ciphers = option.substr(16);
       else if (option.starts_with("--auth-command=")) options.auth_command = option.substr(15);

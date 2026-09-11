@@ -1080,7 +1080,7 @@ exercise_sftp_client_async(
                                    cancellation);
   co_await writer->close_async(cancellation);
   writer.reset();
-  co_await client->set_attributes_async(
+  auto updating = client->set_attributes_async(
       "uploaded.txt",
       elder_terms::RemoteFileAttributes{
           .name = {},
@@ -1092,6 +1092,7 @@ exercise_sftp_client_async(
           .modification_time_unix_seconds = 1'700'002'123,
       },
       cancellation);
+  co_await updating;
   const std::optional<elder_terms::RemoteFileAttributes> uploaded =
       co_await client->lstat_async("uploaded.txt", cancellation);
   expect_true(uploaded.has_value() &&
@@ -1159,7 +1160,7 @@ static int run_client_case(const ServerOptions &server_options,
 
   cardio::dispatcher_group_glib dispatcher_group;
   cardio::dispatcher_host_glib dispatcher(dispatcher_group);
-  auto task = [&]() -> cardio::promise<void> {
+  auto task_body = [&]() -> cardio::promise<void> {
     try {
       elder_terms::TerminalSessionCallbacks callbacks{
           .ended = {},
@@ -1324,7 +1325,8 @@ static int run_client_case(const ServerOptions &server_options,
       async_error = std::current_exception();
     }
     dispatcher_group.shutdown();
-  }();
+  };
+  auto task = task_body();
 
   dispatcher.park();
   task.unsafe_result();

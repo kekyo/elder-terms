@@ -1410,13 +1410,13 @@ msgstr "جارٍ تحضير النقل..."
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:679
 #, c-format
-msgid "Transferring %zu of %zu — %s"
-msgstr "نقل %zu لـ %zu — %s"
+msgid "Transferring %llu of %llu — %s"
+msgstr "نقل %llu لـ %llu — %s"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:682
 #, c-format
-msgid "Transferring %zu of %zu"
-msgstr "نقل %zu لـ %zu"
+msgid "Transferring %llu of %llu"
+msgstr "نقل %llu لـ %llu"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:686
 #, c-format

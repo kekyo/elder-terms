@@ -156,13 +156,14 @@ static cardio::promise<void> run_client(unsigned port, int sync,
   const bool normal_transfer = test_case == Case::normal ||
                                test_case == Case::quit_without_response;
   const auto caller = std::this_thread::get_id();
-  auto session = co_await elder_terms::open_curl_ftp_session_async({
+  auto opening = elder_terms::open_curl_ftp_session_async({
       .connection = {.address = "127.0.0.1", .port = static_cast<int>(port),
                      .username = "alice", .data_connection_mode =
                          elder_terms::FtpDataConnectionMode::passive,
                      .local_directory = {}, .remote_directory = "/"},
       .password = "secret",
   });
+  auto session = co_await opening;
   cardio::cancellation_source cancellation;
   auto cancellation_started = std::chrono::steady_clock::now();
   std::string bytes;

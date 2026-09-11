@@ -1408,13 +1408,13 @@ msgstr "准备传输..."
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:679
 #, c-format
-msgid "Transferring %zu of %zu — %s"
-msgstr "传输 %zu 的 %zu — %s"
+msgid "Transferring %llu of %llu — %s"
+msgstr "传输 %llu 的 %llu — %s"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:682
 #, c-format
-msgid "Transferring %zu of %zu"
-msgstr "传输 %zu 的 %zu"
+msgid "Transferring %llu of %llu"
+msgstr "传输 %llu 的 %llu"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:686
 #, c-format

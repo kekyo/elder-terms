@@ -24,6 +24,9 @@
 
 namespace elder_terms {
 
+static std::string format_translated_string(const char *format, ...)
+    G_GNUC_PRINTF(1, 2);
+
 static std::string format_translated_string(const char *format, ...) {
   va_list arguments;
   va_start(arguments, format);
@@ -681,12 +684,14 @@ static void update_file_transfer_progress(
   std::string label;
   if (has_items && !file_name.empty()) {
     label = format_translated_string(
-        _("Transferring %zu of %zu — %s"), progress.completed_items,
-        progress.total_items, file_name.c_str());
+        _("Transferring %llu of %llu — %s"),
+        static_cast<unsigned long long>(progress.completed_items),
+        static_cast<unsigned long long>(progress.total_items), file_name.c_str());
   } else if (has_items) {
-    label = format_translated_string(_("Transferring %zu of %zu"),
-                                     progress.completed_items,
-                                     progress.total_items);
+    label = format_translated_string(
+        _("Transferring %llu of %llu"),
+        static_cast<unsigned long long>(progress.completed_items),
+        static_cast<unsigned long long>(progress.total_items));
   } else if (!file_name.empty()) {
     label = format_translated_string(_("Transferring — %s"),
                                      file_name.c_str());
@@ -723,20 +728,20 @@ prompt_file_transfer_choice_async(
     const std::string &accept_label,
     cardio::cancellation cancellation) {
   cancellation.throw_if_cancellation_requested();
-  InlinePromptResponse response = co_await prompt_inline_async(
-      window->prompt,
-      {
-          .title = title,
-          .message = detail,
-          .accept_label = accept_label,
-          .cancel_label = cancel_label,
-          .input_required = false,
-          .echo = false,
-          .cancel_visible = true,
-          .alternative_label = alternative_label,
-          .alternative_visible = true,
-      },
-      cancellation);
+  InlinePromptRequest request{
+      .title = title,
+      .message = detail,
+      .accept_label = accept_label,
+      .cancel_label = cancel_label,
+      .input_required = false,
+      .echo = false,
+      .cancel_visible = true,
+      .alternative_label = alternative_label,
+      .alternative_visible = true,
+  };
+  auto pending = prompt_inline_async(
+      window->prompt, std::move(request), cancellation);
+  InlinePromptResponse response = co_await pending;
   cancellation.throw_if_cancellation_requested();
   co_return response;
 }
@@ -1269,19 +1274,19 @@ prompt_file_transfer_rename_name_async(
   std::string initial_text = item.name;
   for (;;) {
     cancellation.throw_if_cancellation_requested();
-    const InlinePromptResponse response = co_await prompt_inline_async(
-        window->prompt,
-        {
-            .title = _("Rename item"),
-            .message = message,
-            .accept_label = _("Rename"),
-            .cancel_label = _("Cancel"),
-            .initial_text = initial_text,
-            .input_required = true,
-            .echo = true,
-            .cancel_visible = true,
-        },
-        cancellation);
+    InlinePromptRequest request{
+        .title = _("Rename item"),
+        .message = message,
+        .accept_label = _("Rename"),
+        .cancel_label = _("Cancel"),
+        .initial_text = initial_text,
+        .input_required = true,
+        .echo = true,
+        .cancel_visible = true,
+    };
+    auto pending = prompt_inline_async(
+        window->prompt, std::move(request), cancellation);
+    const InlinePromptResponse response = co_await pending;
     cancellation.throw_if_cancellation_requested();
     if (!response.accepted) {
       co_return std::nullopt;
@@ -1300,18 +1305,18 @@ static cardio::promise<void>
 show_file_transfer_browser_action_error_async(
     FileTransferWindow *window, std::string title, std::string message,
     cardio::cancellation cancellation) {
-  (void)co_await prompt_inline_async(
-      window->prompt,
-      {
-          .title = std::move(title),
-          .message = std::move(message),
-          .accept_label = _("Close"),
-          .cancel_label = _("Cancel"),
-          .input_required = false,
-          .echo = false,
-          .cancel_visible = false,
-      },
-      std::move(cancellation));
+  InlinePromptRequest request{
+      .title = std::move(title),
+      .message = std::move(message),
+      .accept_label = _("Close"),
+      .cancel_label = _("Cancel"),
+      .input_required = false,
+      .echo = false,
+      .cancel_visible = false,
+  };
+  auto pending = prompt_inline_async(
+      window->prompt, std::move(request), std::move(cancellation));
+  (void)co_await pending;
 }
 
 static cardio::promise<void> run_file_transfer_rename_async(
@@ -1456,19 +1461,19 @@ static cardio::promise<void> run_file_transfer_hash_async(
   set_file_transfer_browser_action_phase(window, true, false, {});
   set_file_transfer_status(window, _("Hash calculation complete"));
   try {
-    (void)co_await prompt_inline_async(
-        window->prompt,
-        {
-            .title = _("File hash values"),
-            .message = item.name,
-            .monospace_message = file_transfer_hash_message(*hashes),
-            .accept_label = _("Close"),
-            .cancel_label = _("Cancel"),
-            .input_required = false,
-            .echo = false,
-            .cancel_visible = false,
-        },
-        window->stop_source.get_cancellation());
+    InlinePromptRequest request{
+        .title = _("File hash values"),
+        .message = item.name,
+        .monospace_message = file_transfer_hash_message(*hashes),
+        .accept_label = _("Close"),
+        .cancel_label = _("Cancel"),
+        .input_required = false,
+        .echo = false,
+        .cancel_visible = false,
+    };
+    auto pending = prompt_inline_async(
+        window->prompt, std::move(request), window->stop_source.get_cancellation());
+    (void)co_await pending;
   } catch (const cardio::canceled_exception &) {
   }
   if (!window->destroyed) {
@@ -1556,18 +1561,18 @@ static cardio::promise<bool> prompt_file_transfer_delete_async(
   const char *title = g_dngettext(
       GETTEXT_PACKAGE, "Delete selected item?", "Delete selected items?",
       items.size());
-  const InlinePromptResponse response = co_await prompt_inline_async(
-      window->prompt,
-      {
-          .title = title,
-          .message = file_transfer_delete_confirmation_message(items),
-          .accept_label = _("Delete"),
-          .cancel_label = _("Cancel"),
-          .input_required = false,
-          .echo = false,
-          .cancel_visible = true,
-      },
-      cancellation);
+  InlinePromptRequest request{
+      .title = title,
+      .message = file_transfer_delete_confirmation_message(items),
+      .accept_label = _("Delete"),
+      .cancel_label = _("Cancel"),
+      .input_required = false,
+      .echo = false,
+      .cancel_visible = true,
+  };
+  auto pending = prompt_inline_async(
+      window->prompt, std::move(request), cancellation);
+  const InlinePromptResponse response = co_await pending;
   cancellation.throw_if_cancellation_requested();
   co_return response.accepted;
 }
@@ -1689,39 +1694,39 @@ static cardio::promise<void> run_file_transfer_window_transfer_async(
       window->transfer_cancel_source->get_cancellation();
   bool succeeded = false;
   try {
-    co_await run_file_transfer_async(
-        window->client,
-        {
-            .direction = direction,
-            .source_paths = std::move(sources),
-            .destination_directory = std::move(destination),
-            .callbacks =
-                {
-                    .conflict =
-                        [window](
-                            const FileTransferConflict &conflict,
-                            cardio::cancellation callback_cancellation) {
-                          return prompt_file_transfer_conflict_async(
-                              window, conflict,
-                              std::move(callback_cancellation));
-                        },
-                    .failure =
-                        [window](
-                            const FileTransferFailure &failure,
-                            cardio::cancellation callback_cancellation) {
-                          return prompt_file_transfer_failure_async(
-                              window, failure,
-                              std::move(callback_cancellation));
-                        },
-                    .progress =
-                        [window](
-                            const FileTransferProgress &progress) {
-                          update_file_transfer_progress(window,
-                                                        progress);
-                        },
-                },
-        },
-        cancellation);
+    FileTransferRequest request{
+        .direction = direction,
+        .source_paths = std::move(sources),
+        .destination_directory = std::move(destination),
+        .callbacks =
+            {
+                .conflict =
+                    [window](
+                        const FileTransferConflict &conflict,
+                        cardio::cancellation callback_cancellation) {
+                      return prompt_file_transfer_conflict_async(
+                          window, conflict,
+                          std::move(callback_cancellation));
+                    },
+                .failure =
+                    [window](
+                        const FileTransferFailure &failure,
+                        cardio::cancellation callback_cancellation) {
+                      return prompt_file_transfer_failure_async(
+                          window, failure,
+                          std::move(callback_cancellation));
+                    },
+                .progress =
+                    [window](
+                        const FileTransferProgress &progress) {
+                      update_file_transfer_progress(window,
+                                                    progress);
+                    },
+            },
+    };
+    auto pending = run_file_transfer_async(
+        window->client, std::move(request), cancellation);
+    co_await pending;
     succeeded = true;
   } catch (const cardio::canceled_exception &) {
     if (!window->destroyed) {
@@ -2557,18 +2562,18 @@ cardio::promise<void> show_file_transfer_window_connection_error_async(
   set_file_transfer_status(window.get(), _("Connection failed"));
   update_file_transfer_sensitivity(window.get());
   update_file_transfer_overlay_presentation(window.get());
-  const InlinePromptResponse response = co_await prompt_inline_async(
-      window->prompt,
-      {
-          .title = std::move(title),
-          .message = std::move(message),
-          .accept_label = _("Close"),
-          .cancel_label = _("Cancel"),
-          .input_required = false,
-          .echo = false,
-          .cancel_visible = false,
-      },
-      std::move(cancellation));
+  InlinePromptRequest request{
+      .title = std::move(title),
+      .message = std::move(message),
+      .accept_label = _("Close"),
+      .cancel_label = _("Cancel"),
+      .input_required = false,
+      .echo = false,
+      .cancel_visible = false,
+  };
+  auto pending = prompt_inline_async(
+      window->prompt, std::move(request), std::move(cancellation));
+  const InlinePromptResponse response = co_await pending;
   if (response.accepted && !window->destroyed && window->window != nullptr) {
     gtk_widget_destroy(window->window);
   }

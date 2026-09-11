@@ -695,7 +695,7 @@ static void run_transfer_integration_case(TransferIntegrationCase test_case) {
           .finished = nullptr,
       };
       std::exception_ptr async_error;
-      auto root_task = [&]() -> cardio::promise<void> {
+      auto root_task_body = [&]() -> cardio::promise<void> {
         try {
           co_await cardio::promises::delay(test_case.start_delay_ms);
           cardio::cancellation_source timeout =
@@ -707,7 +707,8 @@ static void run_transfer_integration_case(TransferIntegrationCase test_case) {
           async_error = std::current_exception();
         }
         dispatcher_group.shutdown();
-      }();
+      };
+      auto root_task = root_task_body();
       dispatcher.park();
       root_task.unsafe_result();
       if (async_error) {
@@ -775,7 +776,7 @@ static void run_transfer_integration_case(TransferIntegrationCase test_case) {
         sockets.child_fd.reset();
       }
       std::exception_ptr async_error;
-      auto root_task = [&]() -> cardio::promise<void> {
+      auto root_task_body = [&]() -> cardio::promise<void> {
         try {
           cardio::cancellation_source timeout =
               cardio::cancellations::timeout(30000);
@@ -796,7 +797,8 @@ static void run_transfer_integration_case(TransferIntegrationCase test_case) {
           async_error = std::current_exception();
         }
         dispatcher_group.shutdown();
-      }();
+      };
+      auto root_task = root_task_body();
       dispatcher.park();
       root_task.unsafe_result();
       if (async_error) {

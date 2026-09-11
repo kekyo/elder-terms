@@ -1,6 +1,7 @@
 #include "../../src/ftp/ftp-client.h"
 
 #include <array>
+#include <curl/curl.h>
 #include <exception>
 #include <filesystem>
 #include <thread>
@@ -24,8 +25,7 @@ static cardio::promise<void> run_async(
   unsigned confirmations = 0;
   bool succeeded = false;
   try {
-    client = co_await elder_terms::open_ftp_client_async(
-        {.connection = std::move(connection), .password = "secret",
+    auto opening = elder_terms::open_ftp_client_async({.connection = std::move(connection), .password = "secret",
          .confirm_certificate = [&](const elder_terms::FtpCertificateFailure &failure, cardio::cancellation cancellation) -> cardio::promise<bool> {
            expect(std::this_thread::get_id() == caller, "Confirmation must run on the caller dispatcher");
            cancellation.throw_if_cancellation_requested();
@@ -35,6 +35,7 @@ static cardio::promise<void> run_async(
            std::cout << "CONFIRM " << (failure.channel == elder_terms::FtpTlsChannel::data ? "data" : "control") << " " << failure.validation_code << " " << failure.sha256 << std::endl;
            co_return approve;
          }}, {});
+    client = co_await opening;
     if (scenario == "approve-data") {
       bool failed = false;
       try { auto writer = std::move(co_await client->open_write_async("/home/probe", std::nullopt, {})); }
@@ -95,6 +96,10 @@ static cardio::promise<void> run_async(
 int main(int argc, char **argv) {
   using namespace elder_terms_ftps_test;
   try {
+    if (argc == 2 && std::string_view(argv[1]) == "--runtime-version") {
+      std::cout << curl_version_info(CURLVERSION_NOW)->version_num << std::endl;
+      return 0;
+    }
     expect(argc == 3 || argc == 5, "Expected INI path/result pairs");
     for (int argument = 1; argument < argc; argument += 2) {
     auto store = elder_terms::create_settings_store(elder_terms::ftp_connection_setting_definitions());

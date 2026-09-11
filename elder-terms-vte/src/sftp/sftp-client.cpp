@@ -163,7 +163,8 @@ private:
   initialize_async(cardio::cancellation cancellation) {
     const std::shared_ptr<LibsshSftpClient> owner =
         shared_from_this();
-    co_await transport->execute_serialized_async(
+    // Keep owning callback temporaries outside the await expression for GCC 12.
+    auto pending_operation = transport->execute_serialized_async(
         [owner](ssh_session session) {
           run_with_blocking_session(session, [owner, session]() {
             sftp_session sftp = sftp_new(session);
@@ -181,6 +182,7 @@ private:
           });
         },
         std::move(cancellation));
+    co_await pending_operation;
   }
 
   cardio::promise<void> run_async(
@@ -188,7 +190,7 @@ private:
       cardio::cancellation cancellation) {
     const std::shared_ptr<LibsshSftpClient> owner =
         shared_from_this();
-    co_await transport->execute_serialized_async(
+    auto pending_operation = transport->execute_serialized_async(
         [owner, operation = std::move(operation)](
             ssh_session session) {
           run_with_blocking_session(session, [owner, operation, session]() {
@@ -199,6 +201,7 @@ private:
           });
         },
         std::move(cancellation));
+    co_await pending_operation;
   }
 
   void close_file_later(
@@ -263,7 +266,7 @@ public:
       std::string path,
       cardio::cancellation cancellation) override {
     auto result = std::make_shared<RemoteDirectorySnapshot>();
-    co_await run_async(
+    auto pending_operation = run_async(
         [path = std::move(path), result](ssh_session session,
                                          sftp_session sftp) {
           char *canonical = sftp_canonicalize_path(sftp, path.c_str());
@@ -322,6 +325,7 @@ public:
           }
         },
         std::move(cancellation));
+    co_await pending_operation;
     std::sort(
         result->entries.begin(), result->entries.end(),
         [](const RemoteFileAttributes &left,
@@ -336,7 +340,7 @@ public:
               cardio::cancellation cancellation) override {
     auto result =
         std::make_shared<std::optional<RemoteFileAttributes>>();
-    co_await run_async(
+    auto pending_operation = run_async(
         [path = std::move(path), result](ssh_session session,
                                          sftp_session sftp) {
           sftp_attributes attributes =
@@ -356,6 +360,7 @@ public:
           sftp_attributes_free(attributes);
         },
         std::move(cancellation));
+    co_await pending_operation;
     co_return *result;
   }
 
@@ -363,7 +368,7 @@ public:
   read_link_async(std::string path,
                   cardio::cancellation cancellation) override {
     auto result = std::make_shared<std::string>();
-    co_await run_async(
+    auto pending_operation = run_async(
         [path = std::move(path), result](ssh_session session,
                                          sftp_session sftp) {
           char *target = sftp_readlink(sftp, path.c_str());
@@ -375,6 +380,7 @@ public:
           ssh_string_free_char(target);
         },
         std::move(cancellation));
+    co_await pending_operation;
     co_return *result;
   }
 
@@ -382,7 +388,7 @@ public:
   make_directory_async(
       std::string path, std::optional<std::uint32_t> permissions,
       cardio::cancellation cancellation) override {
-    co_await run_async(
+    auto pending_operation = run_async(
         [path = std::move(path), permissions](
             ssh_session session, sftp_session sftp) {
           if (sftp_mkdir(sftp, path.c_str(),
@@ -394,13 +400,14 @@ public:
           }
         },
         std::move(cancellation));
+    co_await pending_operation;
   }
 
   cardio::promise<void>
   remove_file_async(
       std::string path,
       cardio::cancellation cancellation) override {
-    co_await run_async(
+    auto pending_operation = run_async(
         [path = std::move(path)](ssh_session session,
                                  sftp_session sftp) {
           if (sftp_unlink(sftp, path.c_str()) != SSH_OK) {
@@ -409,13 +416,14 @@ public:
           }
         },
         std::move(cancellation));
+    co_await pending_operation;
   }
 
   cardio::promise<void>
   remove_directory_async(
       std::string path,
       cardio::cancellation cancellation) override {
-    co_await run_async(
+    auto pending_operation = run_async(
         [path = std::move(path)](ssh_session session,
                                  sftp_session sftp) {
           if (sftp_rmdir(sftp, path.c_str()) != SSH_OK) {
@@ -424,13 +432,14 @@ public:
           }
         },
         std::move(cancellation));
+    co_await pending_operation;
   }
 
   cardio::promise<void>
   rename_async(std::string source_path,
                std::string destination_path,
                cardio::cancellation cancellation) override {
-    co_await run_async(
+    auto pending_operation = run_async(
         [source_path = std::move(source_path),
          destination_path = std::move(destination_path)](
             ssh_session session, sftp_session sftp) {
@@ -441,13 +450,14 @@ public:
           }
         },
         std::move(cancellation));
+    co_await pending_operation;
   }
 
   cardio::promise<void>
   make_symbolic_link_async(
       std::string target, std::string path,
       cardio::cancellation cancellation) override {
-    co_await run_async(
+    auto pending_operation = run_async(
         [target = std::move(target), path = std::move(path)](
             ssh_session session, sftp_session sftp) {
           if (sftp_symlink(sftp, target.c_str(), path.c_str()) !=
@@ -458,13 +468,14 @@ public:
           }
         },
         std::move(cancellation));
+    co_await pending_operation;
   }
 
   cardio::promise<void>
   set_attributes_async(
       std::string path, RemoteFileAttributes attributes,
       cardio::cancellation cancellation) override {
-    co_await run_async(
+    auto pending_operation = run_async(
         [path = std::move(path), attributes = std::move(attributes)](
             ssh_session session, sftp_session sftp) {
           if (attributes.permissions.has_value()) {
@@ -510,6 +521,7 @@ public:
           }
         },
         std::move(cancellation));
+    co_await pending_operation;
   }
 
   cardio::promise<std::unique_ptr<RemoteFileReader>>
@@ -552,7 +564,7 @@ public:
         std::make_shared<std::vector<std::byte>>(buffer.size());
     auto size = std::make_shared<std::size_t>(0);
     const std::shared_ptr<LibsshSftpFileState> file_state = state;
-    co_await owner->run_async(
+    auto pending_operation = owner->run_async(
         [file_state, storage, size](ssh_session session,
                                     sftp_session sftp) {
           if (file_state->file == nullptr) {
@@ -568,6 +580,7 @@ public:
           *size = static_cast<std::size_t>(result);
         },
         std::move(cancellation));
+    co_await pending_operation;
     std::copy_n(storage->data(), *size, buffer.data());
     co_return *size;
   }
@@ -575,7 +588,7 @@ public:
   cardio::promise<void>
   close_async(cardio::cancellation cancellation) override {
     const std::shared_ptr<LibsshSftpFileState> file_state = state;
-    co_await owner->run_async(
+    auto pending_operation = owner->run_async(
         [file_state](ssh_session session, sftp_session sftp) {
           if (file_state->file == nullptr) {
             return;
@@ -588,6 +601,7 @@ public:
           }
         },
         std::move(cancellation));
+    co_await pending_operation;
   }
 };
 
@@ -612,7 +626,7 @@ public:
     auto storage = std::make_shared<std::vector<std::byte>>(
         buffer.begin(), buffer.end());
     const std::shared_ptr<LibsshSftpFileState> file_state = state;
-    co_await owner->run_async(
+    auto pending_operation = owner->run_async(
         [file_state, storage](ssh_session session, sftp_session sftp) {
           if (file_state->file == nullptr) {
             throw std::runtime_error("Remote SFTP file is closed");
@@ -630,12 +644,13 @@ public:
           }
         },
         std::move(cancellation));
+    co_await pending_operation;
   }
 
   cardio::promise<void>
   close_async(cardio::cancellation cancellation) override {
     const std::shared_ptr<LibsshSftpFileState> file_state = state;
-    co_await owner->run_async(
+    auto pending_operation = owner->run_async(
         [file_state](ssh_session session, sftp_session sftp) {
           if (file_state->file == nullptr) {
             return;
@@ -648,6 +663,7 @@ public:
           }
         },
         std::move(cancellation));
+    co_await pending_operation;
   }
 };
 
@@ -655,7 +671,7 @@ cardio::promise<std::unique_ptr<RemoteFileReader>>
 LibsshSftpClient::open_read_async(
     std::string path, cardio::cancellation cancellation) {
   auto file_state = std::make_shared<LibsshSftpFileState>();
-  co_await run_async(
+  auto pending_operation = run_async(
       [path = std::move(path), file_state](
           ssh_session session, sftp_session sftp) {
         file_state->file =
@@ -666,6 +682,7 @@ LibsshSftpClient::open_read_async(
         }
       },
       std::move(cancellation));
+  co_await pending_operation;
   co_return std::make_unique<Reader>(shared_from_this(),
                                      std::move(file_state));
 }
@@ -675,7 +692,7 @@ LibsshSftpClient::open_write_async(
     std::string path, std::optional<std::uint32_t> permissions,
     cardio::cancellation cancellation) {
   auto file_state = std::make_shared<LibsshSftpFileState>();
-  co_await run_async(
+  auto pending_operation = run_async(
       [path = std::move(path), permissions, file_state](
           ssh_session session, sftp_session sftp) {
         file_state->file = sftp_open(
@@ -687,6 +704,7 @@ LibsshSftpClient::open_write_async(
         }
       },
       std::move(cancellation));
+  co_await pending_operation;
   co_return std::make_unique<Writer>(shared_from_this(),
                                      std::move(file_state));
 }

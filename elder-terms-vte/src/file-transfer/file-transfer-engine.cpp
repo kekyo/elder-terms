@@ -768,15 +768,14 @@ resolve_conflict_async(
       throw FileTransferAbort(
           "Destination conflict requires a decision");
     }
+    const auto conflict = FileTransferConflict{
+        .direction = state->request.direction,
+        .source_path = node.source_path,
+        .destination_path = node.destination_path,
+        .source_type = node.attributes.type,
+    };
     state->conflict_action =
-        co_await state->request.callbacks.conflict(
-            FileTransferConflict{
-                .direction = state->request.direction,
-                .source_path = node.source_path,
-                .destination_path = node.destination_path,
-                .source_type = node.attributes.type,
-            },
-            cancellation);
+        co_await state->request.callbacks.conflict(conflict, cancellation);
   }
   if (*state->conflict_action == FileTransferConflictAction::cancel) {
     throw FileTransferAbort("File transfer canceled at a conflict");
@@ -1164,15 +1163,14 @@ transfer_node_with_recovery_async(
     if (!state->request.callbacks.failure) {
       std::rethrow_exception(failure);
     }
+    const FileTransferFailure notification{
+        .direction = state->request.direction,
+        .source_path = node.source_path,
+        .destination_path = node.destination_path,
+        .message = exception_message(failure),
+    };
     const FileTransferFailureAction action =
-        co_await state->request.callbacks.failure(
-            FileTransferFailure{
-                .direction = state->request.direction,
-                .source_path = node.source_path,
-                .destination_path = node.destination_path,
-                .message = exception_message(failure),
-            },
-            cancellation);
+        co_await state->request.callbacks.failure(notification, cancellation);
     if (action == FileTransferFailureAction::retry) {
       continue;
     }
@@ -1225,16 +1223,15 @@ discover_selected_source_async(
     if (!state->request.callbacks.failure) {
       std::rethrow_exception(failure);
     }
+    const FileTransferFailure notification{
+        .direction = state->request.direction,
+        .source_path = source_path,
+        .destination_path =
+            state->request.destination_directory,
+        .message = exception_message(failure),
+    };
     const FileTransferFailureAction action =
-        co_await state->request.callbacks.failure(
-            FileTransferFailure{
-                .direction = state->request.direction,
-                .source_path = source_path,
-                .destination_path =
-                    state->request.destination_directory,
-                .message = exception_message(failure),
-            },
-            cancellation);
+        co_await state->request.callbacks.failure(notification, cancellation);
     if (action == FileTransferFailureAction::retry) {
       continue;
     }

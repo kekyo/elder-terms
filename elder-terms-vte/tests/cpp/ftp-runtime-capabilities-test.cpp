@@ -41,6 +41,8 @@ static cardio::promise<void> verify_async(
             .data_connection_mode = elder_terms::FtpDataConnectionMode::passive,
             .local_directory = {}, .remote_directory = "/home",
             .tls_mode = tls_mode};
+    if (expected_error == "Active FTPS requires libcurl 8.0.0")
+      connection.data_connection_mode = elder_terms::FtpDataConnectionMode::active;
     if (expected_error == "require OpenSSL" || expected_error == "same OpenSSL version") {
       auto store = elder_terms::create_settings_store(elder_terms::ftp_connection_setting_definitions());
       auto *ini = g_key_file_new();
@@ -57,7 +59,8 @@ static cardio::promise<void> verify_async(
       connection.username = "alice";
       connection.port = port;
     }
-    client = co_await elder_terms::open_ftp_client_async({.connection = std::move(connection), .password = "secret"}, {});
+    auto opening = elder_terms::open_ftp_client_async({.connection = std::move(connection), .password = "secret"}, {});
+    client = co_await opening;
     expect(expected_error.empty(), "An unsupported FTP runtime was accepted");
     const auto snapshot = co_await client->load_directory_async("/home", {});
     expect(snapshot.canonical_path == "/home" && snapshot.entries.empty(),
@@ -94,10 +97,11 @@ int main(int argc, char **argv) {
   try {
     expect(argc == 3, "Expected the FTP server executable and capability scenario");
     const std::string scenario = argv[2];
-    expect(scenario == "supported" || scenario == "no-dns" ||
+    expect(scenario == "active-explicit" || scenario == "active-implicit" || scenario == "supported" || scenario == "no-dns" ||
                scenario == "no-ftp" || scenario == "old-version" || scenario == "no-tls" || scenario == "no-ftps" || scenario == "non-openssl" || scenario == "non-openssl-prompt" || scenario == "openssl-mismatch",
            "Unknown runtime capability scenario");
-    static const char *const ftp_protocols[] = {"ftp", nullptr};
+    static const char *const ftp_protocols[] = {"ftp", "ftps", nullptr};
+    static const char *const plain_protocols[] = {"ftp", nullptr};
     static const char *const other_protocols[] = {"http", nullptr};
     static const char *const supported_features[] = {"AsynchDNS", "Largefile", "threadsafe", nullptr};
     static const char *const tls_features[] = {"AsynchDNS", "SSL", nullptr};
@@ -108,11 +112,11 @@ int main(int argc, char **argv) {
     reported_version.version = scenario == "old-version" ? "7.86.0" : "7.88.1";
     reported_version.version_num = scenario == "old-version" ? 0x075600 : 0x075801;
     reported_version.host = "FTP test runtime";
-    reported_version.protocols = scenario == "no-ftp" ? other_protocols : ftp_protocols;
-    reported_version.feature_names = scenario == "no-dns" ? other_features : (scenario == "no-ftps" || scenario == "non-openssl" || scenario == "non-openssl-prompt" || scenario == "openssl-mismatch") ? tls_features : supported_features;
+    reported_version.protocols = scenario == "no-ftp" ? other_protocols : scenario == "no-ftps" ? plain_protocols : ftp_protocols;
+    reported_version.feature_names = scenario == "no-dns" ? other_features : (scenario.starts_with("active-") || scenario == "no-ftps" || scenario == "non-openssl" || scenario == "non-openssl-prompt" || scenario == "openssl-mismatch") ? tls_features : supported_features;
     if (scenario == "non-openssl" || scenario == "non-openssl-prompt") reported_version.ssl_version = "GnuTLS/3.7.9";
     if (scenario == "openssl-mismatch") reported_version.ssl_version = "OpenSSL/0.0.0";
-    const std::string expected_error = scenario == "no-dns" ? "asynchronous DNS"
+    const std::string expected_error = scenario.starts_with("active-") ? "Active FTPS requires libcurl 8.0.0" : scenario == "no-dns" ? "asynchronous DNS"
         : scenario == "no-ftp" ? "without FTP support"
         : scenario == "old-version" ? "7.88.1 or newer"
         : scenario == "no-tls" ? "TLS support"
@@ -148,8 +152,8 @@ int main(int argc, char **argv) {
     cardio::dispatcher_group_glib group;
     cardio::dispatcher_host_glib_auto dispatcher(group);
     auto task = verify_async(port, expected_error,
-        scenario == "no-tls" ? elder_terms::FtpTlsMode::explicit_tls :
-        scenario == "no-ftps" ? elder_terms::FtpTlsMode::implicit_tls : elder_terms::FtpTlsMode::none, group, result);
+        (scenario == "no-tls" || scenario == "active-explicit") ? elder_terms::FtpTlsMode::explicit_tls :
+        (scenario == "no-ftps" || scenario == "active-implicit") ? elder_terms::FtpTlsMode::implicit_tls : elder_terms::FtpTlsMode::none, group, result);
     dispatcher.park();
   } catch (const std::exception &error) {
     std::cerr << "FTP runtime capabilities test: " << error.what() << '\n';

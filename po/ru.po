@@ -1420,13 +1420,13 @@ msgstr "Подготовка передачи…"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:679
 #, c-format
-msgid "Transferring %zu of %zu — %s"
-msgstr "Перенос %zu из %zu — %s"
+msgid "Transferring %llu of %llu — %s"
+msgstr "Перенос %llu из %llu — %s"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:682
 #, c-format
-msgid "Transferring %zu of %zu"
-msgstr "Перенос %zu из %zu"
+msgid "Transferring %llu of %llu"
+msgstr "Перенос %llu из %llu"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:686
 #, c-format

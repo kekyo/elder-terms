@@ -44,6 +44,7 @@ struct CurlOperation {
   cardio::promise_source<CurlFtpResult> completion;
   std::exception_ptr callback_failure;
   std::array<char, CURL_ERROR_SIZE> error{};
+  std::optional<long> response_before_quit;
   curl_slist *quote = nullptr;
   curl_slist *prequote = nullptr;
 
@@ -146,6 +147,10 @@ struct CurlWorker {
           worker->operation->cancellation.is_cancellation_requested())) {
         return CURL_SOCKOPT_ERROR;
       }
+      // An accepted FTP socket is the active-mode data connection. Its TLS
+      // handshake need not wait for the preliminary transfer response.
+      if (worker->certificates && purpose == CURLSOCKTYPE_ACCEPT)
+        worker->certificates->channel = FtpTlsChannel::data;
       worker->open_sockets.insert(fd);
       return CURL_SOCKOPT_OK;
     } catch (...) {
@@ -220,14 +225,45 @@ struct CurlWorker {
     }
   }
 
+  static int preserve_response_before_quit(
+      CURL *handle, curl_infotype type, char *bytes, std::size_t size,
+      void *data) noexcept {
+    auto *worker = static_cast<CurlWorker *>(data);
+    const auto op = worker->operation;
+    if (!op || handle != worker->easy || type != CURLINFO_HEADER_OUT) return 0;
+    try {
+      if (std::string_view(bytes, size) == "QUIT\r\n") {
+        // Before curl 8.5, evicting an older cached connection can replace
+        // this transfer's final reply with that connection's QUIT response.
+        // Keep the actual result before shutdown; never log callback contents.
+        if (!op->response_before_quit) {
+          long response = 0;
+          require_curl(curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &response));
+          op->response_before_quit = response;
+        }
+      } else {
+        // An old connection may instead close before the next transfer starts.
+        op->response_before_quit.reset();
+      }
+    } catch (...) {
+      op->callback_failure = std::current_exception();
+    }
+    return 0;
+  }
+
   static std::size_t header(char *bytes, std::size_t size, std::size_t count,
                              void *data) noexcept {
     auto *worker = static_cast<CurlWorker *>(data);
     const auto op = worker->operation;
     try {
+      if (op && op->response_before_quit) return size * count;
       if (worker->certificates && size * count >= 4) {
         const std::string_view line(bytes, size * count);
-        if (line.starts_with("150 ") || line.starts_with("125 ")) worker->certificates->channel = FtpTlsChannel::data;
+        // Passive TLS may finish before curl reads 150/125. The successful
+        // EPSV/PASV response precedes creation of that data connection.
+        if (line.starts_with("227 ") || line.starts_with("229 ") ||
+            line.starts_with("150 ") || line.starts_with("125 "))
+          worker->certificates->channel = FtpTlsChannel::data;
       }
       if (op && op->request.header) op->request.header({bytes, size * count});
       return size * count;
@@ -292,10 +328,24 @@ struct CurlWorker {
       require_curl(curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L));
       require_curl(curl_easy_setopt(easy, CURLOPT_USE_SSL, static_cast<long>(options.connection.tls_mode == FtpTlsMode::none ? CURLUSESSL_NONE : CURLUSESSL_ALL)));
       if (options.connection.tls_mode != FtpTlsMode::none) {
+        if (curl_version_info(CURLVERSION_NOW)->version_num < 0x080500) {
+          require_curl(curl_easy_setopt(easy, CURLOPT_DEBUGFUNCTION, preserve_response_before_quit));
+          require_curl(curl_easy_setopt(easy, CURLOPT_DEBUGDATA, this));
+          require_curl(curl_easy_setopt(easy, CURLOPT_VERBOSE, 1L));
+        }
+        const bool legacy_tls13_shutdown =
+            curl_version_info(CURLVERSION_NOW)->version_num < 0x080900 &&
+            (!options.connection.tls_max_version ||
+             *options.connection.tls_max_version == FtpTlsVersion::tls13);
+        if (legacy_tls13_shutdown) {
+          // Before curl 8.9, upload shutdown can also discard TLS 1.3 tickets,
+          // leaving a cached session that cannot resume the next data connection.
+          require_curl(curl_easy_setopt(easy, CURLOPT_FRESH_CONNECT, 1L));
+        }
         require_curl(curl_easy_setopt(easy, CURLOPT_SSL_VERIFYPEER, 1L));
         require_curl(curl_easy_setopt(easy, CURLOPT_SSL_VERIFYHOST, certificates ? 0L : 2L));
         require_curl(curl_easy_setopt(easy, CURLOPT_SSLVERSION, (curl_tls_version(options.connection.tls_min_version, false) |
-            (options.connection.tls_max_version ? curl_tls_version(*options.connection.tls_max_version, true) : static_cast<long>(CURL_SSLVERSION_MAX_DEFAULT)))));
+            (options.connection.tls_max_version ? curl_tls_version(*options.connection.tls_max_version, true) : 0L))));
         require_curl(curl_easy_setopt(easy, CURLOPT_FTPSSLAUTH, static_cast<long>(options.connection.tls_auth_order == FtpTlsAuthOrder::ssl ? CURLFTPAUTH_SSL :
             options.connection.tls_auth_order == FtpTlsAuthOrder::automatic ? CURLFTPAUTH_DEFAULT : CURLFTPAUTH_TLS)));
         if (certificates) {
@@ -361,6 +411,7 @@ struct CurlWorker {
         if (certificates->callback_failure) op->callback_failure = certificates->callback_failure;
       }
       require_curl(curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &result.response_code));
+      if (op->response_before_quit) result.response_code = *op->response_before_quit;
       char *entry = nullptr;
       require_curl(curl_easy_getinfo(easy, CURLINFO_FTP_ENTRY_PATH, &entry));
       if (entry != nullptr) result.entry_path = entry;
@@ -373,9 +424,14 @@ struct CurlWorker {
       curl_easy_setopt(easy, CURLOPT_QUOTE, nullptr);
       curl_easy_setopt(easy, CURLOPT_PREQUOTE, nullptr);
       curl_easy_setopt(easy, CURLOPT_ERRORBUFFER, nullptr);
-      if (result.certificate_failure) {
-        // Recreate the transport before a retry, keeping only this logical
-        // session's exact approvals. A failed mutation is never replayed here.
+      if (result.certificate_failure ||
+          options.connection.data_connection_mode == FtpDataConnectionMode::active) {
+        // Close Active transports after copying the response and login path,
+        // before the next operation opens a connection. Reuse can complete a
+        // download before accepting data; overlapping connections can block a
+        // single-connection server. Failed certificates also need a new
+        // transport, preserving only this logical session's exact approvals.
+        // A failed mutation is never replayed here.
         curl_easy_cleanup(easy);
         easy = nullptr;
       }
@@ -565,6 +621,12 @@ open_curl_ftp_session_async(FtpClientOpenOptions options) {
   if (version->version_num < 0x075801 || version->age < CURLVERSION_ELEVENTH) {
     throw std::runtime_error("FTP requires libcurl 7.88.1 or newer");
   }
+  // curl 7.87/7.88 omitted the TLS filter for active FTP data sockets.
+  // The public API cannot repair that connection; reject before authentication.
+  if (options.connection.tls_mode != FtpTlsMode::none &&
+      options.connection.data_connection_mode == FtpDataConnectionMode::active &&
+      version->version_num < 0x080000)
+    throw std::runtime_error("Active FTPS requires libcurl 8.0.0 or newer; select Passive or update libcurl");
   bool asynchronous_dns = false;
   bool ssl = false;
   for (const char *const *feature = version->feature_names; feature && *feature; ++feature) {

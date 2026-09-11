@@ -1863,20 +1863,160 @@ const pauseTransferAtProgressForCapture = async (
 
   if (transferCase.protocol === 'zmodem' && transferCase.direction === 'send') {
     await expectTransferProgressNoticeVisibleAtTerminalTopRight(app);
-    const liveProgress = await waitForTransferProgressRange(
-      app,
-      0.45,
-      0.55,
-      noticeCase.sizeCase.timeoutMs
+    const notice = await app.getById('transfer_progress_notice');
+    const capture = await notice.capture();
+    const area = capture.bounds;
+    const bar = (await (await app.getById('transfer_progress_bar')).capture())
+      .bounds;
+    const reference = {
+      ...capture,
+      image: await readFile(noticeCase.fixturePath),
+    };
+    const row = Math.floor(bar.y - area.y + bar.height / 2);
+    const column = (ratio: number) =>
+      Math.floor(bar.x - area.x + bar.width * ratio);
+    const filled = capturePixel(
+      reference,
+      column(0.25) / area.width,
+      row / area.height
     );
-    await evidence.log('transfer progress live capture value', {
-      liveProgress,
-      transferCase: transferCase.label,
+    const empty = capturePixel(
+      reference,
+      column(0.75) / area.width,
+      row / area.height
+    );
+    const environment = await app.environment();
+    const videoPath = join(evidence.directory, 'zmodem-send-progress.mkv');
+    // Record before releasing the peer. Reading AT-SPI progress and capturing
+    // later can observe entirely different values while ZMODEM keeps streaming.
+    const recorder = spawn(
+      'ffmpeg',
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-f',
+        'x11grab',
+        '-framerate',
+        '30',
+        '-draw_mouse',
+        '0',
+        '-video_size',
+        `${area.width}x${area.height}`,
+        '-i',
+        `${environment.DISPLAY}+${area.x},${area.y}`,
+        '-map',
+        '0:v',
+        '-c:v',
+        'ffv1',
+        '-pix_fmt',
+        'bgr0',
+        '-fps_mode',
+        'passthrough',
+        videoPath,
+        '-map',
+        '0:v',
+        '-c:v',
+        'rawvideo',
+        '-pix_fmt',
+        'bgr0',
+        '-fps_mode',
+        'passthrough',
+        '-f',
+        'rawvideo',
+        'pipe:1',
+      ],
+      { env: environment, stdio: ['pipe', 'pipe', 'pipe'] }
+    );
+    let recordingError: Error | undefined;
+    let stderr = '';
+    const finished = new Promise<number | null>((resolve) => {
+      recorder.once('error', (error) => {
+        recordingError = error;
+        resolve(null);
+      });
+      recorder.once('close', resolve);
     });
-    await assertTransferProgressNoticeMatches(
-      app,
-      evidence,
-      `transfer-progress-notice-${transferCase.protocol}-${transferCase.direction}`,
+    recorder.stderr.on('data', (bytes: Buffer) => {
+      stderr += bytes.toString();
+    });
+    let pending = Buffer.alloc(0);
+    let frameNumber = 0;
+    let middleFrame: number | undefined;
+    let peerReleased = false;
+    const frameSize = area.width * area.height * 4;
+    recorder.stdout.on('data', (bytes: Buffer) => {
+      pending = Buffer.concat([pending, bytes]);
+      while (pending.length >= frameSize) {
+        const frame = pending.subarray(0, frameSize);
+        frameNumber++;
+        const matches = (ratio: number, rgb: readonly number[]) => {
+          const offset = (row * area.width + column(ratio)) * 4;
+          return rgb.every(
+            (value, channel) =>
+              Math.abs(frame[offset + 2 - channel] - value) <= 8
+          );
+        };
+        // The filled prefix and empty suffix distinguish 45–55% progress from
+        // the moving indeterminate pulse before the peer supplies metadata.
+        // Retain this rendered frame even if capture finishes later.
+        if (
+          peerReleased &&
+          middleFrame === undefined &&
+          [0.05, 0.25, 0.45].every((ratio) => matches(ratio, filled)) &&
+          [0.55, 0.75, 0.95].every((ratio) => matches(ratio, empty))
+        )
+          middleFrame = frameNumber;
+        pending = pending.subarray(frameSize);
+      }
+    });
+    try {
+      await waitForResult(async () => {
+        if (recordingError) throw recordingError;
+        expect(recorder.exitCode, stderr).toBeNull();
+        expect(frameNumber).toBeGreaterThan(0);
+      });
+      await writeFile(fixture.markerPath, 'start', 'utf8');
+      peerReleased = true;
+      await waitForResult(
+        async () => {
+          if (recordingError) throw recordingError;
+          expect(recorder.exitCode, stderr).toBeNull();
+          expect(middleFrame).toBeDefined();
+        },
+        { timeoutMs: noticeCase.sizeCase.timeoutMs }
+      );
+    } finally {
+      if (recorder.exitCode === null && !recordingError)
+        recorder.stdin.write('q\n');
+      const code = await finished;
+      await evidence.log('ZMODEM progress video', {
+        middleFrame,
+        frameNumber,
+        code,
+        stderr,
+      });
+      expect(code, stderr).toBe(0);
+    }
+    const framePath = join(
+      evidence.directory,
+      'zmodem-send-progress-middle.png'
+    );
+    await runCommand('ffmpeg', [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-i',
+      videoPath,
+      '-vf',
+      `select=eq(n\\,${middleFrame! - 1})`,
+      '-frames:v',
+      '1',
+      framePath,
+    ]);
+    await evidence.expectCaptureToLookSimilar(
+      { ...capture, image: await readFile(framePath) },
+      'transfer-progress-notice-zmodem-send',
       noticeCase.fixturePath,
       {
         maxDiffPixels: noticeCase.maxDiffPixels,
@@ -2767,7 +2907,11 @@ describe('elder-terms-vte XYZMODEM transfer progress notice e2e', () => {
               ) {
                 await requestTransferProgressPeerPause(fixture);
               }
-              await writeFile(fixture.markerPath, 'start', 'utf8');
+              if (!(
+                transferCase.protocol === 'zmodem' &&
+                transferCase.direction === 'send'
+              ))
+                await writeFile(fixture.markerPath, 'start', 'utf8');
 
               await pauseTransferAtProgressForCapture(
                 app,

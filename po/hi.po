@@ -1410,13 +1410,13 @@ msgstr "स्थानांतरण की तैयारी हो रह�
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:679
 #, c-format
-msgid "Transferring %zu of %zu — %s"
-msgstr "%zu का %zu स्थानांतरित करना - %s"
+msgid "Transferring %llu of %llu — %s"
+msgstr "%llu का %llu स्थानांतरित करना - %s"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:682
 #, c-format
-msgid "Transferring %zu of %zu"
-msgstr "%zu का %zu स्थानांतरित करना"
+msgid "Transferring %llu of %llu"
+msgstr "%llu का %llu स्थानांतरित करना"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:686
 #, c-format

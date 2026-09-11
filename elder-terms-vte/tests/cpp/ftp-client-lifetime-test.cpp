@@ -150,13 +150,14 @@ static cardio::promise<void> session_async(Server &server, const std::string &mo
   std::exception_ptr failure;
   try {
     try {
-      client = co_await elder_terms::open_ftp_client_async({
+      auto opening = elder_terms::open_ftp_client_async({
           .connection = {.address = "127.0.0.1", .port = server.port,
                          .username = "alice",
                          .data_connection_mode = elder_terms::FtpDataConnectionMode::passive,
                          .local_directory = {}, .remote_directory = {},
                        .tls_mode = tls_mode, .ca_file = tls_certificate},
           .password = "secret"}, {});
+      client = co_await opening;
     } catch (const std::runtime_error &error) {
       expect(mode == "login" && std::string(error.what()).find("530") != std::string::npos,
              "Repeated authentication failures must retain their FTP response");
