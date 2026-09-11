@@ -73,6 +73,234 @@ try {
     expired,
   ]);
   assert.equal(expiredResult.code, 0, expiredResult.output);
+  const alternate = join(root, 'alternate.pem');
+  const alternateKey = join(root, 'alternate-key.pem');
+  const alternateResult = await run('openssl', [
+    'req',
+    '-x509',
+    '-newkey',
+    'rsa:2048',
+    '-noenc',
+    '-keyout',
+    alternateKey,
+    '-out',
+    alternate,
+    '-days',
+    '1',
+    '-subj',
+    '/CN=alternate',
+    '-addext',
+    'subjectAltName=IP:127.0.0.1',
+  ]);
+  assert.equal(alternateResult.code, 0, alternateResult.output);
+  const future = join(root, 'future.pem');
+  const request = join(root, 'future.csr');
+  const caConfig = join(root, 'ca.cnf');
+  await writeFile(join(root, 'index'), '');
+  await writeFile(join(root, 'serial'), '01\n');
+  await writeFile(
+    caConfig,
+    '[ca]\ndefault_ca=test\n[test]\ndatabase=' +
+      join(root, 'index') +
+      '\nserial=' +
+      join(root, 'serial') +
+      '\nnew_certs_dir=' +
+      root +
+      '\ncertificate=' +
+      cert +
+      '\nprivate_key=' +
+      key +
+      '\ndefault_md=sha256\npolicy=policy\nx509_extensions=server\n[policy]\ncommonName=supplied\n[server]\nbasicConstraints=critical,CA:TRUE\nsubjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1\n'
+  );
+  const csr = await run('openssl', [
+    'req',
+    '-new',
+    '-key',
+    key,
+    '-subj',
+    '/CN=localhost',
+    '-out',
+    request,
+  ]);
+  assert.equal(csr.code, 0, csr.output);
+  const signed = await run('openssl', [
+    'ca',
+    '-batch',
+    '-selfsign',
+    '-config',
+    caConfig,
+    '-in',
+    request,
+    '-out',
+    future,
+    '-startdate',
+    '20990101000000Z',
+    '-enddate',
+    '21000101000000Z',
+  ]);
+  assert.equal(signed.code, 0, signed.output);
+  const policyCases = [];
+  for (const host of [
+    '127.0.0.1',
+    '::1',
+    'localhost',
+    'LOCALHOST',
+    'localhost.',
+  ])
+    policyCases.push({ host, certificate: cert, success: true });
+  for (const value of [
+    {
+      name: 'ip-san-blocks-dns-cn',
+      subject: 'localhost',
+      san: 'IP:127.0.0.1',
+      host: 'localhost',
+      success: false,
+    },
+    {
+      name: 'multiple-cn-last-mismatch',
+      subject: 'localhost/CN=wrong.invalid',
+      san: '',
+      host: 'localhost',
+      success: false,
+    },
+    {
+      name: 'multiple-cn-last-match',
+      subject: 'wrong.invalid/CN=localhost',
+      san: '',
+      host: 'localhost',
+      success: true,
+    },
+    {
+      name: 'legacy-cn-ip',
+      subject: '127.0.0.1',
+      san: '',
+      host: '127.0.0.1',
+      success: true,
+    },
+    {
+      name: 'san-trailing-dot',
+      subject: 'localhost',
+      san: 'DNS:localhost.',
+      host: 'localhost',
+      success: true,
+    },
+    {
+      name: 'cn-trailing-dot',
+      subject: 'localhost.',
+      san: '',
+      host: 'localhost',
+      success: true,
+    },
+    {
+      name: 'broad-before-valid',
+      subject: 'wrong.invalid',
+      san: 'DNS:*.test,DNS:ftp.test',
+      host: 'ftp.test',
+      success: true,
+    },
+    {
+      name: 'cn-only',
+      subject: 'localhost',
+      san: '',
+      host: 'localhost',
+      success: true,
+    },
+    {
+      name: 'san-priority',
+      subject: 'localhost',
+      san: 'DNS:wrong.invalid',
+      host: 'localhost',
+      success: false,
+    },
+    {
+      name: 'dns-is-not-ip',
+      subject: '127.0.0.1',
+      san: 'DNS:127.0.0.1',
+      host: '127.0.0.1',
+      success: false,
+    },
+    {
+      name: 'wildcard',
+      subject: 'wildcard',
+      san: 'DNS:*.example.test',
+      host: 'ftp.example.test',
+      success: true,
+    },
+    {
+      name: 'wildcard-depth',
+      subject: 'wildcard',
+      san: 'DNS:*.example.test',
+      host: 'deep.ftp.example.test',
+      success: false,
+    },
+    {
+      name: 'partial-wildcard',
+      subject: 'wildcard',
+      san: 'DNS:f*.example.test',
+      host: 'ftp.example.test',
+      success: false,
+    },
+    {
+      name: 'broad-wildcard',
+      subject: 'wildcard',
+      san: 'DNS:*.test',
+      host: 'ftp.test',
+      success: false,
+    },
+    {
+      name: 'idn',
+      subject: 'idn',
+      san: 'DNS:xn--bcher-kva.example',
+      host: 'bücher.example',
+      success: true,
+    },
+    {
+      name: 'rotation',
+      subject: 'replacement',
+      san: 'IP:127.0.0.1',
+      host: '127.0.0.1',
+      success: true,
+    },
+  ]) {
+    const certificate = join(root, value.name + '.pem');
+    const generated = await run('openssl', [
+      'req',
+      '-x509',
+      '-key',
+      key,
+      '-out',
+      certificate,
+      '-days',
+      '1',
+      '-subj',
+      '/CN=' + value.subject,
+      ...(value.san ? ['-addext', 'subjectAltName=' + value.san] : []),
+    ]);
+    assert.equal(generated.code, 0, generated.output);
+    policyCases.push({ ...value, certificate });
+  }
+  for (const scenario of policyCases) {
+    const result = await run(process.argv[6], [
+      scenario.host,
+      scenario.certificate,
+      key,
+      'trusted',
+      scenario.success ? 'success' : 'failure',
+    ]);
+    assert.equal(
+      result.code,
+      0,
+      scenario.host + ' ' + scenario.certificate + ' ' + result.output
+    );
+  }
+  const scope = await run(process.argv[6], [
+    '127.0.0.1',
+    cert,
+    key,
+    'untrusted',
+    join(root, 'rotation.pem'),
+  ]);
+  assert.equal(scope.code, 0, scope.output);
   const cases = [
     { name: 'explicit', success: true },
     {
@@ -83,6 +311,7 @@ try {
       noLogin: true,
     },
     { name: 'expired', cert: expired, ca: expired, noLogin: true },
+    { name: 'future-rejected', cert: future, ca: future, noLogin: true },
     { name: 'untrusted', ca: '', noLogin: true },
     { name: 'bad-ca', ca: join(root, 'absent.pem'), noLogin: true },
     { name: 'auth-refused', flags: ['--reject-auth'], noLogin: true },
@@ -312,6 +541,110 @@ try {
       followup: { success: true, settings: legacy },
     });
   }
+  for (const mode of ['explicit', 'implicit']) {
+    for (const issue of [
+      { name: 'untrusted', ca: '', confirmations: 1 },
+      { name: 'future', cert: future, ca: future, confirmations: 1 },
+      { name: 'expired', cert: expired, ca: expired, confirmations: 1 },
+      { name: 'name', cert: wrong, key: wrongKey, ca: wrong, confirmations: 1 },
+      {
+        name: 'untrusted-name',
+        cert: wrong,
+        key: wrongKey,
+        ca: '',
+        confirmations: 2,
+      },
+    ]) {
+      cases.push({
+        ...issue,
+        name: mode + '-approve-' + issue.name,
+        mode,
+        success: true,
+        result: 'approve',
+        settings: 'certificate_error_action=prompt\n',
+      });
+      cases.push({
+        ...issue,
+        name: mode + '-deny-' + issue.name,
+        mode,
+        noLogin: true,
+        result: 'deny',
+        confirmations: 1,
+        settings: 'certificate_error_action=prompt\n',
+      });
+    }
+    cases.push({
+      name: mode + '-prompt-version-refused',
+      mode,
+      noLogin: true,
+      confirmations: 0,
+      ca: '',
+      flags: ['--tls-version=769', '--legacy-tls'],
+      settings: 'certificate_error_action=prompt\ntls_min_version=1.2\n',
+    });
+    cases.push({
+      name: mode + '-prompt-ca-unreadable',
+      mode,
+      noLogin: true,
+      confirmations: 0,
+      ca: join(root, 'missing-ca.pem'),
+      settings: 'certificate_error_action=prompt\n',
+    });
+    cases.push({
+      name: mode + '-prompt-cipher-refused',
+      mode,
+      noLogin: true,
+      confirmations: 0,
+      flags: ['--tls-version=771', '--tls-ciphers=AES256-SHA'],
+      settings:
+        'certificate_error_action=prompt\ntls_min_version=1.2\ntls_max_version=1.2\ntls_cipher_list=AES128-SHA\n',
+    });
+    cases.push({
+      name: mode + '-prompt-valid',
+      mode,
+      success: true,
+      result: 'approve',
+      confirmations: 0,
+      settings: 'certificate_error_action=prompt\n',
+    });
+    cases.push({
+      name: mode + '-prompt-legacy',
+      mode,
+      success: true,
+      result: 'approve',
+      ca: '',
+      confirmations: 1,
+      flags: ['--tls-version=769', '--legacy-tls'],
+      settings:
+        'certificate_error_action=prompt\ntls_min_version=1.0\ntls_max_version=1.0\ntls_compatibility=openssl_legacy\n',
+    });
+    for (const active of [false, true])
+      cases.push({
+        name: mode + '-approve-data-' + active,
+        mode,
+        active,
+        success: true,
+        result: 'approve-data',
+        confirmations: 1,
+        flags: ['--data-cert=' + alternate, '--data-key=' + alternateKey],
+        settings: 'certificate_error_action=prompt\n',
+      });
+    cases.push({
+      name: mode + '-new-session-asks-again',
+      mode,
+      success: true,
+      result: 'approve',
+      ca: '',
+      confirmations: 2,
+      settings: 'certificate_error_action=prompt\n',
+      followup: {
+        success: true,
+        result: 'approve',
+        ca: '',
+        settings: 'certificate_error_action=prompt\n',
+      },
+    });
+  }
   for (const scenario of cases) {
     const directory = join(root, scenario.name);
     await mkdir(join(directory, 'home'), { recursive: true });
@@ -347,7 +680,7 @@ try {
       const ini = join(directory, 'connection.ini');
       await writeFile(
         ini,
-        `[ftp]\naddress=${scenario.ipv6 ? '::1' : '127.0.0.1'}\nport=${match[1]}\nusername=alice\ndata_connection_mode=${scenario.active ? 'active' : 'passive'}\ntls_mode=${scenario.mode ?? 'explicit'}\nca_file=${scenario.ca ?? cert}\n${scenario.settings ?? ''}`
+        `[ftp]\naddress=${scenario.ipv6 ? '::1' : '127.0.0.1'}\nport=${match[1]}\nusername=alice\nlocal_directory=${directory}\ndata_connection_mode=${scenario.active ? 'active' : 'passive'}\ntls_mode=${scenario.mode ?? 'explicit'}\nca_file=${scenario.ca ?? cert}\n${scenario.settings ?? ''}`
       );
       const followupArgs = [];
       if (scenario.followup) {
@@ -359,18 +692,19 @@ try {
             '\nusername=alice\ntls_mode=' +
             scenario.mode +
             '\nca_file=' +
-            cert +
+            (scenario.followup.ca ?? cert) +
             '\n' +
             scenario.followup.settings
         );
         followupArgs.push(
           followup,
-          scenario.followup.success ? 'success' : 'failure'
+          scenario.followup.result ??
+            (scenario.followup.success ? 'success' : 'failure')
         );
       }
       const result = await run(process.argv[2], [
         ini,
-        scenario.success ? 'success' : 'failure',
+        scenario.result ?? (scenario.success ? 'success' : 'failure'),
         ...followupArgs,
       ]);
       assert.equal(result.code, 0, result.output + trace);
@@ -385,6 +719,27 @@ try {
           trace.includes('COMMAND MLSD') || trace.includes('COMMAND LIST'),
           trace
         );
+      if (scenario.confirmations !== undefined)
+        assert.equal(
+          result.output
+            .split('\n')
+            .filter((line) => line.startsWith('CONFIRM ')).length,
+          scenario.confirmations,
+          result.output
+        );
+      if (scenario.result === 'approve-data') {
+        assert.ok(result.output.includes('CONFIRM data '), result.output);
+        assert.ok(
+          result.output.includes('DATA FAILURE OBSERVED'),
+          result.output
+        );
+        assert.equal(
+          trace.split('\n').filter((line) => line === 'COMMAND STOR probe')
+            .length,
+          2,
+          trace
+        );
+      }
       if (scenario.error)
         assert.ok(result.output.includes(scenario.error), result.output);
       if (scenario.success && scenario.tls) {

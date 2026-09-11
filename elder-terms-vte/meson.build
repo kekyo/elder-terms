@@ -123,7 +123,7 @@ executable(
     'src/inline-prompt.cpp',
     'src/launch-options.cpp',
     'src/ftp/ftp-client.cpp',
-    'src/ftp/curl-ftp-session.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
     'src/ftp/ftp-metadata.cpp',
     'src/sftp/sftp-client.cpp',
     'src/sftp/sftp-fixture-client.cpp',
@@ -148,6 +148,7 @@ executable(
     liburing_dep,
     libssh_dep,
     libcurl_dep,
+    openssl_dep,
   ],
   install: true,
   install_dir: elder_terms_private_install_dir / 'elder-terms-vte',
@@ -192,9 +193,9 @@ curl_ftp_session_test = executable(
   'curl-ftp-session-test',
   [
     'tests/cpp/curl-ftp-session-test.cpp',
-    'src/ftp/curl-ftp-session.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
   ],
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
 )
 
 foreach case_name : ['receive', 'cancel-final', 'cancel-paused', 'callback-failure', 'unanswered-quit']
@@ -210,8 +211,8 @@ ftp_test_server = executable(
 ftps_client_test = executable(
   'ftps-client-test',
   ['tests/cpp/ftps-client-test.cpp', 'src/ftp/ftp-client.cpp',
-   'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftp-metadata.cpp'],
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
+   'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp', 'src/ftp/ftp-metadata.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
 )
 
 
@@ -221,11 +222,11 @@ curl_ftp_client_test = executable(
   [
     'tests/cpp/curl-ftp-client-test.cpp',
     'src/ftp/ftp-client.cpp',
-    'src/ftp/curl-ftp-session.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
     'src/ftp/ftp-metadata.cpp',
   ],
   include_directories: include_directories('src/ftp'),
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
 )
 
 foreach case_name : [
@@ -243,12 +244,12 @@ curl_ftp_stream_test = executable(
   [
     'tests/cpp/curl-ftp-stream-test.cpp',
     'src/ftp/ftp-client.cpp',
-    'src/ftp/curl-ftp-session.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
     'src/ftp/ftp-metadata.cpp',
     'src/file-transfer/file-transfer-engine.cpp',
   ],
   include_directories: include_directories('src/ftp'),
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
 )
 
 foreach case_name : [
@@ -267,11 +268,11 @@ ftp_client_lifetime_test = executable(
   [
     'tests/cpp/ftp-client-lifetime-test.cpp',
     'src/ftp/ftp-client.cpp',
-    'src/ftp/curl-ftp-session.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
     'src/ftp/ftp-metadata.cpp',
   ],
   include_directories: include_directories('src/ftp'),
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
 )
 
 foreach case_name : ['normal', 'login', 'cancel']
@@ -279,24 +280,30 @@ foreach case_name : ['normal', 'login', 'cancel']
     args: [ftp_test_server, case_name], timeout: 120)
 endforeach
 
+ftps_certificate_policy_test = executable(
+  'ftps-certificate-policy-test',
+  ['tests/cpp/ftps-certificate-policy-test.cpp', 'src/ftp/ftps-certificate.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  install: false)
+
 test('ftps-client-test', find_program('node'),
   args: [files('tests/ftps-client-runner.mjs'), ftps_client_test, ftp_test_server,
-         curl_ftp_stream_test, ftp_client_lifetime_test], timeout: 600)
+         curl_ftp_stream_test, ftp_client_lifetime_test, ftps_certificate_policy_test], timeout: 600)
 
 ftp_runtime_capabilities_test = executable(
   'ftp-runtime-capabilities-test',
   [
     'tests/cpp/ftp-runtime-capabilities-test.cpp',
     'src/ftp/ftp-client.cpp',
-    'src/ftp/curl-ftp-session.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
     'src/ftp/ftp-metadata.cpp',
   ],
   include_directories: include_directories('src/ftp'),
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
   link_args: ['-Wl,--wrap=curl_version_info'],
 )
 
-foreach case_name : ['supported', 'no-dns', 'no-ftp', 'old-version', 'no-tls', 'no-ftps', 'non-openssl']
+foreach case_name : ['supported', 'no-dns', 'no-ftp', 'old-version', 'no-tls', 'no-ftps', 'non-openssl', 'non-openssl-prompt', 'openssl-mismatch']
   test('ftp-runtime-capabilities-' + case_name, ftp_runtime_capabilities_test,
     args: [ftp_test_server, case_name], timeout: 120)
 endforeach

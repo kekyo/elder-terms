@@ -352,7 +352,7 @@ or `tls_mode=implicit` in the `[ftp]` section of the connection INI file.
 Explicit FTPS upgrades the control connection with AUTH TLS and defaults to port
 21. Implicit FTPS starts TLS immediately and defaults to port 990. An explicitly
 configured port, including one inherited from global settings, takes precedence. By default, FTPS requires TLS 1.2 or newer for both control and data connections,
-verifies the server certificate and host name, and rejects validation failures.
+verifies the server certificate and host name, and rejects validation failures by default.
 For a private CA, set `ca_file=/absolute/path/company-ca.pem`; an empty value uses
 the system CA store. Both FTPS modes support active and passive data connections,
 IPv4 and IPv6, and servers requiring TLS session reuse for data transfers.
@@ -391,6 +391,32 @@ cipher expressions are rejected. See the official
 [libcurl TLS version](https://curl.se/libcurl/c/CURLOPT_SSLVERSION.html) and
 [cipher selection](https://curl.se/libcurl/c/CURLOPT_SSL_CIPHER_LIST.html) documentation
 for backend limitations.
+
+### FTPS Certificate Errors
+
+The default `certificate_error_action=reject` refuses certificates that fail
+validation. Set `certificate_error_action=prompt` to show an overlay with the
+requested server and port, control/data channel, validation reason, certificate
+subject and issuer, validity dates, and full SHA-256 fingerprint. Cancel is the
+default action; Escape and closing the window also refuse the connection.
+
+Allowing an exception applies only to the displayed certificate and failure in
+this connection window. It is not saved to the connection file or system trust
+store. Another failure or a changed certificate requires confirmation again;
+a new window has no previous approvals. The status bar indicates when an
+exception is active. A valid certificate does not show this overlay.
+
+Initial login can continue after approval. If a certificate fails during a file
+operation, that operation remains failed after approval; retry it explicitly.
+The application does not automatically repeat uploads, renames, or deletions.
+Certificate approval does not relax TLS versions, cipher requirements, or
+cryptographic policy failures. Use the separate legacy compatibility setting
+when an old server requires it.
+
+Certificate confirmation requires libcurl and the application to use the same
+OpenSSL version. Other TLS backends can use the default rejection policy but
+cannot use this confirmation mode. This follows the backend-specific context
+contract of [libcurl's TLS context callback](https://curl.se/libcurl/c/CURLOPT_SSL_CTX_FUNCTION.html).
 
 ### FTP Data Connections
 

@@ -108,6 +108,13 @@ static bool validate_tls_cipher_list(const SettingValue &value, std::string *rea
   return true;
 }
 
+static bool validate_certificate_error_action(const SettingValue &value, std::string *reason) {
+  const auto &text = std::get<std::string>(value);
+  if (text == "reject" || text == "prompt") return true;
+  *reason = "must be reject or prompt";
+  return false;
+}
+
 static SettingKey ftp_key(const char *name) {
   return make_setting_key(ftp_section, name);
 }
@@ -119,6 +126,7 @@ SettingKey ftp_tls_auth_order_setting_key() { return ftp_key("tls_auth_order"); 
 SettingKey ftp_tls_compatibility_setting_key() { return ftp_key("tls_compatibility"); }
 SettingKey ftp_tls_cipher_list_setting_key() { return ftp_key("tls_cipher_list"); }
 SettingKey ftp_tls13_cipher_list_setting_key() { return ftp_key("tls13_cipher_list"); }
+SettingKey ftp_certificate_error_action_setting_key() { return ftp_key("certificate_error_action"); }
 SettingKey ftp_ca_file_setting_key() { return ftp_key("ca_file"); }
 
 const char *ftp_tls_mode_to_string(FtpTlsMode mode) {
@@ -173,7 +181,7 @@ std::vector<SettingDefinition> ftp_connection_setting_definitions() {
       {.key = ftp_key("tls_compatibility"), .default_value = std::string("standard"), .validate = validate_tls_compatibility, .retain_invalid = true},
       {.key = ftp_key("tls_cipher_list"), .default_value = std::string(), .validate = validate_tls_cipher_list, .retain_invalid = true},
       {.key = ftp_key("tls13_cipher_list"), .default_value = std::string(), .validate = validate_tls_cipher_list, .retain_invalid = true},
-      {.key = ftp_key("certificate_error_action"), .default_value = std::string("reject"), .retain_invalid = true},
+      {.key = ftp_key("certificate_error_action"), .default_value = std::string("reject"), .validate = validate_certificate_error_action, .retain_invalid = true},
       {
           .key = ftp_address_setting_key(),
           .default_value = SettingValue{std::string()},
@@ -227,11 +235,6 @@ FtpConnectionSettings ftp_connection_settings(const SettingsStore &store) {
   const auto tls = setting_string_value_or_default(store, ftp_tls_mode_setting_key(), "none");
   std::vector<std::string> errors;
   for (const auto &entry : store.entries) {
-    const auto &key = entry.definition.key;
-    if (key.section == "ftp" && key.name == "certificate_error_action" &&
-        entry.value != entry.definition.default_value) {
-      errors.push_back("[ftp] " + key.name + ": non-default values are not implemented yet");
-    }
     if (entry.definition.key.section == "ftp" && !entry.validation_error.empty()) {
       const auto source = setting_value_source(store, entry.definition.key);
       errors.push_back("[ftp] " + entry.definition.key.name + " (" +
@@ -267,6 +270,8 @@ FtpConnectionSettings ftp_connection_settings(const SettingsStore &store) {
       .tls_compatibility = compatibility == "openssl_legacy" ? FtpTlsCompatibility::openssl_legacy : FtpTlsCompatibility::standard,
       .tls_cipher_list = setting_string_value_or_default(store, ftp_tls_cipher_list_setting_key(), ""),
       .tls13_cipher_list = setting_string_value_or_default(store, ftp_tls13_cipher_list_setting_key(), ""),
+      .certificate_error_action = setting_string_value_or_default(store, ftp_certificate_error_action_setting_key(), "reject") == "prompt"
+          ? FtpCertificateErrorAction::prompt : FtpCertificateErrorAction::reject,
       .validation_errors = std::move(errors),
   };
 }

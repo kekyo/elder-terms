@@ -59,6 +59,14 @@ enum class FtpTlsCompatibility {
   openssl_legacy,
 };
 
+/** Action taken after a certificate validation failure. */
+enum class FtpCertificateErrorAction {
+  /** Refuse invalid certificates without confirmation. */
+  reject,
+  /** Ask the caller to approve a session-local exception. */
+  prompt,
+};
+
 /** Settings for the FTP and FTPS file transfer backend. */
 struct FtpConnectionSettings {
   /** FTP server address or hostname. */
@@ -90,6 +98,8 @@ struct FtpConnectionSettings {
   std::string tls_cipher_list{};
   /** TLS 1.3 cipher names, separated by colons; empty uses defaults. */
   std::string tls13_cipher_list{};
+  /** Whether a validation failure may be presented for explicit approval. */
+  FtpCertificateErrorAction certificate_error_action = FtpCertificateErrorAction::reject;
   /** Invalid effective settings, including their keys and sources. */
   std::vector<std::string> validation_errors{};
 };
@@ -132,6 +142,8 @@ ELDER_TERMS_API SettingKey ftp_tls_compatibility_setting_key();
 ELDER_TERMS_API SettingKey ftp_tls_cipher_list_setting_key();
 /** @returns Setting key for [ftp] tls13_cipher_list. */
 ELDER_TERMS_API SettingKey ftp_tls13_cipher_list_setting_key();
+/** @returns Setting key for [ftp] certificate_error_action. */
+ELDER_TERMS_API SettingKey ftp_certificate_error_action_setting_key();
 /** @returns Setting key for [ftp] ca_file. */
 ELDER_TERMS_API SettingKey ftp_ca_file_setting_key();
 

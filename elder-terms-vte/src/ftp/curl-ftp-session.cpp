@@ -1,4 +1,5 @@
 #include "curl-ftp-session.h"
+#include "ftps-certificate.h"
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -38,6 +39,7 @@ static void require_curl(CURLcode code) {
 
 struct CurlOperation {
   CurlFtpRequest request;
+  std::optional<FtpCertificateFailure> certificate_approval;
   cardio::cancellation cancellation;
   cardio::promise_source<CurlFtpResult> completion;
   std::exception_ptr callback_failure;
@@ -79,6 +81,7 @@ static long curl_tls_version(FtpTlsVersion version, bool maximum) {
 // requests and wakes the condition variable; it never accesses an easy handle.
 struct CurlWorker {
   FtpClientOpenOptions options;
+  std::shared_ptr<FtpCertificatePolicy> certificates;
   std::mutex mutex;
   std::condition_variable changed;
   std::uint64_t revision = 0;
@@ -90,7 +93,11 @@ struct CurlWorker {
   std::shared_ptr<CurlOperation> operation;
   cardio::promise_source<void> ready;
 
-  explicit CurlWorker(FtpClientOpenOptions options) : options(std::move(options)) {}
+  explicit CurlWorker(FtpClientOpenOptions options) : options(std::move(options)) {
+    if (this->options.connection.tls_mode != FtpTlsMode::none &&
+        this->options.connection.certificate_error_action == FtpCertificateErrorAction::prompt)
+      certificates = create_ftp_certificate_policy(this->options.connection);
+  }
 
   void wake() {
     {
@@ -218,6 +225,10 @@ struct CurlWorker {
     auto *worker = static_cast<CurlWorker *>(data);
     const auto op = worker->operation;
     try {
+      if (worker->certificates && size * count >= 4) {
+        const std::string_view line(bytes, size * count);
+        if (line.starts_with("150 ") || line.starts_with("125 ")) worker->certificates->channel = FtpTlsChannel::data;
+      }
       if (op && op->request.header) op->request.header({bytes, size * count});
       return size * count;
     } catch (...) {
@@ -264,6 +275,16 @@ struct CurlWorker {
     CurlFtpResult result;
     try {
       op->cancellation.throw_if_cancellation_requested();
+      if (easy == nullptr) {
+        easy = curl_easy_init();
+        if (!easy) throw std::bad_alloc();
+      }
+      if (certificates) {
+        certificates->failure.reset();
+        certificates->callback_failure = nullptr;
+        certificates->channel = FtpTlsChannel::control;
+        if (op->certificate_approval) approve_ftp_certificate_failure(*certificates, *op->certificate_approval);
+      }
       curl_easy_reset(easy);
       require_curl(curl_easy_setopt(easy, CURLOPT_URL, op->request.url.c_str()));
       require_curl(curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, options.connection.tls_mode == FtpTlsMode::implicit_tls ? "ftps" : "ftp"));
@@ -272,11 +293,17 @@ struct CurlWorker {
       require_curl(curl_easy_setopt(easy, CURLOPT_USE_SSL, static_cast<long>(options.connection.tls_mode == FtpTlsMode::none ? CURLUSESSL_NONE : CURLUSESSL_ALL)));
       if (options.connection.tls_mode != FtpTlsMode::none) {
         require_curl(curl_easy_setopt(easy, CURLOPT_SSL_VERIFYPEER, 1L));
-        require_curl(curl_easy_setopt(easy, CURLOPT_SSL_VERIFYHOST, 2L));
+        require_curl(curl_easy_setopt(easy, CURLOPT_SSL_VERIFYHOST, certificates ? 0L : 2L));
         require_curl(curl_easy_setopt(easy, CURLOPT_SSLVERSION, (curl_tls_version(options.connection.tls_min_version, false) |
             (options.connection.tls_max_version ? curl_tls_version(*options.connection.tls_max_version, true) : static_cast<long>(CURL_SSLVERSION_MAX_DEFAULT)))));
         require_curl(curl_easy_setopt(easy, CURLOPT_FTPSSLAUTH, static_cast<long>(options.connection.tls_auth_order == FtpTlsAuthOrder::ssl ? CURLFTPAUTH_SSL :
             options.connection.tls_auth_order == FtpTlsAuthOrder::automatic ? CURLFTPAUTH_DEFAULT : CURLFTPAUTH_TLS)));
+        if (certificates) {
+          // The callback replaces hostname checking and retains peer checking.
+          // This worker and its connection cache never change endpoint/policy.
+          require_curl(curl_easy_setopt(easy, CURLOPT_SSL_CTX_FUNCTION, configure_ftp_certificate_context));
+          require_curl(curl_easy_setopt(easy, CURLOPT_SSL_CTX_DATA, certificates.get()));
+        }
         auto ciphers = options.connection.tls_cipher_list;
         if (options.connection.tls_compatibility == FtpTlsCompatibility::openssl_legacy && ciphers.empty()) ciphers = "DEFAULT";
         if (!ciphers.empty()) {
@@ -329,6 +356,10 @@ struct CurlWorker {
       require_curl(curl_easy_setopt(easy, CURLOPT_MAXCONNECTS, 1L));
       result.code = curl_easy_perform(easy);
       result.error = op->error.data();
+      if (certificates) {
+        result.certificate_failure = certificates->failure;
+        if (certificates->callback_failure) op->callback_failure = certificates->callback_failure;
+      }
       require_curl(curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &result.response_code));
       char *entry = nullptr;
       require_curl(curl_easy_getinfo(easy, CURLINFO_FTP_ENTRY_PATH, &entry));
@@ -338,9 +369,17 @@ struct CurlWorker {
     }
     // Cleanup may still invoke callbacks. Only worker-owned user data remains
     // installed after the request's command lists and error buffer are released.
-    curl_easy_setopt(easy, CURLOPT_QUOTE, nullptr);
-    curl_easy_setopt(easy, CURLOPT_PREQUOTE, nullptr);
-    curl_easy_setopt(easy, CURLOPT_ERRORBUFFER, nullptr);
+    if (easy) {
+      curl_easy_setopt(easy, CURLOPT_QUOTE, nullptr);
+      curl_easy_setopt(easy, CURLOPT_PREQUOTE, nullptr);
+      curl_easy_setopt(easy, CURLOPT_ERRORBUFFER, nullptr);
+      if (result.certificate_failure) {
+        // Recreate the transport before a retry, keeping only this logical
+        // session's exact approvals. A failed mutation is never replayed here.
+        curl_easy_cleanup(easy);
+        easy = nullptr;
+      }
+    }
     {
       const auto lock = std::lock_guard(socket_mutex);
       operation.reset();
@@ -432,6 +471,8 @@ class CurlFtpSessionAdapter final : public CurlFtpSession {
   cardio::promise<void> worker_task;
   cardio::primitives::mutex stop_mutex;
   bool stopped = false;
+  cardio::cancellation_source confirmation_stop;
+  std::optional<FtpCertificateFailure> pending_approval;
 
 public:
   explicit CurlFtpSessionAdapter(std::shared_ptr<CurlWorker> worker)
@@ -455,26 +496,42 @@ public:
   }
 
   ~CurlFtpSessionAdapter() override {
+    (void)confirmation_stop.cancel();
     worker->request_stop();
     worker->shutdown_sockets();
   }
 
   cardio::promise<CurlFtpResult> perform_async(
       CurlFtpRequest request, cardio::cancellation cancellation) override {
-    cancellation.throw_if_cancellation_requested();
-    auto op = std::make_shared<CurlOperation>();
-    op->request = std::move(request);
-    op->cancellation = cancellation;
-    auto result = op->completion.get_promise();
-    auto registration = cancellation.on_cancellation_requested(
-        [state = worker, op] { state->cancel(op); });
-    worker->submit(op);
-    co_return co_await result;
+    auto combined = cardio::cancellations::any(cancellation, confirmation_stop.get_cancellation());
+    cancellation = combined.get_cancellation();
+    for (;;) {
+      cancellation.throw_if_cancellation_requested();
+      auto op = std::make_shared<CurlOperation>();
+      op->request = request;
+      op->certificate_approval = std::exchange(pending_approval, std::nullopt);
+      op->cancellation = cancellation;
+      auto completed = op->completion.get_promise();
+      auto registration = cancellation.on_cancellation_requested(
+          [state = worker, op] { state->cancel(op); });
+      worker->submit(op);
+      auto result = co_await completed;
+      if (!result.certificate_failure || !worker->options.confirm_certificate) co_return result;
+      const auto accepted = co_await worker->options.confirm_certificate(*result.certificate_failure, cancellation);
+      cancellation.throw_if_cancellation_requested();
+      if (!accepted) co_return result;
+      pending_approval = result.certificate_failure;
+      if (request.initial_authentication && result.certificate_failure->channel == FtpTlsChannel::control) continue;
+      result.certificate_accepted = true;
+      result.error += "; certificate accepted for this connection; the failed operation was not retried";
+      co_return result;
+    }
   }
 
   void resume() override { worker->wake(); }
 
   cardio::promise<void> stop_async() override {
+    (void)confirmation_stop.cancel();
     worker->request_stop();
     auto lock = std::move(co_await stop_mutex.lock());
     if (!stopped) {

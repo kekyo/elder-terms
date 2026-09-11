@@ -44,6 +44,20 @@ for (const testCase of [
   'ftps-explicit',
   'ftps-implicit',
   'ftps-legacy',
+  'ftps-prompt-allow',
+  'ftps-prompt-implicit',
+  'ftps-prompt-legacy',
+  'ftps-prompt-abort',
+  'ftps-prompt-ja',
+  'ftps-prompt-escape',
+  'ftps-prompt-enter',
+  'ftps-prompt-close',
+  'ftps-prompt-valid',
+  'ftps-prompt-expired',
+  'ftps-prompt-future',
+  'ftps-prompt-name',
+  'ftps-prompt-data',
+  'ftps-cert-reject',
   'ftps-cancel-final',
   'ftps-close-final-upload',
   'ftps-close-final-download',
@@ -77,12 +91,24 @@ for (const testCase of [
       const remote = join(remoteRoot, 'home');
       const configPath = join(directory, 'ftp.ini');
       const ftps = testCase.startsWith('ftps-');
+      const japanese = testCase === 'ftps-prompt-ja';
+      const certificatePrompt = testCase.startsWith('ftps-prompt-');
+      const dataCertificateFailure = testCase === 'ftps-prompt-data';
+      const invalidCertificate =
+        certificatePrompt && testCase !== 'ftps-prompt-valid';
+      const rejectedCertificate = testCase === 'ftps-cert-reject';
+      const legacyTls =
+        testCase === 'ftps-legacy' || testCase === 'ftps-prompt-legacy';
       const tlsMode =
-        testCase === 'ftps-implicit' || testCase.startsWith('ftps-close-')
+        testCase === 'ftps-prompt-implicit' ||
+        testCase === 'ftps-implicit' ||
+        testCase.startsWith('ftps-close-')
           ? 'implicit'
           : 'explicit';
       const certificate = join(directory, 'certificate.pem');
       const privateKey = join(directory, 'private-key.pem');
+      const dataCertificate = join(directory, 'data-certificate.pem');
+      const dataKey = join(directory, 'data-key.pem');
       if (ftps) {
         await execute('openssl', [
           'req',
@@ -99,9 +125,91 @@ for (const testCase of [
           '-subj',
           '/CN=localhost',
           '-addext',
-          'subjectAltName=IP:127.0.0.1',
+          testCase === 'ftps-prompt-name'
+            ? 'subjectAltName=DNS:wrong.invalid'
+            : 'subjectAltName=IP:127.0.0.1',
         ]);
       }
+      if (testCase === 'ftps-prompt-expired') {
+        const expired = join(directory, 'expired.pem');
+        await execute('openssl', [
+          'x509',
+          '-in',
+          certificate,
+          '-signkey',
+          privateKey,
+          '-days',
+          '-1',
+          '-out',
+          expired,
+        ]);
+        await writeFile(certificate, await readFile(expired));
+      }
+      if (testCase === 'ftps-prompt-future') {
+        const request = join(directory, 'future.csr'),
+          config = join(directory, 'ca.cnf'),
+          future = join(directory, 'future.pem');
+        await writeFile(join(directory, 'index'), '');
+        await writeFile(join(directory, 'serial'), '01\n');
+        await writeFile(
+          config,
+          '[ca]\ndefault_ca=test\n[test]\ndatabase=' +
+            join(directory, 'index') +
+            '\nserial=' +
+            join(directory, 'serial') +
+            '\nnew_certs_dir=' +
+            directory +
+            '\ncertificate=' +
+            certificate +
+            '\nprivate_key=' +
+            privateKey +
+            '\ndefault_md=sha256\npolicy=policy\nx509_extensions=server\n[policy]\ncommonName=supplied\n[server]\nbasicConstraints=critical,CA:TRUE\nsubjectAltName=IP:127.0.0.1\n'
+        );
+        await execute('openssl', [
+          'req',
+          '-new',
+          '-key',
+          privateKey,
+          '-subj',
+          '/CN=localhost',
+          '-out',
+          request,
+        ]);
+        await execute('openssl', [
+          'ca',
+          '-batch',
+          '-selfsign',
+          '-config',
+          config,
+          '-in',
+          request,
+          '-out',
+          future,
+          '-startdate',
+          '20990101000000Z',
+          '-enddate',
+          '21000101000000Z',
+        ]);
+        await writeFile(certificate, await readFile(future));
+      }
+      if (dataCertificateFailure)
+        await execute('openssl', [
+          'req',
+          '-x509',
+          '-newkey',
+          'rsa:2048',
+          '-noenc',
+          '-keyout',
+          dataKey,
+          '-out',
+          dataCertificate,
+          '-days',
+          '1',
+          '-subj',
+          '/CN=data-channel',
+          '-addext',
+          'subjectAltName=IP:127.0.0.1',
+        ]);
       const closingDownload = scenario === 'close-final-download';
       const held =
         scenario === 'cancel-final' || scenario.startsWith('close-final');
@@ -134,11 +242,12 @@ for (const testCase of [
                 `--key=${privateKey}`,
               ]
             : []),
+          ...(dataCertificateFailure
+            ? ['--data-cert=' + dataCertificate, '--data-key=' + dataKey]
+            : []),
           ...(held ? ['--hold-final'] : []),
           ...(scenario === 'login-refused' ? ['--reject-login'] : []),
-          ...(scenario === 'ftps-legacy'
-            ? ['--tls-version=769', '--legacy-tls']
-            : []),
+          ...(legacyTls ? ['--tls-version=769', '--legacy-tls'] : []),
         ],
         { stdio: ['pipe', 'pipe', 'pipe'] }
       );
@@ -172,25 +281,46 @@ for (const testCase of [
           'address=127.0.0.1',
           `port=${ready.slice(6)}`,
           'username=alice',
-          ...(ftps ? [`tls_mode=${tlsMode}`, `ca_file=${certificate}`] : []),
-          ...(scenario === 'ftps-legacy'
+          ...(ftps
+            ? [
+                `tls_mode=${tlsMode}`,
+                `ca_file=${(invalidCertificate && !dataCertificateFailure && !['ftps-prompt-expired', 'ftps-prompt-future', 'ftps-prompt-name'].includes(testCase)) || rejectedCertificate ? '' : certificate}`,
+              ]
+            : []),
+          ...(legacyTls
             ? [
                 'tls_min_version=1.0',
                 'tls_max_version=1.0',
                 'tls_compatibility=openssl_legacy',
               ]
             : []),
+          ...(certificatePrompt ? ['certificate_error_action=prompt'] : []),
           `data_connection_mode=${scenario === 'active' ? 'active' : 'passive'}`,
           `local_directory=${local}`,
           'remote_directory=/home',
           '',
         ].join('\n')
       );
+      if (japanese) {
+        const configurationDirectory = join(configHome, 'elder-terms');
+        await mkdir(configurationDirectory, { recursive: true });
+        await writeFile(
+          join(configurationDirectory, 'global.ini'),
+          '[general]\nui_language=ja\n'
+        );
+      }
       launcher = createGtkAppLauncher({
         appPath: ftpAppPath,
         // Instrumented GTK startup can exceed the driver's default ten seconds.
         timeoutMs: 60_000,
-        env: { LANGUAGE: 'en', LC_ALL: 'C.UTF-8', XDG_CONFIG_HOME: configHome },
+        env: {
+          LANGUAGE: japanese ? 'ja' : 'en',
+          LC_ALL: 'C.UTF-8',
+          XDG_CONFIG_HOME: configHome,
+          ELDER_TERMS_LOCALE_DIR: fileURLToPath(
+            new URL('../../.build/po/', import.meta.url)
+          ),
+        },
         onSystemOutput: evidence.recordSystemOutputEvent,
         xvfbTrayHost: true,
       });
@@ -211,7 +341,402 @@ for (const testCase of [
         'button'
       ).click();
 
-      if (scenario === 'login-refused') {
+      if (invalidCertificate) {
+        const title = expectElementKind(
+          await app.getById('file_transfer_prompt_title_label'),
+          'label'
+        );
+        await waitForResult(async () => {
+          expect(await title.text()).toBe(
+            japanese
+              ? 'FTPS証明書の検証に失敗しました'
+              : 'FTPS certificate validation failed'
+          );
+        });
+        if (!dataCertificateFailure) {
+          expect(serverLog).not.toContain('COMMAND USER');
+          expect(serverLog).not.toContain('COMMAND PASS');
+        } else expect(serverLog).toContain('COMMAND USER');
+        const message = await expectElementKind(
+          await app.getById('file_transfer_prompt_message_label'),
+          'label'
+        ).text();
+        const fingerprint = (
+          await execute('openssl', [
+            'x509',
+            '-in',
+            dataCertificateFailure ? dataCertificate : certificate,
+            '-noout',
+            '-fingerprint',
+            '-sha256',
+          ])
+        ).stdout
+          .trim()
+          .split('=')[1];
+        expect(message.replace(/\n/g, '')).toContain(fingerprint);
+        for (const detail of [
+          '127.0.0.1',
+          ready.slice(6),
+          ...(japanese
+            ? [
+                '制御接続',
+                '主体:',
+                '発行者:',
+                '有効期間の開始:',
+                '有効期間の終了:',
+                '例外は保存されません。',
+              ]
+            : [
+                dataCertificateFailure
+                  ? 'Data connection'
+                  : 'Control connection',
+                'Subject:',
+                'Issuer:',
+                'Valid from:',
+                'Valid until:',
+                'Exceptions are not saved.',
+              ]),
+        ])
+          expect(message).toContain(detail);
+        const overlay = await app.getById('file_transfer_prompt_panel');
+        await evidence.captureEvidence('certificate-pending', async () =>
+          app.capture()
+        );
+        const cancel = expectElementKind(
+          await app.getById('file_transfer_prompt_cancel_button'),
+          'button'
+        );
+        expect((await cancel.info()).states).toContain('focused');
+        if (testCase === 'ftps-prompt-close') {
+          const pending: GtkWidgetElement[] = [
+            await app.getById('file_transfer_header_bar'),
+          ];
+          let closed = false;
+          while (pending.length) {
+            const widget = pending.shift()!;
+            if (
+              widget.kind === 'button' &&
+              (await widget.info()).name === 'Close'
+            ) {
+              await widget.click();
+              closed = true;
+              break;
+            }
+            if ('getChildCount' in widget)
+              for (
+                let index = 0;
+                index < (await widget.getChildCount());
+                ++index
+              ) {
+                const child = await widget.childAt(index);
+                if (child) pending.push(child);
+              }
+          }
+          expect(closed).toBe(true);
+        } else if (testCase === 'ftps-prompt-abort' || japanese)
+          await cancel.click();
+        else if (testCase === 'ftps-prompt-escape')
+          await app.input.pressKey('Escape');
+        else if (testCase === 'ftps-prompt-enter')
+          await app.input.pressKey('Return');
+        else if (testCase === 'ftps-prompt-allow') {
+          const screen = PNG.sync.read((await app.capture()).image);
+          const area = (await overlay.capture()).bounds;
+          const environment = await app.environment();
+          const videoPath = join(
+            evidence.directory,
+            'ftps-certificate-confirmation.mkv'
+          );
+          let pending = Buffer.alloc(0);
+          let frame = Buffer.alloc(0);
+          let frameNumber = 0;
+          let recordingError: Error | undefined;
+          let stderr = '';
+          const frameSize = screen.width * screen.height * 4;
+          const recorder = spawn(
+            'ffmpeg',
+            [
+              '-hide_banner',
+              '-loglevel',
+              'error',
+              '-f',
+              'x11grab',
+              '-framerate',
+              '30',
+              '-draw_mouse',
+              '0',
+              '-video_size',
+              `${screen.width}x${screen.height}`,
+              '-i',
+              environment.DISPLAY ?? '',
+              '-map',
+              '0:v',
+              '-c:v',
+              'ffv1',
+              '-pix_fmt',
+              'bgr0',
+              '-fps_mode',
+              'passthrough',
+              videoPath,
+              '-map',
+              '0:v',
+              '-c:v',
+              'rawvideo',
+              '-pix_fmt',
+              'bgr0',
+              '-fps_mode',
+              'passthrough',
+              '-f',
+              'rawvideo',
+              'pipe:1',
+            ],
+            { env: environment, stdio: ['pipe', 'pipe', 'pipe'] }
+          );
+          const finished = new Promise<number | null>((resolve) => {
+            recorder.once('error', (error) => {
+              recordingError = error;
+              resolve(null);
+            });
+            recorder.once('close', resolve);
+          });
+          recorder.stderr.on('data', (bytes: Buffer) => {
+            stderr += bytes.toString();
+          });
+          recorder.stdout.on('data', (bytes: Buffer) => {
+            pending = Buffer.concat([pending, bytes]);
+            while (pending.length >= frameSize) {
+              frame = Buffer.from(pending.subarray(0, frameSize));
+              pending = pending.subarray(frameSize);
+              frameNumber++;
+            }
+          });
+          const states: {
+            readonly frame: number;
+            readonly label: string;
+            readonly pixels: Buffer;
+          }[] = [];
+          const difference = (
+            image: Buffer,
+            width: number,
+            bgr: boolean,
+            reference: Buffer
+          ) => {
+            let different = 0;
+            for (let y = 0; y < area.height; y++) {
+              for (let x = 0; x < area.width; x++) {
+                const actual = ((area.y + y) * width + area.x + x) * 4;
+                const expected = (y * area.width + x) * 4;
+                if (
+                  [0, 1, 2].some(
+                    (channel) =>
+                      Math.abs(
+                        image[actual + (bgr ? 2 - channel : channel)] -
+                          reference[expected + channel]
+                      ) > 8
+                  )
+                )
+                  different++;
+              }
+            }
+            return different / (area.width * area.height);
+          };
+          const expectVideoState = async (label: string) => {
+            let previousPixels: Buffer | undefined;
+            const previousFrame = frameNumber;
+            const state = await waitForResult(async () => {
+              if (recordingError) throw recordingError;
+              expect(recorder.exitCode, stderr).toBeNull();
+              const captured = PNG.sync.read((await app.capture()).image);
+              const current = Buffer.alloc(area.width * area.height * 4);
+              for (let y = 0; y < area.height; y++) {
+                const offset = ((area.y + y) * captured.width + area.x) * 4;
+                captured.data.copy(
+                  current,
+                  y * area.width * 4,
+                  offset,
+                  offset + area.width * 4
+                );
+              }
+              const previous = previousPixels;
+              previousPixels = current;
+              // The recorded states must match stable screenshots. The visible
+              // change is also checked below; its area depends on the layout.
+              expect(previous).toBeDefined();
+              expect(current.equals(previous!)).toBe(true);
+              // Recapture when rendering advances before the video catches up.
+              // A transient stable screenshot must not become a permanent target.
+              expect(frameNumber).toBeGreaterThan(previousFrame);
+              expect(
+                difference(frame, screen.width, true, current)
+              ).toBeLessThan(0.01);
+              return { frame: frameNumber, label, pixels: current };
+            });
+            states.push(state);
+          };
+          try {
+            await expectVideoState(
+              'certificate decision pending without FTP authentication'
+            );
+            expect(serverLog).not.toContain('COMMAND USER');
+            await expectElementKind(
+              await app.getById('file_transfer_prompt_accept_button'),
+              'button'
+            ).click();
+
+            await waitForResult(async () => {
+              expect((await overlay.info()).states).not.toContain('showing');
+              expect(
+                await expectElementKind(
+                  await app.getById('file_transfer_status_label'),
+                  'label'
+                ).text()
+              ).toBe('Ready — Certificate exception active');
+              expect(
+                await expectElementKind(
+                  await app.getById('file_transfer_remote_tree'),
+                  'table'
+                ).getRowCount()
+              ).toBeGreaterThan(0);
+            });
+            await expectVideoState(
+              'explicitly approved certificate and resumed browser'
+            );
+            expect(states[1].frame).toBeGreaterThan(states[0].frame);
+            expect(states[1].pixels.equals(states[0].pixels)).toBe(false);
+          } finally {
+            recorder.stdin.write('q\n');
+            const code = await finished;
+            await evidence.log('FTPS certificate video states', {
+              states: states.map(({ frame, label }) => ({ frame, label })),
+              code,
+              stderr,
+            });
+            expect(code, stderr).toBe(0);
+          }
+          const selection = states
+            .map(({ frame }) => `eq(n\\,${frame - 1})`)
+            .join('+');
+          await execute('ffmpeg', [
+            '-v',
+            'error',
+            '-i',
+            videoPath,
+            '-vf',
+            `select=${selection}`,
+            '-fps_mode',
+            'passthrough',
+            join(evidence.directory, 'ftps-certificate-frame-%d.png'),
+          ]);
+          for (let index = 0; index < states.length; index++) {
+            const saved = PNG.sync.read(
+              await readFile(
+                join(
+                  evidence.directory,
+                  `ftps-certificate-frame-${index + 1}.png`
+                )
+              )
+            );
+            expect(
+              difference(saved.data, saved.width, false, states[index].pixels)
+            ).toBeLessThan(0.01);
+          }
+        } else
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_accept_button'),
+            'button'
+          ).click();
+        if (
+          [
+            'ftps-prompt-close',
+            'ftps-prompt-abort',
+            'ftps-prompt-ja',
+            'ftps-prompt-escape',
+            'ftps-prompt-enter',
+          ].includes(testCase)
+        ) {
+          await waitForResult(async () => {
+            const output = await app.output();
+            expect(output.exitCode, output.stderr).toBe(0);
+            expect(output.exitSignal).toBeNull();
+          });
+          expect(serverLog).not.toContain('COMMAND USER');
+          expect(serverLog).not.toContain('COMMAND PASS');
+          return;
+        }
+      }
+      if (dataCertificateFailure) {
+        const dialog = await app.getById(
+          'file_transfer_operation_error_dialog'
+        );
+        expect(
+          serverLog
+            .split('\n')
+            .filter((line) => /^COMMAND (MLSD|LIST)$/.test(line))
+        ).toHaveLength(1);
+        const pending: GtkWidgetElement[] = [dialog];
+        let closed = false;
+        while (pending.length) {
+          const widget = pending.shift()!;
+          if (
+            widget.kind === 'button' &&
+            (await widget.info()).name === 'Close'
+          ) {
+            await widget.click();
+            closed = true;
+            break;
+          }
+          if ('getChildCount' in widget)
+            for (
+              let index = 0;
+              index < (await widget.getChildCount());
+              index++
+            ) {
+              const child = await widget.childAt(index);
+              if (child) pending.push(child);
+            }
+        }
+        expect(closed).toBe(true);
+        await expectElementKind(
+          await app.getById('file_transfer_remote_refresh_button'),
+          'button'
+        ).click();
+      }
+      if (rejectedCertificate) {
+        await waitForResult(async () =>
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_prompt_title_label'),
+              'label'
+            ).text()
+          ).toBe('Failed to start FTPS')
+        );
+        const close = expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        );
+        expect((await close.info()).name).toBe('Close');
+        expect(
+          (
+            await (
+              await app.getById('file_transfer_prompt_cancel_button')
+            ).info()
+          ).states
+        ).not.toContain('showing');
+        expect(serverLog).not.toContain('COMMAND USER');
+        expect(serverLog).not.toContain('COMMAND PASS');
+        await evidence.captureEvidence('certificate-rejected', async () =>
+          app.capture()
+        );
+        await close.click();
+        await waitForResult(async () => {
+          const output = await app.output();
+          expect(output.exitCode, output.stderr).toBe(0);
+          expect(output.exitSignal).toBeNull();
+        });
+        expect(serverLog).not.toContain('COMMAND USER');
+        expect(serverLog).not.toContain('COMMAND PASS');
+        return;
+      } else if (scenario === 'login-refused') {
         await waitForResult(async () => {
           expect(
             await expectElementKind(
@@ -499,7 +1024,10 @@ for (const testCase of [
                 await app.getById('file_transfer_status_label'),
                 'label'
               ).text()
-            ).toBe('Sent 1 item');
+            ).toBe(
+              'Sent 1 item' +
+                (invalidCertificate ? ' — Certificate exception active' : '')
+            );
           });
           expect(await readFile(join(remote, 'upload.bin'))).toEqual(upload);
           await rowFor(remoteTree, 'upload.bin');
@@ -514,7 +1042,10 @@ for (const testCase of [
                 await app.getById('file_transfer_status_label'),
                 'label'
               ).text()
-            ).toBe('Received 1 item');
+            ).toBe(
+              'Received 1 item' +
+                (invalidCertificate ? ' — Certificate exception active' : '')
+            );
           });
           expect(await readFile(join(local, 'download.bin'))).toEqual(download);
           await contextMenu(remoteTree, 'upload.bin');
@@ -549,7 +1080,10 @@ for (const testCase of [
                 await app.getById('file_transfer_status_label'),
                 'label'
               ).text()
-            ).toBe('Deleted 1 item');
+            ).toBe(
+              'Deleted 1 item' +
+                (invalidCertificate ? ' — Certificate exception active' : '')
+            );
           });
           expect(await readdir(remote)).not.toContain('renamed 日本語.bin');
           expect(
@@ -610,6 +1144,18 @@ for (const testCase of [
         // Dismiss that modal notice before interacting with the title bar.
         await clickClose(
           await app.getById('file_transfer_operation_error_dialog')
+        );
+      }
+      if (legacyTls) {
+        const channels = serverLog
+          .split('\n')
+          .filter(
+            (line) =>
+              line.startsWith('TLS CONTROL') || line.startsWith('TLS DATA')
+          );
+        expect(channels.length).toBeGreaterThan(1);
+        expect(channels.every((line) => line.split(' ')[2] === 'TLSv1')).toBe(
+          true
         );
       }
       await evidence.captureEvidence('ftp-before-window-close', async () =>

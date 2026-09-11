@@ -131,6 +131,9 @@ struct FileTransferWindow {
   GtkWidget *prompt_background = nullptr;
   GtkWidget *status_bar = nullptr;
   GtkWidget *status_label = nullptr;
+  std::string status_text;
+  bool certificate_exception = false;
+  bool certificate_confirmation = false;
   GtkCssProvider *exterior_background_provider = nullptr;
   GtkCssProvider *exterior_component_background_provider = nullptr;
   GtkCssProvider *background_provider = nullptr;
@@ -518,7 +521,10 @@ static void set_file_transfer_status(FileTransferWindow *window,
       window->status_label == nullptr) {
     return;
   }
-  gtk_label_set_text(GTK_LABEL(window->status_label), text.c_str());
+  window->status_text = text;
+  const auto displayed = window->certificate_exception
+      ? text + " — " + _("Certificate exception active") : text;
+  gtk_label_set_text(GTK_LABEL(window->status_label), displayed.c_str());
 }
 
 static void update_file_transfer_sensitivity(FileTransferWindow *window) {
@@ -526,7 +532,7 @@ static void update_file_transfer_sensitivity(FileTransferWindow *window) {
     return;
   }
   const bool idle =
-      !window->transfer_active && !window->browser_action_active;
+      !window->transfer_active && !window->browser_action_active && !window->certificate_confirmation;
   const bool local_ready = idle && !window->local.busy;
   const bool remote_ready =
       idle && !window->remote.busy && window->connection_available;
@@ -573,7 +579,7 @@ static void update_file_transfer_overlay_presentation(
           FileTransferConnectionState::authenticating ||
       window->connection_state == FileTransferConnectionState::failed;
   set_widget_visible(window->dim_overlay,
-                     connection_blocked || window->transfer_active ||
+                     connection_blocked || window->certificate_confirmation || window->transfer_active ||
                          window->browser_action_active);
   set_widget_visible(window->transfer_overlay,
                      window->transfer_active ||
@@ -2505,6 +2511,38 @@ cardio::promise<InlinePromptResponse> prompt_file_transfer_window_async(
     update_file_transfer_overlay_presentation(window.get());
   }
   co_return response;
+}
+
+cardio::promise<InlinePromptResponse> confirm_file_transfer_window_async(
+    const std::shared_ptr<FileTransferWindow> &window,
+    InlinePromptRequest request, cardio::cancellation cancellation) {
+  if (!window || window->destroyed || !window->prompt || cancellation.is_cancellation_requested()) co_return InlinePromptResponse{};
+  const auto previous_status = window->status_text;
+  window->certificate_confirmation = true;
+  set_file_transfer_status(window.get(), _("Awaiting certificate confirmation"));
+  update_file_transfer_sensitivity(window.get());
+  update_file_transfer_overlay_presentation(window.get());
+  InlinePromptResponse response;
+  std::exception_ptr failure;
+  try {
+    response = co_await prompt_inline_async(window->prompt, std::move(request), cancellation);
+  } catch (...) {
+    failure = std::current_exception();
+  }
+  if (!window->destroyed) {
+    window->certificate_confirmation = false;
+    set_file_transfer_status(window.get(), previous_status);
+    update_file_transfer_sensitivity(window.get());
+    update_file_transfer_overlay_presentation(window.get());
+  }
+  if (failure) std::rethrow_exception(failure);
+  co_return response;
+}
+
+void mark_file_transfer_certificate_exception(const std::shared_ptr<FileTransferWindow> &window) {
+  if (!window || window->destroyed) return;
+  window->certificate_exception = true;
+  set_file_transfer_status(window.get(), window->status_text);
 }
 
 cardio::promise<void> show_file_transfer_window_connection_error_async(

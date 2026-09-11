@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -29,6 +30,8 @@ struct CurlFtpRequest {
   bool upload = false;
   /** True for a control-only request. */
   bool no_body = false;
+  /** Only initial authentication requests may restart after an approved control certificate. */
+  bool initial_authentication = false;
   /** Receives bytes on the worker; CURL_WRITEFUNC_PAUSE waits for resume(). */
   std::function<std::size_t(std::span<const std::byte>)> receive;
   /** Supplies bytes on the worker; CURL_READFUNC_PAUSE waits for resume(). */
@@ -47,6 +50,10 @@ struct CurlFtpResult {
   std::string error;
   /** Login directory reported by libcurl. */
   std::string entry_path;
+  /** Unapproved certificate failure that ended the handshake. */
+  std::optional<FtpCertificateFailure> certificate_failure{};
+  /** Current operation failed, but its approved certificate permits a fresh next operation. */
+  bool certificate_accepted = false;
 };
 
 /** Serial curl executor running outside the caller's dispatcher. */

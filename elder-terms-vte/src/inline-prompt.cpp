@@ -40,6 +40,7 @@ struct InlinePromptPendingRequest {
   cardio::cancellation_registration cancellation_registration;
   bool input_required = false;
   bool secondary_input_required = false;
+  bool default_cancel = false;
 };
 
 struct InlinePromptController {
@@ -344,12 +345,22 @@ static void on_inline_prompt_entry_activated(GtkEntry *entry, gpointer data) {
   if (controller == nullptr || controller->request == nullptr) {
     return;
   }
+  if (controller->request->default_cancel) return;
   if (entry == GTK_ENTRY(controller->widgets.entry) &&
       controller->request->secondary_input_required) {
     gtk_widget_grab_focus(controller->widgets.secondary_entry);
     return;
   }
   on_inline_prompt_accept_clicked(nullptr, controller);
+}
+
+static gboolean on_inline_prompt_key_press(GtkWidget *, GdkEventKey *event, gpointer data) {
+  auto *controller = static_cast<InlinePromptController *>(data);
+  if (controller->request && controller->request->default_cancel && event->keyval == GDK_KEY_Escape) {
+    complete_inline_prompt(controller, {});
+    return TRUE;
+  }
+  return FALSE;
 }
 
 std::shared_ptr<InlinePromptController>
@@ -360,6 +371,7 @@ create_inline_prompt_controller(InlinePromptWidgets widgets) {
           .request = nullptr,
       });
   apply_inline_prompt_style(widgets);
+  g_signal_connect(widgets.panel, "key-press-event", G_CALLBACK(on_inline_prompt_key_press), controller.get());
   g_signal_connect(widgets.accept_button, "clicked",
                    G_CALLBACK(on_inline_prompt_accept_clicked),
                    controller.get());
@@ -412,6 +424,7 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
   auto pending = std::make_shared<InlinePromptPendingRequest>();
   pending->source =
       std::make_shared<cardio::promise_source<InlinePromptResponse>>();
+  pending->default_cancel = request.default_cancel;
   pending->input_required = request.input_required;
   pending->secondary_input_required = request.secondary_input_required;
   cardio::promise<InlinePromptResponse> response =
@@ -524,7 +537,9 @@ cardio::promise<InlinePromptResponse> prompt_inline_async(
     gtk_widget_set_no_show_all(controller->widgets.alternative_button,
                                !request.alternative_visible);
   }
-  GtkWidget *default_action = request.accept_visible
+  GtkWidget *default_action = request.default_cancel && request.cancel_visible
+                                  ? controller->widgets.cancel_button
+                              : request.accept_visible
                                   ? controller->widgets.accept_button
                               : request.cancel_visible
                                   ? controller->widgets.cancel_button

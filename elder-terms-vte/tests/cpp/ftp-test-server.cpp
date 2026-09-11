@@ -59,6 +59,8 @@ struct Options {
   bool ipv6 = false;
   std::string tls_mode;
   std::string cert;
+  std::string data_cert;
+  std::string data_key;
   std::string key;
   bool reject_auth = false;
   bool reject_protection = false;
@@ -169,7 +171,7 @@ static std::string facts(const std::filesystem::path &path,
       ";modify=20240102030405; " + name + "\r\n";
 }
 
-static void serve(Socket &control, Options options, SSL_CTX *context) {
+static void serve(Socket &control, Options options, SSL_CTX *context, SSL_CTX *data_context) {
   std::filesystem::path cwd = "/home";
   std::filesystem::path rename_from;
   Socket passive;
@@ -345,7 +347,7 @@ static void serve(Socket &control, Options options, SSL_CTX *context) {
           std::cout << "TLS_WAIT" << std::endl;
           if (read_line(STDIN_FILENO) == "cancel") return;
         }
-        if (options.break_data_tls || !data.secure(context)) return;
+        if (options.break_data_tls || !data.secure(data_context)) return;
         expect(!options.require_reuse || SSL_session_reused(data.tls), "Data TLS session was not reused");
         std::osyncstream(std::clog) << "TLS DATA " << SSL_get_version(data.tls) << " " << SSL_get_cipher_name(data.tls) << std::endl;
       }
@@ -416,7 +418,7 @@ static void serve(Socket &control, Options options, SSL_CTX *context) {
           std::cout << "TLS_WAIT" << std::endl;
           if (read_line(STDIN_FILENO) == "cancel") return;
         }
-        if (options.break_data_tls || !data.secure(context)) return;
+        if (options.break_data_tls || !data.secure(data_context)) return;
         expect(!options.require_reuse || SSL_session_reused(data.tls), "Data TLS session was not reused");
         std::osyncstream(std::clog) << "TLS DATA " << SSL_get_version(data.tls) << " " << SSL_get_cipher_name(data.tls) << std::endl;
       }
@@ -515,6 +517,8 @@ int main(int argc, char **argv) {
       const std::string option = argv[index];
       if (option.starts_with("--tls=")) options.tls_mode = option.substr(6);
       else if (option.starts_with("--cert=")) options.cert = option.substr(7);
+      else if (option.starts_with("--data-cert=")) options.data_cert = option.substr(12);
+      else if (option.starts_with("--data-key=")) options.data_key = option.substr(11);
       else if (option.starts_with("--key=")) options.key = option.substr(6);
       else if (option == "--require-reuse") options.require_reuse = true;
       else if (option.starts_with("--tls-version=")) options.tls_version = std::stoi(option.substr(14));
@@ -568,6 +572,15 @@ int main(int argc, char **argv) {
                "Cannot constrain test TLS version");
       }
     }
+    auto data_context = context;
+    if (!options.data_cert.empty()) {
+      data_context = std::shared_ptr<SSL_CTX>(SSL_CTX_new(TLS_server_method()), SSL_CTX_free);
+      expect(data_context && SSL_CTX_use_certificate_chain_file(data_context.get(), options.data_cert.c_str()) == 1 &&
+          SSL_CTX_use_PrivateKey_file(data_context.get(), options.data_key.c_str(), SSL_FILETYPE_PEM) == 1 &&
+          SSL_CTX_check_private_key(data_context.get()) == 1, "Test data TLS credentials failed");
+      // Separate contexts intentionally prevent a control-session resumption
+      // from hiding the distinct certificate exercised by these tests.
+    }
     auto [listener, port] = listen_local(options.ipv6);
     std::cout << "READY " << port << std::endl;
     for (;;) {
@@ -579,12 +592,12 @@ int main(int argc, char **argv) {
       if (context) {
         // curl may open a new control connection before evicting its cached
         // one. An idle TLS connection must not block the listener's greeting.
-        std::thread([control = std::move(control), options, context]() mutable {
-          try { serve(control, options, context.get()); }
+        std::thread([control = std::move(control), options, context, data_context]() mutable {
+          try { serve(control, options, context.get(), data_context.get()); }
           catch (const std::exception &error) { std::cerr << error.what() << std::endl; }
         }).detach();
       } else {
-        serve(control, options, nullptr);
+        serve(control, options, nullptr, nullptr);
       }
     }
   } catch (const std::exception &error) {

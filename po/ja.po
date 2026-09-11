@@ -2058,3 +2058,42 @@ msgstr "FTPS認証"
 
 msgid "Failed to start FTPS"
 msgstr "FTPSの起動に失敗しました"
+
+msgid "Certificate exception active"
+msgstr "証明書の例外を許可中"
+
+msgid "Awaiting certificate confirmation"
+msgstr "証明書の確認待ち"
+
+msgid "The server certificate could not be validated."
+msgstr "サーバー証明書を検証できませんでした。"
+
+msgid "Control connection"
+msgstr "制御接続"
+
+msgid "Data connection"
+msgstr "データ接続"
+
+msgid "Allow only this certificate and validation failure for this connection? Exceptions are not saved."
+msgstr "この接続に限り、この証明書と検証失敗を許可しますか？ 例外は保存されません。"
+
+msgid "Subject:"
+msgstr "主体:"
+
+msgid "Issuer:"
+msgstr "発行者:"
+
+msgid "Valid from:"
+msgstr "有効期間の開始:"
+
+msgid "Valid until:"
+msgstr "有効期間の終了:"
+
+msgid "FTPS certificate validation failed"
+msgstr "FTPS証明書の検証に失敗しました"
+
+msgid "Allow for this connection"
+msgstr "この接続で許可"
+
+msgid "Abort connection"
+msgstr "接続を中止"

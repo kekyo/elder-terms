@@ -206,6 +206,7 @@ struct CurlClientState {
   std::string base_url;
   std::string directory;
   cardio::primitives::mutex operations;
+  bool authenticating = true;
   bool has_mlsd = false;
   bool has_mlst = false;
   bool failed = false;
@@ -234,7 +235,7 @@ struct CurlClientState {
       failed = true;
       throw;
     }
-    if (result.code != CURLE_OK && !ordinary_refusal(result.code)) failed = true;
+    if (result.code != CURLE_OK && !ordinary_refusal(result.code) && !result.certificate_accepted) failed = true;
     co_return result;
   }
 
@@ -245,6 +246,7 @@ struct CurlClientState {
     request.url = base_url;
     request.quote = std::move(commands);
     request.no_body = true;
+    request.initial_authentication = authenticating;
     request.header = [response](std::string_view line) { response->receive(line); };
     co_return co_await perform_async(std::move(request), cancellation);
   }
@@ -429,9 +431,11 @@ static cardio::promise<void> run_stream_async(
     std::shared_ptr<CurlStream> stream, CurlFtpRequest request) {
   std::exception_ptr failure;
   const bool upload = request.upload;
+  bool certificate_accepted = false;
   try {
     const auto result = co_await stream->client->perform_async(
         std::move(request), stream->cancellation.get_cancellation());
+    certificate_accepted = result.certificate_accepted;
     require_success(upload ? "FTP STOR" : "FTP RETR", result);
   } catch (...) {
     failure = std::current_exception();
@@ -445,7 +449,7 @@ static cardio::promise<void> run_stream_async(
     stream->failure = failure;
     release = failure != nullptr || stream->abandoned;
   }
-  if (failure && started) stream->client->failed = true;
+  if (failure && started && !certificate_accepted) stream->client->failed = true;
   if (release) stream->acknowledge();
   stream->changed.trigger();
 }
@@ -820,6 +824,7 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_ftp_client_async(
     co_await state->session->stop_async();
     std::rethrow_exception(failure);
   }
+  state->authenticating = false;
   co_return std::make_shared<CurlFileClient>(std::move(state));
 }
 

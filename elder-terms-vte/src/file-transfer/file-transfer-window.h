@@ -89,6 +89,23 @@ cardio::promise<InlinePromptResponse> prompt_file_transfer_window_async(
     InlinePromptRequest request, cardio::cancellation cancellation);
 
 /**
+ * Confirms an identity exception without changing the browser connection state.
+ * @param window File-transfer window hosting the prompt.
+ * @param request Certificate presentation and explicit response labels.
+ * @param cancellation Cancellation of the operation or connection.
+ * @returns Accepted response, or rejection after cancellation or close.
+ */
+cardio::promise<InlinePromptResponse> confirm_file_transfer_window_async(
+    const std::shared_ptr<FileTransferWindow> &window,
+    InlinePromptRequest request, cardio::cancellation cancellation);
+
+/**
+ * Marks the connection status as using an explicitly accepted certificate.
+ * @param window Window retaining the indication until it closes.
+ */
+void mark_file_transfer_certificate_exception(const std::shared_ptr<FileTransferWindow> &window);
+
+/**
  * Shows a connection failure inside the file-transfer surface until closed.
  *
  * @param window File-transfer window hosting the error.

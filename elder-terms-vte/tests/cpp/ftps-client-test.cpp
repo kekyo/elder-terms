@@ -2,6 +2,8 @@
 
 #include <array>
 #include <exception>
+#include <filesystem>
+#include <thread>
 #include <iostream>
 #include <stdexcept>
 
@@ -12,13 +14,42 @@ static void expect(bool condition, const char *message) {
 }
 
 static cardio::promise<void> run_async(
-    elder_terms::FtpConnectionSettings connection, bool expect_success,
+    elder_terms::FtpConnectionSettings connection, std::string scenario,
     cardio::dispatcher_group_glib &group, std::exception_ptr &failure) {
   std::shared_ptr<elder_terms::RemoteFileClient> client;
+  const bool approve = scenario.starts_with("approve");
+  const bool expect_success = scenario == "success" || approve;
+  const auto caller = std::this_thread::get_id();
+  const auto root = connection.local_directory;
+  unsigned confirmations = 0;
   bool succeeded = false;
   try {
     client = co_await elder_terms::open_ftp_client_async(
-        {.connection = std::move(connection), .password = "secret"}, {});
+        {.connection = std::move(connection), .password = "secret",
+         .confirm_certificate = [&](const elder_terms::FtpCertificateFailure &failure, cardio::cancellation cancellation) -> cardio::promise<bool> {
+           expect(std::this_thread::get_id() == caller, "Confirmation must run on the caller dispatcher");
+           cancellation.throw_if_cancellation_requested();
+           expect(failure.sha256.size() == 95 && !failure.subject.empty() && !failure.issuer.empty() &&
+                  !failure.reason.empty() && !failure.not_before.empty() && !failure.not_after.empty(), "Confirmation must contain copied certificate details");
+           ++confirmations;
+           std::cout << "CONFIRM " << (failure.channel == elder_terms::FtpTlsChannel::data ? "data" : "control") << " " << failure.validation_code << " " << failure.sha256 << std::endl;
+           co_return approve;
+         }}, {});
+    if (scenario == "approve-data") {
+      bool failed = false;
+      try { auto writer = std::move(co_await client->open_write_async("/home/probe", std::nullopt, {})); }
+      catch (const std::exception &error) { failed = true; std::cout << "DATA FAILURE OBSERVED " << error.what() << std::endl; }
+      expect(failed, "Approving a data certificate must not automatically replay STOR");
+      expect(confirmations == 1, "A distinct data certificate must be confirmed once");
+      expect(std::filesystem::file_size(root + "/home/probe") == 0, "The rejected data handshake must not write file contents");
+      auto retry = std::move(co_await client->open_write_async("/home/probe", std::nullopt, {}));
+      const std::array<std::byte, 3> value{std::byte(0),std::byte(255),std::byte(42)};
+      co_await retry->write_all_async(value, {});
+      co_await retry->close_async({});
+      retry.reset();
+      expect(std::filesystem::file_size(root + "/home/probe") == value.size(), "An explicit retry must use the approved data certificate");
+      co_await client->remove_file_async("/home/probe", {});
+    }
     const auto listing = co_await client->load_directory_async("/home", {});
     expect(listing.canonical_path == "/home", "FTPS must list the login directory");
     co_await client->make_directory_async("/home/roundtrip", std::nullopt, {});
@@ -77,7 +108,7 @@ int main(int argc, char **argv) {
       cardio::dispatcher_group_glib group;
       cardio::dispatcher_host_glib_auto dispatcher(group);
       auto task = run_async(elder_terms::ftp_connection_settings(store),
-          std::string_view(argv[argument + 1]) == "success", group, failure);
+          std::string(argv[argument + 1]), group, failure);
       dispatcher.park();
     }
     if (failure) std::rethrow_exception(failure);

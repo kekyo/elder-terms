@@ -76,6 +76,8 @@ struct InlinePromptRequest {
   std::string alternative_label = {};
   /** True when the third-response button is visible. */
   bool alternative_visible = false;
+  /** Prefer rejection and ignore activation from preceding input prompts. */
+  bool default_cancel = false;
 };
 
 /**

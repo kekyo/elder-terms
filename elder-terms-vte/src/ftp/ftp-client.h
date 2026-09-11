@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -10,12 +11,50 @@
 
 namespace elder_terms {
 
+/** TLS-protected FTP channel presenting a certificate. */
+enum class FtpTlsChannel {
+  /** Authentication and file-operation commands. */
+  control,
+  /** Directory contents and file bytes. */
+  data,
+};
+
+/** Immutable certificate failure copied from the TLS worker. */
+struct FtpCertificateFailure {
+  /** Requested server name or numeric address. */
+  std::string address;
+  /** Control connection port. */
+  gint64 port;
+  /** Channel whose handshake was rejected. */
+  FtpTlsChannel channel;
+  /** TLS backend validation identifier, independent of its display string. */
+  int validation_code;
+  /** Failing chain depth; zero is the leaf. */
+  int depth;
+  /** Human-readable failure reason. */
+  std::string reason;
+  /** Leaf subject, or empty when unavailable. */
+  std::string subject;
+  /** Leaf issuer, or empty when unavailable. */
+  std::string issuer;
+  /** Leaf validity start, or empty when unavailable. */
+  std::string not_before;
+  /** Leaf validity end, or empty when unavailable. */
+  std::string not_after;
+  /** SHA-256 fingerprint identifying the presented leaf certificate. */
+  std::string sha256;
+  /** SHA-256 of the chain certificate associated with the failure. */
+  std::string failed_certificate_sha256;
+};
+
 /** Options used to open one FTP or FTPS session. */
 struct FtpClientOpenOptions {
   /** Stored endpoint, identity, and data-connection settings. */
   FtpConnectionSettings connection;
   /** Runtime-only password, or empty when the server accepts one. */
   std::string password;
+  /** Called on the caller dispatcher after a failed handshake ends; true approves only this failure. */
+  std::function<cardio::promise<bool>(const FtpCertificateFailure &, cardio::cancellation)> confirm_certificate{};
 };
 
 /**
