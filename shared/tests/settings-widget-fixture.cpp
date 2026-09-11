@@ -36,6 +36,7 @@ struct FixtureOptions {
   bool allow_invalid_connection_values = false;
   std::string save_file;
   std::string bell_sound_dialog_file;
+  std::string ftp_ca_dialog_file;
   std::string ip_scan_mode;
   std::string page = "general";
   std::vector<ConfigAssignment> connection_assignments;
@@ -47,6 +48,7 @@ struct FixtureState {
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
   std::optional<elder_terms::SettingsStore> rebase_store;
   std::string bell_sound_dialog_file;
+  std::string ftp_ca_dialog_file;
   GtkWidget *window = nullptr;
 };
 
@@ -188,6 +190,8 @@ static FixtureOptions parse_options(int argc, char **argv) {
           option_value(argument, "--send-break-key="));
     } else if (starts_with(argument, "--page=")) {
       options.page = option_value(argument, "--page=");
+    } else if (starts_with(argument, "--ftp-ca-dialog-file=")) {
+      options.ftp_ca_dialog_file = option_value(argument, "--ftp-ca-dialog-file=");
     } else if (starts_with(argument, "--bell-sound-dialog-file=")) {
       options.bell_sound_dialog_file =
           option_value(argument, "--bell-sound-dialog-file=");
@@ -567,6 +571,19 @@ static void select_bell_sound_dialog_file(GtkButton *, gpointer data) {
   g_list_free(windows);
 }
 
+static void select_ftp_ca_dialog_file(GtkButton *, gpointer data) {
+  const auto *file = static_cast<const std::string *>(data);
+  GList *windows = gtk_window_list_toplevels();
+  for (GList *window = windows; window; window = window->next) {
+    auto *dialog = find_widget_by_name(GTK_WIDGET(window->data), "settings_ftp_ca_dialog");
+    if (dialog && GTK_IS_FILE_CHOOSER(dialog)) {
+      gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), file->c_str());
+      break;
+    }
+  }
+  g_list_free(windows);
+}
+
 static void print_color_picker_alpha(GtkWidget *window,
                                      const std::string &id,
                                      const char *name) {
@@ -933,6 +950,24 @@ static void print_store(const char *prefix,
                          elder_terms::sftp_local_directory_setting_key());
   print_setting_metadata(store, "sftp_remote_directory",
                          elder_terms::sftp_remote_directory_setting_key());
+  std::cout << " ftp_tls_mode=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls_mode"), "");
+  print_setting_metadata(store, "ftp_tls_mode", elder_terms::make_setting_key("ftp", "tls_mode"));
+  std::cout << " ftp_tls_min_version=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls_min_version"), "");
+  print_setting_metadata(store, "ftp_tls_min_version", elder_terms::make_setting_key("ftp", "tls_min_version"));
+  std::cout << " ftp_tls_max_version=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls_max_version"), "");
+  print_setting_metadata(store, "ftp_tls_max_version", elder_terms::make_setting_key("ftp", "tls_max_version"));
+  std::cout << " ftp_tls_auth_order=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls_auth_order"), "");
+  print_setting_metadata(store, "ftp_tls_auth_order", elder_terms::make_setting_key("ftp", "tls_auth_order"));
+  std::cout << " ftp_tls_compatibility=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls_compatibility"), "");
+  print_setting_metadata(store, "ftp_tls_compatibility", elder_terms::make_setting_key("ftp", "tls_compatibility"));
+  std::cout << " ftp_certificate_error_action=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "certificate_error_action"), "");
+  print_setting_metadata(store, "ftp_certificate_error_action", elder_terms::make_setting_key("ftp", "certificate_error_action"));
+  std::cout << " ftp_ca_file=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "ca_file"), "");
+  print_setting_metadata(store, "ftp_ca_file", elder_terms::make_setting_key("ftp", "ca_file"));
+  std::cout << " ftp_tls_cipher_list=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls_cipher_list"), "");
+  print_setting_metadata(store, "ftp_tls_cipher_list", elder_terms::make_setting_key("ftp", "tls_cipher_list"));
+  std::cout << " ftp_tls13_cipher_list=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls13_cipher_list"), "");
+  print_setting_metadata(store, "ftp_tls13_cipher_list", elder_terms::make_setting_key("ftp", "tls13_cipher_list"));
   print_setting_metadata(store, "ftp_address",
                          elder_terms::ftp_address_setting_key());
   print_setting_metadata(store, "ftp_port",
@@ -1037,6 +1072,7 @@ int main(int argc, char **argv) {
         elder_terms_settings_widget_fixture::parse_options(argc, argv);
     elder_terms_settings_widget_fixture::FixtureState state;
     state.bell_sound_dialog_file = options.bell_sound_dialog_file;
+    state.ftp_ca_dialog_file = options.ftp_ca_dialog_file;
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     state.window = window;
@@ -1148,6 +1184,11 @@ int main(int argc, char **argv) {
                            select_bell_sound_dialog_file),
             &state.bell_sound_dialog_file);
       }
+    }
+    if (!state.ftp_ca_dialog_file.empty()) {
+      auto *button = elder_terms_settings_widget_fixture::find_widget_by_name(window, "settings_ftp_ca_browse_button");
+      if (button) g_signal_connect_after(button, "clicked",
+          G_CALLBACK(elder_terms_settings_widget_fixture::select_ftp_ca_dialog_file), &state.ftp_ca_dialog_file);
     }
     if (state.rebase_store.has_value()) {
       GtkWidget *rebase_button =

@@ -2097,3 +2097,84 @@ msgstr "この接続で許可"
 
 msgid "Abort connection"
 msgstr "接続を中止"
+
+msgid "Encryption"
+msgstr "暗号化"
+
+msgid "Minimum TLS version"
+msgstr "TLSバージョンの下限"
+
+msgid "Maximum TLS version"
+msgstr "TLSバージョンの上限"
+
+msgid "AUTH command preference"
+msgstr "AUTHコマンドの優先順"
+
+msgid "TLS compatibility"
+msgstr "TLS互換性"
+
+msgid "Certificate validation failure"
+msgstr "証明書検証の失敗時"
+
+msgid "CA certificates"
+msgstr "CA証明書"
+
+msgid "TLS 1.2 and earlier ciphers"
+msgstr "TLS 1.2以前の暗号"
+
+msgid "TLS 1.3 ciphers"
+msgstr "TLS 1.3の暗号"
+
+msgid "FTP (unencrypted)"
+msgstr "FTP（暗号化なし）"
+
+msgid "FTPS (explicit TLS)"
+msgstr "FTPS（明示的TLS）"
+
+msgid "FTPS (implicit TLS)"
+msgstr "FTPS（暗黙的TLS）"
+
+msgid "Prefer AUTH TLS"
+msgstr "AUTH TLSを優先"
+
+msgid "Prefer AUTH SSL"
+msgstr "AUTH SSLを優先"
+
+msgid "Library default"
+msgstr "ライブラリの既定値"
+
+msgid "Standard"
+msgstr "標準"
+
+msgid "Legacy TLS (relaxed cipher/signature rules)"
+msgstr "旧TLS互換（暗号・署名の制約を緩和）"
+
+msgid "Reject connection"
+msgstr "接続を拒否"
+
+msgid "Confirm in an overlay"
+msgstr "オーバーレイで確認"
+
+msgid "Backend maximum"
+msgstr "バックエンドの上限"
+
+msgid "Enter a valid value"
+msgstr "有効な値を入力して下さい"
+
+msgid "System CA certificates"
+msgstr "システムのCA証明書"
+
+msgid "Custom"
+msgstr "独自指定"
+
+msgid "Invalid value:"
+msgstr "不正な値:"
+
+msgid "Select a PEM CA bundle"
+msgstr "PEM形式のCA証明書を選択"
+
+msgid "PEM CA bundles"
+msgstr "PEM形式のCA証明書"
+
+msgid "Browse…"
+msgstr "参照…"

@@ -3093,6 +3093,517 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
+  it('applies FTPS modes, protocol ranges and independent certificate policy', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=ftp', '--type=ftp'],
+      async ({ app }) => {
+        await showFtpPage(app);
+        const mode = expectElementKind(
+          await app.getById('settings_ftp_tls_mode_combo'),
+          'comboBox'
+        );
+        const port = expectElementKind(
+          await app.getById('settings_ftp_port_entry'),
+          'entry'
+        );
+        await mode.selectChildAt(3);
+        await expectInheritedEntry(
+          app,
+          'settings_ftp_port_entry',
+          '990 (built-in default)'
+        );
+        const auth = await app.getById('settings_ftp_tls_auth_order_combo');
+        await expectInsensitive(auth);
+        await mode.selectChildAt(2);
+        await expectInheritedEntry(
+          app,
+          'settings_ftp_port_entry',
+          '21 (built-in default)'
+        );
+        await port.setText('2121');
+        await mode.selectChildAt(3);
+        expect(await port.text()).toBe('2121');
+        await port.setText('');
+        await expectInheritedEntry(
+          app,
+          'settings_ftp_port_entry',
+          '990 (built-in default)'
+        );
+        await mode.selectChildAt(2);
+        for (const [name, index] of [
+          ['tls_min_version', 1],
+          ['tls_max_version', 2],
+          ['tls_auth_order', 2],
+          ['tls_compatibility', 2],
+          ['certificate_error_action', 2],
+        ] as const) {
+          await expectElementKind(
+            await app.getById(`settings_ftp_${name}_combo`),
+            'comboBox'
+          ).selectChildAt(index);
+        }
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        const store = await waitForAppliedStore(app);
+        expect(store.ftp_tls_mode).toBe('explicit');
+        expect(store.ftp_tls_min_version).toBe('1.0');
+        expect(store.ftp_tls_max_version).toBe('1.0');
+        expect(store.ftp_tls_auth_order).toBe('ssl');
+        expect(store.ftp_tls_compatibility).toBe('openssl_legacy');
+        expect(store.ftp_certificate_error_action).toBe('prompt');
+      }
+    );
+  });
+
+  it('requires valid custom CA and TLS ranges before applying settings', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=ftp', '--type=ftp', '--connection=ftp.tls_mode=explicit'],
+      async ({ app }) => {
+        await showFtpPage(app);
+        const apply = await app.getById('settings_apply_button');
+        const minimum = expectElementKind(
+          await app.getById('settings_ftp_tls_min_version_combo'),
+          'comboBox'
+        );
+        const maximum = expectElementKind(
+          await app.getById('settings_ftp_tls_max_version_combo'),
+          'comboBox'
+        );
+        await maximum.selectChildAt(2);
+        await expectInsensitive(apply);
+        await minimum.selectChildAt(1);
+        await expectSensitive(apply);
+        await expectElementKind(
+          await app.getById('settings_ftp_ca_file_mode_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectInsensitive(apply);
+        const ca = expectElementKind(
+          await app.getById('settings_ftp_ca_file_entry'),
+          'entry'
+        );
+        await ca.setText('relative.pem');
+        await expectInsensitive(apply);
+        await ca.setText('/tmp/private-ca.pem');
+        await expectSensitive(apply);
+        await expectElementKind(apply, 'button').click();
+        expect((await waitForAppliedStore(app)).ftp_ca_file).toBe(
+          '/tmp/private-ca.pem'
+        );
+      }
+    );
+  });
+
+  it('preserves an explicit system CA override through save and reload', async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'elder-ftps-settings-'));
+    try {
+      const path = join(directory, 'connection.ini');
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=ftp',
+          '--type=ftp',
+          '--global=ftp.tls_mode=implicit',
+          '--global=ftp.ca_file=/tmp/global-ca.pem',
+          `--save-file=${path}`,
+        ],
+        async ({ app }) => {
+          await showFtpPage(app);
+          const ca = expectElementKind(
+            await app.getById('settings_ftp_ca_file_mode_combo'),
+            'comboBox'
+          );
+          await ca.selectChildAt(1);
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect((await app.output()).stdout).toContain('SAVED ')
+          );
+          const saved = await readFile(path, 'utf8');
+          expect(saved).toContain('ca_file=');
+          expect(saved).not.toContain('global-ca.pem');
+          const restored = await waitForPrintedStore(app, 'SAVED');
+          expect(restored.ftp_ca_file).toBe('');
+          expect(restored.ftp_ca_file_explicit).toBe('true');
+        }
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps FTPS connection settings read-only in a running window', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ftp',
+        '--type=ftp',
+        '--runtime',
+        '--connection=ftp.tls_mode=explicit',
+        '--connection=ftp.certificate_error_action=prompt',
+      ],
+      async ({ app }) => {
+        await showFtpPage(app);
+        for (const name of [
+          'tls_mode',
+          'tls_min_version',
+          'tls_max_version',
+          'tls_auth_order',
+          'tls_compatibility',
+          'certificate_error_action',
+        ])
+          await expectInsensitive(
+            await app.getById(`settings_ftp_${name}_combo`)
+          );
+        for (const name of [
+          'ca_file',
+          'tls_cipher_list',
+          'tls13_cipher_list',
+        ]) {
+          await expectInsensitive(
+            await app.getById(`settings_ftp_${name}_mode_combo`)
+          );
+          await expectInsensitive(
+            await app.getById(`settings_ftp_${name}_entry`)
+          );
+        }
+      }
+    );
+  });
+
+  it('retains an invalid custom CA edit while global defaults are reloaded', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ftp',
+        '--type=ftp',
+        '--connection=ftp.tls_mode=explicit',
+        '--rebase-global=ftp.ca_file=/tmp/rebased.pem',
+      ],
+      async ({ app }) => {
+        await showFtpPage(app);
+        await expectElementKind(
+          await app.getById('settings_ftp_ca_file_mode_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        const ca = expectElementKind(
+          await app.getById('settings_ftp_ca_file_entry'),
+          'entry'
+        );
+        await ca.setText('unfinished');
+        await expectElementKind(
+          await app.getById('rebase_fallbacks_button'),
+          'button'
+        ).click();
+        expect(await ca.text()).toBe('unfinished');
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await ca.setText('/tmp/corrected.pem');
+        await expectSensitive(await app.getById('settings_apply_button'));
+      }
+    );
+  });
+
+  it('edits FTPS global defaults and exposes the complete scrollable form', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--global-mode', '--page=ftp'],
+      async ({ app, directory }) => {
+        const mode = expectElementKind(
+          await app.getById('global_settings_ftp_tls_mode_combo'),
+          'comboBox'
+        );
+        await mode.selectChildAt(3);
+        await expectElementKind(
+          await app.getById(
+            'global_settings_ftp_certificate_error_action_combo'
+          ),
+          'comboBox'
+        ).selectChildAt(2);
+        const ca = expectElementKind(
+          await app.getById('global_settings_ftp_ca_file_mode_combo'),
+          'comboBox'
+        );
+        await expectSelectedComboValue(
+          app,
+          'global_settings_ftp_ca_file_mode_combo',
+          'System CA certificates'
+        );
+        await ca.selectChildAt(1);
+        await expectElementKind(
+          await app.getById('global_settings_ftp_ca_file_entry'),
+          'entry'
+        ).setText('/tmp/global-ca.pem');
+        await captureWhenVisuallyStable(
+          await app.getById('global_settings_ftp_page'),
+          'ftps-global-top.png'
+        );
+        await writeFile(
+          join(directory, 'ftps-global-top.png'),
+          (await app.capture()).image
+        );
+        const scrollbar = expectElementKind(
+          await app.getById('global_settings_ftp_page_scrollbar'),
+          'scrollbar'
+        );
+        await scrollbar.setValue((await scrollbar.valueInfo()).maximum);
+        const cipher = expectElementKind(
+          await app.getById('global_settings_ftp_tls13_cipher_list_mode_combo'),
+          'comboBox'
+        );
+        await waitForResult(async () =>
+          expect((await cipher.info()).states).toContain('showing')
+        );
+        await cipher.selectChildAt(2);
+        await expectElementKind(
+          await app.getById('global_settings_ftp_tls13_cipher_list_entry'),
+          'entry'
+        ).setText('TLS_AES_128_GCM_SHA256');
+        await captureWhenVisuallyStable(
+          await app.getById('global_settings_ftp_page'),
+          'ftps-global-details.png'
+        );
+        await writeFile(
+          join(directory, 'ftps-global-details.png'),
+          (await app.capture()).image
+        );
+        await expectElementKind(
+          await app.getById('global_settings_apply_button'),
+          'button'
+        ).click();
+        const store = await waitForAppliedStore(app);
+        expect(store.ftp_tls_mode).toBe('implicit');
+        expect(store.ftp_ca_file).toBe('/tmp/global-ca.pem');
+        expect(store.ftp_certificate_error_action).toBe('prompt');
+        expect(store.ftp_tls13_cipher_list).toBe('TLS_AES_128_GCM_SHA256');
+      }
+    );
+  });
+
+  it('shows Japanese FTPS choices and keeps TLS options when changing modes', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ftp',
+        '--type=ftp',
+        '--connection=ftp.tls_mode=explicit',
+        '--connection=ftp.tls_min_version=1.0',
+        '--connection=ftp.tls_compatibility=openssl_legacy',
+      ],
+      async ({ app, directory }) => {
+        await showFtpPage(app);
+        await expectSelectedComboValue(
+          app,
+          'settings_ftp_tls_mode_combo',
+          'FTPS（明示的TLS）'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_ftp_tls_compatibility_combo',
+          '旧TLS互換（暗号・署名の制約を緩和）'
+        );
+        const mode = expectElementKind(
+          await app.getById('settings_ftp_tls_mode_combo'),
+          'comboBox'
+        );
+        await mode.selectChildAt(1);
+        await expectInsensitive(
+          await app.getById('settings_ftp_tls_min_version_combo')
+        );
+        await mode.selectChildAt(2);
+        await expectSensitive(
+          await app.getById('settings_ftp_tls_min_version_combo')
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_ftp_tls_min_version_combo',
+          '1.0'
+        );
+        const scrollbar = expectElementKind(
+          await app.getById('settings_ftp_page_scrollbar'),
+          'scrollbar'
+        );
+        await scrollbar.setValue((await scrollbar.valueInfo()).maximum);
+        await captureWhenVisuallyStable(
+          await app.getById('settings_ftp_page'),
+          'ftps-japanese-details.png'
+        );
+        await writeFile(
+          join(directory, 'ftps-japanese-details.png'),
+          (await app.capture()).image
+        );
+      },
+      { env: japaneseTestEnvironment }
+    );
+  });
+
+  it('allows correction of a retained invalid FTPS mode before applying', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ftp',
+        '--type=ftp',
+        '--allow-invalid-connection-values',
+        '--connection=ftp.tls_mode=explict',
+      ],
+      async ({ app }) => {
+        await showFtpPage(app);
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await expectSelectedComboValue(
+          app,
+          'settings_ftp_tls_mode_combo',
+          'Invalid value: explict'
+        );
+        await expectElementKind(
+          await app.getById('settings_ftp_tls_mode_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectSensitive(await app.getById('settings_apply_button'));
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        expect((await waitForAppliedStore(app)).ftp_tls_mode).toBe('explicit');
+      }
+    );
+  });
+
+  it('selects a CA file through a cancellable chooser', async (context) => {
+    const root = await mkdtemp(join(tmpdir(), 'elder-ftps-ca-'));
+    try {
+      const file = join(root, 'selected-ca.pem');
+      await writeFile(file, 'test CA selection');
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=ftp',
+          '--type=ftp',
+          '--connection=ftp.tls_mode=explicit',
+          `--ftp-ca-dialog-file=${file}`,
+        ],
+        async ({ app }) => {
+          await showFtpPage(app);
+          await expectElementKind(
+            await app.getById('settings_ftp_ca_file_mode_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          const scroll = expectElementKind(
+            await app.getById('settings_ftp_page_scrollbar'),
+            'scrollbar'
+          );
+          await scroll.setValue((await scroll.valueInfo()).maximum);
+          const browse = expectElementKind(
+            await app.getById('settings_ftp_ca_browse_button'),
+            'button'
+          );
+          const entry = expectElementKind(
+            await app.getById('settings_ftp_ca_file_entry'),
+            'entry'
+          );
+          await browse.click();
+          await waitForResult(async () =>
+            expect(await app.getWindowCount()).toBe(2)
+          );
+          await app.input.pressKey('Escape');
+          await waitForResult(async () =>
+            expect(await app.getWindowCount()).toBe(1)
+          );
+          expect(await entry.text()).toBe('');
+          await browse.click();
+          await expectElementKind(
+            await app.getById('settings_ftp_ca_open_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect(await entry.text()).toBe(file)
+          );
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          expect((await waitForAppliedStore(app)).ftp_ca_file).toBe(file);
+        }
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('cancels FTPS edits and restores inherited cipher settings', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ftp',
+        '--save',
+        '--type=ftp',
+        '--global=ftp.tls_mode=explicit',
+        '--global=ftp.port=2021',
+        '--global=ftp.tls_cipher_list=AES128-SHA',
+      ],
+      async ({ app }) => {
+        await showFtpPage(app);
+        const mode = expectElementKind(
+          await app.getById('settings_ftp_tls_mode_combo'),
+          'comboBox'
+        );
+        const cipher = expectElementKind(
+          await app.getById('settings_ftp_tls_cipher_list_mode_combo'),
+          'comboBox'
+        );
+        await mode.selectChildAt(3);
+        await expectInheritedEntry(
+          app,
+          'settings_ftp_port_entry',
+          '2021 (global default)'
+        );
+        await cipher.selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_cancel_button'),
+          'button'
+        ).click();
+        // Cancel restores the draft; the real caller closes the editor.
+        // Check the subsequently saved values, as the other cancel tests do.
+        await expectElementKind(
+          await app.getById('settings_save_button'),
+          'button'
+        ).click();
+        const cancelled = await waitForPrintedStore(app, 'SAVED');
+        expect(cancelled.ftp_tls_mode).toBe('explicit');
+        expect(cancelled.ftp_tls_mode_explicit).toBe('false');
+        expect(cancelled.ftp_tls_cipher_list).toBe('AES128-SHA');
+        expect(cancelled.ftp_tls_cipher_list_explicit).toBe('false');
+        await cipher.selectChildAt(0);
+        await cipher.selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        expect((await waitForAppliedStore(app)).ftp_tls_cipher_list).toBe('');
+        expect(
+          (await waitForAppliedStore(app)).ftp_tls_cipher_list_explicit
+        ).toBe('true');
+        await cipher.selectChildAt(0);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect((await waitForAppliedStore(app)).ftp_tls_cipher_list).toBe(
+            'AES128-SHA'
+          )
+        );
+        expect(
+          (await waitForAppliedStore(app)).ftp_tls_cipher_list_explicit
+        ).toBe('false');
+      }
+    );
+  });
+
   it('shows FTP connection controls and applies FTP edits', async (context) => {
     await runSharedGtkTest(
       context,

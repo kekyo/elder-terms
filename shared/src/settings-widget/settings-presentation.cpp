@@ -22,6 +22,15 @@ struct SettingChoiceEntry {
 };
 
 static constexpr std::array setting_labels{
+    SettingLabelEntry{"ftp", "tls_mode", N_("Encryption")},
+    SettingLabelEntry{"ftp", "tls_min_version", N_("Minimum TLS version")},
+    SettingLabelEntry{"ftp", "tls_max_version", N_("Maximum TLS version")},
+    SettingLabelEntry{"ftp", "tls_auth_order", N_("AUTH command preference")},
+    SettingLabelEntry{"ftp", "tls_compatibility", N_("TLS compatibility")},
+    SettingLabelEntry{"ftp", "certificate_error_action", N_("Certificate validation failure")},
+    SettingLabelEntry{"ftp", "ca_file", N_("CA certificates")},
+    SettingLabelEntry{"ftp", "tls_cipher_list", N_("TLS 1.2 and earlier ciphers")},
+    SettingLabelEntry{"ftp", "tls13_cipher_list", N_("TLS 1.3 ciphers")},
     SettingLabelEntry{"general", "name", N_("Connection name")},
     SettingLabelEntry{"general", "type", N_("Connection type")},
     SettingLabelEntry{"general", "open_connection",
@@ -101,6 +110,17 @@ static constexpr std::array setting_labels{
 };
 
 static constexpr std::array setting_choices{
+    SettingChoiceEntry{"ftp", "tls_mode", "none", N_("FTP (unencrypted)")},
+    SettingChoiceEntry{"ftp", "tls_mode", "explicit", N_("FTPS (explicit TLS)")},
+    SettingChoiceEntry{"ftp", "tls_mode", "implicit", N_("FTPS (implicit TLS)")},
+    SettingChoiceEntry{"ftp", "tls_auth_order", "tls", N_("Prefer AUTH TLS")},
+    SettingChoiceEntry{"ftp", "tls_auth_order", "ssl", N_("Prefer AUTH SSL")},
+    SettingChoiceEntry{"ftp", "tls_auth_order", "default", N_("Library default")},
+    SettingChoiceEntry{"ftp", "tls_compatibility", "standard", N_("Standard")},
+    SettingChoiceEntry{"ftp", "tls_compatibility", "openssl_legacy", N_("Legacy TLS (relaxed cipher/signature rules)")},
+    SettingChoiceEntry{"ftp", "certificate_error_action", "reject", N_("Reject connection")},
+    SettingChoiceEntry{"ftp", "certificate_error_action", "prompt", N_("Confirm in an overlay")},
+    SettingChoiceEntry{"ftp", "tls_max_version", "default", N_("Backend maximum")},
     SettingChoiceEntry{"general", "type", "local", N_("Local shell")},
     SettingChoiceEntry{"general", "type", "telnet", N_("TELNET")},
     SettingChoiceEntry{"general", "type", "serial", N_("Serial")},

@@ -1,4 +1,5 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import {
   chmod,
   mkdir,
@@ -39,10 +40,15 @@ const selectConnectionRow = async (
   row: number
 ): Promise<void> => {
   if (element.kind === 'table') {
-    const cell = await element.cellAt(row, 0);
-    expect(cell).toBeDefined();
-    const bounds = (await cell?.capture())?.bounds;
-    expect(bounds).toBeDefined();
+    // Saving a profile replaces its model rows. Resolve the current cell after
+    // AT-SPI has observed that update, before sending any mouse input.
+    const bounds = await waitForResult(async () => {
+      const cell = await element.cellAt(row, 0);
+      expect(cell).toBeDefined();
+      const current = (await cell?.capture())?.bounds;
+      expect(current).toBeDefined();
+      return current;
+    });
     if (bounds === undefined) {
       return;
     }
@@ -2613,6 +2619,389 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
       await Promise.all([fakeFileTransfer.release(), fakeVte.release()]);
     }
   });
+
+  for (const mode of ['explicit', 'implicit'] as const)
+    for (const legacyPrompt of [false, true]) {
+      it(`saves FTPS settings and transfers from the launcher: ${mode}-${legacyPrompt ? 'legacy-prompt' : 'verified'}`, async (context) => {
+        const directory = await mkdtemp(
+          join(tmpdir(), 'elder-terms-launcher-ftps-')
+        );
+        const local = join(directory, 'local');
+        const root = join(directory, 'remote');
+        const remote = join(root, 'home');
+        const certificate = join(directory, 'certificate.pem');
+        const key = join(directory, 'key.pem');
+        let server: ReturnType<typeof spawn> | undefined;
+        let serverFinished: Promise<number | null> | undefined;
+        const events: string[] = [];
+        let serverLog = '';
+        let phase = 'create fixture';
+        try {
+          await mkdir(local);
+          await mkdir(remote, { recursive: true });
+          await writeFile(
+            join(local, 'from-launcher.txt'),
+            'FTPS launcher upload\n'
+          );
+          await writeFile(
+            join(remote, 'from-server.txt'),
+            'FTPS server contents\n'
+          );
+          const generated = spawnSync(
+            'openssl',
+            [
+              'req',
+              '-x509',
+              '-newkey',
+              'rsa:2048',
+              '-noenc',
+              '-keyout',
+              key,
+              '-out',
+              certificate,
+              '-days',
+              '1',
+              '-subj',
+              '/CN=localhost',
+              '-addext',
+              'subjectAltName=IP:127.0.0.1',
+            ],
+            { encoding: 'utf8' }
+          );
+          expect(generated.status, generated.stderr).toBe(0);
+          server = spawn(
+            fileURLToPath(
+              new URL(
+                '../../.build/elder-terms-vte/ftp-test-server',
+                import.meta.url
+              )
+            ),
+            [
+              root,
+              '--trace',
+              `--tls=${mode}`,
+              `--cert=${certificate}`,
+              `--key=${key}`,
+              ...(legacyPrompt ? ['--tls-version=769', '--legacy-tls'] : []),
+            ],
+            { stdio: ['pipe', 'pipe', 'pipe'] }
+          );
+          createInterface({ input: server.stdout! }).on('line', (line) =>
+            events.push(line)
+          );
+          server.stderr!.on('data', (bytes: Buffer) => {
+            serverLog += bytes.toString();
+          });
+          let serverError: Error | undefined;
+          serverFinished = new Promise((resolve) => {
+            server!.once('error', (error) => {
+              serverError = error;
+              resolve(null);
+            });
+            server!.once('close', resolve);
+          });
+          const ready = await waitForResult(async () => {
+            if (serverError) throw serverError;
+            const line = events.find((value) => value.startsWith('READY '));
+            expect(line, serverLog).toBeDefined();
+            return line!;
+          });
+          await runLauncherGtkTest(
+            context,
+            async (connections) => {
+              await writeFile(
+                join(connections, 'Other.ini'),
+                '[general]\ntype=ftp\n'
+              );
+            },
+            async ({ app, connections }) => {
+              phase = 'configure profile';
+              const list = await app.getById('connection_list');
+              await expectElementKind(
+                await app.getById('new_button'),
+                'button'
+              ).click();
+              await app.input.pressKey('Escape');
+              await selectSettingsTab(app, 'settings', 'General');
+              const type = expectElementKind(
+                await app.getById('settings_general_type_combo'),
+                'comboBox'
+              );
+              await type.selectChildAt(6);
+              await expectSelectedComboValue(
+                app,
+                'settings_general_type_combo',
+                'FTP'
+              );
+              await selectSettingsTab(app, 'settings', 'FTP');
+              for (const [name, value] of [
+                ['address', '127.0.0.1'],
+                ['port', ready.slice(6)],
+                ['username', 'alice'],
+                ['local_directory', local],
+                ['remote_directory', '/home'],
+              ])
+                await expectElementKind(
+                  await app.getById('settings_ftp_' + name + '_entry'),
+                  'entry'
+                ).setText(value);
+              await expectElementKind(
+                await app.getById('settings_ftp_tls_mode_combo'),
+                'comboBox'
+              ).selectChildAt(mode === 'explicit' ? 2 : 3);
+              await expectElementKind(
+                await app.getById('settings_ftp_ca_file_mode_combo'),
+                'comboBox'
+              ).selectChildAt(legacyPrompt ? 1 : 2);
+              if (!legacyPrompt)
+                await expectElementKind(
+                  await app.getById('settings_ftp_ca_file_entry'),
+                  'entry'
+                ).setText(certificate);
+              await expectElementKind(
+                await app.getById('settings_ftp_tls_min_version_combo'),
+                'comboBox'
+              ).selectChildAt(legacyPrompt ? 1 : 3);
+              await expectElementKind(
+                await app.getById('settings_ftp_tls_max_version_combo'),
+                'comboBox'
+              ).selectChildAt(legacyPrompt ? 2 : 4);
+              if (legacyPrompt) {
+                await expectElementKind(
+                  await app.getById('settings_ftp_tls_compatibility_combo'),
+                  'comboBox'
+                ).selectChildAt(2);
+                await expectElementKind(
+                  await app.getById(
+                    'settings_ftp_certificate_error_action_combo'
+                  ),
+                  'comboBox'
+                ).selectChildAt(2);
+              }
+              phase = 'save profile';
+              await expectSensitive(await app.getById('apply_button'));
+              await expectElementKind(
+                await app.getById('apply_button'),
+                'button'
+              ).click();
+              await waitForResult(async () => {
+                const saved = await readFile(
+                  join(connections, 'New connection.ini'),
+                  'utf8'
+                );
+                for (const value of [
+                  `tls_mode=${mode}`,
+                  `ca_file=${legacyPrompt ? '' : certificate}`,
+                  `tls_min_version=${legacyPrompt ? '1.0' : '1.2'}`,
+                  `tls_max_version=${legacyPrompt ? '1.0' : '1.2'}`,
+                ])
+                  expect(saved).toContain(value);
+              });
+              phase = 'reselect saved profile';
+              await selectConnectionRow(app, list, 1);
+              await selectConnectionRow(app, list, 0);
+              await selectSettingsTab(app, 'settings', 'FTP');
+              expect(
+                await expectElementKind(
+                  await app.getById('settings_ftp_ca_file_entry'),
+                  'entry'
+                ).text()
+              ).toBe(legacyPrompt ? '' : certificate);
+              phase = 'open transfer window';
+              await expectElementKind(
+                await app.getById('connect_button'),
+                'button'
+              ).click();
+              await expectElementKind(
+                await app.getById('file_transfer_prompt_entry'),
+                'entry'
+              ).setText('alice');
+              await expectElementKind(
+                await app.getById('file_transfer_prompt_secondary_entry'),
+                'entry'
+              ).setText('secret');
+              await expectElementKind(
+                await app.getById('file_transfer_prompt_accept_button'),
+                'button'
+              ).click();
+              if (legacyPrompt) {
+                await waitForResult(async () =>
+                  expect(
+                    await expectElementKind(
+                      await app.getById('file_transfer_prompt_title_label'),
+                      'label'
+                    ).text()
+                  ).toBe('FTPS certificate validation failed')
+                );
+                expect(serverLog).not.toContain('COMMAND USER');
+                await expectElementKind(
+                  await app.getById('file_transfer_prompt_accept_button'),
+                  'button'
+                ).click();
+              }
+              await waitForResult(async () => {
+                expect(
+                  await expectElementKind(
+                    await app.getById('file_transfer_status_label'),
+                    'label'
+                  ).text()
+                ).toBe(
+                  'Ready' +
+                    (legacyPrompt ? ' — Certificate exception active' : '')
+                );
+                expect(
+                  await expectElementKind(
+                    await app.getById('file_transfer_local_path_entry'),
+                    'entry'
+                  ).text()
+                ).toBe(local);
+                expect(
+                  await expectElementKind(
+                    await app.getById('file_transfer_remote_path_entry'),
+                    'entry'
+                  ).text()
+                ).toBe('/home');
+              });
+              phase = 'read transfer listing';
+              const localTree = expectElementKind(
+                await app.getById('file_transfer_local_tree'),
+                'table'
+              );
+              const remoteTree = expectElementKind(
+                await app.getById('file_transfer_remote_tree'),
+                'table'
+              );
+              await waitForResult(async () => {
+                expect((await remoteTree.info()).states).toContain('sensitive');
+                expect(await remoteTree.getRowCount()).toBeGreaterThan(0);
+              });
+              const row = await waitForResult(async () => {
+                for (
+                  let index = 0;
+                  index < (await localTree.getRowCount());
+                  index++
+                )
+                  if (
+                    (await (await localTree.cellAt(index, 0))?.info())?.name ===
+                    'from-launcher.txt'
+                  )
+                    return index;
+                throw Error('Local file missing');
+              });
+              await localTree.selectRow(row);
+              const bounds = await waitForResult(async () => {
+                const cell = await localTree.cellAt(row, 0);
+                expect((await cell?.info())?.name).toBe('from-launcher.txt');
+                return (await cell!.capture()).bounds;
+              });
+              await app.input.moveMouseTo(
+                Math.round(bounds.x + bounds.width / 2),
+                Math.round(bounds.y + bounds.height / 2)
+              );
+              phase = 'open local file menu';
+              await app.input.setMouseButton('right', true);
+              await app.input.setMouseButton('right', false);
+              await expectElementKind(
+                await app.getById('file_transfer_send_item'),
+                'menuItem'
+              ).click();
+              await waitForResult(async () =>
+                expect(
+                  await readFile(join(remote, 'from-launcher.txt'), 'utf8')
+                ).toBe('FTPS launcher upload\n')
+              );
+              await waitForResult(async () =>
+                expect(
+                  await expectElementKind(
+                    await app.getById('file_transfer_status_label'),
+                    'label'
+                  ).text()
+                ).toBe(
+                  'Sent 1 item' +
+                    (legacyPrompt ? ' — Certificate exception active' : '')
+                )
+              );
+              const negotiated = serverLog
+                .split('\n')
+                .filter(
+                  (line) =>
+                    line.startsWith('TLS CONTROL') ||
+                    line.startsWith('TLS DATA')
+                );
+              expect(negotiated.length).toBeGreaterThan(1);
+              expect(
+                negotiated.every(
+                  (line) =>
+                    line.split(' ')[2] === (legacyPrompt ? 'TLSv1' : 'TLSv1.2')
+                )
+              ).toBe(true);
+              const evidence = fileURLToPath(
+                new URL('../../test-results/launcher/', import.meta.url)
+              );
+              await mkdir(evidence, { recursive: true });
+              await writeFile(
+                join(
+                  evidence,
+                  `launcher-ftps-${mode}-${legacyPrompt ? 'legacy-prompt' : 'verified'}.png`
+                ),
+                (await app.capture()).image
+              );
+              phase = 'close transfer window';
+              // Close the transfer window through its own header, leaving the launcher available.
+              const pending: GtkWidgetElement[] = [
+                await app.getById('file_transfer_header_bar'),
+              ];
+              let closed = false;
+              while (pending.length) {
+                const widget = pending.shift()!;
+                if (
+                  widget.kind === 'button' &&
+                  (await widget.info()).name === 'Close'
+                ) {
+                  await widget.click();
+                  closed = true;
+                  break;
+                }
+                if ('getChildCount' in widget)
+                  for (
+                    let index = 0;
+                    index < (await widget.getChildCount());
+                    index++
+                  ) {
+                    const child = await widget.childAt(index);
+                    if (child) pending.push(child);
+                  }
+              }
+              expect(closed).toBe(true);
+              await waitForResult(async () =>
+                expect(await app.getWindowCount()).toBe(1)
+              );
+            },
+            {
+              args: [],
+              env: {
+                ELDER_TERMS_FILE_TRANSFER_PATH:
+                  process.env.ELDER_TERMS_TEST_FTP_APP ??
+                  fileURLToPath(
+                    new URL(
+                      '../../.build/elder-terms-vte/elder-terms-file-transfer',
+                      import.meta.url
+                    )
+                  ),
+              },
+            }
+          );
+        } catch (error) {
+          throw new Error(
+            'FTPS launcher failed during ' + phase + ': ' + String(error)
+          );
+        } finally {
+          server?.kill('SIGTERM');
+          if (serverFinished) await serverFinished;
+          await rm(directory, { recursive: true, force: true });
+        }
+      }, 120_000);
+    }
 
   it('routes an FTP profile to the file transfer application', async (context) => {
     const fakeVte = await createFakeVte();

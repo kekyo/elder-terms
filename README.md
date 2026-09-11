@@ -347,21 +347,34 @@ uses the same two-pane file browser and transfer controls as SFTP.
 FTP sends commands, user names, passwords, directory listings, and file data
 without encryption. elder-terms uses [libcurl](https://curl.se/libcurl/) for
 [FTP (RFC 959)](https://www.rfc-editor.org/rfc/rfc959).
-To use [FTPS](https://everything.curl.dev/ftp/ftps.html), set `tls_mode=explicit`
-or `tls_mode=implicit` in the `[ftp]` section of the connection INI file.
+To use [FTPS](https://everything.curl.dev/ftp/ftps.html), choose FTPS (explicit TLS)
+or FTPS (implicit TLS) under Encryption in the FTP tab. The equivalent INI values
+are `tls_mode=explicit` and `tls_mode=implicit` in the `[ftp]` section.
 Explicit FTPS upgrades the control connection with AUTH TLS and defaults to port
 21. Implicit FTPS starts TLS immediately and defaults to port 990. An explicitly
-configured port, including one inherited from global settings, takes precedence. By default, FTPS requires TLS 1.2 or newer for both control and data connections,
-verifies the server certificate and host name, and rejects validation failures by default.
+configured port, including one inherited from global settings, takes precedence.
+FTPS requires TLS 1.2 or newer for both control and data connections by default.
+It verifies the server certificate and host name and rejects validation failures.
 For a private CA, set `ca_file=/absolute/path/company-ca.pem`; an empty value uses
 the system CA store. Both FTPS modes support active and passive data connections,
 IPv4 and IPv6, and servers requiring TLS session reuse for data transfers.
-FTPS never falls back to plain FTP. TLS settings are currently
-configured through the INI file.
+FTPS never falls back to plain FTP.
 
+The FTP tab also offers TLS version bounds, AUTH
+preference, compatibility, CA certificates, cipher lists, and the certificate
+failure policy. Scroll down to reach the TLS details. Choose Apply to save the
+connection before connecting.
 
+Settings can inherit connection defaults or use a connection-specific value.
+For CA and cipher fields, choose Custom to enter a value; the CA field also has
+a file picker. Choose System CA certificates or Library default to override an
+inherited custom value with the normal default. Invalid setting formats and
+reversed version bounds prevent Apply until corrected. Cipher availability is
+checked when connecting. Connection-time TLS settings are
+read-only in an open transfer window; edit the saved connection and reconnect
+to apply changes.
 
-FTPS protocol details can also be set in the same section:
+The following INI keys correspond to the TLS controls in the FTP tab:
 
 | Key | Default | Choices |
 | --- | --- | --- |
@@ -394,8 +407,10 @@ for backend limitations.
 
 ### FTPS Certificate Errors
 
-The default `certificate_error_action=reject` refuses certificates that fail
-validation. Set `certificate_error_action=prompt` to show an overlay with the
+Under Certificate validation failure, choose Reject connection (the default)
+or Confirm in an overlay. The corresponding INI values are
+`certificate_error_action=reject` and `certificate_error_action=prompt`.
+The confirmation overlay shows the
 requested server and port, control/data channel, validation reason, certificate
 subject and issuer, validity dates, and full SHA-256 fingerprint. Cancel is the
 default action; Escape and closing the window also refuse the connection.

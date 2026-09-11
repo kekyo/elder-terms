@@ -27,6 +27,9 @@
 #include "hyperlink-settings-editor.h"
 #include "settings-presentation.h"
 
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
 namespace elder_terms {
 
 static constexpr char local_connection_type[] = "local";
@@ -81,6 +84,17 @@ struct TerminalFontRow {
 };
 
 struct IpScanDialogState;
+
+// Each text setting has an explicit default choice, so an empty override can
+// replace a nonempty global fallback without becoming inheritance.
+struct FtpTlsControl {
+  const char *name;
+  std::vector<const char *> choices;
+  GtkWidget *combo = nullptr;
+  GtkWidget *entry = nullptr;
+  GtkWidget *browse = nullptr;
+  bool valid = true;
+};
 
 struct SettingsWidgetState {
   SettingsStore applied_store;
@@ -184,6 +198,20 @@ struct SettingsWidgetState {
   GtkWidget *ftp_local_directory_entry = nullptr;
   GtkWidget *ftp_remote_directory_entry = nullptr;
   bool ftp_port_valid = true;
+  bool ftp_tls_valid = true;
+  GtkWidget *ftp_tls_error_label = nullptr;
+  GtkWidget *ftp_ca_dialog = nullptr;
+  std::vector<FtpTlsControl> ftp_tls_controls{
+      {.name = "tls_mode", .choices = {"none", "explicit", "implicit"}},
+      {.name = "tls_min_version", .choices = {"1.0", "1.1", "1.2", "1.3"}},
+      {.name = "tls_max_version", .choices = {"default", "1.0", "1.1", "1.2", "1.3"}},
+      {.name = "tls_auth_order", .choices = {"tls", "ssl", "default"}},
+      {.name = "tls_compatibility", .choices = {"standard", "openssl_legacy"}},
+      {.name = "certificate_error_action", .choices = {"reject", "prompt"}},
+      {.name = "ca_file", .choices = {}},
+      {.name = "tls_cipher_list", .choices = {}},
+      {.name = "tls13_cipher_list", .choices = {}},
+  };
   GtkWidget *serial_device_match_mode_combo = nullptr;
   GtkWidget *serial_device_combo = nullptr;
   GtkWidget *serial_stable_id_value = nullptr;
@@ -1451,7 +1479,8 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
          state->terminal_encoding_valid &&
          state->terminal_bell_sound_valid && state->terminal_fonts_valid &&
          state->telnet_port_valid && state->ssh_port_valid &&
-         state->ftp_port_valid &&
+         state->ftp_port_valid && (state->ftp_tls_valid ||
+         (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != ftp_connection_type)) &&
          state->serial_baudrate_valid &&
          state->transfer_text_send_rate_valid &&
          terminal_key_binding_inputs_valid(state) &&
@@ -2996,7 +3025,205 @@ static void sync_terminal_type_entries(SettingsWidgetState *state) {
   state->synchronizing = previous_synchronizing;
 }
 
+static std::string ftp_tls_effective_text(const SettingsStore &store, const FtpTlsControl &control) {
+  return setting_string_value_or_default(store, make_setting_key("ftp", control.name), "");
+}
+
+static void update_ftp_tls_validation(SettingsWidgetState *state) {
+  const auto connection = ftp_connection_settings(state->draft_store);
+  auto errors = connection.validation_errors;
+  for (const auto &control : state->ftp_tls_controls) {
+    if (!control.combo) continue;
+    const std::string_view name(control.name);
+    const bool sensitive = !state->is_runtime && (name == "tls_mode" ||
+        (connection.tls_mode != FtpTlsMode::none &&
+         (name != "tls_auth_order" || connection.tls_mode == FtpTlsMode::explicit_tls)));
+    gtk_widget_set_sensitive(control.combo, sensitive);
+    const bool custom = sensitive && active_combo_id(control.combo, inherit_choice) == "custom";
+    if (control.entry) gtk_widget_set_sensitive(control.entry, custom);
+    if (control.browse) gtk_widget_set_sensitive(control.browse, custom);
+  }
+  for (const auto &control : state->ftp_tls_controls) {
+    if (!control.valid) errors.push_back(setting_label(make_setting_key("ftp", control.name)) + ": " + _("Enter a valid value"));
+  }
+  state->ftp_tls_valid = errors.empty();
+  if (state->ftp_tls_error_label) {
+    gtk_label_set_text(GTK_LABEL(state->ftp_tls_error_label), errors.empty() ? "" : errors.front().c_str());
+    gtk_widget_set_visible(state->ftp_tls_error_label, !errors.empty());
+    gtk_widget_set_no_show_all(state->ftp_tls_error_label, errors.empty());
+  }
+}
+
+static void sync_ftp_tls_controls(SettingsWidgetState *state) {
+  for (auto &control : state->ftp_tls_controls) {
+    if (!control.combo) continue;
+    const auto key = make_setting_key("ftp", control.name);
+    const auto effective = ftp_tls_effective_text(state->draft_store, control);
+    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string()));
+    std::vector<ComboOption> options;
+    if (control.choices.empty()) {
+      const auto builtin = std::string(control.name) == "ca_file" ? _("System CA certificates") : _("Library default");
+      if (state->mode == SettingsWidgetMode::global_defaults && std::string(control.name) == "ca_file") {
+        gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(control.combo));
+        append_combo_option(control.combo, "default", builtin);
+        append_combo_option(control.combo, "custom", _("Custom"));
+        gtk_combo_box_set_active_id(GTK_COMBO_BOX(control.combo), effective.empty() ? "default" : "custom");
+      } else {
+        populate_inheritable_combo(control.combo, state->draft_store, key,
+            fallback.empty() ? builtin : fallback,
+            {{.id = "default", .label = builtin}, {.id = "custom", .label = _("Custom")}},
+            effective.empty() ? "default" : "custom");
+      }
+      gtk_entry_set_text(GTK_ENTRY(control.entry), effective.c_str());
+      const bool custom = setting_has_explicit_value(state->draft_store, key) && !effective.empty();
+      gtk_widget_set_sensitive(control.entry, !state->is_runtime && custom);
+      if (control.browse) gtk_widget_set_sensitive(control.browse, !state->is_runtime && custom);
+      set_entry_validation(control.entry, true, {});
+    } else {
+      for (const auto *choice : control.choices) options.push_back({.id = choice, .label = setting_choice_label(key, choice)});
+      if (std::none_of(control.choices.begin(), control.choices.end(), [&](const char *choice) { return effective == choice; }))
+        options.push_back({.id = effective.c_str(), .label = std::string(_("Invalid value:")) + " " + effective});
+      populate_inheritable_combo(control.combo, state->draft_store, key, setting_choice_label(key, fallback), options, effective);
+    }
+    control.valid = true;
+  }
+  update_ftp_tls_validation(state);
+}
+
+static void on_ftp_tls_combo_changed(GtkComboBox *combo, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing || state->is_runtime) return;
+  for (auto &control : state->ftp_tls_controls) {
+    if (control.combo != GTK_WIDGET(combo)) continue;
+    const auto key = make_setting_key("ftp", control.name);
+    const auto choice = active_combo_id(control.combo, inherit_choice);
+    control.valid = true;
+    if (choice == inherit_choice) clear_explicit_setting_value(&state->draft_store, key);
+    else if (!control.choices.empty()) control.valid = set_explicit_setting_value(&state->draft_store, key, choice);
+    else if (choice == "default") set_explicit_setting_value(&state->draft_store, key, std::string());
+    else {
+      const std::string text = gtk_entry_get_text(GTK_ENTRY(control.entry));
+      control.valid = !text.empty() && set_explicit_setting_value(&state->draft_store, key, text);
+    }
+    if (control.entry) {
+      state->synchronizing = true;
+      if (choice != "custom") gtk_entry_set_text(GTK_ENTRY(control.entry), ftp_tls_effective_text(state->draft_store, control).c_str());
+      gtk_widget_set_sensitive(control.entry, choice == "custom");
+      if (control.browse) gtk_widget_set_sensitive(control.browse, choice == "custom");
+      set_entry_validation(control.entry, control.valid, control.valid ? "" : _("Enter a valid value"));
+      state->synchronizing = false;
+    }
+    if (std::string(control.name) == "tls_mode" && state->ftp_port_valid) {
+      state->synchronizing = true;
+      sync_inheritable_entry(state->ftp_port_entry, state->draft_store, ftp_port_setting_key(),
+          std::to_string(ftp_connection_settings(state->draft_store).port));
+      state->synchronizing = false;
+    }
+    break;
+  }
+  update_ftp_tls_validation(state);
+  update_action_sensitivity(state);
+  notify_changed(state);
+}
+
+static void on_ftp_tls_text_changed(GtkEditable *entry, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing || state->is_runtime) return;
+  for (auto &control : state->ftp_tls_controls) {
+    if (control.entry != GTK_WIDGET(entry)) continue;
+    const std::string text = gtk_entry_get_text(GTK_ENTRY(entry));
+    control.valid = !text.empty() && set_explicit_setting_value(&state->draft_store, make_setting_key("ftp", control.name), text);
+    set_entry_validation(control.entry, control.valid, control.valid ? "" : _("Enter a valid value"));
+    break;
+  }
+  update_ftp_tls_validation(state);
+  update_action_sensitivity(state);
+  notify_changed(state);
+}
+
+static void on_ftp_ca_dialog_destroy(GtkWidget *, gpointer data) {
+  static_cast<SettingsWidgetState *>(data)->ftp_ca_dialog = nullptr;
+}
+
+static void on_ftp_ca_dialog_response(GtkDialog *dialog, gint response, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (response == GTK_RESPONSE_ACCEPT) {
+    auto *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+    if (filename) {
+      auto *text = g_filename_to_utf8(filename, -1, nullptr, nullptr, nullptr);
+      if (text) {
+        for (const auto &control : state->ftp_tls_controls)
+          if (std::string(control.name) == "ca_file") gtk_entry_set_text(GTK_ENTRY(control.entry), text);
+        g_free(text);
+      }
+      g_free(filename);
+    }
+  }
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+}
+
+static void on_ftp_ca_browse_clicked(GtkButton *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->is_runtime) return;
+  if (state->ftp_ca_dialog) {
+    gtk_window_present(GTK_WINDOW(state->ftp_ca_dialog));
+    return;
+  }
+  auto *top = gtk_widget_get_toplevel(state->root);
+  auto *dialog = gtk_file_chooser_dialog_new(_("Select a PEM CA bundle"), GTK_IS_WINDOW(top) ? GTK_WINDOW(top) : nullptr,
+      GTK_FILE_CHOOSER_ACTION_OPEN, _("Cancel"), GTK_RESPONSE_CANCEL, _("Open"), GTK_RESPONSE_ACCEPT, nullptr);
+  assign_accessible_id(dialog, widget_id(state, "ftp_ca_dialog").c_str());
+  gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
+  gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+  gtk_file_chooser_set_local_only(GTK_FILE_CHOOSER(dialog), TRUE);
+  gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(dialog), FALSE);
+  auto *filter = gtk_file_filter_new();
+  gtk_file_filter_set_name(filter, _("PEM CA bundles"));
+  gtk_file_filter_add_pattern(filter, "*.pem");
+  gtk_file_filter_add_pattern(filter, "*.crt");
+  gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+  assign_accessible_id(gtk_dialog_get_widget_for_response(GTK_DIALOG(dialog), GTK_RESPONSE_ACCEPT),
+      widget_id(state, "ftp_ca_open_button").c_str());
+  state->ftp_ca_dialog = dialog;
+  g_signal_connect(dialog, "response", G_CALLBACK(on_ftp_ca_dialog_response), state);
+  g_signal_connect(dialog, "destroy", G_CALLBACK(on_ftp_ca_dialog_destroy), state);
+  gtk_widget_show_all(dialog);
+}
+
+static void create_ftp_tls_controls(SettingsWidgetState *state, GtkWidget *page) {
+  int row = 6;
+  for (auto &control : state->ftp_tls_controls) {
+    const std::string prefix = std::string("ftp_") + control.name;
+    control.combo = create_combo_box(widget_id(state, (prefix + (control.choices.empty() ? "_mode_combo" : "_combo")).c_str()).c_str());
+    gtk_widget_set_sensitive(control.combo, !state->is_runtime);
+    g_signal_connect(control.combo, "changed", G_CALLBACK(on_ftp_tls_combo_changed), state);
+    GtkWidget *field = control.combo;
+    if (control.choices.empty()) {
+      field = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+      gtk_box_pack_start(GTK_BOX(field), control.combo, FALSE, FALSE, 0);
+      auto *line = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+      control.entry = create_entry(widget_id(state, (prefix + "_entry").c_str()));
+      g_signal_connect(control.entry, "changed", G_CALLBACK(on_ftp_tls_text_changed), state);
+      gtk_box_pack_start(GTK_BOX(line), control.entry, TRUE, TRUE, 0);
+      if (std::string(control.name) == "ca_file") {
+        control.browse = gtk_button_new_with_label(_("Browse…"));
+        assign_accessible_id(control.browse, widget_id(state, "ftp_ca_browse_button").c_str());
+        g_signal_connect(control.browse, "clicked", G_CALLBACK(on_ftp_ca_browse_clicked), state);
+        gtk_box_pack_start(GTK_BOX(line), control.browse, FALSE, FALSE, 0);
+      }
+      gtk_box_pack_start(GTK_BOX(field), line, FALSE, FALSE, 0);
+    }
+    attach_row(page, row++, make_setting_key("ftp", control.name), field);
+  }
+  state->ftp_tls_error_label = gtk_label_new("");
+  assign_accessible_id(state->ftp_tls_error_label, widget_id(state, "ftp_tls_error_label").c_str());
+  gtk_label_set_line_wrap(GTK_LABEL(state->ftp_tls_error_label), TRUE);
+  gtk_label_set_xalign(GTK_LABEL(state->ftp_tls_error_label), 0);
+  gtk_grid_attach(GTK_GRID(page), state->ftp_tls_error_label, 0, row, 2, 1);
+}
+
 static void sync_widgets_from_draft(SettingsWidgetState *state) {
+  sync_ftp_tls_controls(state);
   const TerminalDisplaySettings display =
       terminal_display_settings(state->draft_store);
   const GeneralColorSettings colors =
@@ -5393,7 +5620,15 @@ static GtkWidget *create_sftp_page(SettingsWidgetState *state) {
 
 static GtkWidget *create_ftp_page(SettingsWidgetState *state) {
   const std::string page_id = widget_id(state, "ftp_page");
-  GtkWidget *page = create_page_grid(page_id.c_str());
+  GtkWidget *page = create_page_grid(widget_id(state, "ftp_page_contents").c_str());
+  GtkWidget *scroller = gtk_scrolled_window_new(nullptr, nullptr);
+  assign_accessible_id(scroller, page_id.c_str());
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroller), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_overlay_scrolling(GTK_SCROLLED_WINDOW(scroller), FALSE);
+  gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(scroller), FALSE);
+  assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(scroller)),
+      widget_id(state, "ftp_page_scrollbar").c_str());
+  gtk_container_add(GTK_CONTAINER(scroller), page);
   const gboolean endpoint_sensitive = state->is_runtime ? FALSE : TRUE;
 
   state->ftp_address_entry =
@@ -5442,8 +5677,9 @@ static GtkWidget *create_ftp_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_ftp_remote_directory_changed), state);
   attach_row(page, 5, ftp_remote_directory_setting_key(),
              state->ftp_remote_directory_entry);
+  create_ftp_tls_controls(state, page);
 
-  return page;
+  return scroller;
 }
 
 static GtkWidget *create_serial_page(SettingsWidgetState *state) {
@@ -6162,10 +6398,26 @@ void settings_widget_rebase_fallbacks(
   const std::string log_format_text =
       entry_text(state->log_file_name_format_entry);
 
+  std::vector<std::pair<std::string, std::string>> invalid_tls_text;
+  for (const auto &control : state->ftp_tls_controls)
+    if (!control.valid && control.entry)
+      invalid_tls_text.emplace_back(control.name, entry_text(control.entry));
+
   rebase_settings_store_fallbacks(&state->applied_store, fallbacks);
   rebase_settings_store_fallbacks(&state->draft_store, fallbacks);
   state->synchronizing = true;
   sync_widgets_from_draft(state);
+
+  for (const auto &[name, text] : invalid_tls_text) {
+    for (auto &control : state->ftp_tls_controls) {
+      if (name != control.name) continue;
+      gtk_combo_box_set_active_id(GTK_COMBO_BOX(control.combo), "custom");
+      gtk_entry_set_text(GTK_ENTRY(control.entry), text.c_str());
+      control.valid = false;
+      set_entry_validation(control.entry, false, _("Enter a valid value"));
+    }
+  }
+  update_ftp_tls_validation(state);
 
   if (fonts_invalid) {
     state->terminal_font_draft = font_draft;
@@ -6314,6 +6566,7 @@ void destroy_settings_widget(SettingsWidgetState *state) {
   if (state->terminal_bell_sound_dialog != nullptr) {
     gtk_widget_destroy(state->terminal_bell_sound_dialog);
   }
+  if (state->ftp_ca_dialog) gtk_widget_destroy(state->ftp_ca_dialog);
   destroy_key_binding_input_widget(state->terminal_zoom_in_key_input);
   destroy_key_binding_input_widget(state->terminal_zoom_out_key_input);
   destroy_key_binding_input_widget(state->terminal_send_break_key_input);
