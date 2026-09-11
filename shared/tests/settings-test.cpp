@@ -2179,6 +2179,28 @@ static void test_ftp_tls_settings_preserve_invalid_input_and_inheritance() {
               "Relative CA paths must be rejected");
 }
 
+static void test_ftp_tls_range_and_inheritance() {
+  using namespace elder_terms;
+  auto global = create_settings_store(ftp_connection_setting_definitions());
+  auto *ini = g_key_file_new();
+  g_key_file_set_string(ini, "ftp", "tls_mode", "explicit");
+  g_key_file_set_string(ini, "ftp", "tls_min_version", "1.0");
+  g_key_file_set_string(ini, "ftp", "tls_max_version", "1.1");
+  g_key_file_set_string(ini, "ftp", "tls_compatibility", "openssl_legacy");
+  std::vector<std::string> warnings;
+  load_settings_store_from_key_file(&global, ini, &warnings);
+  g_key_file_unref(ini);
+  auto connection = create_settings_store(ftp_connection_setting_definitions());
+  rebase_settings_store_fallbacks(&connection, global);
+  expect_true(ftp_connection_settings(connection).validation_errors.empty(), "Inherited explicit legacy settings must be valid");
+  expect_true(set_explicit_setting_value(&connection, make_setting_key("ftp", "tls_min_version"), std::string("1.3")), "Valid TLS version must be editable");
+  expect_true(!ftp_connection_settings(connection).validation_errors.empty(), "An inherited maximum below the explicit minimum must fail");
+  expect_true(set_explicit_setting_value(&connection, make_setting_key("ftp", "tls_max_version"), std::string("default")), "An explicit backend maximum must replace the inherited cap");
+  expect_true(ftp_connection_settings(connection).validation_errors.empty(), "A corrected range must clear the validation error");
+  for (const auto &value : {"SSLv2", "SSLv3", "", "1.4"})
+    expect_true(!set_explicit_setting_value(&connection, make_setting_key("ftp", "tls_min_version"), std::string(value)), "Unsupported protocol versions must be rejected");
+}
+
 static void test_ftp_tls_port_resolution() {
   using namespace elder_terms;
   auto global = create_settings_store(ftp_connection_setting_definitions());
@@ -4407,6 +4429,7 @@ int main() {
     elder_terms_settings_test::test_invalid_ftp_settings_fall_back_and_warn();
     elder_terms_settings_test::test_ftp_tls_settings_preserve_invalid_input_and_inheritance();
     elder_terms_settings_test::test_ftp_tls_port_resolution();
+    elder_terms_settings_test::test_ftp_tls_range_and_inheritance();
     elder_terms_settings_test::test_serial_profile();
     elder_terms_settings_test::test_serial_ignore_carrier_profile();
     elder_terms_settings_test::test_transfer_base_path_setting();

@@ -65,6 +65,16 @@ static curl_slist *make_commands(const std::vector<std::string> &commands) {
 }
 
 
+static long curl_tls_version(FtpTlsVersion version, bool maximum) {
+  switch (version) {
+  case FtpTlsVersion::tls10: return maximum ? static_cast<long>(CURL_SSLVERSION_MAX_TLSv1_0) : static_cast<long>(CURL_SSLVERSION_TLSv1_0);
+  case FtpTlsVersion::tls11: return maximum ? static_cast<long>(CURL_SSLVERSION_MAX_TLSv1_1) : static_cast<long>(CURL_SSLVERSION_TLSv1_1);
+  case FtpTlsVersion::tls12: return maximum ? static_cast<long>(CURL_SSLVERSION_MAX_TLSv1_2) : static_cast<long>(CURL_SSLVERSION_TLSv1_2);
+  case FtpTlsVersion::tls13: return maximum ? static_cast<long>(CURL_SSLVERSION_MAX_TLSv1_3) : static_cast<long>(CURL_SSLVERSION_TLSv1_3);
+  }
+  throw std::invalid_argument("Invalid FTPS TLS version");
+}
+
 // Network calls and callbacks belong to this worker. The caller only posts
 // requests and wakes the condition variable; it never accesses an easy handle.
 struct CurlWorker {
@@ -263,8 +273,19 @@ struct CurlWorker {
       if (options.connection.tls_mode != FtpTlsMode::none) {
         require_curl(curl_easy_setopt(easy, CURLOPT_SSL_VERIFYPEER, 1L));
         require_curl(curl_easy_setopt(easy, CURLOPT_SSL_VERIFYHOST, 2L));
-        require_curl(curl_easy_setopt(easy, CURLOPT_SSLVERSION, (static_cast<long>(CURL_SSLVERSION_TLSv1_2) | static_cast<long>(CURL_SSLVERSION_MAX_DEFAULT))));
-        require_curl(curl_easy_setopt(easy, CURLOPT_FTPSSLAUTH, static_cast<long>(CURLFTPAUTH_TLS)));
+        require_curl(curl_easy_setopt(easy, CURLOPT_SSLVERSION, (curl_tls_version(options.connection.tls_min_version, false) |
+            (options.connection.tls_max_version ? curl_tls_version(*options.connection.tls_max_version, true) : static_cast<long>(CURL_SSLVERSION_MAX_DEFAULT)))));
+        require_curl(curl_easy_setopt(easy, CURLOPT_FTPSSLAUTH, static_cast<long>(options.connection.tls_auth_order == FtpTlsAuthOrder::ssl ? CURLFTPAUTH_SSL :
+            options.connection.tls_auth_order == FtpTlsAuthOrder::automatic ? CURLFTPAUTH_DEFAULT : CURLFTPAUTH_TLS)));
+        auto ciphers = options.connection.tls_cipher_list;
+        if (options.connection.tls_compatibility == FtpTlsCompatibility::openssl_legacy && ciphers.empty()) ciphers = "DEFAULT";
+        if (!ciphers.empty()) {
+          ciphers += ":!aNULL:!eNULL";
+          if (options.connection.tls_compatibility == FtpTlsCompatibility::openssl_legacy) ciphers += ":@SECLEVEL=0";
+          require_curl(curl_easy_setopt(easy, CURLOPT_SSL_CIPHER_LIST, ciphers.c_str()));
+        }
+        if (!options.connection.tls13_cipher_list.empty())
+          require_curl(curl_easy_setopt(easy, CURLOPT_TLS13_CIPHERS, options.connection.tls13_cipher_list.c_str()));
         if (!options.connection.ca_file.empty())
           require_curl(curl_easy_setopt(easy, CURLOPT_CAINFO, options.connection.ca_file.c_str()));
       }
@@ -507,6 +528,11 @@ open_curl_ftp_session_async(FtpClientOpenOptions options) {
   if (!ftp) throw std::runtime_error("libcurl was built without FTP support");
   if (options.connection.tls_mode == FtpTlsMode::implicit_tls && !ftps)
     throw std::runtime_error("libcurl was built without FTPS support");
+  if (options.connection.tls_mode != FtpTlsMode::none &&
+      (options.connection.tls_compatibility == FtpTlsCompatibility::openssl_legacy ||
+       !options.connection.tls_cipher_list.empty() || !options.connection.tls13_cipher_list.empty()) &&
+      (!version->ssl_version || !std::string_view(version->ssl_version).starts_with("OpenSSL/")))
+    throw std::runtime_error("These FTPS cipher and compatibility settings require OpenSSL");
   auto worker = std::make_shared<CurlWorker>(std::move(options));
   auto ready = worker->ready.get_promise();
   auto session = std::make_shared<CurlFtpSessionAdapter>(worker);

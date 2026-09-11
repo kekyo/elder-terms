@@ -67,6 +67,10 @@ struct Options {
   bool hold_data_tls = false;
   bool require_reuse = false;
   int tls_version = 0;
+  std::string tls_ciphers;
+  std::string tls13_ciphers;
+  std::string auth_command;
+  bool legacy_tls = false;
   bool legacy_data = false;
   bool reject_login = false;
   bool hold_first_list = false;
@@ -209,7 +213,7 @@ static void serve(Socket &control, Options options, SSL_CTX *context) {
       std::osyncstream(std::clog) << "COMMAND " << (verb == "PASS" ? "PASS [hidden]" : command) << std::endl;
     }
     if (verb == "AUTH") {
-      if (!context || options.reject_auth) { respond(534, "TLS unavailable"); continue; }
+      if (!context || options.reject_auth || (!options.auth_command.empty() && argument != options.auth_command)) { respond(534, "TLS unavailable"); continue; }
       respond(234, "Start TLS");
       if (!secure_control()) return;
       std::osyncstream(std::clog) << "TLS CONTROL " << SSL_get_version(control.tls) << std::endl;
@@ -516,6 +520,10 @@ int main(int argc, char **argv) {
       else if (option.starts_with("--tls-version=")) options.tls_version = std::stoi(option.substr(14));
       else if (option == "--hold-control-tls") options.hold_control_tls = true;
       else if (option == "--hold-data-tls") options.hold_data_tls = true;
+      else if (option.starts_with("--tls-ciphers=")) options.tls_ciphers = option.substr(14);
+      else if (option.starts_with("--tls13-ciphers=")) options.tls13_ciphers = option.substr(16);
+      else if (option.starts_with("--auth-command=")) options.auth_command = option.substr(15);
+      else if (option == "--legacy-tls") options.legacy_tls = true;
       else if (option == "--reject-auth") options.reject_auth = true;
       else if (option == "--reject-protection") options.reject_protection = true;
       else if (option == "--break-data-tls") options.break_data_tls = true;
@@ -548,6 +556,9 @@ int main(int argc, char **argv) {
           SSL_CTX_check_private_key(context.get()) == 1, "Test TLS credentials failed");
     }
     if (context) {
+      if (options.legacy_tls) SSL_CTX_set_security_level(context.get(), 0);
+      if (!options.tls_ciphers.empty()) expect(SSL_CTX_set_cipher_list(context.get(), options.tls_ciphers.c_str()) == 1, "Invalid test cipher list");
+      if (!options.tls13_ciphers.empty()) expect(SSL_CTX_set_ciphersuites(context.get(), options.tls13_ciphers.c_str()) == 1, "Invalid test TLS 1.3 cipher list");
       const unsigned char session_context[] = "elder-terms-ftps";
       expect(SSL_CTX_set_session_id_context(context.get(), session_context, sizeof(session_context)) == 1,
              "Cannot initialize test session reuse");

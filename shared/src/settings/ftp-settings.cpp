@@ -60,11 +60,65 @@ static bool validate_ca_file(const SettingValue &value, std::string *reason) {
   return false;
 }
 
+static std::optional<FtpTlsVersion> parse_tls_version(const std::string &text) {
+  if (text == "1.0") return FtpTlsVersion::tls10;
+  if (text == "1.1") return FtpTlsVersion::tls11;
+  if (text == "1.2") return FtpTlsVersion::tls12;
+  if (text == "1.3") return FtpTlsVersion::tls13;
+  return std::nullopt;
+}
+
+static bool validate_tls_min_version(const SettingValue &value, std::string *reason) {
+  if (parse_tls_version(std::get<std::string>(value))) return true;
+  *reason = "must be 1.0, 1.1, 1.2, or 1.3";
+  return false;
+}
+
+static bool validate_tls_max_version(const SettingValue &value, std::string *reason) {
+  if (std::get<std::string>(value) == "default" || parse_tls_version(std::get<std::string>(value))) return true;
+  *reason = "must be default, 1.0, 1.1, 1.2, or 1.3";
+  return false;
+}
+
+static bool validate_tls_auth_order(const SettingValue &value, std::string *reason) {
+  const auto &text = std::get<std::string>(value);
+  if (text == "tls" || text == "ssl" || text == "default") return true;
+  *reason = "must be tls, ssl, or default";
+  return false;
+}
+
+static bool validate_tls_compatibility(const SettingValue &value, std::string *reason) {
+  const auto &text = std::get<std::string>(value);
+  if (text == "standard" || text == "openssl_legacy") return true;
+  *reason = "must be standard or openssl_legacy";
+  return false;
+}
+
+static bool validate_tls_cipher_list(const SettingValue &value, std::string *reason) {
+  auto text = std::get<std::string>(value);
+  if (std::any_of(text.begin(), text.end(), [](unsigned char c) { return c < 32 || c == 127; })) {
+    *reason = "must not contain control characters";
+    return false;
+  }
+  std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return std::toupper(c); });
+  if (text.find("@SECLEVEL") != std::string::npos) {
+    *reason = "security levels must be selected with tls_compatibility";
+    return false;
+  }
+  return true;
+}
+
 static SettingKey ftp_key(const char *name) {
   return make_setting_key(ftp_section, name);
 }
 
 SettingKey ftp_tls_mode_setting_key() { return ftp_key("tls_mode"); }
+SettingKey ftp_tls_min_version_setting_key() { return ftp_key("tls_min_version"); }
+SettingKey ftp_tls_max_version_setting_key() { return ftp_key("tls_max_version"); }
+SettingKey ftp_tls_auth_order_setting_key() { return ftp_key("tls_auth_order"); }
+SettingKey ftp_tls_compatibility_setting_key() { return ftp_key("tls_compatibility"); }
+SettingKey ftp_tls_cipher_list_setting_key() { return ftp_key("tls_cipher_list"); }
+SettingKey ftp_tls13_cipher_list_setting_key() { return ftp_key("tls13_cipher_list"); }
 SettingKey ftp_ca_file_setting_key() { return ftp_key("ca_file"); }
 
 const char *ftp_tls_mode_to_string(FtpTlsMode mode) {
@@ -113,12 +167,12 @@ std::vector<SettingDefinition> ftp_connection_setting_definitions() {
        .validate = validate_tls_mode, .retain_invalid = true},
       {.key = ftp_ca_file_setting_key(), .default_value = std::string(),
        .validate = validate_ca_file, .retain_invalid = true},
-      {.key = ftp_key("tls_min_version"), .default_value = std::string("1.2"), .retain_invalid = true},
-      {.key = ftp_key("tls_max_version"), .default_value = std::string("default"), .retain_invalid = true},
-      {.key = ftp_key("tls_auth_order"), .default_value = std::string("tls"), .retain_invalid = true},
-      {.key = ftp_key("tls_compatibility"), .default_value = std::string("standard"), .retain_invalid = true},
-      {.key = ftp_key("tls_cipher_list"), .default_value = std::string(), .retain_invalid = true},
-      {.key = ftp_key("tls13_cipher_list"), .default_value = std::string(), .retain_invalid = true},
+      {.key = ftp_key("tls_min_version"), .default_value = std::string("1.2"), .validate = validate_tls_min_version, .retain_invalid = true},
+      {.key = ftp_key("tls_max_version"), .default_value = std::string("default"), .validate = validate_tls_max_version, .retain_invalid = true},
+      {.key = ftp_key("tls_auth_order"), .default_value = std::string("tls"), .validate = validate_tls_auth_order, .retain_invalid = true},
+      {.key = ftp_key("tls_compatibility"), .default_value = std::string("standard"), .validate = validate_tls_compatibility, .retain_invalid = true},
+      {.key = ftp_key("tls_cipher_list"), .default_value = std::string(), .validate = validate_tls_cipher_list, .retain_invalid = true},
+      {.key = ftp_key("tls13_cipher_list"), .default_value = std::string(), .validate = validate_tls_cipher_list, .retain_invalid = true},
       {.key = ftp_key("certificate_error_action"), .default_value = std::string("reject"), .retain_invalid = true},
       {
           .key = ftp_address_setting_key(),
@@ -174,8 +228,7 @@ FtpConnectionSettings ftp_connection_settings(const SettingsStore &store) {
   std::vector<std::string> errors;
   for (const auto &entry : store.entries) {
     const auto &key = entry.definition.key;
-    if (key.section == "ftp" && key.name != "tls_mode" &&
-        (key.name.starts_with("tls_") || key.name == "tls13_cipher_list" || key.name == "certificate_error_action") &&
+    if (key.section == "ftp" && key.name == "certificate_error_action" &&
         entry.value != entry.definition.default_value) {
       errors.push_back("[ftp] " + key.name + ": non-default values are not implemented yet");
     }
@@ -185,6 +238,12 @@ FtpConnectionSettings ftp_connection_settings(const SettingsStore &store) {
           (source == SettingValueSource::global ? "global" : "connection") + "): " + entry.validation_error);
     }
   }
+  const auto minimum = parse_tls_version(setting_string_value_or_default(store, ftp_tls_min_version_setting_key(), "1.2"));
+  const auto maximum = parse_tls_version(setting_string_value_or_default(store, ftp_tls_max_version_setting_key(), "default"));
+  if (minimum && maximum && *minimum > *maximum)
+    errors.push_back("[ftp] tls_min_version must not exceed tls_max_version");
+  const auto auth = setting_string_value_or_default(store, ftp_tls_auth_order_setting_key(), "tls");
+  const auto compatibility = setting_string_value_or_default(store, ftp_tls_compatibility_setting_key(), "standard");
   return {
       .address = std::move(address),
       .port = tls == "implicit" && setting_value_source(store, ftp_port_setting_key()) == SettingValueSource::built_in
@@ -202,6 +261,12 @@ FtpConnectionSettings ftp_connection_settings(const SettingsStore &store) {
       .tls_mode = tls == "explicit" ? FtpTlsMode::explicit_tls :
           tls == "implicit" ? FtpTlsMode::implicit_tls : FtpTlsMode::none,
       .ca_file = setting_string_value_or_default(store, ftp_ca_file_setting_key(), ""),
+      .tls_min_version = minimum.value_or(FtpTlsVersion::tls12),
+      .tls_max_version = maximum,
+      .tls_auth_order = auth == "ssl" ? FtpTlsAuthOrder::ssl : auth == "default" ? FtpTlsAuthOrder::automatic : FtpTlsAuthOrder::tls,
+      .tls_compatibility = compatibility == "openssl_legacy" ? FtpTlsCompatibility::openssl_legacy : FtpTlsCompatibility::standard,
+      .tls_cipher_list = setting_string_value_or_default(store, ftp_tls_cipher_list_setting_key(), ""),
+      .tls13_cipher_list = setting_string_value_or_default(store, ftp_tls13_cipher_list_setting_key(), ""),
       .validation_errors = std::move(errors),
   };
 }

@@ -203,7 +203,23 @@ sudo apt install coreutils
 
 FTPウインドウを起動するたびに、認証パネルでユーザー名と非表示入力のパスワードを同時に尋ねます。設定済みのユーザー名が初期入力され、設定が空の場合は現在のOSユーザー名が初期入力されます。匿名でログインする場合は `anonymous` と明示的に入力し、サーバーが求めるパスワードも入力して下さい。匿名用の認証情報が自動で補われることはなく、入力したパスワードは接続設定に保存されません。ログイン後はSFTPと同じ2ペインのファイルブラウザと転送操作を使用出来ます。
 
-FTPはコマンド、ユーザー名、パスワード、ディレクトリ一覧、ファイルデータを暗号化せずに送信します。elder-termsは[libcurl](https://curl.se/libcurl/)を使用して[FTP（RFC 959）](https://www.rfc-editor.org/rfc/rfc959)に接続します。[FTPS](https://everything.curl.dev/ftp/ftps.html)を使用するには、接続INIの `[ftp]` に `tls_mode=explicit` または `tls_mode=implicit` を追加して下さい。明示的FTPSはAUTH TLSで暗号化へ移行し、既定ポートは21です。暗黙的FTPSは接続直後からTLSを使用し、既定ポートは990です。グローバル設定から継承した値を含め、明示指定されたポートが優先されます。両方式でActive／Passive、IPv4／IPv6、データ接続でTLSセッション再利用を要求するサーバーに対応します。制御・データ接続の両方でTLS 1.2以上を必須とし、証明書と接続先名の検証に失敗した場合は拒否します。独自CAは `ca_file=/absolute/path/company-ca.pem` で指定し、空の場合はシステムCAを使用します。平文FTPへ自動で切り替えることはありません。現段階のTLS設定はINIから指定します。
+FTPはコマンド、ユーザー名、パスワード、ディレクトリ一覧、ファイルデータを暗号化せずに送信します。elder-termsは[libcurl](https://curl.se/libcurl/)を使用して[FTP（RFC 959）](https://www.rfc-editor.org/rfc/rfc959)に接続します。[FTPS](https://everything.curl.dev/ftp/ftps.html)を使用するには、接続INIの `[ftp]` に `tls_mode=explicit` または `tls_mode=implicit` を追加して下さい。明示的FTPSはAUTH TLSで暗号化へ移行し、既定ポートは21です。暗黙的FTPSは接続直後からTLSを使用し、既定ポートは990です。グローバル設定から継承した値を含め、明示指定されたポートが優先されます。両方式でActive／Passive、IPv4／IPv6、データ接続でTLSセッション再利用を要求するサーバーに対応します。既定では制御・データ接続の両方でTLS 1.2以上を必須とし、証明書と接続先名の検証に失敗した場合は拒否します。独自CAは `ca_file=/absolute/path/company-ca.pem` で指定し、空の場合はシステムCAを使用します。平文FTPへ自動で切り替えることはありません。現段階のTLS設定はINIから指定します。
+
+同じセクションでTLSの詳細を指定できます。
+
+| キー | 既定値 | 指定可能な値 |
+| --- | --- | --- |
+| `tls_min_version` | `1.2` | `1.0`、`1.1`、`1.2`、`1.3` |
+| `tls_max_version` | `default` | `default`（バックエンドの上限）、または同じバージョン値 |
+| `tls_auth_order` | `tls` | `tls`、`ssl`、`default`（明示的FTPSのみ） |
+| `tls_compatibility` | `standard` | `standard`、`openssl_legacy` |
+| `tls_cipher_list` | 空 | TLS 1.2以前のOpenSSL暗号式 |
+| `tls13_cipher_list` | 空 | TLS 1.3暗号名のコロン区切り |
+
+バージョンを固定するには上下限を同じ値にします。例えば `tls_min_version=1.0`、`tls_max_version=1.0`、`tls_compatibility=openssl_legacy` を指定すると、導入されたOpenSSLで対応可能な場合にTLS 1.0のみを使う接続になります。互換設定は当該接続に限り[OpenSSLのセキュリティレベル0](https://docs.openssl.org/3.0/man3/SSL_CTX_set_security_level/)を明示的に選びます。証明書検証や他の接続の条件は変わりません。標準設定ではバックエンドのポリシーを維持するため、バージョン範囲に含めても旧TLSが拒否される場合があります。
+
+SSLv2／SSLv3には対応しません。AUTH SSLはFTPコマンドの選択であり、SSLv3の指定ではありません。暗号式と旧TLS互換にはOpenSSL版libcurlが必要です。全て未知の暗号名や未対応設定では接続に失敗します。匿名認証・非暗号化の暗号スイートは除外します。暗号式内の `@SECLEVEL` は受け付けず、互換設定で指定します。バックエンドの制約は[libcurlのTLSバージョン指定](https://curl.se/libcurl/c/CURLOPT_SSLVERSION.html)と[暗号指定](https://curl.se/libcurl/c/CURLOPT_SSL_CIPHER_LIST.html)を参照して下さい。
+
 
 ### FTPのデータ接続
 

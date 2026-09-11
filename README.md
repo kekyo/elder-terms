@@ -351,13 +351,46 @@ To use [FTPS](https://everything.curl.dev/ftp/ftps.html), set `tls_mode=explicit
 or `tls_mode=implicit` in the `[ftp]` section of the connection INI file.
 Explicit FTPS upgrades the control connection with AUTH TLS and defaults to port
 21. Implicit FTPS starts TLS immediately and defaults to port 990. An explicitly
-configured port, including one inherited from global settings, takes precedence. FTPS requires TLS 1.2 or newer for both control and data connections,
+configured port, including one inherited from global settings, takes precedence. By default, FTPS requires TLS 1.2 or newer for both control and data connections,
 verifies the server certificate and host name, and rejects validation failures.
 For a private CA, set `ca_file=/absolute/path/company-ca.pem`; an empty value uses
 the system CA store. Both FTPS modes support active and passive data connections,
 IPv4 and IPv6, and servers requiring TLS session reuse for data transfers.
 FTPS never falls back to plain FTP. TLS settings are currently
 configured through the INI file.
+
+
+
+FTPS protocol details can also be set in the same section:
+
+| Key | Default | Choices |
+| --- | --- | --- |
+| `tls_min_version` | `1.2` | `1.0`, `1.1`, `1.2`, `1.3` |
+| `tls_max_version` | `default` | `default` (backend maximum), or the same version values |
+| `tls_auth_order` | `tls` | `tls`, `ssl`, `default` (explicit FTPS only) |
+| `tls_compatibility` | `standard` | `standard`, `openssl_legacy` |
+| `tls_cipher_list` | empty | OpenSSL cipher expression for TLS 1.2 and earlier |
+| `tls13_cipher_list` | empty | Colon-separated TLS 1.3 cipher names |
+
+Set both version bounds to the same value to require that version. For example,
+`tls_min_version=1.0`, `tls_max_version=1.0`, and
+`tls_compatibility=openssl_legacy` enable a TLS 1.0-only legacy connection when
+supported by the installed OpenSSL. The compatibility option explicitly uses
+[OpenSSL security level 0](https://docs.openssl.org/3.0/man3/SSL_CTX_set_security_level/)
+for this connection. It does not change certificate validation or other
+connections. The standard setting keeps the backend's security policy, which
+can reject old protocols even when the requested version range includes them.
+
+SSLv2 and SSLv3 are unsupported. AUTH SSL is an alternative FTP command and does
+not select SSLv3; the configured TLS bounds still apply. Cipher expressions and
+the legacy compatibility option require an OpenSSL-backed libcurl. Unknown-only
+cipher lists and unsupported settings fail the connection; they are not silently
+ignored. Anonymous and unencrypted cipher suites are excluded. Use the
+compatibility setting to change the security level; `@SECLEVEL` directives in
+cipher expressions are rejected. See the official
+[libcurl TLS version](https://curl.se/libcurl/c/CURLOPT_SSLVERSION.html) and
+[cipher selection](https://curl.se/libcurl/c/CURLOPT_SSL_CIPHER_LIST.html) documentation
+for backend limitations.
 
 ### FTP Data Connections
 

@@ -296,7 +296,7 @@ ftp_runtime_capabilities_test = executable(
   link_args: ['-Wl,--wrap=curl_version_info'],
 )
 
-foreach case_name : ['supported', 'no-dns', 'no-ftp', 'old-version', 'no-tls', 'no-ftps']
+foreach case_name : ['supported', 'no-dns', 'no-ftp', 'old-version', 'no-tls', 'no-ftps', 'non-openssl']
   test('ftp-runtime-capabilities-' + case_name, ftp_runtime_capabilities_test,
     args: [ftp_test_server, case_name], timeout: 120)
 endforeach

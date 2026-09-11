@@ -43,6 +43,7 @@ for (const testCase of [
   'passive',
   'ftps-explicit',
   'ftps-implicit',
+  'ftps-legacy',
   'ftps-cancel-final',
   'ftps-close-final-upload',
   'ftps-close-final-download',
@@ -135,6 +136,9 @@ for (const testCase of [
             : []),
           ...(held ? ['--hold-final'] : []),
           ...(scenario === 'login-refused' ? ['--reject-login'] : []),
+          ...(scenario === 'ftps-legacy'
+            ? ['--tls-version=769', '--legacy-tls']
+            : []),
         ],
         { stdio: ['pipe', 'pipe', 'pipe'] }
       );
@@ -169,6 +173,13 @@ for (const testCase of [
           `port=${ready.slice(6)}`,
           'username=alice',
           ...(ftps ? [`tls_mode=${tlsMode}`, `ca_file=${certificate}`] : []),
+          ...(scenario === 'ftps-legacy'
+            ? [
+                'tls_min_version=1.0',
+                'tls_max_version=1.0',
+                'tls_compatibility=openssl_legacy',
+              ]
+            : []),
           `data_connection_mode=${scenario === 'active' ? 'active' : 'passive'}`,
           `local_directory=${local}`,
           'remote_directory=/home',

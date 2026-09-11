@@ -37,12 +37,24 @@ static cardio::promise<void> verify_async(
     cardio::dispatcher_group_glib &group, int &result) {
   std::shared_ptr<elder_terms::RemoteFileClient> client;
   try {
-    client = co_await elder_terms::open_ftp_client_async({
-        .connection = {.address = "127.0.0.1", .port = port, .username = "alice",
+    elder_terms::FtpConnectionSettings connection{.address = "127.0.0.1", .port = port, .username = "alice",
             .data_connection_mode = elder_terms::FtpDataConnectionMode::passive,
             .local_directory = {}, .remote_directory = "/home",
-            .tls_mode = tls_mode},
-        .password = "secret"}, {});
+            .tls_mode = tls_mode};
+    if (expected_error == "require OpenSSL") {
+      auto store = elder_terms::create_settings_store(elder_terms::ftp_connection_setting_definitions());
+      auto *ini = g_key_file_new();
+      g_key_file_set_string(ini, "ftp", "tls_mode", "explicit");
+      g_key_file_set_string(ini, "ftp", "tls_compatibility", "openssl_legacy");
+      std::vector<std::string> warnings;
+      elder_terms::load_settings_store_from_key_file(&store, ini, &warnings);
+      g_key_file_unref(ini);
+      connection = elder_terms::ftp_connection_settings(store);
+      connection.address = "127.0.0.1";
+      connection.username = "alice";
+      connection.port = port;
+    }
+    client = co_await elder_terms::open_ftp_client_async({.connection = std::move(connection), .password = "secret"}, {});
     expect(expected_error.empty(), "An unsupported FTP runtime was accepted");
     const auto snapshot = co_await client->load_directory_async("/home", {});
     expect(snapshot.canonical_path == "/home" && snapshot.entries.empty(),
@@ -80,7 +92,7 @@ int main(int argc, char **argv) {
     expect(argc == 3, "Expected the FTP server executable and capability scenario");
     const std::string scenario = argv[2];
     expect(scenario == "supported" || scenario == "no-dns" ||
-               scenario == "no-ftp" || scenario == "old-version" || scenario == "no-tls" || scenario == "no-ftps",
+               scenario == "no-ftp" || scenario == "old-version" || scenario == "no-tls" || scenario == "no-ftps" || scenario == "non-openssl",
            "Unknown runtime capability scenario");
     static const char *const ftp_protocols[] = {"ftp", nullptr};
     static const char *const other_protocols[] = {"http", nullptr};
@@ -94,12 +106,14 @@ int main(int argc, char **argv) {
     reported_version.version_num = scenario == "old-version" ? 0x075600 : 0x075801;
     reported_version.host = "FTP test runtime";
     reported_version.protocols = scenario == "no-ftp" ? other_protocols : ftp_protocols;
-    reported_version.feature_names = scenario == "no-dns" ? other_features : scenario == "no-ftps" ? tls_features : supported_features;
+    reported_version.feature_names = scenario == "no-dns" ? other_features : (scenario == "no-ftps" || scenario == "non-openssl") ? tls_features : supported_features;
+    if (scenario == "non-openssl") reported_version.ssl_version = "GnuTLS/3.7.9";
     const std::string expected_error = scenario == "no-dns" ? "asynchronous DNS"
         : scenario == "no-ftp" ? "without FTP support"
         : scenario == "old-version" ? "7.88.1 or newer"
         : scenario == "no-tls" ? "TLS support"
-        : scenario == "no-ftps" ? "FTPS support" : "";
+        : scenario == "no-ftps" ? "FTPS support"
+        : scenario == "non-openssl" ? "require OpenSSL" : "";
 
     directory = "/tmp/elder-terms-ftp-capabilities-XXXXXX";
     expect(::mkdtemp(directory.data()) != nullptr, "Temporary directory creation failed");

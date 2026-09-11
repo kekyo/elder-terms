@@ -64,10 +64,11 @@ static cardio::promise<void> run_async(
 int main(int argc, char **argv) {
   using namespace elder_terms_ftps_test;
   try {
-    expect(argc == 3, "Expected INI path and success/failure");
+    expect(argc == 3 || argc == 5, "Expected INI path/result pairs");
+    for (int argument = 1; argument < argc; argument += 2) {
     auto store = elder_terms::create_settings_store(elder_terms::ftp_connection_setting_definitions());
     auto *ini = g_key_file_new();
-    expect(g_key_file_load_from_file(ini, argv[1], G_KEY_FILE_NONE, nullptr), "Cannot load test INI");
+    expect(g_key_file_load_from_file(ini, argv[argument], G_KEY_FILE_NONE, nullptr), "Cannot load test INI");
     std::vector<std::string> warnings;
     elder_terms::load_settings_store_from_key_file(&store, ini, &warnings);
     g_key_file_unref(ini);
@@ -76,10 +77,11 @@ int main(int argc, char **argv) {
       cardio::dispatcher_group_glib group;
       cardio::dispatcher_host_glib_auto dispatcher(group);
       auto task = run_async(elder_terms::ftp_connection_settings(store),
-          std::string_view(argv[2]) == "success", group, failure);
+          std::string_view(argv[argument + 1]) == "success", group, failure);
       dispatcher.park();
     }
     if (failure) std::rethrow_exception(failure);
+    }
     std::cout << "FTPS PASS" << std::endl;
     return 0;
   } catch (const std::exception &error) {
