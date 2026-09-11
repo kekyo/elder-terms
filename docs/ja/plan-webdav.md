@@ -1,0 +1,265 @@
+# WebDAV対応計画
+
+作成日: 2026-09-12。調査基準: `c65c89c`。
+
+状態: 計画案。今回の成果物はこの文書であり、製品コードは未変更。各段階の完了条件は実装時に検証する。
+
+## 1. 目的と前提
+
+- libcurlでHTTP/HTTPSのWebDAVに接続する。
+- Generalの接続タイプにWebDAVを追加し、専用のWebDAV設定タブを設ける。
+- SFTP/FTP/FTPSと同じファイル転送ウィンドウ、操作、転送進捗、競合・エラー・認証オーバーレイを使う。
+- HTTPSの設定はFTPSより少なくし、無効な証明書の確認はFTPSと同じオーバーレイと許可範囲で扱う。
+- 接続先は未指定。以下は標準的なファイル操作とBasic/Digest認証を基準とする案であり、特定製品での動作保証を意味しない。
+- 初期対象は一覧、移動、属性表示、ダウンロード、アップロード、フォルダー作成、名前変更、削除、再帰転送、競合処理、キャンセル。WebDAVの全仕様を実装するという意味ではない。
+
+## 2. 接続先による差と計画への影響
+
+製品名だけで互換性は決まらない。同じ製品でも認証設定、公開パス、リバースプロキシ、権限、保存先によって条件が変わる。
+
+| 接続先・条件 | 主な違い | 本計画での扱い |
+| --- | --- | --- |
+| Apache `mod_dav` / `mod_dav_fs` | WebDAVを公開する場所、認証、アクセス権を管理者が設定する。 | 独立した標準サーバーとして実接続テストに使用する。URLと認証の設定で対応する。 |
+| Nextcloud | ユーザー別のWebDAV URLとアプリパスワードを使用する。独自の分割アップロードAPIもある。 | 通常のWebDAV操作を対象とし、アプリパスワードを実行時のパスワード欄で受け付ける。独自分割転送は初期対象に含めない。 |
+| IISでBasic認証を許可 | 公開パス、認証、拡張子・URL・要求サイズなどのサーバー側フィルターが影響する。 | 標準操作で対応する方針。拒否された操作はHTTP応答に基づき説明する。 |
+| IISでWindows統合認証のみを許可 | Negotiate/KerberosやNTLMが必要になる。 | Basic/Digestのみでは接続不可。必要なら認証の追加段階と実環境検証を計画に追加する。 |
+| NAS | 製品・機種・設定による差があり、「NAS」という分類だけでは認証・制限を確定できない。 | ホスト、ポート、ベースパス、CA設定は共通項目で吸収する。機種固有の保証には実機検証を追加する。 |
+
+根拠: [Apache mod_dav](https://httpd.apache.org/docs/2.4/mod/mod_dav.html)、[NextcloudのWebDAV接続](https://docs.nextcloud.com/server/stable/user_manual/en/files/access_webdav.html)、[Nextcloudの分割アップロード](https://docs.nextcloud.com/server/stable/developer_manual/client_apis/WebDAV/chunking.html)、[IISのBasic認証](https://learn.microsoft.com/en-us/iis/configuration/system.webserver/security/authentication/basicauthentication)、[IISのWindows認証](https://learn.microsoft.com/en-us/iis/configuration/system.webserver/security/authentication/windowsauthentication/)、[IISの要求フィルター](https://learn.microsoft.com/en-us/iis/publish/using-webdav/how-to-configure-webdav-with-request-filtering)。
+
+上記から、接続タイプの下に「Nextcloudモード」「IISモード」などを最初から設ける必要はないと判断する。設定で扱える差と、追加機能が必要な差を分ける。証明書エラーの確認手順は、接続先製品によらず共通にできる。
+
+LOCK/UNLOCKによる編集ロック管理、PROPPATCHによる任意属性更新、サーバー内COPY、同期・再開転送、独自分割アップロード、OAuthのブラウザログイン、Windows統合認証、クライアント証明書認証、プロキシ設定は初期対象外とする案。これらが必要な接続先が判明した場合は、対象外のまま実装を開始せず計画を改訂する。
+
+## 3. 現行コードから確認した変更点
+
+| 現行コード | 確認事項と変更方針 |
+| --- | --- |
+| `shared/include/elder-terms/settings/general-settings.h`、`shared/src/settings/general-settings.cpp` | `ConnectionKind`と`general.type`の検証にWebDAVを追加する。 |
+| `shared/src/settings/ftp-settings.cpp`、`settings-store.cpp`、`settings.cpp` | FTPの設定定義、継承元、不正値の保持を参考に`webdav-settings.h/.cpp`を追加する。WebDAVを端末プロファイル生成から除外する。 |
+| `shared/src/settings-widget/settings-widget.cpp`、`settings-presentation.*` | FTPページには接続先・初期ディレクトリ・TLS設定と実行中の編集制限がある。行部品、継承、適用・取消、CA選択を再利用する。 |
+| `elder-terms/src/main.cpp` | 保存済み接続と編集中接続の両起動経路で、WebDAVを`elder-terms-file-transfer`へ振り分ける。 |
+| `elder-terms-vte/src/file-transfer/file-transfer-main.cpp` | FTP/SFTPの起動・認証・終了処理とFTPS証明書オーバーレイがある。WebDAVの起動を追加し、認証表示と証明書表示を必要な範囲で共通化する。 |
+| `file-transfer/remote-file-client.h`、`file-transfer-window.cpp` | 一覧・転送UIは既に`RemoteFileClient`へ依存する。WebDAV用にウィンドウを複製しない。サイズは現在必須の数値であり、不明と0バイトを区別する変更が必要。 |
+| `file-transfer/file-transfer-engine.cpp` | アップロードは隣接一時ファイルへ書き、最終応答後に名前変更する。書込み開始APIにサイズがない。削除APIは空ディレクトリの削除を前提とする。HTTP向けにこの境界を明示的に拡張する。 |
+| `ftp/curl-ftp-session.cpp` | 現行FTPは`curl_easy_perform()`を既存workerで実行する。FTP固有オプション、応答行、制御・データ接続、終了処理が含まれ、そのままHTTPに流用できない。 |
+| `ftp/ftps-certificate.h/.cpp` | セッション内の証明書例外、名前照合、OpenSSL整合確認を実装済み。FTPの制御・データ区分から独立させて共通化する。 |
+| `elder-terms-vte/meson.build` | ファイル転送実行ファイルはlibcurl 7.88.1以上とOpenSSLに依存する。WebDAV実装とXML解析の依存を同じ実行ファイルへ追加する。 |
+
+調査環境はlibcurl 8.5.0、OpenSSL 3.0.13、libxml2 2.9.14。これは導入状況の確認であり、動作検証ではない。ベンダーコードは変更しない。
+
+## 4. WebDAV設定タブ
+
+保存先は`[general] type=webdav`と独立した`[webdav]`セクション。FTPの設定値をWebDAVへ暗黙に流用しない。
+
+| 表示項目 | INIキー | 組込み既定値・動作 |
+| --- | --- | --- |
+| 接続方式 | `scheme` | `https`。`https` / `http`を選択。 |
+| サーバーアドレス | `address` | 空。ホスト名、IPv4、IPv6。接続時必須。 |
+| ポート | `port` | HTTPSは443、HTTPは80。明示値を優先。 |
+| WebDAVベースパス | `base_path` | `/`。サーバーのWebDAV公開先。URLのパス部分を指定。 |
+| 認証方式 | `authentication` | `auto`。`auto` / `basic` / `digest` / `none`。 |
+| ユーザー名 | `username` | 空。認証が必要なら接続時の入力欄で指定する。 |
+| 初期ローカルディレクトリ | `local_directory` | 空。既存の転送先設定・ダウンロード先へのフォールバックを利用。 |
+| 初期リモートディレクトリ | `remote_directory` | `/`。ベースパスをルートとするディレクトリ。 |
+| CA証明書 | `ca_file` | 空はシステム既定。継承 / システムCA / 独自PEMファイルを選択。 |
+| 証明書検証の失敗時 | `certificate_error_action` | `reject`。接続拒否 / オーバーレイで確認（`prompt`）。 |
+| 接続タイムアウト（秒） | `connect_timeout_seconds` | 30。DNS・TCP・TLS確立を含む接続待機の上限。 |
+| 通信停止タイムアウト（秒） | `idle_timeout_seconds` | 60。ネットワーク上で進行がない待機の上限。 |
+
+基本項目、HTTPS項目、通信待機の順に配置する。FTPと同じスクロール・継承表示を使う。HTTPS項目はHTTP選択中は無効表示にし、入力済みの値は保持する。HTTPを選択した場合は暗号化されない接続であることを方式の表示で伝える。
+
+- `auto`はBasic/Digestの範囲でlibcurlに選択させる。`CURLAUTH_ANY`で未計画の認証方式まで有効にしない。`none`ではユーザー名・パスワード・Authorizationを送らない。FTPの`anonymous`指定とは別の意味とする。
+- パスワードはFTPと同様に接続時のオーバーレイで受け付け、そのウィンドウのメモリーにだけ保持する。Nextcloudのアプリパスワードも同じ入力欄を使う。
+- HTTPSはTLS 1.2以上、最大版と暗号はライブラリの通常ポリシーとする。FTPSのAUTH順、Active/Passive、旧TLS互換、暗号一覧、TLS上下限の詳細設定は追加しない。
+- ポートの解決順は接続固有値、明示されたグローバル値、schemeに応じた組込み値。方式を切り替えても明示ポートを上書きしない。
+- 設定未指定は継承とする。CAの明示的な空値はシステムCAへの復帰であり、独自CAの継承とは区別する。CAファイルは絶対パスで保存し、読込み失敗は接続エラーにする。
+- サーバーアドレスにscheme・パス・認証情報を混在させない。完成する接続URLを読取り専用で表示して、各欄の関係を確認できるようにする。
+- `base_path`はURLエスケープを含む絶対パス、`remote_directory`は画面に表示する通常のパスとする。ベースパス末尾はコレクションとして正規化する。クエリー・フラグメント・不正なエスケープは拒否する。
+- ベースパスを画面上の`/`とし、その外側へ上がる操作を禁止する。例えばベースが`/remote.php/dav/files/alice/`、初期リモートが`/Documents`なら、その配下から閲覧を開始する。
+- ポートは1〜65535、待機秒数は1〜86400。不正値を既定値へ黙って置き換えず、FTPと同様に出所を持つ検証エラーとして保持する。適用・接続前に検出する。
+- 接続中は接続方式・アドレス・認証・TLS等の接続条件を読取り専用にする。変更は保存した設定から新規接続すると反映する。人の回答待ちとローカルI/Oによる意図的な一時停止を通信停止時間に数えない。
+
+例:
+
+```ini
+[general]
+type=webdav
+
+[webdav]
+scheme=https
+address=cloud.example.com
+base_path=/remote.php/dav/files/alice/
+authentication=auto
+username=alice
+local_directory=
+remote_directory=/Documents
+certificate_error_action=reject
+```
+
+認証とTLS設定の根拠: [CURLOPT_HTTPAUTH](https://curl.se/libcurl/c/CURLOPT_HTTPAUTH.html)、[CURLOPT_CAINFO](https://curl.se/libcurl/c/CURLOPT_CAINFO.html)、[CURLOPT_SSLVERSION](https://curl.se/libcurl/c/CURLOPT_SSLVERSION.html)。独自CAファイルの指定は、そのCA以外を完全に排除する機能としては定義しない。
+
+## 5. 接続・プロトコル・共通UIの設計
+
+### 構成と非同期処理
+
+`webdav/webdav-client.h/.cpp`を`RemoteFileClient`の実装として追加し、内部のHTTP実行、URL処理、WebDAV応答解析を小さな部品に分ける。共通のファイル転送エンジンにはプロトコル名による分岐を増やさず、必要な能力・操作契約を渡す。
+
+HTTP実行はlibcurl multi socket APIとcardioのFD待機・タイマーを結び付ける。アプリ側にWebDAV用workerを追加せず、UIスレッドで同期通信も行わない。現行FTP worker全体の作り直しはこの計画の対象にしない。TLSの判定部品とUIはFTP/FTPSにも実際に適用して共通化する。
+
+- `CURLMOPT_SOCKETFUNCTION`で監視対象を更新し、cardioのFD準備完了から`curl_multi_socket_action()`を呼ぶ。FDの所有者はlibcurlであり、監視側は閉じない。
+- `CURLMOPT_TIMERFUNCTION`の更新に合わせて一回限りのタイマーを交換する。0ミリ秒は次のディスパッチで処理し、コールバック内でlibcurlへ再入しない。-1はタイマーを解除する。
+- 一つの論理接続内は操作を直列化し、ストリームの最終HTTP応答まで操作枠を保持する。独立ウィンドウ間で認証・接続プール・証明書例外を共有しない。
+- 読書きは上限付きバッファとpause/resumeを使う。コールバック内で待機せず、例外をC ABIの外へ出さない。終了時は待機、easy handle、socket監視、タイマー、確認要求を取り消して解放する。
+- 対象scheme、HTTP/HTTPS、非同期DNS、最低libcurl版を実行時検査する。最低7.88.1で使える公開APIを選ぶ。プロキシは現行FTPと同様に明示的に無効化し、環境変数で接続経路が変わらないようにする。
+
+根拠: [multi socket API](https://curl.se/libcurl/c/curl_multi_socket_action.html)、[タイマーコールバック](https://curl.se/libcurl/c/CURLMOPT_TIMERFUNCTION.html)、[プロトコル制限](https://curl.se/libcurl/c/CURLOPT_PROTOCOLS_STR.html)。cardioは同梱の`deps/cardio/README.md`と`include/cardio.h`の`from_fd()`、キャンセル可能な`delay()`の公開説明・コメントを確認した。
+
+### ファイル操作とHTTP応答
+
+| 共通機能 | WebDAVでの操作 | 完了判定・補足 |
+| --- | --- | --- |
+| 一覧 | PROPFIND、Depth: 1 | 207本文から対象コレクション自身と直下の子を区別する。 |
+| 属性 | PROPFIND、Depth: 0 | `resourcetype`、`getcontentlength`、`getlastmodified`、`getetag`等を取得する。 |
+| ダウンロード | GET | 応答と受信完了を検証し、一時ローカルファイルから確定する。 |
+| アップロード | PUT、その後MOVE | 同じ親の一意な一時ファイルへ送信し、最終応答後に目的名へ確定する。 |
+| フォルダー作成 | MKCOL | 作成成功を確認する。既存物との衝突は共通の競合処理へ渡す。 |
+| 名前変更 | MOVE | 通常の名前変更は`Overwrite: F`。転送確定での置換許可と区別する。 |
+| ファイル削除 | DELETE | HTTPエラーと未確定状態を区別する。 |
+| フォルダー削除 | コレクションへのDELETE | WebDAVの再帰削除として明示的に扱う。 |
+
+仕様参照: [RFC 4918](https://www.rfc-editor.org/rfc/rfc4918.html)。HTTPメソッド名だけでは送受信の動作は切り替わらないため、[CURLOPT_CUSTOMREQUEST](https://curl.se/libcurl/c/CURLOPT_CUSTOMREQUEST.html)に加えて本文・ヘッダー・upload等を操作ごとに設定する。
+
+- 207全体を成功と扱わず、リソース単位・プロパティ単位の結果を確認する。403を不存在と誤認しない。認証失敗、権限不足、競合、ロック、容量不足、未対応メソッドを区別して既存のエラーUIへ渡す。
+- XMLはlibxml2で名前空間を解析し、接頭辞の綴りに依存しない。DTD・外部実体・XIncludeを許可せず、外部ファイルとネットワークの参照を禁止する。`XML_PARSE_NONET`だけでローカルファイル参照も防げるとは扱わない。サイズ・深さ・件数に上限を設け、超過や壊れたXMLを空の一覧として表示しない。
+- `href`は絶対URIと絶対パスを正しく解決し、同じoriginとベースパス内に限定する。表示名からアクセス先を作らない。パス各要素を一度だけ復号・符号化し、日本語、空白、`%`、`#`、`+`を検証する。`..`、埋込み区切り、重複した不一致の識別子等を曖昧なまま受理しない。
+- サイズ不明を0バイトに置き換えない。共通属性に不明を表せる型を設け、一覧と合計進捗も対応する。更新時刻の読取りと設定能力は分け、取得できた時刻を表示しても書き戻せるとは判定しない。
+- POSIX権限、シンボリックリンク作成、時刻書込み、サーバー側ハッシュは初期対象外。SFTP専用機能のメニューは既存の能力判定で無効化する。
+- OPTIONSやAllowは補助情報として使うが、PROPFIND成功の代わりにしない。読取り専用サーバーの一覧を、書込み非対応だけで拒否しない。
+
+XML APIは[libxml2の公開parser API](https://gnome.pages.gitlab.gnome.org/libxml2/html/parser_8h.html)と導入済み`/usr/include/libxml2/libxml/parser.h`のコメントを参照した。実装時には選択する解析APIと外部参照の拒否経路を最低対応版でも確認する。
+
+### 転送APIで必要な調整
+
+1. `open_write_async()`に送信予定サイズを渡す契約を追加し、SFTP/FTP/fixtureも追従する。HTTP PUTでは`curl_off_t`でサイズを指定し、既知サイズのファイルを必ずchunkedで送る実装にしない。0バイト、大容量、送信中の元ファイル変更、短い読込みを区別する。
+2. Basic/Digestの選択は小さなPROPFIND等で確立する。本文のある認証要求は巻戻せる小さなXMLにする。PUTで認証更新などにより巻戻しを求められ、既存の前進専用ストリームで処理できなければ明確に失敗させる。全ファイルをメモリーへ保存したり、不完全な本文を再送したりしない。
+3. 一時ファイルは衝突時に上書きしない条件で作成する。通常の名前変更と、利用者が上書きを許可した転送確定を分ける。WebDAVでは目的ファイルを先にDELETEしてからMOVEする経路を避け、対応する確定操作へ置換の意思を渡す。ファイルとディレクトリが衝突する場合は個別に扱う。
+4. WebDAVのコレクションDELETEを、現在の「空ディレクトリだけを削除する」APIに偽装しない。能力と明示的なツリー削除操作を追加し、エンジンの再帰削除入口から選ぶ。SFTP/FTPの子から順に削除する経路は維持する。事前に空であることを調べるだけでは、後から追加された子の削除を防げない。
+5. 通信切断後のPUT/MOVE/DELETEは、HTTP上の冪等性だけを理由に自動再実行しない。最終応答前の切断は結果未確定として表示し、再読込み・利用者の再試行へつなぐ。失敗時の一時ファイル回収は自分が作成した対象だけに限定し、回収できない場合はそのパスを通知する。
+
+根拠: [HTTPアップロード](https://curl.se/libcurl/c/CURLOPT_UPLOAD.html)、[送信サイズ](https://curl.se/libcurl/c/CURLOPT_INFILESIZE_LARGE.html)、[巻戻し要求](https://curl.se/libcurl/c/CURLOPT_SEEKFUNCTION.html)、[読込みコールバック](https://curl.se/libcurl/c/CURLOPT_READFUNCTION.html)。
+
+### リダイレクト
+
+無条件の自動追従は使わない。読取り操作の同一origin・ベースパス内の正規化に限り、上限5回で追従する。PROPFINDはメソッドと本文を維持できる遷移だけ扱い、ログインHTMLへの遷移を成功としない。書込み操作のリダイレクトは自動再送せず、接続先パスの修正を案内する。HTTPSからHTTP、別ホスト・別ポートへの追従と認証情報の転送は行わない。新しいlibcurlだけが持つ追従モードへ依存しない。
+
+根拠: [CURLOPT_FOLLOWLOCATION](https://curl.se/libcurl/c/CURLOPT_FOLLOWLOCATION.html)、[HTTPヘッダーの寿命と転送範囲](https://curl.se/libcurl/c/CURLOPT_HTTPHEADER.html)。
+
+## 6. HTTPS証明書確認のシーケンス
+
+FTPSの`confirm_ftp_certificate_async()`、証明書失敗データ、`ftps-certificate.cpp`の検証・例外管理を共通化する。FTP固有の制御・データ区分はFTPS側で付加し、WebDAVではHTTPS接続として表示する。
+
+1. 通常の証明書・ホスト名検証を有効にして接続する。正常なら確認なしで続行する。
+2. 検証失敗ではハンドシェイクを終了し、エラー識別子と証明書情報を所有するデータへ複製する。未承認の相手へ認証情報・HTTP操作・ファイル本文を送らない。
+3. `reject`ならエラー表示。`prompt`なら既存の転送画面上に接続先・ポート、理由、Subject、Issuer、有効期間、SHA-256全体を表示する。証明書由来の文字列をマークアップとして解釈しない。
+4. 「この接続中は許可」「接続を中止」を提示する。中止を既定にし、Esc・閉じる・キャンセルは拒否する。直前の認証欄のEnterが許可操作に流れないようにする。
+5. 許可は同じウィンドウの固定された接続条件、証明書、検証失敗の組合せに限定する。証明書や失敗条件が変われば再確認する。設定ファイル・CAストアには保存しない。
+6. 許可後の新しいハンドシェイクで対象を照合する。初期の読取り・接続確認は再開できるが、利用中に失敗した変更操作は許可だけで自動再送しない。例外が有効なことを既存ステータスバーへ表示する。
+7. 新規ウィンドウ・再接続・終了で例外を破棄する。待機中のキャンセルは全要求を解放し、遅れて到着した応答を閉じた画面へ適用しない。
+
+自己署名・未信頼CA、期限切れ・有効期間前、ホスト名不一致など、現行FTPSが確認可能とする失敗だけを扱う。TLS交渉不成立、CAファイル読込み失敗、暗号条件の違反を証明書許可で緩和しない。
+
+現行FTPSと同じOpenSSLを利用した方式を採用し、libcurlと直接リンク先OpenSSLの整合確認を共通化する。他バックエンドでは標準検証による`reject`は利用できるが、この確認方式の`prompt`は接続前に未対応と知らせる。コールバックから借用TLSポインターを持ち出さず、接続プールとTLSセッションの再利用も例外の有効範囲を越えないよう検証する。
+
+根拠: [libcurlのSSLコンテキストコールバック](https://curl.se/libcurl/c/CURLOPT_SSL_CTX_FUNCTION.html)、[OpenSSLの検証コールバック](https://docs.openssl.org/3.0/man3/SSL_CTX_set_verify/)、既存の[FTP/FTPS利用説明](ftp-ftps.md)。最低libcurl版との整合のため、新版の非同期TLS検証APIへは依存しない。
+
+## 7. 段階的な実装
+
+各段階で動作を検証するテストを先に追加し、全体実行でREDを確認してから実装し、同じ全体実行でGREENを確認する。段階の途中でもビルド可能に保つ。未完成の操作を成功として見せず、その段階で提供する操作を画面で明確にする。
+
+### 段階1: WebDAV接続を保存し、実サーバーの一覧を表示する
+
+- 接続種別、WebDAV設定定義、設定ページ、継承・検証、二つのランチャー起動経路を追加する。
+- HTTP非同期実行、URL処理、XML解析、PROPFIND、Basic/Digest/認証なしを実装し、共通ウィンドウで閲覧する。
+- 一覧属性にサイズ不明を表せる型を追加し、FTP/SFTPを含む利用箇所を更新する。未取得サイズは一覧で0バイトと表示しない。
+- HTTPSはシステムCA・独自CAによる通常検証まで実装する。`prompt`は段階5で有効にし、未実装の間は黙って拒否設定に読み替えない。
+- HTTP/HTTPSの実通信fixtureを追加する。テストサーバーと制御スクリプトはNode.jsを使い、製品側の解析コードから独立した応答を生成する。
+
+完了条件: 設定の保存・再読込み・継承と起動ができ、認証付きHTTP/HTTPSの実コレクションを共通画面で開ける。証明書不正、401/403、非WebDAV応答を空の一覧と誤認しない。接続・一覧取得中も閉じる操作に応答する。
+
+コミット: `feat: add WebDAV connections and directory browsing`
+
+### 段階2: 共通エンジンでダウンロードする
+
+- GETのストリーム読込み、既存の一時ローカルファイル確定、進捗・取消・失敗表示を接続する。
+- 段階1の共通属性を使って、不明サイズを含む合計進捗を実装する。
+- 0バイト、大容量、途中切断、遅い受信先、読込み停止、サイズ不明、特殊文字のパスを検証する。
+
+完了条件: 共通UIから単体・再帰ダウンロードでき、保存内容が送信元と一致する。途中失敗を成功表示せず、既存の完成ファイルを壊さない。不明サイズを0バイトと表示しない。全体テストがGREEN。
+
+コミット: `feat: download WebDAV files through the shared transfer engine`
+
+### 段階3: アップロードとファイル管理を完成させる
+
+- 送信サイズ、転送確定時の置換指定、明示的なツリー削除の契約を追加し、既存backendを追従させる。
+- PUT/MOVE/MKCOL/DELETEを共通の転送、名前変更、削除、競合オーバーレイへ接続する。
+- 認証巻戻し、最終応答待機、上書き競合、部分失敗、一時ファイル回収、結果未確定を実サーバーの内容で検証する。
+
+完了条件: 共通画面から単体・再帰送受信、作成・名前変更・削除ができる。許可していない目的物を上書きせず、転送確定前に既存ファイルを消さない。部分的な207や接続断を検出し、変更操作の自動再実行が起きない。全体テストがGREEN。
+
+コミット: `feat: support WebDAV uploads and file management`
+
+### 段階4: FTPSの証明書処理と表示を共通化する
+
+- 証明書の失敗データ・限定的な許可・名前照合・OpenSSL整合検査をプロトコル非依存の内部部品へ移す。
+- 確認オーバーレイの表示関数を共通化し、FTPSから実際に利用する。制御・データ接続、既存設定、通常の拒否動作は維持する。
+- 既存コメントを更新し、置換によって未使用になったヘルパーを削除する。旧実装との互換ラッパーは残さない。
+
+完了条件: FTPSの正常証明書、各種検証失敗、許可範囲、データ接続、キャンセル、終了、二重実行防止を含む既存全体テストがGREEN。既存FTPSウィンドウで同じ確認操作を観測できる。
+
+コミット: `refactor: share TLS certificate verification and confirmation`
+
+### 段階5: WebDAVの証明書オーバーレイを有効にする
+
+- 共通証明書部品をHTTPSの初回接続と後続接続へ適用し、WebDAVタブの`prompt`を利用可能にする。
+- 認証と証明書確認のフォーカス、実行中設定、ステータス表示を仕上げる。
+- 許可前のHTTP要求未送信、同一例外の再利用、別証明書・別失敗の再確認、複数ウィンドウの分離を検証する。
+
+完了条件: 本文書6章の全手順が実HTTPS接続で成立する。拒否・Esc・Enter・閉じる・取消を確認し、許可してもTLS条件と操作の再試行方針が変わらない。FTPSを含む全体テストがGREEN。
+
+コミット: `feat: confirm WebDAV certificate failures in the shared overlay`
+
+### 段階6: 相互運用・配布・利用説明を完了する
+
+- 自前fixtureに加え、Apache mod_davとNextcloudで一覧、双方向転送、名前変更、削除、独自CAを検証する。実測したサーバー版と認証条件を記録する。
+- 指定されたIIS/NASがあればその構成を追加する。環境がない製品を検証済みとはしない。Windows統合認証など対象範囲の変更が必要なら、先に計画を改訂する。
+- libxml2のビルド・実行時依存を配布定義へ反映する。最低libcurl版、既存の対応CPU・配布対象でビルドと全C++を検証し、主要配布環境では全UIも実行する。
+- README両言語には利用者向けの接続方法を追加し、WebDAV詳細説明を`docs/ja/webdav.md`、`docs/en/webdav.md`へまとめる。翻訳資源・公開APIコメントも更新する。
+
+完了条件: 開発版と配布版で基本操作と証明書確認を利用でき、実測した対応範囲・制約・出典が文書と一致する。最終完了条件を全て照合し、検証記録を保存する。
+
+コミット: `feat: complete WebDAV interoperability and distribution support`
+
+## 8. 検証方法と作業ルール
+
+- 製品コードはホストgcc/g++、C++20で実装する。Makefileは既存のnpm/Mesonへ委譲する薄い入口とし、依存定義と配布経路を二重管理しない。段階1で入口を用意し、ビルドシステム全体の移行をこの機能へ混在させない。
+- テストの全体実行はルートの`npm test`を基本とし、組み込まれたMesonのC++テストと全Vitestワークスペースを実行する。個別テストだけを実行して段階完了としない。
+- GTK実画面は現行のgestament/Vitest方式を使う。ファイル内容、サーバーで観測した要求、ユーザー操作の結果を検証し、ソース文字列やXMLアセットの一致だけで機能を検証しない。
+- 応答保留・本文送信・接続終了はfixtureの明示イベントで同期する。固定sleepによる成功判定を避ける。証明書確認と進捗表示の時間軸を検証するケースは動画を残して期待する順序を判定する。画像マスターは追加・更新時に目視確認する。
+- 接続終了、pause中の取消、FD番号の再利用、タイマー交換、コールバック例外、最終応答前の切断、異なるウィンドウの同時利用を含める。
+- XMLの名前空間・個別失敗、絶対href、エスケープ、非直下リソース、外部実体、重複・不正情報、応答上限、認証・リダイレクト時の本文再送を検証する。
+- 証明書用の秘密鍵とCAはテスト実行時に生成し、ホストの信頼ストアを変更しない。システムCAの検証が必要な場合は使い捨て配布テスト環境内で行う。
+- 依存パッケージが不足している場合は必要なパッケージのインストールを案内する。外部APIは実装時にも公式文書と導入版のAPIコメントの双方で確認し、非公開・非推奨APIを使わない。
+- 計画と実装・テストに矛盾が生じた場合は、原因と計画上の仮定を先に見直す。未計画の認証方式や独自拡張を場当たり的に追加しない。
+
+## 9. 最終完了条件
+
+- WebDAVを新規・既存接続のタイプとして選択でき、全設定の保存・継承・検証・起動が成立する。
+- FTP/SFTP/FTPSと共通の画面で、HTTP/HTTPSの一覧、双方向転送、再帰操作、作成、名前変更、削除、競合処理を利用できる。
+- Basic/Digest/認証なしが指定どおりに動作し、接続先URLと認証情報の扱いに製品名の決め打ちがない。
+- HTTPSの正常検証とFTPS同等の限定的な証明書確認が動作し、許可前の送信、永続化、別接続への許可漏れ、変更操作の自動再実行がない。
+- 不明サイズ、部分応答、切断、取消、終了、大容量、特殊文字、読取り専用環境を正しく扱う。
+- FTP/FTPS/SFTPを含む全体回帰と配布確認が完了し、外部コードを変更していない。
+- 利用者向け文書・翻訳・公開コメント・検証記録が最終実装と一致する。
+
+計画作成時の照合: 上記の要求を設定、共通UI、プロトコル、証明書手順、各実装段階と検証へ割り当てた。接続先製品・認証要件は未指定として明記した。実装の完了条件は未実施であり、今回の文書追加はビルドへ影響しないため、ビルド・テストは実行していない。
