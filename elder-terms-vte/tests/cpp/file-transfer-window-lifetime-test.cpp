@@ -90,9 +90,9 @@ public:
     return delegate->open_read_async(std::move(path), cancellation);
   }
   cardio::promise<std::unique_ptr<RemoteFileWriter>> open_write_async(
-      std::string path, std::optional<std::uint32_t> permissions,
+      std::string path, std::uint64_t expected_size, std::optional<std::uint32_t> permissions,
       cardio::cancellation cancellation) override {
-    return delegate->open_write_async(std::move(path), permissions, cancellation);
+    return delegate->open_write_async(std::move(path), expected_size, permissions, cancellation);
   }
   bool try_begin_transfer() override { return delegate->try_begin_transfer(); }
   void end_transfer() override { delegate->end_transfer(); }

@@ -38,12 +38,12 @@ static cardio::promise<void> run_async(
     client = co_await opening;
     if (scenario == "approve-data") {
       bool failed = false;
-      try { auto writer = std::move(co_await client->open_write_async("/home/probe", std::nullopt, {})); }
+      try { auto writer = std::move(co_await client->open_write_async("/home/probe", 3, std::nullopt, {})); }
       catch (const std::exception &error) { failed = true; std::cout << "DATA FAILURE OBSERVED " << error.what() << std::endl; }
       expect(failed, "Approving a data certificate must not automatically replay STOR");
       expect(confirmations == 1, "A distinct data certificate must be confirmed once");
       expect(std::filesystem::file_size(root + "/home/probe") == 0, "The rejected data handshake must not write file contents");
-      auto retry = std::move(co_await client->open_write_async("/home/probe", std::nullopt, {}));
+      auto retry = std::move(co_await client->open_write_async("/home/probe", 3, std::nullopt, {}));
       const std::array<std::byte, 3> value{std::byte(0),std::byte(255),std::byte(42)};
       co_await retry->write_all_async(value, {});
       co_await retry->close_async({});
@@ -58,7 +58,7 @@ static cardio::promise<void> run_async(
     expect(nested.canonical_path == "/home/roundtrip", "FTPS must preserve the selected remote directory");
     std::array<std::byte, 65537> bytes{};
     for (std::size_t i = 0; i < bytes.size(); ++i) bytes[i] = std::byte(i % 251);
-    auto writer = std::move(co_await client->open_write_async("file", std::nullopt, {}));
+    auto writer = std::move(co_await client->open_write_async("file", bytes.size(), std::nullopt, {}));
     co_await writer->write_all_async(bytes, {});
     co_await writer->close_async({});
     writer.reset();

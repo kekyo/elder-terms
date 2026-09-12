@@ -161,7 +161,7 @@ static cardio::promise<void> direct_async(
       {"/home/output.bin", payload}, {"/home/empty.bin", {}},
       {"/home/space % # \" 日本;type=a/new % # \" 日本;type=i", std::string("special\r\ncontent\0tail", 21)}}};
   for (const auto &[path, content] : files) {
-    auto writer = std::move(co_await client->open_write_async(path, std::nullopt, {}));
+    auto writer = std::move(co_await client->open_write_async(path, content.size(), std::nullopt, {}));
     for (std::size_t offset = 0; offset < content.size(); offset += 17003) {
       const auto count = std::min<std::size_t>(17003, content.size() - offset);
       co_await writer->write_all_async(
@@ -181,7 +181,7 @@ static cardio::promise<void> direct_async(
 static cardio::promise<void> bounded_upload_async(
     std::shared_ptr<elder_terms::RemoteFileClient> client, Server &server,
     bool cancel) {
-  auto writer = std::move(co_await client->open_write_async("/home/bounded.bin", std::nullopt, {}));
+  auto writer = std::move(co_await client->open_write_async("/home/bounded.bin", 64 * 1024 * 1024, std::nullopt, {}));
   co_await wait_event_async(server, "DATA_WAIT");
   const std::string payload(64 * 1024 * 1024, 'x');
   cardio::cancellation_source cancellation;
@@ -220,7 +220,7 @@ static cardio::promise<void> held_final_async(
   cardio::promise<void> closing;
   cardio::promise<std::string> reading;
   if (upload) {
-    writer = std::move(co_await client->open_write_async("/home/held.bin", std::nullopt, {}));
+    writer = std::move(co_await client->open_write_async("/home/held.bin", 7, std::nullopt, {}));
     const std::string payload = "content";
     co_await write_text_async(*writer, payload, {});
     closing = writer->close_async(cancellation.get_cancellation());
@@ -255,7 +255,7 @@ static cardio::promise<void> failed_transfer_async(
   if (name == "store-refused") {
     bool failed = false;
     try {
-      auto writer = std::move(co_await client->open_write_async("/home/refused.bin", std::nullopt, {}));
+      auto writer = std::move(co_await client->open_write_async("/home/refused.bin", 0, std::nullopt, {}));
     } catch (const std::runtime_error &error) {
       failed = std::string_view(error.what()).find("550") != std::string_view::npos;
     }
@@ -264,7 +264,7 @@ static cardio::promise<void> failed_transfer_async(
     co_return;
   }
   if (name.starts_with("upload")) {
-    auto writer = std::move(co_await client->open_write_async("/home/failure.bin", std::nullopt, {}));
+    auto writer = std::move(co_await client->open_write_async("/home/failure.bin", 14, std::nullopt, {}));
     const std::string content = "complete input";
     co_await write_text_async(*writer, content, {});
     bool failed = false;

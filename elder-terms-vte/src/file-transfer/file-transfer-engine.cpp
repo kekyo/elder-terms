@@ -730,6 +730,11 @@ remove_remote_tree_async(
     co_return;
   }
 
+  if (client->capabilities().recursive_directory_delete) {
+    co_await client->remove_directory_tree_async(path, cancellation);
+    co_return;
+  }
+
   const std::vector<RemoteFileAttributes> children =
       (co_await client->load_directory_async(path, cancellation)).entries;
   for (const RemoteFileAttributes &child : children) {
@@ -860,79 +865,98 @@ cleanup_local_temporary_file_async(const std::string &path) {
   }
 }
 
+static bool transfer_was_cancelled(std::exception_ptr failure) {
+  try { std::rethrow_exception(failure); }
+  catch (const cardio::canceled_exception &) { return true; }
+  catch (...) { return false; }
+}
+
 static cardio::promise<void>
 send_regular_file_async(TransferRunState *state,
                         const TransferNode &node, bool overwrite,
                         cardio::cancellation cancellation) {
+  if (!node.attributes.size)
+    throw std::runtime_error("The upload source has no known size");
+  const auto expected_size = *node.attributes.size;
+  const bool explicit_commit = state->client->capabilities().upload_commit;
   const std::string temporary_path =
       co_await available_remote_temporary_path_async(
           state->client, node.destination_path, cancellation);
-  GObjectPtr<GFile> source(
-      g_file_new_for_path(node.source_path.c_str()));
+  GObjectPtr<GFile> source(g_file_new_for_path(node.source_path.c_str()));
   GObjectPtr<GFileInputStream> input;
   std::unique_ptr<RemoteFileWriter> output;
+  cardio::cancellation_source upload_stopping;
+  auto combined = cardio::cancellations::any(cancellation, upload_stopping.get_cancellation());
   bool temporary_created = false;
   std::exception_ptr failure;
 
   try {
     input.reset(co_await open_local_read_async(source.get(), cancellation));
-    const RemoteFileAttributes attributes = supported_remote_attributes(
-        *state->client, node.attributes);
+    const RemoteFileAttributes attributes = supported_remote_attributes(*state->client, node.attributes);
     output = std::move(co_await state->client->open_write_async(
-        temporary_path, attributes.permissions, cancellation));
+        temporary_path, expected_size, attributes.permissions,
+        explicit_commit ? combined.get_cancellation() : cancellation));
     temporary_created = true;
+    std::uint64_t copied = 0;
     std::array<std::byte, file_transfer_chunk_size> buffer{};
     for (;;) {
       cancellation.throw_if_cancellation_requested();
       const std::size_t size = co_await read_local_stream_async(
-          G_INPUT_STREAM(input.get()),
-          std::span<std::byte>(buffer.data(), buffer.size()),
-          cancellation);
-      if (size == 0) {
-        break;
-      }
-      co_await output->write_all_async(
-          std::span<const std::byte>(buffer.data(), size),
-          cancellation);
+          G_INPUT_STREAM(input.get()), buffer, cancellation);
+      if (size == 0) break;
+      if (size > expected_size - copied)
+        throw std::runtime_error("The upload source grew after discovery");
+      co_await output->write_all_async(std::span<const std::byte>(buffer.data(), size), cancellation);
+      copied += size;
       state->progress.transferred_bytes += size;
       publish_progress(state, node.source_path);
     }
-    co_await close_local_input_async(G_INPUT_STREAM(input.get()),
-                                     cancellation);
+    if (copied != expected_size)
+      throw std::runtime_error("The upload source became shorter after discovery");
+    co_await close_local_input_async(G_INPUT_STREAM(input.get()), cancellation);
     input.reset();
     co_await output->close_async(cancellation);
-    output.reset();
-    if (has_mutable_attributes(attributes)) {
-      co_await state->client->set_attributes_async(
-          temporary_path, attributes, cancellation);
+    if (!explicit_commit) output.reset();
+    if (has_mutable_attributes(attributes))
+      co_await state->client->set_attributes_async(temporary_path, attributes, cancellation);
+    if (explicit_commit) {
+      co_await state->client->commit_upload_async(
+          temporary_path, node.destination_path, overwrite, cancellation);
+    } else {
+      if (overwrite)
+        co_await remove_remote_tree_async(state->client, node.destination_path, cancellation);
+      co_await state->client->rename_async(temporary_path, node.destination_path, cancellation);
     }
-    if (overwrite) {
-      co_await remove_remote_tree_async(
-          state->client, node.destination_path, cancellation);
-    }
-    co_await state->client->rename_async(
-        temporary_path, node.destination_path, cancellation);
     temporary_created = false;
-  } catch (...) {
-    failure = std::current_exception();
-  }
+  } catch (...) { failure = std::current_exception(); }
 
   if (failure) {
+    if (explicit_commit) (void)upload_stopping.cancel();
     if (input != nullptr) {
-      try {
-        co_await close_local_input_async(G_INPUT_STREAM(input.get()), {});
-      } catch (...) {
-      }
+      try { co_await close_local_input_async(G_INPUT_STREAM(input.get()), {}); }
+      catch (...) {}
     }
     if (output != nullptr) {
-      try {
-        co_await output->close_async({});
-      } catch (...) {
-      }
+      try { co_await output->close_async({}); } catch (...) {}
     }
-    if (temporary_created) {
-      co_await cleanup_remote_temporary_file_async(
-          state->client, temporary_path);
+    if (temporary_created && explicit_commit) {
+      const auto creation = output ? output->creation_state() : RemoteFileCreationState::unknown;
+      std::string cleanup_message;
+      if (creation == RemoteFileCreationState::unknown) {
+        cleanup_message = "Temporary upload ownership is uncertain; inspect " + temporary_path;
+      } else if (creation == RemoteFileCreationState::created) {
+        try { co_await state->client->remove_file_async(temporary_path, {}); }
+        catch (...) {
+          cleanup_message = "Could not remove temporary upload " + temporary_path + ": " + exception_message(std::current_exception());
+        }
+      }
+      // A failed If-None-Match precondition proves this path is foreign. Never
+      // delete it, and do not confuse it with an owned or uncertain upload.
+      if (!cleanup_message.empty())
+        throw FileTransferCleanupFailure(exception_message(failure) + "\n" + cleanup_message,
+            temporary_path, cancellation.is_cancellation_requested() || transfer_was_cancelled(failure));
+    } else if (temporary_created) {
+      co_await cleanup_remote_temporary_file_async(state->client, temporary_path);
     }
     std::rethrow_exception(failure);
   }
@@ -1034,6 +1058,10 @@ send_node_once_async(TransferRunState *state, const TransferNode &node,
     complete_subtree(state, node);
     co_return;
   }
+
+  if (destination && state->client->capabilities().upload_commit &&
+      destination->type != node.attributes.type)
+    throw std::runtime_error("The remote service cannot replace a file with a folder or a folder with a file");
 
   if (node.attributes.type == RemoteFileType::regular) {
     co_await send_regular_file_async(state, node, resolution.overwrite,
@@ -1163,6 +1191,9 @@ transfer_node_with_recovery_async(
       throw;
     } catch (const FileTransferAbort &) {
       throw;
+    } catch (const FileTransferCleanupFailure &error) {
+      if (error.cancelled) throw;
+      failure = std::current_exception();
     } catch (...) {
       failure = std::current_exception();
     }
@@ -1297,6 +1328,20 @@ run_file_transfer_async(std::shared_ptr<RemoteFileClient> client,
   for (const TransferNode &node : roots) {
     co_await transfer_node_with_recovery_async(
         &state, node, cancellation);
+  }
+}
+
+cardio::promise<void> create_file_transfer_directory_async(
+    std::shared_ptr<RemoteFileClient> client, FileTransferEndpoint endpoint,
+    std::string path, cardio::cancellation cancellation) {
+  if (path.empty()) throw std::invalid_argument("Folder path must not be empty");
+  cancellation.throw_if_cancellation_requested();
+  if (endpoint == FileTransferEndpoint::remote) {
+    if (!client) throw std::invalid_argument("Remote file client is required");
+    co_await client->make_directory_async(std::move(path), std::nullopt, cancellation);
+  } else {
+    GObjectPtr<GFile> directory(g_file_new_for_path(path.c_str()));
+    co_await make_local_directory_async(directory.get(), cancellation);
   }
 }
 

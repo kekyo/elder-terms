@@ -373,7 +373,7 @@ public:
   }
 
   cardio::promise<std::unique_ptr<elder_terms::RemoteFileWriter>>
-  open_write_async(std::string path,
+  open_write_async(std::string path, std::uint64_t,
                    std::optional<std::uint32_t> permissions,
                    cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
@@ -698,6 +698,50 @@ static cardio::promise<void> test_receive_preserves_unknown_aggregate_size() {
               "Missing size metadata must not prevent receiving the file");
 }
 
+
+static cardio::promise<elder_terms::FileTransferConflictAction>
+overwrite_changed_source_conflict(const elder_terms::FileTransferConflict &,
+                                  cardio::cancellation cancellation) {
+  cancellation.throw_if_cancellation_requested();
+  co_return elder_terms::FileTransferConflictAction::overwrite;
+}
+
+static cardio::promise<void> test_changed_source_does_not_commit_partial_upload() {
+  for (const auto &replacement : std::vector<std::string>{"short", "a replacement that is larger than the discovered source"}) {
+    const auto root = test_root_directory() / "changed-source";
+    std::filesystem::create_directories(root);
+    const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+    const auto source = root / "source.txt";
+    write_file(source, "discovered source content");
+    auto client = std::make_shared<FakeSftpClient>();
+    client->add_directory("/");
+    client->add_directory("/incoming");
+    client->add_file("/incoming/source.txt", "existing destination");
+    bool changed = false;
+    elder_terms::FileTransferRequest request;
+    request.direction = elder_terms::FileTransferDirection::send;
+    request.source_paths = {source.string()};
+    request.destination_directory = "/incoming";
+    request.callbacks.conflict = overwrite_changed_source_conflict;
+    request.callbacks.progress = [&](const elder_terms::FileTransferProgress &progress) {
+      if (!changed && progress.current_path.empty() && progress.total_items > 0) {
+        write_file(source, replacement);
+        changed = true;
+      }
+    };
+    bool failed = false;
+    try {
+      co_await elder_terms::run_file_transfer_async(client, std::move(request), {});
+    } catch (const std::exception &) { failed = true; }
+    expect_true(changed && failed,
+                "An upload must fail if its source grows or shrinks after discovery");
+    expect_true(text(client->nodes.at("/incoming/source.txt").content) == "existing destination",
+                "A changed source must not replace a completed destination");
+    expect_true(client->nodes.size() == 3,
+                "A rejected upload must remove its own temporary file");
+  }
+}
+
 static cardio::promise<void> test_receive_reports_unrepresentable_total_as_unknown() {
   const auto root = test_root_directory() / "overflow";
   const TemporaryDirectoryCleanup cleanup{test_root_directory()};
@@ -827,6 +871,7 @@ int main() {
           {"test_receive_preserves_unknown_aggregate_size", test_receive_preserves_unknown_aggregate_size},
           {"test_receive_reports_unrepresentable_total_as_unknown", test_receive_reports_unrepresentable_total_as_unknown},
           {"test_receive_does_not_replace_a_directory_with_a_file", test_receive_does_not_replace_a_directory_with_a_file},
+          {"test_changed_source_does_not_commit_partial_upload", test_changed_source_does_not_commit_partial_upload},
           {"test_failed_local_commit_preserves_completed_file", test_failed_local_commit_preserves_completed_file},
           {"test_recursive_send_preserves_links_metadata_and_recovers", test_recursive_send_preserves_links_metadata_and_recovers},
           {"test_recursive_receive_preserves_links_and_metadata", test_recursive_receive_preserves_links_and_metadata},

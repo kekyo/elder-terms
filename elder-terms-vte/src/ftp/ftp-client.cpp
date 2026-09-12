@@ -764,7 +764,7 @@ public:
   }
 
   cardio::promise<std::unique_ptr<RemoteFileWriter>> open_write_async(
-      std::string path, std::optional<std::uint32_t> permissions,
+      std::string path, std::uint64_t, std::optional<std::uint32_t> permissions,
       cardio::cancellation cancellation) override {
     (void)permissions;
     const auto state = this->state;

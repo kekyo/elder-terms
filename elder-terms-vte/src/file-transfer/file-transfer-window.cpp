@@ -106,6 +106,7 @@ struct FileTransferPaneState {
   GtkWidget *menu = nullptr;
   GtkWidget *transfer_item = nullptr;
   GtkWidget *hash_item = nullptr;
+  GtkWidget *new_directory_item = nullptr;
   GtkWidget *rename_item = nullptr;
   GtkWidget *delete_item = nullptr;
   std::string current_directory;
@@ -550,6 +551,8 @@ static void update_file_transfer_sensitivity(FileTransferWindow *window) {
   if (window->remote.hash_item != nullptr) {
     gtk_widget_set_sensitive(window->remote.hash_item, remote_ready);
   }
+  gtk_widget_set_sensitive(window->local.new_directory_item, local_ready);
+  gtk_widget_set_sensitive(window->remote.new_directory_item, remote_ready);
   gtk_widget_set_sensitive(window->local.rename_item, local_ready);
   gtk_widget_set_sensitive(window->remote.rename_item, remote_ready);
   gtk_widget_set_sensitive(window->local.delete_item, local_ready);
@@ -1192,50 +1195,36 @@ static gboolean toggle_file_transfer_tree_expander_extension(
 static gboolean on_file_transfer_tree_button_press(
     GtkWidget *widget, GdkEventButton *event, gpointer data) {
   auto *pane = static_cast<FileTransferPaneState *>(data);
-  if (event->type != GDK_BUTTON_PRESS || pane == nullptr) {
-    return FALSE;
-  }
-  if (toggle_file_transfer_tree_expander_extension(widget, event)) {
-    return TRUE;
-  }
-  if (event->button != GDK_BUTTON_SECONDARY ||
-      pane->window->transfer_active ||
-      pane->window->browser_action_active ||
-      (pane->remote &&
-       !pane->window->connection_available)) {
-    return FALSE;
-  }
+  if (event->type != GDK_BUTTON_PRESS || pane == nullptr) return FALSE;
+  if (toggle_file_transfer_tree_expander_extension(widget, event)) return TRUE;
+  if (event->button != GDK_BUTTON_SECONDARY || pane->busy ||
+      pane->window->transfer_active || pane->window->browser_action_active ||
+      pane->window->certificate_confirmation ||
+      (pane->remote && !pane->window->connection_available)) return FALSE;
   GtkTreePath *path = nullptr;
-  if (!gtk_tree_view_get_path_at_pos(
-          GTK_TREE_VIEW(widget), static_cast<gint>(event->x),
-          static_cast<gint>(event->y), &path, nullptr, nullptr,
-          nullptr)) {
-    return FALSE;
-  }
-  GtkTreeSelection *selection = gtk_tree_view_get_selection(
-      GTK_TREE_VIEW(widget));
-  if (!gtk_tree_selection_path_is_selected(selection, path)) {
+  GtkTreeSelection *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(widget));
+  if (gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(widget), static_cast<gint>(event->x),
+          static_cast<gint>(event->y), &path, nullptr, nullptr, nullptr)) {
+    if (!gtk_tree_selection_path_is_selected(selection, path)) {
+      gtk_tree_selection_unselect_all(selection);
+      gtk_tree_selection_select_path(selection, path);
+    }
+    gtk_tree_path_free(path);
+  } else {
+    // Background actions apply to the current folder, never to a stale row.
     gtk_tree_selection_unselect_all(selection);
-    gtk_tree_selection_select_path(selection, path);
   }
-  gtk_tree_path_free(path);
-  const std::vector<FileTransferSelectedItem> items =
-      selected_file_transfer_items(pane);
-  if (items.empty()) {
-    return FALSE;
-  }
-  gtk_widget_set_sensitive(pane->rename_item,
-                           items.size() == 1 ? TRUE : FALSE);
-  if (pane->hash_item != nullptr) {
-    const bool hashable =
-        items.size() == 1 &&
-        items.front().type == RemoteFileType::regular;
+  const auto items = selected_file_transfer_items(pane);
+  const bool transfer_ready = !pane->window->local.busy &&
+      !pane->window->remote.busy && pane->window->connection_available;
+  gtk_widget_set_sensitive(pane->new_directory_item, TRUE);
+  gtk_widget_set_sensitive(pane->transfer_item, transfer_ready && !items.empty());
+  gtk_widget_set_sensitive(pane->rename_item, items.size() == 1);
+  if (pane->hash_item != nullptr)
     gtk_widget_set_sensitive(pane->hash_item,
-                             hashable ? TRUE : FALSE);
-  }
-  gtk_widget_set_sensitive(pane->delete_item, TRUE);
-  gtk_menu_popup_at_pointer(GTK_MENU(pane->menu),
-                            reinterpret_cast<GdkEvent *>(event));
+        items.size() == 1 && items.front().type == RemoteFileType::regular);
+  gtk_widget_set_sensitive(pane->delete_item, !items.empty());
+  gtk_menu_popup_at_pointer(GTK_MENU(pane->menu), reinterpret_cast<GdkEvent *>(event));
   return TRUE;
 }
 
@@ -1265,19 +1254,17 @@ static std::string file_transfer_renamed_item_path(
 }
 
 static cardio::promise<std::optional<std::string>>
-prompt_file_transfer_rename_name_async(
-    FileTransferWindow *window, const FileTransferSelectedItem &item,
+prompt_file_transfer_name_async(
+    FileTransferWindow *window, std::string title, std::string base_message,
+    std::string accept_label, std::string initial_text,
     cardio::cancellation cancellation) {
-  const std::string base_message = format_translated_string(
-      _("Enter a new name for \"%s\"."), item.name.c_str());
   std::string message = base_message;
-  std::string initial_text = item.name;
   for (;;) {
     cancellation.throw_if_cancellation_requested();
     InlinePromptRequest request{
-        .title = _("Rename item"),
+        .title = title,
         .message = message,
-        .accept_label = _("Rename"),
+        .accept_label = accept_label,
         .cancel_label = _("Cancel"),
         .initial_text = initial_text,
         .input_required = true,
@@ -1319,6 +1306,66 @@ show_file_transfer_browser_action_error_async(
   (void)co_await pending;
 }
 
+static std::string file_transfer_new_directory_path(
+    const FileTransferPaneState *pane, const std::string &name) {
+  if (!pane->remote) return (std::filesystem::path(pane->current_directory) / name).string();
+  const auto &directory = pane->current_directory;
+  if (directory.empty()) return name;
+  return directory.ends_with('/') ? directory + name : directory + '/' + name;
+}
+
+static cardio::promise<void> run_file_transfer_new_directory_async(FileTransferPaneState *pane) {
+  auto *window = pane->window;
+  const auto cancellation = window->stop_source.get_cancellation();
+  std::exception_ptr failure;
+  bool cancelled = false;
+  try {
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    const auto name = co_await prompt_file_transfer_name_async(
+        window, _("New folder"), _("Enter a name for the new folder."), _("Create"), {}, cancellation);
+    if (window->destroyed) co_return;
+    if (!name) {
+      set_file_transfer_browser_action_phase(window, false, false, {});
+      set_file_transfer_status(window, _("Folder creation cancelled"));
+      co_return;
+    }
+    const auto destination = file_transfer_new_directory_path(pane, *name);
+    set_file_transfer_browser_action_phase(window, true, true, _("Creating folder…"));
+    co_await create_file_transfer_directory_async(window->client,
+        pane->remote ? FileTransferEndpoint::remote : FileTransferEndpoint::local,
+        destination, cancellation);
+    if (window->destroyed) co_return;
+    set_file_transfer_browser_action_phase(window, false, false, {});
+    set_file_transfer_status(window, format_translated_string(_("Created folder \"%s\""), name->c_str()));
+    start_file_transfer_pane_navigation(pane, pane->current_directory);
+  } catch (const cardio::canceled_exception &) { cancelled = true; }
+  catch (...) { failure = std::current_exception(); }
+  if (window->destroyed) co_return;
+  if (cancelled) {
+    set_file_transfer_browser_action_phase(window, false, false, {});
+    set_file_transfer_status(window, _("Folder creation cancelled"));
+  } else if (failure) {
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    set_file_transfer_status(window, _("Failed to create folder"));
+    co_await show_file_transfer_browser_action_error_async(
+        window, _("Failed to create folder"), exception_text(failure), cancellation);
+    if (!window->destroyed) {
+      set_file_transfer_browser_action_phase(window, false, false, {});
+      start_file_transfer_pane_navigation(pane, pane->current_directory);
+    }
+  }
+}
+
+static void on_file_transfer_new_directory_item_activate(GtkMenuItem *, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  if (!pane || !pane->window || pane->window->destroyed || pane->busy ||
+      pane->window->transfer_active || pane->window->browser_action_active ||
+      pane->window->certificate_confirmation ||
+      (pane->remote && !pane->window->connection_available)) return;
+  pane->window->browser_action_task.reset();
+  pane->window->browser_action_task.emplace(run_file_transfer_new_directory_async(pane));
+}
+
 static cardio::promise<void> run_file_transfer_rename_async(
     FileTransferPaneState *pane, FileTransferSelectedItem item) {
   FileTransferWindow *window = pane->window;
@@ -1329,8 +1376,10 @@ static cardio::promise<void> run_file_transfer_rename_async(
   try {
     set_file_transfer_browser_action_phase(window, true, false, {});
     const std::optional<std::string> new_name =
-        co_await prompt_file_transfer_rename_name_async(
-            window, item, cancellation);
+        co_await prompt_file_transfer_name_async(
+            window, _("Rename item"),
+            format_translated_string(_("Enter a new name for \"%s\"."), item.name.c_str()),
+            _("Rename"), item.name, cancellation);
     if (window->destroyed) {
       co_return;
     }
@@ -1728,6 +1777,11 @@ static cardio::promise<void> run_file_transfer_window_transfer_async(
         window->client, std::move(request), cancellation);
     co_await pending;
     succeeded = true;
+  } catch (const FileTransferCleanupFailure &error) {
+    if (!window->destroyed) {
+      set_file_transfer_status(window, error.cancelled ? _("Transfer cancelled") : _("Transfer failed"));
+      show_file_transfer_error(window, error.what());
+    }
   } catch (const cardio::canceled_exception &) {
     if (!window->destroyed) {
       set_file_transfer_status(window, _("Transfer cancelled"));
@@ -2176,6 +2230,12 @@ static GtkWidget *create_file_transfer_pane(
   }
   gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu),
                         gtk_separator_menu_item_new());
+  pane->new_directory_item = gtk_menu_item_new_with_label(_("New folder"));
+  gestament_gtk_assign_accessible_id(pane->new_directory_item,
+      remote ? "file_transfer_remote_new_directory_item" : "file_transfer_local_new_directory_item");
+  gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu), pane->new_directory_item);
+  g_signal_connect(pane->new_directory_item, "activate",
+      G_CALLBACK(on_file_transfer_new_directory_item_activate), pane);
   pane->rename_item = gtk_menu_item_new_with_label(_("Rename"));
   gestament_gtk_assign_accessible_id(
       pane->rename_item,

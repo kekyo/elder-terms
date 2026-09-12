@@ -529,7 +529,7 @@ public:
                   cardio::cancellation cancellation) override;
 
   cardio::promise<std::unique_ptr<RemoteFileWriter>>
-  open_write_async(std::string path,
+  open_write_async(std::string path, std::uint64_t,
                    std::optional<std::uint32_t> permissions,
                    cardio::cancellation cancellation) override;
 
@@ -689,7 +689,7 @@ LibsshSftpClient::open_read_async(
 
 cardio::promise<std::unique_ptr<RemoteFileWriter>>
 LibsshSftpClient::open_write_async(
-    std::string path, std::optional<std::uint32_t> permissions,
+    std::string path, std::uint64_t, std::optional<std::uint32_t> permissions,
     cardio::cancellation cancellation) {
   auto file_state = std::make_shared<LibsshSftpFileState>();
   auto pending_operation = run_async(

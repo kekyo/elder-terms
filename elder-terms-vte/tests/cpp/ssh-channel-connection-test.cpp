@@ -1083,7 +1083,7 @@ exercise_sftp_client_async(
 
   const std::string uploaded_content = "SFTP uploaded payload";
   std::unique_ptr<elder_terms::RemoteFileWriter> writer =
-      std::move(co_await client->open_write_async("uploaded.txt", 0600,
+      std::move(co_await client->open_write_async("uploaded.txt", uploaded_content.size(), 0600,
                                                   cancellation));
   co_await writer->write_all_async(byte_span(uploaded_content),
                                    cancellation);

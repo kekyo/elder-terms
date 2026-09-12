@@ -261,8 +261,247 @@ static cardio::promise<void> check_downloads_async(std::shared_ptr<elder_terms::
            "Failed downloads must remove their local temporary files");
 }
 
+static cardio::promise<std::string> read_remote_text_async(
+    std::shared_ptr<elder_terms::RemoteFileClient> client, std::string path) {
+  auto reader = std::move(co_await client->open_read_async(std::move(path), {}));
+  std::string result;
+  std::array<std::byte, 4096> buffer{};
+  for (;;) {
+    const auto count = co_await reader->read_async(buffer, {});
+    if (!count) break;
+    result.append(reinterpret_cast<const char *>(buffer.data()), count);
+    expect(result.size() <= 1024 * 1024, "Small fixture resource must have a bounded body");
+  }
+  co_await reader->close_async({});
+  co_return result;
+}
+
+static cardio::promise<void> send_paths_async(
+    std::shared_ptr<elder_terms::RemoteFileClient> client,
+    std::vector<std::string> paths, std::string destination) {
+  elder_terms::FileTransferRequest request;
+  request.direction = elder_terms::FileTransferDirection::send;
+  request.source_paths = std::move(paths);
+  request.destination_directory = std::move(destination);
+  request.callbacks.conflict = overwrite_conflict;
+  co_await elder_terms::run_file_transfer_async(client, std::move(request), {});
+}
+
+static cardio::promise<std::string> failed_send_async(
+    std::shared_ptr<elder_terms::RemoteFileClient> client,
+    std::string path) {
+  std::vector<std::string> paths{std::move(path)};
+  try { co_await send_paths_async(client, std::move(paths), "/uploaded"); }
+  catch (const std::exception &error) { co_return std::string(error.what()); }
+  throw std::runtime_error("Faulted mutation must not be reported as a successful upload");
+}
+
+static cardio::promise<void> check_uploads_async(
+    std::shared_ptr<elder_terms::RemoteFileClient> client,
+    elder_terms::WebdavAuthentication authentication) {
+  using namespace elder_terms;
+  char pattern[] = "/tmp/elder-webdav-upload-XXXXXX";
+  const auto *created = ::mkdtemp(pattern);
+  expect(created != nullptr, "Temporary upload directory must be created");
+  const DownloadDirectory directory{created};
+  const auto write = [&](const char *name, const std::string &content) {
+    const auto path = directory.path / name;
+    std::ofstream output(path, std::ios::binary);
+    output << content;
+    expect(output.good(), "Local upload source must be written");
+    return path.string();
+  };
+  std::filesystem::create_directories(directory.path / "bundle/nested");
+  const auto replacement = write("replace.txt", "original destination");
+  write("bundle/資料 #+%.txt", "special name content");
+  write("bundle/empty.txt", "");
+  write("bundle/nested/child.txt", "recursive content");
+  const auto large = directory.path / "large.bin";
+  {
+    std::array<char, 65536> bytes{};
+    for (std::size_t index = 0; index < bytes.size(); ++index) bytes[index] = static_cast<char>((index * 31 + 7) & 255);
+    std::ofstream output(large, std::ios::binary);
+    std::uint64_t remaining = 40 * 1024 * 1024 + 13;
+    while (remaining) {
+      const auto count = std::min<std::uint64_t>(remaining, bytes.size());
+      output.write(bytes.data(), static_cast<std::streamsize>(count));
+      remaining -= count;
+    }
+    expect(output.good(), "Large source fixture must be written");
+  }
+  co_await client->make_directory_async("/uploaded", std::nullopt, {});
+  std::vector<std::string> first{replacement};
+  co_await send_paths_async(client, std::move(first), "/uploaded");
+  write("replace.txt", "replacement destination");
+  std::vector<std::string> sources{replacement, large.string(), (directory.path / "bundle").string()};
+  co_await send_paths_async(client, std::move(sources), "/uploaded");
+  expect(co_await read_remote_text_async(client, "/uploaded/replace.txt") == "replacement destination",
+         "An approved replacement must commit the completed new content");
+  expect(co_await read_remote_text_async(client, "/uploaded/bundle/資料 #+%.txt") == "special name content" &&
+         (co_await read_remote_text_async(client, "/uploaded/bundle/empty.txt")).empty() &&
+         co_await read_remote_text_async(client, "/uploaded/bundle/nested/child.txt") == "recursive content",
+         "Recursive upload must preserve empty and special-name files");
+  std::filesystem::create_directories(directory.path / "kind-conflicts");
+  const auto file_over_collection = write("kind-conflicts/bundle", "cannot replace a collection");
+  expect(!(co_await failed_send_async(client, file_over_collection)).empty() &&
+         co_await read_remote_text_async(client, "/uploaded/bundle/nested/child.txt") == "recursive content",
+         "File/collection conflicts must preserve the completed collection and its children");
+  std::filesystem::create_directories(directory.path / "kind-conflicts/replace.txt");
+  write("kind-conflicts/replace.txt/child.txt", "cannot replace a file");
+  expect(!(co_await failed_send_async(client, (directory.path / "kind-conflicts/replace.txt").string())).empty() &&
+         co_await read_remote_text_async(client, "/uploaded/replace.txt") == "replacement destination",
+         "Collection/file conflicts must preserve the completed destination file");
+  co_await rename_file_transfer_item_async(client, FileTransferEndpoint::remote,
+                                         "/uploaded/large.bin", "/uploaded/renamed.bin", {});
+  expect(!(co_await client->lstat_async("/uploaded/large.bin", {})), "MOVE must remove the original name");
+  {
+    auto reader = std::move(co_await client->open_read_async("/uploaded/renamed.bin", {}));
+    std::array<std::byte, 65536> buffer{};
+    std::uint64_t offset = 0;
+    for (;;) {
+      const auto count = co_await reader->read_async(buffer, {});
+      if (!count) break;
+      for (std::size_t index = 0; index < count; ++index)
+        expect(std::to_integer<unsigned>(buffer[index]) == ((offset + index) * 31 + 7) % 256,
+               "Large upload and rename must preserve every byte");
+      offset += count;
+    }
+    co_await reader->close_async({});
+    expect(offset == 40 * 1024 * 1024 + 13, "PUT must not truncate a large upload");
+  }
+  bool conflict = false;
+  try { co_await client->rename_async("/uploaded/replace.txt", "/uploaded/renamed.bin", {}); }
+  catch (const std::exception &) { conflict = true; }
+  expect(conflict && co_await read_remote_text_async(client, "/uploaded/replace.txt") == "replacement destination",
+         "Ordinary MOVE must refuse an existing destination without removing its source");
+  std::vector<std::string> removals{"/uploaded/renamed.bin", "/uploaded/bundle"};
+  co_await delete_file_transfer_items_async(client, FileTransferEndpoint::remote, std::move(removals), {});
+  expect(!(co_await client->lstat_async("/uploaded/bundle", {})) &&
+         !(co_await client->lstat_async("/uploaded/renamed.bin", {})),
+         "Shared deletion must remove selected files and explicit collection trees");
+
+  for (const auto *name : {"put-collision.txt", "put-drop.txt", "move-drop.txt", "cleanup-denied.txt", "redirect-write.txt"}) {
+    const auto path = write(name, "faulted upload content");
+    const auto message = co_await failed_send_async(client, path);
+    expect(!message.empty(), "Mutation failure must have a diagnostic");
+    const auto snapshot = co_await client->load_directory_async("/uploaded", {});
+    const auto temporary = std::find_if(snapshot.entries.begin(), snapshot.entries.end(), [name](const auto &entry) {
+      return entry.name.starts_with(std::string(name) + ".elder-terms-part-");
+    });
+    if (std::string_view(name) == "put-collision.txt") {
+      expect(temporary != snapshot.entries.end() &&
+             co_await read_remote_text_async(client, temporary->path) == "foreign temporary file",
+             "Conditional PUT collision must neither overwrite nor delete a foreign file");
+    } else if (std::string_view(name) == "put-drop.txt" || std::string_view(name) == "cleanup-denied.txt") {
+      expect(temporary != snapshot.entries.end() && message.find(temporary->path) != std::string::npos,
+             "Uncertain or refused temporary cleanup must report its remaining path");
+    } else if (std::string_view(name) == "move-drop.txt") {
+      expect(co_await read_remote_text_async(client, "/uploaded/move-drop.txt") == "faulted upload content",
+             "A lost MOVE response must report failure even when the server committed it");
+    }
+  }
+  if (authentication == WebdavAuthentication::digest) {
+    for (const auto &[name, size] : {std::pair{"rewind.txt", 512 * 1024}, std::pair{"rewind-small.txt", 17}}) {
+      const auto path = write(name, std::string(size, 'r'));
+      const auto message = co_await failed_send_async(client, path);
+      expect(message.find("consumed") != std::string::npos &&
+             !(co_await client->lstat_async(std::string("/uploaded/") + name, {})),
+             "Digest renewal after consuming either a small or large PUT must fail without committing a replay");
+    }
+  }
+  const auto dropped = write("delete-drop.txt", "delete before losing response");
+  std::vector<std::string> drop_sources{dropped};
+  co_await send_paths_async(client, std::move(drop_sources), "/uploaded");
+  bool delete_failed = false;
+  try { co_await client->remove_file_async("/uploaded/delete-drop.txt", {}); }
+  catch (const std::exception &) { delete_failed = true; }
+  expect(delete_failed && !(co_await client->lstat_async("/uploaded/delete-drop.txt", {})),
+         "A lost DELETE response must not turn into automatic retry or success");
+  co_await client->make_directory_async("/uploaded/partial", std::nullopt, {});
+  const auto blocked = write("blocked.txt", "retained child");
+  std::vector<std::string> blocked_sources{blocked};
+  co_await send_paths_async(client, std::move(blocked_sources), "/uploaded/partial");
+  bool partial_failed = false;
+  std::vector<std::string> partial_paths{"/uploaded/partial"};
+  try { co_await delete_file_transfer_items_async(client, FileTransferEndpoint::remote, std::move(partial_paths), {}); }
+  catch (const std::exception &) { partial_failed = true; }
+  expect(partial_failed && co_await read_remote_text_async(client, "/uploaded/partial/blocked.txt") == "retained child",
+         "A 207 response with a failed child must not report successful tree deletion");
+  std::vector<std::string> final_paths{"/uploaded"};
+  co_await delete_file_transfer_items_async(client, FileTransferEndpoint::remote, std::move(final_paths), {});
+  expect(!(co_await client->lstat_async("/uploaded", {})), "Explicit final tree removal must restore the fixture root");
+}
+
+static cardio::promise<void> check_cancelled_upload_async(
+    std::shared_ptr<elder_terms::RemoteFileClient> client) {
+  using namespace elder_terms;
+  char pattern[] = "/tmp/elder-webdav-cancel-upload-XXXXXX";
+  const auto *created = ::mkdtemp(pattern);
+  expect(created != nullptr, "Temporary upload directory must be created");
+  const DownloadDirectory directory{created};
+  const auto source = directory.path / "cancel-upload.txt";
+  { std::ofstream output(source, std::ios::binary); output << std::string(131072, 'c'); }
+  co_await client->make_directory_async("/uploaded", std::nullopt, {});
+  cardio::cancellation_source cancellation;
+  FileTransferRequest request;
+  request.direction = FileTransferDirection::send;
+  request.source_paths = {source.string()};
+  request.destination_directory = "/uploaded";
+  auto sending = run_file_transfer_async(client, std::move(request), cancellation.get_cancellation());
+  co_await cardio::from_fd(STDIN_FILENO, cardio::fd_event::read);
+  char command = 0;
+  expect(::read(STDIN_FILENO, &command, 1) == 1 && command == 'c',
+         "Parent must observe the completed PUT body before cancellation");
+  (void)cancellation.cancel();
+  std::string message;
+  try { co_await sending; }
+  catch (const std::exception &error) { message = error.what(); }
+  const auto snapshot = co_await client->load_directory_async("/uploaded", {});
+  const auto temporary = std::find_if(snapshot.entries.begin(), snapshot.entries.end(), [](const auto &entry) {
+    return entry.name.starts_with("cancel-upload.txt.elder-terms-part-");
+  });
+  expect(temporary != snapshot.entries.end() && message.find(temporary->path) != std::string::npos,
+         "Cancellation before the final PUT response must report the uncertain temporary path");
+  expect(!(co_await client->lstat_async("/uploaded/cancel-upload.txt", {})),
+         "Cancellation while waiting for the final PUT response must not commit the upload");
+  std::vector<std::string> cleanup{"/uploaded"};
+  co_await delete_file_transfer_items_async(client, FileTransferEndpoint::remote, std::move(cleanup), {});
+}
+
+static cardio::promise<void> check_bounded_upload_async(
+    std::shared_ptr<elder_terms::RemoteFileClient> client, bool abandon) {
+  auto writer = std::move(co_await client->open_write_async("/body-held.bin", 64 * 1024 * 1024, std::nullopt, {}));
+  const std::string payload(64 * 1024 * 1024, 'b');
+  cardio::cancellation_source cancellation;
+  auto writing = writer->write_all_async(
+      {reinterpret_cast<const std::byte *>(payload.data()), payload.size()},
+      cancellation.get_cancellation());
+  auto queued = client->lstat_async("/hello.txt", {});
+  expect(!writing.is_ready() && !queued.is_ready(),
+         "A paused server must bound upload buffering and retain the request slot");
+  co_await cardio::from_fd(STDIN_FILENO, cardio::fd_event::read);
+  char command = 0;
+  expect(::read(STDIN_FILENO, &command, 1) == 1 && command == 'c',
+         "Parent must observe the paused request body before cancellation");
+  if (abandon) writer.reset();
+  else (void)cancellation.cancel();
+  bool cancelled = false;
+  try { co_await writing; }
+  catch (const cardio::canceled_exception &) { cancelled = true; }
+  expect(cancelled, "A blocked upload must propagate cancellation");
+  if (writer) {
+    try { co_await writer->close_async({}); } catch (const std::exception &) {}
+  }
+  writer.reset();
+  const auto attributes = co_await queued;
+  expect(attributes && attributes->size == 12,
+         "Cancellation must retire the upload and release queued metadata on the same session");
+  expect(co_await read_remote_text_async(client, "/hello.txt") == "Hello DAV!\r\n",
+         "A cancelled bounded upload must leave the session usable");
+}
+
 static cardio::promise<void> check_async(elder_terms::WebdavClientOpenOptions options,
-    bool expect_failure, cardio::dispatcher_group_glib &group, std::exception_ptr &failure) {
+    bool expect_failure, std::string mode, cardio::dispatcher_group_glib &group, std::exception_ptr &failure) {
   std::shared_ptr<elder_terms::RemoteFileClient> client;
   try {
     if (options.connection.remote_directory == "/hold") {
@@ -284,6 +523,19 @@ static cardio::promise<void> check_async(elder_terms::WebdavClientOpenOptions op
     catch (...) { opening_failure = std::current_exception(); }
     if (expect_failure) {
       expect(opening_failure != nullptr, "Invalid credentials or certificates must fail");
+      if (transport_options.connection.remote_directory == "/unsupported-auth") {
+        std::string message;
+        try { std::rethrow_exception(opening_failure); }
+        catch (const std::exception &error) { message = error.what(); }
+        expect(message.find("Unsupported authentication") != std::string::npos,
+               "An unsupported-only challenge must identify the mechanism, not imply an incorrect password");
+      }
+    } else if (mode == "bounded-upload" || mode == "abandon-upload") {
+      if (opening_failure) std::rethrow_exception(opening_failure);
+      co_await check_bounded_upload_async(client, mode == "abandon-upload");
+    } else if (mode == "cancel-upload") {
+      if (opening_failure) std::rethrow_exception(opening_failure);
+      co_await check_cancelled_upload_async(client);
     } else {
       if (opening_failure) std::rethrow_exception(opening_failure);
       const auto snapshot = co_await client->load_directory_async("/", {});
@@ -304,6 +556,7 @@ static cardio::promise<void> check_async(elder_terms::WebdavClientOpenOptions op
       co_await check_downloads_async(client);
       co_await check_paused_http_async(transport_options);
       co_await check_cancelled_pause_async(transport_options);
+      co_await check_uploads_async(client, transport_options.connection.authentication);
       const auto capabilities = client->capabilities();
       expect(!capabilities.symbolic_links && !capabilities.permissions && !capabilities.access_time && !capabilities.modification_time,
              "DAV must not advertise POSIX operations");
@@ -316,13 +569,13 @@ static cardio::promise<void> check_async(elder_terms::WebdavClientOpenOptions op
 
 int main(int argc, char **argv) {
   try {
-    expect(argc == 7 || argc == 8, "Expected scheme, port, auth, password, CA path, expected result and optional initial directory");
+    expect(argc == 7 || argc == 8 || argc == 9, "Expected scheme, port, auth, password, CA path, expected result and optional initial directory");
     elder_terms::WebdavClientOpenOptions options;
     options.connection.scheme = argv[1];
     options.connection.address = "127.0.0.1";
     options.connection.port = std::stoll(argv[2]);
     options.connection.base_path = "/dav/";
-    if (argc == 8) options.connection.remote_directory = argv[7];
+    if (argc >= 8) options.connection.remote_directory = argv[7];
     const std::string auth(argv[3]);
     options.connection.authentication = auth == "none" ? elder_terms::WebdavAuthentication::none
         : auth == "basic" ? elder_terms::WebdavAuthentication::basic
@@ -334,7 +587,7 @@ int main(int argc, char **argv) {
     {
       cardio::dispatcher_group_glib group;
       cardio::dispatcher_host_glib_auto dispatcher(group);
-      auto task = check_async(std::move(options), std::string(argv[6]) == "failure", group, failure);
+      auto task = check_async(std::move(options), std::string(argv[6]) == "failure", argc == 9 ? argv[8] : "", group, failure);
       dispatcher.park();
     }
     if (failure) std::rethrow_exception(failure);

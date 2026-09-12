@@ -15,14 +15,30 @@ export const createWebdavTestServer = async (
   authentication: WebdavTestAuthentication,
   tls?: { cert: string; key: string }
 ) => {
-  const requests: { method: string; url: string; authenticated: boolean }[] =
-    [];
+  const requests: {
+    method: string;
+    url: string;
+    authenticated: boolean;
+    destination: string | undefined;
+    overwrite: string | undefined;
+    contentLength: string | undefined;
+    receivedBytes: number;
+  }[] = [];
   const md5 = (value: string) => createHash('md5').update(value).digest('hex');
   const realm = 'elder-terms DAV tests';
-  const nonce = '0123456789abcdef';
+  let nonce = '0123456789abcdef';
+  const renewedUploads = new Set<string>();
   let announceHeld: () => void = () => {};
   const held = new Promise<void>((resolve) => {
     announceHeld = resolve;
+  });
+  let announceUploadHeld: () => void = () => {};
+  const uploadHeld = new Promise<void>((resolve) => {
+    announceUploadHeld = resolve;
+  });
+  let announceUploadBodyHeld: () => void = () => {};
+  const uploadBodyHeld = new Promise<void>((resolve) => {
+    announceUploadBodyHeld = resolve;
   });
   const files = new Map<
     string,
@@ -42,12 +58,14 @@ export const createWebdavTestServer = async (
       { content: Buffer.from('child\n'), reportedSize: 6 },
     ],
   ]);
+  const directories = new Set(['/dav', '/dav/nested']);
   const largeSize = 40 * 1024 * 1024 + 13;
   const listener: RequestListener = (request, response) => {
     const method = request.method ?? '';
     const url = request.url ?? '';
     const authorization = request.headers.authorization ?? '';
     let authenticated = authentication === 'none' && authorization === '';
+    let staleDigest = false;
     if (authentication === 'basic') {
       authenticated =
         authorization ===
@@ -61,25 +79,50 @@ export const createWebdavTestServer = async (
           ...authorization.slice(7).matchAll(/(\w+)=(?:"([^"]*)"|([^,\s]+))/g),
         ].map((match) => [match[1], match[2] ?? match[3]])
       );
-      authenticated =
+      const validCredentials =
         fields.username === 'alice' &&
         fields.realm === realm &&
-        fields.nonce === nonce &&
+        typeof fields.nonce === 'string' &&
         fields.uri === url &&
         fields.qop === 'auth' &&
         fields.response ===
           md5(
-            `${md5(`alice:${realm}:secret`)}:${nonce}:${fields.nc}:${fields.cnonce}:auth:${md5(`${method}:${url}`)}`
+            `${md5(`alice:${realm}:secret`)}:${fields.nonce}:${fields.nc}:${fields.cnonce}:auth:${md5(`${method}:${url}`)}`
           );
+      authenticated = validCredentials && fields.nonce === nonce;
+      // RFC 7616: a valid response to an expired nonce is not a bad password.
+      staleDigest = validCredentials && fields.nonce !== nonce;
     }
-    requests.push({ method, url, authenticated });
+    const observation = {
+      method,
+      url,
+      authenticated,
+      destination:
+        typeof request.headers.destination === 'string'
+          ? request.headers.destination
+          : undefined,
+      overwrite:
+        typeof request.headers.overwrite === 'string'
+          ? request.headers.overwrite
+          : undefined,
+      contentLength: request.headers['content-length'],
+      receivedBytes: 0,
+    };
+    requests.push(observation);
     request.resume();
     if (!authenticated) {
       response.writeHead(401, {
         'WWW-Authenticate':
           authentication === 'digest'
-            ? `Digest realm="${realm}", nonce="${nonce}", algorithm=MD5, qop="auth"`
+            ? `Digest realm="${realm}", nonce="${nonce}", algorithm=MD5, qop="auth"${staleDigest ? ', stale=true' : ''}`
             : `Basic realm="${realm}"`,
+      });
+      response.end();
+      return;
+    }
+    if (url === '/dav/unsupported-auth') {
+      response.writeHead(401, {
+        'WWW-Authenticate': ['Negotiate', 'NTLM', 'Bearer realm="Basic login"'],
       });
       response.end();
       return;
@@ -122,6 +165,192 @@ export const createWebdavTestServer = async (
     } catch {
       response.writeHead(400);
       response.end();
+      return;
+    }
+    const resourcePath = decodedPath.replace(/\/+$/, '');
+    const parentPath = resourcePath.slice(0, resourcePath.lastIndexOf('/'));
+    const status = (code: number) => {
+      response.writeHead(code);
+      response.end();
+    };
+    if (['PUT', 'MKCOL', 'MOVE', 'DELETE'].includes(method)) {
+      if (!resourcePath.startsWith('/dav/') || resourcePath === '/dav') {
+        status(403);
+        return;
+      }
+      if (method === 'PUT') {
+        if (resourcePath === '/dav/body-held.bin') {
+          request.pause();
+          announceUploadBodyHeld();
+          return;
+        }
+        if (resourcePath.includes('/redirect-write.txt.')) {
+          response.writeHead(307, { Location: '/dav/redirected.txt' });
+          response.end();
+          return;
+        }
+        if (resourcePath.includes('/put-collision.txt.'))
+          files.set(resourcePath, {
+            content: Buffer.from('foreign temporary file'),
+            reportedSize: 22,
+          });
+        if (
+          request.headers['if-none-match'] === '*' &&
+          (files.has(resourcePath) || directories.has(resourcePath))
+        ) {
+          status(412);
+          return;
+        }
+        if (!directories.has(parentPath)) {
+          status(409);
+          return;
+        }
+        if (directories.has(resourcePath)) {
+          status(405);
+          return;
+        }
+        const chunks: Buffer[] = [];
+        request.on('data', (chunk: Buffer) => {
+          observation.receivedBytes += chunk.length;
+          chunks.push(Buffer.from(chunk));
+        });
+        request.on('end', () => {
+          const renewal = resourcePath.includes('/rewind-small.txt.')
+            ? 'small'
+            : resourcePath.includes('/rewind.txt.')
+              ? 'large'
+              : undefined;
+          if (
+            renewal !== undefined &&
+            authentication === 'digest' &&
+            !renewedUploads.has(renewal)
+          ) {
+            renewedUploads.add(renewal);
+            nonce = md5('renewed-' + renewal);
+            response.writeHead(401, {
+              'WWW-Authenticate': `Digest realm="${realm}", nonce="${nonce}", algorithm=MD5, qop="auth", stale=true`,
+            });
+            response.end();
+            return;
+          }
+          const content = Buffer.concat(chunks);
+          const exists = files.has(resourcePath);
+          files.set(resourcePath, { content, reportedSize: content.length });
+          if (resourcePath.includes('/cancel-upload.txt.')) {
+            announceUploadHeld();
+            return;
+          }
+          if (resourcePath.includes('/put-drop.txt.')) {
+            response.destroy();
+            return;
+          }
+          status(exists ? 204 : 201);
+        });
+      } else if (method === 'MKCOL') {
+        if (files.has(resourcePath) || directories.has(resourcePath)) {
+          status(405);
+          return;
+        }
+        if (!directories.has(parentPath)) {
+          status(409);
+          return;
+        }
+        directories.add(resourcePath);
+        status(201);
+      } else if (method === 'MOVE') {
+        let destination: URL;
+        try {
+          destination = new URL(observation.destination ?? '');
+        } catch {
+          status(400);
+          return;
+        }
+        const target = decodeURIComponent(destination.pathname).replace(
+          /\/+$/,
+          ''
+        );
+        if (
+          destination.host !== request.headers.host ||
+          !target.startsWith('/dav/')
+        ) {
+          status(400);
+          return;
+        }
+        if (target.endsWith('/cleanup-denied.txt')) {
+          status(403);
+          return;
+        }
+        if (!files.has(resourcePath) && !directories.has(resourcePath)) {
+          status(404);
+          return;
+        }
+        const exists = files.has(target) || directories.has(target);
+        if (exists && observation.overwrite !== 'T') {
+          status(412);
+          return;
+        }
+        if (!directories.has(target.slice(0, target.lastIndexOf('/')))) {
+          status(409);
+          return;
+        }
+        if (
+          directories.has(target) !== directories.has(resourcePath) &&
+          exists
+        ) {
+          status(409);
+          return;
+        }
+        for (const path of [...files.keys()])
+          if (path === target || path.startsWith(target + '/'))
+            files.delete(path);
+        for (const path of [...directories])
+          if (path === target || path.startsWith(target + '/'))
+            directories.delete(path);
+        for (const [path, value] of [...files]) {
+          if (path === resourcePath || path.startsWith(resourcePath + '/')) {
+            files.delete(path);
+            files.set(target + path.slice(resourcePath.length), value);
+          }
+        }
+        for (const path of [...directories]) {
+          if (path === resourcePath || path.startsWith(resourcePath + '/')) {
+            directories.delete(path);
+            directories.add(target + path.slice(resourcePath.length));
+          }
+        }
+        if (target.endsWith('/move-drop.txt')) {
+          response.destroy();
+          return;
+        }
+        status(exists ? 204 : 201);
+      } else {
+        if (resourcePath.includes('/cleanup-denied.txt.')) {
+          status(403);
+          return;
+        }
+        if (resourcePath.endsWith('/partial')) {
+          response.writeHead(207, { 'Content-Type': 'application/xml' });
+          response.end(
+            '<d:multistatus xmlns:d="DAV:"><d:response><d:href>/dav/uploaded/partial/blocked.txt</d:href><d:status>HTTP/1.1 403 Forbidden</d:status></d:response></d:multistatus>'
+          );
+          return;
+        }
+        if (!files.has(resourcePath) && !directories.has(resourcePath)) {
+          status(404);
+          return;
+        }
+        for (const path of [...files.keys()])
+          if (path === resourcePath || path.startsWith(resourcePath + '/'))
+            files.delete(path);
+        for (const path of [...directories])
+          if (path === resourcePath || path.startsWith(resourcePath + '/'))
+            directories.delete(path);
+        if (resourcePath.endsWith('/delete-drop.txt')) {
+          response.destroy();
+          return;
+        }
+        status(204);
+      }
       return;
     }
     const file = files.get(decodedPath);
@@ -188,7 +417,7 @@ export const createWebdavTestServer = async (
     const collectionPath = url.replace(/\/+$/, '');
     if (
       method !== 'PROPFIND' ||
-      (!['/dav', '/dav/nested'].includes(collectionPath) &&
+      (!directories.has(resourcePath) &&
         file === undefined &&
         !['/dav/large.bin', '/dav/truncated.bin', '/dav/held.bin'].includes(
           decodedPath
@@ -235,15 +464,23 @@ export const createWebdavTestServer = async (
       );
       return;
     }
-    const children =
-      request.headers.depth === '0'
-        ? ''
-        : collectionPath === '/dav/nested'
-          ? entry('/dav/nested/child.txt', false, 6)
-          : entry('/dav/hello.txt', false, 12) +
-            entry(`/dav/${encodeURIComponent('資料 #+%.txt')}`, false, 0) +
-            entry('/dav/unknown.txt', false, undefined) +
-            entry('/dav/nested/', true, undefined);
+    let children = '';
+    if (request.headers.depth !== '0') {
+      const href = (path: string) =>
+        path
+          .split('/')
+          .map((part) => encodeURIComponent(part))
+          .join('/');
+      for (const [path, value] of files)
+        if (path.slice(0, path.lastIndexOf('/')) === resourcePath)
+          children += entry(href(path), false, value.reportedSize);
+      for (const path of directories)
+        if (
+          path !== resourcePath &&
+          path.slice(0, path.lastIndexOf('/')) === resourcePath
+        )
+          children += entry(href(path) + '/', true, undefined);
+    }
     response.writeHead(207, {
       'Content-Type': 'application/xml; charset=utf-8',
     });
@@ -269,7 +506,11 @@ export const createWebdavTestServer = async (
   return {
     port: address.port,
     requests,
+    files,
+    directories,
     held,
+    uploadHeld,
+    uploadBodyHeld,
     close: async () => {
       await new Promise<void>((resolve, reject) => {
         server.close((error) =>

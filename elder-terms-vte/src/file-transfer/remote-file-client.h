@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -29,6 +30,10 @@ struct RemoteFileCapabilities {
   bool access_time = false;
   /** True when modification timestamps can be read and applied. */
   bool modification_time = false;
+  /** True when completed uploads have an explicit conditional commit operation. */
+  bool upload_commit = false;
+  /** True when a collection can be explicitly deleted with all descendants. */
+  bool recursive_directory_delete = false;
 };
 
 /** Portable attributes used by the remote browser and transfer engine. */
@@ -83,11 +88,29 @@ public:
   close_async(cardio::cancellation cancellation) = 0;
 };
 
+/** What the final upload response proves about creation of its temporary path. */
+enum class RemoteFileCreationState {
+  /** Creation or ownership cannot be established; do not delete the path. */
+  unknown,
+  /** A creation precondition failed; the path belongs to somebody else. */
+  not_created,
+  /** The exclusive creation completed successfully in this operation. */
+  created,
+};
+
 /** Asynchronous writer for one remote regular file. */
 class RemoteFileWriter {
 public:
   /** Releases the remote file handle. */
   virtual ~RemoteFileWriter() = default;
+
+  /**
+   * Reports proven ownership after an exclusive upload, including failed close.
+   * @returns Creation state; only used with the upload_commit capability.
+   */
+  virtual RemoteFileCreationState creation_state() const noexcept {
+    return RemoteFileCreationState::unknown;
+  }
 
   /**
    * Writes an entire remote file chunk.
@@ -198,6 +221,35 @@ public:
                cardio::cancellation cancellation) = 0;
 
   /**
+   * Commits a completed adjacent upload without first deleting its destination.
+   * @param source_path Exclusively created temporary file.
+   * @param destination_path Final file path.
+   * @param overwrite True only after an explicit replacement decision.
+   * @param cancellation Operation cancellation signal.
+   * @remarks Requires upload_commit; ordinary rename remains no-replace.
+   */
+  virtual cardio::promise<void> commit_upload_async(
+      std::string source_path, std::string destination_path, bool overwrite,
+      cardio::cancellation cancellation) {
+    (void)source_path; (void)destination_path; (void)overwrite; (void)cancellation;
+    throw std::logic_error("Remote upload commit is not supported");
+    co_return;
+  }
+
+  /**
+   * Deletes a collection and descendants as an explicit tree operation.
+   * @param path Selected collection path, never the virtual root.
+   * @param cancellation Operation cancellation signal.
+   * @remarks Requires recursive_directory_delete; not an empty-directory API.
+   */
+  virtual cardio::promise<void> remove_directory_tree_async(
+      std::string path, cardio::cancellation cancellation) {
+    (void)path; (void)cancellation;
+    throw std::logic_error("Remote collection tree deletion is not supported");
+    co_return;
+  }
+
+  /**
    * Creates a remote symbolic link without following its target.
    *
    * @param target Stored symbolic-link target.
@@ -232,15 +284,17 @@ public:
                   cardio::cancellation cancellation) = 0;
 
   /**
-   * Creates or truncates a remote regular file for writing.
+   * Opens a remote regular file for a known-size upload.
    *
    * @param path Remote file path.
+   * @param expected_size Exact discovered source size, including zero.
    * @param permissions Optional initial POSIX permission bits.
    * @param cancellation Operation cancellation signal.
    * @returns Remote file writer.
+   * @remarks upload_commit services create exclusively; other services may truncate.
    */
   virtual cardio::promise<std::unique_ptr<RemoteFileWriter>>
-  open_write_async(std::string path,
+  open_write_async(std::string path, std::uint64_t expected_size,
                    std::optional<std::uint32_t> permissions,
                    cardio::cancellation cancellation) = 0;
 

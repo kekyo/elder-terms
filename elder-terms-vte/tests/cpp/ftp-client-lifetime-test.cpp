@@ -164,7 +164,7 @@ static cardio::promise<void> session_async(Server &server, const std::string &mo
       co_return;
     }
     expect(mode != "login", "Rejected authentication unexpectedly succeeded");
-    auto writer = std::move(co_await client->open_write_async("/home/repeated.bin", std::nullopt, {}));
+    auto writer = std::move(co_await client->open_write_async("/home/repeated.bin", 23, std::nullopt, {}));
     const std::string payload("repeated binary\0payload", 23);
     co_await write_text_async(*writer, payload, {});
     cardio::cancellation_source cancellation;

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
+#include <optional>
 #include <map>
 #include <memory>
 #include <span>
@@ -27,6 +29,10 @@ struct CurlHttpRequest {
   std::string body;
   /** Request headers, without terminating CRLF. */
   std::vector<std::string> headers;
+  /** Known upload length; present only with a forward-only send callback. */
+  std::optional<std::uint64_t> upload_size;
+  /** Bounded upload producer; may return CURL_READFUNC_PAUSE, never rewind. */
+  std::function<std::size_t(std::span<std::byte>)> send;
   /** Optional successful-body receiver; may return CURL_WRITEFUNC_PAUSE. */
   std::function<std::size_t(std::span<const std::byte>)> receive;
 };
@@ -73,7 +79,7 @@ cardio::promise<CurlHttpResult> perform_http_request_async(
     cardio::cancellation cancellation);
 
 /**
- * Schedules resumption of a paused response callback.
+ * Schedules resumption of a paused request or response callback.
  * @param session Session accessed on its owning dispatcher.
  */
 void resume_curl_http_session(const std::shared_ptr<CurlHttpSession> &session);

@@ -15,11 +15,48 @@ namespace elder_terms {
 
 using HttpClock = std::chrono::steady_clock;
 
+static bool has_only_unsupported_authentication(const CurlHttpResult &result) {
+  const auto header = result.headers.find("www-authenticate");
+  if (header == result.headers.end()) return false;
+  bool found = false;
+  bool quoted = false;
+  bool escaped = false;
+  std::size_t start = 0;
+  const auto &value = header->second;
+  for (std::size_t index = 0; index <= value.size(); ++index) {
+    if (index < value.size()) {
+      const auto character = value[index];
+      if (escaped) { escaped = false; continue; }
+      if (quoted && character == '\\') { escaped = true; continue; }
+      if (character == '"') { quoted = !quoted; continue; }
+      if (quoted || character != ',') continue;
+    }
+    auto segment = std::string_view(value).substr(start, index - start);
+    start = index + 1;
+    while (!segment.empty() && g_ascii_isspace(segment.front())) segment.remove_prefix(1);
+    const auto end = segment.find_first_of(" \t=");
+    auto token = std::string(segment.substr(0, end));
+    auto remainder = end == std::string_view::npos ? std::string_view{} : segment.substr(end);
+    while (!remainder.empty() && g_ascii_isspace(remainder.front())) remainder.remove_prefix(1);
+    // A comma can separate authentication parameters as well as challenges.
+    // Never mistake a quoted realm or a parameter name for an offered scheme.
+    if (token.empty() || remainder.starts_with('=')) continue;
+    std::transform(token.begin(), token.end(), token.begin(), [](unsigned char c) { return g_ascii_tolower(c); });
+    if (token == "basic" || token == "digest") return false;
+    found = true;
+  }
+  return found;
+}
+
 std::runtime_error webdav_http_error(const CurlHttpResult &result) {
   const char *reason = curl_easy_strerror(result.code);
   if (result.code == CURLE_OK) {
     switch (result.status) {
-    case 401: reason = "Authentication was rejected"; break;
+    case 401:
+      reason = has_only_unsupported_authentication(result)
+          ? "Unsupported authentication; WebDAV supports Basic and Digest"
+          : "Authentication was rejected";
+      break;
     case 403: reason = "Access denied"; break;
     case 404: reason = "Resource not found"; break;
     case 405: case 501: reason = "The server does not support this WebDAV operation"; break;
@@ -173,6 +210,7 @@ struct HttpOperation {
   curl_off_t downloaded = 0;
   curl_off_t uploaded = 0;
   std::size_t header_bytes = 0;
+  std::uint64_t input_consumed = 0;
   bool paused = false;
 };
 
@@ -201,6 +239,37 @@ static std::size_t receive_body(char *bytes, std::size_t size,
   }
 }
 
+static std::size_t send_body(char *bytes, std::size_t size,
+                             std::size_t count, void *data) noexcept {
+  auto &operation = *static_cast<HttpOperation *>(data);
+  try {
+    if (size && count > std::numeric_limits<std::size_t>::max() / size)
+      throw std::runtime_error("WebDAV upload buffer size overflow");
+    const auto capacity = size * count;
+    const auto sent = operation.request.send({reinterpret_cast<std::byte *>(bytes), capacity});
+    operation.paused = sent == CURL_READFUNC_PAUSE;
+    if (operation.paused) return sent;
+    if (sent > capacity || sent > *operation.request.upload_size - operation.input_consumed)
+      throw std::runtime_error("WebDAV upload exceeded its declared size");
+    operation.input_consumed += sent;
+    if (sent) operation.activity = HttpClock::now();
+    return sent;
+  } catch (...) {
+    operation.failure = std::current_exception();
+    return CURL_READFUNC_ABORT;
+  }
+}
+
+static int seek_body(void *data, curl_off_t offset, int origin) noexcept {
+  auto &operation = *static_cast<HttpOperation *>(data);
+  if (offset == 0 && origin == SEEK_SET && operation.input_consumed == 0)
+    return CURL_SEEKFUNC_OK;
+  try {
+    throw std::runtime_error("WebDAV cannot replay an upload after its input has been consumed");
+  } catch (...) { operation.failure = std::current_exception(); }
+  return CURL_SEEKFUNC_FAIL;
+}
+
 static std::size_t receive_header(char *bytes, std::size_t size,
                                   std::size_t count, void *data) noexcept {
   auto &operation = *static_cast<HttpOperation *>(data);
@@ -220,6 +289,10 @@ static std::size_t receive_header(char *bytes, std::size_t size,
       if (space == std::string_view::npos) throw std::runtime_error("Invalid HTTP status line");
       const auto parsed = std::from_chars(line.data() + space + 1, line.data() + line.size(), operation.result.status);
       if (parsed.ec != std::errc{}) throw std::runtime_error("Invalid HTTP response status");
+      // Abort before libcurl can replay even a small internally retained body.
+      // A challenge before consuming input can still negotiate Basic/Digest.
+      if (operation.result.status == 401 && operation.request.send && operation.input_consumed)
+        throw std::runtime_error("WebDAV authentication changed after upload input was consumed; the request was not replayed");
     } else if (const auto colon = line.find(':'); colon != std::string_view::npos) {
       std::string name(line.substr(0, colon));
       std::transform(name.begin(), name.end(), name.begin(), [](unsigned char value) { return g_ascii_tolower(value); });
@@ -276,6 +349,23 @@ std::shared_ptr<CurlHttpSession> create_curl_http_session(
   return session;
 }
 
+static void clear_http_borrowed_options(CURL *easy) noexcept {
+  (void)curl_easy_setopt(easy, CURLOPT_POSTFIELDS, static_cast<char *>(nullptr));
+  (void)curl_easy_setopt(easy, CURLOPT_HTTPHEADER, static_cast<curl_slist *>(nullptr));
+  (void)curl_easy_setopt(easy, CURLOPT_WRITEFUNCTION, static_cast<curl_write_callback>(nullptr));
+  (void)curl_easy_setopt(easy, CURLOPT_WRITEDATA, static_cast<void *>(nullptr));
+  (void)curl_easy_setopt(easy, CURLOPT_HEADERFUNCTION, static_cast<curl_write_callback>(nullptr));
+  (void)curl_easy_setopt(easy, CURLOPT_HEADERDATA, static_cast<void *>(nullptr));
+  (void)curl_easy_setopt(easy, CURLOPT_READFUNCTION, static_cast<curl_read_callback>(nullptr));
+  (void)curl_easy_setopt(easy, CURLOPT_READDATA, static_cast<void *>(nullptr));
+  (void)curl_easy_setopt(easy, CURLOPT_SEEKFUNCTION, static_cast<curl_seek_callback>(nullptr));
+  (void)curl_easy_setopt(easy, CURLOPT_SEEKDATA, static_cast<void *>(nullptr));
+  (void)curl_easy_setopt(easy, CURLOPT_XFERINFOFUNCTION, static_cast<curl_xferinfo_callback>(nullptr));
+  (void)curl_easy_setopt(easy, CURLOPT_XFERINFODATA, static_cast<void *>(nullptr));
+  (void)curl_easy_setopt(easy, CURLOPT_NOPROGRESS, 1L);
+  (void)curl_easy_setopt(easy, CURLOPT_ERRORBUFFER, static_cast<char *>(nullptr));
+}
+
 cardio::promise<CurlHttpResult> perform_http_request_async(
     std::shared_ptr<CurlHttpSession> session, CurlHttpRequest request,
     cardio::cancellation cancellation) {
@@ -286,7 +376,7 @@ cardio::promise<CurlHttpResult> perform_http_request_async(
   HttpOperation operation;
   operation.request = std::move(request);
   auto *easy = session->easy;
-  curl_easy_reset(easy);
+
   session->callback_failure = {};
   session->resume_pending = false;
   std::unique_ptr<curl_slist, decltype(&curl_slist_free_all)> headers(nullptr, curl_slist_free_all);
@@ -300,7 +390,20 @@ cardio::promise<CurlHttpResult> perform_http_request_async(
   }
   // All exits, including failed option setup, release borrowed request data
   // before the operation and header list are destroyed.
-  const auto reset_options = std::unique_ptr<CURL, decltype(&curl_easy_reset)>(easy, curl_easy_reset);
+  // curl_easy_reset also discards negotiated Digest authentication. Retain that
+  // session state while releasing every pointer borrowed from this operation.
+  const auto reset_options = std::unique_ptr<CURL, decltype(&clear_http_borrowed_options)>(easy, clear_http_borrowed_options);
+  require_curl(curl_easy_setopt(easy, CURLOPT_POSTFIELDS, static_cast<char *>(nullptr)));
+  require_curl(curl_easy_setopt(easy, CURLOPT_POSTFIELDSIZE_LARGE, curl_off_t{0}));
+  require_curl(curl_easy_setopt(easy, CURLOPT_HTTPGET, 1L));
+  const auto &method = operation.request.method;
+  const bool mutation = method != "GET" && method != "HEAD" && method != "PROPFIND" && method != "OPTIONS";
+  // Fresh HTTP/1.1 mutation connections avoid stale-connection and HTTP/2
+  // stream retries. Redirects remain disabled, and consumed input cannot seek.
+  require_curl(curl_easy_setopt(easy, CURLOPT_FRESH_CONNECT, mutation ? 1L : 0L));
+  require_curl(curl_easy_setopt(easy, CURLOPT_FORBID_REUSE, mutation ? 1L : 0L));
+  require_curl(curl_easy_setopt(easy, CURLOPT_HTTP_VERSION,
+      static_cast<long>(mutation ? CURL_HTTP_VERSION_1_1 : CURL_HTTP_VERSION_NONE)));
   require_curl(curl_easy_setopt(easy, CURLOPT_URL, operation.request.url.c_str()));
   require_curl(curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, session->settings.scheme.c_str()));
   require_curl(curl_easy_setopt(easy, CURLOPT_PROXY, ""));
@@ -320,6 +423,19 @@ cardio::promise<CurlHttpResult> perform_http_request_async(
     require_curl(curl_easy_setopt(easy, CURLOPT_HTTPAUTH, allowed));
     require_curl(curl_easy_setopt(easy, CURLOPT_USERNAME, session->settings.username.c_str()));
     require_curl(curl_easy_setopt(easy, CURLOPT_PASSWORD, session->password.c_str()));
+  }
+  if (operation.request.send) {
+    if (!operation.request.upload_size || !operation.request.body.empty() ||
+        *operation.request.upload_size > static_cast<std::uint64_t>(std::numeric_limits<curl_off_t>::max()))
+      throw std::invalid_argument("WebDAV upload requires one representable known size");
+    require_curl(curl_easy_setopt(easy, CURLOPT_UPLOAD, 1L));
+    require_curl(curl_easy_setopt(easy, CURLOPT_INFILESIZE_LARGE, static_cast<curl_off_t>(*operation.request.upload_size)));
+    require_curl(curl_easy_setopt(easy, CURLOPT_READFUNCTION, send_body));
+    require_curl(curl_easy_setopt(easy, CURLOPT_READDATA, &operation));
+    require_curl(curl_easy_setopt(easy, CURLOPT_SEEKFUNCTION, seek_body));
+    require_curl(curl_easy_setopt(easy, CURLOPT_SEEKDATA, &operation));
+  } else if (operation.request.upload_size) {
+    throw std::invalid_argument("WebDAV upload has no body producer");
   }
   if (!operation.request.body.empty()) {
     require_curl(curl_easy_setopt(easy, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(operation.request.body.size())));
@@ -347,6 +463,9 @@ cardio::promise<CurlHttpResult> perform_http_request_async(
         operation.paused = false;
         operation.activity = HttpClock::now();
         require_curl(curl_easy_pause(easy, CURLPAUSE_CONT));
+        // Resumption can synchronously change curl socket interests. Rebuild
+        // readiness watches instead of forwarding an event from before resume.
+        event = HttpWake{};
       }
       int running = 0;
       require_multi(curl_multi_socket_action(session->multi, event.socket, event.events, &running));
