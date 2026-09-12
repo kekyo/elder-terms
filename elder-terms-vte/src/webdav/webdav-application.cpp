@@ -2,6 +2,7 @@
 #include "webdav-client.h"
 #include "../file-transfer/file-transfer-window.h"
 #include "../file-transfer/file-transfer-paths.h"
+#include "../file-transfer/file-transfer-certificate-prompt.h"
 
 #include <iostream>
 #define GETTEXT_PACKAGE "elder-terms"
@@ -40,11 +41,30 @@ static void stop_application(WebdavApplication *state) {
   state->shutdown.emplace(finish_application_async(state));
 }
 
+static cardio::promise<bool> confirm_webdav_certificate_async(
+    WebdavApplication *state, const TlsCertificateFailure &failure,
+    cardio::cancellation cancellation) {
+  auto pending = confirm_file_transfer_certificate_async(
+      state->window, failure, _("HTTPS certificate validation failed"),
+      _("HTTPS connection"), cancellation);
+  const bool accepted = co_await pending;
+  if (!accepted || cancellation.is_cancellation_requested() || state->shutting_down) {
+    stop_application(state);
+    co_return false;
+  }
+  mark_file_transfer_certificate_exception(state->window);
+  co_return true;
+}
+
 static cardio::promise<void> start_application_async(WebdavApplication *state) {
   std::string failure;
   const auto cancellation = state->stopping.get_cancellation();
   try {
-    WebdavClientOpenOptions options{state->connection, {}};
+    WebdavClientOpenOptions options{
+        .connection = state->connection, .password = {},
+        .confirm_certificate = [state](const TlsCertificateFailure &failure, cardio::cancellation cancellation) {
+          return confirm_webdav_certificate_async(state, failure, cancellation);
+        }};
     if (options.connection.authentication != WebdavAuthentication::none) {
       std::string username = options.connection.username;
       if (username.empty() && g_get_user_name()) username = g_get_user_name();

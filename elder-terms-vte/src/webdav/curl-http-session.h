@@ -13,8 +13,20 @@
 #include <cardio.h>
 #include <curl/curl.h>
 #include <elder-terms/settings/webdav-settings.h>
+#include "../tls/certificate-failure.h"
 
 namespace elder_terms {
+
+/**
+ * Asynchronous decision for one immutable TLS failure on the owning dispatcher.
+ * @param failure Borrowed failure data, valid until the decision promise settles.
+ * @param cancellation Cancellation of the owning request or connection.
+ * @returns True to accept exactly this failure for this connection; false to stop.
+ * @remarks Runs after the failed handshake has released its request resources.
+ * Decisions are retained only by the logical session and are never persisted.
+ */
+using WebdavCertificateConfirmation = std::function<cardio::promise<bool>(
+    const TlsCertificateFailure &, cardio::cancellation)>;
 
 /** HTTP transport owned by one logical WebDAV connection and dispatcher. */
 struct CurlHttpSession;
@@ -62,10 +74,12 @@ std::runtime_error webdav_http_error(const CurlHttpResult &result);
  * Creates an HTTP transport without starting a worker or network request.
  * @param settings Immutable connection settings.
  * @param password Runtime password, retained only by the session.
+ * @param confirm_certificate Optional session-local confirmation; absent means reject.
  * @returns Session bound to the caller's dispatcher.
  */
 std::shared_ptr<CurlHttpSession> create_curl_http_session(
-    WebdavConnectionSettings settings, std::string password);
+    WebdavConnectionSettings settings, std::string password,
+    WebdavCertificateConfirmation confirm_certificate = {});
 
 /**
  * Performs one serialized request using socket readiness and timer events.
@@ -73,6 +87,9 @@ std::shared_ptr<CurlHttpSession> create_curl_http_session(
  * @param request Request retained until libcurl releases its pointers.
  * @param cancellation Cancellation for queued or active work.
  * @returns Final HTTP response, or a callback/cancellation exception.
+ * @remarks The operation slot remains held during certificate confirmation.
+ * Approval may resume read-only requests that failed before any HTTP response;
+ * mutations remain failed and require a distinct explicit retry.
  */
 cardio::promise<CurlHttpResult> perform_http_request_async(
     std::shared_ptr<CurlHttpSession> session, CurlHttpRequest request,

@@ -1,4 +1,5 @@
 #include "curl-http-session.h"
+#include "../tls/certificate-policy.h"
 
 #include <algorithm>
 #include <array>
@@ -93,6 +94,8 @@ struct HttpWake {
 struct CurlHttpSession {
   WebdavConnectionSettings settings;
   std::string password;
+  WebdavCertificateConfirmation confirm_certificate;
+  std::shared_ptr<TlsCertificatePolicy> certificates;
   CURLM *multi = nullptr;
   CURL *easy = nullptr;
   cardio::primitives::mutex operations;
@@ -322,11 +325,10 @@ static int progress_changed(void *data, curl_off_t, curl_off_t downloaded,
 }
 
 std::shared_ptr<CurlHttpSession> create_curl_http_session(
-    WebdavConnectionSettings settings, std::string password) {
+    WebdavConnectionSettings settings, std::string password,
+    WebdavCertificateConfirmation confirm_certificate) {
   if (!settings.validation_errors.empty()) throw std::invalid_argument(settings.validation_errors.front());
   if (settings.scheme != "https" && settings.scheme != "http") throw std::invalid_argument("WebDAV requires HTTP or HTTPS");
-  if (settings.prompt_certificate && settings.scheme == "https")
-    throw std::invalid_argument("WebDAV certificate confirmation is not available yet");
   static const HttpCurlGlobal global;
   (void)global;
   const auto *version = curl_version_info(CURLVERSION_NOW);
@@ -339,6 +341,10 @@ std::shared_ptr<CurlHttpSession> create_curl_http_session(
   auto session = std::make_shared<CurlHttpSession>();
   session->settings = std::move(settings);
   session->password = std::move(password);
+  session->confirm_certificate = std::move(confirm_certificate);
+  if (session->settings.prompt_certificate && session->settings.scheme == "https")
+    session->certificates = create_tls_certificate_policy(
+        session->settings.address, session->settings.port, session->settings.scheme, 1);
   session->multi = curl_multi_init();
   session->easy = curl_easy_init();
   if (!session->multi || !session->easy) throw std::runtime_error("Could not initialize WebDAV HTTP transport");
@@ -366,12 +372,9 @@ static void clear_http_borrowed_options(CURL *easy) noexcept {
   (void)curl_easy_setopt(easy, CURLOPT_ERRORBUFFER, static_cast<char *>(nullptr));
 }
 
-cardio::promise<CurlHttpResult> perform_http_request_async(
+static cardio::promise<CurlHttpResult> perform_http_attempt_async(
     std::shared_ptr<CurlHttpSession> session, CurlHttpRequest request,
     cardio::cancellation cancellation) {
-  auto combined = cardio::cancellations::any(cancellation, session->stopping.get_cancellation());
-  cancellation = combined.get_cancellation();
-  auto lock = std::move(co_await session->operations.lock(cancellation));
   cancellation.throw_if_cancellation_requested();
   HttpOperation operation;
   operation.request = std::move(request);
@@ -400,8 +403,8 @@ cardio::promise<CurlHttpResult> perform_http_request_async(
   const bool mutation = method != "GET" && method != "HEAD" && method != "PROPFIND" && method != "OPTIONS";
   // Fresh HTTP/1.1 mutation connections avoid stale-connection and HTTP/2
   // stream retries. Redirects remain disabled, and consumed input cannot seek.
-  require_curl(curl_easy_setopt(easy, CURLOPT_FRESH_CONNECT, mutation ? 1L : 0L));
-  require_curl(curl_easy_setopt(easy, CURLOPT_FORBID_REUSE, mutation ? 1L : 0L));
+  require_curl(curl_easy_setopt(easy, CURLOPT_FRESH_CONNECT, mutation || session->certificates ? 1L : 0L));
+  require_curl(curl_easy_setopt(easy, CURLOPT_FORBID_REUSE, mutation || session->certificates ? 1L : 0L));
   require_curl(curl_easy_setopt(easy, CURLOPT_HTTP_VERSION,
       static_cast<long>(mutation ? CURL_HTTP_VERSION_1_1 : CURL_HTTP_VERSION_NONE)));
   require_curl(curl_easy_setopt(easy, CURLOPT_URL, operation.request.url.c_str()));
@@ -411,7 +414,16 @@ cardio::promise<CurlHttpResult> perform_http_request_async(
   require_curl(curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 0L));
   require_curl(curl_easy_setopt(easy, CURLOPT_PATH_AS_IS, 1L));
   require_curl(curl_easy_setopt(easy, CURLOPT_SSL_VERIFYPEER, 1L));
-  require_curl(curl_easy_setopt(easy, CURLOPT_SSL_VERIFYHOST, 2L));
+  // The shared OpenSSL policy performs hostname validation before accepting
+  // any HTTP bytes. Its exceptions belong only to this immutable endpoint.
+  require_curl(curl_easy_setopt(easy, CURLOPT_SSL_VERIFYHOST, session->certificates ? 0L : 2L));
+  if (session->certificates) {
+    // Observe the actual leaf on every request: neither an old HTTP connection
+    // nor TLS session resumption may bypass a changed-certificate decision.
+    require_curl(curl_easy_setopt(easy, CURLOPT_SSL_SESSIONID_CACHE, 0L));
+    require_curl(curl_easy_setopt(easy, CURLOPT_SSL_CTX_FUNCTION, configure_tls_certificate_context));
+    require_curl(curl_easy_setopt(easy, CURLOPT_SSL_CTX_DATA, session->certificates.get()));
+  }
   require_curl(curl_easy_setopt(easy, CURLOPT_SSLVERSION, static_cast<long>(CURL_SSLVERSION_TLSv1_2)));
   if (!session->settings.ca_file.empty())
     require_curl(curl_easy_setopt(easy, CURLOPT_CAINFO, session->settings.ca_file.c_str()));
@@ -494,6 +506,47 @@ cardio::promise<CurlHttpResult> perform_http_request_async(
   if (failure) std::rethrow_exception(failure);
   require_multi(removed);
   co_return std::move(operation.result);
+}
+
+cardio::promise<CurlHttpResult> perform_http_request_async(
+    std::shared_ptr<CurlHttpSession> session, CurlHttpRequest request,
+    cardio::cancellation cancellation) {
+  auto combined = cardio::cancellations::any(cancellation, session->stopping.get_cancellation());
+  cancellation = combined.get_cancellation();
+  auto lock = std::move(co_await session->operations.lock(cancellation));
+  const bool read_only = request.method == "GET" || request.method == "HEAD" ||
+      request.method == "PROPFIND" || request.method == "OPTIONS";
+  for (unsigned confirmations = 0;; ++confirmations) {
+    cancellation.throw_if_cancellation_requested();
+    if (session->certificates) {
+      session->certificates->failure.reset();
+      session->certificates->callback_failure = {};
+    }
+    auto result = co_await perform_http_attempt_async(session, request, cancellation);
+    if (!session->certificates) co_return result;
+    if (session->certificates->callback_failure)
+      std::rethrow_exception(session->certificates->callback_failure);
+    if (result.code != CURLE_PEER_FAILED_VERIFICATION ||
+        !session->certificates->failure || !session->confirm_certificate)
+      co_return result;
+    if (confirmations == 16)
+      throw std::runtime_error("WebDAV certificate verification did not converge");
+    // The failed attempt has already detached its easy handle and retired all
+    // watchers. Confirmation runs outside OpenSSL and retains only copied data.
+    const auto failure = *session->certificates->failure;
+    const bool accepted = co_await session->confirm_certificate(failure, cancellation);
+    cancellation.throw_if_cancellation_requested();
+    if (!accepted) {
+      (void)session->stopping.cancel();
+      cancellation.throw_if_cancellation_requested();
+    }
+    approve_tls_certificate_failure(*session->certificates, failure);
+    if (read_only && result.status == 0 && result.code == CURLE_PEER_FAILED_VERIFICATION)
+      continue;
+    // A mutation remains failed even when its handshake failed before HTTP.
+    // Approval applies to a distinct explicit retry, never an automatic replay.
+    throw std::runtime_error("WebDAV certificate accepted for this connection; the failed operation was not retried");
+  }
 }
 
 void resume_curl_http_session(const std::shared_ptr<CurlHttpSession> &session) {

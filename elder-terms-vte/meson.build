@@ -197,9 +197,9 @@ test('webdav-metadata-test', webdav_metadata_test)
 webdav_client_test = executable(
   'webdav-client-test',
   ['tests/cpp/webdav-client-test.cpp', 'src/file-transfer/file-transfer-engine.cpp', 'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
-   'src/webdav/curl-http-session.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
+   'src/webdav/curl-http-session.cpp', 'src/tls/certificate-policy.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
   include_directories: include_directories('src/webdav'),
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, libxml2_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, libxml2_dep, openssl_dep],
 )
 test('webdav-client-test', find_program('node'),
   args: [files('tests/webdav-client-runner.mjs'), webdav_client_test], timeout: 300)
@@ -793,3 +793,13 @@ configure_file(
   output: 'green-off.png',
   copy: true,
 )
+
+webdav_tls_session_test = executable(
+  'webdav-tls-session-test',
+  ['tests/cpp/webdav-tls-session-test.cpp', 'src/webdav/curl-http-session.cpp',
+   'src/tls/certificate-policy.cpp'],
+  include_directories: include_directories('src/webdav'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+)
+test('webdav-tls-session-test', find_program('node'),
+  args: [files('tests/webdav-tls-session-runner.mjs'), webdav_tls_session_test], timeout: 120)

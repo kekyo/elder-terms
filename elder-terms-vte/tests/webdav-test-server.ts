@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import { createServer, type RequestListener } from 'node:http';
-import { createServer as createSecureServer } from 'node:https';
+import {
+  createServer as createSecureServer,
+  Server as SecureServer,
+  type ServerOptions as HttpsServerOptions,
+} from 'node:https';
 
 /** Authentication mechanisms supported by the independent HTTP fixture. */
 export type WebdavTestAuthentication = 'none' | 'basic' | 'digest';
@@ -8,12 +12,15 @@ export type WebdavTestAuthentication = 'none' | 'basic' | 'digest';
 /**
  * Starts a real DAV endpoint with namespace-qualified multistatus responses.
  * @param authentication Required mechanism; credentials are alice/secret.
- * @param tls Optional PEM certificate and key for HTTPS.
+ * @param tls PEM certificate/key and optional protocol limits for HTTPS fixtures.
  * @returns Ephemeral port, request observations, a held-request event and cleanup.
  */
 export const createWebdavTestServer = async (
   authentication: WebdavTestAuthentication,
-  tls?: { cert: string; key: string }
+  tls?: { cert: string; key: string } & Pick<
+    HttpsServerOptions,
+    'minVersion' | 'maxVersion' | 'ciphers'
+  >
 ) => {
   const requests: {
     method: string;
@@ -511,6 +518,15 @@ export const createWebdavTestServer = async (
     held,
     uploadHeld,
     uploadBodyHeld,
+    /** Replaces the peer while keeping existing connections and resumable tickets. */
+    replaceTls: (identity: { cert: string; key: string }) => {
+      if (!(server instanceof SecureServer))
+        throw new Error('TLS rotation requires an HTTPS fixture');
+      // Stale pooled connections or resumed sessions must not hide a new peer.
+      const tickets = server.getTicketKeys();
+      server.setSecureContext(identity);
+      server.setTicketKeys(tickets);
+    },
     close: async () => {
       await new Promise<void>((resolve, reject) => {
         server.close((error) =>

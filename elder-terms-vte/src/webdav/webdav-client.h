@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../file-transfer/remote-file-client.h"
+#include "curl-http-session.h"
 #include <elder-terms/settings/webdav-settings.h>
 
 namespace elder_terms {
@@ -11,6 +12,8 @@ struct WebdavClientOpenOptions {
   WebdavConnectionSettings connection;
   /** Runtime password, never written to settings. */
   std::string password;
+  /** Optional asynchronous decision for this connection only. */
+  WebdavCertificateConfirmation confirm_certificate;
 };
 
 /**
