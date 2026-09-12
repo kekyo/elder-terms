@@ -1,3 +1,4 @@
+import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { createServer, type RequestListener } from 'node:http';
 import {
@@ -35,6 +36,8 @@ export const createWebdavTestServer = async (
   const realm = 'elder-terms DAV tests';
   let nonce = '0123456789abcdef';
   const renewedUploads = new Set<string>();
+  let releasePausedRejection = false;
+  let rejectPausedUpload: (() => void) | undefined;
   let announceHeld: () => void = () => {};
   const held = new Promise<void>((resolve) => {
     announceHeld = resolve;
@@ -135,6 +138,13 @@ export const createWebdavTestServer = async (
       return;
     }
     if (url === '/dav/idle') return;
+    if (method === 'GET' && url === '/dav/release-paused-rejection') {
+      releasePausedRejection = true;
+      rejectPausedUpload?.();
+      response.writeHead(204);
+      response.end();
+      return;
+    }
     if (url === '/dav/hold') {
       announceHeld();
       return;
@@ -186,6 +196,18 @@ export const createWebdavTestServer = async (
         return;
       }
       if (method === 'PUT') {
+        if (resourcePath === '/dav/reject-paused-upload.bin') {
+          // The client releases this response only after its producer pauses.
+          request.on('data', (chunk: Buffer) => {
+            observation.receivedBytes += chunk.length;
+          });
+          rejectPausedUpload = () => {
+            response.writeHead(403, { Connection: 'close' });
+            response.end();
+          };
+          if (releasePausedRejection) rejectPausedUpload();
+          return;
+        }
         if (resourcePath === '/dav/body-held.bin') {
           request.pause();
           announceUploadBodyHeld();
@@ -362,6 +384,20 @@ export const createWebdavTestServer = async (
     }
     const file = files.get(decodedPath);
     if (method === 'GET') {
+      if (decodedPath === '/dav/identity.bin') {
+        response.writeHead(200, { 'Content-Encoding': 'identity \t' });
+        response.end('identity transfer\n');
+        return;
+      }
+      if (decodedPath === '/dav/encoded.bin') {
+        const encoded = gzipSync(Buffer.from('encoded transfer\n'));
+        response.writeHead(200, {
+          'Content-Encoding': 'gzip',
+          'Content-Length': encoded.length,
+        });
+        response.end(encoded);
+        return;
+      }
       if (decodedPath === '/dav/get-redirect') {
         response.writeHead(307, { Location: '/dav/hello.txt' });
         response.end('redirect body');
@@ -426,9 +462,13 @@ export const createWebdavTestServer = async (
       method !== 'PROPFIND' ||
       (!directories.has(resourcePath) &&
         file === undefined &&
-        !['/dav/large.bin', '/dav/truncated.bin', '/dav/held.bin'].includes(
-          decodedPath
-        ))
+        ![
+          '/dav/large.bin',
+          '/dav/truncated.bin',
+          '/dav/held.bin',
+          '/dav/encoded.bin',
+          '/dav/identity.bin',
+        ].includes(decodedPath))
     ) {
       response.writeHead(404);
       response.end();
@@ -449,9 +489,13 @@ export const createWebdavTestServer = async (
       `</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`;
     if (
       file !== undefined ||
-      ['/dav/large.bin', '/dav/truncated.bin', '/dav/held.bin'].includes(
-        decodedPath
-      )
+      [
+        '/dav/large.bin',
+        '/dav/truncated.bin',
+        '/dav/held.bin',
+        '/dav/encoded.bin',
+        '/dav/identity.bin',
+      ].includes(decodedPath)
     ) {
       const size =
         file !== undefined
@@ -460,7 +504,11 @@ export const createWebdavTestServer = async (
             ? largeSize
             : decodedPath === '/dav/held.bin'
               ? 1048576
-              : 262144;
+              : decodedPath === '/dav/encoded.bin'
+                ? 17
+                : decodedPath === '/dav/identity.bin'
+                  ? 18
+                  : 262144;
       response.writeHead(207, {
         'Content-Type': 'application/xml; charset=utf-8',
       });

@@ -25,12 +25,13 @@ struct PausedResponse {
   bool resume = false;
   std::string body;
   bool finished = false;
+  std::size_t callbacks = 0;
   elder_terms::CurlHttpResult result;
   std::exception_ptr failure;
 };
 
 
-static cardio::promise<void> receive_paused_response_async(
+static cardio::promise<void> perform_paused_request_async(
     std::shared_ptr<elder_terms::CurlHttpSession> session,
     elder_terms::CurlHttpRequest request, std::shared_ptr<PausedResponse> state,
     cardio::cancellation cancellation) {
@@ -59,7 +60,7 @@ static cardio::promise<void> check_paused_http_async(elder_terms::WebdavClientOp
     state->body.append(reinterpret_cast<const char *>(bytes.data()), bytes.size());
     return bytes.size();
   };
-  auto receiving = receive_paused_response_async(session, std::move(request), state, {});
+  auto receiving = perform_paused_request_async(session, std::move(request), state, {});
   std::exception_ptr failure;
   try {
     co_await paused;
@@ -85,39 +86,109 @@ static cardio::promise<void> check_paused_http_async(elder_terms::WebdavClientOp
          "Intentional receive pause must neither count as idle time nor duplicate the replayed chunk");
 }
 
-static cardio::promise<void> check_cancelled_pause_async(elder_terms::WebdavClientOpenOptions options) {
+static cardio::promise<void> check_cancelled_pause_async(
+    elder_terms::WebdavClientOpenOptions options, bool upload) {
   using namespace elder_terms;
   const auto endpoint = webdav_endpoint(options.connection);
   auto session = create_curl_http_session(options.connection, options.password);
+  if (upload) {
+    CurlHttpRequest initial;
+    initial.method = "GET";
+    initial.url = webdav_resource_url(endpoint, "/hello.txt");
+    const auto result = co_await perform_http_request_async(session, std::move(initial), {});
+    expect(result.code == CURLE_OK && result.status == 200,
+           "A paused upload must start with an authenticated session");
+  }
   auto state = std::make_shared<PausedResponse>();
   auto paused = state->paused.get_promise();
   cardio::cancellation_source cancellation;
   CurlHttpRequest request;
-  request.method = "GET";
-  request.url = webdav_resource_url(endpoint, "/hello.txt");
-  request.receive = [state](std::span<const std::byte>) {
-    state->paused.try_resolve();
-    return std::size_t{CURL_WRITEFUNC_PAUSE};
-  };
-  auto receiving = receive_paused_response_async(session, std::move(request), state, cancellation.get_cancellation());
+  request.method = upload ? "PUT" : "GET";
+  request.url = webdav_resource_url(endpoint, upload ? "/cancelled-pause.bin" : "/hello.txt");
+  if (upload) {
+    request.upload_size = 1;
+    request.send = [state](std::span<std::byte>) {
+      ++state->callbacks;
+      state->paused.try_resolve();
+      return std::size_t{CURL_READFUNC_PAUSE};
+    };
+  } else {
+    request.receive = [state](std::span<const std::byte>) {
+      ++state->callbacks;
+      state->paused.try_resolve();
+      return std::size_t{CURL_WRITEFUNC_PAUSE};
+    };
+  }
+  auto transferring = perform_paused_request_async(session, std::move(request), state, cancellation.get_cancellation());
   co_await paused;
   const bool was_paused = !state->finished;
   (void)cancellation.cancel();
-  co_await receiving;
+  co_await transferring;
   bool canceled = false;
   try { if (state->failure) std::rethrow_exception(state->failure); }
   catch (const cardio::canceled_exception &) { canceled = true; }
   std::exception_ptr failure;
   try {
-    expect(was_paused && canceled, "Cancellation must retire a paused curl response without requiring resume");
+    expect(was_paused && canceled, "Cancellation must retire a paused curl operation without requiring resume");
+    expect(state->callbacks == 1, "Cancellation must not replay a paused user callback");
+    CurlHttpRequest next;
+    next.method = "GET";
+    next.url = webdav_resource_url(endpoint, "/hello.txt");
+    const auto result = co_await perform_http_request_async(session, std::move(next), {});
+    if (!(result.code == CURLE_OK && result.status == 200 && result.body == "Hello DAV!\r\n"))
+      std::cerr << "Paused " << (upload ? "upload" : "download") << " reuse: curl="
+                << static_cast<int>(result.code) << ", status=" << result.status
+                << ", bytes=" << result.body.size() << ", error=" << result.error << '\n';
+    expect(result.code == CURLE_OK && result.status == 200 && result.body == "Hello DAV!\r\n",
+           "A session must be reusable immediately after paused-transfer cancellation");
+  } catch (...) { failure = std::current_exception(); }
+  co_await stop_curl_http_session_async(session);
+  if (failure) std::rethrow_exception(failure);
+}
+
+static cardio::promise<void> check_rejected_pause_async(elder_terms::WebdavClientOpenOptions options) {
+  using namespace elder_terms;
+  const auto endpoint = webdav_endpoint(options.connection);
+  auto session = create_curl_http_session(options.connection, options.password);
+  auto probe = create_curl_http_session(options.connection, options.password);
+  auto state = std::make_shared<PausedResponse>();
+  auto paused = state->paused.get_promise();
+  CurlHttpRequest request;
+  request.method = "PUT";
+  request.url = webdav_resource_url(endpoint, "/reject-paused-upload.bin");
+  request.upload_size = 1;
+  // Receive 100 Continue before pausing, so the server already has the headers.
+  request.headers.emplace_back("Expect: 100-continue");
+  request.send = [state](std::span<std::byte>) {
+    ++state->callbacks;
+    state->paused.try_resolve();
+    return std::size_t{CURL_READFUNC_PAUSE};
+  };
+  auto transferring = perform_paused_request_async(session, std::move(request), state, {});
+  std::exception_ptr failure;
+  try {
+    co_await paused;
+    if (state->failure) std::rethrow_exception(state->failure);
+    expect(!state->finished, "The upload must pause before its rejection is released");
+    CurlHttpRequest release;
+    release.method = "GET";
+    release.url = webdav_resource_url(endpoint, "/release-paused-rejection");
+    const auto released = co_await perform_http_request_async(probe, std::move(release), {});
+    expect(released.code == CURLE_OK && released.status == 204, "The server must release the early rejection");
+    co_await transferring;
+    if (state->failure) std::rethrow_exception(state->failure);
+    expect(state->result.code == CURLE_OK && state->result.status == 403 && state->callbacks == 1,
+           "An early rejection must finish a paused upload without requesting more body bytes");
     CurlHttpRequest next;
     next.method = "GET";
     next.url = webdav_resource_url(endpoint, "/hello.txt");
     const auto result = co_await perform_http_request_async(session, std::move(next), {});
     expect(result.code == CURLE_OK && result.status == 200 && result.body == "Hello DAV!\r\n",
-           "A session must be reusable immediately after paused-response cancellation");
+           "A session must be reusable after the server rejects a paused upload");
   } catch (...) { failure = std::current_exception(); }
   co_await stop_curl_http_session_async(session);
+  co_await transferring;
+  co_await stop_curl_http_session_async(probe);
   if (failure) std::rethrow_exception(failure);
 }
 
@@ -256,6 +327,28 @@ static cardio::promise<void> check_downloads_async(std::shared_ptr<elder_terms::
   } catch (const std::exception &) { failed = true; }
   expect(failed && read_local_file(destination) == "original content",
          "Truncated GET must fail without replacing the existing destination");
+  FileTransferRequest identity_request;
+  identity_request.direction = FileTransferDirection::receive;
+  identity_request.source_paths = {"/identity.bin"};
+  identity_request.destination_directory = directory.path.string();
+  auto identity_pending = run_file_transfer_async(client, std::move(identity_request), {});
+  co_await identity_pending;
+  expect(read_local_file(directory.path / "identity.bin") == "identity transfer\n",
+         "Identity encoding with HTTP optional whitespace preserves the file content");
+  const auto encoded_destination = directory.path / "encoded.bin";
+  { std::ofstream output(encoded_destination, std::ios::binary); output << "original encoded destination"; }
+  FileTransferRequest encoded_request;
+  encoded_request.direction = FileTransferDirection::receive;
+  encoded_request.source_paths = {"/encoded.bin"};
+  encoded_request.destination_directory = directory.path.string();
+  encoded_request.callbacks.conflict = overwrite_conflict;
+  bool encoded_failed = false;
+  try {
+    auto pending = run_file_transfer_async(client, std::move(encoded_request), {});
+    co_await pending;
+  } catch (const std::exception &) { encoded_failed = true; }
+  expect(encoded_failed && read_local_file(encoded_destination) == "original encoded destination",
+         "Unnegotiated HTTP content encoding must not be committed as corrupted file bytes");
   for (const auto &entry : std::filesystem::directory_iterator(directory.path))
     expect(entry.path().filename().string().find(".elder-terms-part-") == std::string::npos,
            "Failed downloads must remove their local temporary files");
@@ -530,6 +623,9 @@ static cardio::promise<void> check_async(elder_terms::WebdavClientOpenOptions op
         expect(message.find("Unsupported authentication") != std::string::npos,
                "An unsupported-only challenge must identify the mechanism, not imply an incorrect password");
       }
+    } else if (mode == "reject-paused-upload") {
+      if (opening_failure) std::rethrow_exception(opening_failure);
+      co_await check_rejected_pause_async(transport_options);
     } else if (mode == "bounded-upload" || mode == "abandon-upload") {
       if (opening_failure) std::rethrow_exception(opening_failure);
       co_await check_bounded_upload_async(client, mode == "abandon-upload");
@@ -555,7 +651,8 @@ static cardio::promise<void> check_async(elder_terms::WebdavClientOpenOptions op
       client->end_transfer();
       co_await check_downloads_async(client);
       co_await check_paused_http_async(transport_options);
-      co_await check_cancelled_pause_async(transport_options);
+      co_await check_cancelled_pause_async(transport_options, false);
+      co_await check_cancelled_pause_async(transport_options, true);
       co_await check_uploads_async(client, transport_options.connection.authentication);
       const auto capabilities = client->capabilities();
       expect(!capabilities.symbolic_links && !capabilities.permissions && !capabilities.access_time && !capabilities.modification_time,

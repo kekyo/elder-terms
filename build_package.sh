@@ -411,6 +411,10 @@ validate_deb_package() {
 		usr/share/locale/ja/LC_MESSAGES/elder-terms.mo \
 		usr/share/doc/elder-terms/README.md \
 		usr/share/doc/elder-terms/README_ja.md \
+		usr/share/doc/elder-terms/docs/ja/webdav.md \
+		usr/share/doc/elder-terms/docs/ja/webdav-validation.md \
+		usr/share/doc/elder-terms/docs/en/webdav.md \
+		usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 		usr/share/doc/elder-terms/copyright; do
 		assert_file "$tmp_dir/$required_file"
 	done

@@ -363,6 +363,20 @@ remote_directory=.
 
 For more information about FTPS and FTP details, see [the document](./docs/ja/ftp-ftps.md).
 
+## Using WebDAV
+
+Select `WebDAV` as the connection type, then set the address, published path,
+and authentication on the WebDAV tab. For `https://files.example.com/dav/team/`,
+use `files.example.com` as the address and `/dav/team/` as the published path.
+HTTPS is the default; HTTP is also available.
+
+The shared SFTP/FTP/FTPS browser supports file and folder uploads and downloads,
+folder creation, renaming, and deletion. Basic/Digest passwords are entered when
+connecting and are not saved. HTTPS certificate failures are either rejected or
+shown in the same confirmation overlay as FTPS, according to the connection settings.
+
+See [Using WebDAV](./docs/en/webdav.md) for settings and supported operations.
+
 ## Local Startup Process
 
 For a Local connection, "Startup command" on the Local tab selects the process
@@ -929,6 +943,8 @@ and values changed for an individual connection take precedence over them.
 
 ## Building from Source
 
+WebDAV requires libcurl 7.88.1 or newer with HTTP/HTTPS and asynchronous DNS, plus [libxml2](https://gnome.pages.gitlab.gnome.org/libxml2/) 2.9.14 or newer.
+
 The FTP client requires [libcurl](https://curl.se/libcurl/) 7.88.1 or newer
 with FTP and asynchronous DNS support. FTPS additionally requires a
 [TLS-enabled libcurl build](https://curl.se/libcurl/c/libcurl-tutorial.html).
@@ -945,7 +961,7 @@ sudo apt update
 sudo apt install build-essential git meson ninja-build pkg-config gettext \
   libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev \
   libxkbcommon-dev liburing-dev libudev-dev libpcre2-dev libssh-dev libcurl4-openssl-dev \
-  libvte-2.91-dev libssl-dev ca-certificates xdg-utils
+  libvte-2.91-dev libssl-dev libxml2-dev ca-certificates xdg-utils
 ```
 
 Node.js 20 or later is also required. The Node.js package provided by your

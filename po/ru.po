@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-04 11:49+0900\n"
+"POT-Creation-Date: 2026-09-12 19:57+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Russian\n"
@@ -13,790 +13,976 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
-#: shared/src/settings-widget/settings-presentation.cpp
-msgid "Active indicator color"
-msgstr "Цвет активного индикатора"
-
-msgid "Inactive indicator color"
-msgstr "Цвет неактивного индикатора"
-
-#: shared/src/settings-widget/settings-presentation.cpp
-msgid "Default color"
-msgstr "Цвет по умолчанию"
-
-#: elder-terms-vte/src/main-window.ui
-msgid "Reconnect"
-msgstr "Подключиться снова"
-
-#: elder-terms-vte/src/main-window.cpp
-msgid "TELNET connection failed"
-msgstr "Не удалось установить соединение TELNET"
-
-#: elder-terms-vte/src/main-window.cpp
-#, c-format
-msgid "TELNET connection failed:\n%s"
-msgstr "Не удалось установить соединение TELNET:\n%s"
-
 #: shared/src/settings-widget/settings-presentation.cpp:25
-msgid "Connection name"
-msgstr "Имя соединения"
+msgid "Encryption"
+msgstr ""
 
 #: shared/src/settings-widget/settings-presentation.cpp:26
-msgid "Connection type"
-msgstr "Тип соединения"
+msgid "Connection security"
+msgstr "Защита соединения"
 
-#: shared/src/settings-widget/settings-presentation.cpp:28
-msgid "Open connection shortcut"
-msgstr "Открыть ярлык подключения"
-
-#: shared/src/settings-widget/settings-presentation.cpp:29
-msgid "Display language"
-msgstr "Язык отображения"
-
-#: shared/src/settings-widget/settings-presentation.cpp:30
-msgid "Startup mode"
-msgstr "Режим запуска"
-
-#: shared/src/settings-widget/settings-presentation.cpp:32
-msgid "Open application shortcut"
-msgstr "Открыть ярлык приложения"
-
-#: shared/src/settings-widget/settings-presentation.cpp:34
-msgid "Title and status bar background"
-msgstr "Фон заголовка и строки состояния"
-
-#: shared/src/settings-widget/settings-presentation.cpp:35
-msgid "Content background"
-msgstr "Фон содержимого"
-
-#: shared/src/settings-widget/settings-presentation.cpp:36
-msgid "Startup command"
-msgstr "Команда запуска"
-
-#: shared/src/settings-widget/settings-presentation.cpp:37
-msgid "Character encoding"
-msgstr "Кодировка символов"
-
-#: shared/src/settings-widget/settings-presentation.cpp:38
-msgid "Backspace code"
-msgstr "Код возврата"
-
-#: shared/src/settings-widget/settings-presentation.cpp:39
-msgid "Cursor key mode"
-msgstr "Режим клавиши курсора"
-
-#: shared/src/settings-widget/settings-presentation.cpp:40
-msgid "Enter/Return code"
-msgstr "Код Enter/Return"
-
-#: shared/src/settings-widget/settings-presentation.cpp:41
-msgid "Columns"
-msgstr "Столбцы"
-
-#: shared/src/settings-widget/settings-presentation.cpp:42
-msgid "Rows"
-msgstr "Строки"
-
-#: shared/src/settings-widget/settings-presentation.cpp:44
-msgid "Scrollback lines"
-msgstr "Строки буфера прокрутки"
-
-#: shared/src/settings-widget/settings-presentation.cpp:45
-msgid "Zoom factor"
-msgstr "Коэффициент масштабирования"
-
-msgid "Font families"
-msgstr "Семейства шрифтов"
-
-
-#: shared/src/settings-widget/settings-presentation.cpp:51
-msgid "Close window when session ends"
-msgstr "Закрыть окно по завершении сеанса"
-
-#: shared/src/settings-widget/settings-presentation.cpp:53
-msgid "Show window side borders"
-msgstr "Показывать боковые границы окна"
-
-#: shared/src/settings-widget/settings-presentation.cpp:55
-msgid "Window side border width (px)"
-msgstr "Ширина боковых границ окна (пикс.)"
-
-#: shared/src/settings-widget/settings-presentation.cpp:56
-msgid "BEL sound"
-msgstr "Звук BEL"
-
-#: shared/src/settings-widget/settings-presentation.cpp:57
-msgid "Zoom in shortcut"
-msgstr "Увеличить ярлык"
-
-#: shared/src/settings-widget/settings-presentation.cpp:58
-msgid "Zoom out shortcut"
-msgstr "Ярлык уменьшения масштаба"
-
-#: shared/src/settings-widget/settings-presentation.cpp:60
-msgid "Send BREAK shortcut"
-msgstr "Сочетание клавиш отправки BREAK"
-
-#: shared/src/settings-widget/settings-presentation.cpp:61
-#: shared/src/settings-widget/settings-presentation.cpp:64
-#: shared/src/settings-widget/settings-presentation.cpp:71
+#: shared/src/settings-widget/settings-presentation.cpp:27
+#: shared/src/settings-widget/settings-presentation.cpp:81
+#: shared/src/settings-widget/settings-presentation.cpp:84
+#: shared/src/settings-widget/settings-presentation.cpp:91
 msgid "Address"
 msgstr "Адрес"
 
-#: shared/src/settings-widget/settings-presentation.cpp:62
-#: shared/src/settings-widget/settings-presentation.cpp:65
-#: shared/src/settings-widget/settings-presentation.cpp:72
+#: shared/src/settings-widget/settings-presentation.cpp:28
+#: shared/src/settings-widget/settings-presentation.cpp:82
+#: shared/src/settings-widget/settings-presentation.cpp:85
+#: shared/src/settings-widget/settings-presentation.cpp:92
 msgid "Port"
 msgstr "Порт"
 
-#: shared/src/settings-widget/settings-presentation.cpp:63
-#: shared/src/settings-widget/settings-presentation.cpp:68
-msgid "Terminal type"
-msgstr "Тип терминала"
+#: shared/src/settings-widget/settings-presentation.cpp:29
+msgid "Published path"
+msgstr "Опубликованный путь"
 
-#: shared/src/settings-widget/settings-presentation.cpp:66
-#: shared/src/settings-widget/settings-presentation.cpp:73
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
+#: shared/src/settings-widget/settings-presentation.cpp:30
+msgid "Authentication"
+msgstr "Аутентификация"
+
+#: shared/src/settings-widget/settings-presentation.cpp:31
+#: shared/src/settings-widget/settings-presentation.cpp:86
+#: shared/src/settings-widget/settings-presentation.cpp:93
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:440
+#: elder-terms-vte/src/webdav/webdav-application.cpp:80
 msgid "User name"
 msgstr "Имя пользователя"
 
-#: shared/src/settings-widget/settings-presentation.cpp:67
-msgid "Identity file"
-msgstr "Идентификационный файл"
-
-#: shared/src/settings-widget/settings-presentation.cpp:69
-#: shared/src/settings-widget/settings-presentation.cpp:76
+#: shared/src/settings-widget/settings-presentation.cpp:32
+#: shared/src/settings-widget/settings-presentation.cpp:89
+#: shared/src/settings-widget/settings-presentation.cpp:96
 msgid "Local directory"
 msgstr "Локальный каталог"
 
-#: shared/src/settings-widget/settings-presentation.cpp:70
-#: shared/src/settings-widget/settings-presentation.cpp:77
+#: shared/src/settings-widget/settings-presentation.cpp:33
+#: shared/src/settings-widget/settings-presentation.cpp:90
+#: shared/src/settings-widget/settings-presentation.cpp:97
 msgid "Remote directory"
 msgstr "Удаленный каталог"
 
+#: shared/src/settings-widget/settings-presentation.cpp:34
+#: shared/src/settings-widget/settings-presentation.cpp:43
+msgid "CA certificates"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:35
+#: shared/src/settings-widget/settings-presentation.cpp:42
+msgid "Certificate validation failure"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:36
+msgid "Connection timeout (seconds)"
+msgstr "Время ожидания соединения (секунды)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:37
+msgid "Idle timeout (seconds)"
+msgstr "Время ожидания при бездействии (секунды)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:38
+msgid "Minimum TLS version"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:39
+msgid "Maximum TLS version"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:40
+msgid "AUTH command preference"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:41
+msgid "TLS compatibility"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:44
+msgid "TLS 1.2 and earlier ciphers"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:45
+msgid "TLS 1.3 ciphers"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:46
+msgid "Connection name"
+msgstr "Имя соединения"
+
+#: shared/src/settings-widget/settings-presentation.cpp:47
+msgid "Connection type"
+msgstr "Тип соединения"
+
+#: shared/src/settings-widget/settings-presentation.cpp:49
+msgid "Open connection shortcut"
+msgstr "Открыть ярлык подключения"
+
+#: shared/src/settings-widget/settings-presentation.cpp:50
+msgid "Display language"
+msgstr "Язык отображения"
+
+#: shared/src/settings-widget/settings-presentation.cpp:51
+msgid "Startup mode"
+msgstr "Режим запуска"
+
+#: shared/src/settings-widget/settings-presentation.cpp:53
+msgid "Open application shortcut"
+msgstr "Открыть ярлык приложения"
+
+#: shared/src/settings-widget/settings-presentation.cpp:55
+msgid "Title and status bar background"
+msgstr "Фон заголовка и строки состояния"
+
+#: shared/src/settings-widget/settings-presentation.cpp:56
+msgid "Content background"
+msgstr "Фон содержимого"
+
+#: shared/src/settings-widget/settings-presentation.cpp:57
+msgid "Startup command"
+msgstr "Команда запуска"
+
+#: shared/src/settings-widget/settings-presentation.cpp:58
+msgid "Character encoding"
+msgstr "Кодировка символов"
+
+#: shared/src/settings-widget/settings-presentation.cpp:59
+msgid "Backspace code"
+msgstr "Код возврата"
+
+#: shared/src/settings-widget/settings-presentation.cpp:60
+msgid "Cursor key mode"
+msgstr "Режим клавиши курсора"
+
+#: shared/src/settings-widget/settings-presentation.cpp:61
+msgid "Enter/Return code"
+msgstr "Код Enter/Return"
+
+#: shared/src/settings-widget/settings-presentation.cpp:62
+msgid "Columns"
+msgstr "Столбцы"
+
+#: shared/src/settings-widget/settings-presentation.cpp:63
+msgid "Rows"
+msgstr "Строки"
+
+#: shared/src/settings-widget/settings-presentation.cpp:65
+msgid "Scrollback lines"
+msgstr "Строки буфера прокрутки"
+
+#: shared/src/settings-widget/settings-presentation.cpp:66
+msgid "Zoom factor"
+msgstr "Коэффициент масштабирования"
+
+#: shared/src/settings-widget/settings-presentation.cpp:67
+msgid "Active indicator color"
+msgstr "Цвет активного индикатора"
+
+#: shared/src/settings-widget/settings-presentation.cpp:68
+msgid "Inactive indicator color"
+msgstr "Цвет неактивного индикатора"
+
+#: shared/src/settings-widget/settings-presentation.cpp:69
+msgid "Font families"
+msgstr "Семейства шрифтов"
+
+#: shared/src/settings-widget/settings-presentation.cpp:71
+msgid "Close window when session ends"
+msgstr "Закрыть окно по завершении сеанса"
+
+#: shared/src/settings-widget/settings-presentation.cpp:73
+msgid "Show window side borders"
+msgstr "Показывать боковые границы окна"
+
 #: shared/src/settings-widget/settings-presentation.cpp:75
+msgid "Window side border width (px)"
+msgstr "Ширина боковых границ окна (пикс.)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:76
+msgid "BEL sound"
+msgstr "Звук BEL"
+
+#: shared/src/settings-widget/settings-presentation.cpp:77
+msgid "Zoom in shortcut"
+msgstr "Увеличить ярлык"
+
+#: shared/src/settings-widget/settings-presentation.cpp:78
+msgid "Zoom out shortcut"
+msgstr "Ярлык уменьшения масштаба"
+
+#: shared/src/settings-widget/settings-presentation.cpp:80
+msgid "Send BREAK shortcut"
+msgstr "Сочетание клавиш отправки BREAK"
+
+#: shared/src/settings-widget/settings-presentation.cpp:83
+#: shared/src/settings-widget/settings-presentation.cpp:88
+msgid "Terminal type"
+msgstr "Тип терминала"
+
+#: shared/src/settings-widget/settings-presentation.cpp:87
+msgid "Identity file"
+msgstr "Идентификационный файл"
+
+#: shared/src/settings-widget/settings-presentation.cpp:95
 msgid "Data connection mode"
 msgstr "Режим соединения для передачи данных"
 
-#: shared/src/settings-widget/settings-presentation.cpp:78
+#: shared/src/settings-widget/settings-presentation.cpp:98
 msgid "Device"
 msgstr "Устройство"
 
-#: shared/src/settings-widget/settings-presentation.cpp:80
+#: shared/src/settings-widget/settings-presentation.cpp:100
 msgid "Device identification"
 msgstr "Идентификация устройства"
 
-#: shared/src/settings-widget/settings-presentation.cpp:82
-#: shared/src/settings-widget/settings-presentation.cpp:270
+#: shared/src/settings-widget/settings-presentation.cpp:102
+#: shared/src/settings-widget/settings-presentation.cpp:332
 msgid "USB serial number"
 msgstr "Серийный номер USB"
 
-#: shared/src/settings-widget/settings-presentation.cpp:83
+#: shared/src/settings-widget/settings-presentation.cpp:103
 msgid "Baud rate"
 msgstr "Скорость передачи данных"
 
-#: shared/src/settings-widget/settings-presentation.cpp:84
+#: shared/src/settings-widget/settings-presentation.cpp:104
 msgid "Data bits"
 msgstr "Биты данных"
 
-#: shared/src/settings-widget/settings-presentation.cpp:85
+#: shared/src/settings-widget/settings-presentation.cpp:105
 msgid "Parity"
 msgstr "Четность"
 
-#: shared/src/settings-widget/settings-presentation.cpp:86
+#: shared/src/settings-widget/settings-presentation.cpp:106
 msgid "Stop bits"
 msgstr "Стоповые биты"
 
-#: shared/src/settings-widget/settings-presentation.cpp:87
+#: shared/src/settings-widget/settings-presentation.cpp:107
 msgid "Flow control"
 msgstr "Управление потоком"
 
-#: shared/src/settings-widget/settings-presentation.cpp:89
+#: shared/src/settings-widget/settings-presentation.cpp:109
 msgid "Connection monitoring signal"
 msgstr "Сигнал контроля соединения"
 
-#: shared/src/settings-widget/settings-presentation.cpp:91
+#: shared/src/settings-widget/settings-presentation.cpp:111
 msgid "Transfer base directory"
 msgstr "Передача базового каталога"
 
-#: shared/src/settings-widget/settings-presentation.cpp:93
+#: shared/src/settings-widget/settings-presentation.cpp:113
 msgid "Text send rate (bytes/s)"
 msgstr "Скорость отправки текста (байт/с)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:95
+#: shared/src/settings-widget/settings-presentation.cpp:115
 msgid "Follow Enter/Return code for text send"
 msgstr "Использовать код Enter/Return при отправке текста"
 
-#: shared/src/settings-widget/settings-presentation.cpp:97
+#: shared/src/settings-widget/settings-presentation.cpp:117
 msgid "Automatically start ZMODEM transfers"
 msgstr "Автоматически запускать передачу ZMODEM"
 
-#: shared/src/settings-widget/settings-presentation.cpp:98
+#: shared/src/settings-widget/settings-presentation.cpp:118
 msgid "Enable logging"
 msgstr "Включить ведение журнала"
 
-#: shared/src/settings-widget/settings-presentation.cpp:99
+#: shared/src/settings-widget/settings-presentation.cpp:119
 msgid "Log directory"
 msgstr "Каталог журналов"
 
-#: shared/src/settings-widget/settings-presentation.cpp:100
+#: shared/src/settings-widget/settings-presentation.cpp:120
 msgid "File name format"
 msgstr "Формат имени файла"
 
-#: shared/src/settings-widget/settings-presentation.cpp:101
+#: shared/src/settings-widget/settings-presentation.cpp:121
 msgid "Log content"
 msgstr "Содержимое журнала"
 
-#: shared/src/settings-widget/settings-presentation.cpp:105
+#: shared/src/settings-widget/settings-presentation.cpp:125
+msgid "FTP (unencrypted)"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:126
+msgid "FTPS (explicit TLS)"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:127
+msgid "FTPS (implicit TLS)"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:128
+msgid "Prefer AUTH TLS"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:129
+msgid "Prefer AUTH SSL"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:130
+#: shared/src/settings-widget/settings-widget.cpp:3072
+msgid "Library default"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:131
+msgid "Standard"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:132
+msgid "Legacy TLS (relaxed cipher/signature rules)"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:133
+#: shared/src/settings-widget/settings-presentation.cpp:151
+msgid "Reject connection"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:134
+#: shared/src/settings-widget/settings-presentation.cpp:152
+msgid "Confirm in an overlay"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:135
+msgid "Backend maximum"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:136
 msgid "Local shell"
 msgstr "Локальная оболочка"
 
-#: shared/src/settings-widget/settings-presentation.cpp:106
-#: shared/src/settings-widget/settings-presentation.cpp:184
+#: shared/src/settings-widget/settings-presentation.cpp:137
+#: shared/src/settings-widget/settings-presentation.cpp:226
 msgid "TELNET"
 msgstr "TELNET"
 
-#: shared/src/settings-widget/settings-presentation.cpp:107
-#: shared/src/settings-widget/settings-presentation.cpp:186
+#: shared/src/settings-widget/settings-presentation.cpp:138
+#: shared/src/settings-widget/settings-presentation.cpp:228
 msgid "Serial"
 msgstr "Последовательный порт"
 
-#: shared/src/settings-widget/settings-presentation.cpp:108
-#: shared/src/settings-widget/settings-presentation.cpp:188
-#: elder-terms-vte/src/main-window.cpp:1544
+#: shared/src/settings-widget/settings-presentation.cpp:139
+#: shared/src/settings-widget/settings-presentation.cpp:230
+#: elder-terms-vte/src/main-window.cpp:1609
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:139
 msgid "SSH"
 msgstr "SSH"
 
-#: shared/src/settings-widget/settings-presentation.cpp:109
-#: shared/src/settings-widget/settings-presentation.cpp:190
-#: elder-terms-vte/src/main.cpp:1394
+#: shared/src/settings-widget/settings-presentation.cpp:140
+#: shared/src/settings-widget/settings-presentation.cpp:232
+#: elder-terms-vte/src/main.cpp:1490
 msgid "SFTP"
 msgstr "SFTP"
 
-#: shared/src/settings-widget/settings-presentation.cpp:110
-#: shared/src/settings-widget/settings-presentation.cpp:192
+#: shared/src/settings-widget/settings-presentation.cpp:141
+#: shared/src/settings-widget/settings-presentation.cpp:234
 msgid "FTP"
 msgstr "FTP"
 
-#: shared/src/settings-widget/settings-presentation.cpp:112
-msgid "System default"
-msgstr "Система по умолчанию"
-
-#: shared/src/settings-widget/settings-presentation.cpp:113
-msgid "English"
-msgstr "английский"
-
-#: shared/src/settings-widget/settings-presentation.cpp:114
-msgid "العربية"
-msgstr "العربية"
-
-#: shared/src/settings-widget/settings-presentation.cpp:115
-msgid "Español"
-msgstr "Español"
-
-#: shared/src/settings-widget/settings-presentation.cpp:116
-msgid "Français"
-msgstr "Français"
-
-#: shared/src/settings-widget/settings-presentation.cpp:117
-msgid "हिन्दी"
-msgstr "हिन्दी"
-
-#: shared/src/settings-widget/settings-presentation.cpp:118
-msgid "日本語"
-msgstr "日本語"
-
-#: shared/src/settings-widget/settings-presentation.cpp:119
-msgid "한국어"
-msgstr "한국어"
-
-#: shared/src/settings-widget/settings-presentation.cpp:120
-msgid "Português"
-msgstr "Português"
-
-#: shared/src/settings-widget/settings-presentation.cpp:121
-msgid "Русский"
-msgstr "Русский"
-
-#: shared/src/settings-widget/settings-presentation.cpp:122
-msgid "中文"
-msgstr "中文"
-
-#: shared/src/settings-widget/settings-presentation.cpp:124
-msgid "Simple startup"
-msgstr "Простой запуск"
-
-#: shared/src/settings-widget/settings-presentation.cpp:126
-msgid "Background only"
-msgstr "Только в фоновом режиме"
-
-#: shared/src/settings-widget/settings-presentation.cpp:128
-msgid "System tray only"
-msgstr "Только в системном трее"
-
-#: shared/src/settings-widget/settings-presentation.cpp:130
-msgid "System tray and main window"
-msgstr "Панель задач и главное окно"
-
-#: shared/src/settings-widget/settings-presentation.cpp:131
-#: shared/src/settings-widget/settings-presentation.cpp:136
-msgid "Auto"
-msgstr "Авто"
-
-#: shared/src/settings-widget/settings-presentation.cpp:132
-msgid "BS"
-msgstr "BS"
-
-#: shared/src/settings-widget/settings-presentation.cpp:133
-msgid "DEL"
-msgstr "DEL"
-
-#: shared/src/settings-widget/settings-presentation.cpp:134
-msgid "Normal"
-msgstr "Обычный"
-
-#: shared/src/settings-widget/settings-presentation.cpp:135
-msgid "TRS80"
-msgstr "TRS80"
-
-#: shared/src/settings-widget/settings-presentation.cpp:137
-msgid "CR"
-msgstr "CR"
-
-#: shared/src/settings-widget/settings-presentation.cpp:138
-msgid "LF"
-msgstr "LF"
-
-#: shared/src/settings-widget/settings-presentation.cpp:139
-msgid "CRLF"
-msgstr "CRLF"
-
-#: shared/src/settings-widget/settings-presentation.cpp:141
-msgid "Passive (recommended)"
-msgstr "Пассивный (рекомендуется)"
+#: shared/src/settings-widget/settings-presentation.cpp:142
+msgid "WebDAV"
+msgstr "WebDAV"
 
 #: shared/src/settings-widget/settings-presentation.cpp:143
-msgid "Active"
-msgstr "Активный"
+msgid "HTTPS (encrypted)"
+msgstr "HTTPS (с шифрованием)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:144
-#: shared/src/settings-widget/settings-presentation.cpp:153
+msgid "HTTP (unencrypted)"
+msgstr "HTTP (без шифрования)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:145
+msgid "Automatic (Basic or Digest)"
+msgstr "Автоматически (Basic или Digest)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:146
+msgid "Basic"
+msgstr "Basic"
+
+#: shared/src/settings-widget/settings-presentation.cpp:147
+msgid "Digest"
+msgstr "Digest"
+
+#: shared/src/settings-widget/settings-presentation.cpp:148
+#: shared/src/settings-widget/settings-presentation.cpp:186
+#: shared/src/settings-widget/settings-presentation.cpp:195
 msgid "None"
 msgstr "Нет"
 
-#: shared/src/settings-widget/settings-presentation.cpp:146
+#: shared/src/settings-widget/settings-presentation.cpp:149
+#: shared/src/settings-widget/settings-widget.cpp:3072
+msgid "System CA certificates"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:150
+#: shared/src/settings-widget/settings-widget.cpp:3076
+#: shared/src/settings-widget/settings-widget.cpp:3081
+msgid "Custom"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:154
+msgid "System default"
+msgstr "Система по умолчанию"
+
+#: shared/src/settings-widget/settings-presentation.cpp:155
+msgid "English"
+msgstr "английский"
+
+#: shared/src/settings-widget/settings-presentation.cpp:156
+msgid "العربية"
+msgstr "العربية"
+
+#: shared/src/settings-widget/settings-presentation.cpp:157
+msgid "Español"
+msgstr "Español"
+
+#: shared/src/settings-widget/settings-presentation.cpp:158
+msgid "Français"
+msgstr "Français"
+
+#: shared/src/settings-widget/settings-presentation.cpp:159
+msgid "हिन्दी"
+msgstr "हिन्दी"
+
+#: shared/src/settings-widget/settings-presentation.cpp:160
+msgid "日本語"
+msgstr "日本語"
+
+#: shared/src/settings-widget/settings-presentation.cpp:161
+msgid "한국어"
+msgstr "한국어"
+
+#: shared/src/settings-widget/settings-presentation.cpp:162
+msgid "Português"
+msgstr "Português"
+
+#: shared/src/settings-widget/settings-presentation.cpp:163
+msgid "Русский"
+msgstr "Русский"
+
+#: shared/src/settings-widget/settings-presentation.cpp:164
+msgid "中文"
+msgstr "中文"
+
+#: shared/src/settings-widget/settings-presentation.cpp:166
+msgid "Simple startup"
+msgstr "Простой запуск"
+
+#: shared/src/settings-widget/settings-presentation.cpp:168
+msgid "Background only"
+msgstr "Только в фоновом режиме"
+
+#: shared/src/settings-widget/settings-presentation.cpp:170
+msgid "System tray only"
+msgstr "Только в системном трее"
+
+#: shared/src/settings-widget/settings-presentation.cpp:172
+msgid "System tray and main window"
+msgstr "Панель задач и главное окно"
+
+#: shared/src/settings-widget/settings-presentation.cpp:173
+#: shared/src/settings-widget/settings-presentation.cpp:178
+msgid "Auto"
+msgstr "Авто"
+
+#: shared/src/settings-widget/settings-presentation.cpp:174
+msgid "BS"
+msgstr "BS"
+
+#: shared/src/settings-widget/settings-presentation.cpp:175
+msgid "DEL"
+msgstr "DEL"
+
+#: shared/src/settings-widget/settings-presentation.cpp:176
+msgid "Normal"
+msgstr "Обычный"
+
+#: shared/src/settings-widget/settings-presentation.cpp:177
+msgid "TRS80"
+msgstr "TRS80"
+
+#: shared/src/settings-widget/settings-presentation.cpp:179
+msgid "CR"
+msgstr "CR"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+msgid "LF"
+msgstr "LF"
+
+#: shared/src/settings-widget/settings-presentation.cpp:181
+msgid "CRLF"
+msgstr "CRLF"
+
+#: shared/src/settings-widget/settings-presentation.cpp:183
+msgid "Passive (recommended)"
+msgstr "Пассивный (рекомендуется)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:185
+msgid "Active"
+msgstr "Активный"
+
+#: shared/src/settings-widget/settings-presentation.cpp:188
 msgid "Device path"
 msgstr "Путь к устройству"
 
-#: shared/src/settings-widget/settings-presentation.cpp:148
+#: shared/src/settings-widget/settings-presentation.cpp:190
 msgid "Stable device identity"
 msgstr "Постоянный идентификатор устройства"
 
-#: shared/src/settings-widget/settings-presentation.cpp:150
+#: shared/src/settings-widget/settings-presentation.cpp:192
 msgid "Physical USB port"
 msgstr "Физический USB-порт"
 
-#: shared/src/settings-widget/settings-presentation.cpp:151
+#: shared/src/settings-widget/settings-presentation.cpp:193
 msgid "Even"
 msgstr "Даже"
 
-#: shared/src/settings-widget/settings-presentation.cpp:152
+#: shared/src/settings-widget/settings-presentation.cpp:194
 msgid "Odd"
 msgstr "Нечетный"
 
-#: shared/src/settings-widget/settings-presentation.cpp:155
+#: shared/src/settings-widget/settings-presentation.cpp:197
 msgid "XON/XOFF (software)"
 msgstr "XON/XOFF (программное обеспечение)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:157
+#: shared/src/settings-widget/settings-presentation.cpp:199
 msgid "RTS/CTS (hardware)"
 msgstr "RTS/CTS (аппаратное обеспечение)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:159
+#: shared/src/settings-widget/settings-presentation.cpp:201
 msgid "DCD (Data Carrier Detect)"
 msgstr "DCD (обнаружение носителя данных)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:161
+#: shared/src/settings-widget/settings-presentation.cpp:203
 msgid "CTS (Clear to Send)"
 msgstr "CTS (разрешено для отправки)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:163
+#: shared/src/settings-widget/settings-presentation.cpp:205
 msgid "DSR (Data Set Ready)"
 msgstr "DSR (набор данных готов)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:165
+#: shared/src/settings-widget/settings-presentation.cpp:207
 msgid "Ignore (do not monitor)"
 msgstr "Игнорировать (не отслеживать)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:167
+#: shared/src/settings-widget/settings-presentation.cpp:209
 msgid "Raw bytes (before character conversion)"
 msgstr "Необработанные байты (до преобразования символов)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:169
+#: shared/src/settings-widget/settings-presentation.cpp:211
 msgid "UTF-8 text (after character conversion)"
 msgstr "UTF-8 текст (после преобразования символов)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:180
-#: shared/src/settings-widget/application-settings-widget.cpp:313
+#: shared/src/settings-widget/settings-presentation.cpp:222
 msgid "General"
 msgstr "Общие сведения"
 
-#: shared/src/settings-widget/settings-presentation.cpp:182
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2072
+#: shared/src/settings-widget/settings-presentation.cpp:224
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2149
 msgid "Local"
 msgstr "Локальный"
 
-#: shared/src/settings-widget/settings-presentation.cpp:194
-#: elder-terms-vte/src/main-window.ui:426
-#: elder-terms-vte/src/terminal-session.cpp:226
+#: shared/src/settings-widget/settings-presentation.cpp:236
+#: elder-terms-vte/src/main-window.ui:444
+#: elder-terms-vte/src/terminal-session.cpp:402
 msgid "Terminal"
 msgstr "Терминал"
 
-#: shared/src/settings-widget/settings-presentation.cpp:196
+#: shared/src/settings-widget/settings-presentation.cpp:238
 msgid "Macro"
 msgstr "Макрос"
 
-#: shared/src/settings-widget/settings-presentation.cpp:198
+#: shared/src/settings-widget/settings-presentation.cpp:240
+msgid "Links"
+msgstr "Ссылки"
+
+#: shared/src/settings-widget/settings-presentation.cpp:242
 #: elder-terms-vte/src/main-window.ui:50
 msgid "Transfer"
 msgstr "Перенос"
 
-#: shared/src/settings-widget/settings-presentation.cpp:200
+#: shared/src/settings-widget/settings-presentation.cpp:244
 msgid "Logging"
 msgstr "Ведение журнала"
 
-#: shared/src/settings-widget/settings-presentation.cpp:202
+#: shared/src/settings-widget/settings-presentation.cpp:246
 msgid "Apply"
 msgstr "Применить"
 
-#: shared/src/settings-widget/settings-presentation.cpp:204
-#: elder-terms/src/main.cpp:483 elder-terms/src/main.cpp:752
-#: elder-terms/src/main-window.ui:221
+#: shared/src/settings-widget/settings-presentation.cpp:248
+#: elder-terms/src/main.cpp:504 elder-terms/src/main.cpp:773
+#: elder-terms/src/main-window.ui:15 elder-terms/src/main-window.ui:239
 msgid "Save"
 msgstr "Сохранить"
 
-#: shared/src/settings-widget/settings-presentation.cpp:206
-#: elder-terms/src/main.cpp:482 elder-terms/src/main.cpp:550
-#: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1688
-#: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:944
-#: elder-terms-vte/src/main-window.ui:248
-#: elder-terms-vte/src/main-window.ui:359
-#: elder-terms-vte/src/main-window.cpp:1553
+#: shared/src/settings-widget/settings-presentation.cpp:250
+#: shared/src/settings-widget/settings-widget.cpp:3181
+#: elder-terms/src/main.cpp:503 elder-terms/src/main.cpp:571
+#: elder-terms/src/main.cpp:772 elder-terms/src/main.cpp:1827
+#: elder-terms/src/main.cpp:2082 elder-terms/src/main.cpp:2343
+#: elder-terms/src/main.cpp:2418 elder-terms-vte/src/main.cpp:1040
+#: elder-terms-vte/src/main-window.ui:266
+#: elder-terms-vte/src/main-window.ui:377
+#: elder-terms-vte/src/main-window.cpp:1618
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:149
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:416
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:749
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1273
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1304
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1461
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1560
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2394
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2516
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:438
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:762
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1268
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1299
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1518
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1617
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2477
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2629
+#: shared/src/settings-widget/webdav-settings-editor.cpp:225
+#: elder-terms-vte/src/webdav/webdav-application.cpp:79
 msgid "Cancel"
 msgstr "Отменить"
 
-#: shared/src/settings-widget/settings-presentation.cpp:208
+#: shared/src/settings-widget/settings-presentation.cpp:252
 msgid "Reset"
 msgstr "Сбросить"
 
-#: shared/src/settings-widget/settings-presentation.cpp:210
-#: elder-terms-vte/src/main.cpp:943
+#: shared/src/settings-widget/settings-presentation.cpp:254
+#: elder-terms-vte/src/main.cpp:1039
 msgid "Select file"
 msgstr "Выберите файл"
 
-#: shared/src/settings-widget/settings-presentation.cpp:212
-#: elder-terms-vte/src/main.cpp:945
+#: shared/src/settings-widget/settings-presentation.cpp:256
+#: shared/src/settings-widget/settings-widget.cpp:3181
+#: elder-terms-vte/src/main.cpp:1041
+#: shared/src/settings-widget/webdav-settings-editor.cpp:225
 msgid "Open"
 msgstr "Открыть"
 
+#: shared/src/settings-widget/settings-presentation.cpp:258
 msgid "Select Terminal Font"
 msgstr "Выбор шрифта терминала"
 
+#: shared/src/settings-widget/settings-presentation.cpp:260
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:621
+msgid "Add"
+msgstr "Добавить"
 
-#: shared/src/settings-widget/settings-presentation.cpp:218
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:751
-msgid "Enabled"
-msgstr "Включено"
+#: shared/src/settings-widget/settings-presentation.cpp:262
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:624
+msgid "Remove"
+msgstr "Удалить"
 
-#: shared/src/settings-widget/settings-presentation.cpp:220
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:753
-msgid "Disabled"
-msgstr "Отключено"
-
-msgid "Inherited from: global settings"
-msgstr "Источник: глобальные настройки"
-
-msgid "Inherited from: app defaults"
-msgstr "Источник: настройки приложения"
-
-msgid "App defaults"
-msgstr "Настройки приложения"
-
-msgid "Use app defaults"
-msgstr "Использовать настройки приложения"
-
-msgid "Specify for this connection"
-msgstr "Задать для этого подключения"
-
-msgid "Specify fonts"
-msgstr "Задать шрифты"
-
-#: shared/src/settings-widget/settings-presentation.cpp:224
-msgid "No color"
-msgstr "Нет цвета"
-
-#: shared/src/settings-widget/settings-presentation.cpp:226
-msgid "Custom color"
-msgstr "Пользовательский цвет"
-
-#: shared/src/settings-widget/settings-presentation.cpp:228
-msgid "Press a key combination"
-msgstr "Нажмите комбинацию клавиш"
-
-#: shared/src/settings-widget/settings-presentation.cpp:230
-msgid "Clear key binding"
-msgstr "Очистить привязку клавиш"
-
-#: shared/src/settings-widget/settings-presentation.cpp:232
-msgid "Use global default"
-msgstr "Использовать глобальное значение по умолчанию"
-
-#: shared/src/settings-widget/settings-presentation.cpp:234
-msgid "Use built-in default"
-msgstr "Использовать встроенный"
-
-#: shared/src/settings-widget/settings-presentation.cpp:236
-msgid "Macro rules"
-msgstr "Макроправила"
-
-#: shared/src/settings-widget/settings-presentation.cpp:238
-msgid "Rule ID"
-msgstr "Идентификатор правила"
-
-#: shared/src/settings-widget/settings-presentation.cpp:240
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:673
-msgid "Regular expression"
-msgstr "Регулярное выражение"
-
-#: shared/src/settings-widget/settings-presentation.cpp:242
-msgid "Action"
-msgstr "Действие"
-
-#: shared/src/settings-widget/settings-presentation.cpp:244
-msgid "Text to send"
-msgstr "Текст для отправки"
-
-#: shared/src/settings-widget/settings-presentation.cpp:246
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:683
-msgid "Command"
-msgstr "Команда"
-
-#: shared/src/settings-widget/settings-presentation.cpp:248
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:699
-msgid "Arguments"
-msgstr "Аргументы"
-
-#: shared/src/settings-widget/settings-presentation.cpp:250
-msgid "Add rule"
-msgstr "Добавить правило"
-
-#: shared/src/settings-widget/settings-presentation.cpp:252
-msgid "Remove rule"
-msgstr "Удалить правило"
-
-#: shared/src/settings-widget/settings-presentation.cpp:254
+#: shared/src/settings-widget/settings-presentation.cpp:264
+#: shared/src/settings-widget/settings-presentation.cpp:316
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:629
 msgid "Move up"
 msgstr "Вверх"
 
-#: shared/src/settings-widget/settings-presentation.cpp:256
+#: shared/src/settings-widget/settings-presentation.cpp:266
+#: shared/src/settings-widget/settings-presentation.cpp:318
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:634
 msgid "Move down"
 msgstr "Перейти вниз"
 
-#: shared/src/settings-widget/settings-presentation.cpp:258
+#: shared/src/settings-widget/settings-presentation.cpp:268
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:759
+msgid "Enabled"
+msgstr "Включено"
+
+#: shared/src/settings-widget/settings-presentation.cpp:270
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:761
+msgid "Disabled"
+msgstr "Отключено"
+
+#: shared/src/settings-widget/settings-presentation.cpp:272
+msgid "Inherited from: global settings"
+msgstr "Источник: глобальные настройки"
+
+#: shared/src/settings-widget/settings-presentation.cpp:274
+msgid "Inherited from: app defaults"
+msgstr "Источник: настройки приложения"
+
+#: shared/src/settings-widget/settings-presentation.cpp:276
+msgid "App defaults"
+msgstr "Настройки приложения"
+
+#: shared/src/settings-widget/settings-presentation.cpp:278
+msgid "Use app defaults"
+msgstr "Использовать настройки приложения"
+
+#: shared/src/settings-widget/settings-presentation.cpp:280
+msgid "Specify for this connection"
+msgstr "Задать для этого подключения"
+
+#: shared/src/settings-widget/settings-presentation.cpp:282
+msgid "Specify fonts"
+msgstr "Задать шрифты"
+
+#: shared/src/settings-widget/settings-presentation.cpp:284
+msgid "No color"
+msgstr "Нет цвета"
+
+#: shared/src/settings-widget/settings-presentation.cpp:286
+msgid "Default color"
+msgstr "Цвет по умолчанию"
+
+#: shared/src/settings-widget/settings-presentation.cpp:288
+msgid "Custom color"
+msgstr "Пользовательский цвет"
+
+#: shared/src/settings-widget/settings-presentation.cpp:290
+msgid "Press a key combination"
+msgstr "Нажмите комбинацию клавиш"
+
+#: shared/src/settings-widget/settings-presentation.cpp:292
+msgid "Clear key binding"
+msgstr "Очистить привязку клавиш"
+
+#: shared/src/settings-widget/settings-presentation.cpp:294
+msgid "Use global default"
+msgstr "Использовать глобальное значение по умолчанию"
+
+#: shared/src/settings-widget/settings-presentation.cpp:296
+msgid "Use built-in default"
+msgstr "Использовать встроенный"
+
+#: shared/src/settings-widget/settings-presentation.cpp:298
+msgid "Macro rules"
+msgstr "Макроправила"
+
+#: shared/src/settings-widget/settings-presentation.cpp:300
+msgid "Rule ID"
+msgstr "Идентификатор правила"
+
+#: shared/src/settings-widget/settings-presentation.cpp:302
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:673
+msgid "Regular expression"
+msgstr "Регулярное выражение"
+
+#: shared/src/settings-widget/settings-presentation.cpp:304
+msgid "Action"
+msgstr "Действие"
+
+#: shared/src/settings-widget/settings-presentation.cpp:306
+msgid "Text to send"
+msgstr "Текст для отправки"
+
+#: shared/src/settings-widget/settings-presentation.cpp:308
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:683
+msgid "Command"
+msgstr "Команда"
+
+#: shared/src/settings-widget/settings-presentation.cpp:310
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:699
+msgid "Arguments"
+msgstr "Аргументы"
+
+#: shared/src/settings-widget/settings-presentation.cpp:312
+msgid "Add rule"
+msgstr "Добавить правило"
+
+#: shared/src/settings-widget/settings-presentation.cpp:314
+msgid "Remove rule"
+msgstr "Удалить правило"
+
+#: shared/src/settings-widget/settings-presentation.cpp:320
 msgid "Send text"
 msgstr "Отправить текст"
 
-#: shared/src/settings-widget/settings-presentation.cpp:260
+#: shared/src/settings-widget/settings-presentation.cpp:322
 msgid "Run command"
 msgstr "Выполнить команду"
 
-#: shared/src/settings-widget/settings-presentation.cpp:262
+#: shared/src/settings-widget/settings-presentation.cpp:324
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:691
 msgid "Add argument"
 msgstr "Добавить аргумент"
 
-#: shared/src/settings-widget/settings-presentation.cpp:264
+#: shared/src/settings-widget/settings-presentation.cpp:326
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:267
 msgid "Remove argument"
 msgstr "Удалить аргумент"
 
-#: shared/src/settings-widget/settings-presentation.cpp:266
+#: shared/src/settings-widget/settings-presentation.cpp:328
 msgid "No device"
 msgstr "Нет устройства"
 
-#: shared/src/settings-widget/settings-presentation.cpp:268
+#: shared/src/settings-widget/settings-presentation.cpp:330
 msgid "Stable ID"
 msgstr "Постоянный ID"
 
-#: shared/src/settings-widget/settings-presentation.cpp:272
+#: shared/src/settings-widget/settings-presentation.cpp:334
 msgid "Current device node"
 msgstr "Текущий узел устройства"
 
-#: shared/src/settings-widget/settings-presentation.cpp:274
+#: shared/src/settings-widget/settings-presentation.cpp:336
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:10
 msgid "Unavailable"
 msgstr "Недоступно"
 
-#: shared/src/settings-widget/settings-presentation.cpp:276
+#: shared/src/settings-widget/settings-presentation.cpp:338
 msgid "IP scan"
 msgstr "Сканирование IP"
 
-#: shared/src/settings-widget/settings-presentation.cpp:278
+#: shared/src/settings-widget/settings-presentation.cpp:340
 msgid "IP address"
 msgstr "IP-адрес"
 
-#: shared/src/settings-widget/settings-presentation.cpp:280
+#: shared/src/settings-widget/settings-presentation.cpp:342
 msgid "Hostname"
 msgstr "Имя хоста"
 
-#: shared/src/settings-widget/settings-presentation.cpp:282
+#: shared/src/settings-widget/settings-presentation.cpp:344
 msgid "SSH/SFTP(22)"
 msgstr "SSH/SFTP(22)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:284
+#: shared/src/settings-widget/settings-presentation.cpp:346
 msgid "TELNET(23)"
 msgstr "TELNET(23)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:286
+#: shared/src/settings-widget/settings-presentation.cpp:348
 msgid "FTP(21)"
 msgstr "FTP(21)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:288
+#: shared/src/settings-widget/settings-presentation.cpp:350
 msgid "Scanning…"
 msgstr "Сканирование…"
 
-#: shared/src/settings-widget/settings-presentation.cpp:290
+#: shared/src/settings-widget/settings-presentation.cpp:352
 msgid "Scan complete"
 msgstr "Сканирование завершено"
 
-#: shared/src/settings-widget/settings-presentation.cpp:292
+#: shared/src/settings-widget/settings-presentation.cpp:354
 msgid "Scan failed"
 msgstr "Ошибка сканирования"
 
-#: shared/src/settings-widget/settings-presentation.cpp:320
+#: shared/src/settings-widget/settings-presentation.cpp:382
 msgid "Global default"
 msgstr "Глобальное значение по умолчанию"
 
-#: shared/src/settings-widget/settings-presentation.cpp:321
+#: shared/src/settings-widget/settings-presentation.cpp:383
 msgid "Built-in default"
 msgstr "Встроенный по умолчанию"
 
-#: shared/src/settings-widget/settings-presentation.cpp:325
+#: shared/src/settings-widget/settings-presentation.cpp:387
 #, c-format
 msgid "%s (global default)"
 msgstr "%s (глобальное значение по умолчанию)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:326
+#: shared/src/settings-widget/settings-presentation.cpp:388
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s (встроено по умолчанию)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:337
+#: shared/src/settings-widget/settings-presentation.cpp:399
 msgid "Enter a whole number"
 msgstr "Введите целое число"
 
-#: shared/src/settings-widget/settings-presentation.cpp:340
+#: shared/src/settings-widget/settings-presentation.cpp:402
 msgid "Enter a number"
 msgstr "Введите номер"
 
-#: shared/src/settings-widget/settings-presentation.cpp:351
+#: shared/src/settings-widget/settings-presentation.cpp:413
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "Значение должно быть между %s и %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:360
+#: shared/src/settings-widget/settings-presentation.cpp:422
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "Должен включать Ctrl, Shift, Alt или Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:363
+#: shared/src/settings-widget/settings-presentation.cpp:425
 msgid "Contains an empty token"
 msgstr "Содержит пустой токен"
 
-#: shared/src/settings-widget/settings-presentation.cpp:372
+#: shared/src/settings-widget/settings-presentation.cpp:434
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "Содержит неизвестный модификатор: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:385
+#: shared/src/settings-widget/settings-presentation.cpp:447
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "Содержит повторяющийся модификатор: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:393
+#: shared/src/settings-widget/settings-presentation.cpp:455
 msgid "Does not contain a key"
 msgstr "Не содержит ключа"
 
-#: shared/src/settings-widget/settings-presentation.cpp:400
+#: shared/src/settings-widget/settings-presentation.cpp:462
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "Содержит неизвестный ключ: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:408
+#: shared/src/settings-widget/settings-presentation.cpp:470
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr ""
 "Для увеличения и уменьшения масштаба необходимо использовать разные "
 "сочетания клавиш"
 
-#: shared/src/settings-widget/settings-presentation.cpp:411
+#: shared/src/settings-widget/settings-presentation.cpp:473
 msgid "Must not be empty"
 msgstr "Не должно быть пустым"
 
-#: shared/src/settings-widget/settings-presentation.cpp:414
+#: shared/src/settings-widget/settings-presentation.cpp:476
 msgid "The character encoding is not supported"
 msgstr "Кодировка символов не поддерживается"
 
-#: shared/src/settings-widget/settings-presentation.cpp:417
+#: shared/src/settings-widget/settings-presentation.cpp:479
 msgid "Contains a NUL byte"
 msgstr "Содержит байт NUL"
 
-#: shared/src/settings-widget/settings-presentation.cpp:422
+#: shared/src/settings-widget/settings-presentation.cpp:484
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
 msgstr ""
 "Введите default или выберите существующий файл .oga, .ogg или .wav с "
 "абсолютным путём"
 
-#: shared/src/settings-widget/settings-presentation.cpp:425
+#: shared/src/settings-widget/settings-presentation.cpp:487
 msgid "Contains an unmatched closing brace"
 msgstr "Содержит несовпадающую закрывающую скобку"
 
-#: shared/src/settings-widget/settings-presentation.cpp:428
+#: shared/src/settings-widget/settings-presentation.cpp:490
 msgid "Contains an unmatched opening brace"
 msgstr "Содержит несовпадающую открывающую скобку"
 
-#: shared/src/settings-widget/settings-presentation.cpp:431
+#: shared/src/settings-widget/settings-presentation.cpp:493
 msgid "Contains an unknown placeholder"
 msgstr "Содержит неизвестный заполнитель"
 
-#: shared/src/settings-widget/settings-presentation.cpp:434
+#: shared/src/settings-widget/settings-presentation.cpp:496
 msgid "Must be relative to the log base directory"
 msgstr "Должно быть относительно базового каталога журнала"
 
-#: shared/src/settings-widget/settings-presentation.cpp:437
+#: shared/src/settings-widget/settings-presentation.cpp:499
 msgid "Must not contain parent directory traversal"
 msgstr "Не должен содержать обход родительского каталога"
 
-#: shared/src/settings-widget/settings-presentation.cpp:440
+#: shared/src/settings-widget/settings-presentation.cpp:502
 msgid "Must name a log file"
 msgstr "Файл журнала должен называться"
 
-#: shared/src/settings-widget/settings-presentation.cpp:442
+#: shared/src/settings-widget/settings-presentation.cpp:504
 msgid "Invalid value"
 msgstr "Недопустимое значение"
 
-#: shared/src/settings-widget/application-settings-widget.cpp:322
-msgid "Links"
-msgstr "Ссылки"
+#: shared/src/settings-widget/settings-widget.cpp:3054
+#: shared/src/settings-widget/settings-widget.cpp:3120
+#: shared/src/settings-widget/settings-widget.cpp:3143
+#: shared/src/settings-widget/settings-widget.cpp:6448
+#: shared/src/settings-widget/webdav-settings-editor.cpp:100
+msgid "Enter a valid value"
+msgstr "Введите допустимое значение"
+
+#: shared/src/settings-widget/settings-widget.cpp:3092
+#: shared/src/settings-widget/webdav-settings-editor.cpp:129
+msgid "Invalid value:"
+msgstr ""
+
+#: shared/src/settings-widget/settings-widget.cpp:3180
+#: shared/src/settings-widget/webdav-settings-editor.cpp:224
+msgid "Select a PEM CA bundle"
+msgstr ""
+
+#: shared/src/settings-widget/settings-widget.cpp:3188
+msgid "PEM CA bundles"
+msgstr ""
+
+#: shared/src/settings-widget/settings-widget.cpp:3216
+#: shared/src/settings-widget/webdav-settings-editor.cpp:261
+msgid "Browse…"
+msgstr ""
 
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:175
 msgid "Identifier must be unique"
@@ -813,14 +999,6 @@ msgstr "Переместить аргумент вниз"
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:603
 msgid "Rules"
 msgstr "Правила"
-
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:621
-msgid "Add"
-msgstr "Добавить"
-
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:624
-msgid "Remove"
-msgstr "Удалить"
 
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:658
 msgid "Identifier"
@@ -870,19 +1048,19 @@ msgstr ""
 msgid "Path template"
 msgstr "Шаблон пути"
 
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:747
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:755
 msgid "Link actions"
 msgstr "Действия со ссылками"
 
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:765
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:773
 msgid "Restore defaults"
 msgstr "Восстановить значения по умолчанию"
 
-#: elder-terms/src/main.cpp:242
+#: elder-terms/src/main.cpp:262
 msgid "Global shortcuts are unavailable"
 msgstr "Глобальные ярлыки недоступны"
 
-#: elder-terms/src/main.cpp:251
+#: elder-terms/src/main.cpp:271
 msgid ""
 "One or more configured global shortcuts could not be registered and will not "
 "work. Check whether your desktop environment supports global shortcuts."
@@ -891,189 +1069,278 @@ msgstr ""
 "зарегистрированы и не будут работать. Проверьте, поддерживает ли ваша среда "
 "рабочего стола глобальные ярлыки."
 
-#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:375
-#: elder-terms-vte/src/main-window.cpp:1552
+#: elder-terms/src/main.cpp:275 elder-terms-vte/src/main-window.ui:393
+#: elder-terms-vte/src/main-window.cpp:1617
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:148
 msgid "OK"
 msgstr "ОК"
 
-#: elder-terms/src/main.cpp:295
+#: elder-terms/src/main.cpp:315
 msgid "Restart to apply display language?"
 msgstr "Перезапустить, чтобы применить язык отображения?"
 
-#: elder-terms/src/main.cpp:298
+#: elder-terms/src/main.cpp:318
 msgid ""
 "The display language change will take effect after elder-terms restarts."
 msgstr ""
 "Изменение языка отображения вступит в силу после перезапуска elder-terms."
 
-#: elder-terms/src/main.cpp:301
+#: elder-terms/src/main.cpp:321
 msgid "Later"
 msgstr "Позже"
 
-#: elder-terms/src/main.cpp:303
+#: elder-terms/src/main.cpp:323
 msgid "Restart now"
 msgstr "Перезагрузить сейчас"
 
-#: elder-terms/src/main.cpp:432
+#: elder-terms/src/main.cpp:453
 msgid "Failed to save connection defaults"
 msgstr "Не удалось сохранить настройки соединения по умолчанию"
 
-#: elder-terms/src/main.cpp:463 elder-terms/src/main-window.ui:204
+#: elder-terms/src/main.cpp:484 elder-terms/src/main-window.ui:222
 msgid "Connection defaults"
 msgstr "Настройки соединения по умолчанию"
 
-#: elder-terms/src/main.cpp:550
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1303
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1460
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2515
+#: elder-terms/src/main.cpp:571
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1298
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1517
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2628
 msgid "Close"
 msgstr "Закрыть"
 
-#: elder-terms/src/main.cpp:627
+#: elder-terms/src/main.cpp:648
 msgid "Failed to save application settings"
 msgstr "Не удалось сохранить настройки приложения"
 
-#: elder-terms/src/main.cpp:668
+#: elder-terms/src/main.cpp:689
 #, c-format
 msgid "Version %s"
 msgstr "Версия %s"
 
-#: elder-terms/src/main.cpp:712 elder-terms/src/main.cpp:737
-#: elder-terms/src/main-window.ui:61 elder-terms-vte/src/main-window.ui:33
+#: elder-terms/src/main.cpp:733 elder-terms/src/main.cpp:758
+#: elder-terms/src/main-window.ui:79 elder-terms-vte/src/main-window.ui:33
 msgid "Application"
 msgstr "Приложение"
 
-#: elder-terms/src/main.cpp:740
+#: elder-terms/src/main.cpp:761
 msgid "About"
 msgstr "О программе"
 
-#: elder-terms/src/main.cpp:986
+#: elder-terms/src/main.cpp:1007
 #, c-format
 msgid "Open connection %s"
 msgstr "Открытое соединение %s"
 
-#: elder-terms/src/main.cpp:1013 elder-terms/src/tray-backend.cpp:373
+#: elder-terms/src/main.cpp:1034 elder-terms/src/tray-backend.cpp:373
 #: elder-terms/src/tray-backend.cpp:400 elder-terms/src/tray-backend.cpp:907
 msgid "Open elder-terms"
 msgstr "Открыть elder-terms"
 
-#: elder-terms/src/main.cpp:1068 elder-terms/src/main.cpp:1620
+#: elder-terms/src/main.cpp:1106 elder-terms/src/main.cpp:1755
 msgid "Failed to load connection"
 msgstr "Не удалось загрузить соединение"
 
-#: elder-terms/src/main.cpp:1115
+#: elder-terms/src/main.cpp:1155
 msgid "New connection"
 msgstr "Новое соединение"
 
-#: elder-terms/src/main.cpp:1116
+#: elder-terms/src/main.cpp:1156
 #, c-format
 msgid "New connection %d"
 msgstr "Новое соединение %d"
 
-#: elder-terms/src/main.cpp:1294 elder-terms/src/main.cpp:1311
+#: elder-terms/src/main.cpp:1310
+msgid "Connection changed outside elder-terms"
+msgstr "Подключение изменено вне elder-terms"
+
+#: elder-terms/src/main.cpp:1313
+msgid ""
+"Reload the file and discard your unsaved changes, or keep editing. Saving "
+"kept edits will require confirmation before overwriting the file."
+msgstr ""
+"Перезагрузите файл, отбросив несохранённые изменения, или сохраните текущие "
+"правки. Для записи сохранённых правок потребуется подтверждение перезаписи "
+"файла."
+
+#: elder-terms/src/main.cpp:1316
+msgid "Keep edits"
+msgstr "Сохранить правки в редакторе"
+
+#: elder-terms/src/main.cpp:1318
+msgid "Reload from file"
+msgstr "Перезагрузить из файла"
+
+#: elder-terms/src/main.cpp:1428 elder-terms/src/main.cpp:1445
 msgid "Failed to monitor connections"
 msgstr "Не удалось отслеживать соединения"
 
-#: elder-terms/src/main.cpp:1307
+#: elder-terms/src/main.cpp:1441
 msgid "Unknown file monitor error"
 msgstr "Неизвестная ошибка монитора файлов"
 
-#: elder-terms/src/main.cpp:1459
+#: elder-terms/src/main.cpp:1593
 msgid "Failed to create startup profile"
 msgstr "Не удалось создать профиль запуска"
 
-#: elder-terms/src/main.cpp:1516 elder-terms/src/main.cpp:1585
+#: elder-terms/src/main.cpp:1650 elder-terms/src/main.cpp:1720
 #, c-format
 msgid "Failed to start %s"
 msgstr "Не удалось запустить %s"
 
-#: elder-terms/src/main.cpp:1523
+#: elder-terms/src/main.cpp:1657
 #, c-format
 msgid "The %s executable was not found"
 msgstr "Исполняемый файл %s не найден"
 
-#: elder-terms/src/main.cpp:1551
+#: elder-terms/src/main.cpp:1685
 msgid "Unknown process launch error"
 msgstr "Неизвестная ошибка запуска процесса"
 
-#: elder-terms/src/main.cpp:1683
+#: elder-terms/src/main.cpp:1822
 msgid "Discard changes?"
 msgstr "Отменить изменения?"
 
-#: elder-terms/src/main.cpp:1686
+#: elder-terms/src/main.cpp:1825
 msgid "The current connection has changes that have not been applied."
 msgstr "В текущем соединении есть изменения, которые не были применены."
 
-#: elder-terms/src/main.cpp:1690
+#: elder-terms/src/main.cpp:1829
 msgid "Discard"
 msgstr "Отменить"
 
-#: elder-terms/src/main.cpp:1843
+#: elder-terms/src/main.cpp:1940
+msgid "Save and open in text editor"
+msgstr "Сохранить и открыть в текстовом редакторе"
+
+#: elder-terms/src/main.cpp:1940 elder-terms/src/main-window.ui:21
+msgid "Edit in text editor"
+msgstr "Редактировать в текстовом редакторе"
+
+#: elder-terms/src/main.cpp:2013
 msgid "Failed to duplicate connection"
 msgstr "Не удалось дублировать соединение"
 
-#: elder-terms/src/main.cpp:1877
+#: elder-terms/src/main.cpp:2047
 msgid "Failed to delete connection"
 msgstr "Не удалось удалить соединение"
 
-#: elder-terms/src/main.cpp:1904
+#: elder-terms/src/main.cpp:2075
 msgid "Delete connection?"
 msgstr "Удалить соединение?"
 
-#: elder-terms/src/main.cpp:1906
+#: elder-terms/src/main.cpp:2077
 #, c-format
 msgid "The connection \"%s\" will be permanently deleted."
 msgstr "Соединение «%s» будет удалено без возможности восстановления."
 
-#: elder-terms/src/main.cpp:1913 elder-terms/src/main-window.ui:27
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1559
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2165
+#: elder-terms/src/main.cpp:2084 elder-terms/src/main-window.ui:39
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1616
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2248
 msgid "Delete"
 msgstr "Удалить"
 
-#: elder-terms/src/main.cpp:1954 elder-terms/src/main.cpp:1967
+#: elder-terms/src/main.cpp:2125 elder-terms/src/main.cpp:2138
 msgid "Failed to rename connection"
 msgstr "Не удалось переименовать соединение"
 
-#: elder-terms/src/main.cpp:2063
+#: elder-terms/src/main.cpp:2231 elder-terms/src/main.cpp:2250
+#: elder-terms/src/main.cpp:2258
+msgid "Failed to open text editor"
+msgstr "Не удалось открыть текстовый редактор"
+
+#: elder-terms/src/main.cpp:2232
+msgid "The text editor could not be started."
+msgstr "Не удалось запустить текстовый редактор."
+
+#: elder-terms/src/main.cpp:2251
+msgid "The connection file is no longer available."
+msgstr "Файл подключения больше недоступен."
+
+#: elder-terms/src/main.cpp:2259
+msgid ""
+"Set a default application for plain text files in your desktop settings."
+msgstr ""
+"Назначьте приложение по умолчанию для текстовых файлов в настройках рабочего "
+"стола."
+
+#: elder-terms/src/main.cpp:2280 elder-terms/src/main.cpp:2294
 msgid "Failed to save connection"
 msgstr "Не удалось сохранить соединение"
 
-#: elder-terms/src/main-window.ui:15
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1272
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2156
+#: elder-terms/src/main.cpp:2282
+msgid ""
+"The settings contain invalid input. Correct the highlighted fields before "
+"saving."
+msgstr ""
+"В настройках есть недопустимые значения. Исправьте выделенные поля перед "
+"сохранением."
+
+#: elder-terms/src/main.cpp:2337
+msgid "Overwrite externally changed connection?"
+msgstr "Перезаписать подключение, изменённое извне?"
+
+#: elder-terms/src/main.cpp:2340
+msgid ""
+"The file changed or was removed outside elder-terms. Save your current edits "
+"in its place?"
+msgstr ""
+"Файл изменён или удалён вне elder-terms. Записать вместо него текущие правки?"
+
+#: elder-terms/src/main.cpp:2345
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:762
+msgid "Overwrite"
+msgstr "Перезаписать"
+
+#: elder-terms/src/main.cpp:2416
+msgid "Save changes before opening the text editor?"
+msgstr "Сохранить изменения перед открытием текстового редактора?"
+
+#: elder-terms/src/main.cpp:2420
+msgid "Discard and open"
+msgstr "Отбросить и открыть"
+
+#: elder-terms/src/main.cpp:2422
+msgid "Save and open"
+msgstr "Сохранить и открыть"
+
+#: elder-terms/src/main-window.ui:27
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1382
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2239
 msgid "Rename"
 msgstr "Переименовать"
 
-#: elder-terms/src/main-window.ui:21
+#: elder-terms/src/main-window.ui:33
 msgid "Duplicate"
 msgstr "Дублировать"
 
-#: elder-terms/src/main-window.ui:35 elder-terms/src/tray-backend.cpp:377
+#: elder-terms/src/main-window.ui:45
+msgid "Cancel new connection"
+msgstr "Отменить создание подключения"
+
+#: elder-terms/src/main-window.ui:53 elder-terms/src/tray-backend.cpp:377
 #: elder-terms/src/tray-backend.cpp:404 elder-terms/src/tray-backend.cpp:909
 msgid "Application settings"
 msgstr "Настройки приложения"
 
-#: elder-terms/src/main-window.ui:41 elder-terms/src/tray-backend.cpp:381
+#: elder-terms/src/main-window.ui:59 elder-terms/src/tray-backend.cpp:381
 #: elder-terms/src/tray-backend.cpp:408 elder-terms/src/tray-backend.cpp:911
 #: elder-terms-vte/src/main-window.ui:14
 msgid "About elder-terms"
 msgstr "О программе elder-terms"
 
-#: elder-terms/src/main-window.ui:100
+#: elder-terms/src/main-window.ui:118
 msgid "Terminal entries"
 msgstr "Записи терминала"
 
-#: elder-terms/src/main-window.ui:156
+#: elder-terms/src/main-window.ui:174
 msgid "Select a connection or create a new one."
 msgstr "Выберите соединение или создайте новое."
 
-#: elder-terms/src/main-window.ui:198
+#: elder-terms/src/main-window.ui:216
 msgid "New"
 msgstr "Новый"
 
-#: elder-terms/src/main-window.ui:228
+#: elder-terms/src/main-window.ui:246
 msgid "Launch"
 msgstr "Запуск"
 
@@ -1159,22 +1426,26 @@ msgstr "Не удалось открыть elder-terms"
 msgid "Macro command failed"
 msgstr "Не удалось выполнить макрокоманду"
 
-#: elder-terms-vte/src/main.cpp:278
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:224
+#: elder-terms-vte/src/main.cpp:285 elder-terms-vte/src/main.cpp:292
+msgid "Hyperlink command failed"
+msgstr "Не удалось выполнить команду гиперссылки"
+
+#: elder-terms-vte/src/main.cpp:339
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:225
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
 #, fuzzy
 msgid "SSH Host Key Changed"
 msgstr "SSH Ключ хоста"
 
-#: elder-terms-vte/src/main.cpp:281
+#: elder-terms-vte/src/main.cpp:342
 msgid ""
 "The SSH host key for fixture.example:2222 has changed.\n"
 "Verify the fingerprint before asking an administrator to run:\n"
 "sudo ssh-keygen -R '[fixture.example]:2222' -f '/etc/ssh/ssh_known_hosts'"
 msgstr ""
 
-#: elder-terms-vte/src/main.cpp:286
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:226
+#: elder-terms-vte/src/main.cpp:347
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:227
 msgid ""
 "The SSH host key for fixture.example:2222 has changed.\n"
 "Verify the fingerprint before resetting the saved key.\n"
@@ -1182,13 +1453,13 @@ msgid ""
 "ssh-keygen -R '[fixture.example]:2222' -f '/home/test/.ssh/known_hosts'"
 msgstr ""
 
-#: elder-terms-vte/src/main.cpp:312
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:253
+#: elder-terms-vte/src/main.cpp:373
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:254
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
 msgid "SSH Host Key"
 msgstr "SSH Ключ хоста"
 
-#: elder-terms-vte/src/main.cpp:314
+#: elder-terms-vte/src/main.cpp:375
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%d\n"
@@ -1201,151 +1472,165 @@ msgstr ""
 "Отпечаток пальца: %s\n"
 "Принять и сохранить этот ключ хоста?"
 
-#: elder-terms-vte/src/main.cpp:339 elder-terms-vte/src/main.cpp:348
-#: elder-terms-vte/src/main-window.ui:289
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:275
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:284
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:273
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:922
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1003
+#: elder-terms-vte/src/main.cpp:400 elder-terms-vte/src/main.cpp:409
+#: elder-terms-vte/src/main-window.ui:307
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:276
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:285
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:270
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:917
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:996
 msgid "SSH Authentication"
 msgstr "SSH Аутентификация"
 
-#: elder-terms-vte/src/main.cpp:340
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:276
+#: elder-terms-vte/src/main.cpp:401
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:277
 msgid "User name for fixture.example:"
 msgstr "Имя пользователя для fixture.example:"
 
-#: elder-terms-vte/src/main.cpp:349 elder-terms-vte/src/main-window.ui:303
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:285
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:421
+#: elder-terms-vte/src/main.cpp:410 elder-terms-vte/src/main-window.ui:321
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:286
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:443
+#: elder-terms-vte/src/webdav/webdav-application.cpp:82
 msgid "Password:"
 msgstr "Пароль:"
 
-#: elder-terms-vte/src/main.cpp:366
+#: elder-terms-vte/src/main.cpp:427
 #, fuzzy
 msgid "SSH host key reset requested"
 msgstr "SSH ключ хоста не принят"
 
-#: elder-terms-vte/src/main.cpp:367
+#: elder-terms-vte/src/main.cpp:428
 msgid "SSH prompt accepted"
 msgstr "SSH приглашение принято"
 
-#: elder-terms-vte/src/main.cpp:368
+#: elder-terms-vte/src/main.cpp:429
 msgid "SSH prompt cancelled"
 msgstr "SSH приглашение отменено"
 
-#: elder-terms-vte/src/main.cpp:761 elder-terms-vte/src/main.cpp:765
+#: elder-terms-vte/src/main.cpp:857 elder-terms-vte/src/main.cpp:861
 #: elder-terms-vte/src/main-window.ui:8
 msgid "Settings"
 msgstr "Настройки"
 
-#: elder-terms-vte/src/main.cpp:1031 elder-terms-vte/src/main.cpp:1041
-#: elder-terms-vte/src/main.cpp:1066 elder-terms-vte/src/main.cpp:1076
+#: elder-terms-vte/src/main.cpp:1127 elder-terms-vte/src/main.cpp:1137
+#: elder-terms-vte/src/main.cpp:1162 elder-terms-vte/src/main.cpp:1172
 msgid "Transfer unavailable"
 msgstr "Передача невозможна"
 
-#: elder-terms-vte/src/main.cpp:1178 elder-terms-vte/src/main.cpp:1200
+#: elder-terms-vte/src/main.cpp:1274 elder-terms-vte/src/main.cpp:1296
 msgid "BREAK unavailable"
 msgstr "BREAK недоступен"
 
-#: elder-terms-vte/src/main.cpp:1184
+#: elder-terms-vte/src/main.cpp:1280
 msgid "Sending BREAK"
 msgstr "Отправка BREAK"
 
-#: elder-terms-vte/src/main.cpp:1220 elder-terms-vte/src/main.cpp:1841
+#: elder-terms-vte/src/main.cpp:1316 elder-terms-vte/src/main.cpp:1890
 msgid "Text send unavailable"
 msgstr "Отправка текста недоступна"
 
-#: elder-terms-vte/src/main.cpp:1228
+#: elder-terms-vte/src/main.cpp:1324
 msgid "Text (Send)"
 msgstr "Текст (Отправить)"
 
-#: elder-terms-vte/src/main.cpp:1338 elder-terms-vte/src/main.cpp:1373
+#: elder-terms-vte/src/main.cpp:1434 elder-terms-vte/src/main.cpp:1469
 msgid "SFTP unavailable"
 msgstr "SFTP недоступен"
 
-#: elder-terms-vte/src/main.cpp:1346
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:214
+#: elder-terms-vte/src/main.cpp:1442
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:215
 msgid "Failed to start SFTP"
 msgstr "Не удалось запустить SFTP"
 
-#: elder-terms-vte/src/main.cpp:1418
+#: elder-terms-vte/src/main.cpp:1514
 msgid "Log recording"
 msgstr "Запись журнала"
 
-#: elder-terms-vte/src/main.cpp:1464
+#: elder-terms-vte/src/main.cpp:1560
 msgid "ZMODEM (send)"
 msgstr "ZMODEM (отправить)"
 
-#: elder-terms-vte/src/main.cpp:1471
+#: elder-terms-vte/src/main.cpp:1567
 msgid "YMODEM (send)"
 msgstr "YMODEM (отправить)"
 
-#: elder-terms-vte/src/main.cpp:1478
+#: elder-terms-vte/src/main.cpp:1574
 msgid "XMODEM 1K (send)"
 msgstr "XMODEM 1K (отправить)"
 
-#: elder-terms-vte/src/main.cpp:1487
+#: elder-terms-vte/src/main.cpp:1583
 msgid "XMODEM (send)"
 msgstr "XMODEM (отправить)"
 
-#: elder-terms-vte/src/main.cpp:1497
+#: elder-terms-vte/src/main.cpp:1593
 msgid "ZMODEM (receive)"
 msgstr "ZMODEM (получить)"
 
-#: elder-terms-vte/src/main.cpp:1504
+#: elder-terms-vte/src/main.cpp:1600
 msgid "YMODEM-g (receive)"
 msgstr "YMODEM-g (получить)"
 
-#: elder-terms-vte/src/main.cpp:1512
+#: elder-terms-vte/src/main.cpp:1608
 msgid "YMODEM (receive)"
 msgstr "YMODEM (получить)"
 
-#: elder-terms-vte/src/main.cpp:1521
+#: elder-terms-vte/src/main.cpp:1617
 msgid "XMODEM CRC (receive)"
 msgstr "XMODEM CRC (получить)"
 
-#: elder-terms-vte/src/main.cpp:1530
+#: elder-terms-vte/src/main.cpp:1626
 msgid "XMODEM (receive)"
 msgstr "XMODEM (получить)"
 
-#: elder-terms-vte/src/main.cpp:1814 elder-terms-vte/src/main.cpp:1821
-msgid "Hyperlink command failed"
-msgstr "Не удалось выполнить команду гиперссылки"
-
-#: elder-terms-vte/src/main-window.ui:153
-#: elder-terms-vte/src/main-window.cpp:1475
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2541
+#: elder-terms-vte/src/main-window.ui:157
+#: elder-terms-vte/src/main-window.cpp:1526
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2656
 msgid "Disconnected"
 msgstr "Отключено"
 
-#: elder-terms-vte/src/main-window.ui:208
+#: elder-terms-vte/src/main-window.ui:174
+msgid "Reconnect"
+msgstr "Подключиться снова"
+
+#: elder-terms-vte/src/main-window.ui:226
 msgid "Transferring..."
 msgstr "Перенос..."
 
-#: elder-terms-vte/src/main-window.cpp:346
+#: elder-terms-vte/src/main-window.cpp:347
 msgid "Copy"
 msgstr "Копировать"
 
-#: elder-terms-vte/src/main-window.cpp:350
+#: elder-terms-vte/src/main-window.cpp:351
 msgid "Paste"
 msgstr "Вставьте"
 
-#: elder-terms-vte/src/main-window.cpp:356
+#: elder-terms-vte/src/main-window.cpp:357
 msgid "Send BREAK"
 msgstr "Отправить BREAK"
 
-#: elder-terms-vte/src/main-window.cpp:1079
+#: elder-terms-vte/src/main-window.cpp:1086
 #, c-format
 msgid "%s (Disconnected)"
 msgstr "%s (отключено)"
 
-#: elder-terms-vte/src/main-window.cpp:1498
+#: elder-terms-vte/src/main-window.cpp:1552
+msgid "TELNET connection failed"
+msgstr "Не удалось установить соединение TELNET"
+
+#: elder-terms-vte/src/main-window.cpp:1552
 msgid "SSH connection failed"
 msgstr "SSH соединение не удалось"
 
-#: elder-terms-vte/src/main-window.cpp:1500
+#: elder-terms-vte/src/main-window.cpp:1554
+#, c-format
+msgid ""
+"TELNET connection failed:\n"
+"%s"
+msgstr ""
+"Не удалось установить соединение TELNET:\n"
+"%s"
+
+#: elder-terms-vte/src/main-window.cpp:1555
 #, c-format
 msgid ""
 "SSH connection failed:\n"
@@ -1354,94 +1639,155 @@ msgstr ""
 "SSH не удалось установить соединение:\n"
 "%s"
 
-#: elder-terms-vte/src/main-window.cpp:1549
+#: elder-terms-vte/src/main-window.cpp:1614
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:144
 msgid "Accept"
 msgstr "Принять"
 
-#: elder-terms-vte/src/main-window.cpp:1551
+#: elder-terms-vte/src/main-window.cpp:1616
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:147
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:415
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:437
+#: elder-terms-vte/src/webdav/webdav-application.cpp:79
 msgid "Connect"
 msgstr "Подключиться"
 
-#: elder-terms-vte/src/main-window.cpp:1559
+#: elder-terms-vte/src/main-window.cpp:1624
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:155
 msgid "Reset and Connect"
 msgstr ""
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:254
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:255
 msgid "Accept the fixture SSH host key?"
 msgstr "Принять тестовый ключ узла SSH?"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:392
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:416
+#: elder-terms-vte/src/webdav/webdav-application.cpp:73
 #, c-format
 msgid "Enter the user name and password for %s."
 msgstr "Введите имя пользователя и пароль для %s."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:394
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
 msgid "To log in anonymously, enter anonymous as the user name."
 msgstr "Для анонимного входа введите anonymous в качестве имени пользователя."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:397
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:421
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
+#: elder-terms-vte/src/webdav/webdav-application.cpp:76
 msgid "User name must not be empty."
 msgstr "Имя пользователя не должно быть пустым."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:412
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:434
 msgid "FTP authentication"
 msgstr "Аутентификация FTP"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:478
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:434
+msgid "FTPS authentication"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:469
+msgid "FTPS certificate validation failed"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:471
+msgid "Control connection"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:471
+msgid "Data connection"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:524
 msgid "Failed to start FTP"
 msgstr "Не удалось запустить FTP"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:194
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:524
+msgid "Failed to start FTPS"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:27
+msgid "The server certificate could not be validated."
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:33
+msgid ""
+"Allow only this certificate and validation failure for this connection? "
+"Exceptions are not saved."
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:34
+msgid "Subject:"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:35
+msgid "Issuer:"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:36
+msgid "Valid from:"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:37
+msgid "Valid until:"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:42
+msgid "Allow for this connection"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:43
+msgid "Abort connection"
+msgstr ""
+
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:201
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:208
 msgid "Unknown file transfer failure"
 msgstr "Неизвестная ошибка передачи файлов"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:268
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:275
 msgid "Loading…"
 msgstr "Загрузка…"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:411
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:418
 msgid "The local pane only supports native filesystem paths"
 msgstr "Локальная панель поддерживает только пути локальной файловой системы"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:484
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:491
 msgid "Local directory path is empty"
 msgstr "Путь к локальному каталогу пуст"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:620
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2381
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:530
+msgid "Certificate exception active"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:631
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2464
 msgid "Preparing transfer…"
 msgstr "Подготовка передачи…"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:679
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:690
 #, c-format
 msgid "Transferring %llu of %llu — %s"
 msgstr "Перенос %llu из %llu — %s"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:682
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:695
 #, c-format
 msgid "Transferring %llu of %llu"
 msgstr "Перенос %llu из %llu"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:686
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:699
 #, c-format
 msgid "Transferring — %s"
 msgstr "Передача — %s"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:689
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:702
 msgid "Transferring"
 msgstr "Перенос"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:745
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:758
 msgid "Destination already exists"
 msgstr "Пункт назначения уже существует"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:747
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:760
 #, c-format
 msgid ""
 "%s\n"
@@ -1450,20 +1796,16 @@ msgstr ""
 "%s\n"
 "Выбранное решение применяется ко всем оставшимся конфликтам."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:749
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:770
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:762
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:783
 msgid "Skip"
 msgstr "Пропустить"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:749
-msgid "Overwrite"
-msgstr "Перезаписать"
-
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:765
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:778
 msgid "File transfer failed"
 msgstr "Не удалось передать файлы"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:766
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:779
 #, c-format
 msgid ""
 "%s\n"
@@ -1476,40 +1818,31 @@ msgstr ""
 "%s\n"
 "→ %s"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:770
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:783
 msgid "Abort"
 msgstr "Прервать"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:770
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:783
 msgid "Retry"
 msgstr "Повторить"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:793
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:806
 msgid "File transfer operation failed"
 msgstr "Операция передачи файлов завершилась неудачно"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:854
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:867
 msgid "Failed to load remote directory"
 msgstr "Не удалось загрузить удаленный каталог"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:855
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:868
 msgid "Failed to load local directory"
 msgstr "Не удалось загрузить локальный каталог"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:927
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:940
 msgid "Failed to expand directory"
 msgstr "Не удалось расширить каталог"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1262
-#, c-format
-msgid "Enter a new name for \"%s\"."
-msgstr "Введите новое имя для «%s»."
-
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1270
-msgid "Rename item"
-msgstr "Переименовать элемент"
-
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1289
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1286
 msgid ""
 "Names must not be empty, '.', or '..', and must not contain '/' or line "
 "breaks."
@@ -1517,78 +1850,119 @@ msgstr ""
 "Имя не может быть пустым, равным '.' или '..' и не должно содержать '/' или "
 "переносы строк."
 
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1325
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2233
+msgid "New folder"
+msgstr "Новая папка"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1325
+msgid "Enter a name for the new folder."
+msgstr "Введите имя новой папки."
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1325
+msgid "Create"
+msgstr "Создать"
+
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1329
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1590
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2466
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2543
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1346
+msgid "Folder creation cancelled"
+msgstr "Создание папки отменено"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1333
+msgid "Creating folder…"
+msgstr "Создание папки…"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1339
+#, c-format
+msgid "Created folder \"%s\""
+msgstr "Создана папка «%s»"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1349
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1351
+msgid "Failed to create folder"
+msgstr "Не удалось создать папку"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1380
+msgid "Rename item"
+msgstr "Переименовать элемент"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1381
+#, c-format
+msgid "Enter a new name for \"%s\"."
+msgstr "Введите новое имя для «%s»."
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1388
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1649
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2549
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2658
 msgid "Ready"
 msgstr "Готово"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1336
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1395
 msgid "Renaming…"
 msgstr "Переименование…"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1348
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1407
 #, c-format
 msgid "Renamed \"%s\" to \"%s\""
 msgstr "«%s» переименован в «%s»"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1362
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1421
 msgid "Rename cancelled"
 msgstr "Переименование отменено"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1366
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1425
 msgid "Rename failed"
 msgstr "Не удалось переименовать"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1368
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1427
 msgid "Failed to rename item"
 msgstr "Не удалось переименовать элемент"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1415
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1474
 msgid "Calculating hash values…"
 msgstr "Вычисление хеш-значений…"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1435
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1494
 msgid "Hash calculation cancelled"
 msgstr "Вычисление хеш-значений отменено"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1441
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1500
 msgid "Hash calculation failed"
 msgstr "Не удалось вычислить хеш-значения"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1443
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1502
 msgid "Failed to calculate hash values"
 msgstr "Не удалось вычислить хеш-значения"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1452
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1511
 msgid "Hash calculation complete"
 msgstr "Вычисление хеш-значений завершено"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1457
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1514
 msgid "File hash values"
 msgstr "Хеш-значения файла"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1541
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1600
 msgid "The following items will be permanently deleted:"
 msgstr "Следующие элементы будут удалены без возможности восстановления:"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1543
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1602
 msgid "Directories and their contents will be deleted. This cannot be undone."
 msgstr "Каталоги и их содержимое будут удалены. Это действие нельзя отменить."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1552
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1611
 msgid "Delete selected item?"
 msgid_plural "Delete selected items?"
 msgstr[0] "Удалить выбранный элемент?"
 msgstr[1] "Удалить выбранные элементы?"
 msgstr[2] "Удалить выбранные элементы?"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1604
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1663
 msgid "Deleting…"
 msgstr "Удаление…"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1615
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1674
 #, c-format
 msgid "Deleted %zu item"
 msgid_plural "Deleted %zu items"
@@ -1596,29 +1970,31 @@ msgstr[0] "Удалён %zu элемент"
 msgstr[1] "Удалено %zu элемента"
 msgstr[2] "Удалено %zu элементов"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1631
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1690
 msgid "Delete cancelled"
 msgstr "Удаление отменено"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1635
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1694
 msgid "Delete failed"
 msgstr "Не удалось удалить"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1637
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1696
 msgid "Failed to delete selected items"
 msgstr "Не удалось удалить выбранные элементы"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1723
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1731
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1782
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1787
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1795
 msgid "Transfer cancelled"
 msgstr "Перевод отменен"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1733
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:445
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1782
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1797
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:450
 msgid "Transfer failed"
 msgstr "Передача не удалась"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1747
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1811
 #, c-format
 msgid "Sent %zu item"
 msgid_plural "Sent %zu items"
@@ -1626,7 +2002,7 @@ msgstr[0] "Отправлен %zu элемент"
 msgstr[1] "Отправлено %zu элемента"
 msgstr[2] "Отправлено %zu элементов"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1749
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1813
 #, c-format
 msgid "Received %zu item"
 msgid_plural "Received %zu items"
@@ -1634,52 +2010,56 @@ msgstr[0] "Получен %zu элемент"
 msgstr[1] "Получено %zu элемента"
 msgstr[2] "Получено %zu элементов"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2050
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2126
 msgid "Name"
 msgstr "Имя"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2052
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2128
 msgid "Size"
 msgstr "Размер"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2054
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2131
 msgid "Modified"
 msgstr "Изменено"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2072
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2149
 msgid "Remote"
 msgstr "Удаленный"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2104
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2181
 msgid "Up"
 msgstr "Вверх"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2108
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2185
 msgid "Refresh"
 msgstr "Обновить"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2133
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2210
 msgid "Receive"
 msgstr "Получите"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2133
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2210
 msgid "Send"
 msgstr "Отправить"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2144
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2221
 msgid "Calculate Hash Values"
 msgstr "Вычислить хеш-значения"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2348
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2492
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2431
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2575
 msgid "Connecting"
 msgstr "Подключение"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2484
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2567
 msgid "Authenticating"
 msgstr "Аутентификация"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2507
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2587
+msgid "Awaiting certificate confirmation"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2622
 msgid "Connection failed"
 msgstr "Не удалось подключиться"
 
@@ -1699,8 +2079,8 @@ msgstr "Начиная с %s, получите"
 
 #: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:430
 #: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1038
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:509
-#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:626
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:514
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:631
 msgid "Text send failed"
 msgstr "Не удалось отправить текст"
 
@@ -1709,14 +2089,14 @@ msgid "local terminal"
 msgstr "локальный терминал"
 
 #: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1117
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:566
-#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:711
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:571
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:716
 msgid "BREAK sent"
 msgstr "BREAK отправлен"
 
 #: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1117
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:566
-#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:711
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:571
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:716
 msgid "BREAK failed"
 msgstr "Не удалось отправить BREAK"
 
@@ -1725,7 +2105,7 @@ msgid "serial: (unknown)"
 msgstr "серийный номер: (неизвестно)"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:82
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1181
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1175
 msgid "SSH session has no socket"
 msgstr "SSH нет сокета"
 
@@ -1734,16 +2114,16 @@ msgstr "SSH нет сокета"
 msgid "User name for %s:"
 msgstr "Имя пользователя для %s:"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:281
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:279
 msgid "SSH user name was not provided"
 msgstr "Имя пользователя SSH не указано"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:545
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:544
 #, fuzzy
 msgid "Failed to start ssh-keygen"
 msgstr "Не удалось запустить %s"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:546
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:545
 #, fuzzy, c-format
 msgid "Failed to start ssh-keygen: %s"
 msgstr "Не удалось запустить %s"
@@ -1840,125 +2220,149 @@ msgstr "Не удалось проверить ключ хоста SSH"
 msgid "SSH host key was not accepted"
 msgstr "SSH ключ хоста не принят"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:875
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:872
 msgid "SSH Key Passphrase"
 msgstr "SSH Ключевая фраза-пароль"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:877
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:874
 #, c-format
 msgid "Passphrase for %s (attempt %u of %u):"
 msgstr "Парольная фраза для %s (попытка %u из %u):"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:924
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:919
 #, c-format
 msgid "Password for %s (attempt %u of %u):"
 msgstr "Пароль для %s (попытка %u из %u):"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:945
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:941
 msgid "SSH password authentication failed"
 msgstr "SSH аутентификация по паролю не удалась"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:970
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:966
 msgid "SSH authentication response:"
 msgstr "SSH ответ аутентификации:"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1030
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1024
 msgid "SSH keyboard-interactive authentication failed"
 msgstr "SSH интерактивная аутентификация с помощью клавиатуры не удалась"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1049
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1043
 msgid "SSH authentication negotiation failed"
 msgstr "SSH не удалось выполнить согласование аутентификации"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1054
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1048
 msgid "Failed to list SSH authentication methods"
 msgstr "Не удалось вывести список методов аутентификации SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1065
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1059
 msgid "SSH public-key authentication failed"
 msgstr "SSH аутентификация с открытым ключом не удалась"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1087
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1081
 msgid "Failed to refresh SSH authentication methods"
 msgstr "Не удалось обновить SSH методы аутентификации"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1100
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1094
 msgid "SSH server did not accept an available authentication method"
 msgstr "SSH сервер не принял доступный метод аутентификации"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1278
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1578
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1727
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1277
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1595
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1746
 msgid "SSH transport is closed"
 msgstr "SSH транспорт закрыт"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1479
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1496
 msgid "Failed to allocate SSH session"
 msgstr "Не удалось выделить сеанс SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1485
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1502
 msgid "Failed to set SSH host"
 msgstr "Не удалось установить SSH хост"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1490
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1507
 msgid "Failed to parse SSH configuration"
 msgstr "Не удалось проанализировать конфигурацию SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1499
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1516
 msgid "Failed to configure SSH endpoint"
 msgstr "Не удалось настроить конечную точку SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1505
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1522
 msgid "Failed to configure SSH user name"
 msgstr "Не удалось настроить имя пользователя SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1511
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1528
 msgid "Failed to configure SSH known_hosts"
 msgstr "Не удалось настроить SSH известные_хосты"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1517
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1534
 msgid "Failed to attach SSH socket"
 msgstr "Не удалось подключить сокет SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1527
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1544
 msgid "Failed to configure SSH callbacks"
 msgstr "Не удалось настроить обратные вызовы SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1581
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1598
 #, fuzzy
 msgid "SSH command is required"
 msgstr "SSH требуется транспорт"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1676
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1695
 msgid "SSH command output is too large"
 msgstr ""
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1681
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1700
 msgid "SSH command error output is too large"
 msgstr ""
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1688
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1707
 msgid "SSH command did not return an exit status"
 msgstr ""
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1823
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1843
 msgid "SSH transport is required"
 msgstr "SSH требуется транспорт"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1877
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1946
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1984
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2004
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1898
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1967
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2005
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2025
 msgid "SSH channel is closed"
 msgstr "SSH канал закрыт"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:658
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:664
 msgid "ssh: (unknown)"
 msgstr "ssh: (неизвестно)"
 
-#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:932
 msgid "telnet: (unknown)"
 msgstr "телнет: (неизвестно)"
+
+#: shared/src/settings-widget/webdav-settings-editor.cpp:105
+msgid "Complete the connection settings to preview the URL"
+msgstr "Заполните параметры соединения для просмотра URL"
+
+#: shared/src/settings-widget/webdav-settings-editor.cpp:270
+msgid "Connection URL"
+msgstr "URL соединения"
+
+#: elder-terms-vte/src/webdav/webdav-application.cpp:48
+msgid "HTTPS certificate validation failed"
+msgstr "Не удалось проверить сертификат HTTPS"
+
+#: elder-terms-vte/src/webdav/webdav-application.cpp:49
+msgid "HTTPS connection"
+msgstr "Соединение HTTPS"
+
+#: elder-terms-vte/src/webdav/webdav-application.cpp:78
+msgid "WebDAV authentication"
+msgstr "Аутентификация WebDAV"
+
+#: elder-terms-vte/src/webdav/webdav-application.cpp:105
+msgid "Failed to start WebDAV"
+msgstr "Не удалось запустить WebDAV"
 
 #~ msgid "TCP ports"
 #~ msgstr "TCP-порты"
@@ -1981,71 +2385,3 @@ msgstr "телнет: (неизвестно)"
 
 #~ msgid "Global defaults"
 #~ msgstr "Глобальные значения по умолчанию"
-
-#: elder-terms/src/main.cpp
-msgid "Connection changed outside elder-terms"
-msgstr "Подключение изменено вне elder-terms"
-
-#: elder-terms/src/main.cpp
-msgid "Reload the file and discard your unsaved changes, or keep editing. Saving kept edits will require confirmation before overwriting the file."
-msgstr "Перезагрузите файл, отбросив несохранённые изменения, или сохраните текущие правки. Для записи сохранённых правок потребуется подтверждение перезаписи файла."
-
-#: elder-terms/src/main.cpp
-msgid "Keep edits"
-msgstr "Сохранить правки в редакторе"
-
-#: elder-terms/src/main.cpp
-msgid "Reload from file"
-msgstr "Перезагрузить из файла"
-
-#: elder-terms/src/main.cpp
-msgid "Overwrite externally changed connection?"
-msgstr "Перезаписать подключение, изменённое извне?"
-
-#: elder-terms/src/main.cpp
-msgid "The file changed or was removed outside elder-terms. Save your current edits in its place?"
-msgstr "Файл изменён или удалён вне elder-terms. Записать вместо него текущие правки?"
-
-#: elder-terms/src/main-window.ui
-msgid "Edit in text editor"
-msgstr "Редактировать в текстовом редакторе"
-
-#: elder-terms/src/main.cpp
-msgid "Failed to open text editor"
-msgstr "Не удалось открыть текстовый редактор"
-
-#: elder-terms/src/main.cpp
-msgid "The text editor could not be started."
-msgstr "Не удалось запустить текстовый редактор."
-
-#: elder-terms/src/main.cpp
-msgid "The connection file is no longer available."
-msgstr "Файл подключения больше недоступен."
-
-#: elder-terms/src/main.cpp
-msgid "Set a default application for plain text files in your desktop settings."
-msgstr "Назначьте приложение по умолчанию для текстовых файлов в настройках рабочего стола."
-
-#: elder-terms/src/main.cpp
-msgid "Save changes before opening the text editor?"
-msgstr "Сохранить изменения перед открытием текстового редактора?"
-
-#: elder-terms/src/main.cpp
-msgid "Discard and open"
-msgstr "Отбросить и открыть"
-
-#: elder-terms/src/main.cpp
-msgid "Save and open"
-msgstr "Сохранить и открыть"
-
-#: elder-terms/src/main.cpp
-msgid "Save and open in text editor"
-msgstr "Сохранить и открыть в текстовом редакторе"
-
-#: elder-terms/src/main-window.ui
-msgid "Cancel new connection"
-msgstr "Отменить создание подключения"
-
-#: elder-terms/src/main.cpp
-msgid "The settings contain invalid input. Correct the highlighted fields before saving."
-msgstr "В настройках есть недопустимые значения. Исправьте выделенные поля перед сохранением."

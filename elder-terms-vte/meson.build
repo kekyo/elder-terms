@@ -803,3 +803,13 @@ webdav_tls_session_test = executable(
 )
 test('webdav-tls-session-test', find_program('node'),
   args: [files('tests/webdav-tls-session-runner.mjs'), webdav_tls_session_test], timeout: 120)
+
+webdav_apache_test = executable(
+  'webdav-apache-test',
+  ['tests/cpp/webdav-apache-test.cpp', 'src/file-transfer/file-transfer-engine.cpp', 'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
+   'src/webdav/curl-http-session.cpp', 'src/tls/certificate-policy.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
+  include_directories: include_directories('src/webdav'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, libxml2_dep, openssl_dep],
+)
+test('webdav-apache-test', find_program('node'),
+  args: [files('tests/webdav-apache-runner.mjs'), webdav_apache_test], timeout: 900, is_parallel: false)

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: elder-terms 0.0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-04 11:49+0900\n"
+"POT-Creation-Date: 2026-09-12 19:57+0900\n"
 "PO-Revision-Date: 2026-08-10 02:05+0900\n"
 "Last-Translator: elder-terms contributors\n"
 "Language-Team: Arabic\n"
@@ -13,786 +13,972 @@ msgstr ""
 "Plural-Forms: nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 "
 "&& n%100<=10 ? 3 : n%100>=11 && n%100<=99 ? 4 : 5);\n"
 
-#: shared/src/settings-widget/settings-presentation.cpp
-msgid "Active indicator color"
-msgstr "لون المؤشر النشط"
-
-msgid "Inactive indicator color"
-msgstr "لون المؤشر غير النشط"
-
-#: shared/src/settings-widget/settings-presentation.cpp
-msgid "Default color"
-msgstr "اللون الافتراضي"
-
-#: elder-terms-vte/src/main-window.ui
-msgid "Reconnect"
-msgstr "إعادة الاتصال"
-
-#: elder-terms-vte/src/main-window.cpp
-msgid "TELNET connection failed"
-msgstr "فشل اتصال TELNET"
-
-#: elder-terms-vte/src/main-window.cpp
-#, c-format
-msgid "TELNET connection failed:\n%s"
-msgstr "فشل اتصال TELNET:\n%s"
-
 #: shared/src/settings-widget/settings-presentation.cpp:25
-msgid "Connection name"
-msgstr "اسم الاتصال"
+msgid "Encryption"
+msgstr ""
 
 #: shared/src/settings-widget/settings-presentation.cpp:26
-msgid "Connection type"
-msgstr "نوع الاتصال"
+msgid "Connection security"
+msgstr "أمان الاتصال"
 
-#: shared/src/settings-widget/settings-presentation.cpp:28
-msgid "Open connection shortcut"
-msgstr "فتح اختصار الاتصال"
-
-#: shared/src/settings-widget/settings-presentation.cpp:29
-msgid "Display language"
-msgstr "لغة العرض"
-
-#: shared/src/settings-widget/settings-presentation.cpp:30
-msgid "Startup mode"
-msgstr "وضع بدء التشغيل"
-
-#: shared/src/settings-widget/settings-presentation.cpp:32
-msgid "Open application shortcut"
-msgstr "فتح اختصار التطبيق"
-
-#: shared/src/settings-widget/settings-presentation.cpp:34
-msgid "Title and status bar background"
-msgstr "خلفية العنوان وشريط الحالة"
-
-#: shared/src/settings-widget/settings-presentation.cpp:35
-msgid "Content background"
-msgstr "خلفية المحتوى"
-
-#: shared/src/settings-widget/settings-presentation.cpp:36
-msgid "Startup command"
-msgstr "أمر بدء التشغيل"
-
-#: shared/src/settings-widget/settings-presentation.cpp:37
-msgid "Character encoding"
-msgstr "ترميز الأحرف"
-
-#: shared/src/settings-widget/settings-presentation.cpp:38
-msgid "Backspace code"
-msgstr "رمز مسافة للخلف"
-
-#: shared/src/settings-widget/settings-presentation.cpp:39
-msgid "Cursor key mode"
-msgstr "وضع مفتاح المؤشر"
-
-#: shared/src/settings-widget/settings-presentation.cpp:40
-msgid "Enter/Return code"
-msgstr "رمز Enter/Return"
-
-#: shared/src/settings-widget/settings-presentation.cpp:41
-msgid "Columns"
-msgstr "الأعمدة"
-
-#: shared/src/settings-widget/settings-presentation.cpp:42
-msgid "Rows"
-msgstr "الصفوف"
-
-#: shared/src/settings-widget/settings-presentation.cpp:44
-msgid "Scrollback lines"
-msgstr "أسطر سجل التمرير"
-
-#: shared/src/settings-widget/settings-presentation.cpp:45
-msgid "Zoom factor"
-msgstr "عامل التكبير/التصغير"
-
-msgid "Font families"
-msgstr "عائلات الخطوط"
-
-
-#: shared/src/settings-widget/settings-presentation.cpp:51
-msgid "Close window when session ends"
-msgstr "إغلاق النافذة عند انتهاء الجلسة"
-
-#: shared/src/settings-widget/settings-presentation.cpp:53
-msgid "Show window side borders"
-msgstr "إظهار الحدود الجانبية للنافذة"
-
-#: shared/src/settings-widget/settings-presentation.cpp:55
-msgid "Window side border width (px)"
-msgstr "سُمك الحدود الجانبية للنافذة (بكسل)"
-
-#: shared/src/settings-widget/settings-presentation.cpp:56
-msgid "BEL sound"
-msgstr "صوت BEL"
-
-#: shared/src/settings-widget/settings-presentation.cpp:57
-msgid "Zoom in shortcut"
-msgstr "اختصار التكبير"
-
-#: shared/src/settings-widget/settings-presentation.cpp:58
-msgid "Zoom out shortcut"
-msgstr "اختصار التصغير"
-
-#: shared/src/settings-widget/settings-presentation.cpp:60
-msgid "Send BREAK shortcut"
-msgstr "اختصار إرسال BREAK"
-
-#: shared/src/settings-widget/settings-presentation.cpp:61
-#: shared/src/settings-widget/settings-presentation.cpp:64
-#: shared/src/settings-widget/settings-presentation.cpp:71
+#: shared/src/settings-widget/settings-presentation.cpp:27
+#: shared/src/settings-widget/settings-presentation.cpp:81
+#: shared/src/settings-widget/settings-presentation.cpp:84
+#: shared/src/settings-widget/settings-presentation.cpp:91
 msgid "Address"
 msgstr "العنوان"
 
-#: shared/src/settings-widget/settings-presentation.cpp:62
-#: shared/src/settings-widget/settings-presentation.cpp:65
-#: shared/src/settings-widget/settings-presentation.cpp:72
+#: shared/src/settings-widget/settings-presentation.cpp:28
+#: shared/src/settings-widget/settings-presentation.cpp:82
+#: shared/src/settings-widget/settings-presentation.cpp:85
+#: shared/src/settings-widget/settings-presentation.cpp:92
 msgid "Port"
 msgstr "المنفذ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:63
-#: shared/src/settings-widget/settings-presentation.cpp:68
-msgid "Terminal type"
-msgstr "نوع الوحدة الطرفية"
+#: shared/src/settings-widget/settings-presentation.cpp:29
+msgid "Published path"
+msgstr "المسار المنشور"
 
-#: shared/src/settings-widget/settings-presentation.cpp:66
-#: shared/src/settings-widget/settings-presentation.cpp:73
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
+#: shared/src/settings-widget/settings-presentation.cpp:30
+msgid "Authentication"
+msgstr "المصادقة"
+
+#: shared/src/settings-widget/settings-presentation.cpp:31
+#: shared/src/settings-widget/settings-presentation.cpp:86
+#: shared/src/settings-widget/settings-presentation.cpp:93
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:440
+#: elder-terms-vte/src/webdav/webdav-application.cpp:80
 msgid "User name"
 msgstr "اسم المستخدم"
 
-#: shared/src/settings-widget/settings-presentation.cpp:67
-msgid "Identity file"
-msgstr "ملف الهوية"
-
-#: shared/src/settings-widget/settings-presentation.cpp:69
-#: shared/src/settings-widget/settings-presentation.cpp:76
+#: shared/src/settings-widget/settings-presentation.cpp:32
+#: shared/src/settings-widget/settings-presentation.cpp:89
+#: shared/src/settings-widget/settings-presentation.cpp:96
 msgid "Local directory"
 msgstr "الدليل المحلي"
 
-#: shared/src/settings-widget/settings-presentation.cpp:70
-#: shared/src/settings-widget/settings-presentation.cpp:77
+#: shared/src/settings-widget/settings-presentation.cpp:33
+#: shared/src/settings-widget/settings-presentation.cpp:90
+#: shared/src/settings-widget/settings-presentation.cpp:97
 msgid "Remote directory"
 msgstr "الدليل البعيد"
 
+#: shared/src/settings-widget/settings-presentation.cpp:34
+#: shared/src/settings-widget/settings-presentation.cpp:43
+msgid "CA certificates"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:35
+#: shared/src/settings-widget/settings-presentation.cpp:42
+msgid "Certificate validation failure"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:36
+msgid "Connection timeout (seconds)"
+msgstr "مهلة الاتصال (بالثواني)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:37
+msgid "Idle timeout (seconds)"
+msgstr "مهلة الخمول (بالثواني)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:38
+msgid "Minimum TLS version"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:39
+msgid "Maximum TLS version"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:40
+msgid "AUTH command preference"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:41
+msgid "TLS compatibility"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:44
+msgid "TLS 1.2 and earlier ciphers"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:45
+msgid "TLS 1.3 ciphers"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:46
+msgid "Connection name"
+msgstr "اسم الاتصال"
+
+#: shared/src/settings-widget/settings-presentation.cpp:47
+msgid "Connection type"
+msgstr "نوع الاتصال"
+
+#: shared/src/settings-widget/settings-presentation.cpp:49
+msgid "Open connection shortcut"
+msgstr "فتح اختصار الاتصال"
+
+#: shared/src/settings-widget/settings-presentation.cpp:50
+msgid "Display language"
+msgstr "لغة العرض"
+
+#: shared/src/settings-widget/settings-presentation.cpp:51
+msgid "Startup mode"
+msgstr "وضع بدء التشغيل"
+
+#: shared/src/settings-widget/settings-presentation.cpp:53
+msgid "Open application shortcut"
+msgstr "فتح اختصار التطبيق"
+
+#: shared/src/settings-widget/settings-presentation.cpp:55
+msgid "Title and status bar background"
+msgstr "خلفية العنوان وشريط الحالة"
+
+#: shared/src/settings-widget/settings-presentation.cpp:56
+msgid "Content background"
+msgstr "خلفية المحتوى"
+
+#: shared/src/settings-widget/settings-presentation.cpp:57
+msgid "Startup command"
+msgstr "أمر بدء التشغيل"
+
+#: shared/src/settings-widget/settings-presentation.cpp:58
+msgid "Character encoding"
+msgstr "ترميز الأحرف"
+
+#: shared/src/settings-widget/settings-presentation.cpp:59
+msgid "Backspace code"
+msgstr "رمز مسافة للخلف"
+
+#: shared/src/settings-widget/settings-presentation.cpp:60
+msgid "Cursor key mode"
+msgstr "وضع مفتاح المؤشر"
+
+#: shared/src/settings-widget/settings-presentation.cpp:61
+msgid "Enter/Return code"
+msgstr "رمز Enter/Return"
+
+#: shared/src/settings-widget/settings-presentation.cpp:62
+msgid "Columns"
+msgstr "الأعمدة"
+
+#: shared/src/settings-widget/settings-presentation.cpp:63
+msgid "Rows"
+msgstr "الصفوف"
+
+#: shared/src/settings-widget/settings-presentation.cpp:65
+msgid "Scrollback lines"
+msgstr "أسطر سجل التمرير"
+
+#: shared/src/settings-widget/settings-presentation.cpp:66
+msgid "Zoom factor"
+msgstr "عامل التكبير/التصغير"
+
+#: shared/src/settings-widget/settings-presentation.cpp:67
+msgid "Active indicator color"
+msgstr "لون المؤشر النشط"
+
+#: shared/src/settings-widget/settings-presentation.cpp:68
+msgid "Inactive indicator color"
+msgstr "لون المؤشر غير النشط"
+
+#: shared/src/settings-widget/settings-presentation.cpp:69
+msgid "Font families"
+msgstr "عائلات الخطوط"
+
+#: shared/src/settings-widget/settings-presentation.cpp:71
+msgid "Close window when session ends"
+msgstr "إغلاق النافذة عند انتهاء الجلسة"
+
+#: shared/src/settings-widget/settings-presentation.cpp:73
+msgid "Show window side borders"
+msgstr "إظهار الحدود الجانبية للنافذة"
+
 #: shared/src/settings-widget/settings-presentation.cpp:75
+msgid "Window side border width (px)"
+msgstr "سُمك الحدود الجانبية للنافذة (بكسل)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:76
+msgid "BEL sound"
+msgstr "صوت BEL"
+
+#: shared/src/settings-widget/settings-presentation.cpp:77
+msgid "Zoom in shortcut"
+msgstr "اختصار التكبير"
+
+#: shared/src/settings-widget/settings-presentation.cpp:78
+msgid "Zoom out shortcut"
+msgstr "اختصار التصغير"
+
+#: shared/src/settings-widget/settings-presentation.cpp:80
+msgid "Send BREAK shortcut"
+msgstr "اختصار إرسال BREAK"
+
+#: shared/src/settings-widget/settings-presentation.cpp:83
+#: shared/src/settings-widget/settings-presentation.cpp:88
+msgid "Terminal type"
+msgstr "نوع الوحدة الطرفية"
+
+#: shared/src/settings-widget/settings-presentation.cpp:87
+msgid "Identity file"
+msgstr "ملف الهوية"
+
+#: shared/src/settings-widget/settings-presentation.cpp:95
 msgid "Data connection mode"
 msgstr "وضع اتصال البيانات"
 
-#: shared/src/settings-widget/settings-presentation.cpp:78
+#: shared/src/settings-widget/settings-presentation.cpp:98
 msgid "Device"
 msgstr "الجهاز"
 
-#: shared/src/settings-widget/settings-presentation.cpp:80
+#: shared/src/settings-widget/settings-presentation.cpp:100
 msgid "Device identification"
 msgstr "تعريف الجهاز"
 
-#: shared/src/settings-widget/settings-presentation.cpp:82
-#: shared/src/settings-widget/settings-presentation.cpp:270
+#: shared/src/settings-widget/settings-presentation.cpp:102
+#: shared/src/settings-widget/settings-presentation.cpp:332
 msgid "USB serial number"
 msgstr "الرقم التسلسلي لـ USB"
 
-#: shared/src/settings-widget/settings-presentation.cpp:83
+#: shared/src/settings-widget/settings-presentation.cpp:103
 msgid "Baud rate"
 msgstr "معدل الباود"
 
-#: shared/src/settings-widget/settings-presentation.cpp:84
+#: shared/src/settings-widget/settings-presentation.cpp:104
 msgid "Data bits"
 msgstr "بتات البيانات"
 
-#: shared/src/settings-widget/settings-presentation.cpp:85
+#: shared/src/settings-widget/settings-presentation.cpp:105
 msgid "Parity"
 msgstr "التكافؤ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:86
+#: shared/src/settings-widget/settings-presentation.cpp:106
 msgid "Stop bits"
 msgstr "بتات التوقف"
 
-#: shared/src/settings-widget/settings-presentation.cpp:87
+#: shared/src/settings-widget/settings-presentation.cpp:107
 msgid "Flow control"
 msgstr "التحكم في التدفق"
 
-#: shared/src/settings-widget/settings-presentation.cpp:89
+#: shared/src/settings-widget/settings-presentation.cpp:109
 msgid "Connection monitoring signal"
 msgstr "إشارة مراقبة الاتصال"
 
-#: shared/src/settings-widget/settings-presentation.cpp:91
+#: shared/src/settings-widget/settings-presentation.cpp:111
 msgid "Transfer base directory"
 msgstr "نقل الدليل الأساسي"
 
-#: shared/src/settings-widget/settings-presentation.cpp:93
+#: shared/src/settings-widget/settings-presentation.cpp:113
 msgid "Text send rate (bytes/s)"
 msgstr "معدل إرسال النص (بايت/ث)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:95
+#: shared/src/settings-widget/settings-presentation.cpp:115
 msgid "Follow Enter/Return code for text send"
 msgstr "اتباع رمز Enter/Return عند إرسال النص"
 
-#: shared/src/settings-widget/settings-presentation.cpp:97
+#: shared/src/settings-widget/settings-presentation.cpp:117
 msgid "Automatically start ZMODEM transfers"
 msgstr "بدء عمليات النقل ZMODEM تلقائيًا"
 
-#: shared/src/settings-widget/settings-presentation.cpp:98
+#: shared/src/settings-widget/settings-presentation.cpp:118
 msgid "Enable logging"
 msgstr "تمكين التسجيل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:99
+#: shared/src/settings-widget/settings-presentation.cpp:119
 msgid "Log directory"
 msgstr "دليل السجل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:100
+#: shared/src/settings-widget/settings-presentation.cpp:120
 msgid "File name format"
 msgstr "تنسيق اسم الملف"
 
-#: shared/src/settings-widget/settings-presentation.cpp:101
+#: shared/src/settings-widget/settings-presentation.cpp:121
 msgid "Log content"
 msgstr "محتوى السجل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:105
+#: shared/src/settings-widget/settings-presentation.cpp:125
+msgid "FTP (unencrypted)"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:126
+msgid "FTPS (explicit TLS)"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:127
+msgid "FTPS (implicit TLS)"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:128
+msgid "Prefer AUTH TLS"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:129
+msgid "Prefer AUTH SSL"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:130
+#: shared/src/settings-widget/settings-widget.cpp:3072
+msgid "Library default"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:131
+msgid "Standard"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:132
+msgid "Legacy TLS (relaxed cipher/signature rules)"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:133
+#: shared/src/settings-widget/settings-presentation.cpp:151
+msgid "Reject connection"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:134
+#: shared/src/settings-widget/settings-presentation.cpp:152
+msgid "Confirm in an overlay"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:135
+msgid "Backend maximum"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:136
 msgid "Local shell"
 msgstr "الصدفة المحلية"
 
-#: shared/src/settings-widget/settings-presentation.cpp:106
-#: shared/src/settings-widget/settings-presentation.cpp:184
+#: shared/src/settings-widget/settings-presentation.cpp:137
+#: shared/src/settings-widget/settings-presentation.cpp:226
 msgid "TELNET"
 msgstr "TELNET"
 
-#: shared/src/settings-widget/settings-presentation.cpp:107
-#: shared/src/settings-widget/settings-presentation.cpp:186
+#: shared/src/settings-widget/settings-presentation.cpp:138
+#: shared/src/settings-widget/settings-presentation.cpp:228
 msgid "Serial"
 msgstr "تسلسلي"
 
-#: shared/src/settings-widget/settings-presentation.cpp:108
-#: shared/src/settings-widget/settings-presentation.cpp:188
-#: elder-terms-vte/src/main-window.cpp:1544
+#: shared/src/settings-widget/settings-presentation.cpp:139
+#: shared/src/settings-widget/settings-presentation.cpp:230
+#: elder-terms-vte/src/main-window.cpp:1609
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:139
 msgid "SSH"
 msgstr "SSH"
 
-#: shared/src/settings-widget/settings-presentation.cpp:109
-#: shared/src/settings-widget/settings-presentation.cpp:190
-#: elder-terms-vte/src/main.cpp:1394
+#: shared/src/settings-widget/settings-presentation.cpp:140
+#: shared/src/settings-widget/settings-presentation.cpp:232
+#: elder-terms-vte/src/main.cpp:1490
 msgid "SFTP"
 msgstr "SFTP"
 
-#: shared/src/settings-widget/settings-presentation.cpp:110
-#: shared/src/settings-widget/settings-presentation.cpp:192
+#: shared/src/settings-widget/settings-presentation.cpp:141
+#: shared/src/settings-widget/settings-presentation.cpp:234
 msgid "FTP"
 msgstr "FTP"
 
-#: shared/src/settings-widget/settings-presentation.cpp:112
-msgid "System default"
-msgstr "النظام الافتراضي"
-
-#: shared/src/settings-widget/settings-presentation.cpp:113
-msgid "English"
-msgstr "الإنجليزية"
-
-#: shared/src/settings-widget/settings-presentation.cpp:114
-msgid "العربية"
-msgstr "العربية"
-
-#: shared/src/settings-widget/settings-presentation.cpp:115
-msgid "Español"
-msgstr "Español"
-
-#: shared/src/settings-widget/settings-presentation.cpp:116
-msgid "Français"
-msgstr "Français"
-
-#: shared/src/settings-widget/settings-presentation.cpp:117
-msgid "हिन्दी"
-msgstr "हिन्दी"
-
-#: shared/src/settings-widget/settings-presentation.cpp:118
-msgid "日本語"
-msgstr "日本語"
-
-#: shared/src/settings-widget/settings-presentation.cpp:119
-msgid "한국어"
-msgstr "한국어"
-
-#: shared/src/settings-widget/settings-presentation.cpp:120
-msgid "Português"
-msgstr "Português"
-
-#: shared/src/settings-widget/settings-presentation.cpp:121
-msgid "Русский"
-msgstr "Русский"
-
-#: shared/src/settings-widget/settings-presentation.cpp:122
-msgid "中文"
-msgstr "中文"
-
-#: shared/src/settings-widget/settings-presentation.cpp:124
-msgid "Simple startup"
-msgstr "بدء التشغيل البسيط"
-
-#: shared/src/settings-widget/settings-presentation.cpp:126
-msgid "Background only"
-msgstr "في الخلفية فقط"
-
-#: shared/src/settings-widget/settings-presentation.cpp:128
-msgid "System tray only"
-msgstr "علبة النظام فقط"
-
-#: shared/src/settings-widget/settings-presentation.cpp:130
-msgid "System tray and main window"
-msgstr "علبة النظام والنافذة الرئيسية"
-
-#: shared/src/settings-widget/settings-presentation.cpp:131
-#: shared/src/settings-widget/settings-presentation.cpp:136
-msgid "Auto"
-msgstr "تلقائي"
-
-#: shared/src/settings-widget/settings-presentation.cpp:132
-msgid "BS"
-msgstr "BS"
-
-#: shared/src/settings-widget/settings-presentation.cpp:133
-msgid "DEL"
-msgstr "DEL"
-
-#: shared/src/settings-widget/settings-presentation.cpp:134
-msgid "Normal"
-msgstr "عادي"
-
-#: shared/src/settings-widget/settings-presentation.cpp:135
-msgid "TRS80"
-msgstr "TRS80"
-
-#: shared/src/settings-widget/settings-presentation.cpp:137
-msgid "CR"
-msgstr "CR"
-
-#: shared/src/settings-widget/settings-presentation.cpp:138
-msgid "LF"
-msgstr "LF"
-
-#: shared/src/settings-widget/settings-presentation.cpp:139
-msgid "CRLF"
-msgstr "CRLF"
-
-#: shared/src/settings-widget/settings-presentation.cpp:141
-msgid "Passive (recommended)"
-msgstr "سلبي (موصى به)"
+#: shared/src/settings-widget/settings-presentation.cpp:142
+msgid "WebDAV"
+msgstr "WebDAV"
 
 #: shared/src/settings-widget/settings-presentation.cpp:143
-msgid "Active"
-msgstr "نشط"
+msgid "HTTPS (encrypted)"
+msgstr "HTTPS (مشفّر)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:144
-#: shared/src/settings-widget/settings-presentation.cpp:153
+msgid "HTTP (unencrypted)"
+msgstr "HTTP (غير مشفّر)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:145
+msgid "Automatic (Basic or Digest)"
+msgstr "تلقائي (Basic أو Digest)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:146
+msgid "Basic"
+msgstr "Basic"
+
+#: shared/src/settings-widget/settings-presentation.cpp:147
+msgid "Digest"
+msgstr "Digest"
+
+#: shared/src/settings-widget/settings-presentation.cpp:148
+#: shared/src/settings-widget/settings-presentation.cpp:186
+#: shared/src/settings-widget/settings-presentation.cpp:195
 msgid "None"
 msgstr "لا يوجد"
 
-#: shared/src/settings-widget/settings-presentation.cpp:146
+#: shared/src/settings-widget/settings-presentation.cpp:149
+#: shared/src/settings-widget/settings-widget.cpp:3072
+msgid "System CA certificates"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:150
+#: shared/src/settings-widget/settings-widget.cpp:3076
+#: shared/src/settings-widget/settings-widget.cpp:3081
+msgid "Custom"
+msgstr ""
+
+#: shared/src/settings-widget/settings-presentation.cpp:154
+msgid "System default"
+msgstr "النظام الافتراضي"
+
+#: shared/src/settings-widget/settings-presentation.cpp:155
+msgid "English"
+msgstr "الإنجليزية"
+
+#: shared/src/settings-widget/settings-presentation.cpp:156
+msgid "العربية"
+msgstr "العربية"
+
+#: shared/src/settings-widget/settings-presentation.cpp:157
+msgid "Español"
+msgstr "Español"
+
+#: shared/src/settings-widget/settings-presentation.cpp:158
+msgid "Français"
+msgstr "Français"
+
+#: shared/src/settings-widget/settings-presentation.cpp:159
+msgid "हिन्दी"
+msgstr "हिन्दी"
+
+#: shared/src/settings-widget/settings-presentation.cpp:160
+msgid "日本語"
+msgstr "日本語"
+
+#: shared/src/settings-widget/settings-presentation.cpp:161
+msgid "한국어"
+msgstr "한국어"
+
+#: shared/src/settings-widget/settings-presentation.cpp:162
+msgid "Português"
+msgstr "Português"
+
+#: shared/src/settings-widget/settings-presentation.cpp:163
+msgid "Русский"
+msgstr "Русский"
+
+#: shared/src/settings-widget/settings-presentation.cpp:164
+msgid "中文"
+msgstr "中文"
+
+#: shared/src/settings-widget/settings-presentation.cpp:166
+msgid "Simple startup"
+msgstr "بدء التشغيل البسيط"
+
+#: shared/src/settings-widget/settings-presentation.cpp:168
+msgid "Background only"
+msgstr "في الخلفية فقط"
+
+#: shared/src/settings-widget/settings-presentation.cpp:170
+msgid "System tray only"
+msgstr "علبة النظام فقط"
+
+#: shared/src/settings-widget/settings-presentation.cpp:172
+msgid "System tray and main window"
+msgstr "علبة النظام والنافذة الرئيسية"
+
+#: shared/src/settings-widget/settings-presentation.cpp:173
+#: shared/src/settings-widget/settings-presentation.cpp:178
+msgid "Auto"
+msgstr "تلقائي"
+
+#: shared/src/settings-widget/settings-presentation.cpp:174
+msgid "BS"
+msgstr "BS"
+
+#: shared/src/settings-widget/settings-presentation.cpp:175
+msgid "DEL"
+msgstr "DEL"
+
+#: shared/src/settings-widget/settings-presentation.cpp:176
+msgid "Normal"
+msgstr "عادي"
+
+#: shared/src/settings-widget/settings-presentation.cpp:177
+msgid "TRS80"
+msgstr "TRS80"
+
+#: shared/src/settings-widget/settings-presentation.cpp:179
+msgid "CR"
+msgstr "CR"
+
+#: shared/src/settings-widget/settings-presentation.cpp:180
+msgid "LF"
+msgstr "LF"
+
+#: shared/src/settings-widget/settings-presentation.cpp:181
+msgid "CRLF"
+msgstr "CRLF"
+
+#: shared/src/settings-widget/settings-presentation.cpp:183
+msgid "Passive (recommended)"
+msgstr "سلبي (موصى به)"
+
+#: shared/src/settings-widget/settings-presentation.cpp:185
+msgid "Active"
+msgstr "نشط"
+
+#: shared/src/settings-widget/settings-presentation.cpp:188
 msgid "Device path"
 msgstr "مسار الجهاز"
 
-#: shared/src/settings-widget/settings-presentation.cpp:148
+#: shared/src/settings-widget/settings-presentation.cpp:190
 msgid "Stable device identity"
 msgstr "هوية الجهاز الثابتة"
 
-#: shared/src/settings-widget/settings-presentation.cpp:150
+#: shared/src/settings-widget/settings-presentation.cpp:192
 msgid "Physical USB port"
 msgstr "منفذ USB الفعلي"
 
-#: shared/src/settings-widget/settings-presentation.cpp:151
+#: shared/src/settings-widget/settings-presentation.cpp:193
 msgid "Even"
 msgstr "حتى"
 
-#: shared/src/settings-widget/settings-presentation.cpp:152
+#: shared/src/settings-widget/settings-presentation.cpp:194
 msgid "Odd"
 msgstr "فردي"
 
-#: shared/src/settings-widget/settings-presentation.cpp:155
+#: shared/src/settings-widget/settings-presentation.cpp:197
 msgid "XON/XOFF (software)"
 msgstr "XON/XOFF (برنامج)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:157
+#: shared/src/settings-widget/settings-presentation.cpp:199
 msgid "RTS/CTS (hardware)"
 msgstr "RTS/CTS (الأجهزة)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:159
+#: shared/src/settings-widget/settings-presentation.cpp:201
 msgid "DCD (Data Carrier Detect)"
 msgstr "DCD (كشف حامل البيانات)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:161
+#: shared/src/settings-widget/settings-presentation.cpp:203
 msgid "CTS (Clear to Send)"
 msgstr "CTS (مسح للإرسال)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:163
+#: shared/src/settings-widget/settings-presentation.cpp:205
 msgid "DSR (Data Set Ready)"
 msgstr "DSR (مجموعة البيانات جاهزة)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:165
+#: shared/src/settings-widget/settings-presentation.cpp:207
 msgid "Ignore (do not monitor)"
 msgstr "تجاهل (عدم المراقبة)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:167
+#: shared/src/settings-widget/settings-presentation.cpp:209
 msgid "Raw bytes (before character conversion)"
 msgstr "البايتات الأولية (قبل تحويل الأحرف)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:169
+#: shared/src/settings-widget/settings-presentation.cpp:211
 msgid "UTF-8 text (after character conversion)"
 msgstr "UTF-8 النص (بعد تحويل الأحرف)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:180
-#: shared/src/settings-widget/application-settings-widget.cpp:313
+#: shared/src/settings-widget/settings-presentation.cpp:222
 msgid "General"
 msgstr "عام"
 
-#: shared/src/settings-widget/settings-presentation.cpp:182
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2072
+#: shared/src/settings-widget/settings-presentation.cpp:224
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2149
 msgid "Local"
 msgstr "محلي"
 
-#: shared/src/settings-widget/settings-presentation.cpp:194
-#: elder-terms-vte/src/main-window.ui:426
-#: elder-terms-vte/src/terminal-session.cpp:226
+#: shared/src/settings-widget/settings-presentation.cpp:236
+#: elder-terms-vte/src/main-window.ui:444
+#: elder-terms-vte/src/terminal-session.cpp:402
 msgid "Terminal"
 msgstr "الطرفية"
 
-#: shared/src/settings-widget/settings-presentation.cpp:196
+#: shared/src/settings-widget/settings-presentation.cpp:238
 msgid "Macro"
 msgstr "ماكرو"
 
-#: shared/src/settings-widget/settings-presentation.cpp:198
+#: shared/src/settings-widget/settings-presentation.cpp:240
+msgid "Links"
+msgstr "الروابط"
+
+#: shared/src/settings-widget/settings-presentation.cpp:242
 #: elder-terms-vte/src/main-window.ui:50
 msgid "Transfer"
 msgstr "نقل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:200
+#: shared/src/settings-widget/settings-presentation.cpp:244
 msgid "Logging"
 msgstr "التسجيل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:202
+#: shared/src/settings-widget/settings-presentation.cpp:246
 msgid "Apply"
 msgstr "تطبيق"
 
-#: shared/src/settings-widget/settings-presentation.cpp:204
-#: elder-terms/src/main.cpp:483 elder-terms/src/main.cpp:752
-#: elder-terms/src/main-window.ui:221
+#: shared/src/settings-widget/settings-presentation.cpp:248
+#: elder-terms/src/main.cpp:504 elder-terms/src/main.cpp:773
+#: elder-terms/src/main-window.ui:15 elder-terms/src/main-window.ui:239
 msgid "Save"
 msgstr "حفظ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:206
-#: elder-terms/src/main.cpp:482 elder-terms/src/main.cpp:550
-#: elder-terms/src/main.cpp:751 elder-terms/src/main.cpp:1688
-#: elder-terms/src/main.cpp:1911 elder-terms-vte/src/main.cpp:944
-#: elder-terms-vte/src/main-window.ui:248
-#: elder-terms-vte/src/main-window.ui:359
-#: elder-terms-vte/src/main-window.cpp:1553
+#: shared/src/settings-widget/settings-presentation.cpp:250
+#: shared/src/settings-widget/settings-widget.cpp:3181
+#: elder-terms/src/main.cpp:503 elder-terms/src/main.cpp:571
+#: elder-terms/src/main.cpp:772 elder-terms/src/main.cpp:1827
+#: elder-terms/src/main.cpp:2082 elder-terms/src/main.cpp:2343
+#: elder-terms/src/main.cpp:2418 elder-terms-vte/src/main.cpp:1040
+#: elder-terms-vte/src/main-window.ui:266
+#: elder-terms-vte/src/main-window.ui:377
+#: elder-terms-vte/src/main-window.cpp:1618
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:149
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:416
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:749
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1273
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1304
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1461
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1560
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2394
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2516
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:438
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:762
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1268
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1299
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1518
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1617
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2477
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2629
+#: shared/src/settings-widget/webdav-settings-editor.cpp:225
+#: elder-terms-vte/src/webdav/webdav-application.cpp:79
 msgid "Cancel"
 msgstr "إلغاء"
 
-#: shared/src/settings-widget/settings-presentation.cpp:208
+#: shared/src/settings-widget/settings-presentation.cpp:252
 msgid "Reset"
 msgstr "إعادة تعيين"
 
-#: shared/src/settings-widget/settings-presentation.cpp:210
-#: elder-terms-vte/src/main.cpp:943
+#: shared/src/settings-widget/settings-presentation.cpp:254
+#: elder-terms-vte/src/main.cpp:1039
 msgid "Select file"
 msgstr "حدد الملف"
 
-#: shared/src/settings-widget/settings-presentation.cpp:212
-#: elder-terms-vte/src/main.cpp:945
+#: shared/src/settings-widget/settings-presentation.cpp:256
+#: shared/src/settings-widget/settings-widget.cpp:3181
+#: elder-terms-vte/src/main.cpp:1041
+#: shared/src/settings-widget/webdav-settings-editor.cpp:225
 msgid "Open"
 msgstr "فتح"
 
+#: shared/src/settings-widget/settings-presentation.cpp:258
 msgid "Select Terminal Font"
 msgstr "اختيار خط الطرفية"
 
+#: shared/src/settings-widget/settings-presentation.cpp:260
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:621
+msgid "Add"
+msgstr "إضافة"
 
-#: shared/src/settings-widget/settings-presentation.cpp:218
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:751
-msgid "Enabled"
-msgstr "ممكّن"
+#: shared/src/settings-widget/settings-presentation.cpp:262
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:624
+msgid "Remove"
+msgstr "إزالة"
 
-#: shared/src/settings-widget/settings-presentation.cpp:220
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:753
-msgid "Disabled"
-msgstr "معطل"
-
-msgid "Inherited from: global settings"
-msgstr "موروث من: الإعدادات العامة"
-
-msgid "Inherited from: app defaults"
-msgstr "موروث من: افتراضيات التطبيق"
-
-msgid "App defaults"
-msgstr "افتراضيات التطبيق"
-
-msgid "Use app defaults"
-msgstr "استخدام افتراضيات التطبيق"
-
-msgid "Specify for this connection"
-msgstr "تحديد لهذا الاتصال"
-
-msgid "Specify fonts"
-msgstr "تحديد الخطوط"
-
-#: shared/src/settings-widget/settings-presentation.cpp:224
-msgid "No color"
-msgstr "بلا لون"
-
-#: shared/src/settings-widget/settings-presentation.cpp:226
-msgid "Custom color"
-msgstr "لون مخصص"
-
-#: shared/src/settings-widget/settings-presentation.cpp:228
-msgid "Press a key combination"
-msgstr "اضغط على مجموعة المفاتيح"
-
-#: shared/src/settings-widget/settings-presentation.cpp:230
-msgid "Clear key binding"
-msgstr "مسح ربط المفتاح"
-
-#: shared/src/settings-widget/settings-presentation.cpp:232
-msgid "Use global default"
-msgstr "استخدم الإعداد الافتراضي العام"
-
-#: shared/src/settings-widget/settings-presentation.cpp:234
-msgid "Use built-in default"
-msgstr "استخدم الإعداد الافتراضي المدمج"
-
-#: shared/src/settings-widget/settings-presentation.cpp:236
-msgid "Macro rules"
-msgstr "قواعد الماكرو"
-
-#: shared/src/settings-widget/settings-presentation.cpp:238
-msgid "Rule ID"
-msgstr "معرف القاعدة"
-
-#: shared/src/settings-widget/settings-presentation.cpp:240
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:673
-msgid "Regular expression"
-msgstr "التعبير العادي"
-
-#: shared/src/settings-widget/settings-presentation.cpp:242
-msgid "Action"
-msgstr "الإجراء"
-
-#: shared/src/settings-widget/settings-presentation.cpp:244
-msgid "Text to send"
-msgstr "رسالة نصية للإرسال"
-
-#: shared/src/settings-widget/settings-presentation.cpp:246
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:683
-msgid "Command"
-msgstr "الأمر"
-
-#: shared/src/settings-widget/settings-presentation.cpp:248
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:699
-msgid "Arguments"
-msgstr "الحجج"
-
-#: shared/src/settings-widget/settings-presentation.cpp:250
-msgid "Add rule"
-msgstr "إضافة قاعدة"
-
-#: shared/src/settings-widget/settings-presentation.cpp:252
-msgid "Remove rule"
-msgstr "إزالة القاعدة"
-
-#: shared/src/settings-widget/settings-presentation.cpp:254
+#: shared/src/settings-widget/settings-presentation.cpp:264
+#: shared/src/settings-widget/settings-presentation.cpp:316
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:629
 msgid "Move up"
 msgstr "تحرك للأعلى"
 
-#: shared/src/settings-widget/settings-presentation.cpp:256
+#: shared/src/settings-widget/settings-presentation.cpp:266
+#: shared/src/settings-widget/settings-presentation.cpp:318
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:634
 msgid "Move down"
 msgstr "تحرك للأسفل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:258
+#: shared/src/settings-widget/settings-presentation.cpp:268
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:759
+msgid "Enabled"
+msgstr "ممكّن"
+
+#: shared/src/settings-widget/settings-presentation.cpp:270
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:761
+msgid "Disabled"
+msgstr "معطل"
+
+#: shared/src/settings-widget/settings-presentation.cpp:272
+msgid "Inherited from: global settings"
+msgstr "موروث من: الإعدادات العامة"
+
+#: shared/src/settings-widget/settings-presentation.cpp:274
+msgid "Inherited from: app defaults"
+msgstr "موروث من: افتراضيات التطبيق"
+
+#: shared/src/settings-widget/settings-presentation.cpp:276
+msgid "App defaults"
+msgstr "افتراضيات التطبيق"
+
+#: shared/src/settings-widget/settings-presentation.cpp:278
+msgid "Use app defaults"
+msgstr "استخدام افتراضيات التطبيق"
+
+#: shared/src/settings-widget/settings-presentation.cpp:280
+msgid "Specify for this connection"
+msgstr "تحديد لهذا الاتصال"
+
+#: shared/src/settings-widget/settings-presentation.cpp:282
+msgid "Specify fonts"
+msgstr "تحديد الخطوط"
+
+#: shared/src/settings-widget/settings-presentation.cpp:284
+msgid "No color"
+msgstr "بلا لون"
+
+#: shared/src/settings-widget/settings-presentation.cpp:286
+msgid "Default color"
+msgstr "اللون الافتراضي"
+
+#: shared/src/settings-widget/settings-presentation.cpp:288
+msgid "Custom color"
+msgstr "لون مخصص"
+
+#: shared/src/settings-widget/settings-presentation.cpp:290
+msgid "Press a key combination"
+msgstr "اضغط على مجموعة المفاتيح"
+
+#: shared/src/settings-widget/settings-presentation.cpp:292
+msgid "Clear key binding"
+msgstr "مسح ربط المفتاح"
+
+#: shared/src/settings-widget/settings-presentation.cpp:294
+msgid "Use global default"
+msgstr "استخدم الإعداد الافتراضي العام"
+
+#: shared/src/settings-widget/settings-presentation.cpp:296
+msgid "Use built-in default"
+msgstr "استخدم الإعداد الافتراضي المدمج"
+
+#: shared/src/settings-widget/settings-presentation.cpp:298
+msgid "Macro rules"
+msgstr "قواعد الماكرو"
+
+#: shared/src/settings-widget/settings-presentation.cpp:300
+msgid "Rule ID"
+msgstr "معرف القاعدة"
+
+#: shared/src/settings-widget/settings-presentation.cpp:302
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:673
+msgid "Regular expression"
+msgstr "التعبير العادي"
+
+#: shared/src/settings-widget/settings-presentation.cpp:304
+msgid "Action"
+msgstr "الإجراء"
+
+#: shared/src/settings-widget/settings-presentation.cpp:306
+msgid "Text to send"
+msgstr "رسالة نصية للإرسال"
+
+#: shared/src/settings-widget/settings-presentation.cpp:308
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:683
+msgid "Command"
+msgstr "الأمر"
+
+#: shared/src/settings-widget/settings-presentation.cpp:310
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:699
+msgid "Arguments"
+msgstr "الحجج"
+
+#: shared/src/settings-widget/settings-presentation.cpp:312
+msgid "Add rule"
+msgstr "إضافة قاعدة"
+
+#: shared/src/settings-widget/settings-presentation.cpp:314
+msgid "Remove rule"
+msgstr "إزالة القاعدة"
+
+#: shared/src/settings-widget/settings-presentation.cpp:320
 msgid "Send text"
 msgstr "أرسل رسالة نصية"
 
-#: shared/src/settings-widget/settings-presentation.cpp:260
+#: shared/src/settings-widget/settings-presentation.cpp:322
 msgid "Run command"
 msgstr "أمر التشغيل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:262
+#: shared/src/settings-widget/settings-presentation.cpp:324
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:691
 msgid "Add argument"
 msgstr "إضافة وسيطة"
 
-#: shared/src/settings-widget/settings-presentation.cpp:264
+#: shared/src/settings-widget/settings-presentation.cpp:326
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:267
 msgid "Remove argument"
 msgstr "إزالة الوسيطة"
 
-#: shared/src/settings-widget/settings-presentation.cpp:266
+#: shared/src/settings-widget/settings-presentation.cpp:328
 msgid "No device"
 msgstr "لا يوجد جهاز"
 
-#: shared/src/settings-widget/settings-presentation.cpp:268
+#: shared/src/settings-widget/settings-presentation.cpp:330
 msgid "Stable ID"
 msgstr "المعرّف الثابت"
 
-#: shared/src/settings-widget/settings-presentation.cpp:272
+#: shared/src/settings-widget/settings-presentation.cpp:334
 msgid "Current device node"
 msgstr "عقدة الجهاز الحالية"
 
-#: shared/src/settings-widget/settings-presentation.cpp:274
+#: shared/src/settings-widget/settings-presentation.cpp:336
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:10
 msgid "Unavailable"
 msgstr "غير متاح"
 
-#: shared/src/settings-widget/settings-presentation.cpp:276
+#: shared/src/settings-widget/settings-presentation.cpp:338
 msgid "IP scan"
 msgstr "فحص IP"
 
-#: shared/src/settings-widget/settings-presentation.cpp:278
+#: shared/src/settings-widget/settings-presentation.cpp:340
 msgid "IP address"
 msgstr "عنوان IP"
 
-#: shared/src/settings-widget/settings-presentation.cpp:280
+#: shared/src/settings-widget/settings-presentation.cpp:342
 msgid "Hostname"
 msgstr "اسم المضيف"
 
-#: shared/src/settings-widget/settings-presentation.cpp:282
+#: shared/src/settings-widget/settings-presentation.cpp:344
 msgid "SSH/SFTP(22)"
 msgstr "SSH/SFTP(22)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:284
+#: shared/src/settings-widget/settings-presentation.cpp:346
 msgid "TELNET(23)"
 msgstr "TELNET(23)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:286
+#: shared/src/settings-widget/settings-presentation.cpp:348
 msgid "FTP(21)"
 msgstr "FTP(21)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:288
+#: shared/src/settings-widget/settings-presentation.cpp:350
 msgid "Scanning…"
 msgstr "جارٍ الفحص…"
 
-#: shared/src/settings-widget/settings-presentation.cpp:290
+#: shared/src/settings-widget/settings-presentation.cpp:352
 msgid "Scan complete"
 msgstr "اكتمل الفحص"
 
-#: shared/src/settings-widget/settings-presentation.cpp:292
+#: shared/src/settings-widget/settings-presentation.cpp:354
 msgid "Scan failed"
 msgstr "فشل الفحص"
 
-#: shared/src/settings-widget/settings-presentation.cpp:320
+#: shared/src/settings-widget/settings-presentation.cpp:382
 msgid "Global default"
 msgstr "الافتراضي العالمي"
 
-#: shared/src/settings-widget/settings-presentation.cpp:321
+#: shared/src/settings-widget/settings-presentation.cpp:383
 msgid "Built-in default"
 msgstr "الافتراضي المدمج"
 
-#: shared/src/settings-widget/settings-presentation.cpp:325
+#: shared/src/settings-widget/settings-presentation.cpp:387
 #, c-format
 msgid "%s (global default)"
 msgstr "%s (الافتراضي العام)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:326
+#: shared/src/settings-widget/settings-presentation.cpp:388
 #, c-format
 msgid "%s (built-in default)"
 msgstr "%s (الافتراضي المضمن)"
 
-#: shared/src/settings-widget/settings-presentation.cpp:337
+#: shared/src/settings-widget/settings-presentation.cpp:399
 msgid "Enter a whole number"
 msgstr "أدخل رقمًا صحيحًا"
 
-#: shared/src/settings-widget/settings-presentation.cpp:340
+#: shared/src/settings-widget/settings-presentation.cpp:402
 msgid "Enter a number"
 msgstr "أدخل رقمًا"
 
-#: shared/src/settings-widget/settings-presentation.cpp:351
+#: shared/src/settings-widget/settings-presentation.cpp:413
 #, c-format
 msgid "Value must be between %s and %s"
 msgstr "يجب أن تتراوح القيمة بين %s و%s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:360
+#: shared/src/settings-widget/settings-presentation.cpp:422
 msgid "Must include Ctrl, Shift, Alt, or Super"
 msgstr "يجب أن يتضمن Ctrl أو Shift أو Alt أو Super"
 
-#: shared/src/settings-widget/settings-presentation.cpp:363
+#: shared/src/settings-widget/settings-presentation.cpp:425
 msgid "Contains an empty token"
 msgstr "يحتوي على رمز مميز فارغ"
 
-#: shared/src/settings-widget/settings-presentation.cpp:372
+#: shared/src/settings-widget/settings-presentation.cpp:434
 #, c-format
 msgid "Contains an unknown modifier: %s"
 msgstr "يحتوي على مُعدِّل غير معروف: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:385
+#: shared/src/settings-widget/settings-presentation.cpp:447
 #, c-format
 msgid "Contains a duplicate modifier: %s"
 msgstr "يحتوي على معدل مكرر: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:393
+#: shared/src/settings-widget/settings-presentation.cpp:455
 msgid "Does not contain a key"
 msgstr "لا يحتوي على مفتاح"
 
-#: shared/src/settings-widget/settings-presentation.cpp:400
+#: shared/src/settings-widget/settings-presentation.cpp:462
 #, c-format
 msgid "Contains an unknown key: %s"
 msgstr "يحتوي على مفتاح غير معروف: %s"
 
-#: shared/src/settings-widget/settings-presentation.cpp:408
+#: shared/src/settings-widget/settings-presentation.cpp:470
 msgid "Zoom in and zoom out must use different key bindings"
 msgstr "يجب أن يستخدم التكبير والتصغير روابط مفاتيح مختلفة"
 
-#: shared/src/settings-widget/settings-presentation.cpp:411
+#: shared/src/settings-widget/settings-presentation.cpp:473
 msgid "Must not be empty"
 msgstr "يجب ألا يكون فارغًا"
 
-#: shared/src/settings-widget/settings-presentation.cpp:414
+#: shared/src/settings-widget/settings-presentation.cpp:476
 msgid "The character encoding is not supported"
 msgstr "ترميز الأحرف غير مدعوم"
 
-#: shared/src/settings-widget/settings-presentation.cpp:417
+#: shared/src/settings-widget/settings-presentation.cpp:479
 msgid "Contains a NUL byte"
 msgstr "يحتوي على NUL بايت"
 
-#: shared/src/settings-widget/settings-presentation.cpp:422
+#: shared/src/settings-widget/settings-presentation.cpp:484
 msgid "Enter default or select an existing absolute .oga, .ogg, or .wav file"
 msgstr "أدخل default أو حدد ملف .oga أو .ogg أو .wav موجودًا بمسار مطلق"
 
-#: shared/src/settings-widget/settings-presentation.cpp:425
+#: shared/src/settings-widget/settings-presentation.cpp:487
 msgid "Contains an unmatched closing brace"
 msgstr "يحتوي على قوس إغلاق لا مثيل له"
 
-#: shared/src/settings-widget/settings-presentation.cpp:428
+#: shared/src/settings-widget/settings-presentation.cpp:490
 msgid "Contains an unmatched opening brace"
 msgstr "يحتوي على قوس افتتاحي لا مثيل له"
 
-#: shared/src/settings-widget/settings-presentation.cpp:431
+#: shared/src/settings-widget/settings-presentation.cpp:493
 msgid "Contains an unknown placeholder"
 msgstr "يحتوي على عنصر نائب غير معروف"
 
-#: shared/src/settings-widget/settings-presentation.cpp:434
+#: shared/src/settings-widget/settings-presentation.cpp:496
 msgid "Must be relative to the log base directory"
 msgstr "يجب أن يكون مرتبطًا بالدليل الأساسي للسجل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:437
+#: shared/src/settings-widget/settings-presentation.cpp:499
 msgid "Must not contain parent directory traversal"
 msgstr "يجب ألا يحتوي على اجتياز الدليل الأصلي"
 
-#: shared/src/settings-widget/settings-presentation.cpp:440
+#: shared/src/settings-widget/settings-presentation.cpp:502
 msgid "Must name a log file"
 msgstr "يجب تسمية ملف السجل"
 
-#: shared/src/settings-widget/settings-presentation.cpp:442
+#: shared/src/settings-widget/settings-presentation.cpp:504
 msgid "Invalid value"
 msgstr "قيمة غير صالحة"
 
-#: shared/src/settings-widget/application-settings-widget.cpp:322
-msgid "Links"
-msgstr "الروابط"
+#: shared/src/settings-widget/settings-widget.cpp:3054
+#: shared/src/settings-widget/settings-widget.cpp:3120
+#: shared/src/settings-widget/settings-widget.cpp:3143
+#: shared/src/settings-widget/settings-widget.cpp:6448
+#: shared/src/settings-widget/webdav-settings-editor.cpp:100
+msgid "Enter a valid value"
+msgstr "أدخل قيمة صالحة"
+
+#: shared/src/settings-widget/settings-widget.cpp:3092
+#: shared/src/settings-widget/webdav-settings-editor.cpp:129
+msgid "Invalid value:"
+msgstr ""
+
+#: shared/src/settings-widget/settings-widget.cpp:3180
+#: shared/src/settings-widget/webdav-settings-editor.cpp:224
+msgid "Select a PEM CA bundle"
+msgstr ""
+
+#: shared/src/settings-widget/settings-widget.cpp:3188
+msgid "PEM CA bundles"
+msgstr ""
+
+#: shared/src/settings-widget/settings-widget.cpp:3216
+#: shared/src/settings-widget/webdav-settings-editor.cpp:261
+msgid "Browse…"
+msgstr ""
 
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:175
 msgid "Identifier must be unique"
@@ -809,14 +995,6 @@ msgstr "نقل الوسيطة إلى أسفل"
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:603
 msgid "Rules"
 msgstr "القواعد"
-
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:621
-msgid "Add"
-msgstr "إضافة"
-
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:624
-msgid "Remove"
-msgstr "إزالة"
 
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:658
 msgid "Identifier"
@@ -863,19 +1041,19 @@ msgstr "يتطلب التحقق من المسار مسارًا مطلقًا بع
 msgid "Path template"
 msgstr "قالب المسار"
 
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:747
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:755
 msgid "Link actions"
 msgstr "إجراءات الروابط"
 
-#: shared/src/settings-widget/hyperlink-settings-editor.cpp:765
+#: shared/src/settings-widget/hyperlink-settings-editor.cpp:773
 msgid "Restore defaults"
 msgstr "استعادة الإعدادات الافتراضية"
 
-#: elder-terms/src/main.cpp:242
+#: elder-terms/src/main.cpp:262
 msgid "Global shortcuts are unavailable"
 msgstr "الاختصارات العامة غير متاحة"
 
-#: elder-terms/src/main.cpp:251
+#: elder-terms/src/main.cpp:271
 msgid ""
 "One or more configured global shortcuts could not be registered and will not "
 "work. Check whether your desktop environment supports global shortcuts."
@@ -883,188 +1061,272 @@ msgstr ""
 "لا يمكن تسجيل واحد أو أكثر من الاختصارات العامة التي تم تكوينها ولن تعمل. "
 "تحقق مما إذا كانت بيئة سطح المكتب لديك تدعم الاختصارات العامة."
 
-#: elder-terms/src/main.cpp:255 elder-terms-vte/src/main-window.ui:375
-#: elder-terms-vte/src/main-window.cpp:1552
+#: elder-terms/src/main.cpp:275 elder-terms-vte/src/main-window.ui:393
+#: elder-terms-vte/src/main-window.cpp:1617
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:148
 msgid "OK"
 msgstr "حسنًا"
 
-#: elder-terms/src/main.cpp:295
+#: elder-terms/src/main.cpp:315
 msgid "Restart to apply display language?"
 msgstr "هل تريد إعادة التشغيل لتطبيق لغة العرض؟"
 
-#: elder-terms/src/main.cpp:298
+#: elder-terms/src/main.cpp:318
 msgid ""
 "The display language change will take effect after elder-terms restarts."
 msgstr "سيصبح تغيير لغة العرض ساري المفعول بعد إعادة تشغيل elder-terms."
 
-#: elder-terms/src/main.cpp:301
+#: elder-terms/src/main.cpp:321
 msgid "Later"
 msgstr "لاحقًا"
 
-#: elder-terms/src/main.cpp:303
+#: elder-terms/src/main.cpp:323
 msgid "Restart now"
 msgstr "أعد التشغيل الآن"
 
-#: elder-terms/src/main.cpp:432
+#: elder-terms/src/main.cpp:453
 msgid "Failed to save connection defaults"
 msgstr "تعذر حفظ الإعدادات الافتراضية للاتصال"
 
-#: elder-terms/src/main.cpp:463 elder-terms/src/main-window.ui:204
+#: elder-terms/src/main.cpp:484 elder-terms/src/main-window.ui:222
 msgid "Connection defaults"
 msgstr "الإعدادات الافتراضية للاتصال"
 
-#: elder-terms/src/main.cpp:550
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1303
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1460
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2515
+#: elder-terms/src/main.cpp:571
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1298
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1517
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2628
 msgid "Close"
 msgstr "إغلاق"
 
-#: elder-terms/src/main.cpp:627
+#: elder-terms/src/main.cpp:648
 msgid "Failed to save application settings"
 msgstr "تعذر حفظ إعدادات التطبيق"
 
-#: elder-terms/src/main.cpp:668
+#: elder-terms/src/main.cpp:689
 #, c-format
 msgid "Version %s"
 msgstr "الإصدار %s"
 
-#: elder-terms/src/main.cpp:712 elder-terms/src/main.cpp:737
-#: elder-terms/src/main-window.ui:61 elder-terms-vte/src/main-window.ui:33
+#: elder-terms/src/main.cpp:733 elder-terms/src/main.cpp:758
+#: elder-terms/src/main-window.ui:79 elder-terms-vte/src/main-window.ui:33
 msgid "Application"
 msgstr "التطبيق"
 
-#: elder-terms/src/main.cpp:740
+#: elder-terms/src/main.cpp:761
 msgid "About"
 msgstr "حول"
 
-#: elder-terms/src/main.cpp:986
+#: elder-terms/src/main.cpp:1007
 #, c-format
 msgid "Open connection %s"
 msgstr "فتح الاتصال %s"
 
-#: elder-terms/src/main.cpp:1013 elder-terms/src/tray-backend.cpp:373
+#: elder-terms/src/main.cpp:1034 elder-terms/src/tray-backend.cpp:373
 #: elder-terms/src/tray-backend.cpp:400 elder-terms/src/tray-backend.cpp:907
 msgid "Open elder-terms"
 msgstr "فتح elder-terms"
 
-#: elder-terms/src/main.cpp:1068 elder-terms/src/main.cpp:1620
+#: elder-terms/src/main.cpp:1106 elder-terms/src/main.cpp:1755
 msgid "Failed to load connection"
 msgstr "فشل تحميل الاتصال"
 
-#: elder-terms/src/main.cpp:1115
+#: elder-terms/src/main.cpp:1155
 msgid "New connection"
 msgstr "اتصال جديد"
 
-#: elder-terms/src/main.cpp:1116
+#: elder-terms/src/main.cpp:1156
 #, c-format
 msgid "New connection %d"
 msgstr "اتصال جديد %d"
 
-#: elder-terms/src/main.cpp:1294 elder-terms/src/main.cpp:1311
+#: elder-terms/src/main.cpp:1310
+msgid "Connection changed outside elder-terms"
+msgstr "تم تغيير الاتصال خارج elder-terms"
+
+#: elder-terms/src/main.cpp:1313
+msgid ""
+"Reload the file and discard your unsaved changes, or keep editing. Saving "
+"kept edits will require confirmation before overwriting the file."
+msgstr ""
+"أعد تحميل الملف وتجاهل التغييرات غير المحفوظة، أو احتفظ بالتعديلات. سيتطلب "
+"حفظ التعديلات المحتفظ بها تأكيد استبدال الملف."
+
+#: elder-terms/src/main.cpp:1316
+msgid "Keep edits"
+msgstr "الاحتفاظ بالتعديلات"
+
+#: elder-terms/src/main.cpp:1318
+msgid "Reload from file"
+msgstr "إعادة التحميل من الملف"
+
+#: elder-terms/src/main.cpp:1428 elder-terms/src/main.cpp:1445
 msgid "Failed to monitor connections"
 msgstr "فشل في مراقبة الاتصالات"
 
-#: elder-terms/src/main.cpp:1307
+#: elder-terms/src/main.cpp:1441
 msgid "Unknown file monitor error"
 msgstr "خطأ غير معروف في مراقبة الملفات"
 
-#: elder-terms/src/main.cpp:1459
+#: elder-terms/src/main.cpp:1593
 msgid "Failed to create startup profile"
 msgstr "فشل في إنشاء ملف تعريف بدء التشغيل"
 
-#: elder-terms/src/main.cpp:1516 elder-terms/src/main.cpp:1585
+#: elder-terms/src/main.cpp:1650 elder-terms/src/main.cpp:1720
 #, c-format
 msgid "Failed to start %s"
 msgstr "فشل في البدء %s"
 
-#: elder-terms/src/main.cpp:1523
+#: elder-terms/src/main.cpp:1657
 #, c-format
 msgid "The %s executable was not found"
 msgstr "لم يتم العثور على الملف القابل للتنفيذ %s"
 
-#: elder-terms/src/main.cpp:1551
+#: elder-terms/src/main.cpp:1685
 msgid "Unknown process launch error"
 msgstr "خطأ غير معروف في تشغيل العملية"
 
-#: elder-terms/src/main.cpp:1683
+#: elder-terms/src/main.cpp:1822
 msgid "Discard changes?"
 msgstr "هل تريد تجاهل التغييرات؟"
 
-#: elder-terms/src/main.cpp:1686
+#: elder-terms/src/main.cpp:1825
 msgid "The current connection has changes that have not been applied."
 msgstr "يحتوي الاتصال الحالي على تغييرات لم يتم تطبيقها."
 
-#: elder-terms/src/main.cpp:1690
+#: elder-terms/src/main.cpp:1829
 msgid "Discard"
 msgstr "تجاهل"
 
-#: elder-terms/src/main.cpp:1843
+#: elder-terms/src/main.cpp:1940
+msgid "Save and open in text editor"
+msgstr "حفظ وفتح في محرر النصوص"
+
+#: elder-terms/src/main.cpp:1940 elder-terms/src/main-window.ui:21
+msgid "Edit in text editor"
+msgstr "تحرير في محرر نصوص"
+
+#: elder-terms/src/main.cpp:2013
 msgid "Failed to duplicate connection"
 msgstr "فشل تكرار الاتصال"
 
-#: elder-terms/src/main.cpp:1877
+#: elder-terms/src/main.cpp:2047
 msgid "Failed to delete connection"
 msgstr "فشل حذف الاتصال"
 
-#: elder-terms/src/main.cpp:1904
+#: elder-terms/src/main.cpp:2075
 msgid "Delete connection?"
 msgstr "حذف الاتصال؟"
 
-#: elder-terms/src/main.cpp:1906
+#: elder-terms/src/main.cpp:2077
 #, c-format
 msgid "The connection \"%s\" will be permanently deleted."
 msgstr "سيتم حذف الاتصال \"%s\" نهائيًا."
 
-#: elder-terms/src/main.cpp:1913 elder-terms/src/main-window.ui:27
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1559
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2165
+#: elder-terms/src/main.cpp:2084 elder-terms/src/main-window.ui:39
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1616
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2248
 msgid "Delete"
 msgstr "حذف"
 
-#: elder-terms/src/main.cpp:1954 elder-terms/src/main.cpp:1967
+#: elder-terms/src/main.cpp:2125 elder-terms/src/main.cpp:2138
 msgid "Failed to rename connection"
 msgstr "فشل تغيير اسم الاتصال"
 
-#: elder-terms/src/main.cpp:2063
+#: elder-terms/src/main.cpp:2231 elder-terms/src/main.cpp:2250
+#: elder-terms/src/main.cpp:2258
+msgid "Failed to open text editor"
+msgstr "تعذر فتح محرر النصوص"
+
+#: elder-terms/src/main.cpp:2232
+msgid "The text editor could not be started."
+msgstr "تعذر تشغيل محرر النصوص."
+
+#: elder-terms/src/main.cpp:2251
+msgid "The connection file is no longer available."
+msgstr "لم يعد ملف الاتصال متاحًا."
+
+#: elder-terms/src/main.cpp:2259
+msgid ""
+"Set a default application for plain text files in your desktop settings."
+msgstr "عيّن تطبيقًا افتراضيًا لملفات النص العادي في إعدادات سطح المكتب."
+
+#: elder-terms/src/main.cpp:2280 elder-terms/src/main.cpp:2294
 msgid "Failed to save connection"
 msgstr "فشل حفظ الاتصال"
 
-#: elder-terms/src/main-window.ui:15
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1272
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2156
+#: elder-terms/src/main.cpp:2282
+msgid ""
+"The settings contain invalid input. Correct the highlighted fields before "
+"saving."
+msgstr "تحتوي الإعدادات على إدخال غير صالح. صحح الحقول المميزة قبل الحفظ."
+
+#: elder-terms/src/main.cpp:2337
+msgid "Overwrite externally changed connection?"
+msgstr "هل تريد استبدال الاتصال الذي تم تغييره خارجيًا؟"
+
+#: elder-terms/src/main.cpp:2340
+msgid ""
+"The file changed or was removed outside elder-terms. Save your current edits "
+"in its place?"
+msgstr ""
+"تم تغيير الملف أو حذفه خارج elder-terms. هل تريد حفظ تعديلاتك الحالية مكانه؟"
+
+#: elder-terms/src/main.cpp:2345
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:762
+msgid "Overwrite"
+msgstr "الكتابة فوق"
+
+#: elder-terms/src/main.cpp:2416
+msgid "Save changes before opening the text editor?"
+msgstr "هل تريد حفظ التغييرات قبل فتح محرر النصوص؟"
+
+#: elder-terms/src/main.cpp:2420
+msgid "Discard and open"
+msgstr "تجاهل وفتح"
+
+#: elder-terms/src/main.cpp:2422
+msgid "Save and open"
+msgstr "حفظ وفتح"
+
+#: elder-terms/src/main-window.ui:27
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1382
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2239
 msgid "Rename"
 msgstr "إعادة التسمية"
 
-#: elder-terms/src/main-window.ui:21
+#: elder-terms/src/main-window.ui:33
 msgid "Duplicate"
 msgstr "تكرار"
 
-#: elder-terms/src/main-window.ui:35 elder-terms/src/tray-backend.cpp:377
+#: elder-terms/src/main-window.ui:45
+msgid "Cancel new connection"
+msgstr "إلغاء الاتصال الجديد"
+
+#: elder-terms/src/main-window.ui:53 elder-terms/src/tray-backend.cpp:377
 #: elder-terms/src/tray-backend.cpp:404 elder-terms/src/tray-backend.cpp:909
 msgid "Application settings"
 msgstr "إعدادات التطبيق"
 
-#: elder-terms/src/main-window.ui:41 elder-terms/src/tray-backend.cpp:381
+#: elder-terms/src/main-window.ui:59 elder-terms/src/tray-backend.cpp:381
 #: elder-terms/src/tray-backend.cpp:408 elder-terms/src/tray-backend.cpp:911
 #: elder-terms-vte/src/main-window.ui:14
 msgid "About elder-terms"
 msgstr "حول elder-terms"
 
-#: elder-terms/src/main-window.ui:100
+#: elder-terms/src/main-window.ui:118
 msgid "Terminal entries"
 msgstr "إدخالات المحطة الطرفية"
 
-#: elder-terms/src/main-window.ui:156
+#: elder-terms/src/main-window.ui:174
 msgid "Select a connection or create a new one."
 msgstr "حدد اتصالاً أو قم بإنشاء اتصال جديد."
 
-#: elder-terms/src/main-window.ui:198
+#: elder-terms/src/main-window.ui:216
 msgid "New"
 msgstr "جديد"
 
-#: elder-terms/src/main-window.ui:228
+#: elder-terms/src/main-window.ui:246
 msgid "Launch"
 msgstr "إطلاق"
 
@@ -1149,22 +1411,26 @@ msgstr "تعذر فتح elder-terms"
 msgid "Macro command failed"
 msgstr "فشل أمر الماكرو"
 
-#: elder-terms-vte/src/main.cpp:278
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:224
+#: elder-terms-vte/src/main.cpp:285 elder-terms-vte/src/main.cpp:292
+msgid "Hyperlink command failed"
+msgstr "فشل أمر الارتباط التشعبي"
+
+#: elder-terms-vte/src/main.cpp:339
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:225
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
 #, fuzzy
 msgid "SSH Host Key Changed"
 msgstr "SSH مفتاح المضيف"
 
-#: elder-terms-vte/src/main.cpp:281
+#: elder-terms-vte/src/main.cpp:342
 msgid ""
 "The SSH host key for fixture.example:2222 has changed.\n"
 "Verify the fingerprint before asking an administrator to run:\n"
 "sudo ssh-keygen -R '[fixture.example]:2222' -f '/etc/ssh/ssh_known_hosts'"
 msgstr ""
 
-#: elder-terms-vte/src/main.cpp:286
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:226
+#: elder-terms-vte/src/main.cpp:347
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:227
 msgid ""
 "The SSH host key for fixture.example:2222 has changed.\n"
 "Verify the fingerprint before resetting the saved key.\n"
@@ -1172,13 +1438,13 @@ msgid ""
 "ssh-keygen -R '[fixture.example]:2222' -f '/home/test/.ssh/known_hosts'"
 msgstr ""
 
-#: elder-terms-vte/src/main.cpp:312
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:253
+#: elder-terms-vte/src/main.cpp:373
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:254
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
 msgid "SSH Host Key"
 msgstr "SSH مفتاح المضيف"
 
-#: elder-terms-vte/src/main.cpp:314
+#: elder-terms-vte/src/main.cpp:375
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%d\n"
@@ -1191,151 +1457,165 @@ msgstr ""
 "بصمة الإصبع: %s\n"
 "هل تريد قبول مفتاح المضيف هذا وحفظه؟"
 
-#: elder-terms-vte/src/main.cpp:339 elder-terms-vte/src/main.cpp:348
-#: elder-terms-vte/src/main-window.ui:289
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:275
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:284
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:273
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:922
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1003
+#: elder-terms-vte/src/main.cpp:400 elder-terms-vte/src/main.cpp:409
+#: elder-terms-vte/src/main-window.ui:307
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:276
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:285
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:270
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:917
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:996
 msgid "SSH Authentication"
 msgstr "SSH المصادقة"
 
-#: elder-terms-vte/src/main.cpp:340
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:276
+#: elder-terms-vte/src/main.cpp:401
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:277
 msgid "User name for fixture.example:"
 msgstr "اسم المستخدم لـ fixture.example:"
 
-#: elder-terms-vte/src/main.cpp:349 elder-terms-vte/src/main-window.ui:303
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:285
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:421
+#: elder-terms-vte/src/main.cpp:410 elder-terms-vte/src/main-window.ui:321
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:286
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:443
+#: elder-terms-vte/src/webdav/webdav-application.cpp:82
 msgid "Password:"
 msgstr "كلمة المرور:"
 
-#: elder-terms-vte/src/main.cpp:366
+#: elder-terms-vte/src/main.cpp:427
 #, fuzzy
 msgid "SSH host key reset requested"
 msgstr "SSH لم يتم قبول مفتاح المضيف"
 
-#: elder-terms-vte/src/main.cpp:367
+#: elder-terms-vte/src/main.cpp:428
 msgid "SSH prompt accepted"
 msgstr "SSH تم قبول المطالبة"
 
-#: elder-terms-vte/src/main.cpp:368
+#: elder-terms-vte/src/main.cpp:429
 msgid "SSH prompt cancelled"
 msgstr "SSH تم إلغاء المطالبة"
 
-#: elder-terms-vte/src/main.cpp:761 elder-terms-vte/src/main.cpp:765
+#: elder-terms-vte/src/main.cpp:857 elder-terms-vte/src/main.cpp:861
 #: elder-terms-vte/src/main-window.ui:8
 msgid "Settings"
 msgstr "الإعدادات"
 
-#: elder-terms-vte/src/main.cpp:1031 elder-terms-vte/src/main.cpp:1041
-#: elder-terms-vte/src/main.cpp:1066 elder-terms-vte/src/main.cpp:1076
+#: elder-terms-vte/src/main.cpp:1127 elder-terms-vte/src/main.cpp:1137
+#: elder-terms-vte/src/main.cpp:1162 elder-terms-vte/src/main.cpp:1172
 msgid "Transfer unavailable"
 msgstr "النقل غير متاح"
 
-#: elder-terms-vte/src/main.cpp:1178 elder-terms-vte/src/main.cpp:1200
+#: elder-terms-vte/src/main.cpp:1274 elder-terms-vte/src/main.cpp:1296
 msgid "BREAK unavailable"
 msgstr "BREAK غير متاح"
 
-#: elder-terms-vte/src/main.cpp:1184
+#: elder-terms-vte/src/main.cpp:1280
 msgid "Sending BREAK"
 msgstr "جارٍ إرسال BREAK"
 
-#: elder-terms-vte/src/main.cpp:1220 elder-terms-vte/src/main.cpp:1841
+#: elder-terms-vte/src/main.cpp:1316 elder-terms-vte/src/main.cpp:1890
 msgid "Text send unavailable"
 msgstr "إرسال الرسائل النصية غير متاح"
 
-#: elder-terms-vte/src/main.cpp:1228
+#: elder-terms-vte/src/main.cpp:1324
 msgid "Text (Send)"
 msgstr "نص (إرسال)"
 
-#: elder-terms-vte/src/main.cpp:1338 elder-terms-vte/src/main.cpp:1373
+#: elder-terms-vte/src/main.cpp:1434 elder-terms-vte/src/main.cpp:1469
 msgid "SFTP unavailable"
 msgstr "SFTP غير متاح"
 
-#: elder-terms-vte/src/main.cpp:1346
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:214
+#: elder-terms-vte/src/main.cpp:1442
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:215
 msgid "Failed to start SFTP"
 msgstr "فشل في البدء SFTP"
 
-#: elder-terms-vte/src/main.cpp:1418
+#: elder-terms-vte/src/main.cpp:1514
 msgid "Log recording"
 msgstr "تسجيل السجل"
 
-#: elder-terms-vte/src/main.cpp:1464
+#: elder-terms-vte/src/main.cpp:1560
 msgid "ZMODEM (send)"
 msgstr "ZMODEM (إرسال)"
 
-#: elder-terms-vte/src/main.cpp:1471
+#: elder-terms-vte/src/main.cpp:1567
 msgid "YMODEM (send)"
 msgstr "YMODEM (إرسال)"
 
-#: elder-terms-vte/src/main.cpp:1478
+#: elder-terms-vte/src/main.cpp:1574
 msgid "XMODEM 1K (send)"
 msgstr "XMODEM 1K (إرسال)"
 
-#: elder-terms-vte/src/main.cpp:1487
+#: elder-terms-vte/src/main.cpp:1583
 msgid "XMODEM (send)"
 msgstr "XMODEM (إرسال)"
 
-#: elder-terms-vte/src/main.cpp:1497
+#: elder-terms-vte/src/main.cpp:1593
 msgid "ZMODEM (receive)"
 msgstr "ZMODEM (تلقي)"
 
-#: elder-terms-vte/src/main.cpp:1504
+#: elder-terms-vte/src/main.cpp:1600
 msgid "YMODEM-g (receive)"
 msgstr "YMODEM-g (تلقي)"
 
-#: elder-terms-vte/src/main.cpp:1512
+#: elder-terms-vte/src/main.cpp:1608
 msgid "YMODEM (receive)"
 msgstr "YMODEM (تلقي)"
 
-#: elder-terms-vte/src/main.cpp:1521
+#: elder-terms-vte/src/main.cpp:1617
 msgid "XMODEM CRC (receive)"
 msgstr "XMODEM CRC (تلقي)"
 
-#: elder-terms-vte/src/main.cpp:1530
+#: elder-terms-vte/src/main.cpp:1626
 msgid "XMODEM (receive)"
 msgstr "XMODEM (تلقي)"
 
-#: elder-terms-vte/src/main.cpp:1814 elder-terms-vte/src/main.cpp:1821
-msgid "Hyperlink command failed"
-msgstr "فشل أمر الارتباط التشعبي"
-
-#: elder-terms-vte/src/main-window.ui:153
-#: elder-terms-vte/src/main-window.cpp:1475
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2541
+#: elder-terms-vte/src/main-window.ui:157
+#: elder-terms-vte/src/main-window.cpp:1526
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2656
 msgid "Disconnected"
 msgstr "غير متصل"
 
-#: elder-terms-vte/src/main-window.ui:208
+#: elder-terms-vte/src/main-window.ui:174
+msgid "Reconnect"
+msgstr "إعادة الاتصال"
+
+#: elder-terms-vte/src/main-window.ui:226
 msgid "Transferring..."
 msgstr "جارٍ النقل..."
 
-#: elder-terms-vte/src/main-window.cpp:346
+#: elder-terms-vte/src/main-window.cpp:347
 msgid "Copy"
 msgstr "انسخ"
 
-#: elder-terms-vte/src/main-window.cpp:350
+#: elder-terms-vte/src/main-window.cpp:351
 msgid "Paste"
 msgstr "الصق"
 
-#: elder-terms-vte/src/main-window.cpp:356
+#: elder-terms-vte/src/main-window.cpp:357
 msgid "Send BREAK"
 msgstr "إرسال BREAK"
 
-#: elder-terms-vte/src/main-window.cpp:1079
+#: elder-terms-vte/src/main-window.cpp:1086
 #, c-format
 msgid "%s (Disconnected)"
 msgstr "%s (غير متصل)"
 
-#: elder-terms-vte/src/main-window.cpp:1498
+#: elder-terms-vte/src/main-window.cpp:1552
+msgid "TELNET connection failed"
+msgstr "فشل اتصال TELNET"
+
+#: elder-terms-vte/src/main-window.cpp:1552
 msgid "SSH connection failed"
 msgstr "SSH فشل الاتصال"
 
-#: elder-terms-vte/src/main-window.cpp:1500
+#: elder-terms-vte/src/main-window.cpp:1554
+#, c-format
+msgid ""
+"TELNET connection failed:\n"
+"%s"
+msgstr ""
+"فشل اتصال TELNET:\n"
+"%s"
+
+#: elder-terms-vte/src/main-window.cpp:1555
 #, c-format
 msgid ""
 "SSH connection failed:\n"
@@ -1344,94 +1624,155 @@ msgstr ""
 "SSH فشل الاتصال:\n"
 "%s"
 
-#: elder-terms-vte/src/main-window.cpp:1549
+#: elder-terms-vte/src/main-window.cpp:1614
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:144
 msgid "Accept"
 msgstr "قبول"
 
-#: elder-terms-vte/src/main-window.cpp:1551
+#: elder-terms-vte/src/main-window.cpp:1616
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:147
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:415
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:437
+#: elder-terms-vte/src/webdav/webdav-application.cpp:79
 msgid "Connect"
 msgstr "اتصال"
 
-#: elder-terms-vte/src/main-window.cpp:1559
+#: elder-terms-vte/src/main-window.cpp:1624
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:155
 msgid "Reset and Connect"
 msgstr ""
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:254
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:255
 msgid "Accept the fixture SSH host key?"
 msgstr "هل تريد قبول مفتاح مضيف SSH التجريبي؟"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:392
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:416
+#: elder-terms-vte/src/webdav/webdav-application.cpp:73
 #, c-format
 msgid "Enter the user name and password for %s."
 msgstr "أدخل اسم المستخدم وكلمة المرور لـ %s."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:394
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
 msgid "To log in anonymously, enter anonymous as the user name."
 msgstr "لتسجيل الدخول بشكل مجهول، أدخل anonymous كاسم المستخدم."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:397
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:421
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
+#: elder-terms-vte/src/webdav/webdav-application.cpp:76
 msgid "User name must not be empty."
 msgstr "يجب ألا يكون اسم المستخدم فارغًا."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:412
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:434
 msgid "FTP authentication"
 msgstr "مصادقة FTP"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:478
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:434
+msgid "FTPS authentication"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:469
+msgid "FTPS certificate validation failed"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:471
+msgid "Control connection"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:471
+msgid "Data connection"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:524
 msgid "Failed to start FTP"
 msgstr "فشل بدء FTP"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:194
+#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:524
+msgid "Failed to start FTPS"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:27
+msgid "The server certificate could not be validated."
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:33
+msgid ""
+"Allow only this certificate and validation failure for this connection? "
+"Exceptions are not saved."
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:34
+msgid "Subject:"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:35
+msgid "Issuer:"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:36
+msgid "Valid from:"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:37
+msgid "Valid until:"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:42
+msgid "Allow for this connection"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp:43
+msgid "Abort connection"
+msgstr ""
+
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:201
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:208
 msgid "Unknown file transfer failure"
 msgstr "فشل غير معروف في نقل الملفات"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:268
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:275
 msgid "Loading…"
 msgstr "جارٍ التحميل…"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:411
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:418
 msgid "The local pane only supports native filesystem paths"
 msgstr "يدعم الجزء المحلي مسارات نظام الملفات المحلي فقط"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:484
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:491
 msgid "Local directory path is empty"
 msgstr "مسار الدليل المحلي فارغ"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:620
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2381
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:530
+msgid "Certificate exception active"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:631
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2464
 msgid "Preparing transfer…"
 msgstr "جارٍ تحضير النقل..."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:679
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:690
 #, c-format
 msgid "Transferring %llu of %llu — %s"
 msgstr "نقل %llu لـ %llu — %s"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:682
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:695
 #, c-format
 msgid "Transferring %llu of %llu"
 msgstr "نقل %llu لـ %llu"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:686
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:699
 #, c-format
 msgid "Transferring — %s"
 msgstr "النقل — %s"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:689
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:702
 msgid "Transferring"
 msgstr "النقل"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:745
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:758
 msgid "Destination already exists"
 msgstr "الوجهة موجودة بالفعل"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:747
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:760
 #, c-format
 msgid ""
 "%s\n"
@@ -1440,20 +1781,16 @@ msgstr ""
 "%s\n"
 "ينطبق القرار المحدد على جميع التعارضات المتبقية."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:749
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:770
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:762
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:783
 msgid "Skip"
 msgstr "تخطي"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:749
-msgid "Overwrite"
-msgstr "الكتابة فوق"
-
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:765
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:778
 msgid "File transfer failed"
 msgstr "فشل نقل الملفات"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:766
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:779
 #, c-format
 msgid ""
 "%s\n"
@@ -1466,40 +1803,31 @@ msgstr ""
 "%s\n"
 "→ %s"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:770
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:783
 msgid "Abort"
 msgstr "إحباط"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:770
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:783
 msgid "Retry"
 msgstr "إعادة المحاولة"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:793
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:806
 msgid "File transfer operation failed"
 msgstr "فشلت عملية نقل الملفات"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:854
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:867
 msgid "Failed to load remote directory"
 msgstr "فشل تحميل الدليل البعيد"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:855
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:868
 msgid "Failed to load local directory"
 msgstr "فشل تحميل الدليل المحلي"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:927
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:940
 msgid "Failed to expand directory"
 msgstr "فشل في توسيع الدليل"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1262
-#, c-format
-msgid "Enter a new name for \"%s\"."
-msgstr "أدخل اسمًا جديدًا لـ \"%s\"."
-
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1270
-msgid "Rename item"
-msgstr "إعادة تسمية العنصر"
-
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1289
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1286
 msgid ""
 "Names must not be empty, '.', or '..', and must not contain '/' or line "
 "breaks."
@@ -1507,67 +1835,108 @@ msgstr ""
 "يجب ألا تكون الأسماء فارغة أو '.' أو '..'، ويجب ألا تحتوي على '/' أو فواصل "
 "أسطر."
 
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1325
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2233
+msgid "New folder"
+msgstr "مجلد جديد"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1325
+msgid "Enter a name for the new folder."
+msgstr "أدخل اسمًا للمجلد الجديد."
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1325
+msgid "Create"
+msgstr "إنشاء"
+
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1329
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1590
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2466
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2543
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1346
+msgid "Folder creation cancelled"
+msgstr "أُلغي إنشاء المجلد"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1333
+msgid "Creating folder…"
+msgstr "جارٍ إنشاء المجلد…"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1339
+#, c-format
+msgid "Created folder \"%s\""
+msgstr "أُنشئ المجلد \"%s\""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1349
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1351
+msgid "Failed to create folder"
+msgstr "تعذّر إنشاء المجلد"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1380
+msgid "Rename item"
+msgstr "إعادة تسمية العنصر"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1381
+#, c-format
+msgid "Enter a new name for \"%s\"."
+msgstr "أدخل اسمًا جديدًا لـ \"%s\"."
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1388
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1649
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2549
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2658
 msgid "Ready"
 msgstr "جاهز"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1336
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1395
 msgid "Renaming…"
 msgstr "جارٍ إعادة التسمية…"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1348
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1407
 #, c-format
 msgid "Renamed \"%s\" to \"%s\""
 msgstr "تمت إعادة تسمية \"%s\" إلى \"%s\""
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1362
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1421
 msgid "Rename cancelled"
 msgstr "أُلغيت إعادة التسمية"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1366
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1425
 msgid "Rename failed"
 msgstr "فشلت إعادة التسمية"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1368
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1427
 msgid "Failed to rename item"
 msgstr "فشلت إعادة تسمية العنصر"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1415
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1474
 msgid "Calculating hash values…"
 msgstr "جارٍ حساب قيم التجزئة…"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1435
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1494
 msgid "Hash calculation cancelled"
 msgstr "أُلغي حساب قيم التجزئة"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1441
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1500
 msgid "Hash calculation failed"
 msgstr "فشل حساب قيم التجزئة"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1443
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1502
 msgid "Failed to calculate hash values"
 msgstr "تعذر حساب قيم التجزئة"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1452
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1511
 msgid "Hash calculation complete"
 msgstr "اكتمل حساب قيم التجزئة"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1457
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1514
 msgid "File hash values"
 msgstr "قيم تجزئة الملف"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1541
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1600
 msgid "The following items will be permanently deleted:"
 msgstr "سيتم حذف العناصر التالية نهائيًا:"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1543
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1602
 msgid "Directories and their contents will be deleted. This cannot be undone."
 msgstr "سيتم حذف المجلدات ومحتوياتها. لا يمكن التراجع عن هذا الإجراء."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1552
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1611
 msgid "Delete selected item?"
 msgid_plural "Delete selected items?"
 msgstr[0] "حذف العناصر المحددة؟"
@@ -1577,11 +1946,11 @@ msgstr[3] "حذف العناصر المحددة؟"
 msgstr[4] "حذف العناصر المحددة؟"
 msgstr[5] "حذف العناصر المحددة؟"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1604
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1663
 msgid "Deleting…"
 msgstr "جارٍ الحذف…"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1615
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1674
 #, c-format
 msgid "Deleted %zu item"
 msgid_plural "Deleted %zu items"
@@ -1592,29 +1961,31 @@ msgstr[3] "تم حذف %zu عناصر"
 msgstr[4] "تم حذف %zu عنصرًا"
 msgstr[5] "تم حذف %zu عنصر"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1631
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1690
 msgid "Delete cancelled"
 msgstr "أُلغي الحذف"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1635
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1694
 msgid "Delete failed"
 msgstr "فشل الحذف"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1637
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1696
 msgid "Failed to delete selected items"
 msgstr "فشل حذف العناصر المحددة"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1723
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1731
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1782
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1787
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1795
 msgid "Transfer cancelled"
 msgstr "تم إلغاء النقل"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1733
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:445
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1782
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1797
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:450
 msgid "Transfer failed"
 msgstr "فشل النقل"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1747
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1811
 #, c-format
 msgid "Sent %zu item"
 msgid_plural "Sent %zu items"
@@ -1625,7 +1996,7 @@ msgstr[3] "تم إرسال %zu عناصر"
 msgstr[4] "تم إرسال %zu عنصرًا"
 msgstr[5] "تم إرسال %zu عنصر"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1749
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:1813
 #, c-format
 msgid "Received %zu item"
 msgid_plural "Received %zu items"
@@ -1636,52 +2007,56 @@ msgstr[3] "تم استلام %zu عناصر"
 msgstr[4] "تم استلام %zu عنصرًا"
 msgstr[5] "تم استلام %zu عنصر"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2050
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2126
 msgid "Name"
 msgstr "الاسم"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2052
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2128
 msgid "Size"
 msgstr "الحجم"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2054
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2131
 msgid "Modified"
 msgstr "تم التعديل"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2072
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2149
 msgid "Remote"
 msgstr "التحكم عن بعد"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2104
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2181
 msgid "Up"
 msgstr "للأعلى"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2108
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2185
 msgid "Refresh"
 msgstr "تحديث"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2133
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2210
 msgid "Receive"
 msgstr "تلقي"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2133
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2210
 msgid "Send"
 msgstr "أرسل"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2144
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2221
 msgid "Calculate Hash Values"
 msgstr "حساب قيم التجزئة"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2348
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2492
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2431
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2575
 msgid "Connecting"
 msgstr "جارٍ الاتصال"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2484
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2567
 msgid "Authenticating"
 msgstr "جارٍ المصادقة"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2507
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2587
+msgid "Awaiting certificate confirmation"
+msgstr ""
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp:2622
 msgid "Connection failed"
 msgstr "فشل الاتصال"
 
@@ -1701,8 +2076,8 @@ msgstr "ابتداءً من %s تلقي"
 
 #: elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp:430
 #: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1038
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:509
-#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:626
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:514
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:631
 msgid "Text send failed"
 msgstr "فشل إرسال النص"
 
@@ -1711,14 +2086,14 @@ msgid "local terminal"
 msgstr "المحطة المحلية"
 
 #: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1117
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:566
-#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:711
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:571
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:716
 msgid "BREAK sent"
 msgstr "تم إرسال BREAK"
 
 #: elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp:1117
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:566
-#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:711
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:571
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:716
 msgid "BREAK failed"
 msgstr "فشل إرسال BREAK"
 
@@ -1727,7 +2102,7 @@ msgid "serial: (unknown)"
 msgstr "المسلسل: (غير معروف)"
 
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:82
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1181
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1175
 msgid "SSH session has no socket"
 msgstr "SSH الجلسة لا تحتوي على مقبس"
 
@@ -1736,16 +2111,16 @@ msgstr "SSH الجلسة لا تحتوي على مقبس"
 msgid "User name for %s:"
 msgstr "اسم المستخدم لـ %s:"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:281
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:279
 msgid "SSH user name was not provided"
 msgstr "لم يتم إدخال اسم مستخدم SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:545
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:544
 #, fuzzy
 msgid "Failed to start ssh-keygen"
 msgstr "فشل في البدء %s"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:546
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:545
 #, fuzzy, c-format
 msgid "Failed to start ssh-keygen: %s"
 msgstr "فشل في البدء %s"
@@ -1842,125 +2217,149 @@ msgstr "فشل في التحقق من SSH مفتاح المضيف"
 msgid "SSH host key was not accepted"
 msgstr "SSH لم يتم قبول مفتاح المضيف"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:875
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:872
 msgid "SSH Key Passphrase"
 msgstr "SSH عبارة المرور الرئيسية"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:877
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:874
 #, c-format
 msgid "Passphrase for %s (attempt %u of %u):"
 msgstr "عبارة المرور لـ %s (محاولة %u لـ %u):"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:924
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:919
 #, c-format
 msgid "Password for %s (attempt %u of %u):"
 msgstr "كلمة المرور لـ %s (محاولة %u لـ %u):"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:945
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:941
 msgid "SSH password authentication failed"
 msgstr "SSH فشلت مصادقة كلمة المرور"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:970
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:966
 msgid "SSH authentication response:"
 msgstr "SSH استجابة المصادقة:"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1030
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1024
 msgid "SSH keyboard-interactive authentication failed"
 msgstr "SSH فشلت المصادقة التفاعلية للوحة المفاتيح"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1049
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1043
 msgid "SSH authentication negotiation failed"
 msgstr "SSH فشل تفاوض المصادقة"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1054
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1048
 msgid "Failed to list SSH authentication methods"
 msgstr "فشل في إدراج SSH طرق المصادقة"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1065
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1059
 msgid "SSH public-key authentication failed"
 msgstr "SSH فشلت مصادقة المفتاح العام"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1087
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1081
 msgid "Failed to refresh SSH authentication methods"
 msgstr "فشل تحديث SSH طرق المصادقة"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1100
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1094
 msgid "SSH server did not accept an available authentication method"
 msgstr "SSH لم يقبل الخادم طريقة المصادقة المتاحة"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1278
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1578
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1727
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1277
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1595
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1746
 msgid "SSH transport is closed"
 msgstr "SSH النقل مغلق"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1479
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1496
 msgid "Failed to allocate SSH session"
 msgstr "فشل في تخصيص SSH جلسة"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1485
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1502
 msgid "Failed to set SSH host"
 msgstr "فشل في تعيين SSH المضيف"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1490
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1507
 msgid "Failed to parse SSH configuration"
 msgstr "فشل في تحليل تكوين SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1499
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1516
 msgid "Failed to configure SSH endpoint"
 msgstr "فشل في تكوين SSH نقطة النهاية"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1505
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1522
 msgid "Failed to configure SSH user name"
 msgstr "فشل تكوين اسم مستخدم SSH"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1511
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1528
 msgid "Failed to configure SSH known_hosts"
 msgstr "فشل تكوين SSHknown_hosts"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1517
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1534
 msgid "Failed to attach SSH socket"
 msgstr "فشل في توصيل SSH المقبس"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1527
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1544
 msgid "Failed to configure SSH callbacks"
 msgstr "فشل تكوين SSH عمليات الاسترجاعات"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1581
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1598
 #, fuzzy
 msgid "SSH command is required"
 msgstr "SSH النقل مطلوب"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1676
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1695
 msgid "SSH command output is too large"
 msgstr ""
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1681
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1700
 msgid "SSH command error output is too large"
 msgstr ""
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1688
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1707
 msgid "SSH command did not return an exit status"
 msgstr ""
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1823
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1843
 msgid "SSH transport is required"
 msgstr "SSH النقل مطلوب"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1877
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1946
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1984
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2004
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1898
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1967
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2005
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2025
 msgid "SSH channel is closed"
 msgstr "SSH القناة مغلقة"
 
-#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:658
+#: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp:664
 msgid "ssh: (unknown)"
 msgstr "ssh: (غير معروف)"
 
-#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:923
+#: elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp:932
 msgid "telnet: (unknown)"
 msgstr "التلنت: (غير معروف)"
+
+#: shared/src/settings-widget/webdav-settings-editor.cpp:105
+msgid "Complete the connection settings to preview the URL"
+msgstr "أكمل إعدادات الاتصال لمعاينة عنوان URL"
+
+#: shared/src/settings-widget/webdav-settings-editor.cpp:270
+msgid "Connection URL"
+msgstr "عنوان URL للاتصال"
+
+#: elder-terms-vte/src/webdav/webdav-application.cpp:48
+msgid "HTTPS certificate validation failed"
+msgstr "فشل التحقق من شهادة HTTPS"
+
+#: elder-terms-vte/src/webdav/webdav-application.cpp:49
+msgid "HTTPS connection"
+msgstr "اتصال HTTPS"
+
+#: elder-terms-vte/src/webdav/webdav-application.cpp:78
+msgid "WebDAV authentication"
+msgstr "مصادقة WebDAV"
+
+#: elder-terms-vte/src/webdav/webdav-application.cpp:105
+msgid "Failed to start WebDAV"
+msgstr "تعذّر بدء WebDAV"
 
 #~ msgid "TCP ports"
 #~ msgstr "منافذ TCP"
@@ -1982,71 +2381,3 @@ msgstr "التلنت: (غير معروف)"
 
 #~ msgid "Global defaults"
 #~ msgstr "الإعدادات الافتراضية العامة"
-
-#: elder-terms/src/main.cpp
-msgid "Connection changed outside elder-terms"
-msgstr "تم تغيير الاتصال خارج elder-terms"
-
-#: elder-terms/src/main.cpp
-msgid "Reload the file and discard your unsaved changes, or keep editing. Saving kept edits will require confirmation before overwriting the file."
-msgstr "أعد تحميل الملف وتجاهل التغييرات غير المحفوظة، أو احتفظ بالتعديلات. سيتطلب حفظ التعديلات المحتفظ بها تأكيد استبدال الملف."
-
-#: elder-terms/src/main.cpp
-msgid "Keep edits"
-msgstr "الاحتفاظ بالتعديلات"
-
-#: elder-terms/src/main.cpp
-msgid "Reload from file"
-msgstr "إعادة التحميل من الملف"
-
-#: elder-terms/src/main.cpp
-msgid "Overwrite externally changed connection?"
-msgstr "هل تريد استبدال الاتصال الذي تم تغييره خارجيًا؟"
-
-#: elder-terms/src/main.cpp
-msgid "The file changed or was removed outside elder-terms. Save your current edits in its place?"
-msgstr "تم تغيير الملف أو حذفه خارج elder-terms. هل تريد حفظ تعديلاتك الحالية مكانه؟"
-
-#: elder-terms/src/main-window.ui
-msgid "Edit in text editor"
-msgstr "تحرير في محرر نصوص"
-
-#: elder-terms/src/main.cpp
-msgid "Failed to open text editor"
-msgstr "تعذر فتح محرر النصوص"
-
-#: elder-terms/src/main.cpp
-msgid "The text editor could not be started."
-msgstr "تعذر تشغيل محرر النصوص."
-
-#: elder-terms/src/main.cpp
-msgid "The connection file is no longer available."
-msgstr "لم يعد ملف الاتصال متاحًا."
-
-#: elder-terms/src/main.cpp
-msgid "Set a default application for plain text files in your desktop settings."
-msgstr "عيّن تطبيقًا افتراضيًا لملفات النص العادي في إعدادات سطح المكتب."
-
-#: elder-terms/src/main.cpp
-msgid "Save changes before opening the text editor?"
-msgstr "هل تريد حفظ التغييرات قبل فتح محرر النصوص؟"
-
-#: elder-terms/src/main.cpp
-msgid "Discard and open"
-msgstr "تجاهل وفتح"
-
-#: elder-terms/src/main.cpp
-msgid "Save and open"
-msgstr "حفظ وفتح"
-
-#: elder-terms/src/main.cpp
-msgid "Save and open in text editor"
-msgstr "حفظ وفتح في محرر النصوص"
-
-#: elder-terms/src/main-window.ui
-msgid "Cancel new connection"
-msgstr "إلغاء الاتصال الجديد"
-
-#: elder-terms/src/main.cpp
-msgid "The settings contain invalid input. Correct the highlighted fields before saving."
-msgstr "تحتوي الإعدادات على إدخال غير صالح. صحح الحقول المميزة قبل الحفظ."

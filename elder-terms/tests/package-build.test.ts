@@ -93,6 +93,8 @@ const createPackageStage = (
     'usr/lib/elder-terms/elder-terms-vte',
     'usr/share/applications',
     'usr/share/doc/elder-terms',
+    'usr/share/doc/elder-terms/docs/ja',
+    'usr/share/doc/elder-terms/docs/en',
     'usr/share/icons/hicolor/256x256/apps',
     'usr/share/locale/ja/LC_MESSAGES',
   ];
@@ -144,6 +146,16 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     ['usr/lib/elder-terms/elder-terms-vte/green-off.png', 'off\n'],
     ['usr/share/doc/elder-terms/README.md', '# elder-terms\n'],
     ['usr/share/doc/elder-terms/README_ja.md', '# elder-terms\n'],
+    ['usr/share/doc/elder-terms/docs/ja/webdav.md', '# WebDAV\n'],
+    ['usr/share/doc/elder-terms/docs/en/webdav.md', '# WebDAV\n'],
+    [
+      'usr/share/doc/elder-terms/docs/ja/webdav-validation.md',
+      '# WebDAV validation\n',
+    ],
+    [
+      'usr/share/doc/elder-terms/docs/en/webdav-validation.md',
+      '# WebDAV validation\n',
+    ],
     ['usr/share/doc/elder-terms/copyright', 'MIT\n'],
     ['usr/share/icons/hicolor/256x256/apps/elder-terms.png', 'icon\n'],
     ['usr/share/locale/ja/LC_MESSAGES/elder-terms.mo', 'locale\n'],
@@ -652,6 +664,34 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       [goodPackage, canonicalArchitecture!]
     );
     expectSuccess(goodValidation, 'complete deb package was rejected');
+    for (const language of ['ja', 'en']) {
+      for (const document of ['webdav.md', 'webdav-validation.md']) {
+        const missingPath = `usr/share/doc/elder-terms/docs/${language}/${document}`;
+        const stage = join(
+          temporaryRoot,
+          `missing-${language}-${document}-stage`
+        );
+        const output = join(
+          temporaryRoot,
+          `missing-${language}-${document}.deb`
+        );
+        createPackageStage(stage, debianArchitecture, missingPath, true, true);
+        const built = run(dpkgDeb, [
+          '--root-owner-group',
+          '--build',
+          stage,
+          output,
+        ]);
+        expectSuccess(built, `test package creation failed: ${output}`);
+        const validation = runSourced(
+          'VERSION=1.2.3\nvalidate_deb_package "$2" "$3"',
+          [output, canonicalArchitecture!]
+        );
+        expect(validation.status).not.toBe(0);
+        expect(validation.stderr).toContain(missingPath);
+      }
+    }
+
     const missingCaValidation = runSourced(
       'VERSION=1.2.3\nvalidate_deb_package "$2" "$3"',
       [missingCaPackage, canonicalArchitecture!]

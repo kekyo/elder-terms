@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createWebdavTestServer } from './webdav-test-server.ts';
+import { pathToFileURL } from 'node:url';
+import ts from 'typescript';
 
 const run = async (command, args) => {
   const child = spawn(command, args, { stdio: 'inherit' });
@@ -126,6 +127,38 @@ const assertMutationRequests = (requests, authentication) => {
 
 const directory = await mkdtemp(join(tmpdir(), 'elder-dav-client-'));
 try {
+  // Distribution Node.js versions need emitted JavaScript for this shared
+  // TypeScript fixture. Its imports are exclusively Node.js built-ins.
+  const compiled = ts.transpileModule(
+    await readFile(new URL('./webdav-test-server.ts', import.meta.url), 'utf8'),
+    {
+      fileName: 'webdav-test-server.ts',
+      compilerOptions: {
+        module: ts.ModuleKind.ES2022,
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
+        target: ts.ScriptTarget.ES2022,
+      },
+      reportDiagnostics: true,
+    }
+  );
+  if (
+    compiled.diagnostics?.some(
+      (value) => value.category === ts.DiagnosticCategory.Error
+    )
+  )
+    throw new Error(
+      'Could not compile the WebDAV fixture: ' +
+        JSON.stringify(
+          compiled.diagnostics.map(({ code, messageText }) => ({
+            code,
+            messageText,
+          }))
+        )
+    );
+  const fixture = join(directory, 'webdav-test-server.mjs');
+  await writeFile(fixture, compiled.outputText);
+  const { createWebdavTestServer } = await import(pathToFileURL(fixture).href);
+
   const cert = join(directory, 'ca.pem');
   const key = join(directory, 'key.pem');
   await run('openssl', [
@@ -257,6 +290,28 @@ try {
       path === '/redirect' ? 'success' : 'failure',
       path
     );
+  for (const scheme of ['http', 'https'])
+    await withServer(scheme, 'none', 'reject-paused-upload', async (server) => {
+      await run(process.argv[2], [
+        scheme,
+        String(server.port),
+        'none',
+        '',
+        scheme === 'https' ? cert : '',
+        'success',
+        '/',
+        'reject-paused-upload',
+      ]);
+      const uploads = server.requests.filter(
+        (request) =>
+          request.method === 'PUT' &&
+          request.url === '/dav/reject-paused-upload.bin'
+      );
+      if (uploads.length !== 1 || uploads[0].receivedBytes !== 0)
+        throw new Error(
+          'An early rejection must not replay or consume the paused upload'
+        );
+    });
   for (const mode of ['bounded-upload', 'abandon-upload'])
     await withServer('http', 'none', mode, async (server) => {
       const child = spawn(

@@ -1103,6 +1103,23 @@ describe.concurrent('shared settings widget', () => {
             ],
           },
           {
+            id: 'global_settings_webdav_page',
+            labels: [
+              '接続の暗号化',
+              'アドレス',
+              'ポート',
+              '公開パス',
+              '認証方式',
+              'ユーザー名',
+              'ローカルディレクトリ',
+              'リモートディレクトリ',
+              'CA証明書',
+              '証明書検証の失敗時',
+              '接続タイムアウト（秒）',
+              '無通信タイムアウト（秒）',
+            ],
+          },
+          {
             id: 'global_settings_serial_page',
             labels: [
               'デバイス識別方式',

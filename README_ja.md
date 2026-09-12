@@ -222,6 +222,14 @@ remote_directory=.
 
 FTPSやFTPの詳細は、 [別のドキュメント](./docs/ja/ftp-ftps.md) を参照して下さい。
 
+## WebDAVの使用
+
+接続種別に `WebDAV` を選び、WebDAVタブでアドレス、公開パス、認証方式を設定して下さい。例えば `https://files.example.com/dav/team/` へ接続する場合は、アドレスを `files.example.com`、公開パスを `/dav/team/` にします。HTTPSが既定で、HTTPも選択できます。
+
+SFTP/FTP/FTPSと同じ画面で、ファイルやフォルダーの送受信、フォルダー作成、名前変更、削除を行えます。Basic/Digestのパスワードは接続時に入力し、保存しません。HTTPS証明書の検証に失敗した場合は、設定に応じて接続を拒否するか、FTPSと共通のオーバーレイで確認します。
+
+設定一覧と対応範囲は [WebDAVの使用](./docs/ja/webdav.md) を参照して下さい。
+
 ## ローカルターミナルの起動プロセス
 
 Local接続では、Localタブの「起動コマンド」で `elder-terms-vte` がターミナル内に起動するプロセスを指定出来ます。この設定は次に接続を開いたときに反映され、起動済みのターミナルでは読み取り専用です。
@@ -579,6 +587,8 @@ OSC 8ターゲットと表示テキストは接続先から与えられる可能
 
 ## セルフビルド
 
+WebDAVにはHTTP/HTTPSと非同期DNSを有効にしたlibcurl 7.88.1以降、および[libxml2](https://gnome.pages.gitlab.gnome.org/libxml2/) 2.9.14以降が必要です。
+
 FTPクライアントには、FTPと非同期DNSを有効にした[libcurl](https://curl.se/libcurl/) 7.88.1以降が必要です。FTPSには[TLSを有効にしたlibcurl](https://curl.se/libcurl/c/libcurl-tutorial.html)が必要です。Debian／Ubuntuの配布パッケージはOpenSSL版libcurlを使用し、既定の信頼ストアのために `ca-certificates` に依存します。ソースからビルドする場合はOpenSSLのヘッダーとライブラリも必要です。証明書確認ではlibcurlと同じバージョンのOpenSSLが必要で、接続前にアプリケーションが確認します。
 
 UbuntuまたはDebianでビルドする場合は、C++20対応コンパイラ、Meson、Ninja、gettextと、使用するライブラリの開発パッケージをインストールします。
@@ -588,7 +598,7 @@ sudo apt update
 sudo apt install build-essential git meson ninja-build pkg-config gettext \
   libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev \
   libxkbcommon-dev liburing-dev libudev-dev libpcre2-dev libssh-dev libcurl4-openssl-dev \
-  libvte-2.91-dev libssl-dev ca-certificates xdg-utils
+  libvte-2.91-dev libssl-dev libxml2-dev ca-certificates xdg-utils
 ```
 
 このほか、  Node.js 20以降が必要です。ディストリビューションが配布する Node.jsが使えるかもしれません:

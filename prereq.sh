@@ -49,6 +49,7 @@ liburing-dev
 libvte-2.91-dev
 libx11-dev
 libxkbcommon-dev
+libxml2-dev
 meson
 ninja-build
 nodejs

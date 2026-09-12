@@ -893,9 +893,12 @@ send_regular_file_async(TransferRunState *state,
   try {
     input.reset(co_await open_local_read_async(source.get(), cancellation));
     const RemoteFileAttributes attributes = supported_remote_attributes(*state->client, node.attributes);
-    output = std::move(co_await state->client->open_write_async(
-        temporary_path, expected_size, attributes.permissions,
-        explicit_commit ? combined.get_cancellation() : cancellation));
+    // Keep the signal and operation outside the await expression: GCC 12
+    // mishandles the conditional cancellation temporary on the failure path.
+    const auto upload_cancellation = explicit_commit ? combined.get_cancellation() : cancellation;
+    auto opening = state->client->open_write_async(
+        temporary_path, expected_size, attributes.permissions, upload_cancellation);
+    output = std::move(co_await opening);
     temporary_created = true;
     std::uint64_t copied = 0;
     std::array<std::byte, file_transfer_chunk_size> buffer{};

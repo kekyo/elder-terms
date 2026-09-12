@@ -92,12 +92,14 @@ describe('WebDAV window', () => {
           ].join('\n')
         );
         launcher = createGtkAppLauncher({
-          appPath: fileURLToPath(
-            new URL(
-              '../../.build/elder-terms-vte/elder-terms-file-transfer',
-              import.meta.url
-            )
-          ),
+          appPath:
+            process.env.ELDER_TERMS_TEST_FTP_APP ??
+            fileURLToPath(
+              new URL(
+                '../../.build/elder-terms-vte/elder-terms-file-transfer',
+                import.meta.url
+              )
+            ),
           env: {
             LANGUAGE: 'en',
             LC_ALL: 'C.UTF-8',
@@ -305,6 +307,11 @@ describe('WebDAV window', () => {
           await app.input.setMouseButton('right', false);
         };
         const navigate = async (path: string) => {
+          // Native input needs window focus after the menu and inline prompt.
+          await expectElementKind(
+            await app.getById('file_transfer_window'),
+            'window'
+          ).activate();
           const bounds = (await remotePath.capture()).bounds;
           await app.input.moveMouseTo(
             Math.round(bounds.x + bounds.width / 2),

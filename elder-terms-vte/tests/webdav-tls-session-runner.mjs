@@ -1,17 +1,50 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { createWebdavTestServer } from './webdav-test-server.ts';
+import { pathToFileURL } from 'node:url';
+import ts from 'typescript';
 
 const directory = await mkdtemp(join(tmpdir(), 'elder-dav-tls-session-'));
 let server;
 let child;
 let completion;
 try {
+  // Distribution Node.js versions need emitted JavaScript for this shared
+  // TypeScript fixture. Its imports are exclusively Node.js built-ins.
+  const compiled = ts.transpileModule(
+    await readFile(new URL('./webdav-test-server.ts', import.meta.url), 'utf8'),
+    {
+      fileName: 'webdav-test-server.ts',
+      compilerOptions: {
+        module: ts.ModuleKind.ES2022,
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
+        target: ts.ScriptTarget.ES2022,
+      },
+      reportDiagnostics: true,
+    }
+  );
+  if (
+    compiled.diagnostics?.some(
+      (value) => value.category === ts.DiagnosticCategory.Error
+    )
+  )
+    throw new Error(
+      'Could not compile the WebDAV fixture: ' +
+        JSON.stringify(
+          compiled.diagnostics.map(({ code, messageText }) => ({
+            code,
+            messageText,
+          }))
+        )
+    );
+  const fixture = join(directory, 'webdav-test-server.mjs');
+  await writeFile(fixture, compiled.outputText);
+  const { createWebdavTestServer } = await import(pathToFileURL(fixture).href);
+
   const certificates = [];
   for (const name of ['first', 'replacement']) {
     const key = join(directory, name + '.key'),

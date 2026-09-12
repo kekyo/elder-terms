@@ -214,7 +214,7 @@ struct HttpOperation {
   curl_off_t uploaded = 0;
   std::size_t header_bytes = 0;
   std::uint64_t input_consumed = 0;
-  bool paused = false;
+  int pause_mask = CURLPAUSE_CONT;
 };
 
 static std::size_t receive_body(char *bytes, std::size_t size,
@@ -228,7 +228,8 @@ static std::size_t receive_body(char *bytes, std::size_t size,
     if (operation.request.receive && operation.result.status >= 200 && operation.result.status < 300) {
       const auto received = operation.request.receive(
           {reinterpret_cast<const std::byte *>(bytes), length});
-      operation.paused = received == CURL_WRITEFUNC_PAUSE;
+      if (received == CURL_WRITEFUNC_PAUSE) operation.pause_mask |= CURLPAUSE_RECV;
+      else operation.pause_mask &= ~CURLPAUSE_RECV;
       return received;
     }
     constexpr std::size_t limit = 32 * 1024 * 1024;
@@ -250,8 +251,11 @@ static std::size_t send_body(char *bytes, std::size_t size,
       throw std::runtime_error("WebDAV upload buffer size overflow");
     const auto capacity = size * count;
     const auto sent = operation.request.send({reinterpret_cast<std::byte *>(bytes), capacity});
-    operation.paused = sent == CURL_READFUNC_PAUSE;
-    if (operation.paused) return sent;
+    if (sent == CURL_READFUNC_PAUSE) {
+      operation.pause_mask |= CURLPAUSE_SEND;
+      return sent;
+    }
+    operation.pause_mask &= ~CURLPAUSE_SEND;
     if (sent > capacity || sent > *operation.request.upload_size - operation.input_consumed)
       throw std::runtime_error("WebDAV upload exceeded its declared size");
     operation.input_consumed += sent;
@@ -301,7 +305,11 @@ static std::size_t receive_header(char *bytes, std::size_t size,
       std::transform(name.begin(), name.end(), name.begin(), [](unsigned char value) { return g_ascii_tolower(value); });
       auto value = line.substr(colon + 1);
       while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.remove_prefix(1);
-      while (!value.empty() && (value.back() == '\r' || value.back() == '\n' || value.back() == ' ')) value.remove_suffix(1);
+      while (!value.empty() && (value.back() == '\r' || value.back() == '\n' || value.back() == ' ' || value.back() == '\t')) value.remove_suffix(1);
+      if (name == "content-encoding" && operation.result.status >= 200 &&
+          operation.result.status < 300 && !value.empty() &&
+          g_ascii_strcasecmp(std::string(value).c_str(), "identity") != 0)
+        throw std::runtime_error("WebDAV server returned an unsupported Content-Encoding; use an endpoint that honors Accept-Encoding: identity");
       auto &stored = operation.result.headers[name];
       if (!stored.empty()) stored += ", ";
       stored.append(value);
@@ -383,6 +391,9 @@ static cardio::promise<CurlHttpResult> perform_http_attempt_async(
   session->callback_failure = {};
   session->resume_pending = false;
   std::unique_ptr<curl_slist, decltype(&curl_slist_free_all)> headers(nullptr, curl_slist_free_all);
+  // Keep transfer bytes identical to the stored file content without an
+  // unbounded decompression buffer when a slow consumer pauses the stream.
+  operation.request.headers.emplace_back("Accept-Encoding: identity");
   for (const auto &header : operation.request.headers) {
     if (header.find_first_of("\r\n") != std::string::npos || header.find('\0') != std::string::npos)
       throw std::invalid_argument("Invalid WebDAV request header");
@@ -468,11 +479,12 @@ static cardio::promise<CurlHttpResult> perform_http_attempt_async(
   try {
     auto event = HttpWake{};
     bool complete = false;
+    bool pause_initialized = false;
     while (!complete) {
       cancellation.throw_if_cancellation_requested();
       if (session->resume_pending) {
         session->resume_pending = false;
-        operation.paused = false;
+        operation.pause_mask = CURLPAUSE_CONT;
         operation.activity = HttpClock::now();
         require_curl(curl_easy_pause(easy, CURLPAUSE_CONT));
         // Resumption can synchronously change curl socket interests. Rebuild
@@ -491,7 +503,28 @@ static cardio::promise<CurlHttpResult> perform_http_attempt_async(
         }
       }
       if (complete) break;
-      const auto idle_deadline = operation.paused ? std::nullopt
+      if ((operation.pause_mask & CURLPAUSE_SEND) &&
+          operation.result.status >= 300 && operation.result.status != 401 &&
+          session->sockets.empty()) {
+        // Older curl can retain the send-pause bit after reading a refusal,
+        // with no remaining socket interests. Release that completed upload
+        // direction so its final HTTP response can finish without more input.
+        operation.pause_mask &= ~CURLPAUSE_SEND;
+        require_curl(curl_easy_pause(easy, operation.pause_mask));
+      }
+      if (!pause_initialized) {
+        // An easy handle can retain pause state after cancellation or an early
+        // server response. Once curl attaches a connection, restore only the
+        // pauses requested by this operation's callbacks. Before attachment,
+        // curl_easy_pause returns CURLE_BAD_FUNCTION_ARGUMENT; retry on the
+        // next normal curl event without polling or resetting Digest state.
+        const auto code = curl_easy_pause(easy, operation.pause_mask);
+        if (code != CURLE_BAD_FUNCTION_ARGUMENT) {
+          require_curl(code);
+          pause_initialized = true;
+        }
+      }
+      const auto idle_deadline = operation.pause_mask != CURLPAUSE_CONT ? std::nullopt
           : std::optional(operation.activity + std::chrono::seconds(session->settings.idle_timeout_seconds));
       if (idle_deadline && HttpClock::now() >= *idle_deadline)
         throw std::runtime_error("WebDAV connection stopped making progress");
