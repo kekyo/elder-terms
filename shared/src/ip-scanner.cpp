@@ -426,6 +426,13 @@ probe_ipv4_tcp_port_async(std::uint32_t address, std::uint16_t port,
       g_inet_socket_address_new(inet_address.get(), port), g_object_unref);
 
   try {
+    // TODO: ASan with GCC 12.2 reports a use-after-free in the captured
+    // GSocketClient shared_ptr's control block when this coroutine exits.
+    // An isolated full-suite run passed after storing submit()'s promise in
+    // a local variable and awaiting it in a separate statement. A compiler
+    // temporary-lifetime issue is suspected but remains unconfirmed.
+    // Related GCC report (not confirmed to be the same issue):
+    // https://gcc.gnu.org/pipermail/gcc-bugs/2022-November/805094.html
     GSocketConnection *raw_connection =
         co_await cardio::gio::submit<GSocketConnection *>(
             [client, socket_address](GCancellable *gio_cancellation,
