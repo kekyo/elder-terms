@@ -258,6 +258,7 @@ WebdavSettingsEditor *create_webdav_settings_editor(SettingsStore *store,
       g_signal_connect(field.entry, "changed", G_CALLBACK(entry_changed), editor);
     }
     if (std::string_view(field.name) == "ca_file") {
+      gtk_widget_set_valign(label, GTK_ALIGN_START);
       editor->browse = gtk_button_new_with_label(_("Browse…"));
       assign_accessible_id(editor->browse, editor->prefix + "_webdav_ca_browse_button");
       gtk_box_pack_start(GTK_BOX(box), editor->browse, FALSE, FALSE, 0);
