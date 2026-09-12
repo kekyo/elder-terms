@@ -17,6 +17,7 @@
 #include <elder-terms/settings.h>
 
 #include "../ftp/ftp-client.h"
+#include "../webdav/webdav-application.h"
 #include "../launch-options.h"
 #include "../sftp/sftp-client.h"
 #include "../sftp/sftp-fixture-client.h"
@@ -614,6 +615,9 @@ int main(int argc, char **argv) {
     return run_ftp_application(settings_result,
                                launch_options.test.fixture);
   }
-  std::cerr << "Error: configured connection type is not SFTP or FTP\n";
+  if (kind == elder_terms::ConnectionKind::webdav) {
+    return elder_terms::run_webdav_application(settings_result);
+  }
+  std::cerr << "Error: configured connection type is not SFTP, FTP or WebDAV\n";
   return 1;
 }

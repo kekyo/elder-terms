@@ -1709,7 +1709,8 @@ static void launch_selected_connection(ApplicationState *state) {
       elder_terms::general_connection_kind(draft_store);
   const bool file_transfer =
       kind == elder_terms::ConnectionKind::sftp ||
-      kind == elder_terms::ConnectionKind::ftp;
+      kind == elder_terms::ConnectionKind::ftp ||
+      kind == elder_terms::ConnectionKind::webdav;
   const std::string &executable =
       file_transfer ? state->file_transfer_executable
                     : state->vte_executable;
@@ -1759,7 +1760,8 @@ static void launch_saved_connection(
       elder_terms::general_connection_kind(loaded.store);
   const bool file_transfer =
       kind == elder_terms::ConnectionKind::sftp ||
-      kind == elder_terms::ConnectionKind::ftp;
+      kind == elder_terms::ConnectionKind::ftp ||
+      kind == elder_terms::ConnectionKind::webdav;
   const std::string &executable =
       file_transfer ? state->file_transfer_executable
                     : state->vte_executable;

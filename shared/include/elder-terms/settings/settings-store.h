@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -97,6 +98,10 @@ struct SettingEntry {
   std::string validation_error{};
   /** Validation failure restored when an explicit override is cleared. */
   std::string fallback_validation_error{};
+  /** Unparsed INI value retained when scalar parsing fails. */
+  std::optional<std::string> invalid_raw_value{};
+  /** Unparsed inherited input restored when an override is cleared. */
+  std::optional<std::string> fallback_invalid_raw_value{};
 };
 
 /**

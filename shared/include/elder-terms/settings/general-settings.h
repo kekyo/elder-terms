@@ -24,8 +24,10 @@ enum class ConnectionKind {
   serial,
   /** Browses and transfers files over SFTP without a terminal. */
   sftp,
-  /** Browses and transfers files over unencrypted FTP without a terminal. */
+  /** Browses and transfers files over FTP or FTPS without a terminal. */
   ftp,
+  /** Browses and transfers files over WebDAV HTTP(S) without a terminal. */
+  webdav,
 };
 
 /**

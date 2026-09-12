@@ -842,6 +842,10 @@ describe.concurrent('shared settings widget', () => {
         args: ['--type=ftp'] as const,
         expected: ['General', 'FTP'],
       },
+      {
+        args: ['--type=webdav'] as const,
+        expected: ['General', 'WebDAV'],
+      },
     ] as const;
 
     for (const testCase of cases) {
@@ -1051,6 +1055,7 @@ describe.concurrent('shared settings widget', () => {
           'SSH',
           'SFTP',
           'FTP',
+          'WebDAV',
           '端末',
           '転送',
           'ログ',
@@ -3089,6 +3094,102 @@ describe.concurrent('shared settings widget', () => {
         expect(store.type).toBe('sftp');
         expect(store.sftp_local_directory).toBe('/home/alice/outgoing');
         expect(store.sftp_remote_directory).toBe('/opt/drop');
+      }
+    );
+  });
+
+  it('edits WebDAV settings with inherited ports and independent HTTPS policy', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=webdav', '--type=webdav'],
+      async ({ app, directory }) => {
+        await selectSettingsTab(app, 'WebDAV');
+        await writeFile(
+          join(directory, 'webdav-settings-top.png'),
+          (await app.capture()).image
+        );
+        const scheme = expectElementKind(
+          await app.getById('settings_webdav_scheme_combo'),
+          'comboBox'
+        );
+        const port = expectElementKind(
+          await app.getById('settings_webdav_port_entry'),
+          'entry'
+        );
+        await expectInheritedEntry(
+          app,
+          'settings_webdav_port_entry',
+          '443 (built-in default)'
+        );
+        await scheme.selectChildAt(2);
+        await expectInheritedEntry(
+          app,
+          'settings_webdav_port_entry',
+          '80 (built-in default)'
+        );
+        await port.setText('8080');
+        await scheme.selectChildAt(1);
+        expect(await port.text()).toBe('8080');
+        await expectElementKind(
+          await app.getById('settings_webdav_base_path_entry'),
+          'entry'
+        ).setText('/dav/files/');
+        await port.setText('invalid');
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await port.setText('8443');
+        const scroll = expectElementKind(
+          await app.getById('settings_webdav_page_scrollbar'),
+          'scrollbar'
+        );
+        await scroll.setValue((await scroll.valueInfo()).maximum);
+        await expectElementKind(
+          await app.getById('settings_webdav_ca_file_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await expectElementKind(
+          await app.getById('settings_webdav_ca_file_entry'),
+          'entry'
+        ).setText('/tmp/dav-ca.pem');
+        await expectElementKind(
+          await app.getById('settings_webdav_certificate_error_action_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectSensitive(await app.getById('settings_apply_button'));
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        const store = await waitForAppliedStore(app);
+        expect(store.type).toBe('webdav');
+        expect(store.webdav_scheme).toBe('https');
+        expect(store.webdav_port).toBe('8443');
+        expect(store.webdav_base_path).toBe('/dav/files/');
+        expect(store.webdav_ca_file).toBe('/tmp/dav-ca.pem');
+        expect(store.webdav_certificate_action).toBe('prompt');
+      }
+    );
+  });
+
+  it('preserves unfinished WebDAV edits when global defaults change', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=webdav', '--type=webdav', '--rebase-global=webdav.port=8080'],
+      async ({ app }) => {
+        await selectSettingsTab(app, 'WebDAV');
+        const port = expectElementKind(
+          await app.getById('settings_webdav_port_entry'),
+          'entry'
+        );
+        await port.setText('unfinished');
+        await expectElementKind(
+          await app.getById('rebase_fallbacks_button'),
+          'button'
+        ).click();
+        expect(await port.text()).toBe('unfinished');
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await port.setText('8081');
+        await expectSensitive(await app.getById('settings_apply_button'));
       }
     );
   });
@@ -6127,6 +6228,7 @@ describe.concurrent('shared settings widget', () => {
           'SSH',
           'SFTP',
           'FTP',
+          'WebDAV',
           'Terminal',
           'Transfer',
           'Logging',

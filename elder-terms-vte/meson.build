@@ -5,6 +5,7 @@ liburing_dep = dependency('liburing')
 libudev_dep = dependency('libudev')
 libssh_dep = dependency('libssh')
 libcurl_dep = dependency('libcurl', version: '>=7.88.1')
+libxml2_dep = dependency('libxml-2.0', version: '>=2.9.14')
 openssl_dep = dependency('openssl')
 vte_dep = dependency('vte-2.91')
 
@@ -125,6 +126,11 @@ executable(
     'src/ftp/ftp-client.cpp',
     'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
     'src/ftp/ftp-metadata.cpp',
+    'src/webdav/webdav-application.cpp',
+    'src/webdav/webdav-client.cpp',
+    'src/webdav/curl-http-session.cpp',
+    'src/webdav/webdav-url.cpp',
+    'src/webdav/webdav-metadata.cpp',
     'src/sftp/sftp-client.cpp',
     'src/sftp/sftp-fixture-client.cpp',
     'src/file-transfer/file-hash.cpp',
@@ -148,6 +154,7 @@ executable(
     liburing_dep,
     libssh_dep,
     libcurl_dep,
+    libxml2_dep,
     openssl_dep,
   ],
   install: true,
@@ -177,6 +184,24 @@ telnet_protocol_test = executable(
 )
 
 test('telnet-protocol-test', telnet_protocol_test)
+
+webdav_metadata_test = executable(
+  'webdav-metadata-test',
+  ['tests/cpp/webdav-metadata-test.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
+  include_directories: include_directories('src/webdav'),
+  dependencies: [cardio_dep, elder_terms_dep, libcurl_dep, libxml2_dep],
+)
+test('webdav-metadata-test', webdav_metadata_test)
+
+webdav_client_test = executable(
+  'webdav-client-test',
+  ['tests/cpp/webdav-client-test.cpp', 'src/webdav/webdav-client.cpp',
+   'src/webdav/curl-http-session.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
+  include_directories: include_directories('src/webdav'),
+  dependencies: [cardio_dep, elder_terms_dep, libcurl_dep, libxml2_dep],
+)
+test('webdav-client-test', find_program('node'),
+  args: [files('tests/webdav-client-runner.mjs'), webdav_client_test], timeout: 300)
 
 ftp_metadata_test = executable(
   'ftp-metadata-test',

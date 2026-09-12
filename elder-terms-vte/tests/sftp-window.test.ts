@@ -1,3 +1,5 @@
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createRequire } from 'node:module';
 import {
   access,
@@ -1368,52 +1370,229 @@ describe('SFTP window', () => {
           Math.round(treeCapture.bounds.x + treeCapture.bounds.width / 2),
           Math.round(treeCapture.bounds.y + treeCapture.bounds.height / 2)
         );
-        await app.input.scrollWheel(0, 240);
-        const bottomScrollRange = await verticalScrollbar.valueInfo();
-        expect(bottomScrollRange.value).toBeGreaterThan(scrollRange.value);
-        expect(
-          bottomScrollRange.maximum - bottomScrollRange.value
-        ).toBeLessThanOrEqual(treeCapture.bounds.height + rowPitch);
-        const finalRow = (await localTree.getRowCount()) - 1;
-        const finalRowBounds = await captureRowBounds(localTree, finalRow);
-        expect(finalRowBounds.y).toBeGreaterThanOrEqual(treeCapture.bounds.y);
-        expect(finalRowBounds.y + finalRowBounds.height).toBeLessThanOrEqual(
-          treeCapture.bounds.y + treeCapture.bounds.height
+        const screen = PNG.sync.read((await app.capture()).image);
+        const environment = await app.environment();
+        const area = treeCapture.bounds;
+        const videoPath = join(evidence.directory, 'sftp-scroll-layout.mkv');
+        let pendingFrames = Buffer.alloc(0);
+        let latestFrame = Buffer.alloc(0);
+        let frameNumber = 0;
+        let recordingError: Error | undefined;
+        let recordingLog = '';
+        const frameSize = screen.width * screen.height * 4;
+        const recorder = spawn(
+          'ffmpeg',
+          [
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-f',
+            'x11grab',
+            '-framerate',
+            '15',
+            '-draw_mouse',
+            '0',
+            '-video_size',
+            `${screen.width}x${screen.height}`,
+            '-i',
+            environment.DISPLAY ?? '',
+            '-map',
+            '0:v',
+            '-c:v',
+            'ffv1',
+            '-pix_fmt',
+            'bgr0',
+            '-fps_mode',
+            'passthrough',
+            videoPath,
+            '-map',
+            '0:v',
+            '-c:v',
+            'rawvideo',
+            '-pix_fmt',
+            'bgr0',
+            '-fps_mode',
+            'passthrough',
+            '-f',
+            'rawvideo',
+            'pipe:1',
+          ],
+          { env: environment, stdio: ['pipe', 'pipe', 'pipe'] }
         );
-        const bottomCapture = await evidence.captureEvidence(
-          'sftp-scrolled-tree-bottom',
-          async () => localTree.capture()
-        );
-        const bottomTreeMargins = brightInkVerticalMargins(
-          bottomCapture,
-          0.1,
-          0.45,
-          128
-        );
-        expect.soft(bottomTreeMargins.bottom).toBeLessThanOrEqual(rowPitch);
-        expect
-          .soft(bottomTreeMargins.top)
-          .toBeLessThanOrEqual(
-            initialTreeMargins.top + Math.floor(rowPitch / 2)
+        const recordingFinished = new Promise<number | null>((resolve) => {
+          recorder.once('error', (error) => {
+            recordingError = error;
+            resolve(null);
+          });
+          recorder.once('close', resolve);
+        });
+        recorder.stderr.on('data', (bytes: Buffer) => {
+          recordingLog += bytes.toString();
+        });
+        recorder.stdout.on('data', (bytes: Buffer) => {
+          pendingFrames = Buffer.concat([pendingFrames, bytes]);
+          while (pendingFrames.length >= frameSize) {
+            latestFrame = Buffer.from(pendingFrames.subarray(0, frameSize));
+            pendingFrames = pendingFrames.subarray(frameSize);
+            frameNumber += 1;
+          }
+        });
+        const states: { label: string; frame: number; pixels: Buffer }[] = [];
+        const difference = (
+          image: Buffer,
+          width: number,
+          bgr: boolean,
+          expected: Buffer
+        ) => {
+          let different = 0;
+          for (let y = 0; y < area.height; y += 1) {
+            for (let x = 0; x < area.width; x += 1) {
+              const actual = ((area.y + y) * width + area.x + x) * 4;
+              const reference = (y * area.width + x) * 4;
+              if (
+                [0, 1, 2].some(
+                  (channel) =>
+                    Math.abs(
+                      image[actual + (bgr ? 2 - channel : channel)] -
+                        expected[reference + channel]
+                    ) > 8
+                )
+              )
+                different += 1;
+            }
+          }
+          return different / (area.width * area.height);
+        };
+        const recordState = async (label: string) => {
+          const previousFrame = frameNumber;
+          let previousPixels: Buffer | undefined;
+          const observed = await waitForResult(async () => {
+            if (recordingError !== undefined) throw recordingError;
+            expect(recorder.exitCode, recordingLog).toBeNull();
+            const captured = PNG.sync.read((await localTree.capture()).image);
+            const preceding = previousPixels;
+            previousPixels = captured.data;
+            expect(preceding).toBeDefined();
+            expect(captured.data.equals(preceding!)).toBe(true);
+            if (states.length > 0)
+              expect(
+                captured.data.equals(states[states.length - 1].pixels)
+              ).toBe(false);
+            expect(frameNumber).toBeGreaterThan(previousFrame);
+            // A one-percent tolerance can hide differing row numbers. The
+            // lossless recording must closely match the actual settled rows.
+            expect(
+              difference(latestFrame, screen.width, true, captured.data)
+            ).toBeLessThan(0.0001);
+            return { label, frame: frameNumber, pixels: captured.data };
+          });
+          states.push(observed);
+        };
+        try {
+          await recordState('top before scrolling');
+          await app.input.scrollWheel(0, 240);
+          await waitForResult(async () => {
+            const bottomScrollRange = await verticalScrollbar.valueInfo();
+            expect(bottomScrollRange.value).toBeGreaterThan(scrollRange.value);
+            expect(
+              bottomScrollRange.maximum - bottomScrollRange.value
+            ).toBeLessThanOrEqual(treeCapture.bounds.height + rowPitch);
+            const finalRow = (await localTree.getRowCount()) - 1;
+            const finalRowBounds = await captureRowBounds(localTree, finalRow);
+            expect(finalRowBounds.y).toBeGreaterThanOrEqual(
+              treeCapture.bounds.y
+            );
+            expect(
+              finalRowBounds.y + finalRowBounds.height
+            ).toBeLessThanOrEqual(
+              treeCapture.bounds.y + treeCapture.bounds.height
+            );
+          });
+          const bottomCapture = await evidence.captureEvidence(
+            'sftp-scrolled-tree-bottom',
+            async () => localTree.capture()
           );
+          const bottomTreeMargins = brightInkVerticalMargins(
+            bottomCapture,
+            0.1,
+            0.45,
+            128
+          );
+          expect.soft(bottomTreeMargins.bottom).toBeLessThanOrEqual(rowPitch);
+          expect
+            .soft(bottomTreeMargins.top)
+            .toBeLessThanOrEqual(
+              initialTreeMargins.top + Math.floor(rowPitch / 2)
+            );
 
-        await app.input.scrollWheel(0, -240);
-        const topScrollRange = await verticalScrollbar.valueInfo();
-        expect(topScrollRange.value).toBeLessThanOrEqual(
-          topScrollRange.minimum + rowPitch
-        );
-        const firstRowBounds = await captureRowBounds(localTree, 0);
-        expect(firstRowBounds.y).toBeGreaterThanOrEqual(treeCapture.bounds.y);
-        expect(firstRowBounds.y + firstRowBounds.height).toBeLessThanOrEqual(
-          treeCapture.bounds.y + treeCapture.bounds.height
-        );
-        const topCapture = await evidence.captureEvidence(
-          'sftp-scrolled-tree-top',
-          async () => localTree.capture()
-        );
-        expect
-          .soft(brightInkVerticalMargins(topCapture, 0.1, 0.45, 128).bottom)
-          .toBeLessThanOrEqual(rowPitch);
+          await recordState('bottom after scrolling');
+          await app.input.scrollWheel(0, -240);
+          await waitForResult(async () => {
+            const topScrollRange = await verticalScrollbar.valueInfo();
+            expect(topScrollRange.value).toBeLessThanOrEqual(
+              topScrollRange.minimum + rowPitch
+            );
+            const firstRowBounds = await captureRowBounds(localTree, 0);
+            expect(firstRowBounds.y).toBeGreaterThanOrEqual(
+              treeCapture.bounds.y
+            );
+            expect(
+              firstRowBounds.y + firstRowBounds.height
+            ).toBeLessThanOrEqual(
+              treeCapture.bounds.y + treeCapture.bounds.height
+            );
+          });
+          const topCapture = await evidence.captureEvidence(
+            'sftp-scrolled-tree-top',
+            async () => localTree.capture()
+          );
+          expect
+            .soft(brightInkVerticalMargins(topCapture, 0.1, 0.45, 128).bottom)
+            .toBeLessThanOrEqual(rowPitch);
+          await recordState('top after scrolling');
+          expect(states.map(({ label }) => label)).toEqual([
+            'top before scrolling',
+            'bottom after scrolling',
+            'top after scrolling',
+          ]);
+          expect(states[1].frame).toBeGreaterThan(states[0].frame);
+          expect(states[2].frame).toBeGreaterThan(states[1].frame);
+          expect(states[1].pixels.equals(states[0].pixels)).toBe(false);
+          expect(states[2].pixels.equals(states[1].pixels)).toBe(false);
+        } finally {
+          recorder.stdin.write('q\n');
+          const code = await recordingFinished;
+          await evidence.log('SFTP scrolling video states', {
+            states: states.map(({ label, frame }) => ({ label, frame })),
+            code,
+            stderr: recordingLog,
+          });
+          expect(code, recordingLog).toBe(0);
+        }
+        const selection = states
+          .map(({ frame }) => `eq(n\\,${frame - 1})`)
+          .join('+');
+        await promisify(execFile)('ffmpeg', [
+          '-v',
+          'error',
+          '-i',
+          videoPath,
+          '-vf',
+          `select=${selection}`,
+          '-fps_mode',
+          'passthrough',
+          join(evidence.directory, 'sftp-scroll-frame-%d.png'),
+        ]);
+        for (let index = 0; index < states.length; index += 1) {
+          const saved = PNG.sync.read(
+            await readFile(
+              join(evidence.directory, `sftp-scroll-frame-${index + 1}.png`)
+            )
+          );
+          expect(
+            difference(saved.data, saved.width, false, states[index].pixels)
+          ).toBeLessThan(0.0001);
+        }
       }
     );
   });

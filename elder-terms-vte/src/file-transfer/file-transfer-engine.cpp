@@ -609,7 +609,7 @@ discover_local_node_async(GFile *file, std::string destination_path,
               : std::string(),
       .children = {},
       .total_bytes =
-          attributes->type == RemoteFileType::regular ? attributes->size : 0,
+          attributes->type == RemoteFileType::regular ? attributes->size.value_or(0) : 0,
       .total_items = 1,
   };
   if (node.attributes.type != RemoteFileType::directory) {
@@ -653,7 +653,7 @@ discover_remote_node_async(
       .link_target = {},
       .children = {},
       .total_bytes =
-          attributes->type == RemoteFileType::regular ? attributes->size : 0,
+          attributes->type == RemoteFileType::regular ? attributes->size.value_or(0) : 0,
       .total_items = 1,
   };
   if (node.attributes.type == RemoteFileType::symbolic_link) {

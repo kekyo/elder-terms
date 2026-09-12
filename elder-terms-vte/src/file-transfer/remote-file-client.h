@@ -39,8 +39,8 @@ struct RemoteFileAttributes {
   std::string path;
   /** Remote item kind, determined without following symbolic links. */
   RemoteFileType type = RemoteFileType::other;
-  /** Regular-file size in bytes. */
-  std::uint64_t size = 0;
+  /** Regular-file size in bytes, or no value when the service omits it. */
+  std::optional<std::uint64_t> size;
   /** POSIX permission and type bits, when reported by the service. */
   std::optional<std::uint32_t> permissions;
   /** Last access time as Unix seconds, when reported by the service. */

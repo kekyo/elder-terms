@@ -62,6 +62,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/serial-device-event-monitor.cpp',
   'src/settings/application-settings.cpp',
   'src/settings/ftp-settings.cpp',
+  'src/settings/webdav-settings.cpp',
   'src/settings/general-settings.cpp',
   'src/settings/hyperlink-settings.cpp',
   'src/settings/local-session-settings.cpp',
@@ -81,6 +82,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/settings-widget/settings-presentation.cpp',
   'src/settings-widget/application-settings-widget.cpp',
   'src/settings-widget/hyperlink-settings-editor.cpp',
+  'src/settings-widget/webdav-settings-editor.cpp',
   'src/settings-widget/settings-widget.cpp',
 ]
 

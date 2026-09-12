@@ -4383,10 +4383,93 @@ static void test_regular_expression_reports_project_owned_matches() {
   elder_terms::destroy_regular_expression(regex);
 }
 
+static void test_webdav_settings_round_trip() {
+  auto store = create_default_settings(default_terminal_display_settings(1.0), "WebDAV");
+  expect_true(set_explicit_setting_value(&store, general_type_setting_key(),
+                                        std::string("webdav")),
+              "WebDAV must be selectable as an independent connection type");
+  expect_true(!terminal_connection_profile(store).has_value(),
+              "WebDAV must not start a terminal session");
+  expect_true(elder_terms::webdav_connection_settings(store).port == 443,
+              "HTTPS must default to port 443");
+  set_explicit_setting_value(&store, elder_terms::webdav_setting_key("scheme"), std::string("http"));
+  expect_true(elder_terms::webdav_connection_settings(store).port == 80,
+              "HTTP must default to port 80 when no port is configured");
+  auto globals = create_default_settings(default_terminal_display_settings(1.0), "Defaults");
+  set_explicit_setting_value(&globals, elder_terms::webdav_setting_key("port"), gint64{8080});
+  elder_terms::rebase_settings_store_fallbacks(&store, globals);
+  expect_true(elder_terms::webdav_connection_settings(store).port == 8080,
+              "A global port must take precedence over the scheme default");
+  set_explicit_setting_value(&store, elder_terms::webdav_setting_key("port"), gint64{8443});
+  expect_true(elder_terms::webdav_connection_settings(store).port == 8443,
+              "An explicit port must take precedence over a global port");
+  elder_terms::clear_explicit_setting_value(&store, elder_terms::webdav_setting_key("port"));
+  expect_true(!set_explicit_setting_value(&store, elder_terms::webdav_setting_key("base_path"), std::string("/dav/%2Fescape")),
+              "An encoded separator must not alter the WebDAV virtual root");
+  expect_true(!set_explicit_setting_value(&store, elder_terms::webdav_setting_key("base_path"), std::string("/dav/%2e%2e")),
+              "An encoded parent path must be rejected");
+  expect_true(!set_explicit_setting_value(&store, elder_terms::webdav_setting_key("idle_timeout_seconds"), gint64{0}),
+              "WebDAV idle timeout must remain bounded");
+  const std::vector<std::pair<std::string, std::string>> values{
+      {"scheme", "http"}, {"address", "dav.example.test"},
+      {"base_path", "/dav/"}, {"authentication", "digest"},
+      {"username", "alice"}, {"remote_directory", "/Documents"},
+      {"local_directory", "/tmp/downloads"}, {"ca_file", "/tmp/ca.pem"},
+      {"certificate_error_action", "prompt"}};
+  for (const auto &[name, value] : values) {
+    expect_true(set_explicit_setting_value(&store,
+                    elder_terms::make_setting_key("webdav", name), value),
+                "WebDAV setting must be accepted: " + name);
+  }
+  const auto path = temporary_config_path("webdav-round-trip");
+  expect_true(save_settings(store, path).saved, "WebDAV settings must be saved");
+  const auto loaded = load_settings({.config_path = path,
+                                    .startup_config_path = std::nullopt}, 1.0);
+  remove_config(path);
+  for (const auto &[name, value] : values) {
+    expect_true(elder_terms::setting_string_value_or_default(loaded.store,
+                    elder_terms::make_setting_key("webdav", name), "missing") == value,
+                "WebDAV setting must survive reload: " + name);
+  }
+}
+
+static void test_webdav_invalid_numeric_settings_remain_invalid_after_save() {
+  const auto path = temporary_config_path("webdav-invalid-number");
+  write_config(path, "[general]\ntype=webdav\n[webdav]\naddress=localhost\nport=not-a-number\n");
+  const auto loaded = load_settings({.config_path = path, .startup_config_path = std::nullopt}, 1.0);
+  expect_true(!elder_terms::webdav_connection_settings(loaded.store).validation_errors.empty(),
+              "Malformed WebDAV port must prevent connecting");
+  expect_true(save_settings(loaded.store, path).saved, "Unrelated edits may preserve invalid WebDAV input");
+  const auto reloaded = load_settings({.config_path = path, .startup_config_path = std::nullopt}, 1.0);
+  remove_config(path);
+  expect_true(!elder_terms::webdav_connection_settings(reloaded.store).validation_errors.empty(),
+              "Saving must not silently replace a malformed WebDAV port with a valid default");
+  auto inherited = create_default_settings(default_terminal_display_settings(1.0), "Inherited WebDAV");
+  elder_terms::rebase_settings_store_fallbacks(&inherited, reloaded.store);
+  expect_true(!elder_terms::webdav_connection_settings(inherited).validation_errors.empty(),
+              "An invalid inherited port must prevent connecting");
+  set_explicit_setting_value(&inherited, elder_terms::webdav_setting_key("port"), gint64{8443});
+  expect_true(elder_terms::webdav_connection_settings(inherited).validation_errors.empty(),
+              "A valid explicit port must replace the invalid inherited port");
+  elder_terms::clear_explicit_setting_value(&inherited, elder_terms::webdav_setting_key("port"));
+  expect_true(!elder_terms::webdav_connection_settings(inherited).validation_errors.empty(),
+              "Clearing an override must restore the inherited validation failure");
+  auto corrected = reloaded.store;
+  set_explicit_setting_value(&corrected, elder_terms::webdav_setting_key("port"), gint64{8443});
+  expect_true(save_settings(corrected, path).saved, "Corrected WebDAV settings must be saved");
+  const auto corrected_reload = load_settings({.config_path = path, .startup_config_path = std::nullopt}, 1.0);
+  remove_config(path);
+  expect_true(elder_terms::webdav_connection_settings(corrected_reload.store).validation_errors.empty() &&
+                  elder_terms::webdav_connection_settings(corrected_reload.store).port == 8443,
+              "Correcting a port must clear the retained malformed input");
+}
+
 } // namespace elder_terms_settings_test
 
 int main() {
   try {
+    elder_terms_settings_test::test_webdav_settings_round_trip();
+    elder_terms_settings_test::test_webdav_invalid_numeric_settings_remain_invalid_after_save();
     elder_terms_settings_test::test_independent_inactive_indicator_color();
     elder_terms_settings_test::test_terminal_font_list_round_trip_and_validation();
     elder_terms_settings_test::test_default_settings();

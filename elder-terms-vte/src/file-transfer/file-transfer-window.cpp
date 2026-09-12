@@ -209,11 +209,11 @@ static std::string exception_text(std::exception_ptr error) {
 }
 
 static std::string file_size_text(const RemoteFileAttributes &attributes) {
-  if (attributes.type != RemoteFileType::regular) {
+  if (attributes.type != RemoteFileType::regular || !attributes.size) {
     return {};
   }
   FileTransferGCharPtr formatted(
-      g_format_size(static_cast<guint64>(attributes.size)));
+      g_format_size(static_cast<guint64>(*attributes.size)));
   return formatted == nullptr ? std::string()
                               : std::string(formatted.get());
 }

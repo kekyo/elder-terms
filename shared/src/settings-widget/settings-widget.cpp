@@ -25,6 +25,7 @@
 #include <elder-terms/settings/regular-expression.h>
 
 #include "hyperlink-settings-editor.h"
+#include "webdav-settings-editor.h"
 #include "settings-presentation.h"
 
 #define GETTEXT_PACKAGE "elder-terms"
@@ -43,6 +44,7 @@ static constexpr char serial_device_no_device_choice[] =
 static constexpr char ssh_connection_type[] = "ssh";
 static constexpr char sftp_connection_type[] = "sftp";
 static constexpr char ftp_connection_type[] = "ftp";
+static constexpr char webdav_connection_type[] = "webdav";
 static constexpr char zmodem_autostart_enabled[] = "enabled";
 static constexpr char zmodem_autostart_disabled[] = "disabled";
 static constexpr char terminal_text_default[] = "default";
@@ -176,6 +178,7 @@ struct SettingsWidgetState {
   GtkWidget *macro_move_up_button = nullptr;
   GtkWidget *macro_move_down_button = nullptr;
   HyperlinkSettingsEditorState *hyperlink_editor = nullptr;
+  WebdavSettingsEditor *webdav_editor = nullptr;
   int selected_macro = -1;
   unsigned int next_macro_number = 1;
   GtkWidget *telnet_address_entry = nullptr;
@@ -1481,6 +1484,8 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
          state->telnet_port_valid && state->ssh_port_valid &&
          state->ftp_port_valid && (state->ftp_tls_valid ||
          (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != ftp_connection_type)) &&
+         (webdav_settings_editor_is_valid(state->webdav_editor) ||
+          (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != webdav_connection_type)) &&
          state->serial_baudrate_valid &&
          state->transfer_text_send_rate_valid &&
          terminal_key_binding_inputs_valid(state) &&
@@ -2731,6 +2736,8 @@ static void sync_general_type_combo(SettingsWidgetState *state) {
            .label = connection_type_label(sftp_connection_type)},
           {.id = ftp_connection_type,
            .label = connection_type_label(ftp_connection_type)},
+          {.id = webdav_connection_type,
+           .label = connection_type_label(webdav_connection_type)},
       },
       effective);
 }
@@ -3222,8 +3229,9 @@ static void create_ftp_tls_controls(SettingsWidgetState *state, GtkWidget *page)
   gtk_grid_attach(GTK_GRID(page), state->ftp_tls_error_label, 0, row, 2, 1);
 }
 
-static void sync_widgets_from_draft(SettingsWidgetState *state) {
+static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_webdav_draft) {
   sync_ftp_tls_controls(state);
+  sync_webdav_settings_editor(state->webdav_editor, preserve_webdav_draft);
   const TerminalDisplaySettings display =
       terminal_display_settings(state->draft_store);
   const GeneralColorSettings colors =
@@ -6205,6 +6213,29 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       .tab_label = ftp_tab,
   });
 
+  state->webdav_editor = create_webdav_settings_editor(
+      &state->draft_store, state->id_prefix, state->is_runtime, [state] {
+        update_action_sensitivity(state);
+        notify_changed(state);
+      });
+  GtkWidget *webdav_page = gtk_scrolled_window_new(nullptr, nullptr);
+  assign_accessible_id(webdav_page, widget_id(state, "webdav_page").c_str());
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(webdav_page), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_overlay_scrolling(GTK_SCROLLED_WINDOW(webdav_page), FALSE);
+  gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(webdav_page), FALSE);
+  assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(webdav_page)),
+      widget_id(state, "webdav_page_scrollbar").c_str());
+  gtk_container_add(GTK_CONTAINER(webdav_page), webdav_settings_editor_root(state->webdav_editor));
+  GtkWidget *webdav_tab = create_tab_button(state, webdav_page, "WebDAV",
+      widget_id(state, "webdav_tab").c_str());
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), webdav_page, webdav_tab);
+  gtk_widget_show_all(webdav_page);
+  gtk_widget_show_all(webdav_tab);
+  gtk_widget_set_no_show_all(webdav_page, TRUE);
+  gtk_widget_set_no_show_all(webdav_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {webdav_connection_type}, .page = webdav_page, .tab_label = webdav_tab});
+
   GtkWidget *terminal_page = create_terminal_page(state);
   const std::string terminal_tab_id = widget_id(state, "terminal_tab");
   GtkWidget *terminal_tab = create_tab_button(
@@ -6310,7 +6341,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
     gtk_box_pack_start(GTK_BOX(state->root), create_button_box(state), FALSE,
                        FALSE, 0);
   }
-  sync_widgets_from_draft(state);
+  sync_widgets_from_draft(state, false);
   update_terminal_key_binding_validation(state);
   update_connection_pages(state);
   gtk_notebook_set_current_page(GTK_NOTEBOOK(state->notebook), 0);
@@ -6342,7 +6373,7 @@ void update_settings_widget_store(SettingsWidgetState *state,
   state->applied_store = store;
   state->draft_store = std::move(store);
   state->synchronizing = true;
-  sync_widgets_from_draft(state);
+  sync_widgets_from_draft(state, false);
   update_terminal_key_binding_validation(state);
   state->synchronizing = false;
   notify_changed(state);
@@ -6406,7 +6437,7 @@ void settings_widget_rebase_fallbacks(
   rebase_settings_store_fallbacks(&state->applied_store, fallbacks);
   rebase_settings_store_fallbacks(&state->draft_store, fallbacks);
   state->synchronizing = true;
-  sync_widgets_from_draft(state);
+  sync_widgets_from_draft(state, true);
 
   for (const auto &[name, text] : invalid_tls_text) {
     for (auto &control : state->ftp_tls_controls) {
@@ -6573,6 +6604,7 @@ void destroy_settings_widget(SettingsWidgetState *state) {
   destroy_key_binding_input_widget(
       state->general_open_connection_input);
   destroy_hyperlink_settings_editor(state->hyperlink_editor);
+  destroy_webdav_settings_editor(state->webdav_editor);
   if (state->root != nullptr && gtk_widget_get_parent(state->root) == nullptr) {
     gtk_widget_destroy(state->root);
   }

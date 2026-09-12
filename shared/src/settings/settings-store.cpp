@@ -49,10 +49,10 @@ static std::string glib_error_message(GError *error) {
 
 static void warn_invalid_value(std::vector<std::string> *warnings,
                                const SettingKey &key,
-                               const std::string &reason) {
+                               const std::string &reason, bool retained) {
   warnings->push_back("Warning: invalid configuration value " +
                       setting_label(key) + ": " + reason +
-                      "; using fallback");
+                      (retained ? "; retaining invalid input" : "; using fallback"));
 }
 
 static bool validate_setting_definition(const SettingDefinition &definition,
@@ -182,12 +182,16 @@ void load_settings_store_from_key_file(SettingsStore *store,
     SettingValue value = read_setting_value(key_file, entry, &error);
     if (error != nullptr) {
       warn_invalid_value(warnings, entry.definition.key,
-                         glib_error_message(error));
+                         glib_error_message(error), entry.definition.retain_invalid);
       if (entry.definition.retain_invalid) {
         entry.validation_error = glib_error_message(error);
         entry.loaded = true;
-        // Retain malformed string input so saving cannot turn it into a default.
+        entry.dirty = false;
+        // Keep the original INI representation separately from the typed value.
+        // Otherwise an invalid number would be saved as a valid fallback, and
+        // malformed string escapes would become valid after a second escaping.
         gchar *raw = g_key_file_get_value(key_file, section, name, nullptr);
+        entry.invalid_raw_value = raw ? std::optional<std::string>(raw) : std::nullopt;
         if (raw && std::holds_alternative<std::string>(entry.value)) entry.value = std::string(raw);
         g_free(raw);
       }
@@ -197,8 +201,9 @@ void load_settings_store_from_key_file(SettingsStore *store,
 
     std::string reason;
     if (!validate_setting_definition(entry.definition, value, &reason)) {
-      warn_invalid_value(warnings, entry.definition.key, reason);
+      warn_invalid_value(warnings, entry.definition.key, reason, entry.definition.retain_invalid);
       if (entry.definition.retain_invalid) {
+        entry.invalid_raw_value.reset();
         entry.value = std::move(value);
         entry.validation_error = reason;
         entry.loaded = true;
@@ -208,6 +213,7 @@ void load_settings_store_from_key_file(SettingsStore *store,
     }
 
     entry.validation_error.clear();
+    entry.invalid_raw_value.reset();
     entry.value = std::move(value);
     entry.loaded = true;
     entry.dirty = false;
@@ -293,6 +299,7 @@ bool set_setting_value(SettingsStore *store, const SettingKey &key,
 
   if (entry->value != value || !entry->validation_error.empty()) {
     entry->validation_error.clear();
+    entry->invalid_raw_value.reset();
     entry->value = std::move(value);
     entry->loaded = entry->value != entry->fallback_value;
     entry->dirty = true;
@@ -315,6 +322,7 @@ bool set_explicit_setting_value(SettingsStore *store, const SettingKey &key,
 
   if (entry->value != value || !entry->loaded || !entry->validation_error.empty()) {
     entry->validation_error.clear();
+    entry->invalid_raw_value.reset();
     entry->value = std::move(value);
     entry->loaded = true;
     entry->dirty = true;
@@ -332,6 +340,7 @@ bool clear_explicit_setting_value(SettingsStore *store,
   if (entry->value != entry->fallback_value || entry->loaded) {
     entry->value = entry->fallback_value;
     entry->validation_error = entry->fallback_validation_error;
+    entry->invalid_raw_value = entry->fallback_invalid_raw_value;
     entry->loaded = false;
     entry->dirty = true;
   }
@@ -369,6 +378,7 @@ void rebase_settings_store_fallbacks(SettingsStore *store,
     const bool was_dirty = entry.dirty;
     entry.fallback_value = fallback_entry->value;
     entry.fallback_validation_error = fallback_entry->validation_error;
+    entry.fallback_invalid_raw_value = fallback_entry->invalid_raw_value;
     entry.fallback_source =
         setting_has_configured_value(fallbacks, entry.definition.key)
             ? SettingValueSource::global
@@ -376,6 +386,7 @@ void rebase_settings_store_fallbacks(SettingsStore *store,
     if (!has_override) {
       entry.value = entry.fallback_value;
       entry.validation_error = entry.fallback_validation_error;
+      entry.invalid_raw_value = entry.fallback_invalid_raw_value;
     }
     entry.dirty = was_dirty;
   }

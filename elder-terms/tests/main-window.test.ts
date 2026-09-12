@@ -818,6 +818,7 @@ describe('elder-terms main window', () => {
               'SSH',
               'SFTP',
               'FTP',
+              'WebDAV',
               '端末',
               '転送',
               'ログ',
@@ -1219,6 +1220,7 @@ describe('elder-terms main window', () => {
               'SSH',
               'SFTP',
               'FTP',
+              'WebDAV',
               'Terminal',
               'Transfer',
               'Logging',
@@ -1228,6 +1230,45 @@ describe('elder-terms main window', () => {
         expect(
           await app.findById('global_settings_general_name_entry')
         ).toBeUndefined();
+
+        await selectSettingsTab(app, 'global_settings', 'WebDAV');
+        await expectElementKind(
+          await app.getById('global_settings_webdav_address_entry'),
+          'entry'
+        ).setText('dav.example.test');
+        await expectElementKind(
+          await app.getById('global_settings_webdav_base_path_entry'),
+          'entry'
+        ).setText('/dav/root%20folder/');
+        await waitForResult(async () => {
+          const preview = expectElementKind(
+            await app.getById('global_settings_webdav_url_label'),
+            'label'
+          );
+          expect(await preview.text()).toBe(
+            'https://dav.example.test:443/dav/root%20folder/'
+          );
+        });
+        await expectElementKind(
+          await app.getById('global_settings_webdav_scheme_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectElementKind(
+          await app.getById('global_settings_webdav_address_entry'),
+          'entry'
+        ).setText('::1');
+        await expectElementKind(
+          await app.getById('global_settings_webdav_remote_directory_entry'),
+          'entry'
+        ).setText('/Documents #');
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('global_settings_webdav_url_label'),
+              'label'
+            ).text()
+          ).toBe('http://[::1]:80/dav/root%20folder/Documents%20%23');
+        });
 
         await selectSettingsTab(app, 'global_settings', 'Terminal');
         const width = expectElementKind(

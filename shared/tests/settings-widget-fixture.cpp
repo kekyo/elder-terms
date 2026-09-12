@@ -653,6 +653,9 @@ connection_type_name(elder_terms::ConnectionKind kind) {
   if (kind == elder_terms::ConnectionKind::ftp) {
     return "ftp";
   }
+  if (kind == elder_terms::ConnectionKind::webdav) {
+    return "webdav";
+  }
   return "local";
 }
 
@@ -778,6 +781,11 @@ static void print_store(const char *prefix,
             << connection_type_name(
                    elder_terms::general_connection_kind(store))
             << " name=" << elder_terms::general_connection_name(store)
+            << " webdav_scheme=" << elder_terms::webdav_connection_settings(store).scheme
+            << " webdav_port=" << elder_terms::webdav_connection_settings(store).port
+            << " webdav_base_path=" << elder_terms::webdav_connection_settings(store).base_path
+            << " webdav_ca_file=" << elder_terms::webdav_connection_settings(store).ca_file
+            << " webdav_certificate_action=" << (elder_terms::webdav_connection_settings(store).prompt_certificate ? "prompt" : "reject")
             << " width=" << display.width << " height=" << display.height
             << " scrollback_lines=" << display.scrollback_lines
             << " zoom=" << display.zoom

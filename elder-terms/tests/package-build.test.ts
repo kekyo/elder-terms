@@ -716,6 +716,8 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'install',
       '-C',
       buildDirectory,
+      // The workspace build has finished; parallel UI cases use these binaries.
+      '--no-rebuild',
       '--destdir',
       destination,
     ]);

@@ -66,6 +66,10 @@ static void set_key_file_value(GKeyFile *key_file, const SettingEntry &entry) {
   const char *section = entry.definition.key.section.c_str();
   const char *name = entry.definition.key.name.c_str();
 
+  if (entry.invalid_raw_value && !entry.validation_error.empty()) {
+    g_key_file_set_value(key_file, section, name, entry.invalid_raw_value->c_str());
+    return;
+  }
   if (const auto *integer = std::get_if<gint64>(&entry.value)) {
     g_key_file_set_integer(key_file, section, name,
                            static_cast<gint>(*integer));
@@ -702,6 +706,7 @@ SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
   append_definitions(&definitions, ssh_connection_setting_definitions());
   append_definitions(&definitions, sftp_connection_setting_definitions());
   append_definitions(&definitions, ftp_connection_setting_definitions());
+  append_definitions(&definitions, webdav_connection_setting_definitions());
   append_definitions(&definitions, serial_connection_setting_definitions());
   append_definitions(&definitions, transfer_setting_definitions());
   return create_settings_store(std::move(definitions));
@@ -796,6 +801,11 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_zoom)
   }
   if (general_settings_select_ftp_connection(result.store)) {
     append_ftp_connection_warnings(result.store, &result.warnings);
+  }
+  if (general_connection_kind(result.store) == ConnectionKind::webdav) {
+    const auto connection = webdav_connection_settings(result.store);
+    result.warnings.insert(result.warnings.end(), connection.validation_errors.begin(), connection.validation_errors.end());
+    if (connection.address.empty()) result.warnings.emplace_back("WebDAV server address is required");
   }
   if (general_settings_select_serial_connection(result.store)) {
     append_serial_connection_warnings(result.store, &result.warnings);
@@ -943,7 +953,8 @@ TerminalTextSettings terminal_text_settings(const SettingsStore &store,
 std::optional<TerminalConnectionProfile>
 terminal_connection_profile(const SettingsStore &store) {
   if (general_settings_select_sftp_connection(store) ||
-      general_settings_select_ftp_connection(store)) {
+      general_settings_select_ftp_connection(store) ||
+      general_connection_kind(store) == ConnectionKind::webdav) {
     return std::nullopt;
   }
 
