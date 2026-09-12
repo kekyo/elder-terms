@@ -81,8 +81,8 @@ struct FileTransferProgress {
   std::string current_path;
   /** Bytes copied so far. */
   std::uint64_t transferred_bytes = 0;
-  /** Total bytes known after recursive discovery. */
-  std::uint64_t total_bytes = 0;
+  /** Total discovered bytes, or no value if a size is unknown or overflows. */
+  std::optional<std::uint64_t> total_bytes = 0;
   /** Completed item count. */
   std::uint64_t completed_items = 0;
   /** Total discovered item count. */

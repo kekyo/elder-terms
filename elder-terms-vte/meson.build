@@ -127,7 +127,7 @@ executable(
     'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
     'src/ftp/ftp-metadata.cpp',
     'src/webdav/webdav-application.cpp',
-    'src/webdav/webdav-client.cpp',
+    'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
     'src/webdav/curl-http-session.cpp',
     'src/webdav/webdav-url.cpp',
     'src/webdav/webdav-metadata.cpp',
@@ -195,10 +195,10 @@ test('webdav-metadata-test', webdav_metadata_test)
 
 webdav_client_test = executable(
   'webdav-client-test',
-  ['tests/cpp/webdav-client-test.cpp', 'src/webdav/webdav-client.cpp',
+  ['tests/cpp/webdav-client-test.cpp', 'src/file-transfer/file-transfer-engine.cpp', 'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
    'src/webdav/curl-http-session.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
   include_directories: include_directories('src/webdav'),
-  dependencies: [cardio_dep, elder_terms_dep, libcurl_dep, libxml2_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, libxml2_dep],
 )
 test('webdav-client-test', find_program('node'),
   args: [files('tests/webdav-client-runner.mjs'), webdav_client_test], timeout: 300)

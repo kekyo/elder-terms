@@ -1,30 +1,13 @@
 #include "webdav-client.h"
 #include "curl-http-session.h"
 #include "webdav-metadata.h"
+#include "webdav-stream.h"
 
 #include <algorithm>
 #include <stdexcept>
 
 namespace elder_terms {
 
-static std::runtime_error http_error(const CurlHttpResult &result) {
-  const char *reason = curl_easy_strerror(result.code);
-  if (result.code == CURLE_OK) {
-    switch (result.status) {
-    case 401: reason = "Authentication was rejected"; break;
-    case 403: reason = "Access denied"; break;
-    case 404: reason = "Resource not found"; break;
-    case 405: case 501: reason = "The server does not support this WebDAV operation"; break;
-    case 409: reason = "Parent collection or resource conflict"; break;
-    case 412: reason = "Destination exists or a request precondition failed"; break;
-    case 423: reason = "Resource is locked"; break;
-    case 507: reason = "Insufficient server storage"; break;
-    default: reason = "Unexpected server response"; break;
-    }
-  }
-  return std::runtime_error("WebDAV request failed (HTTP " + std::to_string(result.status) +
-      ", curl " + std::to_string(result.code) + "): " + reason);
-}
 
 static cardio::promise<void> unavailable() {
   throw std::runtime_error("This WebDAV operation is not available yet");
@@ -50,7 +33,7 @@ public:
           "<d:getcontentlength/><d:getlastmodified/></d:prop></d:propfind>";
       request.headers = {"Depth: " + std::to_string(depth), "Content-Type: application/xml; charset=utf-8"};
       auto result = co_await perform_http_request_async(session, std::move(request), cancellation);
-      if (result.code != CURLE_OK) throw http_error(result);
+      if (result.code != CURLE_OK) throw webdav_http_error(result);
       if (result.status != 301 && result.status != 302 && result.status != 307 && result.status != 308)
         co_return std::make_pair(std::move(result), std::move(url));
       if (redirects == 5 || !result.headers.contains("location"))
@@ -66,7 +49,7 @@ public:
       std::string path, cardio::cancellation cancellation) override {
     path = webdav_virtual_path(std::move(path));
     auto [result, url] = co_await propfind_async(path, 1, cancellation);
-    if (result.status != 207) throw http_error(result);
+    if (result.status != 207) throw webdav_http_error(result);
     const auto canonical = webdav_reference_path(endpoint, url, url);
     const auto resources = parse_webdav_multistatus(result.body, endpoint, url);
     RemoteDirectorySnapshot snapshot{canonical, {}};
@@ -92,7 +75,7 @@ public:
       std::string path, cardio::cancellation cancellation) override {
     auto [result, url] = co_await propfind_async(webdav_virtual_path(std::move(path)), 0, cancellation);
     if (result.status == 404) co_return std::nullopt;
-    if (result.status != 207) throw http_error(result);
+    if (result.status != 207) throw webdav_http_error(result);
     const auto canonical = webdav_reference_path(endpoint, url, url);
     const auto resources = parse_webdav_multistatus(result.body, endpoint, url);
     if (resources.size() != 1 || resources.front().attributes.path != canonical)
@@ -128,9 +111,10 @@ public:
     throw std::runtime_error("WebDAV does not support changing POSIX metadata");
     co_return;
   }
-  cardio::promise<std::unique_ptr<RemoteFileReader>> open_read_async(std::string, cardio::cancellation) override {
-    co_await unavailable();
-    co_return nullptr;
+  cardio::promise<std::unique_ptr<RemoteFileReader>> open_read_async(std::string path, cardio::cancellation cancellation) override {
+    auto pending = open_webdav_reader_async(session, endpoint, std::move(path), cancellation);
+    auto reader = std::move(co_await pending);
+    co_return reader;
   }
   cardio::promise<std::unique_ptr<RemoteFileWriter>> open_write_async(
       std::string, std::optional<std::uint32_t>, cardio::cancellation) override {

@@ -10,6 +10,7 @@
 #include <exception>
 #include <filesystem>
 #include <memory>
+#include <limits>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -57,9 +58,16 @@ struct TransferNode {
   RemoteFileAttributes attributes;
   std::string link_target;
   std::vector<TransferNode> children;
-  std::uint64_t total_bytes = 0;
+  std::optional<std::uint64_t> total_bytes = 0;
   std::uint64_t total_items = 1;
 };
+
+static std::optional<std::uint64_t> sum_discovered_bytes(
+    std::optional<std::uint64_t> left, std::optional<std::uint64_t> right) {
+  if (!left || !right || *right > std::numeric_limits<std::uint64_t>::max() - *left)
+    return std::nullopt;
+  return *left + *right;
+}
 
 struct TransferRunState {
   std::shared_ptr<RemoteFileClient> client;
@@ -444,14 +452,14 @@ make_local_symbolic_link_async(
 }
 
 static cardio::promise<void>
-move_local_async(GFile *source, GFile *destination,
+move_local_async(GFile *source, GFile *destination, GFileCopyFlags flags,
                  cardio::cancellation cancellation) {
   co_await cardio::gio::submit<void>(
-      [source, destination](GCancellable *cancellable,
+      [source, destination, flags](GCancellable *cancellable,
                             GAsyncReadyCallback callback,
                             gpointer user_data) {
         g_file_move_async(source, destination,
-                          G_FILE_COPY_NOFOLLOW_SYMLINKS,
+                          flags,
                           G_PRIORITY_DEFAULT, cancellable, nullptr, nullptr,
                           callback, user_data);
       },
@@ -609,7 +617,7 @@ discover_local_node_async(GFile *file, std::string destination_path,
               : std::string(),
       .children = {},
       .total_bytes =
-          attributes->type == RemoteFileType::regular ? attributes->size.value_or(0) : 0,
+          attributes->type == RemoteFileType::regular ? attributes->size : std::optional<std::uint64_t>(0),
       .total_items = 1,
   };
   if (node.attributes.type != RemoteFileType::directory) {
@@ -624,7 +632,7 @@ discover_local_node_async(GFile *file, std::string destination_path,
     TransferNode child_node = co_await discover_local_node_async(
         child.get(), remote_child_path(node.destination_path, name),
         cancellation);
-    node.total_bytes += child_node.total_bytes;
+    node.total_bytes = sum_discovered_bytes(node.total_bytes, child_node.total_bytes);
     node.total_items += child_node.total_items;
     node.children.push_back(std::move(child_node));
   }
@@ -653,7 +661,7 @@ discover_remote_node_async(
       .link_target = {},
       .children = {},
       .total_bytes =
-          attributes->type == RemoteFileType::regular ? attributes->size.value_or(0) : 0,
+          attributes->type == RemoteFileType::regular ? attributes->size : std::optional<std::uint64_t>(0),
       .total_items = 1,
   };
   if (node.attributes.type == RemoteFileType::symbolic_link) {
@@ -686,7 +694,7 @@ discover_remote_node_async(
         client, remote_child_path(node.source_path, child.name),
         local_child_path(node.destination_path, child.name),
         cancellation);
-    node.total_bytes += child_node.total_bytes;
+    node.total_bytes = sum_discovered_bytes(node.total_bytes, child_node.total_bytes);
     node.total_items += child_node.total_items;
     node.children.push_back(std::move(child_node));
   }
@@ -703,7 +711,7 @@ static void publish_progress(TransferRunState *state,
 
 static void complete_subtree(TransferRunState *state,
                              const TransferNode &node) {
-  state->progress.transferred_bytes += node.total_bytes;
+  state->progress.transferred_bytes += node.total_bytes.value_or(0);
   state->progress.completed_items += node.total_items;
   publish_progress(state, node.source_path);
 }
@@ -973,10 +981,12 @@ receive_regular_file_async(TransferRunState *state,
     co_await close_local_output_async(G_OUTPUT_STREAM(output.get()),
                                       cancellation);
     output.reset();
-    if (overwrite) {
-      co_await remove_local_tree_async(destination.get(), cancellation);
-    }
-    co_await move_local_async(temporary.get(), destination.get(),
+    // Commit the completed adjacent file with one native move. Never delete
+    // an existing file or directory before knowing that replacement succeeds.
+    const auto flags = static_cast<GFileCopyFlags>(
+        G_FILE_COPY_NOFOLLOW_SYMLINKS | G_FILE_COPY_NO_FALLBACK_FOR_MOVE |
+        (overwrite ? G_FILE_COPY_OVERWRITE : G_FILE_COPY_NONE));
+    co_await move_local_async(temporary.get(), destination.get(), flags,
                               cancellation);
     temporary_created = false;
     co_await set_local_attributes_async(
@@ -1278,7 +1288,7 @@ run_file_transfer_async(std::shared_ptr<RemoteFileClient> client,
     if (!node.has_value()) {
       continue;
     }
-    state.progress.total_bytes += node->total_bytes;
+    state.progress.total_bytes = sum_discovered_bytes(state.progress.total_bytes, node->total_bytes);
     state.progress.total_items += node->total_items;
     roots.push_back(std::move(*node));
   }
@@ -1326,7 +1336,8 @@ cardio::promise<void> rename_file_transfer_item_async(
            .has_value()) {
     throw std::runtime_error("Source item does not exist");
   }
-  co_await move_local_async(source.get(), destination.get(), cancellation);
+  co_await move_local_async(source.get(), destination.get(),
+                            G_FILE_COPY_NOFOLLOW_SYMLINKS, cancellation);
 }
 
 struct FileTransferDeletePath {

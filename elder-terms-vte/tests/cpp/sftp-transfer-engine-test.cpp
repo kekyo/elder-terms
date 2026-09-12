@@ -11,6 +11,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <memory>
 #include <span>
@@ -79,10 +80,11 @@ private:
   std::vector<std::byte> content;
   std::size_t offset = 0;
   bool closed = false;
+  std::function<void()> before_close;
 
 public:
-  explicit FakeSftpReader(std::vector<std::byte> content)
-      : content(std::move(content)) {
+  FakeSftpReader(std::vector<std::byte> content, std::function<void()> before_close)
+      : content(std::move(content)), before_close(std::move(before_close)) {
   }
 
   cardio::promise<std::size_t>
@@ -102,6 +104,7 @@ public:
   cardio::promise<void>
   close_async(cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
+    if (!closed && before_close) before_close();
     closed = true;
     co_return;
   }
@@ -138,6 +141,7 @@ public:
   std::map<std::string, FakeNode> nodes;
   bool transfer_active = false;
   bool fail_next_write = false;
+  std::function<void()> before_read_close;
 
   void add_directory(const std::string &path,
                      std::uint32_t permissions = 0755,
@@ -365,7 +369,7 @@ public:
             elder_terms::RemoteFileType::regular) {
       throw std::runtime_error("fake remote file does not exist");
     }
-    co_return std::make_unique<FakeSftpReader>(iterator->second.content);
+    co_return std::make_unique<FakeSftpReader>(iterator->second.content, before_read_close);
   }
 
   cardio::promise<std::unique_ptr<elder_terms::RemoteFileWriter>>
@@ -668,6 +672,120 @@ test_cancellation_removes_remote_temporary_file() {
               "send cancellation did not release the transfer slot");
 }
 
+
+static cardio::promise<void> test_receive_preserves_unknown_aggregate_size() {
+  const auto root = test_root_directory() / "unknown";
+  const TemporaryDirectoryCleanup cleanup{.path = test_root_directory()};
+  std::filesystem::create_directories(root);
+  auto client = std::make_shared<FakeSftpClient>();
+  client->add_directory("/");
+  client->add_file("/unknown.txt", "unknown transfer");
+  client->nodes.at("/unknown.txt").attributes.size.reset();
+  elder_terms::FileTransferProgress final_progress;
+  elder_terms::FileTransferRequest request;
+  request.direction = elder_terms::FileTransferDirection::receive;
+  request.source_paths = {"/unknown.txt"};
+  request.destination_directory = root.string();
+  request.callbacks.progress = [&final_progress](const elder_terms::FileTransferProgress &progress) {
+    final_progress = progress;
+  };
+  auto pending = elder_terms::run_file_transfer_async(client, std::move(request), {});
+  co_await pending;
+  const std::optional<std::uint64_t> total = final_progress.total_bytes;
+  expect_true(!total && final_progress.transferred_bytes == 16 && final_progress.completed_items == 1,
+              "An unknown file size must remain unknown in aggregate progress");
+  expect_true(read_file(root / "unknown.txt") == "unknown transfer",
+              "Missing size metadata must not prevent receiving the file");
+}
+
+static cardio::promise<void> test_receive_reports_unrepresentable_total_as_unknown() {
+  const auto root = test_root_directory() / "overflow";
+  const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+  std::filesystem::create_directories(root);
+  auto client = std::make_shared<FakeSftpClient>();
+  client->add_directory("/");
+  client->add_directory("/bundle");
+  client->add_file("/bundle/first.txt", "a");
+  client->add_file("/bundle/second.txt", "b");
+  client->nodes.at("/bundle/first.txt").attributes.size = UINT64_MAX;
+  elder_terms::FileTransferProgress final_progress;
+  elder_terms::FileTransferRequest request;
+  request.direction = elder_terms::FileTransferDirection::receive;
+  request.source_paths = {"/bundle"};
+  request.destination_directory = root.string();
+  request.callbacks.progress = [&final_progress](const elder_terms::FileTransferProgress &progress) {
+    final_progress = progress;
+  };
+  auto pending = elder_terms::run_file_transfer_async(client, std::move(request), {});
+  co_await pending;
+  const std::optional<std::uint64_t> total = final_progress.total_bytes;
+  expect_true(!total && final_progress.transferred_bytes == 2 && final_progress.completed_items == 3,
+              "An unrepresentable recursive total must remain unknown instead of wrapping to zero");
+}
+
+static cardio::promise<elder_terms::FileTransferConflictAction>
+overwrite_local_commit_conflict(const elder_terms::FileTransferConflict &,
+                                cardio::cancellation cancellation) {
+  cancellation.throw_if_cancellation_requested();
+  co_return elder_terms::FileTransferConflictAction::overwrite;
+}
+
+static cardio::promise<void> test_failed_local_commit_preserves_completed_file() {
+  const auto root = test_root_directory() / "failed-local-commit";
+  std::filesystem::create_directories(root);
+  const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+  const auto destination = root / "retained.txt";
+  write_file(destination, "completed local content");
+  auto client = std::make_shared<FakeSftpClient>();
+  client->add_directory("/");
+  client->add_file("/retained.txt", "replacement download");
+  bool removed_temporary = false;
+  client->before_read_close = [&] {
+    // A concurrent cleanup removes the incomplete local download before commit.
+    // The old completed destination must survive the resulting move failure.
+    for (const auto &entry : std::filesystem::directory_iterator(root)) {
+      if (entry.path() != destination) {
+        expect_true(std::filesystem::remove(entry.path()), "Concurrent cleanup must remove the pending download");
+        removed_temporary = true;
+      }
+    }
+  };
+  elder_terms::FileTransferRequest request;
+  request.direction = elder_terms::FileTransferDirection::receive;
+  request.source_paths = {"/retained.txt"};
+  request.destination_directory = root.string();
+  request.callbacks.conflict = overwrite_local_commit_conflict;
+  bool failed = false;
+  try { co_await elder_terms::run_file_transfer_async(client, std::move(request), {}); }
+  catch (const std::exception &) { failed = true; }
+  expect_true(removed_temporary && failed, "A missing completed download must fail its final commit");
+  expect_true(read_file(destination) == "completed local content",
+              "Failure of the final move must not delete the existing completed destination");
+}
+
+static cardio::promise<void> test_receive_does_not_replace_a_directory_with_a_file() {
+  const auto root = test_root_directory() / "directory-conflict";
+  const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+  std::filesystem::create_directories(root / "retained");
+  write_file(root / "retained/child.txt", "completed child");
+  auto client = std::make_shared<FakeSftpClient>();
+  client->add_directory("/");
+  client->add_file("/retained", "replacement file");
+  elder_terms::FileTransferRequest request;
+  request.direction = elder_terms::FileTransferDirection::receive;
+  request.source_paths = {"/retained"};
+  request.destination_directory = root.string();
+  request.callbacks.conflict = overwrite_local_commit_conflict;
+  bool failed = false;
+  try {
+    auto pending = elder_terms::run_file_transfer_async(client, std::move(request), {});
+    co_await pending;
+  } catch (const std::exception &) { failed = true; }
+  expect_true(failed && std::filesystem::is_directory(root / "retained") &&
+              read_file(root / "retained/child.txt") == "completed child",
+              "A regular-file commit must preserve a conflicting directory and its completed children");
+}
+
 static cardio::promise<void> test_rejects_parallel_bulk_transfer() {
   auto client = std::make_shared<FakeSftpClient>();
   client->add_directory("/");
@@ -704,10 +822,21 @@ int main() {
   std::exception_ptr error;
   auto task_body = [&]() -> cardio::promise<void> {
     try {
-      co_await test_recursive_send_preserves_links_metadata_and_recovers();
-      co_await test_recursive_receive_preserves_links_and_metadata();
-      co_await test_cancellation_removes_remote_temporary_file();
-      co_await test_rejects_parallel_bulk_transfer();
+      std::string failures;
+      for (const auto &[name, run] : std::vector<std::pair<const char *, cardio::promise<void>(*)()>>{
+          {"test_receive_preserves_unknown_aggregate_size", test_receive_preserves_unknown_aggregate_size},
+          {"test_receive_reports_unrepresentable_total_as_unknown", test_receive_reports_unrepresentable_total_as_unknown},
+          {"test_receive_does_not_replace_a_directory_with_a_file", test_receive_does_not_replace_a_directory_with_a_file},
+          {"test_failed_local_commit_preserves_completed_file", test_failed_local_commit_preserves_completed_file},
+          {"test_recursive_send_preserves_links_metadata_and_recovers", test_recursive_send_preserves_links_metadata_and_recovers},
+          {"test_recursive_receive_preserves_links_and_metadata", test_recursive_receive_preserves_links_and_metadata},
+          {"test_cancellation_removes_remote_temporary_file", test_cancellation_removes_remote_temporary_file},
+          {"test_rejects_parallel_bulk_transfer", test_rejects_parallel_bulk_transfer},
+      }) {
+        try { co_await run(); }
+        catch (const std::exception &failure) { failures += std::string(name) + ": " + failure.what() + "\n"; }
+      }
+      if (!failures.empty()) throw std::runtime_error(failures);
     } catch (...) {
       error = std::current_exception();
     }

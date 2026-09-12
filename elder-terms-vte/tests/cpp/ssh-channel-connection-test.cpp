@@ -986,6 +986,15 @@ static ChildServer start_server(const ServerOptions &options) {
   };
 }
 
+static std::string prompt_sequence(const std::vector<elder_terms::SshUserPromptKind> &prompts) {
+  std::string result;
+  for (const auto prompt : prompts) {
+    if (!result.empty()) result += ',';
+    result += std::to_string(static_cast<int>(prompt));
+  }
+  return result;
+}
+
 static int wait_for_server(ChildServer *server) {
   if (server->release_fd >= 0) {
     (void)::close(server->release_fd);
@@ -1131,6 +1140,7 @@ exercise_sftp_client_async(
 static int run_client_case(const ServerOptions &server_options,
                            const ClientCase &client_case) {
   ChildServer server = start_server(server_options);
+  std::cout << "SSH case " << auth_mode_name(client_case.auth_mode) << " port=" << server.port << std::endl;
   if (!client_case.conflicting_host_public_key.empty()) {
     const std::filesystem::path target_file =
         client_case.conflicting_known_hosts_file.empty()
@@ -1373,7 +1383,11 @@ static int run_client_case(const ServerOptions &server_options,
               "SSH test server validation failed with code " +
                   std::to_string(server_result));
   expect_true(prompts == client_case.expected_prompts,
-              "SSH user prompt sequence did not match");
+              "SSH user prompt sequence did not match: mode=" +
+                  std::string(auth_mode_name(client_case.auth_mode)) +
+                  " port=" + std::to_string(server.port) +
+                  " expected=[" + prompt_sequence(client_case.expected_prompts) +
+                  "] actual=[" + prompt_sequence(prompts) + "]");
   expect_true(
       phases ==
           std::vector<elder_terms::TerminalSessionConnectionPhase>{

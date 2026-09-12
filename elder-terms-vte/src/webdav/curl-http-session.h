@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,13 @@ struct CurlHttpResult {
   /** Diagnostic without outgoing credentials. */
   std::string error;
 };
+
+/**
+ * Describes a failed HTTP result without including outgoing credentials.
+ * @param result Completed transport and HTTP status.
+ * @returns Exception with the status and supported failure category.
+ */
+std::runtime_error webdav_http_error(const CurlHttpResult &result);
 
 /**
  * Creates an HTTP transport without starting a worker or network request.

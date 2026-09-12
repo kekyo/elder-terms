@@ -227,6 +227,48 @@ describe('WebDAV window', () => {
         await waitForResult(async () => {
           expect(await remotePath.text()).toBe('/');
         });
+
+        await waitForResult(async () => {
+          expect(await tree.getRowCount()).toBe(4);
+        });
+        for (let row = 0; row < 4; row += 1) await tree.selectRow(row);
+        expect(await tree.selectedRows()).toHaveLength(4);
+        const firstCell = await tree.cellAt(0, 0);
+        if (firstCell === undefined)
+          throw new Error('Remote collection has no selectable row');
+        const cellBounds = (await firstCell.capture()).bounds;
+        await app.input.moveMouseTo(
+          Math.round(cellBounds.x + cellBounds.width / 2),
+          Math.round(cellBounds.y + cellBounds.height / 2)
+        );
+        await app.input.setMouseButton('right', true);
+        await app.input.setMouseButton('right', false);
+        const receive = expectElementKind(
+          await app.getById('file_transfer_receive_item'),
+          'menuItem'
+        );
+        await waitForResult(async () => {
+          expect((await receive.info()).states).toContain('showing');
+        });
+        await receive.click();
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Received 4 items');
+          expect(await readFile(join(local, 'hello.txt'), 'utf8')).toBe(
+            'Hello DAV!\r\n'
+          );
+          expect(await readFile(join(local, '資料 #+%.txt'))).toHaveLength(0);
+          expect(await readFile(join(local, 'unknown.txt'), 'utf8')).toBe(
+            'unknown length\n'
+          );
+          expect(await readFile(join(local, 'nested/child.txt'), 'utf8')).toBe(
+            'child\n'
+          );
+        });
       } finally {
         try {
           await evidence.log('WebDAV requests', server.requests);

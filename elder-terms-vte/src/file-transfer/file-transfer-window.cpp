@@ -701,12 +701,12 @@ static void update_file_transfer_progress(
   gtk_label_set_text(GTK_LABEL(window->transfer_label),
                      label.c_str());
 
-  if (progress.total_bytes > 0) {
+  if (progress.total_bytes && *progress.total_bytes > 0) {
     stop_file_transfer_pulse(window);
     const double fraction = std::min(
         1.0,
         static_cast<double>(progress.transferred_bytes) /
-            static_cast<double>(progress.total_bytes));
+            static_cast<double>(*progress.total_bytes));
     gtk_progress_bar_set_fraction(
         GTK_PROGRESS_BAR(window->transfer_progress), fraction);
   } else if (progress.total_items > 0) {

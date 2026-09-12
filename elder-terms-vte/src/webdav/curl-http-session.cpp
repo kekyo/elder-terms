@@ -15,6 +15,26 @@ namespace elder_terms {
 
 using HttpClock = std::chrono::steady_clock;
 
+std::runtime_error webdav_http_error(const CurlHttpResult &result) {
+  const char *reason = curl_easy_strerror(result.code);
+  if (result.code == CURLE_OK) {
+    switch (result.status) {
+    case 401: reason = "Authentication was rejected"; break;
+    case 403: reason = "Access denied"; break;
+    case 404: reason = "Resource not found"; break;
+    case 405: case 501: reason = "The server does not support this WebDAV operation"; break;
+    case 409: reason = "Parent collection or resource conflict"; break;
+    case 412: reason = "Destination exists or a request precondition failed"; break;
+    case 423: reason = "Resource is locked"; break;
+    case 507: reason = "Insufficient server storage"; break;
+    default: reason = "Unexpected server response"; break;
+    }
+  }
+  return std::runtime_error("WebDAV request failed (HTTP " + std::to_string(result.status) +
+      ", curl " + std::to_string(result.code) + "): " + reason);
+}
+
+
 static void require_curl(CURLcode code) {
   if (code != CURLE_OK) throw std::runtime_error(curl_easy_strerror(code));
 }

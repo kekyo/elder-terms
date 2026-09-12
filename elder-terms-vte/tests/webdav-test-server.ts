@@ -24,6 +24,25 @@ export const createWebdavTestServer = async (
   const held = new Promise<void>((resolve) => {
     announceHeld = resolve;
   });
+  const files = new Map<
+    string,
+    { content: Buffer; reportedSize: number | undefined }
+  >([
+    [
+      '/dav/hello.txt',
+      { content: Buffer.from('Hello DAV!\r\n'), reportedSize: 12 },
+    ],
+    ['/dav/資料 #+%.txt', { content: Buffer.alloc(0), reportedSize: 0 }],
+    [
+      '/dav/unknown.txt',
+      { content: Buffer.from('unknown length\n'), reportedSize: undefined },
+    ],
+    [
+      '/dav/nested/child.txt',
+      { content: Buffer.from('child\n'), reportedSize: 6 },
+    ],
+  ]);
+  const largeSize = 40 * 1024 * 1024 + 13;
   const listener: RequestListener = (request, response) => {
     const method = request.method ?? '';
     const url = request.url ?? '';
@@ -65,6 +84,7 @@ export const createWebdavTestServer = async (
       response.end();
       return;
     }
+    if (url === '/dav/idle') return;
     if (url === '/dav/hold') {
       announceHeld();
       return;
@@ -96,10 +116,83 @@ export const createWebdavTestServer = async (
       response.end();
       return;
     }
+    let decodedPath: string;
+    try {
+      decodedPath = decodeURIComponent(url);
+    } catch {
+      response.writeHead(400);
+      response.end();
+      return;
+    }
+    const file = files.get(decodedPath);
+    if (method === 'GET') {
+      if (decodedPath === '/dav/get-redirect') {
+        response.writeHead(307, { Location: '/dav/hello.txt' });
+        response.end('redirect body');
+        return;
+      }
+      if (decodedPath === '/dav/get-outside') {
+        response.writeHead(302, { Location: '/outside/hello.txt' });
+        response.end();
+        return;
+      }
+      if (decodedPath === '/dav/partial.bin') {
+        response.writeHead(206, {
+          'Content-Range': 'bytes 0-3/16',
+          'Content-Length': 4,
+        });
+        response.end('part');
+        return;
+      }
+      if (file !== undefined) {
+        response.writeHead(
+          200,
+          file.reportedSize === undefined
+            ? {}
+            : { 'Content-Length': file.content.length }
+        );
+        if (file.reportedSize === undefined) response.write(file.content);
+        response.end(
+          file.reportedSize === undefined ? undefined : file.content
+        );
+      } else if (decodedPath === '/dav/large.bin') {
+        response.writeHead(200, { 'Content-Length': largeSize });
+        const chunk = Buffer.alloc(64 * 1024);
+        for (let index = 0; index < chunk.length; index += 1)
+          chunk[index] = (index * 31 + 7) & 255;
+        let remaining = largeSize;
+        const pump = () => {
+          while (!response.destroyed && remaining > 0) {
+            const count = Math.min(remaining, chunk.length);
+            remaining -= count;
+            if (!response.write(chunk.subarray(0, count))) {
+              response.once('drain', pump);
+              return;
+            }
+          }
+          if (!response.destroyed) response.end();
+        };
+        pump();
+      } else if (decodedPath === '/dav/truncated.bin') {
+        response.writeHead(200, { 'Content-Length': 262144 });
+        response.write(Buffer.alloc(1024, 23), () => response.destroy());
+      } else if (decodedPath === '/dav/held.bin') {
+        response.writeHead(200, { 'Content-Length': 1048576 });
+        response.write(Buffer.alloc(1024, 42));
+      } else {
+        response.writeHead(404);
+        response.end();
+      }
+      return;
+    }
     const collectionPath = url.replace(/\/+$/, '');
     if (
       method !== 'PROPFIND' ||
-      !['/dav', '/dav/nested'].includes(collectionPath)
+      (!['/dav', '/dav/nested'].includes(collectionPath) &&
+        file === undefined &&
+        !['/dav/large.bin', '/dav/truncated.bin', '/dav/held.bin'].includes(
+          decodedPath
+        ))
     ) {
       response.writeHead(404);
       response.end();
@@ -118,6 +211,30 @@ export const createWebdavTestServer = async (
         : `<d:getcontentlength>${size}</d:getcontentlength>`) +
       `<d:getlastmodified>Wed, 01 Jan 2025 00:00:00 GMT</d:getlastmodified>` +
       `</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`;
+    if (
+      file !== undefined ||
+      ['/dav/large.bin', '/dav/truncated.bin', '/dav/held.bin'].includes(
+        decodedPath
+      )
+    ) {
+      const size =
+        file !== undefined
+          ? file.reportedSize
+          : decodedPath === '/dav/large.bin'
+            ? largeSize
+            : decodedPath === '/dav/held.bin'
+              ? 1048576
+              : 262144;
+      response.writeHead(207, {
+        'Content-Type': 'application/xml; charset=utf-8',
+      });
+      response.end(
+        '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">' +
+          entry(url, false, size) +
+          '</d:multistatus>'
+      );
+      return;
+    }
     const children =
       request.headers.depth === '0'
         ? ''
