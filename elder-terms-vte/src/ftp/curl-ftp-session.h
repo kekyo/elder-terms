@@ -51,7 +51,7 @@ struct CurlFtpResult {
   /** Login directory reported by libcurl. */
   std::string entry_path;
   /** Unapproved certificate failure that ended the handshake. */
-  std::optional<FtpCertificateFailure> certificate_failure{};
+  std::optional<TlsCertificateFailure> certificate_failure{};
   /** Current operation failed, but its approved certificate permits a fresh next operation. */
   bool certificate_accepted = false;
 };

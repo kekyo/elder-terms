@@ -1,4 +1,5 @@
-#include "../../src/ftp/ftps-certificate.h"
+#include "../../src/tls/certificate-policy.h"
+#include "../../src/ftp/ftp-client.h"
 
 #include <cstddef>
 #include <iostream>
@@ -26,7 +27,8 @@ static void verify(int argc, char **argv) {
       .data_connection_mode = elder_terms::FtpDataConnectionMode::passive,
       .local_directory = {}, .remote_directory = {},
       .tls_mode = implicit ? elder_terms::FtpTlsMode::implicit_tls : elder_terms::FtpTlsMode::explicit_tls};
-  const auto policy = prompt ? elder_terms::create_ftp_certificate_policy(connection) : nullptr;
+  const auto policy = prompt ? elder_terms::create_tls_certificate_policy(connection.address, connection.port,
+        connection.tls_mode == elder_terms::FtpTlsMode::implicit_tls ? "ftps" : "ftp", 2) : nullptr;
   // The dotted numeric DNS name need not exist in external DNS. Only this test
   // handle maps it to the fixture; URL identity and TLS verification stay intact.
   const auto mapping = connection.address + ':' + argv[3] + ":127.0.0.1";
@@ -51,7 +53,7 @@ static void verify(int argc, char **argv) {
   require(curl_easy_setopt(easy.get(), CURLOPT_TIMEOUT, 60L));
   require(curl_easy_setopt(easy.get(), CURLOPT_WRITEFUNCTION, discard_listing));
   if (policy) {
-    require(curl_easy_setopt(easy.get(), CURLOPT_SSL_CTX_FUNCTION, elder_terms::configure_ftp_certificate_context));
+    require(curl_easy_setopt(easy.get(), CURLOPT_SSL_CTX_FUNCTION, elder_terms::configure_tls_certificate_context));
     require(curl_easy_setopt(easy.get(), CURLOPT_SSL_CTX_DATA, policy.get()));
   }
   const auto result = curl_easy_perform(easy.get());

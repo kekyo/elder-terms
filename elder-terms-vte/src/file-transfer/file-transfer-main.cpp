@@ -26,6 +26,7 @@
 #include "file-hash.h"
 #include "file-transfer-paths.h"
 #include "file-transfer-window.h"
+#include "file-transfer-certificate-prompt.h"
 
 struct SftpApplicationState {
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
@@ -461,45 +462,16 @@ prompt_ftp_credentials_async(FtpApplicationState *state,
   }
 }
 
-static std::string certificate_display_text(const std::string &text) {
-  if (text.empty()) return _("Unavailable");
-  auto *valid = g_utf8_make_valid(text.data(), text.size());
-  std::string result;
-  unsigned count = 0;
-  for (const char *cursor = valid; *cursor; cursor = g_utf8_next_char(cursor), ++count) {
-    if (count == 256) { result += "…"; break; }
-    if (count && count % 48 == 0) result += '\n';
-    result.append(cursor, g_utf8_next_char(cursor) - cursor);
-  }
-  g_free(valid);
-  return result;
-}
-
 static cardio::promise<bool> confirm_ftp_certificate_async(
-    FtpApplicationState *state, const elder_terms::FtpCertificateFailure &failure,
+    FtpApplicationState *state, const elder_terms::TlsCertificateFailure &failure,
     cardio::cancellation cancellation) {
-  std::string message = _("The server certificate could not be validated.");
-  message += "\n\n" + certificate_display_text(failure.address) + ":" + std::to_string(failure.port);
-  message += "\n";
-  message += failure.channel == elder_terms::FtpTlsChannel::control ? _("Control connection") : _("Data connection");
-  message += "\n" + certificate_display_text(failure.reason);
-  message += "\n\n";
-  message += _("Allow only this certificate and validation failure for this connection? Exceptions are not saved.");
-  std::string details = std::string(_("Subject:")) + " " + certificate_display_text(failure.subject);
-  details += "\n" + std::string(_("Issuer:")) + " " + certificate_display_text(failure.issuer);
-  details += "\n" + std::string(_("Valid from:")) + " " + certificate_display_text(failure.not_before);
-  details += "\n" + std::string(_("Valid until:")) + " " + certificate_display_text(failure.not_after);
-  details += "\nSHA-256:\n" + failure.sha256.substr(0, 48) + "\n" + failure.sha256.substr(48);
-  message += "\n\n" + details;
-  elder_terms::InlinePromptRequest request{
-      .title = _("FTPS certificate validation failed"), .message = std::move(message),
-      .accept_label = _("Allow for this connection"),
-      .cancel_label = _("Abort connection"), .input_required = false, .echo = false,
-      .cancel_visible = true, .default_cancel = true};
-  auto pending = elder_terms::confirm_file_transfer_window_async(
-      state->window, std::move(request), cancellation);
-  const auto response = co_await pending;
-  if (!response.accepted || cancellation.is_cancellation_requested() || state->shutting_down) {
+  auto pending = elder_terms::confirm_file_transfer_certificate_async(
+      state->window, failure, _("FTPS certificate validation failed"),
+      failure.identity_slot == elder_terms::ftp_control_certificate_identity
+          ? _("Control connection") : _("Data connection"),
+      cancellation);
+  const bool accepted = co_await pending;
+  if (!accepted || cancellation.is_cancellation_requested() || state->shutting_down) {
     stop_ftp_application(state);
     co_return false;
   }
@@ -527,7 +499,7 @@ start_ftp_application_async(FtpApplicationState *state) {
       elder_terms::FtpClientOpenOptions options{
           .connection = std::move(connection),
           .password = std::move(credentials->password),
-          .confirm_certificate = [state](const elder_terms::FtpCertificateFailure &failure, cardio::cancellation cancellation) {
+          .confirm_certificate = [state](const elder_terms::TlsCertificateFailure &failure, cardio::cancellation cancellation) {
             return confirm_ftp_certificate_async(state, failure, cancellation);
           },
       };

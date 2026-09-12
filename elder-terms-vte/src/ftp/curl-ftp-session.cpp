@@ -1,5 +1,5 @@
 #include "curl-ftp-session.h"
-#include "ftps-certificate.h"
+#include "../tls/certificate-policy.h"
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -39,7 +39,7 @@ static void require_curl(CURLcode code) {
 
 struct CurlOperation {
   CurlFtpRequest request;
-  std::optional<FtpCertificateFailure> certificate_approval;
+  std::optional<TlsCertificateFailure> certificate_approval;
   cardio::cancellation cancellation;
   cardio::promise_source<CurlFtpResult> completion;
   std::exception_ptr callback_failure;
@@ -82,7 +82,7 @@ static long curl_tls_version(FtpTlsVersion version, bool maximum) {
 // requests and wakes the condition variable; it never accesses an easy handle.
 struct CurlWorker {
   FtpClientOpenOptions options;
-  std::shared_ptr<FtpCertificatePolicy> certificates;
+  std::shared_ptr<TlsCertificatePolicy> certificates;
   std::mutex mutex;
   std::condition_variable changed;
   std::uint64_t revision = 0;
@@ -97,7 +97,8 @@ struct CurlWorker {
   explicit CurlWorker(FtpClientOpenOptions options) : options(std::move(options)) {
     if (this->options.connection.tls_mode != FtpTlsMode::none &&
         this->options.connection.certificate_error_action == FtpCertificateErrorAction::prompt)
-      certificates = create_ftp_certificate_policy(this->options.connection);
+      certificates = create_tls_certificate_policy(this->options.connection.address, this->options.connection.port,
+          this->options.connection.tls_mode == FtpTlsMode::implicit_tls ? "ftps" : "ftp", 2);
   }
 
   void wake() {
@@ -150,7 +151,7 @@ struct CurlWorker {
       // An accepted FTP socket is the active-mode data connection. Its TLS
       // handshake need not wait for the preliminary transfer response.
       if (worker->certificates && purpose == CURLSOCKTYPE_ACCEPT)
-        worker->certificates->channel = FtpTlsChannel::data;
+        worker->certificates->identity_slot = ftp_data_certificate_identity;
       worker->open_sockets.insert(fd);
       return CURL_SOCKOPT_OK;
     } catch (...) {
@@ -263,7 +264,7 @@ struct CurlWorker {
         // EPSV/PASV response precedes creation of that data connection.
         if (line.starts_with("227 ") || line.starts_with("229 ") ||
             line.starts_with("150 ") || line.starts_with("125 "))
-          worker->certificates->channel = FtpTlsChannel::data;
+          worker->certificates->identity_slot = ftp_data_certificate_identity;
       }
       if (op && op->request.header) op->request.header({bytes, size * count});
       return size * count;
@@ -318,8 +319,8 @@ struct CurlWorker {
       if (certificates) {
         certificates->failure.reset();
         certificates->callback_failure = nullptr;
-        certificates->channel = FtpTlsChannel::control;
-        if (op->certificate_approval) approve_ftp_certificate_failure(*certificates, *op->certificate_approval);
+        certificates->identity_slot = ftp_control_certificate_identity;
+        if (op->certificate_approval) approve_tls_certificate_failure(*certificates, *op->certificate_approval);
       }
       curl_easy_reset(easy);
       require_curl(curl_easy_setopt(easy, CURLOPT_URL, op->request.url.c_str()));
@@ -351,7 +352,7 @@ struct CurlWorker {
         if (certificates) {
           // The callback replaces hostname checking and retains peer checking.
           // This worker and its connection cache never change endpoint/policy.
-          require_curl(curl_easy_setopt(easy, CURLOPT_SSL_CTX_FUNCTION, configure_ftp_certificate_context));
+          require_curl(curl_easy_setopt(easy, CURLOPT_SSL_CTX_FUNCTION, configure_tls_certificate_context));
           require_curl(curl_easy_setopt(easy, CURLOPT_SSL_CTX_DATA, certificates.get()));
         }
         auto ciphers = options.connection.tls_cipher_list;
@@ -528,7 +529,7 @@ class CurlFtpSessionAdapter final : public CurlFtpSession {
   cardio::primitives::mutex stop_mutex;
   bool stopped = false;
   cardio::cancellation_source confirmation_stop;
-  std::optional<FtpCertificateFailure> pending_approval;
+  std::optional<TlsCertificateFailure> pending_approval;
 
 public:
   explicit CurlFtpSessionAdapter(std::shared_ptr<CurlWorker> worker)
@@ -577,7 +578,7 @@ public:
       cancellation.throw_if_cancellation_requested();
       if (!accepted) co_return result;
       pending_approval = result.certificate_failure;
-      if (request.initial_authentication && result.certificate_failure->channel == FtpTlsChannel::control) continue;
+      if (request.initial_authentication && result.certificate_failure->identity_slot == ftp_control_certificate_identity) continue;
       result.certificate_accepted = true;
       result.error += "; certificate accepted for this connection; the failed operation was not retried";
       co_return result;

@@ -124,7 +124,7 @@ executable(
     'src/inline-prompt.cpp',
     'src/launch-options.cpp',
     'src/ftp/ftp-client.cpp',
-    'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
     'src/ftp/ftp-metadata.cpp',
     'src/webdav/webdav-application.cpp',
     'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
@@ -137,6 +137,7 @@ executable(
     'src/file-transfer/ssh-file-hash.cpp',
     'src/file-transfer/file-transfer-engine.cpp',
     'src/file-transfer/file-transfer-main.cpp',
+    'src/file-transfer/file-transfer-certificate-prompt.cpp',
     'src/file-transfer/file-transfer-paths.cpp',
     'src/file-transfer/file-transfer-window.cpp',
     'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
@@ -218,7 +219,7 @@ curl_ftp_session_test = executable(
   'curl-ftp-session-test',
   [
     'tests/cpp/curl-ftp-session-test.cpp',
-    'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
   ],
   dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
 )
@@ -236,7 +237,7 @@ ftp_test_server = executable(
 ftps_client_test = executable(
   'ftps-client-test',
   ['tests/cpp/ftps-client-test.cpp', 'src/ftp/ftp-client.cpp',
-   'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp', 'src/ftp/ftp-metadata.cpp'],
+   'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp', 'src/ftp/ftp-metadata.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
 )
 
@@ -247,7 +248,7 @@ curl_ftp_client_test = executable(
   [
     'tests/cpp/curl-ftp-client-test.cpp',
     'src/ftp/ftp-client.cpp',
-    'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
     'src/ftp/ftp-metadata.cpp',
   ],
   include_directories: include_directories('src/ftp'),
@@ -269,7 +270,7 @@ curl_ftp_stream_test = executable(
   [
     'tests/cpp/curl-ftp-stream-test.cpp',
     'src/ftp/ftp-client.cpp',
-    'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
     'src/ftp/ftp-metadata.cpp',
     'src/file-transfer/file-transfer-engine.cpp',
   ],
@@ -293,7 +294,7 @@ ftp_client_lifetime_test = executable(
   [
     'tests/cpp/ftp-client-lifetime-test.cpp',
     'src/ftp/ftp-client.cpp',
-    'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
     'src/ftp/ftp-metadata.cpp',
   ],
   include_directories: include_directories('src/ftp'),
@@ -307,13 +308,13 @@ endforeach
 
 ftps_certificate_policy_test = executable(
   'ftps-certificate-policy-test',
-  ['tests/cpp/ftps-certificate-policy-test.cpp', 'src/ftp/ftps-certificate.cpp'],
+  ['tests/cpp/ftps-certificate-policy-test.cpp', 'src/tls/certificate-policy.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
   install: false)
 
 ftps_hostname_test = executable(
   'ftps-hostname-test',
-  ['tests/cpp/ftps-hostname-test.cpp', 'src/ftp/ftps-certificate.cpp'],
+  ['tests/cpp/ftps-hostname-test.cpp', 'src/tls/certificate-policy.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
   install: false)
 
@@ -332,7 +333,7 @@ ftp_runtime_capabilities_test = executable(
   [
     'tests/cpp/ftp-runtime-capabilities-test.cpp',
     'src/ftp/ftp-client.cpp',
-    'src/ftp/curl-ftp-session.cpp', 'src/ftp/ftps-certificate.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
     'src/ftp/ftp-metadata.cpp',
   ],
   include_directories: include_directories('src/ftp'),

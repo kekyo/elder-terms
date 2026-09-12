@@ -26,13 +26,13 @@ static cardio::promise<void> run_async(
   bool succeeded = false;
   try {
     auto opening = elder_terms::open_ftp_client_async({.connection = std::move(connection), .password = "secret",
-         .confirm_certificate = [&](const elder_terms::FtpCertificateFailure &failure, cardio::cancellation cancellation) -> cardio::promise<bool> {
+         .confirm_certificate = [&](const elder_terms::TlsCertificateFailure &failure, cardio::cancellation cancellation) -> cardio::promise<bool> {
            expect(std::this_thread::get_id() == caller, "Confirmation must run on the caller dispatcher");
            cancellation.throw_if_cancellation_requested();
            expect(failure.sha256.size() == 95 && !failure.subject.empty() && !failure.issuer.empty() &&
                   !failure.reason.empty() && !failure.not_before.empty() && !failure.not_after.empty(), "Confirmation must contain copied certificate details");
            ++confirmations;
-           std::cout << "CONFIRM " << (failure.channel == elder_terms::FtpTlsChannel::data ? "data" : "control") << " " << failure.validation_code << " " << failure.sha256 << std::endl;
+           std::cout << "CONFIRM " << (failure.identity_slot == elder_terms::ftp_data_certificate_identity ? "data" : "control") << " " << failure.validation_code << " " << failure.sha256 << std::endl;
            co_return approve;
          }}, {});
     client = co_await opening;
