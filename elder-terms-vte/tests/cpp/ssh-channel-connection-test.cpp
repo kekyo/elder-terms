@@ -1440,7 +1440,27 @@ static void test_supported_authentication_and_shell_channel() {
       root / ".ssh" / "id_encrypted";
   const std::filesystem::path encrypted_public_key =
       root / ".ssh" / "id_encrypted.pub";
-  generate_key_pair(host_private_key, host_public_key, nullptr);
+  // This public test-only key has a fingerprint walk that visits an ordinary
+  // cell 15 times. OpenSSH must show its maximum density, never another S.
+  {
+    std::ofstream key_file(host_private_key);
+    key_file << R"KEY(-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACCYJQ25JId2m4zDE80rGUuf1+O2/zMcuQRzx7dlpuy0bwAAAKDl8GIt5fBi
+LQAAAAtzc2gtZWQyNTUxOQAAACCYJQ25JId2m4zDE80rGUuf1+O2/zMcuQRzx7dlpuy0bw
+AAAEA8cCQePgwL2LLorJKJb/mbOaBviLYfCkaS2lc+lgrnvZglDbkkh3abjMMTzSsZS5/X
+47b/Mxy5BHPHt2Wm7LRvAAAAGHJhbmRvbS1hcnQtYm91bmRhcnktdGVzdAECAwQF
+-----END OPENSSH PRIVATE KEY-----
+)KEY";
+    expect_true(key_file.good(), "failed to write the random-art regression key");
+  }
+  {
+    std::ofstream key_file(host_public_key);
+    key_file << "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJglDbkkh3abjMMTzSsZS5/X47b/Mxy5BHPHt2Wm7LRv random-art-boundary-test\n";
+    expect_true(key_file.good(), "failed to write the random-art regression public key");
+  }
+  expect_true(::chmod(host_private_key.c_str(), S_IRUSR | S_IWUSR) == 0,
+              "failed to protect the random-art regression key");
   generate_key_pair(changed_host_private_key, changed_host_public_key,
                     nullptr);
   generate_key_pair(plain_private_key, plain_public_key, nullptr);

@@ -466,7 +466,8 @@ static std::string host_key_random_art(ssh_key key,
                             : (x == 0 ? 0 : x - 1);
       y = (input & 2U) != 0 ? std::min(y + 1, field_height - 1)
                             : (y == 0 ? 0 : y - 1);
-      if (field[y][x] < sizeof(symbols) - 3) {
+      // Exclude the terminating NUL and the reserved start/end markers.
+      if (field[y][x] < sizeof(symbols) - 4) {
         ++field[y][x];
       }
       input >>= 2U;
