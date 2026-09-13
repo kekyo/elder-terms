@@ -1,3 +1,4 @@
+#include <elder-terms/modal-dialog.h>
 #include <algorithm>
 #include <clocale>
 #include <cstdarg>
@@ -133,8 +134,7 @@ static void show_external_command_error(ApplicationState *state,
 
   GtkWidget *dialog = gtk_message_dialog_new(
       GTK_WINDOW(state->window),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
-                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      static_cast<GtkDialogFlags>(0),
       GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s", dialog_title);
   gtk_window_set_title(GTK_WINDOW(dialog), dialog_title);
   gestament_gtk_assign_accessible_id(dialog, accessible_id);
@@ -146,7 +146,7 @@ static void show_external_command_error(ApplicationState *state,
                                            detail.c_str());
   g_signal_connect(dialog, "response",
                    G_CALLBACK(on_external_command_error_response), nullptr);
-  gtk_widget_show(dialog);
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(state->window));
 }
 
 static bool spawn_external_command(ApplicationState *state,
@@ -304,18 +304,6 @@ static std::string format_translated_string(const char *format, ...) {
   const std::string result = formatted == nullptr ? std::string() : formatted;
   g_free(formatted);
   return result;
-}
-
-static void update_parent_window_sensitivity(ApplicationState *state) {
-  if (state == nullptr || state->window == nullptr) {
-    return;
-  }
-  gtk_widget_set_sensitive(
-      state->window,
-      state->settings_dialog == nullptr &&
-              state->transfer_file_dialog == nullptr
-          ? TRUE
-          : FALSE);
 }
 
 static void maybe_shutdown_application(ApplicationState *state) {
@@ -523,8 +511,7 @@ static void update_application_terminal_presentation(
 
   const bool terminal_interactive =
       state->connection_active && !state->transfer_active &&
-      state->settings_dialog == nullptr &&
-      state->transfer_file_dialog == nullptr;
+      !elder_terms::has_modal_dialog(state->window);
   elder_terms::set_main_window_terminal_interactive(
       state->main_window, terminal_interactive);
   if (terminal_interactive) {
@@ -534,8 +521,11 @@ static void update_application_terminal_presentation(
   elder_terms::set_main_window_transfer_button_sensitive(
       state->main_window,
       state->connection_active && !state->transfer_active &&
-          state->settings_dialog == nullptr &&
-          state->transfer_file_dialog == nullptr);
+          !elder_terms::has_modal_dialog(state->window));
+}
+
+static void on_parent_sensitivity_changed(GObject *, GParamSpec *, gpointer data) {
+  update_application_terminal_presentation(static_cast<ApplicationState *>(data));
 }
 
 static void update_application_session_identity(ApplicationState *state) {
@@ -625,37 +615,16 @@ static void restore_terminal_focus(ApplicationState *state) {
     return;
   }
 
-  gtk_window_present_with_time(GTK_WINDOW(state->window),
-                               gtk_get_current_event_time());
-  elder_terms::focus_main_window_terminal_if_interactive(
-      state->main_window);
-}
-
-static bool present_open_child_window(ApplicationState *state) {
-  if (state == nullptr) {
-    return false;
+  elder_terms::present_modal_dialog(state->window);
+  if (!elder_terms::has_modal_dialog(state->window)) {
+    elder_terms::focus_main_window_terminal_if_interactive(state->main_window);
   }
-
-  GtkWidget *child = state->settings_dialog;
-  if (child == nullptr) {
-    child = state->transfer_file_dialog;
-  }
-  if (child == nullptr) {
-    return false;
-  }
-
-  gtk_window_present_with_time(GTK_WINDOW(child),
-                               gtk_get_current_event_time());
-  return true;
 }
 
 static gboolean on_main_window_focus_in(
     GtkWidget *, GdkEventFocus *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
-  if (present_open_child_window(state)) {
-    return GDK_EVENT_STOP;
-  }
-  if (state != nullptr) {
+  if (state != nullptr && !elder_terms::has_modal_dialog(state->window)) {
     elder_terms::focus_main_window_terminal_if_interactive(
         state->main_window);
   }
@@ -691,8 +660,7 @@ static void on_settings_dialog_destroy(GtkWidget *, gpointer user_data) {
     state->settings_widget = nullptr;
   }
   state->settings_dialog = nullptr;
-  update_parent_window_sensitivity(state);
-  update_application_terminal_presentation(state);
+
   restore_terminal_focus(state);
 }
 
@@ -848,7 +816,7 @@ static void update_runtime_terminal_display_settings(
 
 static void open_settings_dialog(ApplicationState *state) {
   if (state->settings_dialog != nullptr) {
-    gtk_window_present(GTK_WINDOW(state->settings_dialog));
+    elder_terms::present_modal_dialog(state->settings_dialog);
     return;
   }
 
@@ -862,7 +830,6 @@ static void open_settings_dialog(ApplicationState *state) {
   gtk_header_bar_set_show_close_button(
       GTK_HEADER_BAR(header_bar), TRUE);
   gtk_window_set_titlebar(GTK_WINDOW(dialog), header_bar);
-  gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(state->window));
   gtk_window_set_default_size(GTK_WINDOW(dialog), 720, 495);
 
   elder_terms::SettingsWidgetCallbacks callbacks;
@@ -899,11 +866,8 @@ static void open_settings_dialog(ApplicationState *state) {
       state->main_window, dialog, settings_root);
   g_signal_connect(dialog, "destroy",
                    G_CALLBACK(on_settings_dialog_destroy), state);
-  update_parent_window_sensitivity(state);
-  update_application_terminal_presentation(state);
-  gtk_widget_show_all(dialog);
-  gtk_window_present_with_time(GTK_WINDOW(dialog),
-                               gtk_get_current_event_time());
+
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(state->window));
 }
 
 static void on_settings_menu_item_activate(GtkMenuItem *, gpointer user_data) {
@@ -973,11 +937,6 @@ static void on_transfer_file_dialog_destroy(GtkWidget *dialog,
   }
 
   state->transfer_file_dialog = nullptr;
-  if (state->window != nullptr) {
-    update_parent_window_sensitivity(state);
-    update_application_terminal_presentation(state);
-    restore_terminal_focus(state);
-  }
 }
 
 static void on_transfer_file_dialog_response(GtkDialog *dialog,
@@ -1000,14 +959,9 @@ static void on_transfer_file_dialog_response(GtkDialog *dialog,
   if (state != nullptr &&
       state->transfer_file_dialog == GTK_WIDGET(dialog)) {
     state->transfer_file_dialog = nullptr;
-    update_parent_window_sensitivity(state);
   }
   gtk_widget_destroy(GTK_WIDGET(dialog));
 
-  if (state != nullptr && state->window != nullptr) {
-    update_application_terminal_presentation(state);
-    restore_terminal_focus(state);
-  }
   if (!uris.empty() && selected) {
     selected(std::move(uris));
     return;
@@ -1031,7 +985,7 @@ static void choose_transfer_files(
     return;
   }
   if (state->transfer_file_dialog != nullptr) {
-    gtk_window_present(GTK_WINDOW(state->transfer_file_dialog));
+    elder_terms::present_modal_dialog(state->transfer_file_dialog);
     return;
   }
 
@@ -1040,8 +994,7 @@ static void choose_transfer_files(
       GTK_FILE_CHOOSER_ACTION_OPEN, _("Cancel"), GTK_RESPONSE_CANCEL,
       _("Open"), GTK_RESPONSE_ACCEPT, nullptr);
   gestament_gtk_assign_accessible_id(dialog, "transfer_file_dialog");
-  gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
-  gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+
   gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_ACCEPT);
 
   GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
@@ -1065,10 +1018,8 @@ static void choose_transfer_files(
                    G_CALLBACK(on_transfer_file_dialog_response), state);
   g_signal_connect(dialog, "destroy",
                    G_CALLBACK(on_transfer_file_dialog_destroy), state);
-  update_parent_window_sensitivity(state);
-  update_application_terminal_presentation(state);
-  gtk_widget_show_all(dialog);
-  gtk_window_present(GTK_WINDOW(dialog));
+
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(state->window));
 }
 
 static bool start_transfer_request(ApplicationState *state,
@@ -1251,8 +1202,7 @@ static bool start_text_send_request(ApplicationState *state,
 static bool can_paste_terminal_text(const ApplicationState *state) {
   return state != nullptr && state->window != nullptr &&
          state->connection_active && !state->transfer_active &&
-         state->settings_dialog == nullptr &&
-         state->transfer_file_dialog == nullptr &&
+         !elder_terms::has_modal_dialog(state->window) &&
          elder_terms::terminal_session_supports_text_send(
              state->session_state);
 }
@@ -1260,8 +1210,7 @@ static bool can_paste_terminal_text(const ApplicationState *state) {
 static bool can_send_terminal_break(const ApplicationState *state) {
   return state != nullptr && state->window != nullptr &&
          state->connection_active && !state->transfer_active &&
-         state->settings_dialog == nullptr &&
-         state->transfer_file_dialog == nullptr &&
+         !elder_terms::has_modal_dialog(state->window) &&
          elder_terms::terminal_session_supports_break(state->session_state);
 }
 
@@ -1953,6 +1902,8 @@ int main(int argc, char **argv) {
   g_signal_connect_after(
     main_window->window, "focus-in-event",
     G_CALLBACK(on_main_window_focus_in), &app_state);
+  g_signal_connect(app_state.window, "notify::sensitive",
+      G_CALLBACK(on_parent_sensitivity_changed), &app_state);
   g_signal_connect(
     main_window->settings_menu_item, "activate",
     G_CALLBACK(on_settings_menu_item_activate), &app_state);

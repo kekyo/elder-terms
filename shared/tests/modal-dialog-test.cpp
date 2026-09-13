@@ -12,6 +12,10 @@ static void mark_destroyed(GtkWidget *, gpointer data) {
   *static_cast<bool *>(data) = true;
 }
 
+static void restore_application_focus(GObject *parent, GParamSpec *, gpointer data) {
+  if (gtk_widget_get_sensitive(GTK_WIDGET(parent))) gtk_widget_grab_focus(GTK_WIDGET(data));
+}
+
 int main(int argc, char **argv) {
   gtk_init(&argc, &argv);
   try {
@@ -80,6 +84,23 @@ int main(int argc, char **argv) {
     elder_terms::show_modal_dialog(chooser, GTK_WINDOW(settings));
     gtk_widget_destroy(parent);
     require(settings_destroyed && chooser_destroyed, "Parent destruction must close descendants");
+
+    auto *focus_parent = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    auto *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    auto *previous = gtk_entry_new();
+    auto *preferred = gtk_entry_new();
+    gtk_container_add(GTK_CONTAINER(focus_parent), box);
+    gtk_box_pack_start(GTK_BOX(box), previous, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(box), preferred, TRUE, TRUE, 0);
+    gtk_widget_show_all(focus_parent);
+    gtk_widget_grab_focus(previous);
+    g_signal_connect(focus_parent, "notify::sensitive", G_CALLBACK(restore_application_focus), preferred);
+    auto *focus_dialog = gtk_dialog_new();
+    elder_terms::show_modal_dialog(focus_dialog, GTK_WINDOW(focus_parent));
+    gtk_widget_destroy(focus_dialog);
+    require(gtk_window_get_focus(GTK_WINDOW(focus_parent)) == preferred,
+        "Closing a dialog must preserve the application's preferred focus");
+    gtk_widget_destroy(focus_parent);
 
     auto *orphan = gtk_dialog_new();
     elder_terms::show_modal_dialog(orphan, nullptr);

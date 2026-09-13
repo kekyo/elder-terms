@@ -1,3 +1,4 @@
+#include <elder-terms/modal-dialog.h>
 #include <algorithm>
 #include <cerrno>
 #include <cstdint>
@@ -143,7 +144,6 @@ struct ApplicationState {
   GtkWidget *ui_language_restart_dialog = nullptr;
   elder_terms::ApplicationUiLanguage application_initial_ui_language =
       elder_terms::ApplicationUiLanguage::system;
-  bool application_dialog_parent_was_visible = false;
   PendingAction pending_action;
   GFileMonitor *connection_monitor = nullptr;
   guint monitor_refresh_source = 0;
@@ -235,8 +235,7 @@ static void show_error_for_parent(GtkWindow *parent,
   }
   GtkWidget *dialog = gtk_message_dialog_new(
       parent,
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
-                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      static_cast<GtkDialogFlags>(0),
       GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s", summary.c_str());
   gestament_gtk_assign_accessible_id(dialog, "operation_error_dialog");
   if (!secondary.empty()) {
@@ -244,7 +243,7 @@ static void show_error_for_parent(GtkWindow *parent,
                                              secondary.c_str());
   }
   g_signal_connect(dialog, "response", G_CALLBACK(on_notice_response), nullptr);
-  gtk_widget_show(dialog);
+  elder_terms::show_modal_dialog(dialog, parent);
 }
 
 static void show_error(ApplicationState *state, const std::string &summary,
@@ -262,8 +261,7 @@ static void show_hotkey_registration_error(ApplicationState *state) {
   const char *summary = _("Global shortcuts are unavailable");
   GtkWidget *dialog = gtk_message_dialog_new(
       GTK_WINDOW(state->main_window->window),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
-                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      static_cast<GtkDialogFlags>(0),
       GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE, "%s", summary);
   gtk_window_set_title(GTK_WINDOW(dialog), "elder-terms");
   gtk_message_dialog_format_secondary_text(
@@ -280,7 +278,7 @@ static void show_hotkey_registration_error(ApplicationState *state) {
   gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CLOSE);
   g_signal_connect(dialog, "response", G_CALLBACK(on_notice_response),
                    nullptr);
-  gtk_widget_show_all(dialog);
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(state->main_window->window));
 }
 
 static void on_ui_language_restart_dialog_destroy(GtkWidget *dialog,
@@ -303,14 +301,13 @@ static void on_ui_language_restart_dialog_response(GtkDialog *dialog,
 
 static void show_ui_language_restart_dialog(ApplicationState *state) {
   if (state->ui_language_restart_dialog != nullptr) {
-    gtk_window_present(GTK_WINDOW(state->ui_language_restart_dialog));
+    elder_terms::present_modal_dialog(state->ui_language_restart_dialog);
     return;
   }
 
   GtkWidget *dialog = gtk_message_dialog_new(
       GTK_WINDOW(state->main_window->window),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
-                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      static_cast<GtkDialogFlags>(0),
       GTK_MESSAGE_INFO, GTK_BUTTONS_NONE, "%s",
       _("Restart to apply display language?"));
   gtk_message_dialog_format_secondary_text(
@@ -333,7 +330,7 @@ static void show_ui_language_restart_dialog(ApplicationState *state) {
                    G_CALLBACK(on_ui_language_restart_dialog_response), state);
   g_signal_connect(dialog, "destroy",
                    G_CALLBACK(on_ui_language_restart_dialog_destroy), state);
-  gtk_widget_show_all(dialog);
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(state->main_window->window));
 }
 
 static bool editor_is_dirty(const ApplicationState *state) {
@@ -386,23 +383,6 @@ static gboolean on_window_drag_button_press(GtkWidget *,
   return GDK_EVENT_STOP;
 }
 
-static gboolean on_main_window_focus_in(GtkWidget *, GdkEventFocus *,
-                                        gpointer user_data) {
-  auto *state = static_cast<ApplicationState *>(user_data);
-  if (state == nullptr) {
-    return GDK_EVENT_PROPAGATE;
-  }
-  GtkWidget *dialog = state->application_dialog != nullptr
-                          ? state->application_dialog
-                          : state->global_defaults_dialog;
-  if (dialog != nullptr) {
-    gtk_window_present_with_time(GTK_WINDOW(dialog),
-                                 gtk_get_current_event_time());
-    return GDK_EVENT_STOP;
-  }
-  return GDK_EVENT_PROPAGATE;
-}
-
 static void on_global_defaults_dialog_destroy(GtkWidget *,
                                               gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
@@ -411,12 +391,6 @@ static void on_global_defaults_dialog_destroy(GtkWidget *,
   if (state->global_defaults_widget != nullptr) {
     elder_terms::destroy_settings_widget(state->global_defaults_widget);
     state->global_defaults_widget = nullptr;
-  }
-  if (!state->window_destroyed && state->main_window != nullptr) {
-    gtk_widget_set_sensitive(state->main_window->window, TRUE);
-    gtk_window_present_with_time(
-        GTK_WINDOW(state->main_window->window),
-        gtk_get_current_event_time());
   }
 }
 
@@ -472,7 +446,7 @@ static void on_global_defaults_save_clicked(GtkButton *,
 
 static void open_global_defaults_dialog(ApplicationState *state) {
   if (state->global_defaults_dialog != nullptr) {
-    gtk_window_present(GTK_WINDOW(state->global_defaults_dialog));
+    elder_terms::present_modal_dialog(state->global_defaults_dialog);
     return;
   }
 
@@ -482,10 +456,7 @@ static void open_global_defaults_dialog(ApplicationState *state) {
   GtkWidget *dialog = gtk_dialog_new();
   gestament_gtk_assign_accessible_id(dialog, "global_defaults_dialog");
   gtk_window_set_title(GTK_WINDOW(dialog), _("Connection defaults"));
-  gtk_window_set_transient_for(GTK_WINDOW(dialog),
-                               GTK_WINDOW(state->main_window->window));
-  gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
-  gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+
   gtk_window_set_default_size(GTK_WINDOW(dialog), 720, 420);
 
   GtkWidget *action_row = gtk_event_box_new();
@@ -544,9 +515,7 @@ static void open_global_defaults_dialog(ApplicationState *state) {
   g_signal_connect(action_row, "button-press-event",
                    G_CALLBACK(on_window_drag_button_press), dialog);
   update_global_defaults_save_sensitivity(state);
-  gtk_widget_set_sensitive(state->main_window->window, FALSE);
-  gtk_widget_show_all(dialog);
-  gtk_window_present(GTK_WINDOW(dialog));
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(state->main_window->window));
 }
 
 static void on_global_defaults_clicked(GtkButton *, gpointer user_data) {
@@ -601,15 +570,6 @@ static void on_application_dialog_destroy(GtkWidget *dialog,
         state->application_settings_widget);
     state->application_settings_widget = nullptr;
   }
-  if (!state->window_destroyed && state->main_window != nullptr) {
-    gtk_widget_set_sensitive(state->main_window->window, TRUE);
-    if (state->application_dialog_parent_was_visible) {
-      gtk_window_present_with_time(
-          GTK_WINDOW(state->main_window->window),
-          gtk_get_current_event_time());
-    }
-  }
-  state->application_dialog_parent_was_visible = false;
 }
 
 static void close_application_dialog(ApplicationState *state) {
@@ -714,11 +674,11 @@ static void open_application_dialog(ApplicationState *state,
   }
   if (state->application_dialog != nullptr) {
     select_application_dialog_page(state, page);
-    gtk_window_present(GTK_WINDOW(state->application_dialog));
+    elder_terms::present_modal_dialog(state->application_dialog);
     return;
   }
   if (state->global_defaults_dialog != nullptr) {
-    gtk_window_present(GTK_WINDOW(state->global_defaults_dialog));
+    elder_terms::present_modal_dialog(state->global_defaults_dialog);
     return;
   }
 
@@ -731,10 +691,7 @@ static void open_application_dialog(ApplicationState *state,
   GtkWidget *dialog = gtk_dialog_new();
   gestament_gtk_assign_accessible_id(dialog, "application_dialog");
   gtk_window_set_title(GTK_WINDOW(dialog), _("Application"));
-  gtk_window_set_transient_for(GTK_WINDOW(dialog),
-                               GTK_WINDOW(state->main_window->window));
-  gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
-  gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+
   gtk_window_set_default_size(GTK_WINDOW(dialog), 620, 350);
 
   GtkWidget *notebook = gtk_notebook_new();
@@ -784,8 +741,6 @@ static void open_application_dialog(ApplicationState *state,
   state->application_dialog_notebook = notebook;
   state->application_dialog_save_button = save;
   state->application_dialog_cancel_button = cancel;
-  state->application_dialog_parent_was_visible =
-      gtk_widget_get_visible(state->main_window->window) != FALSE;
   GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
   gtk_box_pack_start(GTK_BOX(content), notebook, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(content), action_row, FALSE, TRUE, 0);
@@ -803,10 +758,9 @@ static void open_application_dialog(ApplicationState *state,
                    G_CALLBACK(on_application_dialog_destroy), state);
   g_signal_connect(action_row, "button-press-event",
                    G_CALLBACK(on_window_drag_button_press), dialog);
-  gtk_widget_set_sensitive(state->main_window->window, FALSE);
-  gtk_widget_show_all(dialog);
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(state->main_window->window));
   select_application_dialog_page(state, page);
-  gtk_window_present(GTK_WINDOW(dialog));
+  elder_terms::present_modal_dialog(dialog);
 }
 
 static void on_application_settings_menu_item_activate(GtkMenuItem *,
@@ -1304,8 +1258,7 @@ static void show_external_change_dialog(ApplicationState *state) {
   }
   GtkWidget *dialog = gtk_message_dialog_new(
       GTK_WINDOW(state->main_window->window),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
-                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      static_cast<GtkDialogFlags>(0),
       GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE, "%s",
       _("Connection changed outside elder-terms"));
   gtk_message_dialog_format_secondary_text(
@@ -1325,7 +1278,7 @@ static void show_external_change_dialog(ApplicationState *state) {
                    G_CALLBACK(on_external_change_response), state);
   g_signal_connect(dialog, "destroy",
                    G_CALLBACK(on_external_dialog_destroy), state);
-  gtk_widget_show_all(dialog);
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(state->main_window->window));
 }
 
 static gboolean refresh_connections_from_monitor(gpointer user_data) {
@@ -1812,13 +1765,12 @@ static void on_confirmation_response(GtkDialog *dialog, gint response,
 static void request_discard_confirmation(ApplicationState *state,
                                          PendingAction action) {
   if (state->confirmation_dialog != nullptr) {
-    gtk_window_present(GTK_WINDOW(state->confirmation_dialog));
+    elder_terms::present_modal_dialog(state->confirmation_dialog);
     return;
   }
   GtkWidget *dialog = gtk_message_dialog_new(
       GTK_WINDOW(state->main_window->window),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
-                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      static_cast<GtkDialogFlags>(0),
       GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE, "%s", _("Discard changes?"));
   gtk_message_dialog_format_secondary_text(
       GTK_MESSAGE_DIALOG(dialog), "%s",
@@ -1834,7 +1786,7 @@ static void request_discard_confirmation(ApplicationState *state,
   state->confirmation_dialog = dialog;
   g_signal_connect(dialog, "response", G_CALLBACK(on_confirmation_response),
                    state);
-  gtk_widget_show_all(dialog);
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(state->main_window->window));
 }
 
 static void request_application_restart(ApplicationState *state) {
@@ -2064,14 +2016,13 @@ static void on_delete_connection_menu_item_activate(GtkMenuItem *,
     return;
   }
   if (state->delete_connection_dialog != nullptr) {
-    gtk_window_present(GTK_WINDOW(state->delete_connection_dialog));
+    elder_terms::present_modal_dialog(state->delete_connection_dialog);
     return;
   }
 
   GtkWidget *dialog = gtk_message_dialog_new(
       GTK_WINDOW(state->main_window->window),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
-                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      static_cast<GtkDialogFlags>(0),
       GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE, "%s", _("Delete connection?"));
   const std::string secondary = format_translated_string(
       _("The connection \"%s\" will be permanently deleted."),
@@ -2093,7 +2044,7 @@ static void on_delete_connection_menu_item_activate(GtkMenuItem *,
                    G_CALLBACK(on_delete_connection_dialog_response), state);
   g_signal_connect(dialog, "destroy",
                    G_CALLBACK(on_delete_connection_dialog_destroy), state);
-  gtk_widget_show_all(dialog);
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(state->main_window->window));
 }
 
 static void on_name_edited(GtkCellRendererText *, gchar *path_text,
@@ -2331,8 +2282,7 @@ static void request_save_connection(ApplicationState *state,
   }
   GtkWidget *dialog = gtk_message_dialog_new(
       GTK_WINDOW(state->main_window->window),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
-                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      static_cast<GtkDialogFlags>(0),
       GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE, "%s",
       _("Overwrite externally changed connection?"));
   gtk_message_dialog_format_secondary_text(
@@ -2353,7 +2303,7 @@ static void request_save_connection(ApplicationState *state,
                    G_CALLBACK(on_external_overwrite_response), state);
   g_signal_connect(dialog, "destroy",
                    G_CALLBACK(on_external_dialog_destroy), state);
-  gtk_widget_show_all(dialog);
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(state->main_window->window));
 }
 
 static void on_apply_clicked(GtkButton *, gpointer user_data) {
@@ -2405,13 +2355,12 @@ static void on_edit_connection_menu_item_activate(GtkMenuItem *,
     return;
   }
   if (state->editor_changes_dialog != nullptr) {
-    gtk_window_present(GTK_WINDOW(state->editor_changes_dialog));
+    elder_terms::present_modal_dialog(state->editor_changes_dialog);
     return;
   }
   GtkWidget *dialog = gtk_message_dialog_new(
       GTK_WINDOW(state->main_window->window),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
-                                  GTK_DIALOG_DESTROY_WITH_PARENT),
+      static_cast<GtkDialogFlags>(0),
       GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE, "%s",
       _("Save changes before opening the text editor?"));
   GtkWidget *cancel = gtk_dialog_add_button(
@@ -2431,7 +2380,7 @@ static void on_edit_connection_menu_item_activate(GtkMenuItem *,
                    G_CALLBACK(on_editor_changes_response), state);
   g_signal_connect(dialog, "destroy",
                    G_CALLBACK(on_external_dialog_destroy), state);
-  gtk_widget_show_all(dialog);
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(state->main_window->window));
 }
 
 static void on_connect_clicked(GtkButton *, gpointer user_data) {
@@ -2495,7 +2444,7 @@ static void present_main_window(
         GTK_WINDOW(state->main_window->window),
         activation_time.value());
   } else {
-    gtk_window_present(GTK_WINDOW(state->main_window->window));
+    elder_terms::present_modal_dialog(state->main_window->window);
   }
 }
 
@@ -2650,8 +2599,6 @@ static bool initialize_main_window(ApplicationState *state) {
                    G_CALLBACK(on_connection_list_key_press), state);
   g_signal_connect(main_window->window, "key-press-event",
                    G_CALLBACK(on_connection_list_key_press), state);
-  g_signal_connect_after(main_window->window, "focus-in-event",
-                         G_CALLBACK(on_main_window_focus_in), state);
   g_signal_connect(main_window->new_button, "clicked",
                    G_CALLBACK(on_new_clicked), state);
   g_signal_connect(main_window->global_defaults_button, "clicked",

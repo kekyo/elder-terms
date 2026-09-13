@@ -1,3 +1,4 @@
+#include <elder-terms/modal-dialog.h>
 #include <elder-terms/settings-widget.h>
 
 #include <algorithm>
@@ -345,7 +346,6 @@ static GtkWidget *create_entry(const std::string &id) {
   assign_accessible_id(entry, id.c_str());
   return entry;
 }
-
 
 static GtkWidget *create_combo_box(const char *id) {
   GtkWidget *combo = gtk_combo_box_text_new();
@@ -3173,15 +3173,14 @@ static void on_ftp_ca_browse_clicked(GtkButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->is_runtime) return;
   if (state->ftp_ca_dialog) {
-    gtk_window_present(GTK_WINDOW(state->ftp_ca_dialog));
+    elder_terms::present_modal_dialog(state->ftp_ca_dialog);
     return;
   }
   auto *top = gtk_widget_get_toplevel(state->root);
   auto *dialog = gtk_file_chooser_dialog_new(_("Select a PEM CA bundle"), GTK_IS_WINDOW(top) ? GTK_WINDOW(top) : nullptr,
       GTK_FILE_CHOOSER_ACTION_OPEN, _("Cancel"), GTK_RESPONSE_CANCEL, _("Open"), GTK_RESPONSE_ACCEPT, nullptr);
   assign_accessible_id(dialog, widget_id(state, "ftp_ca_dialog").c_str());
-  gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
-  gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+
   gtk_file_chooser_set_local_only(GTK_FILE_CHOOSER(dialog), TRUE);
   gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(dialog), FALSE);
   auto *filter = gtk_file_filter_new();
@@ -3194,7 +3193,7 @@ static void on_ftp_ca_browse_clicked(GtkButton *, gpointer data) {
   state->ftp_ca_dialog = dialog;
   g_signal_connect(dialog, "response", G_CALLBACK(on_ftp_ca_dialog_response), state);
   g_signal_connect(dialog, "destroy", G_CALLBACK(on_ftp_ca_dialog_destroy), state);
-  gtk_widget_show_all(dialog);
+  elder_terms::show_modal_dialog(dialog, GTK_IS_WINDOW(top) ? GTK_WINDOW(top) : nullptr);
 }
 
 static void create_ftp_tls_controls(SettingsWidgetState *state, GtkWidget *page) {
@@ -3792,18 +3791,6 @@ static void on_terminal_bell_sound_changed(GtkEditable *, gpointer data) {
   notify_changed(state);
 }
 
-static void restore_terminal_bell_sound_dialog_parent(GtkWidget *dialog) {
-  if (dialog == nullptr || !GTK_IS_WINDOW(dialog)) {
-    return;
-  }
-  GtkWindow *parent =
-      gtk_window_get_transient_for(GTK_WINDOW(dialog));
-  if (parent != nullptr &&
-      !gtk_widget_in_destruction(GTK_WIDGET(parent))) {
-    gtk_widget_set_sensitive(GTK_WIDGET(parent), TRUE);
-  }
-}
-
 static void on_terminal_bell_sound_dialog_destroy(GtkWidget *dialog,
                                                   gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
@@ -3811,7 +3798,6 @@ static void on_terminal_bell_sound_dialog_destroy(GtkWidget *dialog,
     return;
   }
   state->terminal_bell_sound_dialog = nullptr;
-  restore_terminal_bell_sound_dialog_parent(dialog);
 }
 
 static void on_terminal_bell_sound_dialog_response(GtkDialog *dialog,
@@ -3839,7 +3825,6 @@ static void on_terminal_bell_sound_dialog_response(GtkDialog *dialog,
   }
 
   state->terminal_bell_sound_dialog = nullptr;
-  restore_terminal_bell_sound_dialog_parent(GTK_WIDGET(dialog));
   gtk_widget_destroy(GTK_WIDGET(dialog));
 }
 
@@ -3882,7 +3867,7 @@ static void on_terminal_bell_sound_browse_clicked(GtkButton *,
     return;
   }
   if (state->terminal_bell_sound_dialog != nullptr) {
-    gtk_window_present(GTK_WINDOW(state->terminal_bell_sound_dialog));
+    elder_terms::present_modal_dialog(state->terminal_bell_sound_dialog);
     return;
   }
 
@@ -3896,8 +3881,7 @@ static void on_terminal_bell_sound_browse_clicked(GtkButton *,
       settings_ui_text(SettingsUiText::open), GTK_RESPONSE_ACCEPT, nullptr);
   assign_accessible_id(
       dialog, widget_id(state, "terminal_bell_sound_dialog").c_str());
-  gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
-  gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+
   gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_ACCEPT);
 
   GtkWidget *cancel_button = gtk_dialog_get_widget_for_response(
@@ -3923,11 +3907,7 @@ static void on_terminal_bell_sound_browse_clicked(GtkButton *,
                    G_CALLBACK(on_terminal_bell_sound_dialog_response), state);
   g_signal_connect(dialog, "destroy",
                    G_CALLBACK(on_terminal_bell_sound_dialog_destroy), state);
-  if (parent != nullptr) {
-    gtk_widget_set_sensitive(GTK_WIDGET(parent), FALSE);
-  }
-  gtk_widget_show_all(dialog);
-  gtk_window_present(GTK_WINDOW(dialog));
+  elder_terms::show_modal_dialog(dialog, parent);
 }
 
 static void rebuild_terminal_font_rows(SettingsWidgetState *state);
@@ -4004,7 +3984,7 @@ static void on_terminal_font_row_clicked(GtkButton *button, gpointer data) {
     const auto row = state->terminal_font_rows[index];
     if (row.choose == GTK_WIDGET(button)) {
       if (state->terminal_font_dialog != nullptr) {
-        gtk_window_present(GTK_WINDOW(state->terminal_font_dialog));
+        elder_terms::present_modal_dialog(state->terminal_font_dialog);
         return;
       }
       auto *toplevel = gtk_widget_get_toplevel(state->root);
@@ -4020,11 +4000,10 @@ static void on_terminal_font_row_clicked(GtkButton *button, gpointer data) {
       pango_font_description_set_family(font, family.empty() ? "Monospace" : family.c_str());
       gtk_font_chooser_set_font_desc(GTK_FONT_CHOOSER(dialog), font);
       pango_font_description_free(font);
-      gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
-      gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+
       g_signal_connect(dialog, "response", G_CALLBACK(on_terminal_font_dialog_response), state);
       g_signal_connect(dialog, "destroy", G_CALLBACK(on_terminal_font_dialog_destroy), state);
-      gtk_widget_show_all(dialog);
+      elder_terms::show_modal_dialog(dialog, GTK_IS_WINDOW(toplevel) ? GTK_WINDOW(toplevel) : nullptr);
       return;
     }
     if (row.up == GTK_WIDGET(button) && index > 0) {
@@ -5315,21 +5294,9 @@ static void detach_ip_scan_dialog(IpScanDialogState *dialog_state) {
   }
 }
 
-static void restore_ip_scan_dialog_parent(GtkWidget *dialog) {
-  if (dialog == nullptr || !GTK_IS_WINDOW(dialog)) {
-    return;
-  }
-  GtkWindow *parent = gtk_window_get_transient_for(GTK_WINDOW(dialog));
-  if (parent != nullptr &&
-      !gtk_widget_in_destruction(GTK_WIDGET(parent))) {
-    gtk_widget_set_sensitive(GTK_WIDGET(parent), TRUE);
-  }
-}
-
-static void on_ip_scan_dialog_destroy(GtkWidget *dialog, gpointer data) {
+static void on_ip_scan_dialog_destroy(GtkWidget *, gpointer data) {
   auto *dialog_state = static_cast<IpScanDialogState *>(data);
   (void)dialog_state->cancellation_source.cancel();
-  restore_ip_scan_dialog_parent(dialog);
   detach_ip_scan_dialog(dialog_state);
 }
 
@@ -5389,13 +5356,12 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
       GTK_IS_WINDOW(toplevel) ? GTK_WINDOW(toplevel) : nullptr;
   GtkWidget *dialog = gtk_dialog_new_with_buttons(
       settings_ui_text(SettingsUiText::ip_scan), parent,
-      GTK_DIALOG_DESTROY_WITH_PARENT,
+      static_cast<GtkDialogFlags>(0),
       settings_ui_text(SettingsUiText::cancel), GTK_RESPONSE_CANCEL,
       nullptr);
   dialog_state->dialog = dialog;
   assign_accessible_id(dialog, widget_id(state, "ip_scan_dialog").c_str());
-  gtk_window_set_modal(GTK_WINDOW(dialog), FALSE);
-  gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+
   gtk_window_set_default_size(GTK_WINDOW(dialog), 640, 360);
   gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
   GtkWidget *cancel_button = gtk_dialog_get_widget_for_response(
@@ -5464,11 +5430,7 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
                    dialog_state.get());
   g_signal_connect(dialog, "destroy", G_CALLBACK(on_ip_scan_dialog_destroy),
                    dialog_state.get());
-  if (parent != nullptr) {
-    gtk_widget_set_sensitive(GTK_WIDGET(parent), FALSE);
-  }
-  gtk_widget_show_all(dialog);
-  gtk_window_present(GTK_WINDOW(dialog));
+  elder_terms::show_modal_dialog(dialog, parent);
   return dialog_state;
 }
 
@@ -5476,7 +5438,7 @@ static void on_ip_scan_clicked(GtkButton *button, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->ip_scan_dialog != nullptr &&
       state->ip_scan_dialog->dialog != nullptr) {
-    gtk_window_present(GTK_WINDOW(state->ip_scan_dialog->dialog));
+    elder_terms::present_modal_dialog(state->ip_scan_dialog->dialog);
     return;
   }
   auto *target_entry = static_cast<GtkWidget *>(

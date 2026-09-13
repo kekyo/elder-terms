@@ -554,6 +554,9 @@ describe('WebDAV window', () => {
             'file_transfer_operation_error_dialog'
           );
           expect((await dialog.info()).states).toContain('showing');
+          expect((await dialog.info()).states).not.toContain('modal');
+          const parent = await app.getById('file_transfer_window');
+          expect((await parent.info()).states).not.toContain('enabled');
           const pending: GtkWidgetElement[] = [dialog];
           const labels: string[] = [];
           while (pending.length) {

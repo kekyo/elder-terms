@@ -1,3 +1,4 @@
+#include <elder-terms/modal-dialog.h>
 #include "file-transfer-window.h"
 
 #include <algorithm>
@@ -801,7 +802,7 @@ static void show_file_transfer_error(FileTransferWindow *window,
   }
   GtkWidget *dialog = gtk_message_dialog_new(
       GTK_WINDOW(window->window),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_DESTROY_WITH_PARENT),
+      static_cast<GtkDialogFlags>(0),
       GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s",
       _("File transfer operation failed"));
   gtk_message_dialog_format_secondary_text(
@@ -810,7 +811,7 @@ static void show_file_transfer_error(FileTransferWindow *window,
       dialog, "file_transfer_operation_error_dialog");
   g_signal_connect(dialog, "response",
                    G_CALLBACK(on_notice_response), nullptr);
-  gtk_widget_show_all(dialog);
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(window->window));
 }
 
 static void clear_tree_children(GtkTreeStore *store,
@@ -2756,9 +2757,8 @@ void present_file_transfer_window(
       window->destroyed) {
     return;
   }
-  gtk_window_present(GTK_WINDOW(window->window));
+  elder_terms::present_modal_dialog(window->window);
 }
-
 
 cardio::promise<void> close_file_transfer_window_async(
     std::shared_ptr<FileTransferWindow> window) {
@@ -2779,6 +2779,5 @@ cardio::promise<void> close_file_transfer_window_async(
   }
   if (failure) std::rethrow_exception(failure);
 }
-
 
 } // namespace elder_terms

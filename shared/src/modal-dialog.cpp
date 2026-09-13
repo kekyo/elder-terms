@@ -68,6 +68,9 @@ static void release_modal_parent(ModalDialogState *state) {
   // Sensitivity notifications may run application callbacks that destroy the
   // parent. Keep its node alive until restoration is finished.
   g_object_ref(parent->window);
+  // Notify application observers after the generic focus restoration, so their
+  // preferred focus (for example the terminal) is not overwritten by it.
+  g_object_freeze_notify(G_OBJECT(parent->window));
   if (parent->children.empty()) {
     auto *focus = static_cast<GtkWidget *>(g_weak_ref_get(&parent->previous_focus));
     g_weak_ref_set(&parent->previous_focus, nullptr);
@@ -86,6 +89,7 @@ static void release_modal_parent(ModalDialogState *state) {
   } else {
     present_modal_dialog(parent->window);
   }
+  g_object_thaw_notify(G_OBJECT(parent->window));
   g_object_unref(parent->window);
 }
 

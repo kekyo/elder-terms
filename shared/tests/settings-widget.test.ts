@@ -467,6 +467,11 @@ const confirmSelectedFont = async (
     }
     return window;
   });
+  const parent = await app.getById('settings_widget_test_window');
+  await expectInsensitive(parent);
+  expect(
+    (await (await app.getById('settings_terminal_font_dialog')).info()).states
+  ).not.toContain('modal');
   await expectElementKind(
     await findDescendantByName(dialog, 'button', 'Select'),
     'button'
@@ -474,6 +479,7 @@ const confirmSelectedFont = async (
   await waitForResult(async () => {
     expect(await findWindowByName(app, dialogName)).toBeUndefined();
   });
+  await expectSensitive(parent);
 };
 
 const visibleSettingsTabNames = async (
@@ -3686,7 +3692,12 @@ describe.concurrent('shared settings widget', () => {
             await app.getById('settings_ftp_ca_file_entry'),
             'entry'
           );
+          const parent = await app.getById('settings_widget_test_window');
           await browse.click();
+          await expectInsensitive(parent);
+          expect(
+            (await (await app.getById('settings_ftp_ca_dialog')).info()).states
+          ).not.toContain('modal');
           await waitForResult(async () =>
             expect(await app.getWindowCount()).toBe(2)
           );
@@ -3694,6 +3705,7 @@ describe.concurrent('shared settings widget', () => {
           await waitForResult(async () =>
             expect(await app.getWindowCount()).toBe(1)
           );
+          await expectSensitive(parent);
           expect(await entry.text()).toBe('');
           await browse.click();
           await expectElementKind(
@@ -3703,6 +3715,7 @@ describe.concurrent('shared settings widget', () => {
           await waitForResult(async () =>
             expect(await entry.text()).toBe(file)
           );
+          await expectSensitive(parent);
           await expectElementKind(
             await app.getById('settings_apply_button'),
             'button'

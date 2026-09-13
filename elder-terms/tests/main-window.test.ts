@@ -864,7 +864,8 @@ describe('elder-terms main window', () => {
           await app.getById('ui_language_restart_dialog'),
           'infoBar'
         );
-        expect((await restartDialog.info()).states).toContain('modal');
+        expect((await restartDialog.info()).states).not.toContain('modal');
+        await expectInsensitive(await app.getById('main_window'));
         expect(
           (await (await app.getById('ui_language_restart_now_button')).info())
             .name
@@ -1039,6 +1040,68 @@ describe('elder-terms main window', () => {
       expect(after.width).toBeGreaterThan(before.width);
       expect(after.height).toBeGreaterThan(before.height);
     });
+  });
+
+  it('keeps the launcher blocked until a nested CA chooser and settings both close', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app, x11MapRecorder }) => {
+        if (x11MapRecorder === undefined)
+          throw new Error('X11 focus recorder was not started');
+        const main = expectElementKind(
+          await app.getById('main_window'),
+          'window'
+        );
+        await main.moveTo(40, 40);
+        const settings = await openGlobalDefaults(app);
+        await settings.moveTo(480, 280);
+        await selectSettingsTab(app, 'global_settings', 'WebDAV');
+        const scroll = expectElementKind(
+          await app.getById('global_settings_webdav_page_scrollbar'),
+          'scrollbar'
+        );
+        await scroll.setValue((await scroll.valueInfo()).maximum);
+        await expectElementKind(
+          await app.getById('global_settings_webdav_ca_file_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectElementKind(
+          await app.getById('global_settings_webdav_ca_browse_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 3);
+        const chooserWindow = await app.windowAt(2);
+        if (chooserWindow === undefined) {
+          throw new Error('CA chooser window was not created');
+        }
+        const chooser = expectElementKind(chooserWindow, 'window');
+        await chooser.moveTo(740, 400);
+        await expectInsensitive(main);
+        await expectInsensitive(settings);
+        const chooserId = String(
+          Number.parseInt((await chooser.x11Info()).windowId, 16)
+        );
+        const mainBounds = await main.bounds();
+        await app.input.moveMouseTo(mainBounds.x + 20, mainBounds.y + 20);
+        await app.input.setMouseButton('left', true);
+        await app.input.setMouseButton('left', false);
+        await waitForResult(async () =>
+          expect(await x11MapRecorder.focusedWindow()).toBe(chooserId)
+        );
+        await app.input.pressKey('Escape');
+        await waitForWindowCount(app, 2);
+        await expectSensitive(settings);
+        await expectInsensitive(main);
+        await expectElementKind(
+          await app.getById('global_defaults_cancel_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+        await expectSensitive(main);
+      },
+      { args: [], env: {}, recordX11Maps: true }
+    );
   });
 
   it('opens global defaults independently and disables its parent until closed', async (context) => {
@@ -1426,6 +1489,10 @@ describe('elder-terms main window', () => {
           await app.findById('ui_language_restart_dialog')
         ).toBeUndefined();
         expect(await width.text()).toBe('95');
+        await expectInsensitive(save);
+        await app.input.pressKey('Escape');
+        await waitForWindowCount(app, 2);
+        expect(await width.text()).toBe('95');
         await expectSensitive(save);
       }
     );
@@ -1682,7 +1749,8 @@ describe('elder-terms main window', () => {
           await app.getById('delete_connection_dialog'),
           'infoBar'
         );
-        expect((await deleteDialog.info()).states).toContain('modal');
+        expect((await deleteDialog.info()).states).not.toContain('modal');
+        await expectInsensitive(await app.getById('main_window'));
         await expectElementKind(
           await app.getById('cancel_delete_connection_button'),
           'button'
@@ -1765,7 +1833,8 @@ describe('elder-terms main window', () => {
           await app.getById('discard_changes_dialog'),
           'infoBar'
         );
-        expect((await dialog.info()).states).toContain('modal');
+        expect((await dialog.info()).states).not.toContain('modal');
+        await expectInsensitive(await app.getById('main_window'));
         await expectElementKind(
           await app.getById('cancel_discard_button'),
           'button'
