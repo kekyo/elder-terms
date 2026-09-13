@@ -6,7 +6,8 @@ import {
   rm,
   writeFile,
 } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -112,6 +113,19 @@ describe('WebDAV window', () => {
           onOutput: evidence.recordAppOutputEvent,
         });
         apps.push(app);
+        const window = expectElementKind(
+          await app.getById('file_transfer_window'),
+          'window'
+        );
+        const x11 = await window.x11Info();
+        const icon = await promisify(execFile)(
+          'xprop',
+          ['-id', x11.windowId, '-len', '16', '32c', '_NET_WM_ICON'],
+          { env: { ...process.env, ...(await app.environment()) } }
+        );
+        expect(icon.stdout).toMatch(
+          /_NET_WM_ICON\(CARDINAL\) = [1-9]\d*, [1-9]\d*/u
+        );
         if (initialDirectory === '/hold') {
           await server.held;
           const pending: GtkWidgetElement[] = [

@@ -12,6 +12,7 @@
 #include <glib/gi18n-lib.h>
 
 #include <cardio.h>
+#include <elder-terms/application-icon.h>
 #include <elder-terms/localization.h>
 #include <elder-terms/settings/application-settings.h>
 #include <elder-terms/settings.h>
@@ -564,6 +565,7 @@ int main(int argc, char **argv) {
   elder_terms::LaunchOptions launch_options =
       elder_terms::parse_launch_options(&argc, argv);
   gtk_init(&argc, &argv);
+  (void)elder_terms::initialize_application_window_icon();
 
   const elder_terms::SettingsLoadResult settings_result =
       elder_terms::load_settings(
