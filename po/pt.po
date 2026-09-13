@@ -2381,3 +2381,15 @@ msgstr "Não foi possível iniciar o WebDAV"
 
 #~ msgid "Global defaults"
 #~ msgstr "Padrões globais"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open containing directory"
+msgstr "Abrir a pasta que contém este item"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open this directory"
+msgstr "Abrir esta pasta"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Failed to open directory"
+msgstr "Falha ao abrir a pasta"

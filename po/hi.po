@@ -2362,3 +2362,15 @@ msgstr "WebDAV शुरू नहीं हो सका"
 
 #~ msgid "Global defaults"
 #~ msgstr "वैश्विक डिफ़ॉल्ट"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open containing directory"
+msgstr "फ़ाइल वाली निर्देशिका खोलें"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open this directory"
+msgstr "यह निर्देशिका खोलें"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Failed to open directory"
+msgstr "निर्देशिका नहीं खोली जा सकी"

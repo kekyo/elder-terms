@@ -107,6 +107,7 @@ struct FileTransferPaneState {
   GtkWidget *menu = nullptr;
   GtkWidget *transfer_item = nullptr;
   GtkWidget *hash_item = nullptr;
+  GtkWidget *open_directory_item = nullptr;
   GtkWidget *new_directory_item = nullptr;
   GtkWidget *rename_item = nullptr;
   GtkWidget *delete_item = nullptr;
@@ -551,6 +552,12 @@ static void update_file_transfer_sensitivity(FileTransferWindow *window) {
   }
   if (window->remote.hash_item != nullptr) {
     gtk_widget_set_sensitive(window->remote.hash_item, remote_ready);
+  }
+  if (window->local.open_directory_item != nullptr) {
+    auto *selection = gtk_tree_view_get_selection(
+        GTK_TREE_VIEW(window->local.tree));
+    gtk_widget_set_sensitive(window->local.open_directory_item,
+        local_ready && gtk_tree_selection_count_selected_rows(selection) == 1);
   }
   gtk_widget_set_sensitive(window->local.new_directory_item, local_ready);
   gtk_widget_set_sensitive(window->remote.new_directory_item, remote_ready);
@@ -1221,6 +1228,12 @@ static gboolean on_file_transfer_tree_button_press(
   gtk_widget_set_sensitive(pane->new_directory_item, TRUE);
   gtk_widget_set_sensitive(pane->transfer_item, transfer_ready && !items.empty());
   gtk_widget_set_sensitive(pane->rename_item, items.size() == 1);
+  if (pane->open_directory_item != nullptr) {
+    gtk_menu_item_set_label(GTK_MENU_ITEM(pane->open_directory_item),
+        items.size() == 1 && items.front().type == RemoteFileType::directory
+            ? _("Open this directory") : _("Open containing directory"));
+    gtk_widget_set_sensitive(pane->open_directory_item, items.size() == 1);
+  }
   if (pane->hash_item != nullptr)
     gtk_widget_set_sensitive(pane->hash_item,
         items.size() == 1 && items.front().type == RemoteFileType::regular);
@@ -1365,6 +1378,51 @@ static void on_file_transfer_new_directory_item_activate(GtkMenuItem *, gpointer
       (pane->remote && !pane->window->connection_available)) return;
   pane->window->browser_action_task.reset();
   pane->window->browser_action_task.emplace(run_file_transfer_new_directory_async(pane));
+}
+
+static cardio::promise<void> run_file_transfer_open_directory_async(
+    FileTransferWindow *window, std::string directory) {
+  std::exception_ptr failure;
+  try {
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    FileTransferGObjectPtr<GFile> file(g_file_new_for_path(directory.c_str()));
+    FileTransferGCharPtr uri(g_file_get_uri(file.get()));
+    co_await cardio::gio::submit<bool>(
+        [uri = uri.get()](GCancellable *cancellable,
+                         GAsyncReadyCallback callback, gpointer user_data) {
+          g_app_info_launch_default_for_uri_async(
+              uri, nullptr, cancellable, callback, user_data);
+        },
+        [](GObject *, GAsyncResult *result, GError **error) {
+          return g_app_info_launch_default_for_uri_finish(result, error) != FALSE;
+        },
+        window->stop_source.get_cancellation());
+  } catch (const cardio::canceled_exception &) {
+  } catch (...) {
+    failure = std::current_exception();
+  }
+  if (window->destroyed) co_return;
+  set_file_transfer_browser_action_phase(window, false, false, {});
+  if (failure) {
+    show_file_transfer_error(window,
+        std::string(_("Failed to open directory")) + "\n" + exception_text(failure));
+  }
+}
+
+static void on_file_transfer_open_directory_item_activate(GtkMenuItem *, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  if (!pane || !pane->window || pane->window->destroyed || pane->remote ||
+      pane->busy || pane->window->transfer_active ||
+      pane->window->browser_action_active || pane->window->certificate_confirmation ||
+      has_modal_dialog(pane->window->window)) return;
+  const auto items = selected_file_transfer_items(pane);
+  if (items.size() != 1) return;
+  // Symbolic links open their containing directory without following the target.
+  auto directory = items.front().type == RemoteFileType::directory
+      ? items.front().path : local_parent_directory(items.front().path);
+  pane->window->browser_action_task.reset();
+  pane->window->browser_action_task.emplace(
+      run_file_transfer_open_directory_async(pane->window, std::move(directory)));
 }
 
 static cardio::promise<void> run_file_transfer_rename_async(
@@ -2228,6 +2286,15 @@ static GtkWidget *create_file_transfer_pane(
     g_signal_connect(
         pane->hash_item, "activate",
         G_CALLBACK(on_file_transfer_hash_item_activate), pane);
+  }
+  if (!remote) {
+    pane->open_directory_item =
+        gtk_menu_item_new_with_label(_("Open containing directory"));
+    gestament_gtk_assign_accessible_id(
+        pane->open_directory_item, "file_transfer_local_open_directory_item");
+    gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu), pane->open_directory_item);
+    g_signal_connect(pane->open_directory_item, "activate",
+        G_CALLBACK(on_file_transfer_open_directory_item_activate), pane);
   }
   gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu),
                         gtk_separator_menu_item_new());

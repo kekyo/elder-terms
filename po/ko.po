@@ -2363,3 +2363,15 @@ msgstr "WebDAV를 시작하지 못했습니다"
 
 #~ msgid "Global defaults"
 #~ msgstr "전역 기본값"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open containing directory"
+msgstr "상위 디렉터리 열기"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open this directory"
+msgstr "이 디렉터리 열기"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Failed to open directory"
+msgstr "디렉터리를 열지 못했습니다"

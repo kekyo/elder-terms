@@ -2356,3 +2356,15 @@ msgstr "无法启动 WebDAV"
 
 #~ msgid "Global defaults"
 #~ msgstr "全局默认值"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open containing directory"
+msgstr "打开所在目录"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open this directory"
+msgstr "打开此目录"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Failed to open directory"
+msgstr "无法打开目录"

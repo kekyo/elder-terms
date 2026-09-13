@@ -2389,3 +2389,15 @@ msgstr "WebDAV接続を開始できませんでした"
 
 #~ msgid "Global defaults"
 #~ msgstr "グローバル既定値"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open containing directory"
+msgstr "親ディレクトリを開く"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open this directory"
+msgstr "このディレクトリを開く"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Failed to open directory"
+msgstr "ディレクトリを開けませんでした"

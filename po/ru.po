@@ -2385,3 +2385,15 @@ msgstr "Не удалось запустить WebDAV"
 
 #~ msgid "Global defaults"
 #~ msgstr "Глобальные значения по умолчанию"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open containing directory"
+msgstr "Открыть родительский каталог"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open this directory"
+msgstr "Открыть этот каталог"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Failed to open directory"
+msgstr "Не удалось открыть каталог"

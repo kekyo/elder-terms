@@ -2381,3 +2381,15 @@ msgstr "تعذّر بدء WebDAV"
 
 #~ msgid "Global defaults"
 #~ msgstr "الإعدادات الافتراضية العامة"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open containing directory"
+msgstr "افتح المجلد الذي يحتوي عليه"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Open this directory"
+msgstr "افتح هذا المجلد"
+
+#: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
+msgid "Failed to open directory"
+msgstr "تعذر فتح المجلد"
