@@ -14,6 +14,9 @@ namespace elder_terms {
  * only present an already open dialog. Hiding or destroying it releases its
  * parent's input block; a response alone does not. Parent destruction closes
  * its descendants. The helper owns its bookkeeping, not the caller's state.
+ * Clicks on a blocked parent present its deepest active dialog. The first call
+ * installs a GDK event handler; events unrelated to blocked-parent clicks are
+ * forwarded to gtk_main_do_event().
  */
 ELDER_TERMS_API void show_modal_dialog(GtkWidget *dialog, GtkWindow *parent);
 

@@ -1082,6 +1082,17 @@ describe('elder-terms main window', () => {
         const chooserId = String(
           Number.parseInt((await chooser.x11Info()).windowId, 16)
         );
+        for (const owner of [main, settings]) {
+          const ownerBounds = await owner.bounds();
+          await app.input.moveMouseTo(ownerBounds.x + 20, ownerBounds.y + 250);
+          await x11MapRecorder.focusCompetitor();
+          await x11MapRecorder.clickWindowWithoutFocus(
+            (await owner.x11Info()).windowId
+          );
+          await waitForResult(async () =>
+            expect(await x11MapRecorder.focusedWindow()).toBe(chooserId)
+          );
+        }
         const mainBounds = await main.bounds();
         await app.input.moveMouseTo(mainBounds.x + 20, mainBounds.y + 20);
         await app.input.setMouseButton('left', true);

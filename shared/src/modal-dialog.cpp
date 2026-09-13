@@ -37,7 +37,7 @@ bool has_modal_dialog(GtkWidget *window) {
   return state != nullptr && !state->destroyed && !state->children.empty();
 }
 
-void present_modal_dialog(GtkWidget *window) {
+static void present_modal_dialog_at_time(GtkWidget *window, guint32 time) {
   if (window == nullptr) return;
   auto *state = modal_state(window);
   if (state != nullptr) {
@@ -53,8 +53,28 @@ void present_modal_dialog(GtkWidget *window) {
     window = state->window;
   }
   if (!gtk_widget_in_destruction(window)) {
-    gtk_window_present_with_time(GTK_WINDOW(window), gtk_get_current_event_time());
+    gtk_window_present_with_time(GTK_WINDOW(window), time);
   }
+}
+
+void present_modal_dialog(GtkWidget *window) {
+  present_modal_dialog_at_time(window, gtk_get_current_event_time());
+}
+
+static void dispatch_modal_event(GdkEvent *event, gpointer) {
+  if (event->type == GDK_BUTTON_PRESS || event->type == GDK_2BUTTON_PRESS ||
+      event->type == GDK_3BUTTON_PRESS) {
+    auto *widget = gtk_get_event_widget(event);
+    auto *window = widget == nullptr ? nullptr : gtk_widget_get_toplevel(widget);
+    if (has_modal_dialog(window)) {
+      // GTK drops button events for insensitive widgets before their signals
+      // run. Handle blocked owners here, using the click's timestamp because
+      // GTK has not yet made this the current event.
+      present_modal_dialog_at_time(window, event->button.time);
+      return;
+    }
+  }
+  gtk_main_do_event(event);
 }
 
 static void release_modal_parent(ModalDialogState *state) {
@@ -124,6 +144,11 @@ static void destroy_modal_state(gpointer data) {
 }
 
 static ModalDialogState *ensure_modal_state(GtkWidget *window) {
+  static bool event_handler_installed = false;
+  if (!event_handler_installed) {
+    gdk_event_handler_set(dispatch_modal_event, nullptr, nullptr);
+    event_handler_installed = true;
+  }
   auto *state = modal_state(window);
   if (state != nullptr) return state;
   state = new ModalDialogState{.window = window};
@@ -132,6 +157,7 @@ static ModalDialogState *ensure_modal_state(GtkWidget *window) {
   g_signal_connect(window, "hide", G_CALLBACK(on_modal_hide), state);
   g_signal_connect(window, "destroy", G_CALLBACK(on_modal_destroy), state);
   g_signal_connect(window, "focus-in-event", G_CALLBACK(on_modal_focus_in), nullptr);
+  gtk_widget_add_events(window, GDK_BUTTON_PRESS_MASK);
   return state;
 }
 

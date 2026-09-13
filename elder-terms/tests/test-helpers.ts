@@ -78,6 +78,14 @@ export interface X11MapRecorder {
    */
   readonly focusCompetitor: () => Promise<string>;
   /**
+   * Sends a native left click directly to a window without WM focus handling.
+   * @param windowId - Hexadecimal X11 window identifier.
+   * @returns A promise completed after the click is sent.
+   * @remarks Move the pointer inside the target first. The event uses a fresh
+   * X server timestamp so focus requests cannot inherit a stale input time.
+   */
+  readonly clickWindowWithoutFocus: (windowId: string) => Promise<void>;
+  /**
    * Reads the top-level X11 window that currently owns input focus.
    *
    * @returns A promise completed with the decimal X11 window identifier.
@@ -289,6 +297,11 @@ const startX11MapRecorder = async (
     },
     events: () => [...recordedEvents],
     focusCompetitor: async () => request('focus-competitor'),
+    clickWindowWithoutFocus: async (windowId) => {
+      const result = await request(`click-window ${windowId}`);
+      if (result !== 'ok')
+        throw new Error('Failed to send native window click');
+    },
     focusedWindow: async () => request('active-window'),
     grabHotkey: async (hotkey) => {
       const result = await request(
