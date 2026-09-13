@@ -56,6 +56,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/key-binding.cpp',
   'src/key-binding-input-widget.cpp',
   'src/localization.cpp',
+  'src/modal-dialog.cpp',
   'src/ip-scanner.cpp',
   'src/ip-scan-name-resolver.cpp',
   'src/serial-device.cpp',
@@ -123,6 +124,14 @@ elder_terms_dep = declare_dependency(
 )
 
 if get_option('build_tests')
+elder_terms_modal_dialog_test = executable(
+  'elder-terms-modal-dialog-test',
+  'tests/modal-dialog-test.cpp',
+  dependencies: elder_terms_dep,
+)
+test('elder-terms-modal-dialog-test', find_program('xvfb-run'),
+  args: ['-a', elder_terms_modal_dialog_test], timeout: 120)
+
 elder_terms_cpp_compiler = meson.get_compiler('cpp')
 elder_terms_dl_dep = elder_terms_cpp_compiler.find_library('dl')
 elder_terms_cardio_test_include_dir = include_directories(

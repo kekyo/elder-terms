@@ -37,6 +37,7 @@ struct FixtureOptions {
   std::string save_file;
   std::string bell_sound_dialog_file;
   std::string ftp_ca_dialog_file;
+  std::string webdav_ca_dialog_file;
   std::string ip_scan_mode;
   std::string page = "general";
   std::vector<ConfigAssignment> connection_assignments;
@@ -49,6 +50,7 @@ struct FixtureState {
   std::optional<elder_terms::SettingsStore> rebase_store;
   std::string bell_sound_dialog_file;
   std::string ftp_ca_dialog_file;
+  std::string webdav_ca_dialog_file;
   GtkWidget *window = nullptr;
 };
 
@@ -190,6 +192,8 @@ static FixtureOptions parse_options(int argc, char **argv) {
           option_value(argument, "--send-break-key="));
     } else if (starts_with(argument, "--page=")) {
       options.page = option_value(argument, "--page=");
+    } else if (starts_with(argument, "--webdav-ca-dialog-file=")) {
+      options.webdav_ca_dialog_file = option_value(argument, "--webdav-ca-dialog-file=");
     } else if (starts_with(argument, "--ftp-ca-dialog-file=")) {
       options.ftp_ca_dialog_file = option_value(argument, "--ftp-ca-dialog-file=");
     } else if (starts_with(argument, "--bell-sound-dialog-file=")) {
@@ -576,6 +580,19 @@ static void select_ftp_ca_dialog_file(GtkButton *, gpointer data) {
   GList *windows = gtk_window_list_toplevels();
   for (GList *window = windows; window; window = window->next) {
     auto *dialog = find_widget_by_name(GTK_WIDGET(window->data), "settings_ftp_ca_dialog");
+    if (dialog && GTK_IS_FILE_CHOOSER(dialog)) {
+      gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), file->c_str());
+      break;
+    }
+  }
+  g_list_free(windows);
+}
+
+static void select_webdav_ca_dialog_file(GtkButton *, gpointer data) {
+  const auto *file = static_cast<const std::string *>(data);
+  GList *windows = gtk_window_list_toplevels();
+  for (GList *window = windows; window; window = window->next) {
+    auto *dialog = find_widget_by_name(GTK_WIDGET(window->data), "settings_webdav_ca_dialog");
     if (dialog && GTK_IS_FILE_CHOOSER(dialog)) {
       gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), file->c_str());
       break;
@@ -1081,6 +1098,7 @@ int main(int argc, char **argv) {
     elder_terms_settings_widget_fixture::FixtureState state;
     state.bell_sound_dialog_file = options.bell_sound_dialog_file;
     state.ftp_ca_dialog_file = options.ftp_ca_dialog_file;
+    state.webdav_ca_dialog_file = options.webdav_ca_dialog_file;
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     state.window = window;
@@ -1197,6 +1215,11 @@ int main(int argc, char **argv) {
       auto *button = elder_terms_settings_widget_fixture::find_widget_by_name(window, "settings_ftp_ca_browse_button");
       if (button) g_signal_connect_after(button, "clicked",
           G_CALLBACK(elder_terms_settings_widget_fixture::select_ftp_ca_dialog_file), &state.ftp_ca_dialog_file);
+    }
+    if (!state.webdav_ca_dialog_file.empty()) {
+      auto *button = elder_terms_settings_widget_fixture::find_widget_by_name(window, "settings_webdav_ca_browse_button");
+      if (button) g_signal_connect_after(button, "clicked",
+          G_CALLBACK(elder_terms_settings_widget_fixture::select_webdav_ca_dialog_file), &state.webdav_ca_dialog_file);
     }
     if (state.rebase_store.has_value()) {
       GtkWidget *rebase_button =

@@ -3115,6 +3115,69 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
+  it('selects a WebDAV CA file while disabling only its parent and restores it on close', async (context) => {
+    const root = await mkdtemp(join(tmpdir(), 'elder-webdav-ca-'));
+    try {
+      const file = join(root, 'selected-ca.pem');
+      await writeFile(file, 'test CA selection');
+      await runSharedGtkTest(
+        context,
+        ['--page=webdav', '--type=webdav', `--webdav-ca-dialog-file=${file}`],
+        async ({ app }) => {
+          await selectSettingsTab(app, 'WebDAV');
+          const parent = expectElementKind(
+            await app.getById('settings_widget_test_window'),
+            'window'
+          );
+          const scroll = expectElementKind(
+            await app.getById('settings_webdav_page_scrollbar'),
+            'scrollbar'
+          );
+          await scroll.setValue((await scroll.valueInfo()).maximum);
+          await expectElementKind(
+            await app.getById('settings_webdav_ca_file_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          const browse = expectElementKind(
+            await app.getById('settings_webdav_ca_browse_button'),
+            'button'
+          );
+          const entry = expectElementKind(
+            await app.getById('settings_webdav_ca_file_entry'),
+            'entry'
+          );
+          for (const accept of [false, true]) {
+            await expectSensitive(parent);
+            await browse.click();
+            const dialog = expectElementKind(
+              await app.getById('settings_webdav_ca_dialog'),
+              'container'
+            );
+            expect((await dialog.info()).states).not.toContain('modal');
+            await expectInsensitive(parent);
+            const open = expectElementKind(
+              await findDescendantByName(dialog, 'button', 'Open'),
+              'button'
+            );
+            await expectSensitive(open);
+            if (accept) {
+              await open.click();
+            } else {
+              await app.input.pressKey('Escape');
+            }
+            await waitForResult(async () =>
+              expect(await app.getWindowCount()).toBe(1)
+            );
+            await expectSensitive(parent);
+            expect(await entry.text()).toBe(accept ? file : '');
+          }
+        }
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('edits WebDAV settings with inherited ports and independent HTTPS policy', async (context) => {
     await runSharedGtkTest(
       context,

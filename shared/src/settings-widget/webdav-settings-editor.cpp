@@ -1,5 +1,6 @@
 #include "webdav-settings-editor.h"
 #include "settings-presentation.h"
+#include <elder-terms/modal-dialog.h>
 
 #include <algorithm>
 #include <charconv>
@@ -219,18 +220,16 @@ static void browse_response(GtkDialog *dialog, gint response, gpointer data) {
 
 static void browse_clicked(GtkButton *, gpointer data) {
   auto *editor = static_cast<WebdavSettingsEditor *>(data);
-  if (editor->dialog) { gtk_window_present(GTK_WINDOW(editor->dialog)); return; }
+  if (editor->dialog) { present_modal_dialog(editor->dialog); return; }
   auto *top = gtk_widget_get_toplevel(editor->root);
   editor->dialog = gtk_file_chooser_dialog_new(_("Select a PEM CA bundle"), GTK_IS_WINDOW(top) ? GTK_WINDOW(top) : nullptr,
       GTK_FILE_CHOOSER_ACTION_OPEN, _("Cancel"), GTK_RESPONSE_CANCEL, _("Open"), GTK_RESPONSE_ACCEPT, nullptr);
-  gtk_window_set_modal(GTK_WINDOW(editor->dialog), TRUE);
-  gtk_window_set_destroy_with_parent(GTK_WINDOW(editor->dialog), TRUE);
   assign_accessible_id(editor->dialog, editor->prefix + "_webdav_ca_dialog");
   g_signal_connect(editor->dialog, "response", G_CALLBACK(browse_response), editor);
   g_signal_connect(editor->dialog, "destroy", G_CALLBACK(+[](GtkWidget *, gpointer data) {
     static_cast<WebdavSettingsEditor *>(data)->dialog = nullptr;
   }), editor);
-  gtk_widget_show_all(editor->dialog);
+  show_modal_dialog(editor->dialog, GTK_IS_WINDOW(top) ? GTK_WINDOW(top) : nullptr);
 }
 
 WebdavSettingsEditor *create_webdav_settings_editor(SettingsStore *store,
