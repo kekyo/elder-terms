@@ -1,3 +1,4 @@
+#include <elder-terms/modal-color-button.h>
 #include <elder-terms/modal-dialog.h>
 #include <elder-terms/settings-widget.h>
 
@@ -4840,7 +4841,7 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
   gtk_box_pack_start(
       GTK_BOX(exterior_color_row),
       state->general_exterior_background_mode_combo, TRUE, TRUE, 0);
-  state->general_exterior_background_button = gtk_color_button_new();
+  state->general_exterior_background_button = create_modal_color_button();
   const std::string exterior_button_id =
       widget_id(state, "general_exterior_background_button");
   assign_accessible_id(state->general_exterior_background_button,
@@ -4868,7 +4869,7 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_general_background_mode_changed), state);
   gtk_box_pack_start(GTK_BOX(background_color_row),
                      state->general_background_mode_combo, TRUE, TRUE, 0);
-  state->general_background_button = gtk_color_button_new();
+  state->general_background_button = create_modal_color_button();
   const std::string background_button_id =
       widget_id(state, "general_background_button");
   assign_accessible_id(state->general_background_button,
@@ -5129,7 +5130,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_terminal_indicator_color_mode_changed), state);
   gtk_box_pack_start(GTK_BOX(indicator_color_row),
                      state->terminal_indicator_color_mode_combo, TRUE, TRUE, 0);
-  state->terminal_indicator_color_button = gtk_color_button_new();
+  state->terminal_indicator_color_button = create_modal_color_button();
   assign_accessible_id(state->terminal_indicator_color_button,
       widget_id(state, "terminal_indicator_color_button").c_str());
   gtk_color_chooser_set_use_alpha(
@@ -5146,7 +5147,7 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   g_signal_connect(state->terminal_indicator_off_color_mode_combo, "changed",
       G_CALLBACK(on_terminal_indicator_off_color_mode_changed), state);
   gtk_box_pack_start(GTK_BOX(off_row), state->terminal_indicator_off_color_mode_combo, TRUE, TRUE, 0);
-  state->terminal_indicator_off_color_button = gtk_color_button_new();
+  state->terminal_indicator_off_color_button = create_modal_color_button();
   assign_accessible_id(state->terminal_indicator_off_color_button,
       widget_id(state, "terminal_indicator_off_color_button").c_str());
   gtk_color_chooser_set_use_alpha(GTK_COLOR_CHOOSER(state->terminal_indicator_off_color_button), FALSE);

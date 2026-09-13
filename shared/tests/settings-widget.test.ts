@@ -441,6 +441,10 @@ const chooseNamedColor = async (
     }
     return window;
   });
+  const parent = await app.getById('settings_widget_test_window');
+  await expectInsensitive(parent);
+  const chooser = await app.getById(`${pickerId}_dialog`);
+  expect((await chooser.info()).states).not.toContain('modal');
   await expectElementKind(
     await findDescendantByName(dialog, 'radio', colorName),
     'radio'
@@ -452,6 +456,7 @@ const chooseNamedColor = async (
   await waitForResult(async () => {
     expect(await findWindowByName(app, 'Pick a Color')).toBeUndefined();
   });
+  await expectSensitive(parent);
 };
 
 const confirmSelectedFont = async (

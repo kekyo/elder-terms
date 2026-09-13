@@ -1,4 +1,5 @@
 #include <elder-terms/modal-dialog.h>
+#include <elder-terms/modal-color-button.h>
 
 #include <iostream>
 #include <stdexcept>
@@ -16,9 +17,93 @@ static void restore_application_focus(GObject *parent, GParamSpec *, gpointer da
   if (gtk_widget_get_sensitive(GTK_WIDGET(parent))) gtk_widget_grab_focus(GTK_WIDGET(data));
 }
 
+static GtkWidget *find_color_dialog(GtkWindow *parent) {
+  auto *windows = gtk_window_list_toplevels();
+  GtkWidget *result = nullptr;
+  int count = 0;
+  for (auto *item = windows; item != nullptr; item = item->next) {
+    auto *window = GTK_WIDGET(item->data);
+    if (GTK_IS_COLOR_CHOOSER_DIALOG(window) &&
+        gtk_window_get_transient_for(GTK_WINDOW(window)) == parent) {
+      result = window;
+      ++count;
+    }
+  }
+  g_list_free(windows);
+  require(count == 1, "Repeated color selection must show exactly one chooser");
+  return result;
+}
+
+static void count_color_changes(GtkColorButton *, gpointer data) {
+  ++*static_cast<int *>(data);
+}
+
+static void destroy_color_parent(GObject *, GParamSpec *, gpointer data) {
+  gtk_widget_destroy(GTK_WIDGET(data));
+}
+
+static void check_color_selection() {
+  auto *parent = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+  auto *button = elder_terms::create_modal_color_button();
+  gtk_container_add(GTK_CONTAINER(parent), button);
+  gtk_widget_show_all(parent);
+  const GdkRGBA original{0.0, 0.0, 0.0, 1.0};
+  const GdkRGBA selected{1.0, 0.0, 0.0, 1.0};
+  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(button), &original);
+  int changes = 0;
+  g_signal_connect(button, "color-set", G_CALLBACK(count_color_changes), &changes);
+  gtk_button_clicked(GTK_BUTTON(button));
+  gtk_button_clicked(GTK_BUTTON(button));
+  auto *dialog = find_color_dialog(GTK_WINDOW(parent));
+  require(!gtk_window_get_modal(GTK_WINDOW(dialog)), "Color selection must not use GTK modal");
+  require(!gtk_widget_get_sensitive(parent), "Color selection must disable its parent");
+  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(dialog), &selected);
+  gtk_dialog_response(GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
+  GdkRGBA actual{};
+  gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &actual);
+  require(gdk_rgba_equal(&original, &actual) && changes == 0,
+      "Cancelling must preserve the color without a change notification");
+  require(gtk_widget_get_sensitive(parent), "Cancelling must restore the parent");
+
+  gtk_button_clicked(GTK_BUTTON(button));
+  dialog = find_color_dialog(GTK_WINDOW(parent));
+  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(dialog), &selected);
+  gtk_dialog_response(GTK_DIALOG(dialog), GTK_RESPONSE_OK);
+  gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &actual);
+  require(gdk_rgba_equal(&selected, &actual) && changes == 1,
+      "Accepting must update the color and notify exactly once");
+  require(gtk_widget_get_sensitive(parent), "Accepting must restore the parent");
+
+  gtk_button_clicked(GTK_BUTTON(button));
+  dialog = find_color_dialog(GTK_WINDOW(parent));
+  bool destroyed = false;
+  g_signal_connect(dialog, "destroy", G_CALLBACK(mark_destroyed), &destroyed);
+  gtk_widget_destroy(button);
+  require(destroyed && gtk_widget_get_sensitive(parent),
+      "Removing the color button must close its chooser and restore the parent");
+  require(changes == 1, "Removing the color button must not accept a color");
+  button = elder_terms::create_modal_color_button();
+  gtk_container_add(GTK_CONTAINER(parent), button);
+  gtk_widget_show_all(parent);
+  gtk_button_clicked(GTK_BUTTON(button));
+  dialog = find_color_dialog(GTK_WINDOW(parent));
+  destroyed = false;
+  g_signal_connect(dialog, "destroy", G_CALLBACK(mark_destroyed), &destroyed);
+  bool parent_destroyed = false;
+  g_signal_connect(parent, "destroy", G_CALLBACK(mark_destroyed), &parent_destroyed);
+  g_signal_connect(button, "notify::rgba", G_CALLBACK(destroy_color_parent), parent);
+  g_signal_connect(button, "color-set", G_CALLBACK(count_color_changes), &changes);
+  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(dialog), &selected);
+  gtk_dialog_response(GTK_DIALOG(dialog), GTK_RESPONSE_OK);
+  require(parent_destroyed && destroyed,
+      "Settings destruction during color notification must close the chooser safely");
+  require(changes == 1, "Destroyed settings must not receive a color selection");
+}
+
 int main(int argc, char **argv) {
   gtk_init(&argc, &argv);
   try {
+    check_color_selection();
     auto *parent = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     auto *entry = gtk_entry_new();
     gtk_container_add(GTK_CONTAINER(parent), entry);
