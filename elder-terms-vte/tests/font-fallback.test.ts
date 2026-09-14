@@ -19,23 +19,29 @@ it('renders missing glyphs with the third ordered family and tolerates unavailab
       'Noto Sans Mono',
       'DejaVu Sans Mono',
       'IPAGothic',
-      'IBM Plex Sans JP',
+      'Noto Sans CJK JP',
     ];
     const fonts = join(directory, 'fonts');
     await mkdir(fonts);
     for (const [index, family] of families.entries()) {
       const match = await execute('fc-match', [
         '-f',
-        '%{family}\n%{file}\n',
+        '%{family}\n%{file}\n%{index}\n',
         family,
       ]);
-      const [actual, path] = match.stdout.trim().split('\n');
+      const [actual, path, face] = match.stdout.trim().split('\n');
       expect(
         actual.split(','),
-        `Install the ${family} font to run this rendering test`
+        `The build must prepare ${family} for this rendering test`
       ).toContain(family);
       await symlink(path, join(fonts, `${index}.ttf`));
-      const query = await execute('fc-query', ['-f', '%{charset}', path]);
+      const query = await execute('fc-query', [
+        '--index',
+        face,
+        '-f',
+        '%{charset}',
+        path,
+      ]);
       const ranges = query.stdout
         .trim()
         .split(/\s+/)
@@ -55,7 +61,14 @@ it('renders missing glyphs with the third ordered family and tolerates unavailab
     const fontConfig = join(directory, 'fonts.conf');
     await writeFile(
       fontConfig,
-      `<?xml version="1.0"?><fontconfig><dir>${fonts}</dir><cachedir>${directory}/cache</cachedir></fontconfig>`
+      `<?xml version="1.0"?><fontconfig><dir>${fonts}</dir><cachedir>${directory}/cache</cachedir><selectfont><rejectfont><pattern/></rejectfont><acceptfont>${families.map((family) => `<pattern><patelt name="family"><string>${family}</string></patelt></pattern>`).join('')}</acceptfont></selectfont></fontconfig>`
+    );
+    // A host TTC may contain other regional faces: exclude them from fallback.
+    const listed = await execute('fc-list', ['-f', '%{family[0]}\n'], {
+      env: { ...process.env, FONTCONFIG_FILE: fontConfig },
+    });
+    expect([...new Set(listed.stdout.trim().split('\n'))].sort()).toEqual(
+      [...families].sort()
     );
     const sockets: Socket[] = [];
     const server = createServer((socket) => {

@@ -13,6 +13,7 @@
     "dev": "npm run build && ./.build/elder-terms/elder-terms"
   },
   "devDependencies": {
+    "funcity": "^1.5.0",
     "screw-up": ">=1.36.0"
   }
 }

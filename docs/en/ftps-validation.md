@@ -13,17 +13,30 @@ npm ci
 ELDER_TERMS_VTE_TEST_FILE_PARALLELISM=true npm run test --workspace=elder-terms-shared --workspace=elder-terms --workspace=elder-terms-vte -- --fileParallelism --maxWorkers=4
 ```
 
-The UI suite needs the fonts used by its fixtures, including
-[IBM Plex Sans JP](https://github.com/IBM/plex/tree/master/packages/plex-sans-jp),
-and a Japanese UTF-8 locale. Match the reference capture environment with
+Workspace builds (including `make build` and the build preceding tests) prepare
+Noto Sans Mono, DejaVu Sans Mono, IPAGothic, and Noto Sans CJK JP automatically.
+Fontconfig must match the requested family exactly; a substitute does not count.
+Missing fonts are downloaded from pinned [Debian packages](https://deb.debian.org/debian/pool/main/f/)
+and the official [Noto CJK Sans 2.004 release](https://github.com/notofonts/noto-cjk/tree/523d033d6cb47f4a80c58a35753646f5c3608a78),
+verified with SHA-256, and saved with their licenses under `.build/test-fonts/`.
+Installed fonts and valid cached downloads need no network access. A damaged cache
+is downloaded again; download or verification failure stops the build.
+The preparation script requires Node.js with TypeScript support, Fontconfig tools,
+and `dpkg-deb` for extracting Debian font packages.
+
+The test runners automatically use the private Fontconfig configuration and cache;
+no manual `FONTCONFIG_FILE` setting or host font installation is needed. If supplied,
+an existing `FONTCONFIG_FILE` is included as the base configuration. The fallback
+test isolates the four families, including the Japanese face of a system TTC,
+and compares rendered glyphs before and after changing fallback order.
+
+The UI suite also needs a Japanese UTF-8 locale. Match the reference capture environment with
 Yaru icons, the SVG image loader, grayscale antialiasing, and `TZ=Asia/Tokyo`
 for the file-list timestamps captured in the existing fixtures. Ensure that
 `org.gnome.desktop.interface icon-theme` selects `Yaru`: mounting its icon files
 alone leaves Debian's `Adwaita` default active. A disposable image can provide
 a [GSettings default override](https://docs.gtk.org/gio/class.Settings.html#vendor-overrides)
-for this setting without modifying the host desktop or product. A private
-Fontconfig configuration can include system fonts and the additional test font
-without changing the host font store. With older Cairo versions, explicitly set
+for this setting without modifying the host desktop or product. With older Cairo versions, explicitly set
 `rgba` to `none` in a `match target="font"` rule after including the system
 configuration. GTK's Xft setting alone did not produce grayscale captures in
 Debian 12. See the [Fontconfig configuration reference](https://fontconfig.pages.freedesktop.org/fontconfig/fontconfig-user.html).
