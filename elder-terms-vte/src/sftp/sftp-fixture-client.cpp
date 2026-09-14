@@ -370,7 +370,7 @@ public:
   }
 
   cardio::promise<std::unique_ptr<RemoteFileWriter>>
-  open_write_async(std::string path,
+  open_write_async(std::string path, std::uint64_t,
                    std::optional<std::uint32_t> permissions,
                    cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();

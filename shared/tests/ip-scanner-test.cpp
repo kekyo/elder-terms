@@ -11,6 +11,7 @@
 #include <functional>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -195,15 +196,15 @@ static void scan_reports_open_standard_ports_and_reverse_names() {
          "reverse lookup did not run exactly for discovered hosts");
   expect(entries.size() == 3, "scan entry updates were not incremental");
   expect(entries[0].address == "192.0.2.8" &&
-             entries[0].reverse_fqdn.empty() &&
+             entries[0].resolved_name.empty() &&
              entries[0].open_ports == std::vector<std::uint16_t>({22}),
          "first open host was not reported before reverse lookup");
   expect(entries[1].address == "192.0.2.8" &&
-             entries[1].reverse_fqdn == "router.example.test" &&
+             entries[1].resolved_name == "router.example.test" &&
              entries[1].open_ports == std::vector<std::uint16_t>({22}),
          "reverse lookup did not update the existing scan entry");
   expect(entries[2].address == "192.0.2.10" &&
-             entries[2].reverse_fqdn.empty() &&
+             entries[2].resolved_name.empty() &&
              entries[2].open_ports ==
                  std::vector<std::uint16_t>({21, 23}),
          "open ports were not reported in ascending order");
@@ -413,6 +414,276 @@ static void gio_probe_detects_an_open_tcp_port_asynchronously() {
   expect(open, "GIO probe did not detect an open loopback TCP port");
 }
 
+template <typename T>
+static cardio::promise<T> wait_for_lookup_cancellation(
+    cardio::cancellation cancellation) {
+  auto source = std::make_shared<cardio::promise_source<T>>();
+  auto registration = cancellation.on_cancellation_requested(
+      [source]() { (void)source->try_cancel(); });
+  co_return co_await source->get_promise();
+}
+
+struct NameLookupCase {
+  std::string label;
+  std::string system_name;
+  std::vector<elder_terms::IpScanNameCandidate> mdns;
+  std::vector<elder_terms::IpScanNameCandidate> llmnr;
+  std::string expected_name;
+  elder_terms::IpScanNameSource expected_source;
+  bool expire_system = false;
+  bool expire_total = false;
+  bool cancel_scan = false;
+  bool llmnr_first = false;
+};
+
+struct NameLookupTestState {
+  const NameLookupCase &test_case;
+  std::map<std::uint64_t, cardio::cancellation_source> deadlines;
+  std::vector<elder_terms::IpScanNameSource> requests;
+  cardio::cancellation_source cancellation;
+  std::shared_ptr<cardio::promise_source<
+      std::vector<elder_terms::IpScanNameCandidate>>> delayed_mdns =
+      std::make_shared<cardio::promise_source<
+          std::vector<elder_terms::IpScanNameCandidate>>>();
+  cardio::promise_source<void> llmnr_ready;
+};
+
+static cardio::promise<std::string> system_name_for_test_async(
+    NameLookupTestState *state, cardio::cancellation signal) {
+  if (state->test_case.expire_system) {
+    expect(state->deadlines.contains(1000), "system lookup has no 1s deadline");
+    (void)state->deadlines.at(1000).cancel();
+    co_return co_await wait_for_lookup_cancellation<std::string>(signal);
+  }
+  co_return state->test_case.system_name;
+}
+
+static cardio::promise<std::vector<elder_terms::IpScanNameCandidate>>
+multicast_names_for_test_async(NameLookupTestState *state,
+                               std::uint32_t address,
+                               elder_terms::IpScanNameSource source,
+                               cardio::cancellation signal) {
+  using Source = elder_terms::IpScanNameSource;
+  using Candidates = std::vector<elder_terms::IpScanNameCandidate>;
+  const auto &test_case = state->test_case;
+  expect(address == ipv4(192, 0, 2, 25), "lookup changed the IP address");
+  state->requests.push_back(source);
+  expect(source == Source::mdns || source == Source::llmnr,
+         "unexpected multicast protocol");
+  if (test_case.expire_total || test_case.cancel_scan) {
+    if (test_case.expire_total && source == Source::mdns &&
+        !test_case.mdns.empty()) {
+      co_return test_case.mdns;
+    }
+    if (state->requests.size() == 2) {
+      if (test_case.cancel_scan) {
+        (void)state->cancellation.cancel();
+      } else {
+        expect(state->deadlines.contains(3000), "lookup has no shared 3s deadline");
+        (void)state->deadlines.at(3000).cancel();
+      }
+    }
+    co_return co_await wait_for_lookup_cancellation<Candidates>(signal);
+  }
+  if (test_case.llmnr_first) {
+    co_return co_await state->delayed_mdns->get_promise();
+  }
+  co_return source == Source::mdns ? test_case.mdns : test_case.llmnr;
+}
+
+static cardio::promise<void> check_name_lookup_async(
+    const NameLookupCase &test_case) {
+  using Source = elder_terms::IpScanNameSource;
+  NameLookupTestState state{
+      .test_case = test_case,
+      .deadlines = {},
+      .requests = {},
+      .cancellation = {},
+      .llmnr_ready = {},
+  };
+  std::vector<elder_terms::IpScanEntry> entries;
+  bool completed = false;
+  // Keep the source completed when this case does not use delayed mDNS.
+  if (!test_case.llmnr_first) {
+    state.delayed_mdns->resolve({});
+    state.llmnr_ready.resolve();
+  }
+  elder_terms::IpScannerDependencies dependencies{
+      .interfaces = {{ipv4(192, 0, 2, 25), ipv4(255, 255, 255, 255)}},
+      .maximum_concurrent_hosts = 1,
+      .probe_port = [](std::uint32_t, std::uint16_t port,
+                        cardio::cancellation) {
+        return cardio::resolved(port == 22);
+      },
+      .reverse_lookup = [&](std::uint32_t, cardio::cancellation signal) {
+        return system_name_for_test_async(&state, signal);
+      },
+      .multicast_lookup = [&](std::uint32_t address, Source source,
+                               cardio::cancellation signal) {
+        if (test_case.llmnr_first && source == Source::llmnr) {
+          state.requests.push_back(source);
+          auto reply = cardio::resolved(test_case.llmnr);
+          state.llmnr_ready.resolve();
+          return reply;
+        }
+        return multicast_names_for_test_async(&state, address, source, signal);
+      },
+      .name_lookup_timeout = [&](std::uint64_t duration) {
+        expect(!state.deadlines.contains(duration), "name lookup restarted its deadline");
+        return state.deadlines.emplace(duration, cardio::cancellation_source{}).first->second;
+      },
+  };
+  bool canceled = false;
+  try {
+    auto scan = elder_terms::scan_ipv4_hosts_async(
+        std::move(dependencies),
+        {.entry_changed = [&](const elder_terms::IpScanEntry &entry) {
+           entries.push_back(entry);
+         },
+         .progress_changed = [](const elder_terms::IpScanProgress &) {},
+         .completed = [&]() { completed = true; }},
+        state.cancellation.get_cancellation());
+    if (test_case.llmnr_first) {
+      // LLMNR has already completed before allowing mDNS to respond.
+      co_await state.llmnr_ready.get_promise();
+      state.delayed_mdns->resolve(test_case.mdns);
+    }
+    co_await scan;
+  } catch (const cardio::canceled_exception &) {
+    canceled = true;
+  }
+  expect(canceled == test_case.cancel_scan, "incorrect scan cancellation result");
+  expect(completed != test_case.cancel_scan, "incorrect completion notification");
+  expect(!entries.empty() && entries.front().resolved_name.empty(),
+         "host was not reported before name lookup");
+  expect(entries.back().resolved_name == test_case.expected_name,
+         "incorrect resolved name: " + entries.back().resolved_name);
+  expect(entries.back().name_source == test_case.expected_source,
+         "incorrect name source");
+  expect(entries.size() == (test_case.expected_name.empty() ? 1U : 2U),
+         "lookup emitted duplicate or late entry updates");
+  expect(state.requests.size() == (test_case.system_name.empty() ? 2U : 0U),
+         "multicast lookup was not conditional on the system resolver result");
+}
+
+static cardio::promise<void> observe_name_lookup_test(
+    const NameLookupCase &test_case, cardio::dispatcher_group_glib *group,
+    std::exception_ptr *error) {
+  try {
+    co_await check_name_lookup_async(test_case);
+  } catch (...) {
+    *error = std::current_exception();
+  }
+  group->shutdown();
+}
+
+static void scan_resolves_multicast_names_with_shared_deadlines() {
+  using Source = elder_terms::IpScanNameSource;
+  const std::vector<NameLookupCase> cases = {
+      {"mDNS only", "", {{"printer.local", 2}}, {}, "printer.local", Source::mdns},
+      {"LLMNR only", "", {}, {{"printer", 2}}, "printer", Source::llmnr},
+      {"system priority", "dns.example.test", {{"printer.local", 2}},
+       {{"printer", 2}}, "dns.example.test", Source::system},
+      {"mDNS priority", "", {{"printer.local", 2}}, {{"printer", 2}},
+       "printer.local", Source::mdns},
+      {"LLMNR replies first", "", {{"printer.local", 2}}, {{"printer", 2}},
+       "printer.local", Source::mdns, false, false, false, true},
+      {"stable candidates", "", {{"z.local", 2}, {"a.local", 3},
+                                   {"bad/name", 1}, {"", 1}, {"a.local", 2}},
+       {}, "a.local", Source::mdns},
+      {"reordered candidates", "", {{"a.local", 2}, {"", 1},
+                                     {"bad/name", 1}, {"a.local", 3}, {"z.local", 2}},
+       {}, "a.local", Source::mdns},
+      {"invalid names", "", {{"bad/name", 1}, {"bad:23", 1},
+                               {"bad name", 1}, {"bad\nname", 1},
+                               {".local", 1}, {"bad..local", 1},
+                               {"bad.local", -1}},
+       {{"printer", 2}}, "printer", Source::llmnr},
+      {"no names", "", {}, {}, "", Source::none},
+      {"system deadline", "", {{"printer.local", 2}}, {},
+       "printer.local", Source::mdns, true},
+      {"total deadline", "", {}, {}, "", Source::none, false, true},
+      {"keep mDNS while LLMNR times out", "", {{"printer.local", 2}}, {},
+       "printer.local", Source::mdns, false, true},
+      {"user cancellation", "", {}, {}, "", Source::none, false, false, true},
+  };
+  std::size_t failures = 0;
+  for (const auto &test_case : cases) {
+    cardio::dispatcher_group_glib group;
+    cardio::dispatcher_host_glib dispatcher(group);
+    std::exception_ptr error;
+    auto task = observe_name_lookup_test(test_case, &group, &error);
+    dispatcher.park();
+    if (error != nullptr) {
+      ++failures;
+      try {
+        std::rethrow_exception(error);
+      } catch (const std::exception &exception) {
+        std::cerr << test_case.label << ": " << exception.what() << '\n';
+      }
+    }
+  }
+  expect(failures == 0, "multicast name lookup cases failed");
+}
+
+static cardio::promise<void> check_same_name_hosts_async(
+    cardio::dispatcher_group_glib *group, std::exception_ptr *error) {
+  try {
+    std::map<std::string, std::string> hosts;
+    std::size_t updates = 0;
+    bool completed = false;
+    elder_terms::IpScannerDependencies dependencies{
+        .interfaces = {{ipv4(192, 0, 2, 25), UINT32_MAX},
+                       {ipv4(192, 0, 2, 26), UINT32_MAX}},
+        .maximum_concurrent_hosts = 2,
+        .probe_port = [](std::uint32_t, std::uint16_t port,
+                         cardio::cancellation) {
+          return cardio::resolved(port == 22);
+        },
+        .reverse_lookup = [](std::uint32_t, cardio::cancellation) {
+          return cardio::resolved(std::string());
+        },
+        .multicast_lookup = [](std::uint32_t, elder_terms::IpScanNameSource source,
+                               cardio::cancellation) {
+          std::vector<elder_terms::IpScanNameCandidate> candidates;
+          if (source == elder_terms::IpScanNameSource::mdns) {
+            candidates.push_back({"printer.local", 2});
+          }
+          return cardio::resolved(std::move(candidates));
+        },
+        .name_lookup_timeout = [](std::uint64_t) {
+          return cardio::cancellation_source{};
+        },
+    };
+    co_await elder_terms::scan_ipv4_hosts_async(
+        std::move(dependencies),
+        {.entry_changed = [&](const elder_terms::IpScanEntry &entry) {
+           hosts[entry.address] = entry.resolved_name;
+           ++updates;
+         },
+         .progress_changed = [](const elder_terms::IpScanProgress &) {},
+         .completed = [&]() { completed = true; }}, {});
+    expect(completed && updates == 4 && hosts.size() == 2 &&
+               hosts.at("192.0.2.25") == "printer.local" &&
+               hosts.at("192.0.2.26") == "printer.local",
+           "hosts sharing one name were merged or lost their IP association");
+  } catch (...) {
+    *error = std::current_exception();
+  }
+  group->shutdown();
+}
+
+static void scan_keeps_same_name_hosts_separate() {
+  cardio::dispatcher_group_glib group;
+  cardio::dispatcher_host_glib dispatcher(group);
+  std::exception_ptr error;
+  auto task = check_same_name_hosts_async(&group, &error);
+  dispatcher.park();
+  if (error != nullptr) {
+    std::rethrow_exception(error);
+  }
+}
+
 } // namespace elder_terms_ip_scanner_test
 
 int main() {
@@ -430,6 +701,9 @@ int main() {
         scan_cancellation_stops_pending_work_without_completion();
     elder_terms_ip_scanner_test::
         gio_probe_detects_an_open_tcp_port_asynchronously();
+    elder_terms_ip_scanner_test::
+        scan_resolves_multicast_names_with_shared_deadlines();
+    elder_terms_ip_scanner_test::scan_keeps_same_name_hosts_separate();
   } catch (const std::exception &exception) {
     std::cerr << exception.what() << '\n';
     return 1;

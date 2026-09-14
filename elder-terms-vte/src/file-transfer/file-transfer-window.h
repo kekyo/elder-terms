@@ -89,6 +89,23 @@ cardio::promise<InlinePromptResponse> prompt_file_transfer_window_async(
     InlinePromptRequest request, cardio::cancellation cancellation);
 
 /**
+ * Confirms an identity exception without changing the browser connection state.
+ * @param window File-transfer window hosting the prompt.
+ * @param request Certificate presentation and explicit response labels.
+ * @param cancellation Cancellation of the operation or connection.
+ * @returns Accepted response, or rejection after cancellation or close.
+ */
+cardio::promise<InlinePromptResponse> confirm_file_transfer_window_async(
+    const std::shared_ptr<FileTransferWindow> &window,
+    InlinePromptRequest request, cardio::cancellation cancellation);
+
+/**
+ * Marks the connection status as using an explicitly accepted certificate.
+ * @param window Window retaining the indication until it closes.
+ */
+void mark_file_transfer_certificate_exception(const std::shared_ptr<FileTransferWindow> &window);
+
+/**
  * Shows a connection failure inside the file-transfer surface until closed.
  *
  * @param window File-transfer window hosting the error.
@@ -125,5 +142,17 @@ void set_file_transfer_window_colors(
  * @param window File-transfer window state.
  */
 void present_file_transfer_window(const std::shared_ptr<FileTransferWindow> &window);
+
+/**
+ * Closes a file browser and waits for its owned asynchronous work to finish.
+ *
+ * @param window Window retained until browsing, management, and transfer
+ * cleanup has completed.
+ * @returns Completion after all asynchronous work owned by the window ends.
+ * @remarks Keep the caller dispatcher alive until completion. The underlying
+ * remote client must also be stopped by its owner. Repeated calls are allowed.
+ */
+cardio::promise<void>
+close_file_transfer_window_async(std::shared_ptr<FileTransferWindow> window);
 
 } // namespace elder_terms

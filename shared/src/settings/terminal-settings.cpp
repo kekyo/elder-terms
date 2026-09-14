@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <charconv>
 #include <cmath>
 #include <filesystem>
 #include <string>
@@ -26,14 +27,9 @@ static constexpr char terminal_width_key[] = "width";
 static constexpr char terminal_height_key[] = "height";
 static constexpr char terminal_scrollback_lines_key[] = "scrollback_lines";
 static constexpr char terminal_zoom_key[] = "zoom";
-static constexpr char terminal_font_primary_family_key[] =
-    "font_primary_family";
-static constexpr char terminal_font_fallback_family_key[] =
-    "font_fallback_family";
-static constexpr char terminal_font_default_value[] = "default";
-static constexpr char default_terminal_font_primary_family[] =
-    "Noto Sans Mono";
-static constexpr char default_terminal_font_fallback_family[] = "Monospace";
+static constexpr char terminal_indicator_color_key[] = "indicator_color";
+static constexpr char terminal_indicator_off_color_key[] = "indicator_off_color";
+static constexpr char terminal_font_families_key[] = "font_families";
 static constexpr char terminal_auto_close_key[] = "auto_close";
 static constexpr char terminal_show_border_key[] = "show_border";
 static constexpr char terminal_border_width_key[] = "border_width";
@@ -122,24 +118,71 @@ static bool validate_border_width(const SettingValue &value,
   return true;
 }
 
-static bool validate_font_family(const SettingValue &value,
-                                 std::string *reason) {
-  const auto *text = std::get_if<std::string>(&value);
-  if (text == nullptr || trim_ascii_whitespace(*text).empty()) {
-    *reason = "must be a non-empty font family name";
-    return false;
+bool terminal_font_families_are_valid(
+    const std::vector<std::string> &families, std::string *reason) {
+  std::vector<std::string> normalized;
+  for (const auto &family : families) {
+    if (!g_utf8_validate(family.data(), static_cast<gssize>(family.size()),
+                         nullptr)) {
+      *reason = "font family names must be valid UTF-8 without NUL characters";
+      return false;
+    }
+    for (const char *character = family.c_str(); *character != '\0';
+         character = g_utf8_next_char(character)) {
+      if (g_unichar_iscntrl(g_utf8_get_char(character)) || *character == ',') {
+        *reason = "font family names must not contain commas or control characters";
+        return false;
+      }
+    }
+    const auto name = trim_ascii_whitespace(family);
+    if (name.empty() || std::find(normalized.begin(), normalized.end(), name) !=
+                            normalized.end()) {
+      *reason = "font family names must be non-empty and unique";
+      return false;
+    }
+    normalized.push_back(name);
   }
   return true;
 }
 
-static std::optional<std::string>
-terminal_font_family_value(const std::string &value,
-                           const char *default_family) {
-  const std::string normalized = trim_ascii_whitespace(value);
-  if (normalized.empty() || normalized == terminal_font_default_value) {
-    return std::string(default_family);
+static std::optional<RgbColor> parse_indicator_color(const std::string &text) {
+  if (text.size() != 7 || text.front() != '#') {
+    return std::nullopt;
   }
-  return normalized;
+  unsigned int packed = 0;
+  const auto parsed = std::from_chars(text.data() + 1,
+                                      text.data() + text.size(), packed, 16);
+  if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
+    return std::nullopt;
+  }
+  return RgbColor{
+      .red = static_cast<guint8>(packed >> 16),
+      .green = static_cast<guint8>(packed >> 8),
+      .blue = static_cast<guint8>(packed),
+  };
+}
+
+static bool validate_indicator_color(const SettingValue &value,
+                                      std::string *reason) {
+  const auto *text = std::get_if<std::string>(&value);
+  if (text != nullptr && (*text == "default" ||
+                          parse_indicator_color(*text).has_value())) {
+    return true;
+  }
+  *reason = "must be default or #RRGGBB";
+  return false;
+}
+
+static bool validate_font_families(const SettingValue &value,
+                                   std::string *reason) {
+  return terminal_font_families_are_valid(
+      std::get<std::vector<std::string>>(value), reason);
+}
+
+static void normalize_font_families(SettingValue &value) {
+  for (auto &family : std::get<std::vector<std::string>>(value)) {
+    family = trim_ascii_whitespace(family);
+  }
 }
 
 static bool validate_key_binding(const SettingValue &value,
@@ -239,12 +282,26 @@ SettingKey terminal_zoom_setting_key() {
   return terminal_key(terminal_zoom_key);
 }
 
-SettingKey terminal_font_primary_family_setting_key() {
-  return terminal_key(terminal_font_primary_family_key);
+SettingKey terminal_indicator_color_setting_key() {
+  return terminal_key(terminal_indicator_color_key);
 }
 
-SettingKey terminal_font_fallback_family_setting_key() {
-  return terminal_key(terminal_font_fallback_family_key);
+std::optional<RgbColor> terminal_indicator_color(const SettingsStore &store) {
+  return parse_indicator_color(setting_string_value_or_default(
+      store, terminal_indicator_color_setting_key(), "default"));
+}
+
+SettingKey terminal_indicator_off_color_setting_key() {
+  return terminal_key(terminal_indicator_off_color_key);
+}
+
+std::optional<RgbColor> terminal_indicator_off_color(const SettingsStore &store) {
+  return parse_indicator_color(setting_string_value_or_default(
+      store, terminal_indicator_off_color_setting_key(), "default"));
+}
+
+SettingKey terminal_font_families_setting_key() {
+  return terminal_key(terminal_font_families_key);
 }
 
 SettingKey terminal_auto_close_setting_key() {
@@ -387,14 +444,20 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .validate = validate_zoom,
       },
       {
-          .key = terminal_font_primary_family_setting_key(),
-          .default_value = SettingValue{std::string{}},
-          .validate = validate_font_family,
+          .key = terminal_indicator_color_setting_key(),
+          .default_value = SettingValue{std::string("default")},
+          .validate = validate_indicator_color,
       },
       {
-          .key = terminal_font_fallback_family_setting_key(),
-          .default_value = SettingValue{std::string{}},
-          .validate = validate_font_family,
+          .key = terminal_font_families_setting_key(),
+          .default_value = SettingValue{std::vector<std::string>{}},
+          .validate = validate_font_families,
+          .normalize = normalize_font_families,
+      },
+      {
+          .key = terminal_indicator_off_color_setting_key(),
+          .default_value = SettingValue{std::string("default")},
+          .validate = validate_indicator_color,
       },
       {
           .key = terminal_auto_close_setting_key(),
@@ -476,16 +539,11 @@ TerminalDisplaySettings terminal_display_settings(const SettingsStore &store) {
 }
 
 TerminalFontFamilies terminal_font_families(const SettingsStore &store) {
-  return {
-      .primary_family = terminal_font_family_value(
-          setting_string_value_or_default(
-              store, terminal_font_primary_family_setting_key(), ""),
-          default_terminal_font_primary_family),
-      .fallback_family = terminal_font_family_value(
-          setting_string_value_or_default(
-              store, terminal_font_fallback_family_setting_key(), ""),
-          default_terminal_font_fallback_family),
-  };
+  auto families = std::get<std::vector<std::string>>(setting_value_or_default(
+      store, terminal_font_families_setting_key(),
+      SettingValue{std::vector<std::string>{}}));
+  if (families.empty()) families = {"Noto Sans Mono", "Monospace"};
+  return {.families = std::move(families)};
 }
 
 bool terminal_auto_close(const SettingsStore &store) {

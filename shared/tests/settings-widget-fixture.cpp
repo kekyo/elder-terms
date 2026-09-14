@@ -6,6 +6,7 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <iomanip>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -32,7 +33,11 @@ struct FixtureOptions {
   bool has_save = false;
   bool show_actions = true;
   bool global_mode = false;
+  bool allow_invalid_connection_values = false;
+  std::string save_file;
   std::string bell_sound_dialog_file;
+  std::string ftp_ca_dialog_file;
+  std::string webdav_ca_dialog_file;
   std::string ip_scan_mode;
   std::string page = "general";
   std::vector<ConfigAssignment> connection_assignments;
@@ -44,6 +49,8 @@ struct FixtureState {
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
   std::optional<elder_terms::SettingsStore> rebase_store;
   std::string bell_sound_dialog_file;
+  std::string ftp_ca_dialog_file;
+  std::string webdav_ca_dialog_file;
   GtkWidget *window = nullptr;
 };
 
@@ -85,10 +92,15 @@ static FixtureOptions parse_options(int argc, char **argv) {
   FixtureOptions options;
   for (int index = 1; index < argc; ++index) {
     const std::string argument = argv[index];
-    if (argument == "--runtime") {
+    if (argument == "--allow-invalid-connection-values") {
+      options.allow_invalid_connection_values = true;
+    } else if (argument == "--runtime") {
       options.is_runtime = true;
     } else if (argument == "--save") {
       options.has_save = true;
+    } else if (starts_with(argument, "--save-file=")) {
+      options.has_save = true;
+      options.save_file = option_value(argument, "--save-file=");
     } else if (argument == "--hide-actions") {
       options.show_actions = false;
     } else if (argument == "--global-mode") {
@@ -96,6 +108,9 @@ static FixtureOptions parse_options(int argc, char **argv) {
     } else if (starts_with(argument, "--global=")) {
       options.global_assignments.push_back(
           parse_assignment(option_value(argument, "--global=")));
+    } else if (starts_with(argument, "--connection=")) {
+      options.connection_assignments.push_back(
+          parse_assignment(option_value(argument, "--connection=")));
     } else if (starts_with(argument, "--rebase-global=")) {
       options.rebase_global_assignments.push_back(
           parse_assignment(option_value(argument, "--rebase-global=")));
@@ -123,14 +138,6 @@ static FixtureOptions parse_options(int argc, char **argv) {
     } else if (starts_with(argument, "--zoom=")) {
       append_connection_assignment(
           &options, "terminal", "zoom", option_value(argument, "--zoom="));
-    } else if (starts_with(argument, "--font-primary-family=")) {
-      append_connection_assignment(
-          &options, "terminal", "font_primary_family",
-          option_value(argument, "--font-primary-family="));
-    } else if (starts_with(argument, "--font-fallback-family=")) {
-      append_connection_assignment(
-          &options, "terminal", "font_fallback_family",
-          option_value(argument, "--font-fallback-family="));
     } else if (starts_with(argument, "--auto-close=")) {
       append_connection_assignment(
           &options, "terminal", "auto_close",
@@ -151,6 +158,10 @@ static FixtureOptions parse_options(int argc, char **argv) {
       append_connection_assignment(
           &options, "general", "background",
           option_value(argument, "--background="));
+    } else if (starts_with(argument, "--indicator-color=")) {
+      append_connection_assignment(
+          &options, "terminal", "indicator_color",
+          option_value(argument, "--indicator-color="));
     } else if (starts_with(argument, "--encoding=")) {
       append_connection_assignment(
           &options, "terminal", "encoding",
@@ -181,6 +192,10 @@ static FixtureOptions parse_options(int argc, char **argv) {
           option_value(argument, "--send-break-key="));
     } else if (starts_with(argument, "--page=")) {
       options.page = option_value(argument, "--page=");
+    } else if (starts_with(argument, "--webdav-ca-dialog-file=")) {
+      options.webdav_ca_dialog_file = option_value(argument, "--webdav-ca-dialog-file=");
+    } else if (starts_with(argument, "--ftp-ca-dialog-file=")) {
+      options.ftp_ca_dialog_file = option_value(argument, "--ftp-ca-dialog-file=");
     } else if (starts_with(argument, "--bell-sound-dialog-file=")) {
       options.bell_sound_dialog_file =
           option_value(argument, "--bell-sound-dialog-file=");
@@ -347,7 +362,7 @@ static void assign_accessible_id(GtkWidget *widget, const char *id) {
 
 static void load_assignments(
     elder_terms::SettingsStore *store,
-    const std::vector<ConfigAssignment> &assignments) {
+    const std::vector<ConfigAssignment> &assignments, bool allow_invalid_values) {
   GKeyFile *key_file = g_key_file_new();
   for (const ConfigAssignment &assignment : assignments) {
     g_key_file_set_value(key_file, assignment.section.c_str(),
@@ -356,8 +371,11 @@ static void load_assignments(
   std::vector<std::string> warnings;
   elder_terms::load_settings_store_from_key_file(store, key_file, &warnings);
   g_key_file_free(key_file);
-  if (!warnings.empty()) {
+  if (!warnings.empty() && !allow_invalid_values) {
     throw std::invalid_argument(warnings.front());
+  }
+  for (const auto &warning : warnings) {
+    std::cerr << warning << '\n';
   }
 }
 
@@ -381,7 +399,7 @@ create_global_store(const std::vector<ConfigAssignment> &assignments) {
       "elder-terms-settings-widget-fixture-missing-global.ini";
   elder_terms::SettingsStore store =
       elder_terms::load_global_settings(missing_path, 1.0).store;
-  load_assignments(&store, assignments);
+  load_assignments(&store, assignments, false);
   return store;
 }
 
@@ -398,7 +416,8 @@ static elder_terms::SettingsStore create_store(const FixtureOptions &options) {
       .key = "name",
       .value = "fixture",
   });
-  load_assignments(&store, connection_assignments);
+  load_assignments(&store, connection_assignments,
+                    options.allow_invalid_connection_values);
   return store;
 }
 
@@ -422,7 +441,22 @@ delayed_burst_probe(std::uint32_t, std::uint16_t port,
 
 static elder_terms::IpScannerDependencies
 create_ip_scanner_dependencies(const std::string &mode) {
-  if (mode != "complete" && mode != "pending" && mode != "burst") {
+  if (starts_with(mode, "network:")) {
+    const auto target = std::stoul(mode.substr(8));
+    if (target > UINT32_MAX) {
+      throw std::invalid_argument("invalid network fixture IPv4 address");
+    }
+    auto dependencies = elder_terms::create_system_ip_scanner_dependencies();
+    dependencies.interfaces = {{static_cast<std::uint32_t>(target), UINT32_MAX}};
+    // Exercise the explicit multicast path even when the system resolver can
+    // already answer multicast PTR queries. Port probes and D-Bus are real.
+    dependencies.reverse_lookup = [](std::uint32_t, cardio::cancellation) {
+      return cardio::resolved(std::string());
+    };
+    return dependencies;
+  }
+  if (mode != "complete" && mode != "pending" && mode != "burst" &&
+      mode != "no-name" && mode != "mdns" && mode != "llmnr") {
     throw std::invalid_argument("unknown IP scan fixture mode: " + mode);
   }
   elder_terms::IpScannerDependencies dependencies{
@@ -438,9 +472,30 @@ create_ip_scanner_dependencies(const std::string &mode) {
       .reverse_lookup = [](std::uint32_t, cardio::cancellation) {
         return cardio::resolved(std::string("router.example.test"));
       },
+      // Fixture completion and cancellation are controlled by the test, not
+      // the production name-lookup deadlines.
+      .name_lookup_timeout = [](std::uint64_t) {
+        return cardio::cancellation_source{};
+      },
   };
   if (mode == "pending") {
     dependencies.reverse_lookup = pending_reverse_lookup;
+  } else if (mode == "no-name" || mode == "mdns" || mode == "llmnr") {
+    dependencies.reverse_lookup = [](std::uint32_t, cardio::cancellation) {
+      return cardio::resolved(std::string());
+    };
+    dependencies.multicast_lookup =
+        [mode](std::uint32_t, elder_terms::IpScanNameSource source,
+               cardio::cancellation) {
+          std::vector<elder_terms::IpScanNameCandidate> candidates;
+          if (mode == "mdns" && source == elder_terms::IpScanNameSource::mdns) {
+            candidates.push_back({"router.local", 2});
+          } else if (mode == "llmnr" &&
+                     source == elder_terms::IpScanNameSource::llmnr) {
+            candidates.push_back({"router", 2});
+          }
+          return cardio::resolved(std::move(candidates));
+        };
   } else if (mode == "burst") {
     dependencies.interfaces = {{
         .address = ipv4(198, 51, 102, 7),
@@ -520,6 +575,32 @@ static void select_bell_sound_dialog_file(GtkButton *, gpointer data) {
   g_list_free(windows);
 }
 
+static void select_ftp_ca_dialog_file(GtkButton *, gpointer data) {
+  const auto *file = static_cast<const std::string *>(data);
+  GList *windows = gtk_window_list_toplevels();
+  for (GList *window = windows; window; window = window->next) {
+    auto *dialog = find_widget_by_name(GTK_WIDGET(window->data), "settings_ftp_ca_dialog");
+    if (dialog && GTK_IS_FILE_CHOOSER(dialog)) {
+      gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), file->c_str());
+      break;
+    }
+  }
+  g_list_free(windows);
+}
+
+static void select_webdav_ca_dialog_file(GtkButton *, gpointer data) {
+  const auto *file = static_cast<const std::string *>(data);
+  GList *windows = gtk_window_list_toplevels();
+  for (GList *window = windows; window; window = window->next) {
+    auto *dialog = find_widget_by_name(GTK_WIDGET(window->data), "settings_webdav_ca_dialog");
+    if (dialog && GTK_IS_FILE_CHOOSER(dialog)) {
+      gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), file->c_str());
+      break;
+    }
+  }
+  g_list_free(windows);
+}
+
 static void print_color_picker_alpha(GtkWidget *window,
                                      const std::string &id,
                                      const char *name) {
@@ -548,44 +629,6 @@ static void print_color_picker_properties(GtkWidget *window,
   std::cout.flush();
 }
 
-static void print_font_chooser_properties(GtkWidget *window,
-                                          const std::string &id_prefix) {
-  const auto print_chooser = [window, &id_prefix](const char *id_suffix,
-                                                  const char *name) {
-    GtkWidget *widget =
-        find_widget_by_name(window, id_prefix + id_suffix);
-    std::cout << ' ' << name << "_present=";
-    if (widget == nullptr || !GTK_IS_FONT_BUTTON(widget) ||
-        !GTK_IS_FONT_CHOOSER(widget)) {
-      std::cout << "false";
-      return;
-    }
-    std::cout << "true" << ' ' << name << "_level="
-              << static_cast<int>(gtk_font_chooser_get_level(
-                     GTK_FONT_CHOOSER(widget)))
-              << ' ' << name << "_use_size="
-              << (gtk_font_button_get_use_size(GTK_FONT_BUTTON(widget)) !=
-                          FALSE
-                      ? "true"
-                      : "false")
-              << ' ' << name << "_show_size="
-              << (gtk_font_button_get_show_size(GTK_FONT_BUTTON(widget)) !=
-                          FALSE
-                      ? "true"
-                      : "false")
-              << ' ' << name << "_show_style="
-              << (gtk_font_button_get_show_style(GTK_FONT_BUTTON(widget)) !=
-                          FALSE
-                      ? "true"
-                      : "false");
-  };
-
-  std::cout << "FONT_CHOOSERS";
-  print_chooser("_terminal_font_primary_button", "primary");
-  print_chooser("_terminal_font_fallback_button", "fallback");
-  std::cout << '\n';
-  std::cout.flush();
-}
 
 static void select_initial_page(GtkWidget *window,
                                 const std::string &page) {
@@ -626,6 +669,9 @@ connection_type_name(elder_terms::ConnectionKind kind) {
   }
   if (kind == elder_terms::ConnectionKind::ftp) {
     return "ftp";
+  }
+  if (kind == elder_terms::ConnectionKind::webdav) {
+    return "webdav";
   }
   return "local";
 }
@@ -752,13 +798,14 @@ static void print_store(const char *prefix,
             << connection_type_name(
                    elder_terms::general_connection_kind(store))
             << " name=" << elder_terms::general_connection_name(store)
+            << " webdav_scheme=" << elder_terms::webdav_connection_settings(store).scheme
+            << " webdav_port=" << elder_terms::webdav_connection_settings(store).port
+            << " webdav_base_path=" << elder_terms::webdav_connection_settings(store).base_path
+            << " webdav_ca_file=" << elder_terms::webdav_connection_settings(store).ca_file
+            << " webdav_certificate_action=" << (elder_terms::webdav_connection_settings(store).prompt_certificate ? "prompt" : "reject")
             << " width=" << display.width << " height=" << display.height
             << " scrollback_lines=" << display.scrollback_lines
             << " zoom=" << display.zoom
-            << " font_primary_family="
-            << font_families.primary_family.value_or("")
-            << " font_fallback_family="
-            << font_families.fallback_family.value_or("")
             << " encoding=" << text_settings.encoding
             << " backspace_code="
             << elder_terms::terminal_backspace_code_to_string(
@@ -780,6 +827,10 @@ static void print_store(const char *prefix,
             << elder_terms::terminal_border_width(store)
             << " exterior_background=" << exterior_background
             << " background=" << background
+            << " indicator_color="
+            << elder_terms::setting_string_value_or_default(
+                   store, elder_terms::make_setting_key("terminal", "indicator_color"),
+                   "default")
             << " zoom_in_key="
             << elder_terms::terminal_zoom_in_key(store)
             << " zoom_out_key="
@@ -870,11 +921,8 @@ static void print_store(const char *prefix,
   print_setting_metadata(store, "zoom",
                          elder_terms::terminal_zoom_setting_key());
   print_setting_metadata(
-      store, "font_primary_family",
-      elder_terms::terminal_font_primary_family_setting_key());
-  print_setting_metadata(
-      store, "font_fallback_family",
-      elder_terms::terminal_font_fallback_family_setting_key());
+      store, "font_families",
+      elder_terms::terminal_font_families_setting_key());
   print_setting_metadata(store, "auto_close",
                          elder_terms::terminal_auto_close_setting_key());
   print_setting_metadata(store, "bell_sound",
@@ -888,6 +936,9 @@ static void print_store(const char *prefix,
       elder_terms::general_exterior_background_setting_key());
   print_setting_metadata(store, "background",
                          elder_terms::general_background_setting_key());
+  print_setting_metadata(
+      store, "indicator_color",
+      elder_terms::make_setting_key("terminal", "indicator_color"));
   print_setting_metadata(store, "encoding",
                          elder_terms::terminal_encoding_setting_key());
   print_setting_metadata(store, "backspace_code",
@@ -924,6 +975,24 @@ static void print_store(const char *prefix,
                          elder_terms::sftp_local_directory_setting_key());
   print_setting_metadata(store, "sftp_remote_directory",
                          elder_terms::sftp_remote_directory_setting_key());
+  std::cout << " ftp_tls_mode=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls_mode"), "");
+  print_setting_metadata(store, "ftp_tls_mode", elder_terms::make_setting_key("ftp", "tls_mode"));
+  std::cout << " ftp_tls_min_version=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls_min_version"), "");
+  print_setting_metadata(store, "ftp_tls_min_version", elder_terms::make_setting_key("ftp", "tls_min_version"));
+  std::cout << " ftp_tls_max_version=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls_max_version"), "");
+  print_setting_metadata(store, "ftp_tls_max_version", elder_terms::make_setting_key("ftp", "tls_max_version"));
+  std::cout << " ftp_tls_auth_order=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls_auth_order"), "");
+  print_setting_metadata(store, "ftp_tls_auth_order", elder_terms::make_setting_key("ftp", "tls_auth_order"));
+  std::cout << " ftp_tls_compatibility=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls_compatibility"), "");
+  print_setting_metadata(store, "ftp_tls_compatibility", elder_terms::make_setting_key("ftp", "tls_compatibility"));
+  std::cout << " ftp_certificate_error_action=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "certificate_error_action"), "");
+  print_setting_metadata(store, "ftp_certificate_error_action", elder_terms::make_setting_key("ftp", "certificate_error_action"));
+  std::cout << " ftp_ca_file=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "ca_file"), "");
+  print_setting_metadata(store, "ftp_ca_file", elder_terms::make_setting_key("ftp", "ca_file"));
+  std::cout << " ftp_tls_cipher_list=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls_cipher_list"), "");
+  print_setting_metadata(store, "ftp_tls_cipher_list", elder_terms::make_setting_key("ftp", "tls_cipher_list"));
+  std::cout << " ftp_tls13_cipher_list=" << elder_terms::setting_string_value_or_default(store, elder_terms::make_setting_key("ftp", "tls13_cipher_list"), "");
+  print_setting_metadata(store, "ftp_tls13_cipher_list", elder_terms::make_setting_key("ftp", "tls13_cipher_list"));
   print_setting_metadata(store, "ftp_address",
                          elder_terms::ftp_address_setting_key());
   print_setting_metadata(store, "ftp_port",
@@ -978,6 +1047,12 @@ static void print_store(const char *prefix,
   print_setting_metadata(store, "log_mode",
                          elder_terms::terminal_log_mode_setting_key());
   std::cout << '\n';
+  std::cout << prefix << "_FONTS [";
+  for (std::size_t index = 0; index < font_families.families.size(); ++index) {
+    if (index != 0) std::cout << ',';
+    std::cout << std::quoted(font_families.families[index]);
+  }
+  std::cout << "]\n";
   std::cout.flush();
 }
 
@@ -1022,6 +1097,8 @@ int main(int argc, char **argv) {
         elder_terms_settings_widget_fixture::parse_options(argc, argv);
     elder_terms_settings_widget_fixture::FixtureState state;
     state.bell_sound_dialog_file = options.bell_sound_dialog_file;
+    state.ftp_ca_dialog_file = options.ftp_ca_dialog_file;
+    state.webdav_ca_dialog_file = options.webdav_ca_dialog_file;
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     state.window = window;
@@ -1037,7 +1114,25 @@ int main(int argc, char **argv) {
         };
     if (options.has_save) {
       callbacks.save =
-          [](const elder_terms::SettingsStore &store) {
+          [path = options.save_file](const elder_terms::SettingsStore &store) {
+            if (!path.empty()) {
+              if (!elder_terms::save_settings(store, path).saved) {
+                return false;
+              }
+              const auto reloaded = elder_terms::load_settings(
+                  {.config_path = path,
+                   .startup_config_path = std::nullopt,
+                   .global_config_path =
+                       std::filesystem::path(path).parent_path() /
+                       "unused-global.ini"},
+                  1.0);
+              if (!reloaded.loaded) {
+                return false;
+              }
+              elder_terms_settings_widget_fixture::print_store(
+                  "SAVED", reloaded.store);
+              return true;
+            }
             elder_terms_settings_widget_fixture::print_store("SAVED", store);
             return true;
           };
@@ -1116,6 +1211,16 @@ int main(int argc, char **argv) {
             &state.bell_sound_dialog_file);
       }
     }
+    if (!state.ftp_ca_dialog_file.empty()) {
+      auto *button = elder_terms_settings_widget_fixture::find_widget_by_name(window, "settings_ftp_ca_browse_button");
+      if (button) g_signal_connect_after(button, "clicked",
+          G_CALLBACK(elder_terms_settings_widget_fixture::select_ftp_ca_dialog_file), &state.ftp_ca_dialog_file);
+    }
+    if (!state.webdav_ca_dialog_file.empty()) {
+      auto *button = elder_terms_settings_widget_fixture::find_widget_by_name(window, "settings_webdav_ca_browse_button");
+      if (button) g_signal_connect_after(button, "clicked",
+          G_CALLBACK(elder_terms_settings_widget_fixture::select_webdav_ca_dialog_file), &state.webdav_ca_dialog_file);
+    }
     if (state.rebase_store.has_value()) {
       GtkWidget *rebase_button =
           gtk_button_new_with_label("Rebase test fallbacks");
@@ -1141,8 +1246,6 @@ int main(int argc, char **argv) {
     }
     elder_terms_settings_widget_fixture::print_entry_placeholders(window);
     elder_terms_settings_widget_fixture::print_color_picker_properties(
-        window, options.global_mode ? "global_settings" : "settings");
-    elder_terms_settings_widget_fixture::print_font_chooser_properties(
         window, options.global_mode ? "global_settings" : "settings");
     std::cout << "READY\n";
     std::cout.flush();

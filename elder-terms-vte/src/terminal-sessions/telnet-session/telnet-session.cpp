@@ -272,6 +272,7 @@ private:
         std::span<unsigned char> writable(buffer.data(), buffer.size());
         const std::size_t read_size = co_await cardio::io_urings::read(
             *io, socket_fd, std::as_writable_bytes(writable));
+        if (stopping) break;
         if (read_size == 0) {
           natural_end = true;
           break;
@@ -285,19 +286,23 @@ private:
       if (!stopping) {
         std::cerr << "Warning: TELNET session failed: " << error.what()
                   << '\n';
+        if (callbacks.failure) callbacks.failure(error.what());
         natural_end = true;
       }
     }
 
     const bool should_notify_session_ended = natural_end && !stopping;
-    stopping = true;
-    cancel_modem_transfer_noexcept();
-    cancel_text_send_noexcept();
-    terminal_io.disconnect_user_input();
-    outgoing.clear();
-    co_await close_current_socket_async();
+    stop();
     if (should_notify_session_ended) {
       notify_connection_phase(TerminalSessionConnectionPhase::disconnected);
+    }
+    // Do not close/reuse the descriptor while pending writes still borrow it.
+    if (write_task.has_value()) co_await *write_task;
+    if (transfer_task.has_value()) co_await *transfer_task;
+    if (text_send_task.has_value()) co_await *text_send_task;
+    if (break_task.has_value()) co_await *break_task;
+    co_await close_current_socket_async();
+    if (should_notify_session_ended) {
       notify_session_ended(callbacks);
     }
   }
@@ -757,6 +762,7 @@ public:
     } catch (const std::exception &error) {
       std::cerr << "Warning: failed to initialize TELNET session: "
                 << error.what() << '\n';
+      if (callbacks.failure) callbacks.failure(error.what());
       stop();
       notify_connection_phase(TerminalSessionConnectionPhase::disconnected);
       return false;
@@ -764,10 +770,6 @@ public:
   }
 
   void stop() override {
-    if (stopping) {
-      return;
-    }
-
     stopping = true;
     cancel_modem_transfer_noexcept();
     cancel_text_send_noexcept();
@@ -775,6 +777,13 @@ public:
     outgoing.clear();
     (void)stop_source.cancel();
     shutdown_socket_noexcept();
+  }
+
+  cardio::promise<void> wait_stopped_async() override {
+    if (read_task.has_value()) co_await *read_task;
+    // A stop arriving during connection setup exits before the normal reader
+    // cleanup, but may still have acquired a socket.
+    co_await close_current_socket_async();
   }
 
   void resize(glong columns, glong rows) override {

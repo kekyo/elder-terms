@@ -12,11 +12,13 @@
 #include <glib/gi18n-lib.h>
 
 #include <cardio.h>
+#include <elder-terms/application-icon.h>
 #include <elder-terms/localization.h>
 #include <elder-terms/settings/application-settings.h>
 #include <elder-terms/settings.h>
 
 #include "../ftp/ftp-client.h"
+#include "../webdav/webdav-application.h"
 #include "../launch-options.h"
 #include "../sftp/sftp-client.h"
 #include "../sftp/sftp-fixture-client.h"
@@ -25,6 +27,7 @@
 #include "file-hash.h"
 #include "file-transfer-paths.h"
 #include "file-transfer-window.h"
+#include "file-transfer-certificate-prompt.h"
 
 struct SftpApplicationState {
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
@@ -49,6 +52,7 @@ struct FtpApplicationState {
   std::shared_ptr<elder_terms::FileTransferWindow> window;
   cardio::cancellation_source stop_source;
   std::optional<cardio::promise<void>> startup_task;
+  std::optional<cardio::promise<void>> shutdown_task;
   bool shutting_down = false;
 };
 
@@ -132,30 +136,29 @@ prompt_sftp_authentication_async(
     SftpApplicationState *state,
     const elder_terms::SshUserPrompt &prompt,
     cardio::cancellation cancellation) {
-  elder_terms::InlinePromptResponse response =
-      co_await elder_terms::prompt_file_transfer_window_async(
-          state->window,
-          {
-              .title = prompt.title.empty() ? _("SSH") : prompt.title,
-              .message = prompt.message,
-              .monospace_message = prompt.monospace_message,
-              .accept_label =
-                  prompt.kind == elder_terms::SshUserPromptKind::host_key
-                      ? _("Accept")
-                      : prompt.kind ==
-                                elder_terms::SshUserPromptKind::username
-                            ? _("Connect")
-                            : _("OK"),
-              .cancel_label = _("Cancel"),
-              .initial_text = prompt.initial_text,
-              .input_required = prompt.input_required,
-              .echo = prompt.echo,
-              .cancel_visible = true,
-              .accept_visible = prompt.accept_visible,
-              .alternative_label = _("Reset and Connect"),
-              .alternative_visible = prompt.host_key_reset_available,
-          },
-          std::move(cancellation));
+  elder_terms::InlinePromptRequest request{
+      .title = prompt.title.empty() ? _("SSH") : prompt.title,
+      .message = prompt.message,
+      .monospace_message = prompt.monospace_message,
+      .accept_label =
+          prompt.kind == elder_terms::SshUserPromptKind::host_key
+              ? _("Accept")
+              : prompt.kind ==
+                        elder_terms::SshUserPromptKind::username
+                    ? _("Connect")
+                    : _("OK"),
+      .cancel_label = _("Cancel"),
+      .initial_text = prompt.initial_text,
+      .input_required = prompt.input_required,
+      .echo = prompt.echo,
+      .cancel_visible = true,
+      .accept_visible = prompt.accept_visible,
+      .alternative_label = _("Reset and Connect"),
+      .alternative_visible = prompt.host_key_reset_available,
+  };
+  auto pending = elder_terms::prompt_file_transfer_window_async(
+      state->window, std::move(request), std::move(cancellation));
+  elder_terms::InlinePromptResponse response = co_await pending;
   if (!response.accepted && !response.alternative) {
     (void)state->stop_source.cancel();
   }
@@ -187,15 +190,14 @@ start_sftp_application_async(SftpApplicationState *state) {
                   state, prompt, std::move(prompt_cancellation));
             },
     };
-    state->transport =
-        co_await elder_terms::AuthenticatedSshTransport::connect_async(
-            state->connection.endpoint, callbacks,
-            {
-                .known_hosts_file =
-                    state->launch_options.test.ssh_known_hosts_file,
-                .config_file = {},
-            },
-            cancellation);
+    elder_terms::AuthenticatedSshTransportOptions options{
+        .known_hosts_file =
+            state->launch_options.test.ssh_known_hosts_file,
+        .config_file = {},
+    };
+    auto connecting = elder_terms::AuthenticatedSshTransport::connect_async(
+        state->connection.endpoint, callbacks, options, cancellation);
+    state->transport = co_await connecting;
     state->client = co_await elder_terms::open_sftp_client_async(
         state->transport, cancellation);
     elder_terms::attach_file_transfer_window_client(
@@ -294,11 +296,9 @@ start_sftp_fixture_async(SftpApplicationState *state) {
   const cardio::cancellation cancellation =
       state->stop_source.get_cancellation();
   if (state->launch_options.test.ssh_prompt.has_value()) {
+    const auto prompt = fixture_sftp_prompt(*state->launch_options.test.ssh_prompt);
     const elder_terms::SshUserPromptResponse response =
-        co_await prompt_sftp_authentication_async(
-            state,
-            fixture_sftp_prompt(*state->launch_options.test.ssh_prompt),
-            cancellation);
+        co_await prompt_sftp_authentication_async(state, prompt, cancellation);
     if (!response.accepted && !response.reset_host_key) {
       stop_sftp_application(state);
       co_return;
@@ -346,13 +346,38 @@ static int run_sftp_application(
   return 0;
 }
 
+// Keep the dispatcher alive until authentication, callbacks and the dedicated
+// curl worker have finished. This task is owned by the application state.
+static cardio::promise<void> finish_ftp_application_async(FtpApplicationState *state) {
+  try {
+    if (state->startup_task.has_value()) co_await *state->startup_task;
+  } catch (const cardio::canceled_exception &) {
+  } catch (const std::exception &exception) {
+    std::cerr << exception.what() << '\n';
+  }
+  auto closing = elder_terms::close_file_transfer_window_async(state->window);
+  try {
+    if (state->client && !state->fixture) {
+      co_await elder_terms::stop_ftp_client_async(state->client);
+    }
+  } catch (const std::exception &exception) {
+    std::cerr << exception.what() << '\n';
+  }
+  try {
+    co_await closing;
+  } catch (const std::exception &exception) {
+    std::cerr << exception.what() << '\n';
+  }
+  state->dispatcher_group->shutdown();
+}
+
 static void stop_ftp_application(FtpApplicationState *state) {
   if (state == nullptr || state->shutting_down) {
     return;
   }
   state->shutting_down = true;
   (void)state->stop_source.cancel();
-  state->dispatcher_group->shutdown();
+  state->shutdown_task.emplace(finish_ftp_application_async(state));
 }
 
 static void create_ftp_application_window(FtpApplicationState *state) {
@@ -360,7 +385,7 @@ static void create_ftp_application_window(FtpApplicationState *state) {
       {
           .connection_name =
               elder_terms::general_connection_name(state->settings),
-          .protocol_name = "FTP",
+          .protocol_name = state->connection.tls_mode == elder_terms::FtpTlsMode::none ? "FTP" : "FTPS",
           .local_directory =
               elder_terms::resolve_file_transfer_local_directory(
                   state->settings, state->connection.local_directory),
@@ -405,25 +430,25 @@ prompt_ftp_credentials_async(FtpApplicationState *state,
   std::string username = initial_ftp_username(state->connection);
   bool username_missing = false;
   while (true) {
-    elder_terms::InlinePromptResponse response =
-        co_await elder_terms::prompt_file_transfer_window_async(
-            state->window,
-            {
-                .title = _("FTP authentication"),
-                .message = ftp_authentication_message(
-                    state->connection, username_missing),
-                .accept_label = _("Connect"),
-                .cancel_label = _("Cancel"),
-                .initial_text = username,
-                .input_label = _("User name"),
-                .input_required = true,
-                .echo = true,
-                .secondary_input_label = _("Password:"),
-                .secondary_input_required = true,
-                .secondary_echo = false,
-                .cancel_visible = true,
-            },
-            cancellation);
+    elder_terms::InlinePromptRequest request{
+        .title = state->connection.tls_mode == elder_terms::FtpTlsMode::none
+            ? _("FTP authentication") : _("FTPS authentication"),
+        .message = ftp_authentication_message(
+            state->connection, username_missing),
+        .accept_label = _("Connect"),
+        .cancel_label = _("Cancel"),
+        .initial_text = username,
+        .input_label = _("User name"),
+        .input_required = true,
+        .echo = true,
+        .secondary_input_label = _("Password:"),
+        .secondary_input_required = true,
+        .secondary_echo = false,
+        .cancel_visible = true,
+    };
+    auto pending = elder_terms::prompt_file_transfer_window_async(
+        state->window, std::move(request), cancellation);
+    elder_terms::InlinePromptResponse response = co_await pending;
     if (!response.accepted) {
       co_return std::nullopt;
     }
@@ -436,6 +461,23 @@ prompt_ftp_credentials_async(FtpApplicationState *state,
     }
     username_missing = true;
   }
+}
+
+static cardio::promise<bool> confirm_ftp_certificate_async(
+    FtpApplicationState *state, const elder_terms::TlsCertificateFailure &failure,
+    cardio::cancellation cancellation) {
+  auto pending = elder_terms::confirm_file_transfer_certificate_async(
+      state->window, failure, _("FTPS certificate validation failed"),
+      failure.identity_slot == elder_terms::ftp_control_certificate_identity
+          ? _("Control connection") : _("Data connection"),
+      cancellation);
+  const bool accepted = co_await pending;
+  if (!accepted || cancellation.is_cancellation_requested() || state->shutting_down) {
+    stop_ftp_application(state);
+    co_return false;
+  }
+  elder_terms::mark_file_transfer_certificate_exception(state->window);
+  co_return true;
 }
 
 static cardio::promise<void>
@@ -455,12 +497,16 @@ start_ftp_application_async(FtpApplicationState *state) {
     } else {
       elder_terms::FtpConnectionSettings connection = state->connection;
       connection.username = std::move(credentials->username);
-      state->client = co_await elder_terms::open_ftp_client_async(
-          {
-              .connection = std::move(connection),
-              .password = std::move(credentials->password),
+      elder_terms::FtpClientOpenOptions options{
+          .connection = std::move(connection),
+          .password = std::move(credentials->password),
+          .confirm_certificate = [state](const elder_terms::TlsCertificateFailure &failure, cardio::cancellation cancellation) {
+            return confirm_ftp_certificate_async(state, failure, cancellation);
           },
-          cancellation);
+      };
+      auto opening = elder_terms::open_ftp_client_async(
+          std::move(options), cancellation);
+      state->client = co_await opening;
     }
     elder_terms::attach_file_transfer_window_client(
         state->window, state->client);
@@ -475,7 +521,8 @@ start_ftp_application_async(FtpApplicationState *state) {
   if (!state->shutting_down) {
     std::cerr << failure << '\n';
     co_await elder_terms::show_file_transfer_window_connection_error_async(
-        state->window, _("Failed to start FTP"), std::move(failure),
+        state->window, state->connection.tls_mode == elder_terms::FtpTlsMode::none
+            ? _("Failed to start FTP") : _("Failed to start FTPS"), std::move(failure),
         state->stop_source.get_cancellation());
   }
 }
@@ -484,7 +531,8 @@ static int run_ftp_application(
     const elder_terms::SettingsLoadResult &settings_result,
     bool fixture) {
   cardio::dispatcher_group_glib dispatcher_group;
-  cardio::dispatcher_host_glib dispatcher(dispatcher_group);
+  // Worker completions must wake the GLib context even before it starts waiting.
+  cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);
   FtpApplicationState state;
   state.dispatcher_group = &dispatcher_group;
   state.fixture = fixture;
@@ -500,6 +548,7 @@ static int run_ftp_application(
   state.window.reset();
   state.client.reset();
   state.startup_task.reset();
+  state.shutdown_task.reset();
   return 0;
 }
 
@@ -516,6 +565,7 @@ int main(int argc, char **argv) {
   elder_terms::LaunchOptions launch_options =
       elder_terms::parse_launch_options(&argc, argv);
   gtk_init(&argc, &argv);
+  (void)elder_terms::initialize_application_window_icon();
 
   const elder_terms::SettingsLoadResult settings_result =
       elder_terms::load_settings(
@@ -539,6 +589,9 @@ int main(int argc, char **argv) {
     return run_ftp_application(settings_result,
                                launch_options.test.fixture);
   }
-  std::cerr << "Error: configured connection type is not SFTP or FTP\n";
+  if (kind == elder_terms::ConnectionKind::webdav) {
+    return elder_terms::run_webdav_application(settings_result);
+  }
+  std::cerr << "Error: configured connection type is not SFTP, FTP or WebDAV\n";
   return 1;
 }

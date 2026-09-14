@@ -1,5 +1,7 @@
 #pragma once
 
+#include <elder-terms/settings.h>
+
 namespace elder_terms {
 
 /**
@@ -42,5 +44,26 @@ struct TerminalConnectionPresentation {
  */
 TerminalConnectionPresentation terminal_connection_presentation(
     TerminalSessionConnectionPhase phase);
+
+/** Presentation of the optional disconnected-session reconnect button. */
+struct TerminalReconnectPresentation {
+  /** True only for manually closed, disconnected network terminals. */
+  bool visible;
+  /** True after the old backend has finished all of its work. */
+  bool sensitive;
+};
+
+/**
+ * Derives reconnection controls without altering automatic closing policy.
+ * @param kind Connection backend kind.
+ * @param auto_close Whether automatic closing is configured.
+ * @param phase Current backend phase.
+ * @param ready Whether the session manager can accept a reconnect request.
+ * @param closing Whether the terminal window is closing.
+ * @returns Visibility and sensitivity of the reconnect button.
+ */
+TerminalReconnectPresentation terminal_reconnect_presentation(
+    TerminalConnectionKind kind, bool auto_close,
+    TerminalSessionConnectionPhase phase, bool ready, bool closing);
 
 } // namespace elder_terms

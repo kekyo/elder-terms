@@ -64,6 +64,8 @@ interface TransferFixture {
 }
 
 interface TransferProgressPeerFixture extends TransferFixture {
+  readonly peerReleasePath: string;
+  readonly peerStatusPath: string;
   readonly peerStderrPath: string;
   readonly pauseRequestPath: string;
   readonly pausedPath: string;
@@ -913,6 +915,8 @@ const writeTransferProgressPeerLoginScript = async (
   markerPath: string,
   command: readonly string[]
 ): Promise<void> => {
+  const releasePath = `${markerPath}.release`;
+  await createFifo(releasePath);
   await writeFile(
     path,
     [
@@ -920,7 +924,15 @@ const writeTransferProgressPeerLoginScript = async (
       `cd ${shellQuote(remoteDirectory)} || exit 1`,
       'stty raw -echo -ixon -ixoff -icanon min 1 time 0 2>/dev/null || true',
       `cat ${shellQuote(markerPath)} >/dev/null || exit 1`,
-      `exec ${command.map(shellQuote).join(' ')} 2>xyzm-pause-peer.stderr`,
+      // Final protocol acknowledgement can precede local file finalization.
+      // Keep the login session alive until the test has observed completion.
+      `${command.map(shellQuote).join(' ')} 2>xyzm-pause-peer.stderr`,
+      'status=$?',
+      `printf '%s\\n' "$status" >xyzm-pause-peer.status`,
+      `if [ "$status" -eq 0 ]; then cat ${shellQuote(
+        releasePath
+      )} >/dev/null || exit 1; fi`,
+      'exit "$status"',
       '',
     ].join('\n'),
     'utf8'
@@ -1166,6 +1178,8 @@ const createTransferProgressPeerFixture = async (
   const loginScriptPath = join(directory, 'login.sh');
   const pauseRequestPath = join(directory, 'pause-request.marker');
   const pausedPath = join(directory, 'paused.marker');
+  const peerReleasePath = `${markerPath}.release`;
+  const peerStatusPath = join(remoteDirectory, 'xyzm-pause-peer.status');
   const peerStderrPath = join(remoteDirectory, 'xyzm-pause-peer.stderr');
   const resumePath = join(directory, 'resume.marker');
   await createFifo(markerPath);
@@ -1210,6 +1224,8 @@ const createTransferProgressPeerFixture = async (
       payload,
       payloadPath: sourcePath,
       peerReadyPath: undefined,
+      peerReleasePath,
+      peerStatusPath,
       peerStderrPath,
       sourceUri: pathToFileURL(sourcePath).href,
       transferBasePath: receiveDirectory,
@@ -1263,6 +1279,8 @@ const createTransferProgressPeerFixture = async (
     payload,
     payloadPath: remotePayloadPath,
     peerReadyPath: undefined,
+    peerReleasePath,
+    peerStatusPath,
     peerStderrPath,
     sourceUri: undefined,
     transferBasePath: receiveDirectory,
@@ -1845,20 +1863,160 @@ const pauseTransferAtProgressForCapture = async (
 
   if (transferCase.protocol === 'zmodem' && transferCase.direction === 'send') {
     await expectTransferProgressNoticeVisibleAtTerminalTopRight(app);
-    const liveProgress = await waitForTransferProgressRange(
-      app,
-      0.45,
-      0.55,
-      noticeCase.sizeCase.timeoutMs
+    const notice = await app.getById('transfer_progress_notice');
+    const capture = await notice.capture();
+    const area = capture.bounds;
+    const bar = (await (await app.getById('transfer_progress_bar')).capture())
+      .bounds;
+    const reference = {
+      ...capture,
+      image: await readFile(noticeCase.fixturePath),
+    };
+    const row = Math.floor(bar.y - area.y + bar.height / 2);
+    const column = (ratio: number) =>
+      Math.floor(bar.x - area.x + bar.width * ratio);
+    const filled = capturePixel(
+      reference,
+      column(0.25) / area.width,
+      row / area.height
     );
-    await evidence.log('transfer progress live capture value', {
-      liveProgress,
-      transferCase: transferCase.label,
+    const empty = capturePixel(
+      reference,
+      column(0.75) / area.width,
+      row / area.height
+    );
+    const environment = await app.environment();
+    const videoPath = join(evidence.directory, 'zmodem-send-progress.mkv');
+    // Record before releasing the peer. Reading AT-SPI progress and capturing
+    // later can observe entirely different values while ZMODEM keeps streaming.
+    const recorder = spawn(
+      'ffmpeg',
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-f',
+        'x11grab',
+        '-framerate',
+        '30',
+        '-draw_mouse',
+        '0',
+        '-video_size',
+        `${area.width}x${area.height}`,
+        '-i',
+        `${environment.DISPLAY}+${area.x},${area.y}`,
+        '-map',
+        '0:v',
+        '-c:v',
+        'ffv1',
+        '-pix_fmt',
+        'bgr0',
+        '-fps_mode',
+        'passthrough',
+        videoPath,
+        '-map',
+        '0:v',
+        '-c:v',
+        'rawvideo',
+        '-pix_fmt',
+        'bgr0',
+        '-fps_mode',
+        'passthrough',
+        '-f',
+        'rawvideo',
+        'pipe:1',
+      ],
+      { env: environment, stdio: ['pipe', 'pipe', 'pipe'] }
+    );
+    let recordingError: Error | undefined;
+    let stderr = '';
+    const finished = new Promise<number | null>((resolve) => {
+      recorder.once('error', (error) => {
+        recordingError = error;
+        resolve(null);
+      });
+      recorder.once('close', resolve);
     });
-    await assertTransferProgressNoticeMatches(
-      app,
-      evidence,
-      `transfer-progress-notice-${transferCase.protocol}-${transferCase.direction}`,
+    recorder.stderr.on('data', (bytes: Buffer) => {
+      stderr += bytes.toString();
+    });
+    let pending = Buffer.alloc(0);
+    let frameNumber = 0;
+    let middleFrame: number | undefined;
+    let peerReleased = false;
+    const frameSize = area.width * area.height * 4;
+    recorder.stdout.on('data', (bytes: Buffer) => {
+      pending = Buffer.concat([pending, bytes]);
+      while (pending.length >= frameSize) {
+        const frame = pending.subarray(0, frameSize);
+        frameNumber++;
+        const matches = (ratio: number, rgb: readonly number[]) => {
+          const offset = (row * area.width + column(ratio)) * 4;
+          return rgb.every(
+            (value, channel) =>
+              Math.abs(frame[offset + 2 - channel] - value) <= 8
+          );
+        };
+        // The filled prefix and empty suffix distinguish 45–55% progress from
+        // the moving indeterminate pulse before the peer supplies metadata.
+        // Retain this rendered frame even if capture finishes later.
+        if (
+          peerReleased &&
+          middleFrame === undefined &&
+          [0.05, 0.25, 0.45].every((ratio) => matches(ratio, filled)) &&
+          [0.55, 0.75, 0.95].every((ratio) => matches(ratio, empty))
+        )
+          middleFrame = frameNumber;
+        pending = pending.subarray(frameSize);
+      }
+    });
+    try {
+      await waitForResult(async () => {
+        if (recordingError) throw recordingError;
+        expect(recorder.exitCode, stderr).toBeNull();
+        expect(frameNumber).toBeGreaterThan(0);
+      });
+      await writeFile(fixture.markerPath, 'start', 'utf8');
+      peerReleased = true;
+      await waitForResult(
+        async () => {
+          if (recordingError) throw recordingError;
+          expect(recorder.exitCode, stderr).toBeNull();
+          expect(middleFrame).toBeDefined();
+        },
+        { timeoutMs: noticeCase.sizeCase.timeoutMs }
+      );
+    } finally {
+      if (recorder.exitCode === null && !recordingError)
+        recorder.stdin.write('q\n');
+      const code = await finished;
+      await evidence.log('ZMODEM progress video', {
+        middleFrame,
+        frameNumber,
+        code,
+        stderr,
+      });
+      expect(code, stderr).toBe(0);
+    }
+    const framePath = join(
+      evidence.directory,
+      'zmodem-send-progress-middle.png'
+    );
+    await runCommand('ffmpeg', [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-i',
+      videoPath,
+      '-vf',
+      `select=eq(n\\,${middleFrame! - 1})`,
+      '-frames:v',
+      '1',
+      framePath,
+    ]);
+    await evidence.expectCaptureToLookSimilar(
+      { ...capture, image: await readFile(framePath) },
+      'transfer-progress-notice-zmodem-send',
       noticeCase.fixturePath,
       {
         maxDiffPixels: noticeCase.maxDiffPixels,
@@ -1971,6 +2129,143 @@ const pauseTransferAtProgressForCapture = async (
 };
 
 describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
+  registerConnectionTest(
+    connectionCases[1],
+    'sshd reconnects in the same window and exchanges new macro responses',
+    async (context) => {
+      await expectRequiredCommands();
+      await withTemporaryDirectory(async (directory) => {
+        const loginScriptPath = join(directory, 'reconnect-login.sh');
+        const configPath = join(directory, 'reconnect.ini');
+        const counterPath = join(directory, 'connection-count');
+        const releasePath = join(directory, 'release');
+        const replyPrefix = join(directory, 'reply-');
+        await createFifo(releasePath);
+        await writeFile(
+          loginScriptPath,
+          [
+            '#!/bin/sh',
+            'stty -echo',
+            'round=0',
+            `if [ -f ${shellQuote(counterPath)} ]; then round=$(cat ${shellQuote(counterPath)}); fi`,
+            'round=$((round + 1))',
+            `printf '%s' "$round" > ${shellQuote(counterPath)}`,
+            'printf "ROUND %s\\n" "$round"',
+            'IFS= read -r reply',
+            `printf '%s' "$reply" > ${shellQuote(replyPrefix)}"$round"`,
+            `IFS= read -r release < ${shellQuote(releasePath)}`,
+            'printf OLD-',
+            '',
+          ].join('\n'),
+          'utf8'
+        );
+        await chmod(loginScriptPath, 0o755);
+        const connection = await startSocatOpenSshd({ loginScriptPath });
+        try {
+          const authorizedKeysPath = join(directory, 'sshd', 'authorized_keys');
+          const authorizedKeys = await readFile(authorizedKeysPath);
+          await writeFile(authorizedKeysPath, '', 'utf8');
+          await connection.writeConfig(configPath, directory, false);
+          const config = await readFile(configPath, 'utf8');
+          await writeFile(
+            configPath,
+            config +
+              '\n[macro.reply]\nregex=^ROUND (?<round>[0-9]+)$\nsend=ACK ${round}\\n\n',
+            'utf8'
+          );
+          await runGtkTest(
+            context,
+            ['-c', configPath, ...connection.launchArguments],
+            async (app, evidence) => {
+              const windowId = (
+                await expectElementKind(
+                  await app.windowAt(0),
+                  'window'
+                ).x11Info()
+              ).windowId;
+              await waitForResult(async () => {
+                expect(
+                  (await (await app.getById('ssh_prompt_panel')).info()).states
+                ).toContain('showing');
+              });
+              await expectElementKind(
+                await app.getById('ssh_prompt_accept_button'),
+                'button'
+              ).click();
+              const retryAuthentication = expectElementKind(
+                await app.getById('reconnect_button'),
+                'button'
+              );
+              await waitForResult(async () => {
+                expect((await retryAuthentication.info()).states).toContain(
+                  'sensitive'
+                );
+                expect(
+                  await expectElementKind(
+                    await app.getById('disconnected_notice_label'),
+                    'label'
+                  ).text()
+                ).toBe(
+                  'SSH connection failed:\nSSH server did not accept an available authentication method'
+                );
+              });
+              // The peer now permits the same key; reconnect must perform a
+              // fresh authentication instead of reusing the failed transport.
+              await writeFile(authorizedKeysPath, authorizedKeys);
+              await retryAuthentication.click();
+              for (let round = 1; round <= 3; round += 1) {
+                await waitForTransferConnection(
+                  app,
+                  evidence,
+                  connection,
+                  undefined
+                );
+                await waitForResult(async () => {
+                  expect(await readFile(`${replyPrefix}${round}`, 'utf8')).toBe(
+                    `ACK ${round}`
+                  );
+                });
+                await waitForActivityIndicatorImageState(app, 'conn', 'on');
+                expect(
+                  (
+                    await expectElementKind(
+                      await app.windowAt(0),
+                      'window'
+                    ).x11Info()
+                  ).windowId
+                ).toBe(windowId);
+                expect(await readFile(counterPath, 'utf8')).toBe(String(round));
+                if (round === 3) break;
+                await writeFile(releasePath, 'close\n', 'utf8');
+                await waitForActivityIndicatorImageState(app, 'conn', 'off');
+                const reconnect = expectElementKind(
+                  await app.getById('reconnect_button'),
+                  'button'
+                );
+                await waitForResult(async () => {
+                  const info = await reconnect.info();
+                  expect(info.states).toContain('showing');
+                  expect(info.states).toContain('sensitive');
+                });
+                const { bounds } = await reconnect.capture();
+                await app.input.moveMouseTo(
+                  Math.trunc(bounds.x + bounds.width / 2),
+                  Math.trunc(bounds.y + bounds.height / 2)
+                );
+                await app.input.setMouseButton('left', true);
+                await app.input.setMouseButton('left', false);
+              }
+            },
+            connection.gtkTestOptions
+          );
+        } finally {
+          await connection.close();
+        }
+      });
+    },
+    90_000
+  );
+
   registerConnectionTest(
     connectionCases[1],
     'sshd receives xterm when an RGB background selects the built-in terminal type',
@@ -2612,7 +2907,11 @@ describe('elder-terms-vte XYZMODEM transfer progress notice e2e', () => {
               ) {
                 await requestTransferProgressPeerPause(fixture);
               }
-              await writeFile(fixture.markerPath, 'start', 'utf8');
+              if (!(
+                transferCase.protocol === 'zmodem' &&
+                transferCase.direction === 'send'
+              ))
+                await writeFile(fixture.markerPath, 'start', 'utf8');
 
               await pauseTransferAtProgressForCapture(
                 app,
@@ -2631,10 +2930,28 @@ describe('elder-terms-vte XYZMODEM transfer progress notice e2e', () => {
                 await evidence.log('xyzm pause peer stderr', {
                   error,
                   stderr: await readOptionalTextFile(fixture.peerStderrPath),
+                  status: await readOptionalTextFile(fixture.peerStatusPath),
                 });
+                try {
+                  await evidence.captureEvidence(
+                    'transfer-incomplete',
+                    async () => app.capture()
+                  );
+                } catch (captureError) {
+                  await evidence.log('transfer failure capture unavailable', {
+                    error: captureError,
+                  });
+                }
                 throw error;
               }
               await expectTransferProgressNoticeHidden(app);
+              await waitForResult(async () => {
+                expect(
+                  (await readFile(fixture.peerStatusPath, 'utf8')).trim()
+                ).toBe('0');
+              });
+              await expectDisconnectedNoticeHidden(app);
+              await releaseTransferPeer(fixture);
             });
           } finally {
             await connection.close();

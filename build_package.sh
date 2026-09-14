@@ -390,7 +390,7 @@ validate_deb_package() {
 		fail "Unexpected Version field in $package_path"
 	depends_value=$(dpkg-deb -f "$package_path" Depends)
 	[ -n "$depends_value" ] || fail "Missing Depends field in $package_path"
-	for required_dependency in dbus-user-session hicolor-icon-theme openssh-client xdg-utils; do
+	for required_dependency in ca-certificates dbus-user-session hicolor-icon-theme openssh-client xdg-utils; do
 		assert_deb_dependency "$depends_value" "$required_dependency"
 	done
 
@@ -411,6 +411,10 @@ validate_deb_package() {
 		usr/share/locale/ja/LC_MESSAGES/elder-terms.mo \
 		usr/share/doc/elder-terms/README.md \
 		usr/share/doc/elder-terms/README_ja.md \
+		usr/share/doc/elder-terms/docs/ja/webdav.md \
+		usr/share/doc/elder-terms/docs/ja/webdav-validation.md \
+		usr/share/doc/elder-terms/docs/en/webdav.md \
+		usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 		usr/share/doc/elder-terms/copyright; do
 		assert_file "$tmp_dir/$required_file"
 	done

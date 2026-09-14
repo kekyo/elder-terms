@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
+    "prebuild": "node ../scripts/prepare-test-fonts.mts",
     "build": "meson setup ../.build .. --reconfigure || meson setup ../.build .. && meson compile -C ../.build",
     "test": "npm run build && vitest run"
   },

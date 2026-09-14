@@ -986,6 +986,15 @@ static ChildServer start_server(const ServerOptions &options) {
   };
 }
 
+static std::string prompt_sequence(const std::vector<elder_terms::SshUserPromptKind> &prompts) {
+  std::string result;
+  for (const auto prompt : prompts) {
+    if (!result.empty()) result += ',';
+    result += std::to_string(static_cast<int>(prompt));
+  }
+  return result;
+}
+
 static int wait_for_server(ChildServer *server) {
   if (server->release_fd >= 0) {
     (void)::close(server->release_fd);
@@ -1074,13 +1083,13 @@ exercise_sftp_client_async(
 
   const std::string uploaded_content = "SFTP uploaded payload";
   std::unique_ptr<elder_terms::RemoteFileWriter> writer =
-      std::move(co_await client->open_write_async("uploaded.txt", 0600,
+      std::move(co_await client->open_write_async("uploaded.txt", uploaded_content.size(), 0600,
                                                   cancellation));
   co_await writer->write_all_async(byte_span(uploaded_content),
                                    cancellation);
   co_await writer->close_async(cancellation);
   writer.reset();
-  co_await client->set_attributes_async(
+  auto updating = client->set_attributes_async(
       "uploaded.txt",
       elder_terms::RemoteFileAttributes{
           .name = {},
@@ -1092,6 +1101,7 @@ exercise_sftp_client_async(
           .modification_time_unix_seconds = 1'700'002'123,
       },
       cancellation);
+  co_await updating;
   const std::optional<elder_terms::RemoteFileAttributes> uploaded =
       co_await client->lstat_async("uploaded.txt", cancellation);
   expect_true(uploaded.has_value() &&
@@ -1130,6 +1140,7 @@ exercise_sftp_client_async(
 static int run_client_case(const ServerOptions &server_options,
                            const ClientCase &client_case) {
   ChildServer server = start_server(server_options);
+  std::cout << "SSH case " << auth_mode_name(client_case.auth_mode) << " port=" << server.port << std::endl;
   if (!client_case.conflicting_host_public_key.empty()) {
     const std::filesystem::path target_file =
         client_case.conflicting_known_hosts_file.empty()
@@ -1159,7 +1170,7 @@ static int run_client_case(const ServerOptions &server_options,
 
   cardio::dispatcher_group_glib dispatcher_group;
   cardio::dispatcher_host_glib dispatcher(dispatcher_group);
-  auto task = [&]() -> cardio::promise<void> {
+  auto task_body = [&]() -> cardio::promise<void> {
     try {
       elder_terms::TerminalSessionCallbacks callbacks{
           .ended = {},
@@ -1324,7 +1335,8 @@ static int run_client_case(const ServerOptions &server_options,
       async_error = std::current_exception();
     }
     dispatcher_group.shutdown();
-  }();
+  };
+  auto task = task_body();
 
   dispatcher.park();
   task.unsafe_result();
@@ -1371,7 +1383,11 @@ static int run_client_case(const ServerOptions &server_options,
               "SSH test server validation failed with code " +
                   std::to_string(server_result));
   expect_true(prompts == client_case.expected_prompts,
-              "SSH user prompt sequence did not match");
+              "SSH user prompt sequence did not match: mode=" +
+                  std::string(auth_mode_name(client_case.auth_mode)) +
+                  " port=" + std::to_string(server.port) +
+                  " expected=[" + prompt_sequence(client_case.expected_prompts) +
+                  "] actual=[" + prompt_sequence(prompts) + "]");
   expect_true(
       phases ==
           std::vector<elder_terms::TerminalSessionConnectionPhase>{
@@ -1424,7 +1440,27 @@ static void test_supported_authentication_and_shell_channel() {
       root / ".ssh" / "id_encrypted";
   const std::filesystem::path encrypted_public_key =
       root / ".ssh" / "id_encrypted.pub";
-  generate_key_pair(host_private_key, host_public_key, nullptr);
+  // This public test-only key has a fingerprint walk that visits an ordinary
+  // cell 15 times. OpenSSH must show its maximum density, never another S.
+  {
+    std::ofstream key_file(host_private_key);
+    key_file << R"KEY(-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACCYJQ25JId2m4zDE80rGUuf1+O2/zMcuQRzx7dlpuy0bwAAAKDl8GIt5fBi
+LQAAAAtzc2gtZWQyNTUxOQAAACCYJQ25JId2m4zDE80rGUuf1+O2/zMcuQRzx7dlpuy0bw
+AAAEA8cCQePgwL2LLorJKJb/mbOaBviLYfCkaS2lc+lgrnvZglDbkkh3abjMMTzSsZS5/X
+47b/Mxy5BHPHt2Wm7LRvAAAAGHJhbmRvbS1hcnQtYm91bmRhcnktdGVzdAECAwQF
+-----END OPENSSH PRIVATE KEY-----
+)KEY";
+    expect_true(key_file.good(), "failed to write the random-art regression key");
+  }
+  {
+    std::ofstream key_file(host_public_key);
+    key_file << "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJglDbkkh3abjMMTzSsZS5/X47b/Mxy5BHPHt2Wm7LRv random-art-boundary-test\n";
+    expect_true(key_file.good(), "failed to write the random-art regression public key");
+  }
+  expect_true(::chmod(host_private_key.c_str(), S_IRUSR | S_IWUSR) == 0,
+              "failed to protect the random-art regression key");
   generate_key_pair(changed_host_private_key, changed_host_public_key,
                     nullptr);
   generate_key_pair(plain_private_key, plain_public_key, nullptr);

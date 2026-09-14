@@ -67,12 +67,18 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
       .application_settings_menu_item =
           required_widget(builder, "application_settings_menu_item"),
       .about_menu_item = required_widget(builder, "about_menu_item"),
+      .save_new_connection_menu_item =
+          required_widget(builder, "save_new_connection_menu_item"),
       .rename_connection_menu_item =
           required_widget(builder, "rename_connection_menu_item"),
+      .edit_connection_menu_item =
+          required_widget(builder, "edit_connection_menu_item"),
       .duplicate_connection_menu_item =
           required_widget(builder, "duplicate_connection_menu_item"),
       .delete_connection_menu_item =
           required_widget(builder, "delete_connection_menu_item"),
+      .cancel_new_connection_menu_item =
+          required_widget(builder, "cancel_new_connection_menu_item"),
       .details_stack = required_widget(builder, "details_stack"),
       .empty_details_label =
           required_widget(builder, "empty_details_label"),
@@ -93,9 +99,12 @@ std::optional<LauncherMainWindow> load_launcher_main_window() {
       result.application_menu_button == nullptr ||
       result.application_settings_menu_item == nullptr ||
       result.about_menu_item == nullptr ||
+      result.save_new_connection_menu_item == nullptr ||
       result.rename_connection_menu_item == nullptr ||
+      result.edit_connection_menu_item == nullptr ||
       result.duplicate_connection_menu_item == nullptr ||
       result.delete_connection_menu_item == nullptr ||
+      result.cancel_new_connection_menu_item == nullptr ||
       result.details_stack == nullptr ||
       result.empty_details_label == nullptr ||
       result.settings_container == nullptr || result.action_row == nullptr ||

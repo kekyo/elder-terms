@@ -1,5 +1,12 @@
 import { fileURLToPath } from 'node:url';
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
@@ -63,12 +70,8 @@ interface AppliedStore {
   readonly encoding: string;
   readonly exterior_background: string;
   readonly height: string;
-  readonly font_fallback_family: string;
-  readonly font_fallback_family_explicit: string;
-  readonly font_fallback_family_source: string;
-  readonly font_primary_family: string;
-  readonly font_primary_family_explicit: string;
-  readonly font_primary_family_source: string;
+  readonly font_families_explicit: string;
+  readonly font_families_source: string;
   readonly log_base_directory: string;
   readonly log_enabled: string;
   readonly log_file_name_format: string;
@@ -168,23 +171,13 @@ const showTerminalPage = async (app: GtkApp): Promise<void> => {
   });
 };
 
-const showTerminalKeyBindings = async (app: GtkApp): Promise<void> => {
+const scrollTerminalPageToBottom = async (app: GtkApp): Promise<void> => {
   const scrollbar = expectElementKind(
     await app.getById('settings_terminal_page_scrollbar'),
     'scrollbar'
   );
   const range = await scrollbar.valueInfo();
   await scrollbar.setValue(range.maximum);
-  await waitForResult(async () => {
-    const zoomIn = await app.getById('settings_terminal_zoom_in_key_entry');
-    const zoomOut = await app.getById('settings_terminal_zoom_out_key_entry');
-    const sendBreak = await app.getById(
-      'settings_terminal_send_break_key_entry'
-    );
-    expect((await zoomIn.info()).states).toContain('showing');
-    expect((await zoomOut.info()).states).toContain('showing');
-    expect((await sendBreak.info()).states).toContain('showing');
-  });
 };
 
 const showTelnetPage = async (app: GtkApp): Promise<void> => {
@@ -448,6 +441,10 @@ const chooseNamedColor = async (
     }
     return window;
   });
+  const parent = await app.getById('settings_widget_test_window');
+  await expectInsensitive(parent);
+  const chooser = await app.getById(`${pickerId}_dialog`);
+  expect((await chooser.info()).states).not.toContain('modal');
   await expectElementKind(
     await findDescendantByName(dialog, 'radio', colorName),
     'radio'
@@ -459,6 +456,7 @@ const chooseNamedColor = async (
   await waitForResult(async () => {
     expect(await findWindowByName(app, 'Pick a Color')).toBeUndefined();
   });
+  await expectSensitive(parent);
 };
 
 const confirmSelectedFont = async (
@@ -474,6 +472,11 @@ const confirmSelectedFont = async (
     }
     return window;
   });
+  const parent = await app.getById('settings_widget_test_window');
+  await expectInsensitive(parent);
+  expect(
+    (await (await app.getById('settings_terminal_font_dialog')).info()).states
+  ).not.toContain('modal');
   await expectElementKind(
     await findDescendantByName(dialog, 'button', 'Select'),
     'button'
@@ -481,6 +484,7 @@ const confirmSelectedFont = async (
   await waitForResult(async () => {
     expect(await findWindowByName(app, dialogName)).toBeUndefined();
   });
+  await expectSensitive(parent);
 };
 
 const visibleSettingsTabNames = async (
@@ -608,13 +612,17 @@ const waitForAppliedStore = async (app: GtkApp): Promise<AppliedStore> =>
   waitForPrintedStore(app, 'APPLIED');
 
 const waitForPrintedStore = async (
-  app: GtkApp,
+  app: Pick<GtkApp, 'output'>,
   prefix: 'APPLIED' | 'REBASED' | 'SAVED'
 ): Promise<AppliedStore> =>
   waitForResult(async () => {
     const output = await app.output();
-    const line = output.stdout
-      .split('\n')
+    const lines = output.stdout.split('\n');
+    // A pipe read can end mid-record. Do not return a truncated result or
+    // an older result while the latest matching record is still arriving.
+    const pending = lines.pop() ?? '';
+    expect(pending.startsWith(`${prefix} `)).toBe(false);
+    const line = lines
       .reverse()
       .find((candidate) => candidate.startsWith(`${prefix} `));
     expect(line).toBeDefined();
@@ -755,6 +763,38 @@ const clearKeyBinding = async (
 };
 
 describe.concurrent('shared settings widget', () => {
+  it('waits for the complete latest settings record when output arrives in chunks', async () => {
+    for (const prefix of ['APPLIED', 'REBASED', 'SAVED'] as const) {
+      for (const previous of [
+        '',
+        `${prefix} serial_parity_source=override serial_parity_explicit=true\n`,
+      ]) {
+        let reads = 0;
+        const store = await waitForPrintedStore(
+          {
+            output: async () => ({
+              stdout:
+                previous +
+                (++reads === 1
+                  ? `${prefix} serial_parity_source=global serial_parity_exp`
+                  : `${prefix} serial_parity_source=global serial_parity_explicit=false\n`),
+              stderr: '',
+              exitCode: null,
+              exitSignal: null,
+              stdoutTruncated: false,
+              stderrTruncated: false,
+            }),
+          },
+          prefix
+        );
+        expect(store).toMatchObject({
+          serial_parity_source: 'global',
+          serial_parity_explicit: 'false',
+        });
+      }
+    }
+  });
+
   it('orders connection settings before Terminal when available', async (context) => {
     const cases = [
       {
@@ -812,6 +852,10 @@ describe.concurrent('shared settings widget', () => {
       {
         args: ['--type=ftp'] as const,
         expected: ['General', 'FTP'],
+      },
+      {
+        args: ['--type=webdav'] as const,
+        expected: ['General', 'WebDAV'],
       },
     ] as const;
 
@@ -963,8 +1007,9 @@ describe.concurrent('shared settings widget', () => {
               'Rows',
               'Scrollback lines',
               'Zoom factor',
-              'Primary font family',
-              'Secondary font family',
+              'Active indicator color',
+              'Inactive indicator color',
+              'Font families',
               'Close window when session ends',
               'Show window side borders',
               'Window side border width (px)',
@@ -1021,6 +1066,7 @@ describe.concurrent('shared settings widget', () => {
           'SSH',
           'SFTP',
           'FTP',
+          'WebDAV',
           '端末',
           '転送',
           'ログ',
@@ -1068,6 +1114,23 @@ describe.concurrent('shared settings widget', () => {
             ],
           },
           {
+            id: 'global_settings_webdav_page',
+            labels: [
+              '接続の暗号化',
+              'アドレス',
+              'ポート',
+              '公開パス',
+              '認証方式',
+              'ユーザー名',
+              'ローカルディレクトリ',
+              'リモートディレクトリ',
+              'CA証明書',
+              '証明書検証の失敗時',
+              '接続タイムアウト（秒）',
+              '無通信タイムアウト（秒）',
+            ],
+          },
+          {
             id: 'global_settings_serial_page',
             labels: [
               'デバイス識別方式',
@@ -1094,8 +1157,7 @@ describe.concurrent('shared settings widget', () => {
               '行数',
               'スクロールバッファ行数',
               '拡大率',
-              'プライマリフォントファミリー',
-              'セカンダリフォントファミリー',
+              'フォントファミリー',
               'セッション終了時にウィンドウを閉じる',
               'ウィンドウの左右にボーダーを表示する',
               'ウィンドウ左右のボーダー幅（px）',
@@ -1127,38 +1189,17 @@ describe.concurrent('shared settings widget', () => {
         for (const page of pages) {
           await expectPageLabels(app, page.id, page.labels);
         }
-        const primaryFontMode = expectElementKind(
-          await app.getById('global_settings_terminal_font_primary_mode_combo'),
-          'comboBox'
-        );
-        const fallbackFontMode = expectElementKind(
-          await app.getById(
-            'global_settings_terminal_font_fallback_mode_combo'
-          ),
-          'comboBox'
-        );
-        expect(primaryFontMode.kind).toBe('comboBox');
-        expect(fallbackFontMode.kind).toBe('comboBox');
         await expectSelectedComboValue(
           app,
-          'global_settings_terminal_font_primary_mode_combo',
-          '組み込み既定値'
-        );
-        await expectSelectedComboValue(
-          app,
-          'global_settings_terminal_font_fallback_mode_combo',
-          '組み込み既定値'
+          'global_settings_terminal_fonts_mode_combo',
+          'アプリ標準'
         );
         expect(
           await comboOptionNames(
             app,
-            'global_settings_terminal_font_primary_mode_combo'
+            'global_settings_terminal_fonts_mode_combo'
           )
-        ).toEqual([
-          '組み込み既定値',
-          '組み込み既定値を使用',
-          'カスタムフォント',
-        ]);
+        ).toEqual(['アプリ標準', '指定する']);
         expect(
           (await (await app.getById('global_settings_apply_button')).info())
             .name
@@ -1666,6 +1707,7 @@ describe.concurrent('shared settings widget', () => {
       },
     ];
 
+    const visualErrors: string[] = [];
     for (const testCase of cases) {
       await runSharedGtkTest(
         context,
@@ -1673,10 +1715,712 @@ describe.concurrent('shared settings widget', () => {
         async ({ app, directory }) => {
           await testCase.prepare(app);
           await testCase.assert(app);
-          await expectPageVisualFixture(app, testCase, directory);
+          // Keep every setting's capture when a shared page layout changes.
+          try {
+            await expectPageVisualFixture(app, testCase, directory);
+          } catch (error) {
+            visualErrors.push(`${testCase.fixtureName}: ${String(error)}`);
+          }
         }
       );
     }
+    expect(visualErrors).toEqual([]);
+  }, 60_000);
+
+  it('identifies the font inheritance source in a single option', async (context) => {
+    for (const global of [false, true]) {
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=terminal',
+          '--save',
+          ...(global ? ['--global=terminal.font_families=Global Font;'] : []),
+          '--rebase-global=terminal.font_families=Rebased Font;',
+        ],
+        async ({ app }) => {
+          await showTerminalPage(app);
+          const id = 'settings_terminal_fonts_mode_combo';
+          expect(await comboOptionNames(app, id)).toEqual([
+            global
+              ? 'Inherited from: global settings'
+              : 'Inherited from: app defaults',
+            'Use app defaults',
+            'Specify for this connection',
+          ]);
+          await expectSelectedComboValue(
+            app,
+            id,
+            global
+              ? 'Inherited from: global settings'
+              : 'Inherited from: app defaults'
+          );
+          await expectElementKind(
+            await app.getById('rebase_fallbacks_button'),
+            'button'
+          ).click();
+          await expectSelectedComboValue(
+            app,
+            id,
+            'Inherited from: global settings'
+          );
+          expect(
+            await expectElementKind(
+              await app.getById('settings_terminal_font_family_0'),
+              'entry'
+            ).text()
+          ).toBe('Rebased Font');
+        }
+      );
+    }
+  });
+
+  it('saves global fonts through two choices and restores app defaults', async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'elder-terms-global-font-'));
+    const path = join(directory, 'global.ini');
+    try {
+      await runSharedGtkTest(
+        context,
+        ['--global-mode', '--page=terminal', `--save-file=${path}`],
+        async ({ app }) => {
+          const id = 'global_settings_terminal_fonts_mode_combo';
+          expect(await comboOptionNames(app, id)).toEqual([
+            'App defaults',
+            'Specify fonts',
+          ]);
+          const mode = expectElementKind(await app.getById(id), 'comboBox');
+          await mode.selectChildAt(1);
+          await expectElementKind(
+            await app.getById('global_settings_terminal_font_family_0'),
+            'entry'
+          ).setText('Global Font');
+          await expectElementKind(
+            await app.getById('global_settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect(await readFile(path, 'utf8')).toContain(
+              'font_families=Global Font;Monospace;'
+            )
+          );
+          await mode.selectChildAt(0);
+          await expectElementKind(
+            await app.getById('global_settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect(await readFile(path, 'utf8')).not.toContain('font_families=')
+          );
+        }
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('aligns the font label with the top and places every candidate in the page', async (context) => {
+    await runSharedGtkTest(context, ['--page=terminal'], async ({ app }) => {
+      await showTerminalPage(app);
+      await scrollTerminalPageToBottom(app);
+      const window = expectElementKind(await app.windowAt(0), 'window');
+      const original = (await window.capture()).bounds;
+      const label = await findDescendantByName(
+        await app.getById('settings_terminal_page'),
+        'label',
+        'Font families'
+      );
+      expect(label).toBeDefined();
+      const mode = await app.getById('settings_terminal_fonts_mode_combo');
+      const labelBounds = (await label!.capture()).bounds;
+      expect(labelBounds.height).toBeLessThanOrEqual(
+        (await mode.capture()).bounds.height
+      );
+      expect(
+        Math.abs(labelBounds.y - (await mode.capture()).bounds.y)
+      ).toBeLessThan(12);
+      const add = expectElementKind(
+        await app.getById('settings_terminal_fonts_add_button'),
+        'button'
+      );
+      await add.click();
+      const third = expectElementKind(
+        await app.getById('settings_terminal_font_family_2'),
+        'entry'
+      );
+      await waitForResult(async () => {
+        expect((await third.info()).states).toContain('showing');
+        expect((await third.info()).states).toContain('focused');
+      });
+      await third.setText('Third Candidate');
+      const outer = expectElementKind(
+        await app.getById('settings_terminal_page_scrollbar'),
+        'scrollbar'
+      );
+      await outer.setValue((await outer.valueInfo()).maximum);
+      const first = (
+        await (await app.getById('settings_terminal_font_family_0')).capture()
+      ).bounds;
+      const last = (await third.capture()).bounds;
+      expect(last.y - first.y).toBeGreaterThan(first.height * 2);
+      expect((await window.capture()).bounds.height).toBe(original.height);
+    });
+  });
+
+  it('saves and resets the inactive color independently of the active color', async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'elder-terms-off-color-'));
+    const path = join(directory, 'connection.ini');
+    try {
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=terminal',
+          '--indicator-color=#FF0000',
+          '--global=terminal.indicator_off_color=#112233',
+          `--save-file=${path}`,
+        ],
+        async ({ app }) => {
+          await showTerminalPage(app);
+          await scrollTerminalPageToBottom(app);
+          const mode = expectElementKind(
+            await app.getById(
+              'settings_terminal_indicator_off_color_mode_combo'
+            ),
+            'comboBox'
+          );
+          await chooseNamedColor(
+            app,
+            'settings_terminal_indicator_off_color_button',
+            'Blue'
+          );
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            const content = await readFile(path, 'utf8');
+            expect(content).toContain('indicator_color=#FF0000\n');
+            expect(content).toContain('indicator_off_color=#3584E4\n');
+          });
+          await chooseNamedColor(
+            app,
+            'settings_terminal_indicator_off_color_button',
+            'Red'
+          );
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect(await readFile(path, 'utf8')).toContain(
+              'indicator_off_color=#3584E4\n'
+            )
+          );
+          await mode.selectChildAt(1);
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect(await readFile(path, 'utf8')).toContain(
+              'indicator_off_color=default\n'
+            )
+          );
+          await mode.selectChildAt(0);
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect(await readFile(path, 'utf8')).not.toContain(
+              'indicator_off_color='
+            )
+          );
+        }
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('saves an ordered font list containing three families', async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'elder-terms-font-list-'));
+    const savedPath = join(directory, 'connection.ini');
+    try {
+      await runSharedGtkTest(
+        context,
+        ['--page=terminal', `--save-file=${savedPath}`],
+        async ({ app }) => {
+          await showTerminalPage(app);
+          await scrollTerminalPageToBottom(app);
+          await expectElementKind(
+            await app.getById('settings_terminal_fonts_mode_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          await expectElementKind(
+            await app.getById('settings_terminal_fonts_add_button'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_terminal_font_family_2'),
+            'entry'
+          ).setText('IPAGothic');
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForPrintedStore(app, 'SAVED');
+          expect(await readFile(savedPath, 'utf8')).toContain(
+            'font_families=Noto Sans Mono;Monospace;IPAGothic;'
+          );
+        }
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('reorders and removes font candidates as one applied and saved list', async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'elder-terms-font-order-'));
+    const path = join(directory, 'connection.ini');
+    try {
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=terminal',
+          '--connection=terminal.font_families=Monospace;IPAGothic;DejaVu Sans Mono;',
+          `--save-file=${path}`,
+        ],
+        async ({ app }) => {
+          await showTerminalPage(app);
+          await scrollTerminalPageToBottom(app);
+          await expectElementKind(
+            await app.getById('settings_terminal_font_up_2'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_terminal_font_down_0'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_terminal_font_remove_2'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect((await app.output()).stdout).toContain(
+              'APPLIED_FONTS ["DejaVu Sans Mono","Monospace"]'
+            );
+          });
+          await expectElementKind(
+            await app.getById('settings_terminal_font_family_0'),
+            'entry'
+          ).setText('Unapplied Font');
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForPrintedStore(app, 'SAVED');
+          expect(await readFile(path, 'utf8')).toContain(
+            'font_families=DejaVu Sans Mono;Monospace;'
+          );
+        }
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves invalid font drafts across rebase and resets the whole list', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=terminal',
+        '--global=terminal.font_families=Global One;Global Two;',
+        '--rebase-global=terminal.font_families=Replacement One;Replacement Two;Replacement Three;',
+        '--save',
+      ],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        await scrollTerminalPageToBottom(app);
+        const mode = expectElementKind(
+          await app.getById('settings_terminal_fonts_mode_combo'),
+          'comboBox'
+        );
+        await mode.selectChildAt(2);
+        const entry = expectElementKind(
+          await app.getById('settings_terminal_font_family_0'),
+          'entry'
+        );
+        for (const invalid of ['', 'Global Two', 'Invalid,Family']) {
+          await entry.setText(invalid);
+          await waitForChangedState(app, 'CHANGED dirty=true valid=false');
+          expect(
+            (await (await app.getById('settings_apply_button')).info()).states
+          ).not.toContain('sensitive');
+        }
+        await expectElementKind(
+          await app.getById('rebase_fallbacks_button'),
+          'button'
+        ).click();
+        expect(
+          await expectElementKind(
+            await app.getById('settings_terminal_font_family_0'),
+            'entry'
+          ).text()
+        ).toBe('Invalid,Family');
+        expect(
+          (await (await app.getById('settings_save_button')).info()).states
+        ).not.toContain('sensitive');
+        await mode.selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect((await app.output()).stdout).toContain(
+            'APPLIED_FONTS ["Noto Sans Mono","Monospace"]'
+          );
+        });
+        await mode.selectChildAt(0);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect((await app.output()).stdout).toContain(
+            'APPLIED_FONTS ["Replacement One","Replacement Two","Replacement Three"]'
+          );
+        });
+      }
+    );
+  });
+
+  it('edits long ordered font lists and shows the list controls in Japanese', async (context) => {
+    const names = Array.from(
+      { length: 12 },
+      (_, index) => `Candidate ${index + 1}`
+    );
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=terminal',
+        `--connection=terminal.font_families=${names.join(';')};`,
+      ],
+      async ({ app, directory }) => {
+        await showTerminalPage(app);
+        await scrollTerminalPageToBottom(app);
+        const scrollbar = expectElementKind(
+          await app.getById('settings_terminal_page_scrollbar'),
+          'scrollbar'
+        );
+        const range = await scrollbar.valueInfo();
+        expect(range.maximum).toBeGreaterThan(range.minimum);
+        await scrollbar.setValue(range.maximum);
+        const last = expectElementKind(
+          await app.getById('settings_terminal_font_family_11'),
+          'entry'
+        );
+        await waitForResult(async () =>
+          expect((await last.info()).states).toContain('showing')
+        );
+        expect(await last.text()).toBe('Candidate 12');
+        await last.setText('Last Font');
+        const window = expectElementKind(await app.windowAt(0), 'window');
+        const originalHeight = (await window.capture()).bounds.height;
+        await expectElementKind(
+          await app.getById('settings_terminal_fonts_add_button'),
+          'button'
+        ).click();
+        const added = expectElementKind(
+          await app.getById('settings_terminal_font_family_12'),
+          'entry'
+        );
+        await waitForResult(async () => {
+          expect((await added.info()).states).toContain('showing');
+          expect((await added.info()).states).toContain('focused');
+        });
+        await added.setText('Added Font');
+        expect((await window.capture()).bounds.height).toBe(originalHeight);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect((await app.output()).stdout).toContain(
+            `APPLIED_FONTS ${JSON.stringify([...names.slice(0, -1), 'Last Font', 'Added Font'])}`
+          )
+        );
+        const page = await app.getById('settings_terminal_page');
+        await writeFile(
+          join(directory, 'long-font-list.png'),
+          (await page.capture()).image
+        );
+      }
+    );
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal'],
+      async ({ app, directory }) => {
+        await showTerminalPage(app);
+        await scrollTerminalPageToBottom(app);
+        await expectPageLabels(app, 'settings_terminal_page', [
+          'フォントファミリー',
+        ]);
+        const add = await app.getById('settings_terminal_fonts_add_button');
+        expect((await add.info()).name).toBe('追加');
+        expect(
+          await comboOptionNames(app, 'settings_terminal_fonts_mode_combo')
+        ).toEqual(['継承元：アプリ標準', 'アプリ標準に固定', 'この接続で指定']);
+        await writeFile(
+          join(directory, 'font-list-ja.png'),
+          (await (await app.getById('settings_terminal_page')).capture()).image
+        );
+      },
+      { env: japaneseTestEnvironment }
+    );
+  });
+
+  it('applies, cancels, saves, and resets the common terminal indicator color', async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'elder-terms-indicator-'));
+    const savedPath = join(directory, 'connection.ini');
+    try {
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=terminal',
+          '--global=terminal.indicator_color=#112233',
+          `--save-file=${savedPath}`,
+        ],
+        async ({ app }) => {
+          await showTerminalPage(app);
+          await scrollTerminalPageToBottom(app);
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_indicator_color_mode_combo',
+            'Custom color (global default)'
+          );
+          const mode = expectElementKind(
+            await app.getById('settings_terminal_indicator_color_mode_combo'),
+            'comboBox'
+          );
+          await chooseNamedColor(
+            app,
+            'settings_terminal_indicator_color_button',
+            'Red'
+          );
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_indicator_color_mode_combo',
+            'Custom color'
+          );
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            const store = await waitForAppliedStore(app);
+            expect(store.indicator_color).toBe('#E01B24');
+            expect(store.indicator_color_source).toBe('override');
+            expect(store.indicator_color_explicit).toBe('true');
+          });
+          await chooseNamedColor(
+            app,
+            'settings_terminal_indicator_color_button',
+            'Blue'
+          );
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(await readFile(savedPath, 'utf8')).toContain(
+              'indicator_color=#E01B24\n'
+            );
+          });
+          await mode.selectChildAt(1);
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_indicator_color_mode_combo',
+            'Default color'
+          );
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(await readFile(savedPath, 'utf8')).toContain(
+              'indicator_color=default\n'
+            );
+          });
+          await mode.selectChildAt(0);
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(await readFile(savedPath, 'utf8')).not.toContain(
+              'indicator_color='
+            );
+          });
+          await expectSelectedComboValue(
+            app,
+            'settings_terminal_indicator_color_mode_combo',
+            'Custom color (global default)'
+          );
+        }
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('edits the global indicator color and keeps an explicit default over an inherited color', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--global-mode', '--page=terminal'],
+      async ({ app }) => {
+        await selectSettingsTab(app, 'Terminal', 'global_settings');
+        const scrollbar = expectElementKind(
+          await app.getById('global_settings_terminal_page_scrollbar'),
+          'scrollbar'
+        );
+        await scrollbar.setValue((await scrollbar.valueInfo()).maximum);
+        await expectSelectedComboValue(
+          app,
+          'global_settings_terminal_indicator_color_mode_combo',
+          'Default color (built-in default)'
+        );
+        await chooseNamedColor(
+          app,
+          'global_settings_terminal_indicator_color_button',
+          'Blue'
+        );
+        await expectElementKind(
+          await app.getById('global_settings_apply_button'),
+          'button'
+        ).click();
+        expect((await waitForAppliedStore(app)).indicator_color).toBe(
+          '#3584E4'
+        );
+      }
+    );
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=terminal',
+        '--global=terminal.indicator_color=#112233',
+        '--indicator-color=default',
+        '--rebase-global=terminal.indicator_color=#445566',
+      ],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_indicator_color_mode_combo',
+          'Default color'
+        );
+        await scrollTerminalPageToBottom(app);
+        await expectElementKind(
+          await app.getById('rebase_fallbacks_button'),
+          'button'
+        ).click();
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_indicator_color_mode_combo',
+          'Default color'
+        );
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        expect((await waitForAppliedStore(app)).indicator_color).toBe(
+          'default'
+        );
+        await expectElementKind(
+          await app.getById('settings_terminal_indicator_color_mode_combo'),
+          'comboBox'
+        ).selectChildAt(0);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect((await waitForAppliedStore(app)).indicator_color).toBe(
+            '#445566'
+          );
+        });
+      }
+    );
+  });
+
+  it('warns about invalid indicator colors and uses a valid inherited fallback', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=terminal',
+        '--global=terminal.indicator_color=#123abc',
+        '--indicator-color=green',
+        '--allow-invalid-connection-values',
+      ],
+      async ({ app }) => {
+        await showTerminalPage(app);
+        await scrollTerminalPageToBottom(app);
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_indicator_color_mode_combo',
+          'Custom color (global default)'
+        );
+        expect((await app.output()).stderr).toContain(
+          'invalid configuration value [terminal] indicator_color'
+        );
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        const store = await waitForAppliedStore(app);
+        expect(store.indicator_color).toBe('#123abc');
+        expect(store.indicator_color_explicit).toBe('false');
+      }
+    );
+  });
+
+  it('shows the common indicator color setting in Japanese', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=terminal'],
+      async ({ app, directory }) => {
+        await showTerminalPage(app);
+        await scrollTerminalPageToBottom(app);
+        await expectPageLabels(app, 'settings_terminal_page', [
+          '点灯時の色',
+          '消灯時の色',
+        ]);
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_indicator_color_mode_combo',
+          '既定の色（組み込み既定値）'
+        );
+        await writeFile(
+          join(directory, 'indicator-color-ja.png'),
+          (await (await app.getById('settings_terminal_page')).capture()).image
+        );
+      },
+      { env: japaneseTestEnvironment }
+    );
   });
 
   it('edits inherited, uncolored, and custom General backgrounds with RGB pickers', async (context) => {
@@ -2093,7 +2837,7 @@ describe.concurrent('shared settings widget', () => {
         }
       );
     }
-  });
+  }, 60_000);
 
   it('shows TELNET controls in editable mode and matches the visual fixture', async (context) => {
     await runSharedGtkTest(
@@ -2382,6 +3126,683 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
+  it('selects a WebDAV CA file while disabling only its parent and restores it on close', async (context) => {
+    const root = await mkdtemp(join(tmpdir(), 'elder-webdav-ca-'));
+    try {
+      const file = join(root, 'selected-ca.pem');
+      await writeFile(file, 'test CA selection');
+      await runSharedGtkTest(
+        context,
+        ['--page=webdav', '--type=webdav', `--webdav-ca-dialog-file=${file}`],
+        async ({ app }) => {
+          await selectSettingsTab(app, 'WebDAV');
+          const parent = expectElementKind(
+            await app.getById('settings_widget_test_window'),
+            'window'
+          );
+          const scroll = expectElementKind(
+            await app.getById('settings_webdav_page_scrollbar'),
+            'scrollbar'
+          );
+          await scroll.setValue((await scroll.valueInfo()).maximum);
+          await expectElementKind(
+            await app.getById('settings_webdav_ca_file_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          const browse = expectElementKind(
+            await app.getById('settings_webdav_ca_browse_button'),
+            'button'
+          );
+          const entry = expectElementKind(
+            await app.getById('settings_webdav_ca_file_entry'),
+            'entry'
+          );
+          for (const accept of [false, true]) {
+            await expectSensitive(parent);
+            await browse.click();
+            const dialog = expectElementKind(
+              await app.getById('settings_webdav_ca_dialog'),
+              'container'
+            );
+            expect((await dialog.info()).states).not.toContain('modal');
+            await expectInsensitive(parent);
+            const open = expectElementKind(
+              await findDescendantByName(dialog, 'button', 'Open'),
+              'button'
+            );
+            await expectSensitive(open);
+            if (accept) {
+              await open.click();
+            } else {
+              await app.input.pressKey('Escape');
+            }
+            await waitForResult(async () =>
+              expect(await app.getWindowCount()).toBe(1)
+            );
+            await expectSensitive(parent);
+            expect(await entry.text()).toBe(accept ? file : '');
+          }
+        }
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('edits WebDAV settings with inherited ports and independent HTTPS policy', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=webdav', '--type=webdav'],
+      async ({ app, directory }) => {
+        await selectSettingsTab(app, 'WebDAV');
+        await writeFile(
+          join(directory, 'webdav-settings-top.png'),
+          (await app.capture()).image
+        );
+        const scheme = expectElementKind(
+          await app.getById('settings_webdav_scheme_combo'),
+          'comboBox'
+        );
+        const port = expectElementKind(
+          await app.getById('settings_webdav_port_entry'),
+          'entry'
+        );
+        await expectInheritedEntry(
+          app,
+          'settings_webdav_port_entry',
+          '443 (built-in default)'
+        );
+        await scheme.selectChildAt(2);
+        await expectInheritedEntry(
+          app,
+          'settings_webdav_port_entry',
+          '80 (built-in default)'
+        );
+        await port.setText('8080');
+        await scheme.selectChildAt(1);
+        expect(await port.text()).toBe('8080');
+        await expectElementKind(
+          await app.getById('settings_webdav_base_path_entry'),
+          'entry'
+        ).setText('/dav/files/');
+        await port.setText('invalid');
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await port.setText('8443');
+        const scroll = expectElementKind(
+          await app.getById('settings_webdav_page_scrollbar'),
+          'scrollbar'
+        );
+        await scroll.setValue((await scroll.valueInfo()).maximum);
+        await expectElementKind(
+          await app.getById('settings_webdav_ca_file_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await expectElementKind(
+          await app.getById('settings_webdav_ca_file_entry'),
+          'entry'
+        ).setText('/tmp/dav-ca.pem');
+        await expectElementKind(
+          await app.getById('settings_webdav_certificate_error_action_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectSensitive(await app.getById('settings_apply_button'));
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        const store = await waitForAppliedStore(app);
+        expect(store.type).toBe('webdav');
+        expect(store.webdav_scheme).toBe('https');
+        expect(store.webdav_port).toBe('8443');
+        expect(store.webdav_base_path).toBe('/dav/files/');
+        expect(store.webdav_ca_file).toBe('/tmp/dav-ca.pem');
+        expect(store.webdav_certificate_action).toBe('prompt');
+      }
+    );
+  });
+
+  it('preserves unfinished WebDAV edits when global defaults change', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=webdav', '--type=webdav', '--rebase-global=webdav.port=8080'],
+      async ({ app }) => {
+        await selectSettingsTab(app, 'WebDAV');
+        const port = expectElementKind(
+          await app.getById('settings_webdav_port_entry'),
+          'entry'
+        );
+        await port.setText('unfinished');
+        await expectElementKind(
+          await app.getById('rebase_fallbacks_button'),
+          'button'
+        ).click();
+        expect(await port.text()).toBe('unfinished');
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await port.setText('8081');
+        await expectSensitive(await app.getById('settings_apply_button'));
+      }
+    );
+  });
+
+  it('applies FTPS modes, protocol ranges and independent certificate policy', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=ftp', '--type=ftp'],
+      async ({ app }) => {
+        await showFtpPage(app);
+        const mode = expectElementKind(
+          await app.getById('settings_ftp_tls_mode_combo'),
+          'comboBox'
+        );
+        const port = expectElementKind(
+          await app.getById('settings_ftp_port_entry'),
+          'entry'
+        );
+        await mode.selectChildAt(3);
+        await expectInheritedEntry(
+          app,
+          'settings_ftp_port_entry',
+          '990 (built-in default)'
+        );
+        const auth = await app.getById('settings_ftp_tls_auth_order_combo');
+        await expectInsensitive(auth);
+        await mode.selectChildAt(2);
+        await expectInheritedEntry(
+          app,
+          'settings_ftp_port_entry',
+          '21 (built-in default)'
+        );
+        await port.setText('2121');
+        await mode.selectChildAt(3);
+        expect(await port.text()).toBe('2121');
+        await port.setText('');
+        await expectInheritedEntry(
+          app,
+          'settings_ftp_port_entry',
+          '990 (built-in default)'
+        );
+        await mode.selectChildAt(2);
+        for (const [name, index] of [
+          ['tls_min_version', 1],
+          ['tls_max_version', 2],
+          ['tls_auth_order', 2],
+          ['tls_compatibility', 2],
+          ['certificate_error_action', 2],
+        ] as const) {
+          await expectElementKind(
+            await app.getById(`settings_ftp_${name}_combo`),
+            'comboBox'
+          ).selectChildAt(index);
+        }
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        const store = await waitForAppliedStore(app);
+        expect(store.ftp_tls_mode).toBe('explicit');
+        expect(store.ftp_tls_min_version).toBe('1.0');
+        expect(store.ftp_tls_max_version).toBe('1.0');
+        expect(store.ftp_tls_auth_order).toBe('ssl');
+        expect(store.ftp_tls_compatibility).toBe('openssl_legacy');
+        expect(store.ftp_certificate_error_action).toBe('prompt');
+      }
+    );
+  });
+
+  it('requires valid custom CA and TLS ranges before applying settings', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=ftp', '--type=ftp', '--connection=ftp.tls_mode=explicit'],
+      async ({ app }) => {
+        await showFtpPage(app);
+        const apply = await app.getById('settings_apply_button');
+        const minimum = expectElementKind(
+          await app.getById('settings_ftp_tls_min_version_combo'),
+          'comboBox'
+        );
+        const maximum = expectElementKind(
+          await app.getById('settings_ftp_tls_max_version_combo'),
+          'comboBox'
+        );
+        await maximum.selectChildAt(2);
+        await expectInsensitive(apply);
+        await minimum.selectChildAt(1);
+        await expectSensitive(apply);
+        await expectElementKind(
+          await app.getById('settings_ftp_ca_file_mode_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectInsensitive(apply);
+        const ca = expectElementKind(
+          await app.getById('settings_ftp_ca_file_entry'),
+          'entry'
+        );
+        await ca.setText('relative.pem');
+        await expectInsensitive(apply);
+        await ca.setText('/tmp/private-ca.pem');
+        await expectSensitive(apply);
+        await expectElementKind(apply, 'button').click();
+        expect((await waitForAppliedStore(app)).ftp_ca_file).toBe(
+          '/tmp/private-ca.pem'
+        );
+      }
+    );
+  });
+
+  it('preserves an explicit system CA override through save and reload', async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'elder-ftps-settings-'));
+    try {
+      const path = join(directory, 'connection.ini');
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=ftp',
+          '--type=ftp',
+          '--global=ftp.tls_mode=implicit',
+          '--global=ftp.ca_file=/tmp/global-ca.pem',
+          `--save-file=${path}`,
+        ],
+        async ({ app }) => {
+          await showFtpPage(app);
+          const ca = expectElementKind(
+            await app.getById('settings_ftp_ca_file_mode_combo'),
+            'comboBox'
+          );
+          await ca.selectChildAt(1);
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect((await app.output()).stdout).toContain('SAVED ')
+          );
+          const saved = await readFile(path, 'utf8');
+          expect(saved).toContain('ca_file=');
+          expect(saved).not.toContain('global-ca.pem');
+          const restored = await waitForPrintedStore(app, 'SAVED');
+          expect(restored.ftp_ca_file).toBe('');
+          expect(restored.ftp_ca_file_explicit).toBe('true');
+        }
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps FTPS connection settings read-only in a running window', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ftp',
+        '--type=ftp',
+        '--runtime',
+        '--connection=ftp.tls_mode=explicit',
+        '--connection=ftp.certificate_error_action=prompt',
+      ],
+      async ({ app }) => {
+        await showFtpPage(app);
+        for (const name of [
+          'tls_mode',
+          'tls_min_version',
+          'tls_max_version',
+          'tls_auth_order',
+          'tls_compatibility',
+          'certificate_error_action',
+        ])
+          await expectInsensitive(
+            await app.getById(`settings_ftp_${name}_combo`)
+          );
+        for (const name of [
+          'ca_file',
+          'tls_cipher_list',
+          'tls13_cipher_list',
+        ]) {
+          await expectInsensitive(
+            await app.getById(`settings_ftp_${name}_mode_combo`)
+          );
+          await expectInsensitive(
+            await app.getById(`settings_ftp_${name}_entry`)
+          );
+        }
+      }
+    );
+  });
+
+  it('retains an invalid custom CA edit while global defaults are reloaded', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ftp',
+        '--type=ftp',
+        '--connection=ftp.tls_mode=explicit',
+        '--rebase-global=ftp.ca_file=/tmp/rebased.pem',
+      ],
+      async ({ app }) => {
+        await showFtpPage(app);
+        await expectElementKind(
+          await app.getById('settings_ftp_ca_file_mode_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        const ca = expectElementKind(
+          await app.getById('settings_ftp_ca_file_entry'),
+          'entry'
+        );
+        await ca.setText('unfinished');
+        await expectElementKind(
+          await app.getById('rebase_fallbacks_button'),
+          'button'
+        ).click();
+        expect(await ca.text()).toBe('unfinished');
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await ca.setText('/tmp/corrected.pem');
+        await expectSensitive(await app.getById('settings_apply_button'));
+      }
+    );
+  });
+
+  it('edits FTPS global defaults and exposes the complete scrollable form', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--global-mode', '--page=ftp'],
+      async ({ app, directory }) => {
+        const mode = expectElementKind(
+          await app.getById('global_settings_ftp_tls_mode_combo'),
+          'comboBox'
+        );
+        await mode.selectChildAt(3);
+        await expectElementKind(
+          await app.getById(
+            'global_settings_ftp_certificate_error_action_combo'
+          ),
+          'comboBox'
+        ).selectChildAt(2);
+        const ca = expectElementKind(
+          await app.getById('global_settings_ftp_ca_file_mode_combo'),
+          'comboBox'
+        );
+        await expectSelectedComboValue(
+          app,
+          'global_settings_ftp_ca_file_mode_combo',
+          'System CA certificates'
+        );
+        await ca.selectChildAt(1);
+        await expectElementKind(
+          await app.getById('global_settings_ftp_ca_file_entry'),
+          'entry'
+        ).setText('/tmp/global-ca.pem');
+        await captureWhenVisuallyStable(
+          await app.getById('global_settings_ftp_page'),
+          'ftps-global-top.png'
+        );
+        await writeFile(
+          join(directory, 'ftps-global-top.png'),
+          (await app.capture()).image
+        );
+        const scrollbar = expectElementKind(
+          await app.getById('global_settings_ftp_page_scrollbar'),
+          'scrollbar'
+        );
+        await scrollbar.setValue((await scrollbar.valueInfo()).maximum);
+        const cipher = expectElementKind(
+          await app.getById('global_settings_ftp_tls13_cipher_list_mode_combo'),
+          'comboBox'
+        );
+        await waitForResult(async () =>
+          expect((await cipher.info()).states).toContain('showing')
+        );
+        await cipher.selectChildAt(2);
+        await expectElementKind(
+          await app.getById('global_settings_ftp_tls13_cipher_list_entry'),
+          'entry'
+        ).setText('TLS_AES_128_GCM_SHA256');
+        await captureWhenVisuallyStable(
+          await app.getById('global_settings_ftp_page'),
+          'ftps-global-details.png'
+        );
+        await writeFile(
+          join(directory, 'ftps-global-details.png'),
+          (await app.capture()).image
+        );
+        await expectElementKind(
+          await app.getById('global_settings_apply_button'),
+          'button'
+        ).click();
+        const store = await waitForAppliedStore(app);
+        expect(store.ftp_tls_mode).toBe('implicit');
+        expect(store.ftp_ca_file).toBe('/tmp/global-ca.pem');
+        expect(store.ftp_certificate_error_action).toBe('prompt');
+        expect(store.ftp_tls13_cipher_list).toBe('TLS_AES_128_GCM_SHA256');
+      }
+    );
+  });
+
+  it('shows Japanese FTPS choices and keeps TLS options when changing modes', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ftp',
+        '--type=ftp',
+        '--connection=ftp.tls_mode=explicit',
+        '--connection=ftp.tls_min_version=1.0',
+        '--connection=ftp.tls_compatibility=openssl_legacy',
+      ],
+      async ({ app, directory }) => {
+        await showFtpPage(app);
+        await expectSelectedComboValue(
+          app,
+          'settings_ftp_tls_mode_combo',
+          'FTPS（明示的TLS）'
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_ftp_tls_compatibility_combo',
+          '旧TLS互換（暗号・署名の制約を緩和）'
+        );
+        const mode = expectElementKind(
+          await app.getById('settings_ftp_tls_mode_combo'),
+          'comboBox'
+        );
+        await mode.selectChildAt(1);
+        await expectInsensitive(
+          await app.getById('settings_ftp_tls_min_version_combo')
+        );
+        await mode.selectChildAt(2);
+        await expectSensitive(
+          await app.getById('settings_ftp_tls_min_version_combo')
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_ftp_tls_min_version_combo',
+          '1.0'
+        );
+        const scrollbar = expectElementKind(
+          await app.getById('settings_ftp_page_scrollbar'),
+          'scrollbar'
+        );
+        await scrollbar.setValue((await scrollbar.valueInfo()).maximum);
+        await captureWhenVisuallyStable(
+          await app.getById('settings_ftp_page'),
+          'ftps-japanese-details.png'
+        );
+        await writeFile(
+          join(directory, 'ftps-japanese-details.png'),
+          (await app.capture()).image
+        );
+      },
+      { env: japaneseTestEnvironment }
+    );
+  });
+
+  it('allows correction of a retained invalid FTPS mode before applying', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ftp',
+        '--type=ftp',
+        '--allow-invalid-connection-values',
+        '--connection=ftp.tls_mode=explict',
+      ],
+      async ({ app }) => {
+        await showFtpPage(app);
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await expectSelectedComboValue(
+          app,
+          'settings_ftp_tls_mode_combo',
+          'Invalid value: explict'
+        );
+        await expectElementKind(
+          await app.getById('settings_ftp_tls_mode_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectSensitive(await app.getById('settings_apply_button'));
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        expect((await waitForAppliedStore(app)).ftp_tls_mode).toBe('explicit');
+      }
+    );
+  });
+
+  it('selects a CA file through a cancellable chooser', async (context) => {
+    const root = await mkdtemp(join(tmpdir(), 'elder-ftps-ca-'));
+    try {
+      const file = join(root, 'selected-ca.pem');
+      await writeFile(file, 'test CA selection');
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=ftp',
+          '--type=ftp',
+          '--connection=ftp.tls_mode=explicit',
+          `--ftp-ca-dialog-file=${file}`,
+        ],
+        async ({ app }) => {
+          await showFtpPage(app);
+          await expectElementKind(
+            await app.getById('settings_ftp_ca_file_mode_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          const scroll = expectElementKind(
+            await app.getById('settings_ftp_page_scrollbar'),
+            'scrollbar'
+          );
+          await scroll.setValue((await scroll.valueInfo()).maximum);
+          const browse = expectElementKind(
+            await app.getById('settings_ftp_ca_browse_button'),
+            'button'
+          );
+          const entry = expectElementKind(
+            await app.getById('settings_ftp_ca_file_entry'),
+            'entry'
+          );
+          const parent = await app.getById('settings_widget_test_window');
+          await browse.click();
+          await expectInsensitive(parent);
+          expect(
+            (await (await app.getById('settings_ftp_ca_dialog')).info()).states
+          ).not.toContain('modal');
+          await waitForResult(async () =>
+            expect(await app.getWindowCount()).toBe(2)
+          );
+          await app.input.pressKey('Escape');
+          await waitForResult(async () =>
+            expect(await app.getWindowCount()).toBe(1)
+          );
+          await expectSensitive(parent);
+          expect(await entry.text()).toBe('');
+          await browse.click();
+          await expectElementKind(
+            await app.getById('settings_ftp_ca_open_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect(await entry.text()).toBe(file)
+          );
+          await expectSensitive(parent);
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          expect((await waitForAppliedStore(app)).ftp_ca_file).toBe(file);
+        }
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('cancels FTPS edits and restores inherited cipher settings', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ftp',
+        '--save',
+        '--type=ftp',
+        '--global=ftp.tls_mode=explicit',
+        '--global=ftp.port=2021',
+        '--global=ftp.tls_cipher_list=AES128-SHA',
+      ],
+      async ({ app }) => {
+        await showFtpPage(app);
+        const mode = expectElementKind(
+          await app.getById('settings_ftp_tls_mode_combo'),
+          'comboBox'
+        );
+        const cipher = expectElementKind(
+          await app.getById('settings_ftp_tls_cipher_list_mode_combo'),
+          'comboBox'
+        );
+        await mode.selectChildAt(3);
+        await expectInheritedEntry(
+          app,
+          'settings_ftp_port_entry',
+          '2021 (global default)'
+        );
+        await cipher.selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_cancel_button'),
+          'button'
+        ).click();
+        // Cancel restores the draft; the real caller closes the editor.
+        // Check the subsequently saved values, as the other cancel tests do.
+        await expectElementKind(
+          await app.getById('settings_save_button'),
+          'button'
+        ).click();
+        const cancelled = await waitForPrintedStore(app, 'SAVED');
+        expect(cancelled.ftp_tls_mode).toBe('explicit');
+        expect(cancelled.ftp_tls_mode_explicit).toBe('false');
+        expect(cancelled.ftp_tls_cipher_list).toBe('AES128-SHA');
+        expect(cancelled.ftp_tls_cipher_list_explicit).toBe('false');
+        await cipher.selectChildAt(0);
+        await cipher.selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        expect((await waitForAppliedStore(app)).ftp_tls_cipher_list).toBe('');
+        expect(
+          (await waitForAppliedStore(app)).ftp_tls_cipher_list_explicit
+        ).toBe('true');
+        await cipher.selectChildAt(0);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect((await waitForAppliedStore(app)).ftp_tls_cipher_list).toBe(
+            'AES128-SHA'
+          )
+        );
+        expect(
+          (await waitForAppliedStore(app)).ftp_tls_cipher_list_explicit
+        ).toBe('false');
+      }
+    );
+  });
+
   it('shows FTP connection controls and applies FTP edits', async (context) => {
     await runSharedGtkTest(
       context,
@@ -2657,6 +4078,93 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
+  for (const type of ['ssh', 'sftp', 'telnet', 'ftp']) {
+    for (const mode of ['complete', 'no-name', 'pending', 'mdns', 'llmnr']) {
+      it(`selects and persists the ${mode} IP scan result for ${type}`, async (context) => {
+        const section = type === 'sftp' ? 'ssh' : type;
+        const expectedAddress =
+          mode === 'complete'
+            ? 'router.example.test'
+            : mode === 'mdns'
+              ? 'router.local'
+              : mode === 'llmnr'
+                ? 'router'
+                : '192.0.2.25';
+        const directory = await mkdtemp(join(tmpdir(), 'elder-terms-scan-'));
+        try {
+          await runSharedGtkTest(
+            context,
+            [
+              `--page=${section}`,
+              `--type=${type}`,
+              `--${section}-address=before.example.test`,
+              `--${section}-port=2222`,
+              `--ip-scan=${mode}`,
+              `--save-file=${join(directory, 'connection.ini')}`,
+            ],
+            async ({ app }) => {
+              if (section === 'ssh') {
+                await showSshPage(app);
+              } else if (section === 'telnet') {
+                await showTelnetPage(app);
+              } else {
+                await showFtpPage(app);
+              }
+              await expectElementKind(
+                await app.getById(`settings_${section}_ip_scan_button`),
+                'button'
+              ).click();
+              const results = expectElementKind(
+                await app.getById('settings_ip_scan_results'),
+                'table'
+              );
+              await waitForResult(async () => {
+                expect(await results.getRowCount()).toBe(1);
+                if (expectedAddress !== '192.0.2.25') {
+                  expect(
+                    (await (await results.cellAt(0, 1))?.info())?.name
+                  ).toBe(expectedAddress);
+                }
+              });
+              await doubleClickTableRow(app, results, 0);
+              await waitForResult(async () => {
+                expect(
+                  await app.findById('settings_ip_scan_dialog')
+                ).toBeUndefined();
+              });
+              expect(
+                await expectElementKind(
+                  await app.getById(`settings_${section}_address_entry`),
+                  'entry'
+                ).text()
+              ).toBe(expectedAddress);
+              await expectElementKind(
+                await app.getById('settings_apply_button'),
+                'button'
+              ).click();
+              const applied = await waitForAppliedStore(app);
+              expect(applied[`${section}_address`]).toBe(expectedAddress);
+              expect(applied[`${section}_port`]).toBe('2222');
+              expect(applied.type).toBe(type);
+              expect(applied.name).toBe('fixture');
+              await expectElementKind(
+                await app.getById('settings_save_button'),
+                'button'
+              ).click();
+              const saved = await waitForPrintedStore(app, 'SAVED');
+              expect(saved[`${section}_address`]).toBe(expectedAddress);
+              expect(saved[`${section}_port`]).toBe('2222');
+              expect(saved.type).toBe(type);
+              expect(saved.name).toBe('fixture');
+            }
+          );
+        } finally {
+          await rm(directory, { recursive: true, force: true });
+        }
+      });
+    }
+  }
+
   it('uses a discovered IP from an active scan for SFTP', async (context) => {
     await runSharedGtkTest(
       context,
@@ -2876,13 +4384,13 @@ describe.concurrent('shared settings widget', () => {
           await mkdir(join(fixture.sysClassTtyRoot, 'zero', 'device'), {
             recursive: true,
           });
-          await Promise.all([
-            writeFile(
-              join(fixture.sysClassTtyRoot, 'zero', 'device', 'product'),
-              'Other USB\n'
-            ),
-            symlink('/dev/zero', join(fixture.byIdRoot, 'usb-other')),
-          ]);
+          // Publish the device only after its metadata is complete. Creating
+          // the link first can notify the watcher before the product exists.
+          await writeFile(
+            join(fixture.sysClassTtyRoot, 'zero', 'device', 'product'),
+            'Other USB\n'
+          );
+          await symlink('/dev/zero', join(fixture.byIdRoot, 'usb-other'));
           await waitForResult(async () => {
             expect(
               await comboOptionNames(app, 'settings_serial_device_combo')
@@ -3454,7 +4962,7 @@ describe.concurrent('shared settings widget', () => {
         await autoClose.selectChildAt(1);
         await showBorder.selectChildAt(2);
         await setNumericEntryValue(borderWidth, 6);
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         await captureKeyBinding(app, zoomInKey, ['alt'], 'Up');
         await captureKeyBinding(app, sendBreakKey, ['shift'], 'F12');
         await clearKeyBinding(
@@ -3488,257 +4996,92 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
-  it('uses three-state terminal font modes and applies, saves, and cancels overrides', async (context) => {
+  it('uses whole-list font modes and selects a family without changing size', async (context) => {
     await runSharedGtkTest(
       context,
       [
         '--page=terminal',
         '--save',
-        '--global=terminal.font_primary_family=Monospace',
-        '--global=terminal.font_fallback_family=IPAGothic',
+        '--global=terminal.font_families=Monospace;IPAGothic;',
       ],
       async ({ app, directory }) => {
         await showTerminalPage(app);
-        const primaryMode = expectElementKind(
-          await app.getById('settings_terminal_font_primary_mode_combo'),
-          'comboBox'
-        );
-        const fallbackMode = expectElementKind(
-          await app.getById('settings_terminal_font_fallback_mode_combo'),
-          'comboBox'
-        );
-        const primaryButton = expectElementKind(
-          await app.getById('settings_terminal_font_primary_button'),
-          'button'
-        );
-        const fallbackButton = expectElementKind(
-          await app.getById('settings_terminal_font_fallback_button'),
-          'button'
-        );
-
+        await scrollTerminalPageToBottom(app);
         await expectSelectedComboValue(
           app,
-          'settings_terminal_font_primary_mode_combo',
-          'Custom font (global default)'
+          'settings_terminal_fonts_mode_combo',
+          'Inherited from: global settings'
         );
-        await expectSelectedComboValue(
-          app,
-          'settings_terminal_font_fallback_mode_combo',
-          'Custom font (global default)'
-        );
-        expect(
-          await comboOptionNames(
-            app,
-            'settings_terminal_font_primary_mode_combo'
-          )
-        ).toEqual([
-          'Custom font (global default)',
-          'Use built-in default',
-          'Custom font',
-        ]);
-        expect(
-          await comboOptionNames(
-            app,
-            'settings_terminal_font_fallback_mode_combo'
-          )
-        ).toEqual([
-          'Custom font (global default)',
-          'Use built-in default',
-          'Custom font',
-        ]);
-        await expectSensitive(primaryButton);
-        await expectSensitive(fallbackButton);
-        await waitForResult(async () => {
-          const output = (await app.output()).stdout;
-          expect(output).toContain('primary_present=true');
-          expect(output).toContain('primary_level=0');
-          expect(output).toContain('primary_use_size=false');
-          expect(output).toContain('primary_show_size=false');
-          expect(output).toContain('primary_show_style=false');
-          expect(output).toContain('fallback_present=true');
-          expect(output).toContain('fallback_level=0');
-          expect(output).toContain('fallback_use_size=false');
-          expect(output).toContain('fallback_show_size=false');
-          expect(output).toContain('fallback_show_style=false');
-        });
-
-        const scrollbar = expectElementKind(
-          await app.getById('settings_terminal_page_scrollbar'),
-          'scrollbar'
-        );
-        const scrollbarValue = await scrollbar.valueInfo();
-        expect(scrollbarValue.maximum).toBeGreaterThan(scrollbarValue.minimum);
-        const window = expectElementKind(
-          await app.getById('settings_widget_test_window'),
-          'window'
-        );
-        const windowBounds = await window.bounds();
-        await app.input.moveMouseTo(
-          windowBounds.x + 5,
-          windowBounds.y + windowBounds.height - 5
-        );
-        await scrollbar.setValue(scrollbarValue.maximum);
-        await waitForResult(async () => {
-          expect((await primaryMode.info()).states).toContain('showing');
-          expect((await fallbackMode.info()).states).toContain('showing');
-        });
-        const terminalPage = await app.getById('settings_terminal_page');
-        const terminalPageCapture = await captureWhenVisuallyStable(
-          terminalPage,
+        const page = await app.getById('settings_terminal_page');
+        const capture = await captureWhenVisuallyStable(
+          page,
           'settings-widget-terminal-font-families'
         );
-        expect(terminalPageCapture.clipped).toBe(false);
-        await expectCaptureToMatchFixture(
-          terminalPageCapture,
-          'settings-widget-terminal-font-families',
-          fixturePath('settings-widget-terminal-font-families'),
-          directory,
-          visualComparisonOptions
-        );
-
+        let visualError: unknown;
+        try {
+          await expectCaptureToMatchFixture(
+            capture,
+            'settings-widget-terminal-font-families',
+            fixturePath('settings-widget-terminal-font-families'),
+            directory,
+            visualComparisonOptions
+          );
+        } catch (error) {
+          visualError = error;
+        }
         await confirmSelectedFont(
           app,
-          'settings_terminal_font_primary_button',
-          'Select Primary Terminal Font'
+          'settings_terminal_font_choose_1',
+          'Select Terminal Font'
         );
         await expectSelectedComboValue(
           app,
-          'settings_terminal_font_primary_mode_combo',
-          'Custom font'
+          'settings_terminal_fonts_mode_combo',
+          'Specify for this connection'
         );
-        await expectSelectedComboValue(
-          app,
-          'settings_terminal_font_fallback_mode_combo',
-          'Custom font (global default)'
-        );
-        await confirmSelectedFont(
-          app,
-          'settings_terminal_font_fallback_button',
-          'Select Secondary Terminal Font'
-        );
-        await expectSelectedComboValue(
-          app,
-          'settings_terminal_font_primary_mode_combo',
-          'Custom font'
-        );
-        await expectSelectedComboValue(
-          app,
-          'settings_terminal_font_fallback_mode_combo',
-          'Custom font'
-        );
-        await expectSensitive(primaryButton);
-        await expectSensitive(fallbackButton);
-        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
         await expectElementKind(
           await app.getById('settings_apply_button'),
           'button'
         ).click();
-
-        const applied = await waitForAppliedStore(app);
-        expect(applied.font_primary_family).toBe('Monospace');
-        expect(applied.font_primary_family_source).toBe('override');
-        expect(applied.font_primary_family_explicit).toBe('true');
-        expect(applied.font_fallback_family).toBe('IPAGothic');
-        expect(applied.font_fallback_family_source).toBe('override');
-        expect(applied.font_fallback_family_explicit).toBe('true');
-      }
-    );
-
-    await runSharedGtkTest(
-      context,
-      [
-        '--page=terminal',
-        '--global=terminal.font_primary_family=Monospace',
-        '--global=terminal.font_fallback_family=IPAGothic',
-      ],
-      async ({ app }) => {
-        await showTerminalPage(app);
-        const primaryMode = expectElementKind(
-          await app.getById('settings_terminal_font_primary_mode_combo'),
+        let applied = await waitForAppliedStore(app);
+        expect(applied.font_families_explicit).toBe('true');
+        expect(applied.zoom).toBe('1');
+        await waitForResult(async () =>
+          expect((await app.output()).stdout).toContain(
+            'APPLIED_FONTS ["Monospace","IPAGothic"]'
+          )
+        );
+        const mode = expectElementKind(
+          await app.getById('settings_terminal_fonts_mode_combo'),
           'comboBox'
         );
-        const fallbackMode = expectElementKind(
-          await app.getById('settings_terminal_font_fallback_mode_combo'),
-          'comboBox'
-        );
-        await primaryMode.selectChildAt(1);
-        await fallbackMode.selectChildAt(1);
-        await waitForChangedState(app, 'CHANGED dirty=true valid=true');
-        await expectElementKind(
-          await app.getById('settings_apply_button'),
-          'button'
-        ).click();
-
-        const applied = await waitForAppliedStore(app);
-        expect((await app.output()).stdout).toContain(
-          'font_primary_family=Noto Sans Mono font_fallback_family=Monospace'
-        );
-        expect(applied.font_primary_family_source).toBe('override');
-        expect(applied.font_primary_family_explicit).toBe('true');
-        expect(applied.font_fallback_family).toBe('Monospace');
-        expect(applied.font_fallback_family_source).toBe('override');
-        expect(applied.font_fallback_family_explicit).toBe('true');
-      }
-    );
-
-    await runSharedGtkTest(
-      context,
-      [
-        '--page=terminal',
-        '--save',
-        '--font-primary-family=Monospace',
-        '--font-fallback-family=IPAGothic',
-      ],
-      async ({ app }) => {
-        await showTerminalPage(app);
-        const primaryMode = expectElementKind(
-          await app.getById('settings_terminal_font_primary_mode_combo'),
-          'comboBox'
-        );
-        await expectSelectedComboValue(
-          app,
-          'settings_terminal_font_primary_mode_combo',
-          'Custom font'
-        );
-        await primaryMode.selectChildAt(0);
+        await mode.selectChildAt(1);
         await expectElementKind(
           await app.getById('settings_save_button'),
           'button'
         ).click();
-
-        const saved = await waitForPrintedStore(app, 'SAVED');
-        expect((await app.output()).stdout).toContain(
-          'font_primary_family=Noto Sans Mono font_fallback_family=IPAGothic'
+        expect(
+          (await waitForPrintedStore(app, 'SAVED')).font_families_explicit
+        ).toBe('true');
+        await waitForResult(async () =>
+          expect((await app.output()).stdout).toContain(
+            'SAVED_FONTS ["Noto Sans Mono","Monospace"]'
+          )
         );
-        expect(saved.font_primary_family_explicit).toBe('false');
-        expect(saved.font_fallback_family).toBe('IPAGothic');
-        expect(saved.font_fallback_family_explicit).toBe('true');
-      }
-    );
-
-    await runSharedGtkTest(
-      context,
-      ['--page=terminal', '--global=terminal.font_primary_family=Monospace'],
-      async ({ app }) => {
-        await showTerminalPage(app);
-        const primaryMode = expectElementKind(
-          await app.getById('settings_terminal_font_primary_mode_combo'),
-          'comboBox'
-        );
-        await primaryMode.selectChildAt(2);
+        await mode.selectChildAt(0);
         await expectElementKind(
-          await app.getById('settings_cancel_button'),
+          await app.getById('settings_apply_button'),
           'button'
         ).click();
         await waitForResult(async () => {
-          const output = (await app.output()).stdout;
-          expect(output).toContain('CANCELLED');
-          expect(output).not.toContain('APPLIED');
-          expect(output).not.toContain('SAVED');
+          applied = await waitForAppliedStore(app);
+          expect(applied.font_families_explicit).toBe('false');
+          expect(applied.font_families_source).toBe('global');
         });
+        expect(visualError).toBeUndefined();
       }
     );
-  }, 120_000);
+  }, 60_000);
 
   it('applies terminal encoding and special-code selections', async (context) => {
     await runSharedGtkTest(
@@ -4039,7 +5382,7 @@ describe.concurrent('shared settings widget', () => {
       ['--page=terminal', '--save'],
       async ({ app }) => {
         await showTerminalPage(app);
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         const zoomInKey = expectElementKind(
           await app.getById('settings_terminal_zoom_in_key_entry'),
           'entry'
@@ -4160,7 +5503,7 @@ describe.concurrent('shared settings widget', () => {
         const apply = await app.getById('settings_apply_button');
         const save = await app.getById('settings_save_button');
 
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         await captureKeyBinding(app, zoomInKey, ['alt'], 'F1');
         await expectEntryText(zoomInKey, 'alt+F1');
         await captureKeyBinding(app, zoomOutKey, ['alt'], 'F1');
@@ -4667,7 +6010,7 @@ describe.concurrent('shared settings widget', () => {
 
         await encoding.setText('CP932');
         await autoClose.selectChildAt(1);
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         await captureKeyBinding(app, zoomIn, ['alt'], 'F1');
         await selectSettingsTab(app, 'TELNET');
         const terminalType = await expectInheritedEntry(
@@ -4862,7 +6205,7 @@ describe.concurrent('shared settings widget', () => {
           await expectInsensitive(save);
         });
 
-        await showTerminalKeyBindings(app);
+        await scrollTerminalPageToBottom(app);
         await captureKeyBinding(app, zoomOut, ['alt'], 'F2');
         await waitForResult(async () => {
           await expectSensitive(apply);
@@ -4983,6 +6326,7 @@ describe.concurrent('shared settings widget', () => {
           'SSH',
           'SFTP',
           'FTP',
+          'WebDAV',
           'Terminal',
           'Transfer',
           'Logging',

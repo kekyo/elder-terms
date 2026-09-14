@@ -26,26 +26,26 @@ static PangoFontDescription *create_base_font() {
   return font;
 }
 
-static bool ordered_families_preserve_every_non_family_field() {
+static bool ordered_families_preserve_every_non_family_field(bool absolute) {
   PangoFontDescription *base = create_base_font();
+  if (absolute) pango_font_description_set_absolute_size(base, 19 * PANGO_SCALE);
   PangoFontDescription *font = create_terminal_font_description(
       base,
       {
-          .primary_family = std::string("Latin Mono"),
-          .fallback_family = std::string("CJK Gothic"),
+          .families = {"Latin Mono", "CJK Gothic", "Symbol Face", "Last Face"},
       });
 
   const char *family = pango_font_description_get_family(font);
   const bool passed =
       expect(family != nullptr &&
-                 std::strcmp(family, "Latin Mono,CJK Gothic") == 0,
-             "the fallback family should follow the primary family") &&
+                 std::strcmp(family, "Latin Mono,CJK Gothic,Symbol Face,Last Face") == 0,
+             "every fallback family should retain its specified priority") &&
       expect(pango_font_description_get_size(font) ==
                  pango_font_description_get_size(base),
              "family selection should preserve the existing font size") &&
       expect(pango_font_description_get_size_is_absolute(font) ==
                  pango_font_description_get_size_is_absolute(base),
-             "family selection should preserve relative size semantics") &&
+             "family selection should preserve size semantics") &&
       expect(pango_font_description_get_style(font) ==
                  pango_font_description_get_style(base),
              "family selection should preserve font style") &&
@@ -86,19 +86,18 @@ static bool built_in_families_preserve_the_runtime_font_size() {
   return passed;
 }
 
-static bool fallback_only_keeps_the_runtime_family_first() {
+static bool single_family_replaces_the_runtime_family() {
   PangoFontDescription *base = create_base_font();
   PangoFontDescription *font = create_terminal_font_description(
       base,
       {
-          .primary_family = std::nullopt,
-          .fallback_family = std::string("CJK Gothic"),
+          .families = {"CJK Gothic"},
       });
   const char *family = pango_font_description_get_family(font);
   const bool passed = expect(
       family != nullptr &&
-          std::strcmp(family, "Runtime Default Mono,CJK Gothic") == 0,
-      "fallback-only settings should follow VTE's runtime default family");
+          std::strcmp(family, "CJK Gothic") == 0,
+      "a single configured family should replace the runtime default family");
 
   pango_font_description_free(font);
   pango_font_description_free(base);
@@ -110,8 +109,7 @@ static bool unspecified_families_leave_the_runtime_font_unchanged() {
   PangoFontDescription *font = create_terminal_font_description(
       base,
       {
-          .primary_family = std::nullopt,
-          .fallback_family = std::nullopt,
+          .families = {},
       });
   const bool passed = expect(
       pango_font_description_equal(base, font) != FALSE,
@@ -125,10 +123,11 @@ static bool unspecified_families_leave_the_runtime_font_unchanged() {
 } // namespace elder_terms
 
 int main() {
-  return elder_terms::ordered_families_preserve_every_non_family_field() &&
+  return elder_terms::ordered_families_preserve_every_non_family_field(false) &&
+                 elder_terms::ordered_families_preserve_every_non_family_field(true) &&
                  elder_terms::
                      built_in_families_preserve_the_runtime_font_size() &&
-                 elder_terms::fallback_only_keeps_the_runtime_family_first() &&
+                 elder_terms::single_family_replaces_the_runtime_family() &&
                  elder_terms::
                      unspecified_families_leave_the_runtime_font_unchanged()
              ? 0

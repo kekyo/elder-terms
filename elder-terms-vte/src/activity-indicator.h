@@ -36,9 +36,9 @@ struct ActivityIndicatorWidget {
   ActivityIndicatorMode mode = ActivityIndicatorMode::blink;
   /** GtkImage receiving the current indicator pixbuf. */
   GtkWidget *image = nullptr;
-  /** Pixbuf shown while the indicator is lit. */
+  /** Borrowed pixbuf shown while the indicator is lit. */
   GdkPixbuf *on_icon = nullptr;
-  /** Pixbuf shown while the indicator is dark. */
+  /** Borrowed pixbuf shown while the indicator is dark. */
   GdkPixbuf *off_icon = nullptr;
   /** Active GLib timeout source, or 0 when no timer is running. */
   guint blink_timeout_id = 0;
@@ -93,6 +93,16 @@ void initialize_activity_indicator_widget(ActivityIndicatorWidget *indicator,
  * @param indicator Widget state to update.
  */
 void note_activity_indicator_widget(ActivityIndicatorWidget *indicator);
+
+/**
+ * Replaces images without changing activity, blink timing, or latch state.
+ * @param indicator Widget state to repaint.
+ * @param on_icon Borrowed lit image, retained by the caller until replacement.
+ * @param off_icon Borrowed dark image, retained by the caller until replacement.
+ */
+void replace_activity_indicator_widget_images(ActivityIndicatorWidget *indicator,
+                                               GdkPixbuf *on_icon,
+                                               GdkPixbuf *off_icon);
 
 /**
  * Controls whether blink activity remains lit until an explicit reset.

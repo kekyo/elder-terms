@@ -105,6 +105,45 @@ describe('FTP window', () => {
         'entry'
       );
       expect(await usernameEntry.text()).toBe('fixture-user');
+      await window.activate();
+      const promptWidgets = await Promise.all(
+        [
+          'message_label',
+          'entry',
+          'secondary_entry',
+          'cancel_button',
+          'accept_button',
+        ].map(async (suffix) => app.getById(`file_transfer_prompt_${suffix}`))
+      );
+      for (const reverse of [false, true]) {
+        const visited = new Set<number>();
+        let previous = 1;
+        await app.input.setModifier('shift', reverse);
+        try {
+          for (let step = 0; step < promptWidgets.length; ++step) {
+            await app.input.pressKey('Tab');
+            const current = await waitForResult(async () => {
+              const states = await Promise.all(
+                promptWidgets.map(
+                  async (widget) => (await widget.info()).states
+                )
+              );
+              const current = states.findIndex((value) =>
+                value.includes('focused')
+              );
+              expect(current).toBeGreaterThanOrEqual(0);
+              expect(current).not.toBe(previous);
+              return current;
+            });
+            previous = current;
+            visited.add(current);
+          }
+        } finally {
+          await app.input.setModifier('shift', false);
+        }
+        expect(previous).toBe(1);
+        expect(visited.size).toBe(promptWidgets.length);
+      }
       const passwordEntry = expectElementKind(
         await app.getById('file_transfer_prompt_secondary_entry'),
         'entry'

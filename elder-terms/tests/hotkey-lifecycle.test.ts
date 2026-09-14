@@ -1,4 +1,11 @@
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -260,33 +267,64 @@ describe('elder-terms application hotkey lifecycle', () => {
     );
   });
 
-  it('shows a localized dialog when the initial hotkey registration fails', async (context) => {
-    await runLauncherGtkTest(
-      context,
-      async (connections) => {
-        await writeGlobalSettings(connections, 'ctrl+alt+t');
-      },
-      async ({ app }) => {
-        await waitForWindowCount(app, 1);
-        const dialog = expectElementKind(
-          await app.getById('hotkey_registration_error_dialog'),
-          'infoBar'
-        );
-        expect(
-          await findDescendantByName(
-            dialog,
-            'label',
-            'グローバルショートカットを利用できません'
-          )
-        ).toBeDefined();
-      },
-      {
-        args: [],
-        blockedHotkeys: [ctrlAltT],
-        env: japaneseTestEnvironment,
-      }
-    );
-  });
+  for (const language of ['en', 'ja'] as const) {
+    it(`uses the application title and localized hotkey warning in ${language}`, async (context) => {
+      await runLauncherGtkTest(
+        context,
+        async (connections) => {
+          await writeGlobalSettings(connections, 'ctrl+alt+t');
+        },
+        async ({ app }) => {
+          await waitForWindowCount(app, 1);
+          const discoveredWindow = await app.windowAt(0);
+          if (discoveredWindow === undefined) {
+            throw new Error('The hotkey warning window was not found');
+          }
+          const window = expectElementKind(discoveredWindow, 'window');
+          expect((await window.x11Info()).title).toBe('elder-terms');
+          const dialog = expectElementKind(
+            await app.getById('hotkey_registration_error_dialog'),
+            'infoBar'
+          );
+          const summary =
+            language === 'ja'
+              ? 'グローバルショートカットを利用できません'
+              : 'Global shortcuts are unavailable';
+          const explanation =
+            language === 'ja'
+              ? '設定されたグローバルショートカットの一部またはすべてを登録できなかったため、動作しません。デスクトップ環境がグローバルショートカットに対応しているか確認してください。'
+              : 'One or more configured global shortcuts could not be registered and will not work. Check whether your desktop environment supports global shortcuts.';
+          for (const text of [summary, explanation]) {
+            expect(
+              await findDescendantByName(dialog, 'label', text)
+            ).toBeDefined();
+          }
+          const captures = fileURLToPath(
+            new URL(
+              '../../test-results/launcher/hotkey-titles/',
+              import.meta.url
+            )
+          );
+          await mkdir(captures, { recursive: true });
+          await writeFile(
+            join(captures, `${language}.png`),
+            (await window.capture()).image
+          );
+          await expectElementKind(
+            await app.getById('hotkey_registration_error_close_button'),
+            'button'
+          ).click();
+          await waitForWindowCount(app, 0);
+          expect((await app.output()).exitCode).toBeNull();
+        },
+        {
+          args: [],
+          blockedHotkeys: [ctrlAltT],
+          env: language === 'ja' ? japaneseTestEnvironment : {},
+        }
+      );
+    });
+  }
 
   it('does not show a registration error when every hotkey is disabled', async (context) => {
     await runLauncherGtkTest(

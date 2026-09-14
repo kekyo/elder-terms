@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.freedesktop.resolve1
+Exec=/usr/lib/systemd/systemd-resolved
+User=root

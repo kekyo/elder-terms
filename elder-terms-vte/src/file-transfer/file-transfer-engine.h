@@ -4,7 +4,9 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <cardio.h>
@@ -73,6 +75,23 @@ struct FileTransferFailure {
   std::string message;
 };
 
+/** An upload failed and its temporary path could not be safely removed. */
+class FileTransferCleanupFailure final : public std::runtime_error {
+public:
+  /** Remote temporary path requiring inspection, not automatic deletion. */
+  const std::string temporary_path;
+  /** True when the initiating transfer was cancelled. */
+  const bool cancelled;
+  /**
+   * Preserves cleanup details even when the transfer is cancelled.
+   * @param message Original failure and cleanup explanation.
+   * @param path Temporary remote path requiring inspection.
+   * @param was_cancelled Whether cancellation caused the transfer to stop.
+   */
+  FileTransferCleanupFailure(std::string message, std::string path, bool was_cancelled)
+      : std::runtime_error(std::move(message)), temporary_path(std::move(path)), cancelled(was_cancelled) {}
+};
+
 /**
  * Aggregate progress for a remote transfer batch.
  */
@@ -81,8 +100,8 @@ struct FileTransferProgress {
   std::string current_path;
   /** Bytes copied so far. */
   std::uint64_t transferred_bytes = 0;
-  /** Total bytes known after recursive discovery. */
-  std::uint64_t total_bytes = 0;
+  /** Total discovered bytes, or no value if a size is unknown or overflows. */
+  std::optional<std::uint64_t> total_bytes = 0;
   /** Completed item count. */
   std::uint64_t completed_items = 0;
   /** Total discovered item count. */
@@ -130,12 +149,24 @@ struct FileTransferRequest {
  * The first conflict decision is reused for the remainder of the batch.
  * Symbolic links are recreated without following them. Regular files are
  * committed from adjacent temporary paths and incomplete temporary files are
- * removed after failure or cancellation.
+ * removed after failure or cancellation only when ownership is established.
+ * Uncertain ownership or failed cleanup reports the temporary path.
  */
 cardio::promise<void>
 run_file_transfer_async(std::shared_ptr<RemoteFileClient> client,
                         FileTransferRequest request,
                         cardio::cancellation cancellation);
+
+/**
+ * Creates one folder without replacing any existing item.
+ * @param client Initialized client, required for a remote folder.
+ * @param endpoint Filesystem receiving the folder.
+ * @param path New absolute local or remote path.
+ * @param cancellation Operation cancellation signal.
+ */
+cardio::promise<void> create_file_transfer_directory_async(
+    std::shared_ptr<RemoteFileClient> client, FileTransferEndpoint endpoint,
+    std::string path, cardio::cancellation cancellation);
 
 /**
  * Renames one local or remote browser item without replacing another item.

@@ -95,7 +95,7 @@ static void run_until_terminal_log_stops(
   cardio::dispatcher_group_glib dispatcher_group;
   cardio::dispatcher_host_glib dispatcher(dispatcher_group);
   std::exception_ptr async_error;
-  auto task = [&]() -> cardio::promise<void> {
+  auto task_body = [&]() -> cardio::promise<void> {
     try {
       enqueue_operations();
       co_await elder_terms::stop_terminal_log_async(log);
@@ -103,7 +103,8 @@ static void run_until_terminal_log_stops(
       async_error = std::current_exception();
     }
     dispatcher_group.shutdown();
-  }();
+  };
+  auto task = task_body();
 
   dispatcher.park();
   task.unsafe_result();

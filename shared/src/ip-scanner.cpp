@@ -1,5 +1,7 @@
 #include <elder-terms/ip-scanner.h>
 
+#include "ip-scan-name-resolver.h"
+
 #include <gio/gio.h>
 
 #include <arpa/inet.h>
@@ -171,6 +173,115 @@ observe_port_probe_async(cardio::promise<bool> probe) {
   }
 }
 
+struct ResolvedScanName {
+  std::string name;
+  IpScanNameSource source = IpScanNameSource::none;
+};
+
+static bool is_usable_scan_name(const std::string &name) {
+  if (name.empty() || name.size() > 253 || name.front() == '.') {
+    return false;
+  }
+  std::size_t label_length = 0;
+  for (const unsigned char character : name) {
+    if (character == '.') {
+      if (label_length == 0 || label_length > 63) {
+        return false;
+      }
+      label_length = 0;
+    } else {
+      // GIO names are UTF-8. Retain international names but reject ASCII
+      // separators that would change how a connection address is interpreted.
+      if (character < 128 &&
+          !((character >= 'a' && character <= 'z') ||
+            (character >= 'A' && character <= 'Z') ||
+            (character >= '0' && character <= '9') ||
+            character == '-' || character == '_')) {
+        return false;
+      }
+      ++label_length;
+    }
+  }
+  return label_length <= 63;
+}
+
+static std::string select_scan_name(
+    const std::vector<IpScanNameCandidate> &candidates) {
+  const IpScanNameCandidate *selected = nullptr;
+  for (const auto &candidate : candidates) {
+    if (candidate.interface_index < 0 || !is_usable_scan_name(candidate.name)) {
+      continue;
+    }
+    if (selected == nullptr ||
+        std::tie(candidate.name, candidate.interface_index) <
+            std::tie(selected->name, selected->interface_index)) {
+      selected = &candidate;
+    }
+  }
+  return selected != nullptr ? selected->name : std::string();
+}
+
+static cardio::promise<std::vector<IpScanNameCandidate>>
+lookup_multicast_candidates_async(const IpScannerDependencies &dependencies,
+                                  std::uint32_t address,
+                                  IpScanNameSource source,
+                                  cardio::cancellation cancellation) {
+  try {
+    co_return co_await dependencies.multicast_lookup(address, source,
+                                                    cancellation);
+  } catch (const cardio::canceled_exception &) {
+    // The owner distinguishes its shared deadline from user cancellation
+    // after both lookups have completed and released their pending work.
+    co_return std::vector<IpScanNameCandidate>{};
+  }
+}
+
+static cardio::promise<ResolvedScanName>
+resolve_scan_name_async(const IpScannerDependencies &dependencies,
+                        std::uint32_t address,
+                        cardio::cancellation cancellation) {
+  auto total_deadline = dependencies.name_lookup_timeout(3000);
+  auto total_signal = cardio::cancellations::any(
+      cancellation, total_deadline.get_cancellation());
+  auto system_deadline = dependencies.name_lookup_timeout(1000);
+  auto system_signal = cardio::cancellations::any(
+      total_signal.get_cancellation(), system_deadline.get_cancellation());
+  std::string system_name;
+  try {
+    system_name = co_await dependencies.reverse_lookup(
+        address, system_signal.get_cancellation());
+  } catch (const cardio::canceled_exception &) {
+  }
+  cancellation.throw_if_cancellation_requested();
+  if (total_deadline.get_cancellation().is_cancellation_requested()) {
+    co_return ResolvedScanName{};
+  }
+  if (is_usable_scan_name(system_name)) {
+    co_return ResolvedScanName{std::move(system_name), IpScanNameSource::system};
+  }
+  if (!dependencies.multicast_lookup) {
+    co_return ResolvedScanName{};
+  }
+
+  auto mdns = lookup_multicast_candidates_async(
+      dependencies, address, IpScanNameSource::mdns,
+      total_signal.get_cancellation());
+  auto llmnr = lookup_multicast_candidates_async(
+      dependencies, address, IpScanNameSource::llmnr,
+      total_signal.get_cancellation());
+  const auto results = co_await cardio::promises::all(std::move(mdns),
+                                                      std::move(llmnr));
+  cancellation.throw_if_cancellation_requested();
+  auto name = select_scan_name(std::get<0>(results));
+  if (!name.empty()) {
+    co_return ResolvedScanName{std::move(name), IpScanNameSource::mdns};
+  }
+  name = select_scan_name(std::get<1>(results));
+  const auto source = name.empty() ? IpScanNameSource::none
+                                   : IpScanNameSource::llmnr;
+  co_return ResolvedScanName{std::move(name), source};
+}
+
 static cardio::promise<std::exception_ptr>
 scan_hosts_worker_async(std::shared_ptr<IpScannerState> state,
                         cardio::cancellation cancellation) {
@@ -198,7 +309,7 @@ scan_hosts_worker_async(std::shared_ptr<IpScannerState> state,
 
       IpScanEntry entry{
           .address = format_ipv4_address(address),
-          .reverse_fqdn = {},
+          .resolved_name = {},
           .open_ports = {},
       };
       if (probes[0].open) {
@@ -214,9 +325,11 @@ scan_hosts_worker_async(std::shared_ptr<IpScannerState> state,
       if (!entry.open_ports.empty()) {
         cancellation.throw_if_cancellation_requested();
         state->callbacks.entry_changed(entry);
-        entry.reverse_fqdn =
-            co_await state->dependencies.reverse_lookup(address, cancellation);
-        if (!entry.reverse_fqdn.empty()) {
+        auto name = co_await resolve_scan_name_async(state->dependencies,
+                                                     address, cancellation);
+        entry.resolved_name = std::move(name.name);
+        entry.name_source = name.source;
+        if (!entry.resolved_name.empty()) {
           cancellation.throw_if_cancellation_requested();
           state->callbacks.entry_changed(entry);
         }
@@ -241,6 +354,7 @@ scan_ipv4_hosts_async(IpScannerDependencies dependencies,
         "IP scanner host concurrency must be greater than zero");
   }
   if (!dependencies.probe_port || !dependencies.reverse_lookup ||
+      !dependencies.name_lookup_timeout ||
       !callbacks.entry_changed || !callbacks.progress_changed ||
       !callbacks.completed) {
     throw std::invalid_argument("IP scanner callbacks must not be empty");
@@ -312,6 +426,13 @@ probe_ipv4_tcp_port_async(std::uint32_t address, std::uint16_t port,
       g_inet_socket_address_new(inet_address.get(), port), g_object_unref);
 
   try {
+    // TODO: ASan with GCC 12.2 reports a use-after-free in the captured
+    // GSocketClient shared_ptr's control block when this coroutine exits.
+    // An isolated full-suite run passed after storing submit()'s promise in
+    // a local variable and awaiting it in a separate statement. A compiler
+    // temporary-lifetime issue is suspected but remains unconfirmed.
+    // Related GCC report (not confirmed to be the same issue):
+    // https://gcc.gnu.org/pipermail/gcc-bugs/2022-November/805094.html
     GSocketConnection *raw_connection =
         co_await cardio::gio::submit<GSocketConnection *>(
             [client, socket_address](GCancellable *gio_cancellation,
@@ -339,12 +460,8 @@ probe_ipv4_tcp_port_async(std::uint32_t address, std::uint16_t port,
 
 static cardio::promise<std::string>
 reverse_lookup_ipv4_async(std::uint32_t address,
-                          std::uint64_t timeout_milliseconds,
                           cardio::cancellation cancellation) {
   cancellation.throw_if_cancellation_requested();
-  auto timeout_source = cardio::cancellations::timeout(timeout_milliseconds);
-  auto combined_source = cardio::cancellations::any(
-      cancellation, timeout_source.get_cancellation());
   auto resolver =
       std::shared_ptr<GResolver>(g_resolver_get_default(), g_object_unref);
   auto inet_address = make_gio_ipv4_address(address);
@@ -362,12 +479,11 @@ reverse_lookup_ipv4_async(std::uint32_t address,
           return g_resolver_lookup_by_address_finish(resolver.get(), result,
                                                      error);
         },
-        combined_source.get_cancellation());
+        cancellation);
     auto name = std::unique_ptr<gchar, decltype(&g_free)>(raw_name, g_free);
     co_return name != nullptr ? std::string(name.get()) : std::string();
   } catch (const cardio::canceled_exception &) {
-    cancellation.throw_if_cancellation_requested();
-    co_return std::string();
+    throw;
   } catch (const cardio::gio::gio_error &) {
     co_return std::string();
   }
@@ -413,9 +529,10 @@ IpScannerDependencies create_system_ip_scanner_dependencies() {
       },
       .reverse_lookup = [](std::uint32_t address,
                            cardio::cancellation cancellation) {
-        return reverse_lookup_ipv4_async(address, 3000,
-                                         std::move(cancellation));
+        return reverse_lookup_ipv4_async(address, std::move(cancellation));
       },
+      .multicast_lookup =
+          elder_terms_ip_scan::create_multicast_name_lookup(G_BUS_TYPE_SYSTEM),
   };
 }
 

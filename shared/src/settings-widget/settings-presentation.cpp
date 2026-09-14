@@ -22,6 +22,27 @@ struct SettingChoiceEntry {
 };
 
 static constexpr std::array setting_labels{
+    SettingLabelEntry{"ftp", "tls_mode", N_("Encryption")},
+    SettingLabelEntry{"webdav", "scheme", N_("Connection security")},
+    SettingLabelEntry{"webdav", "address", N_("Address")},
+    SettingLabelEntry{"webdav", "port", N_("Port")},
+    SettingLabelEntry{"webdav", "base_path", N_("Published path")},
+    SettingLabelEntry{"webdav", "authentication", N_("Authentication")},
+    SettingLabelEntry{"webdav", "username", N_("User name")},
+    SettingLabelEntry{"webdav", "local_directory", N_("Local directory")},
+    SettingLabelEntry{"webdav", "remote_directory", N_("Remote directory")},
+    SettingLabelEntry{"webdav", "ca_file", N_("CA certificates")},
+    SettingLabelEntry{"webdav", "certificate_error_action", N_("Certificate validation failure")},
+    SettingLabelEntry{"webdav", "connect_timeout_seconds", N_("Connection timeout (seconds)")},
+    SettingLabelEntry{"webdav", "idle_timeout_seconds", N_("Idle timeout (seconds)")},
+    SettingLabelEntry{"ftp", "tls_min_version", N_("Minimum TLS version")},
+    SettingLabelEntry{"ftp", "tls_max_version", N_("Maximum TLS version")},
+    SettingLabelEntry{"ftp", "tls_auth_order", N_("AUTH command preference")},
+    SettingLabelEntry{"ftp", "tls_compatibility", N_("TLS compatibility")},
+    SettingLabelEntry{"ftp", "certificate_error_action", N_("Certificate validation failure")},
+    SettingLabelEntry{"ftp", "ca_file", N_("CA certificates")},
+    SettingLabelEntry{"ftp", "tls_cipher_list", N_("TLS 1.2 and earlier ciphers")},
+    SettingLabelEntry{"ftp", "tls13_cipher_list", N_("TLS 1.3 ciphers")},
     SettingLabelEntry{"general", "name", N_("Connection name")},
     SettingLabelEntry{"general", "type", N_("Connection type")},
     SettingLabelEntry{"general", "open_connection",
@@ -43,10 +64,9 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"terminal", "scrollback_lines",
                       N_("Scrollback lines")},
     SettingLabelEntry{"terminal", "zoom", N_("Zoom factor")},
-    SettingLabelEntry{"terminal", "font_primary_family",
-                      N_("Primary font family")},
-    SettingLabelEntry{"terminal", "font_fallback_family",
-                      N_("Secondary font family")},
+    SettingLabelEntry{"terminal", "indicator_color", N_("Active indicator color")},
+    SettingLabelEntry{"terminal", "indicator_off_color", N_("Inactive indicator color")},
+    SettingLabelEntry{"terminal", "font_families", N_("Font families")},
     SettingLabelEntry{"terminal", "auto_close",
                       N_("Close window when session ends")},
     SettingLabelEntry{"terminal", "show_border",
@@ -102,12 +122,34 @@ static constexpr std::array setting_labels{
 };
 
 static constexpr std::array setting_choices{
+    SettingChoiceEntry{"ftp", "tls_mode", "none", N_("FTP (unencrypted)")},
+    SettingChoiceEntry{"ftp", "tls_mode", "explicit", N_("FTPS (explicit TLS)")},
+    SettingChoiceEntry{"ftp", "tls_mode", "implicit", N_("FTPS (implicit TLS)")},
+    SettingChoiceEntry{"ftp", "tls_auth_order", "tls", N_("Prefer AUTH TLS")},
+    SettingChoiceEntry{"ftp", "tls_auth_order", "ssl", N_("Prefer AUTH SSL")},
+    SettingChoiceEntry{"ftp", "tls_auth_order", "default", N_("Library default")},
+    SettingChoiceEntry{"ftp", "tls_compatibility", "standard", N_("Standard")},
+    SettingChoiceEntry{"ftp", "tls_compatibility", "openssl_legacy", N_("Legacy TLS (relaxed cipher/signature rules)")},
+    SettingChoiceEntry{"ftp", "certificate_error_action", "reject", N_("Reject connection")},
+    SettingChoiceEntry{"ftp", "certificate_error_action", "prompt", N_("Confirm in an overlay")},
+    SettingChoiceEntry{"ftp", "tls_max_version", "default", N_("Backend maximum")},
     SettingChoiceEntry{"general", "type", "local", N_("Local shell")},
     SettingChoiceEntry{"general", "type", "telnet", N_("TELNET")},
     SettingChoiceEntry{"general", "type", "serial", N_("Serial")},
     SettingChoiceEntry{"general", "type", "ssh", N_("SSH")},
     SettingChoiceEntry{"general", "type", "sftp", N_("SFTP")},
     SettingChoiceEntry{"general", "type", "ftp", N_("FTP")},
+    SettingChoiceEntry{"general", "type", "webdav", N_("WebDAV")},
+    SettingChoiceEntry{"webdav", "scheme", "https", N_("HTTPS (encrypted)")},
+    SettingChoiceEntry{"webdav", "scheme", "http", N_("HTTP (unencrypted)")},
+    SettingChoiceEntry{"webdav", "authentication", "auto", N_("Automatic (Basic or Digest)")},
+    SettingChoiceEntry{"webdav", "authentication", "basic", N_("Basic")},
+    SettingChoiceEntry{"webdav", "authentication", "digest", N_("Digest")},
+    SettingChoiceEntry{"webdav", "authentication", "none", N_("None")},
+    SettingChoiceEntry{"webdav", "ca_file", "default", N_("System CA certificates")},
+    SettingChoiceEntry{"webdav", "ca_file", "custom", N_("Custom")},
+    SettingChoiceEntry{"webdav", "certificate_error_action", "reject", N_("Reject connection")},
+    SettingChoiceEntry{"webdav", "certificate_error_action", "prompt", N_("Confirm in an overlay")},
     SettingChoiceEntry{"general", "ui_language", "system",
                        N_("System default")},
     SettingChoiceEntry{"general", "ui_language", "en", N_("English")},
@@ -212,18 +254,36 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("Select file");
   case SettingsUiText::open:
     return _("Open");
-  case SettingsUiText::select_primary_terminal_font:
-    return _("Select Primary Terminal Font");
-  case SettingsUiText::select_secondary_terminal_font:
-    return _("Select Secondary Terminal Font");
+  case SettingsUiText::select_terminal_font:
+    return _("Select Terminal Font");
+  case SettingsUiText::font_add:
+    return _("Add");
+  case SettingsUiText::font_remove:
+    return _("Remove");
+  case SettingsUiText::font_move_up:
+    return _("Move up");
+  case SettingsUiText::font_move_down:
+    return _("Move down");
   case SettingsUiText::enabled:
     return _("Enabled");
   case SettingsUiText::disabled:
     return _("Disabled");
-  case SettingsUiText::custom_font:
-    return _("Custom font");
+  case SettingsUiText::font_inherit_global:
+    return _("Inherited from: global settings");
+  case SettingsUiText::font_inherit_builtin:
+    return _("Inherited from: app defaults");
+  case SettingsUiText::font_app_defaults:
+    return _("App defaults");
+  case SettingsUiText::font_use_app_defaults:
+    return _("Use app defaults");
+  case SettingsUiText::font_specify_connection:
+    return _("Specify for this connection");
+  case SettingsUiText::font_specify:
+    return _("Specify fonts");
   case SettingsUiText::no_color:
     return _("No color");
+  case SettingsUiText::default_color:
+    return _("Default color");
   case SettingsUiText::custom_color:
     return _("Custom color");
   case SettingsUiText::press_key_combination:
@@ -278,8 +338,8 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("IP scan");
   case SettingsUiText::ip_address:
     return _("IP address");
-  case SettingsUiText::reverse_fqdn:
-    return _("Reverse FQDN");
+  case SettingsUiText::resolved_name:
+    return _("Hostname");
   case SettingsUiText::ssh_sftp_port_column:
     return _("SSH/SFTP(22)");
   case SettingsUiText::telnet_port_column:

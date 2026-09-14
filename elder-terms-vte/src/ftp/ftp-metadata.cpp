@@ -1,32 +1,16 @@
-#include "ftp-protocol.h"
+#include "ftp-metadata.h"
 
 #include <algorithm>
-#include <array>
 #include <charconv>
 #include <chrono>
 #include <cctype>
-#include <limits>
 #include <stdexcept>
 #include <string>
-#include <utility>
 
 namespace elder_terms {
 
-static constexpr std::size_t maximum_reply_line_size = 8192;
-static constexpr std::size_t maximum_reply_size = 65536;
-static constexpr std::size_t maximum_ready_replies = 64;
-
 static bool ascii_digit(char character) {
   return character >= '0' && character <= '9';
-}
-
-static std::optional<int> reply_code(std::string_view line) {
-  if (line.size() < 3 || !ascii_digit(line[0]) ||
-      !ascii_digit(line[1]) || !ascii_digit(line[2])) {
-    return std::nullopt;
-  }
-  return (line[0] - '0') * 100 + (line[1] - '0') * 10 +
-         (line[2] - '0');
 }
 
 static std::string lower_ascii(std::string_view value) {
@@ -37,18 +21,6 @@ static std::string lower_ascii(std::string_view value) {
         return static_cast<char>(std::tolower(character));
       });
   return result;
-}
-
-static std::string_view trim_ascii_space(std::string_view value) {
-  while (!value.empty() &&
-         (value.front() == ' ' || value.front() == '\t')) {
-    value.remove_prefix(1);
-  }
-  while (!value.empty() &&
-         (value.back() == ' ' || value.back() == '\t')) {
-    value.remove_suffix(1);
-  }
-  return value;
 }
 
 template <typename Integer>
@@ -66,164 +38,10 @@ static std::optional<Integer> parse_unsigned_integer(std::string_view value) {
   return result;
 }
 
-void FtpReplyParser::consume_line(std::string line) {
-  if (line.size() > maximum_reply_line_size) {
-    throw std::runtime_error("FTP reply line exceeds the size limit");
+std::string parse_ftp_pwd_path(std::string_view line) {
+  if (!line.starts_with("257 ")) {
+    throw std::runtime_error("Unexpected FTP PWD response code");
   }
-  reply_size += line.size() + 2;
-  if (reply_size > maximum_reply_size) {
-    throw std::runtime_error("FTP reply exceeds the size limit");
-  }
-
-  if (multiline_code.has_value()) {
-    reply_lines.push_back(std::move(line));
-    const std::string terminator =
-        std::to_string(*multiline_code) + " ";
-    if (reply_lines.back().starts_with(terminator)) {
-      if (ready_replies.size() >= maximum_ready_replies) {
-        throw std::runtime_error("Too many queued FTP replies");
-      }
-      ready_replies.push_back({
-          .code = *multiline_code,
-          .lines = std::move(reply_lines),
-      });
-      multiline_code.reset();
-      reply_lines.clear();
-      reply_size = 0;
-    }
-    return;
-  }
-
-  const std::optional<int> code = reply_code(line);
-  if (!code.has_value() ||
-      (line.size() > 3 && line[3] != ' ' && line[3] != '-')) {
-    throw std::runtime_error("Malformed FTP reply status line");
-  }
-  reply_lines.push_back(std::move(line));
-  if (reply_lines.back().size() > 3 && reply_lines.back()[3] == '-') {
-    multiline_code = *code;
-    return;
-  }
-  if (ready_replies.size() >= maximum_ready_replies) {
-    throw std::runtime_error("Too many queued FTP replies");
-  }
-  ready_replies.push_back({
-      .code = *code,
-      .lines = std::move(reply_lines),
-  });
-  reply_lines.clear();
-  reply_size = 0;
-}
-
-void FtpReplyParser::feed(std::string_view bytes) {
-  pending_bytes.append(bytes);
-  for (;;) {
-    const std::size_t newline = pending_bytes.find('\n');
-    if (newline == std::string::npos) {
-      if (pending_bytes.size() > maximum_reply_line_size) {
-        throw std::runtime_error("FTP reply line exceeds the size limit");
-      }
-      return;
-    }
-    std::string line = pending_bytes.substr(0, newline);
-    pending_bytes.erase(0, newline + 1);
-    if (!line.empty() && line.back() == '\r') {
-      line.pop_back();
-    }
-    consume_line(std::move(line));
-  }
-}
-
-void FtpReplyParser::finish() const {
-  if (!pending_bytes.empty() || multiline_code.has_value() ||
-      !reply_lines.empty()) {
-    throw std::runtime_error("FTP control connection ended within a reply");
-  }
-}
-
-std::optional<FtpReply> FtpReplyParser::take_reply() {
-  if (ready_replies.empty()) {
-    return std::nullopt;
-  }
-  FtpReply result = std::move(ready_replies.front());
-  ready_replies.pop_front();
-  return result;
-}
-
-static std::string_view final_reply_line(const FtpReply &reply,
-                                         int expected_code) {
-  if (reply.code != expected_code || reply.lines.empty()) {
-    throw std::runtime_error("Unexpected FTP reply code");
-  }
-  return reply.lines.back();
-}
-
-static std::string_view parenthesized_value(std::string_view line) {
-  const std::size_t open = line.find('(');
-  const std::size_t close =
-      open == std::string_view::npos ? std::string_view::npos
-                                     : line.find(')', open + 1);
-  if (open == std::string_view::npos || close == std::string_view::npos ||
-      close <= open + 1) {
-    throw std::runtime_error("FTP reply has no valid parenthesized value");
-  }
-  return line.substr(open + 1, close - open - 1);
-}
-
-std::uint16_t parse_ftp_epsv_port(const FtpReply &reply) {
-  const std::string_view value =
-      parenthesized_value(final_reply_line(reply, 229));
-  if (value.size() < 5 || value[0] != value[1] ||
-      value[0] != value[2] || value.back() != value[0]) {
-    throw std::runtime_error("Malformed FTP EPSV reply");
-  }
-  const std::string_view port_text = value.substr(3, value.size() - 4);
-  const std::optional<unsigned int> port =
-      parse_unsigned_integer<unsigned int>(port_text);
-  if (!port.has_value() || *port == 0 || *port > 65535) {
-    throw std::runtime_error("FTP EPSV reply has an invalid port");
-  }
-  return static_cast<std::uint16_t>(*port);
-}
-
-FtpPassiveEndpoint parse_ftp_pasv_endpoint(const FtpReply &reply) {
-  std::string_view value =
-      parenthesized_value(final_reply_line(reply, 227));
-  std::array<unsigned int, 6> fields{};
-  for (std::size_t index = 0; index < fields.size(); ++index) {
-    const std::size_t comma = value.find(',');
-    const bool last = index + 1 == fields.size();
-    if ((!last && comma == std::string_view::npos) ||
-        (last && comma != std::string_view::npos)) {
-      throw std::runtime_error("Malformed FTP PASV reply");
-    }
-    const std::string_view field = trim_ascii_space(
-        last ? value : value.substr(0, comma));
-    const std::optional<unsigned int> parsed =
-        parse_unsigned_integer<unsigned int>(field);
-    if (!parsed.has_value() || *parsed > 255) {
-      throw std::runtime_error("FTP PASV reply field is outside one byte");
-    }
-    fields[index] = *parsed;
-    if (!last) {
-      value.remove_prefix(comma + 1);
-    }
-  }
-  const unsigned int port = fields[4] * 256 + fields[5];
-  if (port == 0) {
-    throw std::runtime_error("FTP PASV reply has an invalid port");
-  }
-  return {
-      .address = std::to_string(fields[0]) + "." +
-                 std::to_string(fields[1]) + "." +
-                 std::to_string(fields[2]) + "." +
-                 std::to_string(fields[3]),
-      .port = static_cast<std::uint16_t>(port),
-  };
-}
-
-std::string parse_ftp_pwd_path(const FtpReply &reply) {
-  const std::string_view line = final_reply_line(reply, 257);
   const std::size_t open = line.find('"');
   if (open == std::string_view::npos) {
     throw std::runtime_error("FTP PWD reply has no quoted pathname");

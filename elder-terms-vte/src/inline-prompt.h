@@ -76,6 +76,8 @@ struct InlinePromptRequest {
   std::string alternative_label = {};
   /** True when the third-response button is visible. */
   bool alternative_visible = false;
+  /** Prefer rejection and ignore activation from preceding input prompts. */
+  bool default_cancel = false;
 };
 
 /**
@@ -117,6 +119,8 @@ create_inline_prompt_controller(InlinePromptWidgets widgets);
 
 /**
  * Displays one question and waits asynchronously for its response.
+ * Tab and Shift+Tab navigation wrap within the panel while the question is
+ * active, retaining GTK's navigation order for available widgets.
  *
  * @param controller Bound prompt controller.
  * @param request Presentation and input requirements.

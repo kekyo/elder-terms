@@ -172,6 +172,13 @@ ELDER_TERMS_API bool
 settings_widget_is_valid(const SettingsWidgetState *state);
 
 /**
+ * Shows the General page when displaying settings for a new selection.
+ *
+ * @param state Widget state, or nullptr for no operation.
+ */
+ELDER_TERMS_API void settings_widget_show_general_page(SettingsWidgetState *state);
+
+/**
  * Returns the root GTK widget for insertion into a container.
  *
  * @param state Settings widget state.

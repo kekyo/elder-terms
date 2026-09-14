@@ -47,21 +47,45 @@ struct Ipv4ScanPlan {
   std::size_t ignored_interface_count;
 };
 
+/** Origin of a hostname discovered by an IP scan. */
+enum class IpScanNameSource {
+  /** No name was resolved. */
+  none,
+  /** The operating system's default resolver returned the name. */
+  system,
+  /** Multicast DNS returned the name. */
+  mdns,
+  /** Link-local multicast name resolution returned the name. */
+  llmnr,
+};
+
+/** One multicast name and the interface on which it was discovered. */
+struct IpScanNameCandidate {
+  /** Hostname exactly as returned by the resolver. */
+  std::string name;
+
+  /** Network interface index associated with this candidate. */
+  int interface_index;
+};
+
 /** Discovered host and its services. */
 struct IpScanEntry {
   /** Numeric IPv4 address. */
   std::string address;
 
-  /** Reverse-resolved fully qualified domain name, or an empty string. */
-  std::string reverse_fqdn;
+  /** Resolved hostname (including single-label names), or an empty string. */
+  std::string resolved_name;
 
   /** Open standard service ports in ascending order. */
   std::vector<std::uint16_t> open_ports;
+
+  /** Origin of the resolved hostname, or none while unnamed. */
+  IpScanNameSource name_source = IpScanNameSource::none;
 };
 
 /** Current IPv4 scan progress. */
 struct IpScanProgress {
-  /** Number of addresses whose probes and reverse lookup have completed. */
+  /** Number of addresses whose probes and name lookups have completed. */
   std::uint64_t completed_addresses;
 
   /** Total number of unique addresses in the scan plan. */
@@ -84,15 +108,32 @@ struct IpScannerDependencies {
                                       cardio::cancellation)>
       probe_port;
 
-  /** Asynchronously obtains the reverse DNS name for an IPv4 address. */
+  /** Asynchronously obtains an IPv4 name through the system resolver. */
   std::function<cardio::promise<std::string>(std::uint32_t,
                                              cardio::cancellation)>
       reverse_lookup;
+
+  /**
+   * Asynchronously obtains mDNS or LLMNR candidates for an IPv4 address.
+   * An empty callback disables explicit multicast lookup.
+   */
+  std::function<cardio::promise<std::vector<IpScanNameCandidate>>(
+      std::uint32_t, IpScanNameSource, cardio::cancellation)>
+      multicast_lookup = {};
+
+  /**
+   * Creates a name-lookup deadline from a duration in milliseconds.
+   * Tests may inject controlled deadline notifications instead of a clock.
+   */
+  std::function<cardio::cancellation_source(std::uint64_t)>
+      name_lookup_timeout = [](std::uint64_t milliseconds) {
+        return cardio::cancellations::timeout(milliseconds);
+      };
 };
 
 /** Scanner result callbacks, invoked on the current Cardio dispatcher. */
 struct IpScannerCallbacks {
-  /** Reports a new entry and a later update when reverse DNS succeeds. */
+  /** Reports a new entry and a later update when name lookup succeeds. */
   std::function<void(const IpScanEntry &)> entry_changed;
 
   /** Reports initial progress and each completed host. */
@@ -125,9 +166,9 @@ create_ipv4_scan_plan(const std::vector<Ipv4InterfaceAddress> &interfaces);
  * @param cancellation Cancellation signal for every pending operation.
  * @return Promise resolved after all hosts finish.
  *
- * @remarks Ports 21, 22, and 23 are probed concurrently for each host. Reverse
- * DNS is attempted only for hosts with at least one open port. A discovered
- * host is reported before its reverse lookup completes.
+ * @remarks Ports 21, 22, and 23 are probed concurrently for each host. Name
+ * lookup is attempted only for hosts with at least one open port. A discovered
+ * host is reported before its name lookups complete.
  */
 ELDER_TERMS_API cardio::promise<void>
 scan_ipv4_hosts_async(IpScannerDependencies dependencies,

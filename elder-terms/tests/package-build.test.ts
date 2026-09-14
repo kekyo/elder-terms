@@ -93,6 +93,8 @@ const createPackageStage = (
     'usr/lib/elder-terms/elder-terms-vte',
     'usr/share/applications',
     'usr/share/doc/elder-terms',
+    'usr/share/doc/elder-terms/docs/ja',
+    'usr/share/doc/elder-terms/docs/en',
     'usr/share/icons/hicolor/256x256/apps',
     'usr/share/locale/ja/LC_MESSAGES',
   ];
@@ -108,7 +110,7 @@ Section: x11
 Priority: optional
 Architecture: ${debianArchitecture}
 Maintainer: elder-terms packager <packager@localhost>
-Depends: libc6, dbus-user-session, hicolor-icon-theme${includeOpenSshClient ? ', openssh-client' : ''}${includeXdgUtils ? ', xdg-utils' : ''}
+Depends: libc6, ca-certificates, dbus-user-session, hicolor-icon-theme${includeOpenSshClient ? ', openssh-client' : ''}${includeXdgUtils ? ', xdg-utils' : ''}
 Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP connections
 `
   );
@@ -144,6 +146,16 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     ['usr/lib/elder-terms/elder-terms-vte/green-off.png', 'off\n'],
     ['usr/share/doc/elder-terms/README.md', '# elder-terms\n'],
     ['usr/share/doc/elder-terms/README_ja.md', '# elder-terms\n'],
+    ['usr/share/doc/elder-terms/docs/ja/webdav.md', '# WebDAV\n'],
+    ['usr/share/doc/elder-terms/docs/en/webdav.md', '# WebDAV\n'],
+    [
+      'usr/share/doc/elder-terms/docs/ja/webdav-validation.md',
+      '# WebDAV validation\n',
+    ],
+    [
+      'usr/share/doc/elder-terms/docs/en/webdav-validation.md',
+      '# WebDAV validation\n',
+    ],
     ['usr/share/doc/elder-terms/copyright', 'MIT\n'],
     ['usr/share/icons/hicolor/256x256/apps/elder-terms.png', 'icon\n'],
     ['usr/share/locale/ja/LC_MESSAGES/elder-terms.mo', 'locale\n'],
@@ -270,11 +282,12 @@ exit 91
       join(binDirectory, 'pkg-config'),
       `#!/bin/sh
 printf '%s\\n' "$*" >>"$ELDER_TERMS_TEST_PKG_CONFIG_INVOCATION"
+if [ "\${ELDER_TERMS_TEST_MISSING_CURL:-0}" = 1 ] && [ "$*" = "--exists libcurl" ]; then exit 1; fi
 exit 0
 `
     );
 
-    const result = run(containerScript, [], {
+    const environment = {
       ...process.env,
       PATH: `${binDirectory}:${process.env.PATH}`,
       ELDER_TERMS_BUILD_TYPE: 'release',
@@ -286,7 +299,8 @@ exit 0
       ELDER_TERMS_TEST_MESON_INVOCATION: invocationPath,
       ELDER_TERMS_TEST_PKG_CONFIG_INVOCATION: pkgConfigInvocationPath,
       ELDER_TERMS_WORK_DIR: join(temporaryRoot, 'container-work'),
-    });
+    };
+    const result = run(containerScript, [], environment);
     expect(result.status).toBe(91);
     const invocation = readFileSync(invocationPath, 'utf8');
     expect(invocation).toContain('--prefix=/usr');
@@ -302,6 +316,17 @@ exit 0
     expect(readFileSync(pkgConfigInvocationPath, 'utf8').split('\n')).toContain(
       '--exists libpcre2-8'
     );
+
+    rmSync(invocationPath);
+    const missingCurl = run(containerScript, [], {
+      ...environment,
+      ELDER_TERMS_TEST_MISSING_CURL: '1',
+    });
+    expect(missingCurl.status).toBe(1);
+    expect(missingCurl.stderr).toContain(
+      'Missing required pkg-config module: libcurl'
+    );
+    expect(() => lstatSync(invocationPath)).toThrow();
   });
 
   it('disables libxyzm debug information for release package builds', () => {
@@ -549,6 +574,8 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     ]).get(debianArchitecture);
     expect(canonicalArchitecture).toBeDefined();
 
+    const missingCaStage = join(temporaryRoot, 'missing-ca-stage');
+    const missingCaPackage = join(temporaryRoot, 'missing-ca.deb');
     const goodStage = join(temporaryRoot, 'good-stage');
     const badStage = join(temporaryRoot, 'bad-stage');
     const goodPackage = join(temporaryRoot, 'elder-terms-good.deb');
@@ -575,6 +602,18 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'elder-terms-missing-xdg-utils.deb'
     );
     createPackageStage(goodStage, debianArchitecture, undefined, true, true);
+    createPackageStage(
+      missingCaStage,
+      debianArchitecture,
+      undefined,
+      true,
+      true
+    );
+    const missingCaControl = join(missingCaStage, 'DEBIAN/control');
+    writeFileSync(
+      missingCaControl,
+      readFileSync(missingCaControl, 'utf8').replace(', ca-certificates', '')
+    );
     createPackageStage(
       badStage,
       debianArchitecture,
@@ -605,6 +644,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     );
     for (const [stage, output] of [
       [goodStage, goodPackage],
+      [missingCaStage, missingCaPackage],
       [badStage, badPackage],
       [missingFileTransferStage, missingFileTransferPackage],
       [missingOpenSshClientStage, missingOpenSshClientPackage],
@@ -624,6 +664,40 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       [goodPackage, canonicalArchitecture!]
     );
     expectSuccess(goodValidation, 'complete deb package was rejected');
+    for (const language of ['ja', 'en']) {
+      for (const document of ['webdav.md', 'webdav-validation.md']) {
+        const missingPath = `usr/share/doc/elder-terms/docs/${language}/${document}`;
+        const stage = join(
+          temporaryRoot,
+          `missing-${language}-${document}-stage`
+        );
+        const output = join(
+          temporaryRoot,
+          `missing-${language}-${document}.deb`
+        );
+        createPackageStage(stage, debianArchitecture, missingPath, true, true);
+        const built = run(dpkgDeb, [
+          '--root-owner-group',
+          '--build',
+          stage,
+          output,
+        ]);
+        expectSuccess(built, `test package creation failed: ${output}`);
+        const validation = runSourced(
+          'VERSION=1.2.3\nvalidate_deb_package "$2" "$3"',
+          [output, canonicalArchitecture!]
+        );
+        expect(validation.status).not.toBe(0);
+        expect(validation.stderr).toContain(missingPath);
+      }
+    }
+
+    const missingCaValidation = runSourced(
+      'VERSION=1.2.3\nvalidate_deb_package "$2" "$3"',
+      [missingCaPackage, canonicalArchitecture!]
+    );
+    expect(missingCaValidation.status).not.toBe(0);
+    expect(missingCaValidation.stderr).toContain('ca-certificates');
 
     const badValidation = runSourced(
       'VERSION=1.2.3\nvalidate_deb_package "$2" "$3"',
@@ -682,6 +756,8 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'install',
       '-C',
       buildDirectory,
+      // The workspace build has finished; parallel UI cases use these binaries.
+      '--no-rebuild',
       '--destdir',
       destination,
     ]);

@@ -38,9 +38,9 @@ elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP
 
 ![Colored terminal](./images/colored-terminal.png)
 
-### FTP/SFTP
+### SFTP/FTP/FTPS/WebDAV
 
-![FTP/SFTP window](./images/sftp.png)
+![SFTP/FTP/FTPS/WebDAV window](./images/sftp.png)
 
 ## Features
 
@@ -58,8 +58,8 @@ elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP
   `xterm-256color`, for TELNET and SSH.
 - Supports X/Y/ZMODEM file transfers for TELNET, serial, and SSH terminal
   connections. Automatic transfers can be enabled for ZMODEM.
-- Transfers files to and from the host of an SSH connection over SFTP.
-- Transfers files over FTP using passive or active data connections.
+- Transfers files to and from the host over SFTP/FTP/FTPS and WebDAV.
+- Transfers files over FTP and FTPS using passive or active data connections.
 - Supports pasting text and sending text files. You can specify the send rate
   and newline handling to avoid overflowing the host's buffer or using
   incompatible newline codes.
@@ -134,6 +134,12 @@ wrong, simply close the terminal window to discard the changes.
 Most settings are self-explanatory once you try them, but a few need more
 detail. Those settings are described in the following sections.
 
+To edit a saved connection's INI file directly, right-click its entry in the
+launcher and select "Edit in text editor". This uses your desktop's default
+application for plain text files.
+Changes saved in an external editor are reloaded automatically, including
+editors that replace the file when saving.
+
 It is also useful to remember that `Ctrl`+`=` increases the font size and
 `Ctrl`+`-` decreases it. You can do the same with the mouse wheel while holding
 `Ctrl`.
@@ -141,7 +147,8 @@ It is also useful to remember that `Ctrl`+`=` increases the font size and
 ![Settings (Terminal)](./images/font-size.png)
 
 Terminal window placement is left to your window manager or Wayland
-compositor. Use bindings such as the `Super` key according to your window
+compositor.
+Use bindings such as the `Super` key according to your window
 system environment.
 
 Today, IoT development often involves debugging and collecting logs from
@@ -155,6 +162,8 @@ of the terminal will satisfy that nostalgia:
 
 Think the blinking looks suspiciously regular? Of course it does. It is an
 homage to the [SONY NEWS workstation](https://en.wikipedia.org/wiki/Sony_NEWS).
+
+Well then, enjoy elder-terms!
 
 ---
 
@@ -194,24 +203,37 @@ built-in default again.
 ## Finding a Host with IP Scan
 
 The TELNET, SSH/SFTP, and FTP settings place an "IP scan" button beside the
-address field. Opening it immediately scans the IPv4 ranges of all configured
-network interfaces for the standard FTP (21), SSH/SFTP (22), and TELNET (23)
-TCP ports. For example, a `/24` interface scans every address whose final octet
-is 0 through 255. A range wider than `/24` is limited to its first 256
-addresses by treating the additional upper host bits as zero. For example, an
-address on `172.20.0.0/16` scans `172.20.0.0` through `172.20.0.255`.
+address field.
+Opening it immediately scans the IPv4 ranges of all configured network interfaces for the standard FTP (21), SSH/SFTP (22), and TELNET (23) TCP ports.
 
-Discovered hosts appear as the scan proceeds, together with their reverse DNS
-name when available. The SSH/SFTP (22), TELNET (23), and FTP (21) columns show
-a check mark when the corresponding port was found. The progress bar shows how
-much of the combined range has been checked. Double-click a row to stop the
-scan, close the dialog, and copy that numeric IP address into the setting.
+For example, a `/24` interface scans every address whose final octet is 0 through 255.
+A range wider than `/24` is limited to its first 256 addresses by treating the additional upper host bits as zero.
+For example, an address on `172.20.0.0/16` scans `172.20.0.0` through `172.20.0.255`.
+
+Discovered hosts appear as the scan proceeds, together with their resolved host
+name when available.
+The SSH/SFTP (22), TELNET (23), and FTP (21) columns show a check mark when the corresponding port was found.
+The progress bar shows how much of the combined range has been checked.
+
+Double-click a row to stop the scan, close the dialog, and copy the resolved name into the setting if it is already available.
+Otherwise, the numeric IP address is used.
+The connection type, port, and entry name are unchanged.
+
 Click "Cancel" to stop and close the scan without changing the address.
 
-Only locally configured IPv4 ranges are scanned. Interfaces without an IPv4
-address are skipped. Loopback interfaces scan only their assigned addresses,
-rather than the whole loopback range. Slow reverse DNS responses may still
-take some time to finish.
+Only locally configured IPv4 ranges are scanned.
+Interfaces without an IPv4 address are skipped.
+Loopback interfaces scan only their assigned addresses, rather than the whole loopback range.
+
+Name lookup uses the system resolver first, then mDNS and LLMNR in parallel, preferring mDNS if both return names. It keeps `.local` and single-label names unchanged.
+Name lookup has a shared three-second deadline per host, including up to one second for the initial system lookup.
+
+Explicit mDNS/LLMNR lookup requires `systemd-resolved` with those protocols enabled on the relevant network interface.
+Normal hostname resolution must also reach `systemd-resolved` to connect using the discovered names.
+The application does not change your system's resolver configuration.
+
+If the service or protocol is unavailable, scanning still works with system-resolved names or numeric addresses.
+See the [systemd resolver API documentation](https://github.com/systemd/systemd/blob/v257/man/org.freedesktop.resolve1.xml) for protocol availability and interface selection requirements.
 
 ## Using SSH and SFTP
 
@@ -234,11 +256,80 @@ An SFTP window opened from an already authenticated SSH terminal reuses that
 terminal's SSH connection, including its selected user name and authentication,
 and therefore does not ask for them again.
 
-## Managing Items in SFTP and FTP
+## Reconnecting SSH and TELNET
 
-SFTP and FTP use the same two-pane file browser. Select an item in either the
-local or remote pane and right-click it to open the item menu. Multiple items
-can be selected with `Ctrl`+click or a drag rectangle before opening the menu.
+To keep a disconnected terminal open, turn off "Close window when session ends"
+in its Terminal settings (`[terminal] auto_close=false`). The disconnected
+overlay then offers a "Reconnect" button for SSH and TELNET. It becomes
+clickable after the previous connection's pending work has stopped.
+
+Reconnection uses the latest applied connection settings in the same window
+and preserves scrollback. SSH asks for authentication again through its usual
+panel. If an attempt fails, the overlay shows the new reason and allows another
+attempt. Transfers are not resumed automatically. Closing the window cancels
+an in-progress attempt.
+
+Automatic closing keeps its existing default and behavior. This button is not
+available with automatic closing enabled or for local and serial terminals.
+
+## Using FTP/FTPS
+
+Create a connection in the launcher and select `FTP` as its connection type.
+The FTP tab contains the server address, control port, user name, data
+connection mode, and initial local and remote directories. The default control
+port is 21 and the default data connection mode is `Passive (recommended)`.
+
+Every time the FTP window starts, its authentication panel asks for the user
+name and hidden password together. For
+anonymous login, enter `anonymous` explicitly and enter the password expected
+by the server. No anonymous credentials are supplied automatically, and the
+entered password is not stored in the connection settings. After login, FTP
+uses the same two-pane file browser and transfer controls as SFTP.
+
+FTP sends commands, user names, passwords, directory listings, and file data
+without encryption. elder-terms uses [FTP (RFC 959)](https://www.rfc-editor.org/rfc/rfc959) or [FTPS](https://everything.curl.dev/ftp/ftps.html).
+
+The corresponding INI settings have the following form:
+
+```ini
+[general]
+type=ftp
+
+[ftp]
+address=ftp.example.com
+port=21
+username=
+data_connection_mode=passive
+local_directory=
+remote_directory=.
+```
+
+For more information about FTPS and FTP details, see [the document](./docs/ja/ftp-ftps.md).
+
+## Using WebDAV
+
+Select `WebDAV` as the connection type, then set the address, published path,
+and authentication on the WebDAV tab. For `https://files.example.com/dav/team/`,
+use `files.example.com` as the address and `/dav/team/` as the published path.
+HTTPS is the default; HTTP is also available.
+
+The read-only URL preview shows the resulting address. Enter the server name separately from its scheme, path and credentials.
+
+The base path becomes `/` in the file browser.
+You cannot navigate above it. An initial remote directory of `/Documents` starts this example at `/dav/team/Documents`.
+
+The shared SFTP/FTP/FTPS browser supports file and folder uploads and downloads,
+folder creation, renaming, and deletion. Basic/Digest passwords are entered when
+connecting and are not saved. HTTPS certificate failures are either rejected or
+shown in the same confirmation overlay as FTPS, according to the connection settings.
+
+See [Using WebDAV](./docs/en/webdav.md) for settings and supported operations.
+
+## Managing Items in SFTP/FTP/FTPS and WebDAV
+
+SFTP/FTP/FTPS and WebDAV use the same two-pane file browser.
+Select an item in either the local or remote pane and right-click it to open the item menu.
+Multiple items can be selected with `Ctrl`+click or a drag rectangle before opening the menu.
 
 - `Rename` is available when exactly one file or directory is selected. Enter
   the new name in the window overlay. The item stays in its current directory,
@@ -267,91 +358,10 @@ sudo apt update
 sudo apt install coreutils
 ```
 
-Deletion is permanent and does not use the desktop trash. In the local pane
-and over SFTP, deleting a symbolic link removes the link itself without
-following its target. Rename and deletion run asynchronously; the browser is
-temporarily covered by a progress overlay and is refreshed when the operation
-finishes.
-
-## Using FTP
-
-Create a connection in the launcher and select `FTP` as its connection type.
-The FTP tab contains the server address, control port, user name, data
-connection mode, and initial local and remote directories. The default control
-port is 21 and the default data connection mode is `Passive (recommended)`.
-
-Every time the FTP window starts, its authentication panel asks for the user
-name and hidden password together. The configured user name is prefilled; if
-it is empty, the current operating-system user name is prefilled instead. For
-anonymous login, enter `anonymous` explicitly and enter the password expected
-by the server. No anonymous credentials are supplied automatically, and the
-entered password is not stored in the connection settings. After login, FTP
-uses the same two-pane file browser and transfer controls as SFTP.
-
-FTP sends commands, user names, passwords, directory listings, and file data
-without encryption. elder-terms implements the base
-[FTP protocol (RFC 959)](https://www.rfc-editor.org/rfc/rfc959) and does not
-implement [FTP over TLS (RFC 4217)](https://www.rfc-editor.org/rfc/rfc4217),
-so FTPS is not supported. Prefer SFTP unless the network and server are
-trusted.
-
-### FTP Data Connections
-
-FTP keeps one control connection open and creates a separate data connection
-for each directory listing or file transfer. The `Data connection mode`
-setting chooses which side initiates that data connection:
-
-- `Passive (recommended)`: elder-terms connects to a port selected by the
-  server. It tries `EPSV` first and, on IPv4, falls back to `PASV` when the
-  server does not support `EPSV`. This normally works best through client-side
-  NAT and firewalls because both connections are outbound. For `PASV`, the
-  advertised host address is ignored and the control-connection peer is used,
-  following the FTP security guidance in
-  [RFC 2577](https://www.rfc-editor.org/rfc/rfc2577).
-- `Active`: elder-terms listens on a local port and the server connects back to
-  it. It tries `EPRT` first and, on IPv4, falls back to `PORT`. An inbound data
-  connection must reach the client, so firewall and NAT configuration may be
-  required. A data connection from a host other than the control-connection
-  peer is rejected.
-
-`EPSV` and `EPRT` are the IPv4/IPv6-capable extended commands defined by
-[RFC 2428](https://www.rfc-editor.org/rfc/rfc2428). `PASV` and `PORT` are the
-traditional IPv4 fallbacks. These are command variants within passive and
-active operation, not additional data connection modes. The IP family is
-selected when the server address is resolved. Proxy traversal and configurable
-data-port ranges are not separate options in elder-terms.
-
-### FTP Operation Ordering and Compatibility
-
-Opening a directory node and every other remote operation starts
-asynchronously, so the GTK window remains responsive. Each FTP window uses one
-authenticated control connection rather than a pool of control connections.
-Operations wait in FIFO order, and one operation retains its turn through its
-data transfer and the server's final completion reply. A directory request
-made while another request is active is therefore queued instead of being
-interleaved with it.
-
-elder-terms negotiates binary transfer mode and prefers `MLSD` listings when
-the server advertises the standardized `MLST`/`MLSD` extensions from
-[RFC 3659](https://www.rfc-editor.org/rfc/rfc3659). It falls back to common
-Unix-style and DOS-style `LIST` output for older servers. Unusual
-server-specific `LIST` formats may not be recognized. FTP does not expose the
-SFTP features for symbolic links, POSIX permissions, or timestamp updates.
-
-The corresponding INI settings have the following form:
-
-```ini
-[general]
-type=ftp
-
-[ftp]
-address=ftp.example.com
-port=21
-username=
-data_connection_mode=passive
-local_directory=
-remote_directory=.
-```
+Deletion is permanent and does not use the desktop trash.
+In the local pane and over SFTP, deleting a symbolic link removes the link itself without
+following its target.
+Rename and deletion run asynchronously; the browser is temporarily covered by a progress overlay and is refreshed when the operation finishes.
 
 ## Local Startup Process
 
@@ -582,21 +592,48 @@ built-in beep for that connection. If libcanberra cannot start playback,
 elder-terms falls back to the built-in beep until the settings are applied
 again.
 
+## Configuring Indicator Color
+
+On the "Terminal" tab, set "Active indicator color" and "Inactive indicator
+color" independently. Each applies to CONN, LOG, SD, RD, and all serial line
+indicators. Applying colors preserves their current states, blinking, and
+latched activity. The lamps retain their shading and highlights; choose
+different colors if you want to distinguish active from inactive lamps.
+
+Connection defaults can provide a shared color, and each connection can override
+it. "Default color" restores green for active lamps and gray for inactive lamps,
+independently of the other color. Configuring only the active color leaves the
+inactive color gray unless a global inactive color is inherited. Choose the
+inherited option to follow connection defaults. Save to keep both colors after
+restarting.
+
+```ini
+[terminal]
+indicator_color=#3584E4
+indicator_off_color=#808080
+```
+
+The value must be `default` or an RGB color in `#RRGGBB` form. Invalid values
+produce a warning and use the next valid inherited or built-in value.
+
 ## Configuring Font Families
 
-Scroll down on the "Terminal" tab to specify primary and secondary font
-families. Each drop-down lets you inherit the global or built-in default,
-explicitly use the built-in default, or select a custom font. Confirming a font
-in the font chooser automatically switches the drop-down to the custom font.
+Scroll down on the "Terminal" tab to edit an ordered list of font families.
+Add or remove rows, and use the up/down buttons to change their priority.
+Each row accepts a family name or opens a font chooser.
 
-The built-in defaults are `Noto Sans Mono` for the primary font and `Monospace`
-for the secondary font.
+The first family has the highest priority. Later families supply characters
+missing from earlier ones, such as Japanese characters missing from a Latin
+font. Uninstalled family names may be saved and are skipped during fallback.
 
-The primary font is used for normal rendering. The secondary font is used as a
-fallback for characters missing from the primary font. For example, if you
-choose a Latin font as the primary font and a Japanese font as the secondary
-font, kanji, hiragana, and similar characters are rendered with the secondary
-font.
+The drop-down applies to the whole list. "Inherited from: global settings" or
+"Inherited from: app defaults" follows the inherited settings, including later
+global changes. "Use app defaults" fixes this connection to `Noto Sans Mono`,
+then `Monospace`, regardless of global settings. "Specify for this connection"
+sets its own list. The global editor offers "App defaults" and "Specify fonts".
+Connection overrides replace the global list rather than extending it.
+Apply changes the current settings, Save persists them, and Cancel discards
+changes made since the last apply.
 
 These settings save only the font families; they do not include font size,
 weight, or style. Font size continues to follow "Zoom factor", `Ctrl`+`=`,
@@ -606,12 +643,15 @@ When editing the INI file directly, specify the values as follows:
 
 ```ini
 [terminal]
-font_primary_family=DejaVu Sans Mono
-font_fallback_family=Noto Sans Mono CJK JP
+font_families=DejaVu Sans Mono;Noto Sans Mono CJK JP;Monospace;
 ```
 
-To explicitly use a built-in default instead of inheriting the global default,
-set the corresponding value to `default`.
+Omit the key to inherit, or use `font_families=` to explicitly restore the
+built-in list. Names are trimmed and must be non-empty and unique, with no
+commas or control characters. Semicolons and backslashes inside a name use
+the [GLib KeyFile escaping rules](https://docs.gtk.org/glib/struct.KeyFile.html)
+(`\;` and `\\`). Invalid lists produce a warning and use the next valid
+inherited or built-in value.
 
 ## Configuring Hotkeys
 
@@ -637,6 +677,10 @@ Assigning a key combination to "Open connection shortcut" for a connection
 lets you open it directly with that hotkey even while the launcher is hidden.
 "Open application shortcut" under "Application settings" shows the launcher;
 its default is `Ctrl+Alt+T`.
+
+If a configured hotkey cannot be registered, a warning titled "elder-terms"
+explains that it will not work. The warning text follows the selected display
+language. Closing the warning does not quit the launcher.
 
 ### Hotkey Limitations on Wayland
 
@@ -885,6 +929,16 @@ and values changed for an individual connection take precedence over them.
 
 ## Building from Source
 
+WebDAV requires libcurl 7.88.1 or newer with HTTP/HTTPS and asynchronous DNS, plus [libxml2](https://gnome.pages.gitlab.gnome.org/libxml2/) 2.9.14 or newer.
+
+The FTP client requires [libcurl](https://curl.se/libcurl/) 7.88.1 or newer
+with FTP and asynchronous DNS support. FTPS additionally requires a
+[TLS-enabled libcurl build](https://curl.se/libcurl/c/libcurl-tutorial.html).
+The Debian/Ubuntu packages use OpenSSL-backed libcurl and depend on
+`ca-certificates` for the default trust store. Source builds also need OpenSSL
+headers and libraries. Certificate confirmation must use the same OpenSSL
+version as libcurl; the application checks this before connecting.
+
 To build on Ubuntu or Debian, install a C++20-capable compiler, Meson, Ninja,
 gettext, and the development packages for the libraries used by elder-terms:
 
@@ -892,8 +946,8 @@ gettext, and the development packages for the libraries used by elder-terms:
 sudo apt update
 sudo apt install build-essential git meson ninja-build pkg-config gettext \
   libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev \
-  libxkbcommon-dev liburing-dev libudev-dev libpcre2-dev libssh-dev \
-  libvte-2.91-dev xdg-utils
+  libxkbcommon-dev liburing-dev libudev-dev libpcre2-dev libssh-dev libcurl4-openssl-dev \
+  libvte-2.91-dev libssl-dev libxml2-dev ca-certificates xdg-utils
 ```
 
 Node.js 20 or later is also required. The Node.js package provided by your

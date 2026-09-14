@@ -1,9 +1,6 @@
-import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
 import type { GtkApp, GtkCapture } from 'gestament';
 import { waitForResult } from 'gestament/testing';
-import type { PNG as PngImage } from 'pngjs';
 import { expect } from 'vitest';
 
 const require = createRequire(import.meta.url);
@@ -67,172 +64,63 @@ export type ActivityIndicatorImageState = 'off' | 'on';
  */
 export const activityIndicatorIconSize = 18;
 
-const indicatorIconPaths: Record<ActivityIndicatorImageState, string> = {
-  off: fileURLToPath(
-    new URL('../src/indicators/green-off.png', import.meta.url)
-  ),
-  on: fileURLToPath(new URL('../src/indicators/green-on.png', import.meta.url)),
-};
-
-interface RgbaPixel {
-  readonly alpha: number;
-  readonly blue: number;
-  readonly green: number;
-  readonly red: number;
-}
-
-const readPng = (capture: GtkCapture): PngImage => PNG.sync.read(capture.image);
-
-const pixelOffset = (png: PngImage, x: number, y: number): number =>
-  (y * png.width + x) * 4;
-
-const pixelAt = (png: PngImage, x: number, y: number): RgbaPixel => {
-  const offset = pixelOffset(png, x, y);
-  return {
-    red: png.data[offset],
-    green: png.data[offset + 1],
-    blue: png.data[offset + 2],
-    alpha: png.data[offset + 3],
-  };
-};
-
-const rgbDistance = (left: RgbaPixel, right: RgbaPixel): number =>
-  Math.abs(left.red - right.red) +
-  Math.abs(left.green - right.green) +
-  Math.abs(left.blue - right.blue);
-
-const scalePngNearest = (
-  source: PngImage,
-  width: number,
-  height: number
-): PngImage => {
-  const scaled = new PNG({ width, height }) as PngImage;
-  for (let y = 0; y < height; ++y) {
-    const sourceY = Math.min(
-      source.height - 1,
-      Math.floor(((y + 0.5) * source.height) / height)
-    );
-    for (let x = 0; x < width; ++x) {
-      const sourceX = Math.min(
-        source.width - 1,
-        Math.floor(((x + 0.5) * source.width) / width)
-      );
-      const sourceOffset = pixelOffset(source, sourceX, sourceY);
-      const scaledOffset = pixelOffset(scaled, x, y);
-      scaled.data[scaledOffset] = source.data[sourceOffset];
-      scaled.data[scaledOffset + 1] = source.data[sourceOffset + 1];
-      scaled.data[scaledOffset + 2] = source.data[sourceOffset + 2];
-      scaled.data[scaledOffset + 3] = source.data[sourceOffset + 3];
-    }
-  }
-  return scaled;
-};
-
-const countNonBackgroundPixels = (png: PngImage): number => {
-  const background = pixelAt(png, 0, 0);
-  let count = 0;
-  for (let y = 0; y < png.height; ++y) {
-    for (let x = 0; x < png.width; ++x) {
-      const pixel = pixelAt(png, x, y);
-      const distance =
-        rgbDistance(pixel, background) +
-        Math.abs(pixel.alpha - background.alpha);
-      if (distance > 24) {
-        ++count;
-      }
-    }
-  }
-  return count;
-};
-
-const averageForegroundGreenDominance = (png: PngImage): number => {
-  const background = pixelAt(png, 0, 0);
-  let dominance = 0;
-  let count = 0;
-  for (let y = 0; y < png.height; ++y) {
-    for (let x = 0; x < png.width; ++x) {
-      const pixel = pixelAt(png, x, y);
-      const distance =
-        rgbDistance(pixel, background) +
-        Math.abs(pixel.alpha - background.alpha);
-      if (distance <= 24) {
-        continue;
-      }
-      dominance += Math.max(0, pixel.green - Math.max(pixel.red, pixel.blue));
-      ++count;
-    }
-  }
-  return count === 0 ? 0 : dominance / count;
-};
-
-const countCloseForegroundPixels = (
-  actual: PngImage,
-  expected: PngImage
-): number => {
-  let count = 0;
-  for (let y = 0; y < expected.height; ++y) {
-    for (let x = 0; x < expected.width; ++x) {
-      const expectedPixel = pixelAt(expected, x, y);
-      if (expectedPixel.alpha <= 16) {
-        continue;
-      }
-      if (rgbDistance(pixelAt(actual, x, y), expectedPixel) <= 70) {
-        ++count;
-      }
-    }
-  }
-  return count;
-};
-
-const readExpectedIndicatorPng = async (
-  state: ActivityIndicatorImageState
-): Promise<PngImage> =>
-  scalePngNearest(
-    PNG.sync.read(await readFile(indicatorIconPaths[state])),
-    activityIndicatorIconSize,
-    activityIndicatorIconSize
-  );
+/**
+ * Requested RGB channels, or undefined for the original green lamp images.
+ */
+export type ActivityIndicatorColor = readonly [
+  red: number,
+  green: number,
+  blue: number,
+];
 
 /**
- * Asserts that a captured indicator image matches the expected on/off asset.
+ * Asserts visible lamp hue and brightness independently of the source PNGs.
  *
  * @param capture Captured GtkImage.
- * @param state Expected indicator image state.
- * @returns Promise resolved after the image assertion passes.
+ * @param state Expected indicator state.
+ * @param color Configured RGB channels; omit for the built-in green lamps.
+ * @returns Promise resolved after the display assertions pass.
  */
 export const expectActivityIndicatorImageState = async (
   capture: GtkCapture,
-  state: ActivityIndicatorImageState
+  state: ActivityIndicatorImageState,
+  color: ActivityIndicatorColor | undefined = undefined
 ): Promise<void> => {
-  const actual = readPng(capture);
-  const expected = await readExpectedIndicatorPng(state);
-  const expectedForegroundCount = countNonBackgroundPixels(expected);
-  const actualForegroundCount = countNonBackgroundPixels(actual);
-  const center = Math.floor(activityIndicatorIconSize / 2);
-  const greenDominance = averageForegroundGreenDominance(actual);
-
+  const actual = PNG.sync.read(capture.image);
   expect(capture.clipped).toBe(false);
   expect(actual.width).toBe(activityIndicatorIconSize);
   expect(actual.height).toBe(activityIndicatorIconSize);
-  expect(actualForegroundCount).toBeGreaterThan(
-    Math.floor(expectedForegroundCount * 0.65)
-  );
-  expect(actualForegroundCount).toBeLessThan(
-    Math.ceil(expectedForegroundCount * 1.35)
-  );
-  expect(
-    rgbDistance(
-      pixelAt(actual, center, center),
-      pixelAt(expected, center, center)
-    )
-  ).toBeLessThanOrEqual(45);
-  expect(countCloseForegroundPixels(actual, expected)).toBeGreaterThan(
-    Math.floor(expectedForegroundCount * 0.55)
-  );
-  if (state === 'off') {
-    expect(greenDominance).toBeLessThan(12);
+  const offset = (9 * actual.width + 9) * 4;
+  const channels = Array.from(actual.data.subarray(offset, offset + 3));
+  const brightness = Math.max(...channels);
+  if (color === undefined) {
+    if (state === 'on') {
+      expect(channels[1] - channels[0]).toBeGreaterThan(35);
+      expect(channels[1] - channels[2]).toBeGreaterThan(35);
+    } else {
+      expect(brightness - Math.min(...channels)).toBeLessThan(12);
+    }
   } else {
-    expect(greenDominance).toBeGreaterThan(35);
+    // A neutral reflection keeps even black lamps distinguishable. Normalize
+    // brightness for the requested color. Custom inactive colors retain the
+    // requested brightness instead of multiplying it by a dark OFF template.
+    for (let channel = 0; channel < 3; channel += 1) {
+      for (let other = 0; other < 3; other += 1) {
+        if (color[channel] - color[other] >= 64) {
+          expect(channels[channel] - channels[other]).toBeGreaterThan(12);
+        }
+      }
+    }
+  }
+  const strength =
+    color === undefined ? 1 : 0.2 + (0.8 * Math.max(...color)) / 255;
+  const normalized = brightness / strength;
+  if (state === 'on' || color !== undefined) {
+    expect(normalized).toBeGreaterThan(130);
+    expect(normalized).toBeLessThan(200);
+  } else {
+    expect(normalized).toBeGreaterThan(55);
+    expect(normalized).toBeLessThan(115);
   }
 };
 
@@ -273,18 +161,20 @@ export const captureActivityIndicatorBox = async (
  * @param indicator Indicator id.
  * @param state Expected indicator image state.
  * @param timeoutMs Timeout in milliseconds.
+ * @param color Configured RGB channels; omit for the built-in green lamps.
  * @returns Captured GtkImage that matched the expected state.
  */
 export const waitForActivityIndicatorImageState = async (
   app: GtkApp,
   indicator: ActivityIndicatorId,
   state: ActivityIndicatorImageState,
-  timeoutMs = 5_000
+  timeoutMs = 5_000,
+  color: ActivityIndicatorColor | undefined = undefined
 ): Promise<GtkCapture> =>
   waitForResult(
     async () => {
       const capture = await captureActivityIndicatorImage(app, indicator);
-      await expectActivityIndicatorImageState(capture, state);
+      await expectActivityIndicatorImageState(capture, state, color);
       return capture;
     },
     {

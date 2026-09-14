@@ -4,6 +4,9 @@ gio_dep = dependency('gio-2.0')
 liburing_dep = dependency('liburing')
 libudev_dep = dependency('libudev')
 libssh_dep = dependency('libssh')
+libcurl_dep = dependency('libcurl', version: '>=7.88.1')
+libxml2_dep = dependency('libxml-2.0', version: '>=2.9.14')
+openssl_dep = dependency('openssl')
 vte_dep = dependency('vte-2.91')
 
 gestament_config = find_program('gestament-config')
@@ -48,6 +51,7 @@ libxyzm_async_static_library = libxyzm_static_libraries[1]
 telnet_protocol_source = 'src/terminal-sessions/telnet-session/telnet-protocol.cpp'
 elder_terms_sources = [
   'src/activity-indicator.cpp',
+  'src/indicator-color.cpp',
   'src/inline-prompt.cpp',
   'src/launch-options.cpp',
   'src/main.cpp',
@@ -59,6 +63,7 @@ elder_terms_sources = [
   'src/file-transfer/file-transfer-engine.cpp',
   'src/file-transfer/file-transfer-paths.cpp',
   'src/file-transfer/file-transfer-window.cpp',
+  'src/file-transfer/local-file-reveal.cpp',
   'src/terminal-connection-phase.cpp',
   'src/terminal-bell.cpp',
   'src/terminal-bell-player.cpp',
@@ -120,15 +125,23 @@ executable(
     'src/inline-prompt.cpp',
     'src/launch-options.cpp',
     'src/ftp/ftp-client.cpp',
-    'src/ftp/ftp-protocol.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
+    'src/ftp/ftp-metadata.cpp',
+    'src/webdav/webdav-application.cpp',
+    'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
+    'src/webdav/curl-http-session.cpp',
+    'src/webdav/webdav-url.cpp',
+    'src/webdav/webdav-metadata.cpp',
     'src/sftp/sftp-client.cpp',
     'src/sftp/sftp-fixture-client.cpp',
     'src/file-transfer/file-hash.cpp',
     'src/file-transfer/ssh-file-hash.cpp',
     'src/file-transfer/file-transfer-engine.cpp',
     'src/file-transfer/file-transfer-main.cpp',
+    'src/file-transfer/file-transfer-certificate-prompt.cpp',
     'src/file-transfer/file-transfer-paths.cpp',
     'src/file-transfer/file-transfer-window.cpp',
+    'src/file-transfer/local-file-reveal.cpp',
     'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
     'src/terminal-sessions/tcp-connector.cpp',
     'src/widget-background.cpp',
@@ -143,6 +156,9 @@ executable(
     gtk_dep,
     liburing_dep,
     libssh_dep,
+    libcurl_dep,
+    libxml2_dep,
+    openssl_dep,
   ],
   install: true,
   install_dir: elder_terms_private_install_dir / 'elder-terms-vte',
@@ -172,33 +188,187 @@ telnet_protocol_test = executable(
 
 test('telnet-protocol-test', telnet_protocol_test)
 
-ftp_protocol_test = executable(
-  'ftp-protocol-test',
+webdav_metadata_test = executable(
+  'webdav-metadata-test',
+  ['tests/cpp/webdav-metadata-test.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
+  include_directories: include_directories('src/webdav'),
+  dependencies: [cardio_dep, elder_terms_dep, libcurl_dep, libxml2_dep],
+)
+test('webdav-metadata-test', webdav_metadata_test)
+
+webdav_client_test = executable(
+  'webdav-client-test',
+  ['tests/cpp/webdav-client-test.cpp', 'src/file-transfer/file-transfer-engine.cpp', 'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
+   'src/webdav/curl-http-session.cpp', 'src/tls/certificate-policy.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
+  include_directories: include_directories('src/webdav'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, libxml2_dep, openssl_dep],
+)
+test('webdav-client-test', find_program('node'),
+  args: [files('tests/webdav-client-runner.mjs'), webdav_client_test], timeout: 300)
+
+ftp_metadata_test = executable(
+  'ftp-metadata-test',
   [
-    'tests/cpp/ftp-protocol-test.cpp',
-    'src/ftp/ftp-protocol.cpp',
+    'tests/cpp/ftp-metadata-test.cpp',
+    'src/ftp/ftp-metadata.cpp',
   ],
+  include_directories: include_directories('src/ftp'),
 )
 
-test('ftp-protocol-test', ftp_protocol_test)
+test('ftp-metadata-test', ftp_metadata_test)
 
-ftp_client_test = executable(
-  'ftp-client-test',
+curl_ftp_session_test = executable(
+  'curl-ftp-session-test',
   [
-    'tests/cpp/ftp-client-test.cpp',
+    'tests/cpp/curl-ftp-session-test.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
+  ],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+)
+
+foreach case_name : ['receive', 'cancel-final', 'cancel-paused', 'callback-failure', 'unanswered-quit']
+  test('curl-ftp-session-' + case_name, curl_ftp_session_test, args: [case_name], timeout: 120)
+endforeach
+
+ftp_test_server = executable(
+  'ftp-test-server',
+  'tests/cpp/ftp-test-server.cpp',
+  dependencies: [openssl_dep, dependency('threads')],
+)
+
+ftps_client_test = executable(
+  'ftps-client-test',
+  ['tests/cpp/ftps-client-test.cpp', 'src/ftp/ftp-client.cpp',
+   'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp', 'src/ftp/ftp-metadata.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+)
+
+
+
+curl_ftp_client_test = executable(
+  'curl-ftp-client-test',
+  [
+    'tests/cpp/curl-ftp-client-test.cpp',
     'src/ftp/ftp-client.cpp',
-    'src/ftp/ftp-protocol.cpp',
-    'src/terminal-sessions/tcp-connector.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
+    'src/ftp/ftp-metadata.cpp',
   ],
-  dependencies: [
-    cardio_dep,
-    elder_terms_dep,
-    gio_dep,
-    liburing_dep,
-  ],
+  include_directories: include_directories('src/ftp'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
 )
 
-test('ftp-client-test', ftp_client_test)
+foreach case_name : [
+  'passive', 'active', 'legacy-passive', 'legacy-active',
+  'ipv6-passive', 'ipv6-active', 'unix', 'dos', 'mlsd-unavailable',
+  'login', 'empty-user', 'unsafe-password', 'denied-listing',
+  'temporary-listing', 'foreign-active', 'fifo',
+]
+  test('curl-ftp-client-' + case_name, curl_ftp_client_test,
+    args: [ftp_test_server, case_name], timeout: 120)
+endforeach
+
+curl_ftp_stream_test = executable(
+  'curl-ftp-stream-test',
+  [
+    'tests/cpp/curl-ftp-stream-test.cpp',
+    'src/ftp/ftp-client.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
+    'src/ftp/ftp-metadata.cpp',
+    'src/file-transfer/file-transfer-engine.cpp',
+  ],
+  include_directories: include_directories('src/ftp'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+)
+
+foreach case_name : [
+  'passive', 'active', 'legacy-passive', 'legacy-active',
+  'backpressure', 'cancel-backpressure', 'held-upload', 'held-download',
+  'cancel-final-upload', 'cancel-final-download', 'store-refused',
+  'upload-error', 'download-error', 'upload-disconnect', 'download-disconnect',
+  'truncated', 'large-size', 'abandon', 'stop-reader', 'engine', 'engine-failure',
+]
+  test('curl-ftp-stream-' + case_name, curl_ftp_stream_test,
+    args: [ftp_test_server, case_name], timeout: 120)
+endforeach
+
+ftp_client_lifetime_test = executable(
+  'ftp-client-lifetime-test',
+  [
+    'tests/cpp/ftp-client-lifetime-test.cpp',
+    'src/ftp/ftp-client.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
+    'src/ftp/ftp-metadata.cpp',
+  ],
+  include_directories: include_directories('src/ftp'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+)
+
+foreach case_name : ['normal', 'login', 'cancel']
+  test('ftp-client-lifetime-' + case_name, ftp_client_lifetime_test,
+    args: [ftp_test_server, case_name], timeout: 120)
+endforeach
+
+ftps_certificate_policy_test = executable(
+  'ftps-certificate-policy-test',
+  ['tests/cpp/ftps-certificate-policy-test.cpp', 'src/tls/certificate-policy.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  install: false)
+
+ftps_hostname_test = executable(
+  'ftps-hostname-test',
+  ['tests/cpp/ftps-hostname-test.cpp', 'src/tls/certificate-policy.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  install: false)
+
+test('ftps-client-test', find_program('node'),
+  args: [files('tests/ftps-client-runner.mjs'), ftps_client_test, ftp_test_server,
+         curl_ftp_stream_test, ftp_client_lifetime_test, ftps_certificate_policy_test, ftps_hostname_test], timeout: 600)
+
+# The optional integration test modifies only a disposable container's CA store.
+# Run it alone so no other test observes its temporary trust entries.
+test('ftps-vsftpd', find_program('node'),
+  args: [files('tests/ftps-vsftpd-runner.mjs'), ftps_client_test],
+  is_parallel: false, timeout: 600)
+
+ftp_runtime_capabilities_test = executable(
+  'ftp-runtime-capabilities-test',
+  [
+    'tests/cpp/ftp-runtime-capabilities-test.cpp',
+    'src/ftp/ftp-client.cpp',
+    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
+    'src/ftp/ftp-metadata.cpp',
+  ],
+  include_directories: include_directories('src/ftp'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  link_args: ['-Wl,--wrap=curl_version_info'],
+)
+
+foreach case_name : ['active-explicit', 'active-implicit', 'supported', 'no-dns', 'no-ftp', 'old-version', 'no-tls', 'no-ftps', 'non-openssl', 'non-openssl-prompt', 'openssl-mismatch']
+  test('ftp-runtime-capabilities-' + case_name, ftp_runtime_capabilities_test,
+    args: [ftp_test_server, case_name], timeout: 120)
+endforeach
+
+file_transfer_window_lifetime_test = executable(
+  'file-transfer-window-lifetime-test',
+  [
+    'tests/cpp/file-transfer-window-lifetime-test.cpp',
+    'src/inline-prompt.cpp',
+    'src/widget-background.cpp',
+    'src/sftp/sftp-fixture-client.cpp',
+    'src/file-transfer/file-hash.cpp',
+    'src/file-transfer/file-transfer-engine.cpp',
+    'src/file-transfer/file-transfer-paths.cpp',
+    'src/file-transfer/file-transfer-window.cpp',
+    'src/file-transfer/local-file-reveal.cpp',
+  ],
+  include_directories: include_directories('src/file-transfer'),
+  cpp_args: ['-I' + gestament_include_dir],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, gtk_dep],
+)
+
+xvfb_run = find_program('xvfb-run')
+test('file-transfer-window-lifetime', xvfb_run,
+  args: ['-a', file_transfer_window_lifetime_test], timeout: 120)
 
 terminal_text_codec_test = executable(
   'terminal-text-codec-test',
@@ -310,13 +480,21 @@ activity_indicator_test = executable(
   [
     'tests/cpp/activity-indicator-test.cpp',
     'src/activity-indicator.cpp',
+    'src/indicator-color.cpp',
   ],
   dependencies: [
     gtk_dep,
+    elder_terms_dep,
   ],
 )
 
 test('activity-indicator-test', activity_indicator_test)
+
+executable('file-manager-fixture', 'tests/cpp/file-manager-fixture.cpp',
+  dependencies: [gio_dep])
+
+executable('file-manager-selection-helper', 'tests/cpp/file-manager-selection-helper.cpp',
+  dependencies: [dependency('atspi-2'), dependency('gobject-2.0')])
 
 file_transfer_contract_test = executable(
   'file-transfer-contract-test',
@@ -350,9 +528,21 @@ terminal_connection_phase_test = executable(
     'src/terminal-connection-phase.cpp',
   ],
   include_directories: include_directories('src'),
+  dependencies: [elder_terms_dep],
 )
 
 test('terminal-connection-phase-test', terminal_connection_phase_test)
+
+terminal_session_reconnect_test = executable(
+  'terminal-session-reconnect-test',
+  [
+    'tests/cpp/terminal-session-reconnect-test.cpp',
+    'src/terminal-session.cpp',
+  ],
+  dependencies: [elder_terms_dep, gtk_dep, cardio_dep, gio_dep],
+)
+
+test('terminal-session-reconnect-test', terminal_session_reconnect_test)
 
 ssh_channel_connection_test = executable(
   'ssh-channel-connection-test',
@@ -612,3 +802,23 @@ configure_file(
   output: 'green-off.png',
   copy: true,
 )
+
+webdav_tls_session_test = executable(
+  'webdav-tls-session-test',
+  ['tests/cpp/webdav-tls-session-test.cpp', 'src/webdav/curl-http-session.cpp',
+   'src/tls/certificate-policy.cpp'],
+  include_directories: include_directories('src/webdav'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+)
+test('webdav-tls-session-test', find_program('node'),
+  args: [files('tests/webdav-tls-session-runner.mjs'), webdav_tls_session_test], timeout: 120)
+
+webdav_apache_test = executable(
+  'webdav-apache-test',
+  ['tests/cpp/webdav-apache-test.cpp', 'src/file-transfer/file-transfer-engine.cpp', 'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
+   'src/webdav/curl-http-session.cpp', 'src/tls/certificate-policy.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
+  include_directories: include_directories('src/webdav'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, libxml2_dep, openssl_dep],
+)
+test('webdav-apache-test', find_program('node'),
+  args: [files('tests/webdav-apache-runner.mjs'), webdav_apache_test], timeout: 900, is_parallel: false)

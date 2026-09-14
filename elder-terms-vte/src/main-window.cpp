@@ -20,6 +20,7 @@
 #include <glib/gi18n-lib.h>
 
 #include "main-window.h"
+#include "indicator-color.h"
 #include "inline-prompt.h"
 #include "widget-background.h"
 
@@ -458,6 +459,7 @@ static bool main_window_has_required_widgets(const MainWindow &main_window) {
          main_window.disconnected_notice != nullptr &&
          main_window.disconnected_notice_background != nullptr &&
          main_window.disconnected_notice_label != nullptr &&
+         main_window.reconnect_button != nullptr &&
          main_window.transfer_progress_overlay != nullptr &&
          main_window.transfer_progress_notice != nullptr &&
          main_window.transfer_progress_notice_background != nullptr &&
@@ -578,6 +580,11 @@ static bool load_indicator_images(MainWindow *main_window) {
       main_window->indicator_off_icon == nullptr) {
     return false;
   }
+
+  main_window->indicator_default_on_icon =
+      GDK_PIXBUF(g_object_ref(main_window->indicator_on_icon));
+  main_window->indicator_default_off_icon =
+      GDK_PIXBUF(g_object_ref(main_window->indicator_off_icon));
 
   for (ActivityIndicatorId indicator : activity_indicator_ids) {
     const std::size_t index = activity_indicator_index(indicator);
@@ -1247,6 +1254,8 @@ std::optional<MainWindow> load_main_window() {
       required_widget(main_window.builder, "disconnected_notice_background");
   main_window.disconnected_notice_label =
       required_widget(main_window.builder, "disconnected_notice_label");
+  main_window.reconnect_button =
+      required_widget(main_window.builder, "reconnect_button");
   main_window.transfer_progress_overlay =
       required_widget(main_window.builder, "transfer_progress_overlay");
   main_window.transfer_progress_notice =
@@ -1328,6 +1337,48 @@ std::optional<MainWindow> load_main_window() {
   set_main_window_transfer_button_visible(&main_window, false);
 
   return main_window;
+}
+
+void set_main_window_indicator_color(MainWindow *main_window,
+                                      const std::optional<RgbColor> &color,
+                                      const std::optional<RgbColor> &off_color) {
+  if (main_window == nullptr || main_window->indicator_default_on_icon == nullptr ||
+      main_window->indicator_default_off_icon == nullptr) return;
+  const std::optional<guint32> packed = color.has_value()
+      ? std::optional<guint32>{(static_cast<guint32>(color->red) << 16) |
+                              (static_cast<guint32>(color->green) << 8) | color->blue}
+      : std::nullopt;
+  const std::optional<guint32> packed_off = off_color.has_value()
+      ? std::optional<guint32>{(static_cast<guint32>(off_color->red) << 16) |
+                              (static_cast<guint32>(off_color->green) << 8) | off_color->blue}
+      : std::nullopt;
+  if (main_window->indicator_color == packed &&
+      main_window->indicator_off_color == packed_off) return;
+  auto *on = color.has_value()
+      ? create_colored_indicator_pixbuf(main_window->indicator_default_on_icon, *color)
+      : GDK_PIXBUF(g_object_ref(main_window->indicator_default_on_icon));
+  // Use the same shading range for either chosen color. The original dark
+  // template would dim every inactive selection; retain it only for defaults.
+  auto *off = off_color.has_value()
+      ? create_colored_indicator_pixbuf(main_window->indicator_default_on_icon, *off_color)
+      : GDK_PIXBUF(g_object_ref(main_window->indicator_default_off_icon));
+  if (on == nullptr || off == nullptr) {
+    g_clear_object(&on);
+    g_clear_object(&off);
+    g_warning("Could not allocate colored indicator images");
+    return;
+  }
+  auto *old_on = main_window->indicator_on_icon;
+  auto *old_off = main_window->indicator_off_icon;
+  main_window->indicator_on_icon = on;
+  main_window->indicator_off_icon = off;
+  for (auto &indicator : main_window->indicators) {
+    replace_activity_indicator_widget_images(&indicator, on, off);
+  }
+  main_window->indicator_color = packed;
+  main_window->indicator_off_color = packed_off;
+  g_object_unref(old_on);
+  g_object_unref(old_off);
 }
 
 void set_main_window_colors(MainWindow *main_window,
@@ -1488,19 +1539,35 @@ void set_main_window_connection_phase(MainWindow *main_window,
 }
 
 void set_main_window_connection_failure(MainWindow *main_window,
-                                        const std::string &message) {
+                                        const std::string &message,
+                                        TerminalConnectionKind kind) {
   if (main_window == nullptr ||
       main_window->disconnected_notice_label == nullptr) {
     return;
   }
 
-  const std::string text = message.empty()
-                               ? _("SSH connection failed")
-                               : format_translated_string(
-                                     _("SSH connection failed:\n%s"),
-                                     message.c_str());
+  const bool telnet = kind == TerminalConnectionKind::telnet;
+  const std::string text =
+      message.empty()
+          ? (telnet ? _("TELNET connection failed") : _("SSH connection failed"))
+          : format_translated_string(
+                telnet ? _("TELNET connection failed:\n%s")
+                       : _("SSH connection failed:\n%s"),
+                message.c_str());
   gtk_label_set_text(GTK_LABEL(main_window->disconnected_notice_label),
                      text.c_str());
+}
+
+void set_main_window_reconnect_presentation(
+    MainWindow *main_window, TerminalReconnectPresentation presentation) {
+  if (main_window == nullptr || main_window->reconnect_button == nullptr) {
+    return;
+  }
+  gtk_widget_set_visible(main_window->reconnect_button, presentation.visible);
+  gtk_widget_set_sensitive(main_window->reconnect_button, presentation.sensitive);
+  gtk_overlay_set_overlay_pass_through(GTK_OVERLAY(main_window->terminal_overlay),
+                                       main_window->disconnected_notice,
+                                       !presentation.visible);
 }
 
 void set_main_window_terminal_interactive(MainWindow *main_window,
@@ -1538,28 +1605,28 @@ cardio::promise<SshUserPromptResponse> prompt_main_window_ssh_async(
   }
 
   set_main_window_terminal_interactive(main_window, false);
-  InlinePromptResponse response = co_await prompt_inline_async(
-      main_window->ssh_prompt,
-      {
-          .title = prompt.title.empty() ? _("SSH") : prompt.title,
-          .message = prompt.message,
-          .monospace_message = prompt.monospace_message,
-          .accept_label =
-              prompt.kind == SshUserPromptKind::host_key
-                  ? _("Accept")
-                  : prompt.kind == SshUserPromptKind::username
-                        ? _("Connect")
-                        : _("OK"),
-          .cancel_label = _("Cancel"),
-          .initial_text = prompt.initial_text,
-          .input_required = prompt.input_required,
-          .echo = prompt.echo,
-          .cancel_visible = true,
-          .accept_visible = prompt.accept_visible,
-          .alternative_label = _("Reset and Connect"),
-          .alternative_visible = prompt.host_key_reset_available,
-      },
-      std::move(cancellation));
+  InlinePromptRequest request{
+      .title = prompt.title.empty() ? _("SSH") : prompt.title,
+      .message = prompt.message,
+      .monospace_message = prompt.monospace_message,
+      .accept_label =
+          prompt.kind == SshUserPromptKind::host_key
+              ? _("Accept")
+              : prompt.kind == SshUserPromptKind::username
+                    ? _("Connect")
+                    : _("OK"),
+      .cancel_label = _("Cancel"),
+      .initial_text = prompt.initial_text,
+      .input_required = prompt.input_required,
+      .echo = prompt.echo,
+      .cancel_visible = true,
+      .accept_visible = prompt.accept_visible,
+      .alternative_label = _("Reset and Connect"),
+      .alternative_visible = prompt.host_key_reset_available,
+  };
+  auto pending = prompt_inline_async(
+      main_window->ssh_prompt, std::move(request), std::move(cancellation));
+  InlinePromptResponse response = co_await pending;
   co_return SshUserPromptResponse{
       .accepted = response.accepted,
       .text = std::move(response.text),
@@ -1742,6 +1809,8 @@ void release_main_window(MainWindow *main_window) {
   clear_main_window_component_background(main_window);
   g_clear_object(&main_window->indicator_on_icon);
   g_clear_object(&main_window->indicator_off_icon);
+  g_clear_object(&main_window->indicator_default_on_icon);
+  g_clear_object(&main_window->indicator_default_off_icon);
   if (main_window->builder != nullptr) {
     g_object_unref(main_window->builder);
   }

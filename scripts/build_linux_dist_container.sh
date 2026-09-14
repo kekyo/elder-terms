@@ -141,6 +141,10 @@ validate_installed_package() {
 		/etc/xdg/autostart/net.kekyo.elder-terms.desktop \
 		/usr/share/icons/hicolor/256x256/apps/elder-terms.png \
 		/usr/share/locale/ja/LC_MESSAGES/elder-terms.mo \
+		/usr/share/doc/elder-terms/docs/ja/webdav.md \
+		/usr/share/doc/elder-terms/docs/ja/webdav-validation.md \
+		/usr/share/doc/elder-terms/docs/en/webdav.md \
+		/usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 		/usr/share/doc/elder-terms/copyright; do
 		assert_file "$installed_file"
 	done
@@ -193,6 +197,9 @@ for pkg_config_module in \
 	gdk-pixbuf-2.0 \
 	gtk+-3.0 \
 	libcanberra \
+	libcurl \
+	libxml-2.0 \
+	openssl \
 	libpcre2-8 \
 	libssh \
 	libudev \
@@ -226,7 +233,7 @@ deb_arch=$(dpkg-architecture -qDEB_HOST_ARCH)
 control_dir="$stage_dir/DEBIAN"
 mkdir -p "$control_dir"
 shlib_depends=$(calculate_shlibdeps)
-runtime_depends='dbus-user-session, hicolor-icon-theme, libcanberra-pulse, openssh-client, xdg-utils'
+runtime_depends='ca-certificates, dbus-user-session, hicolor-icon-theme, libcanberra-pulse, openssh-client, xdg-utils'
 write_control_file "$control_dir/control" "$shlib_depends, $runtime_depends"
 chmod 0644 "$control_dir/control"
 
@@ -244,6 +251,10 @@ for staged_file in \
 	etc/xdg/autostart/net.kekyo.elder-terms.desktop \
 	usr/share/icons/hicolor/256x256/apps/elder-terms.png \
 	usr/share/locale/ja/LC_MESSAGES/elder-terms.mo \
+	usr/share/doc/elder-terms/docs/ja/webdav.md \
+	usr/share/doc/elder-terms/docs/ja/webdav-validation.md \
+	usr/share/doc/elder-terms/docs/en/webdav.md \
+	usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 	usr/share/doc/elder-terms/copyright; do
 	assert_file "$stage_dir/$staged_file"
 done

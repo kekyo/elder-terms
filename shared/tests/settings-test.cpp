@@ -111,9 +111,8 @@ using elder_terms::terminal_display_settings;
 using elder_terms::terminal_encoding_choices;
 using elder_terms::terminal_encoding_name_is_valid;
 using elder_terms::terminal_encoding_setting_key;
-using elder_terms::terminal_font_fallback_family_setting_key;
 using elder_terms::terminal_font_families;
-using elder_terms::terminal_font_primary_family_setting_key;
+using elder_terms::terminal_font_families_setting_key;
 using elder_terms::terminal_height_setting_key;
 using elder_terms::terminal_scrollback_lines_setting_key;
 using elder_terms::terminal_show_border;
@@ -197,22 +196,20 @@ static void remove_config(const std::filesystem::path &path) {
 }
 
 static void test_default_settings() {
+  const gdouble default_zoom = 1.2;
   const SettingsStore store =
-      create_default_settings(default_terminal_display_settings(1.2),
+      create_default_settings(default_terminal_display_settings(default_zoom),
                               "elder-terms");
   const TerminalDisplaySettings display = terminal_display_settings(store);
   expect_true(display.width == 80, "default terminal width should be 80");
   expect_true(display.height == 24, "default terminal height should be 24");
   expect_true(display.scrollback_lines == 10000,
               "default terminal scrollback should retain 10000 lines");
-  expect_true(display.zoom == 1.2, "default terminal zoom should be retained");
+  expect_true(display.zoom == default_zoom,
+              "default terminal zoom should be retained");
   const TerminalFontFamilies fonts = terminal_font_families(store);
-  expect_true(fonts.primary_family ==
-                  std::optional<std::string>{"Noto Sans Mono"},
-              "the default primary terminal font should be Noto Sans Mono");
-  expect_true(fonts.fallback_family ==
-                  std::optional<std::string>{"Monospace"},
-              "the default fallback terminal font should be Monospace");
+  expect_true(fonts.families == std::vector<std::string>{"Noto Sans Mono", "Monospace"},
+              "the default font list should preserve the built-in order");
   expect_true(terminal_auto_close(store),
               "default terminal auto-close should be enabled");
   expect_true(!terminal_show_border(store),
@@ -583,117 +580,219 @@ static void test_terminal_border_width_range_and_round_trip() {
               "terminal border width should survive saving and reloading");
 }
 
-static void test_terminal_font_family_settings_round_trip_and_layering() {
-  const std::filesystem::path global_path =
-      temporary_config_path("global-terminal-fonts");
-  const std::filesystem::path connection_path =
-      temporary_config_path("connection-terminal-fonts");
-  write_config(global_path,
-               "[terminal]\n"
-               "font_primary_family=Global Latin\n"
-               "font_fallback_family=Global CJK\n");
-  write_config(connection_path,
-               "[terminal]\n"
-               "font_primary_family=Connection Latin\n");
-
-  SettingsLoadResult loaded = load_settings(
-      SettingsLoadOptions{
-          .config_path = connection_path,
-          .startup_config_path = std::nullopt,
-          .global_config_path = global_path,
-      },
-      1.0);
-  remove_config(global_path);
-
-  TerminalFontFamilies fonts = terminal_font_families(loaded.store);
-  expect_true(fonts.primary_family ==
-                  std::optional<std::string>{"Connection Latin"},
-              "a connection primary font should override the global font");
-  expect_true(fonts.fallback_family ==
-                  std::optional<std::string>{"Global CJK"},
-              "an unspecified fallback font should inherit the global font");
-  expect_true(setting_value_source(
-                  loaded.store,
-                  terminal_font_primary_family_setting_key()) ==
-                  SettingValueSource::override,
-              "the connection primary font should report an override source");
-  expect_true(setting_value_source(
-                  loaded.store,
-                  terminal_font_fallback_family_setting_key()) ==
-                  SettingValueSource::global,
-              "the inherited fallback font should report a global source");
-
-  expect_true(
-      set_explicit_setting_value(
-          &loaded.store, terminal_font_fallback_family_setting_key(),
-          elder_terms::SettingValue{std::string("Connection CJK")}),
-      "a fallback font family override should be accepted");
-  const SettingsSaveResult save_result =
-      save_settings(loaded.store, connection_path);
-  expect_true(save_result.saved, "terminal font families should save");
-  const std::string content = read_config(connection_path);
-  remove_config(connection_path);
-  expect_true(content.find("font_primary_family=Connection Latin") !=
-                  std::string::npos,
-              "the primary font family should be persisted");
-  expect_true(content.find("font_fallback_family=Connection CJK") !=
-                  std::string::npos,
-              "the fallback font family should be persisted");
+static void test_independent_inactive_indicator_color() {
+  const auto path = temporary_config_path("inactive-color");
+  const auto global = temporary_config_path("inactive-global");
+  const auto on = elder_terms::make_setting_key("terminal", "indicator_color");
+  const auto off = elder_terms::make_setting_key("terminal", "indicator_off_color");
+  const SettingsLoadOptions options{.config_path = path,
+      .startup_config_path = std::nullopt, .global_config_path = global};
+  write_config(global, "[terminal]\nindicator_off_color=#112233\n");
+  write_config(path, "[terminal]\nindicator_color=#FF0000\n");
+  auto loaded = load_settings(options, 1.0);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, off, "missing") == "#112233",
+      "inactive color should inherit independently of the active color");
+  for (const auto &value : {std::string("default"), std::string("#ABCDEF"), std::string("#000000")}) {
+    expect_true(set_explicit_setting_value(&loaded.store, off, elder_terms::SettingValue{value}),
+        "inactive colors should be independently configurable");
+    expect_true(save_settings(loaded.store, path).saved, "inactive color should save");
+    loaded = load_settings(options, 1.0);
+    expect_true(elder_terms::setting_string_value_or_default(loaded.store, off, "missing") == value &&
+        elder_terms::setting_string_value_or_default(loaded.store, on, "missing") == "#FF0000",
+        "saving and reloading the inactive color must not change the active color");
+  }
+  for (const auto *invalid : {"red", "#123", "#1234567", "#GG0000"}) {
+    expect_true(!set_explicit_setting_value(&loaded.store, off, elder_terms::SettingValue{std::string(invalid)}),
+        "invalid inactive color should be rejected");
+  }
+  write_config(path, "[terminal]\nindicator_off_color=invalid\n");
+  loaded = load_settings(options, 1.0);
+  expect_true(warnings_contain(loaded.warnings, "indicator_off_color") &&
+      elder_terms::setting_string_value_or_default(loaded.store, off, "missing") == "#112233",
+      "invalid inactive colors should warn and inherit");
+  write_config(global, "[terminal]\nindicator_off_color=invalid\n");
+  loaded = load_settings(options, 1.0);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, off, "missing") == "default",
+      "invalid inactive colors in all layers should use the original gray lamp");
+  remove_config(path);
+  remove_config(global);
 }
 
-static void test_terminal_font_family_defaults_override_global_fonts() {
-  const std::filesystem::path global_path =
-      temporary_config_path("global-terminal-font-defaults");
-  const std::filesystem::path connection_path =
-      temporary_config_path("connection-terminal-font-defaults");
-  write_config(global_path,
-               "[terminal]\n"
-               "font_primary_family=Global Latin\n"
-               "font_fallback_family=Global CJK\n");
-  write_config(connection_path,
-               "[terminal]\n"
-               "font_primary_family=default\n"
-               "font_fallback_family=default\n");
-
-  const SettingsLoadResult loaded = load_settings(
-      SettingsLoadOptions{
-          .config_path = connection_path,
-          .startup_config_path = std::nullopt,
-          .global_config_path = global_path,
-      },
-      1.0);
+static void test_terminal_indicator_color_round_trip_and_layering() {
+  const auto key = elder_terms::terminal_indicator_color_setting_key();
+  auto defaults = create_default_settings(default_terminal_display_settings(1.0),
+                                           "elder-terms");
+  expect_true(!elder_terms::terminal_indicator_color(defaults).has_value(),
+              "the built-in indicator color should retain the original images");
+  const auto global_path = temporary_config_path("global-indicator-color");
+  const auto path = temporary_config_path("indicator-color");
+  write_config(global_path, "[terminal]\nindicator_color=#123aBC\n");
+  write_config(path, "[terminal]\nauto_close=false\n");
+  const SettingsLoadOptions options{
+      .config_path = path,
+      .startup_config_path = std::nullopt,
+      .global_config_path = global_path,
+  };
+  auto loaded = load_settings(options, 1.0);
+  auto color = elder_terms::terminal_indicator_color(loaded.store);
+  expect_true(color.has_value() && color->red == 0x12 &&
+                  color->green == 0x3a && color->blue == 0xbc,
+              "an inherited indicator color should parse mixed-case RGB");
+  expect_true(setting_value_source(loaded.store, key) == SettingValueSource::global,
+              "an unspecified indicator color should inherit the global color");
+  expect_true(save_settings(loaded.store, path).saved &&
+                  read_config(path).find("indicator_color=") == std::string::npos,
+              "saving a connection should not flatten its inherited color");
+  for (const auto &value : {"#000000", "#FFFFFF", "#ab12Cd", "default"}) {
+    expect_true(set_explicit_setting_value(&loaded.store, key,
+                                           elder_terms::SettingValue{std::string(value)}),
+                "valid RGB and explicit default indicator colors should be accepted");
+    expect_true(save_settings(loaded.store, path).saved,
+                "an explicit indicator color should save");
+    loaded = load_settings(options, 1.0);
+    expect_true(setting_string_value_or_default(loaded.store, key, "missing") == value,
+                "saved indicator colors should survive reload without losing the override");
+    expect_true(setting_value_source(loaded.store, key) == SettingValueSource::override,
+                "an explicit default should suppress the inherited indicator color");
+  }
+  expect_true(!elder_terms::terminal_indicator_color(loaded.store).has_value(),
+              "an explicit default should restore the original images");
+  expect_true(clear_explicit_setting_value(&loaded.store, key),
+              "the indicator color override should be clearable");
+  expect_true(save_settings(loaded.store, path).saved,
+              "clearing an indicator override should save");
+  loaded = load_settings(options, 1.0);
+  expect_true(setting_value_source(loaded.store, key) == SettingValueSource::global &&
+                  setting_string_value_or_default(loaded.store, key, "missing") == "#123aBC",
+              "cleared and reloaded indicator colors should inherit again");
+  for (const auto &value : {"", "green", "none", "#12345", "#1234567", "123456",
+                            "#gg0000", "#-00001", "#12 456", "DEFAULT"}) {
+    write_config(path, std::string("[terminal]\nindicator_color=") + value + "\n");
+    loaded = load_settings(options, 1.0);
+    expect_true(warnings_contain(loaded.warnings,
+                  "invalid configuration value [terminal] indicator_color"),
+                "invalid indicator colors should warn");
+    expect_true(setting_string_value_or_default(loaded.store, key, "missing") == "#123aBC" &&
+                    !setting_has_explicit_value(loaded.store, key),
+                "invalid indicator overrides should retain the valid global fallback");
+    expect_true(!set_explicit_setting_value(&loaded.store, key,
+                                             elder_terms::SettingValue{std::string(value)}),
+                "invalid runtime indicator values should not replace the current color");
+  }
+  write_config(global_path, "[terminal]\nindicator_color=invalid\n");
+  loaded = load_settings(options, 1.0);
+  expect_true(!elder_terms::terminal_indicator_color(loaded.store).has_value(),
+              "invalid colors in every layer should use the original green images");
+  expect_true(!set_explicit_setting_value(&defaults, key, elder_terms::SettingValue{true}),
+              "the indicator color should reject a non-string setting value");
+  remove_config(path);
   remove_config(global_path);
+}
 
-  const TerminalFontFamilies fonts = terminal_font_families(loaded.store);
-  expect_true(fonts.primary_family ==
-                  std::optional<std::string>{"Noto Sans Mono"},
-              "an explicit default should restore the built-in primary font");
-  expect_true(fonts.fallback_family ==
-                  std::optional<std::string>{"Monospace"},
-              "an explicit default should restore the built-in fallback font");
-  expect_true(setting_value_source(
-                  loaded.store,
-                  terminal_font_primary_family_setting_key()) ==
-                  SettingValueSource::override,
-              "the default primary font should remain an override");
-  expect_true(setting_value_source(
-                  loaded.store,
-                  terminal_font_fallback_family_setting_key()) ==
-                  SettingValueSource::override,
-              "the default fallback font should remain an override");
+static void test_terminal_font_list_round_trip_and_validation() {
+  const auto global = temporary_config_path("font-list-global");
+  const auto path = temporary_config_path("font-list-connection");
+  const auto key = elder_terms::make_setting_key("terminal", "font_families");
+  const SettingsLoadOptions options{.config_path = path,
+      .startup_config_path = std::nullopt, .global_config_path = global};
+  const auto values = [&key](const SettingsStore &store) {
+    return std::get<std::vector<std::string>>(elder_terms::setting_value_or_default(
+        store, key, elder_terms::SettingValue{std::vector<std::string>{}}));
+  };
+  write_config(global, "[terminal]\nfont_families=Global First;Global Second;\n");
+  write_config(path, "");
+  auto loaded = load_settings(options, 1.0);
+  expect_true(values(loaded.store) == std::vector<std::string>{"Global First", "Global Second"} &&
+                  setting_value_source(loaded.store, key) == SettingValueSource::global,
+              "an absent connection list should inherit the whole global list");
+  expect_true(save_settings(loaded.store, path).saved && read_config(path).empty(),
+              "an inherited list must not be flattened into the connection file");
 
-  const SettingsSaveResult save_result =
-      save_settings(loaded.store, connection_path);
-  expect_true(save_result.saved,
-              "explicit terminal font defaults should save");
-  const std::string content = read_config(connection_path);
-  remove_config(connection_path);
-  expect_true(content.find("font_primary_family=default") !=
-                  std::string::npos,
-              "the default primary font should be persisted");
-  expect_true(content.find("font_fallback_family=default") !=
-                  std::string::npos,
-              "the default fallback font should be persisted");
+  for (const std::vector<std::string> &list : std::vector<std::vector<std::string>>{
+           {}, {"One"}, {"One", "Two"}, {"One", "Two", "Three", "Four"},
+           {"Semi;colon", "Back\\slash", "Quote\"Face", "日本語"}}) {
+    expect_true(set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{list}),
+                "a valid ordered list, including unknown families, should be accepted");
+    expect_true(save_settings(loaded.store, path).saved, "font lists should save");
+    loaded = load_settings(options, 1.0);
+    expect_true(loaded.warnings.empty() && values(loaded.store) == list &&
+                    setting_has_explicit_value(loaded.store, key),
+                "list order, empty override and escaped names must round-trip");
+  }
+
+  expect_true(set_explicit_setting_value(&loaded.store, key,
+                  elder_terms::SettingValue{std::vector<std::string>{"  First  ", "Second "}}),
+              "surrounding spaces should be accepted");
+  expect_true(values(loaded.store) == std::vector<std::string>{"First", "Second"},
+              "font family names should be normalized before storage");
+  expect_true(save_settings(loaded.store, path).saved, "normalized lists should save");
+  loaded = load_settings(options, 1.0);
+  expect_true(set_setting_value(&loaded.store, key,
+                  elder_terms::SettingValue{std::vector<std::string>{" First ", "Second"}}) &&
+                  !elder_terms::settings_store_is_dirty(loaded.store),
+              "equivalent normalized lists must not become dirty");
+  for (const std::vector<std::string> &invalid : std::vector<std::vector<std::string>>{
+           {""}, {"One", "", "Two"}, {"   "}, {"One", " One "},
+           {"One,Two"}, {"Line\nBreak"}, {"Tab\tName"}, {"\nLeading"},
+           {std::string("Nul\0Name", 8)}, {"Unicode\xc2\x85"}, {"Invalid\xff"}}) {
+    expect_true(!set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{invalid}) &&
+                    !set_setting_value(&loaded.store, key, elder_terms::SettingValue{invalid}) &&
+                    values(loaded.store) == std::vector<std::string>{"First", "Second"},
+                "invalid font lists must not replace the last valid value");
+  }
+  expect_true(!set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{true}),
+              "font lists must reject scalar values");
+  for (const auto *invalid : {"First;;Second;", "First; First;", "One,Two;", "One\\nTwo;", "Bad\\q;"}) {
+    write_config(path, std::string("[terminal]\nfont_families=") + invalid + "\n");
+    loaded = load_settings(options, 1.0);
+    expect_true(warnings_contain(loaded.warnings, "font_families") &&
+                    values(loaded.store) == std::vector<std::string>{"Global First", "Global Second"},
+                "an invalid file list should warn and inherit the valid global list");
+  }
+  write_config(path, "[terminal]\nfont_families=  First  ; Second ; Third;\n");
+  loaded = load_settings(options, 1.0);
+  expect_true(values(loaded.store) == std::vector<std::string>{"First", "Second", "Third"},
+              "file-loaded lists must be normalized too");
+  clear_explicit_setting_value(&loaded.store, key);
+  expect_true(save_settings(loaded.store, path).saved && read_config(path).empty(),
+              "resetting the list must restore inheritance and remove the key");
+  write_config(global, "[terminal]\nfont_families=Invalid,,Family;\n");
+  loaded = load_settings(options, 1.0);
+  expect_true(warnings_contain(loaded.warnings, "font_families") && values(loaded.store).empty(),
+              "invalid global lists must fall back to the built-in list token");
+  remove_config(path);
+  remove_config(global);
+}
+
+static void test_terminal_font_list_defaults_and_rebase() {
+  const auto global = temporary_config_path("font-defaults-global");
+  const auto path = temporary_config_path("font-defaults-connection");
+  const auto key = terminal_font_families_setting_key();
+  write_config(global, "[terminal]\nfont_families=Global First;Global Second;\n");
+  write_config(path, "[terminal]\nfont_families=\n");
+  const SettingsLoadOptions options{.config_path = path,
+      .startup_config_path = std::nullopt, .global_config_path = global};
+  auto loaded = load_settings(options, 1.0);
+  expect_true(terminal_font_families(loaded.store).families ==
+                  std::vector<std::string>{"Noto Sans Mono", "Monospace"} &&
+                  setting_has_explicit_value(loaded.store, key),
+              "an explicit empty list must override global fonts with built-ins");
+  expect_true(save_settings(loaded.store, path).saved &&
+                  read_config(path).find("font_families=\n") != std::string::npos,
+              "the explicit built-in list token must be persisted");
+  write_config(global, "[terminal]\nfont_families=Changed Global;\n");
+  const auto fallback = load_global_settings(global, 1.0);
+  rebase_settings_store_fallbacks(&loaded.store, fallback.store);
+  expect_true(terminal_font_families(loaded.store).families ==
+                  std::vector<std::string>{"Noto Sans Mono", "Monospace"} &&
+                  !elder_terms::settings_store_is_dirty(loaded.store),
+              "rebasing an explicit built-in list must preserve the override and dirty state");
+  clear_explicit_setting_value(&loaded.store, key);
+  expect_true(terminal_font_families(loaded.store).families ==
+                  std::vector<std::string>{"Changed Global"},
+              "resetting after rebase must inherit the replacement list");
+  remove_config(path);
+  remove_config(global);
 }
 
 static void test_terminal_bell_sound_validation_and_round_trip() {
@@ -2036,6 +2135,101 @@ static void test_ftp_profile_uses_independent_endpoint_and_active_mode() {
               "FTP remote directory should come from the FTP section");
 }
 
+static void test_ftp_tls_settings_preserve_invalid_input_and_inheritance() {
+  const auto mode_key = elder_terms::make_setting_key("ftp", "tls_mode");
+  const auto ca_key = elder_terms::make_setting_key("ftp", "ca_file");
+  auto global = elder_terms::create_settings_store(elder_terms::ftp_connection_setting_definitions());
+  auto *ini = g_key_file_new();
+  g_key_file_set_string(ini, "ftp", "tls_mode", "explict");
+  std::vector<std::string> warnings;
+  elder_terms::load_settings_store_from_key_file(&global, ini, &warnings);
+  g_key_file_unref(ini);
+  expect_true(elder_terms::setting_string_value_or_default(global, mode_key, "missing") == "explict",
+              "Invalid TLS mode must remain available for correction instead of becoming plain FTP");
+  auto connection = elder_terms::create_settings_store(elder_terms::ftp_connection_setting_definitions());
+  elder_terms::rebase_settings_store_fallbacks(&connection, global);
+  expect_true(elder_terms::setting_value_source(connection, mode_key) == elder_terms::SettingValueSource::global,
+              "Invalid global TLS setting must retain its source");
+  expect_true(elder_terms::set_explicit_setting_value(&connection, mode_key, std::string("explicit")),
+              "Valid connection override must correct invalid inherited TLS mode");
+  expect_true(elder_terms::ftp_connection_settings(connection).validation_errors.empty(),
+              "Valid override must clear the inherited connection error");
+  auto copy = connection;
+  elder_terms::clear_explicit_setting_value(&copy, mode_key);
+  expect_true(!elder_terms::ftp_connection_settings(copy).validation_errors.empty(),
+              "Clearing the override must restore the inherited connection error");
+  const auto path = temporary_config_path("invalid-ftps-roundtrip");
+  expect_true(save_settings(global, path).saved, "Invalid TLS settings must remain editable after saving");
+  const auto reloaded = load_settings(SettingsLoadOptions{.config_path = path, .startup_config_path = std::nullopt}, 1.0);
+  remove_config(path);
+  expect_true(!elder_terms::ftp_connection_settings(reloaded.store).validation_errors.empty(),
+              "Saving and reloading must not turn invalid TLS into plain FTP");
+  expect_true(elder_terms::setting_string_value_or_default(copy, mode_key, "missing") == "explict",
+              "Clearing the override must restore the invalid inherited setting");
+  expect_true(elder_terms::setting_string_value_or_default(connection, mode_key, "missing") == "explicit",
+              "Editing a copy must not mutate the original TLS settings");
+  expect_true(elder_terms::set_explicit_setting_value(&global, ca_key, std::string("/tmp/company.pem")),
+              "Absolute CA bundle must be accepted");
+  elder_terms::rebase_settings_store_fallbacks(&connection, global);
+  expect_true(elder_terms::set_explicit_setting_value(&connection, ca_key, std::string()),
+              "Empty explicit CA must select the system trust store");
+  expect_true(elder_terms::setting_has_explicit_value(connection, ca_key),
+              "System CA override must not disappear into inheritance");
+  expect_true(!elder_terms::set_explicit_setting_value(&connection, ca_key, std::string("relative.pem")),
+              "Relative CA paths must be rejected");
+}
+
+static void test_ftp_tls_range_and_inheritance() {
+  using namespace elder_terms;
+  auto global = create_settings_store(ftp_connection_setting_definitions());
+  auto *ini = g_key_file_new();
+  g_key_file_set_string(ini, "ftp", "tls_mode", "explicit");
+  g_key_file_set_string(ini, "ftp", "tls_min_version", "1.0");
+  g_key_file_set_string(ini, "ftp", "tls_max_version", "1.1");
+  g_key_file_set_string(ini, "ftp", "tls_compatibility", "openssl_legacy");
+  std::vector<std::string> warnings;
+  load_settings_store_from_key_file(&global, ini, &warnings);
+  g_key_file_unref(ini);
+  auto connection = create_settings_store(ftp_connection_setting_definitions());
+  rebase_settings_store_fallbacks(&connection, global);
+  expect_true(ftp_connection_settings(connection).validation_errors.empty(), "Inherited explicit legacy settings must be valid");
+  expect_true(set_explicit_setting_value(&connection, make_setting_key("ftp", "tls_min_version"), std::string("1.3")), "Valid TLS version must be editable");
+  expect_true(!ftp_connection_settings(connection).validation_errors.empty(), "An inherited maximum below the explicit minimum must fail");
+  expect_true(set_explicit_setting_value(&connection, make_setting_key("ftp", "tls_max_version"), std::string("default")), "An explicit backend maximum must replace the inherited cap");
+  expect_true(ftp_connection_settings(connection).validation_errors.empty(), "A corrected range must clear the validation error");
+  for (const auto &value : {"TLS_SHA256_SHA256", "TLS_SHA384_SHA384", "TLS_AES_128_GCM_SHA256:TLS_SHA256_SHA256"})
+    expect_true(!set_explicit_setting_value(&connection, ftp_tls13_cipher_list_setting_key(), std::string(value)), "Integrity-only TLS 1.3 suites must be rejected even with legacy compatibility");
+  for (const auto &value : {"SSLv2", "SSLv3", "", "1.4"})
+    expect_true(!set_explicit_setting_value(&connection, make_setting_key("ftp", "tls_min_version"), std::string(value)), "Unsupported protocol versions must be rejected");
+}
+
+static void test_ftp_tls_port_resolution() {
+  using namespace elder_terms;
+  auto global = create_settings_store(ftp_connection_setting_definitions());
+  auto connection = global;
+  expect_true(ftp_connection_settings(connection).port == 21, "Plain FTP defaults to port 21");
+  set_explicit_setting_value(&connection, ftp_tls_mode_setting_key(), std::string("implicit"));
+  expect_true(ftp_connection_settings(connection).port == 990, "Implicit FTPS defaults to port 990");
+  for (const gint64 port : {21, 990, 2121}) {
+    set_explicit_setting_value(&connection, ftp_port_setting_key(), port);
+    set_explicit_setting_value(&connection, ftp_tls_mode_setting_key(), std::string("explicit"));
+    expect_true(ftp_connection_settings(connection).port == port, "Mode changes retain explicit ports");
+    set_explicit_setting_value(&connection, ftp_tls_mode_setting_key(), std::string("implicit"));
+    expect_true(ftp_connection_settings(connection).port == port, "Implicit mode retains explicit ports");
+  }
+  clear_explicit_setting_value(&connection, ftp_port_setting_key());
+  expect_true(ftp_connection_settings(connection).port == 990, "Resetting the port restores the mode default");
+  set_explicit_setting_value(&global, ftp_port_setting_key(), gint64(21));
+  rebase_settings_store_fallbacks(&connection, global);
+  expect_true(ftp_connection_settings(connection).port == 21, "Global port 21 remains explicit for implicit FTPS");
+  set_explicit_setting_value(&global, ftp_port_setting_key(), gint64(2221));
+  rebase_settings_store_fallbacks(&connection, global);
+  expect_true(ftp_connection_settings(connection).port == 2221, "Global custom port is inherited");
+  clear_explicit_setting_value(&global, ftp_port_setting_key());
+  rebase_settings_store_fallbacks(&connection, global);
+  expect_true(ftp_connection_settings(connection).port == 990, "Removing global port restores mode default");
+}
+
 static void test_invalid_ftp_settings_fall_back_and_warn() {
   const std::filesystem::path path =
       temporary_config_path("invalid-ftp-settings");
@@ -2387,16 +2581,9 @@ static void test_public_setting_keys() {
               "scrollback_lines");
   expect_true(terminal_zoom_setting_key().name == "zoom",
               "terminal zoom key should use the zoom name");
-  expect_true(
-      terminal_font_primary_family_setting_key().section == "terminal" &&
-          terminal_font_primary_family_setting_key().name ==
-              "font_primary_family",
-      "primary font family key should use [terminal] font_primary_family");
-  expect_true(
-      terminal_font_fallback_family_setting_key().section == "terminal" &&
-          terminal_font_fallback_family_setting_key().name ==
-              "font_fallback_family",
-      "fallback font family key should use [terminal] font_fallback_family");
+  expect_true(terminal_font_families_setting_key().section == "terminal" &&
+                  terminal_font_families_setting_key().name == "font_families",
+              "the font list key should use [terminal] font_families");
   expect_true(terminal_auto_close_setting_key().name == "auto_close",
               "terminal auto_close key should use the auto_close name");
   expect_true(terminal_show_border_setting_key().section == "terminal" &&
@@ -4196,11 +4383,97 @@ static void test_regular_expression_reports_project_owned_matches() {
   elder_terms::destroy_regular_expression(regex);
 }
 
+static void test_webdav_settings_round_trip() {
+  auto store = create_default_settings(default_terminal_display_settings(1.0), "WebDAV");
+  expect_true(set_explicit_setting_value(&store, general_type_setting_key(),
+                                        std::string("webdav")),
+              "WebDAV must be selectable as an independent connection type");
+  expect_true(!terminal_connection_profile(store).has_value(),
+              "WebDAV must not start a terminal session");
+  expect_true(elder_terms::webdav_connection_settings(store).port == 443,
+              "HTTPS must default to port 443");
+  set_explicit_setting_value(&store, elder_terms::webdav_setting_key("scheme"), std::string("http"));
+  expect_true(elder_terms::webdav_connection_settings(store).port == 80,
+              "HTTP must default to port 80 when no port is configured");
+  auto globals = create_default_settings(default_terminal_display_settings(1.0), "Defaults");
+  set_explicit_setting_value(&globals, elder_terms::webdav_setting_key("port"), gint64{8080});
+  elder_terms::rebase_settings_store_fallbacks(&store, globals);
+  expect_true(elder_terms::webdav_connection_settings(store).port == 8080,
+              "A global port must take precedence over the scheme default");
+  set_explicit_setting_value(&store, elder_terms::webdav_setting_key("port"), gint64{8443});
+  expect_true(elder_terms::webdav_connection_settings(store).port == 8443,
+              "An explicit port must take precedence over a global port");
+  elder_terms::clear_explicit_setting_value(&store, elder_terms::webdav_setting_key("port"));
+  expect_true(!set_explicit_setting_value(&store, elder_terms::webdav_setting_key("base_path"), std::string("/dav/%2Fescape")),
+              "An encoded separator must not alter the WebDAV virtual root");
+  expect_true(!set_explicit_setting_value(&store, elder_terms::webdav_setting_key("base_path"), std::string("/dav/%2e%2e")),
+              "An encoded parent path must be rejected");
+  expect_true(!set_explicit_setting_value(&store, elder_terms::webdav_setting_key("idle_timeout_seconds"), gint64{0}),
+              "WebDAV idle timeout must remain bounded");
+  const std::vector<std::pair<std::string, std::string>> values{
+      {"scheme", "http"}, {"address", "dav.example.test"},
+      {"base_path", "/dav/"}, {"authentication", "digest"},
+      {"username", "alice"}, {"remote_directory", "/Documents"},
+      {"local_directory", "/tmp/downloads"}, {"ca_file", "/tmp/ca.pem"},
+      {"certificate_error_action", "prompt"}};
+  for (const auto &[name, value] : values) {
+    expect_true(set_explicit_setting_value(&store,
+                    elder_terms::make_setting_key("webdav", name), value),
+                "WebDAV setting must be accepted: " + name);
+  }
+  const auto path = temporary_config_path("webdav-round-trip");
+  expect_true(save_settings(store, path).saved, "WebDAV settings must be saved");
+  const auto loaded = load_settings({.config_path = path,
+                                    .startup_config_path = std::nullopt}, 1.0);
+  remove_config(path);
+  for (const auto &[name, value] : values) {
+    expect_true(elder_terms::setting_string_value_or_default(loaded.store,
+                    elder_terms::make_setting_key("webdav", name), "missing") == value,
+                "WebDAV setting must survive reload: " + name);
+  }
+}
+
+static void test_webdav_invalid_numeric_settings_remain_invalid_after_save() {
+  const auto path = temporary_config_path("webdav-invalid-number");
+  write_config(path, "[general]\ntype=webdav\n[webdav]\naddress=localhost\nport=not-a-number\n");
+  const auto loaded = load_settings({.config_path = path, .startup_config_path = std::nullopt}, 1.0);
+  expect_true(!elder_terms::webdav_connection_settings(loaded.store).validation_errors.empty(),
+              "Malformed WebDAV port must prevent connecting");
+  expect_true(save_settings(loaded.store, path).saved, "Unrelated edits may preserve invalid WebDAV input");
+  const auto reloaded = load_settings({.config_path = path, .startup_config_path = std::nullopt}, 1.0);
+  remove_config(path);
+  expect_true(!elder_terms::webdav_connection_settings(reloaded.store).validation_errors.empty(),
+              "Saving must not silently replace a malformed WebDAV port with a valid default");
+  auto inherited = create_default_settings(default_terminal_display_settings(1.0), "Inherited WebDAV");
+  elder_terms::rebase_settings_store_fallbacks(&inherited, reloaded.store);
+  expect_true(!elder_terms::webdav_connection_settings(inherited).validation_errors.empty(),
+              "An invalid inherited port must prevent connecting");
+  set_explicit_setting_value(&inherited, elder_terms::webdav_setting_key("port"), gint64{8443});
+  expect_true(elder_terms::webdav_connection_settings(inherited).validation_errors.empty(),
+              "A valid explicit port must replace the invalid inherited port");
+  elder_terms::clear_explicit_setting_value(&inherited, elder_terms::webdav_setting_key("port"));
+  expect_true(!elder_terms::webdav_connection_settings(inherited).validation_errors.empty(),
+              "Clearing an override must restore the inherited validation failure");
+  auto corrected = reloaded.store;
+  set_explicit_setting_value(&corrected, elder_terms::webdav_setting_key("port"), gint64{8443});
+  expect_true(save_settings(corrected, path).saved, "Corrected WebDAV settings must be saved");
+  const auto corrected_reload = load_settings({.config_path = path, .startup_config_path = std::nullopt}, 1.0);
+  remove_config(path);
+  expect_true(elder_terms::webdav_connection_settings(corrected_reload.store).validation_errors.empty() &&
+                  elder_terms::webdav_connection_settings(corrected_reload.store).port == 8443,
+              "Correcting a port must clear the retained malformed input");
+}
+
 } // namespace elder_terms_settings_test
 
 int main() {
   try {
+    elder_terms_settings_test::test_webdav_settings_round_trip();
+    elder_terms_settings_test::test_webdav_invalid_numeric_settings_remain_invalid_after_save();
+    elder_terms_settings_test::test_independent_inactive_indicator_color();
+    elder_terms_settings_test::test_terminal_font_list_round_trip_and_validation();
     elder_terms_settings_test::test_default_settings();
+    elder_terms_settings_test::test_terminal_indicator_color_round_trip_and_layering();
     elder_terms_settings_test::
         test_local_command_line_setting_round_trip_and_layering();
     elder_terms_settings_test::
@@ -4208,9 +4481,7 @@ int main() {
     elder_terms_settings_test::
         test_terminal_border_width_range_and_round_trip();
     elder_terms_settings_test::
-        test_terminal_font_family_settings_round_trip_and_layering();
-    elder_terms_settings_test::
-        test_terminal_font_family_defaults_override_global_fonts();
+        test_terminal_font_list_defaults_and_rebase();
     elder_terms_settings_test::
         test_terminal_bell_sound_validation_and_round_trip();
     elder_terms_settings_test::test_connection_name_settings();
@@ -4241,6 +4512,9 @@ int main() {
     elder_terms_settings_test::
         test_ftp_profile_uses_independent_endpoint_and_active_mode();
     elder_terms_settings_test::test_invalid_ftp_settings_fall_back_and_warn();
+    elder_terms_settings_test::test_ftp_tls_settings_preserve_invalid_input_and_inheritance();
+    elder_terms_settings_test::test_ftp_tls_port_resolution();
+    elder_terms_settings_test::test_ftp_tls_range_and_inheritance();
     elder_terms_settings_test::test_serial_profile();
     elder_terms_settings_test::test_serial_ignore_carrier_profile();
     elder_terms_settings_test::test_transfer_base_path_setting();

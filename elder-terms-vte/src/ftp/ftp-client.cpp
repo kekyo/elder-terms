@@ -1,1135 +1,837 @@
 #include "ftp-client.h"
-
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <unistd.h>
-
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <limits>
-#include <memory>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string>
-#include <string_view>
-#include <system_error>
-#include <utility>
-#include <vector>
+#include "curl-ftp-session.h"
+#include "ftp-metadata.h"
 
 #include <glib.h>
 
-#include "../terminal-sessions/tcp-connector.h"
-#include "ftp-protocol.h"
+#include <algorithm>
+#include <array>
+#include <mutex>
+#include <exception>
+#include <memory>
+#include <stdexcept>
+#include <string_view>
+#include <utility>
 
 namespace elder_terms {
 
-static constexpr std::size_t maximum_listing_size = 64U * 1024U * 1024U;
-static constexpr std::size_t maximum_listing_line_size = 64U * 1024U;
+static constexpr std::size_t control_limit = 64 * 1024;
+static constexpr std::size_t listing_limit = 64 * 1024 * 1024;
 
-class FtpStatusError final : public std::runtime_error {
-public:
-  int code;
-
-  FtpStatusError(int code, std::string message)
-      : std::runtime_error(std::move(message)), code(code) {
-  }
-};
-
-struct FtpAcceptedSocket {
-  int fd = -1;
-  sockaddr_storage peer{};
-  socklen_t peer_length = 0;
-};
-
-struct FtpAcceptStorage {
-  sockaddr_storage peer{};
-  socklen_t peer_length = sizeof(peer);
-};
-
-struct FtpDataEndpoint {
-  int connected_fd = -1;
-  int listener_fd = -1;
-};
-
-static void close_socket(int *fd) noexcept {
-  if (fd != nullptr && *fd >= 0) {
-    (void)::close(*fd);
-    *fd = -1;
+static void validate_argument(const std::string &value, const char *name,
+                              bool allow_empty) {
+  if ((!allow_empty && value.empty()) || !ftp_command_argument_is_safe(value)) {
+    throw std::invalid_argument(std::string("Invalid FTP ") + name);
   }
 }
 
-static std::string ftp_reply_summary(const FtpReply &reply) {
-  if (reply.lines.empty()) {
-    return "FTP status " + std::to_string(reply.code);
+static std::string_view trim_line(std::string_view line) {
+  while (!line.empty() && (line.front() == ' ' || line.front() == '\t')) {
+    line.remove_prefix(1);
   }
-  return reply.lines.back();
+  while (!line.empty() && (line.back() == '\r' || line.back() == '\n' ||
+                           line.back() == ' ' || line.back() == '\t')) {
+    line.remove_suffix(1);
+  }
+  return line;
 }
 
-static FtpStatusError ftp_status_error(const std::string &operation,
-                                       const FtpReply &reply) {
-  return FtpStatusError(
-      reply.code, operation + " failed: " + ftp_reply_summary(reply));
+static std::string path_name(const std::string &path) {
+  return path.substr(path.find_last_of('/') + 1);
 }
 
-static bool reply_is_positive_completion(const FtpReply &reply) {
-  return reply.code >= 200 && reply.code < 300;
+// Preserve dot components until the server resolves them. Local lexical
+// normalization would change paths traversing server-side directory aliases.
+static std::string absolute_path(const std::string &directory,
+                                 const std::string &path) {
+  auto result = path.empty() ? directory : path.front() == '/' ? path
+      : directory + (directory.ends_with('/') ? "" : "/") + path;
+  while (result.size() > 1 && result.ends_with('/')) result.pop_back();
+  return result;
 }
 
-static bool reply_is_positive_preliminary(const FtpReply &reply) {
-  return reply.code >= 100 && reply.code < 200;
-}
-
-static void require_positive_completion(const FtpReply &reply,
-                                        const std::string &operation) {
-  if (!reply_is_positive_completion(reply)) {
-    throw ftp_status_error(operation, reply);
-  }
-}
-
-static bool extension_is_unavailable(const FtpReply &reply) {
-  return reply.code == 500 || reply.code == 501 || reply.code == 502 ||
-         reply.code == 504 || reply.code == 522;
-}
-
-static bool socket_addresses_have_same_host(const sockaddr_storage &left,
-                                            const sockaddr_storage &right) {
-  if (left.ss_family != right.ss_family) {
-    return false;
-  }
-  if (left.ss_family == AF_INET) {
-    const auto *left_ipv4 = reinterpret_cast<const sockaddr_in *>(&left);
-    const auto *right_ipv4 = reinterpret_cast<const sockaddr_in *>(&right);
-    return std::memcmp(&left_ipv4->sin_addr, &right_ipv4->sin_addr,
-                       sizeof(left_ipv4->sin_addr)) == 0;
-  }
-  if (left.ss_family == AF_INET6) {
-    const auto *left_ipv6 = reinterpret_cast<const sockaddr_in6 *>(&left);
-    const auto *right_ipv6 = reinterpret_cast<const sockaddr_in6 *>(&right);
-    return std::memcmp(&left_ipv6->sin6_addr, &right_ipv6->sin6_addr,
-                       sizeof(left_ipv6->sin6_addr)) == 0;
-  }
-  return false;
-}
-
-static void set_socket_port(sockaddr_storage *address, std::uint16_t port) {
-  if (address->ss_family == AF_INET) {
-    reinterpret_cast<sockaddr_in *>(address)->sin_port = htons(port);
-    return;
-  }
-  if (address->ss_family == AF_INET6) {
-    reinterpret_cast<sockaddr_in6 *>(address)->sin6_port = htons(port);
-    return;
-  }
-  throw std::runtime_error("FTP control connection has an unsupported family");
-}
-
-static std::string numeric_socket_host(const sockaddr_storage &address) {
-  std::array<char, INET6_ADDRSTRLEN> buffer{};
-  const void *bytes = nullptr;
-  if (address.ss_family == AF_INET) {
-    bytes = &reinterpret_cast<const sockaddr_in *>(&address)->sin_addr;
-  } else if (address.ss_family == AF_INET6) {
-    bytes = &reinterpret_cast<const sockaddr_in6 *>(&address)->sin6_addr;
-  } else {
-    throw std::runtime_error("FTP socket has an unsupported address family");
-  }
-  if (::inet_ntop(address.ss_family, bytes, buffer.data(), buffer.size()) ==
-      nullptr) {
-    throw std::system_error(errno, std::generic_category(),
-                            "FTP address formatting failed");
-  }
-  return buffer.data();
-}
-
-static std::uint16_t socket_port(const sockaddr_storage &address) {
-  if (address.ss_family == AF_INET) {
-    return ntohs(reinterpret_cast<const sockaddr_in *>(&address)->sin_port);
-  }
-  if (address.ss_family == AF_INET6) {
-    return ntohs(reinterpret_cast<const sockaddr_in6 *>(&address)->sin6_port);
-  }
-  throw std::runtime_error("FTP socket has an unsupported address family");
-}
-
-static std::string ftp_path_name(std::string path) {
-  while (path.size() > 1 && path.back() == '/') {
-    path.pop_back();
-  }
-  const std::size_t separator = path.find_last_of('/');
-  return separator == std::string::npos ? path : path.substr(separator + 1);
-}
-
-static std::string ftp_child_path(const std::string &directory,
-                                  const std::string &name) {
-  if (name.empty() || name == "." || name == ".." ||
-      name.find('/') != std::string::npos ||
-      !ftp_command_argument_is_safe(name) ||
-      !g_utf8_validate(name.data(), static_cast<gssize>(name.size()), nullptr)) {
-    throw std::runtime_error(
-        "FTP server returned an invalid directory entry name");
-  }
-  if (directory == "/") {
-    return "/" + name;
-  }
-  if (directory.empty() || directory == ".") {
-    return directory.empty() ? name : "./" + name;
-  }
-  return directory.back() == '/' ? directory + name
-                                 : directory + "/" + name;
-}
-
-static void validate_ftp_argument(const std::string &value,
-                                  const char *description,
-                                  bool allow_empty) {
-  if ((!allow_empty && value.empty()) ||
-      !ftp_command_argument_is_safe(value)) {
-    throw std::invalid_argument(std::string("Invalid FTP ") + description);
-  }
-}
-
-static RemoteFileType portable_file_type(FtpDirectoryEntryType type) {
-  switch (type) {
-  case FtpDirectoryEntryType::regular:
-    return RemoteFileType::regular;
-  case FtpDirectoryEntryType::directory:
-    return RemoteFileType::directory;
-  case FtpDirectoryEntryType::current_directory:
-  case FtpDirectoryEntryType::parent_directory:
-  case FtpDirectoryEntryType::other:
-    return RemoteFileType::other;
-  }
-  return RemoteFileType::other;
-}
-
-static RemoteFileAttributes
-portable_attributes(const FtpDirectoryEntry &entry, std::string path,
-                    std::string name) {
-  return {
-      .name = std::move(name),
-      .path = std::move(path),
-      .type = portable_file_type(entry.type),
-      .size = entry.size,
-      .permissions = std::nullopt,
-      .access_time_unix_seconds = std::nullopt,
-      .modification_time_unix_seconds =
-          entry.modification_time_unix_seconds,
-  };
-}
-
-class FtpSessionState final {
-private:
-  cardio::promise<int> open_socket_async(
-      int family, cardio::cancellation cancellation) {
-    return io.submit<int>(
-        [family](::io_uring_sqe *sqe) {
-          ::io_uring_prep_socket(
-              sqe, family, SOCK_STREAM | SOCK_CLOEXEC, 0, 0);
-        },
-        [](cardio::io_uring_completion completion) {
-          if (completion.result < 0) {
-            throw std::system_error(-completion.result,
-                                    std::generic_category(),
-                                    "FTP socket creation failed");
-          }
-          return completion.result;
-        },
-        std::move(cancellation));
-  }
-
-  cardio::promise<void> connect_socket_async(
-      int fd, sockaddr_storage address, socklen_t length,
-      cardio::cancellation cancellation) {
-    auto holder = std::make_shared<sockaddr_storage>(address);
-    co_await io.submit<void>(
-        [fd, holder, length](::io_uring_sqe *sqe) {
-          ::io_uring_prep_connect(
-              sqe, fd,
-              reinterpret_cast<const sockaddr *>(holder.get()), length);
-        },
-        [holder](cardio::io_uring_completion completion) {
-          (void)holder;
-          if (completion.result < 0) {
-            throw std::system_error(-completion.result,
-                                    std::generic_category(),
-                                    "FTP data connection failed");
-          }
-        },
-        std::move(cancellation));
-  }
-
-  cardio::promise<int> connect_data_socket_async(
-      std::uint16_t port, cardio::cancellation cancellation) {
-    sockaddr_storage endpoint = control_peer;
-    set_socket_port(&endpoint, port);
-    int fd = co_await open_socket_async(endpoint.ss_family, cancellation);
-    try {
-      co_await connect_socket_async(
-          fd, endpoint, control_peer_length, cancellation);
-      co_return fd;
-    } catch (...) {
-      close_socket(&fd);
-      throw;
-    }
-  }
-
-  cardio::promise<FtpDataEndpoint> prepare_passive_endpoint_async(
-      cardio::cancellation cancellation) {
-    const FtpReply epsv = co_await command_async("EPSV", cancellation);
-    if (epsv.code == 229) {
-      const std::uint16_t port = parse_ftp_epsv_port(epsv);
-      co_return FtpDataEndpoint{
-          .connected_fd =
-              co_await connect_data_socket_async(port, cancellation),
-          .listener_fd = -1,
-      };
-    }
-    if (control_peer.ss_family != AF_INET ||
-        !extension_is_unavailable(epsv)) {
-      throw ftp_status_error("FTP EPSV", epsv);
-    }
-
-    const FtpReply pasv = co_await command_async("PASV", cancellation);
-    if (pasv.code != 227) {
-      throw ftp_status_error("FTP PASV", pasv);
-    }
-    const FtpPassiveEndpoint advertised = parse_ftp_pasv_endpoint(pasv);
-    // RFC 2577 describes PASV address substitution attacks. The control peer
-    // is authoritative; only the advertised port is used.
-    co_return FtpDataEndpoint{
-        .connected_fd =
-            co_await connect_data_socket_async(advertised.port, cancellation),
-        .listener_fd = -1,
-    };
-  }
-
-  cardio::promise<int> create_active_listener_async(
-      cardio::cancellation cancellation) {
-    int fd = co_await open_socket_async(control_local.ss_family, cancellation);
-    try {
-      const int enabled = 1;
-      if (::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enabled,
-                       sizeof(enabled)) != 0) {
-        throw std::system_error(errno, std::generic_category(),
-                                "FTP active setsockopt failed");
-      }
-      sockaddr_storage listener_address = control_local;
-      set_socket_port(&listener_address, 0);
-      if (::bind(fd,
-                 reinterpret_cast<const sockaddr *>(&listener_address),
-                 control_local_length) != 0 ||
-          ::listen(fd, 1) != 0) {
-        throw std::system_error(errno, std::generic_category(),
-                                "FTP active listener failed");
-      }
-      co_return fd;
-    } catch (...) {
-      close_socket(&fd);
-      throw;
-    }
-  }
-
-  cardio::promise<FtpDataEndpoint> prepare_active_endpoint_async(
-      cardio::cancellation cancellation) {
-    int listener_fd = co_await create_active_listener_async(cancellation);
-    try {
-      sockaddr_storage address{};
-      socklen_t length = sizeof(address);
-      if (::getsockname(listener_fd, reinterpret_cast<sockaddr *>(&address),
-                        &length) != 0) {
-        throw std::system_error(errno, std::generic_category(),
-                                "FTP active getsockname failed");
-      }
-      const std::string host = numeric_socket_host(address);
-      const std::uint16_t port = socket_port(address);
-      const int protocol = address.ss_family == AF_INET ? 1 : 2;
-      const FtpReply eprt = co_await command_async(
-          "EPRT |" + std::to_string(protocol) + "|" + host + "|" +
-              std::to_string(port) + "|",
-          cancellation);
-      if (!reply_is_positive_completion(eprt)) {
-        if (address.ss_family != AF_INET ||
-            !extension_is_unavailable(eprt)) {
-          throw ftp_status_error("FTP EPRT", eprt);
-        }
-        const auto *ipv4 = reinterpret_cast<const sockaddr_in *>(&address);
-        const auto *octets = reinterpret_cast<const unsigned char *>(
-            &ipv4->sin_addr.s_addr);
-        const std::string port_command =
-            "PORT " + std::to_string(octets[0]) + "," +
-            std::to_string(octets[1]) + "," +
-            std::to_string(octets[2]) + "," +
-            std::to_string(octets[3]) + "," +
-            std::to_string(port / 256U) + "," +
-            std::to_string(port % 256U);
-        const FtpReply port_reply =
-            co_await command_async(port_command, cancellation);
-        require_positive_completion(port_reply, "FTP PORT");
-      }
-      co_return FtpDataEndpoint{
-          .connected_fd = -1,
-          .listener_fd = listener_fd,
-      };
-    } catch (...) {
-      close_socket(&listener_fd);
-      throw;
-    }
-  }
-
-  cardio::promise<FtpAcceptedSocket> accept_socket_async(
-      int listener_fd, cardio::cancellation cancellation) {
-    auto holder = std::make_shared<FtpAcceptStorage>();
-    co_return co_await io.submit<FtpAcceptedSocket>(
-        [listener_fd, holder](::io_uring_sqe *sqe) {
-          ::io_uring_prep_accept(
-              sqe, listener_fd,
-              reinterpret_cast<sockaddr *>(&holder->peer),
-              &holder->peer_length, SOCK_CLOEXEC);
-        },
-        [holder](cardio::io_uring_completion completion) {
-          if (completion.result < 0) {
-            throw std::system_error(-completion.result,
-                                    std::generic_category(),
-                                    "FTP active accept failed");
-          }
-          return FtpAcceptedSocket{
-              .fd = completion.result,
-              .peer = holder->peer,
-              .peer_length = holder->peer_length,
-          };
-        },
-        std::move(cancellation));
-  }
-
-public:
-  cardio::io_uring io{64};
-  cardio::primitives::mutex operation_mutex;
-  FtpReplyParser reply_parser;
-  int control_fd = -1;
-  sockaddr_storage control_peer{};
-  socklen_t control_peer_length = 0;
-  sockaddr_storage control_local{};
-  socklen_t control_local_length = 0;
-  FtpDataConnectionMode data_connection_mode;
-  bool has_mlsd = false;
-  std::atomic_bool transfer_active = false;
-
-  explicit FtpSessionState(FtpDataConnectionMode mode)
-      : data_connection_mode(mode) {
-  }
-
-  ~FtpSessionState() {
-    close_control();
-  }
-
-  FtpSessionState(const FtpSessionState &) = delete;
-  FtpSessionState &operator=(const FtpSessionState &) = delete;
-
-  void close_control() noexcept {
-    if (control_fd >= 0) {
-      (void)::shutdown(control_fd, SHUT_RDWR);
-      close_socket(&control_fd);
-    }
-  }
-
-  void capture_control_endpoints() {
-    control_peer_length = sizeof(control_peer);
-    if (::getpeername(control_fd,
-                      reinterpret_cast<sockaddr *>(&control_peer),
-                      &control_peer_length) != 0) {
-      throw std::system_error(errno, std::generic_category(),
-                              "FTP getpeername failed");
-    }
-    control_local_length = sizeof(control_local);
-    if (::getsockname(control_fd,
-                      reinterpret_cast<sockaddr *>(&control_local),
-                      &control_local_length) != 0) {
-      throw std::system_error(errno, std::generic_category(),
-                              "FTP getsockname failed");
-    }
-  }
-
-  cardio::promise<void> write_all_async(
-      int fd, std::span<const std::byte> bytes,
-      cardio::cancellation cancellation) {
-    std::size_t offset = 0;
-    while (offset < bytes.size()) {
-      const std::size_t count = co_await cardio::io_urings::write(
-          io, fd, bytes.subspan(offset), cancellation);
-      if (count == 0) {
-        throw std::runtime_error("FTP socket write made no progress");
-      }
-      offset += count;
-    }
-  }
-
-  cardio::promise<void> send_command_async(
-      std::string command, cardio::cancellation cancellation) {
-    if (control_fd < 0) {
-      throw std::runtime_error("FTP control connection is closed");
-    }
-    command += "\r\n";
-    const auto *data = reinterpret_cast<const std::byte *>(command.data());
-    co_await write_all_async(
-        control_fd, std::span<const std::byte>(data, command.size()),
-        std::move(cancellation));
-  }
-
-  cardio::promise<FtpReply> receive_reply_async(
-      cardio::cancellation cancellation) {
-    for (;;) {
-      std::optional<FtpReply> ready = reply_parser.take_reply();
-      if (ready.has_value()) {
-        co_return std::move(*ready);
-      }
-      if (control_fd < 0) {
-        throw std::runtime_error("FTP control connection is closed");
-      }
-      std::array<std::byte, 4096> buffer{};
-      const std::size_t count = co_await cardio::io_urings::read(
-          io, control_fd, buffer, cancellation);
-      if (count == 0) {
-        reply_parser.finish();
-        throw std::runtime_error("FTP control connection ended");
-      }
-      reply_parser.feed(std::string_view(
-          reinterpret_cast<const char *>(buffer.data()), count));
-    }
-  }
-
-  cardio::promise<FtpReply> command_async(
-      std::string command, cardio::cancellation cancellation) {
-    co_await send_command_async(std::move(command), cancellation);
-    co_return co_await receive_reply_async(std::move(cancellation));
-  }
-
-  cardio::promise<int> start_data_command_async(
-      std::string command, cardio::cancellation cancellation) {
-    FtpDataEndpoint endpoint;
-    if (data_connection_mode == FtpDataConnectionMode::passive) {
-      endpoint =
-          co_await prepare_passive_endpoint_async(cancellation);
+static std::string encode_path(const std::string &path) {
+  static constexpr char hex[] = "0123456789ABCDEF";
+  std::string result;
+  for (const unsigned char ch : path) {
+    if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+        (ch >= '0' && ch <= '9') || ch == '/' || ch == '-' || ch == '_' ||
+        ch == '.' || ch == '~') {
+      result += static_cast<char>(ch);
     } else {
-      endpoint =
-          co_await prepare_active_endpoint_async(cancellation);
-    }
-    try {
-      const FtpReply preliminary =
-          co_await command_async(std::move(command), cancellation);
-      if (!reply_is_positive_preliminary(preliminary)) {
-        throw ftp_status_error("FTP data command", preliminary);
-      }
-      if (endpoint.connected_fd >= 0) {
-        co_return std::exchange(endpoint.connected_fd, -1);
-      }
-      FtpAcceptedSocket accepted =
-          co_await accept_socket_async(endpoint.listener_fd, cancellation);
-      close_socket(&endpoint.listener_fd);
-      if (!socket_addresses_have_same_host(accepted.peer, control_peer)) {
-        close_socket(&accepted.fd);
-        throw std::runtime_error(
-            "FTP active data connection came from a different host");
-      }
-      co_return accepted.fd;
-    } catch (...) {
-      close_socket(&endpoint.connected_fd);
-      close_socket(&endpoint.listener_fd);
-      throw;
+      result += '%';
+      result += hex[ch >> 4];
+      result += hex[ch & 15];
     }
   }
+  return result;
+}
 
-  cardio::promise<void> finish_data_command_async(
-      cardio::cancellation cancellation) {
-    const FtpReply completion =
-        co_await receive_reply_async(std::move(cancellation));
-    if (!reply_is_positive_completion(completion)) {
-      throw std::runtime_error(
-          "FTP data transfer did not complete: " +
-          ftp_reply_summary(completion));
+static std::string endpoint_url(const FtpConnectionSettings &connection) {
+  const auto url = std::unique_ptr<CURLU, decltype(&curl_url_cleanup)>(
+      curl_url(), curl_url_cleanup);
+  if (!url) throw std::bad_alloc();
+  const auto set = [&](CURLUPart part, const std::string &value) {
+    const auto code = curl_url_set(url.get(), part, value.c_str(), 0);
+    if (code != CURLUE_OK) {
+      throw std::invalid_argument(std::string("Invalid FTP endpoint: ") +
+                                  curl_url_strerror(code));
     }
+  };
+  set(CURLUPART_SCHEME, connection.tls_mode == FtpTlsMode::implicit_tls ? "ftps" : "ftp");
+  const auto &address = connection.address;
+  set(CURLUPART_HOST, address.find(':') != std::string::npos &&
+                         !address.starts_with('[') ? "[" + address + "]" : address);
+  set(CURLUPART_PORT, std::to_string(connection.port));
+  set(CURLUPART_PATH, "/");
+  char *text = nullptr;
+  const auto code = curl_url_get(url.get(), CURLUPART_URL, &text, 0);
+  const auto owned = std::unique_ptr<char, decltype(&curl_free)>(text, curl_free);
+  if (code != CURLUE_OK) {
+    throw std::invalid_argument(std::string("Invalid FTP endpoint: ") +
+                                curl_url_strerror(code));
+  }
+  return text;
+}
+
+struct ControlLines {
+  std::size_t size = 0;
+  std::vector<std::string> lines;
+
+  void receive(std::string_view line) {
+    if (line.size() > control_limit - size) {
+      throw std::runtime_error("FTP control response exceeds its limit");
+    }
+    size += line.size();
+    while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) {
+      line.remove_suffix(1);
+    }
+    lines.emplace_back(line);
   }
 
-  cardio::promise<std::string> read_data_command_async(
-      std::string command, cardio::cancellation cancellation) {
-    int data_fd = co_await start_data_command_async(
-        std::move(command), cancellation);
-    std::string data;
-    try {
-      std::array<std::byte, 16384> buffer{};
-      for (;;) {
-        const std::size_t count = co_await cardio::io_urings::read(
-            io, data_fd, buffer, cancellation);
-        if (count == 0) {
-          break;
+  bool feature(std::string_view name) const {
+    return std::any_of(lines.begin(), lines.end(), [&](const auto &text) {
+      const auto line = trim_line(text);
+      return line.size() >= name.size() &&
+          g_ascii_strncasecmp(line.data(), name.data(), name.size()) == 0 &&
+          (line.size() == name.size() || line[name.size()] == ' ');
+    });
+  }
+
+  std::string working_directory() const {
+    for (auto line = lines.rbegin(); line != lines.rend(); ++line) {
+      if (line->starts_with("257 ")) {
+        auto path = parse_ftp_pwd_path(*line);
+        validate_argument(path, "server directory", false);
+        if (!path.starts_with('/')) {
+          throw std::runtime_error("FTP server returned a nonabsolute directory");
         }
-        if (data.size() > maximum_listing_size - count) {
-          throw std::runtime_error("FTP directory listing exceeds size limit");
-        }
-        data.append(reinterpret_cast<const char *>(buffer.data()), count);
+        return absolute_path("/", path);
       }
-      close_socket(&data_fd);
-      co_await finish_data_command_async(std::move(cancellation));
-      co_return data;
-    } catch (...) {
-      close_socket(&data_fd);
-      throw;
     }
+    throw std::runtime_error("FTP PWD response contained no directory");
   }
 };
 
-static std::vector<std::string_view> ftp_listing_lines(
-    const std::string &listing) {
-  std::vector<std::string_view> result;
-  std::size_t begin = 0;
-  while (begin < listing.size()) {
-    const std::size_t newline = listing.find('\n', begin);
-    const std::size_t end =
-        newline == std::string::npos ? listing.size() : newline;
-    std::size_t content_end = end;
-    if (content_end > begin && listing[content_end - 1] == '\r') {
-      --content_end;
+static bool command_unavailable(long code) {
+  return code == 500 || code == 501 || code == 502 || code == 504 || code == 522;
+}
+
+static bool ordinary_refusal(CURLcode code) {
+  return code == CURLE_QUOTE_ERROR || code == CURLE_REMOTE_ACCESS_DENIED ||
+      code == CURLE_REMOTE_FILE_NOT_FOUND || code == CURLE_FTP_COULDNT_RETR_FILE ||
+      code == CURLE_UPLOAD_FAILED;
+}
+
+static std::runtime_error operation_error(const char *name,
+                                         const CurlFtpResult &result) {
+  return std::runtime_error(std::string(name) + " failed (FTP " +
+      std::to_string(result.response_code) + ", curl " +
+      std::to_string(result.code) + "): " +
+      (result.error.empty() ? curl_easy_strerror(result.code) : result.error));
+}
+
+static void require_success(const char *name, const CurlFtpResult &result) {
+  if (result.code != CURLE_OK) throw operation_error(name, result);
+}
+
+static RemoteFileAttributes attributes(const FtpDirectoryEntry &entry,
+                                       std::string path, std::string name) {
+  return {.name = std::move(name), .path = std::move(path),
+          .type = entry.type == FtpDirectoryEntryType::regular
+              ? RemoteFileType::regular
+              : entry.type == FtpDirectoryEntryType::directory
+                  ? RemoteFileType::directory : RemoteFileType::other,
+          .size = entry.size, .permissions = std::nullopt,
+          .access_time_unix_seconds = std::nullopt,
+          .modification_time_unix_seconds = entry.modification_time_unix_seconds};
+}
+
+static RemoteDirectorySnapshot directory_snapshot(
+    std::string directory, const std::string &listing, bool machine_readable) {
+  RemoteDirectorySnapshot result{.canonical_path = std::move(directory), .entries = {}};
+  std::size_t offset = 0;
+  while (offset < listing.size()) {
+    const auto end = listing.find('\n', offset);
+    const auto length = (end == std::string::npos ? listing.size() : end) - offset;
+    if (length > control_limit) throw std::runtime_error("FTP listing line is too long");
+    auto line = std::string_view(listing).substr(offset, length);
+    if (line.ends_with('\r')) line.remove_suffix(1);
+    offset += length + 1;
+    const auto entry = machine_readable ? parse_ftp_mlsd_entry(line)
+                                       : parse_ftp_list_entry(line);
+    if (!entry) continue;
+    if (entry->type == FtpDirectoryEntryType::current_directory ||
+        entry->type == FtpDirectoryEntryType::parent_directory ||
+        entry->name == "." || entry->name == "..") continue;
+    const auto &name = entry->name;
+    if (name.empty() || name.find('/') != std::string::npos ||
+        !ftp_command_argument_is_safe(name) ||
+        !g_utf8_validate(name.data(), static_cast<gssize>(name.size()), nullptr)) {
+      throw std::runtime_error("FTP server returned an invalid directory entry name");
     }
-    if (content_end - begin > maximum_listing_line_size) {
-      throw std::runtime_error("FTP directory listing line exceeds size limit");
-    }
-    if (content_end > begin) {
-      result.emplace_back(listing.data() + begin, content_end - begin);
-    }
-    if (newline == std::string::npos) {
-      break;
-    }
-    begin = newline + 1;
+    result.entries.push_back(attributes(*entry, absolute_path(result.canonical_path, name), name));
   }
+  std::sort(result.entries.begin(), result.entries.end(),
+            [](const auto &left, const auto &right) { return left.name < right.name; });
   return result;
 }
 
-static std::vector<FtpDirectoryEntry>
-parse_ftp_listing(const std::string &listing, bool machine_readable) {
-  std::vector<FtpDirectoryEntry> result;
-  for (const std::string_view line : ftp_listing_lines(listing)) {
-    std::optional<FtpDirectoryEntry> entry =
-        machine_readable ? parse_ftp_mlsd_entry(line)
-                         : parse_ftp_list_entry(line);
-    if (entry.has_value()) {
-      result.push_back(std::move(*entry));
-    }
-  }
-  return result;
-}
+// State used by the caller dispatcher. Only request callbacks access their
+// private response buffers on the worker, until perform_async has completed.
+struct CurlStream;
 
-static std::string_view trim_ascii_space(std::string_view value) {
-  while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) {
-    value.remove_prefix(1);
-  }
-  while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) {
-    value.remove_suffix(1);
-  }
-  return value;
-}
+struct CurlClientState {
+  std::shared_ptr<CurlFtpSession> session;
+  std::string base_url;
+  std::string directory;
+  cardio::primitives::mutex operations;
+  bool authenticating = true;
+  bool has_mlsd = false;
+  bool has_mlst = false;
+  bool failed = false;
+  bool stopping = false;
+  bool transferring = false;
+  std::weak_ptr<CurlStream> active_stream;
 
-static bool feature_line_starts_with(std::string_view line,
-                                     std::string_view feature) {
-  line = trim_ascii_space(line);
-  if (line.size() < feature.size()) {
-    return false;
-  }
-  for (std::size_t index = 0; index < feature.size(); ++index) {
-    const unsigned char character =
-        static_cast<unsigned char>(line[index]);
-    if (static_cast<char>(g_ascii_toupper(character)) != feature[index]) {
-      return false;
-    }
-  }
-  return line.size() == feature.size() || line[feature.size()] == ' ' ||
-         line[feature.size()] == ';';
-}
-
-class FtpFileReader final : public RemoteFileReader {
-private:
-  std::shared_ptr<FtpSessionState> state;
-  int data_fd;
-  cardio::primitives::lock_handle operation_lock;
-  bool completed = false;
-
-  void abandon() noexcept {
-    close_socket(&data_fd);
-    if (!completed) {
-      state->close_control();
-      completed = true;
-    }
-    operation_lock.release();
+  void require_open() const {
+    if (stopping || failed) throw std::runtime_error("FTP session is closed");
   }
 
-public:
-  FtpFileReader(std::shared_ptr<FtpSessionState> state, int data_fd,
-                cardio::primitives::lock_handle operation_lock)
-      : state(std::move(state)), data_fd(data_fd),
-        operation_lock(std::move(operation_lock)) {
+  std::string file_url(const std::string &path, bool is_directory) const {
+    // The extra slash selects the server root instead of the login directory.
+    auto result = base_url + encode_path(path);
+    if (is_directory && !result.ends_with('/')) result += '/';
+    return result;
   }
 
-  ~FtpFileReader() override {
-    abandon();
-  }
-
-  cardio::promise<std::size_t>
-  read_async(std::span<std::byte> buffer,
-             cardio::cancellation cancellation) override {
-    if (completed || buffer.empty()) {
-      co_return 0;
-    }
+  cardio::promise<CurlFtpResult> perform_async(
+      CurlFtpRequest request, cardio::cancellation cancellation) {
+    require_open();
+    CurlFtpResult result;
     try {
-      const std::size_t count = co_await cardio::io_urings::read(
-          state->io, data_fd, buffer, cancellation);
-      if (count != 0) {
+      result = co_await session->perform_async(std::move(request), cancellation);
+    } catch (...) {
+      failed = true;
+      throw;
+    }
+    if (result.code != CURLE_OK && !ordinary_refusal(result.code) && !result.certificate_accepted) failed = true;
+    co_return result;
+  }
+
+  cardio::promise<CurlFtpResult> command_async(
+      std::vector<std::string> commands, std::shared_ptr<ControlLines> response,
+      cardio::cancellation cancellation) {
+    CurlFtpRequest request;
+    request.url = base_url;
+    request.quote = std::move(commands);
+    request.no_body = true;
+    request.initial_authentication = authenticating;
+    request.header = [response](std::string_view line) { response->receive(line); };
+    co_return co_await perform_async(std::move(request), cancellation);
+  }
+
+  cardio::promise<RemoteDirectorySnapshot> list_async(
+      std::string path, cardio::cancellation cancellation) {
+    for (;;) {
+      auto headers = std::make_shared<ControlLines>();
+      CurlFtpRequest probe;
+      probe.url = file_url(path, true);
+      probe.no_body = true;
+      probe.prequote = {"PWD"};
+      probe.header = [headers](std::string_view line) { headers->receive(line); };
+      const auto inspected = co_await perform_async(std::move(probe), cancellation);
+      require_success("FTP directory location", inspected);
+      const auto canonical = headers->working_directory();
+      auto listing = std::make_shared<std::string>();
+      CurlFtpRequest request;
+      request.url = file_url(path, true);
+      request.custom_request = has_mlsd ? "MLSD" : "LIST";
+      request.receive = [listing](std::span<const std::byte> bytes) {
+        if (bytes.size() > listing_limit - listing->size()) {
+          throw std::runtime_error("FTP directory listing exceeds its limit");
+        }
+        listing->append(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+        return bytes.size();
+      };
+      const auto result = co_await perform_async(std::move(request), cancellation);
+      if (has_mlsd && command_unavailable(result.response_code) &&
+          result.code == CURLE_FTP_COULDNT_RETR_FILE) {
+        has_mlsd = false;
+        continue;
+      }
+      require_success("FTP directory listing", result);
+      // Curl can return CURLE_OK for LIST 450 without receiving a listing.
+      // An empty directory still requires a successful final transfer reply.
+      if (result.response_code != 226 && result.response_code != 250) {
+        throw operation_error("FTP directory listing", result);
+      }
+      co_return directory_snapshot(canonical, *listing, has_mlsd);
+    }
+  }
+
+  cardio::promise<std::optional<RemoteFileAttributes>> stat_async(
+      std::string path, cardio::cancellation cancellation) {
+    std::optional<CurlFtpResult> refusal;
+    if (has_mlst) {
+      auto response = std::make_shared<ControlLines>();
+      std::vector<std::string> commands{"MLST " + path};
+      const auto result = co_await command_async(std::move(commands), response, cancellation);
+      if (result.code == CURLE_OK) {
+        for (const auto &line : response->lines) {
+          const auto parsed = parse_ftp_mlsd_entry(trim_line(line));
+          if (parsed) co_return attributes(*parsed, path, path_name(path));
+        }
+        throw std::runtime_error("FTP MLST response contained no facts");
+      }
+      if (command_unavailable(result.response_code) && result.code == CURLE_QUOTE_ERROR) {
+        has_mlst = false;
+      } else if (result.response_code == 550 && result.code == CURLE_QUOTE_ERROR) {
+        refusal = result;
+      } else {
+        throw operation_error("FTP MLST", result);
+      }
+    }
+    if (path == "/") {
+      if (refusal) throw operation_error("FTP MLST", *refusal);
+      throw std::runtime_error("FTP server does not support MLST for the root item");
+    }
+    const auto slash = path.find_last_of('/');
+    const auto parent = slash == 0 ? "/" : path.substr(0, slash);
+    const auto name = path_name(path);
+    const auto snapshot = co_await list_async(parent, cancellation);
+    const auto found = std::find_if(snapshot.entries.begin(), snapshot.entries.end(),
+                                   [&name](const auto &entry) { return entry.name == name; });
+    if (found == snapshot.entries.end()) co_return std::nullopt;
+    if (refusal) throw operation_error("FTP MLST", *refusal);
+    auto result = *found;
+    result.path = path;
+    co_return result;
+  }
+};
+
+struct CurlStream {
+  std::shared_ptr<CurlClientState> client;
+  cardio::primitives::lock_handle operation;
+  cardio::primitives::mutex calls;
+  cardio::cancellation_source cancellation;
+  std::mutex mutex;
+  cardio::primitives::conditional changed;
+  std::array<std::byte, 256 * 1024> buffer{};
+  std::size_t begin = 0;
+  std::size_t count = 0;
+  bool ready = false;
+  bool input_ended = false;
+  bool finished = false;
+  bool abandoned = false;
+  bool acknowledged = false;
+  std::exception_ptr failure;
+
+  CurlStream(std::shared_ptr<CurlClientState> client,
+             cardio::primitives::lock_handle operation)
+      : client(std::move(client)), operation(std::move(operation)) {}
+
+  // Only the caller dispatcher acknowledges or abandons a logical operation.
+  // The worker never releases this lock or touches the client's mutable state.
+  void acknowledge() {
+    if (acknowledged) return;
+    acknowledged = true;
+    client->active_stream.reset();
+    operation.release();
+  }
+
+  void abandon() {
+    if (acknowledged) return;
+    bool done;
+    {
+      const auto lock = std::lock_guard(mutex);
+      abandoned = true;
+      done = finished;
+    }
+    client->failed = true;
+    (void)cancellation.cancel();
+    client->session->resume();
+    if (done) acknowledge();
+    changed.trigger();
+  }
+
+  void require_available() const {
+    if (failure) std::rethrow_exception(failure);
+    if (abandoned) throw cardio::canceled_exception();
+  }
+
+  void append(std::span<const std::byte> bytes) {
+    const auto end = (begin + count) % buffer.size();
+    const auto first = std::min(bytes.size(), buffer.size() - end);
+    std::copy_n(bytes.data(), first, buffer.data() + end);
+    std::copy_n(bytes.data() + first, bytes.size() - first, buffer.data());
+    count += bytes.size();
+  }
+
+  std::size_t take(std::span<std::byte> bytes) {
+    const auto size = std::min(bytes.size(), count);
+    const auto first = std::min(size, buffer.size() - begin);
+    std::copy_n(buffer.data() + begin, first, bytes.data());
+    std::copy_n(buffer.data(), size - first, bytes.data() + first);
+    begin = (begin + size) % buffer.size();
+    count -= size;
+    return size;
+  }
+
+  std::size_t receive(std::span<const std::byte> bytes) {
+    {
+      const auto lock = std::lock_guard(mutex);
+      if (abandoned) return CURL_WRITEFUNC_ERROR;
+      if (bytes.size() > buffer.size()) throw std::runtime_error("FTP receive chunk exceeds buffer capacity");
+      if (bytes.size() > buffer.size() - count) return CURL_WRITEFUNC_PAUSE;
+      append(bytes);
+      ready = true;
+    }
+    changed.trigger();
+    return bytes.size();
+  }
+
+  std::size_t send(std::span<std::byte> bytes) {
+    std::size_t result;
+    {
+      const auto lock = std::lock_guard(mutex);
+      if (abandoned) return CURL_READFUNC_ABORT;
+      ready = true;
+      result = count > 0 ? take(bytes) : input_ended ? 0 : CURL_READFUNC_PAUSE;
+    }
+    changed.trigger();
+    return result;
+  }
+};
+
+// This root owns the stream until curl has stopped using every callback.
+// Completion goes through shared stream state; storing this promise on that
+// state would create a cycle. Client stop also waits for its operation lock.
+static cardio::promise<void> run_stream_async(
+    std::shared_ptr<CurlStream> stream, CurlFtpRequest request) {
+  std::exception_ptr failure;
+  const bool upload = request.upload;
+  bool certificate_accepted = false;
+  try {
+    const auto result = co_await stream->client->perform_async(
+        std::move(request), stream->cancellation.get_cancellation());
+    certificate_accepted = result.certificate_accepted;
+    require_success(upload ? "FTP STOR" : "FTP RETR", result);
+  } catch (...) {
+    failure = std::current_exception();
+  }
+  bool release;
+  bool started;
+  {
+    const auto lock = std::lock_guard(stream->mutex);
+    started = stream->ready;
+    stream->finished = true;
+    stream->failure = failure;
+    release = failure != nullptr || stream->abandoned;
+  }
+  if (failure && started && !certificate_accepted) stream->client->failed = true;
+  if (release) stream->acknowledge();
+  stream->changed.trigger();
+}
+
+static cardio::promise<std::shared_ptr<CurlStream>> open_stream_async(
+    std::shared_ptr<CurlClientState> client, std::string path, bool upload,
+    cardio::cancellation cancellation) {
+  validate_argument(path, "path", false);
+  auto operation = std::move(co_await client->operations.lock(cancellation));
+  client->require_open();
+  auto stream = std::make_shared<CurlStream>(client, std::move(operation));
+  client->active_stream = stream;
+  try {
+    CurlFtpRequest request;
+    request.url = client->file_url(absolute_path(client->directory, path), false);
+    request.upload = upload;
+    if (upload) {
+      request.send = [stream](std::span<std::byte> bytes) { return stream->send(bytes); };
+    } else {
+      request.receive = [stream](std::span<const std::byte> bytes) { return stream->receive(bytes); };
+    }
+    cardio::fire_and_forget(run_stream_async(stream, std::move(request)));
+    for (;;) {
+      cancellation.throw_if_cancellation_requested();
+      cardio::promise<void> changed;
+      bool ready;
+      {
+        const auto lock = std::lock_guard(stream->mutex);
+        stream->require_available();
+        ready = stream->ready || stream->finished;
+        if (!ready) changed = stream->changed.wait(cancellation);
+      }
+      if (ready) co_return stream;
+      co_await changed;
+    }
+  } catch (...) {
+    stream->abandon();
+    throw;
+  }
+}
+
+static cardio::promise<std::size_t> read_stream_async(
+    std::shared_ptr<CurlStream> stream, std::span<std::byte> buffer,
+    cardio::cancellation cancellation) {
+  auto call = std::move(co_await stream->calls.lock(cancellation));
+  try {
+    for (;;) {
+      cancellation.throw_if_cancellation_requested();
+      cardio::promise<void> changed;
+      std::size_t count;
+      bool eof;
+      {
+        const auto lock = std::lock_guard(stream->mutex);
+        stream->require_available();
+        if (buffer.empty()) co_return 0;
+        count = stream->take(buffer);
+        eof = count == 0 && stream->finished;
+        // Register under the buffer lock so a producer cannot signal between
+        // observing an empty buffer and installing the caller-owned waiter.
+        if (count == 0 && !eof) changed = stream->changed.wait(cancellation);
+      }
+      if (count > 0) {
+        stream->client->session->resume();
         co_return count;
       }
-      close_socket(&data_fd);
-      co_await state->finish_data_command_async(std::move(cancellation));
-      completed = true;
-      operation_lock.release();
-      co_return 0;
-    } catch (...) {
-      abandon();
-      throw;
+      if (eof) {
+        stream->acknowledge();
+        co_return 0;
+      }
+      co_await changed;
     }
+  } catch (...) {
+    stream->abandon();
+    throw;
   }
+}
 
-  cardio::promise<void>
-  close_async(cardio::cancellation cancellation) override {
-    (void)cancellation;
-    if (!completed) {
-      // Closing RETR before EOF can yield more than one control reply. Closing
-      // the control connection is the only deterministic way to avoid reusing
-      // a desynchronized reply stream.
-      abandon();
+static cardio::promise<void> write_stream_async(
+    std::shared_ptr<CurlStream> stream, std::span<const std::byte> buffer,
+    cardio::cancellation cancellation) {
+  auto call = std::move(co_await stream->calls.lock(cancellation));
+  try {
+    for (;;) {
+      cancellation.throw_if_cancellation_requested();
+      cardio::promise<void> changed;
+      std::size_t count;
+      {
+        const auto lock = std::lock_guard(stream->mutex);
+        stream->require_available();
+        if (stream->input_ended || stream->acknowledged) throw std::runtime_error("FTP writer is closed");
+        if (buffer.empty()) co_return;
+        count = std::min(buffer.size(), stream->buffer.size() - stream->count);
+        stream->append(buffer.first(count));
+        if (count == 0) changed = stream->changed.wait(cancellation);
+      }
+      if (count > 0) {
+        buffer = buffer.subspan(count);
+        stream->client->session->resume();
+      } else {
+        co_await changed;
+      }
     }
-    co_return;
+  } catch (...) {
+    stream->abandon();
+    throw;
   }
-};
+}
 
-class FtpFileWriter final : public RemoteFileWriter {
-private:
-  std::shared_ptr<FtpSessionState> state;
-  int data_fd;
-  cardio::primitives::lock_handle operation_lock;
-  bool completed = false;
-
-  void abandon() noexcept {
-    close_socket(&data_fd);
-    if (!completed) {
-      state->close_control();
-      completed = true;
+static cardio::promise<void> close_writer_async(
+    std::shared_ptr<CurlStream> stream, cardio::cancellation cancellation) {
+  auto call = std::move(co_await stream->calls.lock(cancellation));
+  try {
+    {
+      const auto lock = std::lock_guard(stream->mutex);
+      stream->require_available();
+      stream->input_ended = true;
     }
-    operation_lock.release();
-  }
-
-public:
-  FtpFileWriter(std::shared_ptr<FtpSessionState> state, int data_fd,
-                cardio::primitives::lock_handle operation_lock)
-      : state(std::move(state)), data_fd(data_fd),
-        operation_lock(std::move(operation_lock)) {
-  }
-
-  ~FtpFileWriter() override {
-    abandon();
-  }
-
-  cardio::promise<void>
-  write_all_async(std::span<const std::byte> buffer,
-                  cardio::cancellation cancellation) override {
-    if (completed) {
-      throw std::runtime_error("FTP writer is closed");
+    stream->client->session->resume();
+    for (;;) {
+      cancellation.throw_if_cancellation_requested();
+      cardio::promise<void> changed;
+      bool finished;
+      {
+        const auto lock = std::lock_guard(stream->mutex);
+        stream->require_available();
+        finished = stream->finished;
+        if (!finished) changed = stream->changed.wait(cancellation);
+      }
+      if (finished) {
+        stream->acknowledge();
+        co_return;
+      }
+      co_await changed;
     }
-    try {
-      co_await state->write_all_async(data_fd, buffer,
-                                      std::move(cancellation));
-    } catch (...) {
-      abandon();
-      throw;
-    }
+  } catch (...) {
+    stream->abandon();
+    throw;
   }
+}
 
-  cardio::promise<void>
-  close_async(cardio::cancellation cancellation) override {
-    if (completed) {
+static cardio::promise<void> close_reader_async(
+    std::shared_ptr<CurlStream> stream, cardio::cancellation cancellation) {
+  auto call = std::move(co_await stream->calls.lock(cancellation));
+  if (stream->acknowledged) co_return;
+  // Closing RETR before EOF may leave additional completion replies. Preserve
+  // the existing session-abandonment policy and let curl settle the transfer
+  // before releasing its logical operation slot.
+  stream->abandon();
+  for (;;) {
+    cardio::promise<void> changed;
+    bool finished;
+    {
+      const auto lock = std::lock_guard(stream->mutex);
+      finished = stream->finished;
+      if (!finished) changed = stream->changed.wait();
+    }
+    if (finished) {
+      stream->acknowledge();
       co_return;
     }
-    close_socket(&data_fd);
-    try {
-      co_await state->finish_data_command_async(std::move(cancellation));
-      completed = true;
-      operation_lock.release();
-    } catch (...) {
-      abandon();
-      throw;
-    }
+    co_await changed;
+  }
+}
+
+class CurlFileReader final : public RemoteFileReader {
+  std::shared_ptr<CurlStream> stream;
+public:
+  explicit CurlFileReader(std::shared_ptr<CurlStream> stream) : stream(std::move(stream)) {}
+  ~CurlFileReader() override { stream->abandon(); }
+  cardio::promise<std::size_t> read_async(std::span<std::byte> buffer,
+                                         cardio::cancellation cancellation) override {
+    return read_stream_async(stream, buffer, cancellation);
+  }
+  cardio::promise<void> close_async(cardio::cancellation cancellation) override {
+    return close_reader_async(stream, cancellation);
   }
 };
 
-class FtpClient final : public RemoteFileClient {
-private:
-  std::shared_ptr<FtpSessionState> state;
-
-  explicit FtpClient(std::shared_ptr<FtpSessionState> state)
-      : state(std::move(state)) {
+class CurlFileWriter final : public RemoteFileWriter {
+  std::shared_ptr<CurlStream> stream;
+public:
+  explicit CurlFileWriter(std::shared_ptr<CurlStream> stream) : stream(std::move(stream)) {}
+  ~CurlFileWriter() override { stream->abandon(); }
+  cardio::promise<void> write_all_async(std::span<const std::byte> buffer,
+                                       cardio::cancellation cancellation) override {
+    return write_stream_async(stream, buffer, cancellation);
   }
-
-  [[noreturn]] static void handle_operation_failure(
-      const std::shared_ptr<FtpSessionState> &state) {
-    try {
-      throw;
-    } catch (const FtpStatusError &) {
-      throw;
-    } catch (...) {
-      state->close_control();
-      throw;
-    }
+  cardio::promise<void> close_async(cardio::cancellation cancellation) override {
+    return close_writer_async(stream, cancellation);
   }
+};
 
-  cardio::promise<RemoteDirectorySnapshot> load_directory_locked_async(
-      std::string path, cardio::cancellation cancellation) {
-    if (path.empty()) {
-      path = ".";
-    }
-    const FtpReply cwd =
-        co_await state->command_async("CWD " + path, cancellation);
-    require_positive_completion(cwd, "FTP CWD");
-    const FtpReply pwd = co_await state->command_async("PWD", cancellation);
-    if (pwd.code != 257) {
-      throw ftp_status_error("FTP PWD", pwd);
-    }
-    const std::string canonical = parse_ftp_pwd_path(pwd);
-    const std::string command = state->has_mlsd ? "MLSD" : "LIST";
-    const std::string listing =
-        co_await state->read_data_command_async(command, cancellation);
-    const std::vector<FtpDirectoryEntry> parsed =
-        parse_ftp_listing(listing, state->has_mlsd);
-    RemoteDirectorySnapshot result{
-        .canonical_path = canonical,
-        .entries = {},
-    };
-    for (const FtpDirectoryEntry &entry : parsed) {
-      if (entry.type == FtpDirectoryEntryType::current_directory ||
-          entry.type == FtpDirectoryEntryType::parent_directory) {
-        continue;
-      }
-      result.entries.push_back(portable_attributes(
-          entry, ftp_child_path(canonical, entry.name), entry.name));
-    }
-    std::sort(result.entries.begin(), result.entries.end(),
-              [](const RemoteFileAttributes &left,
-                 const RemoteFileAttributes &right) {
-                return left.name < right.name;
-              });
-    co_return result;
-  }
+class CurlFileClient final : public RemoteFileClient {
+  std::shared_ptr<CurlClientState> state;
 
-  cardio::promise<std::optional<RemoteFileAttributes>>
-  lstat_with_mlst_locked_async(std::string path,
-                               cardio::cancellation cancellation) {
-    const FtpReply reply =
-        co_await state->command_async("MLST " + path, cancellation);
-    if (reply.code == 550) {
-      co_return std::nullopt;
-    }
-    if (reply.code != 250) {
-      throw ftp_status_error("FTP MLST", reply);
-    }
-    for (const std::string &line_text : reply.lines) {
-      std::string_view line = trim_ascii_space(line_text);
-      const std::optional<FtpDirectoryEntry> entry =
-          parse_ftp_mlsd_entry(line);
-      if (!entry.has_value()) {
-        continue;
-      }
-      const std::string name = ftp_path_name(path);
-      co_return portable_attributes(*entry, std::move(path), name);
-    }
-    throw std::runtime_error("FTP MLST response contained no facts");
-  }
-
-  cardio::promise<std::optional<RemoteFileAttributes>>
-  lstat_with_list_locked_async(std::string path,
-                               cardio::cancellation cancellation) {
-    std::string trimmed = path;
-    while (trimmed.size() > 1 && trimmed.back() == '/') {
-      trimmed.pop_back();
-    }
-    const std::size_t separator = trimmed.find_last_of('/');
-    const std::string name = ftp_path_name(trimmed);
-    if (name.empty()) {
-      throw std::runtime_error(
-          "FTP server does not support MLST for the root item");
-    }
-    std::string parent = ".";
-    if (separator == 0) {
-      parent = "/";
-    } else if (separator != std::string::npos) {
-      parent = trimmed.substr(0, separator);
-    }
-    const RemoteDirectorySnapshot snapshot =
-        co_await load_directory_locked_async(parent, cancellation);
-    const auto found = std::find_if(
-        snapshot.entries.begin(), snapshot.entries.end(),
-        [&name](const RemoteFileAttributes &entry) {
-          return entry.name == name;
-        });
-    if (found == snapshot.entries.end()) {
-      co_return std::nullopt;
-    }
-    RemoteFileAttributes result = *found;
-    result.path = std::move(path);
-    co_return result;
+  cardio::promise<void> mutate_async(std::string verb, std::string path,
+                                    cardio::cancellation cancellation) {
+    validate_argument(path, "path", false);
+    const auto state = this->state;
+    auto lock = std::move(co_await state->operations.lock(cancellation));
+    state->require_open();
+    auto response = std::make_shared<ControlLines>();
+    std::vector<std::string> commands{verb + " " + absolute_path(state->directory, path)};
+    const auto result = co_await state->command_async(std::move(commands), response, cancellation);
+    require_success(("FTP " + verb).c_str(), result);
   }
 
 public:
-  FtpClient(const FtpClient &) = delete;
-  FtpClient &operator=(const FtpClient &) = delete;
+  explicit CurlFileClient(std::shared_ptr<CurlClientState> state)
+      : state(std::move(state)) {}
 
-  static cardio::promise<std::shared_ptr<RemoteFileClient>> open_async(
-      FtpClientOpenOptions options, cardio::cancellation cancellation) {
-    validate_ftp_argument(options.connection.username, "username", false);
-    validate_ftp_argument(options.password, "password", true);
-    if (options.connection.address.empty() || options.connection.port <= 0 ||
-        options.connection.port > 65535) {
-      throw std::invalid_argument("FTP endpoint is invalid");
-    }
+  RemoteFileCapabilities capabilities() const noexcept override { return {}; }
 
-    auto state = std::make_shared<FtpSessionState>(
-        options.connection.data_connection_mode);
-    try {
-      state->control_fd = co_await connect_tcp_socket_async(
-          state->io, options.connection.address,
-          static_cast<std::uint16_t>(options.connection.port), cancellation);
-      state->capture_control_endpoints();
-
-      FtpReply greeting = co_await state->receive_reply_async(cancellation);
-      if (greeting.code == 120) {
-        greeting = co_await state->receive_reply_async(cancellation);
-      }
-      if (greeting.code != 220) {
-        throw ftp_status_error("FTP greeting", greeting);
-      }
-
-      FtpReply login = co_await state->command_async(
-          "USER " + options.connection.username, cancellation);
-      if (login.code == 331) {
-        login = co_await state->command_async(
-            "PASS " + options.password, cancellation);
-      }
-      require_positive_completion(login, "FTP login");
-
-      const FtpReply features =
-          co_await state->command_async("FEAT", cancellation);
-      bool has_utf8 = false;
-      if (features.code == 211) {
-        for (const std::string &line : features.lines) {
-          state->has_mlsd =
-              state->has_mlsd || feature_line_starts_with(line, "MLST") ||
-              feature_line_starts_with(line, "MLSD");
-          has_utf8 =
-              has_utf8 || feature_line_starts_with(line, "UTF8");
-        }
-      }
-      if (has_utf8) {
-        (void)co_await state->command_async("OPTS UTF8 ON", cancellation);
-      }
-      const FtpReply type =
-          co_await state->command_async("TYPE I", cancellation);
-      require_positive_completion(type, "FTP TYPE I");
-      co_return std::shared_ptr<RemoteFileClient>(new FtpClient(state));
-    } catch (...) {
-      state->close_control();
-      throw;
-    }
-  }
-
-  auto capabilities() const noexcept
-      -> RemoteFileCapabilities override {
-    return {
-        .symbolic_links = false,
-        .permissions = false,
-        .access_time = false,
-        .modification_time = false,
-    };
+  cardio::promise<void> stop_async() {
+    const auto state = this->state;
+    state->stopping = true;
+    if (auto stream = state->active_stream.lock()) stream->abandon();
+    co_await state->session->stop_async();
+    // Waiters fail require_open() in FIFO order before dispatcher destruction.
+    auto lock = std::move(co_await state->operations.lock());
   }
 
   cardio::promise<RemoteDirectorySnapshot> load_directory_async(
       std::string path, cardio::cancellation cancellation) override {
-    validate_ftp_argument(path, "path", true);
-    auto lock =
-        std::move(co_await state->operation_mutex.lock(cancellation));
-    try {
-      co_return co_await load_directory_locked_async(
-          std::move(path), std::move(cancellation));
-    } catch (...) {
-      handle_operation_failure(state);
-    }
+    validate_argument(path, "path", true);
+    const auto state = this->state;
+    auto lock = std::move(co_await state->operations.lock(cancellation));
+    state->require_open();
+    auto result = co_await state->list_async(absolute_path(state->directory, path), cancellation);
+    state->directory = result.canonical_path;
+    co_return result;
   }
 
   cardio::promise<std::optional<RemoteFileAttributes>> lstat_async(
       std::string path, cardio::cancellation cancellation) override {
-    validate_ftp_argument(path, "path", false);
-    auto lock =
-        std::move(co_await state->operation_mutex.lock(cancellation));
-    try {
-      if (state->has_mlsd) {
-        co_return co_await lstat_with_mlst_locked_async(
-            std::move(path), std::move(cancellation));
-      }
-      co_return co_await lstat_with_list_locked_async(
-          std::move(path), std::move(cancellation));
-    } catch (...) {
-      handle_operation_failure(state);
-    }
-  }
-
-  cardio::promise<std::string> read_link_async(
-      std::string path, cardio::cancellation cancellation) override {
-    (void)path;
-    (void)cancellation;
-    throw std::runtime_error("FTP symbolic links are not supported");
+    validate_argument(path, "path", false);
+    const auto state = this->state;
+    auto lock = std::move(co_await state->operations.lock(cancellation));
+    state->require_open();
+    co_return co_await state->stat_async(absolute_path(state->directory, path), cancellation);
   }
 
   cardio::promise<void> make_directory_async(
       std::string path, std::optional<std::uint32_t> permissions,
       cardio::cancellation cancellation) override {
     (void)permissions;
-    validate_ftp_argument(path, "path", false);
-    auto lock =
-        std::move(co_await state->operation_mutex.lock(cancellation));
-    try {
-      const FtpReply reply = co_await state->command_async(
-          "MKD " + path, std::move(cancellation));
-      require_positive_completion(reply, "FTP MKD");
-    } catch (...) {
-      handle_operation_failure(state);
-    }
+    return mutate_async("MKD", std::move(path), cancellation);
   }
 
   cardio::promise<void> remove_file_async(
       std::string path, cardio::cancellation cancellation) override {
-    validate_ftp_argument(path, "path", false);
-    auto lock =
-        std::move(co_await state->operation_mutex.lock(cancellation));
-    try {
-      const FtpReply reply = co_await state->command_async(
-          "DELE " + path, std::move(cancellation));
-      require_positive_completion(reply, "FTP DELE");
-    } catch (...) {
-      handle_operation_failure(state);
-    }
+    return mutate_async("DELE", std::move(path), cancellation);
   }
 
   cardio::promise<void> remove_directory_async(
       std::string path, cardio::cancellation cancellation) override {
-    validate_ftp_argument(path, "path", false);
-    auto lock =
-        std::move(co_await state->operation_mutex.lock(cancellation));
-    try {
-      const FtpReply reply = co_await state->command_async(
-          "RMD " + path, std::move(cancellation));
-      require_positive_completion(reply, "FTP RMD");
-    } catch (...) {
-      handle_operation_failure(state);
-    }
+    return mutate_async("RMD", std::move(path), cancellation);
   }
 
   cardio::promise<void> rename_async(
-      std::string source_path, std::string destination_path,
+      std::string source, std::string destination,
       cardio::cancellation cancellation) override {
-    validate_ftp_argument(source_path, "source path", false);
-    validate_ftp_argument(destination_path, "destination path", false);
-    auto lock =
-        std::move(co_await state->operation_mutex.lock(cancellation));
-    try {
-      const FtpReply from = co_await state->command_async(
-          "RNFR " + source_path, cancellation);
-      if (from.code != 350) {
-        throw ftp_status_error("FTP RNFR", from);
-      }
-      const FtpReply to = co_await state->command_async(
-          "RNTO " + destination_path, std::move(cancellation));
-      require_positive_completion(to, "FTP RNTO");
-    } catch (...) {
-      handle_operation_failure(state);
-    }
+    validate_argument(source, "source path", false);
+    validate_argument(destination, "destination path", false);
+    const auto state = this->state;
+    auto lock = std::move(co_await state->operations.lock(cancellation));
+    state->require_open();
+    auto response = std::make_shared<ControlLines>();
+    std::vector<std::string> commands{
+        "RNFR " + absolute_path(state->directory, source),
+        "RNTO " + absolute_path(state->directory, destination)};
+    const auto result = co_await state->command_async(std::move(commands), response, cancellation);
+    require_success("FTP rename", result);
+  }
+
+  cardio::promise<std::string> read_link_async(
+      std::string path, cardio::cancellation cancellation) override {
+    (void)path;
+    cancellation.throw_if_cancellation_requested();
+    throw std::runtime_error("FTP symbolic links are unsupported");
+    co_return std::string{};
   }
 
   cardio::promise<void> make_symbolic_link_async(
-      std::string target, std::string path,
-      cardio::cancellation cancellation) override {
+      std::string target, std::string path, cardio::cancellation cancellation) override {
     (void)target;
     (void)path;
-    (void)cancellation;
-    throw std::runtime_error("FTP symbolic links are not supported");
+    cancellation.throw_if_cancellation_requested();
+    throw std::runtime_error("FTP symbolic links are unsupported");
+    co_return;
   }
 
   cardio::promise<void> set_attributes_async(
-      std::string path, RemoteFileAttributes attributes,
+      std::string path, RemoteFileAttributes value,
       cardio::cancellation cancellation) override {
     (void)path;
-    (void)cancellation;
-    if (attributes.permissions.has_value() ||
-        attributes.access_time_unix_seconds.has_value() ||
-        attributes.modification_time_unix_seconds.has_value()) {
-      throw std::runtime_error("FTP metadata updates are not supported");
-    }
+    (void)value;
+    cancellation.throw_if_cancellation_requested();
     co_return;
   }
 
   cardio::promise<std::unique_ptr<RemoteFileReader>> open_read_async(
       std::string path, cardio::cancellation cancellation) override {
-    validate_ftp_argument(path, "path", false);
-    auto lock =
-        std::move(co_await state->operation_mutex.lock(cancellation));
+    const auto state = this->state;
+    auto stream = co_await open_stream_async(state, std::move(path), false, cancellation);
     try {
-      const int data_fd = co_await state->start_data_command_async(
-          "RETR " + path, cancellation);
-      co_return std::make_unique<FtpFileReader>(
-          state, data_fd, std::move(lock));
+      co_return std::make_unique<CurlFileReader>(stream);
     } catch (...) {
-      handle_operation_failure(state);
+      stream->abandon();
+      throw;
     }
   }
 
   cardio::promise<std::unique_ptr<RemoteFileWriter>> open_write_async(
-      std::string path, std::optional<std::uint32_t> permissions,
+      std::string path, std::uint64_t, std::optional<std::uint32_t> permissions,
       cardio::cancellation cancellation) override {
     (void)permissions;
-    validate_ftp_argument(path, "path", false);
-    auto lock =
-        std::move(co_await state->operation_mutex.lock(cancellation));
+    const auto state = this->state;
+    auto stream = co_await open_stream_async(state, std::move(path), true, cancellation);
     try {
-      const int data_fd = co_await state->start_data_command_async(
-          "STOR " + path, cancellation);
-      co_return std::make_unique<FtpFileWriter>(
-          state, data_fd, std::move(lock));
+      co_return std::make_unique<CurlFileWriter>(stream);
     } catch (...) {
-      handle_operation_failure(state);
+      stream->abandon();
+      throw;
     }
   }
 
   bool try_begin_transfer() override {
-    bool expected = false;
-    return state->transfer_active.compare_exchange_strong(expected, true);
+    if (state->transferring || state->failed || state->stopping) return false;
+    state->transferring = true;
+    return true;
   }
 
-  void end_transfer() override {
-    state->transfer_active.store(false);
-  }
+  void end_transfer() override { state->transferring = false; }
 };
 
-cardio::promise<std::shared_ptr<RemoteFileClient>>
-open_ftp_client_async(FtpClientOpenOptions options,
-                      cardio::cancellation cancellation) {
-  return FtpClient::open_async(std::move(options), std::move(cancellation));
+cardio::promise<std::shared_ptr<RemoteFileClient>> open_ftp_client_async(
+    FtpClientOpenOptions options, cardio::cancellation cancellation) {
+  validate_argument(options.connection.username, "username", false);
+  validate_argument(options.password, "password", true);
+  validate_argument(options.connection.address, "address", false);
+  if (options.connection.port <= 0 || options.connection.port > 65535) {
+    throw std::invalid_argument("Invalid FTP port");
+  }
+  cancellation.throw_if_cancellation_requested();
+  auto state = std::make_shared<CurlClientState>();
+  state->session = co_await open_curl_ftp_session_async(options);
+  std::exception_ptr failure;
+  try {
+    state->base_url = endpoint_url(options.connection);
+    auto features = std::make_shared<ControlLines>();
+    std::vector<std::string> commands{"*FEAT"};
+    const auto result = co_await state->command_async(std::move(commands), features, cancellation);
+    require_success("FTP login", result);
+    validate_argument(result.entry_path, "login directory", false);
+    if (!result.entry_path.starts_with('/')) {
+      throw std::runtime_error("FTP server returned a nonabsolute login directory");
+    }
+    state->directory = absolute_path("/", result.entry_path);
+    state->has_mlst = features->feature("MLST");
+    state->has_mlsd = state->has_mlst || features->feature("MLSD");
+    if (features->feature("UTF8")) {
+      auto response = std::make_shared<ControlLines>();
+      commands = {"*OPTS UTF8 ON"};
+      const auto configured = co_await state->command_async(std::move(commands), response, cancellation);
+      require_success("FTP UTF8", configured);
+    }
+  } catch (...) {
+    failure = std::current_exception();
+  }
+  if (failure) {
+    co_await state->session->stop_async();
+    std::rethrow_exception(failure);
+  }
+  state->authenticating = false;
+  co_return std::make_shared<CurlFileClient>(std::move(state));
+}
+
+cardio::promise<void> stop_ftp_client_async(std::shared_ptr<RemoteFileClient> client) {
+  auto ftp = std::dynamic_pointer_cast<CurlFileClient>(client);
+  if (!ftp) throw std::invalid_argument("Expected a libcurl FTP client");
+  co_await ftp->stop_async();
 }
 
 } // namespace elder_terms

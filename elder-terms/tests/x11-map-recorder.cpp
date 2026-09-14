@@ -121,6 +121,46 @@ static Window create_focus_competitor(Display *display, Window root) {
   return window;
 }
 
+static bool click_window_without_focus(Display *display, Window window) {
+  XEvent click{};
+  unsigned int state = 0;
+  if (!XQueryPointer(display, window, &click.xbutton.root,
+                     &click.xbutton.subwindow, &click.xbutton.x_root,
+                     &click.xbutton.y_root, &click.xbutton.x, &click.xbutton.y,
+                     &state)) return false;
+  if (click.xbutton.x < 0 || click.xbutton.y < 0) return false;
+
+  // Use a server timestamp after the competitor gained focus. CurrentTime in
+  // a synthetic input event leaves GTK's last user time unchanged and can
+  // cause a subsequent focus request to be rejected as stale.
+  const Window clock_window = XCreateSimpleWindow(
+      display, click.xbutton.root, 0, 0, 1, 1, 0, 0, 0);
+  const Atom clock_atom = XInternAtom(display, "_ELDER_TERMS_TEST_TIME", False);
+  XSelectInput(display, clock_window, PropertyChangeMask);
+  const unsigned char marker = 0;
+  XChangeProperty(display, clock_window, clock_atom, XA_INTEGER, 8,
+                   PropModeReplace, &marker, 1);
+  XEvent clock_event{};
+  XWindowEvent(display, clock_window, PropertyChangeMask, &clock_event);
+
+  click.xbutton.type = ButtonPress;
+  click.xbutton.display = display;
+  click.xbutton.window = window;
+  click.xbutton.time = clock_event.xproperty.time;
+  click.xbutton.state = state;
+  click.xbutton.button = Button1;
+  click.xbutton.same_screen = True;
+  // NoEventMask delivers to the window's creator even when input selection
+  // uses XI2 instead of core masks. Bypass the WM's click-to-focus handling.
+  const bool pressed = XSendEvent(display, window, False, NoEventMask, &click) != 0;
+  click.xbutton.type = ButtonRelease;
+  click.xbutton.state |= Button1Mask;
+  const bool released = XSendEvent(display, window, False, NoEventMask, &click) != 0;
+  XDestroyWindow(display, clock_window);
+  XSync(display, False);
+  return pressed && released;
+}
+
 static Window focused_window(Display *display) {
   Window window = None;
   int revert_to = RevertToNone;
@@ -224,6 +264,16 @@ int main() {
         XSync(display, False);
         drain_x11_events(display, process_id_atom, icon_atom);
         std::cout << command << '\t' << focus_competitor << std::endl;
+      } else if (command.starts_with("click-window ")) {
+        std::istringstream fields(command);
+        std::string operation;
+        Window window = None;
+        unsigned int request_id = 0;
+        fields >> operation >> std::hex >> window >> std::dec >> request_id;
+        const bool sent = fields && window != None &&
+            click_window_without_focus(display, window);
+        drain_x11_events(display, process_id_atom, icon_atom);
+        std::cout << command << '\t' << (sent ? "ok" : "failed") << std::endl;
       } else if (command.starts_with("active-window ")) {
         XSync(display, False);
         std::cout << command << '\t' << focused_window(display)

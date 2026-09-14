@@ -14,4 +14,13 @@ TerminalConnectionPresentation terminal_connection_presentation(
   };
 }
 
+TerminalReconnectPresentation terminal_reconnect_presentation(
+    TerminalConnectionKind kind, bool auto_close,
+    TerminalSessionConnectionPhase phase, bool ready, bool closing) {
+  const bool visible = !auto_close && !closing &&
+      (kind == TerminalConnectionKind::ssh || kind == TerminalConnectionKind::telnet) &&
+      phase == TerminalSessionConnectionPhase::disconnected;
+  return {.visible = visible, .sensitive = visible && ready};
+}
+
 } // namespace elder_terms

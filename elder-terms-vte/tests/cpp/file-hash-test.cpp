@@ -44,7 +44,7 @@ static void test_local_file_hashes() {
   cardio::dispatcher_group_glib dispatcher_group;
   cardio::dispatcher_host_glib dispatcher(dispatcher_group);
   cardio::cancellation_source cancellation_source;
-  auto task = [&]() -> cardio::promise<void> {
+  auto task_body = [&]() -> cardio::promise<void> {
     try {
       hashes = co_await elder_terms::calculate_local_file_hashes_async(
           file.path.string(), cancellation_source.get_cancellation());
@@ -52,7 +52,8 @@ static void test_local_file_hashes() {
       async_error = std::current_exception();
     }
     dispatcher_group.shutdown();
-  }();
+  };
+  auto task = task_body();
 
   dispatcher.park();
   task.unsafe_result();

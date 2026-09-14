@@ -1,4 +1,5 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import {
   chmod,
   mkdir,
@@ -39,10 +40,15 @@ const selectConnectionRow = async (
   row: number
 ): Promise<void> => {
   if (element.kind === 'table') {
-    const cell = await element.cellAt(row, 0);
-    expect(cell).toBeDefined();
-    const bounds = (await cell?.capture())?.bounds;
-    expect(bounds).toBeDefined();
+    // Saving a profile replaces its model rows. Resolve the current cell after
+    // AT-SPI has observed that update, before sending any mouse input.
+    const bounds = await waitForResult(async () => {
+      const cell = await element.cellAt(row, 0);
+      expect(cell).toBeDefined();
+      const current = (await cell?.capture())?.bounds;
+      expect(current).toBeDefined();
+      return current;
+    });
     if (bounds === undefined) {
       return;
     }
@@ -403,7 +409,10 @@ describe('elder-terms main window', () => {
     expect(version.stdout.trim()).not.toBe('');
     await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
       await openApplicationDialogPage(app, 'application_settings_menu_item');
-      expectElementKind(await app.getById('application_dialog'), 'window');
+      const dialog = expectElementKind(
+        await app.getById('application_dialog'),
+        'window'
+      );
       expect(await selectedSettingsTabName(app, 'application_dialog')).toBe(
         'Application'
       );
@@ -423,12 +432,23 @@ describe('elder-terms main window', () => {
         await app.getById('application_settings_general_page'),
         'container'
       );
-      await expect(
-        app.getById('application_settings_notebook')
-      ).rejects.toThrow();
-      await expect(
-        app.getById('application_settings_link_add_button')
-      ).rejects.toThrow();
+      // Required controls are already present. Inspect the completed dialog
+      // tree directly; a missing-control assertion must not wait for a timeout.
+      const ids: string[] = [];
+      const pending: GtkWidgetElement[] = [dialog];
+      while (pending.length > 0) {
+        const widget = pending.shift()!;
+        ids.push((await widget.info()).accessibleId);
+        if ('getChildCount' in widget) {
+          const count = await widget.getChildCount();
+          for (let index = 0; index < count; index++) {
+            const child = await widget.childAt(index);
+            if (child !== undefined) pending.push(child);
+          }
+        }
+      }
+      expect(ids).not.toContain('application_settings_notebook');
+      expect(ids).not.toContain('application_settings_link_add_button');
       await expectElementKind(
         await app.getById('application_dialog_cancel_button'),
         'button'
@@ -798,6 +818,7 @@ describe('elder-terms main window', () => {
               'SSH',
               'SFTP',
               'FTP',
+              'WebDAV',
               '端末',
               '転送',
               'ログ',
@@ -843,7 +864,8 @@ describe('elder-terms main window', () => {
           await app.getById('ui_language_restart_dialog'),
           'infoBar'
         );
-        expect((await restartDialog.info()).states).toContain('modal');
+        expect((await restartDialog.info()).states).not.toContain('modal');
+        await expectInsensitive(await app.getById('main_window'));
         expect(
           (await (await app.getById('ui_language_restart_now_button')).info())
             .name
@@ -1018,6 +1040,79 @@ describe('elder-terms main window', () => {
       expect(after.width).toBeGreaterThan(before.width);
       expect(after.height).toBeGreaterThan(before.height);
     });
+  });
+
+  it('keeps the launcher blocked until a nested CA chooser and settings both close', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app, x11MapRecorder }) => {
+        if (x11MapRecorder === undefined)
+          throw new Error('X11 focus recorder was not started');
+        const main = expectElementKind(
+          await app.getById('main_window'),
+          'window'
+        );
+        await main.moveTo(40, 40);
+        const settings = await openGlobalDefaults(app);
+        await settings.moveTo(480, 280);
+        await selectSettingsTab(app, 'global_settings', 'WebDAV');
+        const scroll = expectElementKind(
+          await app.getById('global_settings_webdav_page_scrollbar'),
+          'scrollbar'
+        );
+        await scroll.setValue((await scroll.valueInfo()).maximum);
+        await expectElementKind(
+          await app.getById('global_settings_webdav_ca_file_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectElementKind(
+          await app.getById('global_settings_webdav_ca_browse_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 3);
+        const chooserWindow = await app.windowAt(2);
+        if (chooserWindow === undefined) {
+          throw new Error('CA chooser window was not created');
+        }
+        const chooser = expectElementKind(chooserWindow, 'window');
+        await chooser.moveTo(740, 400);
+        await expectInsensitive(main);
+        await expectInsensitive(settings);
+        const chooserId = String(
+          Number.parseInt((await chooser.x11Info()).windowId, 16)
+        );
+        for (const owner of [main, settings]) {
+          const ownerBounds = await owner.bounds();
+          await app.input.moveMouseTo(ownerBounds.x + 20, ownerBounds.y + 250);
+          await x11MapRecorder.focusCompetitor();
+          await x11MapRecorder.clickWindowWithoutFocus(
+            (await owner.x11Info()).windowId
+          );
+          await waitForResult(async () =>
+            expect(await x11MapRecorder.focusedWindow()).toBe(chooserId)
+          );
+        }
+        const mainBounds = await main.bounds();
+        await app.input.moveMouseTo(mainBounds.x + 20, mainBounds.y + 20);
+        await app.input.setMouseButton('left', true);
+        await app.input.setMouseButton('left', false);
+        await waitForResult(async () =>
+          expect(await x11MapRecorder.focusedWindow()).toBe(chooserId)
+        );
+        await app.input.pressKey('Escape');
+        await waitForWindowCount(app, 2);
+        await expectSensitive(settings);
+        await expectInsensitive(main);
+        await expectElementKind(
+          await app.getById('global_defaults_cancel_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+        await expectSensitive(main);
+      },
+      { args: [], env: {}, recordX11Maps: true }
+    );
   });
 
   it('opens global defaults independently and disables its parent until closed', async (context) => {
@@ -1199,6 +1294,7 @@ describe('elder-terms main window', () => {
               'SSH',
               'SFTP',
               'FTP',
+              'WebDAV',
               'Terminal',
               'Transfer',
               'Logging',
@@ -1208,6 +1304,45 @@ describe('elder-terms main window', () => {
         expect(
           await app.findById('global_settings_general_name_entry')
         ).toBeUndefined();
+
+        await selectSettingsTab(app, 'global_settings', 'WebDAV');
+        await expectElementKind(
+          await app.getById('global_settings_webdav_address_entry'),
+          'entry'
+        ).setText('dav.example.test');
+        await expectElementKind(
+          await app.getById('global_settings_webdav_base_path_entry'),
+          'entry'
+        ).setText('/dav/root%20folder/');
+        await waitForResult(async () => {
+          const preview = expectElementKind(
+            await app.getById('global_settings_webdav_url_label'),
+            'label'
+          );
+          expect(await preview.text()).toBe(
+            'https://dav.example.test:443/dav/root%20folder/'
+          );
+        });
+        await expectElementKind(
+          await app.getById('global_settings_webdav_scheme_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectElementKind(
+          await app.getById('global_settings_webdav_address_entry'),
+          'entry'
+        ).setText('::1');
+        await expectElementKind(
+          await app.getById('global_settings_webdav_remote_directory_entry'),
+          'entry'
+        ).setText('/Documents #');
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('global_settings_webdav_url_label'),
+              'label'
+            ).text()
+          ).toBe('http://[::1]:80/dav/root%20folder/Documents%20%23');
+        });
 
         await selectSettingsTab(app, 'global_settings', 'Terminal');
         const width = expectElementKind(
@@ -1364,6 +1499,10 @@ describe('elder-terms main window', () => {
         expect(
           await app.findById('ui_language_restart_dialog')
         ).toBeUndefined();
+        expect(await width.text()).toBe('95');
+        await expectInsensitive(save);
+        await app.input.pressKey('Escape');
+        await waitForWindowCount(app, 2);
         expect(await width.text()).toBe('95');
         await expectSensitive(save);
       }
@@ -1621,7 +1760,8 @@ describe('elder-terms main window', () => {
           await app.getById('delete_connection_dialog'),
           'infoBar'
         );
-        expect((await deleteDialog.info()).states).toContain('modal');
+        expect((await deleteDialog.info()).states).not.toContain('modal');
+        await expectInsensitive(await app.getById('main_window'));
         await expectElementKind(
           await app.getById('cancel_delete_connection_button'),
           'button'
@@ -1704,7 +1844,8 @@ describe('elder-terms main window', () => {
           await app.getById('discard_changes_dialog'),
           'infoBar'
         );
-        expect((await dialog.info()).states).toContain('modal');
+        expect((await dialog.info()).states).not.toContain('modal');
+        await expectInsensitive(await app.getById('main_window'));
         await expectElementKind(
           await app.getById('cancel_discard_button'),
           'button'
@@ -1811,8 +1952,7 @@ describe('elder-terms main window', () => {
           expect(Number(await width.text())).toBe(88);
         });
 
-        await width.setText('91');
-        await expectSensitive(apply);
+        await expectInsensitive(apply);
         await writeFile(
           join(connections, 'Alpha.ini'),
           '[terminal]\nwidth=95\n'
@@ -1841,6 +1981,687 @@ describe('elder-terms main window', () => {
           expect(await connectionRowCount(list)).toBe(2);
           expect(Number(await width.text())).toBe(95);
         });
+      }
+    );
+  });
+
+  for (const mode of [
+    'clean',
+    'new',
+    'new-invalid',
+    'new-save-failure',
+    'save',
+    'save-conflict',
+    'discard',
+    'cancel',
+    'save-failure',
+    'launch-failure',
+    'no-editor',
+    'missing-file',
+  ]) {
+    it(`opens a connection in the XDG text editor: ${mode}`, async (context) => {
+      const directory = await mkdtemp(join(tmpdir(), 'elder-terms-editor-'));
+      const applications = join(directory, 'applications');
+      const executable = join(directory, 'editor.mjs');
+      const capturePath = join(directory, 'capture.json');
+      const isNew = mode.startsWith('new');
+      const profileName = isNew
+        ? 'New connection.ini'
+        : "Alpha 日本語 ; $' (test).ini";
+      await mkdir(applications);
+      // Keep MIME recognition available without exposing host applications.
+      await symlink('/usr/share/mime', join(directory, 'mime'));
+      await writeFile(
+        executable,
+        `#!${process.execPath}
+import { readFile, writeFile } from 'node:fs/promises';
+const args = process.argv.slice(2);
+const content = await readFile(args[0], 'utf8');
+await writeFile(${JSON.stringify(capturePath)}, JSON.stringify({ args, content }));
+${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : ''}
+`
+      );
+      await chmod(executable, 0o755);
+      if (mode !== 'no-editor') {
+        await writeFile(
+          join(applications, 'fixture-editor.desktop'),
+          '[Desktop Entry]\nType=Application\nName=Fixture text editor\n' +
+            `Exec="${executable}" %f\nMimeType=text/plain;\nTerminal=false\n` +
+            // Fail the launch request itself, before gio-launch-desktop takes
+            // over. Errors inside the started editor are not returned by GIO.
+            (mode === 'launch-failure'
+              ? `Path=${join(directory, 'missing-working-directory')}\n`
+              : '')
+        );
+      }
+      try {
+        await runLauncherGtkTest(
+          context,
+          async (connections) => {
+            if (!isNew && mode === 'missing-file') {
+              // Removing the target outside the monitored directory makes
+              // the file disappear specifically between selection and launch.
+              const target = join(directory, 'profile.ini');
+              await writeFile(target, '[terminal]\nwidth=88\n');
+              await symlink(target, join(connections, profileName));
+            } else if (!isNew) {
+              await writeFile(
+                join(connections, profileName),
+                '[terminal]\nwidth=88\n'
+              );
+            }
+            await writeFile(
+              join(connections, '..', '..', 'mimeapps.list'),
+              '[Default Applications]\ntext/plain=fixture-editor.desktop;\n'
+            );
+          },
+          async ({ app, connections }) => {
+            const list = await app.getById('connection_list');
+            if (isNew) {
+              await expectElementKind(
+                await app.getById('new_button'),
+                'button'
+              ).click();
+              await app.input.pressKey('Escape');
+            } else {
+              await selectConnectionRow(app, list, 0);
+            }
+            const width = expectElementKind(
+              await app.getById('settings_terminal_width_entry'),
+              'entry'
+            );
+            if (isNew) {
+              await selectSettingsTab(app, 'settings', 'Terminal');
+              await width.setText(mode === 'new-invalid' ? '0' : '91');
+            } else {
+              await waitForResult(async () =>
+                expect(await width.text()).toBe('88')
+              );
+            }
+            const dirty = [
+              'save',
+              'save-conflict',
+              'discard',
+              'cancel',
+              'save-failure',
+            ].includes(mode);
+            if (dirty) {
+              await width.setText('91');
+            }
+            if (mode === 'save-conflict') {
+              await writeFile(
+                join(connections, profileName),
+                '[terminal]\nwidth=95\n'
+              );
+              await expectElementKind(
+                await app.getById('external_keep_button'),
+                'button'
+              ).click();
+              expect(await width.text()).toBe('91');
+            }
+            if (mode === 'save-failure' || mode === 'new-save-failure') {
+              await chmod(connections, 0o500);
+            }
+            if (mode === 'missing-file') {
+              await rm(join(directory, 'profile.ini'));
+            }
+            try {
+              await rightClickConnectionRow(app, list, 0);
+              expect(
+                (await (await app.getById('edit_connection_menu_item')).info())
+                  .name
+              ).toBe(
+                isNew ? 'Save and open in text editor' : 'Edit in text editor'
+              );
+              await expectElementKind(
+                await app.getById('edit_connection_menu_item'),
+                'menuItem'
+              ).click();
+              if (dirty) {
+                const response =
+                  mode === 'discard'
+                    ? 'discard'
+                    : mode === 'cancel'
+                      ? 'cancel'
+                      : 'save';
+                await expectElementKind(
+                  await app.getById(`editor_${response}_open_button`),
+                  'button'
+                ).click();
+                if (mode === 'save-conflict') {
+                  const overwrite = expectElementKind(
+                    await app.getById('external_overwrite_button'),
+                    'button'
+                  );
+                  expect(
+                    await readFile(join(connections, profileName), 'utf8')
+                  ).toContain('width=95');
+                  await expect(
+                    readFile(capturePath, 'utf8')
+                  ).rejects.toMatchObject({ code: 'ENOENT' });
+                  await overwrite.click();
+                }
+              }
+              if (mode === 'cancel') {
+                await waitForWindowCount(app, 1);
+                expect(await width.text()).toBe('91');
+                await expect(
+                  readFile(capturePath, 'utf8')
+                ).rejects.toMatchObject({ code: 'ENOENT' });
+                expect(
+                  await readFile(join(connections, profileName), 'utf8')
+                ).toContain('width=88');
+              } else if (
+                [
+                  'save-failure',
+                  'new-invalid',
+                  'new-save-failure',
+                  'launch-failure',
+                  'no-editor',
+                  'missing-file',
+                ].includes(mode)
+              ) {
+                const error = expectElementKind(
+                  await app.getById('operation_error_dialog'),
+                  'infoBar'
+                );
+                expect(await width.text()).toBe(
+                  mode === 'new-invalid' ? '0' : isNew || dirty ? '91' : '88'
+                );
+                if (mode === 'new-invalid') {
+                  const labels: string[] = [];
+                  const pending: GtkWidgetElement[] = [error];
+                  while (pending.length > 0) {
+                    const widget = pending.pop()!;
+                    if (widget.kind === 'label')
+                      labels.push((await widget.info()).name ?? '');
+                    if ('getChildCount' in widget && 'childAt' in widget) {
+                      for (
+                        let index = 0;
+                        index < (await widget.getChildCount());
+                        index++
+                      ) {
+                        const child = await widget.childAt(index);
+                        if (child !== undefined) pending.push(child);
+                      }
+                    }
+                  }
+                  expect(labels.join('\n')).toMatch(/invalid input/i);
+                }
+                await expect(
+                  readFile(capturePath, 'utf8')
+                ).rejects.toMatchObject({ code: 'ENOENT' });
+                if (isNew) {
+                  await expect(
+                    readFile(join(connections, profileName), 'utf8')
+                  ).rejects.toMatchObject({ code: 'ENOENT' });
+                  await app.input.pressKey('Escape');
+                  await waitForWindowCount(app, 1);
+                  expect(await connectionRowCount(list)).toBe(1);
+                  await rightClickConnectionRow(app, list, 0);
+                  expect(
+                    (
+                      await (
+                        await app.getById('save_new_connection_menu_item')
+                      ).info()
+                    ).states
+                  ).toContain('showing');
+                } else if (mode !== 'missing-file') {
+                  expect(
+                    await readFile(join(connections, profileName), 'utf8')
+                  ).toContain('width=88');
+                }
+              } else {
+                await waitForResult(async () => {
+                  const capture = JSON.parse(
+                    await readFile(capturePath, 'utf8')
+                  );
+                  expect(capture.args).toEqual([
+                    join(connections, profileName),
+                  ]);
+                  expect(capture.content).toContain(
+                    isNew || mode === 'save' || mode === 'save-conflict'
+                      ? 'width=91'
+                      : 'width=88'
+                  );
+                });
+                await waitForResult(async () => {
+                  expect(await width.text()).toBe(
+                    mode === 'clean'
+                      ? '95'
+                      : isNew || mode === 'save' || mode === 'save-conflict'
+                        ? '91'
+                        : '88'
+                  );
+                  await expectInsensitive(await app.getById('apply_button'));
+                });
+              }
+            } finally {
+              await chmod(connections, 0o700);
+            }
+          },
+          {
+            args: [],
+            env: {
+              XDG_DATA_HOME: directory,
+              XDG_DATA_DIRS: directory,
+              XDG_CONFIG_DIRS: directory,
+            },
+          }
+        );
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
+  }
+
+  for (const saving of ['normal', 'replacement']) {
+    for (const decision of ['reload', 'keep']) {
+      it(`protects dirty edits from ${saving} saves and lets the user ${decision}`, async (context) => {
+        await runLauncherGtkTest(
+          context,
+          prepareProfiles,
+          async ({ app, connections }) => {
+            const { width } = await beginDirtyConnectionEdit(app, 91);
+            const path = join(connections, 'Alpha.ini');
+            if (saving === 'replacement') {
+              const replacement = join(connections, 'replacement.tmp');
+              await writeFile(replacement, '[terminal]\nwidth=95\n');
+              await rename(replacement, path);
+            } else {
+              await writeFile(path, '[terminal]\nwidth=95\n');
+            }
+            await app.getById('external_change_dialog');
+            expect(await width.text()).toBe('91');
+            await expectElementKind(
+              await app.getById(`external_${decision}_button`),
+              'button'
+            ).click();
+            if (decision === 'reload') {
+              await waitForResult(async () => {
+                expect(await width.text()).toBe('95');
+                await expectInsensitive(await app.getById('apply_button'));
+              });
+            } else {
+              expect(await width.text()).toBe('91');
+              const apply = expectElementKind(
+                await app.getById('apply_button'),
+                'button'
+              );
+              await apply.click();
+              await expectElementKind(
+                await app.getById('external_overwrite_cancel_button'),
+                'button'
+              ).click();
+              expect(await readFile(path, 'utf8')).toContain('width=95');
+              expect(await width.text()).toBe('91');
+              await apply.click();
+              await expectElementKind(
+                await app.getById('external_overwrite_button'),
+                'button'
+              ).click();
+              await waitForResult(async () => {
+                expect(await readFile(path, 'utf8')).toContain('width=91');
+                await expectInsensitive(apply);
+              });
+              await waitForWindowCount(app, 1);
+            }
+          }
+        );
+      });
+    }
+  }
+
+  it('retains the last good editor state after a malformed external save', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app, connections }) => {
+        const list = await app.getById('connection_list');
+        await selectConnectionRow(app, list, 0);
+        await selectSettingsTab(app, 'settings', 'Terminal');
+        const width = expectElementKind(
+          await app.getById('settings_terminal_width_entry'),
+          'entry'
+        );
+        await waitForResult(async () => expect(await width.text()).toBe('88'));
+        expect((await width.info()).states).toContain('showing');
+        await writeFile(join(connections, 'Alpha.ini'), '[broken');
+        await app.getById('operation_error_dialog');
+        expect((await width.info()).states).toContain('showing');
+        expect(await width.text()).toBe('88');
+        await app.input.pressKey('Escape');
+        await waitForWindowCount(app, 1);
+        await writeFile(
+          join(connections, 'Alpha.ini'),
+          '[terminal]\nwidth=95\n'
+        );
+        await waitForResult(async () => expect(await width.text()).toBe('95'));
+      }
+    );
+  });
+
+  it('preserves dirty edits when the selected file is removed externally', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app, connections }) => {
+        const { width } = await beginDirtyConnectionEdit(app, 91);
+        await selectSettingsTab(app, 'settings', 'Terminal');
+        await waitForResult(async () =>
+          expect((await width.info()).states).toContain('showing')
+        );
+        const path = join(connections, 'Alpha.ini');
+        await rm(path);
+        await expectElementKind(
+          await app.getById('external_keep_button'),
+          'button'
+        ).click();
+        expect((await width.info()).states).toContain('showing');
+        expect(await width.text()).toBe('91');
+        await expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        ).click();
+        await expectElementKind(
+          await app.getById('external_overwrite_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(await readFile(path, 'utf8')).toContain('width=91');
+          await expectInsensitive(await app.getById('apply_button'));
+        });
+      }
+    );
+  });
+
+  it('opens General when displaying settings for existing and new connections', async (context) => {
+    await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
+      const list = await app.getById('connection_list');
+      await selectConnectionRow(app, list, 0);
+      await selectSettingsTab(app, 'settings', 'Terminal');
+      await selectConnectionRow(app, list, 1);
+      const width = await app.getById('settings_terminal_width_entry');
+      await waitForResult(async () => {
+        expect(
+          (await (await app.getById('settings_general_name_entry')).info())
+            .states
+        ).toContain('showing');
+        expect((await width.info()).states).not.toContain('showing');
+      });
+      await selectSettingsTab(app, 'settings', 'Terminal');
+      await expectElementKind(
+        await app.getById('new_button'),
+        'button'
+      ).click();
+      await app.input.pressKey('Escape');
+      await waitForResult(async () => {
+        expect(
+          (await (await app.getById('settings_general_name_entry')).info())
+            .states
+        ).toContain('showing');
+        expect((await width.info()).states).not.toContain('showing');
+      });
+      await openGlobalDefaults(app);
+      expect(await selectedSettingsTabName(app, 'global_settings')).toBe(
+        'General'
+      );
+      await selectSettingsTab(app, 'global_settings', 'Terminal');
+      await expectElementKind(
+        await app.getById('global_defaults_cancel_button'),
+        'button'
+      ).click();
+      await waitForWindowCount(app, 1);
+      await openGlobalDefaults(app);
+      expect(await selectedSettingsTabName(app, 'global_settings')).toBe(
+        'General'
+      );
+    });
+  });
+
+  for (const japanese of [false, true]) {
+    it(
+      'offers localized actions for a new unsaved entry: Japanese ' + japanese,
+      async (context) => {
+        await runLauncherGtkTest(
+          context,
+          async () => {},
+          async ({ app }) => {
+            await expectElementKind(
+              await app.getById('new_button'),
+              'button'
+            ).click();
+            await app.input.pressKey('Escape');
+            await rightClickConnectionRow(
+              app,
+              await app.getById('connection_list'),
+              0
+            );
+            for (const [id, name] of [
+              ['save_new_connection_menu_item', japanese ? '保存' : 'Save'],
+              [
+                'edit_connection_menu_item',
+                japanese
+                  ? '保存してテキストエディタで開く'
+                  : 'Save and open in text editor',
+              ],
+              [
+                'rename_connection_menu_item',
+                japanese ? '名前の変更' : 'Rename',
+              ],
+              [
+                'cancel_new_connection_menu_item',
+                japanese ? '新規作成を取り消す' : 'Cancel new connection',
+              ],
+            ]) {
+              const item = await app.getById(id);
+              await waitForResult(async () =>
+                expect((await item.info()).states).toContain('showing')
+              );
+              expect((await item.info()).name).toBe(name);
+              await expectSensitive(item);
+            }
+            for (const id of [
+              'duplicate_connection_menu_item',
+              'delete_connection_menu_item',
+            ]) {
+              const item = await app.findById(id);
+              if (item !== undefined)
+                expect((await item.info()).states).not.toContain('showing');
+            }
+            const directory = fileURLToPath(
+              new URL('../../test-results/launcher/new-entry/', import.meta.url)
+            );
+            await mkdir(directory, { recursive: true });
+            await writeFile(
+              join(directory, japanese ? 'menu-ja.png' : 'menu-en.png'),
+              (await (await app.getById('connection_context_menu')).capture())
+                .image
+            );
+          },
+          { args: [], env: japanese ? japaneseTestEnvironment : {} }
+        );
+      }
+    );
+  }
+
+  it('renames a draft without creating a file and saves it from the context menu', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async () => {},
+      async ({ app, connections }) => {
+        await expectElementKind(
+          await app.getById('new_button'),
+          'button'
+        ).click();
+        await app.input.pressKey('Escape');
+        const list = await app.getById('connection_list');
+        const width = expectElementKind(
+          await app.getById('settings_terminal_width_entry'),
+          'entry'
+        );
+        await selectSettingsTab(app, 'settings', 'Terminal');
+        await width.setText('91');
+        await rightClickConnectionRow(app, list, 0);
+        await expectElementKind(
+          await app.getById('rename_connection_menu_item'),
+          'menuItem'
+        ).click();
+        await replaceFocusedText(app, 'draft renamed');
+        await app.input.pressKey('Return');
+        for (const name of ['New connection.ini', 'draft renamed.ini']) {
+          await expect(
+            readFile(join(connections, name), 'utf8')
+          ).rejects.toMatchObject({ code: 'ENOENT' });
+        }
+        await rightClickConnectionRow(app, list, 0);
+        await expectElementKind(
+          await app.getById('save_new_connection_menu_item'),
+          'menuItem'
+        ).click();
+        await waitForResult(async () => {
+          expect(
+            await readFile(join(connections, 'draft renamed.ini'), 'utf8')
+          ).toContain('width=91');
+          await expectInsensitive(await app.getById('apply_button'));
+        });
+        expect(await connectionRowCount(list)).toBe(1);
+        expect(await selectedSettingsTabName(app, 'settings')).toBe('Terminal');
+        await rightClickConnectionRow(app, list, 0);
+        expect(
+          (await (await app.getById('edit_connection_menu_item')).info()).name
+        ).toBe('Edit in text editor');
+        for (const id of [
+          'duplicate_connection_menu_item',
+          'delete_connection_menu_item',
+        ]) {
+          expect((await (await app.getById(id)).info()).states).toContain(
+            'showing'
+          );
+        }
+        for (const id of [
+          'save_new_connection_menu_item',
+          'cancel_new_connection_menu_item',
+        ]) {
+          const item = await app.findById(id);
+          if (item !== undefined)
+            expect((await item.info()).states).not.toContain('showing');
+        }
+      }
+    );
+  });
+
+  it('confirms cancelling a new connection and removes only the discarded draft', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      prepareProfiles,
+      async ({ app, connections }) => {
+        await expectElementKind(
+          await app.getById('new_button'),
+          'button'
+        ).click();
+        await replaceFocusedText(app, 'unsaved draft');
+        await app.input.pressKey('Return');
+        const list = await app.getById('connection_list');
+        const width = expectElementKind(
+          await app.getById('settings_terminal_width_entry'),
+          'entry'
+        );
+        await selectSettingsTab(app, 'settings', 'Terminal');
+        await width.setText('91');
+        await rightClickConnectionRow(app, list, 2);
+        await expectElementKind(
+          await app.getById('cancel_new_connection_menu_item'),
+          'menuItem'
+        ).click();
+        await expectElementKind(
+          await app.getById('cancel_discard_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+        expect(await connectionRowCount(list)).toBe(3);
+        expect(await width.text()).toBe('91');
+        if (list.kind === 'table')
+          expect((await (await list.cellAt(2, 0))?.info())?.name).toBe(
+            'unsaved draft'
+          );
+        await rightClickConnectionRow(app, list, 2);
+        await expectElementKind(
+          await app.getById('cancel_new_connection_menu_item'),
+          'menuItem'
+        ).click();
+        await expectElementKind(
+          await app.getById('discard_changes_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(await connectionRowCount(list)).toBe(2);
+          expect(
+            (await (await app.getById('empty_details_label')).info()).states
+          ).toContain('showing');
+        });
+        expect(await readFile(join(connections, 'Alpha.ini'), 'utf8')).toBe(
+          '[terminal]\nwidth=88\n'
+        );
+        expect(await readFile(join(connections, 'Beta.ini'), 'utf8')).toBe(
+          '[terminal]\nwidth=99\n'
+        );
+        await expect(
+          readFile(join(connections, 'unsaved draft.ini'), 'utf8')
+        ).rejects.toMatchObject({ code: 'ENOENT' });
+      }
+    );
+  });
+
+  it('explains an invalid draft name without saving or losing the draft', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async () => {},
+      async ({ app, connections }) => {
+        await expectElementKind(
+          await app.getById('new_button'),
+          'button'
+        ).click();
+        await replaceFocusedText(app, '');
+        await app.input.pressKey('BackSpace');
+        await app.input.pressKey('Return');
+        const list = await app.getById('connection_list');
+        await rightClickConnectionRow(app, list, 0);
+        await expectElementKind(
+          await app.getById('save_new_connection_menu_item'),
+          'menuItem'
+        ).click();
+        const error = await app.getById('operation_error_dialog');
+        expect((await error.info()).states).toContain('showing');
+        const labels: string[] = [];
+        const pending = [error];
+        while (pending.length > 0) {
+          const widget = pending.pop()!;
+          if (widget.kind === 'label')
+            labels.push((await widget.info()).name ?? '');
+          if ('getChildCount' in widget && 'childAt' in widget) {
+            for (
+              let index = 0;
+              index < (await widget.getChildCount());
+              index++
+            ) {
+              const child = await widget.childAt(index);
+              if (child !== undefined) pending.push(child);
+            }
+          }
+        }
+        expect(labels.join('\n')).toMatch(/name/i);
+        await app.input.pressKey('Escape');
+        await waitForWindowCount(app, 1);
+        expect(await connectionRowCount(list)).toBe(1);
+        await expect(
+          readFile(join(connections, 'New connection.ini'), 'utf8')
+        ).rejects.toMatchObject({ code: 'ENOENT' });
+        await rightClickConnectionRow(app, list, 0);
+        expect(
+          (await (await app.getById('save_new_connection_menu_item')).info())
+            .states
+        ).toContain('showing');
       }
     );
   });
@@ -1921,6 +2742,426 @@ describe('elder-terms main window', () => {
       await Promise.all([fakeFileTransfer.release(), fakeVte.release()]);
     }
   });
+
+  for (const mode of ['explicit', 'implicit'] as const)
+    for (const legacyPrompt of [false, true]) {
+      it(`saves FTPS settings and transfers from the launcher: ${mode}-${legacyPrompt ? 'legacy-prompt' : 'verified'}`, async (context) => {
+        const directory = await mkdtemp(
+          join(tmpdir(), 'elder-terms-launcher-ftps-')
+        );
+        const local = join(directory, 'local');
+        const root = join(directory, 'remote');
+        const remote = join(root, 'home');
+        const certificate = join(directory, 'certificate.pem');
+        const key = join(directory, 'key.pem');
+        let server: ReturnType<typeof spawn> | undefined;
+        let serverFinished: Promise<number | null> | undefined;
+        const events: string[] = [];
+        let serverLog = '';
+        let phase = 'create fixture';
+        try {
+          await mkdir(local);
+          await mkdir(remote, { recursive: true });
+          await writeFile(
+            join(local, 'from-launcher.txt'),
+            'FTPS launcher upload\n'
+          );
+          await writeFile(
+            join(remote, 'from-server.txt'),
+            'FTPS server contents\n'
+          );
+          const generated = spawnSync(
+            'openssl',
+            [
+              'req',
+              '-x509',
+              '-newkey',
+              'rsa:2048',
+              '-noenc',
+              '-keyout',
+              key,
+              '-out',
+              certificate,
+              '-days',
+              '1',
+              '-subj',
+              '/CN=localhost',
+              '-addext',
+              'subjectAltName=IP:127.0.0.1',
+            ],
+            { encoding: 'utf8' }
+          );
+          expect(generated.status, generated.stderr).toBe(0);
+          server = spawn(
+            fileURLToPath(
+              new URL(
+                '../../.build/elder-terms-vte/ftp-test-server',
+                import.meta.url
+              )
+            ),
+            [
+              root,
+              '--trace',
+              `--tls=${mode}`,
+              `--cert=${certificate}`,
+              `--key=${key}`,
+              ...(legacyPrompt ? ['--tls-version=769', '--legacy-tls'] : []),
+            ],
+            { stdio: ['pipe', 'pipe', 'pipe'] }
+          );
+          createInterface({ input: server.stdout! }).on('line', (line) =>
+            events.push(line)
+          );
+          server.stderr!.on('data', (bytes: Buffer) => {
+            serverLog += bytes.toString();
+          });
+          let serverError: Error | undefined;
+          serverFinished = new Promise((resolve) => {
+            server!.once('error', (error) => {
+              serverError = error;
+              resolve(null);
+            });
+            server!.once('close', resolve);
+          });
+          const ready = await waitForResult(async () => {
+            if (serverError) throw serverError;
+            const line = events.find((value) => value.startsWith('READY '));
+            expect(line, serverLog).toBeDefined();
+            return line!;
+          });
+          await runLauncherGtkTest(
+            context,
+            async (connections) => {
+              await writeFile(
+                join(connections, 'Other.ini'),
+                '[general]\ntype=ftp\n'
+              );
+            },
+            async ({ app, connections }) => {
+              phase = 'configure profile';
+              const list = await app.getById('connection_list');
+              await expectElementKind(
+                await app.getById('new_button'),
+                'button'
+              ).click();
+              await app.input.pressKey('Escape');
+              await selectSettingsTab(app, 'settings', 'General');
+              const type = expectElementKind(
+                await app.getById('settings_general_type_combo'),
+                'comboBox'
+              );
+              await type.selectChildAt(6);
+              await expectSelectedComboValue(
+                app,
+                'settings_general_type_combo',
+                'FTP'
+              );
+              await selectSettingsTab(app, 'settings', 'FTP');
+              for (const [name, value] of [
+                ['address', '127.0.0.1'],
+                ['port', ready.slice(6)],
+                ['username', 'alice'],
+                ['local_directory', local],
+                ['remote_directory', '/home'],
+              ])
+                await expectElementKind(
+                  await app.getById('settings_ftp_' + name + '_entry'),
+                  'entry'
+                ).setText(value);
+              await expectElementKind(
+                await app.getById('settings_ftp_tls_mode_combo'),
+                'comboBox'
+              ).selectChildAt(mode === 'explicit' ? 2 : 3);
+              await expectElementKind(
+                await app.getById('settings_ftp_ca_file_mode_combo'),
+                'comboBox'
+              ).selectChildAt(legacyPrompt ? 1 : 2);
+              if (!legacyPrompt)
+                await expectElementKind(
+                  await app.getById('settings_ftp_ca_file_entry'),
+                  'entry'
+                ).setText(certificate);
+              await expectElementKind(
+                await app.getById('settings_ftp_tls_min_version_combo'),
+                'comboBox'
+              ).selectChildAt(legacyPrompt ? 1 : 3);
+              await expectElementKind(
+                await app.getById('settings_ftp_tls_max_version_combo'),
+                'comboBox'
+              ).selectChildAt(legacyPrompt ? 2 : 4);
+              if (legacyPrompt) {
+                await expectElementKind(
+                  await app.getById('settings_ftp_tls_compatibility_combo'),
+                  'comboBox'
+                ).selectChildAt(2);
+                await expectElementKind(
+                  await app.getById(
+                    'settings_ftp_certificate_error_action_combo'
+                  ),
+                  'comboBox'
+                ).selectChildAt(2);
+              }
+              phase = 'save profile';
+              await expectSensitive(await app.getById('apply_button'));
+              await expectElementKind(
+                await app.getById('apply_button'),
+                'button'
+              ).click();
+              await waitForResult(async () => {
+                const saved = await readFile(
+                  join(connections, 'New connection.ini'),
+                  'utf8'
+                );
+                for (const value of [
+                  `tls_mode=${mode}`,
+                  `ca_file=${legacyPrompt ? '' : certificate}`,
+                  `tls_min_version=${legacyPrompt ? '1.0' : '1.2'}`,
+                  `tls_max_version=${legacyPrompt ? '1.0' : '1.2'}`,
+                ])
+                  expect(saved).toContain(value);
+              });
+              phase = 'reselect saved profile';
+              await selectConnectionRow(app, list, 1);
+              await waitForResult(async () => {
+                expect(
+                  await expectElementKind(
+                    await app.getById('settings_ftp_username_entry'),
+                    'entry'
+                  ).text()
+                ).toBe('');
+              });
+              await selectConnectionRow(app, list, 0);
+              await waitForResult(async () => {
+                expect(
+                  await expectElementKind(
+                    await app.getById('settings_ftp_username_entry'),
+                    'entry'
+                  ).text()
+                ).toBe('alice');
+              });
+              await selectSettingsTab(app, 'settings', 'FTP');
+              expect(
+                await expectElementKind(
+                  await app.getById('settings_ftp_ca_file_entry'),
+                  'entry'
+                ).text()
+              ).toBe(legacyPrompt ? '' : certificate);
+              phase = 'open transfer window';
+              await expectElementKind(
+                await app.getById('connect_button'),
+                'button'
+              ).click();
+              await expectElementKind(
+                await app.getById('file_transfer_prompt_entry'),
+                'entry'
+              ).setText('alice');
+              await expectElementKind(
+                await app.getById('file_transfer_prompt_secondary_entry'),
+                'entry'
+              ).setText('secret');
+              await expectElementKind(
+                await app.getById('file_transfer_prompt_accept_button'),
+                'button'
+              ).click();
+              if (legacyPrompt) {
+                await waitForResult(async () =>
+                  expect(
+                    await expectElementKind(
+                      await app.getById('file_transfer_prompt_title_label'),
+                      'label'
+                    ).text()
+                  ).toBe('FTPS certificate validation failed')
+                );
+                expect(serverLog).not.toContain('COMMAND USER');
+                await expectElementKind(
+                  await app.getById('file_transfer_prompt_accept_button'),
+                  'button'
+                ).click();
+              }
+              await waitForResult(async () => {
+                expect(
+                  await expectElementKind(
+                    await app.getById('file_transfer_status_label'),
+                    'label'
+                  ).text()
+                ).toBe(
+                  'Ready' +
+                    (legacyPrompt ? ' — Certificate exception active' : '')
+                );
+                expect(
+                  await expectElementKind(
+                    await app.getById('file_transfer_local_path_entry'),
+                    'entry'
+                  ).text()
+                ).toBe(local);
+                expect(
+                  await expectElementKind(
+                    await app.getById('file_transfer_remote_path_entry'),
+                    'entry'
+                  ).text()
+                ).toBe('/home');
+              });
+              phase = 'read transfer listing';
+              const localTree = expectElementKind(
+                await app.getById('file_transfer_local_tree'),
+                'table'
+              );
+              const remoteTree = expectElementKind(
+                await app.getById('file_transfer_remote_tree'),
+                'table'
+              );
+              await waitForResult(async () => {
+                expect((await remoteTree.info()).states).toContain('sensitive');
+                expect(await remoteTree.getRowCount()).toBeGreaterThan(0);
+              });
+              const row = await waitForResult(async () => {
+                for (
+                  let index = 0;
+                  index < (await localTree.getRowCount());
+                  index++
+                )
+                  if (
+                    (await (await localTree.cellAt(index, 0))?.info())?.name ===
+                    'from-launcher.txt'
+                  )
+                    return index;
+                throw Error('Local file missing');
+              });
+              await localTree.selectRow(row);
+              const bounds = await waitForResult(async () => {
+                const cell = await localTree.cellAt(row, 0);
+                expect((await cell?.info())?.name).toBe('from-launcher.txt');
+                return (await cell!.capture()).bounds;
+              });
+              await app.input.moveMouseTo(
+                Math.round(bounds.x + bounds.width / 2),
+                Math.round(bounds.y + bounds.height / 2)
+              );
+              phase = 'open local file menu';
+              await app.input.setMouseButton('right', true);
+              await app.input.setMouseButton('right', false);
+              await expectElementKind(
+                await app.getById('file_transfer_send_item'),
+                'menuItem'
+              ).click();
+              phase = 'upload local file';
+              try {
+                await waitForResult(async () =>
+                  expect(
+                    await readFile(join(remote, 'from-launcher.txt'), 'utf8')
+                  ).toBe('FTPS launcher upload\n')
+                );
+              } catch (error) {
+                const evidence = fileURLToPath(
+                  new URL('../../test-results/launcher/', import.meta.url)
+                );
+                await mkdir(evidence, { recursive: true });
+                await writeFile(
+                  join(
+                    evidence,
+                    `launcher-ftps-${mode}-${legacyPrompt}-failed.png`
+                  ),
+                  (await app.capture()).image
+                );
+                throw error;
+              }
+              await waitForResult(async () =>
+                expect(
+                  await expectElementKind(
+                    await app.getById('file_transfer_status_label'),
+                    'label'
+                  ).text()
+                ).toBe(
+                  'Sent 1 item' +
+                    (legacyPrompt ? ' — Certificate exception active' : '')
+                )
+              );
+              const negotiated = serverLog
+                .split('\n')
+                .filter(
+                  (line) =>
+                    line.startsWith('TLS CONTROL') ||
+                    line.startsWith('TLS DATA')
+                );
+              expect(negotiated.length).toBeGreaterThan(1);
+              expect(
+                negotiated.every(
+                  (line) =>
+                    line.split(' ')[2] === (legacyPrompt ? 'TLSv1' : 'TLSv1.2')
+                )
+              ).toBe(true);
+              const evidence = fileURLToPath(
+                new URL('../../test-results/launcher/', import.meta.url)
+              );
+              await mkdir(evidence, { recursive: true });
+              await writeFile(
+                join(
+                  evidence,
+                  `launcher-ftps-${mode}-${legacyPrompt ? 'legacy-prompt' : 'verified'}.png`
+                ),
+                (await app.capture()).image
+              );
+              phase = 'close transfer window';
+              // Close the transfer window through its own header, leaving the launcher available.
+              const pending: GtkWidgetElement[] = [
+                await app.getById('file_transfer_header_bar'),
+              ];
+              let closed = false;
+              while (pending.length) {
+                const widget = pending.shift()!;
+                if (
+                  widget.kind === 'button' &&
+                  (await widget.info()).name === 'Close'
+                ) {
+                  await widget.click();
+                  closed = true;
+                  break;
+                }
+                if ('getChildCount' in widget)
+                  for (
+                    let index = 0;
+                    index < (await widget.getChildCount());
+                    index++
+                  ) {
+                    const child = await widget.childAt(index);
+                    if (child) pending.push(child);
+                  }
+              }
+              expect(closed).toBe(true);
+              await waitForResult(async () =>
+                expect(await app.getWindowCount()).toBe(1)
+              );
+            },
+            {
+              args: [],
+              env: {
+                ELDER_TERMS_FILE_TRANSFER_PATH:
+                  process.env.ELDER_TERMS_TEST_FTP_APP ??
+                  fileURLToPath(
+                    new URL(
+                      '../../.build/elder-terms-vte/elder-terms-file-transfer',
+                      import.meta.url
+                    )
+                  ),
+              },
+            }
+          );
+        } catch (error) {
+          throw new Error(
+            'FTPS launcher failed during ' +
+              phase +
+              ': ' +
+              String(error) +
+              '\nFTP fixture trace:\n' +
+              serverLog
+          );
+        } finally {
+          server?.kill('SIGTERM');
+          if (serverFinished) await serverFinished;
+          await rm(directory, { recursive: true, force: true });
+        }
+      }, 120_000);
+    }
 
   it('routes an FTP profile to the file transfer application', async (context) => {
     const fakeVte = await createFakeVte();

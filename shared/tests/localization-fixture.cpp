@@ -30,5 +30,32 @@ int main(int argc, char **argv) {
   std::cout << dgettext("elder-terms", "Hash calculation complete") << '\n';
   std::cout << dgettext("elder-terms", "File hash values") << '\n';
   std::cout << dgettext("elder-terms", "Calculate Hash Values") << '\n';
+  for (const auto *message : {
+      "Connection security",
+      "Published path",
+      "Authentication",
+      "Connection timeout (seconds)",
+      "Idle timeout (seconds)",
+      "HTTPS (encrypted)",
+      "HTTP (unencrypted)",
+      "Automatic (Basic or Digest)",
+      "Enter a valid value",
+      "Complete the connection settings to preview the URL",
+      "Connection URL",
+      "WebDAV authentication",
+      "Failed to start WebDAV",
+      "HTTPS certificate validation failed",
+      "HTTPS connection",
+      "New folder",
+      "Create",
+      "Enter a name for the new folder.",
+      "Creating folder…",
+      "Failed to create folder",
+      "Folder creation cancelled",
+      "Created folder \"%s\"",
+      "WebDAV",
+      "Basic",
+      "Digest"})
+    std::cout << dgettext("elder-terms", message) << '\n';
   return localization.requested_language_applied ? 0 : 1;
 }

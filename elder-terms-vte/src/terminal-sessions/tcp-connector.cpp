@@ -61,6 +61,13 @@ resolve_socket_addresses_async(std::string host, std::uint16_t port,
   auto resolver =
       std::shared_ptr<GResolver>(g_resolver_get_default(), g_object_unref);
   auto host_holder = std::make_shared<std::string>(std::move(host));
+  // TODO: ASan with GCC 12.2 reports a use-after-free in the captured
+  // GResolver shared_ptr's control block when this coroutine exits.
+  // An isolated full-suite run passed after storing submit()'s promise in
+  // a local variable and awaiting it in a separate statement. A compiler
+  // temporary-lifetime issue is suspected but remains unconfirmed.
+  // Related GCC report (not confirmed to be the same issue):
+  // https://gcc.gnu.org/pipermail/gcc-bugs/2022-November/805094.html
   GList *raw_addresses = co_await cardio::gio::submit<GList *>(
       [resolver, host_holder](GCancellable *cancellable,
                               GAsyncReadyCallback callback,

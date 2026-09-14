@@ -124,6 +124,8 @@ struct MainWindow {
   GtkWidget *disconnected_notice_background = nullptr;
   /** Label inside the inline disconnected notice. */
   GtkWidget *disconnected_notice_label = nullptr;
+  /** Reconnection control inside the disconnected notice. */
+  GtkWidget *reconnect_button = nullptr;
   /** Overlay container for transfer progress and cancellation controls. */
   GtkWidget *transfer_progress_overlay = nullptr;
   /** Inline transfer progress notice shown on the terminal surface. */
@@ -177,9 +179,17 @@ struct MainWindow {
   std::array<GtkWidget *, activity_indicator_count()> indicator_labels{};
   /** True when the indicator should accept activity events. */
   std::array<bool, activity_indicator_count()> indicator_visible{};
-  /** Shared lit indicator pixbuf. */
+  /** Owned original lit image, retained for tinting and restoring defaults. */
+  GdkPixbuf *indicator_default_on_icon = nullptr;
+  /** Owned original gray image, retained for restoring the inactive default. */
+  GdkPixbuf *indicator_default_off_icon = nullptr;
+  /** Applied active RGB color, or null for the original green image. */
+  std::optional<guint32> indicator_color;
+  /** Applied inactive RGB color, or null for the original gray image. */
+  std::optional<guint32> indicator_off_color;
+  /** Owned shared lit indicator pixbuf. */
   GdkPixbuf *indicator_on_icon = nullptr;
-  /** Shared dark indicator pixbuf. */
+  /** Owned shared inactive indicator pixbuf. */
   GdkPixbuf *indicator_off_icon = nullptr;
   /** Activity indicator runtime states. */
   std::array<ActivityIndicatorWidget, activity_indicator_count()> indicators{};
@@ -215,6 +225,16 @@ std::optional<MainWindow> load_main_window();
  */
 void set_main_window_colors(MainWindow *main_window,
                             const GeneralColorSettings &settings);
+
+/**
+ * Applies shared active and inactive tints without resetting current activity.
+ * @param main_window Window owning indicator images and states.
+ * @param color Active RGB tint, or null to restore the original green image.
+ * @param off_color Inactive RGB tint, or null to restore the original gray image.
+ */
+void set_main_window_indicator_color(MainWindow *main_window,
+                                      const std::optional<RgbColor> &color,
+                                      const std::optional<RgbColor> &off_color);
 
 /**
  * Registers the open runtime settings dialog for connection color updates.
@@ -292,9 +312,19 @@ void set_main_window_connection_phase(MainWindow *main_window,
  *
  * @param main_window Main window containing the disconnected notice.
  * @param message Backend failure reason.
+ * @param kind Backend whose failure is being displayed.
  */
 void set_main_window_connection_failure(MainWindow *main_window,
-                                        const std::string &message);
+                                        const std::string &message,
+                                        TerminalConnectionKind kind);
+
+/**
+ * Updates the reconnect button and the overlay's native input handling.
+ * @param main_window Main window containing the disconnected notice.
+ * @param presentation Visibility and readiness derived from session state.
+ */
+void set_main_window_reconnect_presentation(
+    MainWindow *main_window, TerminalReconnectPresentation presentation);
 
 /**
  * Updates only the terminal interactive/read-only presentation.

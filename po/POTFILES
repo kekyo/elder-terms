@@ -1,4 +1,5 @@
 shared/src/settings-widget/settings-presentation.cpp
+shared/src/settings-widget/settings-widget.cpp
 shared/src/settings-widget/application-settings-widget.cpp
 shared/src/settings-widget/hyperlink-settings-editor.cpp
 elder-terms/src/main.cpp
@@ -9,6 +10,7 @@ elder-terms-vte/src/main.cpp
 elder-terms-vte/src/main-window.ui
 elder-terms-vte/src/main-window.cpp
 elder-terms-vte/src/file-transfer/file-transfer-main.cpp
+elder-terms-vte/src/file-transfer/file-transfer-certificate-prompt.cpp
 elder-terms-vte/src/file-transfer/file-transfer-window.cpp
 elder-terms-vte/src/terminal-session.cpp
 elder-terms-vte/src/terminal-text-send-runner.cpp
@@ -18,3 +20,5 @@ elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp
 elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp
 elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp
 elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp
+shared/src/settings-widget/webdav-settings-editor.cpp
+elder-terms-vte/src/webdav/webdav-application.cpp

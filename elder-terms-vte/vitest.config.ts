@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import prettierMax from 'prettier-max';
+import { getTestFontEnvironment } from '../scripts/test-font-environment.mjs';
 
 const formatTestResultRunId = (date: Date): string => {
   const pad = (value: number, length: number): string =>
@@ -66,6 +67,7 @@ export default defineConfig({
   plugins: [prettierMax()],
   test: {
     env: {
+      ...getTestFontEnvironment(),
       ELDER_TERMS_TEST_RESULT_RUN_ID: testResultRunId,
       ELDER_TERMS_VTE_TEST_FILE_PARALLELISM: String(testFileParallelism),
       ELDER_TERMS_VTE_TEST_MAX_CONCURRENCY: String(testMaxConcurrency),

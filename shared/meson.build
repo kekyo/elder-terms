@@ -56,11 +56,15 @@ elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/key-binding.cpp',
   'src/key-binding-input-widget.cpp',
   'src/localization.cpp',
+  'src/modal-dialog.cpp',
+  'src/modal-color-button.cpp',
   'src/ip-scanner.cpp',
+  'src/ip-scan-name-resolver.cpp',
   'src/serial-device.cpp',
   'src/serial-device-event-monitor.cpp',
   'src/settings/application-settings.cpp',
   'src/settings/ftp-settings.cpp',
+  'src/settings/webdav-settings.cpp',
   'src/settings/general-settings.cpp',
   'src/settings/hyperlink-settings.cpp',
   'src/settings/local-session-settings.cpp',
@@ -80,6 +84,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/settings-widget/settings-presentation.cpp',
   'src/settings-widget/application-settings-widget.cpp',
   'src/settings-widget/hyperlink-settings-editor.cpp',
+  'src/settings-widget/webdav-settings-editor.cpp',
   'src/settings-widget/settings-widget.cpp',
 ]
 
@@ -120,6 +125,15 @@ elder_terms_dep = declare_dependency(
 )
 
 if get_option('build_tests')
+elder_terms_modal_dialog_test = executable(
+  'elder-terms-modal-dialog-test',
+  'tests/modal-dialog-test.cpp',
+  dependencies: elder_terms_dep,
+)
+test('elder-terms-modal-dialog-test', find_program('xvfb-run'),
+  args: ['-a', elder_terms_modal_dialog_test], timeout: 120,
+  env: ['GSETTINGS_BACKEND=memory'])
+
 elder_terms_cpp_compiler = meson.get_compiler('cpp')
 elder_terms_dl_dep = elder_terms_cpp_compiler.find_library('dl')
 elder_terms_cardio_test_include_dir = include_directories(
@@ -174,6 +188,7 @@ elder_terms_ip_scanner_test = executable(
   'elder-terms-ip-scanner-test',
   [
     'src/ip-scanner.cpp',
+    'src/ip-scan-name-resolver.cpp',
     'tests/ip-scanner-test.cpp',
   ],
   include_directories: elder_terms_shared_include_dir,
@@ -182,6 +197,15 @@ elder_terms_ip_scanner_test = executable(
     elder_terms_shared_gio_dep,
   ],
 )
+
+elder_terms_ip_scan_name_resolver_test = executable(
+  'elder-terms-ip-scan-name-resolver-test',
+  ['src/ip-scan-name-resolver.cpp', 'tests/ip-scan-name-resolver-test.cpp'],
+  include_directories: elder_terms_shared_include_dir,
+  dependencies: [cardio_dep, elder_terms_shared_gio_dep],
+)
+test('elder-terms-ip-scan-name-resolver-test',
+     elder_terms_ip_scan_name_resolver_test)
 
 test('elder-terms-ip-scanner-test', elder_terms_ip_scanner_test)
 
