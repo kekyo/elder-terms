@@ -1,6 +1,6 @@
-## FTP/SFTP details
+# FTP/SFTP details
 
-### Using FTP with TLS (FTPS)
+## Using FTP with TLS (FTPS)
 
 To use [FTPS](https://everything.curl.dev/ftp/ftps.html), choose FTPS (explicit TLS)
 or FTPS (implicit TLS) under Encryption in the FTP tab. The equivalent INI values
@@ -77,7 +77,7 @@ cipher expressions are rejected. See the official
 [cipher selection](https://curl.se/libcurl/c/CURLOPT_SSL_CIPHER_LIST.html) documentation
 for backend limitations.
 
-### FTPS Certificate Errors
+## FTPS Certificate Errors
 
 Under Certificate validation failure, choose Reject connection (the default)
 or Confirm in an overlay. The corresponding INI values are
@@ -106,7 +106,7 @@ OpenSSL version. Other TLS backends can use the default rejection policy but
 cannot use this confirmation mode. This follows the backend-specific context
 contract of [libcurl's TLS context callback](https://curl.se/libcurl/c/CURLOPT_SSL_CTX_FUNCTION.html).
 
-### FTP Data Connections
+## FTP Data Connections
 
 With FTPS, the control connection is encrypted, so a firewall or NAT device
 cannot inspect FTP commands to discover the data ports. Configure the server's
@@ -137,7 +137,7 @@ active operation, not additional data connection modes. The IP family is
 selected when the server address is resolved. Proxy traversal and configurable
 data-port ranges are not separate options in elder-terms.
 
-### FTP Operation Ordering and Compatibility
+## FTP Operation Ordering and Compatibility
 
 Opening a directory node and every other remote operation starts
 asynchronously, so the GTK window remains responsive. Each FTP window has its

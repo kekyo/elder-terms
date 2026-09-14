@@ -38,9 +38,9 @@ elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP
 
 ![Colored terminal](./images/colored-terminal.png)
 
-### FTP/SFTP
+### SFTP/FTP/FTPS/WebDAV
 
-![FTP/SFTP window](./images/sftp.png)
+![SFTP/FTP/FTPS/WebDAV window](./images/sftp.png)
 
 ## Features
 
@@ -58,8 +58,8 @@ elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP
   `xterm-256color`, for TELNET and SSH.
 - Supports X/Y/ZMODEM file transfers for TELNET, serial, and SSH terminal
   connections. Automatic transfers can be enabled for ZMODEM.
-- Transfers files to and from the host of an SSH connection over SFTP.
-- Transfers files over FTP using passive or active data connections.
+- Transfers files to and from the host over SFTP/FTP/FTPS and WebDAV.
+- Transfers files over FTP and FTPS using passive or active data connections.
 - Supports pasting text and sending text files. You can specify the send rate
   and newline handling to avoid overflowing the host's buffer or using
   incompatible newline codes.
@@ -136,31 +136,9 @@ detail. Those settings are described in the following sections.
 
 To edit a saved connection's INI file directly, right-click its entry in the
 launcher and select "Edit in text editor". This uses your desktop's default
-application for plain text files. For a new unsaved entry, the menu offers
-"Save", "Rename", "Cancel new connection", and "Save and open in text editor".
-Renaming a draft does not create a file. Cancelling creation asks before
-discarding the draft; cancelling that confirmation keeps your edits.
-"Save and open in text editor" saves the entry first. Invalid input or a save
-failure is explained without losing the draft or opening the editor.
-If a saved entry has unsaved edits, choose whether to save or discard them
-before opening the editor, or cancel to keep editing in the launcher.
-
-Selecting a connection, creating a new one, or opening connection settings
-starts on the General tab. Applying or saving settings, or reloading external
-changes into an already open editor, keeps the current tab.
-
+application for plain text files.
 Changes saved in an external editor are reloaded automatically, including
-editors that replace the file when saving. If you also have unsaved edits in
-the launcher, choose "Reload from file" to discard them or "Keep edits" to
-preserve them. Saving kept edits asks before overwriting the externally
-changed file. A removed or malformed file leaves the last usable editor state
-intact; correct the file or explicitly save your retained edits to replace it.
-If no text editor is configured or the desktop rejects its launch request,
-elder-terms reports the problem without closing the selected connection.
-Errors inside the editor after the desktop accepts that request must be
-checked in the editor itself; elder-terms does not wait for it to finish.
-See the [desktop launch mechanism](https://github.com/GNOME/glib/blob/2.80.0/gio/gdesktopappinfo.c)
-for the handoff to the desktop's launcher.
+editors that replace the file when saving.
 
 It is also useful to remember that `Ctrl`+`=` increases the font size and
 `Ctrl`+`-` decreases it. You can do the same with the mouse wheel while holding
@@ -169,7 +147,8 @@ It is also useful to remember that `Ctrl`+`=` increases the font size and
 ![Settings (Terminal)](./images/font-size.png)
 
 Terminal window placement is left to your window manager or Wayland
-compositor. Use bindings such as the `Super` key according to your window
+compositor.
+Use bindings such as the `Super` key according to your window
 system environment.
 
 Today, IoT development often involves debugging and collecting logs from
@@ -183,6 +162,8 @@ of the terminal will satisfy that nostalgia:
 
 Think the blinking looks suspiciously regular? Of course it does. It is an
 homage to the [SONY NEWS workstation](https://en.wikipedia.org/wiki/Sony_NEWS).
+
+Well then, enjoy elder-terms!
 
 ---
 
@@ -222,36 +203,37 @@ built-in default again.
 ## Finding a Host with IP Scan
 
 The TELNET, SSH/SFTP, and FTP settings place an "IP scan" button beside the
-address field. Opening it immediately scans the IPv4 ranges of all configured
-network interfaces for the standard FTP (21), SSH/SFTP (22), and TELNET (23)
-TCP ports. For example, a `/24` interface scans every address whose final octet
-is 0 through 255. A range wider than `/24` is limited to its first 256
-addresses by treating the additional upper host bits as zero. For example, an
-address on `172.20.0.0/16` scans `172.20.0.0` through `172.20.0.255`.
+address field.
+Opening it immediately scans the IPv4 ranges of all configured network interfaces for the standard FTP (21), SSH/SFTP (22), and TELNET (23) TCP ports.
+
+For example, a `/24` interface scans every address whose final octet is 0 through 255.
+A range wider than `/24` is limited to its first 256 addresses by treating the additional upper host bits as zero.
+For example, an address on `172.20.0.0/16` scans `172.20.0.0` through `172.20.0.255`.
 
 Discovered hosts appear as the scan proceeds, together with their resolved host
-name when available. The SSH/SFTP (22), TELNET (23), and FTP (21) columns show
-a check mark when the corresponding port was found. The progress bar shows how
-much of the combined range has been checked. Double-click a row to stop the
-scan, close the dialog, and copy the resolved name into the setting if it is
-already available. Otherwise, the numeric IP address is used. The connection
-type, port, and entry name are unchanged.
+name when available.
+The SSH/SFTP (22), TELNET (23), and FTP (21) columns show a check mark when the corresponding port was found.
+The progress bar shows how much of the combined range has been checked.
+
+Double-click a row to stop the scan, close the dialog, and copy the resolved name into the setting if it is already available.
+Otherwise, the numeric IP address is used.
+The connection type, port, and entry name are unchanged.
+
 Click "Cancel" to stop and close the scan without changing the address.
 
-Only locally configured IPv4 ranges are scanned. Interfaces without an IPv4
-address are skipped. Loopback interfaces scan only their assigned addresses,
-rather than the whole loopback range. Name lookup uses the system resolver first,
-then mDNS and LLMNR in parallel, preferring mDNS if both return names. It keeps
-`.local` and single-label names unchanged. Name lookup has a shared three-second
-deadline per host, including up to one second for the initial system lookup.
+Only locally configured IPv4 ranges are scanned.
+Interfaces without an IPv4 address are skipped.
+Loopback interfaces scan only their assigned addresses, rather than the whole loopback range.
 
-Explicit mDNS/LLMNR lookup requires `systemd-resolved` with those protocols enabled
-on the relevant network interface. Normal hostname resolution must also reach
-`systemd-resolved` to connect using the discovered names. The application does
-not change your system's resolver configuration. If the service or protocol is
-unavailable, scanning still works with system-resolved names or numeric addresses.
-See the [systemd resolver API documentation](https://github.com/systemd/systemd/blob/v257/man/org.freedesktop.resolve1.xml)
-for protocol availability and interface selection requirements.
+Name lookup uses the system resolver first, then mDNS and LLMNR in parallel, preferring mDNS if both return names. It keeps `.local` and single-label names unchanged.
+Name lookup has a shared three-second deadline per host, including up to one second for the initial system lookup.
+
+Explicit mDNS/LLMNR lookup requires `systemd-resolved` with those protocols enabled on the relevant network interface.
+Normal hostname resolution must also reach `systemd-resolved` to connect using the discovered names.
+The application does not change your system's resolver configuration.
+
+If the service or protocol is unavailable, scanning still works with system-resolved names or numeric addresses.
+See the [systemd resolver API documentation](https://github.com/systemd/systemd/blob/v257/man/org.freedesktop.resolve1.xml) for protocol availability and interface selection requirements.
 
 ## Using SSH and SFTP
 
@@ -289,45 +271,6 @@ an in-progress attempt.
 
 Automatic closing keeps its existing default and behavior. This button is not
 available with automatic closing enabled or for local and serial terminals.
-
-## Managing Items in SFTP and FTP
-
-SFTP and FTP use the same two-pane file browser. Select an item in either the
-local or remote pane and right-click it to open the item menu. Multiple items
-can be selected with `Ctrl`+click or a drag rectangle before opening the menu.
-
-- `Rename` is available when exactly one file or directory is selected. Enter
-  the new name in the window overlay. The item stays in its current directory,
-  and an existing item is never overwritten.
-- `Delete` is available for one or more selected files and directories. The
-  confirmation overlay lists the effective deletion roots before anything is
-  removed. A non-empty directory is deleted recursively. If both a directory
-  and one of its descendants are selected, the descendant is covered by that
-  directory and is not listed or processed twice.
-- `Calculate Hash Values` is available when exactly one regular file is
-  selected. For a local file, elder-terms calculates MD5, SHA-1, and SHA-256
-  internally. For a remote file over SFTP, the SSH server must permit command
-  execution and make `md5sum`, `sha1sum`, and `sha256sum` available in the
-  connected account's command search path. Calculation fails if these
-  conditions are not met. Hash calculation for remote files over FTP is not
-  supported; hash calculation in the local pane remains available.
-
-On a Debian or Ubuntu SFTP server, the required commands are provided by the
-[`coreutils` package for Debian](https://packages.debian.org/stable/coreutils)
-or the
-[`coreutils` package for Ubuntu](https://packages.ubuntu.com/search?keywords=coreutils&searchon=names&suite=all&section=all).
-Install it on the server as follows:
-
-```shell
-sudo apt update
-sudo apt install coreutils
-```
-
-Deletion is permanent and does not use the desktop trash. In the local pane
-and over SFTP, deleting a symbolic link removes the link itself without
-following its target. Rename and deletion run asynchronously; the browser is
-temporarily covered by a progress overlay and is refreshed when the operation
-finishes.
 
 ## Using FTP/FTPS
 
@@ -370,12 +313,55 @@ and authentication on the WebDAV tab. For `https://files.example.com/dav/team/`,
 use `files.example.com` as the address and `/dav/team/` as the published path.
 HTTPS is the default; HTTP is also available.
 
+The read-only URL preview shows the resulting address. Enter the server name separately from its scheme, path and credentials.
+
+The base path becomes `/` in the file browser.
+You cannot navigate above it. An initial remote directory of `/Documents` starts this example at `/dav/team/Documents`.
+
 The shared SFTP/FTP/FTPS browser supports file and folder uploads and downloads,
 folder creation, renaming, and deletion. Basic/Digest passwords are entered when
 connecting and are not saved. HTTPS certificate failures are either rejected or
 shown in the same confirmation overlay as FTPS, according to the connection settings.
 
 See [Using WebDAV](./docs/en/webdav.md) for settings and supported operations.
+
+## Managing Items in SFTP/FTP/FTPS and WebDAV
+
+SFTP/FTP/FTPS and WebDAV use the same two-pane file browser.
+Select an item in either the local or remote pane and right-click it to open the item menu.
+Multiple items can be selected with `Ctrl`+click or a drag rectangle before opening the menu.
+
+- `Rename` is available when exactly one file or directory is selected. Enter
+  the new name in the window overlay. The item stays in its current directory,
+  and an existing item is never overwritten.
+- `Delete` is available for one or more selected files and directories. The
+  confirmation overlay lists the effective deletion roots before anything is
+  removed. A non-empty directory is deleted recursively. If both a directory
+  and one of its descendants are selected, the descendant is covered by that
+  directory and is not listed or processed twice.
+- `Calculate Hash Values` is available when exactly one regular file is
+  selected. For a local file, elder-terms calculates MD5, SHA-1, and SHA-256
+  internally. For a remote file over SFTP, the SSH server must permit command
+  execution and make `md5sum`, `sha1sum`, and `sha256sum` available in the
+  connected account's command search path. Calculation fails if these
+  conditions are not met. Hash calculation for remote files over FTP is not
+  supported; hash calculation in the local pane remains available.
+
+On a Debian or Ubuntu SFTP server, the required commands are provided by the
+[`coreutils` package for Debian](https://packages.debian.org/stable/coreutils)
+or the
+[`coreutils` package for Ubuntu](https://packages.ubuntu.com/search?keywords=coreutils&searchon=names&suite=all&section=all).
+Install it on the server as follows:
+
+```shell
+sudo apt update
+sudo apt install coreutils
+```
+
+Deletion is permanent and does not use the desktop trash.
+In the local pane and over SFTP, deleting a symbolic link removes the link itself without
+following its target.
+Rename and deletion run asynchronously; the browser is temporarily covered by a progress overlay and is refreshed when the operation finishes.
 
 ## Local Startup Process
 
