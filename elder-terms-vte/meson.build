@@ -63,6 +63,7 @@ elder_terms_sources = [
   'src/file-transfer/file-transfer-engine.cpp',
   'src/file-transfer/file-transfer-paths.cpp',
   'src/file-transfer/file-transfer-window.cpp',
+  'src/file-transfer/local-file-reveal.cpp',
   'src/terminal-connection-phase.cpp',
   'src/terminal-bell.cpp',
   'src/terminal-bell-player.cpp',
@@ -140,6 +141,7 @@ executable(
     'src/file-transfer/file-transfer-certificate-prompt.cpp',
     'src/file-transfer/file-transfer-paths.cpp',
     'src/file-transfer/file-transfer-window.cpp',
+    'src/file-transfer/local-file-reveal.cpp',
     'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
     'src/terminal-sessions/tcp-connector.cpp',
     'src/widget-background.cpp',
@@ -357,6 +359,7 @@ file_transfer_window_lifetime_test = executable(
     'src/file-transfer/file-transfer-engine.cpp',
     'src/file-transfer/file-transfer-paths.cpp',
     'src/file-transfer/file-transfer-window.cpp',
+    'src/file-transfer/local-file-reveal.cpp',
   ],
   include_directories: include_directories('src/file-transfer'),
   cpp_args: ['-I' + gestament_include_dir],
@@ -486,6 +489,12 @@ activity_indicator_test = executable(
 )
 
 test('activity-indicator-test', activity_indicator_test)
+
+executable('file-manager-fixture', 'tests/cpp/file-manager-fixture.cpp',
+  dependencies: [gio_dep])
+
+executable('file-manager-selection-helper', 'tests/cpp/file-manager-selection-helper.cpp',
+  dependencies: [dependency('atspi-2'), dependency('gobject-2.0')])
 
 file_transfer_contract_test = executable(
   'file-transfer-contract-test',

@@ -46,6 +46,17 @@ Without an XSettings manager, GTK 3 on X11 reads
 Adwaita despite the GSettings override.
 [GTK settings documentation](https://docs.gtk.org/gtk3/class.Settings.html)
 
+The local file reveal checks need Nautilus for an actual file-selection check.
+They run in isolated D-Bus and Xvfb sessions with temporary desktop associations.
+The service fixture exercises [OpenDirectory and its request response](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.OpenURI.html#org-freedesktop-portal-openuri-opendirectory),
+FileManager1 `ShowItems`, and directory association fallback. It also checks
+symbolic links, unreadable files, user cancellation, and window closure while
+waiting for a response. Successful or cancelled portal interactions must not
+launch a second file manager. The Nautilus check reads the actual file-grid
+selection through [AT-SPI](https://gnome.pages.gitlab.gnome.org/at-spi2-core/libatspi/method.Accessible.get_state_set.html),
+isolated by the file manager's process ID. It checks a Japanese filename with
+spaces and `#` and verifies that the other file remains unselected.
+
 The installed-package visual runs also use a private copy of the reference
 FreeType rasterizer, Ubuntu 24.04's `libfreetype6 2.13.2+dfsg-1ubuntu0.1`,
 for the target architecture. Noto Sans with medium/full hinting produced small

@@ -16,11 +16,15 @@
 
 #include <gio/gio.h>
 #include <gestament/gtk.h>
+#ifdef GDK_WINDOWING_X11
+#include <gdk/gdkx.h>
+#endif
 
 #define GETTEXT_PACKAGE "elder-terms"
 #include <glib/gi18n-lib.h>
 
 #include "file-transfer-engine.h"
+#include "local-file-reveal.h"
 #include "../widget-background.h"
 
 namespace elder_terms {
@@ -1381,22 +1385,40 @@ static void on_file_transfer_new_directory_item_activate(GtkMenuItem *, gpointer
 }
 
 static cardio::promise<void> run_file_transfer_open_directory_async(
-    FileTransferWindow *window, std::string directory) {
+    FileTransferWindow *window, FileTransferSelectedItem item) {
   std::exception_ptr failure;
   try {
     set_file_transfer_browser_action_phase(window, true, false, {});
-    FileTransferGObjectPtr<GFile> file(g_file_new_for_path(directory.c_str()));
-    FileTransferGCharPtr uri(g_file_get_uri(file.get()));
-    co_await cardio::gio::submit<bool>(
-        [uri = uri.get()](GCancellable *cancellable,
-                         GAsyncReadyCallback callback, gpointer user_data) {
-          g_app_info_launch_default_for_uri_async(
-              uri, nullptr, cancellable, callback, user_data);
-        },
-        [](GObject *, GAsyncResult *result, GError **error) {
-          return g_app_info_launch_default_for_uri_finish(result, error) != FALSE;
-        },
-        window->stop_source.get_cancellation());
+    auto directory = item.path;
+    bool handled = false;
+    if (item.type != RemoteFileType::directory) {
+      std::string parent_window;
+#ifdef GDK_WINDOWING_X11
+      auto *native = gtk_widget_get_window(window->window);
+      if (native && GDK_IS_X11_WINDOW(native)) {
+        FileTransferGCharPtr identifier(g_strdup_printf("x11:%lx",
+            static_cast<unsigned long>(gdk_x11_window_get_xid(native))));
+        parent_window = identifier.get();
+      }
+#endif
+      handled = co_await try_reveal_local_file_async(
+          item.path, std::move(parent_window), window->stop_source.get_cancellation());
+      directory = local_parent_directory(item.path);
+    }
+    if (!handled) {
+      FileTransferGObjectPtr<GFile> file(g_file_new_for_path(directory.c_str()));
+      FileTransferGCharPtr uri(g_file_get_uri(file.get()));
+      co_await cardio::gio::submit<bool>(
+          [uri = uri.get()](GCancellable *cancellable,
+                           GAsyncReadyCallback callback, gpointer user_data) {
+            g_app_info_launch_default_for_uri_async(
+                uri, nullptr, cancellable, callback, user_data);
+          },
+          [](GObject *, GAsyncResult *result, GError **error) {
+            return g_app_info_launch_default_for_uri_finish(result, error) != FALSE;
+          },
+          window->stop_source.get_cancellation());
+    }
   } catch (const cardio::canceled_exception &) {
   } catch (...) {
     failure = std::current_exception();
@@ -1417,12 +1439,10 @@ static void on_file_transfer_open_directory_item_activate(GtkMenuItem *, gpointe
       has_modal_dialog(pane->window->window)) return;
   const auto items = selected_file_transfer_items(pane);
   if (items.size() != 1) return;
-  // Symbolic links open their containing directory without following the target.
-  auto directory = items.front().type == RemoteFileType::directory
-      ? items.front().path : local_parent_directory(items.front().path);
+  // Symbolic links reveal the selected link without following the target.
   pane->window->browser_action_task.reset();
   pane->window->browser_action_task.emplace(
-      run_file_transfer_open_directory_async(pane->window, std::move(directory)));
+      run_file_transfer_open_directory_async(pane->window, items.front()));
 }
 
 static cardio::promise<void> run_file_transfer_rename_async(

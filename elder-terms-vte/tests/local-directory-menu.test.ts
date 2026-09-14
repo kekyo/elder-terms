@@ -80,6 +80,8 @@ await appendFile(path, JSON.stringify(process.argv.slice(2)) + '\\n');
         ].join('\n')
       );
       const launcher = createGtkAppLauncher({
+        // This suite exercises directory association fallback without desktop services.
+        accessibilitySession: 'minimal',
         appPath: fileURLToPath(
           new URL(
             '../../.build/elder-terms-vte/elder-terms-file-transfer',
