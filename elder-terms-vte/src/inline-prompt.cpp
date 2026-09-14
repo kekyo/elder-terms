@@ -354,6 +354,35 @@ static void on_inline_prompt_entry_activated(GtkEntry *entry, gpointer data) {
   on_inline_prompt_accept_clicked(nullptr, controller);
 }
 
+static gboolean on_inline_prompt_focus(GtkWidget *panel,
+                                       GtkDirectionType direction,
+                                       gpointer data) {
+  auto *controller = static_cast<InlinePromptController *>(data);
+  if (controller->request == nullptr ||
+      (direction != GTK_DIR_TAB_FORWARD &&
+       direction != GTK_DIR_TAB_BACKWARD)) {
+    return FALSE;
+  }
+
+  GtkWidget *content = gtk_bin_get_child(GTK_BIN(panel));
+  if (content == nullptr || gtk_widget_child_focus(content, direction)) {
+    return TRUE;
+  }
+
+  // Keep GTK's navigation order, including selectable labels and skipping
+  // hidden or insensitive children. At either end, forget the old focus path
+  // so traversal restarts from the opposite end of this panel.
+  for (GtkWidget *current = panel; GTK_IS_CONTAINER(current);) {
+    auto *container = GTK_CONTAINER(current);
+    GtkWidget *child = gtk_container_get_focus_child(container);
+    gtk_container_set_focus_child(container, nullptr);
+    current = child;
+  }
+  (void)gtk_widget_child_focus(content, direction);
+  // Consume navigation even if no child can currently receive focus.
+  return TRUE;
+}
+
 static gboolean on_inline_prompt_key_press(GtkWidget *, GdkEventKey *event, gpointer data) {
   auto *controller = static_cast<InlinePromptController *>(data);
   if (controller->request && controller->request->default_cancel && event->keyval == GDK_KEY_Escape) {
@@ -371,6 +400,8 @@ create_inline_prompt_controller(InlinePromptWidgets widgets) {
           .request = nullptr,
       });
   apply_inline_prompt_style(widgets);
+  g_signal_connect(widgets.panel, "focus", G_CALLBACK(on_inline_prompt_focus),
+                   controller.get());
   g_signal_connect(widgets.panel, "key-press-event", G_CALLBACK(on_inline_prompt_key_press), controller.get());
   g_signal_connect(widgets.accept_button, "clicked",
                    G_CALLBACK(on_inline_prompt_accept_clicked),

@@ -58,6 +58,84 @@ const expectOnlyMainWindow = async (app: GtkApp): Promise<void> => {
 };
 
 describe.concurrent('SSH prompt overlay', () => {
+  for (const fixture of ['password', 'host-key', 'changed-host-key']) {
+    it(`keeps Tab and Shift+Tab inside the ${fixture} prompt`, async (context) => {
+      await runGtkTest(
+        context,
+        ['--test-fixture', `--test-ssh-prompt=${fixture}`],
+        async (app) => {
+          const window = expectElementKind(
+            await app.getById('main_window'),
+            'window'
+          );
+          await window.activate();
+          const widgets = await Promise.all(
+            [
+              'message_label',
+              'monospace_message_label',
+              'entry',
+              'cancel_button',
+              'accept_button',
+              'alternative_button',
+            ].map(async (suffix) => app.getById(`ssh_prompt_${suffix}`))
+          );
+          const available: GtkWidgetElement[] = [];
+          for (const widget of widgets) {
+            const { states } = await widget.info();
+            if (states.includes('showing') && states.includes('focusable')) {
+              available.push(widget);
+            }
+          }
+          const focusedIndex = async (): Promise<number> => {
+            const states = await Promise.all(
+              available.map(async (widget) => (await widget.info()).states)
+            );
+            return states.findIndex((value) => value.includes('focused'));
+          };
+          let previous = await focusedIndex();
+          expect(previous).toBeGreaterThanOrEqual(0);
+          const forward = [previous];
+          for (let step = 0; step < available.length; ++step) {
+            await app.input.pressKey('Tab');
+            await toPass(async () => {
+              const current = await focusedIndex();
+              expect(current).toBeGreaterThanOrEqual(0);
+              expect(current).not.toBe(previous);
+            });
+            previous = await focusedIndex();
+            forward.push(previous);
+          }
+          expect(forward[forward.length - 1]).toBe(forward[0]);
+          expect(new Set(forward).size).toBe(available.length);
+          await app.input.setModifier('shift', true);
+          try {
+            for (const expected of forward.slice(0, -1).reverse()) {
+              await app.input.pressKey('Tab');
+              await toPass(async () => {
+                expect(await focusedIndex()).toBe(expected);
+              });
+            }
+          } finally {
+            await app.input.setModifier('shift', false);
+          }
+          if (fixture === 'password') {
+            await expectElementKind(widgets[2]!, 'entry').setText('secret');
+            await app.input.pressKey('Return');
+            await expectHidden(await app.getById('ssh_prompt_panel'));
+            await toPass(async () => {
+              expect(
+                (await (await app.getById('terminal_view')).info()).states
+              ).toContain('focused');
+            });
+          } else if (fixture === 'changed-host-key') {
+            await expectElementKind(widgets[3]!, 'button').click();
+            await expectHidden(await app.getById('ssh_prompt_panel'));
+          }
+        }
+      );
+    });
+  }
+
   it('localizes the host-key prompt into Japanese', async (context) => {
     await runGtkTest(
       context,
