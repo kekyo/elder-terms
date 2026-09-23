@@ -944,12 +944,12 @@ describe('SFTP window', () => {
       ).toBeGreaterThanOrEqual(12);
 
       expect(statusLabel.bounds.x - status.bounds.x).toBeGreaterThanOrEqual(12);
-      expect(statusLabel.bounds.y - status.bounds.y).toBeGreaterThanOrEqual(8);
+      expect(statusLabel.bounds.y - status.bounds.y).toBe(2);
       expect(
         status.bounds.y +
           status.bounds.height -
           (statusLabel.bounds.y + statusLabel.bounds.height)
-      ).toBeGreaterThanOrEqual(8);
+      ).toBe(2);
     });
   });
 

@@ -118,6 +118,14 @@ static cardio::promise<void> verify_async(
     cardio::dispatcher_group_glib &group, std::exception_ptr &failure) {
   std::optional<cardio::promise<void>> closing;
   try {
+    show_file_transfer_window(window);
+    GtkWidget *status = find_widget(file_transfer_window_widget(window), "file_transfer_status_bar");
+    gint status_height = 0, image_height = 0, label_height = 0;
+    gtk_widget_get_preferred_height(status, nullptr, &status_height);
+    gtk_widget_get_preferred_height(find_widget(status, "conn_indicator_image"), nullptr, &image_height);
+    gtk_widget_get_preferred_height(find_widget(status, "conn_indicator_label"), nullptr, &label_height);
+    expect(status_height == image_height + label_height + 4,
+           "File transfer status bar must use terminal height with two-pixel vertical margins");
     for (const bool auto_close : {false, true}) {
       for (const char *protocol : {"FTP", "FTPS", "SFTP", "WebDAV"}) {
         auto settings = create_default_settings({}, "Auto-close");

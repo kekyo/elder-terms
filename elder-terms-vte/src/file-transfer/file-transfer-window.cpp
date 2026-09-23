@@ -2677,9 +2677,9 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   gtk_widget_set_margin_end(
       status_content, file_transfer_content_padding);
   gtk_widget_set_margin_top(
-      status_content, file_transfer_control_spacing);
+      status_content, 2);
   gtk_widget_set_margin_bottom(
-      status_content, file_transfer_control_spacing);
+      status_content, 2);
   gtk_container_add(
       GTK_CONTAINER(state->status_bar), status_content);
   gtk_box_pack_start(

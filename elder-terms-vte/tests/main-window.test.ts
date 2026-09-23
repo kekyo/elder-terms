@@ -1672,6 +1672,13 @@ describe.concurrent('elder-terms-vte main window', () => {
               ).text()
             ).toBe('/remote');
           });
+          const terminalStatus = await (
+            await app.getById('status_bar')
+          ).capture();
+          const fileStatus = await (
+            await app.getById('file_transfer_status_bar')
+          ).capture();
+          expect(fileStatus.bounds.height).toBe(terminalStatus.bounds.height);
           const terminal = await app.getById('terminal_view');
           expect((await terminal.info()).states).toContain('sensitive');
           await evidence.captureEvidence(
