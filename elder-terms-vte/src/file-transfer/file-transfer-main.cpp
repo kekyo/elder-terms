@@ -46,6 +46,7 @@ struct SftpApplicationState {
 struct FtpApplicationState {
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
   bool fixture = false;
+  std::optional<std::filesystem::path> config_path;
   elder_terms::SettingsStore settings;
   elder_terms::FtpConnectionSettings connection;
   std::shared_ptr<elder_terms::RemoteFileClient> client;
@@ -127,6 +128,8 @@ static void create_sftp_application_window(SftpApplicationState *state) {
               [state]() {
                 stop_sftp_application(state);
               },
+          .settings = state->settings,
+          .config_path = state->launch_options.config_path,
       });
   elder_terms::show_file_transfer_window(state->window);
 }
@@ -396,6 +399,8 @@ static void create_ftp_application_window(FtpApplicationState *state) {
               [state]() {
                 stop_ftp_application(state);
               },
+          .settings = state->settings,
+          .config_path = state->config_path,
       });
   elder_terms::show_file_transfer_window(state->window);
 }
@@ -529,13 +534,14 @@ start_ftp_application_async(FtpApplicationState *state) {
 
 static int run_ftp_application(
     const elder_terms::SettingsLoadResult &settings_result,
-    bool fixture) {
+    bool fixture, std::optional<std::filesystem::path> config_path) {
   cardio::dispatcher_group_glib dispatcher_group;
   // Worker completions must wake the GLib context even before it starts waiting.
   cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);
   FtpApplicationState state;
   state.dispatcher_group = &dispatcher_group;
   state.fixture = fixture;
+  state.config_path = std::move(config_path);
   state.settings = settings_result.store;
   state.connection =
       elder_terms::ftp_connection_settings(settings_result.store);
@@ -587,10 +593,12 @@ int main(int argc, char **argv) {
   }
   if (kind == elder_terms::ConnectionKind::ftp) {
     return run_ftp_application(settings_result,
-                               launch_options.test.fixture);
+                               launch_options.test.fixture,
+                               launch_options.config_path);
   }
   if (kind == elder_terms::ConnectionKind::webdav) {
-    return elder_terms::run_webdav_application(settings_result);
+    return elder_terms::run_webdav_application(
+        settings_result, launch_options.config_path);
   }
   std::cerr << "Error: configured connection type is not SFTP, FTP or WebDAV\n";
   return 1;

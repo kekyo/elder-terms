@@ -1711,6 +1711,26 @@ describe.concurrent('elder-terms-vte main window', () => {
 
           await sftpWindow.activate();
           await expectElementKind(
+            await app.getById('application_menu_button'),
+            'toggleButton'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_menu_item'),
+            'menuItem'
+          ).click();
+          await waitForResult(async () => {
+            expectElementKind(await app.getById('settings_dialog'), 'window');
+            expect((await sftpWindow.info()).states).not.toContain('sensitive');
+          });
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(await app.getWindowCount()).toBe(1);
+            expect((await sftpWindow.info()).states).toContain('sensitive');
+          });
+          await expectElementKind(
             await app.getByPath('file_transfer_window.0.0.3'),
             'button'
           ).click();

@@ -1,7 +1,9 @@
 #pragma once
 
+#include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include <gtk/gtk.h>
@@ -33,6 +35,10 @@ struct FileTransferWindowOptions {
   GeneralColorSettings colors;
   /** Called asynchronously after the GTK window is destroyed. */
   std::function<void()> closed;
+  /** Runtime settings copied into the Settings editor. */
+  SettingsStore settings = {};
+  /** Writable connection file, or no Save action when absent. */
+  std::optional<std::filesystem::path> config_path = std::nullopt;
 };
 
 /**

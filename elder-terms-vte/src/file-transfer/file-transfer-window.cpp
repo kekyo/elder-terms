@@ -1,7 +1,9 @@
 #include <elder-terms/modal-dialog.h>
+#include <elder-terms/settings-widget.h>
 #include "file-transfer-window.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdarg>
 #include <cstdint>
 #include <ctime>
@@ -24,6 +26,8 @@
 #include <glib/gi18n-lib.h>
 
 #include "file-transfer-engine.h"
+#include "activity-file-client.h"
+#include "../activity-indicator.h"
 #include "local-file-reveal.h"
 #include "../widget-background.h"
 
@@ -128,7 +132,13 @@ struct FileTransferSelectedItem {
 };
 
 struct FileTransferWindow {
+  std::weak_ptr<FileTransferWindow> self;
   GtkWidget *window = nullptr;
+  SettingsStore settings;
+  std::optional<std::filesystem::path> config_path;
+  GtkWidget *settings_dialog = nullptr;
+  SettingsWidgetState *settings_widget = nullptr;
+  guint settings_close_idle = 0;
   GtkWidget *header_bar = nullptr;
   GtkWidget *root_overlay = nullptr;
   GtkWidget *paned = nullptr;
@@ -139,6 +149,9 @@ struct FileTransferWindow {
   GtkWidget *transfer_cancel_button = nullptr;
   GtkWidget *prompt_panel = nullptr;
   GtkWidget *prompt_background = nullptr;
+  std::array<ActivityIndicatorWidget, 3> indicators;
+  GdkPixbuf *indicator_on = nullptr;
+  GdkPixbuf *indicator_off = nullptr;
   GtkWidget *status_bar = nullptr;
   GtkWidget *status_label = nullptr;
   std::string status_text;
@@ -590,6 +603,12 @@ static void update_file_transfer_overlay_presentation(
     FileTransferWindow *window) {
   if (window == nullptr || window->destroyed) {
     return;
+  }
+  set_activity_indicator_widget_active(
+      &window->indicators[0], window->connection_available);
+  if (!window->connection_available) {
+    reset_activity_indicator_widget(&window->indicators[1]);
+    reset_activity_indicator_widget(&window->indicators[2]);
   }
   const bool connection_blocked =
       window->connection_state == FileTransferConnectionState::connecting ||
@@ -1552,8 +1571,12 @@ static cardio::promise<void> run_file_transfer_hash_async(
     set_file_transfer_browser_action_phase(
         window, true, true, _("Calculating hash values…"));
     if (pane->remote) {
+      note_activity_indicator_widget(&window->indicators[1]);
       hashes = co_await window->remote_file_hash(
           item.path, hash_cancellation);
+      if (!window->destroyed) {
+        note_activity_indicator_widget(&window->indicators[2]);
+      }
     } else {
       hashes = co_await calculate_local_file_hashes_async(
           item.path, hash_cancellation);
@@ -1965,7 +1988,19 @@ static void on_file_transfer_window_destroy(GtkWidget *, gpointer data) {
   if (window == nullptr || window->destroyed) {
     return;
   }
+  if (window->settings_close_idle != 0) {
+    g_source_remove(window->settings_close_idle);
+    window->settings_close_idle = 0;
+  }
+  if (window->settings_dialog != nullptr) {
+    gtk_widget_destroy(window->settings_dialog);
+  }
   cancel_inline_prompt(window->prompt);
+  for (auto &indicator : window->indicators) {
+    release_activity_indicator_widget(&indicator);
+  }
+  g_clear_object(&window->indicator_on);
+  g_clear_object(&window->indicator_off);
   clear_file_transfer_window_colors(window);
   window->destroyed = true;
   window->window = nullptr;
@@ -2442,14 +2477,133 @@ static void clear_file_transfer_window_colors(FileTransferWindow *window) {
   }
 }
 
+static void schedule_file_settings_close(FileTransferWindow *window) {
+  if (window->settings_close_idle != 0) return;
+  window->settings_close_idle = g_idle_add(+[](gpointer data) -> gboolean {
+    auto *owner = static_cast<FileTransferWindow *>(data);
+    owner->settings_close_idle = 0;
+    if (owner->settings_dialog != nullptr) {
+      gtk_widget_destroy(owner->settings_dialog);
+    }
+    return G_SOURCE_REMOVE;
+  }, window);
+}
+
+static void open_file_settings(GtkMenuItem *, gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
+  if (window->settings_dialog != nullptr) {
+    present_modal_dialog(window->settings_dialog);
+    return;
+  }
+  GtkWidget *dialog = gtk_dialog_new();
+  window->settings_dialog = dialog;
+  gestament_gtk_assign_accessible_id(dialog, "settings_dialog");
+  gtk_window_set_title(GTK_WINDOW(dialog), _("Settings"));
+  gtk_window_set_default_size(GTK_WINDOW(dialog), 720, 495);
+  GtkWidget *header = gtk_header_bar_new();
+  gtk_header_bar_set_title(GTK_HEADER_BAR(header), _("Settings"));
+  gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header), TRUE);
+  gtk_window_set_titlebar(GTK_WINDOW(dialog), header);
+  SettingsWidgetCallbacks callbacks;
+  callbacks.apply = [window](const SettingsStore &settings) {
+    window->settings = settings;
+    set_file_transfer_window_colors(
+        window->self.lock(), general_color_settings(settings));
+    schedule_file_settings_close(window);
+  };
+  if (window->config_path) {
+    callbacks.save = [window, apply = callbacks.apply](
+                         const SettingsStore &settings) {
+      const auto result = save_settings(settings, *window->config_path);
+      if (!result.saved) {
+        set_file_transfer_status(window, _("Failed to save connection"));
+      }
+      if (result.saved) {
+        apply(settings);
+      }
+      return result.saved;
+    };
+  }
+  callbacks.cancel = [window] { schedule_file_settings_close(window); };
+  window->settings_widget = create_settings_widget({
+      .store = window->settings,
+      .is_runtime = true,
+      .callbacks = std::move(callbacks)});
+  gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(dialog))),
+                    settings_widget_root(window->settings_widget));
+  g_signal_connect(dialog, "destroy", G_CALLBACK(+[](GtkWidget *, gpointer data) {
+    auto *owner = static_cast<FileTransferWindow *>(data);
+    if (owner->settings_close_idle != 0) {
+      g_source_remove(owner->settings_close_idle);
+      owner->settings_close_idle = 0;
+    }
+    destroy_settings_widget(owner->settings_widget);
+    owner->settings_widget = nullptr;
+    owner->settings_dialog = nullptr;
+  }), window);
+  show_modal_dialog(dialog, GTK_WINDOW(window->window));
+}
+
+static void open_file_about(GtkMenuItem *, gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
+  const char *configured = g_getenv("ELDER_TERMS_LAUNCHER_PATH");
+  std::string launcher = configured == nullptr ? "" : configured;
+  if (launcher.empty()) {
+    const auto root = std::filesystem::read_symlink("/proc/self/exe")
+                          .parent_path().parent_path();
+    for (const char *directory : {"launcher", "elder-terms"}) {
+      const auto candidate = root / directory / "elder-terms";
+      if (g_file_test(candidate.c_str(), G_FILE_TEST_IS_EXECUTABLE)) {
+        launcher = candidate.string();
+        break;
+      }
+    }
+    if (launcher.empty()) {
+      launcher = "elder-terms";
+    }
+  }
+  std::string argument = "--about";
+  gchar *argv[] = {launcher.data(), argument.data(), nullptr};
+  GError *error = nullptr;
+  if (!g_spawn_async(nullptr, argv, nullptr, G_SPAWN_SEARCH_PATH,
+                     nullptr, nullptr, nullptr, &error)) {
+    set_file_transfer_status(
+        window, error == nullptr ? _("Failed to open elder-terms") : error->message);
+    g_clear_error(&error);
+  }
+}
+
+static void create_file_settings_menu(FileTransferWindow *window) {
+  GtkWidget *button = gtk_menu_button_new();
+  gestament_gtk_assign_accessible_id(button, "application_menu_button");
+  gtk_widget_set_tooltip_text(button, _("Application"));
+  gtk_container_add(GTK_CONTAINER(button),
+      gtk_image_new_from_icon_name("open-menu-symbolic", GTK_ICON_SIZE_BUTTON));
+  GtkWidget *menu = gtk_menu_new();
+  GtkWidget *settings = gtk_menu_item_new_with_label(_("Settings"));
+  GtkWidget *about = gtk_menu_item_new_with_label(_("About elder-terms"));
+  gestament_gtk_assign_accessible_id(settings, "settings_menu_item");
+  gestament_gtk_assign_accessible_id(about, "about_menu_item");
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), settings);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), about);
+  g_signal_connect(settings, "activate", G_CALLBACK(open_file_settings), window);
+  g_signal_connect(about, "activate", G_CALLBACK(open_file_about), window);
+  gtk_widget_show_all(menu);
+  gtk_menu_button_set_popup(GTK_MENU_BUTTON(button), menu);
+  gtk_header_bar_pack_end(GTK_HEADER_BAR(window->header_bar), button);
+}
+
 std::shared_ptr<FileTransferWindow>
 create_file_transfer_window(FileTransferWindowOptions options) {
   if (options.protocol_name.empty()) {
     throw std::invalid_argument("File transfer protocol name is required");
   }
   auto state = std::make_shared<FileTransferWindow>();
+  state->self = state;
   state->remote_file_hash = std::move(options.remote_file_hash);
   state->closed = std::move(options.closed);
+  state->settings = std::move(options.settings);
+  state->config_path = std::move(options.config_path);
   state->local.current_directory =
       std::move(options.local_directory);
   state->remote.current_directory =
@@ -2474,6 +2628,7 @@ create_file_transfer_window(FileTransferWindowOptions options) {
       GTK_HEADER_BAR(state->header_bar), TRUE);
   gtk_window_set_titlebar(
       GTK_WINDOW(state->window), state->header_bar);
+  create_file_settings_menu(state.get());
 
   state->root_overlay = gtk_overlay_new();
   gtk_container_add(GTK_CONTAINER(state->window),
@@ -2522,6 +2677,34 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   gtk_label_set_xalign(GTK_LABEL(state->status_label), 0.0F);
   gtk_box_pack_start(
       GTK_BOX(status_content), state->status_label, TRUE, TRUE, 0);
+
+  const auto icon_directory =
+      std::filesystem::read_symlink("/proc/self/exe").parent_path();
+  state->indicator_on = gdk_pixbuf_new_from_file_at_scale(
+      (icon_directory / "green-on.png").c_str(), 18, 18, TRUE, nullptr);
+  state->indicator_off = gdk_pixbuf_new_from_file_at_scale(
+      (icon_directory / "green-off.png").c_str(), 18, 18, TRUE, nullptr);
+  const std::array ids{ActivityIndicatorId::conn, ActivityIndicatorId::sd,
+                       ActivityIndicatorId::rd};
+  for (std::size_t index = 0; index < ids.size(); ++index) {
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_size_request(box, 20, -1);
+    GtkWidget *image = gtk_image_new();
+    const std::string prefix = std::string(activity_indicator_token(ids[index])) + "_indicator_";
+    gestament_gtk_assign_accessible_id(image, (prefix + "image").c_str());
+    GtkWidget *label = gtk_label_new(activity_indicator_label(ids[index]));
+    gestament_gtk_assign_accessible_id(label, (prefix + "label").c_str());
+    PangoAttrList *attributes = pango_attr_list_new();
+    pango_attr_list_insert(attributes, pango_attr_scale_new(0.75));
+    gtk_label_set_attributes(GTK_LABEL(label), attributes);
+    pango_attr_list_unref(attributes);
+    gtk_box_pack_start(GTK_BOX(box), image, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), label, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(status_content), box, FALSE, FALSE, 0);
+    initialize_activity_indicator_widget(&state->indicators[index], image,
+        state->indicator_on, state->indicator_off,
+        index == 0 ? ActivityIndicatorMode::steady : ActivityIndicatorMode::blink);
+  }
 
   state->dim_overlay = gtk_event_box_new();
   gestament_gtk_assign_accessible_id(
@@ -2631,7 +2814,13 @@ void attach_file_transfer_window_client(
   if (window->client != nullptr) {
     throw std::logic_error("Remote file client is already attached");
   }
-  window->client = std::move(client);
+  window->client = create_activity_file_client(std::move(client),
+      [weak = std::weak_ptr<FileTransferWindow>(window)](ActivityIndicatorId id) {
+        const auto owner = weak.lock();
+        if (owner && !owner->destroyed && owner->connection_available) {
+          note_activity_indicator_widget(&owner->indicators[id == ActivityIndicatorId::sd ? 1 : 2]);
+        }
+      });
   window->connection_available = true;
   window->connection_state = FileTransferConnectionState::ready;
   set_file_transfer_status(window.get(), _("Ready"));

@@ -1,4 +1,5 @@
 #include "file-transfer-window.h"
+#include "activity-file-client.h"
 #include "../sftp/sftp-fixture-client.h"
 
 #include <algorithm>
@@ -115,10 +116,50 @@ static cardio::promise<void> verify_async(
     cardio::dispatcher_group_glib &group, std::exception_ptr &failure) {
   std::optional<cardio::promise<void>> closing;
   try {
+    std::vector<ActivityIndicatorId> activity;
+    auto observed = create_activity_file_client(create_sftp_fixture_client(false),
+        [&activity](ActivityIndicatorId id) { activity.push_back(id); });
+    const auto listing = co_await observed->load_directory_async("/remote", {});
+    expect(!listing.entries.empty() && activity == std::vector{ActivityIndicatorId::sd, ActivityIndicatorId::rd},
+           "Directory requests and replies must report SD and RD");
+    auto opening = observed->open_read_async("/remote/readme.txt", {});
+    auto reader = std::move(co_await opening);
+    activity.clear();
+    std::array<std::byte, 128> bytes{};
+    const auto size = co_await reader->read_async(bytes, {});
+    expect(size > 0 && activity == std::vector{ActivityIndicatorId::rd},
+           "Downloaded chunks must report RD");
+    activity.clear();
+    expect(co_await reader->read_async(bytes, {}) == 0 && activity.empty(),
+           "EOF must not report received data");
+    co_await reader->close_async({});
+    auto creating = observed->open_write_async("/remote/upload.txt", size, std::nullopt, {});
+    auto writer = std::move(co_await creating);
+    activity.clear();
+    co_await writer->write_all_async(std::span<const std::byte>(bytes.data(), size), {});
+    expect(activity == std::vector{ActivityIndicatorId::sd}, "Uploaded chunks must report SD");
+    co_await writer->close_async({});
+    expect((co_await observed->lstat_async("/remote/upload.txt", {}))->size == size,
+           "Activity observation must preserve the remote upload");
+
+    GtkWidget *connection_image = find_widget(file_transfer_window_widget(window), "conn_indicator_image");
+    expect(GTK_IS_IMAGE(connection_image), "File browser must expose CONN");
+    auto *off_icon = gtk_image_get_pixbuf(GTK_IMAGE(connection_image));
     show_file_transfer_window(window);
     attach_file_transfer_window_client(window, client);
     co_await client->started.wait();
+    expect(gtk_image_get_pixbuf(GTK_IMAGE(connection_image)) != off_icon,
+           "Attaching an authenticated service must activate CONN");
     GtkWidget *root = file_transfer_window_widget(window);
+    for (const char *id : {"conn_indicator_image", "sd_indicator_image", "rd_indicator_image"}) {
+      expect(GTK_IS_IMAGE(find_widget(root, id)), "File browser must expose CONN, SD and RD indicators");
+    }
+    GtkWidget *menu_button = find_widget(gtk_window_get_titlebar(GTK_WINDOW(root)), "application_menu_button");
+    expect(GTK_IS_MENU_BUTTON(menu_button), "File browser must expose a settings menu button");
+    GtkWidget *menu = GTK_WIDGET(gtk_menu_button_get_popup(GTK_MENU_BUTTON(menu_button)));
+    expect(find_widget(menu, "settings_menu_item") != nullptr &&
+           find_widget(menu, "about_menu_item") != nullptr,
+           "File browser menu must offer Settings and About");
     GtkWidget *frame = find_widget(root, "file_transfer_remote_group");
     GtkWidget *tree = find_widget(root, "file_transfer_remote_tree");
     GtkWidget *path = find_widget(root, "file_transfer_remote_path_entry");
@@ -149,6 +190,22 @@ static cardio::promise<void> verify_async(
              "The context menu must become available after directory loading");
       expect(std::strcmp(gtk_entry_get_text(GTK_ENTRY(path)), "/remote/loaded") == 0,
              "The canonical path must be applied before input is enabled");
+      g_signal_emit_by_name(find_widget(menu, "settings_menu_item"), "activate");
+      GList *toplevels = gtk_window_list_toplevels();
+      GtkWidget *settings_dialog = nullptr;
+      for (auto *item = toplevels; item != nullptr; item = item->next) {
+        auto *candidate = GTK_WIDGET(item->data);
+        if (std::strcmp(gtk_widget_get_name(candidate), "settings_dialog") == 0) settings_dialog = candidate;
+      }
+      g_list_free(toplevels);
+      expect(settings_dialog != nullptr &&
+             find_widget(settings_dialog, "settings_widget_root") != nullptr,
+             "Settings menu must open the shared runtime settings editor");
+      expect(gtk_window_get_transient_for(GTK_WINDOW(settings_dialog)) == GTK_WINDOW(root),
+             "Settings must belong to the file browser");
+      set_file_transfer_window_connection_available(window, false);
+      expect(gtk_image_get_pixbuf(GTK_IMAGE(connection_image)) == off_icon,
+             "Disconnected service must deactivate CONN");
       closing.emplace(close_file_transfer_window_async(window));
       co_await *closing;
     } else {
@@ -195,7 +252,8 @@ int main(int argc, char **argv) {
     auto window = create_file_transfer_window({
         .connection_name = "Window lifetime", .protocol_name = "FTP",
         .local_directory = path.data(), .remote_directory = "/remote",
-        .remote_file_hash = {}, .colors = {}, .closed = {}});
+        .remote_file_hash = {}, .colors = {}, .closed = {},
+        .settings = create_default_settings({}, "Window lifetime")});
     auto task = verify_async(window, client, group, failure);
     dispatcher.park();
     if (failure) break;

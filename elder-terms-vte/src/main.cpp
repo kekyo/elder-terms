@@ -1359,6 +1359,8 @@ static void create_shared_sftp_window(ApplicationState *state) {
               [state]() {
                 on_shared_sftp_window_closed(state);
               },
+          .settings = state->settings_store,
+          .config_path = state->config_path,
       });
   elder_terms::show_file_transfer_window(state->sftp_window);
 }
