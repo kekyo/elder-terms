@@ -533,12 +533,33 @@ static void update_application_session_identity(ApplicationState *state) {
     return;
   }
 
+  const char *terminal_title = nullptr;
+  if (state->main_window != nullptr && state->main_window->terminal != nullptr) {
+#if VTE_CHECK_VERSION(0, 78, 0)
+    terminal_title = vte_terminal_get_termprop_string(
+        VTE_TERMINAL(state->main_window->terminal),
+        VTE_TERMPROP_XTERM_TITLE, nullptr);
+#else
+    terminal_title = vte_terminal_get_window_title(
+        VTE_TERMINAL(state->main_window->terminal));
+#endif
+  }
   elder_terms::set_main_window_title(
       state->main_window,
-      elder_terms::terminal_session_window_title(state->session_state));
+      terminal_title != nullptr && terminal_title[0] != '\0'
+          ? std::string(terminal_title)
+          : elder_terms::terminal_session_window_title(state->session_state));
   elder_terms::set_main_window_status_text(
       state->main_window,
       elder_terms::terminal_session_connection_detail(state->session_state));
+}
+
+#if VTE_CHECK_VERSION(0, 78, 0)
+static void on_terminal_title_changed(VteTerminal *, const char *, gpointer data) {
+#else
+static void on_terminal_title_changed(VteTerminal *, gpointer data) {
+#endif
+  update_application_session_identity(static_cast<ApplicationState *>(data));
 }
 
 static void set_application_transfer_progress_visible(ApplicationState *state,
@@ -1904,6 +1925,13 @@ int main(int argc, char **argv) {
     G_CALLBACK(on_main_window_focus_in), &app_state);
   g_signal_connect(app_state.window, "notify::sensitive",
       G_CALLBACK(on_parent_sensitivity_changed), &app_state);
+#if VTE_CHECK_VERSION(0, 78, 0)
+  g_signal_connect(main_window->terminal, "termprop-changed::xterm.title",
+                   G_CALLBACK(on_terminal_title_changed), &app_state);
+#else
+  g_signal_connect(main_window->terminal, "window-title-changed",
+                   G_CALLBACK(on_terminal_title_changed), &app_state);
+#endif
   g_signal_connect(
     main_window->settings_menu_item, "activate",
     G_CALLBACK(on_settings_menu_item_activate), &app_state);

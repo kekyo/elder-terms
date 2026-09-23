@@ -321,6 +321,29 @@ const brightPixelCount = (capture: GtkCapture): number => {
 };
 
 describe.concurrent('elder-terms-vte local session', () => {
+  it.for(['0', '2'])(
+    'reflects OSC %s in the window title',
+    async (osc, context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const shellPath = join(directory, 'title-shell.sh');
+        await writeFile(
+          shellPath,
+          '#!/bin/sh\nprintf "\\033]' +
+            osc +
+            ';Codex title\\007"\nread answer\n'
+        );
+        await chmod(shellPath, 0o755);
+        await runGtkTest(
+          context,
+          [],
+          async (app) => {
+            await expectMainWindowTitle(app, 'Codex title');
+          },
+          { env: { SHELL: shellPath } }
+        );
+      });
+    }
+  );
   it('starts the configured local process with exact arguments instead of the user shell', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const markerPath = join(directory, 'configured-process-arguments.txt');
