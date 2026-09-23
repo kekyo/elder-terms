@@ -70,8 +70,8 @@ elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP
 - Customizes the window exterior colors and terminal background for each
   connection.
 - Opens a specified connection with a single hotkey (the XDG Global Shortcuts
-  portal is required on Wayland). Start by opening your local terminal with a
-  hotkey. It may only be a matter of time before everything is replaced by
+  portal is required for automatic registration on Wayland). Start by opening
+  your local terminal with a hotkey. It may only be a matter of time before everything is replaced by
   elder-terms.
 - Starts the launcher automatically and can keep it running in the system tray.
 - Monitors received text with regular expressions and defines rules that
@@ -86,7 +86,8 @@ elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP
 
 ## Environment
 
-- Linux GTK3 / DBus (Ubuntu/Debian preferred)
+- Linux GTK3 (Ubuntu/Debian preferred; desktop integration uses D-Bus when
+  available)
 
 ---
 
@@ -688,20 +689,85 @@ language. Closing the warning does not quit the launcher.
 ### Hotkey Limitations on Wayland
 
 Wayland sessions require an implementation of the XDG Global Shortcuts portal
-to register hotkeys. Because [Global Shortcuts has been officially supported
-since GNOME 48](https://release.gnome.org/48/developers/#global-shortcuts),
-hotkeys do not work in Wayland sessions on GNOME 47 or earlier. Distributions
-using the standard GNOME desktop are supported starting with
+to register hotkeys automatically. Because [Global Shortcuts has been officially
+supported since GNOME 48](https://release.gnome.org/48/developers/#global-shortcuts),
+automatic registration is unavailable in Wayland sessions on GNOME 47 or
+earlier. Distributions using the standard GNOME desktop are supported starting with
 [Ubuntu 25.04](https://discourse.ubuntu.com/t/ubuntu-25-04-plucky-puffin-released/59303)
 and [Debian 13](https://www.debian.org/News/2025/20250809), which adopted GNOME
 48 or later.
 
-In other words, they are unavailable in GNOME Wayland environments on Ubuntu
+Automatic registration is unavailable in GNOME Wayland environments on Ubuntu
 24.10 or earlier and Debian 12 or earlier.
 
 X11 sessions are not subject to this limitation. Availability in non-GNOME
 Wayland environments depends on whether the desktop environment supports the
-Global Shortcuts portal.
+Global Shortcuts portal. Desktop commands below work without that portal.
+
+### Desktop Shortcuts Without a Portal
+
+X11 sessions register hotkeys directly with X11 and do not require D-Bus.
+On Wayland, automatic registration uses the Global Shortcuts portal. If your
+desktop does not provide it, assign a desktop shortcut to one of these commands:
+
+```sh
+elder-termsctl open-application
+elder-termsctl open-connection 'Local Terminal'
+```
+
+For a source-tree build without installation, use
+`.build/elder-terms/elder-termsctl`.
+
+Replace `Local Terminal` with the exact saved connection name displayed in the
+launcher, without the `.ini` extension. Quote names containing spaces or shell
+characters. Update the desktop command if you rename the connection. The
+connection does not need an "Open connection shortcut" setting. The registration
+warning also shows commands for your configured connections. To use only
+desktop shortcuts, clear the in-app "Open application shortcut" and
+"Open connection shortcut" fields to disable automatic registration.
+
+The launcher must already be running. Use its existing login autostart entry;
+"Background only" is useful without a system tray. Both processes must run as
+the same user with the same `XDG_RUNTIME_DIR`, pointing to an existing private
+runtime directory. `elder-termsctl` requires neither a display connection nor
+D-Bus. It returns 0 when the launcher accepts a request, 1 for a communication
+or request error, and 2 for invalid arguments. Acceptance does not mean the
+terminal's connection to a remote host has succeeded.
+
+For [labwc](https://labwc.github.io/labwc-actions.5.html), add this binding inside
+the existing `<keyboard>` section of `~/.config/labwc/rc.xml`, then reload your
+configuration with `labwc --reconfigure`:
+
+```xml
+<keybind key="C-A-T">
+  <action name="Execute" command="elder-termsctl open-application" />
+</keybind>
+```
+
+For [Sway](https://github.com/swaywm/sway/blob/master/sway/sway.5.scd), add this
+to your existing configuration and reload it:
+
+```text
+bindsym Ctrl+Mod1+t exec elder-termsctl open-application
+```
+
+For [Hyprland's Lua configuration](https://wiki.hypr.land/Configuring/Basics/Binds/):
+
+```lua
+hl.bind("CTRL + ALT + T", hl.dsp.exec_cmd("elder-termsctl open-application"))
+```
+
+For [Hyprland 0.54 and earlier using hyprlang](https://wiki.hypr.land/0.54.0/Configuring/Binds/):
+
+```text
+bind = CTRL ALT, T, exec, elder-termsctl open-application
+```
+
+Replace an existing binding for the same key combination if necessary. Desktop
+configuration files are not modified by elder-terms. Other desktops can use the
+same commands through their shortcut settings. If your compositor provides an
+[`XDG_ACTIVATION_TOKEN`](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/staging/xdg-activation/xdg-activation-v1.xml), the command forwards it for window activation; focus
+remains subject to your compositor's policy.
 
 ## Configuring the Terminal Type
 

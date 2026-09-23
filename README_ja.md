@@ -60,7 +60,7 @@
 - BELに、組み込みbeepまたは任意のWAV/Ogg Vorbisサウンドを指定出来ます。
 - フォントサイズをショートカットキーで変更したり、マウスのホイールで変更したり出来ます。
 - 接続毎にウインドウのエクステリアカラーやターミナルの背景色をカスタマイズ出来ます。
-- ホットキー一発で、指定された接続を起動出来ます(Waylandでは、XDG Global Shortcutsポータルが必要)。
+- ホットキー一発で、指定された接続を起動出来ます(Waylandでの自動登録にはXDG Global Shortcutsポータルが必要)。
   まずは、ローカルターミナルをホットキーで起動できるようにすることから始めて下さい。
   全てがelder-termsに置き換わるのも、時間の問題かもしれません。
 - ランチャーを自動起動させたり、システムトレイに常駐させることが出来ます。
@@ -71,7 +71,7 @@
 
 ## 環境
 
-- Linux GTK3 / DBus (Ubuntu/Debian preferred)
+- Linux GTK3 (Ubuntu/Debian推奨。デスクトップ連携では利用可能な場合にD-Busを使用)
 
 ---
 
@@ -470,13 +470,57 @@ debパッケージまたはMesonのインストールは、elder-termsをデス�
 
 ### Wayland環境でのホットキーの制約
 
-Waylandセッションでは、ホットキーの登録にXDG Global Shortcutsポータル実装が必要です。
-[GNOME 48からGlobal Shortcutsが正式にサポートされた](https://release.gnome.org/48/developers/#global-shortcuts)ため、GNOME 47以前のWaylandセッションではホットキーは機能しません。
+Waylandセッションでは、ホットキーの自動登録にXDG Global Shortcutsポータル実装が必要です。
+[GNOME 48からGlobal Shortcutsが正式にサポートされた](https://release.gnome.org/48/developers/#global-shortcuts)ため、GNOME 47以前のWaylandセッションでは自動登録は使用出来ません。
 標準のGNOMEデスクトップを使用するディストリビューションでは、GNOME 48を採用した[Ubuntu 25.04](https://discourse.ubuntu.com/t/ubuntu-25-04-plucky-puffin-released/59303)および[Debian 13](https://www.debian.org/News/2025/20250809)以降が対応します。
 
-つまり、Ubuntu 24.10以前またはDebian 12以前のGNOME Wayland環境では利用出来ません。
+つまり、Ubuntu 24.10以前またはDebian 12以前のGNOME Wayland環境では自動登録を利用出来ません。
 
-X11セッションはこの制限の対象外です。また、GNOME以外のWayland環境で利用出来るかどうかは、そのデスクトップ環境がGlobal Shortcutsポータルに対応しているかどうかによります。
+X11セッションはこの制限の対象外です。また、GNOME以外のWayland環境で利用出来るかどうかは、そのデスクトップ環境がGlobal Shortcutsポータルに対応しているかどうかによります。以下の外部コマンドによる方式はポータルなしでも使用出来ます。
+
+### ポータルを使わないデスクトップショートカット
+
+X11セッションではX11に直接ホットキーを登録するため、D-Busは不要です。
+Waylandでの自動登録にはGlobal Shortcutsポータルを使用します。非対応の環境では、デスクトップ側のショートカットに以下のコマンドを登録して下さい。
+
+```sh
+elder-termsctl open-application
+elder-termsctl open-connection 'Local Terminal'
+```
+
+ソースツリーでビルドして未インストールの場合は、`.build/elder-terms/elder-termsctl` を使用して下さい。
+
+`Local Terminal` は、ランチャーに表示される保存済み接続名に置き換えて下さい。`.ini` 拡張子は付けません。空白やシェルの特殊文字を含む名前は引用して下さい。接続名を変更した場合は、デスクトップ側のコマンドも更新します。接続側の「接続を開くショートカット」は未設定でも使用出来ます。登録失敗の警告にも、設定された接続に対応するコマンドを表示します。デスクトップ側のショートカットだけを使う場合は、アプリ内の「アプリケーションを開くショートカット」と各接続の「接続を開くショートカット」を空にすると、自動登録を無効に出来ます。
+
+ランチャーは起動済みである必要があります。既存のログイン時自動起動を利用して下さい。システムトレイがない環境では「バックグラウンドのみ」が便利です。ランチャーとコマンドは同じユーザーで実行し、同じ `XDG_RUNTIME_DIR` を使用します。この変数は、所有者だけがアクセス出来る既存のランタイムディレクトリを指す必要があります。`elder-termsctl` 自体には画面接続もD-Busも不要です。終了コードは要求を受理した場合に0、通信や要求のエラーに1、引数の誤りに2となります。要求の受理は、接続先ホストへの接続成功を意味するものではありません。
+
+[labwc](https://labwc.github.io/labwc-actions.5.html)では、既存の `~/.config/labwc/rc.xml` の `<keyboard>` 内に以下を追加し、`labwc --reconfigure` で設定を再読み込みします。
+
+```xml
+<keybind key="C-A-T">
+  <action name="Execute" command="elder-termsctl open-application" />
+</keybind>
+```
+
+[Sway](https://github.com/swaywm/sway/blob/master/sway/sway.5.scd)では、既存の設定に以下を追加して再読み込みします。
+
+```text
+bindsym Ctrl+Mod1+t exec elder-termsctl open-application
+```
+
+[HyprlandのLua設定](https://wiki.hypr.land/Configuring/Basics/Binds/)では以下の形式です。
+
+```lua
+hl.bind("CTRL + ALT + T", hl.dsp.exec_cmd("elder-termsctl open-application"))
+```
+
+[Hyprland 0.54以前のhyprlang設定](https://wiki.hypr.land/0.54.0/Configuring/Binds/)では以下の形式です。
+
+```text
+bind = CTRL ALT, T, exec, elder-termsctl open-application
+```
+
+同じキーに既存の割り当てがある場合は置き換えて下さい。elder-termsがデスクトップ設定ファイルを自動変更することはありません。他のデスクトップでも、ショートカット設定から同じコマンドを使用出来ます。コンポジターが [`XDG_ACTIVATION_TOKEN`](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/staging/xdg-activation/xdg-activation-v1.xml) を渡す場合はウィンドウのアクティブ化に引き継ぎますが、最終的なフォーカス動作はコンポジターの方針に従います。
 
 ## ターミナル種別の設定
 

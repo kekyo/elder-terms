@@ -71,7 +71,7 @@ it('controls the resident launcher and saved connections without D-Bus or a disp
         for (const request of [
           'unknown\0\0',
           'open-application\0unexpected\0',
-          'x'.repeat(17000),
+          'open-application\0\0' + 'x'.repeat(17000),
         ]) {
           const response = await new Promise<string>((resolve, reject) => {
             const socket = createConnection(

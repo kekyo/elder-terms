@@ -254,6 +254,43 @@ static void show_error(ApplicationState *state, const std::string &summary,
                         details);
 }
 
+static void append_external_hotkey_commands(ApplicationState *state,
+                                           GtkWidget *dialog) {
+  if (state->control_server == nullptr) {
+    return;
+  }
+  GtkWidget *area = gtk_message_dialog_get_message_area(
+      GTK_MESSAGE_DIALOG(dialog));
+  GtkWidget *guidance = gtk_label_new(
+      _("Configure desktop shortcuts to run these commands:"));
+  gtk_label_set_xalign(GTK_LABEL(guidance), 0.0F);
+  gtk_label_set_line_wrap(GTK_LABEL(guidance), TRUE);
+  gtk_label_set_max_width_chars(GTK_LABEL(guidance), 60);
+  gtk_box_pack_start(GTK_BOX(area), guidance, FALSE, TRUE, 0);
+
+  std::string text = "elder-termsctl open-application";
+  for (const auto &profile : state->profiles) {
+    // Names are data, including quotes and shell substitutions. The displayed
+    // command must preserve them when copied into a desktop shortcut.
+    gchar *quoted = g_shell_quote(profile.name.c_str());
+    text += "\nelder-termsctl open-connection ";
+    text += quoted;
+    g_free(quoted);
+  }
+  GtkWidget *commands = gtk_label_new(text.c_str());
+  gtk_label_set_selectable(GTK_LABEL(commands), TRUE);
+  gtk_label_set_xalign(GTK_LABEL(commands), 0.0F);
+  gtk_label_set_yalign(GTK_LABEL(commands), 0.0F);
+  gestament_gtk_assign_accessible_id(commands, "hotkey_external_commands");
+  GtkWidget *scroll = gtk_scrolled_window_new(nullptr, nullptr);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+                                 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+  gtk_widget_set_size_request(scroll, 420, 120);
+  gtk_container_add(GTK_CONTAINER(scroll), commands);
+  gtk_box_pack_start(GTK_BOX(area), scroll, FALSE, TRUE, 0);
+  gtk_widget_show_all(area);
+}
+
 static void show_hotkey_registration_error(ApplicationState *state) {
   if (state == nullptr || state->main_window == nullptr ||
       state->window_destroyed || state->application_shutting_down) {
@@ -271,6 +308,7 @@ static void show_hotkey_registration_error(ApplicationState *state) {
       _("One or more configured global shortcuts could not be registered and "
         "will not work. Check whether your desktop environment supports "
         "global shortcuts."));
+  append_external_hotkey_commands(state, dialog);
   GtkWidget *close = gtk_dialog_add_button(
       GTK_DIALOG(dialog), _("OK"), GTK_RESPONSE_CLOSE);
   gestament_gtk_assign_accessible_id(

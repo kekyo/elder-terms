@@ -1052,6 +1052,9 @@ msgid "Restore defaults"
 msgstr "既定値に戻す"
 
 #: elder-terms/src/main.cpp:262
+msgid "Configure desktop shortcuts to run these commands:"
+msgstr "デスクトップのショートカットに次のコマンドを登録してください:"
+
 msgid "Global shortcuts are unavailable"
 msgstr "グローバルショートカットを利用できません"
 

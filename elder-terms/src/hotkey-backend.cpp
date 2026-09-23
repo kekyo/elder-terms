@@ -86,8 +86,11 @@ static cardio::promise<void> run_x11_event_loop_async(
 
 HotkeyBackendKind
 select_hotkey_backend_kind(const HotkeyBackendAvailability &availability) {
-  if (availability.prefer_portal && availability.has_portal) {
-    return HotkeyBackendKind::portal;
+  if (availability.prefer_portal) {
+    // XWayland grabs cannot cover native Wayland windows. Desktop commands
+    // remain available through the independent control socket instead.
+    return availability.has_portal ? HotkeyBackendKind::portal
+                                   : HotkeyBackendKind::none;
   }
   if (availability.has_x11) {
     return HotkeyBackendKind::x11;
@@ -964,7 +967,7 @@ static cardio::promise<void> initialize_portal_or_fallback_async(
     if (!implementation->destroyed) {
       std::cerr << "Global shortcuts portal is unavailable: "
                 << error.what() << '\n';
-      if (!has_x11 ||
+      if (prefer_portal || !has_x11 ||
           !initialize_x11_backend(implementation)) {
         mark_backend_unavailable(implementation.get());
       }
@@ -998,7 +1001,7 @@ create_hotkey_backend(HotkeyBackendOptions options,
     return state;
   }
   if (implementation->options.dispatcher == nullptr) {
-    if (!has_x11 ||
+    if (prefer_portal || !has_x11 ||
         !initialize_x11_backend(implementation)) {
       mark_backend_unavailable(implementation.get());
     }

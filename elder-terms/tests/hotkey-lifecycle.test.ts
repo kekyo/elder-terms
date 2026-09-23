@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
   chmod,
   mkdir,
@@ -19,6 +21,8 @@ import type {
 import { waitForResult } from 'gestament/testing';
 import { describe, expect, it } from 'vitest';
 import { expectElementKind, runLauncherGtkTest } from './test-helpers';
+
+const execute = promisify(execFile);
 
 const ctrlAltT = {
   key: 't',
@@ -273,6 +277,10 @@ describe('elder-terms application hotkey lifecycle', () => {
         context,
         async (connections) => {
           await writeGlobalSettings(connections, 'ctrl+alt+t');
+          await writeFile(
+            join(connections, "Alice's $(printf unsafe).ini"),
+            '[general]\ntype=local\nopen_connection=ctrl+shift+y\n'
+          );
         },
         async ({ app }) => {
           await waitForWindowCount(app, 1);
@@ -294,10 +302,35 @@ describe('elder-terms application hotkey lifecycle', () => {
             language === 'ja'
               ? '設定されたグローバルショートカットの一部またはすべてを登録できなかったため、動作しません。デスクトップ環境がグローバルショートカットに対応しているか確認してください。'
               : 'One or more configured global shortcuts could not be registered and will not work. Check whether your desktop environment supports global shortcuts.';
-          for (const text of [summary, explanation]) {
+          const guidance =
+            language === 'ja'
+              ? 'デスクトップのショートカットに次のコマンドを登録してください:'
+              : 'Configure desktop shortcuts to run these commands:';
+          for (const text of [summary, explanation, guidance]) {
             expect(
               await findDescendantByName(dialog, 'label', text)
             ).toBeDefined();
+          }
+          const commands = expectElementKind(
+            await app.getById('hotkey_external_commands'),
+            'label'
+          );
+          const commandLines = (await commands.info()).name.split('\n');
+          expect(commandLines).toHaveLength(2);
+          for (const [index, command] of commandLines.entries()) {
+            const result = await execute('/bin/sh', [
+              '-c',
+              'set -- ' + command + '; printf "%s\\n" "$@"',
+            ]);
+            expect(result.stdout.trimEnd().split('\n')).toEqual(
+              index === 0
+                ? ['elder-termsctl', 'open-application']
+                : [
+                    'elder-termsctl',
+                    'open-connection',
+                    "Alice's $(printf unsafe)",
+                  ]
+            );
           }
           const captures = fileURLToPath(
             new URL(

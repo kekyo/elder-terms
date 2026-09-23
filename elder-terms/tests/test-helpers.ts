@@ -409,7 +409,10 @@ export const runLauncherGtkTest = async (
 ): Promise<void> => {
   const directory = await mkdtemp(join(tmpdir(), 'elder-terms-gtk-'));
   const configHome = join(directory, 'config');
+  const runtimeDirectory = join(directory, 'runtime');
   const connections = join(configHome, 'elder-terms', 'connections');
+  // Isolate the control socket from other tests and the user's desktop.
+  await mkdir(runtimeDirectory, { mode: 0o700 });
   await mkdir(connections, { recursive: true });
   await prepare(connections);
 
@@ -420,6 +423,7 @@ export const runLauncherGtkTest = async (
       LANGUAGE: 'C',
       LC_ALL: 'C.UTF-8',
       XDG_CONFIG_HOME: configHome,
+      XDG_RUNTIME_DIR: runtimeDirectory,
       ...options?.env,
     },
     xvfbPool: {

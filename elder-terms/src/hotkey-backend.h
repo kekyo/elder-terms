@@ -14,10 +14,10 @@
 namespace elder_terms {
 
 /**
- * Identifies the runtime transport used for global hotkey actions.
+ * Identifies the runtime transport used to register global hotkeys.
  */
 enum class HotkeyBackendKind {
-  /** No global hotkey transport is available. */
+  /** No automatic global hotkey registration is available. */
   none,
   /** X11 passive key grab. */
   x11,
@@ -43,7 +43,7 @@ struct HotkeyBackendAvailability {
 struct HotkeyActivationContext {
   /** Event timestamp when provided by the platform. */
   std::optional<std::uint32_t> activation_time;
-  /** Wayland activation token when provided by the portal. */
+  /** Wayland activation token supplied by the desktop. */
   std::optional<std::string> activation_token;
 };
 
@@ -88,8 +88,8 @@ struct HotkeyBackendState;
  * Chooses the runtime hotkey transport.
  *
  * @param availability Available transports and session preference.
- * @returns Portal for a preferred Wayland session, otherwise X11, then portal,
- * then none.
+ * @returns Portal or none for a preferred Wayland session; otherwise X11,
+ * then portal, then none. External control remains available independently.
  */
 HotkeyBackendKind
 select_hotkey_backend_kind(const HotkeyBackendAvailability &availability);
