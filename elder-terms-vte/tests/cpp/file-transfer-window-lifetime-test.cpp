@@ -138,8 +138,56 @@ static cardio::promise<void> verify_async(
         set_file_transfer_window_connection_available(closing_window, true);
         set_file_transfer_window_connection_available(closing_window, false);
         const bool destroyed = file_transfer_window_widget(closing_window) == nullptr;
+        if (!auto_close) {
+          auto *dim = find_widget(file_transfer_window_widget(closing_window), "file_transfer_dim_overlay");
+          expect(dim != nullptr && gtk_widget_get_visible(dim),
+                 "Disconnected file browsers must display the disconnection overlay");
+        }
         co_await close_file_transfer_window_async(closing_window);
         expect(destroyed == auto_close, "File transfer disconnection must respect general auto-close");
+      }
+    }
+    for (const bool close_during_reconnect : {false, true}) {
+      auto settings = create_default_settings({}, "Reconnect");
+      set_setting_value(&settings, general_auto_close_setting_key(), SettingValue{false});
+      auto old_client = std::make_shared<GatedClient>();
+      unsigned reconnects = 0;
+      cardio::primitives::manually_conditional reconnected{false};
+      std::shared_ptr<FileTransferWindow> reconnect_window;
+      reconnect_window = create_file_transfer_window({
+          .connection_name = "Reconnect", .protocol_name = "FTP",
+          .local_directory = "/tmp", .remote_directory = "/remote",
+          .remote_file_hash = {}, .colors = {}, .closed = {}, .settings = settings,
+          .reconnect = [&](SettingsStore current) -> cardio::promise<void> {
+            expect(!general_auto_close(current), "Reconnect must receive the current settings");
+            ++reconnects;
+            attach_file_transfer_window_client(reconnect_window, create_sftp_fixture_client(false));
+            reconnected.raise();
+            co_return;
+          }});
+      show_file_transfer_window(reconnect_window);
+      attach_file_transfer_window_client(reconnect_window, old_client);
+      co_await old_client->started.wait();
+      set_file_transfer_window_connection_available(reconnect_window, false);
+      auto *root = file_transfer_window_widget(reconnect_window);
+      auto *button = find_widget(root, "file_transfer_reconnect_button");
+      auto *dim = find_widget(root, "file_transfer_dim_overlay");
+      expect(button && gtk_widget_get_visible(button), "Disconnected FTP must offer reconnect");
+      gtk_button_clicked(GTK_BUTTON(button));
+      expect(!gtk_widget_get_visible(button), "Reconnect must prevent duplicate attempts");
+      co_await old_client->cleanup_started.wait();
+      expect(reconnects == 0, "Reconnect must wait for old operation cleanup");
+      std::optional<cardio::promise<void>> reconnect_closing;
+      if (close_during_reconnect) reconnect_closing.emplace(close_file_transfer_window_async(reconnect_window));
+      old_client->cleanup_allowed.raise();
+      if (close_during_reconnect) {
+        co_await *reconnect_closing;
+        expect(reconnects == 0, "Closing during cleanup must not reopen the connection");
+      } else {
+        co_await reconnected.wait();
+        expect(reconnects == 1 && !gtk_widget_get_visible(dim) && !gtk_widget_get_visible(button),
+               "Successful reconnect must restore the browser and hide the overlay");
+        co_await close_file_transfer_window_async(reconnect_window);
       }
     }
     for (const bool connection_lost : {false, true}) {

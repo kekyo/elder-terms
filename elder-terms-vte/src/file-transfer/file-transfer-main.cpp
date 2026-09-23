@@ -39,6 +39,7 @@ struct SftpApplicationState {
   std::shared_ptr<elder_terms::FileTransferWindow> window;
   cardio::cancellation_source stop_source;
   std::optional<cardio::promise<void>> startup_task;
+  std::optional<cardio::promise<void>> shutdown_task;
   cardio::primitives::manually_conditional fixture_hash_gate{false};
   bool shutting_down = false;
 };
@@ -71,13 +72,22 @@ static std::string format_message(const char *format,
   return result;
 }
 
+static cardio::promise<void> finish_sftp_application_async(SftpApplicationState *state) {
+  try {
+    if (state->startup_task) co_await *state->startup_task;
+    co_await elder_terms::close_file_transfer_window_async(state->window);
+  } catch (const cardio::canceled_exception &) {
+  } catch (const std::exception &error) { std::cerr << error.what() << '\n'; }
+  state->dispatcher_group->shutdown();
+}
+
 static void stop_sftp_application(SftpApplicationState *state) {
   if (state == nullptr || state->shutting_down) {
     return;
   }
   state->shutting_down = true;
   (void)state->stop_source.cancel();
-  state->dispatcher_group->shutdown();
+  state->shutdown_task.emplace(finish_sftp_application_async(state));
 }
 
 static cardio::promise<elder_terms::FileHashes>
@@ -107,6 +117,9 @@ calculate_sftp_file_hashes_async(
   };
 }
 
+static cardio::promise<void> reconnect_sftp_application_async(
+    SftpApplicationState *state, elder_terms::SettingsStore settings);
+
 static void create_sftp_application_window(SftpApplicationState *state) {
   state->window = elder_terms::create_file_transfer_window(
       {
@@ -130,6 +143,9 @@ static void create_sftp_application_window(SftpApplicationState *state) {
               },
           .settings = state->settings,
           .config_path = state->launch_options.config_path,
+          .reconnect = [state](elder_terms::SettingsStore settings) {
+            return reconnect_sftp_application_async(state, std::move(settings));
+          },
       });
   elder_terms::show_file_transfer_window(state->window);
 }
@@ -314,6 +330,18 @@ start_sftp_fixture_async(SftpApplicationState *state) {
       state->window, state->client);
 }
 
+static cardio::promise<void> reconnect_sftp_application_async(
+    SftpApplicationState *state, elder_terms::SettingsStore settings) {
+  if (state->startup_task) co_await *state->startup_task;
+  state->client.reset();
+  state->transport.reset();
+  if (state->shutting_down) co_return;
+  state->settings = std::move(settings);
+  state->connection = elder_terms::sftp_connection_settings(state->settings);
+  if (state->launch_options.test.fixture) co_await start_sftp_fixture_async(state);
+  else co_await start_sftp_application_async(state);
+}
+
 static int run_sftp_application(
     const elder_terms::SettingsLoadResult &settings_result,
     elder_terms::LaunchOptions launch_options) {
@@ -346,6 +374,7 @@ static int run_sftp_application(
   state.client.reset();
   state.transport.reset();
   state.startup_task.reset();
+  state.shutdown_task.reset();
   return 0;
 }
 
@@ -383,6 +412,19 @@ static void stop_ftp_application(FtpApplicationState *state) {
   state->shutdown_task.emplace(finish_ftp_application_async(state));
 }
 
+static cardio::promise<void> start_ftp_application_async(FtpApplicationState *state);
+
+static cardio::promise<void> reconnect_ftp_application_async(
+    FtpApplicationState *state, elder_terms::SettingsStore settings) {
+  if (state->startup_task) co_await *state->startup_task;
+  if (state->client && !state->fixture) co_await elder_terms::stop_ftp_client_async(state->client);
+  state->client.reset();
+  if (state->shutting_down) co_return;
+  state->settings = std::move(settings);
+  state->connection = elder_terms::ftp_connection_settings(state->settings);
+  co_await start_ftp_application_async(state);
+}
+
 static void create_ftp_application_window(FtpApplicationState *state) {
   state->window = elder_terms::create_file_transfer_window(
       {
@@ -401,6 +443,9 @@ static void create_ftp_application_window(FtpApplicationState *state) {
               },
           .settings = state->settings,
           .config_path = state->config_path,
+          .reconnect = [state](elder_terms::SettingsStore settings) {
+            return reconnect_ftp_application_async(state, std::move(settings));
+          },
       });
   elder_terms::show_file_transfer_window(state->window);
 }

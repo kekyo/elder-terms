@@ -1822,6 +1822,16 @@ describe.concurrent('elder-terms-vte main window', () => {
               timeoutMs: 5_000,
             }
           );
+          const reconnect = expectElementKind(
+            await app.getById('file_transfer_reconnect_button'),
+            'button'
+          );
+          expect((await reconnect.info()).states).toContain('showing');
+          await reconnect.click();
+          await waitForResult(async () => {
+            expect((await remotePath.info()).states).toContain('sensitive');
+            expect((await reconnect.info()).states).not.toContain('showing');
+          });
         }
       );
     });

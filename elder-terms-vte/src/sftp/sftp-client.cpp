@@ -32,7 +32,7 @@ struct LibsshSftpFileState {
   sftp_file file = nullptr;
 };
 
-static std::runtime_error
+static RemoteFileError
 libssh_sftp_failure(ssh_session session, sftp_session sftp,
                     const std::string &operation) {
   const int code = sftp == nullptr ? SSH_ERROR : sftp_get_error(sftp);
@@ -44,7 +44,13 @@ libssh_sftp_failure(ssh_session session, sftp_session sftp,
     message += ": ";
     message += detail;
   }
-  return std::runtime_error(message);
+  // A subsystem can reach channel EOF while the shared SSH transport remains
+  // connected. Ordinary file/directory EOF is successful and never reaches here.
+  const bool connection_lost = code == SSH_FX_NO_CONNECTION ||
+      code == SSH_FX_CONNECTION_LOST ||
+      (code == SSH_FX_EOF && session != nullptr &&
+       ssh_get_error_code(session) == SSH_FATAL);
+  return RemoteFileError(message, connection_lost);
 }
 
 static RemoteFileType
@@ -174,7 +180,7 @@ private:
                   session, nullptr, "Failed to allocate SFTP subsystem");
             }
             if (sftp_init(sftp) != SSH_OK) {
-              const std::runtime_error error = libssh_sftp_failure(
+              const auto error = libssh_sftp_failure(
                   session, sftp, "Failed to initialize SFTP subsystem");
               sftp_free(sftp);
               throw error;
@@ -214,6 +220,8 @@ private:
       const bool connected = co_await transport->is_connected_async(cancellation);
       try {
         std::rethrow_exception(failure);
+      } catch (const RemoteFileError &error) {
+        throw RemoteFileError(error.what(), error.connection_lost || !connected);
       } catch (const std::exception &error) {
         throw RemoteFileError(error.what(), !connected);
       }

@@ -97,6 +97,52 @@ describe('WebDAV window', () => {
             expect((await app.output()).exitCode).toBeNull();
           }
         });
+        if (!autoClose) {
+          const reconnect = expectElementKind(
+            await app.getById('file_transfer_reconnect_button'),
+            'button'
+          );
+          expect((await reconnect.info()).states).toContain('showing');
+          expect(
+            (await (await app.getById('file_transfer_dim_overlay')).info())
+              .states
+          ).toContain('showing');
+          // A failed attempt must return to the reconnect action.
+          await reconnect.click();
+          const accept = expectElementKind(
+            await app.getById('file_transfer_prompt_accept_button'),
+            'button'
+          );
+          await waitForResult(async () => {
+            expect((await accept.info()).states).toContain('showing');
+          });
+          await accept.click();
+          await waitForResult(async () => {
+            expect((await reconnect.info()).states).toContain('showing');
+          });
+          await server.restart();
+          serverClosed = false;
+          server.files.set('/dav/reconnected.txt', {
+            content: Buffer.from('reconnected'),
+            reportedSize: 11,
+          });
+          await reconnect.click();
+          const tree = expectElementKind(
+            await app.getById('file_transfer_remote_tree'),
+            'table'
+          ) as GtkTableElement;
+          await waitForResult(async () => {
+            expect((await tree.info()).states).toContain('sensitive');
+            const names = [];
+            for (let row = 0; row < (await tree.getRowCount()); row++)
+              names.push((await (await tree.cellAt(row, 0))?.info())?.name);
+            expect(names).toContain('reconnected.txt');
+            expect((await reconnect.info()).states).not.toContain('showing');
+          });
+          await evidence.captureEvidence('webdav-reconnected', async () =>
+            app.capture()
+          );
+        }
       } finally {
         await evidence.flushOutputs(apps, launcher);
         await launcher.release();

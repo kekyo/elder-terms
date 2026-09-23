@@ -106,6 +106,16 @@ static cardio::promise<void> start_application_async(WebdavApplication *state) {
   }
 }
 
+static cardio::promise<void> reconnect_application_async(
+    WebdavApplication *state, SettingsStore settings) {
+  if (state->startup) co_await *state->startup;
+  if (state->client) co_await stop_webdav_client_async(state->client);
+  state->client.reset();
+  if (state->shutting_down) co_return;
+  state->connection = webdav_connection_settings(settings);
+  co_await start_application_async(state);
+}
+
 int run_webdav_application(const SettingsLoadResult &settings,
     std::optional<std::filesystem::path> config_path) {
   cardio::dispatcher_group_glib group;
@@ -120,7 +130,10 @@ int run_webdav_application(const SettingsLoadResult &settings,
       .remote_directory = state.connection.remote_directory, .remote_file_hash = {},
       .colors = general_color_settings(settings.store),
       .closed = [&state] { stop_application(&state); },
-      .settings = settings.store, .config_path = std::move(config_path)});
+      .settings = settings.store, .config_path = std::move(config_path),
+      .reconnect = [&state](SettingsStore settings) {
+        return reconnect_application_async(&state, std::move(settings));
+      }});
   show_file_transfer_window(state.window);
   state.startup.emplace(start_application_async(&state));
   dispatcher.park();

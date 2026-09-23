@@ -127,21 +127,26 @@ static std::string read_line(const Socket &socket) {
   return read_line_with([&socket](void *bytes, std::size_t size) { return socket.read(bytes, size); });
 }
 
-static std::pair<Socket, unsigned> listen_local(bool ipv6) {
+static std::pair<Socket, unsigned> listen_local(bool ipv6, unsigned requested_port = 0) {
   Socket socket(::socket(ipv6 ? AF_INET6 : AF_INET,
                          SOCK_STREAM | SOCK_CLOEXEC, 0));
   expect(socket.fd >= 0, "FTP test socket failed");
+  const int reuse = 1;
+  expect(::setsockopt(socket.fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == 0,
+         "FTP test socket reuse failed");
   sockaddr_storage storage{};
   socklen_t length;
   if (ipv6) {
     auto &address = reinterpret_cast<sockaddr_in6 &>(storage);
     address.sin6_family = AF_INET6;
     address.sin6_addr = in6addr_loopback;
+    address.sin6_port = htons(requested_port);
     length = sizeof(address);
   } else {
     auto &address = reinterpret_cast<sockaddr_in &>(storage);
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    address.sin_port = htons(requested_port);
     length = sizeof(address);
   }
   expect(::bind(socket.fd, reinterpret_cast<sockaddr *>(&storage), length) == 0 &&
@@ -514,6 +519,7 @@ int main(int argc, char **argv) {
   using namespace elder_terms_ftp_test_server;
   try {
     expect(argc >= 2, "Usage: ftp-test-server ROOT [options]");
+    unsigned requested_port = 0;
     Options options;
     options.root = argv[1];
     for (int index = 2; index < argc; ++index) {
@@ -523,6 +529,7 @@ int main(int argc, char **argv) {
       else if (option.starts_with("--data-cert=")) options.data_cert = option.substr(12);
       else if (option.starts_with("--data-key=")) options.data_key = option.substr(11);
       else if (option.starts_with("--key=")) options.key = option.substr(6);
+      else if (option.starts_with("--port=")) requested_port = std::stoul(option.substr(7));
       else if (option == "--require-reuse") options.require_reuse = true;
       else if (option.starts_with("--tls-version=")) options.tls_version = std::stoi(option.substr(14));
       else if (option == "--hold-control-tls") options.hold_control_tls = true;
@@ -585,7 +592,7 @@ int main(int argc, char **argv) {
       // Separate contexts intentionally prevent a control-session resumption
       // from hiding the distinct certificate exercised by these tests.
     }
-    auto [listener, port] = listen_local(options.ipv6);
+    auto [listener, port] = listen_local(options.ipv6, requested_port);
     std::cout << "READY " << port << std::endl;
     for (;;) {
       Socket control(::accept4(listener.fd, nullptr, nullptr, SOCK_CLOEXEC));

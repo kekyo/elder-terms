@@ -268,6 +268,7 @@ for (const testCase of [
           '[general]',
           'name=Live FTP',
           'type=ftp',
+          'auto_close=false',
           'background=#183C58',
           '[ftp]',
           'address=127.0.0.1',
@@ -1137,6 +1138,99 @@ for (const testCase of [
         await clickClose(
           await app.getById('file_transfer_operation_error_dialog')
         );
+      }
+      if (testCase === 'passive' || testCase === 'ftps-explicit') {
+        server.kill('SIGTERM');
+        await serverFinished;
+        const refresh = expectElementKind(
+          await app.getById('file_transfer_remote_refresh_button'),
+          'button'
+        );
+        await refresh.click();
+        const reconnect = expectElementKind(
+          await app.getById('file_transfer_reconnect_button'),
+          'button'
+        );
+        await waitForResult(async () => {
+          expect((await reconnect.info()).states).toContain('showing');
+          expect(
+            (await (await app.getById('file_transfer_dim_overlay')).info())
+              .states
+          ).toContain('showing');
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Disconnected');
+        });
+        await evidence.captureEvidence('ftp-disconnected', async () =>
+          window.capture()
+        );
+        // The disconnected overlay must keep local browsing usable.
+        await expectElementKind(
+          await app.getById('file_transfer_local_refresh_button'),
+          'button'
+        ).click();
+        const restartArgs = [
+          ...server.spawnargs.slice(1),
+          '--port=' + ready.slice(6),
+        ];
+        server = spawn(serverPath, restartArgs, {
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        let restarted = false;
+        const restartLines = createInterface({ input: server.stdout! });
+        restartLines.on('line', (line) => {
+          if (line.startsWith('READY ')) restarted = true;
+        });
+        server.stderr!.on('data', (bytes: Buffer) => {
+          serverLog += bytes.toString();
+        });
+        serverFinished = new Promise((resolve) => {
+          server!.once('error', (error) => {
+            serverError = error;
+            resolve(null);
+          });
+          server!.once('close', resolve);
+        });
+        await waitForResult(async () => {
+          if (serverError) throw serverError;
+          expect(restarted, serverLog).toBe(true);
+        });
+        await writeFile(
+          join(remote, 'archive', 'reconnected.txt'),
+          'new listing after restart'
+        );
+        await reconnect.click();
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_entry'),
+          'entry'
+        ).setText('alice');
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_secondary_entry'),
+          'entry'
+        ).setText('secret');
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        ).click();
+        const tree = expectElementKind(
+          await app.getById('file_transfer_remote_tree'),
+          'table'
+        ) as GtkTableElement;
+        await waitForResult(async () => {
+          expect((await tree.info()).states).toContain('sensitive');
+          const names = [];
+          for (let row = 0; row < (await tree.getRowCount()); row++)
+            names.push((await (await tree.cellAt(row, 0))?.info())?.name);
+          expect(names).toContain('reconnected.txt');
+          expect((await reconnect.info()).states).not.toContain('showing');
+          expect(
+            (await (await app.getById('file_transfer_dim_overlay')).info())
+              .states
+          ).not.toContain('showing');
+        });
       }
       if (legacyTls) {
         const channels = serverLog

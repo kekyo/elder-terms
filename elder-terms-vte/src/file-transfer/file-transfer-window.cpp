@@ -143,6 +143,7 @@ struct FileTransferWindow {
   GtkWidget *root_overlay = nullptr;
   GtkWidget *paned = nullptr;
   GtkWidget *dim_overlay = nullptr;
+  GtkWidget *reconnect_button = nullptr;
   GtkWidget *transfer_overlay = nullptr;
   GtkWidget *transfer_label = nullptr;
   GtkWidget *transfer_progress = nullptr;
@@ -169,6 +170,9 @@ struct FileTransferWindow {
   std::function<cardio::promise<FileHashes>(
       std::string, cardio::cancellation)> remote_file_hash;
   std::function<void()> closed;
+  std::function<cardio::promise<void>(SettingsStore)> reconnect;
+  std::optional<cardio::promise<void>> reconnect_task;
+  bool reconnecting = false;
   cardio::cancellation_source stop_source;
   std::optional<cardio::cancellation_source> transfer_cancel_source;
   std::optional<cardio::promise<void>> transfer_task;
@@ -567,7 +571,7 @@ static void update_file_transfer_sensitivity(FileTransferWindow *window) {
     return;
   }
   const bool idle =
-      !window->transfer_active && !window->browser_action_active && !window->certificate_confirmation;
+      !window->reconnecting && !window->transfer_active && !window->browser_action_active && !window->certificate_confirmation;
   const bool local_ready = idle && !window->local.busy;
   const bool remote_ready =
       idle && !window->remote.busy && window->connection_available;
@@ -622,7 +626,15 @@ static void update_file_transfer_overlay_presentation(
     reset_activity_indicator_widget(&window->indicators[1]);
     reset_activity_indicator_widget(&window->indicators[2]);
   }
+  const bool disconnected =
+      window->connection_state == FileTransferConnectionState::disconnected;
+  set_widget_visible(window->reconnect_button, disconnected && static_cast<bool>(window->reconnect));
+  // A disconnected remote service must not prevent local browsing.
+  gtk_overlay_set_overlay_pass_through(GTK_OVERLAY(window->root_overlay),
+      window->dim_overlay, disconnected && !window->transfer_active &&
+      !window->browser_action_active && !window->certificate_confirmation);
   const bool connection_blocked =
+      disconnected ||
       window->connection_state == FileTransferConnectionState::connecting ||
       window->connection_state ==
           FileTransferConnectionState::authenticating ||
@@ -633,6 +645,51 @@ static void update_file_transfer_overlay_presentation(
   set_widget_visible(window->transfer_overlay,
                      window->transfer_active ||
                          window->browser_action_progress);
+}
+
+static cardio::promise<void> reconnect_file_transfer_window_async(
+    std::shared_ptr<FileTransferWindow> window) {
+  window->reconnecting = true;
+  window->connection_state = FileTransferConnectionState::connecting;
+  set_file_transfer_status(window.get(), _("Connecting"));
+  update_file_transfer_overlay_presentation(window.get());
+  update_file_transfer_sensitivity(window.get());
+  // Finish all old operations before releasing their client and renewing the
+  // cancellation source. Old completion callbacks cannot affect the new session.
+  (void)window->stop_source.cancel();
+  if (window->transfer_cancel_source) (void)window->transfer_cancel_source->cancel();
+  std::string failure;
+  try {
+    for (auto *task : {&window->transfer_task, &window->browser_action_task,
+                      &window->local.task, &window->remote.task}) {
+      if (!task->has_value()) continue;
+      try { co_await **task; } catch (const cardio::canceled_exception &) {}
+      task->reset();
+    }
+    if (!window->destroyed) {
+      window->client.reset();
+      window->remote_load_started = false;
+      window->certificate_exception = false;
+      window->stop_source = cardio::cancellation_source();
+      co_await window->reconnect(window->settings);
+    }
+  } catch (const cardio::canceled_exception &) {
+  } catch (const std::exception &error) { failure = error.what(); }
+  if (!failure.empty()) {
+    co_await show_file_transfer_window_connection_error_async(
+        window, _("Connection failed"), std::move(failure),
+        window->stop_source.get_cancellation());
+  }
+  window->reconnecting = false;
+  update_file_transfer_sensitivity(window.get());
+}
+
+static void on_file_transfer_reconnect_clicked(GtkButton *, gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
+  if (window->destroyed || window->reconnecting || !window->reconnect ||
+      window->connection_state != FileTransferConnectionState::disconnected) return;
+  window->reconnect_task.reset();
+  window->reconnect_task.emplace(reconnect_file_transfer_window_async(window->self.lock()));
 }
 
 static bool has_file_transfer_progress_operation(
@@ -2615,6 +2672,7 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   state->self = state;
   state->remote_file_hash = std::move(options.remote_file_hash);
   state->closed = std::move(options.closed);
+  state->reconnect = std::move(options.reconnect);
   state->settings = std::move(options.settings);
   state->config_path = std::move(options.config_path);
   state->local.current_directory =
@@ -2728,6 +2786,15 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   gtk_widget_set_valign(state->dim_overlay, GTK_ALIGN_FILL);
   gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay),
                           state->dim_overlay);
+
+  state->reconnect_button = gtk_button_new_with_label(_("Reconnect"));
+  gestament_gtk_assign_accessible_id(state->reconnect_button, "file_transfer_reconnect_button");
+  gtk_widget_set_no_show_all(state->reconnect_button, TRUE);
+  gtk_widget_set_halign(state->reconnect_button, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(state->reconnect_button, GTK_ALIGN_CENTER);
+  gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay), state->reconnect_button);
+  g_signal_connect(state->reconnect_button, "clicked",
+                   G_CALLBACK(on_file_transfer_reconnect_clicked), state.get());
 
   state->transfer_overlay =
       gtk_frame_new(nullptr);
@@ -2919,7 +2986,7 @@ cardio::promise<void> show_file_transfer_window_connection_error_async(
   InlinePromptRequest request{
       .title = std::move(title),
       .message = std::move(message),
-      .accept_label = _("Close"),
+      .accept_label = window->reconnecting ? _("OK") : _("Close"),
       .cancel_label = _("Cancel"),
       .input_required = false,
       .echo = false,
@@ -2929,7 +2996,13 @@ cardio::promise<void> show_file_transfer_window_connection_error_async(
       window->prompt, std::move(request), std::move(cancellation));
   const InlinePromptResponse response = co_await pending;
   if (response.accepted && !window->destroyed && window->window != nullptr) {
-    gtk_widget_destroy(window->window);
+    if (window->reconnecting) {
+      window->connection_state = FileTransferConnectionState::disconnected;
+      set_file_transfer_status(window.get(), _("Disconnected"));
+      update_file_transfer_overlay_presentation(window.get());
+    } else {
+      gtk_widget_destroy(window->window);
+    }
   }
 }
 
@@ -3065,7 +3138,7 @@ cardio::promise<void> close_file_transfer_window_async(
   // may start fresh asynchronous I/O, so a dispatcher shutdown alone cannot
   // guarantee that these tasks have stopped using the window's state.
   std::exception_ptr failure;
-  for (auto *task : {&window->transfer_task, &window->browser_action_task,
+  for (auto *task : {&window->reconnect_task, &window->transfer_task, &window->browser_action_task,
                     &window->local.task, &window->remote.task}) {
     if (!task->has_value()) continue;
     try {

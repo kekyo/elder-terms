@@ -39,6 +39,8 @@ struct FileTransferWindowOptions {
   SettingsStore settings = {};
   /** Writable connection file, or no Save action when absent. */
   std::optional<std::filesystem::path> config_path = std::nullopt;
+  /** Reopens and attaches the remote service using the current settings. */
+  std::function<cardio::promise<void>(SettingsStore)> reconnect = {};
 };
 
 /**
@@ -76,7 +78,7 @@ void show_file_transfer_window(const std::shared_ptr<FileTransferWindow> &window
  *
  * @param window File-transfer window waiting for its remote service.
  * @param client Initialized remote service used by browsing and transfers.
- * @remarks A remote service may only be attached once.
+ * @remarks A remote service may be attached initially or during the reconnect callback.
  */
 void attach_file_transfer_window_client(
     const std::shared_ptr<FileTransferWindow> &window,
