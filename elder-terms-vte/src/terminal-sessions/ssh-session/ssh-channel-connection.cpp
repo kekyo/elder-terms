@@ -1933,6 +1933,12 @@ SshChannelConnection::read_async(std::span<unsigned char> buffer,
             if (read_size == SSH_ERROR &&
                 !ssh_result_is_again(transport->impl->session,
                                      read_size)) {
+              // A peer can close the socket without sending channel EOF.
+              // Report the ended stream through the normal disconnect path.
+              if (ssh_is_connected(transport->impl->session) == 0) {
+                return SshChannelReadResult{
+                    .size = 0, .poll_flags = 0, .eof = true};
+              }
               throw ssh_failure(transport->impl->session,
                                 "Failed to read SSH channel");
             }
