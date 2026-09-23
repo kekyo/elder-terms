@@ -232,7 +232,7 @@ const showTerminalSettingsPage = async (app: GtkApp): Promise<void> => {
   await selectSettingsNotebookTab(
     app,
     'Terminal',
-    'settings_terminal_auto_close_combo'
+    'settings_terminal_width_entry'
   );
 };
 
@@ -907,7 +907,11 @@ describe.concurrent('elder-terms-vte settings', () => {
         'utf8'
       );
       await chmod(shellPath, 0o755);
-      await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
+      await writeFile(
+        configPath,
+        '[general]\nauto_close=false\n\n[terminal]\n',
+        'utf8'
+      );
 
       await runGtkTest(
         context,
@@ -1307,7 +1311,7 @@ describe.concurrent('elder-terms-vte settings', () => {
           'Warning: invalid configuration value [terminal] zoom:'
         );
         expect(output.stderr).toContain(
-          'Warning: invalid configuration value [terminal] auto_close:'
+          'Warning: invalid configuration value [general] auto_close:'
         );
       }
     );
@@ -1465,13 +1469,13 @@ describe.concurrent('elder-terms-vte settings', () => {
         const port = await listenOnLocalhost(server);
         const initialConfig = [
           '[general]',
+          'auto_close=false',
           'name=Connection color fixture with a stable title that hides the dynamic endpoint',
           'type=telnet',
           'exterior_background=#204060',
           'background=#604020',
           '',
           '[terminal]',
-          'auto_close=false',
           '',
           '[telnet]',
           'address=127.0.0.1',
@@ -2038,7 +2042,7 @@ describe.concurrent('elder-terms-vte settings', () => {
         const port = await listenOnLocalhost(server);
         const configPath = join(directory, 'runtime-log.ini');
         const logPath = join(directory, 'logs', 'runtime.txt');
-        const initialConfig = `[general]\ntype=telnet\n\n[terminal]\nauto_close=false\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n\n[log]\nenabled=false\nbase_directory=${directory}\nfile_name_format=logs/runtime.txt\nmode=cooked\n`;
+        const initialConfig = `[general]\nauto_close=false\ntype=telnet\n\n[terminal]\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n\n[log]\nenabled=false\nbase_directory=${directory}\nfile_name_format=logs/runtime.txt\nmode=cooked\n`;
         await writeFile(configPath, initialConfig, 'utf8');
 
         await runGtkTest(context, ['-c', configPath], async (app) => {
@@ -2156,7 +2160,7 @@ describe.concurrent('elder-terms-vte settings', () => {
       ).toBe('');
       await expectSelectedComboValue(
         app,
-        'settings_terminal_auto_close_combo',
+        'settings_general_auto_close_combo',
         'Enabled (built-in default)'
       );
     });
@@ -2745,20 +2749,20 @@ describe.concurrent('elder-terms-vte settings', () => {
         [],
         async (app) => {
           await openSettingsDialog(app);
-          await showTerminalSettingsPage(app);
+          await showGeneralSettingsPage(app);
 
           await expectSelectedComboValue(
             app,
-            'settings_terminal_auto_close_combo',
+            'settings_general_auto_close_combo',
             'Enabled (built-in default)'
           );
           await expectElementKind(
-            await app.getById('settings_terminal_auto_close_combo'),
+            await app.getById('settings_general_auto_close_combo'),
             'comboBox'
           ).selectChildAt(2);
           await expectSelectedComboValue(
             app,
-            'settings_terminal_auto_close_combo',
+            'settings_general_auto_close_combo',
             'Disabled'
           );
           await expectElementKind(
@@ -2943,20 +2947,20 @@ describe.concurrent('elder-terms-vte settings', () => {
         [],
         async (app, evidence) => {
           await openSettingsDialog(app);
-          await showTerminalSettingsPage(app);
+          await showGeneralSettingsPage(app);
 
           await expectSelectedComboValue(
             app,
-            'settings_terminal_auto_close_combo',
+            'settings_general_auto_close_combo',
             'Enabled (built-in default)'
           );
           await expectElementKind(
-            await app.getById('settings_terminal_auto_close_combo'),
+            await app.getById('settings_general_auto_close_combo'),
             'comboBox'
           ).selectChildAt(2);
           await expectSelectedComboValue(
             app,
-            'settings_terminal_auto_close_combo',
+            'settings_general_auto_close_combo',
             'Disabled'
           );
           await expectElementKind(

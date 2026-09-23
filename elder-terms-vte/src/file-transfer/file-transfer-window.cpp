@@ -215,6 +215,17 @@ struct FileTransferWindow {
   }
 };
 
+static bool is_remote_disconnection(std::exception_ptr failure) {
+  if (!failure) return false;
+  try {
+    std::rethrow_exception(failure);
+  } catch (const RemoteFileError &error) {
+    return error.connection_lost;
+  } catch (...) {
+    return false;
+  }
+}
+
 static std::string exception_text(std::exception_ptr error) {
   if (!error) {
     return _("Unknown file transfer failure");
@@ -544,9 +555,10 @@ static void set_file_transfer_status(FileTransferWindow *window,
       window->status_label == nullptr) {
     return;
   }
-  window->status_text = text;
+  window->status_text = window->connection_state == FileTransferConnectionState::disconnected
+      ? _("Disconnected") : text;
   const auto displayed = window->certificate_exception
-      ? text + " — " + _("Certificate exception active") : text;
+      ? window->status_text + " — " + _("Certificate exception active") : window->status_text;
   gtk_label_set_text(GTK_LABEL(window->status_label), displayed.c_str());
 }
 
@@ -826,8 +838,8 @@ static void on_notice_response(GtkDialog *dialog, gint, gpointer) {
 }
 
 static void show_file_transfer_error(FileTransferWindow *window,
-                            const std::string &message) {
-  if (window == nullptr || window->destroyed) {
+                            const std::string &message, std::exception_ptr failure) {
+  if (window == nullptr || window->destroyed || is_remote_disconnection(failure)) {
     return;
   }
   GtkWidget *dialog = gtk_message_dialog_new(
@@ -897,7 +909,7 @@ static cardio::promise<void> load_file_transfer_pane_root_async(
       set_file_transfer_status(window, pane->remote
                                   ? _("Failed to load remote directory")
                                   : _("Failed to load local directory"));
-      show_file_transfer_error(window, exception_text(std::current_exception()));
+      show_file_transfer_error(window, exception_text(std::current_exception()), std::current_exception());
       gtk_entry_set_text(GTK_ENTRY(pane->path_entry),
                          pane->current_directory.c_str());
     }
@@ -969,7 +981,7 @@ static cardio::promise<void> expand_file_transfer_directory_async(
         gtk_tree_path_free(tree_path);
       }
       set_file_transfer_status(window, _("Failed to expand directory"));
-      show_file_transfer_error(window, exception_text(std::current_exception()));
+      show_file_transfer_error(window, exception_text(std::current_exception()), std::current_exception());
     }
   }
   gtk_tree_row_reference_free(reference);
@@ -1328,7 +1340,8 @@ prompt_file_transfer_name_async(
 static cardio::promise<void>
 show_file_transfer_browser_action_error_async(
     FileTransferWindow *window, std::string title, std::string message,
-    cardio::cancellation cancellation) {
+    std::exception_ptr failure, cardio::cancellation cancellation) {
+  if (window->destroyed || is_remote_disconnection(failure)) co_return;
   InlinePromptRequest request{
       .title = std::move(title),
       .message = std::move(message),
@@ -1385,7 +1398,7 @@ static cardio::promise<void> run_file_transfer_new_directory_async(FileTransferP
     set_file_transfer_browser_action_phase(window, true, false, {});
     set_file_transfer_status(window, _("Failed to create folder"));
     co_await show_file_transfer_browser_action_error_async(
-        window, _("Failed to create folder"), exception_text(failure), cancellation);
+        window, _("Failed to create folder"), exception_text(failure), failure, cancellation);
     if (!window->destroyed) {
       set_file_transfer_browser_action_phase(window, false, false, {});
       start_file_transfer_pane_navigation(pane, pane->current_directory);
@@ -1446,7 +1459,7 @@ static cardio::promise<void> run_file_transfer_open_directory_async(
   set_file_transfer_browser_action_phase(window, false, false, {});
   if (failure) {
     show_file_transfer_error(window,
-        std::string(_("Failed to open directory")) + "\n" + exception_text(failure));
+        std::string(_("Failed to open directory")) + "\n" + exception_text(failure), failure);
   }
 }
 
@@ -1522,7 +1535,7 @@ static cardio::promise<void> run_file_transfer_rename_async(
     set_file_transfer_browser_action_phase(window, true, false, {});
     set_file_transfer_status(window, _("Rename failed"));
     co_await show_file_transfer_browser_action_error_async(
-        window, _("Failed to rename item"), message, cancellation);
+        window, _("Failed to rename item"), message, failure, cancellation);
     if (!window->destroyed) {
       set_file_transfer_browser_action_phase(window, false, false, {});
       start_file_transfer_pane_navigation(pane, pane->current_directory);
@@ -1601,7 +1614,7 @@ static cardio::promise<void> run_file_transfer_hash_async(
     set_file_transfer_browser_action_phase(window, true, false, {});
     set_file_transfer_status(window, _("Hash calculation failed"));
     co_await show_file_transfer_browser_action_error_async(
-        window, _("Failed to calculate hash values"), message,
+        window, _("Failed to calculate hash values"), message, failure,
         window->stop_source.get_cancellation());
     if (!window->destroyed) {
       set_file_transfer_browser_action_phase(window, false, false, {});
@@ -1795,7 +1808,7 @@ static cardio::promise<void> run_file_transfer_delete_async(
     set_file_transfer_browser_action_phase(window, true, false, {});
     set_file_transfer_status(window, _("Delete failed"));
     co_await show_file_transfer_browser_action_error_async(
-        window, _("Failed to delete selected items"), message,
+        window, _("Failed to delete selected items"), message, failure,
         cancellation);
     if (!window->destroyed) {
       set_file_transfer_browser_action_phase(window, false, false, {});
@@ -1882,7 +1895,7 @@ static cardio::promise<void> run_file_transfer_window_transfer_async(
   } catch (const FileTransferCleanupFailure &error) {
     if (!window->destroyed) {
       set_file_transfer_status(window, error.cancelled ? _("Transfer cancelled") : _("Transfer failed"));
-      show_file_transfer_error(window, error.what());
+      show_file_transfer_error(window, error.what(), std::current_exception());
     }
   } catch (const cardio::canceled_exception &) {
     if (!window->destroyed) {
@@ -1897,7 +1910,7 @@ static cardio::promise<void> run_file_transfer_window_transfer_async(
         set_file_transfer_status(window, _("Transfer cancelled"));
       } else {
         set_file_transfer_status(window, _("Transfer failed"));
-        show_file_transfer_error(window, message);
+        show_file_transfer_error(window, message, std::current_exception());
       }
     }
   }
@@ -2820,6 +2833,10 @@ void attach_file_transfer_window_client(
         if (owner && !owner->destroyed && owner->connection_available) {
           note_activity_indicator_widget(&owner->indicators[id == ActivityIndicatorId::sd ? 1 : 2]);
         }
+      }, [weak = std::weak_ptr<FileTransferWindow>(window)] {
+        if (const auto owner = weak.lock()) {
+          set_file_transfer_window_connection_available(owner, false);
+        }
       });
   window->connection_available = true;
   window->connection_state = FileTransferConnectionState::ready;
@@ -2929,6 +2946,10 @@ void set_file_transfer_window_connection_available(
   if (!available) {
     if (window->transfer_cancel_source.has_value()) {
       (void)window->transfer_cancel_source->cancel();
+    }
+    if (general_auto_close(window->settings)) {
+      gtk_widget_destroy(window->window);
+      return;
     }
     set_file_transfer_status(window.get(), _("Disconnected"));
   } else {

@@ -24,6 +24,89 @@ import { createTestEvidence, expectElementKind } from './test-helpers';
 import { createWebdavTestServer } from './webdav-test-server';
 
 describe('WebDAV window', () => {
+  for (const autoClose of [false, true]) {
+    it(`respects general auto-close=${autoClose} when the WebDAV service disconnects`, async (context) => {
+      const directory = await mkdtemp(
+        join(tmpdir(), 'elder-terms-dav-disconnect-')
+      );
+      const server = await createWebdavTestServer('none', undefined);
+      const evidence = createTestEvidence(context);
+      let serverClosed = false;
+      const launcher = createGtkAppLauncher({
+        appPath: fileURLToPath(
+          new URL(
+            '../../.build/elder-terms-vte/elder-terms-file-transfer',
+            import.meta.url
+          )
+        ),
+        env: {
+          LANGUAGE: 'en',
+          LC_ALL: 'C.UTF-8',
+          XDG_CONFIG_HOME: join(directory, 'config'),
+        },
+        onSystemOutput: evidence.recordSystemOutputEvent,
+        xvfbTrayHost: true,
+      });
+      const apps: GtkApp[] = [];
+      try {
+        const config = join(directory, 'connection.ini');
+        await writeFile(
+          config,
+          [
+            '[general]',
+            'type=webdav',
+            `auto_close=${autoClose}`,
+            '[webdav]',
+            'scheme=http',
+            'authentication=none',
+            'address=127.0.0.1',
+            `port=${server.port}`,
+            'base_path=/dav/',
+            'remote_directory=/',
+            `local_directory=${directory}`,
+            '',
+          ].join('\n')
+        );
+        const app = await launcher.launch(['-c', config], {
+          onOutput: evidence.recordAppOutputEvent,
+        });
+        apps.push(app);
+        const refresh = expectElementKind(
+          await app.getById('file_transfer_remote_refresh_button'),
+          'button'
+        );
+        await waitForResult(async () => {
+          expect((await refresh.info()).states).toContain('sensitive');
+        });
+        await server.close();
+        serverClosed = true;
+        await refresh.click();
+        await waitForResult(async () => {
+          if (autoClose) {
+            const output = await app.output();
+            expect(output.exitCode, output.stderr).toBe(0);
+            expect(output.exitSignal).toBeNull();
+          } else {
+            expect(
+              await expectElementKind(
+                await app.getById('file_transfer_status_label'),
+                'label'
+              ).text()
+            ).toBe('Disconnected');
+            expect((await refresh.info()).states).not.toContain('sensitive');
+            expect((await app.output()).exitCode).toBeNull();
+          }
+        });
+      } finally {
+        await evidence.flushOutputs(apps, launcher);
+        await launcher.release();
+        if (!serverClosed) await server.close();
+        await evidence.release();
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
+  }
+
   for (const [scheme, authentication, initialDirectory] of [
     ['http', 'none', '/'],
     ['http', 'basic', '/'],

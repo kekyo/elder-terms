@@ -75,6 +75,9 @@ await writeFile('/evidence/editor-path.txt', path);
       assert.equal(await readFile('/evidence/editor-path.txt', 'utf8'), path);
       assert.equal(await name.text(), 'Externally edited scan');
     });
+    const autoClose = await app.getById('settings_general_auto_close_combo');
+    assert.equal(autoClose.kind, 'comboBox');
+    await autoClose.selectChildAt(2);
     const notebook = await app.getById('settings_notebook');
     assert.equal(notebook.kind, 'tabList');
     for (let index = 0; index < (await notebook.getChildCount()); index++) {
@@ -85,9 +88,6 @@ await writeFile('/evidence/editor-path.txt', path);
         break;
       }
     }
-    const autoClose = await app.getById('settings_terminal_auto_close_combo');
-    assert.equal(autoClose.kind, 'comboBox');
-    await autoClose.selectChildAt(2);
     const scrollbar = await app.getById('settings_terminal_page_scrollbar');
     assert.equal(scrollbar.kind, 'scrollbar');
     await scrollbar.setValue((await scrollbar.valueInfo()).maximum);

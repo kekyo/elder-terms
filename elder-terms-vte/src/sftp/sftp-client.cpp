@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -200,8 +201,23 @@ private:
             operation(session, owner->state->session);
           });
         },
-        std::move(cancellation));
-    co_await pending_operation;
+        cancellation);
+    std::exception_ptr failure;
+    try {
+      co_await pending_operation;
+    } catch (const cardio::canceled_exception &) {
+      throw;
+    } catch (...) {
+      failure = std::current_exception();
+    }
+    if (failure) {
+      const bool connected = co_await transport->is_connected_async(cancellation);
+      try {
+        std::rethrow_exception(failure);
+      } catch (const std::exception &error) {
+        throw RemoteFileError(error.what(), !connected);
+      }
+    }
   }
 
   void close_file_later(

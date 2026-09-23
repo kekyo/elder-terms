@@ -753,7 +753,7 @@ static void apply_runtime_settings(ApplicationState *state,
         GTK_CHECK_MENU_ITEM(state->log_enabled_menu_item),
         log_settings.enabled ? TRUE : FALSE);
   }
-  state->auto_close = elder_terms::terminal_auto_close(state->settings_store);
+  state->auto_close = elder_terms::general_auto_close(state->settings_store);
   const auto connection_profile =
       elder_terms::terminal_connection_profile(state->settings_store);
   if (!connection_profile.has_value()) {
@@ -1687,7 +1687,7 @@ int main(int argc, char **argv) {
       .settings_store = settings_result.store,
       .config_path = launch_options.config_path,
       .test_options = launch_options.test,
-      .auto_close = elder_terms::terminal_auto_close(settings_result.store),
+      .auto_close = elder_terms::general_auto_close(settings_result.store),
       .connection_phase =
           elder_terms::TerminalSessionConnectionPhase::disconnected,
       .connection_active = false,

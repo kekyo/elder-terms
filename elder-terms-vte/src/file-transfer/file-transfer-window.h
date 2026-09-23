@@ -128,6 +128,8 @@ cardio::promise<void> show_file_transfer_window_connection_error_async(
  *
  * @param window File-transfer window state.
  * @param available True while the remote transport is usable.
+ * @remarks A transition to unavailable closes the window when [general]
+ * auto_close is enabled; otherwise the local browser remains usable.
  */
 void set_file_transfer_window_connection_available(
     const std::shared_ptr<FileTransferWindow> &window, bool available);

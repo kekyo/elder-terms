@@ -679,7 +679,7 @@ describe.concurrent('elder-terms-vte main window', () => {
       const configPath = join(directory, 'serial.ini');
       await writeFile(
         configPath,
-        '[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=/tmp/elder-terms-missing-serial\nbaudrate=115200\n',
+        '[general]\nauto_close=false\ntype=serial\n\n[terminal]\n\n[serial]\ndevice=/tmp/elder-terms-missing-serial\nbaudrate=115200\n',
         'utf8'
       );
 
@@ -819,7 +819,11 @@ describe.concurrent('elder-terms-vte main window', () => {
         'utf8'
       );
       await chmod(shellPath, 0o755);
-      await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
+      await writeFile(
+        configPath,
+        '[general]\nauto_close=false\n\n[terminal]\n',
+        'utf8'
+      );
 
       await runGtkTest(
         context,
@@ -912,7 +916,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         const configPath = join(directory, 'ssh-negotiation-failure.ini');
         await writeFile(
           configPath,
-          `[general]\ntype=ssh\n\n[terminal]\nauto_close=true\n\n[ssh]\naddress=127.0.0.1\nport=${port}\nusername=negotiation-user\n`,
+          `[general]\nauto_close=true\ntype=ssh\n\n[terminal]\n\n[ssh]\naddress=127.0.0.1\nport=${port}\nusername=negotiation-user\n`,
           'utf8'
         );
 
@@ -1001,10 +1005,10 @@ describe.concurrent('elder-terms-vte main window', () => {
           configPath,
           [
             '[general]',
+            'auto_close=false',
             'type=telnet',
             '',
             '[terminal]',
-            'auto_close=false',
             'return_code=lf',
             '',
             '[telnet]',
@@ -1340,7 +1344,7 @@ describe.concurrent('elder-terms-vte main window', () => {
           const configPath = join(directory, 'ssh-reconnect.ini');
           await writeFile(
             configPath,
-            `[general]\ntype=ssh\n\n[terminal]\nauto_close=false\n\n[ssh]\naddress=127.0.0.1\nport=${port}\nusername=retry-user\n`,
+            `[general]\nauto_close=false\ntype=ssh\n\n[terminal]\n\n[ssh]\naddress=127.0.0.1\nport=${port}\nusername=retry-user\n`,
             'utf8'
           );
           await runGtkTest(context, ['-c', configPath], async (app) => {
@@ -1420,7 +1424,7 @@ describe.concurrent('elder-terms-vte main window', () => {
     });
   }
 
-  for (const autoClose of ['', 'auto_close=true\n']) {
+  for (const autoClose of ['[general]', 'auto_close=true\n', '']) {
     it(`preserves TELNET automatic closing after connection refusal with ${autoClose === '' ? 'default' : 'explicit'} settings`, async (context) => {
       await withTemporaryDirectory(async (directory) => {
         const server = createServer();
@@ -1486,7 +1490,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         const configPath = join(directory, 'refused-reconnect.ini');
         await writeFile(
           configPath,
-          `[general]\ntype=telnet\n\n[terminal]\nauto_close=false\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
+          `[general]\nauto_close=false\ntype=telnet\n\n[terminal]\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
           'utf8'
         );
         await runGtkTest(context, ['-c', configPath], async (app) => {
@@ -1537,7 +1541,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         const configPath = join(directory, 'telnet.ini');
         await writeFile(
           configPath,
-          `[general]\ntype=telnet\n\n[terminal]\nauto_close=false\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
+          `[general]\nauto_close=false\ntype=telnet\n\n[terminal]\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
           'utf8'
         );
 
@@ -1604,11 +1608,11 @@ describe.concurrent('elder-terms-vte main window', () => {
         configPath,
         [
           '[general]',
+          'auto_close=false',
           'name=Shared SSH fixture',
           'type=ssh',
           '',
           '[terminal]',
-          'auto_close=false',
           '',
           '[ssh]',
           'address=fixture.example',
@@ -1760,6 +1764,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         [
           '[general]',
           'name=Disconnected SSH fixture',
+          'auto_close=false',
           'type=ssh',
           '',
           '[ssh]',
@@ -1833,7 +1838,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         const configPath = join(directory, 'telnet.ini');
         await writeFile(
           configPath,
-          `[general]\ntype=telnet\n\n[terminal]\nauto_close=false\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
+          `[general]\nauto_close=false\ntype=telnet\n\n[terminal]\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
           'utf8'
         );
 
@@ -1895,7 +1900,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         const configPath = join(directory, 'telnet.ini');
         await writeFile(
           configPath,
-          `[general]\ntype=telnet\n\n[terminal]\nauto_close=false\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
+          `[general]\nauto_close=false\ntype=telnet\n\n[terminal]\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
           'utf8'
         );
 
@@ -1986,7 +1991,7 @@ describe.concurrent('elder-terms-vte main window', () => {
         const configPath = join(directory, 'telnet.ini');
         await writeFile(
           configPath,
-          `[general]\ntype=telnet\n\n[terminal]\nauto_close=false\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n\n[transfer]\nbase_path=${basePath}\n`,
+          `[general]\nauto_close=false\ntype=telnet\n\n[terminal]\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n\n[transfer]\nbase_path=${basePath}\n`,
           'utf8'
         );
 

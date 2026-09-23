@@ -259,9 +259,12 @@ and therefore does not ask for them again.
 ## Reconnecting SSH and TELNET
 
 To keep a disconnected terminal open, turn off "Close window when session ends"
-in its Terminal settings (`[terminal] auto_close=false`). The disconnected
+in its General settings (`[general] auto_close=false`). The disconnected
 overlay then offers a "Reconnect" button for SSH and TELNET. It becomes
 clickable after the previous connection's pending work has stopped.
+
+The same setting controls whether FTP, FTPS, SFTP, and WebDAV windows close
+when a service disconnection is detected.
 
 Reconnection uses the latest applied connection settings in the same window
 and preserves scrollback. SSH asks for authentication again through its usual

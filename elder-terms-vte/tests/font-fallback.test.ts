@@ -102,7 +102,7 @@ it('renders missing glyphs with the third ordered family and tolerates unavailab
         const config = join(directory, `fonts-${index}.ini`);
         await writeFile(
           config,
-          `[general]\ntype=telnet\nbackground=#000000\n[telnet]\naddress=127.0.0.1\nport=${endpoint.port}\n[terminal]\nauto_close=false\nfont_families=${list.join(';')};\n`
+          `[general]\nauto_close=false\ntype=telnet\nbackground=#000000\n[telnet]\naddress=127.0.0.1\nport=${endpoint.port}\n[terminal]\nfont_families=${list.join(';')};\n`
         );
         await runGtkTest(
           context,

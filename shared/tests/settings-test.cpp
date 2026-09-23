@@ -87,7 +87,7 @@ using elder_terms::TelnetConnectionSettings;
 using elder_terms::telnet_address_setting_key;
 using elder_terms::telnet_port_setting_key;
 using elder_terms::telnet_terminal_type_setting_key;
-using elder_terms::terminal_auto_close_setting_key;
+using elder_terms::general_auto_close_setting_key;
 using elder_terms::TerminalBackspaceCode;
 using elder_terms::TerminalConnectionKind;
 using elder_terms::TerminalConnectionProfile;
@@ -96,7 +96,7 @@ using elder_terms::TerminalDisplaySettings;
 using elder_terms::TerminalFontFamilies;
 using elder_terms::TerminalReturnCode;
 using elder_terms::TerminalTextSettings;
-using elder_terms::terminal_auto_close;
+using elder_terms::general_auto_close;
 using elder_terms::terminal_backspace_code_setting_key;
 using elder_terms::terminal_border_width;
 using elder_terms::terminal_border_width_setting_key;
@@ -210,7 +210,9 @@ static void test_default_settings() {
   const TerminalFontFamilies fonts = terminal_font_families(store);
   expect_true(fonts.families == std::vector<std::string>{"Noto Sans Mono", "Monospace"},
               "the default font list should preserve the built-in order");
-  expect_true(terminal_auto_close(store),
+  expect_true(general_auto_close_setting_key().section == "general",
+              "auto-close must belong to general settings");
+  expect_true(general_auto_close(store),
               "default terminal auto-close should be enabled");
   expect_true(!terminal_show_border(store),
               "terminal window side borders should be disabled by default");
@@ -627,7 +629,7 @@ static void test_terminal_indicator_color_round_trip_and_layering() {
   const auto global_path = temporary_config_path("global-indicator-color");
   const auto path = temporary_config_path("indicator-color");
   write_config(global_path, "[terminal]\nindicator_color=#123aBC\n");
-  write_config(path, "[terminal]\nauto_close=false\n");
+  write_config(path, "[general]\nauto_close=false\n");
   const SettingsLoadOptions options{
       .config_path = path,
       .startup_config_path = std::nullopt,
@@ -2410,13 +2412,13 @@ static void test_invalid_values_fall_back_to_defaults() {
   const std::filesystem::path path = temporary_config_path("invalid-values");
   write_config(path,
                "[general]\n"
+               "auto_close=invalid\n"
                "type=telnet\n"
                "\n"
                "[terminal]\n"
                "width=invalid\n"
                "height=-5\n"
                "zoom=0\n"
-               "auto_close=invalid\n"
                "show_border=invalid\n"
                "\n"
                "[telnet]\n"
@@ -2440,7 +2442,7 @@ static void test_invalid_values_fall_back_to_defaults() {
               "invalid terminal height should fall back to default");
   expect_true(display.zoom == 1.0,
               "invalid terminal zoom should fall back to default");
-  expect_true(terminal_auto_close(result.store),
+  expect_true(general_auto_close(result.store),
               "invalid terminal auto-close should fall back to default");
   expect_true(!terminal_show_border(result.store),
               "invalid terminal border visibility should fall back to false");
@@ -2467,7 +2469,7 @@ static void test_invalid_values_fall_back_to_defaults() {
               "invalid terminal zoom should emit a warning");
   expect_true(warnings_contain(
                   result.warnings,
-                  "invalid configuration value [terminal] auto_close"),
+                  "invalid configuration value [general] auto_close"),
               "invalid terminal auto-close should emit a warning");
   expect_true(warnings_contain(
                   result.warnings,
@@ -2584,8 +2586,8 @@ static void test_public_setting_keys() {
   expect_true(terminal_font_families_setting_key().section == "terminal" &&
                   terminal_font_families_setting_key().name == "font_families",
               "the font list key should use [terminal] font_families");
-  expect_true(terminal_auto_close_setting_key().name == "auto_close",
-              "terminal auto_close key should use the auto_close name");
+  expect_true(general_auto_close_setting_key().name == "auto_close",
+              "general auto_close key should use the auto_close name");
   expect_true(terminal_show_border_setting_key().section == "terminal" &&
                   terminal_show_border_setting_key().name == "show_border",
               "terminal border key should use [terminal] show_border");
@@ -2843,7 +2845,7 @@ static void test_save_settings_omits_default_values() {
                     elder_terms::SettingValue{gint64{24}});
   set_setting_value(&store, terminal_zoom_setting_key(),
                     elder_terms::SettingValue{gdouble{1.0}});
-  set_setting_value(&store, terminal_auto_close_setting_key(),
+  set_setting_value(&store, general_auto_close_setting_key(),
                     elder_terms::SettingValue{false});
   set_setting_value(&store, terminal_show_border_setting_key(),
                     elder_terms::SettingValue{true});

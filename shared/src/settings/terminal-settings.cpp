@@ -17,7 +17,6 @@ static constexpr glong default_terminal_height = 24;
 static constexpr glong default_terminal_scrollback_lines = 10000;
 static constexpr gint64 minimum_terminal_scrollback_lines = 1000;
 static constexpr gint64 maximum_terminal_scrollback_lines = 100000;
-static constexpr bool default_terminal_auto_close = true;
 static constexpr bool default_terminal_show_border = false;
 static constexpr gint64 default_terminal_border_width = 4;
 static constexpr gint64 minimum_terminal_border_width = 1;
@@ -30,7 +29,6 @@ static constexpr char terminal_zoom_key[] = "zoom";
 static constexpr char terminal_indicator_color_key[] = "indicator_color";
 static constexpr char terminal_indicator_off_color_key[] = "indicator_off_color";
 static constexpr char terminal_font_families_key[] = "font_families";
-static constexpr char terminal_auto_close_key[] = "auto_close";
 static constexpr char terminal_show_border_key[] = "show_border";
 static constexpr char terminal_border_width_key[] = "border_width";
 static constexpr char terminal_bell_sound_key[] = "bell_sound";
@@ -304,10 +302,6 @@ SettingKey terminal_font_families_setting_key() {
   return terminal_key(terminal_font_families_key);
 }
 
-SettingKey terminal_auto_close_setting_key() {
-  return terminal_key(terminal_auto_close_key);
-}
-
 SettingKey terminal_show_border_setting_key() {
   return terminal_key(terminal_show_border_key);
 }
@@ -460,11 +454,6 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .validate = validate_indicator_color,
       },
       {
-          .key = terminal_auto_close_setting_key(),
-          .default_value = SettingValue{default_terminal_auto_close},
-          .validate = nullptr,
-      },
-      {
           .key = terminal_show_border_setting_key(),
           .default_value = SettingValue{default_terminal_show_border},
           .validate = nullptr,
@@ -544,11 +533,6 @@ TerminalFontFamilies terminal_font_families(const SettingsStore &store) {
       SettingValue{std::vector<std::string>{}}));
   if (families.empty()) families = {"Noto Sans Mono", "Monospace"};
   return {.families = std::move(families)};
-}
-
-bool terminal_auto_close(const SettingsStore &store) {
-  return setting_boolean_value_or_default(
-      store, terminal_auto_close_setting_key(), default_terminal_auto_close);
 }
 
 bool terminal_show_border(const SettingsStore &store) {

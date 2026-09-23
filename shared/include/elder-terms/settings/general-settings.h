@@ -191,4 +191,19 @@ general_settings_select_ftp_connection(const SettingsStore &store);
 ELDER_TERMS_API bool
 general_settings_select_serial_connection(const SettingsStore &store);
 
+/**
+ * Returns the setting key for [general] auto_close.
+ *
+ * @returns Setting key for session auto-close behavior.
+ */
+ELDER_TERMS_API SettingKey general_auto_close_setting_key();
+
+/**
+ * Extracts the session auto-close behavior from a store.
+ *
+ * @param store Source settings store.
+ * @returns True when the connection window should close after its session ends.
+ */
+ELDER_TERMS_API bool general_auto_close(const SettingsStore &store);
+
 } // namespace elder_terms

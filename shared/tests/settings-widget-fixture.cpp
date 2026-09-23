@@ -140,7 +140,7 @@ static FixtureOptions parse_options(int argc, char **argv) {
           &options, "terminal", "zoom", option_value(argument, "--zoom="));
     } else if (starts_with(argument, "--auto-close=")) {
       append_connection_assignment(
-          &options, "terminal", "auto_close",
+          &options, "general", "auto_close",
           option_value(argument, "--auto-close="));
     } else if (starts_with(argument, "--show-border=")) {
       append_connection_assignment(
@@ -817,7 +817,7 @@ static void print_store(const char *prefix,
             << elder_terms::terminal_return_code_to_string(
                    text_settings.return_code)
             << " auto_close="
-            << (elder_terms::terminal_auto_close(store) ? "true" : "false")
+            << (elder_terms::general_auto_close(store) ? "true" : "false")
             << " bell_sound="
             << (bell.sound_file.has_value() ? bell.sound_file->string()
                                             : "default")
@@ -924,7 +924,7 @@ static void print_store(const char *prefix,
       store, "font_families",
       elder_terms::terminal_font_families_setting_key());
   print_setting_metadata(store, "auto_close",
-                         elder_terms::terminal_auto_close_setting_key());
+                         elder_terms::general_auto_close_setting_key());
   print_setting_metadata(store, "bell_sound",
                          elder_terms::terminal_bell_sound_setting_key());
   print_setting_metadata(store, "show_border",

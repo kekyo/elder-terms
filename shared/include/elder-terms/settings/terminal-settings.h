@@ -141,13 +141,6 @@ ELDER_TERMS_API bool terminal_font_families_are_valid(
     const std::vector<std::string> &families, std::string *reason);
 
 /**
- * Returns the setting key for [terminal] auto_close.
- *
- * @returns Setting key for terminal auto-close behavior.
- */
-ELDER_TERMS_API SettingKey terminal_auto_close_setting_key();
-
-/**
  * Returns the setting key for [terminal] show_border.
  *
  * @returns Setting key for terminal window side-border visibility.
@@ -274,14 +267,6 @@ terminal_display_settings(const SettingsStore &store);
  */
 ELDER_TERMS_API TerminalFontFamilies
 terminal_font_families(const SettingsStore &store);
-
-/**
- * Extracts the terminal auto-close behavior from a store.
- *
- * @param store Source settings store.
- * @returns True when the app should exit after the active session ends.
- */
-ELDER_TERMS_API bool terminal_auto_close(const SettingsStore &store);
 
 /**
  * Extracts terminal window side-border visibility from a store.

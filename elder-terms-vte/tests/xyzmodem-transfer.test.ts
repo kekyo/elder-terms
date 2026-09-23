@@ -1006,10 +1006,10 @@ const writeTelnetConfig = async (
     path,
     [
       '[general]',
+      'auto_close=false',
       'type=telnet',
       '',
       '[terminal]',
-      'auto_close=false',
       'encoding=SHIFT-JIS',
       'backspace_code=del',
       'cursor_key_mode=trs80',
@@ -1044,10 +1044,10 @@ const writeSshConfig = async (
     path,
     [
       '[general]',
+      'auto_close=false',
       'type=ssh',
       '',
       '[terminal]',
-      'auto_close=false',
       'encoding=SHIFT-JIS',
       'backspace_code=del',
       'cursor_key_mode=trs80',
