@@ -32,6 +32,7 @@
 #include <elder-terms/settings.h>
 
 #include "connection-repository.h"
+#include "control-server.h"
 #include "hotkey-backend.h"
 #include "main-window.h"
 #include "tray-backend.h"
@@ -105,6 +106,7 @@ struct ApplicationState {
   std::optional<elder_terms::LauncherMainWindow> main_window_storage;
   elder_terms::LauncherMainWindow *main_window = nullptr;
   elder_terms::HotkeyBackendState *hotkey_backend = nullptr;
+  elder_terms::ControlServerState *control_server = nullptr;
   elder_terms::TrayBackendState *tray_backend = nullptr;
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
   elder_terms::SettingsWidgetState *global_defaults_widget = nullptr;
@@ -2687,6 +2689,50 @@ static void on_tray_availability_changed(ApplicationState *state,
   }
 }
 
+static bool dispatch_launcher_action(
+    ApplicationState *state,
+    const std::optional<std::filesystem::path> &connection,
+    const elder_terms::HotkeyActivationContext &context) {
+  if (state->application_shutting_down || state->quitting ||
+      state->main_window == nullptr || state->window_destroyed) {
+    return false;
+  }
+  if (connection.has_value()) {
+    launch_saved_connection(state, *connection, context.activation_token);
+  } else {
+    present_main_window(state, context.activation_time,
+                        context.activation_token);
+  }
+  return true;
+}
+
+static std::string handle_control_request(
+    ApplicationState *state, const elder_terms::ControlRequest &request) {
+  std::optional<std::filesystem::path> path;
+  if (request.connection.has_value()) {
+    // Resolve against the current repository rather than trusting client paths
+    // or the asynchronously refreshed window selection.
+    const auto profiles = elder_terms::list_connection_profiles(
+        state->connection_directory);
+    const auto profile = std::find_if(
+        profiles.begin(), profiles.end(), [&request](const auto &candidate) {
+          return candidate.name == *request.connection;
+        });
+    if (profile == profiles.end()) {
+      return "Unknown saved connection";
+    }
+    path = profile->path;
+  }
+  return dispatch_launcher_action(
+             state, path,
+             {
+                 .activation_time = std::nullopt,
+                 .activation_token = request.activation_token,
+             })
+             ? ""
+             : "The launcher is shutting down";
+}
+
 static void on_application_startup(GApplication *,
                                    gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
@@ -2713,6 +2759,15 @@ static void on_application_startup(GApplication *,
 
   g_application_hold(state->application);
   state->application_held = true;
+  try {
+    state->control_server = elder_terms::create_control_server(
+        [state](const elder_terms::ControlRequest &request) {
+          return handle_control_request(state, request);
+        });
+  } catch (const std::exception &error) {
+    std::cerr << "External hotkey control is unavailable: "
+              << error.what() << '\n';
+  }
   std::vector<std::string> hotkey_warnings;
   const std::vector<elder_terms::HotkeyAction> hotkey_actions =
       build_registered_hotkey_actions(
@@ -2736,14 +2791,12 @@ static void on_application_startup(GApplication *,
                       });
                   if (target !=
                       state->connection_hotkey_targets.end()) {
-                    launch_saved_connection(
-                        state, target->path,
-                        context.activation_token);
+                    (void)dispatch_launcher_action(
+                        state, target->path, context);
                   }
                   return;
                 }
-                present_main_window(state, context.activation_time,
-                                    context.activation_token);
+                (void)dispatch_launcher_action(state, std::nullopt, context);
               },
           .registration_failed = [state]() {
             show_hotkey_registration_error(state);
@@ -2852,6 +2905,8 @@ static void on_application_shutdown(GApplication *,
                                     gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
   state->application_shutting_down = true;
+  elder_terms::destroy_control_server(state->control_server);
+  state->control_server = nullptr;
   if (state->hotkey_backend != nullptr) {
     elder_terms::destroy_hotkey_backend(state->hotkey_backend);
     state->hotkey_backend = nullptr;

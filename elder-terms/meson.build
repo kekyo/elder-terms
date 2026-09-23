@@ -29,6 +29,8 @@ elder_terms_launcher = executable(
   'elder-terms',
   [
     'src/connection-repository.cpp',
+    'src/control-server.cpp',
+    'src/control-socket.cpp',
     'src/hotkey-backend.cpp',
     'src/main-window.cpp',
     'src/main.cpp',
@@ -152,3 +154,10 @@ foreach icon_size : ['16', '22', '24', '32', '48', '64', '128', '256']
     install_dir: get_option('datadir') / 'icons/hicolor' / (icon_size + 'x' + icon_size) / 'apps',
   )
 endforeach
+
+executable(
+  'elder-termsctl',
+  ['src/control-client.cpp', 'src/control-socket.cpp'],
+  install: true,
+  install_dir: get_option('bindir'),
+)
