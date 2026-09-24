@@ -24,7 +24,7 @@ Refresh the listing before retrying. Check any reported temporary path when clea
 
 ## Authentication
 
-Enter a username and password in the connection overlay for Basic or Digest authentication.
+For Basic or Digest authentication, enter the user name in the first connection overlay and the password in the next one.
 Passwords are not saved. A server-issued app password can use the same password field.
 
 Auto selects only Basic or Digest.

@@ -323,8 +323,9 @@ The base path becomes `/` in the file browser.
 You cannot navigate above it. An initial remote directory of `/Documents` starts this example at `/dav/team/Documents`.
 
 The shared SFTP/FTP/FTPS browser supports file and folder uploads and downloads,
-folder creation, renaming, and deletion. Basic/Digest passwords are entered when
-connecting and are not saved. HTTPS certificate failures are either rejected or
+folder creation, renaming, and deletion. For Basic/Digest authentication, enter
+the user name and then the password in separate panels. Passwords are not saved.
+HTTPS certificate failures are either rejected or
 shown in the same confirmation overlay as FTPS, according to the connection settings.
 
 See [Using WebDAV](./docs/en/webdav.md) for settings and supported operations.

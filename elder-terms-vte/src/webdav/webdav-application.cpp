@@ -70,7 +70,7 @@ static cardio::promise<void> start_application_async(WebdavApplication *state) {
       if (username.empty() && g_get_user_name()) username = g_get_user_name();
       bool missing = false;
       while (true) {
-        auto *formatted = g_strdup_printf(_("Enter the user name and password for %s."), options.connection.address.c_str());
+        auto *formatted = g_strdup_printf(_("User name for %s:"), options.connection.address.c_str());
         std::string message(formatted);
         g_free(formatted);
         if (missing) message += "\n\n" + std::string(_("User name must not be empty."));
@@ -78,19 +78,24 @@ static cardio::promise<void> start_application_async(WebdavApplication *state) {
             .title = _("WebDAV authentication"), .message = std::move(message),
             .accept_label = _("Connect"), .cancel_label = _("Cancel"),
             .initial_text = username, .input_label = _("User name"),
-            .input_required = true, .echo = true,
-            .secondary_input_label = _("Password:"), .secondary_input_required = true,
-            .secondary_echo = false, .cancel_visible = true};
+            .input_required = true, .echo = true, .cancel_visible = true};
         auto response = co_await prompt_file_transfer_window_async(state->window, std::move(request), cancellation);
         if (!response.accepted) { stop_application(state); co_return; }
         username = std::move(response.text);
         if (username.find_first_not_of(" \t\r\n") != std::string::npos) {
-          options.connection.username = std::move(username);
-          options.password = std::move(response.secondary_text);
           break;
         }
         missing = true;
       }
+      InlinePromptRequest password_request{
+          .title = _("WebDAV authentication"), .message = _("Password:"),
+          .accept_label = _("Connect"), .cancel_label = _("Cancel"),
+          .input_required = true, .echo = false, .cancel_visible = true};
+      auto password_response = co_await prompt_file_transfer_window_async(
+          state->window, std::move(password_request), cancellation);
+      if (!password_response.accepted) { stop_application(state); co_return; }
+      options.connection.username = std::move(username);
+      options.password = std::move(password_response.text);
     }
     state->client = co_await open_webdav_client_async(std::move(options), cancellation);
     attach_file_transfer_window_client(state->window, state->client);

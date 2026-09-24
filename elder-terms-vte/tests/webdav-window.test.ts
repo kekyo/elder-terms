@@ -291,11 +291,38 @@ describe('WebDAV window', () => {
           return;
         }
         if (authentication !== 'none') {
-          const password = expectElementKind(
-            await app.getById('file_transfer_prompt_secondary_entry'),
+          const entry = expectElementKind(
+            await app.getById('file_transfer_prompt_entry'),
             'entry'
           );
-          await password.setText('secret');
+          expect(await entry.text()).toBe('alice');
+          await entry.setText('');
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_accept_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(
+              await expectElementKind(
+                await app.getById('file_transfer_prompt_message_label'),
+                'label'
+              ).text()
+            ).toContain('User name must not be empty.');
+          });
+          await entry.setText('alice');
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_accept_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(
+              await expectElementKind(
+                await app.getById('file_transfer_prompt_message_label'),
+                'label'
+              ).text()
+            ).toBe('Password:');
+          });
+          await entry.setText('secret');
           await expectElementKind(
             await app.getById('file_transfer_prompt_accept_button'),
             'button'
