@@ -1052,6 +1052,24 @@ msgid "Restore defaults"
 msgstr "既定値に戻す"
 
 #: elder-terms/src/main.cpp:262
+msgid "Hotkey detection: Checking…"
+msgstr "ホットキーの検出方式: 確認中…"
+
+msgid "Hotkey detection: X11"
+msgstr "ホットキーの検出方式: X11"
+
+msgid "Hotkey detection: GlobalShortcuts Portal"
+msgstr "ホットキーの検出方式: GlobalShortcuts Portal"
+
+msgid "Hotkey detection: Unavailable"
+msgstr "ホットキーの検出方式: 利用不可"
+
+msgid "etctl: Available"
+msgstr "etctl: 利用可能"
+
+msgid "etctl: Unavailable"
+msgstr "etctl: 利用不可"
+
 msgid "Configure desktop shortcuts to run these commands:"
 msgstr "デスクトップのショートカットに次のコマンドを登録してください:"
 

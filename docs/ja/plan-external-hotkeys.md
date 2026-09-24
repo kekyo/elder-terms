@@ -6,7 +6,7 @@
 
 キー捕捉と操作実行を分離し、既存ホットキーと外部コマンドを共通のランチャー表示・保存済み接続起動処理に接続する。現行の接続モデルは名前とINIパスで管理され固定IDを持たないため、外部コマンドは拡張子を除く保存済み接続名で指定する。登録されたホットキーの有無に依存させず、任意パスを起動する機能は設けない。
 
-`elder-termsctl open-application` と `elder-termsctl open-connection <name>` を追加する。CLIはGTKやD-Busを初期化せず、同じユーザーの起動済みランチャーに要求する。ランチャーが停止している場合は失敗を返し、自動起動は既存のログイン時起動を利用する。Waylandのactivation tokenはCLIから伝える。
+`etctl open-application` と `etctl open-connection <name>` を追加する。CLIはGTKやD-Busを初期化せず、同じユーザーの起動済みランチャーに要求する。ランチャーが停止している場合は失敗を返し、自動起動は既存のログイン時起動を利用する。Waylandのactivation tokenはCLIから伝える。
 
 通信先は `$XDG_RUNTIME_DIR/elder-terms/control.sock`。所有者専用ディレクトリ・ソケットと接続元UIDの確認で保護する。ランチャー側はcardioによる非同期I/Oを使用し、ワーカースレッドやポーリングを追加しない。ロックにより生存中のソケットを上書きせず、異常終了後の残存ソケットを回収する。不正・過大な要求を拒否し、終了時に待機処理をキャンセルする。
 

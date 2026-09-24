@@ -396,7 +396,7 @@ validate_deb_package() {
 
 	dpkg-deb -x "$package_path" "$tmp_dir"
 	for required_file in \
-		usr/bin/elder-termsctl \
+		usr/bin/etctl \
 		usr/lib/elder-terms/libelder-terms.so \
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/launcher/main-window.ui \
@@ -427,7 +427,7 @@ validate_deb_package() {
 		'../lib/elder-terms/elder-terms-vte/elder-terms-file-transfer'
 
 	for elf_path in \
-		usr/bin/elder-termsctl \
+		usr/bin/etctl \
 		usr/lib/elder-terms/libelder-terms.so \
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/elder-terms-vte/elder-terms-vte \

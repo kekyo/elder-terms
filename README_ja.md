@@ -480,44 +480,46 @@ X11セッションはこの制限の対象外です。また、GNOME以外のWay
 
 ### ポータルを使わないデスクトップショートカット
 
+「情報」パネルのバージョン表示の下で、ホットキーの検出方式と `etctl` の受付可否を確認出来ます。検出方式の表示は、個々のショートカットの登録成功を示すものではありません。
+
 X11セッションではX11に直接ホットキーを登録するため、D-Busは不要です。
 Waylandでの自動登録にはGlobal Shortcutsポータルを使用します。非対応の環境では、デスクトップ側のショートカットに以下のコマンドを登録して下さい。
 
 ```sh
-elder-termsctl open-application
-elder-termsctl open-connection 'Local Terminal'
+etctl open-application
+etctl open-connection 'Local Terminal'
 ```
 
-ソースツリーでビルドして未インストールの場合は、`.build/elder-terms/elder-termsctl` を使用して下さい。
+ソースツリーでビルドして未インストールの場合は、`.build/elder-terms/etctl` を使用して下さい。
 
 `Local Terminal` は、ランチャーに表示される保存済み接続名に置き換えて下さい。`.ini` 拡張子は付けません。空白やシェルの特殊文字を含む名前は引用して下さい。接続名を変更した場合は、デスクトップ側のコマンドも更新します。接続側の「接続を開くショートカット」は未設定でも使用出来ます。登録失敗の警告にも、設定された接続に対応するコマンドを表示します。デスクトップ側のショートカットだけを使う場合は、アプリ内の「アプリケーションを開くショートカット」と各接続の「接続を開くショートカット」を空にすると、自動登録を無効に出来ます。
 
-ランチャーは起動済みである必要があります。既存のログイン時自動起動を利用して下さい。システムトレイがない環境では「バックグラウンドのみ」が便利です。ランチャーとコマンドは同じユーザーで実行し、同じ `XDG_RUNTIME_DIR` を使用します。この変数は、所有者だけがアクセス出来る既存のランタイムディレクトリを指す必要があります。`elder-termsctl` 自体には画面接続もD-Busも不要です。終了コードは要求を受理した場合に0、通信や要求のエラーに1、引数の誤りに2となります。要求の受理は、接続先ホストへの接続成功を意味するものではありません。
+ランチャーは起動済みである必要があります。既存のログイン時自動起動を利用して下さい。システムトレイがない環境では「バックグラウンドのみ」が便利です。ランチャーとコマンドは同じユーザーで実行し、同じ `XDG_RUNTIME_DIR` を使用します。この変数は、所有者だけがアクセス出来る既存のランタイムディレクトリを指す必要があります。`etctl` 自体には画面接続もD-Busも不要です。終了コードは要求を受理した場合に0、通信や要求のエラーに1、引数の誤りに2となります。要求の受理は、接続先ホストへの接続成功を意味するものではありません。
 
 [labwc](https://labwc.github.io/labwc-actions.5.html)では、既存の `~/.config/labwc/rc.xml` の `<keyboard>` 内に以下を追加し、`labwc --reconfigure` で設定を再読み込みします。
 
 ```xml
 <keybind key="C-A-T">
-  <action name="Execute" command="elder-termsctl open-application" />
+  <action name="Execute" command="etctl open-application" />
 </keybind>
 ```
 
 [Sway](https://github.com/swaywm/sway/blob/master/sway/sway.5.scd)では、既存の設定に以下を追加して再読み込みします。
 
 ```text
-bindsym Ctrl+Mod1+t exec elder-termsctl open-application
+bindsym Ctrl+Mod1+t exec etctl open-application
 ```
 
 [HyprlandのLua設定](https://wiki.hypr.land/Configuring/Basics/Binds/)では以下の形式です。
 
 ```lua
-hl.bind("CTRL + ALT + T", hl.dsp.exec_cmd("elder-termsctl open-application"))
+hl.bind("CTRL + ALT + T", hl.dsp.exec_cmd("etctl open-application"))
 ```
 
 [Hyprland 0.54以前のhyprlang設定](https://wiki.hypr.land/0.54.0/Configuring/Binds/)では以下の形式です。
 
 ```text
-bind = CTRL ALT, T, exec, elder-termsctl open-application
+bind = CTRL ALT, T, exec, etctl open-application
 ```
 
 同じキーに既存の割り当てがある場合は置き換えて下さい。elder-termsがデスクトップ設定ファイルを自動変更することはありません。他のデスクトップでも、ショートカット設定から同じコマンドを使用出来ます。コンポジターが [`XDG_ACTIVATION_TOKEN`](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/staging/xdg-activation/xdg-activation-v1.xml) を渡す場合はウィンドウのアクティブ化に引き継ぎますが、最終的なフォーカス動作はコンポジターの方針に従います。

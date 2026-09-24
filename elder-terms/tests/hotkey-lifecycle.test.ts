@@ -324,12 +324,8 @@ describe('elder-terms application hotkey lifecycle', () => {
             ]);
             expect(result.stdout.trimEnd().split('\n')).toEqual(
               index === 0
-                ? ['elder-termsctl', 'open-application']
-                : [
-                    'elder-termsctl',
-                    'open-connection',
-                    "Alice's $(printf unsafe)",
-                  ]
+                ? ['etctl', 'open-application']
+                : ['etctl', 'open-connection', "Alice's $(printf unsafe)"]
             );
           }
           const captures = fileURLToPath(
@@ -357,6 +353,89 @@ describe('elder-terms application hotkey lifecycle', () => {
         }
       );
     });
+  }
+
+  for (const language of ['en', 'ja'] as const) {
+    for (const transport of ['x11', 'unavailable'] as const) {
+      it(`shows the detected hotkey transport in About: ${language}/${transport}`, async (context) => {
+        const directory = await mkdtemp(join(tmpdir(), 'elder-about-'));
+        const wrapper = join(directory, 'launcher');
+        const executable = fileURLToPath(
+          new URL('../../.build/elder-terms/elder-terms', import.meta.url)
+        );
+        // Keep the test infrastructure on X11, but let the application detect
+        // a Wayland session without a GlobalShortcuts portal when requested.
+        await writeFile(
+          wrapper,
+          '#!/bin/sh\n' +
+            (transport === 'unavailable'
+              ? 'unset GDK_BACKEND\nexport XDG_SESSION_TYPE=wayland\n'
+              : '') +
+            "exec '" +
+            executable.replace(/'/g, "'\\''") +
+            '\' "$@"\n'
+        );
+        await chmod(wrapper, 0o700);
+        try {
+          await runLauncherGtkTest(
+            context,
+            async (connections) => {
+              await writeGlobalSettings(connections, '');
+            },
+            async ({ app }) => {
+              // The dialog must exist before testing the new status control.
+              await app.getById('application_about_version_label');
+              const status = await app.findById(
+                'application_about_hotkey_status'
+              );
+              expect(status).toBeDefined();
+              const label = expectElementKind(status!, 'label');
+              const expected =
+                language === 'ja'
+                  ? (transport === 'x11'
+                      ? 'ホットキーの検出方式: X11'
+                      : 'ホットキーの検出方式: 利用不可') + '\netctl: 利用可能'
+                  : (transport === 'x11'
+                      ? 'Hotkey detection: X11'
+                      : 'Hotkey detection: Unavailable') + '\netctl: Available';
+              // Portal discovery can wait for D-Bus service activation before
+              // its default call timeout expires. Observe completion instead
+              // of treating the wait helper's shorter default as a failure.
+              await waitForResult(
+                async () => {
+                  expect(await label.text()).toBe(expected);
+                },
+                { timeoutMs: 45_000 }
+              );
+              const captures = fileURLToPath(
+                new URL(
+                  '../../test-results/launcher/hotkey-status/',
+                  import.meta.url
+                )
+              );
+              await mkdir(captures, { recursive: true });
+              const dialog = expectElementKind(
+                await app.getById('application_dialog'),
+                'window'
+              );
+              await writeFile(
+                join(captures, `${language}-${transport}.png`),
+                (await dialog.capture()).image
+              );
+            },
+            {
+              appPath: wrapper,
+              args: ['--about'],
+              env: {
+                ...(language === 'ja' ? japaneseTestEnvironment : {}),
+              },
+            }
+          );
+        } finally {
+          await rm(directory, { recursive: true, force: true });
+        }
+      }, 60_000);
+    }
   }
 
   it('does not show a registration error when every hotkey is disabled', async (context) => {

@@ -79,6 +79,9 @@ struct HotkeyBackendOptions {
   HotkeyActivationCallback activated;
   /** Receives the first registration failure while actions are configured. */
   HotkeyRegistrationFailureCallback registration_failed;
+  /** Receives the detected transport once initialization completes, including
+   * none when unavailable. May run before create_hotkey_backend returns. */
+  std::function<void(HotkeyBackendKind)> detection_completed;
 };
 
 /** Opaque global hotkey backend state. */

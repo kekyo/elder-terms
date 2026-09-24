@@ -11,8 +11,8 @@
 #include <sys/time.h>
 
 static void print_usage() {
-  std::cout << "Usage: elder-termsctl open-application\n"
-               "       elder-termsctl open-connection <saved-connection-name>\n"
+  std::cout << "Usage: etctl open-application\n"
+               "       etctl open-connection <saved-connection-name>\n"
                "Controls the running launcher in the same XDG_RUNTIME_DIR.\n";
 }
 
@@ -94,7 +94,7 @@ int main(int argc, char **argv) {
     }
     return 0;
   } catch (const std::exception &error) {
-    std::cerr << "elder-termsctl: " << error.what() << '\n';
+    std::cerr << "etctl: " << error.what() << '\n';
     return 1;
   }
 }

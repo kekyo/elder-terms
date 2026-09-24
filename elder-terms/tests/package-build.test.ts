@@ -116,7 +116,7 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
   );
 
   const executablePaths = [
-    'usr/bin/elder-termsctl',
+    'usr/bin/etctl',
     'usr/lib/elder-terms/libelder-terms.so',
     'usr/lib/elder-terms/launcher/elder-terms',
     'usr/lib/elder-terms/elder-terms-vte/elder-terms-vte',
@@ -670,7 +670,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     createPackageStage(
       missingControlStage,
       debianArchitecture,
-      'usr/bin/elder-termsctl',
+      'usr/bin/etctl',
       true,
       true
     );
@@ -688,7 +688,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       [missingControlPackage, canonicalArchitecture!]
     );
     expect(missingControlValidation.status).not.toBe(0);
-    expect(missingControlValidation.stderr).toContain('usr/bin/elder-termsctl');
+    expect(missingControlValidation.stderr).toContain('usr/bin/etctl');
     for (const language of ['ja', 'en']) {
       for (const document of ['webdav.md', 'webdav-validation.md']) {
         const missingPath = `usr/share/doc/elder-terms/docs/${language}/${document}`;

@@ -106,6 +106,7 @@ struct ApplicationState {
   std::optional<elder_terms::LauncherMainWindow> main_window_storage;
   elder_terms::LauncherMainWindow *main_window = nullptr;
   elder_terms::HotkeyBackendState *hotkey_backend = nullptr;
+  std::optional<elder_terms::HotkeyBackendKind> detected_hotkey_backend;
   elder_terms::ControlServerState *control_server = nullptr;
   elder_terms::TrayBackendState *tray_backend = nullptr;
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
@@ -140,6 +141,7 @@ struct ApplicationState {
   GtkWidget *global_defaults_dialog = nullptr;
   GtkWidget *global_defaults_save_button = nullptr;
   GtkWidget *application_dialog = nullptr;
+  GtkWidget *application_about_hotkey_status = nullptr;
   GtkWidget *application_dialog_notebook = nullptr;
   GtkWidget *application_dialog_save_button = nullptr;
   GtkWidget *application_dialog_cancel_button = nullptr;
@@ -268,12 +270,12 @@ static void append_external_hotkey_commands(ApplicationState *state,
   gtk_label_set_max_width_chars(GTK_LABEL(guidance), 60);
   gtk_box_pack_start(GTK_BOX(area), guidance, FALSE, TRUE, 0);
 
-  std::string text = "elder-termsctl open-application";
+  std::string text = "etctl open-application";
   for (const auto &profile : state->profiles) {
     // Names are data, including quotes and shell substitutions. The displayed
     // command must preserve them when copied into a desktop shortcut.
     gchar *quoted = g_shell_quote(profile.name.c_str());
-    text += "\nelder-termsctl open-connection ";
+    text += "\netctl open-connection ";
     text += quoted;
     g_free(quoted);
   }
@@ -602,6 +604,7 @@ static void on_application_dialog_destroy(GtkWidget *dialog,
     return;
   }
   state->application_dialog = nullptr;
+  state->application_about_hotkey_status = nullptr;
   state->application_dialog_notebook = nullptr;
   state->application_dialog_save_button = nullptr;
   state->application_dialog_cancel_button = nullptr;
@@ -667,7 +670,32 @@ static void on_application_dialog_save_clicked(GtkButton *,
   gtk_dialog_response(GTK_DIALOG(user_data), GTK_RESPONSE_ACCEPT);
 }
 
-static GtkWidget *create_application_about_page() {
+static void update_application_hotkey_status(ApplicationState *state) {
+  if (state->application_about_hotkey_status == nullptr) {
+    return;
+  }
+  const char *detection = _("Hotkey detection: Checking…");
+  if (state->detected_hotkey_backend.has_value()) {
+    switch (*state->detected_hotkey_backend) {
+    case elder_terms::HotkeyBackendKind::x11:
+      detection = _("Hotkey detection: X11");
+      break;
+    case elder_terms::HotkeyBackendKind::portal:
+      detection = _("Hotkey detection: GlobalShortcuts Portal");
+      break;
+    case elder_terms::HotkeyBackendKind::none:
+      detection = _("Hotkey detection: Unavailable");
+      break;
+    }
+  }
+  const std::string text = std::string(detection) + "\n" +
+      (state->control_server != nullptr ? _("etctl: Available")
+                                        : _("etctl: Unavailable"));
+  gtk_label_set_text(GTK_LABEL(state->application_about_hotkey_status),
+                     text.c_str());
+}
+
+static GtkWidget *create_application_about_page(ApplicationState *state) {
   GtkWidget *page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
   gtk_widget_set_margin_top(page, 32);
   gtk_widget_set_margin_bottom(page, 32);
@@ -692,6 +720,14 @@ static GtkWidget *create_application_about_page() {
   gestament_gtk_assign_accessible_id(
       version_label, "application_about_version_label");
   gtk_box_pack_start(GTK_BOX(page), version_label, FALSE, FALSE, 0);
+  state->application_about_hotkey_status = gtk_label_new(nullptr);
+  gtk_label_set_selectable(
+      GTK_LABEL(state->application_about_hotkey_status), TRUE);
+  gestament_gtk_assign_accessible_id(
+      state->application_about_hotkey_status, "application_about_hotkey_status");
+  gtk_box_pack_start(GTK_BOX(page), state->application_about_hotkey_status,
+                     FALSE, FALSE, 0);
+  update_application_hotkey_status(state);
   return page;
 }
 
@@ -754,7 +790,7 @@ static void open_application_dialog(ApplicationState *state,
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), settings_page,
                            gtk_label_new(_("Application")));
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook),
-                           create_application_about_page(),
+                           create_application_about_page(state),
                            gtk_label_new(_("About")));
 
   GtkWidget *action_row = gtk_event_box_new();
@@ -2838,6 +2874,10 @@ static void on_application_startup(GApplication *,
               },
           .registration_failed = [state]() {
             show_hotkey_registration_error(state);
+          },
+          .detection_completed = [state](elder_terms::HotkeyBackendKind kind) {
+            state->detected_hotkey_backend = kind;
+            update_application_hotkey_status(state);
           },
       },
       hotkey_actions);

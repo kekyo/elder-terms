@@ -20,7 +20,7 @@ import { runLauncherGtkTest } from './test-helpers';
 
 const execute = promisify(execFile);
 const ctl = fileURLToPath(
-  new URL('../../.build/elder-terms/elder-termsctl', import.meta.url)
+  new URL('../../.build/elder-terms/etctl', import.meta.url)
 );
 
 it('controls the resident launcher and saved connections without D-Bus or a display in the client', async (context) => {

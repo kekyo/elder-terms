@@ -156,7 +156,7 @@ foreach icon_size : ['16', '22', '24', '32', '48', '64', '128', '256']
 endforeach
 
 executable(
-  'elder-termsctl',
+  'etctl',
   ['src/control-client.cpp', 'src/control-socket.cpp'],
   install: true,
   install_dir: get_option('bindir'),

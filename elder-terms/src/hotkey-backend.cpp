@@ -157,11 +157,19 @@ static void notify_registration_failure(
   }
 }
 
+static void notify_detection_completed(
+    HotkeyBackendImplementation *implementation) {
+  if (implementation->options.detection_completed) {
+    implementation->options.detection_completed(implementation->kind);
+  }
+}
+
 static void mark_backend_unavailable(
     HotkeyBackendImplementation *implementation) {
   implementation->initialization_pending = false;
   implementation->backend_unavailable = true;
   implementation->kind = HotkeyBackendKind::none;
+  notify_detection_completed(implementation);
   notify_registration_failure(implementation);
 }
 
@@ -389,6 +397,7 @@ static bool initialize_x11_backend(
   grab_x11_actions(implementation.get());
   implementation->tasks.emplace_back(
       run_x11_event_loop_async(implementation));
+  notify_detection_completed(implementation.get());
   return true;
 }
 
@@ -954,6 +963,7 @@ static cardio::promise<void> initialize_portal_or_fallback_async(
       implementation->kind = selected;
       implementation->initialization_pending = false;
       implementation->backend_unavailable = false;
+      notify_detection_completed(implementation.get());
       start_portal_registration(implementation);
     } else if (selected == HotkeyBackendKind::x11) {
       if (!initialize_x11_backend(implementation)) {
