@@ -656,6 +656,16 @@ X11 sessions are not subject to this limitation. Availability in non-GNOME
 Wayland environments depends on whether the desktop environment supports the
 Global Shortcuts portal. Desktop commands below work without that portal.
 
+Run `etctl setup` in your logged-in desktop session to detect and configure the available hotkey method. It checks the launcher's X11 registration, waits for Global Shortcuts portal registration and any required approval, or installs the current shortcuts in the user configuration of a Sway or labwc Wayland session and reloads the compositor. Detection uses session capabilities rather than distribution names. Do not run it with `sudo`.
+
+```sh
+etctl setup
+```
+
+The command starts the launcher if needed. Run it again after changing saved-connection shortcuts to synchronize desktop configuration. It exits with status 1 if no supported registration method is available or a compositor reload fails.
+
+Repeated runs replace only the bindings managed by elder-terms. When there is no user compositor configuration, setup preserves the system configuration it finds. For labwc, this copies the current system configuration into the user file, so later system configuration updates are not inherited automatically. Sway sessions launched with a custom config path may require adding the generated bindings to that config for persistence. See the [Sway configuration reference](https://github.com/swaywm/sway/blob/master/sway/sway.5.scd) and [labwc configuration search and reload rules](https://labwc.github.io/labwc-config.5.html).
+
 ### Desktop Shortcuts Without a Portal
 
 Below the version in the About panel, you can check the detected hotkey
@@ -663,8 +673,8 @@ transport and whether `etctl` requests are available. The detected transport
 does not indicate that each configured shortcut was successfully registered.
 
 X11 sessions register hotkeys directly with X11 and do not require D-Bus.
-On Wayland, automatic registration uses the Global Shortcuts portal. If your
-desktop does not provide it, assign a desktop shortcut to one of these commands:
+On Wayland, automatic registration uses the Global Shortcuts portal. If
+`etctl setup` does not support your desktop, assign a desktop shortcut to one of these commands:
 
 ```sh
 # Open elder-terms launcher window
@@ -717,7 +727,7 @@ bind = CTRL ALT, T, exec, etctl open-application
 ```
 
 Replace an existing binding for the same key combination if necessary.
-Desktop configuration files are not modified by elder-terms.
+`etctl setup` modifies the user's Sway or labwc configuration. Avoid adding the same binding again when configuring shortcuts manually.
 
 Other desktops can use the same commands through their shortcut settings.
 If your compositor provides an [`XDG_ACTIVATION_TOKEN`](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/staging/xdg-activation/xdg-activation-v1.xml),
