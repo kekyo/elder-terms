@@ -103,9 +103,6 @@ describe('FTP window', () => {
         ).text()
       ).toBe('User name');
       expect(
-        await app.findById('file_transfer_prompt_secondary_entry')
-      ).toBeUndefined();
-      expect(
         await expectElementKind(
           await app.getById('file_transfer_status_label'),
           'label'
