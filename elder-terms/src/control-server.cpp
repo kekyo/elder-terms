@@ -49,18 +49,31 @@ static std::string dispatch_request(ControlServerState *state,
   const std::string command = packet.substr(0, first);
   const std::string connection = packet.substr(first + 1, second - first - 1);
   const std::string token = packet.substr(second + 1);
-  if ((command != "open-application" && command != "open-connection") ||
-      (command == "open-application" && !connection.empty()) ||
+  if ((command != "open-application" && command != "open-connection" &&
+       command != "setup") ||
+      ((command == "open-application" || command == "setup") &&
+       !connection.empty()) ||
       (command == "open-connection" && connection.empty())) {
     return "ERROR Invalid control command\n";
   }
-  const std::string error = state->callback({
+  const ControlReply reply = state->callback({
+      .command = command == "setup"
+                     ? ControlCommand::setup
+                     : command == "open-connection"
+                           ? ControlCommand::open_connection
+                           : ControlCommand::open_application,
       .connection = command == "open-connection"
                         ? std::optional<std::string>(connection) : std::nullopt,
       .activation_token = token.empty() ? std::nullopt
                                        : std::optional<std::string>(token),
   });
-  return error.empty() ? "OK\n" : "ERROR " + error + "\n";
+  if (reply.pending) {
+    return "PENDING " + reply.message + "\n";
+  }
+  if (!reply.success) {
+    return "ERROR " + reply.message + "\n";
+  }
+  return reply.message.empty() ? "OK\n" : "OK " + reply.message + "\n";
 }
 
 static cardio::promise<void> serve_client(ControlServerState *state, int fd) {

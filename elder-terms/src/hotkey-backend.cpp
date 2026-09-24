@@ -71,6 +71,8 @@ struct HotkeyBackendImplementation {
   bool initialization_pending = true;
   bool backend_unavailable = false;
   bool registration_failure_reported = false;
+  bool registration_failed_current = false;
+  std::size_t portal_registered_actions = 0;
   bool destroyed = false;
 };
 
@@ -147,8 +149,11 @@ find_hotkey_action_id(const std::vector<HotkeyAction> &actions,
 static void notify_registration_failure(
     HotkeyBackendImplementation *implementation) {
   if (implementation == nullptr || implementation->destroyed ||
-      implementation->actions.empty() ||
-      implementation->registration_failure_reported) {
+      implementation->actions.empty()) {
+    return;
+  }
+  implementation->registration_failed_current = true;
+  if (implementation->registration_failure_reported) {
     return;
   }
   implementation->registration_failure_reported = true;
@@ -177,28 +182,7 @@ static bool has_text(const char *value) {
   return value != nullptr && *value != '\0';
 }
 
-static bool gdk_backend_is_pinned_to_x11() {
-  const char *raw = g_getenv("GDK_BACKEND");
-  if (!has_text(raw)) {
-    return false;
-  }
-  std::string backend = raw;
-  const std::size_t comma = backend.find(',');
-  if (comma != std::string::npos) {
-    backend.resize(comma);
-  }
-  std::transform(
-      backend.begin(), backend.end(), backend.begin(),
-      [](unsigned char value) {
-        return static_cast<char>(std::tolower(value));
-      });
-  return backend == "x11";
-}
-
 static bool should_prefer_portal() {
-  if (gdk_backend_is_pinned_to_x11()) {
-    return false;
-  }
   if (has_text(g_getenv("WAYLAND_DISPLAY"))) {
     return true;
   }
@@ -565,6 +549,7 @@ static void clear_portal_backend(
   close_portal_session(implementation);
   implementation->portal_session_response_generation = 0;
   implementation->portal_bind_response_generation = 0;
+  implementation->portal_registered_actions = 0;
 }
 
 static void on_portal_activated(
@@ -723,6 +708,12 @@ static void handle_portal_bind_response(
       });
   if (all_accepted && !accepted_ids.empty()) {
     implementation->portal_bind_response_generation = generation;
+    implementation->portal_registered_actions = std::count_if(
+        implementation->actions.begin(), implementation->actions.end(),
+        [&accepted_ids](const HotkeyAction &action) {
+          return std::find(accepted_ids.begin(), accepted_ids.end(),
+                           action.id) != accepted_ids.end();
+        });
   } else {
     std::cerr << "Global shortcuts portal rejected one or more "
                  "hotkey actions\n";
@@ -1033,6 +1024,8 @@ void replace_hotkey_actions(
       state->implementation;
   ++implementation->generation;
   implementation->actions = actions;
+  implementation->registration_failed_current = false;
+  implementation->portal_registered_actions = 0;
   if (implementation->initialization_pending) {
     return;
   }
@@ -1070,6 +1063,32 @@ HotkeyBackendKind
 hotkey_backend_kind(const HotkeyBackendState *state) {
   return state == nullptr ? HotkeyBackendKind::none
                           : state->implementation->kind;
+}
+
+HotkeyRegistrationStatus
+hotkey_registration_status(const HotkeyBackendState *state) {
+  if (state == nullptr) {
+    return {HotkeyBackendKind::none, false, true, 0, 0};
+  }
+  const auto &implementation = *state->implementation;
+  const bool pending = implementation.initialization_pending ||
+      (implementation.kind == HotkeyBackendKind::portal &&
+       !implementation.registration_failed_current &&
+       !implementation.actions.empty() &&
+       implementation.portal_bind_response_generation !=
+           implementation.generation);
+  const std::size_t registered =
+      implementation.kind == HotkeyBackendKind::x11
+          ? implementation.x11_grabs.size()
+          : implementation.kind == HotkeyBackendKind::portal
+                ? implementation.portal_registered_actions : 0;
+  return {
+      implementation.kind,
+      pending,
+      implementation.registration_failed_current,
+      implementation.actions.size(),
+      registered,
+  };
 }
 
 } // namespace elder_terms

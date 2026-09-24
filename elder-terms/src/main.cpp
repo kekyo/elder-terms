@@ -34,6 +34,7 @@
 #include "connection-repository.h"
 #include "control-server.h"
 #include "hotkey-backend.h"
+#include "hotkey-setup.h"
 #include "main-window.h"
 #include "tray-backend.h"
 
@@ -107,6 +108,7 @@ struct ApplicationState {
   elder_terms::LauncherMainWindow *main_window = nullptr;
   elder_terms::HotkeyBackendState *hotkey_backend = nullptr;
   std::optional<elder_terms::HotkeyBackendKind> detected_hotkey_backend;
+  std::vector<elder_terms::HotkeyAction> active_hotkey_actions;
   elder_terms::ControlServerState *control_server = nullptr;
   elder_terms::TrayBackendState *tray_backend = nullptr;
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
@@ -1079,6 +1081,7 @@ static void replace_registered_hotkeys(
   if (state->hotkey_backend != nullptr) {
     elder_terms::replace_hotkey_actions(state->hotkey_backend, actions);
   }
+  state->active_hotkey_actions = actions;
 }
 
 static void reload_hotkey_actions(ApplicationState *state) {
@@ -2780,8 +2783,129 @@ static bool dispatch_launcher_action(
   return true;
 }
 
-static std::string handle_control_request(
+static elder_terms::ExternalHotkeyCommandResult run_hotkey_setup_command(
+    const std::vector<std::string> &command) {
+  std::vector<gchar *> arguments;
+  arguments.reserve(command.size() + 1);
+  for (const auto &part : command) {
+    arguments.push_back(const_cast<gchar *>(part.c_str()));
+  }
+  arguments.push_back(nullptr);
+  gint wait_status = 0;
+  GError *error = nullptr;
+  gchar *output = nullptr;
+  const gboolean launched = g_spawn_sync(
+      nullptr, arguments.data(), nullptr,
+      static_cast<GSpawnFlags>(G_SPAWN_SEARCH_PATH |
+                               G_SPAWN_STDERR_TO_DEV_NULL),
+      nullptr, nullptr, &output, nullptr, &wait_status, &error);
+  if (!launched) {
+    if (error != nullptr) {
+      g_error_free(error);
+    }
+    g_free(output);
+    return {false, ""};
+  }
+  const bool succeeded = g_spawn_check_wait_status(wait_status, &error);
+  if (error != nullptr) {
+    g_error_free(error);
+  }
+  const std::string text = output == nullptr ? "" : output;
+  g_free(output);
+  return {succeeded, text};
+}
+
+static elder_terms::ExternalHotkeySetupEnvironment
+current_hotkey_setup_environment() {
+  const auto value = [](const char *name) {
+    const char *raw = g_getenv(name);
+    return raw == nullptr ? std::string() : std::string(raw);
+  };
+  const std::string session_type = value("XDG_SESSION_TYPE");
+  const std::string wayland_display = value("WAYLAND_DISPLAY");
+  std::vector<std::filesystem::path> config_dirs;
+  const std::string raw_config_dirs = value("XDG_CONFIG_DIRS");
+  const std::string directories = raw_config_dirs.empty()
+                                      ? "/etc/xdg" : raw_config_dirs;
+  std::size_t position = 0;
+  while (position < directories.size()) {
+    const auto end = directories.find(':', position);
+    const std::string path = directories.substr(position, end - position);
+    if (!path.empty() && path.front() == '/') {
+      config_dirs.emplace_back(path);
+    }
+    if (end == std::string::npos) {
+      break;
+    }
+    position = end + 1;
+  }
+  config_dirs.emplace_back("/etc");
+  return {
+      .wayland = !wayland_display.empty() ||
+                 g_ascii_strcasecmp(session_type.c_str(), "wayland") == 0,
+      .config_home = g_get_user_config_dir(),
+      .home = g_get_home_dir(),
+      .config_dirs = std::move(config_dirs),
+      .sway_socket = value("SWAYSOCK"),
+      .labwc_pid = value("LABWC_PID"),
+  };
+}
+
+static elder_terms::ControlReply setup_hotkeys(ApplicationState *state) {
+  if (state->hotkey_backend == nullptr) {
+    return {false, true, "Hotkey backend is starting"};
+  }
+  const auto status = elder_terms::hotkey_registration_status(
+      state->hotkey_backend);
+  if (status.pending) {
+    return {false, true, "Hotkey registration is still in progress"};
+  }
+  if (status.configured == 0) {
+    return {true, false, "No hotkeys are configured"};
+  }
+  if (!status.failed && status.registered == status.configured) {
+    return {true, false,
+            status.kind == elder_terms::HotkeyBackendKind::x11
+                ? "X11 hotkeys are registered"
+                : "GlobalShortcuts portal hotkeys are registered"};
+  }
+  const auto environment = current_hotkey_setup_environment();
+  if (!environment.wayland) {
+    return {false, false, "X11 could not register all configured hotkeys"};
+  }
+  std::vector<elder_terms::ExternalHotkeyCommand> commands;
+  for (const auto &action : state->active_hotkey_actions) {
+    std::vector<std::string> arguments = {"etctl"};
+    if (action.id == open_application_hotkey_action_id) {
+      arguments.push_back("open-application");
+    } else {
+      const auto target = std::find_if(
+          state->connection_hotkey_targets.begin(),
+          state->connection_hotkey_targets.end(),
+          [&action](const ConnectionHotkeyTarget &candidate) {
+            return candidate.action_id == action.id;
+          });
+      if (target == state->connection_hotkey_targets.end()) {
+        return {false, false, "A configured connection hotkey has no target"};
+      }
+      arguments.push_back("open-connection");
+      arguments.push_back(target->name);
+    }
+    commands.push_back({action.binding, std::move(arguments)});
+  }
+  const auto result = elder_terms::setup_external_hotkeys(
+      environment, commands, run_hotkey_setup_command);
+  return {result.success, false, result.message};
+}
+
+static elder_terms::ControlReply handle_control_request(
     ApplicationState *state, const elder_terms::ControlRequest &request) {
+  if (state->application_shutting_down || state->quitting) {
+    return {false, false, "The launcher is shutting down"};
+  }
+  if (request.command == elder_terms::ControlCommand::setup) {
+    return setup_hotkeys(state);
+  }
   std::optional<std::filesystem::path> path;
   if (request.connection.has_value()) {
     // Resolve against the current repository rather than trusting client paths
@@ -2793,18 +2917,18 @@ static std::string handle_control_request(
           return candidate.name == *request.connection;
         });
     if (profile == profiles.end()) {
-      return "Unknown saved connection";
+      return {false, false, "Unknown saved connection"};
     }
     path = profile->path;
   }
-  return dispatch_launcher_action(
-             state, path,
-             {
-                 .activation_time = std::nullopt,
-                 .activation_token = request.activation_token,
-             })
-             ? ""
-             : "The launcher is shutting down";
+  const bool accepted = dispatch_launcher_action(
+      state, path,
+      {
+          .activation_time = std::nullopt,
+          .activation_token = request.activation_token,
+      });
+  return {accepted, false,
+          accepted ? "" : "The launcher is shutting down"};
 }
 
 static void on_application_startup(GApplication *,
@@ -2881,6 +3005,7 @@ static void on_application_startup(GApplication *,
           },
       },
       hotkey_actions);
+  state->active_hotkey_actions = hotkey_actions;
   if (state->startup_mode == elder_terms::StartupMode::window ||
       state->startup_mode == elder_terms::StartupMode::background) {
     return;

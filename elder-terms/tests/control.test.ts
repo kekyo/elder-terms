@@ -1,6 +1,7 @@
 import { execFile, spawn } from 'node:child_process';
 import {
   chmod,
+  copyFile,
   mkdtemp,
   mkdir,
   readFile,
@@ -53,7 +54,7 @@ it('controls the resident launcher and saved connections without D-Bus or a disp
       async (connections) => {
         await writeFile(
           join(connections, '..', 'global.ini'),
-          '[general]\nstartup_mode=background\nopen_application=\n'
+          '[general]\nstartup_mode=background\nopen_application=Ctrl+Shift+Y\n'
         );
         await writeFile(
           join(connections, '日本語 connection.ini'),
@@ -62,6 +63,9 @@ it('controls the resident launcher and saved connections without D-Bus or a disp
       },
       async ({ app, connections }) => {
         expect(await app.getWindowCount()).toBe(0);
+        expect((await control(['setup'])).stdout).toContain(
+          'X11 hotkeys are registered'
+        );
         await expect(
           control(['open-connection', 'missing'])
         ).rejects.toMatchObject({ code: 1 });
@@ -140,16 +144,223 @@ it('explains usage without GTK and reports a missing resident launcher', async (
   try {
     const help = await execute(ctl, ['--help'], { env });
     expect(help.stdout).toContain('open-connection');
+    expect(help.stdout).toContain('setup');
     await expect(
       execute(ctl, ['open-connection'], { env })
     ).rejects.toMatchObject({ code: 2 });
     await expect(
       execute(ctl, ['open-application'], { env })
     ).rejects.toMatchObject({ code: 1 });
+    await expect(execute(ctl, ['setup'], { env })).rejects.toMatchObject({
+      code: 1,
+    });
   } finally {
     await rm(runtime, { recursive: true, force: true });
   }
 });
+
+it('starts the launcher when setup is run in an active X11 session', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'elder-control-setup-'));
+  const desktop = createGtkAppLauncher({
+    appPath: fileURLToPath(
+      new URL('../../.build/elder-terms/elder-terms', import.meta.url)
+    ),
+    xvfbPool: { type: 'xvfb' },
+    xvfbTrayHost: false,
+  });
+  const bin = join(directory, 'bin');
+  const config = join(directory, 'config');
+  const runtime = join(directory, 'runtime');
+  const pidFile = join(directory, 'launcher.pid');
+  const launcherBinary = fileURLToPath(
+    new URL('../../.build/elder-terms/elder-terms', import.meta.url)
+  );
+  let launcherPid: number | undefined;
+  try {
+    await mkdir(bin);
+    await mkdir(runtime, { mode: 0o700 });
+    await mkdir(join(config, 'elder-terms/connections'), { recursive: true });
+    await writeFile(
+      join(config, 'elder-terms/global.ini'),
+      '[general]\nstartup_mode=background\nopen_application=Ctrl+Shift+Y\n'
+    );
+    await copyFile(ctl, join(bin, 'etctl'));
+    await writeFile(
+      join(bin, 'elder-terms'),
+      `#!/bin/sh\nprintf '%s' "$$" > '${pidFile}'\nexec '${launcherBinary}' "$@"\n`
+    );
+    await chmod(join(bin, 'elder-terms'), 0o700);
+    const env = {
+      ...process.env,
+      ...(await desktop.environment()),
+      XDG_CONFIG_HOME: config,
+      XDG_RUNTIME_DIR: runtime,
+      DBUS_SESSION_BUS_ADDRESS: 'unix:path=/nonexistent/elder-terms-bus',
+    };
+    const setup = await execute(join(bin, 'etctl'), ['setup'], { env });
+    expect(setup.stdout).toContain('X11 hotkeys are registered');
+    launcherPid = Number(await readFile(pidFile, 'utf8'));
+    expect(Number.isInteger(launcherPid)).toBe(true);
+    await execute(join(bin, 'etctl'), ['open-application'], { env });
+  } finally {
+    if (launcherPid !== undefined) {
+      try {
+        process.kill(launcherPid);
+      } catch {
+        // The launcher may have exited during cleanup.
+      }
+    }
+    await desktop.release();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it('configures the detected Sway session and reloads it without OS labels', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'elder-control-sway-'));
+  const launcherBinary = fileURLToPath(
+    new URL('../../.build/elder-terms/elder-terms', import.meta.url)
+  );
+  const wrapper = join(directory, 'launcher');
+  const compositor = join(directory, 'swaymsg');
+  const capture = join(directory, 'sway-calls');
+  await writeFile(
+    wrapper,
+    `#!/bin/sh\nexport GDK_BACKEND=x11\nexport XDG_SESSION_TYPE=wayland\nexec '${launcherBinary}' "$@"\n`
+  );
+  await chmod(wrapper, 0o700);
+  await writeFile(
+    compositor,
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> '${capture}'\nif [ "$*" = '-t get_config' ]; then cat "$XDG_CONFIG_HOME/sway/config"; fi\nexit 0\n`
+  );
+  await chmod(compositor, 0o700);
+  try {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[general]\nstartup_mode=background\nopen_application=Ctrl+Shift+Y\n'
+        );
+      },
+      async ({ app, configHome }) => {
+        const env = {
+          ...process.env,
+          ...(await app.environment()),
+          XDG_RUNTIME_DIR: join(configHome, '..', 'runtime'),
+          DBUS_SESSION_BUS_ADDRESS: 'unix:path=/nonexistent/elder-terms-bus',
+        };
+        await waitForResult(async () =>
+          expect(
+            (
+              await stat(join(env.XDG_RUNTIME_DIR, 'elder-terms/control.sock'))
+            ).isSocket()
+          ).toBe(true)
+        );
+        const first = await execute(ctl, ['setup'], { env });
+        const second = await execute(ctl, ['setup'], { env });
+        expect(first.stdout).toContain('Sway hotkeys configured and reloaded');
+        expect(second.stdout).toContain('Sway hotkeys configured and reloaded');
+        const configuration = await readFile(
+          join(configHome, 'sway/config'),
+          'utf8'
+        );
+        expect(configuration.match(/bindsym Ctrl\+Shift\+y/g)).toHaveLength(1);
+        expect(await readFile(capture, 'utf8')).toBe(
+          '-t get_version\nreload\n-t get_config\n-t get_version\nreload\n-t get_config\n'
+        );
+      },
+      {
+        appPath: wrapper,
+        args: [],
+        env: {
+          SWAYSOCK: join(directory, 'session.sock'),
+          PATH: directory + ':' + (process.env.PATH ?? '/usr/bin:/bin'),
+        },
+        xvfbTrayHost: false,
+      }
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 60_000);
+
+it('configures a labwc session while retaining existing user shortcuts', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'elder-control-labwc-'));
+  const launcherBinary = fileURLToPath(
+    new URL('../../.build/elder-terms/elder-terms', import.meta.url)
+  );
+  const wrapper = join(directory, 'launcher');
+  const compositor = join(directory, 'labwc');
+  const capture = join(directory, 'labwc-calls');
+  await writeFile(
+    wrapper,
+    `#!/bin/sh\nunset GDK_BACKEND\nexport XDG_SESSION_TYPE=wayland\nexec '${launcherBinary}' "$@"\n`
+  );
+  await chmod(wrapper, 0o700);
+  await writeFile(
+    compositor,
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> '${capture}'\nexit 0\n`
+  );
+  await chmod(compositor, 0o700);
+  try {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[general]\nstartup_mode=background\nopen_application=Ctrl+Shift+Y\n'
+        );
+        const labwc = join(connections, '..', '..', 'labwc');
+        await mkdir(labwc);
+        await writeFile(
+          join(labwc, 'rc.xml'),
+          '<labwc_config><keyboard><keybind key="W-Return"><action name="Execute" command="terminal"/></keybind></keyboard></labwc_config>'
+        );
+      },
+      async ({ app, configHome }) => {
+        const env = {
+          ...process.env,
+          ...(await app.environment()),
+          XDG_RUNTIME_DIR: join(configHome, '..', 'runtime'),
+          DBUS_SESSION_BUS_ADDRESS: 'unix:path=/nonexistent/elder-terms-bus',
+        };
+        await waitForResult(async () =>
+          expect(
+            (
+              await stat(join(env.XDG_RUNTIME_DIR, 'elder-terms/control.sock'))
+            ).isSocket()
+          ).toBe(true)
+        );
+        expect((await execute(ctl, ['setup'], { env })).stdout).toContain(
+          'labwc hotkeys configured and reloaded'
+        );
+        expect((await execute(ctl, ['setup'], { env })).stdout).toContain(
+          'labwc hotkeys configured and reloaded'
+        );
+        const configuration = await readFile(
+          join(configHome, 'labwc/rc.xml'),
+          'utf8'
+        );
+        expect(configuration.match(/key="W-Return"/g)).toHaveLength(1);
+        expect(configuration.match(/key="C-S-y"/g)).toHaveLength(1);
+        expect(await readFile(capture, 'utf8')).toBe(
+          '--reconfigure\n--reconfigure\n'
+        );
+      },
+      {
+        appPath: wrapper,
+        args: [],
+        env: {
+          LABWC_PID: '12345',
+          PATH: directory + ':' + (process.env.PATH ?? '/usr/bin:/bin'),
+        },
+        xvfbTrayHost: false,
+      }
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 60_000);
 
 it('accepts requests when the launcher itself cannot connect to D-Bus and recovers after termination', async () => {
   const runtime = await mkdtemp(join(tmpdir(), 'elder-control-nobus-'));

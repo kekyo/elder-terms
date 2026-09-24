@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 #include <functional>
 #include <optional>
 #include <string>
@@ -35,6 +36,20 @@ struct HotkeyBackendAvailability {
   bool has_portal;
   /** Whether the current GDK display supports X11 grabs. */
   bool has_x11;
+};
+
+/** Current registration outcome for the configured shortcut set. */
+struct HotkeyRegistrationStatus {
+  /** Selected transport, or none when unavailable. */
+  HotkeyBackendKind kind;
+  /** Whether transport detection or portal approval is in progress. */
+  bool pending;
+  /** Whether registration failed or the portal rejected a shortcut. */
+  bool failed;
+  /** Number of configured shortcuts. */
+  std::size_t configured;
+  /** Number of shortcuts accepted by the transport. */
+  std::size_t registered;
 };
 
 /**
@@ -155,5 +170,14 @@ void destroy_hotkey_backend(HotkeyBackendState *state);
  */
 HotkeyBackendKind
 hotkey_backend_kind(const HotkeyBackendState *state);
+
+/**
+ * Returns the live registration outcome, including pending portal consent.
+ *
+ * @param state Backend state, or null.
+ * @returns Counts and outcome for the current shortcut set.
+ */
+HotkeyRegistrationStatus
+hotkey_registration_status(const HotkeyBackendState *state);
 
 } // namespace elder_terms

@@ -6,16 +6,31 @@
 
 namespace elder_terms {
 
-/** A transport-independent request to show the launcher or open a connection. */
+/** Accepted control operations. */
+enum class ControlCommand { open_application, open_connection, setup };
+
+/** A transport-independent request to control the launcher. */
 struct ControlRequest {
-  /** Saved connection name, or no value to show the launcher. */
+  /** Requested operation. */
+  ControlCommand command;
+  /** Saved connection name for open_connection, otherwise no value. */
   std::optional<std::string> connection;
   /** Desktop activation token, when supplied by the caller. */
   std::optional<std::string> activation_token;
 };
 
-/** Handles a request, returning an empty string on acceptance or an error. */
-using ControlCallback = std::function<std::string(const ControlRequest &)>;
+/** Outcome of a control request. */
+struct ControlReply {
+  /** Whether the operation was accepted. */
+  bool success;
+  /** Whether setup should be queried again after initialization. */
+  bool pending;
+  /** Human-readable result or error. */
+  std::string message;
+};
+
+/** Handles a control request on the dispatcher's thread. */
+using ControlCallback = std::function<ControlReply(const ControlRequest &)>;
 
 /** Opaque asynchronous control server and its owned resources. */
 struct ControlServerState;
