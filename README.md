@@ -666,6 +666,12 @@ The command starts the launcher if needed. Run it again after changing saved-con
 
 Repeated runs replace only the bindings managed by elder-terms. When there is no user compositor configuration, setup preserves the system configuration it finds. For labwc, this copies the current system configuration into the user file, so later system configuration updates are not inherited automatically. Sway sessions launched with a custom config path may require adding the generated bindings to that config for persistence. See the [Sway configuration reference](https://github.com/swaywm/sway/blob/master/sway/sway.5.scd) and [labwc configuration search and reload rules](https://labwc.github.io/labwc-config.5.html).
 
+Run `etctl unsetup` to remove shortcuts that setup saved in user Sway or labwc configuration. It leaves other shortcuts and the configuration files in place. The command works without a running launcher or graphical session. In an active Sway or labwc session, it also reloads the compositor; otherwise, reload the compositor or log in again to apply the change. X11 and Global Shortcuts portal registrations belong to the running launcher and are unaffected by this command.
+
+```sh
+etctl unsetup
+```
+
 ### Desktop Shortcuts Without a Portal
 
 Below the version in the About panel, you can check the detected hotkey

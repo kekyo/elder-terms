@@ -25,8 +25,10 @@ static void print_usage() {
   std::cout << "Usage: etctl open-application\n"
                "       etctl open-connection <saved-connection-name>\n"
                "       etctl setup\n"
+               "       etctl unsetup\n"
                "Controls the launcher in the same XDG_RUNTIME_DIR.\n"
-               "Setup starts the launcher when needed.\n";
+               "Setup starts the launcher when needed.\n"
+               "Unsetup removes shortcuts saved in Sway or labwc configuration.\n";
 }
 
 static std::runtime_error io_error() {
@@ -103,10 +105,13 @@ static std::string send_request(const std::string &command,
     return response;
 }
 
+static std::filesystem::path launcher_path() {
+  return std::filesystem::read_symlink("/proc/self/exe").parent_path() /
+         "elder-terms";
+}
+
 static pid_t start_launcher() {
-  const auto executable =
-      std::filesystem::read_symlink("/proc/self/exe").parent_path() /
-      "elder-terms";
+  const auto executable = launcher_path();
   const std::string path = executable.string();
   char *const arguments[] = {
       const_cast<char *>(path.c_str()),
@@ -142,6 +147,18 @@ static pid_t start_launcher() {
   return child;
 }
 
+static void run_unsetup() {
+  const std::string path = launcher_path().string();
+  char *const arguments[] = {
+      const_cast<char *>(path.c_str()),
+      const_cast<char *>("--unsetup"),
+      nullptr,
+  };
+  execv(path.c_str(), arguments);
+  throw std::runtime_error("Cannot run elder-terms unsetup: " +
+                           std::string(std::strerror(errno)));
+}
+
 int main(int argc, char **argv) {
   if (argc == 2 && std::string(argv[1]) == "--help") {
     print_usage();
@@ -150,11 +167,15 @@ int main(int argc, char **argv) {
   const std::string command = argc > 1 ? argv[1] : "";
   if (!((command == "open-application" && argc == 2) ||
         (command == "setup" && argc == 2) ||
+        (command == "unsetup" && argc == 2) ||
         (command == "open-connection" && argc == 3 && argv[2][0] != '\0'))) {
     print_usage();
     return 2;
   }
   try {
+    if (command == "unsetup") {
+      run_unsetup();
+    }
     const std::string connection = command == "open-connection" ? argv[2] : "";
     bool launched = false;
     pid_t launched_pid = 0;

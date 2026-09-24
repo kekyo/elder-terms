@@ -6,6 +6,7 @@
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -197,8 +198,8 @@ static std::vector<std::filesystem::path> system_config_paths(
   return paths;
 }
 
-static std::string sway_config(
-    std::string contents, const std::vector<ExternalHotkeyCommand> &actions) {
+static std::optional<std::string> without_sway_setup_block(
+    std::string contents) {
   const auto begin = contents.find(sway_begin);
   const auto end = contents.find(sway_end);
   if ((begin == std::string::npos) != (end == std::string::npos) ||
@@ -207,11 +208,18 @@ static std::string sway_config(
         contents.find(sway_end, end + 1) != std::string::npos))) {
     throw std::runtime_error("The existing Sway setup block is incomplete");
   }
-  if (begin != std::string::npos) {
-    const auto after_end = contents.find('\n', end);
-    contents.erase(begin, after_end == std::string::npos
-                              ? contents.size() - begin : after_end + 1 - begin);
+  if (begin == std::string::npos) {
+    return std::nullopt;
   }
+  const auto after_end = contents.find('\n', end);
+  contents.erase(begin, after_end == std::string::npos
+                            ? contents.size() - begin : after_end + 1 - begin);
+  return contents;
+}
+
+static std::string sway_config(
+    std::string contents, const std::vector<ExternalHotkeyCommand> &actions) {
+  contents = without_sway_setup_block(contents).value_or(contents);
   if (!contents.empty() && contents.back() != '\n') {
     contents += '\n';
   }
@@ -369,6 +377,66 @@ ExternalHotkeySetupResult setup_external_hotkeys(
       return {true, "labwc hotkeys configured and reloaded"};
     }
     return {false, "No supported shortcut API or compositor configuration was found"};
+  } catch (const std::exception &error) {
+    return {false, error.what()};
+  }
+}
+
+ExternalHotkeySetupResult unsetup_external_hotkeys(
+    const ExternalHotkeySetupEnvironment &environment,
+    const ExternalHotkeyCommandRunner &run) {
+  if (!environment.config_home.is_absolute() || !environment.home.is_absolute()) {
+    return {false, "Unsetup requires valid user config and home directories"};
+  }
+  try {
+    std::vector<std::pair<std::filesystem::path, std::string>> changes;
+    bool sway_changed = false;
+    bool labwc_changed = false;
+    const std::vector<std::filesystem::path> sway_paths = {
+        environment.home / ".sway/config",
+        environment.config_home / "sway/config",
+        environment.home / ".i3/config",
+    };
+    for (const auto &path : sway_paths) {
+      if (!std::filesystem::exists(path)) {
+        continue;
+      }
+      const auto updated = without_sway_setup_block(read_file(path));
+      if (updated.has_value()) {
+        changes.emplace_back(path, *updated);
+        sway_changed = true;
+      }
+    }
+    const auto labwc_path = environment.config_home / "labwc/rc.xml";
+    if (std::filesystem::exists(labwc_path)) {
+      const auto base = read_file(labwc_path);
+      if (base.find(labwc_marker) != std::string::npos) {
+        changes.emplace_back(labwc_path, labwc_config(base, {}));
+        labwc_changed = true;
+      }
+    }
+    if (changes.empty()) {
+      return {true, "No setup-managed hotkeys were found"};
+    }
+    for (const auto &[path, contents] : changes) {
+      write_config(path, contents);
+    }
+    if (environment.wayland && sway_changed &&
+        !environment.sway_socket.empty() &&
+        run({"swaymsg", "-t", "get_version"}).success) {
+      if (!run({"swaymsg", "reload"}).success) {
+        return {false, "Setup-managed hotkeys were removed, but Sway reload failed"};
+      }
+      const auto active = run({"swaymsg", "-t", "get_config"});
+      if (!active.success || active.output.find(sway_begin) != std::string::npos) {
+        return {false, "Setup-managed hotkeys were removed, but Sway still reports the old configuration"};
+      }
+    }
+    if (environment.wayland && labwc_changed && !environment.labwc_pid.empty() &&
+        !run({"labwc", "--reconfigure"}).success) {
+      return {false, "Setup-managed hotkeys were removed, but labwc reload failed"};
+    }
+    return {true, "Setup-managed hotkeys removed from user configuration"};
   } catch (const std::exception &error) {
     return {false, error.what()};
   }

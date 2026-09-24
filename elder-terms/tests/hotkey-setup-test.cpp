@@ -118,6 +118,29 @@ int main() {
                       "Sway setup should activate bindings when reload keeps the old system config");
 
     commands.clear();
+    const auto sway_removed =
+        elder_terms::unsetup_external_hotkeys(sway, run);
+    const auto sway_after_removal = read_file(config_home / "sway/config");
+    success &= expect(sway_removed.success &&
+                          sway_after_removal.find("elder-terms setup begin") ==
+                              std::string::npos &&
+                          sway_after_removal.find("bindsym Ctrl+F2") ==
+                              std::string::npos &&
+                          sway_after_removal.find("bindsym Mod4+Return") ==
+                              std::string::npos &&
+                          sway_after_removal.find("include '") !=
+                              std::string::npos,
+                      "Sway unsetup should remove managed bindings and retain the system include");
+    success &= expect(commands.size() == 3 &&
+                          commands[1] ==
+                              std::vector<std::string>({"swaymsg", "reload"}),
+                      "Sway unsetup should reload the active compositor");
+    const auto sway_again =
+        elder_terms::unsetup_external_hotkeys(sway, run);
+    success &= expect(sway_again.success && commands.size() == 3,
+                      "Sway unsetup should be repeatable without another reload");
+
+    commands.clear();
     std::filesystem::create_directories(config_system / "labwc");
     std::ofstream(config_system / "labwc/rc.xml")
         << "<?xml version=\"1.0\"?><labwc_config><keyboard>"
@@ -152,6 +175,24 @@ int main() {
       xmlFreeDoc(document);
     }
 
+    commands.clear();
+    const auto labwc_removed =
+        elder_terms::unsetup_external_hotkeys(labwc, run);
+    const auto labwc_after_removal = read_file(labwc_path);
+    success &= expect(labwc_removed.success &&
+                          count_text(labwc_after_removal, "key=\"W-Return\"") == 1 &&
+                          count_text(labwc_after_removal, "key=\"C-F2\"") == 0 &&
+                          count_text(labwc_after_removal, "key=\"C-S-y\"") == 0,
+                      "labwc unsetup should retain unrelated shortcuts");
+    success &= expect(commands.size() == 1 &&
+                          commands[0] ==
+                              std::vector<std::string>({"labwc", "--reconfigure"}),
+                      "labwc unsetup should reload the active compositor");
+    const auto labwc_again =
+        elder_terms::unsetup_external_hotkeys(labwc, run);
+    success &= expect(labwc_again.success && commands.size() == 1,
+                      "labwc unsetup should be repeatable without another reload");
+
     const auto openbox_home = root / "openbox-user";
     const auto openbox_system = root / "openbox-system";
     std::filesystem::create_directories(openbox_system / "labwc");
@@ -178,6 +219,38 @@ int main() {
                               std::string::npos &&
                           count_text(openbox_contents, "key=\"C-F2\"") == 1,
                       "labwc setup should accept Openbox-style system configuration");
+    const auto openbox_removed =
+        elder_terms::unsetup_external_hotkeys(openbox, run);
+    const auto openbox_after_removal = read_file(openbox_path);
+    success &= expect(openbox_removed.success &&
+                          openbox_after_removal.find("<openbox_config") !=
+                              std::string::npos &&
+                          count_text(openbox_after_removal, "key=\"W-Return\"") == 1 &&
+                          count_text(openbox_after_removal, "key=\"C-F2\"") == 0,
+                      "labwc unsetup should support Openbox-style configuration");
+
+    const auto offline_home = root / "offline-user";
+    std::filesystem::create_directories(offline_home / "sway");
+    std::ofstream(offline_home / "sway/config")
+        << "bindsym Mod4+Return exec terminal\n"
+           "# elder-terms setup begin\n"
+           "bindsym Ctrl+F2 exec 'etctl' 'open-application'\n"
+           "# elder-terms setup end\n";
+    const elder_terms::ExternalHotkeySetupEnvironment offline{
+        .wayland = false,
+        .config_home = offline_home,
+        .home = root / "offline-home",
+        .config_dirs = {config_system},
+        .sway_socket = "",
+        .labwc_pid = "",
+    };
+    commands.clear();
+    const auto offline_removed =
+        elder_terms::unsetup_external_hotkeys(offline, run);
+    success &= expect(offline_removed.success && commands.empty() &&
+                          read_file(offline_home / "sway/config") ==
+                              "bindsym Mod4+Return exec terminal\n",
+                      "Unsetup should remove saved bindings without an active session");
 
     commands.clear();
     const elder_terms::ExternalHotkeySetupEnvironment unsupported{

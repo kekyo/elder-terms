@@ -3128,6 +3128,12 @@ static void on_application_shutdown(GApplication *,
 } // namespace
 
 int main(int argc, char **argv) {
+  if (argc == 2 && std::string(argv[1]) == "--unsetup") {
+    const auto result = elder_terms::unsetup_external_hotkeys(
+        current_hotkey_setup_environment(), run_hotkey_setup_command);
+    (result.success ? std::cout : std::cerr) << result.message << '\n';
+    return result.success ? 0 : 1;
+  }
   const std::vector<std::string> process_arguments =
       copy_process_arguments(argc, argv);
   const std::string restart_executable =

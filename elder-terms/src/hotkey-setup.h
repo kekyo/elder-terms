@@ -33,9 +33,9 @@ struct ExternalHotkeySetupEnvironment {
   std::string labwc_pid;
 };
 
-/** Result of configuring an external desktop hotkey transport. */
+/** Result of changing shortcuts in an external desktop configuration. */
 struct ExternalHotkeySetupResult {
-  /** Whether all configured shortcuts were written and activated. */
+  /** Whether the requested operation completed successfully. */
   bool success;
   /** Human-readable transport and outcome or reason for failure. */
   std::string message;
@@ -65,6 +65,17 @@ using ExternalHotkeyCommandRunner =
 ExternalHotkeySetupResult setup_external_hotkeys(
     const ExternalHotkeySetupEnvironment &environment,
     const std::vector<ExternalHotkeyCommand> &actions,
+    const ExternalHotkeyCommandRunner &run);
+
+/**
+ * Removes hotkeys previously saved by setup from user compositor files.
+ *
+ * @param environment Session capabilities and user config paths.
+ * @param run Executes a compositor reload command without a shell.
+ * @returns Whether managed entries were removed or already absent.
+ */
+ExternalHotkeySetupResult unsetup_external_hotkeys(
+    const ExternalHotkeySetupEnvironment &environment,
     const ExternalHotkeyCommandRunner &run);
 
 } // namespace elder_terms

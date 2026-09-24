@@ -145,6 +145,7 @@ it('explains usage without GTK and reports a missing resident launcher', async (
     const help = await execute(ctl, ['--help'], { env });
     expect(help.stdout).toContain('open-connection');
     expect(help.stdout).toContain('setup');
+    expect(help.stdout).toContain('unsetup');
     await expect(
       execute(ctl, ['open-connection'], { env })
     ).rejects.toMatchObject({ code: 2 });
@@ -154,6 +155,38 @@ it('explains usage without GTK and reports a missing resident launcher', async (
     await expect(execute(ctl, ['setup'], { env })).rejects.toMatchObject({
       code: 1,
     });
+    const configHome = join(runtime, 'config');
+    await mkdir(join(configHome, 'sway'), { recursive: true });
+    await writeFile(
+      join(configHome, 'sway/config'),
+      "bindsym Mod4+Return exec terminal\n# elder-terms setup begin\nbindsym Ctrl+F2 exec 'etctl' 'open-application'\n# elder-terms setup end\n"
+    );
+    const unsetup = await execute(ctl, ['unsetup'], {
+      env: {
+        ...env,
+        HOME: runtime,
+        XDG_CONFIG_HOME: configHome,
+        SWAYSOCK: '',
+        LABWC_PID: '',
+      },
+    });
+    expect(unsetup.stdout).toContain('removed');
+    expect(await readFile(join(configHome, 'sway/config'), 'utf8')).toBe(
+      'bindsym Mod4+Return exec terminal\n'
+    );
+    expect(
+      (
+        await execute(ctl, ['unsetup'], {
+          env: {
+            ...env,
+            HOME: runtime,
+            XDG_CONFIG_HOME: configHome,
+            SWAYSOCK: '',
+            LABWC_PID: '',
+          },
+        })
+      ).stdout
+    ).toContain('No setup-managed hotkeys');
   } finally {
     await rm(runtime, { recursive: true, force: true });
   }
