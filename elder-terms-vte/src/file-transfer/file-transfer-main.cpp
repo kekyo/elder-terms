@@ -464,7 +464,7 @@ static std::string ftp_authentication_message(
     const elder_terms::FtpConnectionSettings &connection,
     bool username_missing) {
   std::string message = format_message(
-      _("Enter the user name and password for %s."), connection.address);
+      _("User name for %s:"), connection.address);
   message += "\n\n";
   message += _("To log in anonymously, enter anonymous as the user name.");
   if (username_missing) {
@@ -491,9 +491,6 @@ prompt_ftp_credentials_async(FtpApplicationState *state,
         .input_label = _("User name"),
         .input_required = true,
         .echo = true,
-        .secondary_input_label = _("Password:"),
-        .secondary_input_required = true,
-        .secondary_echo = false,
         .cancel_visible = true,
     };
     auto pending = elder_terms::prompt_file_transfer_window_async(
@@ -504,13 +501,30 @@ prompt_ftp_credentials_async(FtpApplicationState *state,
     }
     username = std::move(response.text);
     if (username.find_first_not_of(" \t\r\n") != std::string::npos) {
-      co_return FtpRuntimeCredentials{
-          .username = std::move(username),
-          .password = std::move(response.secondary_text),
-      };
+      break;
     }
     username_missing = true;
   }
+  elder_terms::InlinePromptRequest password_request{
+      .title = state->connection.tls_mode == elder_terms::FtpTlsMode::none
+                   ? _("FTP authentication") : _("FTPS authentication"),
+      .message = _("Password:"),
+      .accept_label = _("Connect"),
+      .cancel_label = _("Cancel"),
+      .input_required = true,
+      .echo = false,
+      .cancel_visible = true,
+  };
+  auto pending = elder_terms::prompt_file_transfer_window_async(
+      state->window, std::move(password_request), cancellation);
+  elder_terms::InlinePromptResponse response = co_await pending;
+  if (!response.accepted) {
+    co_return std::nullopt;
+  }
+  co_return FtpRuntimeCredentials{
+      .username = std::move(username),
+      .password = std::move(response.text),
+  };
 }
 
 static cardio::promise<bool> confirm_ftp_certificate_async(

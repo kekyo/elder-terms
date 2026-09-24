@@ -326,7 +326,19 @@ for (const testCase of [
         'entry'
       ).setText('alice');
       await expectElementKind(
-        await app.getById('file_transfer_prompt_secondary_entry'),
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_message_label'),
+            'label'
+          ).text()
+        ).toBe(japanese ? 'パスワード:' : 'Password:');
+      });
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_entry'),
         'entry'
       ).setText('secret');
       await expectElementKind(
@@ -1208,7 +1220,19 @@ for (const testCase of [
           'entry'
         ).setText('alice');
         await expectElementKind(
-          await app.getById('file_transfer_prompt_secondary_entry'),
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_prompt_message_label'),
+              'label'
+            ).text()
+          ).toBe('Password:');
+        });
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_entry'),
           'entry'
         ).setText('secret');
         await expectElementKind(

@@ -103,11 +103,12 @@ describe('FTP window', () => {
         ).text()
       ).toBe('User name');
       expect(
-        await expectElementKind(
-          await app.getById('file_transfer_prompt_secondary_entry_label'),
-          'label'
-        ).text()
-      ).toBe('Password:');
+        (
+          await (
+            await app.getById('file_transfer_prompt_secondary_entry')
+          ).info()
+        ).states
+      ).not.toContain('showing');
       expect(
         await expectElementKind(
           await app.getById('file_transfer_status_label'),
@@ -121,13 +122,9 @@ describe('FTP window', () => {
       expect(await usernameEntry.text()).toBe('fixture-user');
       await window.activate();
       const promptWidgets = await Promise.all(
-        [
-          'message_label',
-          'entry',
-          'secondary_entry',
-          'cancel_button',
-          'accept_button',
-        ].map(async (suffix) => app.getById(`file_transfer_prompt_${suffix}`))
+        ['message_label', 'entry', 'cancel_button', 'accept_button'].map(
+          async (suffix) => app.getById(`file_transfer_prompt_${suffix}`)
+        )
       );
       for (const reverse of [false, true]) {
         const visited = new Set<number>();
@@ -158,10 +155,23 @@ describe('FTP window', () => {
         expect(previous).toBe(1);
         expect(visited.size).toBe(promptWidgets.length);
       }
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_message_label'),
+            'label'
+          ).text()
+        ).toBe('Password:');
+      });
       const passwordEntry = expectElementKind(
-        await app.getById('file_transfer_prompt_secondary_entry'),
+        await app.getById('file_transfer_prompt_entry'),
         'entry'
       );
+      expect(await passwordEntry.text()).toBe('');
       await passwordEntry.setText('fixture-secret');
       await expectElementKind(
         await app.getById('file_transfer_prompt_accept_button'),
@@ -528,16 +538,11 @@ describe('FTP window', () => {
         await app.getById('file_transfer_prompt_entry'),
         'entry'
       );
-      const passwordEntry = expectElementKind(
-        await app.getById('file_transfer_prompt_secondary_entry'),
-        'entry'
-      );
       await waitForResult(async () => {
         expect(await usernameEntry.text()).toBe(userInfo().username);
       });
 
       await usernameEntry.setText('');
-      await passwordEntry.setText('anonymous@example.invalid');
       await expectElementKind(
         await app.getById('file_transfer_prompt_accept_button'),
         'button'
@@ -552,7 +557,19 @@ describe('FTP window', () => {
       });
 
       await usernameEntry.setText('anonymous');
-      await passwordEntry.setText('anonymous@example.invalid');
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_message_label'),
+            'label'
+          ).text()
+        ).toBe('Password:');
+      });
+      await usernameEntry.setText('anonymous@example.invalid');
       await expectElementKind(
         await app.getById('file_transfer_prompt_accept_button'),
         'button'
