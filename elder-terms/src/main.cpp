@@ -1078,10 +1078,10 @@ static void replace_registered_hotkeys(
   const std::vector<elder_terms::HotkeyAction> actions =
       build_registered_hotkey_actions(state, global_store, &warnings);
   print_warnings(warnings);
+  state->active_hotkey_actions = actions;
   if (state->hotkey_backend != nullptr) {
     elder_terms::replace_hotkey_actions(state->hotkey_backend, actions);
   }
-  state->active_hotkey_actions = actions;
 }
 
 static void reload_hotkey_actions(ApplicationState *state) {
@@ -2873,6 +2873,9 @@ static elder_terms::ControlReply setup_hotkeys(ApplicationState *state) {
   if (!environment.wayland) {
     return {false, false, "X11 could not register all configured hotkeys"};
   }
+  if (state->control_server == nullptr) {
+    return {false, false, "External hotkey control is unavailable"};
+  }
   std::vector<elder_terms::ExternalHotkeyCommand> commands;
   for (const auto &action : state->active_hotkey_actions) {
     std::vector<std::string> arguments = {"etctl"};
@@ -2896,6 +2899,18 @@ static elder_terms::ControlReply setup_hotkeys(ApplicationState *state) {
   const auto result = elder_terms::setup_external_hotkeys(
       environment, commands, run_hotkey_setup_command);
   return {result.success, false, result.message};
+}
+
+static void handle_hotkey_registration_failure(ApplicationState *state) {
+  if (state->application_shutting_down || state->quitting) {
+    return;
+  }
+  const elder_terms::ControlReply result = setup_hotkeys(state);
+  if (result.success) {
+    return;
+  }
+  std::cerr << "Automatic hotkey setup failed: " << result.message << '\n';
+  show_hotkey_registration_error(state);
 }
 
 static elder_terms::ControlReply handle_control_request(
@@ -2971,6 +2986,7 @@ static void on_application_startup(GApplication *,
       build_registered_hotkey_actions(
           state, global_settings.store, &hotkey_warnings);
   print_warnings(hotkey_warnings);
+  state->active_hotkey_actions = hotkey_actions;
   state->hotkey_backend = elder_terms::create_hotkey_backend(
       {
           .application = state->application,
@@ -2997,7 +3013,9 @@ static void on_application_startup(GApplication *,
                 (void)dispatch_launcher_action(state, std::nullopt, context);
               },
           .registration_failed = [state]() {
-            show_hotkey_registration_error(state);
+            if (state->hotkey_backend != nullptr) {
+              handle_hotkey_registration_failure(state);
+            }
           },
           .detection_completed = [state](elder_terms::HotkeyBackendKind kind) {
             state->detected_hotkey_backend = kind;
@@ -3005,7 +3023,10 @@ static void on_application_startup(GApplication *,
           },
       },
       hotkey_actions);
-  state->active_hotkey_actions = hotkey_actions;
+  // X11 may report a failure before create_hotkey_backend returns.
+  if (elder_terms::hotkey_registration_status(state->hotkey_backend).failed) {
+    handle_hotkey_registration_failure(state);
+  }
   if (state->startup_mode == elder_terms::StartupMode::window ||
       state->startup_mode == elder_terms::StartupMode::background) {
     return;

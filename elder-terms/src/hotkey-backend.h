@@ -18,7 +18,7 @@ namespace elder_terms {
  * Identifies the runtime transport used to register global hotkeys.
  */
 enum class HotkeyBackendKind {
-  /** No automatic global hotkey registration is available. */
+  /** No X11 or portal registration transport is selected. */
   none,
   /** X11 passive key grab. */
   x11,

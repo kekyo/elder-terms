@@ -248,7 +248,7 @@ it('starts the launcher when setup is run in an active X11 session', async () =>
   }
 });
 
-it('configures the detected Sway session and reloads it without OS labels', async (context) => {
+it('automatically configures the detected Sway session without OS labels', async (context) => {
   const directory = await mkdtemp(join(tmpdir(), 'elder-control-sway-'));
   const launcherBinary = fileURLToPath(
     new URL('../../.build/elder-terms/elder-terms', import.meta.url)
@@ -289,6 +289,20 @@ it('configures the detected Sway session and reloads it without OS labels', asyn
             ).isSocket()
           ).toBe(true)
         );
+        await waitForResult(
+          async () => {
+            expect(
+              await readFile(join(configHome, 'sway/config'), 'utf8')
+            ).toContain('bindsym Ctrl+Shift+y');
+            expect(await readFile(capture, 'utf8')).toBe(
+              '-t get_version\nreload\n-t get_config\n'
+            );
+          },
+          { timeoutMs: 45_000 }
+        );
+        expect(
+          await app.findById('hotkey_registration_error_dialog')
+        ).toBeUndefined();
         const first = await execute(ctl, ['setup'], { env });
         const second = await execute(ctl, ['setup'], { env });
         expect(first.stdout).toContain('Sway hotkeys configured and reloaded');
@@ -299,7 +313,7 @@ it('configures the detected Sway session and reloads it without OS labels', asyn
         );
         expect(configuration.match(/bindsym Ctrl\+Shift\+y/g)).toHaveLength(1);
         expect(await readFile(capture, 'utf8')).toBe(
-          '-t get_version\nreload\n-t get_config\n-t get_version\nreload\n-t get_config\n'
+          '-t get_version\nreload\n-t get_config\n-t get_version\nreload\n-t get_config\n-t get_version\nreload\n-t get_config\n'
         );
       },
       {
@@ -315,9 +329,9 @@ it('configures the detected Sway session and reloads it without OS labels', asyn
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
-}, 60_000);
+}, 90_000);
 
-it('configures a labwc session while retaining existing user shortcuts', async (context) => {
+it('automatically configures labwc while retaining existing user shortcuts', async (context) => {
   const directory = await mkdtemp(join(tmpdir(), 'elder-control-labwc-'));
   const launcherBinary = fileURLToPath(
     new URL('../../.build/elder-terms/elder-terms', import.meta.url)
@@ -364,6 +378,18 @@ it('configures a labwc session while retaining existing user shortcuts', async (
             ).isSocket()
           ).toBe(true)
         );
+        await waitForResult(
+          async () => {
+            expect(
+              await readFile(join(configHome, 'labwc/rc.xml'), 'utf8')
+            ).toContain('key="C-S-y"');
+            expect(await readFile(capture, 'utf8')).toBe('--reconfigure\n');
+          },
+          { timeoutMs: 45_000 }
+        );
+        expect(
+          await app.findById('hotkey_registration_error_dialog')
+        ).toBeUndefined();
         expect((await execute(ctl, ['setup'], { env })).stdout).toContain(
           'labwc hotkeys configured and reloaded'
         );
@@ -377,7 +403,7 @@ it('configures a labwc session while retaining existing user shortcuts', async (
         expect(configuration.match(/key="W-Return"/g)).toHaveLength(1);
         expect(configuration.match(/key="C-S-y"/g)).toHaveLength(1);
         expect(await readFile(capture, 'utf8')).toBe(
-          '--reconfigure\n--reconfigure\n'
+          '--reconfigure\n--reconfigure\n--reconfigure\n'
         );
       },
       {
@@ -393,7 +419,7 @@ it('configures a labwc session while retaining existing user shortcuts', async (
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
-}, 60_000);
+}, 90_000);
 
 it('accepts requests when the launcher itself cannot connect to D-Bus and recovers after termination', async () => {
   const runtime = await mkdtemp(join(tmpdir(), 'elder-control-nobus-'));
