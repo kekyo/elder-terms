@@ -657,7 +657,10 @@ In these environments, you may need to enable custom hotkeys (below).
 
 ### Manually Enabling Hotkeys
 
-Use `etctl setup` to check registration or synchronize compositor configuration after changing hotkeys while the launcher is running.
+Saving application or connection hotkeys immediately updates the running launcher's registration when the desktop accepts the new bindings.
+The Global Shortcuts portal may ask you to approve the changed bindings.
+On Sway and labwc, the launcher also synchronizes its compositor bindings and requests a reload when direct registration is unavailable.
+Use `etctl setup` to check registration or retry compositor synchronization after a failure.
 
 The command checks the running launcher's X11 or Global Shortcuts portal registration result. If it starts the launcher,
 the portal may display an approval screen. When registration fails in a Sway or labwc Wayland session,
@@ -670,7 +673,7 @@ etctl setup
 ```
 
 The command starts the launcher if needed.
-Run it after changing saved-connection shortcuts to synchronize desktop configuration without restarting the launcher.
+Manually configured desktop shortcuts are managed in your desktop settings and are not changed by saving elder-terms settings.
 
 Automatic setup and repeated command runs replace only the bindings managed by elder-terms. When there is no user compositor configuration,
 they preserve the system configuration they find.

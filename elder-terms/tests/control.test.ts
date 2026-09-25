@@ -14,15 +14,35 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { createGtkAppLauncher } from 'gestament';
+import {
+  createGtkAppLauncher,
+  type GtkApp,
+  type GtkEntryElement,
+} from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
-import { runLauncherGtkTest } from './test-helpers';
+import { expectElementKind, runLauncherGtkTest } from './test-helpers';
 
 const execute = promisify(execFile);
 const ctl = fileURLToPath(
   new URL('../../.build/elder-terms/etctl', import.meta.url)
 );
+
+const clickShortcutEntry = async (
+  app: GtkApp,
+  entry: GtkEntryElement,
+  clearIcon: boolean
+): Promise<void> => {
+  const { bounds } = await entry.capture();
+  await app.input.moveMouseTo(
+    Math.trunc(
+      clearIcon ? bounds.x + bounds.width - 14 : bounds.x + bounds.width / 2
+    ),
+    Math.trunc(bounds.y + bounds.height / 2)
+  );
+  await app.input.setMouseButton('left', true);
+  await app.input.setMouseButton('left', false);
+};
 
 it('controls the resident launcher and saved connections without D-Bus or a display in the client', async (context) => {
   const runtime = await mkdtemp(join(tmpdir(), 'elder-control-'));
@@ -315,6 +335,32 @@ it('automatically configures the detected Sway session without OS labels', async
         expect(await readFile(capture, 'utf8')).toBe(
           '-t get_version\nreload\n-t get_config\n-t get_version\nreload\n-t get_config\n-t get_version\nreload\n-t get_config\n'
         );
+
+        const profile = join(configHome, 'elder-terms/connections/Alpha.ini');
+        await writeFile(profile, '[general]\nopen_connection=ctrl+alt+t\n');
+        await waitForResult(async () => {
+          const updated = await readFile(
+            join(configHome, 'sway/config'),
+            'utf8'
+          );
+          expect(updated).toContain('bindsym Ctrl+Mod1+t');
+          expect(updated).toContain("'open-connection' 'Alpha'");
+          expect(
+            (await readFile(capture, 'utf8')).match(/reload\n/g)
+          ).toHaveLength(4);
+        });
+        await writeFile(profile, '[general]\nopen_connection=ctrl+alt+y\n');
+        await waitForResult(async () => {
+          const updated = await readFile(
+            join(configHome, 'sway/config'),
+            'utf8'
+          );
+          expect(updated).toContain('bindsym Ctrl+Mod1+y');
+          expect(updated).not.toContain('bindsym Ctrl+Mod1+t');
+          expect(
+            (await readFile(capture, 'utf8')).match(/reload\n/g)
+          ).toHaveLength(5);
+        });
       },
       {
         appPath: wrapper,
@@ -405,6 +451,80 @@ it('automatically configures labwc while retaining existing user shortcuts', asy
         expect(await readFile(capture, 'utf8')).toBe(
           '--reconfigure\n--reconfigure\n--reconfigure\n'
         );
+
+        await execute(ctl, ['open-application'], { env });
+        await waitForResult(async () => {
+          expect(await app.getWindowCount()).toBe(1);
+        });
+        await expectElementKind(
+          await app.getById('application_menu_button'),
+          'toggleButton'
+        ).click();
+        await expectElementKind(
+          await app.getById('application_settings_menu_item'),
+          'menuItem'
+        ).click();
+        const shortcut = expectElementKind(
+          await app.getById('application_settings_open_application_entry'),
+          'entry'
+        );
+        await clickShortcutEntry(app, shortcut, false);
+        await app.input.setModifier('control', true);
+        await app.input.setModifier('alt', true);
+        await app.input.pressKey('t');
+        await app.input.setModifier('alt', false);
+        await app.input.setModifier('control', false);
+        await waitForResult(async () => {
+          expect(await shortcut.text()).toBe('ctrl+alt+t');
+        });
+        await expectElementKind(
+          await app.getById('application_dialog_save_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(await app.getWindowCount()).toBe(1);
+          const updated = await readFile(
+            join(configHome, 'labwc/rc.xml'),
+            'utf8'
+          );
+          expect(updated).toContain('key="C-A-t"');
+          expect(updated).not.toContain('key="C-S-y"');
+          expect(await readFile(capture, 'utf8')).toBe(
+            '--reconfigure\n--reconfigure\n--reconfigure\n--reconfigure\n'
+          );
+        });
+
+        await expectElementKind(
+          await app.getById('application_menu_button'),
+          'toggleButton'
+        ).click();
+        await expectElementKind(
+          await app.getById('application_settings_menu_item'),
+          'menuItem'
+        ).click();
+        const disabledShortcut = expectElementKind(
+          await app.getById('application_settings_open_application_entry'),
+          'entry'
+        );
+        await clickShortcutEntry(app, disabledShortcut, false);
+        await clickShortcutEntry(app, disabledShortcut, true);
+        await expectElementKind(
+          await app.getById('application_dialog_save_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(await app.getWindowCount()).toBe(1);
+          const updated = await readFile(
+            join(configHome, 'labwc/rc.xml'),
+            'utf8'
+          );
+          expect(updated).toContain('key="W-Return"');
+          expect(updated).not.toContain('elder-terms setup');
+          expect(updated).not.toContain('key="C-A-t"');
+          expect(await readFile(capture, 'utf8')).toBe(
+            '--reconfigure\n--reconfigure\n--reconfigure\n--reconfigure\n--reconfigure\n'
+          );
+        });
       },
       {
         appPath: wrapper,

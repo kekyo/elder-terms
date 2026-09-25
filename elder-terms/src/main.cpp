@@ -109,6 +109,7 @@ struct ApplicationState {
   elder_terms::HotkeyBackendState *hotkey_backend = nullptr;
   std::optional<elder_terms::HotkeyBackendKind> detected_hotkey_backend;
   std::vector<elder_terms::HotkeyAction> active_hotkey_actions;
+  bool hotkey_warning_shown = false;
   elder_terms::ControlServerState *control_server = nullptr;
   elder_terms::TrayBackendState *tray_backend = nullptr;
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
@@ -196,6 +197,8 @@ static void replace_registered_hotkeys(
     ApplicationState *state,
     const elder_terms::SettingsStore &global_store);
 static void reload_hotkey_actions(ApplicationState *state);
+static elder_terms::ControlReply setup_hotkeys(ApplicationState *state);
+static elder_terms::ExternalHotkeySetupResult clear_external_hotkeys();
 static void present_main_window(
     ApplicationState *state,
     std::optional<std::uint32_t> activation_time = std::nullopt,
@@ -1078,9 +1081,39 @@ static void replace_registered_hotkeys(
   const std::vector<elder_terms::HotkeyAction> actions =
       build_registered_hotkey_actions(state, global_store, &warnings);
   print_warnings(warnings);
+  // File monitors can report more than one event for a save. Re-registering
+  // identical actions would reopen portal consent or reload a compositor.
+  const bool changed =
+      state->active_hotkey_actions.size() != actions.size() ||
+      !std::equal(
+          actions.begin(), actions.end(),
+          state->active_hotkey_actions.begin(),
+          [](const elder_terms::HotkeyAction &left,
+             const elder_terms::HotkeyAction &right) {
+            return left.id == right.id &&
+                   left.description == right.description &&
+                   elder_terms::key_bindings_equal(
+                       left.binding, right.binding);
+          });
   state->active_hotkey_actions = actions;
-  if (state->hotkey_backend != nullptr) {
+  if (changed && state->hotkey_backend != nullptr) {
+    // A previous portal rejection may have installed compositor bindings.
+    // Clear those before the new portal request can succeed.
+    if (!actions.empty() &&
+        elder_terms::hotkey_backend_kind(state->hotkey_backend) ==
+            elder_terms::HotkeyBackendKind::portal) {
+      const auto result = clear_external_hotkeys();
+      if (!result.success) {
+        show_error(state, _("Hotkeys are unavailable"), {result.message});
+      }
+    }
     elder_terms::replace_hotkey_actions(state->hotkey_backend, actions);
+    if (actions.empty()) {
+      const elder_terms::ControlReply result = setup_hotkeys(state);
+      if (!result.success && !result.pending) {
+        show_error(state, _("Hotkeys are unavailable"), {result.message});
+      }
+    }
   }
 }
 
@@ -2851,17 +2884,30 @@ current_hotkey_setup_environment() {
   };
 }
 
+static elder_terms::ExternalHotkeySetupResult clear_external_hotkeys() {
+  const auto environment = current_hotkey_setup_environment();
+  if (!environment.wayland) {
+    return {true, "No Wayland hotkeys to remove"};
+  }
+  return elder_terms::unsetup_external_hotkeys(
+      environment, run_hotkey_setup_command);
+}
+
 static elder_terms::ControlReply setup_hotkeys(ApplicationState *state) {
   if (state->hotkey_backend == nullptr) {
     return {false, true, "Hotkey backend is starting"};
   }
   const auto status = elder_terms::hotkey_registration_status(
       state->hotkey_backend);
+  if (status.configured == 0) {
+    const auto result = clear_external_hotkeys();
+    if (!result.success) {
+      return {false, false, result.message};
+    }
+    return {true, false, "No hotkeys are configured"};
+  }
   if (status.pending) {
     return {false, true, "Hotkey registration is still in progress"};
-  }
-  if (status.configured == 0) {
-    return {true, false, "No hotkeys are configured"};
   }
   if (!status.failed && status.registered == status.configured) {
     return {true, false,
@@ -2910,7 +2956,10 @@ static void handle_hotkey_registration_failure(ApplicationState *state) {
     return;
   }
   std::cerr << "Automatic hotkey setup failed: " << result.message << '\n';
-  show_hotkey_registration_error(state);
+  if (!state->hotkey_warning_shown) {
+    state->hotkey_warning_shown = true;
+    show_hotkey_registration_error(state);
+  }
 }
 
 static elder_terms::ControlReply handle_control_request(

@@ -79,7 +79,7 @@ using HotkeyActivationCallback =
     std::function<void(const std::string &,
                        const HotkeyActivationContext &)>;
 
-/** Callback invoked once when a configured hotkey cannot be registered. */
+/** Callback invoked once per action set when registration fails. */
 using HotkeyRegistrationFailureCallback = std::function<void()>;
 
 /**
@@ -92,7 +92,7 @@ struct HotkeyBackendOptions {
   cardio::dispatcher *dispatcher;
   /** Receives global hotkey activation events. */
   HotkeyActivationCallback activated;
-  /** Receives the first registration failure while actions are configured. */
+  /** Receives the first registration failure for each configured action set. */
   HotkeyRegistrationFailureCallback registration_failed;
   /** Receives the detected transport once initialization completes, including
    * none when unavailable. May run before create_hotkey_backend returns. */

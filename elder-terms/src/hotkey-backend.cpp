@@ -1025,6 +1025,7 @@ void replace_hotkey_actions(
   ++implementation->generation;
   implementation->actions = actions;
   implementation->registration_failed_current = false;
+  implementation->registration_failure_reported = false;
   implementation->portal_registered_actions = 0;
   if (implementation->initialization_pending) {
     return;
