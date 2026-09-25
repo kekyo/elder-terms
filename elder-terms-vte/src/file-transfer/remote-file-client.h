@@ -12,6 +12,20 @@
 
 namespace elder_terms {
 
+/** Remote operation failure, including whether the service connection ended. */
+struct RemoteFileError : std::runtime_error {
+  /** True only for transport failures that make the service unavailable. */
+  bool connection_lost;
+
+  /**
+   * Creates a remote operation failure.
+   * @param message Description of the failed operation.
+   * @param connection_lost Whether the connection is no longer available.
+   */
+  RemoteFileError(const std::string &message, bool connection_lost)
+      : std::runtime_error(message), connection_lost(connection_lost) {}
+};
+
 /** Kind of an item exposed by a remote file service. */
 enum class RemoteFileType {
   regular,

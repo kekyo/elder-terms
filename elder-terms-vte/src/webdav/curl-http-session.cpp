@@ -49,7 +49,7 @@ static bool has_only_unsupported_authentication(const CurlHttpResult &result) {
   return found;
 }
 
-std::runtime_error webdav_http_error(const CurlHttpResult &result) {
+RemoteFileError webdav_http_error(const CurlHttpResult &result) {
   const char *reason = curl_easy_strerror(result.code);
   if (result.code == CURLE_OK) {
     switch (result.status) {
@@ -68,8 +68,10 @@ std::runtime_error webdav_http_error(const CurlHttpResult &result) {
     default: reason = "Unexpected server response"; break;
     }
   }
-  return std::runtime_error("WebDAV request failed (HTTP " + std::to_string(result.status) +
-      ", curl " + std::to_string(result.code) + "): " + reason);
+  return RemoteFileError("WebDAV request failed (HTTP " + std::to_string(result.status) +
+      ", curl " + std::to_string(result.code) + "): " + reason,
+      result.code == CURLE_COULDNT_CONNECT || result.code == CURLE_SEND_ERROR ||
+      result.code == CURLE_RECV_ERROR || result.code == CURLE_GOT_NOTHING);
 }
 
 

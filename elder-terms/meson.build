@@ -3,6 +3,7 @@ elder_terms_launcher_gtk_dep = dependency('gtk+-3.0')
 elder_terms_launcher_gio_dep = dependency('gio-2.0')
 elder_terms_launcher_gdk_pixbuf_dep = dependency('gdk-pixbuf-2.0')
 elder_terms_launcher_x11_dep = dependency('x11')
+elder_terms_launcher_xml_dep = dependency('libxml-2.0')
 elder_terms_launcher_gestament_config = find_program('gestament-config')
 elder_terms_launcher_gestament_include_dir = run_command(
   elder_terms_launcher_gestament_config,
@@ -29,7 +30,10 @@ elder_terms_launcher = executable(
   'elder-terms',
   [
     'src/connection-repository.cpp',
+    'src/control-server.cpp',
+    'src/control-socket.cpp',
     'src/hotkey-backend.cpp',
+    'src/hotkey-setup.cpp',
     'src/main-window.cpp',
     'src/main.cpp',
     'src/tray-backend.cpp',
@@ -45,6 +49,7 @@ elder_terms_launcher = executable(
     elder_terms_launcher_gio_dep,
     elder_terms_launcher_gtk_dep,
     elder_terms_launcher_x11_dep,
+    elder_terms_launcher_xml_dep,
   ],
   install: true,
   install_dir: elder_terms_private_install_dir / 'launcher',
@@ -117,6 +122,22 @@ test(
   'hotkey-backend-test',
   elder_terms_hotkey_backend_test,
 )
+
+elder_terms_hotkey_setup_test = executable(
+  'hotkey-setup-test',
+  [
+    'src/hotkey-setup.cpp',
+    'tests/hotkey-setup-test.cpp',
+  ],
+  include_directories: elder_terms_launcher_include_dir,
+  dependencies: [
+    elder_terms_dep,
+    elder_terms_launcher_gtk_dep,
+    elder_terms_launcher_xml_dep,
+  ],
+)
+
+test('hotkey-setup-test', elder_terms_hotkey_setup_test)
 endif
 
 configure_file(
@@ -152,3 +173,10 @@ foreach icon_size : ['16', '22', '24', '32', '48', '64', '128', '256']
     install_dir: get_option('datadir') / 'icons/hicolor' / (icon_size + 'x' + icon_size) / 'apps',
   )
 endforeach
+
+executable(
+  'etctl',
+  ['src/control-client.cpp', 'src/control-socket.cpp'],
+  install: true,
+  install_dir: get_option('bindir'),
+)

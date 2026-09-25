@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
   chmod,
   mkdir,
@@ -19,6 +21,8 @@ import type {
 import { waitForResult } from 'gestament/testing';
 import { describe, expect, it } from 'vitest';
 import { expectElementKind, runLauncherGtkTest } from './test-helpers';
+
+const execute = promisify(execFile);
 
 const ctrlAltT = {
   key: 't',
@@ -273,6 +277,10 @@ describe('elder-terms application hotkey lifecycle', () => {
         context,
         async (connections) => {
           await writeGlobalSettings(connections, 'ctrl+alt+t');
+          await writeFile(
+            join(connections, "Alice's $(printf unsafe).ini"),
+            '[general]\ntype=local\nopen_connection=ctrl+shift+y\n'
+          );
         },
         async ({ app }) => {
           await waitForWindowCount(app, 1);
@@ -288,16 +296,37 @@ describe('elder-terms application hotkey lifecycle', () => {
           );
           const summary =
             language === 'ja'
-              ? 'グローバルショートカットを利用できません'
-              : 'Global shortcuts are unavailable';
+              ? 'ホットキーを利用できません'
+              : 'Hotkeys are unavailable';
           const explanation =
             language === 'ja'
-              ? '設定されたグローバルショートカットの一部またはすべてを登録できなかったため、動作しません。デスクトップ環境がグローバルショートカットに対応しているか確認してください。'
-              : 'One or more configured global shortcuts could not be registered and will not work. Check whether your desktop environment supports global shortcuts.';
-          for (const text of [summary, explanation]) {
+              ? '設定されたホットキーの一部またはすべてを登録できなかったため、動作しません。デスクトップ環境がホットキーに対応しているか確認してください。'
+              : 'One or more configured hotkeys could not be registered and will not work. Check whether your desktop environment supports hotkeys.';
+          const guidance =
+            language === 'ja'
+              ? 'デスクトップのショートカットに次のコマンドを登録してください:'
+              : 'Configure desktop shortcuts to run these commands:';
+          for (const text of [summary, explanation, guidance]) {
             expect(
               await findDescendantByName(dialog, 'label', text)
             ).toBeDefined();
+          }
+          const commands = expectElementKind(
+            await app.getById('hotkey_external_commands'),
+            'label'
+          );
+          const commandLines = (await commands.info()).name.split('\n');
+          expect(commandLines).toHaveLength(2);
+          for (const [index, command] of commandLines.entries()) {
+            const result = await execute('/bin/sh', [
+              '-c',
+              'set -- ' + command + '; printf "%s\\n" "$@"',
+            ]);
+            expect(result.stdout.trimEnd().split('\n')).toEqual(
+              index === 0
+                ? ['etctl', 'open-application']
+                : ['etctl', 'open-connection', "Alice's $(printf unsafe)"]
+            );
           }
           const captures = fileURLToPath(
             new URL(
@@ -324,6 +353,89 @@ describe('elder-terms application hotkey lifecycle', () => {
         }
       );
     });
+  }
+
+  for (const language of ['en', 'ja'] as const) {
+    for (const transport of ['x11', 'unavailable'] as const) {
+      it(`shows the detected hotkey transport in About: ${language}/${transport}`, async (context) => {
+        const directory = await mkdtemp(join(tmpdir(), 'elder-about-'));
+        const wrapper = join(directory, 'launcher');
+        const executable = fileURLToPath(
+          new URL('../../.build/elder-terms/elder-terms', import.meta.url)
+        );
+        // Keep the test infrastructure on X11, but let the application detect
+        // a Wayland session without a GlobalShortcuts portal when requested.
+        await writeFile(
+          wrapper,
+          '#!/bin/sh\n' +
+            (transport === 'unavailable'
+              ? 'unset GDK_BACKEND\nexport XDG_SESSION_TYPE=wayland\n'
+              : '') +
+            "exec '" +
+            executable.replace(/'/g, "'\\''") +
+            '\' "$@"\n'
+        );
+        await chmod(wrapper, 0o700);
+        try {
+          await runLauncherGtkTest(
+            context,
+            async (connections) => {
+              await writeGlobalSettings(connections, '');
+            },
+            async ({ app }) => {
+              // The dialog must exist before testing the new status control.
+              await app.getById('application_about_version_label');
+              const status = await app.findById(
+                'application_about_hotkey_status'
+              );
+              expect(status).toBeDefined();
+              const label = expectElementKind(status!, 'label');
+              const expected =
+                language === 'ja'
+                  ? (transport === 'x11'
+                      ? 'ホットキーの検出方式: X11'
+                      : 'ホットキーの検出方式: 利用不可') + '\netctl: 利用可能'
+                  : (transport === 'x11'
+                      ? 'Hotkey detection: X11'
+                      : 'Hotkey detection: Unavailable') + '\netctl: Available';
+              // Portal discovery can wait for D-Bus service activation before
+              // its default call timeout expires. Observe completion instead
+              // of treating the wait helper's shorter default as a failure.
+              await waitForResult(
+                async () => {
+                  expect(await label.text()).toBe(expected);
+                },
+                { timeoutMs: 45_000 }
+              );
+              const captures = fileURLToPath(
+                new URL(
+                  '../../test-results/launcher/hotkey-status/',
+                  import.meta.url
+                )
+              );
+              await mkdir(captures, { recursive: true });
+              const dialog = expectElementKind(
+                await app.getById('application_dialog'),
+                'window'
+              );
+              await writeFile(
+                join(captures, `${language}-${transport}.png`),
+                (await dialog.capture()).image
+              );
+            },
+            {
+              appPath: wrapper,
+              args: ['--about'],
+              env: {
+                ...(language === 'ja' ? japaneseTestEnvironment : {}),
+              },
+            }
+          );
+        } finally {
+          await rm(directory, { recursive: true, force: true });
+        }
+      }, 60_000);
+    }
   }
 
   it('does not show a registration error when every hotkey is disabled', async (context) => {

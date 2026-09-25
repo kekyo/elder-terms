@@ -227,7 +227,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
         await symlink(helper.slavePath, serialDevicePath);
         await writeFile(
           configPath,
-          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\nsend_break_key=F12\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=ignore\n`,
+          `[general]\nauto_close=false\ntype=serial\n\n[terminal]\nsend_break_key=F12\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=ignore\n`,
           'utf8'
         );
 
@@ -263,7 +263,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
         await symlink(helper.slavePath, serialDevicePath);
         await writeFile(
           configPath,
-          `[general]\ntype=serial\n\n[terminal]\nauto_close=true\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=ignore\n`,
+          `[general]\nauto_close=true\ntype=serial\n\n[terminal]\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=ignore\n`,
           'utf8'
         );
 
@@ -300,7 +300,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
         await symlink(helper.slavePath, serialDevicePath);
         await writeFile(
           configPath,
-          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+          `[general]\nauto_close=false\ntype=serial\n\n[terminal]\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
           'utf8'
         );
 
@@ -348,7 +348,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
         await symlink(helper.slavePath, serialDevicePath);
         await writeFile(
           configPath,
-          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\nbackspace_code=del\ncursor_key_mode=trs80\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+          `[general]\nauto_close=false\ntype=serial\n\n[terminal]\nbackspace_code=del\ncursor_key_mode=trs80\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
           'utf8'
         );
 
@@ -374,7 +374,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
         await symlink(helper.slavePath, serialDevicePath);
         await writeFile(
           configPath,
-          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+          `[general]\nauto_close=false\ntype=serial\n\n[terminal]\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
           'utf8'
         );
 
@@ -415,7 +415,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
       const serialDevicePath = join(directory, 'ttyELDERTERMS0');
       await writeFile(
         configPath,
-        `[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+        `[general]\nauto_close=false\ntype=serial\n\n[terminal]\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
         'utf8'
       );
 
@@ -469,7 +469,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
         await symlink(helper.slavePath, serialDevicePath);
         await writeFile(
           configPath,
-          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+          `[general]\nauto_close=false\ntype=serial\n\n[terminal]\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
           'utf8'
         );
 
@@ -514,7 +514,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
       try {
         await writeFile(
           configPath,
-          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+          `[general]\nauto_close=false\ntype=serial\n\n[terminal]\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
           'utf8'
         );
 
@@ -549,7 +549,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
       const serialDevicePath = join(directory, 'ttyELDERTERMS0');
       await writeFile(
         configPath,
-        `[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+        `[general]\nauto_close=false\ntype=serial\n\n[terminal]\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
         'utf8'
       );
 
@@ -586,7 +586,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
         await symlink(firstHelper.slavePath, serialDevicePath);
         await writeFile(
           configPath,
-          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+          `[general]\nauto_close=false\ntype=serial\n\n[terminal]\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
           'utf8'
         );
 
@@ -676,7 +676,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
         await symlink(firstHelper.slavePath, firstTarget);
         await writeFile(
           configPath,
-          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\n\n[serial]\ndevice=${firstTarget}\ndevice_match_mode=by-id\ndevice_usb_serial=${usbSerial}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+          `[general]\nauto_close=false\ntype=serial\n\n[terminal]\n\n[serial]\ndevice=${firstTarget}\ndevice_match_mode=by-id\ndevice_usb_serial=${usbSerial}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
           'utf8'
         );
 
@@ -741,7 +741,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
         await writeFile(sourcePath, '日本\x1b[A', 'utf8');
         await writeFile(
           configPath,
-          `[general]\ntype=serial\n\n[terminal]\nauto_close=false\nencoding=SHIFT-JIS\ncursor_key_mode=trs80\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
+          `[general]\nauto_close=false\ntype=serial\n\n[terminal]\nencoding=SHIFT-JIS\ncursor_key_mode=trs80\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
           'utf8'
         );
 

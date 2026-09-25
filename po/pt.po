@@ -1054,17 +1054,17 @@ msgid "Restore defaults"
 msgstr "Restaurar padrões"
 
 #: elder-terms/src/main.cpp:262
-msgid "Global shortcuts are unavailable"
-msgstr "Os atalhos globais não estão disponíveis"
+msgid "Hotkeys are unavailable"
+msgstr "As teclas de atalho não estão disponíveis"
 
 #: elder-terms/src/main.cpp:271
 msgid ""
-"One or more configured global shortcuts could not be registered and will not "
-"work. Check whether your desktop environment supports global shortcuts."
+"One or more configured hotkeys could not be registered and will not work. "
+"Check whether your desktop environment supports hotkeys."
 msgstr ""
-"Um ou mais atalhos globais configurados não puderam ser registrados e não "
+"Uma ou mais teclas de atalho configuradas não puderam ser registradas e não "
 "funcionarão. Verifique se o seu ambiente de área de trabalho oferece suporte "
-"a atalhos globais."
+"a teclas de atalho."
 
 #: elder-terms/src/main.cpp:275 elder-terms-vte/src/main-window.ui:393
 #: elder-terms-vte/src/main-window.cpp:1617

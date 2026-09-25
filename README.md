@@ -69,16 +69,12 @@ elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP
 - Changes the font size with keyboard shortcuts or the mouse wheel.
 - Customizes the window exterior colors and terminal background for each
   connection.
-- Opens a specified connection with a single hotkey (the XDG Global Shortcuts
-  portal is required on Wayland). Start by opening your local terminal with a
-  hotkey. It may only be a matter of time before everything is replaced by
-  elder-terms.
+- Opens a specified connection with a single hotkey.
+- Start by opening your local terminal with a hotkey.
 - Starts the launcher automatically and can keep it running in the system tray.
 - Monitors received text with regular expressions and defines rules that
   automatically send text or run a specified command.
-- Recognizes OSC 8 targets or visible terminal text as links. Hold `Ctrl` and
-  left-click to open HTTP(S) URLs or run a command configured with regular
-  expression captures.
+- Recognizes OSC 8 targets or visible terminal text as links.
 - Records logs to files and organizes them into directories by connection and
   date and time.
 - Supports multilingual display (English, Arabic, Spanish, French, Hindi,
@@ -86,7 +82,7 @@ elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP
 
 ## Environment
 
-- Linux GTK3 / DBus (Ubuntu/Debian preferred)
+- Linux GTK3 (Ubuntu/Debian preferred)
 
 ---
 
@@ -204,18 +200,19 @@ built-in default again.
 
 The TELNET, SSH/SFTP, and FTP settings place an "IP scan" button beside the
 address field.
-Opening it immediately scans the IPv4 ranges of all configured network interfaces for the standard FTP (21), SSH/SFTP (22), and TELNET (23) TCP ports.
+Opening it immediately scans the IPv4 ranges of all configured network interfaces
+for the standard FTP (21), SSH/SFTP (22), and TELNET (23) TCP ports.
 
 For example, a `/24` interface scans every address whose final octet is 0 through 255.
 A range wider than `/24` is limited to its first 256 addresses by treating the additional upper host bits as zero.
 For example, an address on `172.20.0.0/16` scans `172.20.0.0` through `172.20.0.255`.
 
-Discovered hosts appear as the scan proceeds, together with their resolved host
-name when available.
+Discovered hosts appear as the scan proceeds, together with their resolved host name when available.
 The SSH/SFTP (22), TELNET (23), and FTP (21) columns show a check mark when the corresponding port was found.
 The progress bar shows how much of the combined range has been checked.
 
-Double-click a row to stop the scan, close the dialog, and copy the resolved name into the setting if it is already available.
+Double-click a row to stop the scan, close the dialog,
+and copy the resolved name into the setting if it is already available.
 Otherwise, the numeric IP address is used.
 The connection type, port, and entry name are unchanged.
 
@@ -225,10 +222,13 @@ Only locally configured IPv4 ranges are scanned.
 Interfaces without an IPv4 address are skipped.
 Loopback interfaces scan only their assigned addresses, rather than the whole loopback range.
 
-Name lookup uses the system resolver first, then mDNS and LLMNR in parallel, preferring mDNS if both return names. It keeps `.local` and single-label names unchanged.
-Name lookup has a shared three-second deadline per host, including up to one second for the initial system lookup.
+Name lookup uses the system resolver first, then mDNS and LLMNR in parallel,
+preferring mDNS if both return names. It keeps `.local` and single-label names unchanged.
+Name lookup has a shared three-second deadline per host,
+including up to one second for the initial system lookup.
 
-Explicit mDNS/LLMNR lookup requires `systemd-resolved` with those protocols enabled on the relevant network interface.
+Explicit mDNS/LLMNR lookup requires `systemd-resolved`
+with those protocols enabled on the relevant network interface.
 Normal hostname resolution must also reach `systemd-resolved` to connect using the discovered names.
 The application does not change your system's resolver configuration.
 
@@ -237,40 +237,33 @@ See the [systemd resolver API documentation](https://github.com/systemd/systemd/
 
 ## Using SSH and SFTP
 
-When an SSH terminal or a dedicated SFTP window starts, a user-name panel is
-shown before the SSH connection is opened. The initial value is selected in
-this order: the user name in the connection settings, the matching `User`
-value in `~/.ssh/config`, and the current operating-system user name. You can
-change it for this connection without changing the saved settings. An empty
-user name is not accepted.
+When an SSH terminal or a dedicated SFTP window starts,
+a user-name panel is shown before the SSH connection is opened.
+The initial value is selected in this order:
+the user name in the connection settings, the matching `User` value in `~/.ssh/config`,
+and the current operating-system user name.
+You can change it for this connection without changing the saved settings.
+An empty user name is not accepted.
 
-The user name is requested separately because a password is not always
-needed. SSH first tries the configured private key, then credentials available
-through SSH Agent or default identity files. An encrypted configured key opens
-a passphrase panel. The
-password or keyboard-interactive panel is shown only when the server offers
-that method and an earlier method has not completed authentication. All of
-these methods authenticate the user name selected in the first panel.
+SSH first tries the configured private key, then credentials available
+through SSH Agent or default identity files.
+An encrypted configured key opens a passphrase panel.
+The password or keyboard-interactive panel is shown only when the server offers
+that method and an earlier method has not completed authentication.
+All of these methods authenticate the user name selected in the first panel.
 
-An SFTP window opened from an already authenticated SSH terminal reuses that
-terminal's SSH connection, including its selected user name and authentication,
+An SFTP window opened from an already authenticated SSH terminal reuses that terminal's SSH connection,
+including its selected user name and authentication,
 and therefore does not ask for them again.
 
 ## Reconnecting SSH and TELNET
 
-To keep a disconnected terminal open, turn off "Close window when session ends"
-in its Terminal settings (`[terminal] auto_close=false`). The disconnected
-overlay then offers a "Reconnect" button for SSH and TELNET. It becomes
-clickable after the previous connection's pending work has stopped.
+To keep a disconnected terminal open,
+turn off "Close window when session ends" in its General settings (`[general] auto_close=false`).
+The disconnected overlay then offers a "Reconnect" button for SSH and TELNET.
+It becomes clickable after the previous connection's pending work has stopped.
 
-Reconnection uses the latest applied connection settings in the same window
-and preserves scrollback. SSH asks for authentication again through its usual
-panel. If an attempt fails, the overlay shows the new reason and allows another
-attempt. Transfers are not resumed automatically. Closing the window cancels
-an in-progress attempt.
-
-Automatic closing keeps its existing default and behavior. This button is not
-available with automatic closing enabled or for local and serial terminals.
+This button is not available with automatic closing enabled or for local and serial terminals.
 
 ## Using FTP/FTPS
 
@@ -279,15 +272,15 @@ The FTP tab contains the server address, control port, user name, data
 connection mode, and initial local and remote directories. The default control
 port is 21 and the default data connection mode is `Passive (recommended)`.
 
-Every time the FTP window starts, its authentication panel asks for the user
-name and hidden password together. For
-anonymous login, enter `anonymous` explicitly and enter the password expected
-by the server. No anonymous credentials are supplied automatically, and the
-entered password is not stored in the connection settings. After login, FTP
-uses the same two-pane file browser and transfer controls as SFTP.
+Every time the FTP window starts,
+it asks for the user name first and then the password in a separate hidden-input panel.
+For anonymous login, enter `anonymous` explicitly and enter the password expected by the server.
+No anonymous credentials are supplied automatically,
+and the entered password is not stored in the connection settings.
+After login, FTP uses the same two-pane file browser and transfer controls as SFTP.
 
-FTP sends commands, user names, passwords, directory listings, and file data
-without encryption. elder-terms uses [FTP (RFC 959)](https://www.rfc-editor.org/rfc/rfc959) or [FTPS](https://everything.curl.dev/ftp/ftps.html).
+FTP sends commands, user names, passwords, directory listings, and file data without encryption.
+elder-terms uses [FTP (RFC 959)](https://www.rfc-editor.org/rfc/rfc959) or [FTPS](https://everything.curl.dev/ftp/ftps.html).
 
 The corresponding INI settings have the following form:
 
@@ -316,12 +309,13 @@ HTTPS is the default; HTTP is also available.
 The read-only URL preview shows the resulting address. Enter the server name separately from its scheme, path and credentials.
 
 The base path becomes `/` in the file browser.
-You cannot navigate above it. An initial remote directory of `/Documents` starts this example at `/dav/team/Documents`.
+You cannot navigate above it.
+An initial remote directory of `/Documents` starts this example at `/dav/team/Documents`.
 
 The shared SFTP/FTP/FTPS browser supports file and folder uploads and downloads,
-folder creation, renaming, and deletion. Basic/Digest passwords are entered when
-connecting and are not saved. HTTPS certificate failures are either rejected or
-shown in the same confirmation overlay as FTPS, according to the connection settings.
+folder creation, renaming, and deletion.
+HTTPS certificate failures are either rejected or shown in the same confirmation overlay as FTPS,
+according to the connection settings.
 
 See [Using WebDAV](./docs/en/webdav.md) for settings and supported operations.
 
@@ -331,21 +325,20 @@ SFTP/FTP/FTPS and WebDAV use the same two-pane file browser.
 Select an item in either the local or remote pane and right-click it to open the item menu.
 Multiple items can be selected with `Ctrl`+click or a drag rectangle before opening the menu.
 
-- `Rename` is available when exactly one file or directory is selected. Enter
-  the new name in the window overlay. The item stays in its current directory,
-  and an existing item is never overwritten.
-- `Delete` is available for one or more selected files and directories. The
-  confirmation overlay lists the effective deletion roots before anything is
-  removed. A non-empty directory is deleted recursively. If both a directory
-  and one of its descendants are selected, the descendant is covered by that
-  directory and is not listed or processed twice.
-- `Calculate Hash Values` is available when exactly one regular file is
-  selected. For a local file, elder-terms calculates MD5, SHA-1, and SHA-256
-  internally. For a remote file over SFTP, the SSH server must permit command
-  execution and make `md5sum`, `sha1sum`, and `sha256sum` available in the
-  connected account's command search path. Calculation fails if these
-  conditions are not met. Hash calculation for remote files over FTP is not
-  supported; hash calculation in the local pane remains available.
+- `Rename` is available when exactly one file or directory is selected.
+  Enter the new name in the window overlay.
+  The item stays in its current directory, and an existing item is never overwritten.
+- `Delete` is available for one or more selected files and directories.
+  The confirmation overlay lists the effective deletion roots before anything is removed.
+  A non-empty directory is deleted recursively.
+  If both a directory and one of its descendants are selected,
+  the descendant is covered by that directory and is not listed or processed twice.
+- `Calculate Hash Values` is available when exactly one regular file is selected.
+  For a local file, elder-terms calculates MD5, SHA-1, and SHA-256 internally.
+  For a remote file over SFTP, the SSH server must permit command execution and make `md5sum`, `sha1sum`, and `sha256sum` available in the connected account's command search path.
+  Calculation fails if these conditions are not met.
+  Hash calculation for remote files over FTP is not supported;
+  hash calculation in the local pane remains available.
 
 On a Debian or Ubuntu SFTP server, the required commands are provided by the
 [`coreutils` package for Debian](https://packages.debian.org/stable/coreutils)
@@ -361,21 +354,20 @@ sudo apt install coreutils
 Deletion is permanent and does not use the desktop trash.
 In the local pane and over SFTP, deleting a symbolic link removes the link itself without
 following its target.
-Rename and deletion run asynchronously; the browser is temporarily covered by a progress overlay and is refreshed when the operation finishes.
+The browser is temporarily covered by a progress overlay and is refreshed when the operation finishes.
 
 ## Local Startup Process
 
-For a Local connection, "Startup command" on the Local tab selects the process
-that `elder-terms-vte` starts in the terminal. The setting takes effect the next
-time the connection is opened and is read-only in a running terminal.
+For a Local connection, "Startup command" on the Local tab selects the process that `elder-terms-vte` starts in the terminal.
+The setting takes effect the next time the connection is opened and is read-only in a running terminal.
 
-When this field is empty, it inherits the global or built-in default. The
-built-in default starts the user's shell specified by `SHELL`, with no
-additional arguments. If `SHELL` is unset or empty, `/bin/sh` is used.
+When this field is empty, it inherits the global or built-in default.
+The built-in default starts the user's shell specified by `SHELL`, with no additional arguments.
+If `SHELL` is unset or empty, `/bin/sh` is used.
 
 The value is split into an executable and arguments using shell-style quoting,
-but the process is started directly without a shell. Environment-variable
-expansion, globbing, redirection, and pipelines are therefore not performed.
+but the process is started directly without a shell.
+Environment-variable expansion, globbing, redirection, and pipelines are therefore not performed.
 Start a shell explicitly when those features are required, for example:
 
 ```ini
@@ -383,42 +375,39 @@ Start a shell explicitly when those features are required, for example:
 command_line=/bin/sh -lc 'exec tmux new-session -A -s elder-terms'
 ```
 
-The same `[local]` setting can be saved as a global default or overridden for
-an individual connection. Clearing "Startup command" restores inheritance.
+The same `[local]` setting can be saved as a global default or overridden for an individual connection.
+Clearing "Startup command" restores inheritance.
 
 ## Selecting a Serial Device
 
 For a serial connection, "Device identification" lets you choose one of three
 ways to identify the device:
 
-- Stable device identity: Uses a link created under `/dev/serial/by-id`. This
-  tracks the same USB serial device even when it is moved to another USB port,
+- Stable device identity: Uses a link created under `/dev/serial/by-id`.
+  This tracks the same USB serial device even when it is moved to another USB port,
   so you should normally use this built-in default.
-- Physical USB port: Uses a link created under `/dev/serial/by-path`. Use this
-  when you always want to connect to the device plugged into the same physical
+- Physical USB port: Uses a link created under `/dev/serial/by-path`.
+  Use this when you always want to connect to the device plugged into the same physical
   port rather than to a particular USB serial device.
-- Device path: Uses the current device node, such as `/dev/ttyUSB0` or
-  `/dev/ttyACM0`. Its node number may change after the device is unplugged and
-  reconnected.
+- Device path: Uses the current device node,
+  such as `/dev/ttyUSB0` or `/dev/ttyACM0`.
+  Its node number may change after the device is unplugged and reconnected.
 
-"Device" is not a field for directly entering a path. It lists the devices
-currently available under the selected identification method. The list updates
-automatically when devices are plugged in or unplugged. "Stable ID", "USB
-serial number", and "Current device node" are also shown for the selected
-device.
+"Device" is not a field for directly entering a path.
+It lists the devices currently available under the selected identification method.
+The list updates automatically when devices are plugged in or unplugged.
+"Stable ID", "USB serial number", and "Current device node" are also shown for the selected device.
 
-If the device is removed while connected, elder-terms retains the selected
-identity and reconnects when the same target reappears. "Stable device
-identity" also stores the USB serial number as supplementary information. This
-allows elder-terms to reconnect to the same device when it can uniquely
-identify one, even if the `/dev/serial/by-id` link name changes. If multiple
-candidates have the same USB serial number, it waits for a connection instead
-of selecting the wrong device.
+If the device is removed while connected, elder-terms retains the selected identity and reconnects when the same target reappears.
+"Stable device identity" also stores the USB serial number as supplementary information.
+This allows elder-terms to reconnect to the same device when it can uniquely identify one,
+even if the `/dev/serial/by-id` link name changes.
+If multiple candidates have the same USB serial number,
+it waits for a connection instead of selecting the wrong device.
 
-The values are stored in the INI file as follows. `device_match_mode` is one of
-`path`, `by-id`, or `by-path`, and defaults to `by-id` when omitted.
-`device_usb_serial` is supplementary information that is saved when the
-settings screen can obtain it.
+The values are stored in the INI file as follows.
+`device_match_mode` is one of `path`, `by-id`, or `by-path`, and defaults to `by-id` when omitted.
+`device_usb_serial` is supplementary information that is saved when the settings screen can obtain it.
 
 ```ini
 [serial]
@@ -427,22 +416,22 @@ device=/dev/serial/by-id/usb-Example_Serial_Device_1234-if00
 device_usb_serial=1234
 ```
 
-If a legacy INI file without `device_match_mode` stores a `device` such as
-`/dev/ttyUSB0`, that path continues to be used. When selecting the device again
-in the settings screen, choose the identification method above that suits your
-use case.
+If a legacy INI file without `device_match_mode` stores a `device` such as `/dev/ttyUSB0`,
+that path continues to be used.
+When selecting the device again in the settings screen,
+choose the identification method above that suits your use case.
 
 ## Monitoring Serial Connections
 
-"Connection monitoring signal" detects a session disconnection when DCD, CTS,
-or DSR changes from high to low. Select "Ignore (do not monitor)" if your USB
-serial adapter has no usable modem-line signal, or if its driver does not
-support polling modem lines and reports "Invalid argument".
+"Connection monitoring signal" detects a session disconnection when DCD, CTS, or DSR changes from high to low.
+Select "Ignore (do not monitor)" if your USB serial adapter has no usable modem-line signal, 
+or if its driver does not support polling modem lines and reports "Invalid argument".
 
-With "Ignore (do not monitor)", elder-terms does not read modem-line state, and
-that state cannot trigger "Close window when session ends". The serial session
-remains available for sending and receiving. Removing the device itself, or a
-read/write error, is still treated as an actual disconnection as before.
+With "Ignore (do not monitor)", elder-terms does not read modem-line state,
+and that state cannot trigger "Close window when session ends".
+The serial session remains available for sending and receiving.
+Removing the device itself, or a read/write error,
+is still treated as an actual disconnection as before.
 
 The setting is stored in the INI file as follows:
 
@@ -458,23 +447,20 @@ display, and converts entered text to the remote host's character encoding.
 The default for every connection is `UTF-8`.
 
 "Backspace code" selects the control code sent when you press Backspace.
-"Auto" leaves the choice to `libvte`, "BS" sends ASCII BS (`0x08`), and "DEL"
-sends ASCII DEL (`0x7f`). Change this setting if pressing Backspace on the
-remote host does not delete a character or displays something such as `^H`.
+"Auto" leaves the choice to `libvte`, "BS" sends ASCII BS (`0x08`), and "DEL" sends ASCII DEL (`0x7f`).
+Change this setting if pressing Backspace on the remote host does not delete a character or displays something such as `^H`.
 The Delete key uses `libvte`'s automatic binding regardless of this setting.
 
-"Normal" under "Cursor key mode" sends the normal escape sequences generated
-by `libvte` unchanged. "TRS80" converts them to the one-byte control codes used
-by the TRS-80 Model 100/200, IBM PC GW-BASIC/Quick BASIC, NEC PC-9800 series,
-and MSX: up is `0x1e`, down is `0x1f`, right is `0x1c`, and left is `0x1d`.
+"Normal" under "Cursor key mode" sends the normal escape sequences generated by `libvte` unchanged.
+"TRS80" converts them to the one-byte control codes used by the TRS-80 Model 100/200,
+IBM PC GW-BASIC/Quick BASIC, NEC PC-9800 series, and MSX: up is `0x1e`, down is `0x1f`, right is `0x1c`, and left is `0x1d`.
 Use this mode when the remote host expects TRS-80-style cursor keys.
 
-"Enter/Return code" selects the code sent when an unmodified Return key or
-numpad Enter confirms a normal newline. "CR" sends `0x0d`, "LF" sends `0x0a`,
-and "CRLF" sends `0x0d 0x0a`. For keyboard input, "Auto" uses `libvte`'s choice
-unchanged. It does not replace Return/Enter modified by `Shift`, `Ctrl`, `Alt`,
-`Super`, or similar keys, nor dedicated sequences generated in application
-keypad mode.
+"Enter/Return code" selects the code sent when an unmodified Return key or numpad Enter confirms a normal newline.
+"CR" sends `0x0d`, "LF" sends `0x0a`, and "CRLF" sends `0x0d 0x0a`.
+For keyboard input, "Auto" uses `libvte`'s choice unchanged.
+It does not replace Return/Enter modified by `Shift`, `Ctrl`, `Alt`, `Super`,
+or similar keys, nor dedicated sequences generated in application keypad mode.
 
 The built-in defaults for each connection type are as follows:
 
@@ -485,8 +471,7 @@ The built-in defaults for each connection type are as follows:
 | TELNET | UTF-8 | `Auto` | `Normal` | `Auto` |
 | Serial | UTF-8 | `BS` | `TRS80` | `CR` |
 
-When editing the INI file directly, set `return_code` to one of `auto`, `cr`,
-`lf`, or `crlf`.
+When editing the INI file directly, set `return_code` to one of `auto`, `cr`, `lf`, or `crlf`.
 
 ```ini
 [terminal]
@@ -495,24 +480,21 @@ return_code=crlf
 
 ## Newlines When Sending and Pasting Text
 
-"Follow Enter/Return code for text send" applies to sending text files, macro
-output, and all text pasted from the clipboard or primary selection through a
-keyboard shortcut or the context menu. The built-in default is enabled.
+"Follow Enter/Return code for text send" applies to sending text files,
+macro output, and all text pasted from the clipboard or primary selection through a keyboard shortcut or the context menu.
+The built-in default is enabled.
 
-When enabled, CRLF, a lone CR, and a lone LF in the input are first read as a
-single logical newline, and each newline is then sent according to the
-"Enter/Return code" setting. With "Auto", text sending uses CR. When a file is
-read in multiple chunks, this processing also treats a CRLF split across a
-chunk boundary as one newline.
+When enabled, CRLF, a lone CR, and a lone LF in the input are first read as a single logical newline,
+and each newline is then sent according to the "Enter/Return code" setting.
+With "Auto", text sending uses CR. When a file is read in multiple chunks,
+this processing also treats a CRLF split across a chunk boundary as one newline.
 
-When disabled, the original sequence of CR, LF, and CRLF in the input is not
-changed. For a TELNET connection, the CR framing and IAC escaping required by
-TELNET NVT are still applied afterward.
+When disabled, the original sequence of CR, LF, and CRLF in the input is not changed.
+For a TELNET connection, the CR framing and IAC escaping required by TELNET NVT are still applied afterward.
 
-Pasting does not fall back to `libvte` paste handling or Bracketed Paste. It
-uses the same send-rate control, character encoding conversion, and newline
-processing as sending a text file. Specify this setting in the INI file as
-follows:
+Pasting does not fall back to `libvte` paste handling or Bracketed Paste.
+It uses the same send-rate control, character encoding conversion, and newline processing as sending a text file.
+Specify this setting in the INI file as follows:
 
 ```ini
 [transfer]
@@ -521,15 +503,14 @@ text_send_follow_return_code=true
 
 ## Sending BREAK
 
-When a key combination is assigned to "Send BREAK shortcut", one BREAK is sent
-for each physical key press. Automatic repeats caused by holding the key are
-suppressed. Leaving the field blank disables the shortcut. The zoom-in,
-zoom-out, and BREAK shortcuts cannot use the same key combination.
+When a key combination is assigned to "Send BREAK shortcut", one BREAK is sent for each physical key press.
+Automatic repeats caused by holding the key are suppressed.
+Leaving the field blank disables the shortcut.
+The zoom-in, zoom-out, and BREAK shortcuts cannot use the same key combination.
 
-You can perform the same action by right-clicking the terminal and selecting
-"Send BREAK". The menu item is disabled while disconnected, during a transfer,
-and in a local terminal. Progress and the result appear in the status bar, and
-the SD indicator lights while BREAK is sent.
+You can perform the same action by right-clicking the terminal and selecting "Send BREAK".
+The menu item is disabled while disconnected, during a transfer, and in a local terminal.
+Progress and the result appear in the status bar, and the SD indicator lights while BREAK is sent.
 
 Each connection type sends the following:
 
@@ -552,18 +533,16 @@ send_break_key=F12
 Character encodings accept names defined by iconv, but be aware that several
 definitions can have similar yet different names.
 
-For example, in Japanese environments, Shift JIS is commonly used for BBS
-serial communication and has the obvious iconv name `SHIFT_JIS`. In practice,
-however, the extended `CP932` conventionally used by the NEC PC-9800 series is
-usually the better choice.
+For example, in Japanese environments,
+Shift JIS is commonly used for BBS serial communication and has the obvious iconv name `SHIFT_JIS`.
+In practice, however, the extended `CP932` conventionally used by the NEC PC-9800 series is usually the better choice.
 
-If you use a different encoding, receiving extended or altered characters can
-produce garbled text.
+If you use a different encoding, receiving extended or altered characters can produce garbled text.
 
 ## Configuring the Scrollback Buffer
 
-"Scrollback lines" on the "Terminal" tab sets the normal-screen history kept
-by VTE, from 1,000 to 100,000 lines. The built-in default is 10,000 lines.
+"Scrollback lines" on the "Terminal" tab sets the normal-screen history kept by VTE, from 1,000 to 100,000 lines.
+The built-in default is 10,000 lines.
 
 When editing the INI file directly, specify the value as follows:
 
@@ -574,38 +553,28 @@ scrollback_lines=20000
 
 ## Configuring the BEL Sound
 
-"BEL sound" on the "Terminal" tab selects the sound played when the terminal
-receives BEL. The built-in `default` value keeps VTE's existing simple beep.
+"BEL sound" on the "Terminal" tab selects the sound played when the terminal receives BEL.
+The built-in `default` value keeps VTE's existing simple beep.
 
-For a custom sound, enter the absolute path of an existing file or use the
-"Select file" button to choose it. Supported formats are Ogg Vorbis (`.oga`,
-with the legacy `.ogg` extension also accepted) and WAV (PCM).
+For a custom sound, enter the absolute path of an existing file or use the "Select file" button to choose it.
+Supported formats are Ogg Vorbis (`.oga`, with the legacy `.ogg` extension also accepted) and WAV (PCM).
 
 ```ini
 [terminal]
 bell_sound=/home/user/.local/share/sounds/terminal-bell.oga
 ```
 
-Connection settings can inherit the global default. If the global default uses
-a custom sound, set `bell_sound=default` on one connection to restore the
-built-in beep for that connection. If libcanberra cannot start playback,
-elder-terms falls back to the built-in beep until the settings are applied
-again.
-
 ## Configuring Indicator Color
 
-On the "Terminal" tab, set "Active indicator color" and "Inactive indicator
-color" independently. Each applies to CONN, LOG, SD, RD, and all serial line
-indicators. Applying colors preserves their current states, blinking, and
-latched activity. The lamps retain their shading and highlights; choose
-different colors if you want to distinguish active from inactive lamps.
+On the "Terminal" tab, set "Active indicator color" and "Inactive indicator color" independently.
+Each applies to CONN, LOG, SD, RD, and all serial line indicators.
+Applying colors preserves their current states, blinking, and latched activity.
+The lamps retain their shading and highlights; choose different colors if you want to distinguish active from inactive lamps.
 
-Connection defaults can provide a shared color, and each connection can override
-it. "Default color" restores green for active lamps and gray for inactive lamps,
-independently of the other color. Configuring only the active color leaves the
-inactive color gray unless a global inactive color is inherited. Choose the
-inherited option to follow connection defaults. Save to keep both colors after
-restarting.
+Connection defaults can provide a shared color, and each connection can override it.
+"Default color" restores green for active lamps and gray for inactive lamps, independently of the other color.
+Configuring only the active color leaves the inactive color gray unless a global inactive color is inherited.
+Choose the inherited option to follow connection defaults. Save to keep both colors after restarting.
 
 ```ini
 [terminal]
@@ -613,8 +582,8 @@ indicator_color=#3584E4
 indicator_off_color=#808080
 ```
 
-The value must be `default` or an RGB color in `#RRGGBB` form. Invalid values
-produce a warning and use the next valid inherited or built-in value.
+The value must be `default` or an RGB color in `#RRGGBB` form.
+Invalid values produce a warning and use the next valid inherited or built-in value.
 
 ## Configuring Font Families
 
@@ -622,22 +591,22 @@ Scroll down on the "Terminal" tab to edit an ordered list of font families.
 Add or remove rows, and use the up/down buttons to change their priority.
 Each row accepts a family name or opens a font chooser.
 
-The first family has the highest priority. Later families supply characters
-missing from earlier ones, such as Japanese characters missing from a Latin
-font. Uninstalled family names may be saved and are skipped during fallback.
+The first family has the highest priority.
+Later families supply characters missing from earlier ones, such as Japanese characters missing from a Latin
+font.
+Uninstalled family names may be saved and are skipped during fallback.
 
-The drop-down applies to the whole list. "Inherited from: global settings" or
-"Inherited from: app defaults" follows the inherited settings, including later
-global changes. "Use app defaults" fixes this connection to `Noto Sans Mono`,
-then `Monospace`, regardless of global settings. "Specify for this connection"
-sets its own list. The global editor offers "App defaults" and "Specify fonts".
+The drop-down applies to the whole list.
+"Inherited from: global settings" or "Inherited from: app defaults" follows the inherited settings,
+including later global changes.
+"Use app defaults" fixes this connection to `Noto Sans Mono`, then `Monospace`, regardless of global settings.
+"Specify for this connection" sets its own list.
+The global editor offers "App defaults" and "Specify fonts".
 Connection overrides replace the global list rather than extending it.
-Apply changes the current settings, Save persists them, and Cancel discards
-changes made since the last apply.
+Apply changes the current settings, Save persists them, and Cancel discards changes made since the last apply.
 
-These settings save only the font families; they do not include font size,
-weight, or style. Font size continues to follow "Zoom factor", `Ctrl`+`=`,
-`Ctrl`+`-`, or the mouse wheel while holding `Ctrl`.
+These settings save only the font families; they do not include font size, weight, or style.
+Font size continues to follow "Zoom factor", `Ctrl`+`=`, `Ctrl`+`-`, or the mouse wheel while holding `Ctrl`.
 
 When editing the INI file directly, specify the values as follows:
 
@@ -646,59 +615,148 @@ When editing the INI file directly, specify the values as follows:
 font_families=DejaVu Sans Mono;Noto Sans Mono CJK JP;Monospace;
 ```
 
-Omit the key to inherit, or use `font_families=` to explicitly restore the
-built-in list. Names are trimmed and must be non-empty and unique, with no
-commas or control characters. Semicolons and backslashes inside a name use
-the [GLib KeyFile escaping rules](https://docs.gtk.org/glib/struct.KeyFile.html)
-(`\;` and `\\`). Invalid lists produce a warning and use the next valid
-inherited or built-in value.
+Omit the key to inherit, or use `font_families=` to explicitly restore the built-in list.
+Names are trimmed and must be non-empty and unique, with no commas or control characters.
+Semicolons and backslashes inside a name use the [GLib KeyFile escaping rules](https://docs.gtk.org/glib/struct.KeyFile.html)
+(`\;` and `\\`). Invalid lists produce a warning and use the next valid inherited or built-in value.
 
 ## Configuring Hotkeys
 
-Hotkeys work only while the elder-terms launcher is running. In environments
-with a system tray, you can keep the launcher in the tray by opening the
-launcher's application menu, selecting "Application settings", and setting
-"Startup mode" to "System tray only" or "System tray and main window".
+Hotkeys work only while the elder-terms launcher is running.
+In environments with a system tray, you can keep the launcher in the tray by opening the launcher's application menu,
+selecting "Application settings", and setting "Startup mode" to "System tray only" or "System tray and main window".
 
 ![System tray](./images/system-tray.png)
 
-The deb package and Meson installation install an XDG autostart entry that
-starts elder-terms when you log in to the desktop. Whether autostart shows the
-launcher and keeps it in the system tray follows "Startup mode" under
-"Application settings", so hotkeys are available immediately after login.
+The deb package and Meson installation install an XDG autostart entry that starts elder-terms when you log in to the desktop.
+Whether autostart shows the launcher and keeps it in the system tray follows "Startup mode" under "Application settings",
+so hotkeys are available immediately after login.
 
-To disable autostart, use your desktop environment's startup-application
-settings. You can also override the system-wide autostart entry by placing a
-file with the same name, `net.kekyo.elder-terms.desktop`, in your
-`~/.config/autostart` directory and setting `Hidden=true`. Simply building the
-source tree does not install the autostart entry.
+To disable autostart, use your desktop environment's startup-application settings.
+
+> You can also override the system-wide autostart entry by placing a file with the same name,
+> `net.kekyo.elder-terms.desktop`, in your `~/.config/autostart` directory and setting `Hidden=true`.
 
 Assigning a key combination to "Open connection shortcut" for a connection
 lets you open it directly with that hotkey even while the launcher is hidden.
-"Open application shortcut" under "Application settings" shows the launcher;
-its default is `Ctrl+Alt+T`.
+"Open application shortcut" under "Application settings" shows the launcher; its default is `Ctrl+Alt+T`.
 
-If a configured hotkey cannot be registered, a warning titled "elder-terms"
-explains that it will not work. The warning text follows the selected display
-language. Closing the warning does not quit the launcher.
+### Hotkeys on Wayland
 
-### Hotkey Limitations on Wayland
+On Wayland, the launcher first tries the XDG Global Shortcuts portal. If it cannot register the configured hotkeys,
+it detects a Sway or labwc session, saves the hotkeys to the user's compositor configuration, and requests a reload.
 
-Wayland sessions require an implementation of the XDG Global Shortcuts portal
-to register hotkeys. Because [Global Shortcuts has been officially supported
-since GNOME 48](https://release.gnome.org/48/developers/#global-shortcuts),
-hotkeys do not work in Wayland sessions on GNOME 47 or earlier. Distributions
-using the standard GNOME desktop are supported starting with
-[Ubuntu 25.04](https://discourse.ubuntu.com/t/ubuntu-25-04-plucky-puffin-released/59303)
-and [Debian 13](https://www.debian.org/News/2025/20250809), which adopted GNOME
-48 or later.
+Because [Global Shortcuts has been officially supported since GNOME 48](https://release.gnome.org/48/developers/#global-shortcuts),
+portal registration is unavailable in Wayland sessions on GNOME 47 or earlier.
+Distributions using the standard GNOME desktop are supported starting with [Ubuntu 25.04](https://discourse.ubuntu.com/t/ubuntu-25-04-plucky-puffin-released/59303) and [Debian 13](https://www.debian.org/News/2025/20250809),
+which adopted GNOME 48 or later.
 
-In other words, they are unavailable in GNOME Wayland environments on Ubuntu
-24.10 or earlier and Debian 12 or earlier.
+The default GNOME Wayland sessions on Ubuntu 24.10 or earlier and Debian 12 or earlier have no automatic registration route through this portal or the Sway/labwc fallback.
+Automatic configuration in other Wayland environments also requires the Global Shortcuts portal or the corresponding compositor settings.
+In these environments, you may need to enable custom hotkeys (below).
 
-X11 sessions are not subject to this limitation. Availability in non-GNOME
-Wayland environments depends on whether the desktop environment supports the
-Global Shortcuts portal.
+### Manually Enabling Hotkeys
+
+Use `etctl setup` to check registration or synchronize compositor configuration after changing hotkeys while the launcher is running.
+
+The command checks the running launcher's X11 or Global Shortcuts portal registration result. If it starts the launcher,
+the portal may display an approval screen. When registration fails in a Sway or labwc Wayland session,
+it saves the current hotkeys to the user's configuration file and requests the compositor to reload them.
+
+Since hotkey hooking is performed within the user session, do not run this command with `sudo`:
+
+```sh
+etctl setup
+```
+
+The command starts the launcher if needed.
+Run it after changing saved-connection shortcuts to synchronize desktop configuration without restarting the launcher.
+
+Automatic setup and repeated command runs replace only the bindings managed by elder-terms. When there is no user compositor configuration,
+they preserve the system configuration they find.
+
+- For labwc, this copies the current system configuration into the user file, so later system configuration updates are not inherited automatically.
+  See [labwc configuration search and reload rules](https://labwc.github.io/labwc-config.5.html).
+- Sway sessions launched with a custom config path may require adding the generated bindings to that config for persistence.
+  See the [Sway configuration reference](https://github.com/swaywm/sway/blob/master/sway/sway.5.scd).
+
+Run `etctl unsetup` to remove hotkeys saved by the launcher or `etctl setup` in user Sway or labwc configuration.
+
+It leaves other shortcuts and the configuration files in place.
+The command works without a running launcher or graphical session.
+In an active Sway or labwc session, it also reloads the compositor; otherwise, reload the compositor or log in again to apply the change.
+X11 and Global Shortcuts portal registrations belong to the running launcher and are unaffected by this command.
+If configured hotkeys remain enabled, the launcher may recreate Sway or labwc bindings the next time it starts.
+
+```sh
+etctl unsetup
+```
+
+### Custom Enabling Hotkeys
+
+Below the version in the About panel, you can check the detected hotkey transport and whether `etctl` requests are available.
+The transport label describes X11 or portal detection, so it may show "Unavailable" even when Sway or labwc bindings are active.
+
+X11 sessions register hotkeys directly with X11 and do not require D-Bus.
+On Wayland, the launcher uses the Global Shortcuts portal first, then supported Sway or labwc configuration when necessary.
+If `etctl setup` does not support your desktop, assign a desktop shortcut to one of these commands:
+
+```sh
+# Open elder-terms launcher window
+etctl open-application
+
+# open 'Local Terminal' connection window
+etctl open-connection 'Local Terminal'
+```
+
+Replace `Local Terminal` with the exact saved connection name displayed in the launcher, without the `.ini` extension.
+Quote names containing spaces or shell characters.
+
+The launcher must already be running. Use its existing login autostart entry;
+"Background only" is useful without a system tray.
+
+Both processes must run as the same user with the same `XDG_RUNTIME_DIR`,
+pointing to an existing private runtime directory.
+`etctl` requires neither a display connection nor D-Bus.
+
+It returns 0 when the launcher accepts a request, 1 for a communication or request error,
+and 2 for invalid arguments.
+Acceptance does not mean the terminal's connection to a remote host has succeeded.
+
+For [labwc](https://labwc.github.io/labwc-actions.5.html), add this binding inside the existing `<keyboard>` section of `~/.config/labwc/rc.xml`,
+then reload your configuration with `labwc --reconfigure`:
+
+```xml
+<keybind key="C-A-T">
+  <action name="Execute" command="etctl open-application" />
+</keybind>
+```
+
+For [Sway](https://github.com/swaywm/sway/blob/master/sway/sway.5.scd),
+add this to your existing configuration and reload it:
+
+```text
+bindsym Ctrl+Mod1+t exec etctl open-application
+```
+
+For [Hyprland's Lua configuration](https://wiki.hypr.land/Configuring/Basics/Binds/):
+
+```lua
+hl.bind("CTRL + ALT + T", hl.dsp.exec_cmd("etctl open-application"))
+```
+
+For [Hyprland 0.54 and earlier using hyprlang](https://wiki.hypr.land/0.54.0/Configuring/Binds/):
+
+```text
+bind = CTRL ALT, T, exec, etctl open-application
+```
+
+Replace an existing binding for the same key combination if necessary.
+The launcher and `etctl setup` modify the user's Sway or labwc configuration. Avoid adding the same binding again when configuring shortcuts manually.
+
+Other desktops can use the same commands through their shortcut settings.
+If your compositor provides an [`XDG_ACTIVATION_TOKEN`](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/staging/xdg-activation/xdg-activation-v1.xml),
+the command forwards it for window activation; focus remains subject to your compositor's policy.
 
 ## Configuring the Terminal Type
 
@@ -1018,7 +1076,7 @@ documentation; and license notices into a single `elder-terms` deb package.
 The following package combinations are supported:
 
 | Distribution | Release | Architectures |
-| --- | --- | --- |
+| :--- | :--- | :--- |
 | Debian | bookworm | amd64, i386, arm64, armhf |
 | Debian | trixie | amd64, i386, arm64, armhf, riscv64 |
 | Ubuntu | 24.04 | amd64, arm64 |

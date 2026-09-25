@@ -1519,7 +1519,7 @@ describe('elder-terms main window', () => {
         );
         await writeFile(
           join(connections, '..', 'global.ini'),
-          '[terminal]\nwidth=80\nauto_close=false\n'
+          '[general]\nauto_close=false\n\n[terminal]\nwidth=80\n'
         );
       },
       async ({ app, configHome, connections }) => {
@@ -1543,7 +1543,7 @@ describe('elder-terms main window', () => {
         });
         await expectSelectedComboValue(
           app,
-          'settings_terminal_auto_close_combo',
+          'settings_general_auto_close_combo',
           'Disabled (global default)'
         );
 
@@ -1560,16 +1560,17 @@ describe('elder-terms main window', () => {
           'entry'
         );
         const globalAutoClose = expectElementKind(
-          await app.getById('global_settings_terminal_auto_close_combo'),
+          await app.getById('global_settings_general_auto_close_combo'),
           'comboBox'
         );
         expect(Number(await globalWidth.text())).toBe(80);
         await expectSelectedComboValue(
           app,
-          'global_settings_terminal_auto_close_combo',
+          'global_settings_general_auto_close_combo',
           'Disabled'
         );
         await globalWidth.setText('120');
+        await selectSettingsTab(app, 'global_settings', 'General');
         await globalAutoClose.selectChildAt(1);
         const globalSave = expectElementKind(
           await app.getById('global_defaults_save_button'),
@@ -1585,7 +1586,7 @@ describe('elder-terms main window', () => {
         expect(Number(await width.text())).toBe(93);
         await expectSelectedComboValue(
           app,
-          'settings_terminal_auto_close_combo',
+          'settings_general_auto_close_combo',
           'Enabled (global default)'
         );
         await expectSensitive(apply);
@@ -1618,7 +1619,7 @@ describe('elder-terms main window', () => {
         });
         await expectSelectedComboValue(
           app,
-          'settings_terminal_auto_close_combo',
+          'settings_general_auto_close_combo',
           'Enabled (global default)'
         );
         await expectSensitive(apply);
@@ -2956,7 +2957,19 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
                 'entry'
               ).setText('alice');
               await expectElementKind(
-                await app.getById('file_transfer_prompt_secondary_entry'),
+                await app.getById('file_transfer_prompt_accept_button'),
+                'button'
+              ).click();
+              await waitForResult(async () => {
+                expect(
+                  await expectElementKind(
+                    await app.getById('file_transfer_prompt_message_label'),
+                    'label'
+                  ).text()
+                ).toBe('Password:');
+              });
+              await expectElementKind(
+                await app.getById('file_transfer_prompt_entry'),
                 'entry'
               ).setText('secret');
               await expectElementKind(

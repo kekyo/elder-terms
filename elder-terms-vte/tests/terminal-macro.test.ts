@@ -37,10 +37,10 @@ const closeServer = async (server: Server): Promise<void> =>
 const connectionConfig = (port: number, macro: readonly string[]): string =>
   [
     '[general]',
+    'auto_close=false',
     'type=telnet',
     '',
     '[terminal]',
-    'auto_close=false',
     'return_code=lf',
     '',
     '[transfer]',

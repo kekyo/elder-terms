@@ -575,6 +575,16 @@ export const createWebdavTestServer = async (
       server.setSecureContext(identity);
       server.setTicketKeys(tickets);
     },
+    /** Restarts the stopped service on its original endpoint. */
+    restart: async () => {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(address.port, '127.0.0.1', () => {
+          server.removeListener('error', reject);
+          resolve();
+        });
+      });
+    },
     close: async () => {
       await new Promise<void>((resolve, reject) => {
         server.close((error) =>

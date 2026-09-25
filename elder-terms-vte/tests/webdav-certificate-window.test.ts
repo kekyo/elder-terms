@@ -181,8 +181,20 @@ describe('WebDAV certificate confirmation', () => {
           xvfbTrayHost: true,
         });
         const authenticate = async (app: GtkApp) => {
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_accept_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(
+              await expectElementKind(
+                await app.getById('file_transfer_prompt_message_label'),
+                'label'
+              ).text()
+            ).toBe('Password:');
+          });
           const entry = expectElementKind(
-            await app.getById('file_transfer_prompt_secondary_entry'),
+            await app.getById('file_transfer_prompt_entry'),
             'entry'
           );
           await entry.setText('secret');

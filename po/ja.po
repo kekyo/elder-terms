@@ -1052,17 +1052,37 @@ msgid "Restore defaults"
 msgstr "既定値に戻す"
 
 #: elder-terms/src/main.cpp:262
-msgid "Global shortcuts are unavailable"
-msgstr "グローバルショートカットを利用できません"
+msgid "Hotkey detection: Checking…"
+msgstr "ホットキーの検出方式: 確認中…"
+
+msgid "Hotkey detection: X11"
+msgstr "ホットキーの検出方式: X11"
+
+msgid "Hotkey detection: GlobalShortcuts Portal"
+msgstr "ホットキーの検出方式: GlobalShortcuts Portal"
+
+msgid "Hotkey detection: Unavailable"
+msgstr "ホットキーの検出方式: 利用不可"
+
+msgid "etctl: Available"
+msgstr "etctl: 利用可能"
+
+msgid "etctl: Unavailable"
+msgstr "etctl: 利用不可"
+
+msgid "Configure desktop shortcuts to run these commands:"
+msgstr "デスクトップのショートカットに次のコマンドを登録してください:"
+
+msgid "Hotkeys are unavailable"
+msgstr "ホットキーを利用できません"
 
 #: elder-terms/src/main.cpp:271
 msgid ""
-"One or more configured global shortcuts could not be registered and will not "
-"work. Check whether your desktop environment supports global shortcuts."
+"One or more configured hotkeys could not be registered and will not work. "
+"Check whether your desktop environment supports hotkeys."
 msgstr ""
-"設定されたグローバルショートカットの一部またはすべてを登録できなかったため、"
-"動作しません。デスクトップ環境がグローバルショートカットに対応しているか確認"
-"してください。"
+"設定されたホットキーの一部またはすべてを登録できなかったため、動作しません。"
+"デスクトップ環境がホットキーに対応しているか確認してください。"
 
 #: elder-terms/src/main.cpp:275 elder-terms-vte/src/main-window.ui:393
 #: elder-terms-vte/src/main-window.cpp:1617
@@ -1658,12 +1678,6 @@ msgstr "リセットして接続"
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:255
 msgid "Accept the fixture SSH host key?"
 msgstr "テスト用SSHホスト鍵を承認しますか？"
-
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:416
-#: elder-terms-vte/src/webdav/webdav-application.cpp:73
-#, c-format
-msgid "Enter the user name and password for %s."
-msgstr "%sのユーザー名とパスワードを入力して下さい。"
 
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
 msgid "To log in anonymously, enter anonymous as the user name."

@@ -1055,17 +1055,17 @@ msgid "Restore defaults"
 msgstr "Restaurer les valeurs par défaut"
 
 #: elder-terms/src/main.cpp:262
-msgid "Global shortcuts are unavailable"
-msgstr "Les raccourcis globaux ne sont pas disponibles"
+msgid "Hotkeys are unavailable"
+msgstr "Les raccourcis clavier ne sont pas disponibles"
 
 #: elder-terms/src/main.cpp:271
 msgid ""
-"One or more configured global shortcuts could not be registered and will not "
-"work. Check whether your desktop environment supports global shortcuts."
+"One or more configured hotkeys could not be registered and will not work. "
+"Check whether your desktop environment supports hotkeys."
 msgstr ""
-"Un ou plusieurs raccourcis globaux configurés n'ont pas pu être enregistrés "
+"Un ou plusieurs raccourcis clavier configurés n'ont pas pu être enregistrés "
 "et ne fonctionneront pas. Vérifiez si votre environnement de bureau prend en "
-"charge les raccourcis globaux."
+"charge les raccourcis clavier."
 
 #: elder-terms/src/main.cpp:275 elder-terms-vte/src/main-window.ui:393
 #: elder-terms-vte/src/main-window.cpp:1617

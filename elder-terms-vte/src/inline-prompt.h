@@ -26,10 +26,6 @@ struct InlinePromptWidgets {
   GtkWidget *entry_label = nullptr;
   /** Optional text response entry. */
   GtkWidget *entry;
-  /** Optional label describing the secondary text response. */
-  GtkWidget *secondary_entry_label = nullptr;
-  /** Optional secondary text response entry. */
-  GtkWidget *secondary_entry = nullptr;
   /** Button rejecting the prompt. */
   GtkWidget *cancel_button;
   /** Button accepting the prompt. */
@@ -60,14 +56,6 @@ struct InlinePromptRequest {
   bool input_required;
   /** True when entered text may be displayed. */
   bool echo;
-  /** Initial text displayed in the secondary response entry. */
-  std::string secondary_initial_text = {};
-  /** Label displayed above the secondary text response. */
-  std::string secondary_input_label = {};
-  /** True when the prompt collects a secondary text response. */
-  bool secondary_input_required = false;
-  /** True when the secondary entered text may be displayed. */
-  bool secondary_echo = false;
   /** True when the rejecting button is visible. */
   bool cancel_visible;
   /** True when the accepting button is visible. */
@@ -88,8 +76,6 @@ struct InlinePromptResponse {
   bool accepted = false;
   /** Submitted text, or an empty string when no input was required. */
   std::string text;
-  /** Secondary submitted text, or an empty string when not requested. */
-  std::string secondary_text;
   /** True when the optional third response was selected. */
   bool alternative = false;
 };
@@ -127,8 +113,7 @@ create_inline_prompt_controller(InlinePromptWidgets widgets);
  * @param cancellation Cancellation signal for the pending question.
  * @returns Accepted response, or a rejected response after cancellation.
  * @throws std::invalid_argument when no action is visible, or when a requested
- * preformatted message, secondary input, or third response is unavailable
- * from the controller.
+ * preformatted message or third response is unavailable from the controller.
  */
 cardio::promise<InlinePromptResponse> prompt_inline_async(
     const std::shared_ptr<InlinePromptController> &controller,

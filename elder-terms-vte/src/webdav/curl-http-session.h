@@ -14,6 +14,7 @@
 #include <curl/curl.h>
 #include <elder-terms/settings/webdav-settings.h>
 #include "../tls/certificate-failure.h"
+#include "../file-transfer/remote-file-client.h"
 
 namespace elder_terms {
 
@@ -68,7 +69,7 @@ struct CurlHttpResult {
  * @param result Completed transport and HTTP status.
  * @returns Exception with the status and supported failure category.
  */
-std::runtime_error webdav_http_error(const CurlHttpResult &result);
+RemoteFileError webdav_http_error(const CurlHttpResult &result);
 
 /**
  * Creates an HTTP transport without starting a worker or network request.

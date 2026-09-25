@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 #include <functional>
 #include <optional>
 #include <string>
@@ -14,10 +15,10 @@
 namespace elder_terms {
 
 /**
- * Identifies the runtime transport used for global hotkey actions.
+ * Identifies the runtime transport used to register global hotkeys.
  */
 enum class HotkeyBackendKind {
-  /** No global hotkey transport is available. */
+  /** No X11 or portal registration transport is selected. */
   none,
   /** X11 passive key grab. */
   x11,
@@ -37,13 +38,27 @@ struct HotkeyBackendAvailability {
   bool has_x11;
 };
 
+/** Current registration outcome for the configured shortcut set. */
+struct HotkeyRegistrationStatus {
+  /** Selected transport, or none when unavailable. */
+  HotkeyBackendKind kind;
+  /** Whether transport detection or portal approval is in progress. */
+  bool pending;
+  /** Whether registration failed or the portal rejected a shortcut. */
+  bool failed;
+  /** Number of configured shortcuts. */
+  std::size_t configured;
+  /** Number of shortcuts accepted by the transport. */
+  std::size_t registered;
+};
+
 /**
  * Carries platform focus context for one global hotkey activation.
  */
 struct HotkeyActivationContext {
   /** Event timestamp when provided by the platform. */
   std::optional<std::uint32_t> activation_time;
-  /** Wayland activation token when provided by the portal. */
+  /** Wayland activation token supplied by the desktop. */
   std::optional<std::string> activation_token;
 };
 
@@ -79,6 +94,9 @@ struct HotkeyBackendOptions {
   HotkeyActivationCallback activated;
   /** Receives the first registration failure while actions are configured. */
   HotkeyRegistrationFailureCallback registration_failed;
+  /** Receives the detected transport once initialization completes, including
+   * none when unavailable. May run before create_hotkey_backend returns. */
+  std::function<void(HotkeyBackendKind)> detection_completed;
 };
 
 /** Opaque global hotkey backend state. */
@@ -88,8 +106,8 @@ struct HotkeyBackendState;
  * Chooses the runtime hotkey transport.
  *
  * @param availability Available transports and session preference.
- * @returns Portal for a preferred Wayland session, otherwise X11, then portal,
- * then none.
+ * @returns Portal or none for a preferred Wayland session; otherwise X11,
+ * then portal, then none. External control remains available independently.
  */
 HotkeyBackendKind
 select_hotkey_backend_kind(const HotkeyBackendAvailability &availability);
@@ -152,5 +170,14 @@ void destroy_hotkey_backend(HotkeyBackendState *state);
  */
 HotkeyBackendKind
 hotkey_backend_kind(const HotkeyBackendState *state);
+
+/**
+ * Returns the live registration outcome, including pending portal consent.
+ *
+ * @param state Backend state, or null.
+ * @returns Counts and outcome for the current shortcut set.
+ */
+HotkeyRegistrationStatus
+hotkey_registration_status(const HotkeyBackendState *state);
 
 } // namespace elder_terms

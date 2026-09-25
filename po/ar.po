@@ -1050,16 +1050,16 @@ msgid "Restore defaults"
 msgstr "استعادة الإعدادات الافتراضية"
 
 #: elder-terms/src/main.cpp:262
-msgid "Global shortcuts are unavailable"
-msgstr "الاختصارات العامة غير متاحة"
+msgid "Hotkeys are unavailable"
+msgstr "مفاتيح الاختصار غير متاحة"
 
 #: elder-terms/src/main.cpp:271
 msgid ""
-"One or more configured global shortcuts could not be registered and will not "
-"work. Check whether your desktop environment supports global shortcuts."
+"One or more configured hotkeys could not be registered and will not work. "
+"Check whether your desktop environment supports hotkeys."
 msgstr ""
-"لا يمكن تسجيل واحد أو أكثر من الاختصارات العامة التي تم تكوينها ولن تعمل. "
-"تحقق مما إذا كانت بيئة سطح المكتب لديك تدعم الاختصارات العامة."
+"تعذّر تسجيل مفتاح اختصار واحد أو أكثر من المفاتيح التي تم تكوينها، ولن تعمل. "
+"تحقّق مما إذا كانت بيئة سطح المكتب تدعم مفاتيح الاختصار."
 
 #: elder-terms/src/main.cpp:275 elder-terms-vte/src/main-window.ui:393
 #: elder-terms-vte/src/main-window.cpp:1617

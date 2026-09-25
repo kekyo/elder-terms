@@ -1,4 +1,5 @@
 #include "file-transfer-window.h"
+#include "activity-file-client.h"
 #include "../sftp/sftp-fixture-client.h"
 
 #include <algorithm>
@@ -27,6 +28,7 @@ class GatedClient final : public RemoteFileClient {
   cardio::primitives::manually_conditional pending{false};
 public:
   bool complete_listing = false;
+  std::optional<bool> operation_failure;
   cardio::primitives::manually_conditional listing_allowed{false};
   cardio::primitives::manually_conditional pane_enabled{false};
   cardio::primitives::manually_conditional started{false};
@@ -38,6 +40,7 @@ public:
   cardio::promise<RemoteDirectorySnapshot> load_directory_async(
       std::string path, cardio::cancellation cancellation) override {
     started.raise();
+    if (operation_failure) throw RemoteFileError("Remote operation failed", *operation_failure);
     if (complete_listing) {
       co_await listing_allowed.wait(cancellation);
       co_return RemoteDirectorySnapshot{.canonical_path = "/remote/loaded", .entries = {}};
@@ -116,9 +119,133 @@ static cardio::promise<void> verify_async(
   std::optional<cardio::promise<void>> closing;
   try {
     show_file_transfer_window(window);
+    GtkWidget *status = find_widget(file_transfer_window_widget(window), "file_transfer_status_bar");
+    gint status_height = 0, image_height = 0, label_height = 0;
+    gtk_widget_get_preferred_height(status, nullptr, &status_height);
+    gtk_widget_get_preferred_height(find_widget(status, "conn_indicator_image"), nullptr, &image_height);
+    gtk_widget_get_preferred_height(find_widget(status, "conn_indicator_label"), nullptr, &label_height);
+    expect(status_height == image_height + label_height + 4,
+           "File transfer status bar must use terminal height with two-pixel vertical margins");
+    for (const bool auto_close : {false, true}) {
+      for (const char *protocol : {"FTP", "FTPS", "SFTP", "WebDAV"}) {
+        auto settings = create_default_settings({}, "Auto-close");
+        set_setting_value(&settings, general_auto_close_setting_key(), SettingValue{auto_close});
+        auto closing_window = create_file_transfer_window({
+            .connection_name = "Auto-close", .protocol_name = protocol,
+            .local_directory = "/tmp", .remote_directory = "/remote",
+            .remote_file_hash = {}, .colors = {}, .closed = {},
+            .settings = settings});
+        set_file_transfer_window_connection_available(closing_window, true);
+        set_file_transfer_window_connection_available(closing_window, false);
+        const bool destroyed = file_transfer_window_widget(closing_window) == nullptr;
+        if (!auto_close) {
+          auto *dim = find_widget(file_transfer_window_widget(closing_window), "file_transfer_dim_overlay");
+          expect(dim != nullptr && gtk_widget_get_visible(dim),
+                 "Disconnected file browsers must display the disconnection overlay");
+        }
+        co_await close_file_transfer_window_async(closing_window);
+        expect(destroyed == auto_close, "File transfer disconnection must respect general auto-close");
+      }
+    }
+    for (const bool close_during_reconnect : {false, true}) {
+      auto settings = create_default_settings({}, "Reconnect");
+      set_setting_value(&settings, general_auto_close_setting_key(), SettingValue{false});
+      auto old_client = std::make_shared<GatedClient>();
+      unsigned reconnects = 0;
+      cardio::primitives::manually_conditional reconnected{false};
+      std::shared_ptr<FileTransferWindow> reconnect_window;
+      reconnect_window = create_file_transfer_window({
+          .connection_name = "Reconnect", .protocol_name = "FTP",
+          .local_directory = "/tmp", .remote_directory = "/remote",
+          .remote_file_hash = {}, .colors = {}, .closed = {}, .settings = settings,
+          .reconnect = [&](SettingsStore current) -> cardio::promise<void> {
+            expect(!general_auto_close(current), "Reconnect must receive the current settings");
+            ++reconnects;
+            attach_file_transfer_window_client(reconnect_window, create_sftp_fixture_client(false));
+            reconnected.raise();
+            co_return;
+          }});
+      show_file_transfer_window(reconnect_window);
+      attach_file_transfer_window_client(reconnect_window, old_client);
+      co_await old_client->started.wait();
+      set_file_transfer_window_connection_available(reconnect_window, false);
+      auto *root = file_transfer_window_widget(reconnect_window);
+      auto *button = find_widget(root, "file_transfer_reconnect_button");
+      auto *dim = find_widget(root, "file_transfer_dim_overlay");
+      expect(button && gtk_widget_get_visible(button), "Disconnected FTP must offer reconnect");
+      gtk_button_clicked(GTK_BUTTON(button));
+      expect(!gtk_widget_get_visible(button), "Reconnect must prevent duplicate attempts");
+      co_await old_client->cleanup_started.wait();
+      expect(reconnects == 0, "Reconnect must wait for old operation cleanup");
+      std::optional<cardio::promise<void>> reconnect_closing;
+      if (close_during_reconnect) reconnect_closing.emplace(close_file_transfer_window_async(reconnect_window));
+      old_client->cleanup_allowed.raise();
+      if (close_during_reconnect) {
+        co_await *reconnect_closing;
+        expect(reconnects == 0, "Closing during cleanup must not reopen the connection");
+      } else {
+        co_await reconnected.wait();
+        expect(reconnects == 1 && !gtk_widget_get_visible(dim) && !gtk_widget_get_visible(button),
+               "Successful reconnect must restore the browser and hide the overlay");
+        co_await close_file_transfer_window_async(reconnect_window);
+      }
+    }
+    for (const bool connection_lost : {false, true}) {
+      auto failing = std::make_shared<GatedClient>();
+      failing->operation_failure = connection_lost;
+      unsigned disconnections = 0;
+      auto observed = create_activity_file_client(failing, [](ActivityIndicatorId) {},
+          [&disconnections] { ++disconnections; });
+      bool rejected = false;
+      try { (void)co_await observed->load_directory_async("/remote", {}); }
+      catch (const RemoteFileError &) { rejected = true; }
+      expect(rejected && disconnections == (connection_lost ? 1U : 0U),
+             "Only transport failures must notify a file browser disconnection");
+    }
+    std::vector<ActivityIndicatorId> activity;
+    auto observed = create_activity_file_client(create_sftp_fixture_client(false),
+        [&activity](ActivityIndicatorId id) { activity.push_back(id); }, {});
+    const auto listing = co_await observed->load_directory_async("/remote", {});
+    expect(!listing.entries.empty() && activity == std::vector{ActivityIndicatorId::sd, ActivityIndicatorId::rd},
+           "Directory requests and replies must report SD and RD");
+    auto opening = observed->open_read_async("/remote/readme.txt", {});
+    auto reader = std::move(co_await opening);
+    activity.clear();
+    std::array<std::byte, 128> bytes{};
+    const auto size = co_await reader->read_async(bytes, {});
+    expect(size > 0 && activity == std::vector{ActivityIndicatorId::rd},
+           "Downloaded chunks must report RD");
+    activity.clear();
+    expect(co_await reader->read_async(bytes, {}) == 0 && activity.empty(),
+           "EOF must not report received data");
+    co_await reader->close_async({});
+    auto creating = observed->open_write_async("/remote/upload.txt", size, std::nullopt, {});
+    auto writer = std::move(co_await creating);
+    activity.clear();
+    co_await writer->write_all_async(std::span<const std::byte>(bytes.data(), size), {});
+    expect(activity == std::vector{ActivityIndicatorId::sd}, "Uploaded chunks must report SD");
+    co_await writer->close_async({});
+    expect((co_await observed->lstat_async("/remote/upload.txt", {}))->size == size,
+           "Activity observation must preserve the remote upload");
+
+    GtkWidget *connection_image = find_widget(file_transfer_window_widget(window), "conn_indicator_image");
+    expect(GTK_IS_IMAGE(connection_image), "File browser must expose CONN");
+    auto *off_icon = gtk_image_get_pixbuf(GTK_IMAGE(connection_image));
+    show_file_transfer_window(window);
     attach_file_transfer_window_client(window, client);
     co_await client->started.wait();
+    expect(gtk_image_get_pixbuf(GTK_IMAGE(connection_image)) != off_icon,
+           "Attaching an authenticated service must activate CONN");
     GtkWidget *root = file_transfer_window_widget(window);
+    for (const char *id : {"conn_indicator_image", "sd_indicator_image", "rd_indicator_image"}) {
+      expect(GTK_IS_IMAGE(find_widget(root, id)), "File browser must expose CONN, SD and RD indicators");
+    }
+    GtkWidget *menu_button = find_widget(gtk_window_get_titlebar(GTK_WINDOW(root)), "application_menu_button");
+    expect(GTK_IS_MENU_BUTTON(menu_button), "File browser must expose a settings menu button");
+    GtkWidget *menu = GTK_WIDGET(gtk_menu_button_get_popup(GTK_MENU_BUTTON(menu_button)));
+    expect(find_widget(menu, "settings_menu_item") != nullptr &&
+           find_widget(menu, "about_menu_item") != nullptr,
+           "File browser menu must offer Settings and About");
     GtkWidget *frame = find_widget(root, "file_transfer_remote_group");
     GtkWidget *tree = find_widget(root, "file_transfer_remote_tree");
     GtkWidget *path = find_widget(root, "file_transfer_remote_path_entry");
@@ -149,6 +276,58 @@ static cardio::promise<void> verify_async(
              "The context menu must become available after directory loading");
       expect(std::strcmp(gtk_entry_get_text(GTK_ENTRY(path)), "/remote/loaded") == 0,
              "The canonical path must be applied before input is enabled");
+      set_file_transfer_window_connection_available(window, false);
+      cardio::primitives::manually_conditional local_idle{false};
+      GtkWidget *local_frame = find_widget(root, "file_transfer_local_group");
+      const auto idle_handler = g_signal_connect(local_frame, "notify::sensitive",
+          G_CALLBACK(+[](GtkWidget *widget, GParamSpec *, gpointer data) {
+            if (gtk_widget_get_sensitive(widget)) {
+              static_cast<cardio::primitives::manually_conditional *>(data)->raise();
+            }
+          }), &local_idle);
+      if (!gtk_widget_get_sensitive(local_frame)) co_await local_idle.wait();
+      local_idle.drop();
+      GtkWidget *local_path = find_widget(root, "file_transfer_local_path_entry");
+      gtk_entry_set_text(GTK_ENTRY(local_path), "/elder-terms-test-missing-local-directory");
+      g_signal_emit_by_name(local_path, "activate");
+      co_await local_idle.wait();
+      g_signal_handler_disconnect(local_frame, idle_handler);
+      GtkWidget *local_error = nullptr;
+      GList *error_windows = gtk_window_list_toplevels();
+      for (auto *item = error_windows; item != nullptr; item = item->next) {
+        auto *candidate = GTK_WIDGET(item->data);
+        if (std::strcmp(gtk_widget_get_name(candidate), "file_transfer_operation_error_dialog") == 0) local_error = candidate;
+      }
+      g_list_free(error_windows);
+      expect(local_error != nullptr, "A disconnected remote service must not hide local browser errors");
+      gtk_widget_destroy(local_error);
+      set_file_transfer_window_connection_available(window, true);
+      g_signal_emit_by_name(find_widget(menu, "settings_menu_item"), "activate");
+      GList *toplevels = gtk_window_list_toplevels();
+      GtkWidget *settings_dialog = nullptr;
+      for (auto *item = toplevels; item != nullptr; item = item->next) {
+        auto *candidate = GTK_WIDGET(item->data);
+        if (std::strcmp(gtk_widget_get_name(candidate), "settings_dialog") == 0) settings_dialog = candidate;
+      }
+      g_list_free(toplevels);
+      expect(settings_dialog != nullptr &&
+             find_widget(settings_dialog, "settings_widget_root") != nullptr,
+             "Settings menu must open the shared runtime settings editor");
+      expect(gtk_window_get_transient_for(GTK_WINDOW(settings_dialog)) == GTK_WINDOW(root),
+             "Settings must belong to the file browser");
+      set_file_transfer_window_connection_available(window, false);
+      expect(gtk_image_get_pixbuf(GTK_IMAGE(connection_image)) == off_icon,
+             "Disconnected service must deactivate CONN");
+      set_file_transfer_window_connection_available(window, true);
+      GtkWidget *auto_close = find_widget(settings_dialog, "settings_general_auto_close_combo");
+      expect(auto_close != nullptr &&
+             find_widget(find_widget(settings_dialog, "settings_general_page"), "settings_general_auto_close_combo") == auto_close,
+             "File browser auto-close must be editable on General");
+      gtk_combo_box_set_active(GTK_COMBO_BOX(auto_close), 1);
+      gtk_button_clicked(GTK_BUTTON(find_widget(settings_dialog, "settings_apply_button")));
+      set_file_transfer_window_connection_available(window, false);
+      expect(file_transfer_window_widget(window) == nullptr,
+             "Applying auto-close in file browser settings must affect the next disconnection");
       closing.emplace(close_file_transfer_window_async(window));
       co_await *closing;
     } else {
@@ -192,10 +371,13 @@ int main(int argc, char **argv) {
     cardio::dispatcher_host_glib dispatcher(group);
     auto client = std::make_shared<GatedClient>();
     client->complete_listing = complete_listing;
+    auto settings = create_default_settings({}, "Window lifetime");
+    set_setting_value(&settings, general_auto_close_setting_key(), SettingValue{false});
     auto window = create_file_transfer_window({
         .connection_name = "Window lifetime", .protocol_name = "FTP",
         .local_directory = path.data(), .remote_directory = "/remote",
-        .remote_file_hash = {}, .colors = {}, .closed = {}});
+        .remote_file_hash = {}, .colors = {}, .closed = {},
+        .settings = settings});
     auto task = verify_async(window, client, group, failure);
     dispatcher.park();
     if (failure) break;

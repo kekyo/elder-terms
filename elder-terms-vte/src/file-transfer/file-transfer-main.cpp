@@ -39,6 +39,7 @@ struct SftpApplicationState {
   std::shared_ptr<elder_terms::FileTransferWindow> window;
   cardio::cancellation_source stop_source;
   std::optional<cardio::promise<void>> startup_task;
+  std::optional<cardio::promise<void>> shutdown_task;
   cardio::primitives::manually_conditional fixture_hash_gate{false};
   bool shutting_down = false;
 };
@@ -46,6 +47,7 @@ struct SftpApplicationState {
 struct FtpApplicationState {
   cardio::dispatcher_group_glib *dispatcher_group = nullptr;
   bool fixture = false;
+  std::optional<std::filesystem::path> config_path;
   elder_terms::SettingsStore settings;
   elder_terms::FtpConnectionSettings connection;
   std::shared_ptr<elder_terms::RemoteFileClient> client;
@@ -70,13 +72,22 @@ static std::string format_message(const char *format,
   return result;
 }
 
+static cardio::promise<void> finish_sftp_application_async(SftpApplicationState *state) {
+  try {
+    if (state->startup_task) co_await *state->startup_task;
+    co_await elder_terms::close_file_transfer_window_async(state->window);
+  } catch (const cardio::canceled_exception &) {
+  } catch (const std::exception &error) { std::cerr << error.what() << '\n'; }
+  state->dispatcher_group->shutdown();
+}
+
 static void stop_sftp_application(SftpApplicationState *state) {
   if (state == nullptr || state->shutting_down) {
     return;
   }
   state->shutting_down = true;
   (void)state->stop_source.cancel();
-  state->dispatcher_group->shutdown();
+  state->shutdown_task.emplace(finish_sftp_application_async(state));
 }
 
 static cardio::promise<elder_terms::FileHashes>
@@ -106,6 +117,9 @@ calculate_sftp_file_hashes_async(
   };
 }
 
+static cardio::promise<void> reconnect_sftp_application_async(
+    SftpApplicationState *state, elder_terms::SettingsStore settings);
+
 static void create_sftp_application_window(SftpApplicationState *state) {
   state->window = elder_terms::create_file_transfer_window(
       {
@@ -127,6 +141,11 @@ static void create_sftp_application_window(SftpApplicationState *state) {
               [state]() {
                 stop_sftp_application(state);
               },
+          .settings = state->settings,
+          .config_path = state->launch_options.config_path,
+          .reconnect = [state](elder_terms::SettingsStore settings) {
+            return reconnect_sftp_application_async(state, std::move(settings));
+          },
       });
   elder_terms::show_file_transfer_window(state->window);
 }
@@ -311,6 +330,18 @@ start_sftp_fixture_async(SftpApplicationState *state) {
       state->window, state->client);
 }
 
+static cardio::promise<void> reconnect_sftp_application_async(
+    SftpApplicationState *state, elder_terms::SettingsStore settings) {
+  if (state->startup_task) co_await *state->startup_task;
+  state->client.reset();
+  state->transport.reset();
+  if (state->shutting_down) co_return;
+  state->settings = std::move(settings);
+  state->connection = elder_terms::sftp_connection_settings(state->settings);
+  if (state->launch_options.test.fixture) co_await start_sftp_fixture_async(state);
+  else co_await start_sftp_application_async(state);
+}
+
 static int run_sftp_application(
     const elder_terms::SettingsLoadResult &settings_result,
     elder_terms::LaunchOptions launch_options) {
@@ -343,6 +374,7 @@ static int run_sftp_application(
   state.client.reset();
   state.transport.reset();
   state.startup_task.reset();
+  state.shutdown_task.reset();
   return 0;
 }
 
@@ -380,6 +412,19 @@ static void stop_ftp_application(FtpApplicationState *state) {
   state->shutdown_task.emplace(finish_ftp_application_async(state));
 }
 
+static cardio::promise<void> start_ftp_application_async(FtpApplicationState *state);
+
+static cardio::promise<void> reconnect_ftp_application_async(
+    FtpApplicationState *state, elder_terms::SettingsStore settings) {
+  if (state->startup_task) co_await *state->startup_task;
+  if (state->client && !state->fixture) co_await elder_terms::stop_ftp_client_async(state->client);
+  state->client.reset();
+  if (state->shutting_down) co_return;
+  state->settings = std::move(settings);
+  state->connection = elder_terms::ftp_connection_settings(state->settings);
+  co_await start_ftp_application_async(state);
+}
+
 static void create_ftp_application_window(FtpApplicationState *state) {
   state->window = elder_terms::create_file_transfer_window(
       {
@@ -396,6 +441,11 @@ static void create_ftp_application_window(FtpApplicationState *state) {
               [state]() {
                 stop_ftp_application(state);
               },
+          .settings = state->settings,
+          .config_path = state->config_path,
+          .reconnect = [state](elder_terms::SettingsStore settings) {
+            return reconnect_ftp_application_async(state, std::move(settings));
+          },
       });
   elder_terms::show_file_transfer_window(state->window);
 }
@@ -414,7 +464,7 @@ static std::string ftp_authentication_message(
     const elder_terms::FtpConnectionSettings &connection,
     bool username_missing) {
   std::string message = format_message(
-      _("Enter the user name and password for %s."), connection.address);
+      _("User name for %s:"), connection.address);
   message += "\n\n";
   message += _("To log in anonymously, enter anonymous as the user name.");
   if (username_missing) {
@@ -441,9 +491,6 @@ prompt_ftp_credentials_async(FtpApplicationState *state,
         .input_label = _("User name"),
         .input_required = true,
         .echo = true,
-        .secondary_input_label = _("Password:"),
-        .secondary_input_required = true,
-        .secondary_echo = false,
         .cancel_visible = true,
     };
     auto pending = elder_terms::prompt_file_transfer_window_async(
@@ -454,13 +501,30 @@ prompt_ftp_credentials_async(FtpApplicationState *state,
     }
     username = std::move(response.text);
     if (username.find_first_not_of(" \t\r\n") != std::string::npos) {
-      co_return FtpRuntimeCredentials{
-          .username = std::move(username),
-          .password = std::move(response.secondary_text),
-      };
+      break;
     }
     username_missing = true;
   }
+  elder_terms::InlinePromptRequest password_request{
+      .title = state->connection.tls_mode == elder_terms::FtpTlsMode::none
+                   ? _("FTP authentication") : _("FTPS authentication"),
+      .message = _("Password:"),
+      .accept_label = _("Connect"),
+      .cancel_label = _("Cancel"),
+      .input_required = true,
+      .echo = false,
+      .cancel_visible = true,
+  };
+  auto pending = elder_terms::prompt_file_transfer_window_async(
+      state->window, std::move(password_request), cancellation);
+  elder_terms::InlinePromptResponse response = co_await pending;
+  if (!response.accepted) {
+    co_return std::nullopt;
+  }
+  co_return FtpRuntimeCredentials{
+      .username = std::move(username),
+      .password = std::move(response.text),
+  };
 }
 
 static cardio::promise<bool> confirm_ftp_certificate_async(
@@ -529,13 +593,14 @@ start_ftp_application_async(FtpApplicationState *state) {
 
 static int run_ftp_application(
     const elder_terms::SettingsLoadResult &settings_result,
-    bool fixture) {
+    bool fixture, std::optional<std::filesystem::path> config_path) {
   cardio::dispatcher_group_glib dispatcher_group;
   // Worker completions must wake the GLib context even before it starts waiting.
   cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);
   FtpApplicationState state;
   state.dispatcher_group = &dispatcher_group;
   state.fixture = fixture;
+  state.config_path = std::move(config_path);
   state.settings = settings_result.store;
   state.connection =
       elder_terms::ftp_connection_settings(settings_result.store);
@@ -587,10 +652,12 @@ int main(int argc, char **argv) {
   }
   if (kind == elder_terms::ConnectionKind::ftp) {
     return run_ftp_application(settings_result,
-                               launch_options.test.fixture);
+                               launch_options.test.fixture,
+                               launch_options.config_path);
   }
   if (kind == elder_terms::ConnectionKind::webdav) {
-    return elder_terms::run_webdav_application(settings_result);
+    return elder_terms::run_webdav_application(
+        settings_result, launch_options.config_path);
   }
   std::cerr << "Error: configured connection type is not SFTP, FTP or WebDAV\n";
   return 1;

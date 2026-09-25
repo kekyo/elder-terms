@@ -403,11 +403,11 @@ describe.concurrent('SSH prompt overlay', () => {
         configPath,
         [
           '[general]',
+          'auto_close=false',
           'type=local',
           'background=#604020',
           '',
           '[terminal]',
-          'auto_close=false',
           '',
         ].join('\n'),
         'utf8'

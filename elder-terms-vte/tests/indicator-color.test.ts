@@ -268,7 +268,7 @@ describe.concurrent('terminal indicator color', () => {
       const configPath = join(directory, 'saved-color.ini');
       await writeFile(
         configPath,
-        '[terminal]\nauto_close=false\nindicator_color=#FF0000\n',
+        '[general]\nauto_close=false\n\n[terminal]\nindicator_color=#FF0000\n',
         'utf8'
       );
       await runGtkTest(
@@ -395,12 +395,12 @@ describe.concurrent('terminal indicator color', () => {
           const configPath = join(directory, 'blink.ini');
           const config = [
             '[general]',
+            'auto_close=false',
             'type=telnet',
             '[telnet]',
             'address=127.0.0.1',
             `port=${address.port}`,
             '[terminal]',
-            'auto_close=false',
             'indicator_color=#FF0000',
             'indicator_off_color=#FFFF00',
             '[macro.reply]',

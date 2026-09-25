@@ -30,8 +30,8 @@ int main() {
               .prefer_portal = true,
               .has_portal = false,
               .has_x11 = true,
-          }) == elder_terms::HotkeyBackendKind::x11,
-          "X11 should be used when the preferred portal is unavailable")) {
+          }) == elder_terms::HotkeyBackendKind::none,
+          "Wayland without a portal must use desktop commands, not XWayland grabs")) {
     return 1;
   }
   if (!expect(

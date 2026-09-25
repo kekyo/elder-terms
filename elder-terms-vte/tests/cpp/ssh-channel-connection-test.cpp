@@ -60,6 +60,7 @@ struct ServerOptions {
   std::string payload = "SSH integration payload";
   std::filesystem::path sftp_root;
   std::string expected_exec_command;
+  bool abrupt_disconnect = false;
 };
 
 struct ServerState {
@@ -125,6 +126,7 @@ struct ClientCase {
   bool request_host_key_reset = false;
   bool expected_host_key_reset_available = false;
   bool preserve_protected_host_markers = false;
+  bool remote_disconnect = false;
   std::vector<elder_terms::SshUserPromptKind> expected_prompts = {};
 };
 
@@ -457,7 +459,7 @@ static int on_channel_data(ssh_session, ssh_channel channel, void *data,
   state->payload.append(static_cast<const char *>(data), size);
   const int written = ssh_channel_write(channel, data, size);
   state->payload_echoed = written == static_cast<int>(size);
-  if (state->payload_echoed) {
+  if (state->payload_echoed && !state->options.abrupt_disconnect) {
     (void)ssh_channel_send_eof(channel);
   }
   return static_cast<int>(size);
@@ -914,6 +916,9 @@ static int run_server_process(const ServerOptions &options, int port_fd,
 
   const int validation_result =
       state.release_requested ? validate_server_state(state) : 24;
+  if (options.abrupt_disconnect) {
+    (void)::shutdown(ssh_get_fd(session), SHUT_RDWR);
+  }
   stop_sftp_server(&state);
   state.event = nullptr;
   ssh_event_remove_fd(event, release_fd);
@@ -1139,7 +1144,9 @@ exercise_sftp_client_async(
 
 static int run_client_case(const ServerOptions &server_options,
                            const ClientCase &client_case) {
-  ChildServer server = start_server(server_options);
+  auto effective_options = server_options;
+  effective_options.abrupt_disconnect = client_case.remote_disconnect;
+  ChildServer server = start_server(effective_options);
   std::cout << "SSH case " << auth_mode_name(client_case.auth_mode) << " port=" << server.port << std::endl;
   if (!client_case.conflicting_host_public_key.empty()) {
     const std::filesystem::path target_file =
@@ -1295,41 +1302,53 @@ static int run_client_case(const ServerOptions &server_options,
           transport->endpoint_settings().username ==
               client_case.prompted_username,
           "SSH transport should expose the prompted username");
+      if (client_case.remote_disconnect) {
+        const unsigned char release = 1;
+        expect_true(write_all_fd(server.release_fd, &release, sizeof(release)),
+                    "failed to release the SSH test server");
+        (void)::close(server.release_fd);
+        server.release_fd = -1;
+        expect_true(co_await connection->read_async(buffer,
+                        cancellation_source.get_cancellation()) == 0,
+                    "Remote SSH disconnect must be reported as EOF");
+      }
       connection->close();
       connection.reset();
-      expect_true(
-          co_await transport->is_connected_async(
-              cancellation_source.get_cancellation()),
-          "authenticated transport should outlive its shell channel");
-      expect_true(
-          transport.use_count() == 1,
-          "authenticated transport retained unexpected owners: " +
-              std::to_string(transport.use_count()));
-      if (!server_options.sftp_root.empty()) {
-        co_await exercise_sftp_client_async(
-            transport, cancellation_source.get_cancellation());
+      if (!client_case.remote_disconnect) {
+        expect_true(
+            co_await transport->is_connected_async(
+                cancellation_source.get_cancellation()),
+            "authenticated transport should outlive its shell channel");
         expect_true(
             transport.use_count() == 1,
-            "SFTP client retained the authenticated transport after close");
+            "authenticated transport retained unexpected owners: " +
+                std::to_string(transport.use_count()));
+        if (!server_options.sftp_root.empty()) {
+          co_await exercise_sftp_client_async(
+              transport, cancellation_source.get_cancellation());
+          expect_true(
+              transport.use_count() == 1,
+              "SFTP client retained the authenticated transport after close");
+        }
+        if (!server_options.expected_exec_command.empty()) {
+          const elder_terms::FileHashes hashes =
+              co_await elder_terms::calculate_ssh_file_hashes_async(
+                  transport, "/server's payload.txt",
+                  cancellation_source.get_cancellation());
+          expect_true(
+              hashes.md5 == "38adb9eb75e100197e43a3626662315a" &&
+                  hashes.sha1 ==
+                      "543d35939ab278c16ab479a9e39a1580ebc49413" &&
+                  hashes.sha256 ==
+                      "7588cf1ef3681d5379f11b15bd4bf803d9a7fd22dc77cd6c15242c5265d196ff",
+              "SSH file hash values did not match the server response");
+        }
+        const unsigned char release = 1;
+        expect_true(write_all_fd(server.release_fd, &release, sizeof(release)),
+                    "failed to release the SSH test server");
+        (void)::close(server.release_fd);
+        server.release_fd = -1;
       }
-      if (!server_options.expected_exec_command.empty()) {
-        const elder_terms::FileHashes hashes =
-            co_await elder_terms::calculate_ssh_file_hashes_async(
-                transport, "/server's payload.txt",
-                cancellation_source.get_cancellation());
-        expect_true(
-            hashes.md5 == "38adb9eb75e100197e43a3626662315a" &&
-                hashes.sha1 ==
-                    "543d35939ab278c16ab479a9e39a1580ebc49413" &&
-                hashes.sha256 ==
-                    "7588cf1ef3681d5379f11b15bd4bf803d9a7fd22dc77cd6c15242c5265d196ff",
-            "SSH file hash values did not match the server response");
-      }
-      const unsigned char release = 1;
-      expect_true(write_all_fd(server.release_fd, &release, sizeof(release)),
-                  "failed to release the SSH test server");
-      (void)::close(server.release_fd);
-      server.release_fd = -1;
       transport.reset();
     } catch (...) {
       async_error = std::current_exception();
@@ -1479,6 +1498,7 @@ AAAEA8cCQePgwL2LLorJKJb/mbOaBviLYfCkaS2lc+lgrnvZglDbkkh3abjMMTzSsZS5/X
           .known_hosts_file = known_hosts_file,
           .config_file = {},
           .authentication_answer = {},
+          .remote_disconnect = true,
           .expected_prompts = {
               elder_terms::SshUserPromptKind::username,
               elder_terms::SshUserPromptKind::host_key,

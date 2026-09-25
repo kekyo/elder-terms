@@ -946,6 +946,7 @@ describe.concurrent('shared settings widget', () => {
               'Connection type',
               'Title and status bar background',
               'Content background',
+              'Close window when session ends',
             ],
           },
           {
@@ -1010,7 +1011,6 @@ describe.concurrent('shared settings widget', () => {
               'Active indicator color',
               'Inactive indicator color',
               'Font families',
-              'Close window when session ends',
               'Show window side borders',
               'Window side border width (px)',
               'Zoom in shortcut',
@@ -1078,6 +1078,7 @@ describe.concurrent('shared settings widget', () => {
               '接続方式',
               'タイトル／ステータスバーの背景',
               'コンテンツの背景',
+              'セッション終了時にウィンドウを閉じる',
             ],
           },
           {
@@ -1158,7 +1159,6 @@ describe.concurrent('shared settings widget', () => {
               'スクロールバッファ行数',
               '拡大率',
               'フォントファミリー',
-              'セッション終了時にウィンドウを閉じる',
               'ウィンドウの左右にボーダーを表示する',
               'ウィンドウ左右のボーダー幅（px）',
               '拡大ショートカット',
@@ -1692,18 +1692,18 @@ describe.concurrent('shared settings widget', () => {
         prepare: showTerminalPage,
       },
       {
-        args: ['--page=terminal', '--auto-close=false'],
+        args: ['--page=general', '--auto-close=false'],
         assert: async (app) => {
           await expectSelectedComboValue(
             app,
-            'settings_terminal_auto_close_combo',
+            'settings_general_auto_close_combo',
             'Disabled'
           );
         },
-        differsFrom: 'settings-widget-terminal-page-default',
-        fixtureName: 'settings-widget-terminal-auto-close-false',
-        pageId: 'settings_terminal_page',
-        prepare: showTerminalPage,
+        differsFrom: undefined,
+        fixtureName: 'settings-widget-general-auto-close-false',
+        pageId: 'settings_general_page',
+        prepare: stayOnInitialPage,
       },
     ];
 
@@ -4861,7 +4861,7 @@ describe.concurrent('shared settings widget', () => {
           'entry'
         );
         const autoClose = expectElementKind(
-          await app.getById('settings_terminal_auto_close_combo'),
+          await app.getById('settings_general_auto_close_combo'),
           'comboBox'
         );
         const showBorder = expectElementKind(
@@ -4890,7 +4890,7 @@ describe.concurrent('shared settings widget', () => {
         await expectNumericEntryValue(zoom, 1.25);
         await expectSelectedComboValue(
           app,
-          'settings_terminal_auto_close_combo',
+          'settings_general_auto_close_combo',
           'Disabled'
         );
         await expectSelectedComboValue(
@@ -4959,7 +4959,10 @@ describe.concurrent('shared settings widget', () => {
         await setNumericEntryValue(height, 25);
         await setNumericEntryValue(scrollbackLines, 50000);
         await setNumericEntryValue(zoom, 1.1);
+        await selectSettingsTab(app, 'General');
         await autoClose.selectChildAt(1);
+        await selectSettingsTab(app, 'Terminal');
+        await showTerminalPage(app);
         await showBorder.selectChildAt(2);
         await setNumericEntryValue(borderWidth, 6);
         await scrollTerminalPageToBottom(app);
@@ -5550,7 +5553,7 @@ describe.concurrent('shared settings widget', () => {
       '--global=terminal.height=32',
       '--global=terminal.scrollback_lines=20000',
       '--global=terminal.zoom=1.25',
-      '--global=terminal.auto_close=true',
+      '--global=general.auto_close=true',
       '--global=terminal.show_border=true',
       '--global=terminal.border_width=9',
       '--global=terminal.encoding=CP932',
@@ -5664,7 +5667,7 @@ describe.concurrent('shared settings widget', () => {
       );
       await expectSelectedComboValue(
         app,
-        'settings_terminal_auto_close_combo',
+        'settings_general_auto_close_combo',
         'Enabled (global default)'
       );
       await expectSelectedComboValue(
@@ -5987,7 +5990,7 @@ describe.concurrent('shared settings widget', () => {
         '--page=terminal',
         '--global=general.type=telnet',
         '--global=terminal.encoding=CP932',
-        '--global=terminal.auto_close=true',
+        '--global=general.auto_close=true',
         '--global=terminal.zoom_in_key=alt+F1',
         '--global=telnet.terminal_type=vt220',
       ],
@@ -5999,7 +6002,7 @@ describe.concurrent('shared settings widget', () => {
           'CP932 (global default)'
         );
         const autoClose = expectElementKind(
-          await app.getById('settings_terminal_auto_close_combo'),
+          await app.getById('settings_general_auto_close_combo'),
           'comboBox'
         );
         const zoomIn = await expectInheritedEntry(
@@ -6009,7 +6012,10 @@ describe.concurrent('shared settings widget', () => {
         );
 
         await encoding.setText('CP932');
+        await selectSettingsTab(app, 'General');
         await autoClose.selectChildAt(1);
+        await selectSettingsTab(app, 'Terminal');
+        await showTerminalPage(app);
         await scrollTerminalPageToBottom(app);
         await captureKeyBinding(app, zoomIn, ['alt'], 'F1');
         await selectSettingsTab(app, 'TELNET');

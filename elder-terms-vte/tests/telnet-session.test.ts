@@ -140,7 +140,7 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
         const configPath = join(directory, 'telnet-break.ini');
         await writeFile(
           configPath,
-          `[general]\ntype=telnet\nname=break\n\n[terminal]\nauto_close=false\nsend_break_key=F12\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
+          `[general]\nauto_close=false\ntype=telnet\nname=break\n\n[terminal]\nsend_break_key=F12\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n`,
           'utf8'
         );
 
@@ -711,10 +711,10 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
         );
         await writeFile(
           configPath,
-          `${configTemplate.replace(
+          `[general]\nauto_close=false\n\n${configTemplate.replace(
             '${port}',
             String(port)
-          )}\n[terminal]\nauto_close=false\n`,
+          )}\n[terminal]\n`,
           'utf8'
         );
 
@@ -775,10 +775,10 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
         );
         await writeFile(
           configPath,
-          `${configTemplate.replace(
+          `[general]\nauto_close=false\n\n${configTemplate.replace(
             '${port}',
             String(port)
-          )}\n[terminal]\nauto_close=false\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
+          )}\n[terminal]\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
           'utf8'
         );
 
@@ -835,7 +835,7 @@ describe.concurrent('elder-terms-vte TELNET session', () => {
         await writeFile(sourcePath, 'AÿB\r\nC\rD\n', 'utf8');
         await writeFile(
           configPath,
-          `[general]\ntype=telnet\n\n[terminal]\nauto_close=false\nencoding=ISO-8859-1\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
+          `[general]\nauto_close=false\ntype=telnet\n\n[terminal]\nencoding=ISO-8859-1\n\n[telnet]\naddress=127.0.0.1\nport=${port}\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
           'utf8'
         );
 

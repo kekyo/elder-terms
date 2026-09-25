@@ -7,12 +7,18 @@ import { userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { GtkApp, GtkToggleButtonElement } from 'gestament';
+import {
+  createGtkAppLauncher,
+  type GtkApp,
+  type GtkToggleButtonElement,
+  type GtkTableElement,
+} from 'gestament';
 import { describe, expect, it, type TestContext } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import {
   capturePixel,
+  createTestEvidence,
   expectCaptureToMatchFixture,
   expectElementKind,
   type TestEvidence,
@@ -725,6 +731,7 @@ const startSocatOpenSshd = async (
       'AllowTcpForwarding no',
       'X11Forwarding no',
       'PermitTTY yes',
+      'Subsystem sftp /usr/lib/openssh/sftp-server',
       'StrictModes no',
       'UseDNS no',
       `ForceCommand ${options.loginScriptPath}`,
@@ -1006,10 +1013,10 @@ const writeTelnetConfig = async (
     path,
     [
       '[general]',
+      'auto_close=false',
       'type=telnet',
       '',
       '[terminal]',
-      'auto_close=false',
       'encoding=SHIFT-JIS',
       'backspace_code=del',
       'cursor_key_mode=trs80',
@@ -1044,10 +1051,10 @@ const writeSshConfig = async (
     path,
     [
       '[general]',
+      'auto_close=false',
       'type=ssh',
       '',
       '[terminal]',
-      'auto_close=false',
       'encoding=SHIFT-JIS',
       'backspace_code=del',
       'cursor_key_mode=trs80',
@@ -2129,6 +2136,139 @@ const pauseTransferAtProgressForCapture = async (
 };
 
 describe.concurrent('elder-terms-vte XYZMODEM transfer e2e', () => {
+  registerConnectionTest(
+    connectionCases[1],
+    'SFTP reconnects after the remote session exits',
+    async (context) => {
+      await expectRequiredCommands();
+      await withTemporaryDirectory(async (directory) => {
+        const loginScriptPath = join(directory, 'sftp-login.sh');
+        const pidPath = join(directory, 'sftp.pid');
+        const configPath = join(directory, 'sftp.ini');
+        const remote = join(directory, 'remote');
+        await mkdir(remote);
+        await writeFile(join(remote, 'before.txt'), 'before');
+        await writeFile(
+          loginScriptPath,
+          [
+            '#!/bin/sh',
+            'printf "%s" "$$" > ' + shellQuote(pidPath),
+            'exec /usr/lib/openssh/sftp-server',
+            '',
+          ].join('\n')
+        );
+        await chmod(loginScriptPath, 0o755);
+        const connection = await startSocatOpenSshd({ loginScriptPath });
+        const evidence = createTestEvidence(context);
+        const launcher = createGtkAppLauncher({
+          appPath: fileURLToPath(
+            new URL(
+              '../../.build/elder-terms-vte/elder-terms-file-transfer',
+              import.meta.url
+            )
+          ),
+          timeoutMs: 60_000,
+          env: {
+            ...connection.gtkTestOptions?.env,
+            LANGUAGE: 'en',
+            LC_ALL: 'C.UTF-8',
+            XDG_CONFIG_HOME: join(directory, 'config'),
+          },
+          onSystemOutput: evidence.recordSystemOutputEvent,
+          xvfbTrayHost: true,
+        });
+        const apps: GtkApp[] = [];
+        try {
+          await connection.writeConfig(configPath, directory, false);
+          const config = (await readFile(configPath, 'utf8')).replace(
+            'type=ssh',
+            'type=sftp'
+          );
+          await writeFile(
+            configPath,
+            config +
+              '\n[sftp]\nlocal_directory=' +
+              directory +
+              '\nremote_directory=' +
+              remote +
+              '\n'
+          );
+          const app = await launcher.launch(
+            ['-c', configPath, ...connection.launchArguments],
+            { onOutput: evidence.recordAppOutputEvent }
+          );
+          apps.push(app);
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_accept_button'),
+            'button'
+          ).click();
+          const tree = expectElementKind(
+            await app.getById('file_transfer_remote_tree'),
+            'table'
+          ) as GtkTableElement;
+          const expectRow = async (name: string) => {
+            await waitForResult(async () => {
+              expect((await tree.info()).states).toContain('sensitive');
+              const names = [];
+              for (let row = 0; row < (await tree.getRowCount()); row++)
+                names.push((await (await tree.cellAt(row, 0))?.info())?.name);
+              expect(names).toContain(name);
+            });
+          };
+          await expectRow('before.txt');
+          process.kill(Number(await readFile(pidPath, 'utf8')), 'SIGTERM');
+          await expectElementKind(
+            await app.getById('file_transfer_remote_refresh_button'),
+            'button'
+          ).click();
+          const reconnect = expectElementKind(
+            await app.getById('file_transfer_reconnect_button'),
+            'button'
+          );
+          await waitForResult(async () => {
+            expect((await reconnect.info()).states).toContain('showing');
+            expect(
+              await expectElementKind(
+                await app.getById('file_transfer_status_label'),
+                'label'
+              ).text()
+            ).toBe('Disconnected');
+          });
+          await evidence.captureEvidence('sftp-disconnected', async () =>
+            app.capture()
+          );
+          await writeFile(join(remote, 'after.txt'), 'after');
+          await reconnect.click();
+          await expectElementKind(
+            await app.getById('file_transfer_prompt_accept_button'),
+            'button'
+          ).click();
+          await expectRow('after.txt');
+          expect((await reconnect.info()).states).not.toContain('showing');
+          await evidence.captureEvidence('sftp-reconnected', async () =>
+            app.capture()
+          );
+        } catch (error) {
+          await evidence.log('SFTP reconnect failure', {
+            error,
+            server: connection.diagnostics(),
+          });
+          if (apps.length)
+            await evidence.captureEvidence('sftp-failure', async () =>
+              apps[0].capture()
+            );
+          throw error;
+        } finally {
+          await evidence.flushOutputs(apps, launcher);
+          await launcher.release();
+          await connection.close();
+          await evidence.release();
+        }
+      });
+    },
+    120_000
+  );
+
   registerConnectionTest(
     connectionCases[1],
     'sshd reconnects in the same window and exchanges new macro responses',

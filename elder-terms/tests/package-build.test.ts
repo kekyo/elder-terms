@@ -116,6 +116,7 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
   );
 
   const executablePaths = [
+    'usr/bin/etctl',
     'usr/lib/elder-terms/libelder-terms.so',
     'usr/lib/elder-terms/launcher/elder-terms',
     'usr/lib/elder-terms/elder-terms-vte/elder-terms-vte',
@@ -664,6 +665,30 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       [goodPackage, canonicalArchitecture!]
     );
     expectSuccess(goodValidation, 'complete deb package was rejected');
+    const missingControlStage = join(temporaryRoot, 'missing-control-stage');
+    const missingControlPackage = join(temporaryRoot, 'missing-control.deb');
+    createPackageStage(
+      missingControlStage,
+      debianArchitecture,
+      'usr/bin/etctl',
+      true,
+      true
+    );
+    expectSuccess(
+      run(dpkgDeb, [
+        '--root-owner-group',
+        '--build',
+        missingControlStage,
+        missingControlPackage,
+      ]),
+      'control test package creation failed'
+    );
+    const missingControlValidation = runSourced(
+      'VERSION=1.2.3\nvalidate_deb_package "$2" "$3"',
+      [missingControlPackage, canonicalArchitecture!]
+    );
+    expect(missingControlValidation.status).not.toBe(0);
+    expect(missingControlValidation.stderr).toContain('usr/bin/etctl');
     for (const language of ['ja', 'en']) {
       for (const document of ['webdav.md', 'webdav-validation.md']) {
         const missingPath = `usr/share/doc/elder-terms/docs/${language}/${document}`;

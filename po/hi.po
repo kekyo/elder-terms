@@ -1050,16 +1050,16 @@ msgid "Restore defaults"
 msgstr "डिफ़ॉल्ट पुनर्स्थापित करें"
 
 #: elder-terms/src/main.cpp:262
-msgid "Global shortcuts are unavailable"
-msgstr "वैश्विक शॉर्टकट अनुपलब्ध हैं"
+msgid "Hotkeys are unavailable"
+msgstr "हॉटकी उपलब्ध नहीं हैं"
 
 #: elder-terms/src/main.cpp:271
 msgid ""
-"One or more configured global shortcuts could not be registered and will not "
-"work. Check whether your desktop environment supports global shortcuts."
+"One or more configured hotkeys could not be registered and will not work. "
+"Check whether your desktop environment supports hotkeys."
 msgstr ""
-"एक या अधिक कॉन्फ़िगर किए गए वैश्विक शॉर्टकट पंजीकृत नहीं किए जा सके और काम नहीं करेंगे। "
-"जांचें कि क्या आपका डेस्कटॉप वातावरण वैश्विक शॉर्टकट का समर्थन करता है।"
+"कॉन्फ़िगर की गई एक या अधिक हॉटकी पंजीकृत नहीं की जा सकीं और काम नहीं करेंगी। "
+"जाँचें कि आपका डेस्कटॉप वातावरण हॉटकी का समर्थन करता है या नहीं।"
 
 #: elder-terms/src/main.cpp:275 elder-terms-vte/src/main-window.ui:393
 #: elder-terms-vte/src/main-window.cpp:1617

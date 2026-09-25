@@ -163,7 +163,8 @@ static cardio::promise<void> browse_async(
     bool rejected = false;
     try {
       co_await client->rename_async("/home/data.txt", "/home/denied", cancellation);
-    } catch (const std::runtime_error &) {
+    } catch (const elder_terms::RemoteFileError &error) {
+      expect(!error.connection_lost, "Permission errors must not disconnect the session");
       rejected = true;
     }
     expect(rejected && std::filesystem::exists(server.directory / "home/data.txt"),
@@ -206,6 +207,13 @@ static cardio::promise<void> browse_async(
     const auto restored = co_await client->load_directory_async("/home", cancellation);
     expect(restored.canonical_path == "/home" && restored.entries.size() == 5,
            "Ordinary operation refusals must leave the client usable");
+    expect(::kill(server.pid, SIGTERM) == 0, "Test server must stop after a successful connection");
+    while (::waitpid(server.pid, nullptr, 0) < 0 && errno == EINTR) {}
+    server.pid = -1;
+    bool disconnected = false;
+    try { (void)co_await client->load_directory_async("/home", cancellation); }
+    catch (const elder_terms::RemoteFileError &error) { disconnected = error.connection_lost; }
+    expect(disconnected, "A remote FTP shutdown must be reported as a disconnected session");
   } catch (...) {
     failure = std::current_exception();
   }

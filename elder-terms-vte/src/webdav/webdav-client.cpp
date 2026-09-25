@@ -101,7 +101,8 @@ static cardio::promise<void> mutate_webdav_async(
   const auto url = request.url;
   const auto result = co_await perform_http_request_async(connection->session, std::move(request), cancellation);
   if (result.code != CURLE_OK)
-    throw std::runtime_error("WebDAV " + method + " result is uncertain for " + path + ": " + webdav_http_error(result).what());
+    throw RemoteFileError("WebDAV " + method + " result is uncertain for " + path + ": " + webdav_http_error(result).what(),
+                          webdav_http_error(result).connection_lost);
   if (result.status >= 300 && result.status < 400)
     throw std::runtime_error("WebDAV " + method + " redirect was not followed; check the configured resource path: " + path);
   if (result.status == 207) {

@@ -64,6 +64,7 @@ struct ApplicationState {
   std::optional<cardio::promise<void>> shutdown_task;
   std::optional<cardio::promise<void>> ssh_prompt_fixture_task;
   std::optional<cardio::promise<void>> sftp_open_task;
+  std::optional<cardio::promise<void>> sftp_close_task;
   std::optional<cardio::promise<void>> sftp_connection_check_task;
   std::optional<cardio::cancellation_source> sftp_cancel_source;
   std::shared_ptr<elder_terms::AuthenticatedSshTransport> sftp_transport;
@@ -452,7 +453,7 @@ static cardio::promise<void> check_shared_sftp_connection_async(
 static void start_shared_sftp_connection_check(
     ApplicationState *state) {
   if (state == nullptr || state->sftp_window == nullptr ||
-      state->sftp_connection_check_active) {
+      state->sftp_connection_check_active || state->sftp_opening) {
     return;
   }
   if (state->test_options.fixture) {
@@ -533,12 +534,33 @@ static void update_application_session_identity(ApplicationState *state) {
     return;
   }
 
+  const char *terminal_title = nullptr;
+  if (state->main_window != nullptr && state->main_window->terminal != nullptr) {
+#if VTE_CHECK_VERSION(0, 78, 0)
+    terminal_title = vte_terminal_get_termprop_string(
+        VTE_TERMINAL(state->main_window->terminal),
+        VTE_TERMPROP_XTERM_TITLE, nullptr);
+#else
+    terminal_title = vte_terminal_get_window_title(
+        VTE_TERMINAL(state->main_window->terminal));
+#endif
+  }
   elder_terms::set_main_window_title(
       state->main_window,
-      elder_terms::terminal_session_window_title(state->session_state));
+      terminal_title != nullptr && terminal_title[0] != '\0'
+          ? std::string(terminal_title)
+          : elder_terms::terminal_session_window_title(state->session_state));
   elder_terms::set_main_window_status_text(
       state->main_window,
       elder_terms::terminal_session_connection_detail(state->session_state));
+}
+
+#if VTE_CHECK_VERSION(0, 78, 0)
+static void on_terminal_title_changed(VteTerminal *, const char *, gpointer data) {
+#else
+static void on_terminal_title_changed(VteTerminal *, gpointer data) {
+#endif
+  update_application_session_identity(static_cast<ApplicationState *>(data));
 }
 
 static void set_application_transfer_progress_visible(ApplicationState *state,
@@ -732,7 +754,7 @@ static void apply_runtime_settings(ApplicationState *state,
         GTK_CHECK_MENU_ITEM(state->log_enabled_menu_item),
         log_settings.enabled ? TRUE : FALSE);
   }
-  state->auto_close = elder_terms::terminal_auto_close(state->settings_store);
+  state->auto_close = elder_terms::general_auto_close(state->settings_store);
   const auto connection_profile =
       elder_terms::terminal_connection_profile(state->settings_store);
   if (!connection_profile.has_value()) {
@@ -1277,19 +1299,26 @@ static GtkWidget *create_text_send_menu_item(ApplicationState *state) {
   return item;
 }
 
-static void on_shared_sftp_window_closed(ApplicationState *state) {
-  if (state == nullptr) {
-    return;
-  }
-  if (state->sftp_cancel_source.has_value()) {
-    (void)state->sftp_cancel_source->cancel();
-    state->sftp_cancel_source.reset();
-  }
+static cardio::promise<void> finish_shared_sftp_window_async(ApplicationState *state) {
+  try {
+    if (state->sftp_open_task) co_await *state->sftp_open_task;
+    if (state->sftp_connection_check_task) co_await *state->sftp_connection_check_task;
+    co_await elder_terms::close_file_transfer_window_async(state->sftp_window);
+  } catch (const cardio::canceled_exception &) {
+  } catch (const std::exception &error) { std::cerr << error.what() << '\n'; }
   state->sftp_connection_check_active = false;
   state->sftp_window.reset();
   state->sftp_client.reset();
   state->sftp_transport.reset();
+  state->sftp_cancel_source.reset();
   maybe_shutdown_application(state);
+}
+
+static void on_shared_sftp_window_closed(ApplicationState *state) {
+  if (state == nullptr) return;
+  if (state->sftp_cancel_source) (void)state->sftp_cancel_source->cancel();
+  state->sftp_close_task.reset();
+  state->sftp_close_task.emplace(finish_shared_sftp_window_async(state));
 }
 
 static cardio::promise<elder_terms::FileHashes>
@@ -1312,6 +1341,61 @@ calculate_shared_sftp_file_hashes_async(
       .sha256 =
           "d79bda8bec3b76fa69692436f1d8ce37a168df014f925dd1fc18c58a550d05a9",
   };
+}
+
+static cardio::promise<void> reconnect_shared_sftp_window_async(
+    ApplicationState *state, elder_terms::SettingsStore settings) {
+  if (state->sftp_open_task) co_await *state->sftp_open_task;
+  state->sftp_opening = true;
+  if (state->sftp_cancel_source) (void)state->sftp_cancel_source->cancel();
+  if (state->sftp_connection_check_task) co_await *state->sftp_connection_check_task;
+  if (!elder_terms::file_transfer_window_widget(state->sftp_window)) {
+    state->sftp_opening = false;
+    co_return;
+  }
+  state->sftp_cancel_source.emplace();
+  const auto cancellation = state->sftp_cancel_source->get_cancellation();
+  state->sftp_client.reset();
+  state->sftp_transport.reset();
+  std::string failure;
+  try {
+    if (state->test_options.fixture) {
+      state->sftp_client = elder_terms::create_sftp_fixture_client(state->test_options.sftp_pause_transfer);
+      state->test_options.shared_sftp_disconnected = false;
+    } else {
+      elder_terms::TerminalSessionCallbacks callbacks{
+          .ended = {}, .activity = {}, .indicator_state = {}, .connection_phase = {},
+          .failure = {}, .output = {}, .zmodem_auto_start = {},
+          .ssh_prompt = [state](const elder_terms::SshUserPrompt &prompt,
+                               cardio::cancellation cancellation) -> cardio::promise<elder_terms::SshUserPromptResponse> {
+            elder_terms::InlinePromptRequest request{
+                .title = prompt.title.empty() ? _("SSH") : prompt.title,
+                .message = prompt.message, .monospace_message = prompt.monospace_message,
+                .accept_label = prompt.kind == elder_terms::SshUserPromptKind::host_key ? _("Accept")
+                    : prompt.kind == elder_terms::SshUserPromptKind::username ? _("Connect") : _("OK"),
+                .cancel_label = _("Cancel"), .initial_text = prompt.initial_text,
+                .input_required = prompt.input_required, .echo = prompt.echo,
+                .cancel_visible = true, .accept_visible = prompt.accept_visible,
+                .alternative_label = _("Reset and Connect"), .alternative_visible = prompt.host_key_reset_available};
+            auto response = co_await elder_terms::prompt_file_transfer_window_async(
+                state->sftp_window, std::move(request), cancellation);
+            co_return elder_terms::SshUserPromptResponse{
+                .accepted = response.accepted, .text = std::move(response.text),
+                .reset_host_key = response.alternative};
+          }};
+      elder_terms::AuthenticatedSshTransportOptions options{
+          .known_hosts_file = state->test_options.ssh_known_hosts_file, .config_file = {}};
+      state->sftp_transport = co_await elder_terms::AuthenticatedSshTransport::connect_async(
+          elder_terms::ssh_endpoint_settings(settings), callbacks, options, cancellation);
+      state->sftp_client = co_await elder_terms::open_sftp_client_async(state->sftp_transport, cancellation);
+    }
+    cancellation.throw_if_cancellation_requested();
+    elder_terms::attach_file_transfer_window_client(state->sftp_window, state->sftp_client);
+  } catch (const cardio::canceled_exception &) {
+  } catch (const std::exception &error) { failure = error.what(); }
+  if (!failure.empty()) co_await elder_terms::show_file_transfer_window_connection_error_async(
+      state->sftp_window, _("Failed to start SFTP"), std::move(failure), cancellation);
+  state->sftp_opening = false;
 }
 
 static void create_shared_sftp_window(ApplicationState *state) {
@@ -1338,6 +1422,11 @@ static void create_shared_sftp_window(ApplicationState *state) {
               [state]() {
                 on_shared_sftp_window_closed(state);
               },
+          .settings = state->settings_store,
+          .config_path = state->config_path,
+          .reconnect = [state](elder_terms::SettingsStore settings) {
+            return reconnect_shared_sftp_window_async(state, std::move(settings));
+          },
       });
   elder_terms::show_file_transfer_window(state->sftp_window);
 }
@@ -1656,6 +1745,7 @@ int main(int argc, char **argv) {
       .shutdown_task = std::nullopt,
       .ssh_prompt_fixture_task = std::nullopt,
       .sftp_open_task = std::nullopt,
+      .sftp_close_task = std::nullopt,
       .sftp_connection_check_task = std::nullopt,
       .sftp_cancel_source = std::nullopt,
       .sftp_transport = nullptr,
@@ -1664,7 +1754,7 @@ int main(int argc, char **argv) {
       .settings_store = settings_result.store,
       .config_path = launch_options.config_path,
       .test_options = launch_options.test,
-      .auto_close = elder_terms::terminal_auto_close(settings_result.store),
+      .auto_close = elder_terms::general_auto_close(settings_result.store),
       .connection_phase =
           elder_terms::TerminalSessionConnectionPhase::disconnected,
       .connection_active = false,
@@ -1904,6 +1994,13 @@ int main(int argc, char **argv) {
     G_CALLBACK(on_main_window_focus_in), &app_state);
   g_signal_connect(app_state.window, "notify::sensitive",
       G_CALLBACK(on_parent_sensitivity_changed), &app_state);
+#if VTE_CHECK_VERSION(0, 78, 0)
+  g_signal_connect(main_window->terminal, "termprop-changed::xterm.title",
+                   G_CALLBACK(on_terminal_title_changed), &app_state);
+#else
+  g_signal_connect(main_window->terminal, "window-title-changed",
+                   G_CALLBACK(on_terminal_title_changed), &app_state);
+#endif
   g_signal_connect(
     main_window->settings_menu_item, "activate",
     G_CALLBACK(on_settings_menu_item_activate), &app_state);
@@ -1951,6 +2048,7 @@ int main(int argc, char **argv) {
   }
   app_state.sftp_connection_check_task.reset();
   app_state.sftp_open_task.reset();
+  app_state.sftp_close_task.reset();
   app_state.sftp_window.reset();
   app_state.sftp_client.reset();
   app_state.sftp_transport.reset();

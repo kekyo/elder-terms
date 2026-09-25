@@ -321,6 +321,29 @@ const brightPixelCount = (capture: GtkCapture): number => {
 };
 
 describe.concurrent('elder-terms-vte local session', () => {
+  it.for(['0', '2'])(
+    'reflects OSC %s in the window title',
+    async (osc, context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const shellPath = join(directory, 'title-shell.sh');
+        await writeFile(
+          shellPath,
+          '#!/bin/sh\nprintf "\\033]' +
+            osc +
+            ';Codex title\\007"\nread answer\n'
+        );
+        await chmod(shellPath, 0o755);
+        await runGtkTest(
+          context,
+          [],
+          async (app) => {
+            await expectMainWindowTitle(app, 'Codex title');
+          },
+          { env: { SHELL: shellPath } }
+        );
+      });
+    }
+  );
   it('starts the configured local process with exact arguments instead of the user shell', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const markerPath = join(directory, 'configured-process-arguments.txt');
@@ -346,7 +369,7 @@ describe.concurrent('elder-terms-vte local session', () => {
       await chmod(fallbackShellPath, 0o755);
       await writeFile(
         configPath,
-        "[local]\ncommand_line=configured-local-process alpha 'two words' $HOME '*'\n\n[terminal]\nauto_close=false\n",
+        "[general]\nauto_close=false\n\n[local]\ncommand_line=configured-local-process alpha 'two words' $HOME '*'\n\n[terminal]\n",
         'utf8'
       );
 
@@ -373,7 +396,7 @@ describe.concurrent('elder-terms-vte local session', () => {
     });
   });
 
-  it('exits when the local shell exits and terminal auto_close is enabled', async (context) => {
+  it('exits when the local shell exits and general auto_close is enabled', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const shell = await createExitingShellFixture(directory);
 
@@ -409,11 +432,15 @@ describe.concurrent('elder-terms-vte local session', () => {
     });
   });
 
-  it('keeps running when the local shell exits and terminal auto_close is disabled', async (context) => {
+  it('keeps running when the local shell exits and general auto_close is disabled', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const shell = await createExitingShellFixture(directory);
       const configPath = join(directory, 'auto-close-disabled.ini');
-      await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
+      await writeFile(
+        configPath,
+        '[general]\nauto_close=false\n\n[terminal]\n',
+        'utf8'
+      );
 
       await runGtkTest(
         context,
@@ -449,10 +476,10 @@ describe.concurrent('elder-terms-vte local session', () => {
         configPath,
         [
           '[general]',
+          'auto_close=false',
           'background=#604020',
           '',
           '[terminal]',
-          'auto_close=false',
           '',
         ].join('\n'),
         'utf8'
@@ -523,7 +550,11 @@ describe.concurrent('elder-terms-vte local session', () => {
     await withTemporaryDirectory(async (directory) => {
       const shell = await createControlledExitShellFixture(directory);
       const configPath = join(directory, 'auto-close-disabled.ini');
-      await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
+      await writeFile(
+        configPath,
+        '[general]\nauto_close=false\n\n[terminal]\n',
+        'utf8'
+      );
 
       await runGtkTest(
         context,
@@ -558,7 +589,11 @@ describe.concurrent('elder-terms-vte local session', () => {
     await withTemporaryDirectory(async (directory) => {
       const shell = await createControlledExitShellFixture(directory);
       const configPath = join(directory, 'auto-close-disabled.ini');
-      await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
+      await writeFile(
+        configPath,
+        '[general]\nauto_close=false\n\n[terminal]\n',
+        'utf8'
+      );
 
       await runGtkTest(
         context,
@@ -597,7 +632,11 @@ describe.concurrent('elder-terms-vte local session', () => {
     await withTemporaryDirectory(async (directory) => {
       const shell = await createRepeatingOutputShellFixture(directory);
       const configPath = join(directory, 'auto-close-disabled.ini');
-      await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
+      await writeFile(
+        configPath,
+        '[general]\nauto_close=false\n\n[terminal]\n',
+        'utf8'
+      );
 
       await runGtkTest(
         context,
@@ -621,7 +660,11 @@ describe.concurrent('elder-terms-vte local session', () => {
     await withTemporaryDirectory(async (directory) => {
       const shell = await createInputShellFixture(directory);
       const configPath = join(directory, 'auto-close-disabled.ini');
-      await writeFile(configPath, '[terminal]\nauto_close=false\n', 'utf8');
+      await writeFile(
+        configPath,
+        '[general]\nauto_close=false\n\n[terminal]\n',
+        'utf8'
+      );
 
       await runGtkTest(
         context,
@@ -647,7 +690,7 @@ describe.concurrent('elder-terms-vte local session', () => {
       const configPath = join(directory, 'terminal-text.ini');
       await writeFile(
         configPath,
-        '[terminal]\nauto_close=false\nbackspace_code=auto\n',
+        '[general]\nauto_close=false\n\n[terminal]\nbackspace_code=auto\n',
         'utf8'
       );
 
@@ -704,7 +747,7 @@ describe.concurrent('elder-terms-vte local session', () => {
         await chmod(shellPath, 0o755);
         await writeFile(
           configPath,
-          `[terminal]\nauto_close=false\nreturn_code=${testCase.name}\n`,
+          `[general]\nauto_close=false\n\n[terminal]\nreturn_code=${testCase.name}\n`,
           'utf8'
         );
 
@@ -744,8 +787,10 @@ describe.concurrent('elder-terms-vte local session', () => {
       const configPath = join(directory, 'keyboard-protocol.ini');
       await writeFile(
         configPath,
-        `[terminal]
+        `[general]
 auto_close=false
+
+[terminal]
 
 [log]
 enabled=true
@@ -824,7 +869,7 @@ mode=cooked
       const configPath = join(directory, 'terminal-size.ini');
       await writeFile(
         configPath,
-        '[terminal]\nwidth=81\nheight=25\nauto_close=false\n',
+        '[general]\nauto_close=false\n\n[terminal]\nwidth=81\nheight=25\n',
         'utf8'
       );
 
@@ -867,7 +912,7 @@ mode=cooked
       await chmod(shellPath, 0o755);
       await writeFile(
         configPath,
-        `[terminal]\nauto_close=false\nencoding=SHIFT-JIS\ncursor_key_mode=trs80\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
+        `[general]\nauto_close=false\n\n[terminal]\nencoding=SHIFT-JIS\ncursor_key_mode=trs80\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
         'utf8'
       );
 
@@ -940,7 +985,7 @@ mode=cooked
         await chmod(shellPath, 0o755);
         await writeFile(
           configPath,
-          `[terminal]\nauto_close=false\nreturn_code=lf\n\n[transfer]\ntext_send_bytes_per_second=8000000\ntext_send_follow_return_code=${String(
+          `[general]\nauto_close=false\n\n[terminal]\nreturn_code=lf\n\n[transfer]\ntext_send_bytes_per_second=8000000\ntext_send_follow_return_code=${String(
             testCase.follow
           )}\n`,
           'utf8'
@@ -1000,7 +1045,7 @@ mode=cooked
       await chmod(shellPath, 0o755);
       await writeFile(
         configPath,
-        '[terminal]\nauto_close=false\n\n[transfer]\ntext_send_bytes_per_second=1\n',
+        '[general]\nauto_close=false\n\n[terminal]\n\n[transfer]\ntext_send_bytes_per_second=1\n',
         'utf8'
       );
 
@@ -1058,7 +1103,7 @@ mode=cooked
       await chmod(shellPath, 0o755);
       await writeFile(
         configPath,
-        `[terminal]\nauto_close=false\nencoding=SHIFT-JIS\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
+        `[general]\nauto_close=false\n\n[terminal]\nencoding=SHIFT-JIS\n\n[transfer]\ntext_send_bytes_per_second=10\n\n[log]\nenabled=true\nbase_directory=${directory}\nfile_name_format=logs/cooked.txt\nmode=cooked\n`,
         'utf8'
       );
 
@@ -1134,7 +1179,7 @@ mode=cooked
         await chmod(shellPath, 0o755);
         await writeFile(
           configPath,
-          '[terminal]\nauto_close=false\nreturn_code=lf\n\n' +
+          '[general]\nauto_close=false\n\n[terminal]\nreturn_code=lf\n\n' +
             '[transfer]\ntext_send_bytes_per_second=10\n' +
             'text_send_follow_return_code=true\n',
           'utf8'

@@ -143,12 +143,15 @@ static bool ordinary_refusal(CURLcode code) {
       code == CURLE_UPLOAD_FAILED;
 }
 
-static std::runtime_error operation_error(const char *name,
+static RemoteFileError operation_error(const char *name,
                                          const CurlFtpResult &result) {
-  return std::runtime_error(std::string(name) + " failed (FTP " +
+  return RemoteFileError(std::string(name) + " failed (FTP " +
       std::to_string(result.response_code) + ", curl " +
       std::to_string(result.code) + "): " +
-      (result.error.empty() ? curl_easy_strerror(result.code) : result.error));
+      (result.error.empty() ? curl_easy_strerror(result.code) : result.error),
+      result.response_code == 421 || result.code == CURLE_COULDNT_CONNECT ||
+      result.code == CURLE_SEND_ERROR || result.code == CURLE_RECV_ERROR ||
+      result.code == CURLE_GOT_NOTHING);
 }
 
 static void require_success(const char *name, const CurlFtpResult &result) {

@@ -71,6 +71,8 @@ struct HotkeyBackendImplementation {
   bool initialization_pending = true;
   bool backend_unavailable = false;
   bool registration_failure_reported = false;
+  bool registration_failed_current = false;
+  std::size_t portal_registered_actions = 0;
   bool destroyed = false;
 };
 
@@ -86,8 +88,11 @@ static cardio::promise<void> run_x11_event_loop_async(
 
 HotkeyBackendKind
 select_hotkey_backend_kind(const HotkeyBackendAvailability &availability) {
-  if (availability.prefer_portal && availability.has_portal) {
-    return HotkeyBackendKind::portal;
+  if (availability.prefer_portal) {
+    // XWayland grabs cannot cover native Wayland windows. Desktop commands
+    // remain available through the independent control socket instead.
+    return availability.has_portal ? HotkeyBackendKind::portal
+                                   : HotkeyBackendKind::none;
   }
   if (availability.has_x11) {
     return HotkeyBackendKind::x11;
@@ -144,8 +149,11 @@ find_hotkey_action_id(const std::vector<HotkeyAction> &actions,
 static void notify_registration_failure(
     HotkeyBackendImplementation *implementation) {
   if (implementation == nullptr || implementation->destroyed ||
-      implementation->actions.empty() ||
-      implementation->registration_failure_reported) {
+      implementation->actions.empty()) {
+    return;
+  }
+  implementation->registration_failed_current = true;
+  if (implementation->registration_failure_reported) {
     return;
   }
   implementation->registration_failure_reported = true;
@@ -154,11 +162,19 @@ static void notify_registration_failure(
   }
 }
 
+static void notify_detection_completed(
+    HotkeyBackendImplementation *implementation) {
+  if (implementation->options.detection_completed) {
+    implementation->options.detection_completed(implementation->kind);
+  }
+}
+
 static void mark_backend_unavailable(
     HotkeyBackendImplementation *implementation) {
   implementation->initialization_pending = false;
   implementation->backend_unavailable = true;
   implementation->kind = HotkeyBackendKind::none;
+  notify_detection_completed(implementation);
   notify_registration_failure(implementation);
 }
 
@@ -166,28 +182,7 @@ static bool has_text(const char *value) {
   return value != nullptr && *value != '\0';
 }
 
-static bool gdk_backend_is_pinned_to_x11() {
-  const char *raw = g_getenv("GDK_BACKEND");
-  if (!has_text(raw)) {
-    return false;
-  }
-  std::string backend = raw;
-  const std::size_t comma = backend.find(',');
-  if (comma != std::string::npos) {
-    backend.resize(comma);
-  }
-  std::transform(
-      backend.begin(), backend.end(), backend.begin(),
-      [](unsigned char value) {
-        return static_cast<char>(std::tolower(value));
-      });
-  return backend == "x11";
-}
-
 static bool should_prefer_portal() {
-  if (gdk_backend_is_pinned_to_x11()) {
-    return false;
-  }
   if (has_text(g_getenv("WAYLAND_DISPLAY"))) {
     return true;
   }
@@ -386,6 +381,7 @@ static bool initialize_x11_backend(
   grab_x11_actions(implementation.get());
   implementation->tasks.emplace_back(
       run_x11_event_loop_async(implementation));
+  notify_detection_completed(implementation.get());
   return true;
 }
 
@@ -553,6 +549,7 @@ static void clear_portal_backend(
   close_portal_session(implementation);
   implementation->portal_session_response_generation = 0;
   implementation->portal_bind_response_generation = 0;
+  implementation->portal_registered_actions = 0;
 }
 
 static void on_portal_activated(
@@ -711,6 +708,12 @@ static void handle_portal_bind_response(
       });
   if (all_accepted && !accepted_ids.empty()) {
     implementation->portal_bind_response_generation = generation;
+    implementation->portal_registered_actions = std::count_if(
+        implementation->actions.begin(), implementation->actions.end(),
+        [&accepted_ids](const HotkeyAction &action) {
+          return std::find(accepted_ids.begin(), accepted_ids.end(),
+                           action.id) != accepted_ids.end();
+        });
   } else {
     std::cerr << "Global shortcuts portal rejected one or more "
                  "hotkey actions\n";
@@ -951,6 +954,7 @@ static cardio::promise<void> initialize_portal_or_fallback_async(
       implementation->kind = selected;
       implementation->initialization_pending = false;
       implementation->backend_unavailable = false;
+      notify_detection_completed(implementation.get());
       start_portal_registration(implementation);
     } else if (selected == HotkeyBackendKind::x11) {
       if (!initialize_x11_backend(implementation)) {
@@ -964,7 +968,7 @@ static cardio::promise<void> initialize_portal_or_fallback_async(
     if (!implementation->destroyed) {
       std::cerr << "Global shortcuts portal is unavailable: "
                 << error.what() << '\n';
-      if (!has_x11 ||
+      if (prefer_portal || !has_x11 ||
           !initialize_x11_backend(implementation)) {
         mark_backend_unavailable(implementation.get());
       }
@@ -998,7 +1002,7 @@ create_hotkey_backend(HotkeyBackendOptions options,
     return state;
   }
   if (implementation->options.dispatcher == nullptr) {
-    if (!has_x11 ||
+    if (prefer_portal || !has_x11 ||
         !initialize_x11_backend(implementation)) {
       mark_backend_unavailable(implementation.get());
     }
@@ -1020,6 +1024,8 @@ void replace_hotkey_actions(
       state->implementation;
   ++implementation->generation;
   implementation->actions = actions;
+  implementation->registration_failed_current = false;
+  implementation->portal_registered_actions = 0;
   if (implementation->initialization_pending) {
     return;
   }
@@ -1057,6 +1063,32 @@ HotkeyBackendKind
 hotkey_backend_kind(const HotkeyBackendState *state) {
   return state == nullptr ? HotkeyBackendKind::none
                           : state->implementation->kind;
+}
+
+HotkeyRegistrationStatus
+hotkey_registration_status(const HotkeyBackendState *state) {
+  if (state == nullptr) {
+    return {HotkeyBackendKind::none, false, true, 0, 0};
+  }
+  const auto &implementation = *state->implementation;
+  const bool pending = implementation.initialization_pending ||
+      (implementation.kind == HotkeyBackendKind::portal &&
+       !implementation.registration_failed_current &&
+       !implementation.actions.empty() &&
+       implementation.portal_bind_response_generation !=
+           implementation.generation);
+  const std::size_t registered =
+      implementation.kind == HotkeyBackendKind::x11
+          ? implementation.x11_grabs.size()
+          : implementation.kind == HotkeyBackendKind::portal
+                ? implementation.portal_registered_actions : 0;
+  return {
+      implementation.kind,
+      pending,
+      implementation.registration_failed_current,
+      implementation.actions.size(),
+      registered,
+  };
 }
 
 } // namespace elder_terms

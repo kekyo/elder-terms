@@ -6,6 +6,8 @@
 namespace elder_terms {
 
 static constexpr char general_section[] = "general";
+static constexpr char general_auto_close_key[] = "auto_close";
+static constexpr bool default_general_auto_close = true;
 static constexpr char general_name_key[] = "name";
 static constexpr char general_type_key[] = "type";
 static constexpr char general_open_connection_key[] = "open_connection";
@@ -111,6 +113,15 @@ static const SettingEntry *connection_name_entry(const SettingsStore &store) {
   return iterator == store.entries.end() ? nullptr : &*iterator;
 }
 
+SettingKey general_auto_close_setting_key() {
+  return make_setting_key(general_section, general_auto_close_key);
+}
+
+bool general_auto_close(const SettingsStore &store) {
+  return setting_boolean_value_or_default(
+      store, general_auto_close_setting_key(), default_general_auto_close);
+}
+
 SettingKey general_name_setting_key() {
   return make_setting_key(general_section, general_name_key);
 }
@@ -135,6 +146,11 @@ SettingKey general_background_setting_key() {
 std::vector<SettingDefinition>
 general_setting_definitions(std::string default_connection_name) {
   return {
+      {
+          .key = general_auto_close_setting_key(),
+          .default_value = SettingValue{default_general_auto_close},
+          .validate = nullptr,
+      },
       {
           .key = general_name_setting_key(),
           .default_value =

@@ -1,7 +1,9 @@
 #include <elder-terms/modal-dialog.h>
+#include <elder-terms/settings-widget.h>
 #include "file-transfer-window.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdarg>
 #include <cstdint>
 #include <ctime>
@@ -24,6 +26,8 @@
 #include <glib/gi18n-lib.h>
 
 #include "file-transfer-engine.h"
+#include "activity-file-client.h"
+#include "../activity-indicator.h"
 #include "local-file-reveal.h"
 #include "../widget-background.h"
 
@@ -128,17 +132,27 @@ struct FileTransferSelectedItem {
 };
 
 struct FileTransferWindow {
+  std::weak_ptr<FileTransferWindow> self;
   GtkWidget *window = nullptr;
+  SettingsStore settings;
+  std::optional<std::filesystem::path> config_path;
+  GtkWidget *settings_dialog = nullptr;
+  SettingsWidgetState *settings_widget = nullptr;
+  guint settings_close_idle = 0;
   GtkWidget *header_bar = nullptr;
   GtkWidget *root_overlay = nullptr;
   GtkWidget *paned = nullptr;
   GtkWidget *dim_overlay = nullptr;
+  GtkWidget *reconnect_button = nullptr;
   GtkWidget *transfer_overlay = nullptr;
   GtkWidget *transfer_label = nullptr;
   GtkWidget *transfer_progress = nullptr;
   GtkWidget *transfer_cancel_button = nullptr;
   GtkWidget *prompt_panel = nullptr;
   GtkWidget *prompt_background = nullptr;
+  std::array<ActivityIndicatorWidget, 3> indicators;
+  GdkPixbuf *indicator_on = nullptr;
+  GdkPixbuf *indicator_off = nullptr;
   GtkWidget *status_bar = nullptr;
   GtkWidget *status_label = nullptr;
   std::string status_text;
@@ -156,6 +170,9 @@ struct FileTransferWindow {
   std::function<cardio::promise<FileHashes>(
       std::string, cardio::cancellation)> remote_file_hash;
   std::function<void()> closed;
+  std::function<cardio::promise<void>(SettingsStore)> reconnect;
+  std::optional<cardio::promise<void>> reconnect_task;
+  bool reconnecting = false;
   cardio::cancellation_source stop_source;
   std::optional<cardio::cancellation_source> transfer_cancel_source;
   std::optional<cardio::promise<void>> transfer_task;
@@ -201,6 +218,17 @@ struct FileTransferWindow {
     }
   }
 };
+
+static bool is_remote_disconnection(std::exception_ptr failure) {
+  if (!failure) return false;
+  try {
+    std::rethrow_exception(failure);
+  } catch (const RemoteFileError &error) {
+    return error.connection_lost;
+  } catch (...) {
+    return false;
+  }
+}
 
 static std::string exception_text(std::exception_ptr error) {
   if (!error) {
@@ -531,9 +559,10 @@ static void set_file_transfer_status(FileTransferWindow *window,
       window->status_label == nullptr) {
     return;
   }
-  window->status_text = text;
+  window->status_text = window->connection_state == FileTransferConnectionState::disconnected
+      ? _("Disconnected") : text;
   const auto displayed = window->certificate_exception
-      ? text + " — " + _("Certificate exception active") : text;
+      ? window->status_text + " — " + _("Certificate exception active") : window->status_text;
   gtk_label_set_text(GTK_LABEL(window->status_label), displayed.c_str());
 }
 
@@ -542,7 +571,7 @@ static void update_file_transfer_sensitivity(FileTransferWindow *window) {
     return;
   }
   const bool idle =
-      !window->transfer_active && !window->browser_action_active && !window->certificate_confirmation;
+      !window->reconnecting && !window->transfer_active && !window->browser_action_active && !window->certificate_confirmation;
   const bool local_ready = idle && !window->local.busy;
   const bool remote_ready =
       idle && !window->remote.busy && window->connection_available;
@@ -591,7 +620,21 @@ static void update_file_transfer_overlay_presentation(
   if (window == nullptr || window->destroyed) {
     return;
   }
+  set_activity_indicator_widget_active(
+      &window->indicators[0], window->connection_available);
+  if (!window->connection_available) {
+    reset_activity_indicator_widget(&window->indicators[1]);
+    reset_activity_indicator_widget(&window->indicators[2]);
+  }
+  const bool disconnected =
+      window->connection_state == FileTransferConnectionState::disconnected;
+  set_widget_visible(window->reconnect_button, disconnected && static_cast<bool>(window->reconnect));
+  // A disconnected remote service must not prevent local browsing.
+  gtk_overlay_set_overlay_pass_through(GTK_OVERLAY(window->root_overlay),
+      window->dim_overlay, disconnected && !window->transfer_active &&
+      !window->browser_action_active && !window->certificate_confirmation);
   const bool connection_blocked =
+      disconnected ||
       window->connection_state == FileTransferConnectionState::connecting ||
       window->connection_state ==
           FileTransferConnectionState::authenticating ||
@@ -602,6 +645,51 @@ static void update_file_transfer_overlay_presentation(
   set_widget_visible(window->transfer_overlay,
                      window->transfer_active ||
                          window->browser_action_progress);
+}
+
+static cardio::promise<void> reconnect_file_transfer_window_async(
+    std::shared_ptr<FileTransferWindow> window) {
+  window->reconnecting = true;
+  window->connection_state = FileTransferConnectionState::connecting;
+  set_file_transfer_status(window.get(), _("Connecting"));
+  update_file_transfer_overlay_presentation(window.get());
+  update_file_transfer_sensitivity(window.get());
+  // Finish all old operations before releasing their client and renewing the
+  // cancellation source. Old completion callbacks cannot affect the new session.
+  (void)window->stop_source.cancel();
+  if (window->transfer_cancel_source) (void)window->transfer_cancel_source->cancel();
+  std::string failure;
+  try {
+    for (auto *task : {&window->transfer_task, &window->browser_action_task,
+                      &window->local.task, &window->remote.task}) {
+      if (!task->has_value()) continue;
+      try { co_await **task; } catch (const cardio::canceled_exception &) {}
+      task->reset();
+    }
+    if (!window->destroyed) {
+      window->client.reset();
+      window->remote_load_started = false;
+      window->certificate_exception = false;
+      window->stop_source = cardio::cancellation_source();
+      co_await window->reconnect(window->settings);
+    }
+  } catch (const cardio::canceled_exception &) {
+  } catch (const std::exception &error) { failure = error.what(); }
+  if (!failure.empty()) {
+    co_await show_file_transfer_window_connection_error_async(
+        window, _("Connection failed"), std::move(failure),
+        window->stop_source.get_cancellation());
+  }
+  window->reconnecting = false;
+  update_file_transfer_sensitivity(window.get());
+}
+
+static void on_file_transfer_reconnect_clicked(GtkButton *, gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
+  if (window->destroyed || window->reconnecting || !window->reconnect ||
+      window->connection_state != FileTransferConnectionState::disconnected) return;
+  window->reconnect_task.reset();
+  window->reconnect_task.emplace(reconnect_file_transfer_window_async(window->self.lock()));
 }
 
 static bool has_file_transfer_progress_operation(
@@ -807,8 +895,8 @@ static void on_notice_response(GtkDialog *dialog, gint, gpointer) {
 }
 
 static void show_file_transfer_error(FileTransferWindow *window,
-                            const std::string &message) {
-  if (window == nullptr || window->destroyed) {
+                            const std::string &message, std::exception_ptr failure) {
+  if (window == nullptr || window->destroyed || is_remote_disconnection(failure)) {
     return;
   }
   GtkWidget *dialog = gtk_message_dialog_new(
@@ -878,7 +966,7 @@ static cardio::promise<void> load_file_transfer_pane_root_async(
       set_file_transfer_status(window, pane->remote
                                   ? _("Failed to load remote directory")
                                   : _("Failed to load local directory"));
-      show_file_transfer_error(window, exception_text(std::current_exception()));
+      show_file_transfer_error(window, exception_text(std::current_exception()), std::current_exception());
       gtk_entry_set_text(GTK_ENTRY(pane->path_entry),
                          pane->current_directory.c_str());
     }
@@ -950,7 +1038,7 @@ static cardio::promise<void> expand_file_transfer_directory_async(
         gtk_tree_path_free(tree_path);
       }
       set_file_transfer_status(window, _("Failed to expand directory"));
-      show_file_transfer_error(window, exception_text(std::current_exception()));
+      show_file_transfer_error(window, exception_text(std::current_exception()), std::current_exception());
     }
   }
   gtk_tree_row_reference_free(reference);
@@ -1309,7 +1397,8 @@ prompt_file_transfer_name_async(
 static cardio::promise<void>
 show_file_transfer_browser_action_error_async(
     FileTransferWindow *window, std::string title, std::string message,
-    cardio::cancellation cancellation) {
+    std::exception_ptr failure, cardio::cancellation cancellation) {
+  if (window->destroyed || is_remote_disconnection(failure)) co_return;
   InlinePromptRequest request{
       .title = std::move(title),
       .message = std::move(message),
@@ -1366,7 +1455,7 @@ static cardio::promise<void> run_file_transfer_new_directory_async(FileTransferP
     set_file_transfer_browser_action_phase(window, true, false, {});
     set_file_transfer_status(window, _("Failed to create folder"));
     co_await show_file_transfer_browser_action_error_async(
-        window, _("Failed to create folder"), exception_text(failure), cancellation);
+        window, _("Failed to create folder"), exception_text(failure), failure, cancellation);
     if (!window->destroyed) {
       set_file_transfer_browser_action_phase(window, false, false, {});
       start_file_transfer_pane_navigation(pane, pane->current_directory);
@@ -1427,7 +1516,7 @@ static cardio::promise<void> run_file_transfer_open_directory_async(
   set_file_transfer_browser_action_phase(window, false, false, {});
   if (failure) {
     show_file_transfer_error(window,
-        std::string(_("Failed to open directory")) + "\n" + exception_text(failure));
+        std::string(_("Failed to open directory")) + "\n" + exception_text(failure), failure);
   }
 }
 
@@ -1503,7 +1592,7 @@ static cardio::promise<void> run_file_transfer_rename_async(
     set_file_transfer_browser_action_phase(window, true, false, {});
     set_file_transfer_status(window, _("Rename failed"));
     co_await show_file_transfer_browser_action_error_async(
-        window, _("Failed to rename item"), message, cancellation);
+        window, _("Failed to rename item"), message, failure, cancellation);
     if (!window->destroyed) {
       set_file_transfer_browser_action_phase(window, false, false, {});
       start_file_transfer_pane_navigation(pane, pane->current_directory);
@@ -1552,8 +1641,12 @@ static cardio::promise<void> run_file_transfer_hash_async(
     set_file_transfer_browser_action_phase(
         window, true, true, _("Calculating hash values…"));
     if (pane->remote) {
+      note_activity_indicator_widget(&window->indicators[1]);
       hashes = co_await window->remote_file_hash(
           item.path, hash_cancellation);
+      if (!window->destroyed) {
+        note_activity_indicator_widget(&window->indicators[2]);
+      }
     } else {
       hashes = co_await calculate_local_file_hashes_async(
           item.path, hash_cancellation);
@@ -1578,7 +1671,7 @@ static cardio::promise<void> run_file_transfer_hash_async(
     set_file_transfer_browser_action_phase(window, true, false, {});
     set_file_transfer_status(window, _("Hash calculation failed"));
     co_await show_file_transfer_browser_action_error_async(
-        window, _("Failed to calculate hash values"), message,
+        window, _("Failed to calculate hash values"), message, failure,
         window->stop_source.get_cancellation());
     if (!window->destroyed) {
       set_file_transfer_browser_action_phase(window, false, false, {});
@@ -1772,7 +1865,7 @@ static cardio::promise<void> run_file_transfer_delete_async(
     set_file_transfer_browser_action_phase(window, true, false, {});
     set_file_transfer_status(window, _("Delete failed"));
     co_await show_file_transfer_browser_action_error_async(
-        window, _("Failed to delete selected items"), message,
+        window, _("Failed to delete selected items"), message, failure,
         cancellation);
     if (!window->destroyed) {
       set_file_transfer_browser_action_phase(window, false, false, {});
@@ -1859,7 +1952,7 @@ static cardio::promise<void> run_file_transfer_window_transfer_async(
   } catch (const FileTransferCleanupFailure &error) {
     if (!window->destroyed) {
       set_file_transfer_status(window, error.cancelled ? _("Transfer cancelled") : _("Transfer failed"));
-      show_file_transfer_error(window, error.what());
+      show_file_transfer_error(window, error.what(), std::current_exception());
     }
   } catch (const cardio::canceled_exception &) {
     if (!window->destroyed) {
@@ -1874,7 +1967,7 @@ static cardio::promise<void> run_file_transfer_window_transfer_async(
         set_file_transfer_status(window, _("Transfer cancelled"));
       } else {
         set_file_transfer_status(window, _("Transfer failed"));
-        show_file_transfer_error(window, message);
+        show_file_transfer_error(window, message, std::current_exception());
       }
     }
   }
@@ -1965,7 +2058,19 @@ static void on_file_transfer_window_destroy(GtkWidget *, gpointer data) {
   if (window == nullptr || window->destroyed) {
     return;
   }
+  if (window->settings_close_idle != 0) {
+    g_source_remove(window->settings_close_idle);
+    window->settings_close_idle = 0;
+  }
+  if (window->settings_dialog != nullptr) {
+    gtk_widget_destroy(window->settings_dialog);
+  }
   cancel_inline_prompt(window->prompt);
+  for (auto &indicator : window->indicators) {
+    release_activity_indicator_widget(&indicator);
+  }
+  g_clear_object(&window->indicator_on);
+  g_clear_object(&window->indicator_off);
   clear_file_transfer_window_colors(window);
   window->destroyed = true;
   window->window = nullptr;
@@ -2442,14 +2547,134 @@ static void clear_file_transfer_window_colors(FileTransferWindow *window) {
   }
 }
 
+static void schedule_file_settings_close(FileTransferWindow *window) {
+  if (window->settings_close_idle != 0) return;
+  window->settings_close_idle = g_idle_add(+[](gpointer data) -> gboolean {
+    auto *owner = static_cast<FileTransferWindow *>(data);
+    owner->settings_close_idle = 0;
+    if (owner->settings_dialog != nullptr) {
+      gtk_widget_destroy(owner->settings_dialog);
+    }
+    return G_SOURCE_REMOVE;
+  }, window);
+}
+
+static void open_file_settings(GtkMenuItem *, gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
+  if (window->settings_dialog != nullptr) {
+    present_modal_dialog(window->settings_dialog);
+    return;
+  }
+  GtkWidget *dialog = gtk_dialog_new();
+  window->settings_dialog = dialog;
+  gestament_gtk_assign_accessible_id(dialog, "settings_dialog");
+  gtk_window_set_title(GTK_WINDOW(dialog), _("Settings"));
+  gtk_window_set_default_size(GTK_WINDOW(dialog), 720, 495);
+  GtkWidget *header = gtk_header_bar_new();
+  gtk_header_bar_set_title(GTK_HEADER_BAR(header), _("Settings"));
+  gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header), TRUE);
+  gtk_window_set_titlebar(GTK_WINDOW(dialog), header);
+  SettingsWidgetCallbacks callbacks;
+  callbacks.apply = [window](const SettingsStore &settings) {
+    window->settings = settings;
+    set_file_transfer_window_colors(
+        window->self.lock(), general_color_settings(settings));
+    schedule_file_settings_close(window);
+  };
+  if (window->config_path) {
+    callbacks.save = [window, apply = callbacks.apply](
+                         const SettingsStore &settings) {
+      const auto result = save_settings(settings, *window->config_path);
+      if (!result.saved) {
+        set_file_transfer_status(window, _("Failed to save connection"));
+      }
+      if (result.saved) {
+        apply(settings);
+      }
+      return result.saved;
+    };
+  }
+  callbacks.cancel = [window] { schedule_file_settings_close(window); };
+  window->settings_widget = create_settings_widget({
+      .store = window->settings,
+      .is_runtime = true,
+      .callbacks = std::move(callbacks)});
+  gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(dialog))),
+                    settings_widget_root(window->settings_widget));
+  g_signal_connect(dialog, "destroy", G_CALLBACK(+[](GtkWidget *, gpointer data) {
+    auto *owner = static_cast<FileTransferWindow *>(data);
+    if (owner->settings_close_idle != 0) {
+      g_source_remove(owner->settings_close_idle);
+      owner->settings_close_idle = 0;
+    }
+    destroy_settings_widget(owner->settings_widget);
+    owner->settings_widget = nullptr;
+    owner->settings_dialog = nullptr;
+  }), window);
+  show_modal_dialog(dialog, GTK_WINDOW(window->window));
+}
+
+static void open_file_about(GtkMenuItem *, gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
+  const char *configured = g_getenv("ELDER_TERMS_LAUNCHER_PATH");
+  std::string launcher = configured == nullptr ? "" : configured;
+  if (launcher.empty()) {
+    const auto root = std::filesystem::read_symlink("/proc/self/exe")
+                          .parent_path().parent_path();
+    for (const char *directory : {"launcher", "elder-terms"}) {
+      const auto candidate = root / directory / "elder-terms";
+      if (g_file_test(candidate.c_str(), G_FILE_TEST_IS_EXECUTABLE)) {
+        launcher = candidate.string();
+        break;
+      }
+    }
+    if (launcher.empty()) {
+      launcher = "elder-terms";
+    }
+  }
+  std::string argument = "--about";
+  gchar *argv[] = {launcher.data(), argument.data(), nullptr};
+  GError *error = nullptr;
+  if (!g_spawn_async(nullptr, argv, nullptr, G_SPAWN_SEARCH_PATH,
+                     nullptr, nullptr, nullptr, &error)) {
+    set_file_transfer_status(
+        window, error == nullptr ? _("Failed to open elder-terms") : error->message);
+    g_clear_error(&error);
+  }
+}
+
+static void create_file_settings_menu(FileTransferWindow *window) {
+  GtkWidget *button = gtk_menu_button_new();
+  gestament_gtk_assign_accessible_id(button, "application_menu_button");
+  gtk_widget_set_tooltip_text(button, _("Application"));
+  gtk_container_add(GTK_CONTAINER(button),
+      gtk_image_new_from_icon_name("open-menu-symbolic", GTK_ICON_SIZE_BUTTON));
+  GtkWidget *menu = gtk_menu_new();
+  GtkWidget *settings = gtk_menu_item_new_with_label(_("Settings"));
+  GtkWidget *about = gtk_menu_item_new_with_label(_("About elder-terms"));
+  gestament_gtk_assign_accessible_id(settings, "settings_menu_item");
+  gestament_gtk_assign_accessible_id(about, "about_menu_item");
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), settings);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), about);
+  g_signal_connect(settings, "activate", G_CALLBACK(open_file_settings), window);
+  g_signal_connect(about, "activate", G_CALLBACK(open_file_about), window);
+  gtk_widget_show_all(menu);
+  gtk_menu_button_set_popup(GTK_MENU_BUTTON(button), menu);
+  gtk_header_bar_pack_end(GTK_HEADER_BAR(window->header_bar), button);
+}
+
 std::shared_ptr<FileTransferWindow>
 create_file_transfer_window(FileTransferWindowOptions options) {
   if (options.protocol_name.empty()) {
     throw std::invalid_argument("File transfer protocol name is required");
   }
   auto state = std::make_shared<FileTransferWindow>();
+  state->self = state;
   state->remote_file_hash = std::move(options.remote_file_hash);
   state->closed = std::move(options.closed);
+  state->reconnect = std::move(options.reconnect);
+  state->settings = std::move(options.settings);
+  state->config_path = std::move(options.config_path);
   state->local.current_directory =
       std::move(options.local_directory);
   state->remote.current_directory =
@@ -2474,6 +2699,7 @@ create_file_transfer_window(FileTransferWindowOptions options) {
       GTK_HEADER_BAR(state->header_bar), TRUE);
   gtk_window_set_titlebar(
       GTK_WINDOW(state->window), state->header_bar);
+  create_file_settings_menu(state.get());
 
   state->root_overlay = gtk_overlay_new();
   gtk_container_add(GTK_CONTAINER(state->window),
@@ -2509,9 +2735,9 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   gtk_widget_set_margin_end(
       status_content, file_transfer_content_padding);
   gtk_widget_set_margin_top(
-      status_content, file_transfer_control_spacing);
+      status_content, 2);
   gtk_widget_set_margin_bottom(
-      status_content, file_transfer_control_spacing);
+      status_content, 2);
   gtk_container_add(
       GTK_CONTAINER(state->status_bar), status_content);
   gtk_box_pack_start(
@@ -2523,6 +2749,34 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   gtk_box_pack_start(
       GTK_BOX(status_content), state->status_label, TRUE, TRUE, 0);
 
+  const auto icon_directory =
+      std::filesystem::read_symlink("/proc/self/exe").parent_path();
+  state->indicator_on = gdk_pixbuf_new_from_file_at_scale(
+      (icon_directory / "green-on.png").c_str(), 18, 18, TRUE, nullptr);
+  state->indicator_off = gdk_pixbuf_new_from_file_at_scale(
+      (icon_directory / "green-off.png").c_str(), 18, 18, TRUE, nullptr);
+  const std::array ids{ActivityIndicatorId::conn, ActivityIndicatorId::sd,
+                       ActivityIndicatorId::rd};
+  for (std::size_t index = 0; index < ids.size(); ++index) {
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_size_request(box, 20, -1);
+    GtkWidget *image = gtk_image_new();
+    const std::string prefix = std::string(activity_indicator_token(ids[index])) + "_indicator_";
+    gestament_gtk_assign_accessible_id(image, (prefix + "image").c_str());
+    GtkWidget *label = gtk_label_new(activity_indicator_label(ids[index]));
+    gestament_gtk_assign_accessible_id(label, (prefix + "label").c_str());
+    PangoAttrList *attributes = pango_attr_list_new();
+    pango_attr_list_insert(attributes, pango_attr_scale_new(0.75));
+    gtk_label_set_attributes(GTK_LABEL(label), attributes);
+    pango_attr_list_unref(attributes);
+    gtk_box_pack_start(GTK_BOX(box), image, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), label, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(status_content), box, FALSE, FALSE, 0);
+    initialize_activity_indicator_widget(&state->indicators[index], image,
+        state->indicator_on, state->indicator_off,
+        index == 0 ? ActivityIndicatorMode::steady : ActivityIndicatorMode::blink);
+  }
+
   state->dim_overlay = gtk_event_box_new();
   gestament_gtk_assign_accessible_id(
       state->dim_overlay, "file_transfer_dim_overlay");
@@ -2532,6 +2786,15 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   gtk_widget_set_valign(state->dim_overlay, GTK_ALIGN_FILL);
   gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay),
                           state->dim_overlay);
+
+  state->reconnect_button = gtk_button_new_with_label(_("Reconnect"));
+  gestament_gtk_assign_accessible_id(state->reconnect_button, "file_transfer_reconnect_button");
+  gtk_widget_set_no_show_all(state->reconnect_button, TRUE);
+  gtk_widget_set_halign(state->reconnect_button, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(state->reconnect_button, GTK_ALIGN_CENTER);
+  gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay), state->reconnect_button);
+  g_signal_connect(state->reconnect_button, "clicked",
+                   G_CALLBACK(on_file_transfer_reconnect_clicked), state.get());
 
   state->transfer_overlay =
       gtk_frame_new(nullptr);
@@ -2631,7 +2894,17 @@ void attach_file_transfer_window_client(
   if (window->client != nullptr) {
     throw std::logic_error("Remote file client is already attached");
   }
-  window->client = std::move(client);
+  window->client = create_activity_file_client(std::move(client),
+      [weak = std::weak_ptr<FileTransferWindow>(window)](ActivityIndicatorId id) {
+        const auto owner = weak.lock();
+        if (owner && !owner->destroyed && owner->connection_available) {
+          note_activity_indicator_widget(&owner->indicators[id == ActivityIndicatorId::sd ? 1 : 2]);
+        }
+      }, [weak = std::weak_ptr<FileTransferWindow>(window)] {
+        if (const auto owner = weak.lock()) {
+          set_file_transfer_window_connection_available(owner, false);
+        }
+      });
   window->connection_available = true;
   window->connection_state = FileTransferConnectionState::ready;
   set_file_transfer_status(window.get(), _("Ready"));
@@ -2713,7 +2986,7 @@ cardio::promise<void> show_file_transfer_window_connection_error_async(
   InlinePromptRequest request{
       .title = std::move(title),
       .message = std::move(message),
-      .accept_label = _("Close"),
+      .accept_label = window->reconnecting ? _("OK") : _("Close"),
       .cancel_label = _("Cancel"),
       .input_required = false,
       .echo = false,
@@ -2723,7 +2996,13 @@ cardio::promise<void> show_file_transfer_window_connection_error_async(
       window->prompt, std::move(request), std::move(cancellation));
   const InlinePromptResponse response = co_await pending;
   if (response.accepted && !window->destroyed && window->window != nullptr) {
-    gtk_widget_destroy(window->window);
+    if (window->reconnecting) {
+      window->connection_state = FileTransferConnectionState::disconnected;
+      set_file_transfer_status(window.get(), _("Disconnected"));
+      update_file_transfer_overlay_presentation(window.get());
+    } else {
+      gtk_widget_destroy(window->window);
+    }
   }
 }
 
@@ -2740,6 +3019,10 @@ void set_file_transfer_window_connection_available(
   if (!available) {
     if (window->transfer_cancel_source.has_value()) {
       (void)window->transfer_cancel_source->cancel();
+    }
+    if (general_auto_close(window->settings)) {
+      gtk_widget_destroy(window->window);
+      return;
     }
     set_file_transfer_status(window.get(), _("Disconnected"));
   } else {
@@ -2855,7 +3138,7 @@ cardio::promise<void> close_file_transfer_window_async(
   // may start fresh asynchronous I/O, so a dispatcher shutdown alone cannot
   // guarantee that these tasks have stopped using the window's state.
   std::exception_ptr failure;
-  for (auto *task : {&window->transfer_task, &window->browser_action_task,
+  for (auto *task : {&window->reconnect_task, &window->transfer_task, &window->browser_action_task,
                     &window->local.task, &window->remote.task}) {
     if (!task->has_value()) continue;
     try {
