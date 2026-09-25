@@ -644,43 +644,59 @@ lets you open it directly with that hotkey even while the launcher is hidden.
 ### Hotkey Limitations on Wayland
 
 Wayland sessions require an implementation of the XDG Global Shortcuts portal to register hotkeys automatically.
+
 Because [Global Shortcuts has been officially supported since GNOME 48](https://release.gnome.org/48/developers/#global-shortcuts),
 automatic registration is unavailable in Wayland sessions on GNOME 47 or earlier.
 Distributions using the standard GNOME desktop are supported starting with [Ubuntu 25.04](https://discourse.ubuntu.com/t/ubuntu-25-04-plucky-puffin-released/59303) and [Debian 13](https://www.debian.org/News/2025/20250809),
 which adopted GNOME 48 or later.
 
-Automatic registration is unavailable in GNOME Wayland environments on Ubuntu
-24.10 or earlier and Debian 12 or earlier.
+Unfortunately, automatic hotkey registration does not work in Wayland environments running Ubuntu 24.10 or earlier, or Debian 12 or earlier.
 
-X11 sessions are not subject to this limitation. Availability in non-GNOME
-Wayland environments depends on whether the desktop environment supports the
-Global Shortcuts portal. Desktop commands below work without that portal.
+> X11 sessions should work without any issues.
 
-Run `etctl setup` in your logged-in desktop session to detect and configure the available hotkey method. It checks the launcher's X11 registration, waits for Global Shortcuts portal registration and any required approval, or installs the current shortcuts in the user configuration of a Sway or labwc Wayland session and reloads the compositor. Detection uses session capabilities rather than distribution names. Do not run it with `sudo`.
+Additionally, whether hotkeys can be used in Wayland environments other than GNOME depends on whether that desktop environment supports the Global Shortcuts portal.
+
+To make using hotkeys as easy as possible in these environments, you can use the `etctl setup` command.
+
+Running this command automatically attempts the registration methods available in your current environment.
+In X11, it checks for key bindings in the launcher, and in the Global Shortcuts portal, it displays an approval screen if necessary.
+In Sway or labwc Wayland sessions where the portal is unavailable, it saves the current hotkeys to the user’s configuration file and requests the compositor to reload them.
+
+Since hotkey hooking is performed within the user session, do not run this command with `sudo`:
 
 ```sh
 etctl setup
 ```
 
-The command starts the launcher if needed. Run it again after changing saved-connection shortcuts to synchronize desktop configuration. It exits with status 1 if no supported registration method is available or a compositor reload fails.
+The command starts the launcher if needed.
+Run it again after changing saved-connection shortcuts to synchronize desktop configuration.
 
-Repeated runs replace only the bindings managed by elder-terms. When there is no user compositor configuration, setup preserves the system configuration it finds. For labwc, this copies the current system configuration into the user file, so later system configuration updates are not inherited automatically. Sway sessions launched with a custom config path may require adding the generated bindings to that config for persistence. See the [Sway configuration reference](https://github.com/swaywm/sway/blob/master/sway/sway.5.scd) and [labwc configuration search and reload rules](https://labwc.github.io/labwc-config.5.html).
+Repeated runs replace only the bindings managed by elder-terms. When there is no user compositor configuration,
+setup preserves the system configuration it finds.
 
-Run `etctl unsetup` to remove shortcuts that setup saved in user Sway or labwc configuration. It leaves other shortcuts and the configuration files in place. The command works without a running launcher or graphical session. In an active Sway or labwc session, it also reloads the compositor; otherwise, reload the compositor or log in again to apply the change. X11 and Global Shortcuts portal registrations belong to the running launcher and are unaffected by this command.
+- For labwc, this copies the current system configuration into the user file, so later system configuration updates are not inherited automatically.
+  See [labwc configuration search and reload rules](https://labwc.github.io/labwc-config.5.html).
+- Sway sessions launched with a custom config path may require adding the generated bindings to that config for persistence.
+  See the [Sway configuration reference](https://github.com/swaywm/sway/blob/master/sway/sway.5.scd).
+
+Run `etctl unsetup` to remove shortcuts that setup saved in user Sway or labwc configuration.
+
+It leaves other shortcuts and the configuration files in place.
+The command works without a running launcher or graphical session.
+In an active Sway or labwc session, it also reloads the compositor; otherwise, reload the compositor or log in again to apply the change.
+X11 and Global Shortcuts portal registrations belong to the running launcher and are unaffected by this command.
 
 ```sh
 etctl unsetup
 ```
 
-### Desktop Shortcuts Without a Portal
+### Configuring Hotkeys When X11 Sessions or Portals Become Unavailable
 
-Below the version in the About panel, you can check the detected hotkey
-transport and whether `etctl` requests are available. The detected transport
-does not indicate that each configured shortcut was successfully registered.
+Below the version in the About panel, you can check the detected hotkey transport and whether `etctl` requests are available.
 
 X11 sessions register hotkeys directly with X11 and do not require D-Bus.
-On Wayland, automatic registration uses the Global Shortcuts portal. If
-`etctl setup` does not support your desktop, assign a desktop shortcut to one of these commands:
+On Wayland, automatic registration uses the Global Shortcuts portal.
+If `etctl setup` does not support your desktop, assign a desktop shortcut to one of these commands:
 
 ```sh
 # Open elder-terms launcher window
