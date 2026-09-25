@@ -301,7 +301,7 @@ static void show_hotkey_registration_error(ApplicationState *state) {
     return;
   }
 
-  const char *summary = _("Global shortcuts are unavailable");
+  const char *summary = _("Hotkeys are unavailable");
   GtkWidget *dialog = gtk_message_dialog_new(
       GTK_WINDOW(state->main_window->window),
       static_cast<GtkDialogFlags>(0),
@@ -309,9 +309,9 @@ static void show_hotkey_registration_error(ApplicationState *state) {
   gtk_window_set_title(GTK_WINDOW(dialog), "elder-terms");
   gtk_message_dialog_format_secondary_text(
       GTK_MESSAGE_DIALOG(dialog), "%s",
-      _("One or more configured global shortcuts could not be registered and "
+      _("One or more configured hotkeys could not be registered and "
         "will not work. Check whether your desktop environment supports "
-        "global shortcuts."));
+        "hotkeys."));
   append_external_hotkey_commands(state, dialog);
   GtkWidget *close = gtk_dialog_add_button(
       GTK_DIALOG(dialog), _("OK"), GTK_RESPONSE_CLOSE);

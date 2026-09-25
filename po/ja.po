@@ -1073,17 +1073,16 @@ msgstr "etctl: 利用不可"
 msgid "Configure desktop shortcuts to run these commands:"
 msgstr "デスクトップのショートカットに次のコマンドを登録してください:"
 
-msgid "Global shortcuts are unavailable"
-msgstr "グローバルショートカットを利用できません"
+msgid "Hotkeys are unavailable"
+msgstr "ホットキーを利用できません"
 
 #: elder-terms/src/main.cpp:271
 msgid ""
-"One or more configured global shortcuts could not be registered and will not "
-"work. Check whether your desktop environment supports global shortcuts."
+"One or more configured hotkeys could not be registered and will not work. "
+"Check whether your desktop environment supports hotkeys."
 msgstr ""
-"設定されたグローバルショートカットの一部またはすべてを登録できなかったため、"
-"動作しません。デスクトップ環境がグローバルショートカットに対応しているか確認"
-"してください。"
+"設定されたホットキーの一部またはすべてを登録できなかったため、動作しません。"
+"デスクトップ環境がホットキーに対応しているか確認してください。"
 
 #: elder-terms/src/main.cpp:275 elder-terms-vte/src/main-window.ui:393
 #: elder-terms-vte/src/main-window.cpp:1617

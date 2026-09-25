@@ -296,12 +296,12 @@ describe('elder-terms application hotkey lifecycle', () => {
           );
           const summary =
             language === 'ja'
-              ? 'グローバルショートカットを利用できません'
-              : 'Global shortcuts are unavailable';
+              ? 'ホットキーを利用できません'
+              : 'Hotkeys are unavailable';
           const explanation =
             language === 'ja'
-              ? '設定されたグローバルショートカットの一部またはすべてを登録できなかったため、動作しません。デスクトップ環境がグローバルショートカットに対応しているか確認してください。'
-              : 'One or more configured global shortcuts could not be registered and will not work. Check whether your desktop environment supports global shortcuts.';
+              ? '設定されたホットキーの一部またはすべてを登録できなかったため、動作しません。デスクトップ環境がホットキーに対応しているか確認してください。'
+              : 'One or more configured hotkeys could not be registered and will not work. Check whether your desktop environment supports hotkeys.';
           const guidance =
             language === 'ja'
               ? 'デスクトップのショートカットに次のコマンドを登録してください:'

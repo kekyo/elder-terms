@@ -1048,16 +1048,15 @@ msgid "Restore defaults"
 msgstr "恢复默认值"
 
 #: elder-terms/src/main.cpp:262
-msgid "Global shortcuts are unavailable"
-msgstr "全局快捷方式不可用"
+msgid "Hotkeys are unavailable"
+msgstr "热键不可用"
 
 #: elder-terms/src/main.cpp:271
 msgid ""
-"One or more configured global shortcuts could not be registered and will not "
-"work. Check whether your desktop environment supports global shortcuts."
+"One or more configured hotkeys could not be registered and will not work. "
+"Check whether your desktop environment supports hotkeys."
 msgstr ""
-"一个或多个已配置的全局快捷方式无法注册并且无法工作。检查您的桌面环境是否支持"
-"全局快捷方式。"
+"一个或多个已配置的热键无法注册，因此无法使用。请检查您的桌面环境是否支持热键。"
 
 #: elder-terms/src/main.cpp:275 elder-terms-vte/src/main-window.ui:393
 #: elder-terms-vte/src/main-window.cpp:1617

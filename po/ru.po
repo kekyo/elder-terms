@@ -1057,17 +1057,17 @@ msgid "Restore defaults"
 msgstr "Восстановить значения по умолчанию"
 
 #: elder-terms/src/main.cpp:262
-msgid "Global shortcuts are unavailable"
-msgstr "Глобальные ярлыки недоступны"
+msgid "Hotkeys are unavailable"
+msgstr "Горячие клавиши недоступны"
 
 #: elder-terms/src/main.cpp:271
 msgid ""
-"One or more configured global shortcuts could not be registered and will not "
-"work. Check whether your desktop environment supports global shortcuts."
+"One or more configured hotkeys could not be registered and will not work. "
+"Check whether your desktop environment supports hotkeys."
 msgstr ""
-"Один или несколько настроенных глобальных ярлыков не могут быть "
+"Одна или несколько настроенных горячих клавиш не могут быть "
 "зарегистрированы и не будут работать. Проверьте, поддерживает ли ваша среда "
-"рабочего стола глобальные ярлыки."
+"рабочего стола горячие клавиши."
 
 #: elder-terms/src/main.cpp:275 elder-terms-vte/src/main-window.ui:393
 #: elder-terms-vte/src/main-window.cpp:1617

@@ -1054,17 +1054,17 @@ msgid "Restore defaults"
 msgstr "Restaurar valores predeterminados"
 
 #: elder-terms/src/main.cpp:262
-msgid "Global shortcuts are unavailable"
-msgstr "Los atajos globales no están disponibles"
+msgid "Hotkeys are unavailable"
+msgstr "Las teclas de acceso rápido no están disponibles"
 
 #: elder-terms/src/main.cpp:271
 msgid ""
-"One or more configured global shortcuts could not be registered and will not "
-"work. Check whether your desktop environment supports global shortcuts."
+"One or more configured hotkeys could not be registered and will not work. "
+"Check whether your desktop environment supports hotkeys."
 msgstr ""
-"Uno o más accesos directos globales configurados no se pudieron registrar y "
-"no funcionarán. Compruebe si su entorno de escritorio admite accesos "
-"directos globales."
+"No se pudieron registrar una o más teclas de acceso rápido configuradas y no "
+"funcionarán. Compruebe si su entorno de escritorio admite las teclas de acceso "
+"rápido."
 
 #: elder-terms/src/main.cpp:275 elder-terms-vte/src/main-window.ui:393
 #: elder-terms-vte/src/main-window.cpp:1617
