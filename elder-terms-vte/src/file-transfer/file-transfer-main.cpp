@@ -465,8 +465,6 @@ static std::string ftp_authentication_message(
     bool username_missing) {
   std::string message = format_message(
       _("User name for %s:"), connection.address);
-  message += "\n\n";
-  message += _("To log in anonymously, enter anonymous as the user name.");
   if (username_missing) {
     message += "\n\n";
     message += _("User name must not be empty.");
@@ -492,14 +490,16 @@ prompt_ftp_credentials_async(FtpApplicationState *state,
         .input_required = true,
         .echo = true,
         .cancel_visible = true,
+        .alternative_label = "anonymous",
+        .alternative_visible = true,
     };
     auto pending = elder_terms::prompt_file_transfer_window_async(
         state->window, std::move(request), cancellation);
     elder_terms::InlinePromptResponse response = co_await pending;
-    if (!response.accepted) {
+    if (!response.accepted && !response.alternative) {
       co_return std::nullopt;
     }
-    username = std::move(response.text);
+    username = response.alternative ? "anonymous" : std::move(response.text);
     if (username.find_first_not_of(" \t\r\n") != std::string::npos) {
       break;
     }

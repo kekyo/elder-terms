@@ -36,7 +36,7 @@ struct FtpClientOpenOptions {
  * @returns Initialized remote file client with serialized logical operations.
  *
  * @remarks The username must be explicit;
- * anonymous login uses the literal username `anonymous` supplied by the user.
+ * anonymous login uses the literal username `anonymous` selected by the user.
  */
 cardio::promise<std::shared_ptr<RemoteFileClient>>
 open_ftp_client_async(FtpClientOpenOptions options,

@@ -274,8 +274,9 @@ port is 21 and the default data connection mode is `Passive (recommended)`.
 
 Every time the FTP window starts,
 it asks for the user name first and then the password in a separate hidden-input panel.
-For anonymous login, enter `anonymous` explicitly and enter the password expected by the server.
-No anonymous credentials are supplied automatically,
+For anonymous login, click `anonymous` in the user name panel to continue to the password panel.
+You can also enter `anonymous` as the user name and click Connect.
+Enter the password expected by the server; no password is supplied automatically,
 and the entered password is not stored in the connection settings.
 After login, FTP uses the same two-pane file browser and transfer controls as SFTP.
 

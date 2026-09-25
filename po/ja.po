@@ -1679,10 +1679,6 @@ msgstr "リセットして接続"
 msgid "Accept the fixture SSH host key?"
 msgstr "テスト用SSHホスト鍵を承認しますか？"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
-msgid "To log in anonymously, enter anonymous as the user name."
-msgstr "匿名でログインする場合は、ユーザー名に anonymous と入力して下さい。"
-
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:421
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
 #: elder-terms-vte/src/webdav/webdav-application.cpp:76

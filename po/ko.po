@@ -1653,10 +1653,6 @@ msgstr "테스트용 SSH 호스트 키를 수락하시겠습니까?"
 msgid "Enter the user name and password for %s."
 msgstr "%s의 사용자 이름과 비밀번호를 입력하세요."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
-msgid "To log in anonymously, enter anonymous as the user name."
-msgstr "익명으로 로그인하려면 사용자 이름에 anonymous를 입력하세요."
-
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:421
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
 #: elder-terms-vte/src/webdav/webdav-application.cpp:76

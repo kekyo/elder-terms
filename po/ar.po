@@ -1651,10 +1651,6 @@ msgstr "هل تريد قبول مفتاح مضيف SSH التجريبي؟"
 msgid "Enter the user name and password for %s."
 msgstr "أدخل اسم المستخدم وكلمة المرور لـ %s."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
-msgid "To log in anonymously, enter anonymous as the user name."
-msgstr "لتسجيل الدخول بشكل مجهول، أدخل anonymous كاسم المستخدم."
-
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:421
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
 #: elder-terms-vte/src/webdav/webdav-application.cpp:76

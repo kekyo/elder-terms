@@ -1666,10 +1666,6 @@ msgstr "Принять тестовый ключ узла SSH?"
 msgid "Enter the user name and password for %s."
 msgstr "Введите имя пользователя и пароль для %s."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
-msgid "To log in anonymously, enter anonymous as the user name."
-msgstr "Для анонимного входа введите anonymous в качестве имени пользователя."
-
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:421
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
 #: elder-terms-vte/src/webdav/webdav-application.cpp:76
