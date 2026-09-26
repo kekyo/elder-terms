@@ -424,6 +424,7 @@ export const runLauncherGtkTest = async (
       LC_ALL: 'C.UTF-8',
       XDG_CONFIG_HOME: configHome,
       XDG_RUNTIME_DIR: runtimeDirectory,
+      XDG_ACTIVATION_TOKEN: undefined,
       ...options?.env,
     },
     xvfbPool: {
