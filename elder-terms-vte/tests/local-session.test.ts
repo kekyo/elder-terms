@@ -322,22 +322,35 @@ const brightPixelCount = (capture: GtkCapture): number => {
 
 describe.concurrent('elder-terms-vte local session', () => {
   it.for(['0', '2'])(
-    'reflects OSC %s in the window title',
+    'keeps the connection name when OSC %s updates and clears the window title',
     async (osc, context) => {
       await withTemporaryDirectory(async (directory) => {
         const shellPath = join(directory, 'title-shell.sh');
+        const configPath = join(directory, 'named-title.ini');
+        await writeFile(
+          configPath,
+          '[general]\nname=Tokyo / Lab\ntype=local\n',
+          'utf8'
+        );
         await writeFile(
           shellPath,
-          '#!/bin/sh\nprintf "\\033]' +
+          '#!/bin/sh\nread answer\nprintf "\\033]' +
             osc +
-            ';Codex title\\007"\nread answer\n'
+            ';Codex title\\007"\nread answer\nprintf "\\033]' +
+            osc +
+            ';\\007"\nread answer\n'
         );
         await chmod(shellPath, 0o755);
         await runGtkTest(
           context,
-          [],
+          ['-c', configPath],
           async (app) => {
-            await expectMainWindowTitle(app, 'Codex title');
+            await expectMainWindowTitle(app, 'elder-terms | Tokyo / Lab');
+            await focusTerminal(app);
+            await app.input.pressKey('Return');
+            await expectMainWindowTitle(app, 'Codex title | Tokyo / Lab');
+            await app.input.pressKey('Return');
+            await expectMainWindowTitle(app, 'elder-terms | Tokyo / Lab');
           },
           { env: { SHELL: shellPath } }
         );
@@ -489,7 +502,7 @@ describe.concurrent('elder-terms-vte local session', () => {
         context,
         ['-c', configPath],
         async (app, evidence) => {
-          const connectedTitle = 'elder-terms: auto-close-disabled';
+          const connectedTitle = 'elder-terms | auto-close-disabled';
           await waitForActivityIndicatorImageState(app, 'conn', 'on');
           await expectMainWindowTitle(app, connectedTitle);
           await expectMainWindowStatus(app, 'local terminal');

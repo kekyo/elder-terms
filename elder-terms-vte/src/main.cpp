@@ -547,9 +547,8 @@ static void update_application_session_identity(ApplicationState *state) {
   }
   elder_terms::set_main_window_title(
       state->main_window,
-      terminal_title != nullptr && terminal_title[0] != '\0'
-          ? std::string(terminal_title)
-          : elder_terms::terminal_session_window_title(state->session_state));
+      elder_terms::terminal_session_window_title(
+          state->session_state, terminal_title != nullptr ? terminal_title : ""));
   elder_terms::set_main_window_status_text(
       state->main_window,
       elder_terms::terminal_session_connection_detail(state->session_state));
