@@ -2389,3 +2389,11 @@ msgstr "افتح هذا المجلد"
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
 msgid "Failed to open directory"
 msgstr "تعذر فتح المجلد"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Use for New Window"
+msgstr "استخدام للنافذة الجديدة"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to save New Window connection"
+msgstr "تعذر حفظ اتصال النافذة الجديدة"

@@ -47,6 +47,7 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"general", "type", N_("Connection type")},
     SettingLabelEntry{"general", "open_connection",
                       N_("Open connection shortcut")},
+    SettingLabelEntry{"general", "new_window", N_("Use for New Window")},
     SettingLabelEntry{"general", "ui_language", N_("Display language")},
     SettingLabelEntry{"general", "startup_mode", N_("Startup mode")},
     SettingLabelEntry{"general", "open_application",

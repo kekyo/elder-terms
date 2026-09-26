@@ -662,6 +662,121 @@ const connectionStatusTextMask = async (
 };
 
 describe.concurrent('elder-terms-vte settings', () => {
+  for (const action of ['new-window', 'direct', 'explicit', 'unconfigured']) {
+    it(`uses the configured connection only for New Window: ${action}`, async (context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const connections = join(directory, 'elder-terms', 'connections');
+        const marker = join(directory, 'started.txt');
+        await mkdir(connections, { recursive: true });
+        const command = (value: string): string =>
+          `/bin/sh -c 'printf ${value} > "${marker}"; exec /bin/sh'`;
+        await writeFile(
+          join(directory, 'elder-terms', 'global.ini'),
+          `[general]\nnew_window=${action === 'unconfigured' ? '' : 'Selected connection'}\n[local]\ncommand_line=${command('default')}\n`
+        );
+        await writeFile(
+          join(connections, 'Selected connection.ini'),
+          `[general]\nname=Display name\ntype=local\n[local]\ncommand_line=${command('selected')}\n`
+        );
+        const explicitPath = join(connections, 'Explicit.ini');
+        await writeFile(
+          explicitPath,
+          `[general]\ntype=local\n[local]\ncommand_line=${command('explicit')}\n`
+        );
+        const args =
+          action === 'direct'
+            ? []
+            : [
+                '--new-window',
+                ...(action === 'explicit' ? ['-c', explicitPath] : []),
+              ];
+        await runGtkTest(
+          context,
+          args,
+          async (app) => {
+            await waitForResult(async () =>
+              expect(await readFile(marker, 'utf8')).toBe(
+                action === 'new-window'
+                  ? 'selected'
+                  : action === 'explicit'
+                    ? 'explicit'
+                    : 'default'
+              )
+            );
+            await openSettingsDialog(app);
+            const toggle = expectElementKind(
+              await app.getById('settings_general_new_window_switch'),
+              'switch'
+            );
+            expect(await toggle.isChecked()).toBe(action === 'new-window');
+            expect((await toggle.info()).states).not.toContain('sensitive');
+            const before = await readFile(
+              join(directory, 'elder-terms', 'global.ini'),
+              'utf8'
+            );
+            await clickWidget(app, toggle);
+            expect(await toggle.isChecked()).toBe(action === 'new-window');
+            expect(
+              await readFile(
+                join(directory, 'elder-terms', 'global.ini'),
+                'utf8'
+              )
+            ).toBe(before);
+          },
+          { env: { XDG_CONFIG_HOME: directory } }
+        );
+      });
+    });
+  }
+
+  for (const name of ['Missing', '../outside', 'Transfer', 'Broken']) {
+    it(`rejects an unusable New Window connection: ${name}`, async () => {
+      await withTemporaryDirectory(async (directory) => {
+        const connections = join(directory, 'elder-terms', 'connections');
+        await mkdir(connections, { recursive: true });
+        await writeFile(
+          join(directory, 'elder-terms', 'global.ini'),
+          `[general]\nnew_window=${name}\n`
+        );
+        await writeFile(
+          join(connections, 'Transfer.ini'),
+          '[general]\ntype=ftp\n[ftp]\naddress=localhost\n'
+        );
+        await writeFile(join(connections, 'Broken.ini'), '[general\n');
+        let failure:
+          | { code?: number; stdout?: string; stderr?: string }
+          | undefined;
+        try {
+          await execFileAsync(
+            '/usr/bin/xvfb-run',
+            [
+              '-a',
+              fileURLToPath(
+                new URL(
+                  '../../.build/elder-terms-vte/elder-terms-vte',
+                  import.meta.url
+                )
+              ),
+              '--new-window',
+            ],
+            {
+              env: {
+                ...process.env,
+                XDG_CONFIG_HOME: directory,
+                LANGUAGE: 'C',
+                LC_ALL: 'C.UTF-8',
+              },
+            }
+          );
+        } catch (error) {
+          failure = error as typeof failure;
+        }
+        expect(failure?.code).toBe(1);
+        // xvfb-run redirects the application's stderr to its stdout.
+        expect(failure?.stdout, failure?.stderr).toContain('Error:');
+      });
+    });
+  }
   it('uses a Japanese global UI language from a C UTF-8 environment', async (context) => {
     await runGtkTest(
       context,

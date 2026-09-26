@@ -2411,3 +2411,11 @@ msgstr "このディレクトリを開く"
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
 msgid "Failed to open directory"
 msgstr "ディレクトリを開けませんでした"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Use for New Window"
+msgstr "新しいウィンドウで使用"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to save New Window connection"
+msgstr "新しいウィンドウの接続を保存できませんでした"

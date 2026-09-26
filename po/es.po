@@ -2393,3 +2393,11 @@ msgstr "Abrir esta carpeta"
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
 msgid "Failed to open directory"
 msgstr "No se pudo abrir la carpeta"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Use for New Window"
+msgstr "Usar para una ventana nueva"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to save New Window connection"
+msgstr "No se pudo guardar la conexión para una ventana nueva"

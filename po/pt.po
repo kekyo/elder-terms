@@ -2387,3 +2387,11 @@ msgstr "Abrir esta pasta"
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
 msgid "Failed to open directory"
 msgstr "Falha ao abrir a pasta"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Use for New Window"
+msgstr "Usar para uma nova janela"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to save New Window connection"
+msgstr "Falha ao salvar a conexão para uma nova janela"

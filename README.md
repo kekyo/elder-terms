@@ -136,6 +136,25 @@ application for plain text files.
 Changes saved in an external editor are reloaded automatically, including
 editors that replace the file when saving.
 
+To choose the connection opened by "New Window" on a terminal window's desktop
+icon, select a connection in the launcher, turn on "Use for New Window" in the
+General tab, and save it. Saving another connection with this switch on replaces
+the previous selection. The switch cannot be changed from a running terminal's
+settings. Local shell, TELNET, SSH, and serial connections are eligible.
+
+The selection is stored as an application setting in `global.ini`. Use the
+connection entry's name as the value:
+
+```ini
+[general]
+new_window=Local terminal
+```
+
+Renaming the connection in the launcher updates the selection. Deleting it or
+saving it as SFTP, FTP, or WebDAV clears the selection. When no connection is
+selected, the terminal uses built-in settings and global defaults. If the named
+connection is missing, unreadable, or not a terminal connection, startup fails.
+
 It is also useful to remember that `Ctrl`+`=` increases the font size and
 `Ctrl`+`-` decreases it. You can do the same with the mouse wheel while holding
 `Ctrl`.
@@ -173,8 +192,9 @@ in the list take precedence.
 2. Settings saved in INI files: Connection values in `global.ini`, edited with
    "Connection defaults", override the built-in defaults, and each
    connection's INI file overrides `global.ini`. Application-wide settings are
-   edited separately with "Application settings" and are also stored in
-   `global.ini`. These settings are preserved for the next launch.
+   edited with "Application settings", while the New Window connection is
+   selected in the connection's General tab. Both are stored in `global.ini`
+   and preserved for the next launch.
 3. Launch-session settings: If you launch a connection with unsaved changes in
    the launcher, those changes are passed to the connection window as a
    temporary launch profile. Changes made with "Apply" in the settings dialog

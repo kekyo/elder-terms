@@ -870,9 +870,22 @@ static void open_settings_dialog(ApplicationState *state) {
   }
   callbacks.cancel = [state]() { schedule_settings_dialog_close(state); };
 
+  const auto global = elder_terms::load_global_settings(
+      elder_terms::default_global_config_path(), 1.0);
+  const auto new_window_name =
+      elder_terms::application_new_window_connection(global.store);
+  std::error_code path_error;
+  const bool new_window_connection =
+      state->config_path.has_value() && !new_window_name.empty() &&
+      std::filesystem::equivalent(
+          *state->config_path,
+          elder_terms::default_global_config_path().parent_path() /
+              "connections" / (new_window_name + ".ini"),
+          path_error);
   elder_terms::SettingsWidgetOptions options{
       .store = state->settings_store,
       .is_runtime = true,
+      .new_window_connection = new_window_connection,
       .callbacks = std::move(callbacks),
   };
   state->settings_widget =

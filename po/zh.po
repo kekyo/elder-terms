@@ -2363,3 +2363,11 @@ msgstr "打开此目录"
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
 msgid "Failed to open directory"
 msgstr "无法打开目录"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Use for New Window"
+msgstr "用于新建窗口"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to save New Window connection"
+msgstr "无法保存新窗口连接"

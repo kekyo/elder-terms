@@ -1160,6 +1160,28 @@ static std::optional<std::string> read_profile_content(
   return result;
 }
 
+static bool persist_new_window_connection(ApplicationState *state,
+                                           const std::string &name) {
+  const auto result =
+      elder_terms::save_new_window_connection(name, state->global_config_path);
+  print_warnings(result.warnings);
+  if (!result.saved) {
+    show_error(state, _("Failed to save New Window connection"), result.warnings);
+  }
+  return result.saved;
+}
+
+static void replace_new_window_connection_reference(ApplicationState *state,
+                                                     const std::string &original,
+                                                     const std::string &replacement) {
+  const auto global =
+      elder_terms::load_global_settings(state->global_config_path, 1.0);
+  print_warnings(global.warnings);
+  if (elder_terms::application_new_window_connection(global.store) == original) {
+    (void)persist_new_window_connection(state, replacement);
+  }
+}
+
 static bool load_existing_connection(ApplicationState *state,
                                      const std::filesystem::path &path) {
   // Observe before parsing, so a concurrent later write cannot be mistaken
@@ -1184,6 +1206,12 @@ static bool load_existing_connection(ApplicationState *state,
   state->name_dirty = false;
   elder_terms::update_settings_widget_store(state->settings_widget,
                                              result.store);
+  const auto global =
+      elder_terms::load_global_settings(state->global_config_path, 1.0);
+  elder_terms::settings_widget_set_new_window_connection(
+      state->settings_widget,
+      elder_terms::application_new_window_connection(global.store) ==
+          state->persisted_name);
   gtk_stack_set_visible_child_name(GTK_STACK(state->main_window->details_stack),
                                    "settings");
   update_action_sensitivity(state);
@@ -1268,6 +1296,8 @@ static void begin_new_connection(ApplicationState *state) {
                                                global_defaults.store);
   elder_terms::update_settings_widget_store(state->settings_widget,
                                              std::move(store));
+  elder_terms::settings_widget_set_new_window_connection(state->settings_widget,
+                                                          false);
   elder_terms::settings_widget_show_general_page(state->settings_widget);
   gtk_stack_set_visible_child_name(GTK_STACK(state->main_window->details_stack),
                                    "settings");
@@ -2112,6 +2142,8 @@ static void on_delete_connection_dialog_response(GtkDialog *dialog,
     return;
   }
 
+  replace_new_window_connection_reference(state, path->stem().string(), "");
+
   state->external_conflict = false;
   preserve_current_editor_after_list_refresh(state);
   reload_hotkey_actions(state);
@@ -2201,6 +2233,9 @@ static void on_name_edited(GtkCellRendererText *, gchar *path_text,
       show_error(state, _("Failed to rename connection"), result.warnings);
       return;
     }
+
+    replace_new_window_connection_reference(state, state->persisted_name,
+                                             validation.name);
 
     state->selected_path = result.path;
     state->persisted_name = validation.name;
@@ -2355,6 +2390,21 @@ static bool save_current_connection(ApplicationState *state) {
   print_warnings(result.warnings);
   if (!result.saved) {
     show_error(state, _("Failed to save connection"), result.warnings);
+    return false;
+  }
+  const auto global =
+      elder_terms::load_global_settings(state->global_config_path, 1.0);
+  const auto selected =
+      elder_terms::application_new_window_connection(global.store);
+  const auto next =
+      elder_terms::settings_widget_new_window_connection(state->settings_widget)
+          ? validation.name
+          : selected == state->persisted_name ? std::string() : selected;
+  if (next != selected && !persist_new_window_connection(state, next)) {
+    // The profile was saved successfully. Keep its new path and contents so a
+    // retry can finish the application setting without an overwrite prompt.
+    state->selected_path = result.path;
+    state->observed_file_content = read_profile_content(result.path);
     return false;
   }
   select_existing_connection(state, result.path, false);

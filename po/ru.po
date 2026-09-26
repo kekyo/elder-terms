@@ -2393,3 +2393,11 @@ msgstr "Открыть этот каталог"
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
 msgid "Failed to open directory"
 msgstr "Не удалось открыть каталог"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Use for New Window"
+msgstr "Использовать для нового окна"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to save New Window connection"
+msgstr "Не удалось сохранить подключение для нового окна"
