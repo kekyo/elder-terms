@@ -33,6 +33,10 @@ const clickShortcutEntry = async (
   entry: GtkEntryElement,
   clearIcon: boolean
 ): Promise<void> => {
+  await expectElementKind(
+    await app.getById('application_dialog'),
+    'window'
+  ).activate();
   const { bounds } = await entry.capture();
   await app.input.moveMouseTo(
     Math.trunc(
@@ -42,6 +46,9 @@ const clickShortcutEntry = async (
   );
   await app.input.setMouseButton('left', true);
   await app.input.setMouseButton('left', false);
+  await waitForResult(async () => {
+    expect((await entry.info()).states).toContain('focused');
+  });
 };
 
 it('controls the resident launcher and saved connections without D-Bus or a display in the client', async (context) => {
