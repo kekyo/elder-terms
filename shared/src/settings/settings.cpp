@@ -839,9 +839,10 @@ static void update_application_key_file_value(
                         value.c_str());
 }
 
-SettingsSaveResult save_application_settings(
+static SettingsSaveResult save_application_setting_keys(
     const SettingsStore &store,
-    const std::filesystem::path &global_config_path) {
+    const std::filesystem::path &global_config_path,
+    const std::vector<SettingKey> &keys) {
   GKeyFile *key_file = g_key_file_new();
   GError *error = nullptr;
   if (!g_key_file_load_from_file(
@@ -862,13 +863,34 @@ SettingsSaveResult save_application_settings(
   }
   g_clear_error(&error);
 
-  update_application_key_file_value(
-      key_file, store, application_ui_language_setting_key());
-  update_application_key_file_value(
-      key_file, store, application_startup_mode_setting_key());
-  update_application_key_file_value(
-      key_file, store, application_open_hotkey_setting_key());
+  for (const SettingKey &key : keys) {
+    update_application_key_file_value(key_file, store, key);
+  }
   return write_global_settings_key_file(key_file, global_config_path);
+}
+
+SettingsSaveResult save_application_settings(
+    const SettingsStore &store,
+    const std::filesystem::path &global_config_path) {
+  // New Window is edited in the connection editor, independently of this
+  // dialog's snapshot, so saving application settings must preserve it.
+  return save_application_setting_keys(
+      store, global_config_path,
+      {application_ui_language_setting_key(),
+       application_startup_mode_setting_key(),
+       application_open_hotkey_setting_key()});
+}
+
+SettingsSaveResult save_new_window_connection(
+    const std::string &connection,
+    const std::filesystem::path &global_config_path) {
+  auto store = create_global_default_settings(
+      default_terminal_display_settings(1.0));
+  const auto key = application_new_window_setting_key();
+  if (!connection.empty()) {
+    set_explicit_setting_value(&store, key, SettingValue{connection});
+  }
+  return save_application_setting_keys(store, global_config_path, {key});
 }
 
 const char *terminal_backspace_code_to_string(TerminalBackspaceCode code) {

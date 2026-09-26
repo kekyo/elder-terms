@@ -31,6 +31,11 @@ LaunchOptions parse_launch_options(int *argc, char **argv) {
 
   for (int index = 1; index < *argc;) {
     const std::string argument = argv[index];
+    if (argument == "--new-window") {
+      options.new_window = true;
+      ++index;
+      continue;
+    }
     if (argument == "--test-fixture") {
       options.test.fixture = true;
       ++index;

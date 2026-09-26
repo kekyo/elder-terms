@@ -1672,6 +1672,28 @@ static void install_transfer_menu(ApplicationState *state) {
                             menu);
 }
 
+static bool select_new_window_connection(elder_terms::LaunchOptions *options) {
+  if (!options->new_window || options->config_path.has_value() ||
+      options->startup_config_path.has_value()) {
+    return true;
+  }
+  const auto global_path = elder_terms::default_global_config_path();
+  const auto global = elder_terms::load_global_settings(global_path, 1.0);
+  const auto name = elder_terms::application_new_window_connection(global.store);
+  if (name.empty()) {
+    return true;
+  }
+  // A connection name is a repository file stem, never an arbitrary path.
+  if (std::filesystem::path(name).filename() != name || name == "." ||
+      name == ".." || name.find('\\') != std::string::npos) {
+    std::cerr << "Error: invalid New Window connection name: " << name << '\n';
+    return false;
+  }
+  options->config_path = global_path.parent_path() / "connections" /
+                         (name + ".ini");
+  return true;
+}
+
 int main(int argc, char **argv) {
   const elder_terms::ApplicationUiLanguage ui_language =
       elder_terms::load_application_ui_language_preference(
@@ -1682,8 +1704,11 @@ int main(int argc, char **argv) {
     std::cerr << warning << '\n';
   }
   gtk_disable_setlocale();
-  const auto launch_options =
+  auto launch_options =
     elder_terms::parse_launch_options(&argc, argv);
+  if (!select_new_window_connection(&launch_options)) {
+    return 1;
+  }
   gtk_init(&argc, &argv);
   g_set_prgname(terminal_application_id);
   (void)elder_terms::initialize_application_window_icon();
@@ -1713,6 +1738,12 @@ int main(int argc, char **argv) {
 
   for (const std::string &warning : settings_result.warnings) {
     std::cerr << warning << '\n';
+  }
+
+  if (launch_options.new_window && !settings_result.loaded) {
+    std::cerr << "Error: failed to load the New Window connection\n";
+    gtk_widget_destroy(main_window->window);
+    return 1;
   }
 
   const std::optional<elder_terms::TerminalConnectionProfile>

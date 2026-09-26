@@ -280,6 +280,18 @@ ELDER_TERMS_API SettingsSaveResult save_application_settings(
     const std::filesystem::path &global_config_path);
 
 /**
+ * Updates only the application's New Window connection in global.ini.
+ * @param connection Saved connection file stem; an empty string clears it.
+ * @param global_config_path Target global.ini path.
+ * @returns Save status and warnings.
+ * @remarks All unrelated keys and comments are retained. Connection names
+ * are resolved inside the connections directory alongside global.ini.
+ */
+ELDER_TERMS_API SettingsSaveResult save_new_window_connection(
+    const std::string &connection,
+    const std::filesystem::path &global_config_path);
+
+/**
  * Extracts the terminal connection profile from a store.
  *
  * @param store Source settings store.
