@@ -125,6 +125,14 @@ elder_terms_dep = declare_dependency(
 )
 
 if get_option('build_tests')
+settings_widget_theme_test = executable(
+  'settings-widget-theme-test', 'tests/settings-widget-theme-test.cpp',
+  dependencies: elder_terms_dep,
+)
+test('settings-widget-theme-test', find_program('xvfb-run'),
+  args: ['-a', settings_widget_theme_test], timeout: 120,
+  env: ['GSETTINGS_BACKEND=memory'])
+
 elder_terms_modal_dialog_test = executable(
   'elder-terms-modal-dialog-test',
   'tests/modal-dialog-test.cpp',

@@ -41,7 +41,9 @@ const { PNG } = require('pngjs') as typeof import('pngjs');
 
 for (const testCase of [
   'passive',
+  'anonymous',
   'ftps-explicit',
+  'ftps-anonymous',
   'ftps-implicit',
   'ftps-legacy',
   'ftps-prompt-allow',
@@ -321,14 +323,23 @@ for (const testCase of [
         onOutput: evidence.recordAppOutputEvent,
       });
       apps.push(app);
-      await expectElementKind(
-        await app.getById('file_transfer_prompt_entry'),
-        'entry'
-      ).setText('alice');
-      await expectElementKind(
-        await app.getById('file_transfer_prompt_accept_button'),
-        'button'
-      ).click();
+      if (testCase === 'anonymous' || testCase === 'ftps-anonymous') {
+        const anonymous = expectElementKind(
+          await app.getById('file_transfer_prompt_alternative_button'),
+          'button'
+        );
+        expect((await anonymous.info()).name).toBe('anonymous');
+        await anonymous.click();
+      } else {
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_entry'),
+          'entry'
+        ).setText('alice');
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_accept_button'),
+          'button'
+        ).click();
+      }
       await waitForResult(async () => {
         expect(
           await expectElementKind(
@@ -337,6 +348,15 @@ for (const testCase of [
           ).text()
         ).toBe(japanese ? 'パスワード:' : 'Password:');
       });
+      if (testCase === 'anonymous' || testCase === 'ftps-anonymous') {
+        expect(
+          (
+            await (
+              await app.getById('file_transfer_prompt_alternative_button')
+            ).info()
+          ).states
+        ).not.toContain('showing');
+      }
       await expectElementKind(
         await app.getById('file_transfer_prompt_entry'),
         'entry'
@@ -345,6 +365,11 @@ for (const testCase of [
         await app.getById('file_transfer_prompt_accept_button'),
         'button'
       ).click();
+      if (testCase === 'anonymous' || testCase === 'ftps-anonymous') {
+        await waitForResult(async () => {
+          expect(serverLog).toContain('COMMAND USER anonymous');
+        });
+      }
 
       if (invalidCertificate) {
         const title = expectElementKind(

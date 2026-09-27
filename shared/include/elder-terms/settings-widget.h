@@ -88,6 +88,11 @@ struct SettingsWidgetOptions {
   SettingsWidgetMode mode = SettingsWidgetMode::connection;
   /** Prefix used to form stable accessible widget identifiers. */
   std::string id_prefix = "settings";
+  /**
+   * True when this connection is selected for the desktop New Window action.
+   * @remarks The caller persists this selection separately in global.ini.
+   */
+  bool new_window_connection = false;
   /** Optional callbacks emitted by the widget. */
   SettingsWidgetCallbacks callbacks;
   /**
@@ -142,6 +147,24 @@ settings_widget_rebase_fallbacks(SettingsWidgetState *state,
  */
 ELDER_TERMS_API void settings_widget_set_default_connection_name(
     SettingsWidgetState *state, std::string default_connection_name);
+
+/**
+ * Replaces the applied and draft New Window selection for this connection.
+ * @param state Settings widget state.
+ * @param selected True when this connection is selected in global.ini.
+ * @remarks The selection is separate from the connection settings store.
+ * File transfer connections cannot be selected.
+ */
+ELDER_TERMS_API void settings_widget_set_new_window_connection(
+    SettingsWidgetState *state, bool selected);
+
+/**
+ * Returns the draft New Window selection for this connection.
+ * @param state Settings widget state.
+ * @returns True when this terminal connection is selected; false for null.
+ */
+ELDER_TERMS_API bool settings_widget_new_window_connection(
+    const SettingsWidgetState *state);
 
 /**
  * Returns a copy of the current settings draft.

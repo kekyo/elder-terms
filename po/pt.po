@@ -1663,12 +1663,6 @@ msgstr "Aceitar a chave de anfitrião SSH de teste?"
 msgid "Enter the user name and password for %s."
 msgstr "Introduza o nome de utilizador e a palavra-passe para %s."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
-msgid "To log in anonymously, enter anonymous as the user name."
-msgstr ""
-"Para iniciar sessão anonimamente, introduza anonymous como nome de "
-"utilizador."
-
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:421
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
 #: elder-terms-vte/src/webdav/webdav-application.cpp:76
@@ -2393,3 +2387,11 @@ msgstr "Abrir esta pasta"
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
 msgid "Failed to open directory"
 msgstr "Falha ao abrir a pasta"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Use for New Window"
+msgstr "Usar para uma nova janela"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to save New Window connection"
+msgstr "Falha ao salvar a conexão para uma nova janela"

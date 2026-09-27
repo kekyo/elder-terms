@@ -596,7 +596,7 @@ describe.concurrent('elder-terms-vte serial session', () => {
             throw new Error('first serial PTY helper is not running');
           }
 
-          const connectedTitle = 'elder-terms: serial';
+          const connectedTitle = 'elder-terms | serial';
           const connectionStatus = `serial: ${serialDevicePath}:9600:n81n`;
           await pressKeyUntilReceived(app, activeFirstHelper, 'a', '61');
           await waitForActivityIndicatorImageState(app, 'conn', 'on');

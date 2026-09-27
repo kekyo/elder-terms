@@ -547,9 +547,8 @@ static void update_application_session_identity(ApplicationState *state) {
   }
   elder_terms::set_main_window_title(
       state->main_window,
-      terminal_title != nullptr && terminal_title[0] != '\0'
-          ? std::string(terminal_title)
-          : elder_terms::terminal_session_window_title(state->session_state));
+      elder_terms::terminal_session_window_title(
+          state->session_state, terminal_title != nullptr ? terminal_title : ""));
   elder_terms::set_main_window_status_text(
       state->main_window,
       elder_terms::terminal_session_connection_detail(state->session_state));
@@ -870,9 +869,22 @@ static void open_settings_dialog(ApplicationState *state) {
   }
   callbacks.cancel = [state]() { schedule_settings_dialog_close(state); };
 
+  const auto global = elder_terms::load_global_settings(
+      elder_terms::default_global_config_path(), 1.0);
+  const auto new_window_name =
+      elder_terms::application_new_window_connection(global.store);
+  std::error_code path_error;
+  const bool new_window_connection =
+      state->config_path.has_value() && !new_window_name.empty() &&
+      std::filesystem::equivalent(
+          *state->config_path,
+          elder_terms::default_global_config_path().parent_path() /
+              "connections" / (new_window_name + ".ini"),
+          path_error);
   elder_terms::SettingsWidgetOptions options{
       .store = state->settings_store,
       .is_runtime = true,
+      .new_window_connection = new_window_connection,
       .callbacks = std::move(callbacks),
   };
   state->settings_widget =
@@ -1672,6 +1684,28 @@ static void install_transfer_menu(ApplicationState *state) {
                             menu);
 }
 
+static bool select_new_window_connection(elder_terms::LaunchOptions *options) {
+  if (!options->new_window || options->config_path.has_value() ||
+      options->startup_config_path.has_value()) {
+    return true;
+  }
+  const auto global_path = elder_terms::default_global_config_path();
+  const auto global = elder_terms::load_global_settings(global_path, 1.0);
+  const auto name = elder_terms::application_new_window_connection(global.store);
+  if (name.empty()) {
+    return true;
+  }
+  // A connection name is a repository file stem, never an arbitrary path.
+  if (std::filesystem::path(name).filename() != name || name == "." ||
+      name == ".." || name.find('\\') != std::string::npos) {
+    std::cerr << "Error: invalid New Window connection name: " << name << '\n';
+    return false;
+  }
+  options->config_path = global_path.parent_path() / "connections" /
+                         (name + ".ini");
+  return true;
+}
+
 int main(int argc, char **argv) {
   const elder_terms::ApplicationUiLanguage ui_language =
       elder_terms::load_application_ui_language_preference(
@@ -1682,8 +1716,11 @@ int main(int argc, char **argv) {
     std::cerr << warning << '\n';
   }
   gtk_disable_setlocale();
-  const auto launch_options =
+  auto launch_options =
     elder_terms::parse_launch_options(&argc, argv);
+  if (!select_new_window_connection(&launch_options)) {
+    return 1;
+  }
   gtk_init(&argc, &argv);
   g_set_prgname(terminal_application_id);
   (void)elder_terms::initialize_application_window_icon();
@@ -1713,6 +1750,12 @@ int main(int argc, char **argv) {
 
   for (const std::string &warning : settings_result.warnings) {
     std::cerr << warning << '\n';
+  }
+
+  if (launch_options.new_window && !settings_result.loaded) {
+    std::cerr << "Error: failed to load the New Window connection\n";
+    gtk_widget_destroy(main_window->window);
+    return 1;
   }
 
   const std::optional<elder_terms::TerminalConnectionProfile>

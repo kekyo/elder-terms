@@ -3420,6 +3420,68 @@ static void test_global_settings_editor_excludes_connection_name() {
               "global settings should persist explicit defaults");
 }
 
+static void test_new_window_setting_is_global_only() {
+  const auto global_path = temporary_config_path("new-window-global");
+  const auto connection_path = temporary_config_path("new-window-connection");
+  const auto key = elder_terms::make_setting_key("general", "new_window");
+  write_config(global_path, "# User settings\n[general]\n"
+                            "new_window=Local terminal\nui_language=ja\n"
+                            "[terminal]\nwidth=92\n[custom]\nvalue=keep\n");
+  auto global = load_global_settings(global_path, 1.0);
+  expect_true(elder_terms::setting_string_value_or_default(global.store, key,
+                                                          "") ==
+                  "Local terminal",
+              "global.ini should select the New Window connection");
+  expect_true(set_explicit_setting_value(
+                  &global.store, key, elder_terms::SettingValue{std::string("SSH")}),
+              "the New Window connection should be editable globally");
+  expect_true(save_global_settings(global.store, global_path).saved,
+              "the New Window connection should save");
+  const auto reloaded = load_global_settings(global_path, 1.0);
+  expect_true(elder_terms::setting_string_value_or_default(reloaded.store, key,
+                                                          "") == "SSH",
+              "the saved New Window connection should round trip");
+  write_config(global_path, "# User settings\n[general]\n"
+                            "new_window=SSH\nui_language=ja\n"
+                            "[terminal]\nwidth=92\n[custom]\nvalue=keep\n");
+  expect_true(elder_terms::save_new_window_connection("Serial", global_path).saved,
+              "New Window should update independently of connection defaults");
+  const auto selected = load_global_settings(global_path, 1.0);
+  expect_true(elder_terms::application_new_window_connection(selected.store) ==
+                  "Serial" && application_ui_language(selected.store) ==
+                                  ApplicationUiLanguage::japanese &&
+                  terminal_display_settings(selected.store).width == 92,
+              "changing New Window should preserve other effective settings");
+  expect_true(read_config(global_path).find("value=keep") != std::string::npos &&
+                  read_config(global_path).find("# User settings") != std::string::npos,
+              "changing New Window should preserve unknown settings and comments");
+  expect_true(elder_terms::save_application_settings(reloaded.store, global_path).saved &&
+                  elder_terms::application_new_window_connection(
+                      load_global_settings(global_path, 1.0).store) == "Serial",
+              "saving an older application dialog must preserve New Window");
+  expect_true(elder_terms::save_new_window_connection("", global_path).saved &&
+                  elder_terms::application_new_window_connection(
+                      load_global_settings(global_path, 1.0).store).empty(),
+              "clearing New Window should restore an unconfigured selection");
+  write_config(connection_path, "[general]\nnew_window=Other\n");
+  const auto connection = load_settings(
+      {.config_path = connection_path,
+       .startup_config_path = std::nullopt,
+       .global_config_path = global_path},
+      1.0);
+  expect_true(!setting_has_explicit_value(connection.store, key),
+              "connection files must not configure New Window");
+  expect_true(save_settings(connection.store, connection_path).saved,
+              "connection settings should save");
+  const auto saved_connection = load_settings(
+      {.config_path = connection_path, .startup_config_path = std::nullopt},
+      1.0);
+  expect_true(!setting_has_explicit_value(saved_connection.store, key),
+              "New Window must remain an application setting");
+  remove_config(global_path);
+  remove_config(connection_path);
+}
+
 static void test_application_settings_are_global_only() {
   const std::filesystem::path missing_path =
       temporary_config_path("missing-application-settings");
@@ -4545,6 +4607,7 @@ int main() {
     elder_terms_settings_test::test_global_settings_do_not_flatten_into_connection_files();
     elder_terms_settings_test::test_global_settings_editor_excludes_connection_name();
     elder_terms_settings_test::test_application_settings_are_global_only();
+    elder_terms_settings_test::test_new_window_setting_is_global_only();
     elder_terms_settings_test::test_connection_open_hotkey_settings();
     elder_terms_settings_test::test_rebase_preserves_draft_overrides_and_dirty_state();
     elder_terms_settings_test::test_key_binding_conflicts_are_resolved_per_layer();

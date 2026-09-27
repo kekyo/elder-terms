@@ -85,6 +85,20 @@ ELDER_TERMS_API SettingKey application_ui_language_setting_key();
 ELDER_TERMS_API SettingKey application_open_hotkey_setting_key();
 
 /**
+ * Returns the global-only [general] new_window setting key.
+ * @returns Setting key for the saved connection opened by New Window.
+ */
+ELDER_TERMS_API SettingKey application_new_window_setting_key();
+
+/**
+ * Extracts the saved connection name opened by New Window.
+ * @param store Global settings store.
+ * @returns Saved connection file stem, or an empty string when unconfigured.
+ */
+ELDER_TERMS_API std::string
+application_new_window_connection(const SettingsStore &store);
+
+/**
  * Returns the stable INI value for a startup mode.
  *
  * @param mode Startup mode to serialize.

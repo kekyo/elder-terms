@@ -1650,10 +1650,6 @@ msgstr "क्या परीक्षण SSH होस्ट कुंजी �
 msgid "Enter the user name and password for %s."
 msgstr "%s के लिए उपयोगकर्ता नाम और पासवर्ड दर्ज करें।"
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
-msgid "To log in anonymously, enter anonymous as the user name."
-msgstr "अनाम रूप से लॉग इन करने के लिए, उपयोगकर्ता नाम के रूप में anonymous दर्ज करें।"
-
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:421
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
 #: elder-terms-vte/src/webdav/webdav-application.cpp:76
@@ -2374,3 +2370,11 @@ msgstr "यह निर्देशिका खोलें"
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
 msgid "Failed to open directory"
 msgstr "निर्देशिका नहीं खोली जा सकी"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Use for New Window"
+msgstr "नई विंडो के लिए उपयोग करें"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to save New Window connection"
+msgstr "नई विंडो का कनेक्शन सहेजने में विफल"

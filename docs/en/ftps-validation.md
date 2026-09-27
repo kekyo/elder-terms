@@ -1,8 +1,6 @@
 # FTPS validation
 
 This document describes the integration checks for the libcurl FTP backend.
-Validation results are recorded after each complete run in
-[plan-ftps.md](../plan-ftps.md).
 
 ## Development tree
 

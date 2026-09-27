@@ -11,3 +11,9 @@ NoDisplay=true
 Categories=System;TerminalEmulator;
 StartupNotify=true
 StartupWMClass=Elder-terms-vte
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=New Window
+Name[ja]=新しいウィンドウ
+Exec=elder-terms-vte --new-window

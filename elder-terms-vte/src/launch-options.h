@@ -41,6 +41,8 @@ struct TestOptions {
 struct LaunchOptions {
   /** Test harness options. */
   TestOptions test;
+  /** True when the desktop New Window action selects a global connection. */
+  bool new_window = false;
   /** Optional INI configuration path passed with -c. */
   std::optional<std::filesystem::path> config_path;
   /** Optional read-only startup INI configuration path passed with -s. */

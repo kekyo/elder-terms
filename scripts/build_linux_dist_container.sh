@@ -142,7 +142,6 @@ validate_installed_package() {
 		/usr/share/icons/hicolor/256x256/apps/elder-terms.png \
 		/usr/share/locale/ja/LC_MESSAGES/elder-terms.mo \
 		/usr/share/doc/elder-terms/docs/ja/webdav.md \
-		/usr/share/doc/elder-terms/docs/ja/webdav-validation.md \
 		/usr/share/doc/elder-terms/docs/en/webdav.md \
 		/usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 		/usr/share/doc/elder-terms/copyright; do
@@ -252,7 +251,6 @@ for staged_file in \
 	usr/share/icons/hicolor/256x256/apps/elder-terms.png \
 	usr/share/locale/ja/LC_MESSAGES/elder-terms.mo \
 	usr/share/doc/elder-terms/docs/ja/webdav.md \
-	usr/share/doc/elder-terms/docs/ja/webdav-validation.md \
 	usr/share/doc/elder-terms/docs/en/webdav.md \
 	usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 	usr/share/doc/elder-terms/copyright; do

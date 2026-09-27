@@ -18,11 +18,6 @@ namespace elder_terms {
 
 static constexpr const char *application_title = "elder-terms";
 
-static std::string application_window_title(
-    const std::string &connection_name) {
-  return std::string(application_title) + ": " + connection_name;
-}
-
 struct TerminalSessionState {
   GtkWidget *terminal = nullptr;
   TerminalConnectionProfile profile;
@@ -388,12 +383,15 @@ terminal_session_authenticated_ssh_transport(
   return state->session->authenticated_ssh_transport();
 }
 
-std::string terminal_session_window_title(const TerminalSessionState *state) {
+std::string terminal_session_window_title(const TerminalSessionState *state,
+                                         const std::string &terminal_title) {
+  const std::string title =
+      terminal_title.empty() ? application_title : terminal_title;
   if (state == nullptr || state->session == nullptr) {
-    return application_title;
+    return title;
   }
 
-  return application_window_title(state->profile.name);
+  return title + " | " + state->profile.name;
 }
 
 std::string

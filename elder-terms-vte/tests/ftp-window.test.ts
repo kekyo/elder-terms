@@ -92,10 +92,10 @@ describe('FTP window', () => {
       ).toBe('FTP authentication');
       expect(
         await expectElementKind(
-          await app.getById('file_transfer_prompt_message_label'),
-          'label'
-        ).text()
-      ).toContain('To log in anonymously, enter anonymous as the user name.');
+          await app.getById('file_transfer_prompt_alternative_button'),
+          'button'
+        ).info()
+      ).toMatchObject({ name: 'anonymous' });
       expect(
         await expectElementKind(
           await app.getById('file_transfer_prompt_entry_label'),
@@ -115,9 +115,13 @@ describe('FTP window', () => {
       expect(await usernameEntry.text()).toBe('fixture-user');
       await window.activate();
       const promptWidgets = await Promise.all(
-        ['message_label', 'entry', 'cancel_button', 'accept_button'].map(
-          async (suffix) => app.getById(`file_transfer_prompt_${suffix}`)
-        )
+        [
+          'message_label',
+          'entry',
+          'cancel_button',
+          'alternative_button',
+          'accept_button',
+        ].map(async (suffix) => app.getById(`file_transfer_prompt_${suffix}`))
       );
       for (const reverse of [false, true]) {
         const visited = new Set<number>();
@@ -484,7 +488,7 @@ describe('FTP window', () => {
     }
   });
 
-  it('requires an explicit user name and defaults it to the current user', async (context) => {
+  it('requires a user name and supports anonymous login', async (context) => {
     const directory = await mkdtemp(join(tmpdir(), 'elder-terms-ftp-auth-'));
     const evidence = createTestEvidence(context);
     const apps: GtkApp[] = [];
@@ -549,9 +553,8 @@ describe('FTP window', () => {
         ).toContain('User name must not be empty.');
       });
 
-      await usernameEntry.setText('anonymous');
       await expectElementKind(
-        await app.getById('file_transfer_prompt_accept_button'),
+        await app.getById('file_transfer_prompt_alternative_button'),
         'button'
       ).click();
       await waitForResult(async () => {
@@ -562,6 +565,13 @@ describe('FTP window', () => {
           ).text()
         ).toBe('Password:');
       });
+      expect(
+        (
+          await (
+            await app.getById('file_transfer_prompt_alternative_button')
+          ).info()
+        ).states
+      ).not.toContain('showing');
       await usernameEntry.setText('anonymous@example.invalid');
       await expectElementKind(
         await app.getById('file_transfer_prompt_accept_button'),

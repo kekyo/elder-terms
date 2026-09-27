@@ -232,7 +232,7 @@ static void serve(Socket &control, Options options, SSL_CTX *context, SSL_CTX *d
       respond(protected_data ? 200 : 534, "Data protection");
     } else if (verb == "USER") {
       expect(!context || control.tls, "Credentials sent without TLS");
-      valid_user = argument == "alice";
+      valid_user = argument == "alice" || argument == "anonymous";
       respond(valid_user ? 331 : 530, "Identity checked");
     } else if (verb == "PASS") {
       logged_in = valid_user && argument == "secret" && !options.reject_login;

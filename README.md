@@ -136,6 +136,25 @@ application for plain text files.
 Changes saved in an external editor are reloaded automatically, including
 editors that replace the file when saving.
 
+To choose the connection opened by "New Window" on a terminal window's desktop
+icon, select a connection in the launcher, turn on "Use for New Window" in the
+General tab, and save it. Saving another connection with this switch on replaces
+the previous selection. The switch cannot be changed from a running terminal's
+settings. Local shell, TELNET, SSH, and serial connections are eligible.
+
+The selection is stored as an application setting in `global.ini`. Use the
+connection entry's name as the value:
+
+```ini
+[general]
+new_window=Local terminal
+```
+
+Renaming the connection in the launcher updates the selection. Deleting it or
+saving it as SFTP, FTP, or WebDAV clears the selection. When no connection is
+selected, the terminal uses built-in settings and global defaults. If the named
+connection is missing, unreadable, or not a terminal connection, startup fails.
+
 It is also useful to remember that `Ctrl`+`=` increases the font size and
 `Ctrl`+`-` decreases it. You can do the same with the mouse wheel while holding
 `Ctrl`.
@@ -173,8 +192,9 @@ in the list take precedence.
 2. Settings saved in INI files: Connection values in `global.ini`, edited with
    "Connection defaults", override the built-in defaults, and each
    connection's INI file overrides `global.ini`. Application-wide settings are
-   edited separately with "Application settings" and are also stored in
-   `global.ini`. These settings are preserved for the next launch.
+   edited with "Application settings", while the New Window connection is
+   selected in the connection's General tab. Both are stored in `global.ini`
+   and preserved for the next launch.
 3. Launch-session settings: If you launch a connection with unsaved changes in
    the launcher, those changes are passed to the connection window as a
    temporary launch profile. Changes made with "Apply" in the settings dialog
@@ -274,8 +294,9 @@ port is 21 and the default data connection mode is `Passive (recommended)`.
 
 Every time the FTP window starts,
 it asks for the user name first and then the password in a separate hidden-input panel.
-For anonymous login, enter `anonymous` explicitly and enter the password expected by the server.
-No anonymous credentials are supplied automatically,
+For anonymous login, click `anonymous` in the user name panel to continue to the password panel.
+You can also enter `anonymous` as the user name and click Connect.
+Enter the password expected by the server; no password is supplied automatically,
 and the entered password is not stored in the connection settings.
 After login, FTP uses the same two-pane file browser and transfer controls as SFTP.
 
@@ -657,7 +678,14 @@ In these environments, you may need to enable custom hotkeys (below).
 
 ### Manually Enabling Hotkeys
 
-Use `etctl setup` to check registration or synchronize compositor configuration after changing hotkeys while the launcher is running.
+Saving application or connection hotkeys immediately updates the running launcher's registration when the desktop accepts the new bindings.
+The Global Shortcuts portal may ask you to approve the changed bindings.
+On Sway and labwc, the launcher also synchronizes its compositor bindings and requests a reload when direct registration is unavailable.
+Use `etctl setup` to check registration or retry compositor synchronization after a failure.
+
+> Normally, when you launch the elder-terms launcher, it automatically performs a process internally that is equivalent to `etctl setup`.
+> Therefore, you do not need to run this command manually,
+> but if you encounter issues with hotkeys, running this command may provide more detailed results.
 
 The command checks the running launcher's X11 or Global Shortcuts portal registration result. If it starts the launcher,
 the portal may display an approval screen. When registration fails in a Sway or labwc Wayland session,
@@ -670,7 +698,7 @@ etctl setup
 ```
 
 The command starts the launcher if needed.
-Run it after changing saved-connection shortcuts to synchronize desktop configuration without restarting the launcher.
+Manually configured desktop shortcuts are managed in your desktop settings and are not changed by saving elder-terms settings.
 
 Automatic setup and repeated command runs replace only the bindings managed by elder-terms. When there is no user compositor configuration,
 they preserve the system configuration they find.

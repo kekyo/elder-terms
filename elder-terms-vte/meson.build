@@ -372,6 +372,14 @@ file_transfer_window_lifetime_test = executable(
 )
 
 xvfb_run = find_program('xvfb-run')
+widget_background_test = executable(
+  'widget-background-test',
+  ['tests/cpp/widget-background-test.cpp', 'src/widget-background.cpp'],
+  dependencies: [elder_terms_dep, gtk_dep],
+)
+test('widget-background-test', xvfb_run,
+  args: ['-a', widget_background_test], timeout: 120)
+
 test('file-transfer-window-lifetime', xvfb_run,
   args: ['-a', file_transfer_window_lifetime_test], timeout: 120)
 

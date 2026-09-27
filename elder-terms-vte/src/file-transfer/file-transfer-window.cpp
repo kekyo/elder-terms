@@ -2487,6 +2487,7 @@ static void clear_file_transfer_window_colors(FileTransferWindow *window) {
   if (window == nullptr) {
     return;
   }
+  set_widget_exterior_foreground(nullptr, window->status_bar, false);
 
   if (window->exterior_background_provider != nullptr) {
     gtk_style_context_remove_provider(
@@ -3076,6 +3077,7 @@ void set_file_transfer_window_colors(
       g_clear_object(
           &window->exterior_component_background_provider);
     }
+    set_widget_exterior_foreground(window->header_bar, window->status_bar, true);
   }
   if (settings.background.has_value()) {
     window->background_provider =

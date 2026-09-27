@@ -10,6 +10,7 @@ static constexpr char general_section[] = "general";
 static constexpr char ui_language_key[] = "ui_language";
 static constexpr char startup_mode_key[] = "startup_mode";
 static constexpr char open_application_key[] = "open_application";
+static constexpr char new_window_key[] = "new_window";
 static constexpr char window_mode[] = "window";
 static constexpr char background_mode[] = "background";
 static constexpr char tray_mode[] = "tray";
@@ -100,8 +101,22 @@ SettingKey application_open_hotkey_setting_key() {
   return make_setting_key(general_section, open_application_key);
 }
 
+SettingKey application_new_window_setting_key() {
+  return make_setting_key(general_section, new_window_key);
+}
+
+std::string application_new_window_connection(const SettingsStore &store) {
+  return setting_string_value_or_default(
+      store, application_new_window_setting_key(), std::string());
+}
+
 std::vector<SettingDefinition> application_setting_definitions() {
   return {
+      {
+          .key = application_new_window_setting_key(),
+          .default_value = SettingValue{std::string()},
+          .validate = nullptr,
+      },
       {
           .key = application_ui_language_setting_key(),
           .default_value = SettingValue{std::string(system_language)},

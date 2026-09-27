@@ -199,10 +199,13 @@ terminal_session_authenticated_ssh_transport(
  * Returns the window title for a terminal session state.
  *
  * @param state Session state created by create_terminal_session.
- * @returns Application and connection name, or the application title when no
- * backend session exists.
+ * @param terminal_title Title requested by terminal escape sequences, or an
+ * empty string to use the application title.
+ * @returns Terminal or application title followed by the connection name,
+ * or the title alone when no backend session exists.
  */
-std::string terminal_session_window_title(const TerminalSessionState *state);
+std::string terminal_session_window_title(const TerminalSessionState *state,
+                                         const std::string &terminal_title);
 
 /**
  * Returns the backend-specific connection detail for a terminal session state.

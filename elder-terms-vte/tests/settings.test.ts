@@ -662,6 +662,121 @@ const connectionStatusTextMask = async (
 };
 
 describe.concurrent('elder-terms-vte settings', () => {
+  for (const action of ['new-window', 'direct', 'explicit', 'unconfigured']) {
+    it(`uses the configured connection only for New Window: ${action}`, async (context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const connections = join(directory, 'elder-terms', 'connections');
+        const marker = join(directory, 'started.txt');
+        await mkdir(connections, { recursive: true });
+        const command = (value: string): string =>
+          `/bin/sh -c 'printf ${value} > "${marker}"; exec /bin/sh'`;
+        await writeFile(
+          join(directory, 'elder-terms', 'global.ini'),
+          `[general]\nnew_window=${action === 'unconfigured' ? '' : 'Selected connection'}\n[local]\ncommand_line=${command('default')}\n`
+        );
+        await writeFile(
+          join(connections, 'Selected connection.ini'),
+          `[general]\nname=Display name\ntype=local\n[local]\ncommand_line=${command('selected')}\n`
+        );
+        const explicitPath = join(connections, 'Explicit.ini');
+        await writeFile(
+          explicitPath,
+          `[general]\ntype=local\n[local]\ncommand_line=${command('explicit')}\n`
+        );
+        const args =
+          action === 'direct'
+            ? []
+            : [
+                '--new-window',
+                ...(action === 'explicit' ? ['-c', explicitPath] : []),
+              ];
+        await runGtkTest(
+          context,
+          args,
+          async (app) => {
+            await waitForResult(async () =>
+              expect(await readFile(marker, 'utf8')).toBe(
+                action === 'new-window'
+                  ? 'selected'
+                  : action === 'explicit'
+                    ? 'explicit'
+                    : 'default'
+              )
+            );
+            await openSettingsDialog(app);
+            const toggle = expectElementKind(
+              await app.getById('settings_general_new_window_switch'),
+              'switch'
+            );
+            expect(await toggle.isChecked()).toBe(action === 'new-window');
+            expect((await toggle.info()).states).not.toContain('sensitive');
+            const before = await readFile(
+              join(directory, 'elder-terms', 'global.ini'),
+              'utf8'
+            );
+            await clickWidget(app, toggle);
+            expect(await toggle.isChecked()).toBe(action === 'new-window');
+            expect(
+              await readFile(
+                join(directory, 'elder-terms', 'global.ini'),
+                'utf8'
+              )
+            ).toBe(before);
+          },
+          { env: { XDG_CONFIG_HOME: directory } }
+        );
+      });
+    });
+  }
+
+  for (const name of ['Missing', '../outside', 'Transfer', 'Broken']) {
+    it(`rejects an unusable New Window connection: ${name}`, async () => {
+      await withTemporaryDirectory(async (directory) => {
+        const connections = join(directory, 'elder-terms', 'connections');
+        await mkdir(connections, { recursive: true });
+        await writeFile(
+          join(directory, 'elder-terms', 'global.ini'),
+          `[general]\nnew_window=${name}\n`
+        );
+        await writeFile(
+          join(connections, 'Transfer.ini'),
+          '[general]\ntype=ftp\n[ftp]\naddress=localhost\n'
+        );
+        await writeFile(join(connections, 'Broken.ini'), '[general\n');
+        let failure:
+          | { code?: number; stdout?: string; stderr?: string }
+          | undefined;
+        try {
+          await execFileAsync(
+            '/usr/bin/xvfb-run',
+            [
+              '-a',
+              fileURLToPath(
+                new URL(
+                  '../../.build/elder-terms-vte/elder-terms-vte',
+                  import.meta.url
+                )
+              ),
+              '--new-window',
+            ],
+            {
+              env: {
+                ...process.env,
+                XDG_CONFIG_HOME: directory,
+                LANGUAGE: 'C',
+                LC_ALL: 'C.UTF-8',
+              },
+            }
+          );
+        } catch (error) {
+          failure = error as typeof failure;
+        }
+        expect(failure?.code).toBe(1);
+        // xvfb-run redirects the application's stderr to its stdout.
+        expect(failure?.stdout, failure?.stderr).toContain('Error:');
+      });
+    });
+  }
   it('uses a Japanese global UI language from a C UTF-8 environment', async (context) => {
     await runGtkTest(
       context,
@@ -832,7 +947,7 @@ describe.concurrent('elder-terms-vte settings', () => {
         context,
         ['--test-fixture', '-c', configPath],
         async (app) => {
-          await expectMainWindowTitle(app, 'elder-terms: Tokyo / Lab');
+          await expectMainWindowTitle(app, 'elder-terms | Tokyo / Lab');
           await expectMainWindowStatus(app, 'local terminal');
         }
       );
@@ -841,7 +956,7 @@ describe.concurrent('elder-terms-vte settings', () => {
 
   it('shows the local connection name and status', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
-      await expectMainWindowTitle(app, 'elder-terms: elder-terms');
+      await expectMainWindowTitle(app, 'elder-terms | elder-terms');
       await expectMainWindowStatus(app, 'local terminal');
     });
   });
@@ -867,7 +982,10 @@ describe.concurrent('elder-terms-vte settings', () => {
         context,
         ['--test-fixture', '-c', configPath],
         async (app) => {
-          await expectMainWindowTitle(app, 'elder-terms: storage.ad.kekyo.net');
+          await expectMainWindowTitle(
+            app,
+            'elder-terms | storage.ad.kekyo.net'
+          );
           await expectMainWindowStatus(app, 'ssh: storage.ad.kekyo.net:22');
         }
       );
@@ -1359,7 +1477,10 @@ describe.concurrent('elder-terms-vte settings', () => {
           return currentLayout;
         });
         expectWindowCellSize(layout, defaultColumns, defaultRows);
-        await expectMainWindowTitle(app, 'elder-terms: telnet-missing-address');
+        await expectMainWindowTitle(
+          app,
+          'elder-terms | telnet-missing-address'
+        );
         await expectMainWindowStatus(app, 'telnet: (unknown)');
 
         const output = await app.output();
@@ -1433,7 +1554,7 @@ describe.concurrent('elder-terms-vte settings', () => {
           expectWindowCellSize(layout, defaultColumns, defaultRows);
           await expectMainWindowTitle(
             app,
-            'elder-terms: serial-missing-device'
+            'elder-terms | serial-missing-device'
           );
           await expectMainWindowStatus(app, 'serial: (unknown)');
 
@@ -1762,7 +1883,8 @@ describe.concurrent('elder-terms-vte settings', () => {
               capturePixelAtScreenPosition(
                 settingsDialogCapture,
                 generalTabCenterX,
-                generalTabCapture.bounds.y - 4
+                // Native labels fill the tab vertically, up to the notebook border.
+                generalTabCapture.bounds.y + 4
               ),
             ]).toEqual([
               componentBackground,
@@ -2451,7 +2573,7 @@ describe.concurrent('elder-terms-vte settings', () => {
           context,
           ['--test-fixture', '-c', configPath],
           async (app) => {
-            await expectMainWindowTitle(app, 'elder-terms: telnet');
+            await expectMainWindowTitle(app, 'elder-terms | telnet');
             await expectMainWindowStatus(app, `telnet: 127.0.0.1:${port}`);
             await openSettingsDialog(app);
 
@@ -2493,7 +2615,7 @@ describe.concurrent('elder-terms-vte settings', () => {
         context,
         ['--test-fixture', '-c', configPath],
         async (app) => {
-          await expectMainWindowTitle(app, 'elder-terms: serial');
+          await expectMainWindowTitle(app, 'elder-terms | serial');
           await expectMainWindowStatus(app, 'serial: /dev/ttyUSB1:115200:n81n');
         }
       );
@@ -2513,7 +2635,7 @@ describe.concurrent('elder-terms-vte settings', () => {
         context,
         ['--test-fixture', '-c', configPath],
         async (app) => {
-          await expectMainWindowTitle(app, 'elder-terms: serial');
+          await expectMainWindowTitle(app, 'elder-terms | serial');
           await expectMainWindowStatus(app, 'serial: /dev/ttyUSB0:115200:e72x');
           await openSettingsDialog(app);
 
@@ -2633,7 +2755,7 @@ describe.concurrent('elder-terms-vte settings', () => {
         context,
         ['--test-fixture', '-c', configPath],
         async (app) => {
-          await expectMainWindowTitle(app, 'elder-terms: serial-apply-title');
+          await expectMainWindowTitle(app, 'elder-terms | serial-apply-title');
           await expectMainWindowStatus(app, 'serial: /dev/ttyUSB1:115200:n81n');
           await openSettingsDialog(app);
           await showSerialSettingsPage(app);
@@ -2664,7 +2786,7 @@ describe.concurrent('elder-terms-vte settings', () => {
           ).click();
           await expectSettingsDialogClosed(app);
 
-          await expectMainWindowTitle(app, 'elder-terms: serial-apply-title');
+          await expectMainWindowTitle(app, 'elder-terms | serial-apply-title');
           await expectMainWindowStatus(app, 'serial: /dev/ttyUSB1:57600:o52h');
         }
       );

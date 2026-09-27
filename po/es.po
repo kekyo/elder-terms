@@ -1667,12 +1667,6 @@ msgstr "¿Aceptar la clave de host SSH de prueba?"
 msgid "Enter the user name and password for %s."
 msgstr "Introduzca el nombre de usuario y la contraseña para %s."
 
-#: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:418
-msgid "To log in anonymously, enter anonymous as the user name."
-msgstr ""
-"Para iniciar sesión de forma anónima, introduzca anonymous como nombre de "
-"usuario."
-
 #: elder-terms-vte/src/file-transfer/file-transfer-main.cpp:421
 #: elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
 #: elder-terms-vte/src/webdav/webdav-application.cpp:76
@@ -2399,3 +2393,11 @@ msgstr "Abrir esta carpeta"
 #: elder-terms-vte/src/file-transfer/file-transfer-window.cpp
 msgid "Failed to open directory"
 msgstr "No se pudo abrir la carpeta"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Use for New Window"
+msgstr "Usar para una ventana nueva"
+
+#: elder-terms/src/main.cpp
+msgid "Failed to save New Window connection"
+msgstr "No se pudo guardar la conexión para una ventana nueva"

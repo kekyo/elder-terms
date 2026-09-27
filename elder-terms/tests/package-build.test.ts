@@ -150,10 +150,6 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     ['usr/share/doc/elder-terms/docs/ja/webdav.md', '# WebDAV\n'],
     ['usr/share/doc/elder-terms/docs/en/webdav.md', '# WebDAV\n'],
     [
-      'usr/share/doc/elder-terms/docs/ja/webdav-validation.md',
-      '# WebDAV validation\n',
-    ],
-    [
       'usr/share/doc/elder-terms/docs/en/webdav-validation.md',
       '# WebDAV validation\n',
     ],
@@ -690,7 +686,11 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     expect(missingControlValidation.status).not.toBe(0);
     expect(missingControlValidation.stderr).toContain('usr/bin/etctl');
     for (const language of ['ja', 'en']) {
-      for (const document of ['webdav.md', 'webdav-validation.md']) {
+      const documents =
+        language === 'en'
+          ? ['webdav.md', 'webdav-validation.md']
+          : ['webdav.md'];
+      for (const document of documents) {
         const missingPath = `usr/share/doc/elder-terms/docs/${language}/${document}`;
         const stage = join(
           temporaryRoot,

@@ -109,6 +109,7 @@ struct ApplicationState {
   elder_terms::HotkeyBackendState *hotkey_backend = nullptr;
   std::optional<elder_terms::HotkeyBackendKind> detected_hotkey_backend;
   std::vector<elder_terms::HotkeyAction> active_hotkey_actions;
+  bool hotkey_warning_shown = false;
   elder_terms::ControlServerState *control_server = nullptr;
   elder_terms::TrayBackendState *tray_backend = nullptr;
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
@@ -196,6 +197,8 @@ static void replace_registered_hotkeys(
     ApplicationState *state,
     const elder_terms::SettingsStore &global_store);
 static void reload_hotkey_actions(ApplicationState *state);
+static elder_terms::ControlReply setup_hotkeys(ApplicationState *state);
+static elder_terms::ExternalHotkeySetupResult clear_external_hotkeys();
 static void present_main_window(
     ApplicationState *state,
     std::optional<std::uint32_t> activation_time = std::nullopt,
@@ -1078,9 +1081,39 @@ static void replace_registered_hotkeys(
   const std::vector<elder_terms::HotkeyAction> actions =
       build_registered_hotkey_actions(state, global_store, &warnings);
   print_warnings(warnings);
+  // File monitors can report more than one event for a save. Re-registering
+  // identical actions would reopen portal consent or reload a compositor.
+  const bool changed =
+      state->active_hotkey_actions.size() != actions.size() ||
+      !std::equal(
+          actions.begin(), actions.end(),
+          state->active_hotkey_actions.begin(),
+          [](const elder_terms::HotkeyAction &left,
+             const elder_terms::HotkeyAction &right) {
+            return left.id == right.id &&
+                   left.description == right.description &&
+                   elder_terms::key_bindings_equal(
+                       left.binding, right.binding);
+          });
   state->active_hotkey_actions = actions;
-  if (state->hotkey_backend != nullptr) {
+  if (changed && state->hotkey_backend != nullptr) {
+    // A previous portal rejection may have installed compositor bindings.
+    // Clear those before the new portal request can succeed.
+    if (!actions.empty() &&
+        elder_terms::hotkey_backend_kind(state->hotkey_backend) ==
+            elder_terms::HotkeyBackendKind::portal) {
+      const auto result = clear_external_hotkeys();
+      if (!result.success) {
+        show_error(state, _("Hotkeys are unavailable"), {result.message});
+      }
+    }
     elder_terms::replace_hotkey_actions(state->hotkey_backend, actions);
+    if (actions.empty()) {
+      const elder_terms::ControlReply result = setup_hotkeys(state);
+      if (!result.success && !result.pending) {
+        show_error(state, _("Hotkeys are unavailable"), {result.message});
+      }
+    }
   }
 }
 
@@ -1127,6 +1160,28 @@ static std::optional<std::string> read_profile_content(
   return result;
 }
 
+static bool persist_new_window_connection(ApplicationState *state,
+                                           const std::string &name) {
+  const auto result =
+      elder_terms::save_new_window_connection(name, state->global_config_path);
+  print_warnings(result.warnings);
+  if (!result.saved) {
+    show_error(state, _("Failed to save New Window connection"), result.warnings);
+  }
+  return result.saved;
+}
+
+static void replace_new_window_connection_reference(ApplicationState *state,
+                                                     const std::string &original,
+                                                     const std::string &replacement) {
+  const auto global =
+      elder_terms::load_global_settings(state->global_config_path, 1.0);
+  print_warnings(global.warnings);
+  if (elder_terms::application_new_window_connection(global.store) == original) {
+    (void)persist_new_window_connection(state, replacement);
+  }
+}
+
 static bool load_existing_connection(ApplicationState *state,
                                      const std::filesystem::path &path) {
   // Observe before parsing, so a concurrent later write cannot be mistaken
@@ -1151,6 +1206,12 @@ static bool load_existing_connection(ApplicationState *state,
   state->name_dirty = false;
   elder_terms::update_settings_widget_store(state->settings_widget,
                                              result.store);
+  const auto global =
+      elder_terms::load_global_settings(state->global_config_path, 1.0);
+  elder_terms::settings_widget_set_new_window_connection(
+      state->settings_widget,
+      elder_terms::application_new_window_connection(global.store) ==
+          state->persisted_name);
   gtk_stack_set_visible_child_name(GTK_STACK(state->main_window->details_stack),
                                    "settings");
   update_action_sensitivity(state);
@@ -1235,6 +1296,8 @@ static void begin_new_connection(ApplicationState *state) {
                                                global_defaults.store);
   elder_terms::update_settings_widget_store(state->settings_widget,
                                              std::move(store));
+  elder_terms::settings_widget_set_new_window_connection(state->settings_widget,
+                                                          false);
   elder_terms::settings_widget_show_general_page(state->settings_widget);
   gtk_stack_set_visible_child_name(GTK_STACK(state->main_window->details_stack),
                                    "settings");
@@ -2079,6 +2142,8 @@ static void on_delete_connection_dialog_response(GtkDialog *dialog,
     return;
   }
 
+  replace_new_window_connection_reference(state, path->stem().string(), "");
+
   state->external_conflict = false;
   preserve_current_editor_after_list_refresh(state);
   reload_hotkey_actions(state);
@@ -2168,6 +2233,9 @@ static void on_name_edited(GtkCellRendererText *, gchar *path_text,
       show_error(state, _("Failed to rename connection"), result.warnings);
       return;
     }
+
+    replace_new_window_connection_reference(state, state->persisted_name,
+                                             validation.name);
 
     state->selected_path = result.path;
     state->persisted_name = validation.name;
@@ -2322,6 +2390,21 @@ static bool save_current_connection(ApplicationState *state) {
   print_warnings(result.warnings);
   if (!result.saved) {
     show_error(state, _("Failed to save connection"), result.warnings);
+    return false;
+  }
+  const auto global =
+      elder_terms::load_global_settings(state->global_config_path, 1.0);
+  const auto selected =
+      elder_terms::application_new_window_connection(global.store);
+  const auto next =
+      elder_terms::settings_widget_new_window_connection(state->settings_widget)
+          ? validation.name
+          : selected == state->persisted_name ? std::string() : selected;
+  if (next != selected && !persist_new_window_connection(state, next)) {
+    // The profile was saved successfully. Keep its new path and contents so a
+    // retry can finish the application setting without an overwrite prompt.
+    state->selected_path = result.path;
+    state->observed_file_content = read_profile_content(result.path);
     return false;
   }
   select_existing_connection(state, result.path, false);
@@ -2851,17 +2934,30 @@ current_hotkey_setup_environment() {
   };
 }
 
+static elder_terms::ExternalHotkeySetupResult clear_external_hotkeys() {
+  const auto environment = current_hotkey_setup_environment();
+  if (!environment.wayland) {
+    return {true, "No Wayland hotkeys to remove"};
+  }
+  return elder_terms::unsetup_external_hotkeys(
+      environment, run_hotkey_setup_command);
+}
+
 static elder_terms::ControlReply setup_hotkeys(ApplicationState *state) {
   if (state->hotkey_backend == nullptr) {
     return {false, true, "Hotkey backend is starting"};
   }
   const auto status = elder_terms::hotkey_registration_status(
       state->hotkey_backend);
+  if (status.configured == 0) {
+    const auto result = clear_external_hotkeys();
+    if (!result.success) {
+      return {false, false, result.message};
+    }
+    return {true, false, "No hotkeys are configured"};
+  }
   if (status.pending) {
     return {false, true, "Hotkey registration is still in progress"};
-  }
-  if (status.configured == 0) {
-    return {true, false, "No hotkeys are configured"};
   }
   if (!status.failed && status.registered == status.configured) {
     return {true, false,
@@ -2910,7 +3006,10 @@ static void handle_hotkey_registration_failure(ApplicationState *state) {
     return;
   }
   std::cerr << "Automatic hotkey setup failed: " << result.message << '\n';
-  show_hotkey_registration_error(state);
+  if (!state->hotkey_warning_shown) {
+    state->hotkey_warning_shown = true;
+    show_hotkey_registration_error(state);
+  }
 }
 
 static elder_terms::ControlReply handle_control_request(

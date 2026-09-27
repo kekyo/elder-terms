@@ -357,6 +357,224 @@ const readLaunchCapture = async (path: string): Promise<LaunchCapture> =>
   JSON.parse(await readFile(path, 'utf8')) as LaunchCapture;
 
 describe('elder-terms main window', () => {
+  it('saves one New Window connection and discards unsaved switch changes', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await prepareProfiles(connections);
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '# User settings\n[general]\nnew_window=Alpha\nopen_application=\n' +
+            '[terminal]\nheight=31\n[custom]\nvalue=keep\n'
+        );
+      },
+      async ({ app, configHome, connections }) => {
+        const list = await app.getById('connection_list');
+        const globalPath = join(configHome, 'elder-terms', 'global.ini');
+        await selectConnectionRow(app, list, 0);
+        const toggle = expectElementKind(
+          await app.getById('settings_general_new_window_switch'),
+          'switch'
+        );
+        await waitForResult(async () =>
+          expect(await toggle.isChecked()).toBe(true)
+        );
+        await toggle.toggle();
+        await waitForResult(async () =>
+          expect(await toggle.isChecked()).toBe(false)
+        );
+        await expectSensitive(await app.getById('apply_button'));
+        await selectConnectionRow(app, list, 1);
+        await expectElementKind(
+          await app.getById('cancel_discard_button'),
+          'button'
+        ).click();
+        expect(await toggle.isChecked()).toBe(false);
+        expect(await readFile(globalPath, 'utf8')).toContain(
+          'new_window=Alpha'
+        );
+        await selectConnectionRow(app, list, 1);
+        await expectElementKind(
+          await app.getById('discard_changes_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect(
+            Number(
+              await expectElementKind(
+                await app.getById('settings_terminal_width_entry'),
+                'entry'
+              ).text()
+            )
+          ).toBe(99)
+        );
+        expect(await toggle.isChecked()).toBe(false);
+        await toggle.toggle();
+        await waitForResult(async () =>
+          expect(await toggle.isChecked()).toBe(true)
+        );
+        await expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect(await readFile(globalPath, 'utf8')).toContain(
+            'new_window=Beta'
+          )
+        );
+        expect(await readFile(globalPath, 'utf8')).toContain('value=keep');
+        expect(await readFile(globalPath, 'utf8')).toContain('height=31');
+        expect(
+          await readFile(join(connections, 'Beta.ini'), 'utf8')
+        ).not.toContain('new_window');
+        await selectConnectionRow(app, list, 0);
+        await waitForResult(async () =>
+          expect(
+            Number(
+              await expectElementKind(
+                await app.getById('settings_terminal_width_entry'),
+                'entry'
+              ).text()
+            )
+          ).toBe(88)
+        );
+        expect(await toggle.isChecked()).toBe(false);
+        await toggle.toggle();
+        await waitForResult(async () =>
+          expect(await toggle.isChecked()).toBe(true)
+        );
+        await expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect(await readFile(globalPath, 'utf8')).toContain(
+            'new_window=Alpha'
+          )
+        );
+        await toggle.toggle();
+        await waitForResult(async () =>
+          expect(await toggle.isChecked()).toBe(false)
+        );
+        await expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect(await readFile(globalPath, 'utf8')).not.toContain(
+            'new_window='
+          )
+        );
+      }
+    );
+  });
+
+  it('selects a new saved connection for New Window', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async () => {},
+      async ({ app, configHome, connections }) => {
+        await expectElementKind(
+          await app.getById('new_button'),
+          'button'
+        ).click();
+        await app.input.pressKey('Escape');
+        const toggle = expectElementKind(
+          await app.getById('settings_general_new_window_switch'),
+          'switch'
+        );
+        expect(await toggle.isChecked()).toBe(false);
+        await toggle.toggle();
+        await waitForResult(async () =>
+          expect(await toggle.isChecked()).toBe(true)
+        );
+        await expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect(
+            await readFile(
+              join(configHome, 'elder-terms', 'global.ini'),
+              'utf8'
+            )
+          ).toContain('new_window=New connection')
+        );
+        expect(
+          await readFile(join(connections, 'New connection.ini'), 'utf8')
+        ).not.toContain('new_window');
+        expect(await toggle.isChecked()).toBe(true);
+      }
+    );
+  });
+
+  for (const type of ['sftp', 'ftp', 'webdav']) {
+    it(`disables the New Window switch for ${type} connections`, async (context) => {
+      await runLauncherGtkTest(
+        context,
+        async (connections) => {
+          await writeFile(
+            join(connections, 'Transfer.ini'),
+            `[general]\ntype=${type}\n`
+          );
+        },
+        async ({ app }) => {
+          await selectConnectionRow(
+            app,
+            await app.getById('connection_list'),
+            0
+          );
+          const toggle = expectElementKind(
+            await app.getById('settings_general_new_window_switch'),
+            'switch'
+          );
+          await expectInsensitive(toggle);
+          expect(await toggle.isChecked()).toBe(false);
+        }
+      );
+    });
+  }
+
+  it('clears New Window when its connection becomes a file transfer', async (context) => {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await prepareProfiles(connections);
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[general]\nnew_window=Alpha\n'
+        );
+      },
+      async ({ app, configHome }) => {
+        await selectConnectionRow(app, await app.getById('connection_list'), 0);
+        const toggle = expectElementKind(
+          await app.getById('settings_general_new_window_switch'),
+          'switch'
+        );
+        await waitForResult(async () =>
+          expect(await toggle.isChecked()).toBe(true)
+        );
+        await expectElementKind(
+          await app.getById('settings_general_type_combo'),
+          'comboBox'
+        ).selectChildAt(6);
+        await expectInsensitive(toggle);
+        expect(await toggle.isChecked()).toBe(false);
+        await expectElementKind(
+          await app.getById('apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect(
+            await readFile(
+              join(configHome, 'elder-terms', 'global.ini'),
+              'utf8'
+            )
+          ).not.toContain('new_window=')
+        );
+      }
+    );
+  });
   it('creates a default local terminal on the first launch', async (context) => {
     await runLauncherGtkTest(
       context,
@@ -1721,8 +1939,14 @@ describe('elder-terms main window', () => {
   it('renames and deletes a saved connection from its context menu', async (context) => {
     await runLauncherGtkTest(
       context,
-      prepareProfiles,
-      async ({ app, connections }) => {
+      async (connections) => {
+        await prepareProfiles(connections);
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[general]\nnew_window=Alpha\n'
+        );
+      },
+      async ({ app, connections, configHome }) => {
         const list = await app.getById('connection_list');
         await rightClickConnectionRow(app, list, 0);
         const renameItem = await waitForResult(async () => {
@@ -1751,6 +1975,9 @@ describe('elder-terms main window', () => {
         await expect(
           readFile(join(connections, 'Alpha.ini'), 'utf8')
         ).rejects.toMatchObject({ code: 'ENOENT' });
+        expect(
+          await readFile(join(configHome, 'elder-terms', 'global.ini'), 'utf8')
+        ).toContain('new_window=renamed alpha');
 
         await rightClickConnectionRow(app, list, 1);
         await waitForResult(async () => {
@@ -1787,6 +2014,9 @@ describe('elder-terms main window', () => {
         await expect(
           readFile(join(connections, 'renamed alpha.ini'), 'utf8')
         ).rejects.toMatchObject({ code: 'ENOENT' });
+        expect(
+          await readFile(join(configHome, 'elder-terms', 'global.ini'), 'utf8')
+        ).not.toContain('new_window=');
       }
     );
   });
