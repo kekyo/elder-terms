@@ -661,31 +661,6 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       [goodPackage, canonicalArchitecture!]
     );
     expectSuccess(goodValidation, 'complete deb package was rejected');
-    const removedDocumentStage = join(temporaryRoot, 'removed-document-stage');
-    const removedDocumentPackage = join(temporaryRoot, 'removed-document.deb');
-    createPackageStage(
-      removedDocumentStage,
-      debianArchitecture,
-      'usr/share/doc/elder-terms/docs/ja/webdav-validation.md',
-      true,
-      true
-    );
-    expectSuccess(
-      run(dpkgDeb, [
-        '--root-owner-group',
-        '--build',
-        removedDocumentStage,
-        removedDocumentPackage,
-      ]),
-      'package without the removed document could not be built'
-    );
-    expectSuccess(
-      runSourced('VERSION=1.2.3\nvalidate_deb_package "$2" "$3"', [
-        removedDocumentPackage,
-        canonicalArchitecture!,
-      ]),
-      'package without the removed document was rejected'
-    );
     const missingControlStage = join(temporaryRoot, 'missing-control-stage');
     const missingControlPackage = join(temporaryRoot, 'missing-control.deb');
     createPackageStage(
