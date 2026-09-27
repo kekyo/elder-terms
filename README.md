@@ -1,5 +1,6 @@
 # elder-terms
 
+A Terminal emulator for local shell, serial, TELNET, FTP, FTPS, SSH, and SFTP connections.
 '90s, come back in this time. This is all we need.
 
 ![elder-terms](./images/elder-terms-128.png)
@@ -18,31 +19,9 @@
 
 elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP connections, inspired by personal computing in the 1990s.
 
-### Basic Terminal
-
 ![Terminal](./images/terminal.png)
 
-### Terminal Launcher
-
-![Launcher](./images/launcher-settings.png)
-
-### Complex Display
-
-![Complex terminal](./images/complex-terminal.png)
-
-### Serial Device
-
-![Serial terminal](./images/serial-terminal.png)
-
-### Custom Exterior Colors
-
-![Colored terminal](./images/colored-terminal.png)
-
-### SFTP/FTP/FTPS/WebDAV
-
-![SFTP/FTP/FTPS/WebDAV window](./images/sftp.png)
-
-## Features
+### Features
 
 - Provides a simple, no-frills terminal with everything you need, using Linux
   GTK/`libvte`.
@@ -79,6 +58,26 @@ elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP
   date and time.
 - Supports multilingual display (English, Arabic, Spanish, French, Hindi,
   Japanese, Korean, Portuguese, Russian, and Simplified Chinese).
+
+### Terminal Launcher
+
+![Launcher](./images/launcher-settings.png)
+
+### Complex Display
+
+![Complex terminal](./images/complex-terminal.png)
+
+### Serial Device
+
+![Serial terminal](./images/serial-terminal.png)
+
+### Custom Exterior Colors
+
+![Colored terminal](./images/colored-terminal.png)
+
+### SFTP/FTP/FTPS/WebDAV
+
+![SFTP/FTP/FTPS/WebDAV window](./images/sftp.png)
 
 ## Environment
 

@@ -1,5 +1,6 @@
 # elder-terms
 
+ローカルシェル・シリアル・TELNET・FTP・SSH・SFTPで接続できるターミナルエミュレータ。
 '90s、あの頃のパラダイス。こういうのでいいんだよ。
 
 ![elder-terms](./images/elder-terms-128.png)
@@ -16,31 +17,9 @@
 シリアル接続やTELNET、そしてパソコン通信。すべてが懐かしく、すべてが満たされ、そして全てがコントローラブルだったあの頃。
 現代的な機能も追加して、蘇るターミナル生活。
 
-### 基本的なターミナル
-
 ![Terminal](./images/terminal.png)
 
-### ターミナルランチャー
-
-![Launcher](./images/launcher-settings.png)
-
-### 複雑な表示
-
-![Complex terminal](./images/complex-terminal.png)
-
-### シリアルデバイス
-
-![Serial terminal](./images/serial-terminal.png)
-
-### 外郭色のカスタマイズ
-
-![Colored terminal](./images/colored-terminal.png)
-
-### SFTP/FTP/FTPS/WebDAV
-
-![SFTP/FTP/FTPS/WebDAV window](./images/sftp.png)
-
-## 機能
+### 機能
 
 - Linux GTK/`libvte` を使用して、飾らない、必要十分なターミナルを実現します。
 - シリアルやTELNET接続だけではなく、ローカルターミナル、SSH、SFTP、FTPもサポートし、現代で同じ生活を取り戻せます。
@@ -66,6 +45,26 @@
 - OSC 8ターゲットまたは表示中の端末テキストをリンクとして認識出来ます。
 - ログをファイルに記録できます。接続先や日時によるディレクトリの分離によって、ログの整理が捗ります。
 - 多国語表示に対応しています (英語、アラビア語、スペイン語、フランス語、ヒンディー語、日本語、韓国語、ポルトガル語、ロシア語、簡体字中国語)
+
+### ターミナルランチャー
+
+![Launcher](./images/launcher-settings.png)
+
+### 複雑な表示
+
+![Complex terminal](./images/complex-terminal.png)
+
+### シリアルデバイス
+
+![Serial terminal](./images/serial-terminal.png)
+
+### 外郭色のカスタマイズ
+
+![Colored terminal](./images/colored-terminal.png)
+
+### SFTP/FTP/FTPS/WebDAV
+
+![SFTP/FTP/FTPS/WebDAV window](./images/sftp.png)
 
 ## 環境
 

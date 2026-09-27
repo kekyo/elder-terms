@@ -144,15 +144,23 @@ struct TrayBackendImplementation {
   GDBusConnection *connection = nullptr;
   guint item_registration_id = 0;
   guint menu_registration_id = 0;
+  guint watcher_id = 0;
+  guint host_signal_id = 0;
+  guint host_properties_id = 0;
+  std::string watcher_owner;
+  std::string registered_owner;
+  std::uint64_t watcher_revision = 0;
+  std::optional<cardio::promise_source<void>> watcher_changed;
   GtkStatusIcon *status_icon = nullptr;
   GtkWidget *status_menu = nullptr;
   gulong embedded_signal_id = 0;
   std::optional<cardio::cancellation_source> cancellation_source;
-  std::optional<cardio::promise<void>> initialization_task;
 };
 
 struct TrayBackendState {
   std::shared_ptr<TrayBackendImplementation> implementation;
+  // The task owns its implementation while suspended; keep its owner separate.
+  std::optional<cardio::promise<void>> monitoring_task;
 };
 
 static GDBusNodeInfo *status_notifier_item_node_info() {
@@ -706,6 +714,10 @@ static const GDBusInterfaceVTable dbus_menu_vtable = {
 
 static bool register_status_notifier_objects(
     TrayBackendImplementation *implementation) {
+  if (implementation->item_registration_id != 0 &&
+      implementation->menu_registration_id != 0) {
+    return true;
+  }
   GError *error = nullptr;
   implementation->item_registration_id =
       g_dbus_connection_register_object(
@@ -774,22 +786,10 @@ static cardio::promise<GVariant *> call_dbus_async(
 
 static cardio::promise<bool> status_notifier_host_available_async(
     TrayBackendImplementation *implementation,
+    const std::string &watcher_owner,
     cardio::cancellation cancellation) {
-  GVariant *owner_result = co_await call_dbus_async(
-      implementation->connection, "org.freedesktop.DBus",
-      "/org/freedesktop/DBus", "org.freedesktop.DBus",
-      "NameHasOwner",
-      g_variant_new("(s)", status_notifier_watcher_service),
-      G_VARIANT_TYPE("(b)"), cancellation);
-  gboolean has_owner = FALSE;
-  g_variant_get(owner_result, "(b)", &has_owner);
-  g_variant_unref(owner_result);
-  if (has_owner == FALSE) {
-    co_return false;
-  }
-
   GVariant *property_result = co_await call_dbus_async(
-      implementation->connection, status_notifier_watcher_service,
+      implementation->connection, watcher_owner.c_str(),
       status_notifier_watcher_path, "org.freedesktop.DBus.Properties",
       "Get",
       g_variant_new("(ss)", status_notifier_watcher_interface,
@@ -805,9 +805,10 @@ static cardio::promise<bool> status_notifier_host_available_async(
 
 static cardio::promise<void> register_status_notifier_async(
     TrayBackendImplementation *implementation,
+    const std::string &watcher_owner,
     cardio::cancellation cancellation) {
   GVariant *result = co_await call_dbus_async(
-      implementation->connection, status_notifier_watcher_service,
+      implementation->connection, watcher_owner.c_str(),
       status_notifier_watcher_path, status_notifier_watcher_interface,
       "RegisterStatusNotifierItem",
       g_variant_new("(s)", status_notifier_item_path), nullptr,
@@ -969,6 +970,10 @@ static void create_fallback_backend(
   if (implementation->destroyed) {
     return;
   }
+  implementation->registered_owner.clear();
+  if (implementation->kind == TrayBackendKind::xembed) {
+    return;
+  }
   const TrayBackendKind selected = select_tray_backend_kind({
       .has_status_notifier_item = false,
       .has_xembed = can_use_xembed(),
@@ -982,43 +987,143 @@ static void create_fallback_backend(
   }
 }
 
-static cardio::promise<void> initialize_backend_async(
+static void notify_watcher_changed(TrayBackendImplementation *implementation) {
+  ++implementation->watcher_revision;
+  if (implementation->cancellation_source.has_value()) {
+    (void)implementation->cancellation_source->cancel();
+  }
+  if (implementation->watcher_changed.has_value()) {
+    (void)implementation->watcher_changed->try_resolve();
+  }
+}
+
+static std::shared_ptr<TrayBackendImplementation> lock_watcher_backend(
+    gpointer user_data) {
+  return static_cast<std::weak_ptr<TrayBackendImplementation> *>(user_data)
+      ->lock();
+}
+
+static void free_watcher_backend(gpointer user_data) {
+  delete static_cast<std::weak_ptr<TrayBackendImplementation> *>(user_data);
+}
+
+static void on_watcher_appeared(GDBusConnection *, const gchar *,
+                               const gchar *owner, gpointer user_data) {
+  const auto implementation = lock_watcher_backend(user_data);
+  if (implementation == nullptr || implementation->destroyed) return;
+  implementation->watcher_owner = owner;
+  notify_watcher_changed(implementation.get());
+}
+
+static void on_watcher_vanished(GDBusConnection *, const gchar *,
+                               gpointer user_data) {
+  const auto implementation = lock_watcher_backend(user_data);
+  if (implementation == nullptr || implementation->destroyed) return;
+  implementation->watcher_owner.clear();
+  notify_watcher_changed(implementation.get());
+  create_fallback_backend(implementation.get());
+}
+
+static void on_watcher_host_changed(
+    GDBusConnection *, const gchar *sender, const gchar *,
+    const gchar *interface_name, const gchar *signal_name,
+    GVariant *parameters, gpointer user_data) {
+  const auto implementation = lock_watcher_backend(user_data);
+  if (implementation == nullptr || implementation->destroyed ||
+      sender == nullptr || implementation->watcher_owner != sender) return;
+
+  bool host_lost = false;
+  if (std::strcmp(interface_name, status_notifier_watcher_interface) == 0) {
+    if (std::strcmp(signal_name, "StatusNotifierHostUnregistered") == 0) {
+      host_lost = true;
+    } else if (std::strcmp(signal_name, "StatusNotifierHostRegistered") != 0) {
+      return;
+    }
+  } else {
+    const char *changed_interface = nullptr;
+    GVariant *changed = nullptr;
+    GVariant *invalidated = nullptr;
+    g_variant_get(parameters, "(&s@a{sv}@as)", &changed_interface,
+                  &changed, &invalidated);
+    gboolean registered = FALSE;
+    bool relevant = std::strcmp(changed_interface,
+                                status_notifier_watcher_interface) == 0;
+    if (relevant) {
+      relevant = g_variant_lookup(changed, "IsStatusNotifierHostRegistered",
+                                   "b", &registered) != FALSE;
+      host_lost = relevant && registered == FALSE;
+      GVariantIter iterator;
+      g_variant_iter_init(&iterator, invalidated);
+      const char *property = nullptr;
+      while (g_variant_iter_next(&iterator, "&s", &property)) {
+        if (std::strcmp(property, "IsStatusNotifierHostRegistered") == 0) {
+          relevant = true;
+          host_lost = true;
+        }
+      }
+    }
+    g_variant_unref(changed);
+    g_variant_unref(invalidated);
+    if (!relevant) return;
+  }
+  notify_watcher_changed(implementation.get());
+  if (host_lost) create_fallback_backend(implementation.get());
+}
+
+static cardio::promise<void> monitor_backend_async(
     std::shared_ptr<TrayBackendImplementation> implementation) {
-  try {
-    const cardio::cancellation cancellation =
+  std::uint64_t observed_revision = 0;
+  while (!implementation->destroyed) {
+    // Wait for events rather than imposing a login delay or polling the bus.
+    if (observed_revision == implementation->watcher_revision) {
+      implementation->watcher_changed.emplace();
+      co_await implementation->watcher_changed->get_promise();
+      implementation->watcher_changed.reset();
+    }
+    if (implementation->destroyed) co_return;
+    observed_revision = implementation->watcher_revision;
+    const std::string owner = implementation->watcher_owner;
+    if (owner.empty()) {
+      create_fallback_backend(implementation.get());
+      continue;
+    }
+    implementation->cancellation_source.emplace();
+    const auto cancellation =
         implementation->cancellation_source->get_cancellation();
-    const bool has_status_notifier =
-        implementation->connection != nullptr &&
-        co_await status_notifier_host_available_async(
-            implementation.get(), cancellation);
-    if (implementation->destroyed) {
-      co_return;
-    }
-    if (!has_status_notifier) {
-      create_fallback_backend(implementation.get());
-      co_return;
-    }
-    if (!register_status_notifier_objects(implementation.get())) {
-      unregister_status_notifier_objects(implementation.get());
-      create_fallback_backend(implementation.get());
-      co_return;
-    }
-    co_await register_status_notifier_async(
-        implementation.get(), cancellation);
-    if (implementation->destroyed) {
-      co_return;
-    }
-    implementation->kind =
-        TrayBackendKind::status_notifier_item;
-    set_backend_availability(
-        implementation.get(), TrayBackendAvailabilityState::available);
-  } catch (const cardio::canceled_exception &) {
-  } catch (const std::exception &error) {
-    if (!implementation->destroyed) {
-      std::cerr << "Failed to initialize tray backend: "
-                << error.what() << '\n';
-      unregister_status_notifier_objects(implementation.get());
-      create_fallback_backend(implementation.get());
+    try {
+      const bool host_available = co_await status_notifier_host_available_async(
+          implementation.get(), owner, cancellation);
+      // A reply from a superseded host must not change the current backend.
+      if (implementation->destroyed ||
+          observed_revision != implementation->watcher_revision) continue;
+      if (!host_available) {
+        create_fallback_backend(implementation.get());
+        continue;
+      }
+      if (implementation->registered_owner == owner) continue;
+      if (!register_status_notifier_objects(implementation.get())) {
+        unregister_status_notifier_objects(implementation.get());
+        create_fallback_backend(implementation.get());
+        continue;
+      }
+      co_await register_status_notifier_async(
+          implementation.get(), owner, cancellation);
+      if (implementation->destroyed ||
+          observed_revision != implementation->watcher_revision) continue;
+      destroy_xembed_backend(implementation.get());
+      implementation->registered_owner = owner;
+      implementation->kind = TrayBackendKind::status_notifier_item;
+      set_backend_availability(
+          implementation.get(), TrayBackendAvailabilityState::available);
+    } catch (const cardio::canceled_exception &) {
+    } catch (const std::exception &error) {
+      if (!implementation->destroyed &&
+          observed_revision == implementation->watcher_revision) {
+        std::cerr << "Failed to initialize tray backend: "
+                  << error.what() << '\n';
+        unregister_status_notifier_objects(implementation.get());
+        create_fallback_backend(implementation.get());
+      }
     }
   }
 }
@@ -1035,13 +1140,32 @@ TrayBackendState *create_tray_backend(TrayBackendOptions options) {
 
   auto *state = new TrayBackendState{
       .implementation = implementation,
+      .monitoring_task = std::nullopt,
   };
-  if (implementation->options.dispatcher == nullptr) {
+  if (implementation->options.dispatcher == nullptr ||
+      implementation->connection == nullptr) {
     create_fallback_backend(implementation.get());
     return state;
   }
-  implementation->initialization_task.emplace(
-      initialize_backend_async(implementation));
+  state->monitoring_task.emplace(monitor_backend_async(implementation));
+  implementation->host_signal_id = g_dbus_connection_signal_subscribe(
+      implementation->connection, status_notifier_watcher_service,
+      status_notifier_watcher_interface, nullptr, status_notifier_watcher_path,
+      nullptr, G_DBUS_SIGNAL_FLAGS_NONE, on_watcher_host_changed,
+      new std::weak_ptr<TrayBackendImplementation>(implementation),
+      free_watcher_backend);
+  implementation->host_properties_id = g_dbus_connection_signal_subscribe(
+      implementation->connection, status_notifier_watcher_service,
+      "org.freedesktop.DBus.Properties", "PropertiesChanged",
+      status_notifier_watcher_path, status_notifier_watcher_interface,
+      G_DBUS_SIGNAL_FLAGS_NONE, on_watcher_host_changed,
+      new std::weak_ptr<TrayBackendImplementation>(implementation),
+      free_watcher_backend);
+  implementation->watcher_id = g_bus_watch_name_on_connection(
+      implementation->connection, status_notifier_watcher_service,
+      G_BUS_NAME_WATCHER_FLAGS_NONE, on_watcher_appeared, on_watcher_vanished,
+      new std::weak_ptr<TrayBackendImplementation>(implementation),
+      free_watcher_backend);
   return state;
 }
 
@@ -1057,6 +1181,18 @@ void destroy_tray_backend(TrayBackendState *state) {
   if (implementation->cancellation_source.has_value()) {
     (void)implementation->cancellation_source->cancel();
   }
+  if (implementation->watcher_id != 0) {
+    g_bus_unwatch_name(implementation->watcher_id);
+  }
+  if (implementation->host_signal_id != 0) {
+    g_dbus_connection_signal_unsubscribe(implementation->connection,
+                                         implementation->host_signal_id);
+  }
+  if (implementation->host_properties_id != 0) {
+    g_dbus_connection_signal_unsubscribe(implementation->connection,
+                                         implementation->host_properties_id);
+  }
+  state->monitoring_task.reset();
   unregister_status_notifier_objects(implementation.get());
   destroy_xembed_backend(implementation.get());
   g_clear_object(&implementation->connection);
