@@ -64,7 +64,12 @@ install_data(
 
 foreach language : ['ja', 'en']
   install_data(
-    ['docs' / language / 'webdav.md', 'docs' / language / 'webdav-validation.md'],
+    'docs' / language / 'webdav.md',
     install_dir: get_option('datadir') / 'doc/elder-terms/docs' / language,
   )
 endforeach
+
+install_data(
+  'docs/en/webdav-validation.md',
+  install_dir: get_option('datadir') / 'doc/elder-terms/docs/en',
+)

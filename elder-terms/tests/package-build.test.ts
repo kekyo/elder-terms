@@ -150,10 +150,6 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     ['usr/share/doc/elder-terms/docs/ja/webdav.md', '# WebDAV\n'],
     ['usr/share/doc/elder-terms/docs/en/webdav.md', '# WebDAV\n'],
     [
-      'usr/share/doc/elder-terms/docs/ja/webdav-validation.md',
-      '# WebDAV validation\n',
-    ],
-    [
       'usr/share/doc/elder-terms/docs/en/webdav-validation.md',
       '# WebDAV validation\n',
     ],
@@ -665,6 +661,31 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       [goodPackage, canonicalArchitecture!]
     );
     expectSuccess(goodValidation, 'complete deb package was rejected');
+    const removedDocumentStage = join(temporaryRoot, 'removed-document-stage');
+    const removedDocumentPackage = join(temporaryRoot, 'removed-document.deb');
+    createPackageStage(
+      removedDocumentStage,
+      debianArchitecture,
+      'usr/share/doc/elder-terms/docs/ja/webdav-validation.md',
+      true,
+      true
+    );
+    expectSuccess(
+      run(dpkgDeb, [
+        '--root-owner-group',
+        '--build',
+        removedDocumentStage,
+        removedDocumentPackage,
+      ]),
+      'package without the removed document could not be built'
+    );
+    expectSuccess(
+      runSourced('VERSION=1.2.3\nvalidate_deb_package "$2" "$3"', [
+        removedDocumentPackage,
+        canonicalArchitecture!,
+      ]),
+      'package without the removed document was rejected'
+    );
     const missingControlStage = join(temporaryRoot, 'missing-control-stage');
     const missingControlPackage = join(temporaryRoot, 'missing-control.deb');
     createPackageStage(
@@ -690,7 +711,11 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     expect(missingControlValidation.status).not.toBe(0);
     expect(missingControlValidation.stderr).toContain('usr/bin/etctl');
     for (const language of ['ja', 'en']) {
-      for (const document of ['webdav.md', 'webdav-validation.md']) {
+      const documents =
+        language === 'en'
+          ? ['webdav.md', 'webdav-validation.md']
+          : ['webdav.md'];
+      for (const document of documents) {
         const missingPath = `usr/share/doc/elder-terms/docs/${language}/${document}`;
         const stage = join(
           temporaryRoot,

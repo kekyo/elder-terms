@@ -683,6 +683,10 @@ The Global Shortcuts portal may ask you to approve the changed bindings.
 On Sway and labwc, the launcher also synchronizes its compositor bindings and requests a reload when direct registration is unavailable.
 Use `etctl setup` to check registration or retry compositor synchronization after a failure.
 
+> Normally, when you launch the elder-terms launcher, it automatically performs a process internally that is equivalent to `etctl setup`.
+> Therefore, you do not need to run this command manually,
+> but if you encounter issues with hotkeys, running this command may provide more detailed results.
+
 The command checks the running launcher's X11 or Global Shortcuts portal registration result. If it starts the launcher,
 the portal may display an approval screen. When registration fails in a Sway or labwc Wayland session,
 it saves the current hotkeys to the user's configuration file and requests the compositor to reload them.

@@ -413,7 +413,6 @@ validate_deb_package() {
 		usr/share/doc/elder-terms/README.md \
 		usr/share/doc/elder-terms/README_ja.md \
 		usr/share/doc/elder-terms/docs/ja/webdav.md \
-		usr/share/doc/elder-terms/docs/ja/webdav-validation.md \
 		usr/share/doc/elder-terms/docs/en/webdav.md \
 		usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 		usr/share/doc/elder-terms/copyright; do
