@@ -1883,7 +1883,8 @@ describe.concurrent('elder-terms-vte settings', () => {
               capturePixelAtScreenPosition(
                 settingsDialogCapture,
                 generalTabCenterX,
-                generalTabCapture.bounds.y - 4
+                // Native labels fill the tab vertically, up to the notebook border.
+                generalTabCapture.bounds.y + 4
               ),
             ]).toEqual([
               componentBackground,

@@ -787,6 +787,7 @@ static void add_main_window_settings_background(MainWindow *main_window) {
 }
 
 static void clear_main_window_exterior_background(MainWindow *main_window) {
+  set_widget_exterior_foreground(nullptr, main_window->status_bar, false);
   remove_main_window_settings_exterior_background(main_window);
   GtkCssProvider *component_provider =
       main_window->exterior_component_background_provider;
@@ -987,6 +988,8 @@ static void set_main_window_exterior_background(
     }
   }
   add_main_window_settings_exterior_background(main_window);
+  set_widget_exterior_foreground(
+      main_window->header_bar, main_window->status_bar, true);
 }
 
 static void set_main_window_settings_background(

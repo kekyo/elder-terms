@@ -14,6 +14,7 @@ namespace elder_terms {
  * @returns Owned provider, or null when the CSS could not be loaded.
  * @remarks Selected descendants receive a stronger lightness adjustment so
  * selection remains visible when this provider overrides the GTK theme.
+ * Theme background images on glyph nodes are preserved.
  */
 GtkCssProvider *create_widget_background_provider(
     const RgbColor &color, const char *target_name);
@@ -116,5 +117,17 @@ void add_widget_tree_background_provider_at_priority(
  */
 void remove_widget_tree_background_provider(
     GtkWidget *widget, GtkCssProvider *provider);
+
+/**
+ * Uses the titlebar's theme foreground for a matching custom status surface.
+ *
+ * @param header Header bar supplying the resolved foreground, or null when disabling.
+ * @param status Status bar whose current widget tree receives the foreground.
+ * @param enabled True when both surfaces use the same custom exterior background.
+ * @remarks Theme and header state changes refresh the color. Disabling restores
+ * the status theme. The status owns the binding and observes the header weakly.
+ */
+void set_widget_exterior_foreground(
+    GtkWidget *header, GtkWidget *status, bool enabled);
 
 } // namespace elder_terms

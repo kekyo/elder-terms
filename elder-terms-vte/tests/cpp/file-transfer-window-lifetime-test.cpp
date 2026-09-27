@@ -113,6 +113,72 @@ static GtkWidget *find_widget(GtkWidget *widget, const char *name) {
   return found;
 }
 
+static GdkRGBA foreground(GtkWidget *widget) {
+  auto *context = gtk_widget_get_style_context(widget);
+  GdkRGBA color{};
+  gtk_style_context_get_color(context, gtk_style_context_get_state(context), &color);
+  return color;
+}
+
+static void wait_for_draw(GtkWidget *widget) {
+  bool drawn = false;
+  const auto handler = g_signal_connect_after(widget, "draw",
+      G_CALLBACK(+[](GtkWidget *, cairo_t *, gpointer data) {
+        *static_cast<bool *>(data) = true;
+        return FALSE;
+      }), &drawn);
+  gtk_widget_queue_draw(widget);
+  while (!drawn) g_main_context_iteration(nullptr, TRUE);
+  g_signal_handler_disconnect(widget, handler);
+}
+
+static void check_exterior_colors(const std::shared_ptr<FileTransferWindow> &window) {
+  auto *root = file_transfer_window_widget(window);
+  auto *header = gtk_window_get_titlebar(GTK_WINDOW(root));
+  auto *status = find_widget(root, "file_transfer_status_label");
+  auto *indicator = find_widget(root, "conn_indicator_label");
+  auto *theme = gtk_css_provider_new();
+  gtk_css_provider_load_from_data(theme,
+      "* { transition: none; } headerbar { color: #f0f0f0; }"
+      "headerbar:backdrop { color: #c0c0c0; } label { color: inherit; }"
+      "window { color: #000000; }", -1, nullptr);
+  gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(theme),
+      GTK_STYLE_PROVIDER_PRIORITY_THEME + 1);
+  wait_for_draw(root);
+  const auto theme_status = foreground(status);
+  GeneralColorSettings colors;
+  colors.exterior_background = RgbColor{0x61, 0x35, 0x83};
+  set_file_transfer_window_colors(window, colors);
+  for (bool backdrop : {false, true, false}) {
+    if (backdrop) gtk_widget_set_state_flags(header, GTK_STATE_FLAG_BACKDROP, FALSE);
+    else gtk_widget_unset_state_flags(header, GTK_STATE_FLAG_BACKDROP);
+    wait_for_draw(root);
+    const auto expected = foreground(header);
+    const auto actual = foreground(status);
+    expect(gdk_rgba_equal(&expected, &actual),
+        "Custom exterior status text must follow the header foreground in active and backdrop states");
+    const auto indicator_color = foreground(indicator);
+    expect(gdk_rgba_equal(&expected, &indicator_color),
+        "Activity indicator captions must share the exterior foreground");
+  }
+  gtk_css_provider_load_from_data(theme,
+      "* { transition: none; } headerbar { color: #204060; }"
+      "label { color: inherit; } window { color: #000000; }", -1, nullptr);
+  // Observe the painted frame after GTK has applied all theme invalidations.
+  wait_for_draw(root);
+  const auto changed_header = foreground(header);
+  const auto changed_status = foreground(status);
+  expect(gdk_rgba_equal(&changed_header, &changed_status),
+      "Changing the GTK theme must refresh custom exterior text colors");
+  set_file_transfer_window_colors(window, {});
+  wait_for_draw(root);
+  const auto default_status = foreground(status);
+  expect(gdk_rgba_equal(&default_status, &theme_status),
+      "Removing a custom background must restore the normal status theme color");
+  gtk_style_context_remove_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(theme));
+  g_object_unref(theme);
+}
+
 static cardio::promise<void> verify_async(
     std::shared_ptr<FileTransferWindow> window, std::shared_ptr<GatedClient> client,
     cardio::dispatcher_group_glib &group, std::exception_ptr &failure) {
@@ -236,6 +302,7 @@ static cardio::promise<void> verify_async(
     co_await client->started.wait();
     expect(gtk_image_get_pixbuf(GTK_IMAGE(connection_image)) != off_icon,
            "Attaching an authenticated service must activate CONN");
+    check_exterior_colors(window);
     GtkWidget *root = file_transfer_window_widget(window);
     for (const char *id : {"conn_indicator_image", "sd_indicator_image", "rd_indicator_image"}) {
       expect(GTK_IS_IMAGE(find_widget(root, id)), "File browser must expose CONN, SD and RD indicators");
