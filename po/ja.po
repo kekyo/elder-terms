@@ -188,6 +188,10 @@ msgstr "フォントファミリー"
 msgid "Close window when session ends"
 msgstr "セッション終了時にウィンドウを閉じる"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Compact mode"
+msgstr "コンパクトモード"
+
 #: shared/src/settings-widget/settings-presentation.cpp:73
 msgid "Show window side borders"
 msgstr "ウィンドウの左右にボーダーを表示する"

@@ -120,6 +120,7 @@ struct SettingsWidgetState {
   GtkWidget *general_name_entry = nullptr;
   GtkWidget *general_type_combo = nullptr;
   GtkWidget *general_auto_close_combo = nullptr;
+  GtkWidget *general_compact_mode_switch = nullptr;
   GtkWidget *general_new_window_switch = nullptr;
   KeyBindingInputWidgetState *general_open_connection_input = nullptr;
   GtkWidget *general_open_connection_reset_button = nullptr;
@@ -3303,6 +3304,10 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_we
                            general_auto_close_setting_key(),
                            general_auto_close(state->draft_store));
   }
+  if (state->general_compact_mode_switch != nullptr) {
+    gtk_switch_set_active(GTK_SWITCH(state->general_compact_mode_switch),
+                          general_compact_mode(state->draft_store));
+  }
   if (state->terminal_show_border_combo != nullptr) {
     populate_boolean_combo(state->terminal_show_border_combo,
                            state->draft_store,
@@ -3759,6 +3764,19 @@ static void on_general_auto_close_changed(GtkComboBox *, gpointer data) {
     return;
   }
   update_general_auto_close_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_general_compact_mode_changed(GtkSwitch *, GParamSpec *,
+                                            gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  set_explicit_setting_value(
+      &state->draft_store, general_compact_mode_setting_key(),
+      SettingValue{gtk_switch_get_active(
+          GTK_SWITCH(state->general_compact_mode_switch)) != FALSE});
   notify_changed(state);
 }
 
@@ -4903,6 +4921,17 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_general_auto_close_changed), state);
   attach_row(page, row++, general_auto_close_setting_key(),
              state->general_auto_close_combo);
+
+  state->general_compact_mode_switch = gtk_switch_new();
+  assign_accessible_id(
+      state->general_compact_mode_switch,
+      widget_id(state, "general_compact_mode_switch").c_str());
+  GtkWidget *compact_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_box_pack_start(GTK_BOX(compact_row),
+                     state->general_compact_mode_switch, FALSE, FALSE, 0);
+  g_signal_connect(state->general_compact_mode_switch, "notify::active",
+                   G_CALLBACK(on_general_compact_mode_changed), state);
+  attach_row(page, row++, general_compact_mode_setting_key(), compact_row);
 
   if (state->mode == SettingsWidgetMode::connection) {
     state->general_new_window_switch = gtk_switch_new();

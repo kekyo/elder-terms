@@ -57,6 +57,7 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"general", "background", N_("Content background")},
     SettingLabelEntry{"general", "auto_close",
                       N_("Close window when session ends")},
+    SettingLabelEntry{"general", "compact_mode", N_("Compact mode")},
     SettingLabelEntry{"local", "command_line", N_("Startup command")},
     SettingLabelEntry{"terminal", "encoding", N_("Character encoding")},
     SettingLabelEntry{"terminal", "backspace_code", N_("Backspace code")},
