@@ -901,31 +901,10 @@ static void update_general_name_from_widget(SettingsWidgetState *state) {
                              general_name_setting_key(), SettingValue{name});
 }
 
-static void on_tab_button_clicked(GtkButton *button, gpointer data) {
-  auto *state = static_cast<SettingsWidgetState *>(data);
-  auto *page = static_cast<GtkWidget *>(
-      g_object_get_data(G_OBJECT(button), "elder-terms-settings-page"));
-  if (page == nullptr) {
-    return;
-  }
-
-  const gint page_number =
-      gtk_notebook_page_num(GTK_NOTEBOOK(state->notebook), page);
-  if (page_number >= 0) {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(state->notebook), page_number);
-  }
-}
-
-static GtkWidget *create_tab_button(SettingsWidgetState *state,
-                                    GtkWidget *page, const char *text,
-                                    const char *id) {
-  GtkWidget *button = gtk_button_new_with_label(text);
-  gtk_button_set_relief(GTK_BUTTON(button), GTK_RELIEF_NONE);
-  gtk_widget_set_focus_on_click(button, FALSE);
-  assign_accessible_id(button, id);
-  g_object_set_data(G_OBJECT(button), "elder-terms-settings-page", page);
-  g_signal_connect(button, "clicked", G_CALLBACK(on_tab_button_clicked), state);
-  return button;
+static GtkWidget *create_tab_label(const char *text, const char *id) {
+  GtkWidget *label = gtk_label_new(text);
+  assign_accessible_id(label, id);
+  return label;
 }
 
 static void update_general_type_from_widget(SettingsWidgetState *state) {
@@ -6116,8 +6095,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   GtkWidget *general_page = create_general_page(state);
   const std::string general_tab_id = widget_id(state, "general_tab");
-  GtkWidget *general_tab = create_tab_button(
-      state, general_page, settings_ui_text(SettingsUiText::general_tab),
+  GtkWidget *general_tab = create_tab_label(
+      settings_ui_text(SettingsUiText::general_tab),
       general_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), general_page,
                            general_tab);
@@ -6126,8 +6105,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   GtkWidget *local_page = create_local_page(state);
   const std::string local_tab_id = widget_id(state, "local_tab");
-  GtkWidget *local_tab = create_tab_button(
-      state, local_page, settings_ui_text(SettingsUiText::local_tab),
+  GtkWidget *local_tab = create_tab_label(
+      settings_ui_text(SettingsUiText::local_tab),
       local_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), local_page,
                            local_tab);
@@ -6143,8 +6122,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   GtkWidget *telnet_page = create_telnet_page(state);
   const std::string telnet_tab_id = widget_id(state, "telnet_tab");
-  GtkWidget *telnet_tab = create_tab_button(
-      state, telnet_page, settings_ui_text(SettingsUiText::telnet_tab),
+  GtkWidget *telnet_tab = create_tab_label(
+      settings_ui_text(SettingsUiText::telnet_tab),
       telnet_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), telnet_page,
                            telnet_tab);
@@ -6160,8 +6139,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   GtkWidget *serial_page = create_serial_page(state);
   const std::string serial_tab_id = widget_id(state, "serial_tab");
-  GtkWidget *serial_tab = create_tab_button(
-      state, serial_page, settings_ui_text(SettingsUiText::serial_tab),
+  GtkWidget *serial_tab = create_tab_label(
+      settings_ui_text(SettingsUiText::serial_tab),
       serial_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), serial_page,
                            serial_tab);
@@ -6177,8 +6156,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   GtkWidget *ssh_page = create_ssh_page(state);
   const std::string ssh_tab_id = widget_id(state, "ssh_tab");
-  GtkWidget *ssh_tab = create_tab_button(
-      state, ssh_page, settings_ui_text(SettingsUiText::ssh_tab),
+  GtkWidget *ssh_tab = create_tab_label(
+      settings_ui_text(SettingsUiText::ssh_tab),
       ssh_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), ssh_page, ssh_tab);
   gtk_widget_show_all(ssh_page);
@@ -6193,8 +6172,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   GtkWidget *sftp_page = create_sftp_page(state);
   const std::string sftp_tab_id = widget_id(state, "sftp_tab");
-  GtkWidget *sftp_tab = create_tab_button(
-      state, sftp_page, settings_ui_text(SettingsUiText::sftp_tab),
+  GtkWidget *sftp_tab = create_tab_label(
+      settings_ui_text(SettingsUiText::sftp_tab),
       sftp_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), sftp_page, sftp_tab);
   gtk_widget_show_all(sftp_page);
@@ -6209,8 +6188,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   GtkWidget *ftp_page = create_ftp_page(state);
   const std::string ftp_tab_id = widget_id(state, "ftp_tab");
-  GtkWidget *ftp_tab = create_tab_button(
-      state, ftp_page, settings_ui_text(SettingsUiText::ftp_tab),
+  GtkWidget *ftp_tab = create_tab_label(
+      settings_ui_text(SettingsUiText::ftp_tab),
       ftp_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), ftp_page, ftp_tab);
   gtk_widget_show_all(ftp_page);
@@ -6236,7 +6215,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(webdav_page)),
       widget_id(state, "webdav_page_scrollbar").c_str());
   gtk_container_add(GTK_CONTAINER(webdav_page), webdav_settings_editor_root(state->webdav_editor));
-  GtkWidget *webdav_tab = create_tab_button(state, webdav_page, "WebDAV",
+  GtkWidget *webdav_tab = create_tab_label(
+      "WebDAV",
       widget_id(state, "webdav_tab").c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), webdav_page, webdav_tab);
   gtk_widget_show_all(webdav_page);
@@ -6248,8 +6228,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   GtkWidget *terminal_page = create_terminal_page(state);
   const std::string terminal_tab_id = widget_id(state, "terminal_tab");
-  GtkWidget *terminal_tab = create_tab_button(
-      state, terminal_page, settings_ui_text(SettingsUiText::terminal_tab),
+  GtkWidget *terminal_tab = create_tab_label(
+      settings_ui_text(SettingsUiText::terminal_tab),
       terminal_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), terminal_page,
                            terminal_tab);
@@ -6266,8 +6246,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   GtkWidget *transfer_page = create_transfer_page(state);
   const std::string transfer_tab_id = widget_id(state, "transfer_tab");
-  GtkWidget *transfer_tab = create_tab_button(
-      state, transfer_page, settings_ui_text(SettingsUiText::transfer_tab),
+  GtkWidget *transfer_tab = create_tab_label(
+      settings_ui_text(SettingsUiText::transfer_tab),
       transfer_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), transfer_page,
                            transfer_tab);
@@ -6284,8 +6264,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   GtkWidget *logging_page = create_logging_page(state);
   const std::string logging_tab_id = widget_id(state, "logging_tab");
-  GtkWidget *logging_tab = create_tab_button(
-      state, logging_page, settings_ui_text(SettingsUiText::logging_tab),
+  GtkWidget *logging_tab = create_tab_label(
+      settings_ui_text(SettingsUiText::logging_tab),
       logging_tab_id.c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), logging_page,
                            logging_tab);
@@ -6303,8 +6283,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   if (state->mode == SettingsWidgetMode::connection) {
     GtkWidget *macro_page = create_macro_page(state);
     const std::string macro_tab_id = widget_id(state, "macro_tab");
-    GtkWidget *macro_tab = create_tab_button(
-        state, macro_page, settings_ui_text(SettingsUiText::macro_tab),
+    GtkWidget *macro_tab = create_tab_label(
+        settings_ui_text(SettingsUiText::macro_tab),
         macro_tab_id.c_str());
     gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), macro_page,
                              macro_tab);
@@ -6330,8 +6310,8 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
     GtkWidget *link_page =
         hyperlink_settings_editor_root(state->hyperlink_editor);
     const std::string link_tab_id = widget_id(state, "link_tab");
-    GtkWidget *link_tab = create_tab_button(
-        state, link_page, settings_ui_text(SettingsUiText::links_tab),
+    GtkWidget *link_tab = create_tab_label(
+        settings_ui_text(SettingsUiText::links_tab),
         link_tab_id.c_str());
     gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), link_page,
                              link_tab);
