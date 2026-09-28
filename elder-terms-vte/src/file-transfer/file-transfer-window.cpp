@@ -2491,15 +2491,11 @@ static void clear_file_transfer_window_colors(FileTransferWindow *window) {
   if (window == nullptr) {
     return;
   }
-  set_widget_exterior_foreground(nullptr, window->status_bar, false);
-
   if (window->exterior_background_provider != nullptr) {
-    gtk_style_context_remove_provider(
-        gtk_widget_get_style_context(window->header_bar),
-        GTK_STYLE_PROVIDER(window->exterior_background_provider));
-    gtk_style_context_remove_provider(
-        gtk_widget_get_style_context(window->status_bar),
-        GTK_STYLE_PROVIDER(window->exterior_background_provider));
+    remove_widget_tree_background_provider(
+        window->header_bar, window->exterior_background_provider);
+    remove_widget_tree_background_provider(
+        window->status_bar, window->exterior_background_provider);
     g_clear_object(&window->exterior_background_provider);
   }
   if (window->exterior_component_background_provider != nullptr) {
@@ -3093,14 +3089,10 @@ void set_file_transfer_window_colors(
         create_widget_background_provider(
             settings.exterior_background.value(),
             "File transfer exterior");
-    gtk_style_context_add_provider(
-        gtk_widget_get_style_context(window->header_bar),
-        GTK_STYLE_PROVIDER(window->exterior_background_provider),
-        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-    gtk_style_context_add_provider(
-        gtk_widget_get_style_context(window->status_bar),
-        GTK_STYLE_PROVIDER(window->exterior_background_provider),
-        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    add_widget_tree_background_provider(
+        window->header_bar, window->exterior_background_provider);
+    add_widget_tree_background_provider(
+        window->status_bar, window->exterior_background_provider);
     window->exterior_component_background_provider =
         create_scoped_widget_component_background_provider(
             settings.exterior_background.value(),
@@ -3124,7 +3116,6 @@ void set_file_transfer_window_colors(
       g_clear_object(
           &window->exterior_component_background_provider);
     }
-    set_widget_exterior_foreground(window->header_bar, window->status_bar, true);
   }
   if (settings.background.has_value()) {
     window->background_provider =

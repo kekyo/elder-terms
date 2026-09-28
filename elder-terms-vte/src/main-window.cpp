@@ -790,7 +790,6 @@ static void add_main_window_settings_background(MainWindow *main_window) {
 }
 
 static void clear_main_window_exterior_background(MainWindow *main_window) {
-  set_widget_exterior_foreground(nullptr, main_window->status_bar, false);
   remove_main_window_settings_exterior_background(main_window);
   GtkCssProvider *component_provider =
       main_window->exterior_component_background_provider;
@@ -995,8 +994,6 @@ static void set_main_window_exterior_background(
     }
   }
   add_main_window_settings_exterior_background(main_window);
-  set_widget_exterior_foreground(
-      main_window->header_bar, main_window->status_bar, true);
 }
 
 static void set_main_window_settings_background(
@@ -1040,6 +1037,14 @@ static void set_main_window_terminal_background(
       .alpha = 1.0,
   };
   vte_terminal_set_color_background(terminal, &background);
+  const RgbColor text_color = contrasting_foreground(*color);
+  const GdkRGBA foreground{
+      .red = static_cast<gdouble>(text_color.red) / channel_maximum,
+      .green = static_cast<gdouble>(text_color.green) / channel_maximum,
+      .blue = static_cast<gdouble>(text_color.blue) / channel_maximum,
+      .alpha = 1.0,
+  };
+  vte_terminal_set_color_foreground(terminal, &foreground);
   main_window->terminal_background_overridden = true;
 }
 

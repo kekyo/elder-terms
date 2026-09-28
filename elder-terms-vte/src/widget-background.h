@@ -7,26 +7,37 @@
 namespace elder_terms {
 
 /**
- * Creates a CSS provider that paints one opaque RGB background.
+ * Selects black or white text for the greatest contrast with a background.
+ *
+ * @param background Opaque RGB surface color.
+ * @returns Black or white RGB foreground color.
+ * @remarks The comparison uses relative sRGB luminance and contrast ratios.
+ */
+RgbColor contrasting_foreground(const RgbColor &background);
+
+/**
+ * Creates a CSS provider that paints one opaque RGB background and readable text.
  *
  * @param color RGB color to paint.
  * @param target_name Diagnostic name used when CSS parsing fails.
  * @returns Owned provider, or null when the CSS could not be loaded.
  * @remarks Selected descendants receive a stronger lightness adjustment so
  * selection remains visible when this provider overrides the GTK theme.
- * Theme background images on glyph nodes are preserved.
+ * Text uses black or white according to each surface's contrast. Theme
+ * background images on glyph nodes are preserved.
  */
 GtkCssProvider *create_widget_background_provider(
     const RgbColor &color, const char *target_name);
 
 /**
- * Creates a CSS provider for interactive surfaces derived from a background.
+ * Creates a CSS provider for interactive surfaces and their text.
  *
  * @param color RGB content background used as the derivation source.
  * @param target_name Diagnostic name used when CSS parsing fails.
  * @returns Owned provider, or null when the CSS could not be loaded.
  * @remarks The derived color preserves hue and saturation while moving
- * lightness four percent toward the contrasting extreme.
+ * lightness four percent toward the contrasting extreme. Foreground text
+ * is selected from the derived surface color.
  */
 GtkCssProvider *create_widget_component_background_provider(
     const RgbColor &color, const char *target_name);
@@ -46,7 +57,7 @@ GtkCssProvider *create_scoped_widget_component_background_provider(
     const char *target_name);
 
 /**
- * Creates a screen provider for popup surfaces derived from a background.
+ * Creates a screen provider for popup surfaces and their text.
  *
  * @param color RGB content background used as the derivation source.
  * @param target_name Diagnostic name used when CSS parsing fails.
@@ -117,17 +128,5 @@ void add_widget_tree_background_provider_at_priority(
  */
 void remove_widget_tree_background_provider(
     GtkWidget *widget, GtkCssProvider *provider);
-
-/**
- * Uses the titlebar's theme foreground for a matching custom status surface.
- *
- * @param header Header bar supplying the resolved foreground, or null when disabling.
- * @param status Status bar whose current widget tree receives the foreground.
- * @param enabled True when both surfaces use the same custom exterior background.
- * @remarks Theme and header state changes refresh the color. Disabling restores
- * the status theme. The status owns the binding and observes the header weakly.
- */
-void set_widget_exterior_foreground(
-    GtkWidget *header, GtkWidget *status, bool enabled);
 
 } // namespace elder_terms
