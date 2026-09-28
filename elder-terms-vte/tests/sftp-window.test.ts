@@ -365,6 +365,43 @@ const captureBorderSamples = (capture: GtkCapture): readonly RgbPixel[] => {
 };
 
 describe('SFTP window', () => {
+  it('centers the file transfer title text in the title bar', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      ['compact_mode=true'],
+      undefined,
+      async ({ app }) => {
+        const capture = await (
+          await app.getById('file_transfer_title_label')
+        ).capture();
+        const png = PNG.sync.read(capture.image) as PngImage;
+        const inkColumns: number[] = [];
+        for (let x = 0; x < png.width; ++x) {
+          for (let y = 1; y < png.height - 1; ++y) {
+            const pixel = (y * png.width + x) * 4;
+            const background = (y * png.width + png.width - 1) * 4;
+            const difference =
+              Math.abs(png.data[pixel]! - png.data[background]!) +
+              Math.abs(png.data[pixel + 1]! - png.data[background + 1]!) +
+              Math.abs(png.data[pixel + 2]! - png.data[background + 2]!);
+            if (difference > 120) {
+              inkColumns.push(x);
+              break;
+            }
+          }
+        }
+        expect(inkColumns.length).toBeGreaterThan(10);
+        expect(
+          Math.abs(
+            (inkColumns[0]! + inkColumns[inkColumns.length - 1]!) / 2 -
+              png.width / 2
+          )
+        ).toBeLessThan(12);
+      }
+    );
+  });
+
   it('shows activity in the title bar and hides the status bar in compact mode', async (context) => {
     await runSftpFixture(
       context,

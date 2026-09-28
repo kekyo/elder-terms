@@ -1312,7 +1312,7 @@ std::optional<MainWindow> load_main_window() {
   gtk_widget_set_hexpand(main_window.header_title_label, TRUE);
   gtk_widget_set_halign(main_window.header_title_box, GTK_ALIGN_FILL);
   gtk_widget_set_halign(main_window.header_title_label, GTK_ALIGN_FILL);
-  gtk_label_set_xalign(GTK_LABEL(main_window.header_title_label), 0.0F);
+  gtk_label_set_xalign(GTK_LABEL(main_window.header_title_label), 0.5F);
   gtk_label_set_single_line_mode(GTK_LABEL(main_window.header_title_label), TRUE);
   gtk_label_set_ellipsize(GTK_LABEL(main_window.header_title_label),
                           PANGO_ELLIPSIZE_END);

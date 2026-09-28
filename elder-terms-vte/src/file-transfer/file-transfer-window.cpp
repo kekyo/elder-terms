@@ -2726,7 +2726,7 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   gtk_widget_set_hexpand(state->title_label, TRUE);
   gtk_widget_set_halign(state->title_box, GTK_ALIGN_FILL);
   gtk_widget_set_halign(state->title_label, GTK_ALIGN_FILL);
-  gtk_label_set_xalign(GTK_LABEL(state->title_label), 0.0F);
+  gtk_label_set_xalign(GTK_LABEL(state->title_label), 0.5F);
   gtk_label_set_single_line_mode(GTK_LABEL(state->title_label), TRUE);
   gtk_label_set_ellipsize(GTK_LABEL(state->title_label), PANGO_ELLIPSIZE_END);
   gtk_style_context_add_class(
