@@ -78,6 +78,10 @@ struct MainWindow {
   GtkWidget *window = nullptr;
   /** Header bar widget. */
   GtkWidget *header_bar = nullptr;
+  /** Single-line title that expands ahead of title-bar controls. */
+  GtkWidget *header_title_label = nullptr;
+  /** Custom title container that accepts the activity indicators. */
+  GtkWidget *header_title_box = nullptr;
   /** Button that opens the file transfer menu. */
   GtkWidget *transfer_button = nullptr;
   /** Button that opens application-level commands. */
@@ -92,6 +96,8 @@ struct MainWindow {
   GtkWidget *frame_start_border = nullptr;
   /** Optional right border around the terminal window content. */
   GtkWidget *frame_end_border = nullptr;
+  /** Optional bottom border shown with side borders in compact mode. */
+  GtkWidget *frame_bottom_border = nullptr;
   /** Scroller surrounding the terminal and scrollbar. */
   GtkWidget *terminal_scroller = nullptr;
   /** Overlay stacking disconnected status on top of the terminal. */
@@ -148,8 +154,10 @@ struct MainWindow {
   GtkWidget *fixture_grid_size_label = nullptr;
   /** Hidden fixture-only VTE scrollback-size label. */
   GtkWidget *fixture_scrollback_lines_label = nullptr;
-  /** Status bar activity indicator container. */
+  /** Activity indicators shown in the status bar or title bar. */
   GtkWidget *activity_indicator_bar = nullptr;
+  /** True while indicators occupy the title bar. */
+  bool compact_mode = false;
   /** Open runtime settings dialog receiving connection backgrounds. */
   GtkWidget *settings_dialog = nullptr;
   /** Root of the open settings widget receiving connection backgrounds. */
@@ -415,6 +423,14 @@ void set_main_window_transfer_button_sensitive(MainWindow *main_window,
  */
 void set_main_window_status_text(MainWindow *main_window,
                                  const std::string &text);
+
+/**
+ * Moves activity indicators between the status bar and title bar.
+ *
+ * @param main_window Window whose layout is changed.
+ * @param compact_mode True to hide the status bar and show title indicators.
+ */
+void set_main_window_compact_mode(MainWindow *main_window, bool compact_mode);
 
 /**
  * Updates the main window title.

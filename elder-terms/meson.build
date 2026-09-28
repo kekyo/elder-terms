@@ -102,6 +102,26 @@ test(
   elder_terms_tray_backend_test,
 )
 
+elder_terms_tray_watcher_lifecycle_test = executable(
+  'tray-watcher-lifecycle-test',
+  ['src/tray-backend.cpp', 'tests/tray-watcher-lifecycle-test.cpp'],
+  include_directories: elder_terms_launcher_include_dir,
+  dependencies: [
+    cardio_dep,
+    elder_terms_launcher_gdk_pixbuf_dep,
+    elder_terms_launcher_gio_dep,
+    elder_terms_launcher_gtk_dep,
+  ],
+)
+
+foreach scenario : [
+  'late-watcher', 'late-host', 'restart', 'host-signals', 'host-properties',
+  'replace-registering', 'destroy-registering', 'destroy-waiting',
+]
+  test('tray-watcher-' + scenario, elder_terms_tray_watcher_lifecycle_test,
+    args: [scenario], timeout: 120)
+endforeach
+
 elder_terms_hotkey_backend_test = executable(
   'hotkey-backend-test',
   [

@@ -1,9 +1,14 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import {
+  execFile,
+  spawn,
+  type ChildProcessWithoutNullStreams,
+} from 'node:child_process';
 import { once } from 'node:events';
 import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 import type { GtkApp } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
@@ -17,11 +22,15 @@ import {
   waitForActivityIndicatorImageState,
 } from './activity-indicator-test-helpers';
 import {
+  defaultColumns,
+  defaultRows,
   expectDisconnectedNoticeHidden,
   expectDisconnectedNoticeRenderedUndimmedAtTerminalTopRight,
   expectDisconnectedNoticeVisibleAtTerminalTopRight,
   expectMainWindowStatus,
   expectMainWindowTitle,
+  expectWindowCellSize,
+  readWindowCellLayout,
   runGtkTest,
   withTemporaryDirectory,
 } from './gtk-test-helpers';
@@ -35,6 +44,7 @@ import {
 const helperPath = fileURLToPath(
   new URL('../../.build/elder-terms-vte/serial-pty-helper', import.meta.url)
 );
+const execFileAsync = promisify(execFile);
 
 interface SerialPtyHelper {
   readonly lines: readonly string[];
@@ -333,6 +343,84 @@ describe.concurrent('elder-terms-vte serial session', () => {
             await pressKeyUntilReceivedAndSdIndicatorOn(app, helper, 'a', '61');
           }
         );
+      } finally {
+        await helper.close();
+      }
+    });
+  });
+
+  it('keeps a connected serial terminal running when compact mode is applied', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const helper = await startSerialPtyHelper();
+      try {
+        const configPath = join(directory, 'serial-compact.ini');
+        const serialDevicePath = join(directory, 'ttyELDERTERMS0');
+        await symlink(helper.slavePath, serialDevicePath);
+        await writeFile(
+          configPath,
+          `[general]\ntype=serial\n\n[serial]\ndevice=${serialDevicePath}\n`,
+          'utf8'
+        );
+
+        await runGtkTest(context, ['-c', configPath], async (app) => {
+          await waitForActivityIndicatorImageState(app, 'conn', 'on');
+          expectWindowCellSize(
+            await readWindowCellLayout(app),
+            defaultColumns,
+            defaultRows
+          );
+          await execFileAsync('/usr/bin/stty', [
+            '-F',
+            helper.slavePath,
+            'echo',
+          ]);
+          const { stdout: serialStateBefore } = await execFileAsync(
+            '/usr/bin/stty',
+            ['-F', helper.slavePath, '-g']
+          );
+          await expectElementKind(
+            await app.getById('application_menu_button'),
+            'toggleButton'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_menu_item'),
+            'menuItem'
+          ).click();
+          const compact = expectElementKind(
+            await app.getById('settings_general_compact_mode_switch'),
+            'switch'
+          );
+          expect(await compact.isChecked()).toBe(false);
+          await compact.toggle();
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+
+          await toPass(async () => {
+            expect((await app.output()).exitCode).toBeNull();
+            expectWindowCellSize(
+              await readWindowCellLayout(app),
+              defaultColumns,
+              defaultRows
+            );
+            expect(
+              (await (await app.getById('status_bar')).info()).states
+            ).not.toContain('showing');
+            for (const indicator of serialActivityIndicatorIds) {
+              expect(
+                (await (await app.getById(`${indicator}_indicator_box`)).info())
+                  .states
+              ).toContain('showing');
+            }
+          });
+          const { stdout: serialStateAfter } = await execFileAsync(
+            '/usr/bin/stty',
+            ['-F', helper.slavePath, '-g']
+          );
+          expect(serialStateAfter).toBe(serialStateBefore);
+          await pressKeyUntilReceived(app, helper, 'a', '61');
+        });
       } finally {
         await helper.close();
       }

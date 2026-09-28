@@ -14,6 +14,8 @@ static constexpr char general_open_connection_key[] = "open_connection";
 static constexpr char general_exterior_background_key[] =
     "exterior_background";
 static constexpr char general_background_key[] = "background";
+static constexpr char general_compact_mode_key[] = "compact_mode";
+static constexpr bool default_general_compact_mode = false;
 static constexpr char default_general_background[] = "none";
 static constexpr char local_connection_type[] = "local";
 static constexpr char telnet_connection_type[] = "telnet";
@@ -143,6 +145,15 @@ SettingKey general_background_setting_key() {
   return make_setting_key(general_section, general_background_key);
 }
 
+SettingKey general_compact_mode_setting_key() {
+  return make_setting_key(general_section, general_compact_mode_key);
+}
+
+bool general_compact_mode(const SettingsStore &store) {
+  return setting_boolean_value_or_default(
+      store, general_compact_mode_setting_key(), default_general_compact_mode);
+}
+
 std::vector<SettingDefinition>
 general_setting_definitions(std::string default_connection_name) {
   return {
@@ -178,6 +189,11 @@ general_setting_definitions(std::string default_connection_name) {
           .default_value =
               SettingValue{std::string(default_general_background)},
           .validate = validate_general_color,
+      },
+      {
+          .key = general_compact_mode_setting_key(),
+          .default_value = SettingValue{default_general_compact_mode},
+          .validate = nullptr,
       },
   };
 }

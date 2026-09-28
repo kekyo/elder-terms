@@ -947,6 +947,7 @@ describe.concurrent('shared settings widget', () => {
               'Title and status bar background',
               'Content background',
               'Close window when session ends',
+              'Compact mode',
             ],
           },
           {
@@ -1049,6 +1050,7 @@ describe.concurrent('shared settings widget', () => {
         'Connection name',
         'Connection type',
         'Open connection shortcut',
+        'Compact mode',
       ]);
     });
   }, 90_000);
@@ -1079,6 +1081,7 @@ describe.concurrent('shared settings widget', () => {
               'タイトル／ステータスバーの背景',
               'コンテンツの背景',
               'セッション終了時にウィンドウを閉じる',
+              'コンパクトモード',
             ],
           },
           {

@@ -92,16 +92,25 @@ void apply_terminal_display_settings(
     TerminalDisplaySettings terminal_display_settings);
 
 /**
- * Applies terminal window side-border visibility to the live layout.
+ * Applies terminal window border visibility to the live layout.
  *
  * @param state Layout state created by create_terminal_layout.
- * @param show_border Whether to show the left and right frame borders.
+ * @param show_border Whether to show the side borders and the compact bottom border.
  */
 void apply_terminal_border_visibility(TerminalLayoutState *state,
                                       bool show_border);
 
 /**
- * Applies terminal window side-border width to the live layout.
+ * Applies compact window chrome while preserving the current terminal grid.
+ *
+ * @param state Layout state created by create_terminal_layout.
+ * @param compact_mode Whether the status bar is hidden.
+ */
+void apply_terminal_compact_mode(TerminalLayoutState *state,
+                                 bool compact_mode);
+
+/**
+ * Applies terminal window border width to the live layout.
  *
  * @param state Layout state created by create_terminal_layout.
  * @param border_width Width of each frame border in pixels.

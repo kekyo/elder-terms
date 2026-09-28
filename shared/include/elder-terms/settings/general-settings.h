@@ -100,6 +100,21 @@ general_exterior_background_setting_key();
 ELDER_TERMS_API SettingKey general_background_setting_key();
 
 /**
+ * Returns the setting key for [general] compact_mode.
+ *
+ * @returns Setting key for the compact connection window layout.
+ */
+ELDER_TERMS_API SettingKey general_compact_mode_setting_key();
+
+/**
+ * Returns whether the connection window uses its compact layout.
+ *
+ * @param store Source settings store.
+ * @returns True when the status bar is replaced by title-bar indicators.
+ */
+ELDER_TERMS_API bool general_compact_mode(const SettingsStore &store);
+
+/**
  * Returns the effective connection name.
  *
  * @param store Source settings store.

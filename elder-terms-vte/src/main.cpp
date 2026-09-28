@@ -788,6 +788,10 @@ static void apply_runtime_settings(ApplicationState *state,
   elder_terms::apply_terminal_border_visibility(
       state->layout_state,
       elder_terms::terminal_show_border(state->settings_store));
+  const bool compact_mode =
+      elder_terms::general_compact_mode(state->settings_store);
+  elder_terms::apply_terminal_compact_mode(state->layout_state, compact_mode);
+  elder_terms::set_main_window_compact_mode(state->main_window, compact_mode);
 }
 
 static bool save_runtime_settings(
@@ -1773,6 +1777,8 @@ int main(int argc, char **argv) {
   elder_terms::set_main_window_indicator_color(
       &*main_window, elder_terms::terminal_indicator_color(settings_result.store),
       elder_terms::terminal_indicator_off_color(settings_result.store));
+  elder_terms::set_main_window_compact_mode(
+      &*main_window, elder_terms::general_compact_mode(settings_result.store));
 
   ApplicationState app_state{
       .main_window = &*main_window,

@@ -1,5 +1,6 @@
 # elder-terms
 
+A Terminal emulator for local shell, serial, TELNET, FTP, FTPS, SSH, and SFTP connections.
 '90s, come back in this time. This is all we need.
 
 ![elder-terms](./images/elder-terms-128.png)
@@ -18,31 +19,9 @@
 
 elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP connections, inspired by personal computing in the 1990s.
 
-### Basic Terminal
-
 ![Terminal](./images/terminal.png)
 
-### Terminal Launcher
-
-![Launcher](./images/launcher-settings.png)
-
-### Complex Display
-
-![Complex terminal](./images/complex-terminal.png)
-
-### Serial Device
-
-![Serial terminal](./images/serial-terminal.png)
-
-### Custom Exterior Colors
-
-![Colored terminal](./images/colored-terminal.png)
-
-### SFTP/FTP/FTPS/WebDAV
-
-![SFTP/FTP/FTPS/WebDAV window](./images/sftp.png)
-
-## Features
+### Features
 
 - Provides a simple, no-frills terminal with everything you need, using Linux
   GTK/`libvte`.
@@ -63,8 +42,8 @@ elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP
 - Supports pasting text and sending text files. You can specify the send rate
   and newline handling to avoid overflowing the host's buffer or using
   incompatible newline codes.
-- Shows indicators at the bottom of the terminal so you can reminisce about
-  analog modems.
+- Shows indicators below the terminal by default, or beside the title in
+  compact mode, so you can reminisce about analog modems.
 - Uses either the built-in beep or a custom WAV/Ogg Vorbis sound for BEL.
 - Changes the font size with keyboard shortcuts or the mouse wheel.
 - Customizes the window exterior colors and terminal background for each
@@ -79,6 +58,26 @@ elder-terms is a GTK terminal for local shell, serial, TELNET, FTP, SSH and SFTP
   date and time.
 - Supports multilingual display (English, Arabic, Spanish, French, Hindi,
   Japanese, Korean, Portuguese, Russian, and Simplified Chinese).
+
+### Terminal Launcher
+
+![Launcher](./images/launcher-settings.png)
+
+### Complex Display
+
+![Complex terminal](./images/complex-terminal.png)
+
+### Serial Device
+
+![Serial terminal](./images/serial-terminal.png)
+
+### Custom Exterior Colors
+
+![Colored terminal](./images/colored-terminal.png)
+
+### SFTP/FTP/FTPS/WebDAV
+
+![SFTP/FTP/FTPS/WebDAV window](./images/sftp.png)
 
 ## Environment
 
@@ -170,8 +169,8 @@ Today, IoT development often involves debugging and collecting logs from
 serial devices such as Arduino boards. elder-terms is exceptionally capable in
 such environments.
 
-And yes, analog modems have not been forgotten. The indicators at the bottom
-of the terminal will satisfy that nostalgia:
+And yes, analog modems have not been forgotten. The indicators below the
+terminal by default will satisfy that nostalgia:
 
 ![Indicator](./images/serial-indicator.png)
 
@@ -583,6 +582,19 @@ Supported formats are Ogg Vorbis (`.oga`, with the legacy `.ogg` extension also 
 ```ini
 [terminal]
 bell_sound=/home/user/.local/share/sounds/terminal-bell.oga
+```
+
+## Compact Mode
+
+The "Compact mode" switch on a connection's General tab hides the bottom status bar
+and puts the activity indicators beside the title. It works for terminal and
+FTP, FTPS, SFTP, and WebDAV file browser windows. The built-in default is off.
+When window side borders are enabled, a compact terminal also shows a bottom
+border of the same width.
+
+```ini
+[general]
+compact_mode=true
 ```
 
 ## Configuring Indicator Color

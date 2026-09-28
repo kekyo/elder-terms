@@ -140,6 +140,8 @@ struct FileTransferWindow {
   SettingsWidgetState *settings_widget = nullptr;
   guint settings_close_idle = 0;
   GtkWidget *header_bar = nullptr;
+  GtkWidget *title_box = nullptr;
+  GtkWidget *title_label = nullptr;
   GtkWidget *root_overlay = nullptr;
   GtkWidget *paned = nullptr;
   GtkWidget *dim_overlay = nullptr;
@@ -154,6 +156,8 @@ struct FileTransferWindow {
   GdkPixbuf *indicator_on = nullptr;
   GdkPixbuf *indicator_off = nullptr;
   GtkWidget *status_bar = nullptr;
+  GtkWidget *status_content = nullptr;
+  GtkWidget *indicator_bar = nullptr;
   GtkWidget *status_label = nullptr;
   std::string status_text;
   bool certificate_exception = false;
@@ -2560,6 +2564,25 @@ static void schedule_file_settings_close(FileTransferWindow *window) {
   }, window);
 }
 
+static void apply_file_transfer_compact_mode(FileTransferWindow *window,
+                                             bool compact_mode) {
+  GtkWidget *new_parent = compact_mode ? window->title_box
+                                      : window->status_content;
+  if (gtk_widget_get_parent(window->indicator_bar) != new_parent) {
+    GtkWidget *old_parent = gtk_widget_get_parent(window->indicator_bar);
+    g_object_ref(window->indicator_bar);
+    gtk_container_remove(GTK_CONTAINER(old_parent), window->indicator_bar);
+    gtk_box_pack_start(GTK_BOX(new_parent), window->indicator_bar,
+                       FALSE, FALSE, 0);
+    g_object_unref(window->indicator_bar);
+    gtk_widget_show_all(window->indicator_bar);
+  }
+  gtk_widget_set_no_show_all(window->status_bar,
+                             compact_mode ? TRUE : FALSE);
+  gtk_widget_set_visible(window->status_bar,
+                         compact_mode ? FALSE : TRUE);
+}
+
 static void open_file_settings(GtkMenuItem *, gpointer data) {
   auto *window = static_cast<FileTransferWindow *>(data);
   if (window->settings_dialog != nullptr) {
@@ -2580,6 +2603,7 @@ static void open_file_settings(GtkMenuItem *, gpointer data) {
     window->settings = settings;
     set_file_transfer_window_colors(
         window->self.lock(), general_color_settings(settings));
+    apply_file_transfer_compact_mode(window, general_compact_mode(settings));
     schedule_file_settings_close(window);
   };
   if (window->config_path) {
@@ -2698,6 +2722,23 @@ create_file_transfer_window(FileTransferWindowOptions options) {
       GTK_HEADER_BAR(state->header_bar), title.c_str());
   gtk_header_bar_set_show_close_button(
       GTK_HEADER_BAR(state->header_bar), TRUE);
+  state->title_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  state->title_label = gtk_label_new(title.c_str());
+  gestament_gtk_assign_accessible_id(
+      state->title_label, "file_transfer_title_label");
+  gtk_widget_set_hexpand(state->title_box, TRUE);
+  gtk_widget_set_hexpand(state->title_label, TRUE);
+  gtk_widget_set_halign(state->title_box, GTK_ALIGN_FILL);
+  gtk_widget_set_halign(state->title_label, GTK_ALIGN_FILL);
+  gtk_label_set_xalign(GTK_LABEL(state->title_label), 0.0F);
+  gtk_label_set_single_line_mode(GTK_LABEL(state->title_label), TRUE);
+  gtk_label_set_ellipsize(GTK_LABEL(state->title_label), PANGO_ELLIPSIZE_END);
+  gtk_style_context_add_class(
+      gtk_widget_get_style_context(state->title_label), "title");
+  gtk_box_pack_start(GTK_BOX(state->title_box), state->title_label,
+                     TRUE, TRUE, 0);
+  gtk_header_bar_set_custom_title(GTK_HEADER_BAR(state->header_bar),
+                                  state->title_box);
   gtk_window_set_titlebar(
       GTK_WINDOW(state->window), state->header_bar);
   create_file_settings_menu(state.get());
@@ -2728,19 +2769,19 @@ create_file_transfer_window(FileTransferWindowOptions options) {
       GTK_EVENT_BOX(state->status_bar), TRUE);
   gestament_gtk_assign_accessible_id(
       state->status_bar, "file_transfer_status_bar");
-  GtkWidget *status_content =
+  state->status_content =
       gtk_box_new(
           GTK_ORIENTATION_HORIZONTAL, file_transfer_control_spacing);
   gtk_widget_set_margin_start(
-      status_content, file_transfer_content_padding);
+      state->status_content, file_transfer_content_padding);
   gtk_widget_set_margin_end(
-      status_content, file_transfer_content_padding);
+      state->status_content, file_transfer_content_padding);
   gtk_widget_set_margin_top(
-      status_content, 2);
+      state->status_content, 2);
   gtk_widget_set_margin_bottom(
-      status_content, 2);
+      state->status_content, 2);
   gtk_container_add(
-      GTK_CONTAINER(state->status_bar), status_content);
+      GTK_CONTAINER(state->status_bar), state->status_content);
   gtk_box_pack_start(
       GTK_BOX(content), state->status_bar, FALSE, TRUE, 0);
   state->status_label = gtk_label_new(_("Connecting"));
@@ -2748,7 +2789,11 @@ create_file_transfer_window(FileTransferWindowOptions options) {
       state->status_label, "file_transfer_status_label");
   gtk_label_set_xalign(GTK_LABEL(state->status_label), 0.0F);
   gtk_box_pack_start(
-      GTK_BOX(status_content), state->status_label, TRUE, TRUE, 0);
+      GTK_BOX(state->status_content), state->status_label, TRUE, TRUE, 0);
+  state->indicator_bar =
+      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, file_transfer_control_spacing);
+  gtk_box_pack_start(GTK_BOX(state->status_content), state->indicator_bar,
+                     FALSE, FALSE, 0);
 
   const auto icon_directory =
       std::filesystem::read_symlink("/proc/self/exe").parent_path();
@@ -2772,11 +2817,13 @@ create_file_transfer_window(FileTransferWindowOptions options) {
     pango_attr_list_unref(attributes);
     gtk_box_pack_start(GTK_BOX(box), image, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(box), label, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(status_content), box, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(state->indicator_bar), box, FALSE, FALSE, 0);
     initialize_activity_indicator_widget(&state->indicators[index], image,
         state->indicator_on, state->indicator_off,
         index == 0 ? ActivityIndicatorMode::steady : ActivityIndicatorMode::blink);
   }
+  apply_file_transfer_compact_mode(
+      state.get(), general_compact_mode(state->settings));
 
   state->dim_overlay = gtk_event_box_new();
   gestament_gtk_assign_accessible_id(

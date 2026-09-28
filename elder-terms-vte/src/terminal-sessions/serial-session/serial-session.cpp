@@ -1225,6 +1225,14 @@ public:
 
     (void)terminal_io.apply_text_settings(profile.text_settings);
 
+    // A display-only settings change must not reconfigure an active device.
+    // A failed redundant termios update is treated as a connection loss.
+    const bool port_settings_changed =
+        settings.baudrate != updated_settings->baudrate ||
+        settings.bits != updated_settings->bits ||
+        settings.parity != updated_settings->parity ||
+        settings.stop_bit != updated_settings->stop_bit ||
+        settings.flow_control != updated_settings->flow_control;
     const std::string current_device = settings.device;
     const SerialDeviceMatchMode current_device_match_mode =
         settings.device_match_mode;
@@ -1246,12 +1254,14 @@ public:
     }
 
     if (serial_fd >= 0) {
-      try {
-        configure_serial_port(serial_fd, settings);
-      } catch (const std::exception &error) {
-        std::cerr << "Warning: failed to apply serial settings: "
-                  << error.what() << '\n';
-        handle_device_connection_lost(serial_fd);
+      if (port_settings_changed) {
+        try {
+          configure_serial_port(serial_fd, settings);
+        } catch (const std::exception &error) {
+          std::cerr << "Warning: failed to apply serial settings: "
+                    << error.what() << '\n';
+          handle_device_connection_lost(serial_fd);
+        }
       }
       return;
     }
