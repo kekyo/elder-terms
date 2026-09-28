@@ -149,7 +149,7 @@ new_window=Local terminal
 elder-termsはそのような環境でも無類の力を発揮します。
 
 ああ、わかっていますとも。アナログモデムの事も忘れていません。
-そのノスタルジーは、ターミナル下部のインジケータが補ってくれます:
+そのノスタルジーは、通常はターミナル下部に表示されるインジケータが補ってくれます:
 
 ![Indicator](./images/serial-indicator.png)
 
@@ -509,6 +509,18 @@ scrollback_lines=20000
 ```ini
 [terminal]
 bell_sound=/home/user/.local/share/sounds/terminal-bell.oga
+```
+
+## コンパクトモード
+
+接続の「一般」タブにある「コンパクトモード」をオンにすると、下部のステータスバーを隠し、
+インジケーターをタイトルの隣に表示します。ターミナルとFTP、FTPS、SFTP、WebDAVの
+ファイルブラウザで使用出来ます。組み込み既定値はオフです。
+左右ボーダーを表示する設定では、コンパクトモードのターミナルに同じ幅の下辺ボーダーも表示します。
+
+```ini
+[general]
+compact_mode=true
 ```
 
 ## インジケーターの色の設定

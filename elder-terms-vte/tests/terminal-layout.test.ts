@@ -27,6 +27,160 @@ import {
 import { capturePixel } from './test-helpers';
 
 describe.concurrent('elder-terms-vte terminal layout', () => {
+  it('expands a long title without wrapping in regular mode', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'long-title.ini');
+      await writeFile(
+        configPath,
+        `[general]\nname=${'A long connection title '.repeat(20)}\n`,
+        'utf8'
+      );
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app) => {
+          const initial = await waitForResult(async () => {
+            const layout = await readWindowCellLayout(app);
+            expectWindowCellSize(layout, defaultColumns, defaultRows);
+            await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+            return layout;
+          });
+          expect(
+            (await (await app.getById('status_bar')).info()).states
+          ).toContain('showing');
+          const title = await (
+            await app.getById('header_title_label')
+          ).capture();
+          await initial.mainWindow.resizeTo(
+            initial.mainBounds.width + initial.hints.widthIncrement,
+            initial.mainBounds.height
+          );
+          await waitForResult(async () => {
+            const layout = await readWindowCellLayout(app);
+            expectWindowCellSize(layout, defaultColumns + 1, defaultRows);
+            await expectFixtureVteGridSize(
+              app,
+              defaultColumns + 1,
+              defaultRows
+            );
+          });
+          const expanded = await (
+            await app.getById('header_title_label')
+          ).capture();
+          expect(expanded.bounds.width).toBeGreaterThan(title.bounds.width);
+          expect(expanded.bounds.height).toBe(title.bounds.height);
+        }
+      );
+    });
+  });
+
+  it('uses the title bar indicators and a bottom border in compact mode while retaining cell geometry', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'compact.ini');
+      await writeFile(
+        configPath,
+        [
+          '[general]',
+          `name=${'A long connection title '.repeat(20)}`,
+          'compact_mode=true',
+          'exterior_background=#800000',
+          '',
+          '[terminal]',
+          'show_border=true',
+          'border_width=7',
+          '',
+        ].join('\n'),
+        'utf8'
+      );
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app) => {
+          const layout = await waitForResult(async () => {
+            const current = await readWindowCellLayout(app);
+            expectWindowCellSize(current, defaultColumns, defaultRows);
+            await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+            return current;
+          });
+          expect(
+            (await (await app.getById('status_bar')).info()).states
+          ).not.toContain('showing');
+          const bottom = await (
+            await app.getById('frame_bottom_border')
+          ).capture();
+          expect(bottom.bounds.height).toBe(7);
+          expect(capturePixel(bottom, 0.5, 0.5)).toStrictEqual([128, 0, 0]);
+          const side = await (await app.getById('frame_end_border')).capture();
+          expect(bottom.bounds.x + bottom.bounds.width).toBe(side.bounds.x);
+          expect(bottom.bounds.y + bottom.bounds.height).toBe(
+            side.bounds.y + side.bounds.height
+          );
+          expect(
+            (await (await app.getById('activity_indicator_bar')).info()).states
+          ).toContain('showing');
+          const [title, indicators, menu] = await Promise.all([
+            (await app.getById('header_title_label')).capture(),
+            (await app.getById('activity_indicator_bar')).capture(),
+            (await app.getById('application_menu_button')).capture(),
+          ]);
+          expect(title.bounds.x + title.bounds.width).toBeLessThanOrEqual(
+            indicators.bounds.x
+          );
+          expect(
+            indicators.bounds.x + indicators.bounds.width
+          ).toBeLessThanOrEqual(menu.bounds.x);
+          await layout.mainWindow.resizeTo(
+            layout.mainBounds.width + layout.hints.widthIncrement,
+            layout.mainBounds.height + layout.hints.heightIncrement
+          );
+          await waitForResult(async () => {
+            const current = await readWindowCellLayout(app);
+            expectWindowCellSize(current, defaultColumns + 1, defaultRows + 1);
+            await expectFixtureVteGridSize(
+              app,
+              defaultColumns + 1,
+              defaultRows + 1
+            );
+          });
+          const expandedTitle = await (
+            await app.getById('header_title_label')
+          ).capture();
+          expect(expandedTitle.bounds.width).toBeGreaterThan(
+            title.bounds.width
+          );
+          expect(expandedTitle.bounds.height).toBe(title.bounds.height);
+          await pressKeyWithModifiers(app, ['control'], 'equal');
+          const zoomed = await waitForResult(async () => {
+            const current = await readWindowCellLayout(app);
+            expect(current.hints.widthIncrement).not.toBe(
+              layout.hints.widthIncrement
+            );
+            expectWindowCellSize(current, defaultColumns + 1, defaultRows + 1);
+            await expectFixtureVteGridSize(
+              app,
+              defaultColumns + 1,
+              defaultRows + 1
+            );
+            return current;
+          });
+          await zoomed.mainWindow.resizeTo(
+            zoomed.mainBounds.width + zoomed.hints.widthIncrement - 1,
+            zoomed.mainBounds.height + zoomed.hints.heightIncrement - 1
+          );
+          await waitForResult(async () => {
+            const current = await readWindowCellLayout(app);
+            expectWindowCellSize(current, defaultColumns + 1, defaultRows + 1);
+            await expectFixtureVteGridSize(
+              app,
+              defaultColumns + 1,
+              defaultRows + 1
+            );
+          });
+        }
+      );
+    });
+  });
+
   it('fills the whole terminal image up to the right and bottom edges', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app, evidence) => {
       const layout = await waitForResult(async () =>

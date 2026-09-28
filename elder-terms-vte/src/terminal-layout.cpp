@@ -34,10 +34,10 @@ struct TerminalLayoutState {
   GtkWidget *root_box = nullptr;
   GtkWidget *frame_start_border = nullptr;
   GtkWidget *frame_end_border = nullptr;
+  GtkWidget *frame_bottom_border = nullptr;
   GtkWidget *terminal_scroller = nullptr;
   GtkWidget *terminal = nullptr;
   GtkWidget *terminal_scrollbar = nullptr;
-  GtkWidget *status_bar = nullptr;
   GtkWidget *fixture_grid_size_label = nullptr;
   GtkWidget *fixture_scrollback_lines_label = nullptr;
   TestOptions options;
@@ -62,6 +62,7 @@ struct TerminalLayoutState {
   bool layout_geometry_update_pending = false;
   bool break_key_pressed = false;
   bool show_border = false;
+  bool compact_mode = false;
   gint border_width = 0;
   guint window_size_sync_source = 0;
   guint font_resize_guard_source = 0;
@@ -374,6 +375,11 @@ static void set_border_visibility(TerminalLayoutState *state,
     gtk_widget_set_no_show_all(border, show_border ? FALSE : TRUE);
     gtk_widget_set_visible(border, show_border ? TRUE : FALSE);
   }
+  const bool show_bottom = show_border && state->compact_mode;
+  gtk_widget_set_no_show_all(state->frame_bottom_border,
+                             show_bottom ? FALSE : TRUE);
+  gtk_widget_set_visible(state->frame_bottom_border,
+                         show_bottom ? TRUE : FALSE);
 }
 
 static void set_border_width(TerminalLayoutState *state, gint border_width) {
@@ -382,6 +388,7 @@ static void set_border_width(TerminalLayoutState *state, gint border_width) {
                             state->frame_end_border}) {
     gtk_widget_set_size_request(border, border_width, -1);
   }
+  gtk_widget_set_size_request(state->frame_bottom_border, -1, border_width);
 }
 
 static bool has_pending_font_zoom(TerminalLayoutState *state) {
@@ -883,10 +890,11 @@ create_terminal_layout(const MainWindow &main_window, TestOptions options,
   state->root_box = main_window.root_box;
   state->frame_start_border = main_window.frame_start_border;
   state->frame_end_border = main_window.frame_end_border;
+  state->frame_bottom_border = main_window.frame_bottom_border;
+  state->compact_mode = main_window.compact_mode;
   state->terminal_scroller = main_window.terminal_scroller;
   state->terminal = main_window.terminal;
   state->terminal_scrollbar = main_window.terminal_scrollbar;
-  state->status_bar = main_window.status_bar;
   state->fixture_grid_size_label = main_window.fixture_grid_size_label;
   state->fixture_scrollback_lines_label =
       main_window.fixture_scrollback_lines_label;
@@ -1015,6 +1023,19 @@ void apply_terminal_border_visibility(TerminalLayoutState *state,
   state->layout_grid_guard_active = true;
   state->layout_geometry_update_pending = true;
   set_border_visibility(state, show_border);
+  queue_window_size_update(state);
+}
+
+void apply_terminal_compact_mode(TerminalLayoutState *state,
+                                 bool compact_mode) {
+  if (state == nullptr || state->compact_mode == compact_mode) {
+    return;
+  }
+
+  state->layout_grid_guard_active = true;
+  state->layout_geometry_update_pending = true;
+  state->compact_mode = compact_mode;
+  set_border_visibility(state, state->show_border);
   queue_window_size_update(state);
 }
 

@@ -436,6 +436,8 @@ static GtkWidget *required_widget(GtkBuilder *builder, const char *id) {
 
 static bool main_window_has_required_widgets(const MainWindow &main_window) {
   return main_window.window != nullptr && main_window.header_bar != nullptr &&
+         main_window.header_title_label != nullptr &&
+         main_window.header_title_box != nullptr &&
          main_window.transfer_button != nullptr &&
          main_window.application_menu_button != nullptr &&
          main_window.settings_menu_item != nullptr &&
@@ -443,6 +445,7 @@ static bool main_window_has_required_widgets(const MainWindow &main_window) {
          main_window.root_box != nullptr &&
          main_window.frame_start_border != nullptr &&
          main_window.frame_end_border != nullptr &&
+         main_window.frame_bottom_border != nullptr &&
          main_window.terminal_scroller != nullptr &&
          main_window.terminal_overlay != nullptr &&
          main_window.terminal != nullptr &&
@@ -814,6 +817,8 @@ static void clear_main_window_exterior_background(MainWindow *main_window) {
         main_window->frame_start_border, provider);
     remove_main_window_exterior_provider(
         main_window->frame_end_border, provider);
+    remove_main_window_exterior_provider(
+        main_window->frame_bottom_border, provider);
   }
   g_clear_object(&main_window->exterior_background_provider);
   g_clear_object(
@@ -970,6 +975,8 @@ static void set_main_window_exterior_background(
       main_window->frame_start_border, provider);
   add_main_window_exterior_provider(
       main_window->frame_end_border, provider);
+  add_main_window_exterior_provider(
+      main_window->frame_bottom_border, provider);
   if (component_provider != nullptr) {
     update_widget_style_class(
         main_window->header_bar,
@@ -1099,6 +1106,10 @@ static void apply_main_window_title(MainWindow *main_window) {
     gtk_header_bar_set_title(GTK_HEADER_BAR(main_window->header_bar),
                              title.c_str());
   }
+  if (main_window->header_title_label != nullptr) {
+    gtk_label_set_text(GTK_LABEL(main_window->header_title_label),
+                       title.c_str());
+  }
 }
 
 static void set_main_window_disconnected_notice_visible(
@@ -1223,6 +1234,8 @@ std::optional<MainWindow> load_main_window() {
       required_widget(main_window.builder, "frame_start_border");
   main_window.frame_end_border =
       required_widget(main_window.builder, "frame_end_border");
+  main_window.frame_bottom_border =
+      required_widget(main_window.builder, "frame_bottom_border");
   main_window.terminal_scroller =
       required_widget(main_window.builder, "terminal_scroller");
   main_window.terminal_overlay =
@@ -1282,15 +1295,40 @@ std::optional<MainWindow> load_main_window() {
       required_widget(main_window.builder, "fixture_scrollback_lines_label");
   main_window.activity_indicator_bar =
       required_widget(main_window.builder, "activity_indicator_bar");
+  if (main_window.header_bar == nullptr) {
+    release_main_window(&main_window);
+    return std::nullopt;
+  }
+  main_window.header_title_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  main_window.header_title_label = gtk_label_new("elder-terms-vte");
+  gestament_gtk_assign_accessible_id(
+      main_window.header_title_label, "header_title_label");
+  gtk_widget_set_hexpand(main_window.header_title_box, TRUE);
+  gtk_widget_set_hexpand(main_window.header_title_label, TRUE);
+  gtk_widget_set_halign(main_window.header_title_box, GTK_ALIGN_FILL);
+  gtk_widget_set_halign(main_window.header_title_label, GTK_ALIGN_FILL);
+  gtk_label_set_xalign(GTK_LABEL(main_window.header_title_label), 0.0F);
+  gtk_label_set_single_line_mode(GTK_LABEL(main_window.header_title_label), TRUE);
+  gtk_label_set_ellipsize(GTK_LABEL(main_window.header_title_label),
+                          PANGO_ELLIPSIZE_END);
+  gtk_style_context_add_class(
+      gtk_widget_get_style_context(main_window.header_title_label), "title");
+  gtk_box_pack_start(GTK_BOX(main_window.header_title_box),
+                     main_window.header_title_label, TRUE, TRUE, 0);
+  gtk_header_bar_set_custom_title(GTK_HEADER_BAR(main_window.header_bar),
+                                  main_window.header_title_box);
+  gtk_widget_show_all(main_window.header_title_box);
   if (!main_window_has_required_widgets(main_window)) {
     release_main_window(&main_window);
     return std::nullopt;
   }
   for (GtkWidget *border : {main_window.frame_start_border,
-                            main_window.frame_end_border}) {
-    gtk_widget_set_vexpand(border, TRUE);
+                            main_window.frame_end_border,
+                            main_window.frame_bottom_border}) {
     update_widget_style_class(border, frame_border_style_class, true);
   }
+  gtk_widget_set_vexpand(main_window.frame_start_border, TRUE);
+  gtk_widget_set_vexpand(main_window.frame_end_border, TRUE);
   PangoAttrList *status_attributes = pango_attr_list_new();
   pango_attr_list_insert(status_attributes,
                          pango_attr_font_features_new("tnum=1"));
@@ -1733,6 +1771,29 @@ void set_main_window_status_text(MainWindow *main_window,
   }
 
   gtk_label_set_text(GTK_LABEL(main_window->status_label), text.c_str());
+}
+
+void set_main_window_compact_mode(MainWindow *main_window, bool compact_mode) {
+  if (main_window == nullptr || main_window->compact_mode == compact_mode) {
+    return;
+  }
+
+  GtkWidget *indicators = main_window->activity_indicator_bar;
+  GtkWidget *old_parent = gtk_widget_get_parent(indicators);
+  GtkWidget *new_parent = compact_mode
+      ? main_window->header_title_box
+      : gtk_widget_get_parent(main_window->status_label);
+  g_object_ref(indicators);
+  gtk_container_remove(GTK_CONTAINER(old_parent), indicators);
+  gtk_box_pack_start(GTK_BOX(new_parent), indicators, FALSE, FALSE, 0);
+  g_object_unref(indicators);
+  gtk_widget_show(indicators);
+
+  main_window->compact_mode = compact_mode;
+  gtk_widget_set_no_show_all(main_window->status_bar,
+                             compact_mode ? TRUE : FALSE);
+  gtk_widget_set_visible(main_window->status_bar,
+                         compact_mode ? FALSE : TRUE);
 }
 
 void set_main_window_title(MainWindow *main_window, const std::string &title) {

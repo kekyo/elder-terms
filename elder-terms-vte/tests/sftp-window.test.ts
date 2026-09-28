@@ -365,6 +365,74 @@ const captureBorderSamples = (capture: GtkCapture): readonly RgbPixel[] => {
 };
 
 describe('SFTP window', () => {
+  it('shows activity in the title bar and hides the status bar in compact mode', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      ['compact_mode=true'],
+      undefined,
+      async ({ app }) => {
+        expect(
+          (await (await app.getById('file_transfer_status_bar')).info()).states
+        ).not.toContain('showing');
+        for (const id of ['conn', 'sd', 'rd']) {
+          expect(
+            (await (await app.getById(id + '_indicator_image')).info()).states
+          ).toContain('showing');
+        }
+        expect(
+          (await (await app.getById('file_transfer_title_label')).info()).states
+        ).toContain('showing');
+        const [title, indicator, menu] = await Promise.all([
+          (await app.getById('file_transfer_title_label')).capture(),
+          (await app.getById('rd_indicator_image')).capture(),
+          (await app.getById('application_menu_button')).capture(),
+        ]);
+        expect(title.bounds.x + title.bounds.width).toBeLessThanOrEqual(
+          indicator.bounds.x
+        );
+        expect(indicator.bounds.x + indicator.bounds.width).toBeLessThanOrEqual(
+          menu.bounds.x
+        );
+        const browser = expectElementKind(
+          await app.getById('file_transfer_window'),
+          'window'
+        );
+        const browserBounds = (await browser.capture()).bounds;
+        await browser.resizeTo(browserBounds.width + 50, browserBounds.height);
+        const expandedTitle = await (
+          await app.getById('file_transfer_title_label')
+        ).capture();
+        expect(expandedTitle.bounds.width).toBeGreaterThan(title.bounds.width);
+        expect(expandedTitle.bounds.height).toBe(title.bounds.height);
+        await expectElementKind(
+          await app.getById('application_menu_button'),
+          'toggleButton'
+        ).click();
+        await expectElementKind(
+          await app.getById('settings_menu_item'),
+          'menuItem'
+        ).click();
+        const compact = expectElementKind(
+          await app.getById('settings_general_compact_mode_switch'),
+          'switch'
+        );
+        expect(await compact.isChecked()).toBe(true);
+        await compact.toggle();
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          expect(
+            (await (await app.getById('file_transfer_status_bar')).info())
+              .states
+          ).toContain('showing');
+        });
+      }
+    );
+  });
+
   it('localizes browser controls and state into Japanese', async (context) => {
     await runSftpFixtureWithEnvironment(
       context,
@@ -664,7 +732,7 @@ describe('SFTP window', () => {
 
         const header = await app.getById('file_transfer_header_bar');
         const status = await app.getById('file_transfer_status_bar');
-        expect(capturePixel(await header.capture(), 0.08, 0.5)).toEqual([
+        expect(capturePixel(await header.capture(), 0.3, 0.5)).toEqual([
           0x7a, 0x24, 0x68,
         ]);
         expect(capturePixel(await header.capture(), 0.9, 0.5)).toEqual(

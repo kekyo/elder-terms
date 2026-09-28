@@ -2406,6 +2406,72 @@ describe.concurrent('elder-terms-vte settings', () => {
     });
   });
 
+  it('saves and applies compact mode without changing the terminal grid', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'compact-setting.ini');
+      await writeFile(configPath, '[general]\nname=Compact test\n', 'utf8');
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app) => {
+          await waitForResult(async () => {
+            const layout = await readWindowCellLayout(app);
+            expectWindowCellSize(layout, defaultColumns, defaultRows);
+            await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+          });
+          await openSettingsDialog(app);
+          await showGeneralSettingsPage(app);
+          const compact = expectElementKind(
+            await app.getById('settings_general_compact_mode_switch'),
+            'switch'
+          );
+          expect(await compact.isChecked()).toBe(false);
+          await compact.toggle();
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await expectSettingsDialogClosed(app);
+          expect(await readFile(configPath, 'utf8')).toContain(
+            'compact_mode=true'
+          );
+          await waitForResult(async () => {
+            const layout = await readWindowCellLayout(app);
+            expectWindowCellSize(layout, defaultColumns, defaultRows);
+            await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+            expect(
+              (await (await app.getById('status_bar')).info()).states
+            ).not.toContain('showing');
+            expect(
+              (await (await app.getById('frame_bottom_border')).info()).states
+            ).not.toContain('showing');
+          });
+          await openSettingsDialog(app);
+          await showGeneralSettingsPage(app);
+          const compactAgain = expectElementKind(
+            await app.getById('settings_general_compact_mode_switch'),
+            'switch'
+          );
+          expect(await compactAgain.isChecked()).toBe(true);
+          await compactAgain.toggle();
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          await expectSettingsDialogClosed(app);
+          await waitForResult(async () => {
+            const layout = await readTerminalGridLayout(app);
+            expectWindowCellSize(layout, defaultColumns, defaultRows);
+            await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+            expect(
+              (await (await app.getById('status_bar')).info()).states
+            ).toContain('showing');
+          });
+        }
+      );
+    });
+  });
+
   it('reflects runtime terminal grid settings after window resizing', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
       const initialLayout = await waitForResult(async () => {
