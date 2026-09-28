@@ -357,7 +357,7 @@ const readLaunchCapture = async (path: string): Promise<LaunchCapture> =>
   JSON.parse(await readFile(path, 'utf8')) as LaunchCapture;
 
 describe('elder-terms main window', () => {
-  it('saves one New Window connection and discards unsaved switch changes', async (context) => {
+  it('saves one New Window connection and discards unsaved dropdown changes', async (context) => {
     await runLauncherGtkTest(
       context,
       async (connections) => {
@@ -372,16 +372,20 @@ describe('elder-terms main window', () => {
         const list = await app.getById('connection_list');
         const globalPath = join(configHome, 'elder-terms', 'global.ini');
         await selectConnectionRow(app, list, 0);
-        const toggle = expectElementKind(
-          await app.getById('settings_general_new_window_switch'),
-          'switch'
+        const newWindow = expectElementKind(
+          await app.getById('settings_general_new_window_combo'),
+          'comboBox'
         );
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(true)
+        await expectSelectedComboValue(
+          app,
+          'settings_general_new_window_combo',
+          'Enabled'
         );
-        await toggle.toggle();
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(false)
+        await newWindow.selectChildAt(0);
+        await expectSelectedComboValue(
+          app,
+          'settings_general_new_window_combo',
+          'Disabled'
         );
         await expectSensitive(await app.getById('apply_button'));
         await selectConnectionRow(app, list, 1);
@@ -389,7 +393,11 @@ describe('elder-terms main window', () => {
           await app.getById('cancel_discard_button'),
           'button'
         ).click();
-        expect(await toggle.isChecked()).toBe(false);
+        await expectSelectedComboValue(
+          app,
+          'settings_general_new_window_combo',
+          'Disabled'
+        );
         expect(await readFile(globalPath, 'utf8')).toContain(
           'new_window=Alpha'
         );
@@ -408,10 +416,16 @@ describe('elder-terms main window', () => {
             )
           ).toBe(99)
         );
-        expect(await toggle.isChecked()).toBe(false);
-        await toggle.toggle();
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(true)
+        await expectSelectedComboValue(
+          app,
+          'settings_general_new_window_combo',
+          'Disabled'
+        );
+        await newWindow.selectChildAt(1);
+        await expectSelectedComboValue(
+          app,
+          'settings_general_new_window_combo',
+          'Enabled'
         );
         await expectElementKind(
           await app.getById('apply_button'),
@@ -438,10 +452,16 @@ describe('elder-terms main window', () => {
             )
           ).toBe(88)
         );
-        expect(await toggle.isChecked()).toBe(false);
-        await toggle.toggle();
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(true)
+        await expectSelectedComboValue(
+          app,
+          'settings_general_new_window_combo',
+          'Disabled'
+        );
+        await newWindow.selectChildAt(1);
+        await expectSelectedComboValue(
+          app,
+          'settings_general_new_window_combo',
+          'Enabled'
         );
         await expectElementKind(
           await app.getById('apply_button'),
@@ -452,9 +472,11 @@ describe('elder-terms main window', () => {
             'new_window=Alpha'
           )
         );
-        await toggle.toggle();
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(false)
+        await newWindow.selectChildAt(0);
+        await expectSelectedComboValue(
+          app,
+          'settings_general_new_window_combo',
+          'Disabled'
         );
         await expectElementKind(
           await app.getById('apply_button'),
@@ -479,14 +501,20 @@ describe('elder-terms main window', () => {
           'button'
         ).click();
         await app.input.pressKey('Escape');
-        const toggle = expectElementKind(
-          await app.getById('settings_general_new_window_switch'),
-          'switch'
+        const newWindow = expectElementKind(
+          await app.getById('settings_general_new_window_combo'),
+          'comboBox'
         );
-        expect(await toggle.isChecked()).toBe(false);
-        await toggle.toggle();
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(true)
+        await expectSelectedComboValue(
+          app,
+          'settings_general_new_window_combo',
+          'Disabled'
+        );
+        await newWindow.selectChildAt(1);
+        await expectSelectedComboValue(
+          app,
+          'settings_general_new_window_combo',
+          'Enabled'
         );
         await expectElementKind(
           await app.getById('apply_button'),
@@ -503,13 +531,17 @@ describe('elder-terms main window', () => {
         expect(
           await readFile(join(connections, 'New connection.ini'), 'utf8')
         ).not.toContain('new_window');
-        expect(await toggle.isChecked()).toBe(true);
+        await expectSelectedComboValue(
+          app,
+          'settings_general_new_window_combo',
+          'Enabled'
+        );
       }
     );
   });
 
   for (const type of ['sftp', 'ftp', 'webdav']) {
-    it(`disables the New Window switch for ${type} connections`, async (context) => {
+    it(`disables the New Window dropdown for ${type} connections`, async (context) => {
       await runLauncherGtkTest(
         context,
         async (connections) => {
@@ -524,12 +556,16 @@ describe('elder-terms main window', () => {
             await app.getById('connection_list'),
             0
           );
-          const toggle = expectElementKind(
-            await app.getById('settings_general_new_window_switch'),
-            'switch'
+          const newWindow = expectElementKind(
+            await app.getById('settings_general_new_window_combo'),
+            'comboBox'
           );
-          await expectInsensitive(toggle);
-          expect(await toggle.isChecked()).toBe(false);
+          await expectInsensitive(newWindow);
+          await expectSelectedComboValue(
+            app,
+            'settings_general_new_window_combo',
+            'Disabled'
+          );
         }
       );
     });
@@ -547,19 +583,25 @@ describe('elder-terms main window', () => {
       },
       async ({ app, configHome }) => {
         await selectConnectionRow(app, await app.getById('connection_list'), 0);
-        const toggle = expectElementKind(
-          await app.getById('settings_general_new_window_switch'),
-          'switch'
+        const newWindow = expectElementKind(
+          await app.getById('settings_general_new_window_combo'),
+          'comboBox'
         );
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(true)
+        await expectSelectedComboValue(
+          app,
+          'settings_general_new_window_combo',
+          'Enabled'
         );
         await expectElementKind(
           await app.getById('settings_general_type_combo'),
           'comboBox'
         ).selectChildAt(6);
-        await expectInsensitive(toggle);
-        expect(await toggle.isChecked()).toBe(false);
+        await expectInsensitive(newWindow);
+        await expectSelectedComboValue(
+          app,
+          'settings_general_new_window_combo',
+          'Disabled'
+        );
         await expectElementKind(
           await app.getById('apply_button'),
           'button'

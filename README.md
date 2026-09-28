@@ -136,10 +136,11 @@ Changes saved in an external editor are reloaded automatically, including
 editors that replace the file when saving.
 
 To choose the connection opened by "New Window" on a terminal window's desktop
-icon, select a connection in the launcher, turn on "Use for New Window" in the
-General tab, and save it. Saving another connection with this switch on replaces
-the previous selection. The switch cannot be changed from a running terminal's
-settings. Local shell, TELNET, SSH, and serial connections are eligible.
+icon, select a connection in the launcher, choose "Enabled" from "Use for New
+Window" in the General tab, and save it. Saving another connection with this
+choice replaces the previous selection. The choice cannot be changed from a
+running terminal's settings. Local shell, TELNET, SSH, and serial connections
+are eligible.
 
 The selection is stored as an application setting in `global.ini`. Use the
 connection entry's name as the value:
@@ -586,9 +587,11 @@ bell_sound=/home/user/.local/share/sounds/terminal-bell.oga
 
 ## Compact Mode
 
-The "Compact mode" switch on a connection's General tab hides the bottom status bar
-and puts the activity indicators beside the title. It works for terminal and
-FTP, FTPS, SFTP, and WebDAV file browser windows. The built-in default is off.
+Choosing "Enabled" for "Compact mode" on a connection's General tab hides the
+bottom status bar and puts the activity indicators beside the title. The
+dropdown can also use the global default or explicitly disable compact mode.
+It works for terminal and FTP, FTPS, SFTP, and WebDAV file browser windows. The
+built-in default is off.
 When window side borders are enabled, a compact terminal also shows a bottom
 border of the same width.
 

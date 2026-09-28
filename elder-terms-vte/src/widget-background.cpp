@@ -41,8 +41,7 @@ static constexpr char component_background_selectors[] =
     "scrollbar > contents > trough > slider, "
     "progressbar > trough, "
     "scale > contents > trough, "
-    "scale > contents > trough > slider, "
-    "switch > slider";
+    "scale > contents > trough > slider";
 static constexpr char popup_component_background_selectors[] =
     "window.popup, "
     "window.popup *, "

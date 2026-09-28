@@ -414,11 +414,13 @@ describe('SFTP window', () => {
           'menuItem'
         ).click();
         const compact = expectElementKind(
-          await app.getById('settings_general_compact_mode_switch'),
-          'switch'
+          await app.getById('settings_general_compact_mode_combo'),
+          'comboBox'
         );
-        expect(await compact.isChecked()).toBe(true);
-        await compact.toggle();
+        expect((await (await compact.selectedChildAt(0))?.info())?.name).toBe(
+          'Enabled'
+        );
+        await compact.selectChildAt(2);
         await expectElementKind(
           await app.getById('settings_apply_button'),
           'button'

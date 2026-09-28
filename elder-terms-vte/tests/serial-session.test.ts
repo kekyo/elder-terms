@@ -387,11 +387,13 @@ describe.concurrent('elder-terms-vte serial session', () => {
             'menuItem'
           ).click();
           const compact = expectElementKind(
-            await app.getById('settings_general_compact_mode_switch'),
-            'switch'
+            await app.getById('settings_general_compact_mode_combo'),
+            'comboBox'
           );
-          expect(await compact.isChecked()).toBe(false);
-          await compact.toggle();
+          expect((await (await compact.selectedChildAt(0))?.info())?.name).toBe(
+            'Disabled (built-in default)'
+          );
+          await compact.selectChildAt(1);
           await expectElementKind(
             await app.getById('settings_apply_button'),
             'button'

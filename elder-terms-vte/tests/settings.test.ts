@@ -704,18 +704,26 @@ describe.concurrent('elder-terms-vte settings', () => {
               )
             );
             await openSettingsDialog(app);
-            const toggle = expectElementKind(
-              await app.getById('settings_general_new_window_switch'),
-              'switch'
+            const newWindow = expectElementKind(
+              await app.getById('settings_general_new_window_combo'),
+              'comboBox'
             );
-            expect(await toggle.isChecked()).toBe(action === 'new-window');
-            expect((await toggle.info()).states).not.toContain('sensitive');
+            await expectSelectedComboValue(
+              app,
+              'settings_general_new_window_combo',
+              action === 'new-window' ? 'Enabled' : 'Disabled'
+            );
+            expect((await newWindow.info()).states).not.toContain('sensitive');
             const before = await readFile(
               join(directory, 'elder-terms', 'global.ini'),
               'utf8'
             );
-            await clickWidget(app, toggle);
-            expect(await toggle.isChecked()).toBe(action === 'new-window');
+            await clickWidget(app, newWindow);
+            await expectSelectedComboValue(
+              app,
+              'settings_general_new_window_combo',
+              action === 'new-window' ? 'Enabled' : 'Disabled'
+            );
             expect(
               await readFile(
                 join(directory, 'elder-terms', 'global.ini'),
@@ -2422,11 +2430,15 @@ describe.concurrent('elder-terms-vte settings', () => {
           await openSettingsDialog(app);
           await showGeneralSettingsPage(app);
           const compact = expectElementKind(
-            await app.getById('settings_general_compact_mode_switch'),
-            'switch'
+            await app.getById('settings_general_compact_mode_combo'),
+            'comboBox'
           );
-          expect(await compact.isChecked()).toBe(false);
-          await compact.toggle();
+          await expectSelectedComboValue(
+            app,
+            'settings_general_compact_mode_combo',
+            'Disabled (built-in default)'
+          );
+          await compact.selectChildAt(1);
           await expectElementKind(
             await app.getById('settings_save_button'),
             'button'
@@ -2449,11 +2461,15 @@ describe.concurrent('elder-terms-vte settings', () => {
           await openSettingsDialog(app);
           await showGeneralSettingsPage(app);
           const compactAgain = expectElementKind(
-            await app.getById('settings_general_compact_mode_switch'),
-            'switch'
+            await app.getById('settings_general_compact_mode_combo'),
+            'comboBox'
           );
-          expect(await compactAgain.isChecked()).toBe(true);
-          await compactAgain.toggle();
+          await expectSelectedComboValue(
+            app,
+            'settings_general_compact_mode_combo',
+            'Enabled'
+          );
+          await compactAgain.selectChildAt(2);
           await expectElementKind(
             await app.getById('settings_apply_button'),
             'button'
