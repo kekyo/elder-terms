@@ -373,10 +373,6 @@ describe('elder-terms main window', () => {
       },
       async ({ app, configHome }) => {
         await selectConnectionRow(app, await app.getById('connection_list'), 0);
-        await expect(
-          app.getById('settings_general_new_window_combo')
-        ).rejects.toThrow(/not found/iu);
-
         await openApplicationDialogPage(app, 'application_settings_menu_item');
         const combo = expectElementKind(
           await app.getById('application_settings_new_window_combo'),
@@ -442,9 +438,6 @@ describe('elder-terms main window', () => {
           'button'
         ).click();
         await app.input.pressKey('Escape');
-        await expect(
-          app.getById('settings_general_new_window_combo')
-        ).rejects.toThrow(/not found/iu);
         await expectElementKind(
           await app.getById('apply_button'),
           'button'

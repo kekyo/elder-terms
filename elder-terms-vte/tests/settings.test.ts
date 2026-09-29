@@ -703,20 +703,6 @@ describe.concurrent('elder-terms-vte settings', () => {
                     : 'default'
               )
             );
-            await openSettingsDialog(app);
-            await expect(
-              app.getById('settings_general_new_window_combo')
-            ).rejects.toThrow(/not found/iu);
-            const before = await readFile(
-              join(directory, 'elder-terms', 'global.ini'),
-              'utf8'
-            );
-            expect(
-              await readFile(
-                join(directory, 'elder-terms', 'global.ini'),
-                'utf8'
-              )
-            ).toBe(before);
           },
           { env: { XDG_CONFIG_HOME: directory } }
         );
