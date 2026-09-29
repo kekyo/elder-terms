@@ -2372,8 +2372,8 @@ msgid "Failed to open directory"
 msgstr "निर्देशिका नहीं खोली जा सकी"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Use for New Window"
-msgstr "नई विंडो के लिए उपयोग करें"
+msgid "Use for \"New Window\""
+msgstr "\"New Window\" के लिए उपयोग करें"
 
 #: elder-terms/src/main.cpp
 msgid "Failed to save New Window connection"

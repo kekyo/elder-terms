@@ -357,119 +357,78 @@ const readLaunchCapture = async (path: string): Promise<LaunchCapture> =>
   JSON.parse(await readFile(path, 'utf8')) as LaunchCapture;
 
 describe('elder-terms main window', () => {
-  it('saves one New Window connection and discards unsaved switch changes', async (context) => {
+  it('edits the New Window connection in application settings', async (context) => {
     await runLauncherGtkTest(
       context,
       async (connections) => {
         await prepareProfiles(connections);
         await writeFile(
+          join(connections, 'Transfer.ini'),
+          '[general]\ntype=sftp\n'
+        );
+        await writeFile(
           join(connections, '..', 'global.ini'),
-          '# User settings\n[general]\nnew_window=Alpha\nopen_application=\n' +
-            '[terminal]\nheight=31\n[custom]\nvalue=keep\n'
+          '# User settings\n[general]\nnew_window=Alpha\n[custom]\nvalue=keep\n'
         );
       },
-      async ({ app, configHome, connections }) => {
-        const list = await app.getById('connection_list');
+      async ({ app, configHome }) => {
+        await selectConnectionRow(app, await app.getById('connection_list'), 0);
+        await openApplicationDialogPage(app, 'application_settings_menu_item');
+        const combo = expectElementKind(
+          await app.getById('application_settings_new_window_combo'),
+          'comboBox'
+        );
+        await expectSelectedComboValue(
+          app,
+          'application_settings_new_window_combo',
+          'Alpha'
+        );
+        expect((await (await combo.childAt(0))?.info())?.name).toBe('None');
+        expect((await (await combo.childAt(1))?.info())?.name).toBe('Alpha');
+        expect((await (await combo.childAt(2))?.info())?.name).toBe('Beta');
+        expect(await combo.getChildCount()).toBe(3);
+        await combo.selectChildAt(2);
+        await expectElementKind(
+          await app.getById('application_dialog_cancel_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+
+        await openApplicationDialogPage(app, 'application_settings_menu_item');
+        await expectSelectedComboValue(
+          app,
+          'application_settings_new_window_combo',
+          'Alpha'
+        );
+        await expectElementKind(
+          await app.getById('application_settings_new_window_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectElementKind(
+          await app.getById('application_dialog_save_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
         const globalPath = join(configHome, 'elder-terms', 'global.ini');
-        await selectConnectionRow(app, list, 0);
-        const toggle = expectElementKind(
-          await app.getById('settings_general_new_window_switch'),
-          'switch'
-        );
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(true)
-        );
-        await toggle.toggle();
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(false)
-        );
-        await expectSensitive(await app.getById('apply_button'));
-        await selectConnectionRow(app, list, 1);
-        await expectElementKind(
-          await app.getById('cancel_discard_button'),
-          'button'
-        ).click();
-        expect(await toggle.isChecked()).toBe(false);
-        expect(await readFile(globalPath, 'utf8')).toContain(
-          'new_window=Alpha'
-        );
-        await selectConnectionRow(app, list, 1);
-        await expectElementKind(
-          await app.getById('discard_changes_button'),
-          'button'
-        ).click();
-        await waitForResult(async () =>
-          expect(
-            Number(
-              await expectElementKind(
-                await app.getById('settings_terminal_width_entry'),
-                'entry'
-              ).text()
-            )
-          ).toBe(99)
-        );
-        expect(await toggle.isChecked()).toBe(false);
-        await toggle.toggle();
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(true)
-        );
-        await expectElementKind(
-          await app.getById('apply_button'),
-          'button'
-        ).click();
-        await waitForResult(async () =>
-          expect(await readFile(globalPath, 'utf8')).toContain(
-            'new_window=Beta'
-          )
-        );
+        expect(await readFile(globalPath, 'utf8')).toContain('new_window=Beta');
         expect(await readFile(globalPath, 'utf8')).toContain('value=keep');
-        expect(await readFile(globalPath, 'utf8')).toContain('height=31');
-        expect(
-          await readFile(join(connections, 'Beta.ini'), 'utf8')
-        ).not.toContain('new_window');
-        await selectConnectionRow(app, list, 0);
-        await waitForResult(async () =>
-          expect(
-            Number(
-              await expectElementKind(
-                await app.getById('settings_terminal_width_entry'),
-                'entry'
-              ).text()
-            )
-          ).toBe(88)
-        );
-        expect(await toggle.isChecked()).toBe(false);
-        await toggle.toggle();
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(true)
-        );
+
+        await openApplicationDialogPage(app, 'application_settings_menu_item');
         await expectElementKind(
-          await app.getById('apply_button'),
+          await app.getById('application_settings_new_window_combo'),
+          'comboBox'
+        ).selectChildAt(0);
+        await expectElementKind(
+          await app.getById('application_dialog_save_button'),
           'button'
         ).click();
-        await waitForResult(async () =>
-          expect(await readFile(globalPath, 'utf8')).toContain(
-            'new_window=Alpha'
-          )
-        );
-        await toggle.toggle();
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(false)
-        );
-        await expectElementKind(
-          await app.getById('apply_button'),
-          'button'
-        ).click();
-        await waitForResult(async () =>
-          expect(await readFile(globalPath, 'utf8')).not.toContain(
-            'new_window='
-          )
-        );
+        await waitForWindowCount(app, 1);
+        expect(await readFile(globalPath, 'utf8')).not.toContain('new_window=');
       }
     );
   });
 
-  it('selects a new saved connection for New Window', async (context) => {
+  it('selects a newly saved connection for New Window', async (context) => {
     await runLauncherGtkTest(
       context,
       async () => {},
@@ -479,61 +438,35 @@ describe('elder-terms main window', () => {
           'button'
         ).click();
         await app.input.pressKey('Escape');
-        const toggle = expectElementKind(
-          await app.getById('settings_general_new_window_switch'),
-          'switch'
-        );
-        expect(await toggle.isChecked()).toBe(false);
-        await toggle.toggle();
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(true)
-        );
         await expectElementKind(
           await app.getById('apply_button'),
           'button'
         ).click();
-        await waitForResult(async () =>
-          expect(
-            await readFile(
-              join(configHome, 'elder-terms', 'global.ini'),
-              'utf8'
-            )
-          ).toContain('new_window=New connection')
+        await openApplicationDialogPage(app, 'application_settings_menu_item');
+        const combo = expectElementKind(
+          await app.getById('application_settings_new_window_combo'),
+          'comboBox'
         );
+        await combo.selectChildAt(1);
+        await expectSelectedComboValue(
+          app,
+          'application_settings_new_window_combo',
+          'New connection'
+        );
+        await expectElementKind(
+          await app.getById('application_dialog_save_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
+        expect(
+          await readFile(join(configHome, 'elder-terms', 'global.ini'), 'utf8')
+        ).toContain('new_window=New connection');
         expect(
           await readFile(join(connections, 'New connection.ini'), 'utf8')
         ).not.toContain('new_window');
-        expect(await toggle.isChecked()).toBe(true);
       }
     );
   });
-
-  for (const type of ['sftp', 'ftp', 'webdav']) {
-    it(`disables the New Window switch for ${type} connections`, async (context) => {
-      await runLauncherGtkTest(
-        context,
-        async (connections) => {
-          await writeFile(
-            join(connections, 'Transfer.ini'),
-            `[general]\ntype=${type}\n`
-          );
-        },
-        async ({ app }) => {
-          await selectConnectionRow(
-            app,
-            await app.getById('connection_list'),
-            0
-          );
-          const toggle = expectElementKind(
-            await app.getById('settings_general_new_window_switch'),
-            'switch'
-          );
-          await expectInsensitive(toggle);
-          expect(await toggle.isChecked()).toBe(false);
-        }
-      );
-    });
-  }
 
   it('clears New Window when its connection becomes a file transfer', async (context) => {
     await runLauncherGtkTest(
@@ -547,19 +480,10 @@ describe('elder-terms main window', () => {
       },
       async ({ app, configHome }) => {
         await selectConnectionRow(app, await app.getById('connection_list'), 0);
-        const toggle = expectElementKind(
-          await app.getById('settings_general_new_window_switch'),
-          'switch'
-        );
-        await waitForResult(async () =>
-          expect(await toggle.isChecked()).toBe(true)
-        );
         await expectElementKind(
           await app.getById('settings_general_type_combo'),
           'comboBox'
         ).selectChildAt(6);
-        await expectInsensitive(toggle);
-        expect(await toggle.isChecked()).toBe(false);
         await expectElementKind(
           await app.getById('apply_button'),
           'button'
@@ -572,6 +496,17 @@ describe('elder-terms main window', () => {
             )
           ).not.toContain('new_window=')
         );
+        await openApplicationDialogPage(app, 'application_settings_menu_item');
+        await expectSelectedComboValue(
+          app,
+          'application_settings_new_window_combo',
+          'None'
+        );
+        const combo = expectElementKind(
+          await app.getById('application_settings_new_window_combo'),
+          'comboBox'
+        );
+        expect(await combo.getChildCount()).toBe(2);
       }
     );
   });
@@ -686,12 +621,18 @@ describe('elder-terms main window', () => {
     });
   });
 
-  for (const { language, env, tabNames } of [
-    { language: 'English', env: {}, tabNames: ['Application', 'About'] },
+  for (const { language, env, tabNames, newWindowLabel } of [
+    {
+      language: 'English',
+      env: {},
+      tabNames: ['Application', 'About'],
+      newWindowLabel: 'Use for "New Window"',
+    },
     {
       language: 'Japanese',
       env: japaneseTestEnvironment,
       tabNames: ['アプリケーション', '情報'],
+      newWindowLabel: '"New Window"で使用',
     },
   ]) {
     it(`opens a compact application dialog in ${language}`, async (context) => {
@@ -699,6 +640,21 @@ describe('elder-terms main window', () => {
         context,
         prepareProfiles,
         async ({ app }) => {
+          await openApplicationDialogPage(
+            app,
+            'application_settings_menu_item'
+          );
+          expect(
+            await expectElementKind(
+              await app.getById('application_settings_new_window_label'),
+              'label'
+            ).text()
+          ).toBe(newWindowLabel);
+          await expectElementKind(
+            await app.getById('application_dialog_cancel_button'),
+            'button'
+          ).click();
+          await waitForWindowCount(app, 1);
           for (const itemId of [
             'application_settings_menu_item',
             'about_menu_item',

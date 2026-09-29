@@ -59,6 +59,7 @@ interface AppliedStore {
   readonly [key: string]: string;
   readonly name: string;
   readonly auto_close: string;
+  readonly compact_mode: string;
   readonly bell_sound: string;
   readonly show_border: string;
   readonly border_width: string;
@@ -1287,6 +1288,46 @@ describe.concurrent('shared settings widget', () => {
           app,
           'CHANGED dirty=true valid=true width=91'
         );
+      }
+    );
+  });
+
+  it('shows and restores the inherited compact mode choice', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=general', '--global=general.compact_mode=true'],
+      async ({ app }) => {
+        await expectSelectedComboValue(
+          app,
+          'settings_general_compact_mode_combo',
+          'Enabled (global default)'
+        );
+        const compact = expectElementKind(
+          await app.getById('settings_general_compact_mode_combo'),
+          'comboBox'
+        );
+        await compact.selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          const store = await waitForAppliedStore(app);
+          expect(store.compact_mode).toBe('true');
+          expect(store.compact_mode_source).toBe('override');
+          expect(store.compact_mode_explicit).toBe('true');
+        });
+        await compact.selectChildAt(0);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await waitForResult(async () => {
+          const store = await waitForAppliedStore(app);
+          expect(store.compact_mode).toBe('true');
+          expect(store.compact_mode_source).toBe('global');
+          expect(store.compact_mode_explicit).toBe('false');
+        });
       }
     );
   });

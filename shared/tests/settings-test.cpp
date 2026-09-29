@@ -3457,8 +3457,8 @@ static void test_new_window_setting_is_global_only() {
               "changing New Window should preserve unknown settings and comments");
   expect_true(elder_terms::save_application_settings(reloaded.store, global_path).saved &&
                   elder_terms::application_new_window_connection(
-                      load_global_settings(global_path, 1.0).store) == "Serial",
-              "saving an older application dialog must preserve New Window");
+                      load_global_settings(global_path, 1.0).store) == "SSH",
+              "saving application settings must update New Window");
   expect_true(elder_terms::save_new_window_connection("", global_path).saved &&
                   elder_terms::application_new_window_connection(
                       load_global_settings(global_path, 1.0).store).empty(),

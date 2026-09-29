@@ -108,8 +108,6 @@ struct SettingsWidgetState {
   bool is_runtime = false;
   bool show_actions = true;
   bool synchronizing = false;
-  bool applied_new_window_connection = false;
-  bool draft_new_window_connection = false;
   SettingsWidgetCallbacks callbacks;
   SettingsWidgetIpScannerDependenciesFactory
       ip_scanner_dependencies_factory;
@@ -120,8 +118,7 @@ struct SettingsWidgetState {
   GtkWidget *general_name_entry = nullptr;
   GtkWidget *general_type_combo = nullptr;
   GtkWidget *general_auto_close_combo = nullptr;
-  GtkWidget *general_compact_mode_switch = nullptr;
-  GtkWidget *general_new_window_switch = nullptr;
+  GtkWidget *general_compact_mode_combo = nullptr;
   KeyBindingInputWidgetState *general_open_connection_input = nullptr;
   GtkWidget *general_open_connection_reset_button = nullptr;
   GtkWidget *general_exterior_background_mode_combo = nullptr;
@@ -1108,6 +1105,20 @@ static void update_general_auto_close_from_widget(
   }
   set_explicit_setting_value(
       &state->draft_store, general_auto_close_setting_key(),
+      SettingValue{choice == boolean_enabled});
+}
+
+static void update_general_compact_mode_from_widget(
+    SettingsWidgetState *state) {
+  const std::string choice = active_combo_id(
+      state->general_compact_mode_combo, inherit_choice);
+  if (choice == inherit_choice) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 general_compact_mode_setting_key());
+    return;
+  }
+  set_explicit_setting_value(
+      &state->draft_store, general_compact_mode_setting_key(),
       SettingValue{choice == boolean_enabled});
 }
 
@@ -3212,23 +3223,7 @@ static void create_ftp_tls_controls(SettingsWidgetState *state, GtkWidget *page)
   gtk_grid_attach(GTK_GRID(page), state->ftp_tls_error_label, 0, row, 2, 1);
 }
 
-static void sync_new_window_switch(SettingsWidgetState *state) {
-  if (state->general_new_window_switch == nullptr) {
-    return;
-  }
-  const bool supported =
-      terminal_connection_profile(state->draft_store).has_value();
-  if (!supported) {
-    state->draft_new_window_connection = false;
-  }
-  gtk_widget_set_sensitive(state->general_new_window_switch,
-                           supported && !state->is_runtime);
-  gtk_switch_set_active(GTK_SWITCH(state->general_new_window_switch),
-                         state->draft_new_window_connection);
-}
-
 static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_webdav_draft) {
-  sync_new_window_switch(state);
   sync_ftp_tls_controls(state);
   sync_webdav_settings_editor(state->webdav_editor, preserve_webdav_draft);
   const TerminalDisplaySettings display =
@@ -3304,9 +3299,11 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_we
                            general_auto_close_setting_key(),
                            general_auto_close(state->draft_store));
   }
-  if (state->general_compact_mode_switch != nullptr) {
-    gtk_switch_set_active(GTK_SWITCH(state->general_compact_mode_switch),
-                          general_compact_mode(state->draft_store));
+  if (state->general_compact_mode_combo != nullptr) {
+    populate_boolean_combo(state->general_compact_mode_combo,
+                           state->draft_store,
+                           general_compact_mode_setting_key(),
+                           general_compact_mode(state->draft_store));
   }
   if (state->terminal_show_border_combo != nullptr) {
     populate_boolean_combo(state->terminal_show_border_combo,
@@ -3639,7 +3636,6 @@ static void on_general_type_changed(GtkComboBox *, gpointer data) {
   const bool previous_synchronizing = state->synchronizing;
   state->synchronizing = true;
   sync_zmodem_combo(state);
-  sync_new_window_switch(state);
   state->synchronizing = previous_synchronizing;
   notify_changed(state);
 }
@@ -3767,16 +3763,12 @@ static void on_general_auto_close_changed(GtkComboBox *, gpointer data) {
   notify_changed(state);
 }
 
-static void on_general_compact_mode_changed(GtkSwitch *, GParamSpec *,
-                                            gpointer data) {
+static void on_general_compact_mode_changed(GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) {
     return;
   }
-  set_explicit_setting_value(
-      &state->draft_store, general_compact_mode_setting_key(),
-      SettingValue{gtk_switch_get_active(
-          GTK_SWITCH(state->general_compact_mode_switch)) != FALSE});
+  update_general_compact_mode_from_widget(state);
   notify_changed(state);
 }
 
@@ -4763,20 +4755,9 @@ static void on_log_mode_changed(GtkComboBox *, gpointer data) {
   notify_changed(state);
 }
 
-static void on_new_window_changed(GObject *, GParamSpec *, gpointer data) {
-  auto *state = static_cast<SettingsWidgetState *>(data);
-  if (state->synchronizing || state->is_runtime) {
-    return;
-  }
-  state->draft_new_window_connection =
-      gtk_switch_get_active(GTK_SWITCH(state->general_new_window_switch));
-  notify_changed(state);
-}
-
 static void on_apply_clicked(GtkButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   state->applied_store = state->draft_store;
-  state->applied_new_window_connection = state->draft_new_window_connection;
   if (state->callbacks.apply) {
     state->callbacks.apply(state->applied_store);
   }
@@ -4786,14 +4767,12 @@ static void on_save_clicked(GtkButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->callbacks.save && state->callbacks.save(state->draft_store)) {
     state->applied_store = state->draft_store;
-    state->applied_new_window_connection = state->draft_new_window_connection;
   }
 }
 
 static void on_cancel_clicked(GtkButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   state->draft_store = state->applied_store;
-  state->draft_new_window_connection = state->applied_new_window_connection;
   if (state->callbacks.cancel) {
     state->callbacks.cancel();
   }
@@ -4922,28 +4901,13 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
   attach_row(page, row++, general_auto_close_setting_key(),
              state->general_auto_close_combo);
 
-  state->general_compact_mode_switch = gtk_switch_new();
-  assign_accessible_id(
-      state->general_compact_mode_switch,
-      widget_id(state, "general_compact_mode_switch").c_str());
-  GtkWidget *compact_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-  gtk_box_pack_start(GTK_BOX(compact_row),
-                     state->general_compact_mode_switch, FALSE, FALSE, 0);
-  g_signal_connect(state->general_compact_mode_switch, "notify::active",
+  const std::string compact_mode_id =
+      widget_id(state, "general_compact_mode_combo");
+  state->general_compact_mode_combo = create_combo_box(compact_mode_id.c_str());
+  g_signal_connect(state->general_compact_mode_combo, "changed",
                    G_CALLBACK(on_general_compact_mode_changed), state);
-  attach_row(page, row++, general_compact_mode_setting_key(), compact_row);
-
-  if (state->mode == SettingsWidgetMode::connection) {
-    state->general_new_window_switch = gtk_switch_new();
-    assign_accessible_id(state->general_new_window_switch,
-                         widget_id(state, "general_new_window_switch").c_str());
-    GtkWidget *switch_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_box_pack_start(GTK_BOX(switch_row), state->general_new_window_switch,
-                       FALSE, FALSE, 0);
-    g_signal_connect(state->general_new_window_switch, "notify::active",
-                     G_CALLBACK(on_new_window_changed), state);
-    attach_row(page, row, application_new_window_setting_key(), switch_row);
-  }
+  attach_row(page, row++, general_compact_mode_setting_key(),
+             state->general_compact_mode_combo);
 
   return page;
 }
@@ -6104,8 +6068,6 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
                                 : std::move(options.id_prefix);
   state->is_runtime = options.is_runtime;
   state->show_actions = options.show_actions;
-  state->applied_new_window_connection = options.new_window_connection;
-  state->draft_new_window_connection = options.new_window_connection;
   state->callbacks = std::move(options.callbacks);
   state->ip_scanner_dependencies_factory =
       std::move(options.ip_scanner_dependencies_factory);
@@ -6575,26 +6537,6 @@ void settings_widget_set_default_connection_name(
   state->synchronizing = previous_synchronizing;
 }
 
-void settings_widget_set_new_window_connection(SettingsWidgetState *state,
-                                                bool selected) {
-  if (state == nullptr) {
-    return;
-  }
-  const bool previous_synchronizing = state->synchronizing;
-  state->synchronizing = true;
-  state->draft_new_window_connection = selected;
-  sync_new_window_switch(state);
-  state->applied_new_window_connection = state->draft_new_window_connection;
-  state->synchronizing = previous_synchronizing;
-  notify_changed(state);
-}
-
-bool settings_widget_new_window_connection(const SettingsWidgetState *state) {
-  return state != nullptr && state->mode == SettingsWidgetMode::connection &&
-         state->draft_new_window_connection &&
-         terminal_connection_profile(state->draft_store).has_value();
-}
-
 SettingsStore settings_widget_draft_store(const SettingsWidgetState *state) {
   return state == nullptr ? SettingsStore{} : state->draft_store;
 }
@@ -6602,8 +6544,6 @@ SettingsStore settings_widget_draft_store(const SettingsWidgetState *state) {
 bool settings_widget_is_dirty(const SettingsWidgetState *state) {
   return state != nullptr &&
          (settings_store_is_dirty(state->draft_store) ||
-          state->draft_new_window_connection !=
-              state->applied_new_window_connection ||
           !settings_inputs_valid(state));
 }
 

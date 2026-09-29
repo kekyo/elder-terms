@@ -155,8 +155,10 @@ static void check_exterior_colors(const std::shared_ptr<FileTransferWindow> &win
     wait_for_draw(root);
     const auto expected = foreground(header);
     const auto actual = foreground(status);
+    expect(expected.red > 0.95 && expected.green > 0.95 && expected.blue > 0.95,
+        "Dark custom exterior surfaces must use a readable light foreground");
     expect(gdk_rgba_equal(&expected, &actual),
-        "Custom exterior status text must follow the header foreground in active and backdrop states");
+        "Custom exterior status text must share the header foreground in active and backdrop states");
     const auto indicator_color = foreground(indicator);
     expect(gdk_rgba_equal(&expected, &indicator_color),
         "Activity indicator captions must share the exterior foreground");
@@ -169,7 +171,7 @@ static void check_exterior_colors(const std::shared_ptr<FileTransferWindow> &win
   const auto changed_header = foreground(header);
   const auto changed_status = foreground(status);
   expect(gdk_rgba_equal(&changed_header, &changed_status),
-      "Changing the GTK theme must refresh custom exterior text colors");
+      "Changing the GTK theme must preserve matching custom exterior text colors");
   set_file_transfer_window_colors(window, {});
   wait_for_draw(root);
   const auto default_status = foreground(status);

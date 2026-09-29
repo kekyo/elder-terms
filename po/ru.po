@@ -2395,8 +2395,8 @@ msgid "Failed to open directory"
 msgstr "Не удалось открыть каталог"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Use for New Window"
-msgstr "Использовать для нового окна"
+msgid "Use for \"New Window\""
+msgstr "Использовать для «New Window»"
 
 #: elder-terms/src/main.cpp
 msgid "Failed to save New Window connection"

@@ -2373,8 +2373,8 @@ msgid "Failed to open directory"
 msgstr "디렉터리를 열지 못했습니다"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Use for New Window"
-msgstr "새 창에 사용"
+msgid "Use for \"New Window\""
+msgstr "\"New Window\"에 사용"
 
 #: elder-terms/src/main.cpp
 msgid "Failed to save New Window connection"

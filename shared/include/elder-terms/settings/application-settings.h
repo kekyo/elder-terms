@@ -56,7 +56,7 @@ enum class StartupMode {
 /**
  * Returns global-only application setting definitions.
  *
- * @returns Setting definitions for launcher startup and activation.
+ * @returns Setting definitions for startup, activation, and New Window.
  *
  * @remarks These definitions must only be added to the global settings store.
  */

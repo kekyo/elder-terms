@@ -1,8 +1,10 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
+import type { PNG as PngImage } from 'pngjs';
 import {
   assertTerminalTextGridMatches,
   constrainedFontZoomSteps,
@@ -26,7 +28,49 @@ import {
 } from './gtk-test-helpers';
 import { capturePixel } from './test-helpers';
 
+const require = createRequire(import.meta.url);
+const { PNG } = require('pngjs') as typeof import('pngjs');
+
 describe.concurrent('elder-terms-vte terminal layout', () => {
+  it('centers the title text in the title bar', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, 'centered-title.ini');
+      await writeFile(configPath, '[general]\nname=Centered title\n', 'utf8');
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', configPath],
+        async (app) => {
+          const capture = await (
+            await app.getById('header_title_label')
+          ).capture();
+          const png = PNG.sync.read(capture.image) as PngImage;
+          const inkColumns: number[] = [];
+          for (let x = 0; x < png.width; ++x) {
+            for (let y = 1; y < png.height - 1; ++y) {
+              const pixel = (y * png.width + x) * 4;
+              const background = (y * png.width + png.width - 1) * 4;
+              const difference =
+                Math.abs(png.data[pixel]! - png.data[background]!) +
+                Math.abs(png.data[pixel + 1]! - png.data[background + 1]!) +
+                Math.abs(png.data[pixel + 2]! - png.data[background + 2]!);
+              if (difference > 120) {
+                inkColumns.push(x);
+                break;
+              }
+            }
+          }
+          expect(inkColumns.length).toBeGreaterThan(10);
+          expect(
+            Math.abs(
+              (inkColumns[0]! + inkColumns[inkColumns.length - 1]!) / 2 -
+                png.width / 2
+            )
+          ).toBeLessThan(12);
+        }
+      );
+    });
+  });
+
   it('expands a long title without wrapping in regular mode', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'long-title.ini');

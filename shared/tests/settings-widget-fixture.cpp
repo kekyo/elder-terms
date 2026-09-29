@@ -818,6 +818,8 @@ static void print_store(const char *prefix,
                    text_settings.return_code)
             << " auto_close="
             << (elder_terms::general_auto_close(store) ? "true" : "false")
+            << " compact_mode="
+            << (elder_terms::general_compact_mode(store) ? "true" : "false")
             << " bell_sound="
             << (bell.sound_file.has_value() ? bell.sound_file->string()
                                             : "default")
@@ -925,6 +927,8 @@ static void print_store(const char *prefix,
       elder_terms::terminal_font_families_setting_key());
   print_setting_metadata(store, "auto_close",
                          elder_terms::general_auto_close_setting_key());
+  print_setting_metadata(store, "compact_mode",
+                         elder_terms::general_compact_mode_setting_key());
   print_setting_metadata(store, "bell_sound",
                          elder_terms::terminal_bell_sound_setting_key());
   print_setting_metadata(store, "show_border",

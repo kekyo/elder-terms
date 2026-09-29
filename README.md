@@ -136,10 +136,10 @@ Changes saved in an external editor are reloaded automatically, including
 editors that replace the file when saving.
 
 To choose the connection opened by "New Window" on a terminal window's desktop
-icon, select a connection in the launcher, turn on "Use for New Window" in the
-General tab, and save it. Saving another connection with this switch on replaces
-the previous selection. The switch cannot be changed from a running terminal's
-settings. Local shell, TELNET, SSH, and serial connections are eligible.
+icon, open "Application settings" in the launcher and select its name from
+"Use for \"New Window\"". Select "None" to use the default terminal settings.
+The list includes saved local shell, TELNET, SSH, and serial connections.
+The desktop action is named "New Window" in every system language.
 
 The selection is stored as an application setting in `global.ini`. Use the
 connection entry's name as the value:
@@ -191,9 +191,8 @@ in the list take precedence.
 2. Settings saved in INI files: Connection values in `global.ini`, edited with
    "Connection defaults", override the built-in defaults, and each
    connection's INI file overrides `global.ini`. Application-wide settings are
-   edited with "Application settings", while the New Window connection is
-   selected in the connection's General tab. Both are stored in `global.ini`
-   and preserved for the next launch.
+   edited with "Application settings", including the New Window connection.
+   These settings are stored in `global.ini` and preserved for the next launch.
 3. Launch-session settings: If you launch a connection with unsaved changes in
    the launcher, those changes are passed to the connection window as a
    temporary launch profile. Changes made with "Apply" in the settings dialog
@@ -586,9 +585,11 @@ bell_sound=/home/user/.local/share/sounds/terminal-bell.oga
 
 ## Compact Mode
 
-The "Compact mode" switch on a connection's General tab hides the bottom status bar
-and puts the activity indicators beside the title. It works for terminal and
-FTP, FTPS, SFTP, and WebDAV file browser windows. The built-in default is off.
+Choosing "Enabled" for "Compact mode" on a connection's General tab hides the
+bottom status bar and puts the activity indicators beside the title. The
+dropdown can also use the global default or explicitly disable compact mode.
+It works for terminal and FTP, FTPS, SFTP, and WebDAV file browser windows. The
+built-in default is off.
 When window side borders are enabled, a compact terminal also shows a bottom
 border of the same width.
 

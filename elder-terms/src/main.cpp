@@ -769,6 +769,16 @@ static void open_application_dialog(ApplicationState *state,
   state->application_initial_ui_language =
       elder_terms::application_ui_language(loaded.store);
 
+  std::vector<std::string> new_window_connections;
+  for (const elder_terms::ConnectionProfile &profile :
+       elder_terms::list_connection_profiles(state->connection_directory)) {
+    const auto connection = elder_terms::load_connection_profile(profile.path);
+    if (connection.loaded &&
+        elder_terms::terminal_connection_profile(connection.store).has_value()) {
+      new_window_connections.push_back(profile.name);
+    }
+  }
+
   GtkWidget *dialog = gtk_dialog_new();
   gestament_gtk_assign_accessible_id(dialog, "application_dialog");
   gtk_window_set_title(GTK_WINDOW(dialog), _("Application"));
@@ -783,6 +793,7 @@ static void open_application_dialog(ApplicationState *state,
   elder_terms::ApplicationSettingsWidgetOptions options{
       .store = std::move(loaded.store),
       .id_prefix = "application_settings",
+      .new_window_connections = std::move(new_window_connections),
       .changed = [state]() { update_application_dialog_actions(state); },
   };
   state->application_settings_widget =
@@ -1206,12 +1217,6 @@ static bool load_existing_connection(ApplicationState *state,
   state->name_dirty = false;
   elder_terms::update_settings_widget_store(state->settings_widget,
                                              result.store);
-  const auto global =
-      elder_terms::load_global_settings(state->global_config_path, 1.0);
-  elder_terms::settings_widget_set_new_window_connection(
-      state->settings_widget,
-      elder_terms::application_new_window_connection(global.store) ==
-          state->persisted_name);
   gtk_stack_set_visible_child_name(GTK_STACK(state->main_window->details_stack),
                                    "settings");
   update_action_sensitivity(state);
@@ -1296,8 +1301,6 @@ static void begin_new_connection(ApplicationState *state) {
                                                global_defaults.store);
   elder_terms::update_settings_widget_store(state->settings_widget,
                                              std::move(store));
-  elder_terms::settings_widget_set_new_window_connection(state->settings_widget,
-                                                          false);
   elder_terms::settings_widget_show_general_page(state->settings_widget);
   gtk_stack_set_visible_child_name(GTK_STACK(state->main_window->details_stack),
                                    "settings");
@@ -2383,10 +2386,12 @@ static bool save_current_connection(ApplicationState *state) {
     update_action_sensitivity(state);
     return false;
   }
+  const elder_terms::SettingsStore draft =
+      elder_terms::settings_widget_draft_store(state->settings_widget);
   const elder_terms::ConnectionSaveResult result =
       elder_terms::save_connection_profile(
           state->connection_directory, state->selected_path, validation.name,
-          elder_terms::settings_widget_draft_store(state->settings_widget));
+          draft);
   print_warnings(result.warnings);
   if (!result.saved) {
     show_error(state, _("Failed to save connection"), result.warnings);
@@ -2397,9 +2402,11 @@ static bool save_current_connection(ApplicationState *state) {
   const auto selected =
       elder_terms::application_new_window_connection(global.store);
   const auto next =
-      elder_terms::settings_widget_new_window_connection(state->settings_widget)
-          ? validation.name
-          : selected == state->persisted_name ? std::string() : selected;
+      !selected.empty() && selected == state->persisted_name
+          ? (elder_terms::terminal_connection_profile(draft).has_value()
+                 ? validation.name
+                 : std::string())
+          : selected;
   if (next != selected && !persist_new_window_connection(state, next)) {
     // The profile was saved successfully. Keep its new path and contents so a
     // retry can finish the application setting without an overwrite prompt.

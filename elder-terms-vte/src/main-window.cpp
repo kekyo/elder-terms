@@ -790,7 +790,6 @@ static void add_main_window_settings_background(MainWindow *main_window) {
 }
 
 static void clear_main_window_exterior_background(MainWindow *main_window) {
-  set_widget_exterior_foreground(nullptr, main_window->status_bar, false);
   remove_main_window_settings_exterior_background(main_window);
   GtkCssProvider *component_provider =
       main_window->exterior_component_background_provider;
@@ -995,8 +994,6 @@ static void set_main_window_exterior_background(
     }
   }
   add_main_window_settings_exterior_background(main_window);
-  set_widget_exterior_foreground(
-      main_window->header_bar, main_window->status_bar, true);
 }
 
 static void set_main_window_settings_background(
@@ -1040,6 +1037,14 @@ static void set_main_window_terminal_background(
       .alpha = 1.0,
   };
   vte_terminal_set_color_background(terminal, &background);
+  const RgbColor text_color = contrasting_foreground(*color);
+  const GdkRGBA foreground{
+      .red = static_cast<gdouble>(text_color.red) / channel_maximum,
+      .green = static_cast<gdouble>(text_color.green) / channel_maximum,
+      .blue = static_cast<gdouble>(text_color.blue) / channel_maximum,
+      .alpha = 1.0,
+  };
+  vte_terminal_set_color_foreground(terminal, &foreground);
   main_window->terminal_background_overridden = true;
 }
 
@@ -1307,7 +1312,7 @@ std::optional<MainWindow> load_main_window() {
   gtk_widget_set_hexpand(main_window.header_title_label, TRUE);
   gtk_widget_set_halign(main_window.header_title_box, GTK_ALIGN_FILL);
   gtk_widget_set_halign(main_window.header_title_label, GTK_ALIGN_FILL);
-  gtk_label_set_xalign(GTK_LABEL(main_window.header_title_label), 0.0F);
+  gtk_label_set_xalign(GTK_LABEL(main_window.header_title_label), 0.5F);
   gtk_label_set_single_line_mode(GTK_LABEL(main_window.header_title_label), TRUE);
   gtk_label_set_ellipsize(GTK_LABEL(main_window.header_title_label),
                           PANGO_ELLIPSIZE_END);

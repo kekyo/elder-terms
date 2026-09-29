@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 #include <gtk/gtk.h>
 
@@ -22,13 +23,15 @@ struct ApplicationSettingsWidgetOptions {
   SettingsStore store;
   /** Prefix used to form stable accessible widget identifiers. */
   std::string id_prefix = "application_settings";
+  /** Names of saved terminal connections eligible for New Window. */
+  std::vector<std::string> new_window_connections;
   /** Optional callback invoked after an editable value changes. */
   ApplicationSettingsWidgetChangedCallback changed;
 };
 
 /**
  * Creates an editor for display language, startup mode, application shortcut,
- * and terminal link action settings.
+ * and the connection opened by the desktop New Window action.
  *
  * @param options Initial settings and callback behavior.
  * @returns New widget state owned by the caller.
