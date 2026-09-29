@@ -872,13 +872,12 @@ static SettingsSaveResult save_application_setting_keys(
 SettingsSaveResult save_application_settings(
     const SettingsStore &store,
     const std::filesystem::path &global_config_path) {
-  // New Window is edited in the connection editor, independently of this
-  // dialog's snapshot, so saving application settings must preserve it.
   return save_application_setting_keys(
       store, global_config_path,
       {application_ui_language_setting_key(),
        application_startup_mode_setting_key(),
-       application_open_hotkey_setting_key()});
+       application_open_hotkey_setting_key(),
+       application_new_window_setting_key()});
 }
 
 SettingsSaveResult save_new_window_connection(

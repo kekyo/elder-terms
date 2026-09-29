@@ -272,7 +272,7 @@ save_global_settings(const SettingsStore &store,
  * @returns Save status and warnings.
  *
  * @remarks Display language, startup mode, the application shortcut, and
- * changed terminal link actions are updated while every unrelated key already
+ * the New Window connection are updated while every unrelated key already
  * present in the file is retained.
  */
 ELDER_TERMS_API SettingsSaveResult save_application_settings(

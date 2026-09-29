@@ -2400,8 +2400,8 @@ msgid "Failed to open directory"
 msgstr "Impossible d’ouvrir le dossier"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Use for New Window"
-msgstr "Utiliser pour une nouvelle fenêtre"
+msgid "Use for \"New Window\""
+msgstr "Utiliser pour « New Window »"
 
 #: elder-terms/src/main.cpp
 msgid "Failed to save New Window connection"

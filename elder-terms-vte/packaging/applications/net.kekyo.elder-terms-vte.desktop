@@ -14,6 +14,6 @@ StartupWMClass=Elder-terms-vte
 Actions=new-window;
 
 [Desktop Action new-window]
+# Keep the action name in English across locales to match application settings.
 Name=New Window
-Name[ja]=新しいウィンドウ
 Exec=elder-terms-vte --new-window

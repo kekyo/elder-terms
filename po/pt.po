@@ -2389,8 +2389,8 @@ msgid "Failed to open directory"
 msgstr "Falha ao abrir a pasta"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Use for New Window"
-msgstr "Usar para uma nova janela"
+msgid "Use for \"New Window\""
+msgstr "Usar para \"New Window\""
 
 #: elder-terms/src/main.cpp
 msgid "Failed to save New Window connection"

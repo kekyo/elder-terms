@@ -108,8 +108,6 @@ struct SettingsWidgetState {
   bool is_runtime = false;
   bool show_actions = true;
   bool synchronizing = false;
-  bool applied_new_window_connection = false;
-  bool draft_new_window_connection = false;
   SettingsWidgetCallbacks callbacks;
   SettingsWidgetIpScannerDependenciesFactory
       ip_scanner_dependencies_factory;
@@ -121,7 +119,6 @@ struct SettingsWidgetState {
   GtkWidget *general_type_combo = nullptr;
   GtkWidget *general_auto_close_combo = nullptr;
   GtkWidget *general_compact_mode_combo = nullptr;
-  GtkWidget *general_new_window_combo = nullptr;
   KeyBindingInputWidgetState *general_open_connection_input = nullptr;
   GtkWidget *general_open_connection_reset_button = nullptr;
   GtkWidget *general_exterior_background_mode_combo = nullptr;
@@ -3226,24 +3223,7 @@ static void create_ftp_tls_controls(SettingsWidgetState *state, GtkWidget *page)
   gtk_grid_attach(GTK_GRID(page), state->ftp_tls_error_label, 0, row, 2, 1);
 }
 
-static void sync_new_window_combo(SettingsWidgetState *state) {
-  if (state->general_new_window_combo == nullptr) {
-    return;
-  }
-  const bool supported =
-      terminal_connection_profile(state->draft_store).has_value();
-  if (!supported) {
-    state->draft_new_window_connection = false;
-  }
-  gtk_widget_set_sensitive(state->general_new_window_combo,
-                           supported && !state->is_runtime);
-  gtk_combo_box_set_active_id(
-      GTK_COMBO_BOX(state->general_new_window_combo),
-      state->draft_new_window_connection ? boolean_enabled : boolean_disabled);
-}
-
 static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_webdav_draft) {
-  sync_new_window_combo(state);
   sync_ftp_tls_controls(state);
   sync_webdav_settings_editor(state->webdav_editor, preserve_webdav_draft);
   const TerminalDisplaySettings display =
@@ -3656,7 +3636,6 @@ static void on_general_type_changed(GtkComboBox *, gpointer data) {
   const bool previous_synchronizing = state->synchronizing;
   state->synchronizing = true;
   sync_zmodem_combo(state);
-  sync_new_window_combo(state);
   state->synchronizing = previous_synchronizing;
   notify_changed(state);
 }
@@ -4776,20 +4755,9 @@ static void on_log_mode_changed(GtkComboBox *, gpointer data) {
   notify_changed(state);
 }
 
-static void on_new_window_changed(GtkComboBox *, gpointer data) {
-  auto *state = static_cast<SettingsWidgetState *>(data);
-  if (state->synchronizing || state->is_runtime) {
-    return;
-  }
-  state->draft_new_window_connection = active_combo_id(
-      state->general_new_window_combo, boolean_disabled) == boolean_enabled;
-  notify_changed(state);
-}
-
 static void on_apply_clicked(GtkButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   state->applied_store = state->draft_store;
-  state->applied_new_window_connection = state->draft_new_window_connection;
   if (state->callbacks.apply) {
     state->callbacks.apply(state->applied_store);
   }
@@ -4799,14 +4767,12 @@ static void on_save_clicked(GtkButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->callbacks.save && state->callbacks.save(state->draft_store)) {
     state->applied_store = state->draft_store;
-    state->applied_new_window_connection = state->draft_new_window_connection;
   }
 }
 
 static void on_cancel_clicked(GtkButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   state->draft_store = state->applied_store;
-  state->draft_new_window_connection = state->applied_new_window_connection;
   if (state->callbacks.cancel) {
     state->callbacks.cancel();
   }
@@ -4942,20 +4908,6 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_general_compact_mode_changed), state);
   attach_row(page, row++, general_compact_mode_setting_key(),
              state->general_compact_mode_combo);
-
-  if (state->mode == SettingsWidgetMode::connection) {
-    const std::string new_window_id =
-        widget_id(state, "general_new_window_combo");
-    state->general_new_window_combo = create_combo_box(new_window_id.c_str());
-    append_combo_option(state->general_new_window_combo, boolean_disabled,
-                        settings_ui_text(SettingsUiText::disabled));
-    append_combo_option(state->general_new_window_combo, boolean_enabled,
-                        settings_ui_text(SettingsUiText::enabled));
-    g_signal_connect(state->general_new_window_combo, "changed",
-                     G_CALLBACK(on_new_window_changed), state);
-    attach_row(page, row, application_new_window_setting_key(),
-               state->general_new_window_combo);
-  }
 
   return page;
 }
@@ -6116,8 +6068,6 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
                                 : std::move(options.id_prefix);
   state->is_runtime = options.is_runtime;
   state->show_actions = options.show_actions;
-  state->applied_new_window_connection = options.new_window_connection;
-  state->draft_new_window_connection = options.new_window_connection;
   state->callbacks = std::move(options.callbacks);
   state->ip_scanner_dependencies_factory =
       std::move(options.ip_scanner_dependencies_factory);
@@ -6587,26 +6537,6 @@ void settings_widget_set_default_connection_name(
   state->synchronizing = previous_synchronizing;
 }
 
-void settings_widget_set_new_window_connection(SettingsWidgetState *state,
-                                                bool selected) {
-  if (state == nullptr) {
-    return;
-  }
-  const bool previous_synchronizing = state->synchronizing;
-  state->synchronizing = true;
-  state->draft_new_window_connection = selected;
-  sync_new_window_combo(state);
-  state->applied_new_window_connection = state->draft_new_window_connection;
-  state->synchronizing = previous_synchronizing;
-  notify_changed(state);
-}
-
-bool settings_widget_new_window_connection(const SettingsWidgetState *state) {
-  return state != nullptr && state->mode == SettingsWidgetMode::connection &&
-         state->draft_new_window_connection &&
-         terminal_connection_profile(state->draft_store).has_value();
-}
-
 SettingsStore settings_widget_draft_store(const SettingsWidgetState *state) {
   return state == nullptr ? SettingsStore{} : state->draft_store;
 }
@@ -6614,8 +6544,6 @@ SettingsStore settings_widget_draft_store(const SettingsWidgetState *state) {
 bool settings_widget_is_dirty(const SettingsWidgetState *state) {
   return state != nullptr &&
          (settings_store_is_dirty(state->draft_store) ||
-          state->draft_new_window_connection !=
-              state->applied_new_window_connection ||
           !settings_inputs_valid(state));
 }
 

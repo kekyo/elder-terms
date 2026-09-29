@@ -1,5 +1,6 @@
 #include <elder-terms/application-settings-widget.h>
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -34,11 +35,13 @@ static constexpr const char *startup_modes[] = {
 struct ApplicationSettingsWidgetState {
   SettingsStore draft_store;
   std::string id_prefix;
+  std::vector<std::string> new_window_connections;
   ApplicationSettingsWidgetChangedCallback changed;
   bool synchronizing = false;
   GtkWidget *root = nullptr;
   GtkWidget *ui_language_combo = nullptr;
   GtkWidget *startup_mode_combo = nullptr;
+  GtkWidget *new_window_combo = nullptr;
   KeyBindingInputWidgetState *open_application_input = nullptr;
   GtkWidget *open_application_reset_button = nullptr;
 };
@@ -71,8 +74,9 @@ static GtkWidget *create_row_label(const std::string &text) {
 }
 
 static void attach_row(GtkWidget *grid, int row, const SettingKey &key,
-                       GtkWidget *control) {
+                       GtkWidget *control, const char *label_id) {
   GtkWidget *label = create_row_label(setting_label(key));
+  assign_accessible_id(label, label_id);
   gtk_grid_attach(GTK_GRID(grid), label, 0, row, 1, 1);
   gtk_widget_set_hexpand(control, TRUE);
   gtk_widget_set_halign(control, GTK_ALIGN_FILL);
@@ -169,6 +173,26 @@ static void sync_widgets(ApplicationSettingsWidgetState *state) {
   }
   gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->startup_mode_combo),
                               startup_active);
+
+  gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(state->new_window_combo));
+  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(state->new_window_combo), "",
+                            _("None"));
+  for (const std::string &name : state->new_window_connections) {
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(state->new_window_combo),
+                              name.c_str(), name.c_str());
+  }
+  const std::string selected =
+      application_new_window_connection(state->draft_store);
+  if (!selected.empty() &&
+      std::find(state->new_window_connections.begin(),
+                state->new_window_connections.end(), selected) ==
+          state->new_window_connections.end()) {
+    const std::string label = selected + " (" + _("Unavailable") + ")";
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(state->new_window_combo),
+                              selected.c_str(), label.c_str());
+  }
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->new_window_combo),
+                              selected.c_str());
   sync_hotkey(state);
 
   state->synchronizing = previous_synchronizing;
@@ -206,6 +230,23 @@ static void on_startup_mode_changed(GtkComboBox *, gpointer data) {
     set_explicit_setting_value(&state->draft_store,
                                application_startup_mode_setting_key(),
                                SettingValue{mode});
+  }
+  notify_changed(state);
+}
+
+static void on_new_window_changed(GtkComboBox *, gpointer data) {
+  auto *state = static_cast<ApplicationSettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  const std::string name = active_combo_id(state->new_window_combo, "");
+  if (name.empty()) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 application_new_window_setting_key());
+  } else {
+    set_explicit_setting_value(&state->draft_store,
+                               application_new_window_setting_key(),
+                               SettingValue{name});
   }
   notify_changed(state);
 }
@@ -254,6 +295,7 @@ create_application_settings_widget(ApplicationSettingsWidgetOptions options) {
   auto *state = new ApplicationSettingsWidgetState();
   state->draft_store = std::move(options.store);
   state->id_prefix = std::move(options.id_prefix);
+  state->new_window_connections = std::move(options.new_window_connections);
   state->changed = std::move(options.changed);
 
   GtkWidget *general_page = gtk_grid_new();
@@ -273,7 +315,7 @@ create_application_settings_widget(ApplicationSettingsWidgetOptions options) {
   g_signal_connect(state->ui_language_combo, "changed",
                    G_CALLBACK(on_ui_language_changed), state);
   attach_row(general_page, 0, application_ui_language_setting_key(),
-             state->ui_language_combo);
+             state->ui_language_combo, nullptr);
 
   state->startup_mode_combo = gtk_combo_box_text_new();
   assign_accessible_id(state->startup_mode_combo,
@@ -281,7 +323,7 @@ create_application_settings_widget(ApplicationSettingsWidgetOptions options) {
   g_signal_connect(state->startup_mode_combo, "changed",
                    G_CALLBACK(on_startup_mode_changed), state);
   attach_row(general_page, 1, application_startup_mode_setting_key(),
-             state->startup_mode_combo);
+             state->startup_mode_combo, nullptr);
 
   state->open_application_input = create_key_binding_input_widget({
       .text = "",
@@ -303,7 +345,16 @@ create_application_settings_widget(ApplicationSettingsWidgetOptions options) {
   gtk_box_pack_start(GTK_BOX(hotkey_row),
                      state->open_application_reset_button, FALSE, FALSE, 0);
   attach_row(general_page, 2, application_open_hotkey_setting_key(),
-             hotkey_row);
+             hotkey_row, nullptr);
+
+  state->new_window_combo = gtk_combo_box_text_new();
+  assign_accessible_id(state->new_window_combo,
+                       widget_id(state, "new_window_combo").c_str());
+  g_signal_connect(state->new_window_combo, "changed",
+                   G_CALLBACK(on_new_window_changed), state);
+  attach_row(general_page, 3, application_new_window_setting_key(),
+             state->new_window_combo,
+             widget_id(state, "new_window_label").c_str());
 
   sync_widgets(state);
   return state;

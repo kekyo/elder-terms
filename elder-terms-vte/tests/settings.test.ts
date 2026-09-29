@@ -704,25 +704,12 @@ describe.concurrent('elder-terms-vte settings', () => {
               )
             );
             await openSettingsDialog(app);
-            const newWindow = expectElementKind(
-              await app.getById('settings_general_new_window_combo'),
-              'comboBox'
-            );
-            await expectSelectedComboValue(
-              app,
-              'settings_general_new_window_combo',
-              action === 'new-window' ? 'Enabled' : 'Disabled'
-            );
-            expect((await newWindow.info()).states).not.toContain('sensitive');
+            await expect(
+              app.getById('settings_general_new_window_combo')
+            ).rejects.toThrow(/not found/iu);
             const before = await readFile(
               join(directory, 'elder-terms', 'global.ini'),
               'utf8'
-            );
-            await clickWidget(app, newWindow);
-            await expectSelectedComboValue(
-              app,
-              'settings_general_new_window_combo',
-              action === 'new-window' ? 'Enabled' : 'Disabled'
             );
             expect(
               await readFile(
@@ -752,8 +739,7 @@ describe.concurrent('elder-terms-vte settings', () => {
         );
         await writeFile(join(connections, 'Broken.ini'), '[general\n');
         let failure:
-          | { code?: number; stdout?: string; stderr?: string }
-          | undefined;
+          { code?: number; stdout?: string; stderr?: string } | undefined;
         try {
           await execFileAsync(
             '/usr/bin/xvfb-run',
