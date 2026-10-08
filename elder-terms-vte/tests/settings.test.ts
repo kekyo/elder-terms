@@ -2393,12 +2393,17 @@ describe.concurrent('elder-terms-vte settings', () => {
       await runGtkTest(
         context,
         ['--test-fixture', '-c', configPath],
-        async (app) => {
+        async (app, evidence) => {
           await waitForResult(async () => {
             const layout = await readWindowCellLayout(app);
             expectWindowCellSize(layout, defaultColumns, defaultRows);
             await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
           });
+          const header = await app.getById('header_bar');
+          const regularHeader = await evidence.captureEvidence(
+            'regular-header',
+            async () => header.capture()
+          );
           await openSettingsDialog(app);
           await showGeneralSettingsPage(app);
           const compact = expectElementKind(
@@ -2429,7 +2434,13 @@ describe.concurrent('elder-terms-vte settings', () => {
             expect(
               (await (await app.getById('frame_bottom_border')).info()).states
             ).not.toContain('showing');
+            expect((await header.capture()).bounds.height).toBe(
+              Math.round(regularHeader.bounds.height * 0.75)
+            );
           });
+          await evidence.captureEvidence('compact-header', async () =>
+            header.capture()
+          );
           await openSettingsDialog(app);
           await showGeneralSettingsPage(app);
           const compactAgain = expectElementKind(
@@ -2454,6 +2465,9 @@ describe.concurrent('elder-terms-vte settings', () => {
             expect(
               (await (await app.getById('status_bar')).info()).states
             ).toContain('showing');
+            expect((await header.capture()).bounds.height).toBe(
+              regularHeader.bounds.height
+            );
           });
         }
       );

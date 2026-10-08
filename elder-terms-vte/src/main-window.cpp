@@ -27,6 +27,8 @@
 namespace elder_terms {
 
 static constexpr int indicator_icon_pixel_size = 18;
+static constexpr const char *compact_header_style_class =
+    "terminal-compact-header";
 static constexpr guint transfer_progress_pulse_period_ms = 120;
 static constexpr const char *terminal_dim_overlay_style_class =
     "terminal-dim-overlay";
@@ -1778,6 +1780,57 @@ void set_main_window_status_text(MainWindow *main_window,
   gtk_label_set_text(GTK_LABEL(main_window->status_label), text.c_str());
 }
 
+static void clear_main_window_compact_header(MainWindow *main_window) {
+  if (main_window->compact_header_provider == nullptr) {
+    return;
+  }
+
+  gtk_style_context_remove_provider_for_screen(
+      gtk_widget_get_screen(main_window->header_bar),
+      GTK_STYLE_PROVIDER(main_window->compact_header_provider));
+  update_widget_style_class(
+      main_window->header_bar, compact_header_style_class, false);
+  g_clear_object(&main_window->compact_header_provider);
+}
+
+static void apply_main_window_compact_header(MainWindow *main_window) {
+  GtkWidget *header = main_window->header_bar;
+  int natural_height = 0;
+  gtk_widget_get_preferred_height(header, nullptr, &natural_height);
+  gtk_widget_set_margin_top(main_window->activity_indicator_bar, 0);
+  gtk_widget_set_margin_bottom(main_window->activity_indicator_bar, 0);
+  GtkStyleContext *context = gtk_widget_get_style_context(header);
+  GtkBorder border{};
+  gtk_style_context_get_border(
+      context, gtk_style_context_get_state(context), &border);
+
+  // Measure the unmodified theme with the indicators in place. GTK's CSS
+  // minimum height excludes borders. Reset vertical margins as well as
+  // padding: solid-CSD themes can use a negative top margin. The existing
+  // icons and labels then fit without resampling or shrinking text.
+  const int content_height = std::max(
+      0, (natural_height * 3 + 2) / 4 - border.top - border.bottom);
+  const std::string css =
+      std::string(".") + compact_header_style_class + " {"
+      "min-height: " + std::to_string(content_height) + "px;"
+      "padding-top: 0; padding-bottom: 0;"
+      "margin-top: 0; margin-bottom: 0;"
+      "} ." + compact_header_style_class + " button {"
+      "min-height: 0;"
+      "padding-top: 0; padding-bottom: 0;"
+      "margin-top: 0; margin-bottom: 0;"
+      "}";
+  main_window->compact_header_provider = gtk_css_provider_new();
+  gtk_css_provider_load_from_data(
+      main_window->compact_header_provider, css.c_str(), -1, nullptr);
+  update_widget_style_class(header, compact_header_style_class, true);
+  // A screen provider also reaches GTK-created window control buttons.
+  gtk_style_context_add_provider_for_screen(
+      gtk_widget_get_screen(header),
+      GTK_STYLE_PROVIDER(main_window->compact_header_provider),
+      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+}
+
 void set_main_window_compact_mode(MainWindow *main_window, bool compact_mode) {
   if (main_window == nullptr || main_window->compact_mode == compact_mode) {
     return;
@@ -1794,6 +1847,13 @@ void set_main_window_compact_mode(MainWindow *main_window, bool compact_mode) {
   g_object_unref(indicators);
   gtk_widget_show(indicators);
 
+  if (compact_mode) {
+    apply_main_window_compact_header(main_window);
+  } else {
+    clear_main_window_compact_header(main_window);
+    gtk_widget_set_margin_top(indicators, 2);
+    gtk_widget_set_margin_bottom(indicators, 2);
+  }
   main_window->compact_mode = compact_mode;
   gtk_widget_set_no_show_all(main_window->status_bar,
                              compact_mode ? TRUE : FALSE);
@@ -1872,6 +1932,7 @@ void release_main_window(MainWindow *main_window) {
   cancel_main_window_ssh_prompt(main_window);
   stop_main_window_transfer_progress_pulse(main_window);
   deactivate_main_window_activity_indicators(main_window);
+  clear_main_window_compact_header(main_window);
   clear_main_window_exterior_background(main_window);
   clear_main_window_settings_background(main_window);
   clear_main_window_overlay_background(main_window);

@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { GtkWidgetElement } from 'gestament';
 import { waitForResult, toPass } from 'gestament/testing';
 import type { PNG as PngImage } from 'pngjs';
 import {
@@ -32,6 +33,182 @@ const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
 
 describe.concurrent('elder-terms-vte terminal layout', () => {
+  for (const { theme, scale } of [
+    { theme: 'Adwaita', scale: 1 },
+    { theme: 'Adwaita:dark', scale: 1 },
+    { theme: 'Adwaita', scale: 2 },
+  ]) {
+    it(`shrinks the compact title bar to 75% with intact serial indicators and controls (${theme}, scale ${scale})`, async (context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const configPath = join(directory, 'compact-header.ini');
+        const settings = '[general]\ntype=serial\nname=Compact header\n';
+        const terminalSettings = '\n[terminal]\nwidth=72\nheight=12\n';
+        const env = { GTK_THEME: theme, GDK_SCALE: String(scale) };
+        await writeFile(configPath, settings + terminalSettings, 'utf8');
+        let regularHeight = 0;
+        await runGtkTest(
+          context,
+          ['--test-fixture', '-c', configPath],
+          async (app, evidence) => {
+            const header = await (await app.getById('header_bar')).capture();
+            regularHeight = header.bounds.height;
+            await evidence.captureEvidence('regular-serial-screen', async () =>
+              app.capture()
+            );
+          },
+          { env }
+        );
+
+        await writeFile(
+          configPath,
+          settings + 'compact_mode=true\n' + terminalSettings,
+          'utf8'
+        );
+        await runGtkTest(
+          context,
+          ['--test-fixture', '-c', configPath],
+          async (app, evidence) => {
+            const layout = await waitForResult(async () => {
+              const current = await readWindowCellLayout(app);
+              expectWindowCellSize(current, 72, 12);
+              await expectFixtureVteGridSize(app, 72, 12);
+              return current;
+            });
+            const header = await (await app.getById('header_bar')).capture();
+            const screen = await evidence.captureEvidence(
+              'compact-serial-screen',
+              async () => app.capture()
+            );
+            expect(header.clipped).toBe(false);
+            // GTK3 AT-SPI bounds use logical pixels; X11 input and screen
+            // captures use physical pixels, including on HiDPI displays.
+            expect(header.bounds.height).toBe(Math.round(regularHeight * 0.75));
+            expect(
+              layout.mainBounds.x + layout.mainBounds.width
+            ).toBeLessThanOrEqual(screen.bounds.width);
+            expect(
+              layout.mainBounds.y + layout.mainBounds.height
+            ).toBeLessThanOrEqual(screen.bounds.height);
+            const controls = [
+              'header_title_label',
+              'activity_indicator_bar',
+              'transfer_button',
+              'application_menu_button',
+            ];
+            let previousEnd = header.bounds.x;
+            for (const id of controls) {
+              const capture = await (await app.getById(id)).capture();
+              expect(capture.clipped, id).toBe(false);
+              expect(capture.bounds.x, id).toBeGreaterThanOrEqual(previousEnd);
+              expect(capture.bounds.y, id).toBeGreaterThanOrEqual(
+                header.bounds.y
+              );
+              expect(
+                capture.bounds.y + capture.bounds.height,
+                id
+              ).toBeLessThanOrEqual(header.bounds.y + header.bounds.height);
+              previousEnd = capture.bounds.x + capture.bounds.width;
+            }
+            for (const indicator of [
+              'conn',
+              'log',
+              'sd',
+              'rd',
+              'rts',
+              'cts',
+              'dtr',
+              'dsr',
+              'cd',
+              'ri',
+            ]) {
+              const image = await (
+                await app.getById(`${indicator}_indicator_image`)
+              ).capture();
+              const label = await (
+                await app.getById(`${indicator}_indicator_label`)
+              ).capture();
+              expect(image.bounds.width).toBe(18);
+              expect(image.bounds.height).toBe(18);
+              expect(image.bounds.y).toBeGreaterThanOrEqual(header.bounds.y);
+              expect(image.bounds.y + image.bounds.height).toBeLessThanOrEqual(
+                label.bounds.y
+              );
+              expect(label.bounds.height).toBeGreaterThan(0);
+              expect(label.bounds.y + label.bounds.height).toBeLessThanOrEqual(
+                header.bounds.y + header.bounds.height
+              );
+            }
+            const pending: GtkWidgetElement[] = [
+              await app.getById('header_bar'),
+            ];
+            let closeButton;
+            while (pending.length !== 0) {
+              const widget = pending.shift()!;
+              if (widget.kind === 'button') {
+                const capture = await widget.capture();
+                expect(capture.bounds.x).toBeGreaterThanOrEqual(previousEnd);
+                expect(capture.bounds.y).toBeGreaterThanOrEqual(
+                  header.bounds.y
+                );
+                expect(
+                  capture.bounds.x + capture.bounds.width
+                ).toBeLessThanOrEqual(header.bounds.x + header.bounds.width);
+                expect(
+                  capture.bounds.y + capture.bounds.height
+                ).toBeLessThanOrEqual(header.bounds.y + header.bounds.height);
+                if ((await widget.info()).name === 'Close') {
+                  closeButton = widget;
+                }
+              }
+              if ('getChildCount' in widget) {
+                const count = await widget.getChildCount();
+                for (let index = 0; index < count; ++index) {
+                  const child = await widget.childAt(index);
+                  if (child !== undefined) pending.push(child);
+                }
+              }
+            }
+            expect(closeButton).toBeDefined();
+            if (closeButton === undefined)
+              throw new Error('Missing title-bar close button');
+            const close = await closeButton.capture();
+
+            for (const [buttonId, itemId] of [
+              ['application_menu_button', 'settings_menu_item'],
+              ['transfer_button', 'transfer_log_enabled_item'],
+            ] as const) {
+              const button = await (await app.getById(buttonId)).capture();
+              await app.input.moveMouseTo(
+                Math.trunc((button.bounds.x + button.bounds.width / 2) * scale),
+                Math.trunc((button.bounds.y + button.bounds.height / 2) * scale)
+              );
+              await app.input.setMouseButton('left', true);
+              await app.input.setMouseButton('left', false);
+              await waitForResult(async () => {
+                expect(
+                  (await (await app.getById(itemId)).info()).states
+                ).toContain('showing');
+              });
+              await app.input.pressKey('Escape');
+            }
+            await expectFixtureVteGridSize(app, 72, 12);
+            expectWindowCellSize(await readWindowCellLayout(app), 72, 12);
+            await app.input.moveMouseTo(
+              Math.trunc((close.bounds.x + close.bounds.width / 2) * scale),
+              Math.trunc((close.bounds.y + close.bounds.height / 2) * scale)
+            );
+            await app.input.setMouseButton('left', true);
+            await app.input.setMouseButton('left', false);
+            await waitForResult(async () =>
+              expect((await app.output()).exitCode).toBe(0)
+            );
+          },
+          { env }
+        );
+      });
+    });
+  }
+
   it('centers the title text in the title bar', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'centered-title.ini');
