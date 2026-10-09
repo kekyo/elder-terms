@@ -71,6 +71,7 @@ struct ServerOptions {
   int forward_target_port = 0;
   bool sftp_only = false;
   int window_gate_fd = -1;
+  bool forward_open_marker = false;
 };
 
 struct ServerState {
@@ -215,14 +216,25 @@ static bool read_all_fd(int fd, void *data, std::size_t size) {
 // to its caller. The pipe orders the peer; no scheduling delay is assumed.
 static int window_gate_fd = -1;
 static bool restored_window_observed = false;
+static bool consume_forward_open_reply = false;
+static bool forward_open_reply_observed = false;
 
-extern "C" int __real_ssh_set_channel_callbacks(ssh_channel, ssh_channel_callbacks);
-extern "C" int __wrap_ssh_set_channel_callbacks(ssh_channel channel, ssh_channel_callbacks callbacks) {
-  if (window_gate_fd >= 0) {
-    // Socket writability is independent of remote SSH window growth.
-    callbacks->channel_write_wontblock_function = nullptr;
+extern "C" int __real_ssh_channel_open_forward(ssh_channel, const char *, int, const char *, int);
+extern "C" int __wrap_ssh_channel_open_forward(ssh_channel channel, const char *host, int port,
+                                               const char *source, int source_port) {
+  const auto result = __real_ssh_channel_open_forward(channel, host, port, source, source_port);
+  if (consume_forward_open_reply && !forward_open_reply_observed && result == SSH_AGAIN) {
+    expect_true(ssh_channel_poll_timeout(channel, 30000, 0) == 1, "receive the channel-open marker");
+    char marker = 0;
+    expect_true(ssh_channel_read_nonblocking(channel, &marker, 1, 0) == 1 && marker == 'o',
+                "consume the marker after channel-open confirmation");
+    expect_true(ssh_channel_poll_timeout(channel, 0, 0) == 0, "drain readiness after the open marker");
+    expect_true(ssh_channel_is_open(channel) != 0, "read must process channel-open confirmation");
+    expect_true((ssh_get_poll_flags(ssh_channel_get_session(channel)) & SSH_WRITE_PENDING) == 0,
+                "channel-open completion must not depend on socket writability");
+    forward_open_reply_observed = true;
   }
-  return __real_ssh_set_channel_callbacks(channel, callbacks);
+  return result;
 }
 
 extern "C" int __real_ssh_channel_write(ssh_channel, const void *, std::uint32_t);
@@ -839,7 +851,12 @@ static int on_forward_message(ssh_session session, ssh_message message, void *us
   }
   ssh_callbacks_init(&state->channel_callbacks);
   (void)session;
-  return ssh_set_channel_callbacks(state->channel, &state->channel_callbacks) == SSH_OK ? 0 : 1;
+  if (ssh_set_channel_callbacks(state->channel, &state->channel_callbacks) != SSH_OK) return 1;
+  if (state->options.forward_open_marker) {
+    const char marker = 'o';
+    if (ssh_channel_write(state->channel, &marker, 1) != 1) return 1;
+  }
+  return 0;
 }
 
 static std::optional<int> bound_port(ssh_bind bind) {
@@ -1573,19 +1590,23 @@ static std::size_t open_socket_count() {
   return count;
 }
 
-static void test_forward_window_recovery(const ServerOptions &options, const std::filesystem::path &known_hosts) {
+static void test_forward_readiness(const ServerOptions &options, const std::filesystem::path &known_hosts,
+                                    bool test_open_reply) {
   int gate[2] = {-1, -1};
-  expect_true(::pipe(gate) == 0, "create the receive-window gate");
+  if (!test_open_reply) expect_true(::pipe(gate) == 0, "create the receive-window gate");
   auto server_options = options;
   server_options.forward_host = "window.proxy-test.invalid";
   server_options.window_gate_fd = gate[0];
+  server_options.forward_open_marker = test_open_reply;
   server_options.payload.resize(65537);
   for (std::size_t index = 0; index < server_options.payload.size(); ++index)
     server_options.payload[index] = static_cast<char>(index % 256);
   auto server = start_server(server_options);
-  ::close(gate[0]);
+  if (gate[0] >= 0) ::close(gate[0]);
   window_gate_fd = gate[1];
   restored_window_observed = false;
+  consume_forward_open_reply = test_open_reply;
+  forward_open_reply_observed = false;
   cardio::dispatcher_group_glib group;
   cardio::dispatcher_host_glib dispatcher(group);
   std::exception_ptr failure;
@@ -1605,7 +1626,8 @@ static void test_forward_window_recovery(const ServerOptions &options, const std
           transport, server_options.forward_host, server_options.forward_port, {});
       auto channel = std::move(co_await opening);
       co_await channel->write_all_async(bytes(server_options.payload), {});
-      expect_true(restored_window_observed, "exercise an exhausted and restored window");
+      expect_true(test_open_reply ? forward_open_reply_observed : restored_window_observed,
+                  "exercise readiness consumed by a read before the caller waits");
       std::string received;
       std::array<unsigned char, 16384> buffer{};
       for (;;) {
@@ -1613,7 +1635,7 @@ static void test_forward_window_recovery(const ServerOptions &options, const std
         if (!count) break;
         received.append(reinterpret_cast<const char *>(buffer.data()), count);
       }
-      expect_true(received == server_options.payload, "forwarding must resume without losing bytes after WINDOW_ADJUST");
+      expect_true(received == server_options.payload, "forwarding must resume without losing bytes after buffered SSH replies");
     } catch (...) { failure = std::current_exception(); }
     group.shutdown();
   };
@@ -1621,10 +1643,11 @@ static void test_forward_window_recovery(const ServerOptions &options, const std
   dispatcher.park();
   task.unsafe_result();
   window_gate_fd = -1;
-  ::close(gate[1]);
+  consume_forward_open_reply = false;
+  if (gate[1] >= 0) ::close(gate[1]);
   const auto result = wait_for_server(&server);
   if (failure) std::rethrow_exception(failure);
-  expect_true(result == 0, "server must receive the complete payload after window recovery");
+  expect_true(result == 0, "server must receive the complete payload after readiness recovery");
 }
 
 static void test_proxy_forwarding(const ServerOptions &options, const std::filesystem::path &known_hosts, bool socks) {
@@ -1952,7 +1975,8 @@ AAAEA8cCQePgwL2LLorJKJb/mbOaBviLYfCkaS2lc+lgrnvZglDbkkh3abjMMTzSsZS5/X
   options.auth_mode = ServerAuthMode::none;
   options.host_key_path = host_private_key;
   options.host_public_key_path = host_public_key;
-  test_forward_window_recovery(options, root / ".ssh" / "proxy_known_hosts");
+  test_forward_readiness(options, root / ".ssh" / "proxy_known_hosts", true);
+  test_forward_readiness(options, root / ".ssh" / "proxy_known_hosts", false);
   test_proxy_forwarding(options, root / ".ssh" / "proxy_known_hosts", false);
   test_proxy_forwarding(options, root / ".ssh" / "proxy_known_hosts", true);
   test_proxy_rejections(options, root / ".ssh" / "proxy_known_hosts");

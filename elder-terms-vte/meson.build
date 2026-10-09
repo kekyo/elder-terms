@@ -584,7 +584,7 @@ ssh_channel_connection_test = executable(
     ssh_transport_dep,
     liburing_dep,
   ],
-  link_args: ['-Wl,--wrap=ssh_channel_write', '-Wl,--wrap=ssh_set_channel_callbacks'],
+  link_args: ['-Wl,--wrap=ssh_channel_write', '-Wl,--wrap=ssh_channel_open_forward'],
 )
 
 test('ssh-channel-connection-test', ssh_channel_connection_test,
