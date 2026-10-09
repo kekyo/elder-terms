@@ -28,7 +28,7 @@
 #include "../../terminal-text-send-runner.h"
 #include "../../terminal-transfer-runner.h"
 #include "../../terminal-zmodem-auto-start.h"
-#include "../tcp-connector.h"
+#include "../ssh-session/ssh-proxy.h"
 #include "../terminal-view-io.h"
 #include "telnet-protocol.h"
 
@@ -105,6 +105,8 @@ class TerminalTelnetSession final : public TerminalSession {
 private:
   TerminalViewIo terminal_io;
   TelnetConnectionSettings settings;
+  AuthenticatedSshTransportOptions connection_options;
+  std::shared_ptr<SshProxyConnection> route;
   TerminalSessionCallbacks callbacks;
   TelnetProtocol protocol;
   std::optional<cardio::io_uring> io;
@@ -240,14 +242,8 @@ private:
   }
 
   cardio::promise<void> close_current_socket_async() {
-    const int fd = std::exchange(socket_fd, -1);
-    if (fd >= 0 && io.has_value()) {
-      try {
-        co_await cardio::io_urings::close(*io, fd);
-      } catch (...) {
-        (void)::close(fd);
-      }
-    }
+    socket_fd = -1;
+    co_await stop_ssh_proxy_connection_async(std::move(route));
   }
 
   cardio::promise<void> read_loop_async() {
@@ -255,9 +251,12 @@ private:
     try {
       set_current_window_size();
       const auto port = static_cast<std::uint16_t>(settings.port);
-      socket_fd = co_await connect_tcp_socket_async(
-          *io, settings.address, port, stop_source.get_cancellation());
+      auto connecting = connect_ssh_proxy_async(connection_options.proxy,
+          settings.address, port, callbacks, connection_options, stop_source.get_cancellation());
+      route = std::move(co_await connecting);
+      socket_fd = ssh_proxy_connection_fd(route);
       if (stopping) {
+        co_await close_current_socket_async();
         co_return;
       }
       notify_connection_phase(TerminalSessionConnectionPhase::connected);
@@ -724,16 +723,19 @@ private:
 public:
   TerminalTelnetSession(GtkWidget *terminal, TelnetConnectionSettings settings,
                         TerminalTextSettings text_settings,
-                        TerminalSessionCallbacks callbacks)
+                        TerminalSessionCallbacks callbacks,
+                        AuthenticatedSshTransportOptions connection_options)
       : terminal_io(terminal, text_settings, callbacks.output),
         settings(std::move(settings)),
+        connection_options(std::move(connection_options)),
         callbacks(callbacks),
         protocol(this->settings.terminal_type) {
   }
 
   ~TerminalTelnetSession() override {
     stop();
-    close_socket_noexcept(&socket_fd);
+    route.reset();
+    socket_fd = -1;
     close_socket_noexcept(&transfer_input_event_fd);
     close_socket_noexcept(&binary_negotiation_event_fd);
   }
@@ -940,11 +942,13 @@ std::unique_ptr<TerminalSession>
 create_terminal_telnet_session(GtkWidget *terminal,
                                TelnetConnectionSettings settings,
                                TerminalTextSettings text_settings,
-                               TerminalSessionCallbacks callbacks) {
+                               TerminalSessionCallbacks callbacks,
+                               AuthenticatedSshTransportOptions connection_options) {
   return std::make_unique<TerminalTelnetSession>(terminal,
                                                  std::move(settings),
                                                  std::move(text_settings),
-                                                 callbacks);
+                                                 callbacks,
+                                                 std::move(connection_options));
 }
 
 } // namespace elder_terms

@@ -134,6 +134,7 @@ struct TerminalSessionBackendCreator {
   TerminalTextSettings text_settings;
   TerminalSessionCallbacks callbacks;
   TerminalSessionOptions options;
+  SshProxySettings proxy;
 
   std::unique_ptr<TerminalSession>
   operator()(const LocalShellConnectionSettings &settings) const {
@@ -144,7 +145,8 @@ struct TerminalSessionBackendCreator {
   std::unique_ptr<TerminalSession>
   operator()(const TelnetConnectionSettings &settings) const {
     return create_terminal_telnet_session(terminal, settings, text_settings,
-                                          callbacks);
+        callbacks, {.known_hosts_file = options.ssh_known_hosts_file,
+                    .config_file = {}, .proxy = proxy});
   }
 
   std::unique_ptr<TerminalSession>
@@ -161,6 +163,7 @@ struct TerminalSessionBackendCreator {
                                            .known_hosts_file =
                                                options.ssh_known_hosts_file,
                                            .config_file = {},
+                                           .proxy = proxy,
                                        });
   }
 };
@@ -175,6 +178,7 @@ create_backend(GtkWidget *terminal, const TerminalConnectionProfile &profile,
           .text_settings = profile.text_settings,
           .callbacks = callbacks,
           .options = std::move(options),
+          .proxy = profile.ssh_proxy,
       },
       profile.settings);
 }

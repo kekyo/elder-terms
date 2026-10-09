@@ -5,9 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
+import { withSshGateway } from './ssh-proxy-test-helper.mjs';
 
-const run = async (command, args) => {
-  const child = spawn(command, args, { stdio: 'inherit' });
+const run = async (command, args, env = {}) => {
+  const child = spawn(command, args, {
+    stdio: 'inherit',
+    env: { ...process.env, ...env },
+  });
   const [code, signal] = await once(child, 'close');
   if (code !== 0) throw new Error(`${command} failed: ${code ?? signal}`);
 };
@@ -172,7 +176,7 @@ try {
     '-subj',
     '/CN=127.0.0.1',
     '-addext',
-    'subjectAltName=IP:127.0.0.1',
+    'subjectAltName=IP:127.0.0.1,DNS:proxy-test.invalid',
     '-keyout',
     key,
     '-out',
@@ -238,192 +242,269 @@ try {
       }
     );
   };
-  for (const scheme of ['http', 'https']) {
-    for (const authentication of ['none', 'basic', 'digest']) {
-      const ca = scheme === 'https' ? cert : '';
-      await runCase(
-        scheme,
-        authentication,
-        authentication,
-        'secret',
-        ca,
-        'success'
-      );
-      if (authentication !== 'none') {
-        await runCase(scheme, authentication, 'auto', 'secret', ca, 'success');
-        await runCase(
-          scheme,
-          authentication,
-          authentication,
-          'incorrect',
-          ca,
-          'failure'
-        );
-      }
-      if (scheme === 'https')
+  if (!process.argv.includes('--proxy-only')) {
+    for (const scheme of ['http', 'https']) {
+      for (const authentication of ['none', 'basic', 'digest']) {
+        const ca = scheme === 'https' ? cert : '';
         await runCase(
           scheme,
           authentication,
           authentication,
           'secret',
-          '',
-          'failure'
+          ca,
+          'success'
         );
+        if (authentication !== 'none') {
+          await runCase(
+            scheme,
+            authentication,
+            'auto',
+            'secret',
+            ca,
+            'success'
+          );
+          await runCase(
+            scheme,
+            authentication,
+            authentication,
+            'incorrect',
+            ca,
+            'failure'
+          );
+        }
+        if (scheme === 'https')
+          await runCase(
+            scheme,
+            authentication,
+            authentication,
+            'secret',
+            '',
+            'failure'
+          );
+      }
     }
-  }
-  for (const path of [
-    '/redirect',
-    '/denied',
-    '/unsupported-auth',
-    '/not-dav',
-    '/malformed',
-    '/outside',
-    '/cross',
-    '/loop',
-  ])
-    await runCase(
-      'http',
-      'none',
-      'none',
-      '',
-      '',
-      path === '/redirect' ? 'success' : 'failure',
-      path
-    );
-  for (const scheme of ['http', 'https'])
-    await withServer(scheme, 'none', 'reject-paused-upload', async (server) => {
-      await run(process.argv[2], [
-        scheme,
-        String(server.port),
+    for (const path of [
+      '/redirect',
+      '/denied',
+      '/unsupported-auth',
+      '/not-dav',
+      '/malformed',
+      '/outside',
+      '/cross',
+      '/loop',
+    ])
+      await runCase(
+        'http',
+        'none',
         'none',
         '',
-        scheme === 'https' ? cert : '',
-        'success',
-        '/',
-        'reject-paused-upload',
-      ]);
-      const uploads = server.requests.filter(
-        (request) =>
-          request.method === 'PUT' &&
-          request.url === '/dav/reject-paused-upload.bin'
+        '',
+        path === '/redirect' ? 'success' : 'failure',
+        path
       );
-      if (uploads.length !== 1 || uploads[0].receivedBytes !== 0)
-        throw new Error(
-          'An early rejection must not replay or consume the paused upload'
+    for (const scheme of ['http', 'https'])
+      await withServer(
+        scheme,
+        'none',
+        'reject-paused-upload',
+        async (server) => {
+          await run(process.argv[2], [
+            scheme,
+            String(server.port),
+            'none',
+            '',
+            scheme === 'https' ? cert : '',
+            'success',
+            '/',
+            'reject-paused-upload',
+          ]);
+          const uploads = server.requests.filter(
+            (request) =>
+              request.method === 'PUT' &&
+              request.url === '/dav/reject-paused-upload.bin'
+          );
+          if (uploads.length !== 1 || uploads[0].receivedBytes !== 0)
+            throw new Error(
+              'An early rejection must not replay or consume the paused upload'
+            );
+        }
+      );
+    for (const mode of ['bounded-upload', 'abandon-upload'])
+      await withServer('http', 'none', mode, async (server) => {
+        const child = spawn(
+          process.argv[2],
+          ['http', String(server.port), 'none', '', '', 'success', '/', mode],
+          { stdio: ['pipe', 'inherit', 'inherit'] }
         );
-    });
-  for (const mode of ['bounded-upload', 'abandon-upload'])
-    await withServer('http', 'none', mode, async (server) => {
+        const completion = once(child, 'close');
+        try {
+          await Promise.race([
+            server.uploadBodyHeld,
+            (async () => {
+              const [code, signal] = await completion;
+              throw new Error(
+                'Upload exited before its paused request body: ' +
+                  (code ?? signal)
+              );
+            })(),
+          ]);
+          child.stdin.end('c');
+          const [code] = await completion;
+          if (code !== 0)
+            throw new Error(
+              'Bounded upload cancellation and queued session reuse failed'
+            );
+          const uploads = server.requests.filter(
+            (request) =>
+              request.authenticated &&
+              request.method === 'PUT' &&
+              request.url === '/dav/body-held.bin'
+          );
+          if (
+            uploads.length !== 1 ||
+            uploads[0].contentLength !== String(64 * 1024 * 1024)
+          )
+            throw new Error('The held upload must be one known-size request');
+        } finally {
+          if (child.exitCode === null && child.signalCode === null)
+            child.kill();
+          await completion;
+        }
+      });
+    await withServer('http', 'none', 'cancel-upload', async (server) => {
       const child = spawn(
         process.argv[2],
-        ['http', String(server.port), 'none', '', '', 'success', '/', mode],
+        [
+          'http',
+          String(server.port),
+          'none',
+          '',
+          '',
+          'success',
+          '/',
+          'cancel-upload',
+        ],
         { stdio: ['pipe', 'inherit', 'inherit'] }
       );
       const completion = once(child, 'close');
       try {
         await Promise.race([
-          server.uploadBodyHeld,
+          server.uploadHeld,
           (async () => {
             const [code, signal] = await completion;
             throw new Error(
-              'Upload exited before its paused request body: ' +
+              'Upload exited before its held final response: ' +
                 (code ?? signal)
             );
           })(),
         ]);
-        child.stdin.end('c');
+        child.stdin.end('cancel\n');
         const [code] = await completion;
         if (code !== 0)
-          throw new Error(
-            'Bounded upload cancellation and queued session reuse failed'
-          );
-        const uploads = server.requests.filter(
-          (request) =>
-            request.authenticated &&
-            request.method === 'PUT' &&
-            request.url === '/dav/body-held.bin'
-        );
+          throw new Error('Upload final-response cancellation failed');
         if (
-          uploads.length !== 1 ||
-          uploads[0].contentLength !== String(64 * 1024 * 1024)
+          server.requests.some(
+            (request) =>
+              request.method === 'DELETE' &&
+              request.url.includes('cancel-upload.txt.elder-terms-part-')
+          )
         )
-          throw new Error('The held upload must be one known-size request');
+          throw new Error(
+            'Cancellation deleted a temporary file whose ownership was not confirmed'
+          );
       } finally {
         if (child.exitCode === null && child.signalCode === null) child.kill();
         await completion;
       }
     });
-  await withServer('http', 'none', 'cancel-upload', async (server) => {
-    const child = spawn(
-      process.argv[2],
-      [
-        'http',
-        String(server.port),
-        'none',
-        '',
-        '',
-        'success',
-        '/',
-        'cancel-upload',
-      ],
-      { stdio: ['pipe', 'inherit', 'inherit'] }
-    );
-    const completion = once(child, 'close');
-    try {
-      await Promise.race([
-        server.uploadHeld,
-        (async () => {
-          const [code, signal] = await completion;
-          throw new Error(
-            'Upload exited before its held final response: ' + (code ?? signal)
-          );
-        })(),
-      ]);
-      child.stdin.end('cancel\n');
-      const [code] = await completion;
-      if (code !== 0)
-        throw new Error('Upload final-response cancellation failed');
-      if (
-        server.requests.some(
-          (request) =>
-            request.method === 'DELETE' &&
-            request.url.includes('cancel-upload.txt.elder-terms-part-')
-        )
-      )
-        throw new Error(
-          'Cancellation deleted a temporary file whose ownership was not confirmed'
+    await withServer('http', 'none', 'cancel-connection', async (server) => {
+      const child = spawn(
+        process.argv[2],
+        ['http', String(server.port), 'none', '', '', 'success', '/hold'],
+        { stdio: ['pipe', 'inherit', 'inherit'] }
+      );
+      const completion = once(child, 'close');
+      try {
+        await Promise.race([
+          server.held,
+          (async () => {
+            const [code, signal] = await completion;
+            throw new Error(
+              'Connection exited before its held request: ' + (code ?? signal)
+            );
+          })(),
+        ]);
+        child.stdin.end('cancel\n');
+        const [code] = await completion;
+        if (code !== 0)
+          throw new Error('Pending DAV connection did not cancel cleanly');
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) child.kill();
+        await completion;
+      }
+    });
+  }
+  for (const scheme of ['http', 'https']) {
+    await withServer(scheme, 'none', 'ssh-proxy', async (server) => {
+      await withSshGateway(process.argv[3], directory, async (gateway) => {
+        await run(
+          process.argv[2],
+          [scheme, String(server.port), 'none', '', cert, 'success'],
+          {
+            ELDER_TERMS_TEST_PROXY_PORT: String(gateway.port),
+            ELDER_TERMS_TEST_PROXY_KNOWN_HOSTS: gateway.knownHosts,
+            NO_PROXY: '*',
+            no_proxy: '*',
+          }
         );
-    } finally {
-      if (child.exitCode === null && child.signalCode === null) child.kill();
-      await completion;
-    }
-  });
-  await withServer('http', 'none', 'cancel-connection', async (server) => {
-    const child = spawn(
-      process.argv[2],
-      ['http', String(server.port), 'none', '', '', 'success', '/hold'],
-      { stdio: ['pipe', 'inherit', 'inherit'] }
-    );
-    const completion = once(child, 'close');
-    try {
-      await Promise.race([
-        server.held,
-        (async () => {
-          const [code, signal] = await completion;
+        if (
+          gateway.requests.length < 2 ||
+          gateway.requests.some(
+            ({ host, port }) =>
+              host !== 'proxy-test.invalid' || port !== server.port
+          )
+        )
           throw new Error(
-            'Connection exited before its held request: ' + (code ?? signal)
+            'Every WebDAV connection must preserve its destination through SSH'
           );
-        })(),
-      ]);
-      child.stdin.end('cancel\n');
-      const [code] = await completion;
-      if (code !== 0)
-        throw new Error('Pending DAV connection did not cancel cleanly');
-    } finally {
-      if (child.exitCode === null && child.signalCode === null) child.kill();
-      await completion;
+        if (
+          server.requests.some(
+            (request) =>
+              request.host !== `proxy-test.invalid:${server.port}` ||
+              (scheme === 'https' &&
+                request.servername !== 'proxy-test.invalid')
+          )
+        )
+          throw new Error(
+            'SSH forwarding must preserve the HTTP Host and TLS SNI'
+          );
+        assertMutationRequests(server.requests, 'none');
+      });
+    });
+  }
+  await withServer(
+    'https',
+    'none',
+    'ssh-proxy-untrusted-certificate',
+    async (server) => {
+      await withSshGateway(process.argv[3], directory, async (gateway) => {
+        await run(
+          process.argv[2],
+          ['https', String(server.port), 'none', '', '', 'failure'],
+          {
+            ELDER_TERMS_TEST_PROXY_PORT: String(gateway.port),
+            ELDER_TERMS_TEST_PROXY_KNOWN_HOSTS: gateway.knownHosts,
+            NO_PROXY: '*',
+            no_proxy: '*',
+          }
+        );
+        if (server.requests.length)
+          throw new Error(
+            'An untrusted destination certificate must block HTTP requests through SSH'
+          );
+      });
     }
-  });
+  );
   if (failures.length) throw new Error(failures.join('\n'));
 } finally {
   await rm(directory, { recursive: true, force: true });

@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
+import { withSshGateway } from './ssh-proxy-test-helper.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'elder-dav-tls-session-'));
 let server;
@@ -66,7 +67,7 @@ try {
         '-subj',
         '/CN=' + name,
         '-addext',
-        'subjectAltName=IP:127.0.0.1',
+        'subjectAltName=IP:127.0.0.1,DNS:proxy-test.invalid',
       ],
       { stdio: 'ignore' }
     );
@@ -80,55 +81,72 @@ try {
       key: await readFile(key, 'utf8'),
     });
   }
-  server = await createWebdavTestServer('basic', certificates[0]);
-  child = spawn(process.argv[2], [String(server.port)], {
-    stdio: ['pipe', 'pipe', 'inherit'],
-  });
-  completion = once(child, 'close');
-  const lines = createInterface({ input: child.stdout });
-  const iterator = lines[Symbol.asyncIterator]();
-  const waitForMarker = async (marker) => {
+  const check = async (env) => {
+    server = await createWebdavTestServer('basic', certificates[0]);
+    child = spawn(process.argv[2], [String(server.port)], {
+      stdio: ['pipe', 'pipe', 'inherit'],
+      env: { ...process.env, ...env },
+    });
+    completion = once(child, 'close');
+    const lines = createInterface({ input: child.stdout });
+    const iterator = lines[Symbol.asyncIterator]();
+    const waitForMarker = async (marker) => {
+      for (;;) {
+        const next = await iterator.next();
+        assert.equal(next.done, false, 'Client exited before ' + marker);
+        console.log(next.value);
+        if (next.value === marker) return;
+      }
+    };
+    await waitForMarker('READY');
+    assert.ok(
+      server.requests.length > 0,
+      'Initial read must reach the server after approval'
+    );
+    const before = server.requests.length;
+    server.replaceTls(certificates[1]);
+    child.stdin.write('r');
+    await waitForMarker('FAILED_MUTATION');
+    assert.equal(
+      server.requests.length,
+      before,
+      'Certificate approval during MOVE must not send HTTP requests before explicit retry'
+    );
+    child.stdin.end('t');
     for (;;) {
       const next = await iterator.next();
-      assert.equal(next.done, false, 'Client exited before ' + marker);
+      if (next.done) break;
       console.log(next.value);
-      if (next.value === marker) return;
     }
+    const [code, signal] = await completion;
+    assert.equal(code, 0, 'Certificate mutation driver failed: ' + signal);
+    const mutations = server.requests.filter(
+      (request) => request.method === 'MOVE'
+    );
+    assert.equal(
+      mutations.length,
+      1,
+      'Only the distinct explicit retry may perform MOVE'
+    );
+    assert.equal(mutations[0].authenticated, true);
+    assert.equal(mutations[0].url, '/dav/hello.txt');
+    assert.equal(mutations[0].overwrite, 'F');
+    assert.ok(mutations[0].destination.endsWith('/dav/renamed.txt'));
   };
-  await waitForMarker('READY');
-  assert.ok(
-    server.requests.length > 0,
-    'Initial read must reach the server after approval'
-  );
-  const before = server.requests.length;
-  server.replaceTls(certificates[1]);
-  child.stdin.write('r');
-  await waitForMarker('FAILED_MUTATION');
-  assert.equal(
-    server.requests.length,
-    before,
-    'Certificate approval during MOVE must not send HTTP requests before explicit retry'
-  );
-  child.stdin.end('t');
-  for (;;) {
-    const next = await iterator.next();
-    if (next.done) break;
-    console.log(next.value);
-  }
-  const [code, signal] = await completion;
-  assert.equal(code, 0, 'Certificate mutation driver failed: ' + signal);
-  const mutations = server.requests.filter(
-    (request) => request.method === 'MOVE'
-  );
-  assert.equal(
-    mutations.length,
-    1,
-    'Only the distinct explicit retry may perform MOVE'
-  );
-  assert.equal(mutations[0].authenticated, true);
-  assert.equal(mutations[0].url, '/dav/hello.txt');
-  assert.equal(mutations[0].overwrite, 'F');
-  assert.ok(mutations[0].destination.endsWith('/dav/renamed.txt'));
+  if (process.argv[3]) {
+    await withSshGateway(process.argv[3], directory, async (gateway) => {
+      await check({
+        ELDER_TERMS_TEST_PROXY_PORT: String(gateway.port),
+        ELDER_TERMS_TEST_PROXY_KNOWN_HOSTS: gateway.knownHosts,
+        NO_PROXY: '*',
+        no_proxy: '*',
+      });
+      assert.ok(
+        gateway.requests.length >= 3,
+        'Certificate changes must open fresh SSH channels'
+      );
+    });
+  } else await check({});
 } finally {
   if (child && child.exitCode === null && child.signalCode === null)
     child.kill();

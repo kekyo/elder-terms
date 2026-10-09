@@ -15,6 +15,7 @@
 #include <elder-terms/settings/webdav-settings.h>
 #include "../tls/certificate-failure.h"
 #include "../file-transfer/remote-file-client.h"
+#include "../terminal-sessions/ssh-session/ssh-socks-proxy.h"
 
 namespace elder_terms {
 
@@ -76,11 +77,13 @@ RemoteFileError webdav_http_error(const CurlHttpResult &result);
  * @param settings Immutable connection settings.
  * @param password Runtime password, retained only by the session.
  * @param confirm_certificate Optional session-local confirmation; absent means reject.
+ * @param proxy Owned SSH SOCKS route, or null for direct access.
  * @returns Session bound to the caller's dispatcher.
  */
 std::shared_ptr<CurlHttpSession> create_curl_http_session(
     WebdavConnectionSettings settings, std::string password,
-    WebdavCertificateConfirmation confirm_certificate = {});
+    WebdavCertificateConfirmation confirm_certificate = {},
+    std::shared_ptr<SshSocksProxy> proxy = {});
 
 /**
  * Performs one serialized request using socket readiness and timer events.

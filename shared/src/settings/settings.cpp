@@ -704,6 +704,7 @@ SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
   append_definitions(&definitions, local_shell_connection_setting_definitions());
   append_definitions(&definitions, telnet_connection_setting_definitions());
   append_definitions(&definitions, ssh_connection_setting_definitions());
+  append_definitions(&definitions, ssh_proxy_setting_definitions());
   append_definitions(&definitions, sftp_connection_setting_definitions());
   append_definitions(&definitions, ftp_connection_setting_definitions());
   append_definitions(&definitions, webdav_connection_setting_definitions());
@@ -986,6 +987,7 @@ terminal_connection_profile(const SettingsStore &store) {
         .settings = telnet_connection_settings(store),
         .text_settings =
             terminal_text_settings(store, TerminalConnectionKind::telnet),
+        .ssh_proxy = ssh_proxy_connection_settings(store),
     };
   }
 
@@ -1006,6 +1008,7 @@ terminal_connection_profile(const SettingsStore &store) {
         .settings = ssh_connection_settings(store),
         .text_settings =
             terminal_text_settings(store, TerminalConnectionKind::ssh),
+        .ssh_proxy = ssh_proxy_connection_settings(store),
     };
   }
 

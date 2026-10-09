@@ -18,6 +18,7 @@
 #include <elder-terms/settings/settings-store.h>
 #include <elder-terms/settings/sftp-settings.h>
 #include <elder-terms/settings/ssh-settings.h>
+#include <elder-terms/settings/ssh-proxy-settings.h>
 #include <elder-terms/settings/telnet-settings.h>
 #include <elder-terms/settings/terminal-settings.h>
 #include <elder-terms/settings/transfer-settings.h>
@@ -108,6 +109,8 @@ struct TerminalConnectionProfile {
   TerminalConnectionSettings settings = LocalShellConnectionSettings{};
   /** Effective terminal character encoding and special-code settings. */
   TerminalTextSettings text_settings{};
+  /** Gateway route retained for connection, cancellation, and reconnect. */
+  SshProxySettings ssh_proxy{};
 };
 
 /**

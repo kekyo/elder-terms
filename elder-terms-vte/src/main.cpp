@@ -1387,7 +1387,8 @@ static cardio::promise<void> reconnect_shared_sftp_window_async(
                 .reset_host_key = response.alternative};
           }};
       elder_terms::AuthenticatedSshTransportOptions options{
-          .known_hosts_file = state->test_options.ssh_known_hosts_file, .config_file = {}};
+          .known_hosts_file = state->test_options.ssh_known_hosts_file, .config_file = {},
+          .proxy = elder_terms::ssh_proxy_connection_settings(settings)};
       state->sftp_transport = co_await elder_terms::AuthenticatedSshTransport::connect_async(
           elder_terms::ssh_endpoint_settings(settings), callbacks, options, cancellation);
       state->sftp_client = co_await elder_terms::open_sftp_client_async(state->sftp_transport, cancellation);

@@ -29,6 +29,8 @@ struct AuthenticatedSshTransportOptions {
    * libssh defaults.
    */
   std::string config_file;
+  /** Shared connection route; never applied recursively to the gateway. */
+  SshProxySettings proxy{};
 };
 
 /** Result returned by one non-interactive SSH command. */
@@ -53,7 +55,7 @@ private:
   friend cardio::promise<void> await_transport_ok_async(
       const std::shared_ptr<AuthenticatedSshTransport> &transport,
       Operation operation, const std::string &description,
-      bool notify_channel_activity, cardio::cancellation cancellation);
+      cardio::cancellation cancellation);
   friend cardio::promise<void> flush_transport_async(
       const std::shared_ptr<AuthenticatedSshTransport> &transport,
       cardio::cancellation cancellation);

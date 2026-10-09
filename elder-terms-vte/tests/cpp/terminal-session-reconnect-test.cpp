@@ -19,6 +19,7 @@ struct BackendRecord {
   TerminalConnectionSettings settings{};
   TerminalTextSettings text_settings{};
   std::string known_hosts;
+  SshProxySettings proxy{};
   cardio::promise_source<void> finished;
   cardio::promise<void> work = finished.get_promise();
   std::optional<TerminalTransferRequest> transfer;
@@ -103,17 +104,22 @@ std::unique_ptr<TerminalSession> create_terminal_serial_session(
 
 std::unique_ptr<TerminalSession> create_terminal_telnet_session(
     GtkWidget *, TelnetConnectionSettings settings,
-    TerminalTextSettings text_settings, TerminalSessionCallbacks callbacks) {
-  return create_controlled_session(std::move(settings), std::move(text_settings),
-                                   std::move(callbacks), {});
+    TerminalTextSettings text_settings, TerminalSessionCallbacks callbacks,
+    AuthenticatedSshTransportOptions options) {
+  auto result = create_controlled_session(std::move(settings), std::move(text_settings),
+                                   std::move(callbacks), options.known_hosts_file);
+  records.back()->proxy = options.proxy;
+  return result;
 }
 
 std::unique_ptr<TerminalSession> create_terminal_ssh_session(
     GtkWidget *, SshConnectionSettings settings,
     TerminalTextSettings text_settings, TerminalSessionCallbacks callbacks,
     SshChannelConnectionOptions options) {
-  return create_controlled_session(std::move(settings), std::move(text_settings),
+  auto result = create_controlled_session(std::move(settings), std::move(text_settings),
                                    std::move(callbacks), std::move(options.known_hosts_file));
+  records.back()->proxy = options.proxy;
+  return result;
 }
 
 static void expect_true(bool condition, const char *message) {
@@ -164,6 +170,8 @@ static cardio::promise<void> test_reconnection(TerminalConnectionKind kind,
     expect_true(start_terminal_session_transfer(state, std::move(request)),
                 "controlled transfer should start");
     profile.name = "updated";
+    profile.ssh_proxy.enabled = true;
+    profile.ssh_proxy.endpoint.address = "updated.gateway";
     profile.text_settings.encoding = "ISO-8859-1";
     if (kind == TerminalConnectionKind::ssh) {
       std::get<SshConnectionSettings>(profile.settings).endpoint.address = "updated.example";
@@ -208,12 +216,17 @@ static cardio::promise<void> test_reconnection(TerminalConnectionKind kind,
       expect_true(current->zmodem && current->text_settings.encoding == "ISO-8859-1",
                   "replacement must use current runtime settings");
       if (kind == TerminalConnectionKind::ssh) {
+        expect_true(current->proxy.enabled && current->proxy.endpoint.address == "updated.gateway",
+                    "SSH reconnect must use the latest proxy settings");
         expect_true(current->known_hosts == "isolated-known-hosts" &&
                         std::get<SshConnectionSettings>(current->settings).endpoint.address == "updated.example",
                     "SSH must retain overrides and use the latest endpoint");
       } else {
         expect_true(std::get<TelnetConnectionSettings>(current->settings).address == "updated.example",
                     "TELNET must use the latest endpoint");
+        expect_true(current->proxy.enabled && current->proxy.endpoint.address == "updated.gateway" &&
+                        current->known_hosts == "isolated-known-hosts",
+                    "TELNET reconnect must use the latest SSH proxy and host-key overrides");
       }
       old->callbacks.activity(ActivityIndicatorId::rd);
       old->callbacks.connection_phase(TerminalSessionConnectionPhase::disconnected);

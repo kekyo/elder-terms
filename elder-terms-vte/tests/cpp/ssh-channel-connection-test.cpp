@@ -1,4 +1,7 @@
 #include "../../src/terminal-sessions/ssh-session/ssh-channel-connection.h"
+#include "../../src/terminal-sessions/ssh-session/ssh-proxy.h"
+#include "../../src/terminal-sessions/ssh-session/ssh-socks-proxy.h"
+#include "../../src/terminal-sessions/telnet-session/telnet-protocol.h"
 #include "../../src/file-transfer/file-hash.h"
 #include "../../src/sftp/sftp-client.h"
 
@@ -7,6 +10,7 @@
 #include <poll.h>
 #include <signal.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -61,6 +65,13 @@ struct ServerOptions {
   std::filesystem::path sftp_root;
   std::string expected_exec_command;
   bool abrupt_disconnect = false;
+  std::string forward_host{};
+  int forward_port = 23;
+  bool reject_forward = false;
+  int forward_target_port = 0;
+  bool sftp_only = false;
+  int window_gate_fd = -1;
+  bool forward_open_marker = false;
 };
 
 struct ServerState {
@@ -76,10 +87,12 @@ struct ServerState {
   pid_t sftp_server_pid = -1;
   int sftp_server_input_fd = -1;
   int sftp_server_output_fd = -1;
+  int forward_fd = -1;
   bool sftp_requested = false;
   bool sftp_started = false;
   bool exec_requested = false;
   bool exec_response_sent = false;
+  bool forward_requested = false;
   bool none_requested = false;
   bool password_requested = false;
   bool password_accepted = false;
@@ -92,6 +105,7 @@ struct ServerState {
   bool window_changed = false;
   bool payload_echoed = false;
   bool release_requested = false;
+  bool window_marker_pending = false;
   std::string username;
   std::string password;
   std::string keyboard_interactive_answer;
@@ -196,6 +210,51 @@ static bool read_all_fd(int fd, void *data, std::size_t size) {
     return false;
   }
   return true;
+}
+
+// Arrange for a read to consume WINDOW_ADJUST before the blocked write returns
+// to its caller. The pipe orders the peer; no scheduling delay is assumed.
+static int window_gate_fd = -1;
+static bool restored_window_observed = false;
+static bool consume_forward_open_reply = false;
+static bool forward_open_reply_observed = false;
+
+extern "C" int __real_ssh_channel_open_forward(ssh_channel, const char *, int, const char *, int);
+extern "C" int __wrap_ssh_channel_open_forward(ssh_channel channel, const char *host, int port,
+                                               const char *source, int source_port) {
+  const auto result = __real_ssh_channel_open_forward(channel, host, port, source, source_port);
+  if (consume_forward_open_reply && !forward_open_reply_observed && result == SSH_AGAIN) {
+    expect_true(ssh_channel_poll_timeout(channel, 30000, 0) == 1, "receive the channel-open marker");
+    char marker = 0;
+    expect_true(ssh_channel_read_nonblocking(channel, &marker, 1, 0) == 1 && marker == 'o',
+                "consume the marker after channel-open confirmation");
+    expect_true(ssh_channel_poll_timeout(channel, 0, 0) == 0, "drain readiness after the open marker");
+    expect_true(ssh_channel_is_open(channel) != 0, "read must process channel-open confirmation");
+    expect_true((ssh_get_poll_flags(ssh_channel_get_session(channel)) & SSH_WRITE_PENDING) == 0,
+                "channel-open completion must not depend on socket writability");
+    forward_open_reply_observed = true;
+  }
+  return result;
+}
+
+extern "C" int __real_ssh_channel_write(ssh_channel, const void *, std::uint32_t);
+extern "C" int __wrap_ssh_channel_write(ssh_channel channel, const void *data, std::uint32_t size) {
+  const auto result = __real_ssh_channel_write(channel, data, size);
+  if (window_gate_fd >= 0 && !restored_window_observed && result == 0) {
+    expect_true(ssh_channel_window_size(channel) == 0, "write must exhaust the remote window");
+    const char release = 'w';
+    expect_true(write_all_fd(window_gate_fd, &release, 1), "release the peer receive window");
+    expect_true(ssh_channel_poll_timeout(channel, 30000, 1) == 1, "receive the window-update marker");
+    char marker = 0;
+    expect_true(ssh_channel_read_nonblocking(channel, &marker, 1, 1) == 1 && marker == 'w',
+                "consume the marker after WINDOW_ADJUST");
+    expect_true(ssh_channel_window_size(channel) > 0, "read must restore the remote send window");
+    expect_true(ssh_channel_poll_timeout(channel, 0, 1) == 0, "drain readiness after the window marker");
+    expect_true((ssh_get_poll_flags(ssh_channel_get_session(channel)) & SSH_WRITE_PENDING) == 0,
+                "window recovery must not depend on socket writability");
+    restored_window_observed = true;
+  }
+  return result;
 }
 
 static std::filesystem::path
@@ -456,10 +515,18 @@ static int on_channel_data(ssh_session, ssh_channel channel, void *data,
   if (is_stderr != 0 || data == nullptr || size == 0) {
     return static_cast<int>(size);
   }
+  if (state->options.window_gate_fd >= 0) {
+    char release = 0;
+    if (!read_all_fd(state->options.window_gate_fd, &release, 1) || release != 'w') return -1;
+    (void)::close(state->options.window_gate_fd);
+    state->options.window_gate_fd = -1;
+    state->window_marker_pending = true;
+  }
   state->payload.append(static_cast<const char *>(data), size);
   const int written = ssh_channel_write(channel, data, size);
   state->payload_echoed = written == static_cast<int>(size);
-  if (state->payload_echoed && !state->options.abrupt_disconnect) {
+  if (state->payload_echoed && !state->options.abrupt_disconnect &&
+      (state->options.forward_host.empty() || state->payload.size() >= state->options.payload.size())) {
     (void)ssh_channel_send_eof(channel);
   }
   return static_cast<int>(size);
@@ -691,7 +758,7 @@ static ssh_channel on_channel_open(ssh_session session, void *userdata) {
     }
     return channel;
   }
-  if (state->channel != nullptr) {
+  if (state->channel != nullptr || state->options.sftp_only) {
     state->sftp_channel = channel;
     state->sftp_channel_callbacks.userdata = state;
     state->sftp_channel_callbacks.channel_data_function =
@@ -728,6 +795,70 @@ static ssh_channel on_channel_open(ssh_session session, void *userdata) {
   return state->channel;
 }
 
+static int on_forward_peer_data(socket_t fd, int, void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  std::array<unsigned char, 32768> buffer{};
+  const auto count = ::recv(fd, buffer.data(), buffer.size(), MSG_DONTWAIT);
+  if (count > 0) {
+    std::size_t offset = 0;
+    while (offset < static_cast<std::size_t>(count)) {
+      const auto sent = ssh_channel_write(state->channel, buffer.data() + offset, count - offset);
+      if (sent <= 0) return -1;
+      offset += sent;
+    }
+  } else if (!count) {
+    (void)ssh_channel_send_eof(state->channel);
+    ssh_event_remove_fd(state->event, fd);
+  }
+  return 0;
+}
+
+static int on_forward_channel_data(ssh_session, ssh_channel, void *data,
+    std::uint32_t size, int, void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  state->payload.append(static_cast<const char *>(data), size);
+  return write_all_fd(state->forward_fd, data, size) ? static_cast<int>(size) : -1;
+}
+
+static void on_forward_channel_eof(ssh_session, ssh_channel, void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  (void)::shutdown(state->forward_fd, SHUT_WR);
+}
+
+static int on_forward_message(ssh_session session, ssh_message message, void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  if (ssh_message_type(message) != SSH_REQUEST_CHANNEL_OPEN ||
+      ssh_message_subtype(message) != SSH_CHANNEL_DIRECT_TCPIP) return 1;
+  const auto *destination = ssh_message_channel_request_open_destination(message);
+  state->forward_requested = destination && state->options.forward_host == destination &&
+      ssh_message_channel_request_open_destination_port(message) == state->options.forward_port;
+  if (!state->forward_requested || state->options.reject_forward) return 1;
+  state->channel = ssh_message_channel_request_open_reply_accept(message);
+  if (!state->channel) return 1;
+  state->channel_callbacks.userdata = state;
+  state->channel_callbacks.channel_data_function = on_channel_data;
+  if (state->options.forward_target_port) {
+    state->forward_fd = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    address.sin_port = htons(state->options.forward_target_port);
+    if (state->forward_fd < 0 || ::connect(state->forward_fd,
+          reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) return 1;
+    state->channel_callbacks.channel_data_function = on_forward_channel_data;
+    state->channel_callbacks.channel_eof_function = on_forward_channel_eof;
+    if (ssh_event_add_fd(state->event, state->forward_fd, POLLIN, on_forward_peer_data, state) != SSH_OK) return 1;
+  }
+  ssh_callbacks_init(&state->channel_callbacks);
+  (void)session;
+  if (ssh_set_channel_callbacks(state->channel, &state->channel_callbacks) != SSH_OK) return 1;
+  if (state->options.forward_open_marker) {
+    const char marker = 'o';
+    if (ssh_channel_write(state->channel, &marker, 1) != 1) return 1;
+  }
+  return 0;
+}
+
 static std::optional<int> bound_port(ssh_bind bind) {
   const socket_t fd = ssh_bind_get_fd(bind);
   if (fd < 0) {
@@ -743,6 +874,16 @@ static std::optional<int> bound_port(ssh_bind bind) {
 }
 
 static int validate_server_state(const ServerState &state) {
+  if (state.options.sftp_only)
+    return state.sftp_started && state.sftp_requested && !state.shell_requested &&
+        state.username == state.options.username ? 0 : 39;
+  if (state.options.forward_target_port)
+    return state.forward_requested && !state.payload.empty() &&
+        (state.options.auth_mode != ServerAuthMode::public_key || state.public_key_accepted) ? 0 : 38;
+  if (state.options.reject_forward)
+    return state.forward_requested && state.payload.empty() ? 0 : 37;
+  if (!state.options.forward_host.empty())
+    return state.forward_requested && state.payload == state.options.payload && state.payload_echoed ? 0 : 36;
   if (state.options.auth_mode ==
       ServerAuthMode::keyboard_interactive) {
     if (!state.keyboard_interactive_requested) {
@@ -877,6 +1018,7 @@ static int run_server_process(const ServerOptions &options, int port_fd,
     break;
   }
   ssh_set_auth_methods(session, auth_methods);
+  if (!options.forward_host.empty()) ssh_set_message_callback(session, on_forward_message, &state);
   if (ssh_handle_key_exchange(session) != SSH_OK) {
     ssh_disconnect(session);
     ssh_free(session);
@@ -912,14 +1054,25 @@ static int run_server_process(const ServerOptions &options, int port_fd,
     if (ssh_event_dopoll(event, -1) == SSH_ERROR) {
       break;
     }
+    if (state.window_marker_pending) {
+      // libssh grows the receive window after the data callback returns.
+      // Send a marker after that packet so the client can observe its receipt.
+      state.window_marker_pending = false;
+      const char marker = 'w';
+      if (ssh_channel_write_stderr(state.channel, &marker, 1) != 1) break;
+    }
   }
 
   const int validation_result =
-      state.release_requested ? validate_server_state(state) : 24;
+      (state.release_requested || !options.forward_host.empty()) ? validate_server_state(state) : 24;
   if (options.abrupt_disconnect) {
     (void)::shutdown(ssh_get_fd(session), SHUT_RDWR);
   }
   stop_sftp_server(&state);
+  if (state.forward_fd >= 0) {
+    ssh_event_remove_fd(event, state.forward_fd);
+    close_server_fd(&state.forward_fd);
+  }
   state.event = nullptr;
   ssh_event_remove_fd(event, release_fd);
   ssh_event_remove_session(event, session);
@@ -1038,12 +1191,8 @@ static std::span<const std::byte> byte_span(const std::string &value) {
 
 static cardio::promise<void>
 exercise_sftp_client_async(
-    const std::shared_ptr<elder_terms::AuthenticatedSshTransport>
-        &transport,
+    std::shared_ptr<elder_terms::RemoteFileClient> client,
     cardio::cancellation cancellation) {
-  std::shared_ptr<elder_terms::RemoteFileClient> client =
-      co_await elder_terms::open_sftp_client_async(transport,
-                                                   cancellation);
   expect_true(client != nullptr, "SFTP client was not created");
   const elder_terms::RemoteDirectorySnapshot snapshot =
       co_await client->load_directory_async(".", cancellation);
@@ -1325,7 +1474,8 @@ static int run_client_case(const ServerOptions &server_options,
                 std::to_string(transport.use_count()));
         if (!server_options.sftp_root.empty()) {
           co_await exercise_sftp_client_async(
-              transport, cancellation_source.get_cancellation());
+              co_await elder_terms::open_sftp_client_async(transport, cancellation_source.get_cancellation()),
+              cancellation_source.get_cancellation());
           expect_true(
               transport.use_count() == 1,
               "SFTP client retained the authenticated transport after close");
@@ -1430,6 +1580,341 @@ static std::size_t line_count(const std::filesystem::path &path) {
   return count;
 }
 
+static std::size_t open_socket_count() {
+  std::size_t count = 0;
+  for (const auto &entry : std::filesystem::directory_iterator("/proc/self/fd")) {
+    std::error_code error;
+    const auto target = std::filesystem::read_symlink(entry.path(), error).string();
+    if (!error && target.starts_with("socket:")) ++count;
+  }
+  return count;
+}
+
+static void test_forward_readiness(const ServerOptions &options, const std::filesystem::path &known_hosts,
+                                    bool test_open_reply) {
+  int gate[2] = {-1, -1};
+  if (!test_open_reply) expect_true(::pipe(gate) == 0, "create the receive-window gate");
+  auto server_options = options;
+  server_options.forward_host = "window.proxy-test.invalid";
+  server_options.window_gate_fd = gate[0];
+  server_options.forward_open_marker = test_open_reply;
+  server_options.payload.resize(65537);
+  for (std::size_t index = 0; index < server_options.payload.size(); ++index)
+    server_options.payload[index] = static_cast<char>(index % 256);
+  auto server = start_server(server_options);
+  if (gate[0] >= 0) ::close(gate[0]);
+  window_gate_fd = gate[1];
+  restored_window_observed = false;
+  consume_forward_open_reply = test_open_reply;
+  forward_open_reply_observed = false;
+  cardio::dispatcher_group_glib group;
+  cardio::dispatcher_host_glib dispatcher(group);
+  std::exception_ptr failure;
+  auto body = [&]() -> cardio::promise<void> {
+    try {
+      elder_terms::TerminalSessionCallbacks callbacks{};
+      callbacks.ssh_prompt = [](const auto &prompt, cardio::cancellation) -> cardio::promise<elder_terms::SshUserPromptResponse> {
+        co_return elder_terms::SshUserPromptResponse{.accepted = true, .text = prompt.initial_text, .reset_host_key = false};
+      };
+      const elder_terms::SshEndpointSettings endpoint{
+          .address = "127.0.0.1", .port = server.port,
+          .username = options.username, .identity_file = {}};
+      auto connecting = elder_terms::AuthenticatedSshTransport::connect_async(endpoint, callbacks,
+          {.known_hosts_file = known_hosts.string(), .config_file = {}}, {});
+      auto transport = co_await connecting;
+      auto opening = elder_terms::SshChannelConnection::open_forward_async(
+          transport, server_options.forward_host, server_options.forward_port, {});
+      auto channel = std::move(co_await opening);
+      co_await channel->write_all_async(bytes(server_options.payload), {});
+      expect_true(test_open_reply ? forward_open_reply_observed : restored_window_observed,
+                  "exercise readiness consumed by a read before the caller waits");
+      std::string received;
+      std::array<unsigned char, 16384> buffer{};
+      for (;;) {
+        const auto count = co_await channel->read_async(buffer, {});
+        if (!count) break;
+        received.append(reinterpret_cast<const char *>(buffer.data()), count);
+      }
+      expect_true(received == server_options.payload, "forwarding must resume without losing bytes after buffered SSH replies");
+    } catch (...) { failure = std::current_exception(); }
+    group.shutdown();
+  };
+  auto task = body();
+  dispatcher.park();
+  task.unsafe_result();
+  window_gate_fd = -1;
+  consume_forward_open_reply = false;
+  if (gate[1] >= 0) ::close(gate[1]);
+  const auto result = wait_for_server(&server);
+  if (failure) std::rethrow_exception(failure);
+  expect_true(result == 0, "server must receive the complete payload after readiness recovery");
+}
+
+static void test_proxy_forwarding(const ServerOptions &options, const std::filesystem::path &known_hosts, bool socks) {
+  auto gateway_options = options;
+  gateway_options.forward_host = "internal.proxy-test.invalid";
+  elder_terms::TelnetProtocol protocol("xterm");
+  gateway_options.payload.clear();
+  for (const auto &request : protocol.encode_enable_binary())
+    gateway_options.payload.append(reinterpret_cast<const char *>(request.data()), request.size());
+  gateway_options.payload += options.payload;
+  auto server = start_server(gateway_options);
+  cardio::dispatcher_group_glib group;
+  cardio::dispatcher_host_glib dispatcher(group);
+  std::exception_ptr failure;
+  auto body = [&]() -> cardio::promise<void> {
+    try {
+      const auto initial_sockets = open_socket_count();
+      elder_terms::SshProxySettings proxy;
+      proxy.enabled = true;
+      proxy.endpoint = {.address = "127.0.0.1", .port = server.port,
+                        .username = options.username, .identity_file = {}};
+      elder_terms::TerminalSessionCallbacks callbacks{};
+      callbacks.ssh_prompt = [](const auto &prompt, cardio::cancellation) -> cardio::promise<elder_terms::SshUserPromptResponse> {
+        expect_true(prompt.title.find("SSH proxy") != std::string::npos, "gateway prompts must identify SSH proxy");
+        co_return elder_terms::SshUserPromptResponse{.accepted = true, .text = prompt.initial_text, .reset_host_key = false};
+      };
+      std::shared_ptr<elder_terms::SshProxyConnection> connection;
+      std::shared_ptr<elder_terms::SshSocksProxy> adapter;
+      cardio::io_uring io(64);
+      int fd = -1;
+      std::string socket_path;
+      if (socks) {
+        auto opening = elder_terms::open_ssh_socks_proxy_async(proxy, gateway_options.forward_host,
+            callbacks, {.known_hosts_file = known_hosts.string(), .config_file = {}}, {});
+        adapter = std::move(co_await opening);
+        const auto url = elder_terms::ssh_socks_proxy_url(adapter);
+        expect_true(url.starts_with("socks5h://localhost/"), "SOCKS endpoint must use a private Unix socket");
+        socket_path = url.substr(std::string("socks5h://localhost").size());
+        struct stat info{};
+        expect_true(::stat(std::filesystem::path(socket_path).parent_path().c_str(), &info) == 0 &&
+            (info.st_mode & 0777) == 0700, "SOCKS directory must be private to this user");
+        fd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+        sockaddr_un address{};
+        address.sun_family = AF_UNIX;
+        std::copy(socket_path.begin(), socket_path.end(), address.sun_path);
+        expect_true(::connect(fd, reinterpret_cast<sockaddr *>(&address), sizeof(address)) == 0, "connect private SOCKS endpoint");
+        std::string greeting("\x05\x01\x00", 3);
+        co_await cardio::io_urings::write(io, fd, byte_span(greeting));
+        std::array<std::byte, 2> method{};
+        expect_true(co_await cardio::io_urings::read(io, fd, std::span(method)) == 2 && method[1] == std::byte{0}, "SOCKS method negotiation");
+        std::string request("\x05\x01\x00\x03", 4);
+        request.push_back(static_cast<char>(gateway_options.forward_host.size()));
+        request += gateway_options.forward_host;
+        request.append("\x00\x17", 2);
+        // Send individual bytes to exercise fragmented SOCKS negotiation.
+        for (const auto &byte : request) {
+          const auto one = std::span<const std::byte>(reinterpret_cast<const std::byte *>(&byte), 1);
+          co_await cardio::io_urings::write(io, fd, one);
+        }
+        std::array<std::byte, 10> response{};
+        std::size_t received = 0;
+        while (received < response.size()) received += co_await cardio::io_urings::read(io, fd, std::span(response).subspan(received));
+        expect_true(response[1] == std::byte{0}, "SOCKS CONNECT must reach the gateway");
+      } else {
+        auto connecting = elder_terms::connect_ssh_proxy_async(proxy, gateway_options.forward_host, 23,
+            callbacks, {.known_hosts_file = known_hosts.string(), .config_file = {}}, {});
+        connection = std::move(co_await connecting);
+        fd = elder_terms::ssh_proxy_connection_fd(connection);
+      }
+      const auto data = byte_span(gateway_options.payload);
+      std::size_t sent = 0;
+      while (sent < data.size()) sent += co_await cardio::io_urings::write(io, fd, data.subspan(sent));
+      std::string echoed;
+      std::array<std::byte, 128> buffer{};
+      for (;;) {
+        const auto count = co_await cardio::io_urings::read(io, fd, std::span<std::byte>(buffer));
+        if (!count) break;
+        echoed.append(reinterpret_cast<const char *>(buffer.data()), count);
+      }
+      expect_true(echoed == gateway_options.payload, "gateway must transport payload and remote EOF");
+      const auto parsed = protocol.receive(std::span<const unsigned char>(
+          reinterpret_cast<const unsigned char *>(echoed.data()), echoed.size()));
+      expect_true(protocol.is_binary_enabled() && std::string(parsed.terminal_data.begin(), parsed.terminal_data.end()) == options.payload,
+                  "TELNET negotiation and terminal data must survive forwarding");
+      co_await elder_terms::stop_ssh_proxy_connection_async(connection);
+      connection.reset();
+      if (adapter) {
+        ::close(fd);
+        co_await elder_terms::stop_ssh_socks_proxy_async(adapter);
+        adapter.reset();
+        expect_true(!std::filesystem::exists(socket_path), "stopping SOCKS must remove the private endpoint");
+      }
+      expect_true(open_socket_count() == initial_sockets, "stopping proxy must release gateway and bridge sockets");
+    } catch (...) { failure = std::current_exception(); }
+    group.shutdown();
+  };
+  auto task = body();
+  dispatcher.park();
+  expect_true(task.is_ready(), "proxy task must complete");
+  const auto result = wait_for_server(&server);
+  if (failure) std::rethrow_exception(failure);
+  expect_true(result == 0, "gateway must receive the original host and port");
+}
+
+static void test_proxy_rejections(const ServerOptions &options, const std::filesystem::path &known_hosts) {
+  auto gateway_options = options;
+  gateway_options.forward_host = "127.0.0.1";
+  gateway_options.reject_forward = true;
+  auto server = start_server(gateway_options);
+  cardio::dispatcher_group_glib group;
+  cardio::dispatcher_host_glib dispatcher(group);
+  std::exception_ptr failure;
+  auto body = [&]() -> cardio::promise<void> {
+    try {
+      elder_terms::SshProxySettings proxy;
+      proxy.enabled = true;
+      proxy.endpoint = {.address = "127.0.0.1", .port = server.port,
+                        .username = options.username, .identity_file = {}};
+      elder_terms::TerminalSessionCallbacks callbacks{};
+      bool prompted = false;
+      bool accept = false;
+      callbacks.ssh_prompt = [&](const auto &prompt, cardio::cancellation) -> cardio::promise<elder_terms::SshUserPromptResponse> {
+        prompted = true;
+        co_return elder_terms::SshUserPromptResponse{.accepted = accept, .text = prompt.initial_text};
+      };
+      elder_terms::AuthenticatedSshTransportOptions overrides{.known_hosts_file = known_hosts.string(), .config_file = {}};
+      proxy.validation_errors = {"invalid proxy setting"};
+      bool rejected = false;
+      try { (void)co_await elder_terms::connect_ssh_proxy_async(proxy, "127.0.0.1", 23, callbacks, overrides, {}); }
+      catch (const std::invalid_argument &) { rejected = true; }
+      expect_true(rejected && !prompted, "invalid proxy must fail before authentication or connecting");
+      proxy.validation_errors.clear();
+      cardio::cancellation_source canceled;
+      canceled.cancel();
+      rejected = false;
+      try { (void)co_await elder_terms::connect_ssh_proxy_async(proxy, "127.0.0.1", 23, callbacks, overrides, canceled.get_cancellation()); }
+      catch (const cardio::canceled_exception &) { rejected = true; }
+      expect_true(rejected && !prompted, "canceled connection must not fall back to direct TCP");
+      rejected = false;
+      try { (void)co_await elder_terms::connect_ssh_proxy_async(proxy, "127.0.0.1", 23, callbacks, overrides, {}); }
+      catch (const std::exception &) { rejected = true; }
+      expect_true(rejected && prompted, "declined authentication must reject the connection");
+      accept = true;
+      rejected = false;
+      std::string rejection;
+      try { (void)co_await elder_terms::connect_ssh_proxy_async(proxy, "127.0.0.1", 23, callbacks, overrides, {}); }
+      catch (const std::exception &error) { rejection = error.what(); rejected = rejection.find("SSH proxy forwarding failed") != std::string::npos; }
+      expect_true(rejected, "forwarding refusal must remain a proxy failure: " + rejection);
+    } catch (...) { failure = std::current_exception(); }
+    group.shutdown();
+  };
+  auto task = body();
+  dispatcher.park();
+  expect_true(task.is_ready(), "proxy rejection task completed");
+  const auto result = wait_for_server(&server);
+  if (failure) std::rethrow_exception(failure);
+  expect_true(result == 0, "gateway must observe the rejected forwarding request");
+}
+
+enum class ProxySftpMode { none, standalone, shell_first, sftp_first };
+
+static void test_proxy_ssh(ServerOptions target_options, ServerOptions gateway_options,
+    const std::filesystem::path &target_identity, const std::filesystem::path &gateway_identity,
+    const std::filesystem::path &known_hosts, bool changed_keys, ProxySftpMode sftp_mode) {
+  const auto initial_sockets = open_socket_count();
+  target_options.sftp_only = sftp_mode == ProxySftpMode::standalone;
+  auto target = start_server(target_options);
+  gateway_options.forward_host = "target.proxy-test.invalid";
+  gateway_options.forward_port = target.port;
+  gateway_options.forward_target_port = target.port;
+  gateway_options.username = "gateway-user";
+  auto gateway = start_server(gateway_options);
+  if (changed_keys) {
+    install_conflicting_host_key(known_hosts, target_options.host_public_key_path, "127.0.0.1", gateway.port);
+    install_conflicting_host_key(known_hosts, gateway_options.host_public_key_path, gateway_options.forward_host, target.port);
+  }
+  cardio::dispatcher_group_glib group;
+  cardio::dispatcher_host_glib dispatcher(group);
+  std::exception_ptr failure;
+  unsigned int gateway_keys = 0;
+  unsigned int target_keys = 0;
+  auto body = [&]() -> cardio::promise<void> {
+    try {
+      elder_terms::TerminalSessionCallbacks callbacks{};
+      callbacks.ssh_prompt = [&](const auto &prompt, cardio::cancellation) -> cardio::promise<elder_terms::SshUserPromptResponse> {
+        const bool gateway_prompt = prompt.title.find("SSH proxy") != std::string::npos;
+        std::string text;
+        if (prompt.kind == elder_terms::SshUserPromptKind::username) {
+          text = gateway_prompt ? gateway_options.username : target_options.username;
+          expect_true(prompt.initial_text == text, "gateway and destination users must remain distinct");
+        } else if (prompt.kind == elder_terms::SshUserPromptKind::host_key) {
+          if (gateway_prompt) ++gateway_keys; else ++target_keys;
+          expect_true(prompt.message.find(gateway_prompt ? "127.0.0.1" : gateway_options.forward_host) != std::string::npos,
+                      "host-key prompts must identify the original endpoint");
+          expect_true(prompt.host_key_reset_available == changed_keys,
+                      "changed gateway and target host keys must be checked independently");
+        } else text = gateway_prompt ? "key-passphrase" : target_options.password;
+        const bool reset_key = changed_keys && prompt.kind == elder_terms::SshUserPromptKind::host_key;
+        co_return elder_terms::SshUserPromptResponse{.accepted = !reset_key, .text = text, .reset_host_key = reset_key};
+      };
+      elder_terms::SshConnectionSettings settings{
+          .endpoint = {.address = gateway_options.forward_host, .port = target.port,
+              .username = target_options.username, .identity_file = target_identity.string()},
+          .terminal_type = target_options.terminal_type};
+      elder_terms::SshChannelConnectionOptions overrides{
+          .known_hosts_file = known_hosts.string(), .config_file = {},
+          .proxy = {.enabled = true, .endpoint = {.address = "127.0.0.1", .port = gateway.port,
+              .username = gateway_options.username, .identity_file = gateway_identity.string()}}};
+      std::unique_ptr<elder_terms::SshChannelConnection> connection;
+      std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport;
+      if (sftp_mode == ProxySftpMode::standalone) {
+        auto opening = elder_terms::AuthenticatedSshTransport::connect_async(settings.endpoint, callbacks, overrides, {});
+        transport = std::move(co_await opening);
+      } else {
+        auto opening = elder_terms::SshChannelConnection::connect_async(settings,
+            target_options.columns, target_options.rows, callbacks, overrides, {});
+        connection = std::move(co_await opening);
+        transport = connection->authenticated_transport();
+      }
+      if (sftp_mode == ProxySftpMode::sftp_first) {
+        auto client = co_await elder_terms::open_sftp_client_async(transport, {});
+        co_await exercise_sftp_client_async(std::move(client), {});
+      }
+      if (connection) {
+        co_await connection->resize_async(target_options.resized_columns, target_options.resized_rows, {});
+        co_await connection->send_break_async(500, {});
+        co_await connection->write_all_async(bytes(target_options.payload), {});
+        std::string echoed;
+        std::array<unsigned char, 128> buffer{};
+        while (echoed.size() < target_options.payload.size()) {
+          const auto count = co_await connection->read_async(buffer, {});
+          if (!count) break;
+          echoed.append(reinterpret_cast<const char *>(buffer.data()), count);
+        }
+        expect_true(echoed == target_options.payload, "SSH shell must operate on the final endpoint");
+      }
+      std::shared_ptr<elder_terms::RemoteFileClient> sftp_client;
+      if (sftp_mode == ProxySftpMode::standalone || sftp_mode == ProxySftpMode::shell_first) {
+        sftp_client = co_await elder_terms::open_sftp_client_async(transport, {});
+        if (connection) connection->close();
+        connection.reset();
+        transport.reset();
+        // The SFTP client now owns the final transport and the whole route.
+        co_await exercise_sftp_client_async(sftp_client, {});
+      }
+      const unsigned char release = 1;
+      expect_true(write_all_fd(target.release_fd, &release, 1), "release final server");
+      if (connection) connection->close();
+      connection.reset();
+      transport.reset();
+      sftp_client.reset();
+    } catch (...) { failure = std::current_exception(); }
+    group.shutdown();
+  };
+  auto task = body();
+  dispatcher.park();
+  expect_true(task.is_ready(), "nested SSH task completed");
+  const auto target_result = wait_for_server(&target);
+  const auto gateway_result = wait_for_server(&gateway);
+  if (failure) std::rethrow_exception(failure);
+  expect_true(target_result == 0 && gateway_result == 0, "both SSH servers must validate their distinct sessions");
+  expect_true(open_socket_count() == initial_sockets, "final SSH/SFTP owner must release every routed socket");
+  expect_true(gateway_keys == 1 && target_keys == 1, "both SSH host keys must be verified");
+  expect_true(!known_hosts_entries(known_hosts, known_hosts_target(gateway_options.forward_host, target.port)).empty(),
+              "destination host key must be stored under its original name and port");
+}
+
 static void test_supported_authentication_and_shell_channel() {
   const std::filesystem::path root = test_root_directory("authentication");
   std::filesystem::remove_all(root);
@@ -1490,6 +1975,11 @@ AAAEA8cCQePgwL2LLorJKJb/mbOaBviLYfCkaS2lc+lgrnvZglDbkkh3abjMMTzSsZS5/X
   options.auth_mode = ServerAuthMode::none;
   options.host_key_path = host_private_key;
   options.host_public_key_path = host_public_key;
+  test_forward_readiness(options, root / ".ssh" / "proxy_known_hosts", true);
+  test_forward_readiness(options, root / ".ssh" / "proxy_known_hosts", false);
+  test_proxy_forwarding(options, root / ".ssh" / "proxy_known_hosts", false);
+  test_proxy_forwarding(options, root / ".ssh" / "proxy_known_hosts", true);
+  test_proxy_rejections(options, root / ".ssh" / "proxy_known_hosts");
   run_client_case(
       options,
       ClientCase{
@@ -1551,6 +2041,21 @@ AAAEA8cCQePgwL2LLorJKJb/mbOaBviLYfCkaS2lc+lgrnvZglDbkkh3abjMMTzSsZS5/X
               elder_terms::SshUserPromptKind::host_key,
           },
       });
+
+  auto gateway_options = options;
+  gateway_options.host_key_path = changed_host_private_key;
+  gateway_options.host_public_key_path = changed_host_public_key;
+  gateway_options.authorized_key_path = encrypted_public_key;
+  test_proxy_ssh(options, gateway_options, plain_private_key, encrypted_private_key,
+                 root / ".ssh" / "nested_known_hosts", false, ProxySftpMode::none);
+  test_proxy_ssh(options, gateway_options, plain_private_key, encrypted_private_key,
+                 root / ".ssh" / "nested_known_hosts", true, ProxySftpMode::none);
+
+  auto sftp_options = options;
+  sftp_options.sftp_root = root / "sftp-root";
+  for (const auto mode : {ProxySftpMode::standalone, ProxySftpMode::shell_first, ProxySftpMode::sftp_first})
+    test_proxy_ssh(sftp_options, gateway_options, plain_private_key, encrypted_private_key,
+                   root / ".ssh" / "sftp_proxy_known_hosts", false, mode);
 
   options.authorized_key_path = encrypted_public_key;
   run_client_case(

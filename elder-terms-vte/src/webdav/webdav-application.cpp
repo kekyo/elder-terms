@@ -13,6 +13,8 @@ namespace elder_terms {
 struct WebdavApplication {
   cardio::dispatcher_group_glib *dispatcher_group;
   WebdavConnectionSettings connection;
+  SshProxySettings proxy;
+  std::shared_ptr<SshSocksProxy> route;
   std::shared_ptr<RemoteFileClient> client;
   std::shared_ptr<FileTransferWindow> window;
   cardio::cancellation_source stopping;
@@ -29,6 +31,7 @@ static cardio::promise<void> finish_application_async(WebdavApplication *state) 
   auto closing = close_file_transfer_window_async(state->window);
   try {
     if (state->client) co_await stop_webdav_client_async(state->client);
+    co_await stop_ssh_socks_proxy_async(state->route);
     co_await closing;
   } catch (const std::exception &error) { std::cerr << error.what() << '\n'; }
   state->dispatcher_group->shutdown();
@@ -60,11 +63,20 @@ static cardio::promise<void> start_application_async(WebdavApplication *state) {
   std::string failure;
   const auto cancellation = state->stopping.get_cancellation();
   try {
+    if (!state->proxy.validation_errors.empty()) throw std::invalid_argument(state->proxy.validation_errors.front());
     WebdavClientOpenOptions options{
         .connection = state->connection, .password = {},
         .confirm_certificate = [state](const TlsCertificateFailure &failure, cardio::cancellation cancellation) {
           return confirm_webdav_certificate_async(state, failure, cancellation);
         }};
+    TerminalSessionCallbacks gateway_callbacks{};
+    gateway_callbacks.ssh_prompt = [state](const SshUserPrompt &prompt, cardio::cancellation signal) {
+      return prompt_file_transfer_ssh_async(state->window, prompt, signal);
+    };
+    auto opening_proxy = open_ssh_socks_proxy_async(state->proxy, options.connection.address,
+        std::move(gateway_callbacks), {.known_hosts_file = {}, .config_file = {}}, cancellation);
+    state->route = std::move(co_await opening_proxy);
+    options.proxy = state->route;
     if (options.connection.authentication != WebdavAuthentication::none) {
       std::string username = options.connection.username;
       if (username.empty() && g_get_user_name()) username = g_get_user_name();
@@ -104,6 +116,7 @@ static cardio::promise<void> start_application_async(WebdavApplication *state) {
     stop_application(state);
     co_return;
   } catch (const std::exception &error) { failure = error.what(); }
+  co_await stop_ssh_socks_proxy_async(state->route);
   if (!state->shutting_down) {
     std::cerr << failure << '\n';
     co_await show_file_transfer_window_connection_error_async(
@@ -115,9 +128,12 @@ static cardio::promise<void> reconnect_application_async(
     WebdavApplication *state, SettingsStore settings) {
   if (state->startup) co_await *state->startup;
   if (state->client) co_await stop_webdav_client_async(state->client);
+  co_await stop_ssh_socks_proxy_async(state->route);
+  state->route.reset();
   state->client.reset();
   if (state->shutting_down) co_return;
   state->connection = webdav_connection_settings(settings);
+  state->proxy = ssh_proxy_connection_settings(settings);
   co_await start_application_async(state);
 }
 
@@ -128,6 +144,7 @@ int run_webdav_application(const SettingsLoadResult &settings,
   WebdavApplication state;
   state.dispatcher_group = &group;
   state.connection = webdav_connection_settings(settings.store);
+  state.proxy = ssh_proxy_connection_settings(settings.store);
   state.window = create_file_transfer_window({
       .connection_name = general_connection_name(settings.store),
       .protocol_name = "WebDAV",

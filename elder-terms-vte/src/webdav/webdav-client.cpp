@@ -246,7 +246,7 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_webdav_client_async(
   client->connection->endpoint = webdav_endpoint(options.connection);
   const auto directory = options.connection.remote_directory;
   client->connection->session = create_curl_http_session(std::move(options.connection), std::move(options.password),
-      std::move(options.confirm_certificate));
+      std::move(options.confirm_certificate), std::move(options.proxy));
   co_await client->load_directory_async(directory, cancellation);
   co_return client;
 }

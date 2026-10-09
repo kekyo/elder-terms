@@ -815,6 +815,7 @@ describe.concurrent('shared settings widget', () => {
         expected: [
           'General',
           'TELNET',
+          'SSH proxy',
           'Terminal',
           'Transfer',
           'Logging',
@@ -839,6 +840,7 @@ describe.concurrent('shared settings widget', () => {
         expected: [
           'General',
           'SSH',
+          'SSH proxy',
           'Terminal',
           'Transfer',
           'Logging',
@@ -848,15 +850,15 @@ describe.concurrent('shared settings widget', () => {
       },
       {
         args: ['--type=sftp'] as const,
-        expected: ['General', 'SSH', 'SFTP'],
+        expected: ['General', 'SSH', 'SFTP', 'SSH proxy'],
       },
       {
         args: ['--type=ftp'] as const,
-        expected: ['General', 'FTP'],
+        expected: ['General', 'FTP', 'SSH proxy'],
       },
       {
         args: ['--type=webdav'] as const,
-        expected: ['General', 'WebDAV'],
+        expected: ['General', 'WebDAV', 'SSH proxy'],
       },
     ] as const;
 
@@ -985,6 +987,16 @@ describe.concurrent('shared settings widget', () => {
             ],
           },
           {
+            id: 'global_settings_ssh_proxy_page',
+            labels: [
+              'Use SSH proxy',
+              'Address',
+              'Port',
+              'User name',
+              'Identity file',
+            ],
+          },
+          {
             id: 'global_settings_serial_page',
             labels: [
               'Device identification',
@@ -1070,6 +1082,7 @@ describe.concurrent('shared settings widget', () => {
           'SFTP',
           'FTP',
           'WebDAV',
+          'SSH proxy',
           '端末',
           '転送',
           'ログ',
@@ -1133,6 +1146,16 @@ describe.concurrent('shared settings widget', () => {
               '証明書検証の失敗時',
               '接続タイムアウト（秒）',
               '無通信タイムアウト（秒）',
+            ],
+          },
+          {
+            id: 'global_settings_ssh_proxy_page',
+            labels: [
+              'SSH proxyを使用',
+              'アドレス',
+              'ポート',
+              'ユーザー名',
+              '秘密鍵ファイル',
             ],
           },
           {
@@ -6377,6 +6400,7 @@ describe.concurrent('shared settings widget', () => {
           'SFTP',
           'FTP',
           'WebDAV',
+          'SSH proxy',
           'Terminal',
           'Transfer',
           'Logging',

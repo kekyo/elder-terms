@@ -18,7 +18,10 @@ elder-terms-vte/src/terminal-transfer-runner.cpp
 elder-terms-vte/src/terminal-sessions/local-session/local-session.cpp
 elder-terms-vte/src/terminal-sessions/serial-session/serial-session.cpp
 elder-terms-vte/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp
+elder-terms-vte/src/terminal-sessions/ssh-session/ssh-proxy.cpp
 elder-terms-vte/src/terminal-sessions/ssh-session/ssh-session.cpp
 elder-terms-vte/src/terminal-sessions/telnet-session/telnet-session.cpp
 shared/src/settings-widget/webdav-settings-editor.cpp
+shared/src/settings-widget/ssh-proxy-settings-editor.cpp
+shared/src/settings/ssh-proxy-settings.cpp
 elder-terms-vte/src/webdav/webdav-application.cpp

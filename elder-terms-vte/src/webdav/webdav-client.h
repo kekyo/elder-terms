@@ -14,6 +14,8 @@ struct WebdavClientOpenOptions {
   std::string password;
   /** Optional asynchronous decision for this connection only. */
   WebdavCertificateConfirmation confirm_certificate;
+  /** Owned SSH route, or null for direct HTTP connections. */
+  std::shared_ptr<SshSocksProxy> proxy{};
 };
 
 /**

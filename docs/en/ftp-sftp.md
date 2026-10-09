@@ -134,8 +134,15 @@ setting chooses which side initiates that data connection:
 [RFC 2428](https://www.rfc-editor.org/rfc/rfc2428). `PASV` and `PORT` are the
 traditional IPv4 fallbacks. These are command variants within passive and
 active operation, not additional data connection modes. The IP family is
-selected when the server address is resolved. Proxy traversal and configurable
-data-port ranges are not separate options in elder-terms.
+selected when the server address is resolved for a direct connection. Configurable
+data-port ranges are not a separate option in elder-terms.
+
+Use the separate [SSH proxy tab](ssh-proxy.md) to route both control and data
+connections for passive FTP/FTPS through a gateway. The gateway resolves the
+destination name; FTPS still verifies certificates against that name.
+Active mode with SSH proxy is rejected in settings and at connection time;
+select Passive or disable SSH proxy. The gateway must permit forwarding to
+both the server's control port and its passive data ports.
 
 ## FTP Operation Ordering and Compatibility
 

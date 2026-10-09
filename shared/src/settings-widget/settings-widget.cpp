@@ -28,6 +28,7 @@
 
 #include "hyperlink-settings-editor.h"
 #include "webdav-settings-editor.h"
+#include "ssh-proxy-settings-editor.h"
 #include "settings-presentation.h"
 
 #define GETTEXT_PACKAGE "elder-terms"
@@ -182,6 +183,7 @@ struct SettingsWidgetState {
   GtkWidget *macro_move_down_button = nullptr;
   HyperlinkSettingsEditorState *hyperlink_editor = nullptr;
   WebdavSettingsEditor *webdav_editor = nullptr;
+  SshProxySettingsEditor *ssh_proxy_editor = nullptr;
   int selected_macro = -1;
   unsigned int next_macro_number = 1;
   GtkWidget *telnet_address_entry = nullptr;
@@ -1470,7 +1472,8 @@ static bool macro_rules_are_valid(const SettingsWidgetState *state) {
 }
 
 static bool settings_inputs_valid(const SettingsWidgetState *state) {
-  return state->local_command_line_valid && state->terminal_width_valid &&
+  return ssh_proxy_settings_editor_is_valid(state->ssh_proxy_editor) &&
+         state->local_command_line_valid && state->terminal_width_valid &&
          state->terminal_height_valid &&
          state->terminal_scrollback_lines_valid &&
          state->terminal_border_width_valid && state->terminal_zoom_valid &&
@@ -3226,6 +3229,7 @@ static void create_ftp_tls_controls(SettingsWidgetState *state, GtkWidget *page)
 static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_webdav_draft) {
   sync_ftp_tls_controls(state);
   sync_webdav_settings_editor(state->webdav_editor, preserve_webdav_draft);
+  sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, preserve_webdav_draft);
   const TerminalDisplaySettings display =
       terminal_display_settings(state->draft_store);
   const GeneralColorSettings colors =
@@ -4574,6 +4578,8 @@ static void on_ftp_data_connection_mode_changed(GtkComboBox *,
     return;
   }
   update_ftp_data_connection_mode_from_widget(state);
+  sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, true);
+  update_action_sensitivity(state);
   notify_changed(state);
 }
 
@@ -6217,6 +6223,22 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   state->connection_pages.push_back({
       .connection_types = {webdav_connection_type}, .page = webdav_page, .tab_label = webdav_tab});
 
+  state->ssh_proxy_editor = create_ssh_proxy_settings_editor(
+      &state->draft_store, state->id_prefix, state->is_runtime,
+      state->mode == SettingsWidgetMode::global_defaults, [state] {
+        update_action_sensitivity(state);
+        notify_changed(state);
+      });
+  auto *proxy_page = ssh_proxy_settings_editor_root(state->ssh_proxy_editor);
+  auto *proxy_tab = create_tab_label(_("SSH proxy"), widget_id(state, "ssh_proxy_tab").c_str());
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), proxy_page, proxy_tab);
+  gtk_widget_show_all(proxy_page);
+  gtk_widget_show_all(proxy_tab);
+  gtk_widget_set_no_show_all(proxy_page, TRUE);
+  gtk_widget_set_no_show_all(proxy_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type, webdav_connection_type, ftp_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
+
   GtkWidget *terminal_page = create_terminal_page(state);
   const std::string terminal_tab_id = widget_id(state, "terminal_tab");
   GtkWidget *terminal_tab = create_tab_label(
@@ -6586,6 +6608,7 @@ void destroy_settings_widget(SettingsWidgetState *state) {
       state->general_open_connection_input);
   destroy_hyperlink_settings_editor(state->hyperlink_editor);
   destroy_webdav_settings_editor(state->webdav_editor);
+  destroy_ssh_proxy_settings_editor(state->ssh_proxy_editor);
   if (state->root != nullptr && gtk_widget_get_parent(state->root) == nullptr) {
     gtk_widget_destroy(state->root);
   }

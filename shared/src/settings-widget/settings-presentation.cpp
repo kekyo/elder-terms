@@ -22,6 +22,10 @@ struct SettingChoiceEntry {
 };
 
 static constexpr std::array setting_labels{
+    SettingLabelEntry{"ssh_proxy", "address", N_("Address")},
+    SettingLabelEntry{"ssh_proxy", "port", N_("Port")},
+    SettingLabelEntry{"ssh_proxy", "username", N_("User name")},
+    SettingLabelEntry{"ssh_proxy", "identity_file", N_("Identity file")},
     SettingLabelEntry{"ftp", "tls_mode", N_("Encryption")},
     SettingLabelEntry{"webdav", "scheme", N_("Connection security")},
     SettingLabelEntry{"webdav", "address", N_("Address")},
