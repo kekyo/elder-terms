@@ -116,8 +116,10 @@ std::unique_ptr<TerminalSession> create_terminal_ssh_session(
     GtkWidget *, SshConnectionSettings settings,
     TerminalTextSettings text_settings, TerminalSessionCallbacks callbacks,
     SshChannelConnectionOptions options) {
-  return create_controlled_session(std::move(settings), std::move(text_settings),
+  auto result = create_controlled_session(std::move(settings), std::move(text_settings),
                                    std::move(callbacks), std::move(options.known_hosts_file));
+  records.back()->proxy = options.proxy;
+  return result;
 }
 
 static void expect_true(bool condition, const char *message) {
@@ -214,6 +216,8 @@ static cardio::promise<void> test_reconnection(TerminalConnectionKind kind,
       expect_true(current->zmodem && current->text_settings.encoding == "ISO-8859-1",
                   "replacement must use current runtime settings");
       if (kind == TerminalConnectionKind::ssh) {
+        expect_true(current->proxy.enabled && current->proxy.endpoint.address == "updated.gateway",
+                    "SSH reconnect must use the latest proxy settings");
         expect_true(current->known_hosts == "isolated-known-hosts" &&
                         std::get<SshConnectionSettings>(current->settings).endpoint.address == "updated.example",
                     "SSH must retain overrides and use the latest endpoint");

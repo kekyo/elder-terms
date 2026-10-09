@@ -1,7 +1,9 @@
 #include "ssh-channel-connection.h"
+#include "ssh-proxy.h"
 
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -1149,6 +1151,7 @@ static bool ssh_worker_result_is_again(const SshWorkerResult &result) {
 
 struct AuthenticatedSshTransport::Impl {
   SshEndpointSettings endpoint;
+  std::shared_ptr<SshProxyConnection> route;
   ssh_session session = nullptr;
   ssh_callbacks_struct session_callbacks = {};
   int socket_fd = -1;
@@ -1494,7 +1497,6 @@ AuthenticatedSshTransport::connect_async(
     AuthenticatedSshTransportOptions options,
     cardio::cancellation cancellation) {
   if (!options.proxy.validation_errors.empty()) throw std::invalid_argument(options.proxy.validation_errors.front());
-  if (options.proxy.enabled) throw std::invalid_argument("SSH proxy is not yet supported for this connection type");
   cardio::io_uring io(64);
   int socket_fd = -1;
   auto transport_impl = std::make_unique<Impl>();
@@ -1535,9 +1537,18 @@ AuthenticatedSshTransport::connect_async(
                         options.known_hosts_file.c_str()) != SSH_OK) {
       throw ssh_failure(session, _("Failed to configure SSH known_hosts"));
     }
-    socket_fd = co_await connect_tcp_socket_async(
-        io, settings.address, static_cast<std::uint16_t>(settings.port),
-        cancellation);
+    if (options.proxy.enabled) {
+      auto connecting = connect_ssh_proxy_async(options.proxy, settings.address,
+          static_cast<std::uint16_t>(settings.port), callbacks, options, cancellation);
+      transport_impl->route = std::move(co_await connecting);
+      // Keep the route's socket independently owned: libssh may close its own
+      // descriptor on a fatal transport error before the route is retired.
+      socket_fd = ::fcntl(ssh_proxy_connection_fd(transport_impl->route), F_DUPFD_CLOEXEC, 0);
+      if (socket_fd < 0) throw std::system_error(errno, std::generic_category(), "SSH proxy socket duplicate");
+    } else {
+      socket_fd = co_await connect_tcp_socket_async(
+          io, settings.address, static_cast<std::uint16_t>(settings.port), cancellation);
+    }
     if (ssh_options_set(session, SSH_OPTIONS_FD, &socket_fd) != SSH_OK) {
       throw ssh_failure(session, _("Failed to attach SSH socket"));
     }

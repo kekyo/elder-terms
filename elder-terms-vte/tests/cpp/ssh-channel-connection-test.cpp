@@ -66,6 +66,7 @@ struct ServerOptions {
   std::string forward_host{};
   int forward_port = 23;
   bool reject_forward = false;
+  int forward_target_port = 0;
 };
 
 struct ServerState {
@@ -81,6 +82,7 @@ struct ServerState {
   pid_t sftp_server_pid = -1;
   int sftp_server_input_fd = -1;
   int sftp_server_output_fd = -1;
+  int forward_fd = -1;
   bool sftp_requested = false;
   bool sftp_started = false;
   bool exec_requested = false;
@@ -735,6 +737,36 @@ static ssh_channel on_channel_open(ssh_session session, void *userdata) {
   return state->channel;
 }
 
+static int on_forward_peer_data(socket_t fd, int, void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  std::array<unsigned char, 32768> buffer{};
+  const auto count = ::recv(fd, buffer.data(), buffer.size(), MSG_DONTWAIT);
+  if (count > 0) {
+    std::size_t offset = 0;
+    while (offset < static_cast<std::size_t>(count)) {
+      const auto sent = ssh_channel_write(state->channel, buffer.data() + offset, count - offset);
+      if (sent <= 0) return -1;
+      offset += sent;
+    }
+  } else if (!count) {
+    (void)ssh_channel_send_eof(state->channel);
+    ssh_event_remove_fd(state->event, fd);
+  }
+  return 0;
+}
+
+static int on_forward_channel_data(ssh_session, ssh_channel, void *data,
+    std::uint32_t size, int, void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  state->payload.append(static_cast<const char *>(data), size);
+  return write_all_fd(state->forward_fd, data, size) ? static_cast<int>(size) : -1;
+}
+
+static void on_forward_channel_eof(ssh_session, ssh_channel, void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  (void)::shutdown(state->forward_fd, SHUT_WR);
+}
+
 static int on_forward_message(ssh_session session, ssh_message message, void *userdata) {
   auto *state = static_cast<ServerState *>(userdata);
   if (ssh_message_type(message) != SSH_REQUEST_CHANNEL_OPEN ||
@@ -747,6 +779,18 @@ static int on_forward_message(ssh_session session, ssh_message message, void *us
   if (!state->channel) return 1;
   state->channel_callbacks.userdata = state;
   state->channel_callbacks.channel_data_function = on_channel_data;
+  if (state->options.forward_target_port) {
+    state->forward_fd = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    address.sin_port = htons(state->options.forward_target_port);
+    if (state->forward_fd < 0 || ::connect(state->forward_fd,
+          reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) return 1;
+    state->channel_callbacks.channel_data_function = on_forward_channel_data;
+    state->channel_callbacks.channel_eof_function = on_forward_channel_eof;
+    if (ssh_event_add_fd(state->event, state->forward_fd, POLLIN, on_forward_peer_data, state) != SSH_OK) return 1;
+  }
   ssh_callbacks_init(&state->channel_callbacks);
   (void)session;
   return ssh_set_channel_callbacks(state->channel, &state->channel_callbacks) == SSH_OK ? 0 : 1;
@@ -767,6 +811,9 @@ static std::optional<int> bound_port(ssh_bind bind) {
 }
 
 static int validate_server_state(const ServerState &state) {
+  if (state.options.forward_target_port)
+    return state.forward_requested && !state.payload.empty() &&
+        (state.options.auth_mode != ServerAuthMode::public_key || state.public_key_accepted) ? 0 : 38;
   if (state.options.reject_forward)
     return state.forward_requested && state.payload.empty() ? 0 : 37;
   if (!state.options.forward_host.empty())
@@ -949,6 +996,10 @@ static int run_server_process(const ServerOptions &options, int port_fd,
     (void)::shutdown(ssh_get_fd(session), SHUT_RDWR);
   }
   stop_sftp_server(&state);
+  if (state.forward_fd >= 0) {
+    ssh_event_remove_fd(event, state.forward_fd);
+    close_server_fd(&state.forward_fd);
+  }
   state.event = nullptr;
   ssh_event_remove_fd(event, release_fd);
   ssh_event_remove_session(event, session);
@@ -1581,6 +1632,84 @@ static void test_proxy_rejections(const ServerOptions &options, const std::files
   expect_true(result == 0, "gateway must observe the rejected forwarding request");
 }
 
+static void test_proxy_ssh(ServerOptions target_options, ServerOptions gateway_options,
+    const std::filesystem::path &target_identity, const std::filesystem::path &gateway_identity,
+    const std::filesystem::path &known_hosts, bool changed_keys) {
+  auto target = start_server(target_options);
+  gateway_options.forward_host = "target.proxy-test.invalid";
+  gateway_options.forward_port = target.port;
+  gateway_options.forward_target_port = target.port;
+  gateway_options.username = "gateway-user";
+  auto gateway = start_server(gateway_options);
+  if (changed_keys) {
+    install_conflicting_host_key(known_hosts, target_options.host_public_key_path, "127.0.0.1", gateway.port);
+    install_conflicting_host_key(known_hosts, gateway_options.host_public_key_path, gateway_options.forward_host, target.port);
+  }
+  cardio::dispatcher_group_glib group;
+  cardio::dispatcher_host_glib dispatcher(group);
+  std::exception_ptr failure;
+  unsigned int gateway_keys = 0;
+  unsigned int target_keys = 0;
+  auto body = [&]() -> cardio::promise<void> {
+    try {
+      elder_terms::TerminalSessionCallbacks callbacks{};
+      callbacks.ssh_prompt = [&](const auto &prompt, cardio::cancellation) -> cardio::promise<elder_terms::SshUserPromptResponse> {
+        const bool gateway_prompt = prompt.title.find("SSH proxy") != std::string::npos;
+        std::string text;
+        if (prompt.kind == elder_terms::SshUserPromptKind::username) {
+          text = gateway_prompt ? gateway_options.username : target_options.username;
+          expect_true(prompt.initial_text == text, "gateway and destination users must remain distinct");
+        } else if (prompt.kind == elder_terms::SshUserPromptKind::host_key) {
+          if (gateway_prompt) ++gateway_keys; else ++target_keys;
+          expect_true(prompt.message.find(gateway_prompt ? "127.0.0.1" : gateway_options.forward_host) != std::string::npos,
+                      "host-key prompts must identify the original endpoint");
+          expect_true(prompt.host_key_reset_available == changed_keys,
+                      "changed gateway and target host keys must be checked independently");
+        } else text = gateway_prompt ? "key-passphrase" : target_options.password;
+        const bool reset_key = changed_keys && prompt.kind == elder_terms::SshUserPromptKind::host_key;
+        co_return elder_terms::SshUserPromptResponse{.accepted = !reset_key, .text = text, .reset_host_key = reset_key};
+      };
+      elder_terms::SshConnectionSettings settings{
+          .endpoint = {.address = gateway_options.forward_host, .port = target.port,
+              .username = target_options.username, .identity_file = target_identity.string()},
+          .terminal_type = target_options.terminal_type};
+      elder_terms::SshChannelConnectionOptions overrides{
+          .known_hosts_file = known_hosts.string(), .config_file = {},
+          .proxy = {.enabled = true, .endpoint = {.address = "127.0.0.1", .port = gateway.port,
+              .username = gateway_options.username, .identity_file = gateway_identity.string()}}};
+      auto opening = elder_terms::SshChannelConnection::connect_async(settings,
+          target_options.columns, target_options.rows, callbacks, overrides, {});
+      auto connection = std::move(co_await opening);
+      co_await connection->resize_async(target_options.resized_columns, target_options.resized_rows, {});
+      co_await connection->send_break_async(500, {});
+      co_await connection->write_all_async(bytes(target_options.payload), {});
+      std::string echoed;
+      std::array<unsigned char, 128> buffer{};
+      while (echoed.size() < target_options.payload.size()) {
+        const auto count = co_await connection->read_async(buffer, {});
+        if (!count) break;
+        echoed.append(reinterpret_cast<const char *>(buffer.data()), count);
+      }
+      expect_true(echoed == target_options.payload, "SSH shell must operate on the final endpoint");
+      const unsigned char release = 1;
+      expect_true(write_all_fd(target.release_fd, &release, 1), "release final server");
+      connection->close();
+      connection.reset();
+    } catch (...) { failure = std::current_exception(); }
+    group.shutdown();
+  };
+  auto task = body();
+  dispatcher.park();
+  expect_true(task.is_ready(), "nested SSH task completed");
+  const auto target_result = wait_for_server(&target);
+  const auto gateway_result = wait_for_server(&gateway);
+  if (failure) std::rethrow_exception(failure);
+  expect_true(target_result == 0 && gateway_result == 0, "both SSH servers must validate their distinct sessions");
+  expect_true(gateway_keys == 1 && target_keys == 1, "both SSH host keys must be verified");
+  expect_true(!known_hosts_entries(known_hosts, known_hosts_target(gateway_options.forward_host, target.port)).empty(),
+              "destination host key must be stored under its original name and port");
+}
+
 static void test_supported_authentication_and_shell_channel() {
   const std::filesystem::path root = test_root_directory("authentication");
   std::filesystem::remove_all(root);
@@ -1704,6 +1833,15 @@ AAAEA8cCQePgwL2LLorJKJb/mbOaBviLYfCkaS2lc+lgrnvZglDbkkh3abjMMTzSsZS5/X
               elder_terms::SshUserPromptKind::host_key,
           },
       });
+
+  auto gateway_options = options;
+  gateway_options.host_key_path = changed_host_private_key;
+  gateway_options.host_public_key_path = changed_host_public_key;
+  gateway_options.authorized_key_path = encrypted_public_key;
+  test_proxy_ssh(options, gateway_options, plain_private_key, encrypted_private_key,
+                 root / ".ssh" / "nested_known_hosts", false);
+  test_proxy_ssh(options, gateway_options, plain_private_key, encrypted_private_key,
+                 root / ".ssh" / "nested_known_hosts", true);
 
   options.authorized_key_path = encrypted_public_key;
   run_client_case(

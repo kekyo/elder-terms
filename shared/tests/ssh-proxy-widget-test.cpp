@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
   gtk_init(&argc, &argv);
   try {
     using namespace elder_terms;
-    for (const auto *type : {"telnet", "local", "serial"}) {
+    for (const auto *type : {"telnet", "ssh", "local", "serial"}) {
       auto store = create_default_settings({}, "proxy test");
       set_explicit_setting_value(&store, general_type_setting_key(), std::string(type));
       SettingsWidgetOptions options;
@@ -37,7 +37,7 @@ int main(int argc, char **argv) {
       }), state);
       auto *page = find_widget(root, "settings_ssh_proxy_page");
       require(page != nullptr, "SSH proxy must have an independent settings page");
-      const bool network = std::string_view(type) == "telnet";
+      const bool network = std::string_view(type) == "telnet" || std::string_view(type) == "ssh";
       require(static_cast<bool>(gtk_widget_get_visible(page)) == network, "proxy page visibility must follow connection type");
       if (network) {
         auto *enabled = find_widget(root, "settings_ssh_proxy_enabled_combo");
