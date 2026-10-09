@@ -989,11 +989,11 @@ describe.concurrent('shared settings widget', () => {
           {
             id: 'global_settings_ssh_proxy_page',
             labels: [
-              'SSH proxyを使用',
-              'アドレス',
-              'ポート',
-              'ユーザー名',
-              '秘密鍵ファイル',
+              'Use SSH proxy',
+              'Address',
+              'Port',
+              'User name',
+              'Identity file',
             ],
           },
           {
@@ -1146,6 +1146,16 @@ describe.concurrent('shared settings widget', () => {
               '証明書検証の失敗時',
               '接続タイムアウト（秒）',
               '無通信タイムアウト（秒）',
+            ],
+          },
+          {
+            id: 'global_settings_ssh_proxy_page',
+            labels: [
+              'SSH proxyを使用',
+              'アドレス',
+              'ポート',
+              'ユーザー名',
+              '秘密鍵ファイル',
             ],
           },
           {
