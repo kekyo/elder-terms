@@ -192,6 +192,8 @@ static cardio::promise<void>
 start_sftp_application_async(SftpApplicationState *state) {
   std::string failure;
   try {
+    const auto proxy = elder_terms::ssh_proxy_connection_settings(state->settings);
+    if (!proxy.validation_errors.empty()) throw std::invalid_argument(proxy.validation_errors.front());
     const cardio::cancellation cancellation =
         state->stop_source.get_cancellation();
     elder_terms::TerminalSessionCallbacks callbacks{
@@ -548,6 +550,8 @@ static cardio::promise<void>
 start_ftp_application_async(FtpApplicationState *state) {
   std::string failure;
   try {
+    const auto proxy = elder_terms::ssh_proxy_connection_settings(state->settings);
+    if (!proxy.validation_errors.empty()) throw std::invalid_argument(proxy.validation_errors.front());
     const cardio::cancellation cancellation =
         state->stop_source.get_cancellation();
     std::optional<FtpRuntimeCredentials> credentials =

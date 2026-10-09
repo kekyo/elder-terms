@@ -82,6 +82,7 @@ elder_terms_sources = [
   'src/terminal-sessions/serial-session/serial-session.cpp',
   'src/terminal-sessions/serial-session/serial-termios.cpp',
   'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
+    'src/terminal-sessions/ssh-session/ssh-proxy.cpp',
   'src/terminal-sessions/ssh-session/ssh-session.cpp',
   'src/terminal-sessions/tcp-connector.cpp',
   telnet_protocol_source,
@@ -146,6 +147,7 @@ executable(
     'src/activity-indicator.cpp',
     'src/file-transfer/local-file-reveal.cpp',
     'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
+    'src/terminal-sessions/ssh-session/ssh-proxy.cpp',
     'src/terminal-sessions/tcp-connector.cpp',
     'src/widget-background.cpp',
   ],
@@ -561,10 +563,12 @@ ssh_channel_connection_test = executable(
   'ssh-channel-connection-test',
   [
     'tests/cpp/ssh-channel-connection-test.cpp',
+    telnet_protocol_source,
     'src/file-transfer/file-hash.cpp',
     'src/file-transfer/ssh-file-hash.cpp',
     'src/sftp/sftp-client.cpp',
     'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
+    'src/terminal-sessions/ssh-session/ssh-proxy.cpp',
     'src/terminal-sessions/tcp-connector.cpp',
   ],
   dependencies: [

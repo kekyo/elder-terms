@@ -1,4 +1,6 @@
 #include "../../src/terminal-sessions/ssh-session/ssh-channel-connection.h"
+#include "../../src/terminal-sessions/ssh-session/ssh-proxy.h"
+#include "../../src/terminal-sessions/telnet-session/telnet-protocol.h"
 #include "../../src/file-transfer/file-hash.h"
 #include "../../src/sftp/sftp-client.h"
 
@@ -61,6 +63,9 @@ struct ServerOptions {
   std::filesystem::path sftp_root;
   std::string expected_exec_command;
   bool abrupt_disconnect = false;
+  std::string forward_host{};
+  int forward_port = 23;
+  bool reject_forward = false;
 };
 
 struct ServerState {
@@ -80,6 +85,7 @@ struct ServerState {
   bool sftp_started = false;
   bool exec_requested = false;
   bool exec_response_sent = false;
+  bool forward_requested = false;
   bool none_requested = false;
   bool password_requested = false;
   bool password_accepted = false;
@@ -459,7 +465,8 @@ static int on_channel_data(ssh_session, ssh_channel channel, void *data,
   state->payload.append(static_cast<const char *>(data), size);
   const int written = ssh_channel_write(channel, data, size);
   state->payload_echoed = written == static_cast<int>(size);
-  if (state->payload_echoed && !state->options.abrupt_disconnect) {
+  if (state->payload_echoed && !state->options.abrupt_disconnect &&
+      (state->options.forward_host.empty() || state->payload.size() >= state->options.payload.size())) {
     (void)ssh_channel_send_eof(channel);
   }
   return static_cast<int>(size);
@@ -728,6 +735,23 @@ static ssh_channel on_channel_open(ssh_session session, void *userdata) {
   return state->channel;
 }
 
+static int on_forward_message(ssh_session session, ssh_message message, void *userdata) {
+  auto *state = static_cast<ServerState *>(userdata);
+  if (ssh_message_type(message) != SSH_REQUEST_CHANNEL_OPEN ||
+      ssh_message_subtype(message) != SSH_CHANNEL_DIRECT_TCPIP) return 1;
+  const auto *destination = ssh_message_channel_request_open_destination(message);
+  state->forward_requested = destination && state->options.forward_host == destination &&
+      ssh_message_channel_request_open_destination_port(message) == state->options.forward_port;
+  if (!state->forward_requested || state->options.reject_forward) return 1;
+  state->channel = ssh_message_channel_request_open_reply_accept(message);
+  if (!state->channel) return 1;
+  state->channel_callbacks.userdata = state;
+  state->channel_callbacks.channel_data_function = on_channel_data;
+  ssh_callbacks_init(&state->channel_callbacks);
+  (void)session;
+  return ssh_set_channel_callbacks(state->channel, &state->channel_callbacks) == SSH_OK ? 0 : 1;
+}
+
 static std::optional<int> bound_port(ssh_bind bind) {
   const socket_t fd = ssh_bind_get_fd(bind);
   if (fd < 0) {
@@ -743,6 +767,10 @@ static std::optional<int> bound_port(ssh_bind bind) {
 }
 
 static int validate_server_state(const ServerState &state) {
+  if (state.options.reject_forward)
+    return state.forward_requested && state.payload.empty() ? 0 : 37;
+  if (!state.options.forward_host.empty())
+    return state.forward_requested && state.payload == state.options.payload && state.payload_echoed ? 0 : 36;
   if (state.options.auth_mode ==
       ServerAuthMode::keyboard_interactive) {
     if (!state.keyboard_interactive_requested) {
@@ -877,6 +905,7 @@ static int run_server_process(const ServerOptions &options, int port_fd,
     break;
   }
   ssh_set_auth_methods(session, auth_methods);
+  if (!options.forward_host.empty()) ssh_set_message_callback(session, on_forward_message, &state);
   if (ssh_handle_key_exchange(session) != SSH_OK) {
     ssh_disconnect(session);
     ssh_free(session);
@@ -915,7 +944,7 @@ static int run_server_process(const ServerOptions &options, int port_fd,
   }
 
   const int validation_result =
-      state.release_requested ? validate_server_state(state) : 24;
+      (state.release_requested || !options.forward_host.empty()) ? validate_server_state(state) : 24;
   if (options.abrupt_disconnect) {
     (void)::shutdown(ssh_get_fd(session), SHUT_RDWR);
   }
@@ -1430,6 +1459,128 @@ static std::size_t line_count(const std::filesystem::path &path) {
   return count;
 }
 
+static void test_proxy_forwarding(const ServerOptions &options, const std::filesystem::path &known_hosts) {
+  auto gateway_options = options;
+  gateway_options.forward_host = "internal.proxy-test.invalid";
+  elder_terms::TelnetProtocol protocol("xterm");
+  gateway_options.payload.clear();
+  for (const auto &request : protocol.encode_enable_binary())
+    gateway_options.payload.append(reinterpret_cast<const char *>(request.data()), request.size());
+  gateway_options.payload += options.payload;
+  auto server = start_server(gateway_options);
+  cardio::dispatcher_group_glib group;
+  cardio::dispatcher_host_glib dispatcher(group);
+  std::exception_ptr failure;
+  auto body = [&]() -> cardio::promise<void> {
+    try {
+      const auto socket_count = []() {
+        std::size_t count = 0;
+        for (const auto &entry : std::filesystem::directory_iterator("/proc/self/fd")) {
+          std::error_code error;
+          const auto target = std::filesystem::read_symlink(entry.path(), error).string();
+          if (!error && target.starts_with("socket:")) ++count;
+        }
+        return count;
+      };
+      const auto initial_sockets = socket_count();
+      elder_terms::SshProxySettings proxy;
+      proxy.enabled = true;
+      proxy.endpoint = {.address = "127.0.0.1", .port = server.port,
+                        .username = options.username, .identity_file = {}};
+      elder_terms::TerminalSessionCallbacks callbacks{};
+      callbacks.ssh_prompt = [](const auto &prompt, cardio::cancellation) -> cardio::promise<elder_terms::SshUserPromptResponse> {
+        expect_true(prompt.title.find("SSH proxy") != std::string::npos, "gateway prompts must identify SSH proxy");
+        co_return elder_terms::SshUserPromptResponse{.accepted = true, .text = prompt.initial_text, .reset_host_key = false};
+      };
+      auto connecting = elder_terms::connect_ssh_proxy_async(proxy, gateway_options.forward_host, 23,
+          callbacks, {.known_hosts_file = known_hosts.string(), .config_file = {}}, {});
+      auto connection = std::move(co_await connecting);
+      cardio::io_uring io(64);
+      const int fd = elder_terms::ssh_proxy_connection_fd(connection);
+      const auto data = byte_span(gateway_options.payload);
+      std::size_t sent = 0;
+      while (sent < data.size()) sent += co_await cardio::io_urings::write(io, fd, data.subspan(sent));
+      std::string echoed;
+      std::array<std::byte, 128> buffer{};
+      for (;;) {
+        const auto count = co_await cardio::io_urings::read(io, fd, std::span<std::byte>(buffer));
+        if (!count) break;
+        echoed.append(reinterpret_cast<const char *>(buffer.data()), count);
+      }
+      expect_true(echoed == gateway_options.payload, "gateway must transport payload and remote EOF");
+      const auto parsed = protocol.receive(std::span<const unsigned char>(
+          reinterpret_cast<const unsigned char *>(echoed.data()), echoed.size()));
+      expect_true(protocol.is_binary_enabled() && std::string(parsed.terminal_data.begin(), parsed.terminal_data.end()) == options.payload,
+                  "TELNET negotiation and terminal data must survive forwarding");
+      co_await elder_terms::stop_ssh_proxy_connection_async(connection);
+      connection.reset();
+      expect_true(socket_count() == initial_sockets, "stopping proxy must release gateway and bridge sockets");
+    } catch (...) { failure = std::current_exception(); }
+    group.shutdown();
+  };
+  auto task = body();
+  dispatcher.park();
+  expect_true(task.is_ready(), "proxy task must complete");
+  const auto result = wait_for_server(&server);
+  if (failure) std::rethrow_exception(failure);
+  expect_true(result == 0, "gateway must receive the original host and port");
+}
+
+static void test_proxy_rejections(const ServerOptions &options, const std::filesystem::path &known_hosts) {
+  auto gateway_options = options;
+  gateway_options.forward_host = "127.0.0.1";
+  gateway_options.reject_forward = true;
+  auto server = start_server(gateway_options);
+  cardio::dispatcher_group_glib group;
+  cardio::dispatcher_host_glib dispatcher(group);
+  std::exception_ptr failure;
+  auto body = [&]() -> cardio::promise<void> {
+    try {
+      elder_terms::SshProxySettings proxy;
+      proxy.enabled = true;
+      proxy.endpoint = {.address = "127.0.0.1", .port = server.port,
+                        .username = options.username, .identity_file = {}};
+      elder_terms::TerminalSessionCallbacks callbacks{};
+      bool prompted = false;
+      bool accept = false;
+      callbacks.ssh_prompt = [&](const auto &prompt, cardio::cancellation) -> cardio::promise<elder_terms::SshUserPromptResponse> {
+        prompted = true;
+        co_return elder_terms::SshUserPromptResponse{.accepted = accept, .text = prompt.initial_text};
+      };
+      elder_terms::AuthenticatedSshTransportOptions overrides{.known_hosts_file = known_hosts.string(), .config_file = {}};
+      proxy.validation_errors = {"invalid proxy setting"};
+      bool rejected = false;
+      try { (void)co_await elder_terms::connect_ssh_proxy_async(proxy, "127.0.0.1", 23, callbacks, overrides, {}); }
+      catch (const std::invalid_argument &) { rejected = true; }
+      expect_true(rejected && !prompted, "invalid proxy must fail before authentication or connecting");
+      proxy.validation_errors.clear();
+      cardio::cancellation_source canceled;
+      canceled.cancel();
+      rejected = false;
+      try { (void)co_await elder_terms::connect_ssh_proxy_async(proxy, "127.0.0.1", 23, callbacks, overrides, canceled.get_cancellation()); }
+      catch (const cardio::canceled_exception &) { rejected = true; }
+      expect_true(rejected && !prompted, "canceled connection must not fall back to direct TCP");
+      rejected = false;
+      try { (void)co_await elder_terms::connect_ssh_proxy_async(proxy, "127.0.0.1", 23, callbacks, overrides, {}); }
+      catch (const std::exception &) { rejected = true; }
+      expect_true(rejected && prompted, "declined authentication must reject the connection");
+      accept = true;
+      rejected = false;
+      std::string rejection;
+      try { (void)co_await elder_terms::connect_ssh_proxy_async(proxy, "127.0.0.1", 23, callbacks, overrides, {}); }
+      catch (const std::exception &error) { rejection = error.what(); rejected = rejection.find("SSH proxy forwarding failed") != std::string::npos; }
+      expect_true(rejected, "forwarding refusal must remain a proxy failure: " + rejection);
+    } catch (...) { failure = std::current_exception(); }
+    group.shutdown();
+  };
+  auto task = body();
+  dispatcher.park();
+  expect_true(task.is_ready(), "proxy rejection task completed");
+  const auto result = wait_for_server(&server);
+  if (failure) std::rethrow_exception(failure);
+  expect_true(result == 0, "gateway must observe the rejected forwarding request");
+}
+
 static void test_supported_authentication_and_shell_channel() {
   const std::filesystem::path root = test_root_directory("authentication");
   std::filesystem::remove_all(root);
@@ -1490,6 +1641,8 @@ AAAEA8cCQePgwL2LLorJKJb/mbOaBviLYfCkaS2lc+lgrnvZglDbkkh3abjMMTzSsZS5/X
   options.auth_mode = ServerAuthMode::none;
   options.host_key_path = host_private_key;
   options.host_public_key_path = host_public_key;
+  test_proxy_forwarding(options, root / ".ssh" / "proxy_known_hosts");
+  test_proxy_rejections(options, root / ".ssh" / "proxy_known_hosts");
   run_client_case(
       options,
       ClientCase{

@@ -29,6 +29,8 @@ struct AuthenticatedSshTransportOptions {
    * libssh defaults.
    */
   std::string config_file;
+  /** Shared connection route; never applied recursively to the gateway. */
+  SshProxySettings proxy{};
 };
 
 /** Result returned by one non-interactive SSH command. */

@@ -1411,9 +1411,15 @@ struct AuthenticatedSshTransport::Impl {
     }
     channels.clear();
     if (session != nullptr) {
+      // libssh owns its internally opened sockets, but SSH_OPTIONS_FD sockets
+      // remain ours after a normal disconnect. Fatal socket errors can already
+      // have closed them; query the live descriptor before resetting the session.
+      const int connected_fd = ssh_get_fd(session);
       ssh_disconnect(session);
       ssh_free(session);
       session = nullptr;
+      if (connected_fd >= 0) (void)::close(connected_fd);
+      socket_fd = -1;
     }
   }
 
@@ -1487,6 +1493,8 @@ AuthenticatedSshTransport::connect_async(
     const TerminalSessionCallbacks &callbacks,
     AuthenticatedSshTransportOptions options,
     cardio::cancellation cancellation) {
+  if (!options.proxy.validation_errors.empty()) throw std::invalid_argument(options.proxy.validation_errors.front());
+  if (options.proxy.enabled) throw std::invalid_argument("SSH proxy is not yet supported for this connection type");
   cardio::io_uring io(64);
   int socket_fd = -1;
   auto transport_impl = std::make_unique<Impl>();
@@ -1963,6 +1971,44 @@ SshChannelConnection::read_async(std::span<unsigned char> buffer,
     co_await transport->impl->await_ready_async(
         result.poll_flags, cardio::fd_event::read, cancellation);
   }
+}
+
+cardio::promise<std::unique_ptr<SshChannelConnection>>
+SshChannelConnection::open_forward_async(
+    std::shared_ptr<AuthenticatedSshTransport> transport, std::string host,
+    std::uint16_t port, cardio::cancellation cancellation) {
+  if (!transport || !transport->impl) {
+    throw std::invalid_argument(_("SSH transport is required"));
+  }
+  auto connection_impl = std::make_unique<Impl>();
+  connection_impl->transport = transport;
+  auto allocating = transport->impl->execute_async<ssh_channel>(
+      [transport]() {
+        auto channel = ssh_channel_new(transport->impl->session);
+        if (!channel) throw ssh_failure(transport->impl->session, "Failed to allocate SSH channel");
+        transport->impl->channels.push_back(channel);
+        return channel;
+      }, false, cancellation);
+  connection_impl->channel = co_await allocating;
+  const auto channel = connection_impl->channel;
+  const auto description = std::string(_("SSH proxy forwarding failed")) + ": " + host + ":" + std::to_string(port);
+  auto opening = await_transport_ok_async(
+      transport, [channel, host, port]() {
+        return ssh_channel_open_forward(channel, host.c_str(), port, "127.0.0.1", 0);
+      }, description, true, cancellation);
+  co_await opening;
+  co_await flush_transport_async(transport, cancellation);
+  co_return std::unique_ptr<SshChannelConnection>(new SshChannelConnection(std::move(connection_impl)));
+}
+
+cardio::promise<void> SshChannelConnection::send_eof_async(cardio::cancellation cancellation) {
+  if (!impl || impl->closed || !impl->transport || !impl->channel) co_return;
+  const auto transport = impl->transport;
+  const auto channel = impl->channel;
+  co_await await_transport_ok_async(transport,
+      [channel]() { return ssh_channel_send_eof(channel); },
+      "Failed to end SSH stream", true, cancellation);
+  co_await flush_transport_async(transport, cancellation);
 }
 
 cardio::promise<void> SshChannelConnection::write_all_async(

@@ -13,6 +13,7 @@ namespace elder_terms {
 struct WebdavApplication {
   cardio::dispatcher_group_glib *dispatcher_group;
   WebdavConnectionSettings connection;
+  SshProxySettings proxy;
   std::shared_ptr<RemoteFileClient> client;
   std::shared_ptr<FileTransferWindow> window;
   cardio::cancellation_source stopping;
@@ -60,6 +61,7 @@ static cardio::promise<void> start_application_async(WebdavApplication *state) {
   std::string failure;
   const auto cancellation = state->stopping.get_cancellation();
   try {
+    if (!state->proxy.validation_errors.empty()) throw std::invalid_argument(state->proxy.validation_errors.front());
     WebdavClientOpenOptions options{
         .connection = state->connection, .password = {},
         .confirm_certificate = [state](const TlsCertificateFailure &failure, cardio::cancellation cancellation) {
@@ -118,6 +120,7 @@ static cardio::promise<void> reconnect_application_async(
   state->client.reset();
   if (state->shutting_down) co_return;
   state->connection = webdav_connection_settings(settings);
+  state->proxy = ssh_proxy_connection_settings(settings);
   co_await start_application_async(state);
 }
 
@@ -128,6 +131,7 @@ int run_webdav_application(const SettingsLoadResult &settings,
   WebdavApplication state;
   state.dispatcher_group = &group;
   state.connection = webdav_connection_settings(settings.store);
+  state.proxy = ssh_proxy_connection_settings(settings.store);
   state.window = create_file_transfer_window({
       .connection_name = general_connection_name(settings.store),
       .protocol_name = "WebDAV",

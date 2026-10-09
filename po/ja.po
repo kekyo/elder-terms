@@ -2423,3 +2423,18 @@ msgstr "\"New Window\"で使用"
 #: elder-terms/src/main.cpp
 msgid "Failed to save New Window connection"
 msgstr "新しいウィンドウの接続を保存できませんでした"
+
+msgid "SSH proxy"
+msgstr "SSH proxy"
+
+msgid "Use SSH proxy"
+msgstr "SSH proxyを使用"
+
+msgid "SSH proxy forwarding failed"
+msgstr "SSH proxyのTCP転送に失敗しました"
+
+msgid "SSH proxy connection failed"
+msgstr "SSH proxyへの接続に失敗しました"
+
+msgid "SSH proxy requires a valid gateway address and port"
+msgstr "SSH proxyには有効な踏み台のアドレスとポートが必要です"

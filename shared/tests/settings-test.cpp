@@ -195,6 +195,63 @@ static void remove_config(const std::filesystem::path &path) {
   std::filesystem::remove(path, error);
 }
 
+static void test_ssh_proxy_settings_round_trip_and_inheritance() {
+  const auto enabled = elder_terms::make_setting_key("ssh_proxy", "enabled");
+  const auto address = elder_terms::make_setting_key("ssh_proxy", "address");
+  const auto port = elder_terms::make_setting_key("ssh_proxy", "port");
+  auto store = create_default_settings(default_terminal_display_settings(1.0), "proxy");
+  expect_true(set_explicit_setting_value(&store, enabled, true),
+              "SSH proxy must expose an independent enabled setting");
+  expect_true(set_explicit_setting_value(&store, address, std::string("bastion.example")),
+              "SSH proxy must accept a gateway hostname");
+  expect_true(set_explicit_setting_value(&store, port, gint64{2222}),
+              "SSH proxy must accept a gateway port");
+  const auto global = temporary_config_path("proxy-global");
+  const auto connection = temporary_config_path("proxy-connection");
+  expect_true(save_global_settings(store, global).saved, "save proxy defaults");
+  write_config(connection, "[general]\ntype=telnet\n[telnet]\naddress=internal.example\n[ssh_proxy]\nenabled=false\n");
+  auto loaded = load_settings(
+      SettingsLoadOptions{.config_path = connection, .startup_config_path = std::nullopt,
+                          .global_config_path = global}, 1.0);
+  expect_true(!elder_terms::setting_boolean_value_or_default(loaded.store, enabled, true),
+              "explicit disabled proxy must override global enabled proxy");
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, address, "") == "bastion.example",
+              "disabled proxy must retain inherited endpoint");
+  clear_explicit_setting_value(&loaded.store, enabled);
+  expect_true(elder_terms::setting_boolean_value_or_default(loaded.store, enabled, false),
+              "clearing override must restore inherited enabled proxy");
+  write_config(connection, "[general]\ntype=telnet\n[ssh_proxy]\nenabled=invalid\nport=70000\n");
+  loaded = load_settings(
+      SettingsLoadOptions{.config_path = connection, .startup_config_path = std::nullopt,
+                          .global_config_path = global}, 1.0);
+  for (const auto *name : {"enabled", "port"}) {
+    const auto entry = std::find_if(loaded.store.entries.begin(), loaded.store.entries.end(),
+        [name](const auto &value) { return value.definition.key.section == "ssh_proxy" && value.definition.key.name == name; });
+    expect_true(entry != loaded.store.entries.end() && !entry->validation_error.empty(),
+                "invalid proxy input must survive loading instead of enabling direct fallback");
+  }
+  expect_true(!elder_terms::ssh_proxy_connection_settings(loaded.store).validation_errors.empty(),
+              "invalid enabled setting must prevent a direct connection");
+  set_explicit_setting_value(&loaded.store, enabled, false);
+  expect_true(elder_terms::ssh_proxy_connection_settings(loaded.store).validation_errors.empty(),
+              "explicitly disabled proxy may retain invalid inactive fields");
+  set_explicit_setting_value(&loaded.store, enabled, true);
+  for (const auto *type : {"local", "serial"}) {
+    set_explicit_setting_value(&loaded.store, general_type_setting_key(), std::string(type));
+    const auto proxy = elder_terms::ssh_proxy_connection_settings(loaded.store);
+    expect_true(!proxy.enabled && proxy.validation_errors.empty(),
+                "local and serial must ignore inherited proxy configuration");
+  }
+  write_config(global, "[ssh_proxy]\nenabled=invalid\n");
+  write_config(connection, "[general]\ntype=telnet\n");
+  loaded = load_settings(SettingsLoadOptions{.config_path = connection,
+      .startup_config_path = std::nullopt, .global_config_path = global}, 1.0);
+  expect_true(!elder_terms::ssh_proxy_connection_settings(loaded.store).validation_errors.empty(),
+              "invalid inherited enabled setting must also fail closed");
+  remove_config(global);
+  remove_config(connection);
+}
+
 static void test_default_settings() {
   const gdouble default_zoom = 1.2;
   const SettingsStore store =
@@ -4568,6 +4625,7 @@ int main() {
     elder_terms_settings_test::test_terminal_log_file_name_format_validation();
     elder_terms_settings_test::test_key_binding_parser_uses_exact_modifiers();
     elder_terms_settings_test::test_terminal_key_binding_configuration();
+    elder_terms_settings_test::test_ssh_proxy_settings_round_trip_and_inheritance();
     elder_terms_settings_test::test_telnet_profile();
     elder_terms_settings_test::test_ssh_profile();
     elder_terms_settings_test::
