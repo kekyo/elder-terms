@@ -6235,7 +6235,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_widget_set_no_show_all(proxy_page, TRUE);
   gtk_widget_set_no_show_all(proxy_tab, TRUE);
   state->connection_pages.push_back({
-      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
+      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type, webdav_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
 
   GtkWidget *terminal_page = create_terminal_page(state);
   const std::string terminal_tab_id = widget_id(state, "terminal_tab");

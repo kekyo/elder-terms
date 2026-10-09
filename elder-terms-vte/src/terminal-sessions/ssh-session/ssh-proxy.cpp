@@ -17,10 +17,11 @@ namespace elder_terms {
 
 struct SshProxyBridge {
   int fd = -1;
+  bool owns_fd = true;
   std::unique_ptr<SshChannelConnection> channel;
   cardio::cancellation_source stop;
 
-  ~SshProxyBridge() { if (fd >= 0) ::close(fd); }
+  ~SshProxyBridge() { if (owns_fd && fd >= 0) ::close(fd); }
 
   void cancel() {
     stop.cancel();
@@ -103,19 +104,27 @@ static cardio::promise<void> run_bridge_async(std::shared_ptr<SshProxyBridge> br
   bridge->channel.reset();
 }
 
-cardio::promise<std::shared_ptr<SshProxyConnection>> connect_ssh_proxy_async(
-    SshProxySettings proxy, std::string host, std::uint16_t port,
+cardio::promise<void> bridge_ssh_channel_async(
+    std::unique_ptr<SshChannelConnection> channel, int fd, cardio::cancellation cancellation) {
+  auto bridge = std::make_shared<SshProxyBridge>();
+  bridge->fd = fd;
+  bridge->owns_fd = false;
+  bridge->channel = std::move(channel);
+  auto registration = cancellation.on_cancellation_requested([bridge] { bridge->cancel(); });
+  if (cancellation.is_cancellation_requested()) bridge->cancel();
+  co_await run_bridge_async(bridge);
+  // A cancellation callback may already be queued; it must not access a
+  // descriptor after its caller has closed and potentially reused it.
+  bridge->fd = -1;
+}
+
+cardio::promise<std::shared_ptr<AuthenticatedSshTransport>> connect_ssh_gateway_async(
+    SshProxySettings proxy,
     TerminalSessionCallbacks callbacks, AuthenticatedSshTransportOptions options,
     cardio::cancellation cancellation) {
   cancellation.throw_if_cancellation_requested();
   if (!proxy.validation_errors.empty()) throw std::invalid_argument(proxy.validation_errors.front());
-  auto result = std::make_shared<SshProxyConnection>();
-  if (!proxy.enabled) {
-    cardio::io_uring io(64);
-    result->fd = co_await connect_tcp_socket_async(io, std::move(host), port, cancellation);
-    co_return result;
-  }
-  if (proxy.endpoint.address.empty() || proxy.endpoint.port < 1 || proxy.endpoint.port > 65535) {
+  if (!proxy.enabled || proxy.endpoint.address.empty() || proxy.endpoint.port < 1 || proxy.endpoint.port > 65535) {
     throw std::invalid_argument(_("SSH proxy requires a valid gateway address and port"));
   }
   if (callbacks.ssh_prompt) {
@@ -135,6 +144,23 @@ cardio::promise<std::shared_ptr<SshProxyConnection>> connect_ssh_proxy_async(
   catch (const std::exception &error) {
     throw std::runtime_error(std::string(_("SSH proxy connection failed")) + " (" + proxy.endpoint.address + "): " + error.what());
   }
+  co_return gateway;
+}
+
+cardio::promise<std::shared_ptr<SshProxyConnection>> connect_ssh_proxy_async(
+    SshProxySettings proxy, std::string host, std::uint16_t port,
+    TerminalSessionCallbacks callbacks, AuthenticatedSshTransportOptions options,
+    cardio::cancellation cancellation) {
+  cancellation.throw_if_cancellation_requested();
+  if (!proxy.validation_errors.empty()) throw std::invalid_argument(proxy.validation_errors.front());
+  auto result = std::make_shared<SshProxyConnection>();
+  if (!proxy.enabled) {
+    cardio::io_uring io(64);
+    result->fd = co_await connect_tcp_socket_async(io, std::move(host), port, cancellation);
+    co_return result;
+  }
+  auto authenticating = connect_ssh_gateway_async(std::move(proxy), std::move(callbacks), std::move(options), cancellation);
+  auto gateway = std::move(co_await authenticating);
   auto bridge = std::make_shared<SshProxyBridge>();
   auto opening = SshChannelConnection::open_forward_async(std::move(gateway), std::move(host), port, cancellation);
   bridge->channel = std::move(co_await opening);

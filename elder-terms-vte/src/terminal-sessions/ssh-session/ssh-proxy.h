@@ -8,6 +8,27 @@ namespace elder_terms {
 struct SshProxyConnection;
 
 /**
+ * Authenticates one gateway without recursively applying a proxy.
+ * @param proxy Enabled gateway configuration.
+ * @param callbacks Gateway prompts, decorated with the SSH proxy label.
+ * @param options SSH path overrides.
+ * @param cancellation Connection cancellation signal.
+ * @returns Shared authenticated gateway.
+ */
+cardio::promise<std::shared_ptr<AuthenticatedSshTransport>> connect_ssh_gateway_async(
+    SshProxySettings proxy, TerminalSessionCallbacks callbacks,
+    AuthenticatedSshTransportOptions options, cardio::cancellation cancellation);
+
+/**
+ * Bridges a connected socket to an already opened forwarding channel.
+ * @param channel Channel owned until both stream directions stop.
+ * @param fd Borrowed socket; retain it until this operation finishes.
+ * @param cancellation Cancels both directions and joins their work.
+ */
+cardio::promise<void> bridge_ssh_channel_async(
+    std::unique_ptr<SshChannelConnection> channel, int fd, cardio::cancellation cancellation);
+
+/**
  * Connects to a destination through a gateway, or directly when disabled.
  * @param proxy Gateway configuration; invalid values always fail before connecting.
  * @param host Final destination hostname, resolved by the gateway when enabled.

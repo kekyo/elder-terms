@@ -3190,4 +3190,20 @@ cardio::promise<void> close_file_transfer_window_async(
   if (failure) std::rethrow_exception(failure);
 }
 
+cardio::promise<SshUserPromptResponse> prompt_file_transfer_ssh_async(
+    std::shared_ptr<FileTransferWindow> window, const SshUserPrompt &prompt,
+    cardio::cancellation cancellation) {
+  InlinePromptRequest request{
+      .title = prompt.title, .message = prompt.message,
+      .monospace_message = prompt.monospace_message,
+      .accept_label = prompt.kind == SshUserPromptKind::host_key ? _("Accept") : _("Connect"),
+      .cancel_label = _("Cancel"), .initial_text = prompt.initial_text,
+      .input_required = prompt.input_required, .echo = prompt.echo,
+      .cancel_visible = true, .accept_visible = prompt.accept_visible,
+      .alternative_label = _("Reset and Connect"), .alternative_visible = prompt.host_key_reset_available};
+  auto response = co_await prompt_file_transfer_window_async(window, std::move(request), cancellation);
+  if (!response.accepted && !response.alternative) throw cardio::canceled_exception();
+  co_return SshUserPromptResponse{.accepted = response.accepted, .text = std::move(response.text), .reset_host_key = response.alternative};
+}
+
 } // namespace elder_terms

@@ -1381,13 +1381,19 @@ struct AuthenticatedSshTransport::Impl {
   }
 
   void close_channel(ssh_channel channel,
-                     std::shared_ptr<void> callback_lifetime = {}) {
+                     std::shared_ptr<void> callback_lifetime,
+                     ssh_channel_callbacks callbacks) {
     if (channel == nullptr) {
       return;
     }
-    (void)enqueue([this, channel,
+    (void)enqueue([this, channel, callbacks,
                    callback_lifetime = std::move(callback_lifetime)]() {
       (void)callback_lifetime;
+      // libssh can retain a freed channel until the peer acknowledges its close.
+      // Detach callbacks before releasing their caller-owned storage.
+      if (callbacks != nullptr) {
+        (void)ssh_remove_channel_callbacks(channel, callbacks);
+      }
       if (ssh_channel_is_open(channel) != 0) {
         (void)ssh_channel_send_eof(channel);
         (void)ssh_channel_close(channel);
@@ -1739,7 +1745,7 @@ AuthenticatedSshTransport::execute_command_async(
   }
 
   if (channel != nullptr) {
-    impl->close_channel(channel, callback_state);
+    impl->close_channel(channel, callback_state, &callback_state->callbacks);
   }
   if (operation_error) {
     std::rethrow_exception(operation_error);
@@ -1806,8 +1812,78 @@ void AuthenticatedSshTransport::end_sftp_transfer() noexcept {
   }
 }
 
+// Each direction has its own retained wakeup. Reading one libssh channel can
+// consume packets for another, so socket readiness alone cannot wake its owner.
+struct SshChannelWaiter {
+  int socket_fd;
+  int wakeup_fd = -1;
+  int wait_fd = -1;
+
+  explicit SshChannelWaiter(int socket_fd) : socket_fd(socket_fd) {
+    wakeup_fd = open_ssh_event_fd();
+    try {
+      wait_fd = open_ssh_epoll_fd();
+      for (const auto fd : {socket_fd, wakeup_fd}) {
+        epoll_event event{};
+        event.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
+        event.data.fd = fd;
+        if (::epoll_ctl(wait_fd, EPOLL_CTL_ADD, fd, &event) != 0)
+          throw std::system_error(errno, std::generic_category(), "SSH channel epoll");
+      }
+    } catch (...) {
+      close_ssh_fd(&wait_fd);
+      close_ssh_fd(&wakeup_fd);
+      throw;
+    }
+  }
+  ~SshChannelWaiter() { close_ssh_fd(&wait_fd); close_ssh_fd(&wakeup_fd); }
+
+  cardio::promise<void> wait_async(int poll_flags, cardio::cancellation cancellation) {
+    epoll_event event{};
+    event.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
+    if ((poll_flags & SSH_WRITE_PENDING) != 0) event.events |= EPOLLOUT;
+    event.data.fd = socket_fd;
+    if (::epoll_ctl(wait_fd, EPOLL_CTL_MOD, socket_fd, &event) < 0) {
+      if (errno == EBADF || errno == ENOENT) co_return;
+      throw std::system_error(errno, std::generic_category(), "SSH channel wait");
+    }
+    (void)co_await cardio::from_fd(wait_fd,
+        cardio::fd_event::read | cardio::fd_event::error | cardio::fd_event::hangup, cancellation);
+    std::array<epoll_event, 2> ready{};
+    int count;
+    do { count = ::epoll_wait(wait_fd, ready.data(), ready.size(), 0); } while (count < 0 && errno == EINTR);
+    if (count < 0) throw std::system_error(errno, std::generic_category(), "SSH channel epoll wait");
+  }
+};
+
+struct SshChannelEvents {
+  SshChannelWaiter reader;
+  SshChannelWaiter writer;
+  ssh_channel_callbacks_struct callbacks{};
+
+  explicit SshChannelEvents(int fd) : reader(fd), writer(fd) {
+    callbacks.userdata = this;
+    callbacks.channel_data_function = [](ssh_session, ssh_channel, void *, std::uint32_t, int, void *data) {
+      notify_ssh_event_fd(static_cast<SshChannelEvents *>(data)->reader.wakeup_fd);
+      return 0; // Retain the bytes for read_async().
+    };
+    callbacks.channel_eof_function = [](ssh_session, ssh_channel, void *data) {
+      const auto *events = static_cast<SshChannelEvents *>(data);
+      notify_ssh_event_fd(events->reader.wakeup_fd);
+      notify_ssh_event_fd(events->writer.wakeup_fd);
+    };
+    callbacks.channel_close_function = callbacks.channel_eof_function;
+    callbacks.channel_write_wontblock_function = [](ssh_session, ssh_channel, std::uint32_t, void *data) {
+      notify_ssh_event_fd(static_cast<SshChannelEvents *>(data)->writer.wakeup_fd);
+      return 0;
+    };
+    ssh_callbacks_init(&callbacks);
+  }
+};
+
 struct SshChannelConnection::Impl {
   std::shared_ptr<AuthenticatedSshTransport> transport;
+  std::shared_ptr<SshChannelEvents> events;
   ssh_channel channel = nullptr;
   bool closed = false;
 
@@ -1821,7 +1897,8 @@ struct SshChannelConnection::Impl {
     }
     closed = true;
     if (transport != nullptr && transport->impl != nullptr) {
-      transport->impl->close_channel(channel);
+      transport->impl->close_channel(channel, events,
+                                      events != nullptr ? &events->callbacks : nullptr);
     }
     channel = nullptr;
   }
@@ -1868,12 +1945,18 @@ SshChannelConnection::open_async(
 
   auto connection_impl = std::make_unique<Impl>();
   connection_impl->transport = transport;
+  connection_impl->events = std::make_shared<SshChannelEvents>(transport->impl->socket_fd);
+  const auto events = connection_impl->events;
   auto allocating = transport->impl->execute_async<ssh_channel>(
-      [transport]() {
+      [transport, events]() {
         ssh_channel channel = ssh_channel_new(transport->impl->session);
         if (channel == nullptr) {
           throw ssh_failure(transport->impl->session,
                             "Failed to allocate SSH channel");
+        }
+        if (ssh_set_channel_callbacks(channel, &events->callbacks) != SSH_OK) {
+          ssh_channel_free(channel);
+          throw std::runtime_error("Failed to register SSH channel readiness");
         }
         transport->impl->channels.push_back(channel);
         return channel;
@@ -1931,6 +2014,7 @@ SshChannelConnection::read_async(std::span<unsigned char> buffer,
     if (impl->closed) {
       co_return 0;
     }
+    drain_ssh_event_fd(impl->events->reader.wakeup_fd);
     auto reading = transport->impl->execute_async<SshChannelReadResult>(
         [transport, channel, buffer, capacity]() {
           /*
@@ -1979,8 +2063,7 @@ SshChannelConnection::read_async(std::span<unsigned char> buffer,
     if (result.eof) {
       co_return 0;
     }
-    co_await transport->impl->await_ready_async(
-        result.poll_flags, cardio::fd_event::read, cancellation);
+    co_await impl->events->reader.wait_async(result.poll_flags, cancellation);
   }
 }
 
@@ -1993,10 +2076,16 @@ SshChannelConnection::open_forward_async(
   }
   auto connection_impl = std::make_unique<Impl>();
   connection_impl->transport = transport;
+  connection_impl->events = std::make_shared<SshChannelEvents>(transport->impl->socket_fd);
+  const auto events = connection_impl->events;
   auto allocating = transport->impl->execute_async<ssh_channel>(
-      [transport]() {
+      [transport, events]() {
         auto channel = ssh_channel_new(transport->impl->session);
         if (!channel) throw ssh_failure(transport->impl->session, "Failed to allocate SSH channel");
+        if (ssh_set_channel_callbacks(channel, &events->callbacks) != SSH_OK) {
+          ssh_channel_free(channel);
+          throw std::runtime_error("Failed to register SSH channel readiness");
+        }
         transport->impl->channels.push_back(channel);
         return channel;
       }, false, cancellation);
@@ -2040,6 +2129,7 @@ cardio::promise<void> SshChannelConnection::write_all_async(
         std::min<std::size_t>(
             bytes.size() - offset,
             std::numeric_limits<std::uint32_t>::max()));
+    drain_ssh_event_fd(impl->events->writer.wakeup_fd);
     const SshWorkerResult result =
         co_await transport->impl->execute_ssh_async(
             [channel, bytes, offset, chunk_size]() {
@@ -2054,8 +2144,7 @@ cardio::promise<void> SshChannelConnection::write_all_async(
     if (!ssh_worker_result_is_again(result) && result.value != 0) {
       throw ssh_worker_failure(result, "Failed to write SSH channel");
     }
-    co_await transport->impl->await_ready_async(
-        result.poll_flags, cardio::fd_event::write, cancellation);
+    co_await impl->events->writer.wait_async(result.poll_flags, cancellation);
   }
   co_await flush_transport_async(transport, std::move(cancellation));
 }

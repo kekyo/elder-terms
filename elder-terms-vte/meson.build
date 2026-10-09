@@ -48,6 +48,16 @@ libxyzm_static_libraries = custom_target(
 libxyzm_static_library = libxyzm_static_libraries[0]
 libxyzm_async_static_library = libxyzm_static_libraries[1]
 
+
+ssh_transport_library = static_library('elder-terms-ssh-transport',
+  ['src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
+   'src/terminal-sessions/ssh-session/ssh-proxy.cpp',
+   'src/terminal-sessions/ssh-session/ssh-socks-proxy.cpp',
+   'src/terminal-sessions/tcp-connector.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libssh_dep, liburing_dep])
+ssh_transport_dep = declare_dependency(link_with: ssh_transport_library,
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libssh_dep, liburing_dep])
+
 telnet_protocol_source = 'src/terminal-sessions/telnet-session/telnet-protocol.cpp'
 elder_terms_sources = [
   'src/activity-indicator.cpp',
@@ -81,10 +91,7 @@ elder_terms_sources = [
   'src/terminal-sessions/serial-session/serial-line-monitor.cpp',
   'src/terminal-sessions/serial-session/serial-session.cpp',
   'src/terminal-sessions/serial-session/serial-termios.cpp',
-  'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
-    'src/terminal-sessions/ssh-session/ssh-proxy.cpp',
   'src/terminal-sessions/ssh-session/ssh-session.cpp',
-  'src/terminal-sessions/tcp-connector.cpp',
   telnet_protocol_source,
   'src/terminal-sessions/telnet-session/telnet-session.cpp',
   'src/terminal-sessions/terminal-keyboard-protocol.cpp',
@@ -109,7 +116,7 @@ executable(
     gio_dep,
     gtk_dep,
     liburing_dep,
-    libssh_dep,
+    ssh_transport_dep,
     libudev_dep,
     vte_dep,
   ],
@@ -146,9 +153,6 @@ executable(
     'src/file-transfer/activity-file-client.cpp',
     'src/activity-indicator.cpp',
     'src/file-transfer/local-file-reveal.cpp',
-    'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
-    'src/terminal-sessions/ssh-session/ssh-proxy.cpp',
-    'src/terminal-sessions/tcp-connector.cpp',
     'src/widget-background.cpp',
   ],
   cpp_args: [
@@ -160,8 +164,8 @@ executable(
     gio_dep,
     gtk_dep,
     liburing_dep,
-    libssh_dep,
-    libcurl_dep,
+    ssh_transport_dep,
+    libcurl_dep, ssh_transport_dep,
     libxml2_dep,
     openssl_dep,
   ],
@@ -197,19 +201,22 @@ webdav_metadata_test = executable(
   'webdav-metadata-test',
   ['tests/cpp/webdav-metadata-test.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
   include_directories: include_directories('src/webdav'),
-  dependencies: [cardio_dep, elder_terms_dep, libcurl_dep, libxml2_dep],
+  dependencies: [cardio_dep, elder_terms_dep, libcurl_dep, ssh_transport_dep, libxml2_dep],
 )
 test('webdav-metadata-test', webdav_metadata_test)
+
+ssh_proxy_test_server = executable('ssh-proxy-test-server',
+  'tests/cpp/ssh-proxy-test-server.cpp', dependencies: [libssh_dep])
 
 webdav_client_test = executable(
   'webdav-client-test',
   ['tests/cpp/webdav-client-test.cpp', 'src/file-transfer/file-transfer-engine.cpp', 'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
    'src/webdav/curl-http-session.cpp', 'src/tls/certificate-policy.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
   include_directories: include_directories('src/webdav'),
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, libxml2_dep, openssl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, libxml2_dep, openssl_dep],
 )
 test('webdav-client-test', find_program('node'),
-  args: [files('tests/webdav-client-runner.mjs'), webdav_client_test], timeout: 300)
+  args: [files('tests/webdav-client-runner.mjs'), webdav_client_test, ssh_proxy_test_server], timeout: 300)
 
 ftp_metadata_test = executable(
   'ftp-metadata-test',
@@ -228,7 +235,7 @@ curl_ftp_session_test = executable(
     'tests/cpp/curl-ftp-session-test.cpp',
     'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
   ],
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, openssl_dep],
 )
 
 foreach case_name : ['receive', 'cancel-final', 'cancel-paused', 'callback-failure', 'unanswered-quit']
@@ -245,7 +252,7 @@ ftps_client_test = executable(
   'ftps-client-test',
   ['tests/cpp/ftps-client-test.cpp', 'src/ftp/ftp-client.cpp',
    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp', 'src/ftp/ftp-metadata.cpp'],
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, openssl_dep],
 )
 
 
@@ -259,7 +266,7 @@ curl_ftp_client_test = executable(
     'src/ftp/ftp-metadata.cpp',
   ],
   include_directories: include_directories('src/ftp'),
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, openssl_dep],
 )
 
 foreach case_name : [
@@ -282,7 +289,7 @@ curl_ftp_stream_test = executable(
     'src/file-transfer/file-transfer-engine.cpp',
   ],
   include_directories: include_directories('src/ftp'),
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, openssl_dep],
 )
 
 foreach case_name : [
@@ -305,7 +312,7 @@ ftp_client_lifetime_test = executable(
     'src/ftp/ftp-metadata.cpp',
   ],
   include_directories: include_directories('src/ftp'),
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, openssl_dep],
 )
 
 foreach case_name : ['normal', 'login', 'cancel']
@@ -316,13 +323,13 @@ endforeach
 ftps_certificate_policy_test = executable(
   'ftps-certificate-policy-test',
   ['tests/cpp/ftps-certificate-policy-test.cpp', 'src/tls/certificate-policy.cpp'],
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, openssl_dep],
   install: false)
 
 ftps_hostname_test = executable(
   'ftps-hostname-test',
   ['tests/cpp/ftps-hostname-test.cpp', 'src/tls/certificate-policy.cpp'],
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, openssl_dep],
   install: false)
 
 test('ftps-client-test', find_program('node'),
@@ -344,7 +351,7 @@ ftp_runtime_capabilities_test = executable(
     'src/ftp/ftp-metadata.cpp',
   ],
   include_directories: include_directories('src/ftp'),
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, openssl_dep],
   link_args: ['-Wl,--wrap=curl_version_info'],
 )
 
@@ -567,15 +574,12 @@ ssh_channel_connection_test = executable(
     'src/file-transfer/file-hash.cpp',
     'src/file-transfer/ssh-file-hash.cpp',
     'src/sftp/sftp-client.cpp',
-    'src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
-    'src/terminal-sessions/ssh-session/ssh-proxy.cpp',
-    'src/terminal-sessions/tcp-connector.cpp',
   ],
   dependencies: [
     cardio_dep,
     elder_terms_dep,
     gio_dep,
-    libssh_dep,
+    ssh_transport_dep,
     liburing_dep,
   ],
 )
@@ -825,17 +829,19 @@ webdav_tls_session_test = executable(
   ['tests/cpp/webdav-tls-session-test.cpp', 'src/webdav/curl-http-session.cpp',
    'src/tls/certificate-policy.cpp'],
   include_directories: include_directories('src/webdav'),
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, openssl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, openssl_dep],
 )
 test('webdav-tls-session-test', find_program('node'),
   args: [files('tests/webdav-tls-session-runner.mjs'), webdav_tls_session_test], timeout: 120)
+test('webdav-proxy-tls-session-test', find_program('node'),
+  args: [files('tests/webdav-tls-session-runner.mjs'), webdav_tls_session_test, ssh_proxy_test_server], timeout: 120)
 
 webdav_apache_test = executable(
   'webdav-apache-test',
   ['tests/cpp/webdav-apache-test.cpp', 'src/file-transfer/file-transfer-engine.cpp', 'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
    'src/webdav/curl-http-session.cpp', 'src/tls/certificate-policy.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
   include_directories: include_directories('src/webdav'),
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, libxml2_dep, openssl_dep],
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, libxml2_dep, openssl_dep],
 )
 test('webdav-apache-test', find_program('node'),
   args: [files('tests/webdav-apache-runner.mjs'), webdav_apache_test], timeout: 900, is_parallel: false)

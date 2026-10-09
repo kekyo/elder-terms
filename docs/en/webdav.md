@@ -56,7 +56,9 @@ which is why confirmation has this requirement.
 Support covers standard WebDAV file operations.
 Service-specific chunked uploads and login extensions,
 Windows integrated authentication, LOCK/UNLOCK, arbitrary property updates, server-side COPY,
-synchronization, transfer resumption, client certificates and proxy configuration are outside this scope.
+synchronization, transfer resumption, client certificates and arbitrary HTTP/SOCKS proxy configuration are outside this scope.
+
+[SSH proxy](ssh-proxy.md) supports a gateway shared by the connection's HTTP requests. Destination names are resolved by the gateway; HTTPS certificates are still verified against the final destination name.
 
 Read-only endpoints can provide listings and downloads.
 Access permissions, locks, capacity and server limits can reject individual operations; the response is shown as an error.

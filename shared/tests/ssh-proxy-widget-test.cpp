@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
   gtk_init(&argc, &argv);
   try {
     using namespace elder_terms;
-    for (const auto *type : {"telnet", "ssh", "sftp", "local", "serial"}) {
+    for (const auto *type : {"telnet", "ssh", "sftp", "webdav", "local", "serial"}) {
       auto store = create_default_settings({}, "proxy test");
       set_explicit_setting_value(&store, general_type_setting_key(), std::string(type));
       SettingsWidgetOptions options;

@@ -13,6 +13,7 @@
 #include "../inline-prompt.h"
 #include "file-hash.h"
 #include "remote-file-client.h"
+#include "../terminal-sessions/ssh-session/ssh-user-prompt.h"
 
 namespace elder_terms {
 
@@ -164,5 +165,17 @@ void present_file_transfer_window(const std::shared_ptr<FileTransferWindow> &win
  */
 cardio::promise<void>
 close_file_transfer_window_async(std::shared_ptr<FileTransferWindow> window);
+
+/**
+ * Presents an SSH gateway or destination question in the file-transfer window.
+ * @param window Window owning the prompt.
+ * @param prompt Host-key or authentication question.
+ * @param cancellation Prompt cancellation signal.
+ * @returns User response, including an explicit changed-key reset.
+ * @throws cardio::canceled_exception when the user cancels.
+ */
+cardio::promise<SshUserPromptResponse> prompt_file_transfer_ssh_async(
+    std::shared_ptr<FileTransferWindow> window, const SshUserPrompt &prompt,
+    cardio::cancellation cancellation);
 
 } // namespace elder_terms

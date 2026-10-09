@@ -1,5 +1,6 @@
 #include "../../src/terminal-sessions/ssh-session/ssh-channel-connection.h"
 #include "../../src/terminal-sessions/ssh-session/ssh-proxy.h"
+#include "../../src/terminal-sessions/ssh-session/ssh-socks-proxy.h"
 #include "../../src/terminal-sessions/telnet-session/telnet-protocol.h"
 #include "../../src/file-transfer/file-hash.h"
 #include "../../src/sftp/sftp-client.h"
@@ -9,6 +10,7 @@
 #include <poll.h>
 #include <signal.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -1521,7 +1523,7 @@ static std::size_t open_socket_count() {
   return count;
 }
 
-static void test_proxy_forwarding(const ServerOptions &options, const std::filesystem::path &known_hosts) {
+static void test_proxy_forwarding(const ServerOptions &options, const std::filesystem::path &known_hosts, bool socks) {
   auto gateway_options = options;
   gateway_options.forward_host = "internal.proxy-test.invalid";
   elder_terms::TelnetProtocol protocol("xterm");
@@ -1545,11 +1547,49 @@ static void test_proxy_forwarding(const ServerOptions &options, const std::files
         expect_true(prompt.title.find("SSH proxy") != std::string::npos, "gateway prompts must identify SSH proxy");
         co_return elder_terms::SshUserPromptResponse{.accepted = true, .text = prompt.initial_text, .reset_host_key = false};
       };
-      auto connecting = elder_terms::connect_ssh_proxy_async(proxy, gateway_options.forward_host, 23,
-          callbacks, {.known_hosts_file = known_hosts.string(), .config_file = {}}, {});
-      auto connection = std::move(co_await connecting);
+      std::shared_ptr<elder_terms::SshProxyConnection> connection;
+      std::shared_ptr<elder_terms::SshSocksProxy> adapter;
       cardio::io_uring io(64);
-      const int fd = elder_terms::ssh_proxy_connection_fd(connection);
+      int fd = -1;
+      std::string socket_path;
+      if (socks) {
+        auto opening = elder_terms::open_ssh_socks_proxy_async(proxy, gateway_options.forward_host,
+            callbacks, {.known_hosts_file = known_hosts.string(), .config_file = {}}, {});
+        adapter = std::move(co_await opening);
+        const auto url = elder_terms::ssh_socks_proxy_url(adapter);
+        expect_true(url.starts_with("socks5h://localhost/"), "SOCKS endpoint must use a private Unix socket");
+        socket_path = url.substr(std::string("socks5h://localhost").size());
+        struct stat info{};
+        expect_true(::stat(std::filesystem::path(socket_path).parent_path().c_str(), &info) == 0 &&
+            (info.st_mode & 0777) == 0700, "SOCKS directory must be private to this user");
+        fd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+        sockaddr_un address{};
+        address.sun_family = AF_UNIX;
+        std::copy(socket_path.begin(), socket_path.end(), address.sun_path);
+        expect_true(::connect(fd, reinterpret_cast<sockaddr *>(&address), sizeof(address)) == 0, "connect private SOCKS endpoint");
+        std::string greeting("\x05\x01\x00", 3);
+        co_await cardio::io_urings::write(io, fd, byte_span(greeting));
+        std::array<std::byte, 2> method{};
+        expect_true(co_await cardio::io_urings::read(io, fd, std::span(method)) == 2 && method[1] == std::byte{0}, "SOCKS method negotiation");
+        std::string request("\x05\x01\x00\x03", 4);
+        request.push_back(static_cast<char>(gateway_options.forward_host.size()));
+        request += gateway_options.forward_host;
+        request.append("\x00\x17", 2);
+        // Send individual bytes to exercise fragmented SOCKS negotiation.
+        for (const auto &byte : request) {
+          const auto one = std::span<const std::byte>(reinterpret_cast<const std::byte *>(&byte), 1);
+          co_await cardio::io_urings::write(io, fd, one);
+        }
+        std::array<std::byte, 10> response{};
+        std::size_t received = 0;
+        while (received < response.size()) received += co_await cardio::io_urings::read(io, fd, std::span(response).subspan(received));
+        expect_true(response[1] == std::byte{0}, "SOCKS CONNECT must reach the gateway");
+      } else {
+        auto connecting = elder_terms::connect_ssh_proxy_async(proxy, gateway_options.forward_host, 23,
+            callbacks, {.known_hosts_file = known_hosts.string(), .config_file = {}}, {});
+        connection = std::move(co_await connecting);
+        fd = elder_terms::ssh_proxy_connection_fd(connection);
+      }
       const auto data = byte_span(gateway_options.payload);
       std::size_t sent = 0;
       while (sent < data.size()) sent += co_await cardio::io_urings::write(io, fd, data.subspan(sent));
@@ -1567,6 +1607,12 @@ static void test_proxy_forwarding(const ServerOptions &options, const std::files
                   "TELNET negotiation and terminal data must survive forwarding");
       co_await elder_terms::stop_ssh_proxy_connection_async(connection);
       connection.reset();
+      if (adapter) {
+        ::close(fd);
+        co_await elder_terms::stop_ssh_socks_proxy_async(adapter);
+        adapter.reset();
+        expect_true(!std::filesystem::exists(socket_path), "stopping SOCKS must remove the private endpoint");
+      }
       expect_true(open_socket_count() == initial_sockets, "stopping proxy must release gateway and bridge sockets");
     } catch (...) { failure = std::current_exception(); }
     group.shutdown();
@@ -1802,7 +1848,8 @@ AAAEA8cCQePgwL2LLorJKJb/mbOaBviLYfCkaS2lc+lgrnvZglDbkkh3abjMMTzSsZS5/X
   options.auth_mode = ServerAuthMode::none;
   options.host_key_path = host_private_key;
   options.host_public_key_path = host_public_key;
-  test_proxy_forwarding(options, root / ".ssh" / "proxy_known_hosts");
+  test_proxy_forwarding(options, root / ".ssh" / "proxy_known_hosts", false);
+  test_proxy_forwarding(options, root / ".ssh" / "proxy_known_hosts", true);
   test_proxy_rejections(options, root / ".ssh" / "proxy_known_hosts");
   run_client_case(
       options,
