@@ -213,6 +213,10 @@ std::string ssh_socks_proxy_url(const std::shared_ptr<SshSocksProxy> &proxy) {
   return proxy ? "socks5h://localhost" + proxy->state->socket_path : std::string();
 }
 
+std::string ssh_socks_proxy_socket_path(const std::shared_ptr<SshSocksProxy> &proxy) {
+  return proxy ? proxy->state->socket_path : std::string();
+}
+
 cardio::promise<void> stop_ssh_socks_proxy_async(std::shared_ptr<SshSocksProxy> proxy) {
   if (!proxy) co_return;
   proxy->state->stopping.cancel();

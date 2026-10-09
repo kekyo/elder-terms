@@ -44,7 +44,7 @@ static std::string value_text(const SettingsStore &store, const char *name) {
 }
 
 static void update_validation(SshProxySettingsEditor *editor) {
-  const auto settings = ssh_proxy_settings(*editor->store);
+  const auto settings = editor->global ? ssh_proxy_settings(*editor->store) : ssh_proxy_connection_settings(*editor->store);
   auto errors = settings.validation_errors;
   gtk_widget_set_sensitive(editor->enabled, !editor->read_only);
   for (auto &field : editor->fields) {
@@ -135,6 +135,7 @@ SshProxySettingsEditor *create_ssh_proxy_settings_editor(SettingsStore *store,
   gtk_container_set_border_width(GTK_CONTAINER(editor->root), 12);
   assign_id(editor->root, editor->prefix + "_ssh_proxy_page");
   assign_id(editor->enabled, editor->prefix + "_ssh_proxy_enabled_combo");
+  assign_id(editor->error, editor->prefix + "_ssh_proxy_error_label");
   auto *label = gtk_label_new(_("Use SSH proxy"));
   gtk_label_set_xalign(GTK_LABEL(label), 0);
   gtk_grid_attach(GTK_GRID(editor->root), label, 0, 0, 1, 1);

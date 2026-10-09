@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #include <array>
@@ -82,6 +83,7 @@ static long curl_tls_version(FtpTlsVersion version, bool maximum) {
 // requests and wakes the condition variable; it never accesses an easy handle.
 struct CurlWorker {
   FtpClientOpenOptions options;
+  std::string proxy_socket_path;
   std::shared_ptr<TlsCertificatePolicy> certificates;
   std::mutex mutex;
   std::condition_variable changed;
@@ -94,7 +96,8 @@ struct CurlWorker {
   std::shared_ptr<CurlOperation> operation;
   cardio::promise_source<void> ready;
 
-  explicit CurlWorker(FtpClientOpenOptions options) : options(std::move(options)) {
+  CurlWorker(FtpClientOpenOptions options, std::string proxy_socket_path)
+      : options(std::move(options)), proxy_socket_path(std::move(proxy_socket_path)) {
     if (this->options.connection.tls_mode != FtpTlsMode::none &&
         this->options.connection.certificate_error_action == FtpCertificateErrorAction::prompt)
       certificates = create_tls_certificate_policy(this->options.connection.address, this->options.connection.port,
@@ -136,6 +139,26 @@ struct CurlWorker {
     return ::close(fd) == 0 ? 0 : 1;
   }
 
+  static curl_socket_t open_proxy_socket(void *data, curlsocktype purpose,
+                                       curl_sockaddr *) noexcept {
+    const auto &worker = *static_cast<CurlWorker *>(data);
+    if (purpose != CURLSOCKTYPE_IPCXN || worker.stopping.load()) return CURL_SOCKET_BAD;
+    sockaddr_un address{};
+    address.sun_family = AF_UNIX;
+    if (worker.proxy_socket_path.empty() || worker.proxy_socket_path.size() >= sizeof(address.sun_path))
+      return CURL_SOCKET_BAD;
+    std::memcpy(address.sun_path, worker.proxy_socket_path.c_str(), worker.proxy_socket_path.size() + 1);
+    const auto fd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
+    if (fd < 0) return CURL_SOCKET_BAD;
+    // A local nonblocking connect either completes immediately or fails. Never
+    // wait on a full accept queue or substitute a TCP connection on failure.
+    if (::connect(fd, reinterpret_cast<const sockaddr *>(&address), sizeof(address)) != 0) {
+      ::close(fd);
+      return CURL_SOCKET_BAD;
+    }
+    return fd;
+  }
+
   static int configure_socket(void *data, curl_socket_t fd,
                                 curlsocktype purpose) noexcept {
     auto *worker = static_cast<CurlWorker *>(data);
@@ -153,6 +176,7 @@ struct CurlWorker {
       if (worker->certificates && purpose == CURLSOCKTYPE_ACCEPT)
         worker->certificates->identity_slot = ftp_data_certificate_identity;
       worker->open_sockets.insert(fd);
+      if (!worker->proxy_socket_path.empty()) return CURL_SOCKOPT_ALREADY_CONNECTED;
       return CURL_SOCKOPT_OK;
     } catch (...) {
       if (worker->operation) worker->operation->callback_failure = std::current_exception();
@@ -325,7 +349,17 @@ struct CurlWorker {
       curl_easy_reset(easy);
       require_curl(curl_easy_setopt(easy, CURLOPT_URL, op->request.url.c_str()));
       require_curl(curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, options.connection.tls_mode == FtpTlsMode::implicit_tls ? "ftps" : "ftp"));
-      require_curl(curl_easy_setopt(easy, CURLOPT_PROXY, ""));
+      // FTP's secondary-connection resolver treats a Unix SOCKS URL as a DNS
+      // hostname (e.g. curl 8.5 ftp_state_pasv_resp). Supply the private socket
+      // through the public already-connected-socket API for both connections.
+      // This numeric proxy address is only a resolver placeholder, never dialed.
+      require_curl(curl_easy_setopt(easy, CURLOPT_PROXY,
+          proxy_socket_path.empty() ? "" : "socks5h://127.0.0.1:1"));
+      if (!proxy_socket_path.empty()) {
+        require_curl(curl_easy_setopt(easy, CURLOPT_OPENSOCKETFUNCTION, open_proxy_socket));
+        require_curl(curl_easy_setopt(easy, CURLOPT_OPENSOCKETDATA, this));
+      }
+      require_curl(curl_easy_setopt(easy, CURLOPT_NOPROXY, ""));
       require_curl(curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L));
       require_curl(curl_easy_setopt(easy, CURLOPT_USE_SSL, static_cast<long>(options.connection.tls_mode == FtpTlsMode::none ? CURLUSESSL_NONE : CURLUSESSL_ALL)));
       if (options.connection.tls_mode != FtpTlsMode::none) {
@@ -524,6 +558,7 @@ struct CurlOwnedDescriptor {
 
 class CurlFtpSessionAdapter final : public CurlFtpSession {
   std::shared_ptr<CurlWorker> worker;
+  std::shared_ptr<SshSocksProxy> proxy;
   CurlOwnedDescriptor thread_exit_read;
   cardio::promise<void> worker_task;
   cardio::primitives::mutex stop_mutex;
@@ -532,8 +567,8 @@ class CurlFtpSessionAdapter final : public CurlFtpSession {
   std::optional<TlsCertificateFailure> pending_approval;
 
 public:
-  explicit CurlFtpSessionAdapter(std::shared_ptr<CurlWorker> worker)
-      : worker(std::move(worker)) {
+  CurlFtpSessionAdapter(std::shared_ptr<CurlWorker> worker, std::shared_ptr<SshSocksProxy> proxy)
+      : worker(std::move(worker)), proxy(std::move(proxy)) {
     int descriptors[2];
     if (::pipe2(descriptors, O_CLOEXEC | O_NONBLOCK) != 0) {
       throw std::system_error(errno, std::generic_category(), "FTP worker exit pipe");
@@ -606,6 +641,7 @@ public:
       thread_exit_read.reset();
       (void)timer_cancel.cancel();
       co_await deadline;
+      co_await stop_ssh_socks_proxy_async(proxy);
       stopped = true;
       if (failure) std::rethrow_exception(failure);
     }
@@ -616,6 +652,8 @@ cardio::promise<std::shared_ptr<CurlFtpSession>>
 open_curl_ftp_session_async(FtpClientOpenOptions options) {
   if (!options.connection.validation_errors.empty())
     throw std::invalid_argument(options.connection.validation_errors.front());
+  if (options.proxy && options.connection.data_connection_mode == FtpDataConnectionMode::active)
+    throw std::invalid_argument("SSH proxy requires passive FTP/FTPS; select Passive or disable SSH proxy");
   static const CurlGlobal global;
   (void)global;
   const curl_version_info_data *version = curl_version_info(CURLVERSION_NOW);
@@ -653,9 +691,12 @@ open_curl_ftp_session_async(FtpClientOpenOptions options) {
        !options.connection.tls_cipher_list.empty() || !options.connection.tls13_cipher_list.empty()) &&
       (!version->ssl_version || !std::string_view(version->ssl_version).starts_with("OpenSSL/")))
     throw std::runtime_error("These FTPS cipher and compatibility settings require OpenSSL");
-  auto worker = std::make_shared<CurlWorker>(std::move(options));
+  // SSH forwarding belongs to the caller's dispatcher. The worker receives
+  // only the socket path and must not release the last gateway owner.
+  auto proxy = std::exchange(options.proxy, nullptr);
+  auto worker = std::make_shared<CurlWorker>(std::move(options), ssh_socks_proxy_socket_path(proxy));
   auto ready = worker->ready.get_promise();
-  auto session = std::make_shared<CurlFtpSessionAdapter>(worker);
+  auto session = std::make_shared<CurlFtpSessionAdapter>(worker, std::move(proxy));
   std::exception_ptr failure;
   try {
     co_await ready;

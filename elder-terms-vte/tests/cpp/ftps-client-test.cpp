@@ -3,6 +3,7 @@
 #include <array>
 #include <curl/curl.h>
 #include <exception>
+#include <cstdlib>
 #include <filesystem>
 #include <thread>
 #include <iostream>
@@ -14,17 +15,48 @@ static void expect(bool condition, const char *message) {
   if (!condition) throw std::runtime_error(message);
 }
 
+static std::size_t socket_count() {
+  std::size_t count = 0;
+  for (const auto &entry : std::filesystem::directory_iterator("/proc/self/fd")) {
+    std::error_code error;
+    if (std::filesystem::read_symlink(entry.path(), error).string().starts_with("socket:")) ++count;
+  }
+  return count;
+}
+
 static cardio::promise<void> run_async(
     elder_terms::FtpConnectionSettings connection, std::string scenario,
     cardio::dispatcher_group_glib &group, std::exception_ptr &failure) {
   std::shared_ptr<elder_terms::RemoteFileClient> client;
+  std::shared_ptr<elder_terms::SshSocksProxy> proxy;
   const bool approve = scenario.starts_with("approve");
   const bool expect_success = scenario == "success" || approve;
   const auto caller = std::this_thread::get_id();
   const auto root = connection.local_directory;
   unsigned confirmations = 0;
   bool succeeded = false;
+  const auto initial_sockets = socket_count();
   try {
+    if (const auto *port = std::getenv("ELDER_TERMS_TEST_PROXY_PORT")) {
+      elder_terms::TerminalSessionCallbacks callbacks{};
+      callbacks.ssh_prompt = [](const auto &prompt, cardio::cancellation) -> cardio::promise<elder_terms::SshUserPromptResponse> {
+        co_return elder_terms::SshUserPromptResponse{.accepted = true, .text = prompt.initial_text};
+      };
+      elder_terms::SshProxySettings route{.enabled = true,
+          .endpoint = {.address = "127.0.0.1", .port = std::stoll(port), .username = "gateway-test", .identity_file = {}}};
+      auto connecting = elder_terms::open_ssh_socks_proxy_async(route, connection.address, callbacks,
+          {.known_hosts_file = std::getenv("ELDER_TERMS_TEST_PROXY_KNOWN_HOSTS"), .config_file = {}}, {});
+      proxy = std::move(co_await connecting);
+      auto active = connection;
+      active.data_connection_mode = elder_terms::FtpDataConnectionMode::active;
+      bool rejected = false;
+      try {
+        auto invalid = co_await elder_terms::open_ftp_client_async(
+            {.connection = active, .password = "secret", .proxy = proxy}, {});
+        co_await elder_terms::stop_ftp_client_async(invalid);
+      } catch (const std::invalid_argument &) { rejected = true; }
+      expect(rejected, "The FTP backend must reject active mode with SSH proxy before making requests");
+    }
     auto opening = elder_terms::open_ftp_client_async({.connection = std::move(connection), .password = "secret",
          .confirm_certificate = [&](const elder_terms::TlsCertificateFailure &failure, cardio::cancellation cancellation) -> cardio::promise<bool> {
            expect(std::this_thread::get_id() == caller, "Confirmation must run on the caller dispatcher");
@@ -34,7 +66,7 @@ static cardio::promise<void> run_async(
            ++confirmations;
            std::cout << "CONFIRM " << (failure.identity_slot == elder_terms::ftp_data_certificate_identity ? "data" : "control") << " " << failure.validation_code << " " << failure.sha256 << std::endl;
            co_return approve;
-         }}, {});
+         }, .proxy = proxy}, {});
     client = co_await opening;
     if (scenario == "approve-data") {
       bool failed = false;
@@ -74,12 +106,23 @@ static cardio::promise<void> run_async(
         expect(buffer[i] == bytes[offset + i], "FTPS must preserve binary contents");
       offset += count;
     }
+    if (offset != bytes.size()) std::cerr << "Downloaded " << offset << " of " << bytes.size()
+        << ", server file " << std::filesystem::file_size(root + "/home/roundtrip/renamed") << std::endl;
     expect(offset == bytes.size(), "FTPS must not truncate downloads");
     co_await reader->close_async({});
     reader.reset();
     co_await client->remove_file_async("/home/roundtrip/renamed", {});
     co_await client->remove_directory_async("/home/roundtrip", {});
     expect(!(co_await client->lstat_async("/home/roundtrip", {})), "FTPS deletion must take effect");
+    if (proxy) {
+      // open_write waits for the actual data connection to request upload bytes.
+      auto interrupted = std::move(co_await client->open_write_async("/home/interrupted", 1024 * 1024, std::nullopt, {}));
+      co_await elder_terms::stop_ftp_client_async(client);
+      bool stopped = false;
+      try { co_await interrupted->write_all_async(bytes, {}); }
+      catch (const std::exception &) { stopped = true; }
+      expect(stopped, "Stopping FTP must retire a pending upload through SSH");
+    }
     succeeded = true;
   } catch (const std::exception &error) {
     std::cout << "RESULT ERROR " << error.what() << std::endl;
@@ -88,6 +131,11 @@ static cardio::promise<void> run_async(
   if (succeeded != expect_success && !failure)
     failure = std::make_exception_ptr(std::runtime_error("Unexpected FTPS connection result"));
   if (client) co_await elder_terms::stop_ftp_client_async(client);
+  co_await elder_terms::stop_ssh_socks_proxy_async(proxy);
+  if (proxy) {
+    expect(!std::filesystem::exists(elder_terms::ssh_socks_proxy_socket_path(proxy)), "Stopping FTP must remove its private proxy endpoint");
+    expect(socket_count() == initial_sockets, "Stopping FTP must release its control, data and SSH sockets");
+  }
   group.shutdown();
 }
 

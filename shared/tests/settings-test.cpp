@@ -206,6 +206,15 @@ static void test_ssh_proxy_settings_round_trip_and_inheritance() {
               "SSH proxy must accept a gateway hostname");
   expect_true(set_explicit_setting_value(&store, port, gint64{2222}),
               "SSH proxy must accept a gateway port");
+  set_explicit_setting_value(&store, general_type_setting_key(), std::string("ftp"));
+  expect_true(elder_terms::ssh_proxy_connection_settings(store).validation_errors.empty(),
+              "Passive FTP must support SSH proxy");
+  set_explicit_setting_value(&store, elder_terms::ftp_data_connection_mode_setting_key(), std::string("active"));
+  expect_true(!elder_terms::ssh_proxy_connection_settings(store).validation_errors.empty(),
+              "Active FTP must reject SSH proxy before connecting");
+  expect_true(elder_terms::ftp_connection_settings(store).data_connection_mode == elder_terms::FtpDataConnectionMode::active,
+              "Proxy validation must retain the requested FTP mode");
+  set_explicit_setting_value(&store, elder_terms::ftp_data_connection_mode_setting_key(), std::string("passive"));
   const auto global = temporary_config_path("proxy-global");
   const auto connection = temporary_config_path("proxy-connection");
   expect_true(save_global_settings(store, global).saved, "save proxy defaults");

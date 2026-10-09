@@ -75,15 +75,20 @@ static int on_message(ssh_session, ssh_message message, void *opaque) {
   const int port = ssh_message_channel_request_open_destination_port(message);
   if (!host || port < 1 || port > 65535) return 1;
   const std::string name(host);
-  if (name != "proxy-test.invalid" && name != "127.0.0.1" && name != "localhost") return 1;
+  if (name != "proxy-test.invalid" && name != "127.0.0.1" && name != "localhost" && name != "::1") return 1;
   auto forward = std::make_unique<Forward>();
   forward->event = gateway.event;
-  forward->fd = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+  forward->fd = ::socket(name == "::1" ? AF_INET6 : AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
   sockaddr_in peer{};
   peer.sin_family = AF_INET;
   peer.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
   peer.sin_port = htons(port);
-  if (forward->fd < 0 || ::connect(forward->fd, reinterpret_cast<sockaddr *>(&peer), sizeof(peer)) != 0) {
+  sockaddr_in6 peer6{};
+  peer6.sin6_family = AF_INET6;
+  peer6.sin6_addr = in6addr_loopback;
+  peer6.sin6_port = htons(port);
+  const auto *target = name == "::1" ? reinterpret_cast<sockaddr *>(&peer6) : reinterpret_cast<sockaddr *>(&peer);
+  if (forward->fd < 0 || ::connect(forward->fd, target, name == "::1" ? sizeof(peer6) : sizeof(peer)) != 0) {
     close_peer(*forward);
     return 1;
   }

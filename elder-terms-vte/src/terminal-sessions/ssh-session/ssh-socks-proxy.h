@@ -23,6 +23,9 @@ cardio::promise<std::shared_ptr<SshSocksProxy>> open_ssh_socks_proxy_async(
 /** @param proxy Adapter or null for direct access. @returns socks5h URL, or empty for direct access. */
 std::string ssh_socks_proxy_url(const std::shared_ptr<SshSocksProxy> &proxy);
 
+/** @param proxy Adapter or null. @returns Private Unix socket path, or empty for direct access. */
+std::string ssh_socks_proxy_socket_path(const std::shared_ptr<SshSocksProxy> &proxy);
+
 /**
  * Stops accepting connections and joins all forwarding operations.
  * @param proxy Adapter; null and repeated calls are accepted.

@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
   gtk_init(&argc, &argv);
   try {
     using namespace elder_terms;
-    for (const auto *type : {"telnet", "ssh", "sftp", "webdav", "local", "serial"}) {
+    for (const auto *type : {"telnet", "ssh", "sftp", "webdav", "ftp", "local", "serial"}) {
       auto store = create_default_settings({}, "proxy test");
       set_explicit_setting_value(&store, general_type_setting_key(), std::string(type));
       SettingsWidgetOptions options;
@@ -52,6 +52,21 @@ int main(int argc, char **argv) {
         const auto proxy = ssh_proxy_settings(settings_widget_draft_store(state));
         require(proxy.enabled && proxy.endpoint.address == "bastion.example" && proxy.endpoint.port == 2222,
                 "UI must update the independent proxy settings");
+        if (std::string_view(type) == "ftp") {
+          auto *mode = find_widget(root, "settings_ftp_data_connection_mode_combo");
+          gtk_combo_box_set_active_id(GTK_COMBO_BOX(mode), "active");
+          require(!settings_widget_is_valid(state), "Active FTP must not use SSH proxy");
+          auto *error = find_widget(root, "settings_ssh_proxy_error_label");
+          require(error && std::string_view(gtk_label_get_text(GTK_LABEL(error))).find("Passive") != std::string_view::npos,
+                  "The proxy tab must explain how to resolve active FTP incompatibility");
+          require(ftp_connection_settings(settings_widget_draft_store(state)).data_connection_mode == FtpDataConnectionMode::active,
+                  "Validation must not silently change FTP mode");
+          gtk_combo_box_set_active_id(GTK_COMBO_BOX(enabled), "false");
+          require(settings_widget_is_valid(state), "Direct active FTP must remain valid");
+          gtk_combo_box_set_active_id(GTK_COMBO_BOX(enabled), "true");
+          gtk_combo_box_set_active_id(GTK_COMBO_BOX(mode), "passive");
+          require(settings_widget_is_valid(state), "Passive FTP must permit SSH proxy");
+        }
         gtk_entry_set_text(GTK_ENTRY(port), "invalid");
         require(!settings_widget_is_valid(state), "unfinished port must prevent Apply");
         settings_widget_rebase_fallbacks(state, store);

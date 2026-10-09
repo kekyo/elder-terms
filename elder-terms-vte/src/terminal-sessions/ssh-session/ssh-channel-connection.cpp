@@ -1420,14 +1420,13 @@ struct AuthenticatedSshTransport::Impl {
     }
     channels.clear();
     if (session != nullptr) {
-      // libssh owns its internally opened sockets, but SSH_OPTIONS_FD sockets
-      // remain ours after a normal disconnect. Fatal socket errors can already
-      // have closed them; query the live descriptor before resetting the session.
-      const int connected_fd = ssh_get_fd(session);
-      ssh_disconnect(session);
+      // Channels have already been retired. Close through libssh so a fatal
+      // write cannot close the descriptor between taking a snapshot and our
+      // own close(), which could otherwise target a newly reused descriptor.
+      // A normal ssh_disconnect leaves SSH_OPTIONS_FD sockets open in 0.10+.
+      ssh_silent_disconnect(session);
       ssh_free(session);
       session = nullptr;
-      if (connected_fd >= 0) (void)::close(connected_fd);
       socket_fd = -1;
     }
   }

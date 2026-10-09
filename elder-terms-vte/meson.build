@@ -165,7 +165,7 @@ executable(
     gtk_dep,
     liburing_dep,
     ssh_transport_dep,
-    libcurl_dep, ssh_transport_dep,
+    libcurl_dep,
     libxml2_dep,
     openssl_dep,
   ],
@@ -254,6 +254,8 @@ ftps_client_test = executable(
    'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp', 'src/ftp/ftp-metadata.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, openssl_dep],
 )
+test('ssh-proxy-ftp-test', find_program('node'),
+  args: [files('tests/ssh-proxy-ftp-runner.mjs'), ftps_client_test, ftp_test_server, ssh_proxy_test_server], timeout: 180)
 
 
 
@@ -833,8 +835,10 @@ webdav_tls_session_test = executable(
 )
 test('webdav-tls-session-test', find_program('node'),
   args: [files('tests/webdav-tls-session-runner.mjs'), webdav_tls_session_test], timeout: 120)
+if get_option('build_tests')
 test('webdav-proxy-tls-session-test', find_program('node'),
   args: [files('tests/webdav-tls-session-runner.mjs'), webdav_tls_session_test, ssh_proxy_test_server], timeout: 120)
+endif
 
 webdav_apache_test = executable(
   'webdav-apache-test',

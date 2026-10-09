@@ -53,7 +53,7 @@ static cardio::promise<void> copy_to_gateway_async(SshProxyBridge &bridge) {
       if (count > 0) {
         co_await bridge.channel->write_all_async(
             std::span<const unsigned char>(buffer.data(), count), cancellation);
-      } else if (count == 0) {
+      } else if (count == 0 || (count < 0 && errno == ECONNRESET)) {
         co_await bridge.channel->send_eof_async(cancellation);
         co_return;
       } else if (errno == EINTR) {
@@ -88,6 +88,11 @@ static cardio::promise<void> copy_from_gateway_async(SshProxyBridge &bridge) {
         else if (sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
           (void)co_await cardio::from_fd(bridge.fd,
               cardio::fd_event::write | cardio::fd_event::error | cardio::fd_event::hangup, cancellation);
+        } else if (sent < 0 && (errno == EPIPE || errno == ECONNRESET)) {
+          // The local peer may close after queuing its final upload bytes.
+          // Drain those bytes in the other pump before sending channel EOF;
+          // aborting both directions here would silently truncate the upload.
+          co_return;
         } else {
           throw std::system_error(errno, std::generic_category(), "SSH proxy socket write");
         }

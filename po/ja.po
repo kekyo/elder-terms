@@ -2438,3 +2438,6 @@ msgstr "SSH proxyへの接続に失敗しました"
 
 msgid "SSH proxy requires a valid gateway address and port"
 msgstr "SSH proxyには有効な踏み台のアドレスとポートが必要です"
+
+msgid "SSH proxy requires passive FTP/FTPS; select Passive or disable SSH proxy"
+msgstr "SSH proxyにはパッシブFTP/FTPSが必要です。パッシブを選択するか、SSH proxyを無効にしてください"

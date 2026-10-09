@@ -255,6 +255,11 @@ See the [systemd resolver API documentation](https://github.com/systemd/systemd/
 
 ## Using SSH and SFTP
 
+SSH, SFTP, TELNET, WebDAV and passive FTP/FTPS can use an SSH gateway.
+Configure it in the separate "SSH proxy" tab, keeping the final destination in
+its protocol tab. See [Using SSH proxy](./docs/en/ssh-proxy.md) for inheritance,
+authentication and supported connection modes.
+
 When an SSH terminal or a dedicated SFTP window starts,
 a user-name panel is shown before the SSH connection is opened.
 The initial value is selected in this order:
