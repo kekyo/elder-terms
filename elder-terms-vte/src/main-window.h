@@ -158,8 +158,8 @@ struct MainWindow {
   GtkWidget *activity_indicator_bar = nullptr;
   /** True while indicators occupy the title bar. */
   bool compact_mode = false;
-  /** Screen provider scoped to the compact terminal header and its controls. */
-  GtkCssProvider *compact_header_provider = nullptr;
+  /** Owned screen provider scoped to the terminal header and its controls. */
+  GtkCssProvider *header_provider = nullptr;
   /** Open runtime settings dialog receiving connection backgrounds. */
   GtkWidget *settings_dialog = nullptr;
   /** Root of the open settings widget receiving connection backgrounds. */

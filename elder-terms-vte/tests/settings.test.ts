@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server, type Socket } from 'node:net';
@@ -2390,6 +2390,14 @@ describe.concurrent('elder-terms-vte settings', () => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'compact-setting.ini');
       await writeFile(configPath, '[general]\nname=Compact test\n', 'utf8');
+      // Slow theme transitions expose intermediate geometry reliably in video.
+      await mkdir(join(directory, 'gtk-3.0'));
+      await writeFile(
+        join(directory, 'gtk-3.0', 'gtk.css'),
+        'headerbar { background: #123456; }\n' +
+          'headerbar, headerbar button { transition-duration: 2s; }\n',
+        'utf8'
+      );
       await runGtkTest(
         context,
         ['--test-fixture', '-c', configPath],
@@ -2404,71 +2412,229 @@ describe.concurrent('elder-terms-vte settings', () => {
             'regular-header',
             async () => header.capture()
           );
-          await openSettingsDialog(app);
-          await showGeneralSettingsPage(app);
-          const compact = expectElementKind(
-            await app.getById('settings_general_compact_mode_combo'),
-            'comboBox'
+          const regularButtons = await Promise.all(
+            ['transfer_button', 'application_menu_button'].map(async (id) => ({
+              id,
+              bounds: (await (await app.getById(id)).capture()).bounds,
+            }))
           );
-          await expectSelectedComboValue(
-            app,
-            'settings_general_compact_mode_combo',
-            'Disabled (built-in default)'
+          const area = regularHeader.bounds;
+          const videoHeight = area.height + 2;
+          const videoPath = join(evidence.directory, 'compact-header.mkv');
+          const environment = await app.environment();
+          const recorder = spawn(
+            'ffmpeg',
+            [
+              '-hide_banner',
+              '-loglevel',
+              'error',
+              '-f',
+              'x11grab',
+              '-framerate',
+              '30',
+              '-draw_mouse',
+              '0',
+              '-video_size',
+              `${area.width}x${videoHeight}`,
+              '-i',
+              `${environment.DISPLAY}+${area.x},${area.y}`,
+              '-progress',
+              'pipe:1',
+              '-stats_period',
+              '0.1',
+              '-c:v',
+              'ffv1',
+              '-pix_fmt',
+              'bgr0',
+              videoPath,
+            ],
+            { env: environment, stdio: ['pipe', 'pipe', 'pipe'] }
           );
-          await compact.selectChildAt(1);
-          await expectElementKind(
-            await app.getById('settings_save_button'),
-            'button'
-          ).click();
-          await expectSettingsDialogClosed(app);
-          expect(await readFile(configPath, 'utf8')).toContain(
-            'compact_mode=true'
-          );
-          await waitForResult(async () => {
-            const layout = await readWindowCellLayout(app);
-            expectWindowCellSize(layout, defaultColumns, defaultRows);
-            await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
-            expect(
-              (await (await app.getById('status_bar')).info()).states
-            ).not.toContain('showing');
-            expect(
-              (await (await app.getById('frame_bottom_border')).info()).states
-            ).not.toContain('showing');
-            expect((await header.capture()).bounds.height).toBe(
-              Math.round(regularHeader.bounds.height * 0.75)
-            );
+          let frames = 0;
+          let progress = '';
+          let recordingError: Error | undefined;
+          let recordingStderr = '';
+          const recordingFinished = new Promise<number | null>((resolve) => {
+            recorder.once('error', (error) => {
+              recordingError = error;
+            });
+            recorder.once('close', resolve);
           });
-          await evidence.captureEvidence('compact-header', async () =>
-            header.capture()
-          );
-          await openSettingsDialog(app);
-          await showGeneralSettingsPage(app);
-          const compactAgain = expectElementKind(
-            await app.getById('settings_general_compact_mode_combo'),
-            'comboBox'
-          );
-          await expectSelectedComboValue(
-            app,
-            'settings_general_compact_mode_combo',
-            'Enabled'
-          );
-          await compactAgain.selectChildAt(2);
-          await expectElementKind(
-            await app.getById('settings_apply_button'),
-            'button'
-          ).click();
-          await expectSettingsDialogClosed(app);
-          await waitForResult(async () => {
-            const layout = await readTerminalGridLayout(app);
-            expectWindowCellSize(layout, defaultColumns, defaultRows);
-            await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
-            expect(
-              (await (await app.getById('status_bar')).info()).states
-            ).toContain('showing');
-            expect((await header.capture()).bounds.height).toBe(
-              regularHeader.bounds.height
-            );
+          recorder.stderr.on('data', (bytes: Buffer) => {
+            recordingStderr += bytes.toString();
           });
+          recorder.stdout.on('data', (bytes: Buffer) => {
+            const lines = (progress + bytes.toString()).split('\n');
+            progress = lines.pop()!;
+            for (const line of lines) {
+              if (line.startsWith('frame=')) frames = Number(line.slice(6));
+            }
+          });
+          // Probe the empty left padding to find the painted header's lower
+          // edge. The fixed background also works while a dialog is open.
+          const paintedHeight = (
+            pixels: Buffer,
+            stride: number,
+            x: number
+          ): number => {
+            let y = 2;
+            while (y * stride < pixels.length) {
+              const offset = y * stride + x * 4;
+              if (
+                pixels[offset] !== 0x12 ||
+                pixels[offset + 1] !== 0x34 ||
+                pixels[offset + 2] !== 0x56
+              )
+                break;
+              ++y;
+            }
+            return y === 2 ? 0 : y;
+          };
+          const regularPng = PNG.sync.read(regularHeader.image);
+          const expectedHeights = new Set([
+            paintedHeight(regularPng.data, regularPng.width * 4, 2),
+          ]);
+          try {
+            await waitForResult(async () => {
+              if (recordingError !== undefined) throw recordingError;
+              expect(recorder.exitCode, recordingStderr).toBeNull();
+              expect(frames).toBeGreaterThan(0);
+            });
+            await openSettingsDialog(app);
+            await expectElementKind(
+              await app.getById('settings_dialog'),
+              'window'
+            ).moveTo(0, area.y + videoHeight + 10);
+            await showGeneralSettingsPage(app);
+            const compact = expectElementKind(
+              await app.getById('settings_general_compact_mode_combo'),
+              'comboBox'
+            );
+            await expectSelectedComboValue(
+              app,
+              'settings_general_compact_mode_combo',
+              'Disabled (built-in default)'
+            );
+            await compact.selectChildAt(1);
+            await expectElementKind(
+              await app.getById('settings_save_button'),
+              'button'
+            ).click();
+            await expectSettingsDialogClosed(app);
+            expect(await readFile(configPath, 'utf8')).toContain(
+              'compact_mode=true'
+            );
+            await waitForResult(async () => {
+              const layout = await readWindowCellLayout(app);
+              expectWindowCellSize(layout, defaultColumns, defaultRows);
+              await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+              expect(
+                (await (await app.getById('status_bar')).info()).states
+              ).not.toContain('showing');
+              expect(
+                (await (await app.getById('frame_bottom_border')).info()).states
+              ).not.toContain('showing');
+              expect((await header.capture()).bounds.height).toBe(
+                Math.round(regularHeader.bounds.height * 0.75)
+              );
+            });
+            const compactHeader = await evidence.captureEvidence(
+              'compact-header',
+              async () => header.capture()
+            );
+            const compactPng = PNG.sync.read(compactHeader.image);
+            expectedHeights.add(
+              paintedHeight(compactPng.data, compactPng.width * 4, 2)
+            );
+            await openSettingsDialog(app);
+            await expectElementKind(
+              await app.getById('settings_dialog'),
+              'window'
+            ).moveTo(0, area.y + videoHeight + 10);
+            await showGeneralSettingsPage(app);
+            const compactAgain = expectElementKind(
+              await app.getById('settings_general_compact_mode_combo'),
+              'comboBox'
+            );
+            await expectSelectedComboValue(
+              app,
+              'settings_general_compact_mode_combo',
+              'Enabled'
+            );
+            await compactAgain.selectChildAt(2);
+            await expectElementKind(
+              await app.getById('settings_apply_button'),
+              'button'
+            ).click();
+            await expectSettingsDialogClosed(app);
+            await waitForResult(async () => {
+              const layout = await readTerminalGridLayout(app);
+              expectWindowCellSize(layout, defaultColumns, defaultRows);
+              await expectFixtureVteGridSize(app, defaultColumns, defaultRows);
+              expect(
+                (await (await app.getById('status_bar')).info()).states
+              ).toContain('showing');
+              expect((await header.capture()).bounds.height).toBe(
+                regularHeader.bounds.height
+              );
+              for (const { id, bounds: regular } of regularButtons) {
+                const { bounds } = await (await app.getById(id)).capture();
+                expect(bounds.width, id).toBe(regular.width);
+                expect(bounds.height, id).toBe(regular.height);
+                expect(bounds.y, id).toBe(regular.y);
+              }
+            });
+            const restoredFrame = frames;
+            await waitForResult(async () =>
+              expect(frames).toBeGreaterThan(restoredFrame + 3)
+            );
+          } finally {
+            if (recorder.exitCode === null && recordingError === undefined)
+              recorder.stdin.write('q\n');
+            expect(await recordingFinished, recordingStderr).toBe(0);
+          }
+          const { stdout: pixels } = await execFileAsync(
+            'ffmpeg',
+            [
+              '-v',
+              'error',
+              '-i',
+              videoPath,
+              '-vf',
+              'crop=1:ih:2:0',
+              '-pix_fmt',
+              'rgba',
+              '-f',
+              'rawvideo',
+              'pipe:1',
+            ],
+            { encoding: 'buffer' }
+          );
+          const observedHeights = new Set<number>();
+          const frameBytes = videoHeight * 4;
+          for (let offset = 0; offset < pixels.length; offset += frameBytes) {
+            const height = paintedHeight(
+              pixels.subarray(offset, offset + frameBytes),
+              4,
+              0
+            );
+            // A newly opened settings dialog may briefly cover the header.
+            if (height !== 0) observedHeights.add(height);
+          }
+          await evidence.log('recorded header heights', {
+            expected: [...expectedHeights],
+            observed: [...observedHeights],
+            frames,
+          });
+          expect(expectedHeights.size).toBe(2);
+          expect(observedHeights).toEqual(expectedHeights);
+        },
+        {
+          env: {
+            XDG_CONFIG_HOME: directory,
+            GTK_THEME: 'Adwaita',
+            GDK_SCALE: '1',
+          },
         }
       );
     });

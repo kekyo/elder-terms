@@ -37,6 +37,9 @@ describe.concurrent('elder-terms-vte terminal layout', () => {
     { theme: 'Adwaita', scale: 1 },
     { theme: 'Adwaita:dark', scale: 1 },
     { theme: 'Adwaita', scale: 2 },
+    { theme: 'Yaru', scale: 1 },
+    { theme: 'Yaru-dark', scale: 1 },
+    { theme: 'Yaru-dark', scale: 2 },
   ]) {
     it(`shrinks the compact title bar to 75% with intact serial indicators and controls (${theme}, scale ${scale})`, async (context) => {
       await withTemporaryDirectory(async (directory) => {
@@ -141,10 +144,15 @@ describe.concurrent('elder-terms-vte terminal layout', () => {
             const pending: GtkWidgetElement[] = [
               await app.getById('header_bar'),
             ];
+            const buttons = [
+              await app.getById('transfer_button'),
+              await app.getById('application_menu_button'),
+            ];
             let closeButton;
             while (pending.length !== 0) {
               const widget = pending.shift()!;
               if (widget.kind === 'button') {
+                buttons.push(widget);
                 const capture = await widget.capture();
                 expect(capture.bounds.x).toBeGreaterThanOrEqual(previousEnd);
                 expect(capture.bounds.y).toBeGreaterThanOrEqual(
@@ -172,6 +180,29 @@ describe.concurrent('elder-terms-vte terminal layout', () => {
             if (closeButton === undefined)
               throw new Error('Missing title-bar close button');
             const close = await closeButton.capture();
+
+            const menu = await (
+              await app.getById('application_menu_button')
+            ).capture();
+            for (const button of buttons) {
+              const { bounds } = await button.capture();
+              const name = (await button.info()).name;
+              // Both application and window controls should stay square,
+              // similarly sized, and clear of the title bar's edges.
+              expect(bounds.width, name).toBe(bounds.height);
+              expect(bounds.height, name).toBe(menu.bounds.height);
+              expect(bounds.height, name).toBeGreaterThanOrEqual(24);
+              expect(bounds.y - header.bounds.y, name).toBeGreaterThanOrEqual(
+                2
+              );
+              expect(
+                header.bounds.y +
+                  header.bounds.height -
+                  bounds.y -
+                  bounds.height,
+                name
+              ).toBeGreaterThanOrEqual(2);
+            }
 
             for (const [buttonId, itemId] of [
               ['application_menu_button', 'settings_menu_item'],
