@@ -22,6 +22,10 @@ struct SettingChoiceEntry {
 };
 
 static constexpr std::array setting_labels{
+    SettingLabelEntry{"ssh_proxy", "address", N_("Address")},
+    SettingLabelEntry{"ssh_proxy", "port", N_("Port")},
+    SettingLabelEntry{"ssh_proxy", "username", N_("User name")},
+    SettingLabelEntry{"ssh_proxy", "identity_file", N_("Identity file")},
     SettingLabelEntry{"ftp", "tls_mode", N_("Encryption")},
     SettingLabelEntry{"webdav", "scheme", N_("Connection security")},
     SettingLabelEntry{"webdav", "address", N_("Address")},
@@ -68,8 +72,8 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"terminal", "scrollback_lines",
                       N_("Scrollback lines")},
     SettingLabelEntry{"terminal", "zoom", N_("Zoom factor")},
-    SettingLabelEntry{"terminal", "indicator_color", N_("Active indicator color")},
-    SettingLabelEntry{"terminal", "indicator_off_color", N_("Inactive indicator color")},
+    SettingLabelEntry{"general", "indicator_color", N_("Active indicator color")},
+    SettingLabelEntry{"general", "indicator_off_color", N_("Inactive indicator color")},
     SettingLabelEntry{"terminal", "font_families", N_("Font families")},
     SettingLabelEntry{"terminal", "show_border",
                       N_("Show window side borders")},

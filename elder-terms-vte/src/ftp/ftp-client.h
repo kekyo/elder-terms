@@ -9,6 +9,7 @@
 
 #include "../file-transfer/remote-file-client.h"
 #include "../tls/certificate-failure.h"
+#include "../terminal-sessions/ssh-session/ssh-socks-proxy.h"
 
 namespace elder_terms {
 
@@ -26,6 +27,8 @@ struct FtpClientOpenOptions {
   std::string password;
   /** Called on the caller dispatcher after a failed handshake ends; true approves only this failure. */
   std::function<cardio::promise<bool>(const TlsCertificateFailure &, cardio::cancellation)> confirm_certificate{};
+  /** Owned SSH route for both control and passive data connections; null uses direct TCP. */
+  std::shared_ptr<SshSocksProxy> proxy{};
 };
 
 /**

@@ -28,6 +28,7 @@
 
 #include "hyperlink-settings-editor.h"
 #include "webdav-settings-editor.h"
+#include "ssh-proxy-settings-editor.h"
 #include "settings-presentation.h"
 
 #define GETTEXT_PACKAGE "elder-terms"
@@ -131,10 +132,10 @@ struct SettingsWidgetState {
   GtkWidget *terminal_height_entry = nullptr;
   GtkWidget *terminal_scrollback_lines_entry = nullptr;
   GtkWidget *terminal_zoom_entry = nullptr;
-  GtkWidget *terminal_indicator_color_mode_combo = nullptr;
-  GtkWidget *terminal_indicator_color_button = nullptr;
-  GtkWidget *terminal_indicator_off_color_mode_combo = nullptr;
-  GtkWidget *terminal_indicator_off_color_button = nullptr;
+  GtkWidget *general_indicator_color_mode_combo = nullptr;
+  GtkWidget *general_indicator_color_button = nullptr;
+  GtkWidget *general_indicator_off_color_mode_combo = nullptr;
+  GtkWidget *general_indicator_off_color_button = nullptr;
   GtkWidget *terminal_page_surface = nullptr;
   GtkWidget *terminal_font_pending_scroll = nullptr;
   GtkWidget *terminal_fonts_mode_combo = nullptr;
@@ -182,6 +183,7 @@ struct SettingsWidgetState {
   GtkWidget *macro_move_down_button = nullptr;
   HyperlinkSettingsEditorState *hyperlink_editor = nullptr;
   WebdavSettingsEditor *webdav_editor = nullptr;
+  SshProxySettingsEditor *ssh_proxy_editor = nullptr;
   int selected_macro = -1;
   unsigned int next_macro_number = 1;
   GtkWidget *telnet_address_entry = nullptr;
@@ -1179,9 +1181,9 @@ enum class ColorSettingField {
 };
 
 static SettingKey color_setting_key(ColorSettingField field) {
-  if (field == ColorSettingField::indicator_off) return terminal_indicator_off_color_setting_key();
+  if (field == ColorSettingField::indicator_off) return general_indicator_off_color_setting_key();
   if (field == ColorSettingField::indicator) {
-    return terminal_indicator_color_setting_key();
+    return general_indicator_color_setting_key();
   }
   return field == ColorSettingField::exterior_background
              ? general_exterior_background_setting_key()
@@ -1190,9 +1192,9 @@ static SettingKey color_setting_key(ColorSettingField field) {
 
 static GtkWidget *color_mode_combo(
     SettingsWidgetState *state, ColorSettingField field) {
-  if (field == ColorSettingField::indicator_off) return state->terminal_indicator_off_color_mode_combo;
+  if (field == ColorSettingField::indicator_off) return state->general_indicator_off_color_mode_combo;
   if (field == ColorSettingField::indicator) {
-    return state->terminal_indicator_color_mode_combo;
+    return state->general_indicator_color_mode_combo;
   }
   return field == ColorSettingField::exterior_background
              ? state->general_exterior_background_mode_combo
@@ -1201,9 +1203,9 @@ static GtkWidget *color_mode_combo(
 
 static GtkWidget *color_button(
     SettingsWidgetState *state, ColorSettingField field) {
-  if (field == ColorSettingField::indicator_off) return state->terminal_indicator_off_color_button;
+  if (field == ColorSettingField::indicator_off) return state->general_indicator_off_color_button;
   if (field == ColorSettingField::indicator) {
-    return state->terminal_indicator_color_button;
+    return state->general_indicator_color_button;
   }
   return field == ColorSettingField::exterior_background
              ? state->general_exterior_background_button
@@ -1218,13 +1220,13 @@ static const char *color_default_value(ColorSettingField field) {
 static std::optional<RgbColor> color_field_value(
     const SettingsStore &store, ColorSettingField field) {
   if (field == ColorSettingField::indicator_off) {
-    return terminal_indicator_off_color(store).value_or(
+    return general_indicator_off_color(store).value_or(
         RgbColor{.red = 85, .green = 85, .blue = 85});
   }
   if (field == ColorSettingField::indicator) {
     // The default swatch represents the green lamp; rendering retains the
     // original shaded images when no custom color is configured.
-    return terminal_indicator_color(store).value_or(
+    return general_indicator_color(store).value_or(
         RgbColor{.red = 92, .green = 167, .blue = 68});
   }
   const auto colors = general_color_settings(store);
@@ -1470,7 +1472,8 @@ static bool macro_rules_are_valid(const SettingsWidgetState *state) {
 }
 
 static bool settings_inputs_valid(const SettingsWidgetState *state) {
-  return state->local_command_line_valid && state->terminal_width_valid &&
+  return ssh_proxy_settings_editor_is_valid(state->ssh_proxy_editor) &&
+         state->local_command_line_valid && state->terminal_width_valid &&
          state->terminal_height_valid &&
          state->terminal_scrollback_lines_valid &&
          state->terminal_border_width_valid && state->terminal_zoom_valid &&
@@ -3226,6 +3229,7 @@ static void create_ftp_tls_controls(SettingsWidgetState *state, GtkWidget *page)
 static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_webdav_draft) {
   sync_ftp_tls_controls(state);
   sync_webdav_settings_editor(state->webdav_editor, preserve_webdav_draft);
+  sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, preserve_webdav_draft);
   const TerminalDisplaySettings display =
       terminal_display_settings(state->draft_store);
   const GeneralColorSettings colors =
@@ -4143,14 +4147,14 @@ static void on_terminal_page_size_allocate(GtkWidget *scroller, GtkAllocation *,
   }
 }
 
-static void on_terminal_indicator_off_color_mode_changed(GtkComboBox *, gpointer data) {
+static void on_general_indicator_off_color_mode_changed(GtkComboBox *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) return;
   update_color_mode_from_widget(state, ColorSettingField::indicator_off);
   notify_changed(state);
 }
 
-static void on_terminal_indicator_off_color_set(GtkColorButton *, gpointer data) {
+static void on_general_indicator_off_color_set(GtkColorButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) return;
   update_color_from_picker(state, ColorSettingField::indicator_off);
@@ -4202,7 +4206,7 @@ static void on_general_background_color_set(GtkColorButton *,
   notify_changed(state);
 }
 
-static void on_terminal_indicator_color_mode_changed(GtkComboBox *,
+static void on_general_indicator_color_mode_changed(GtkComboBox *,
                                                       gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) return;
@@ -4210,7 +4214,7 @@ static void on_terminal_indicator_color_mode_changed(GtkComboBox *,
   notify_changed(state);
 }
 
-static void on_terminal_indicator_color_set(GtkColorButton *, gpointer data) {
+static void on_general_indicator_color_set(GtkColorButton *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) return;
   update_color_from_picker(state, ColorSettingField::indicator);
@@ -4574,6 +4578,8 @@ static void on_ftp_data_connection_mode_changed(GtkComboBox *,
     return;
   }
   update_ftp_data_connection_mode_from_widget(state);
+  sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, true);
+  update_action_sensitivity(state);
   notify_changed(state);
 }
 
@@ -4893,6 +4899,39 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
   attach_row(page, row++, general_background_setting_key(),
              background_color_row);
 
+  GtkWidget *indicator_color_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  state->general_indicator_color_mode_combo = create_combo_box(
+      widget_id(state, "general_indicator_color_mode_combo").c_str());
+  g_signal_connect(state->general_indicator_color_mode_combo, "changed",
+                   G_CALLBACK(on_general_indicator_color_mode_changed), state);
+  gtk_box_pack_start(GTK_BOX(indicator_color_row),
+                     state->general_indicator_color_mode_combo, TRUE, TRUE, 0);
+  state->general_indicator_color_button = create_modal_color_button();
+  assign_accessible_id(state->general_indicator_color_button,
+      widget_id(state, "general_indicator_color_button").c_str());
+  gtk_color_chooser_set_use_alpha(
+      GTK_COLOR_CHOOSER(state->general_indicator_color_button), FALSE);
+  g_signal_connect(state->general_indicator_color_button, "color-set",
+                   G_CALLBACK(on_general_indicator_color_set), state);
+  gtk_box_pack_start(GTK_BOX(indicator_color_row),
+                     state->general_indicator_color_button, FALSE, FALSE, 0);
+  attach_row(page, row++, general_indicator_color_setting_key(), indicator_color_row);
+
+  auto *off_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  state->general_indicator_off_color_mode_combo = create_combo_box(
+      widget_id(state, "general_indicator_off_color_mode_combo").c_str());
+  g_signal_connect(state->general_indicator_off_color_mode_combo, "changed",
+      G_CALLBACK(on_general_indicator_off_color_mode_changed), state);
+  gtk_box_pack_start(GTK_BOX(off_row), state->general_indicator_off_color_mode_combo, TRUE, TRUE, 0);
+  state->general_indicator_off_color_button = create_modal_color_button();
+  assign_accessible_id(state->general_indicator_off_color_button,
+      widget_id(state, "general_indicator_off_color_button").c_str());
+  gtk_color_chooser_set_use_alpha(GTK_COLOR_CHOOSER(state->general_indicator_off_color_button), FALSE);
+  g_signal_connect(state->general_indicator_off_color_button, "color-set",
+      G_CALLBACK(on_general_indicator_off_color_set), state);
+  gtk_box_pack_start(GTK_BOX(off_row), state->general_indicator_off_color_button, FALSE, FALSE, 0);
+  attach_row(page, row++, general_indicator_off_color_setting_key(), off_row);
+
   const std::string auto_close_id =
       widget_id(state, "general_auto_close_combo");
   state->general_auto_close_combo = create_combo_box(auto_close_id.c_str());
@@ -5139,39 +5178,6 @@ static GtkWidget *create_terminal_page(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(font_panel), state->terminal_fonts_rows_box, FALSE, FALSE, 0);
   auto *font_label = attach_row(page, 14, terminal_font_families_setting_key(), font_panel);
   gtk_widget_set_valign(font_label, GTK_ALIGN_START);
-
-  GtkWidget *indicator_color_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  state->terminal_indicator_color_mode_combo = create_combo_box(
-      widget_id(state, "terminal_indicator_color_mode_combo").c_str());
-  g_signal_connect(state->terminal_indicator_color_mode_combo, "changed",
-                   G_CALLBACK(on_terminal_indicator_color_mode_changed), state);
-  gtk_box_pack_start(GTK_BOX(indicator_color_row),
-                     state->terminal_indicator_color_mode_combo, TRUE, TRUE, 0);
-  state->terminal_indicator_color_button = create_modal_color_button();
-  assign_accessible_id(state->terminal_indicator_color_button,
-      widget_id(state, "terminal_indicator_color_button").c_str());
-  gtk_color_chooser_set_use_alpha(
-      GTK_COLOR_CHOOSER(state->terminal_indicator_color_button), FALSE);
-  g_signal_connect(state->terminal_indicator_color_button, "color-set",
-                   G_CALLBACK(on_terminal_indicator_color_set), state);
-  gtk_box_pack_start(GTK_BOX(indicator_color_row),
-                     state->terminal_indicator_color_button, FALSE, FALSE, 0);
-  attach_row(page, 15, terminal_indicator_color_setting_key(), indicator_color_row);
-
-  auto *off_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  state->terminal_indicator_off_color_mode_combo = create_combo_box(
-      widget_id(state, "terminal_indicator_off_color_mode_combo").c_str());
-  g_signal_connect(state->terminal_indicator_off_color_mode_combo, "changed",
-      G_CALLBACK(on_terminal_indicator_off_color_mode_changed), state);
-  gtk_box_pack_start(GTK_BOX(off_row), state->terminal_indicator_off_color_mode_combo, TRUE, TRUE, 0);
-  state->terminal_indicator_off_color_button = create_modal_color_button();
-  assign_accessible_id(state->terminal_indicator_off_color_button,
-      widget_id(state, "terminal_indicator_off_color_button").c_str());
-  gtk_color_chooser_set_use_alpha(GTK_COLOR_CHOOSER(state->terminal_indicator_off_color_button), FALSE);
-  g_signal_connect(state->terminal_indicator_off_color_button, "color-set",
-      G_CALLBACK(on_terminal_indicator_off_color_set), state);
-  gtk_box_pack_start(GTK_BOX(off_row), state->terminal_indicator_off_color_button, FALSE, FALSE, 0);
-  attach_row(page, 16, terminal_indicator_off_color_setting_key(), off_row);
 
   return scroller;
 }
@@ -6217,6 +6223,22 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   state->connection_pages.push_back({
       .connection_types = {webdav_connection_type}, .page = webdav_page, .tab_label = webdav_tab});
 
+  state->ssh_proxy_editor = create_ssh_proxy_settings_editor(
+      &state->draft_store, state->id_prefix, state->is_runtime,
+      state->mode == SettingsWidgetMode::global_defaults, [state] {
+        update_action_sensitivity(state);
+        notify_changed(state);
+      });
+  auto *proxy_page = ssh_proxy_settings_editor_root(state->ssh_proxy_editor);
+  auto *proxy_tab = create_tab_label(_("SSH proxy"), widget_id(state, "ssh_proxy_tab").c_str());
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), proxy_page, proxy_tab);
+  gtk_widget_show_all(proxy_page);
+  gtk_widget_show_all(proxy_tab);
+  gtk_widget_set_no_show_all(proxy_page, TRUE);
+  gtk_widget_set_no_show_all(proxy_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type, webdav_connection_type, ftp_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
+
   GtkWidget *terminal_page = create_terminal_page(state);
   const std::string terminal_tab_id = widget_id(state, "terminal_tab");
   GtkWidget *terminal_tab = create_tab_label(
@@ -6586,6 +6608,7 @@ void destroy_settings_widget(SettingsWidgetState *state) {
       state->general_open_connection_input);
   destroy_hyperlink_settings_editor(state->hyperlink_editor);
   destroy_webdav_settings_editor(state->webdav_editor);
+  destroy_ssh_proxy_settings_editor(state->ssh_proxy_editor);
   if (state->root != nullptr && gtk_widget_get_parent(state->root) == nullptr) {
     gtk_widget_destroy(state->root);
   }

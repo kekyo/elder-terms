@@ -50,6 +50,7 @@ struct FtpApplicationState {
   std::optional<std::filesystem::path> config_path;
   elder_terms::SettingsStore settings;
   elder_terms::FtpConnectionSettings connection;
+  std::shared_ptr<elder_terms::SshSocksProxy> route;
   std::shared_ptr<elder_terms::RemoteFileClient> client;
   std::shared_ptr<elder_terms::FileTransferWindow> window;
   cardio::cancellation_source stop_source;
@@ -192,6 +193,8 @@ static cardio::promise<void>
 start_sftp_application_async(SftpApplicationState *state) {
   std::string failure;
   try {
+    const auto proxy = elder_terms::ssh_proxy_connection_settings(state->settings);
+    if (!proxy.validation_errors.empty()) throw std::invalid_argument(proxy.validation_errors.front());
     const cardio::cancellation cancellation =
         state->stop_source.get_cancellation();
     elder_terms::TerminalSessionCallbacks callbacks{
@@ -213,6 +216,7 @@ start_sftp_application_async(SftpApplicationState *state) {
         .known_hosts_file =
             state->launch_options.test.ssh_known_hosts_file,
         .config_file = {},
+        .proxy = proxy,
     };
     auto connecting = elder_terms::AuthenticatedSshTransport::connect_async(
         state->connection.endpoint, callbacks, options, cancellation);
@@ -392,6 +396,7 @@ static cardio::promise<void> finish_ftp_application_async(FtpApplicationState *s
     if (state->client && !state->fixture) {
       co_await elder_terms::stop_ftp_client_async(state->client);
     }
+    co_await elder_terms::stop_ssh_socks_proxy_async(state->route);
   } catch (const std::exception &exception) {
     std::cerr << exception.what() << '\n';
   }
@@ -418,6 +423,8 @@ static cardio::promise<void> reconnect_ftp_application_async(
     FtpApplicationState *state, elder_terms::SettingsStore settings) {
   if (state->startup_task) co_await *state->startup_task;
   if (state->client && !state->fixture) co_await elder_terms::stop_ftp_client_async(state->client);
+  co_await elder_terms::stop_ssh_socks_proxy_async(state->route);
+  state->route.reset();
   state->client.reset();
   if (state->shutting_down) co_return;
   state->settings = std::move(settings);
@@ -548,6 +555,8 @@ static cardio::promise<void>
 start_ftp_application_async(FtpApplicationState *state) {
   std::string failure;
   try {
+    const auto proxy = elder_terms::ssh_proxy_connection_settings(state->settings);
+    if (!proxy.validation_errors.empty()) throw std::invalid_argument(proxy.validation_errors.front());
     const cardio::cancellation cancellation =
         state->stop_source.get_cancellation();
     std::optional<FtpRuntimeCredentials> credentials =
@@ -559,6 +568,13 @@ start_ftp_application_async(FtpApplicationState *state) {
     if (state->fixture) {
       state->client = elder_terms::create_sftp_fixture_client(false);
     } else {
+      elder_terms::TerminalSessionCallbacks callbacks{};
+      callbacks.ssh_prompt = [state](const elder_terms::SshUserPrompt &prompt, cardio::cancellation signal) {
+        return elder_terms::prompt_file_transfer_ssh_async(state->window, prompt, signal);
+      };
+      auto opening_proxy = elder_terms::open_ssh_socks_proxy_async(proxy, state->connection.address,
+          std::move(callbacks), {.known_hosts_file = {}, .config_file = {}}, cancellation);
+      state->route = std::move(co_await opening_proxy);
       elder_terms::FtpConnectionSettings connection = state->connection;
       connection.username = std::move(credentials->username);
       elder_terms::FtpClientOpenOptions options{
@@ -567,6 +583,7 @@ start_ftp_application_async(FtpApplicationState *state) {
           .confirm_certificate = [state](const elder_terms::TlsCertificateFailure &failure, cardio::cancellation cancellation) {
             return confirm_ftp_certificate_async(state, failure, cancellation);
           },
+          .proxy = state->route,
       };
       auto opening = elder_terms::open_ftp_client_async(
           std::move(options), cancellation);
@@ -582,6 +599,7 @@ start_ftp_application_async(FtpApplicationState *state) {
     failure = exception.what();
   }
 
+  co_await elder_terms::stop_ssh_socks_proxy_async(state->route);
   if (!state->shutting_down) {
     std::cerr << failure << '\n';
     co_await elder_terms::show_file_transfer_window_connection_error_async(

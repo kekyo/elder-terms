@@ -20,8 +20,7 @@ namespace elder_terms {
 using SshChannelConnectionOptions = AuthenticatedSshTransportOptions;
 
 /**
- * Direct nonblocking libssh connection containing one interactive shell
- * channel.
+ * Nonblocking libssh stream containing one shell or TCP forwarding channel.
  */
 class SshChannelConnection {
 private:
@@ -73,6 +72,24 @@ public:
       std::string terminal_type, glong columns, glong rows,
       const TerminalSessionCallbacks &callbacks,
       cardio::cancellation cancellation);
+
+  /**
+   * Opens a TCP forwarding channel on an authenticated gateway.
+   * @param transport Authenticated gateway retained by the channel.
+   * @param host Destination hostname resolved by the gateway.
+   * @param port Destination TCP port.
+   * @param cancellation Operation cancellation signal.
+   * @returns Connected byte stream.
+   */
+  static cardio::promise<std::unique_ptr<SshChannelConnection>> open_forward_async(
+      std::shared_ptr<AuthenticatedSshTransport> transport, std::string host,
+      std::uint16_t port, cardio::cancellation cancellation);
+
+  /**
+   * Ends the outgoing stream while preserving incoming data.
+   * @param cancellation Operation cancellation signal.
+   */
+  cardio::promise<void> send_eof_async(cardio::cancellation cancellation);
 
   /**
    * Reads available stdout or stderr bytes from the remote channel.

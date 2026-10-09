@@ -158,6 +158,8 @@ struct MainWindow {
   GtkWidget *activity_indicator_bar = nullptr;
   /** True while indicators occupy the title bar. */
   bool compact_mode = false;
+  /** Owned screen provider scoped to the terminal header and its controls. */
+  GtkCssProvider *header_provider = nullptr;
   /** Open runtime settings dialog receiving connection backgrounds. */
   GtkWidget *settings_dialog = nullptr;
   /** Root of the open settings widget receiving connection backgrounds. */
@@ -426,6 +428,9 @@ void set_main_window_status_text(MainWindow *main_window,
 
 /**
  * Moves activity indicators between the status bar and title bar.
+ *
+ * @remarks Compact mode targets 75% of the themed title-bar height while
+ * retaining enough space for its icons and labels.
  *
  * @param main_window Window whose layout is changed.
  * @param compact_mode True to hide the status bar and show title indicators.

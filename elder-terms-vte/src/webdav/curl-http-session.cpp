@@ -96,6 +96,7 @@ struct HttpWake {
 struct CurlHttpSession {
   WebdavConnectionSettings settings;
   std::string password;
+  std::shared_ptr<SshSocksProxy> proxy;
   WebdavCertificateConfirmation confirm_certificate;
   std::shared_ptr<TlsCertificatePolicy> certificates;
   CURLM *multi = nullptr;
@@ -336,7 +337,7 @@ static int progress_changed(void *data, curl_off_t, curl_off_t downloaded,
 
 std::shared_ptr<CurlHttpSession> create_curl_http_session(
     WebdavConnectionSettings settings, std::string password,
-    WebdavCertificateConfirmation confirm_certificate) {
+    WebdavCertificateConfirmation confirm_certificate, std::shared_ptr<SshSocksProxy> proxy) {
   if (!settings.validation_errors.empty()) throw std::invalid_argument(settings.validation_errors.front());
   if (settings.scheme != "https" && settings.scheme != "http") throw std::invalid_argument("WebDAV requires HTTP or HTTPS");
   static const HttpCurlGlobal global;
@@ -351,6 +352,7 @@ std::shared_ptr<CurlHttpSession> create_curl_http_session(
   auto session = std::make_shared<CurlHttpSession>();
   session->settings = std::move(settings);
   session->password = std::move(password);
+  session->proxy = std::move(proxy);
   session->confirm_certificate = std::move(confirm_certificate);
   if (session->settings.prompt_certificate && session->settings.scheme == "https")
     session->certificates = create_tls_certificate_policy(
@@ -422,7 +424,10 @@ static cardio::promise<CurlHttpResult> perform_http_attempt_async(
       static_cast<long>(mutation ? CURL_HTTP_VERSION_1_1 : CURL_HTTP_VERSION_NONE)));
   require_curl(curl_easy_setopt(easy, CURLOPT_URL, operation.request.url.c_str()));
   require_curl(curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, session->settings.scheme.c_str()));
-  require_curl(curl_easy_setopt(easy, CURLOPT_PROXY, ""));
+  const auto proxy_url = ssh_socks_proxy_url(session->proxy);
+  require_curl(curl_easy_setopt(easy, CURLOPT_PROXY, proxy_url.c_str()));
+  // An explicit route must also override NO_PROXY/no_proxy from the environment.
+  require_curl(curl_easy_setopt(easy, CURLOPT_NOPROXY, ""));
   require_curl(curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L));
   require_curl(curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 0L));
   require_curl(curl_easy_setopt(easy, CURLOPT_PATH_AS_IS, 1L));
@@ -592,6 +597,9 @@ void resume_curl_http_session(const std::shared_ptr<CurlHttpSession> &session) {
 cardio::promise<void> stop_curl_http_session_async(std::shared_ptr<CurlHttpSession> session) {
   (void)session->stopping.cancel();
   auto lock = std::move(co_await session->operations.lock());
+  if (session->easy) curl_easy_cleanup(std::exchange(session->easy, nullptr));
+  if (session->multi) curl_multi_cleanup(std::exchange(session->multi, nullptr));
+  co_await stop_ssh_socks_proxy_async(session->proxy);
 }
 
 } // namespace elder_terms

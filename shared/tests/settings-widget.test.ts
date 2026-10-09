@@ -815,6 +815,7 @@ describe.concurrent('shared settings widget', () => {
         expected: [
           'General',
           'TELNET',
+          'SSH proxy',
           'Terminal',
           'Transfer',
           'Logging',
@@ -839,6 +840,7 @@ describe.concurrent('shared settings widget', () => {
         expected: [
           'General',
           'SSH',
+          'SSH proxy',
           'Terminal',
           'Transfer',
           'Logging',
@@ -848,15 +850,15 @@ describe.concurrent('shared settings widget', () => {
       },
       {
         args: ['--type=sftp'] as const,
-        expected: ['General', 'SSH', 'SFTP'],
+        expected: ['General', 'SSH', 'SFTP', 'SSH proxy'],
       },
       {
         args: ['--type=ftp'] as const,
-        expected: ['General', 'FTP'],
+        expected: ['General', 'FTP', 'SSH proxy'],
       },
       {
         args: ['--type=webdav'] as const,
-        expected: ['General', 'WebDAV'],
+        expected: ['General', 'WebDAV', 'SSH proxy'],
       },
     ] as const;
 
@@ -947,6 +949,8 @@ describe.concurrent('shared settings widget', () => {
               'Connection type',
               'Title and status bar background',
               'Content background',
+              'Active indicator color',
+              'Inactive indicator color',
               'Close window when session ends',
               'Compact mode',
             ],
@@ -985,6 +989,16 @@ describe.concurrent('shared settings widget', () => {
             ],
           },
           {
+            id: 'global_settings_ssh_proxy_page',
+            labels: [
+              'Use SSH proxy',
+              'Address',
+              'Port',
+              'User name',
+              'Identity file',
+            ],
+          },
+          {
             id: 'global_settings_serial_page',
             labels: [
               'Device identification',
@@ -1010,8 +1024,6 @@ describe.concurrent('shared settings widget', () => {
               'Rows',
               'Scrollback lines',
               'Zoom factor',
-              'Active indicator color',
-              'Inactive indicator color',
               'Font families',
               'Show window side borders',
               'Window side border width (px)',
@@ -1070,6 +1082,7 @@ describe.concurrent('shared settings widget', () => {
           'SFTP',
           'FTP',
           'WebDAV',
+          'SSH proxy',
           '端末',
           '転送',
           'ログ',
@@ -1133,6 +1146,16 @@ describe.concurrent('shared settings widget', () => {
               '証明書検証の失敗時',
               '接続タイムアウト（秒）',
               '無通信タイムアウト（秒）',
+            ],
+          },
+          {
+            id: 'global_settings_ssh_proxy_page',
+            labels: [
+              'SSH proxyを使用',
+              'アドレス',
+              'ポート',
+              'ユーザー名',
+              '秘密鍵ファイル',
             ],
           },
           {
@@ -1909,6 +1932,57 @@ describe.concurrent('shared settings widget', () => {
     });
   });
 
+  for (const connectionType of [
+    'local',
+    'telnet',
+    'ssh',
+    'serial',
+    'sftp',
+    'ftp',
+    'webdav',
+  ]) {
+    it(`edits and saves both indicator colors from General for ${connectionType} connections`, async (context) => {
+      const directory = await mkdtemp(
+        join(tmpdir(), 'elder-terms-general-indicators-')
+      );
+      const path = join(directory, 'connection.ini');
+      try {
+        await runSharedGtkTest(
+          context,
+          ['--page=general', `--type=${connectionType}`, `--save-file=${path}`],
+          async ({ app }) => {
+            await expectPageLabels(app, 'settings_general_page', [
+              'Active indicator color',
+              'Inactive indicator color',
+            ]);
+            for (const [id, color] of [
+              ['indicator_color', 'Red'],
+              ['indicator_off_color', 'Blue'],
+            ]) {
+              const buttonId = `settings_general_${id}_button`;
+              expect(
+                (await (await app.getById(buttonId)).info()).states
+              ).toContain('showing');
+              await chooseNamedColor(app, buttonId, color);
+            }
+            await expectElementKind(
+              await app.getById('settings_save_button'),
+              'button'
+            ).click();
+            await waitForResult(async () => {
+              const content = await readFile(path, 'utf8');
+              const general = content.split('[general]\n')[1]?.split(/\n\[/)[0];
+              expect(general).toContain('indicator_color=#E01B24\n');
+              expect(general).toContain('indicator_off_color=#3584E4\n');
+            });
+          }
+        );
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
+  }
+
   it('saves and resets the inactive color independently of the active color', async (context) => {
     const directory = await mkdtemp(join(tmpdir(), 'elder-terms-off-color-'));
     const path = join(directory, 'connection.ini');
@@ -1916,23 +1990,22 @@ describe.concurrent('shared settings widget', () => {
       await runSharedGtkTest(
         context,
         [
-          '--page=terminal',
+          '--page=general',
           '--indicator-color=#FF0000',
-          '--global=terminal.indicator_off_color=#112233',
+          '--global=general.indicator_off_color=#112233',
           `--save-file=${path}`,
         ],
         async ({ app }) => {
-          await showTerminalPage(app);
-          await scrollTerminalPageToBottom(app);
+          await selectSettingsTab(app, 'General');
           const mode = expectElementKind(
             await app.getById(
-              'settings_terminal_indicator_off_color_mode_combo'
+              'settings_general_indicator_off_color_mode_combo'
             ),
             'comboBox'
           );
           await chooseNamedColor(
             app,
-            'settings_terminal_indicator_off_color_button',
+            'settings_general_indicator_off_color_button',
             'Blue'
           );
           await expectElementKind(
@@ -1946,7 +2019,7 @@ describe.concurrent('shared settings widget', () => {
           });
           await chooseNamedColor(
             app,
-            'settings_terminal_indicator_off_color_button',
+            'settings_general_indicator_off_color_button',
             'Red'
           );
           await expectElementKind(
@@ -2234,37 +2307,36 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
-  it('applies, cancels, saves, and resets the common terminal indicator color', async (context) => {
+  it('applies, cancels, saves, and resets the common indicator color', async (context) => {
     const directory = await mkdtemp(join(tmpdir(), 'elder-terms-indicator-'));
     const savedPath = join(directory, 'connection.ini');
     try {
       await runSharedGtkTest(
         context,
         [
-          '--page=terminal',
-          '--global=terminal.indicator_color=#112233',
+          '--page=general',
+          '--global=general.indicator_color=#112233',
           `--save-file=${savedPath}`,
         ],
         async ({ app }) => {
-          await showTerminalPage(app);
-          await scrollTerminalPageToBottom(app);
+          await selectSettingsTab(app, 'General');
           await expectSelectedComboValue(
             app,
-            'settings_terminal_indicator_color_mode_combo',
+            'settings_general_indicator_color_mode_combo',
             'Custom color (global default)'
           );
           const mode = expectElementKind(
-            await app.getById('settings_terminal_indicator_color_mode_combo'),
+            await app.getById('settings_general_indicator_color_mode_combo'),
             'comboBox'
           );
           await chooseNamedColor(
             app,
-            'settings_terminal_indicator_color_button',
+            'settings_general_indicator_color_button',
             'Red'
           );
           await expectSelectedComboValue(
             app,
-            'settings_terminal_indicator_color_mode_combo',
+            'settings_general_indicator_color_mode_combo',
             'Custom color'
           );
           await expectElementKind(
@@ -2279,7 +2351,7 @@ describe.concurrent('shared settings widget', () => {
           });
           await chooseNamedColor(
             app,
-            'settings_terminal_indicator_color_button',
+            'settings_general_indicator_color_button',
             'Blue'
           );
           await expectElementKind(
@@ -2298,7 +2370,7 @@ describe.concurrent('shared settings widget', () => {
           await mode.selectChildAt(1);
           await expectSelectedComboValue(
             app,
-            'settings_terminal_indicator_color_mode_combo',
+            'settings_general_indicator_color_mode_combo',
             'Default color'
           );
           await expectElementKind(
@@ -2322,7 +2394,7 @@ describe.concurrent('shared settings widget', () => {
           });
           await expectSelectedComboValue(
             app,
-            'settings_terminal_indicator_color_mode_combo',
+            'settings_general_indicator_color_mode_combo',
             'Custom color (global default)'
           );
         }
@@ -2335,22 +2407,17 @@ describe.concurrent('shared settings widget', () => {
   it('edits the global indicator color and keeps an explicit default over an inherited color', async (context) => {
     await runSharedGtkTest(
       context,
-      ['--global-mode', '--page=terminal'],
+      ['--global-mode', '--page=general'],
       async ({ app }) => {
-        await selectSettingsTab(app, 'Terminal', 'global_settings');
-        const scrollbar = expectElementKind(
-          await app.getById('global_settings_terminal_page_scrollbar'),
-          'scrollbar'
-        );
-        await scrollbar.setValue((await scrollbar.valueInfo()).maximum);
+        await selectSettingsTab(app, 'General', 'global_settings');
         await expectSelectedComboValue(
           app,
-          'global_settings_terminal_indicator_color_mode_combo',
+          'global_settings_general_indicator_color_mode_combo',
           'Default color (built-in default)'
         );
         await chooseNamedColor(
           app,
-          'global_settings_terminal_indicator_color_button',
+          'global_settings_general_indicator_color_button',
           'Blue'
         );
         await expectElementKind(
@@ -2365,26 +2432,26 @@ describe.concurrent('shared settings widget', () => {
     await runSharedGtkTest(
       context,
       [
-        '--page=terminal',
-        '--global=terminal.indicator_color=#112233',
+        '--page=general',
+        '--global=general.indicator_color=#112233',
         '--indicator-color=default',
-        '--rebase-global=terminal.indicator_color=#445566',
+        '--rebase-global=general.indicator_color=#445566',
       ],
       async ({ app }) => {
-        await showTerminalPage(app);
+        await selectSettingsTab(app, 'General');
         await expectSelectedComboValue(
           app,
-          'settings_terminal_indicator_color_mode_combo',
+          'settings_general_indicator_color_mode_combo',
           'Default color'
         );
-        await scrollTerminalPageToBottom(app);
+
         await expectElementKind(
           await app.getById('rebase_fallbacks_button'),
           'button'
         ).click();
         await expectSelectedComboValue(
           app,
-          'settings_terminal_indicator_color_mode_combo',
+          'settings_general_indicator_color_mode_combo',
           'Default color'
         );
         await expectElementKind(
@@ -2395,7 +2462,7 @@ describe.concurrent('shared settings widget', () => {
           'default'
         );
         await expectElementKind(
-          await app.getById('settings_terminal_indicator_color_mode_combo'),
+          await app.getById('settings_general_indicator_color_mode_combo'),
           'comboBox'
         ).selectChildAt(0);
         await expectElementKind(
@@ -2415,21 +2482,20 @@ describe.concurrent('shared settings widget', () => {
     await runSharedGtkTest(
       context,
       [
-        '--page=terminal',
-        '--global=terminal.indicator_color=#123abc',
+        '--page=general',
+        '--global=general.indicator_color=#123abc',
         '--indicator-color=green',
         '--allow-invalid-connection-values',
       ],
       async ({ app }) => {
-        await showTerminalPage(app);
-        await scrollTerminalPageToBottom(app);
+        await selectSettingsTab(app, 'General');
         await expectSelectedComboValue(
           app,
-          'settings_terminal_indicator_color_mode_combo',
+          'settings_general_indicator_color_mode_combo',
           'Custom color (global default)'
         );
         expect((await app.output()).stderr).toContain(
-          'invalid configuration value [terminal] indicator_color'
+          'invalid configuration value [general] indicator_color'
         );
         await expectElementKind(
           await app.getById('settings_apply_button'),
@@ -2445,22 +2511,21 @@ describe.concurrent('shared settings widget', () => {
   it('shows the common indicator color setting in Japanese', async (context) => {
     await runSharedGtkTest(
       context,
-      ['--page=terminal'],
+      ['--page=general'],
       async ({ app, directory }) => {
-        await showTerminalPage(app);
-        await scrollTerminalPageToBottom(app);
-        await expectPageLabels(app, 'settings_terminal_page', [
+        await selectSettingsTab(app, '一般');
+        await expectPageLabels(app, 'settings_general_page', [
           '点灯時の色',
           '消灯時の色',
         ]);
         await expectSelectedComboValue(
           app,
-          'settings_terminal_indicator_color_mode_combo',
+          'settings_general_indicator_color_mode_combo',
           '既定の色（組み込み既定値）'
         );
         await writeFile(
           join(directory, 'indicator-color-ja.png'),
-          (await (await app.getById('settings_terminal_page')).capture()).image
+          (await (await app.getById('settings_general_page')).capture()).image
         );
       },
       { env: japaneseTestEnvironment }
@@ -6377,6 +6442,7 @@ describe.concurrent('shared settings widget', () => {
           'SFTP',
           'FTP',
           'WebDAV',
+          'SSH proxy',
           'Terminal',
           'Transfer',
           'Logging',

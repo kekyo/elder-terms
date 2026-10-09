@@ -1,6 +1,7 @@
 #include <elder-terms/settings/general-settings.h>
 
 #include <algorithm>
+#include <charconv>
 #include <utility>
 
 namespace elder_terms {
@@ -14,6 +15,8 @@ static constexpr char general_open_connection_key[] = "open_connection";
 static constexpr char general_exterior_background_key[] =
     "exterior_background";
 static constexpr char general_background_key[] = "background";
+static constexpr char general_indicator_color_key[] = "indicator_color";
+static constexpr char general_indicator_off_color_key[] = "indicator_off_color";
 static constexpr char general_compact_mode_key[] = "compact_mode";
 static constexpr bool default_general_compact_mode = false;
 static constexpr char default_general_background[] = "none";
@@ -47,6 +50,34 @@ static bool validate_connection_hotkey(const SettingValue &value,
     return false;
   }
   return global_hotkey_text_is_valid(*text, reason);
+}
+
+static std::optional<RgbColor> parse_indicator_color(const std::string &text) {
+  if (text.size() != 7 || text.front() != '#') {
+    return std::nullopt;
+  }
+  unsigned int packed = 0;
+  const auto parsed = std::from_chars(text.data() + 1,
+                                      text.data() + text.size(), packed, 16);
+  if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
+    return std::nullopt;
+  }
+  return RgbColor{
+      .red = static_cast<guint8>(packed >> 16),
+      .green = static_cast<guint8>(packed >> 8),
+      .blue = static_cast<guint8>(packed),
+  };
+}
+
+static bool validate_indicator_color(const SettingValue &value,
+                                      std::string *reason) {
+  const auto *text = std::get_if<std::string>(&value);
+  if (text != nullptr && (*text == "default" ||
+                          parse_indicator_color(*text).has_value())) {
+    return true;
+  }
+  *reason = "must be default or #RRGGBB";
+  return false;
 }
 
 static bool is_ascii_hex_digit(char character) {
@@ -145,6 +176,24 @@ SettingKey general_background_setting_key() {
   return make_setting_key(general_section, general_background_key);
 }
 
+SettingKey general_indicator_color_setting_key() {
+  return make_setting_key(general_section, general_indicator_color_key);
+}
+
+std::optional<RgbColor> general_indicator_color(const SettingsStore &store) {
+  return parse_indicator_color(setting_string_value_or_default(
+      store, general_indicator_color_setting_key(), "default"));
+}
+
+SettingKey general_indicator_off_color_setting_key() {
+  return make_setting_key(general_section, general_indicator_off_color_key);
+}
+
+std::optional<RgbColor> general_indicator_off_color(const SettingsStore &store) {
+  return parse_indicator_color(setting_string_value_or_default(
+      store, general_indicator_off_color_setting_key(), "default"));
+}
+
 SettingKey general_compact_mode_setting_key() {
   return make_setting_key(general_section, general_compact_mode_key);
 }
@@ -189,6 +238,16 @@ general_setting_definitions(std::string default_connection_name) {
           .default_value =
               SettingValue{std::string(default_general_background)},
           .validate = validate_general_color,
+      },
+      {
+          .key = general_indicator_color_setting_key(),
+          .default_value = SettingValue{std::string("default")},
+          .validate = validate_indicator_color,
+      },
+      {
+          .key = general_indicator_off_color_setting_key(),
+          .default_value = SettingValue{std::string("default")},
+          .validate = validate_indicator_color,
       },
       {
           .key = general_compact_mode_setting_key(),

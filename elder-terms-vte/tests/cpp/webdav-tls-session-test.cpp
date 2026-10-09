@@ -2,6 +2,7 @@
 #include "curl-http-session.h"
 
 #include <iostream>
+#include <cstdlib>
 #include <stdexcept>
 #include <unistd.h>
 
@@ -46,22 +47,34 @@ static cardio::promise<void> check_async(
     std::exception_ptr &failure) {
   std::shared_ptr<elder_terms::CurlHttpSession> session;
   std::shared_ptr<elder_terms::CurlHttpSession> second_session;
+  std::shared_ptr<elder_terms::SshSocksProxy> proxy;
   CertificateConfirmations confirmations;
   CertificateConfirmations separate_confirmations;
   try {
     elder_terms::WebdavConnectionSettings settings;
     settings.scheme = "https";
-    settings.address = "127.0.0.1";
+    settings.address = std::getenv("ELDER_TERMS_TEST_PROXY_PORT") ? "proxy-test.invalid" : "127.0.0.1";
     settings.port = port;
     settings.base_path = "/dav/";
     settings.authentication = elder_terms::WebdavAuthentication::basic;
     settings.username = "alice";
     settings.prompt_certificate = true;
+    if (const auto *proxy_port = std::getenv("ELDER_TERMS_TEST_PROXY_PORT")) {
+      elder_terms::TerminalSessionCallbacks callbacks{};
+      callbacks.ssh_prompt = [](const auto &prompt, cardio::cancellation) -> cardio::promise<elder_terms::SshUserPromptResponse> {
+        co_return elder_terms::SshUserPromptResponse{.accepted = true, .text = prompt.initial_text};
+      };
+      elder_terms::SshProxySettings route{.enabled = true,
+          .endpoint = {.address = "127.0.0.1", .port = std::stoll(proxy_port), .username = "gateway-test", .identity_file = {}}};
+      auto opening = elder_terms::open_ssh_socks_proxy_async(route, settings.address, callbacks,
+          {.known_hosts_file = std::getenv("ELDER_TERMS_TEST_PROXY_KNOWN_HOSTS"), .config_file = {}}, {});
+      proxy = std::move(co_await opening);
+    }
     session = elder_terms::create_curl_http_session(settings, "secret",
         [&confirmations](const auto &certificate, cardio::cancellation cancellation) {
           return accept_certificate_async(&confirmations, certificate.sha256, cancellation);
-        });
-    const auto base = "https://127.0.0.1:" + std::to_string(port) + "/dav";
+        }, proxy);
+    const auto base = "https://" + settings.address + ":" + std::to_string(port) + "/dav";
     const auto initial = co_await elder_terms::perform_http_request_async(session, listing_request(base), {});
     expect(initial.code == CURLE_OK && initial.status == 207 && confirmations.count == 1,
            "Initial read-only request must continue after approving its certificate");
@@ -87,7 +100,7 @@ static cardio::promise<void> check_async(
     second_session = elder_terms::create_curl_http_session(settings, "secret",
         [&separate_confirmations](const auto &certificate, cardio::cancellation cancellation) {
           return accept_certificate_async(&separate_confirmations, certificate.sha256, cancellation);
-        });
+        }, proxy);
     const auto separate = co_await elder_terms::perform_http_request_async(second_session, listing_request(base), {});
     expect(separate.code == CURLE_OK && separate.status == 207 &&
                separate_confirmations.count == 1 && confirmations.count == 2,

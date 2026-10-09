@@ -63,19 +63,14 @@ const selectBlueAndGreenIndicatorColors = async (
     'tabList'
   );
   for (let index = 0; index < (await notebook.getChildCount()); index += 1) {
-    if ((await (await notebook.childAt(index))?.info())?.name === 'Terminal') {
+    if ((await (await notebook.childAt(index))?.info())?.name === 'General') {
       await notebook.selectChildAt(index);
       break;
     }
   }
-  const scrollbar = expectElementKind(
-    await app.getById('settings_terminal_page_scrollbar'),
-    'scrollbar'
-  );
-  await scrollbar.setValue((await scrollbar.valueInfo()).maximum);
   for (const [id, color] of [
-    ['settings_terminal_indicator_color_button', 'Blue'],
-    ['settings_terminal_indicator_off_color_button', 'Green'],
+    ['settings_general_indicator_color_button', 'Blue'],
+    ['settings_general_indicator_off_color_button', 'Green'],
   ]) {
     await expectElementKind(await app.getById(id), 'button').click();
     const chooser = await waitForResult(async () => {
@@ -136,6 +131,95 @@ const expectVideoPixel = (
 };
 
 describe.concurrent('terminal indicator color', () => {
+  it('applies General color changes to an open SFTP browser sharing the SSH connection', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const config = join(directory, 'shared-colors.ini');
+      await writeFile(
+        config,
+        [
+          '[general]',
+          'type=ssh',
+          'auto_close=false',
+          'indicator_color=#FF0000',
+          'indicator_off_color=#0000FF',
+          '[ssh]',
+          'address=fixture.example',
+          '[sftp]',
+          `local_directory=${directory}`,
+          'remote_directory=/remote',
+          '',
+        ].join('\n')
+      );
+      await runGtkTest(
+        context,
+        ['--test-fixture', '-c', config],
+        async (app) => {
+          const mainWindow = expectElementKind(
+            await app.getById('main_window'),
+            'window'
+          );
+          await expectElementKind(
+            await app.getById('transfer_button'),
+            'toggleButton'
+          ).click();
+          await expectElementKind(
+            await app.getById('transfer_sftp_item'),
+            'menuItem'
+          ).click();
+          const browser = await waitForResult(async () =>
+            expectElementKind(
+              await app.getById('file_transfer_window'),
+              'window'
+            )
+          );
+          const pending = [await app.getById('file_transfer_status_bar')];
+          const lamps = new Map<string, GtkWidgetElement>();
+          while (pending.length > 0) {
+            const widget = pending.pop()!;
+            const id = (await widget.info()).accessibleId;
+            if (id.endsWith('_indicator_image')) lamps.set(id, widget);
+            if ('getChildCount' in widget && 'childAt' in widget) {
+              for (let i = 0; i < (await widget.getChildCount()); i++) {
+                const child = await widget.childAt(i);
+                if (child !== undefined) pending.push(child);
+              }
+            }
+          }
+          expect(lamps.size).toBe(3);
+          await browser.activate();
+          await waitForResult(async () => {
+            const [r, g, b] = capturePixel(
+              await lamps.get('conn_indicator_image')!.capture(),
+              0.5,
+              0.5
+            );
+            expect(r - g).toBeGreaterThan(60);
+            expect(r - b).toBeGreaterThan(60);
+          });
+          await mainWindow.activate();
+          await selectBlueAndGreenIndicatorColors(app);
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          await browser.activate();
+          for (const [id, lamp] of lamps) {
+            await waitForResult(async () => {
+              const [r, g, b] = capturePixel(await lamp.capture(), 0.5, 0.5);
+              if (id === 'conn_indicator_image') {
+                expect(b - r).toBeGreaterThan(60);
+                expect(b - g).toBeGreaterThan(30);
+              } else {
+                expect(g - r).toBeGreaterThan(60);
+                expect(g - b).toBeGreaterThan(30);
+              }
+            });
+          }
+        }
+      );
+    });
+  });
+
   for (const [customOn, customOff] of [
     [true, false],
     [true, true],
@@ -146,9 +230,10 @@ describe.concurrent('terminal indicator color', () => {
         const config = join(directory, 'independent.ini');
         await writeFile(
           config,
-          '[general]\ntype=serial\n[serial]\ndevice=/dev/null\n[terminal]\n' +
+          '[general]\ntype=serial\n' +
             (customOn ? 'indicator_color=#FF0000\n' : '') +
-            (customOff ? 'indicator_off_color=#0000FF\n' : '')
+            (customOff ? 'indicator_off_color=#0000FF\n' : '') +
+            '[serial]\ndevice=/dev/null\n'
         );
         await runGtkTest(
           context,
@@ -196,10 +281,9 @@ describe.concurrent('terminal indicator color', () => {
           [
             '[general]',
             'type=serial',
+            `indicator_color=${color}`,
             '[serial]',
             'device=/dev/null',
-            '[terminal]',
-            `indicator_color=${color}`,
             '',
           ].join('\n'),
           'utf8'
@@ -268,7 +352,7 @@ describe.concurrent('terminal indicator color', () => {
       const configPath = join(directory, 'saved-color.ini');
       await writeFile(
         configPath,
-        '[general]\nauto_close=false\n\n[terminal]\nindicator_color=#FF0000\n',
+        '[general]\nauto_close=false\nindicator_color=#FF0000\n',
         'utf8'
       );
       await runGtkTest(
@@ -330,19 +414,14 @@ describe.concurrent('terminal indicator color', () => {
           ) {
             if (
               (await (await notebook.childAt(index))?.info())?.name ===
-              'Terminal'
+              'General'
             ) {
               await notebook.selectChildAt(index);
               break;
             }
           }
-          const scrollbar = expectElementKind(
-            await app.getById('settings_terminal_page_scrollbar'),
-            'scrollbar'
-          );
-          await scrollbar.setValue((await scrollbar.valueInfo()).maximum);
           await expectElementKind(
-            await app.getById('settings_terminal_indicator_color_mode_combo'),
+            await app.getById('settings_general_indicator_color_mode_combo'),
             'comboBox'
           ).selectChildAt(1);
           await expectElementKind(
@@ -397,12 +476,11 @@ describe.concurrent('terminal indicator color', () => {
             '[general]',
             'auto_close=false',
             'type=telnet',
+            'indicator_color=#FF0000',
+            'indicator_off_color=#FFFF00',
             '[telnet]',
             'address=127.0.0.1',
             `port=${address.port}`,
-            '[terminal]',
-            'indicator_color=#FF0000',
-            'indicator_off_color=#FFFF00',
             '[macro.reply]',
             'regex=^PING$',
             'send=ACK\\n',

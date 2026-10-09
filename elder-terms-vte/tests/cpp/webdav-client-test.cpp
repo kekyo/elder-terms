@@ -596,7 +596,20 @@ static cardio::promise<void> check_bounded_upload_async(
 static cardio::promise<void> check_async(elder_terms::WebdavClientOpenOptions options,
     bool expect_failure, std::string mode, cardio::dispatcher_group_glib &group, std::exception_ptr &failure) {
   std::shared_ptr<elder_terms::RemoteFileClient> client;
+  std::shared_ptr<elder_terms::SshSocksProxy> proxy_route;
   try {
+    if (const auto *port = std::getenv("ELDER_TERMS_TEST_PROXY_PORT")) {
+      elder_terms::TerminalSessionCallbacks callbacks{};
+      callbacks.ssh_prompt = [](const auto &prompt, cardio::cancellation) -> cardio::promise<elder_terms::SshUserPromptResponse> {
+        co_return elder_terms::SshUserPromptResponse{.accepted = true, .text = prompt.initial_text};
+      };
+      elder_terms::SshProxySettings proxy{.enabled = true,
+          .endpoint = {.address = "127.0.0.1", .port = std::stoll(port), .username = "gateway-test", .identity_file = {}}};
+      auto opening = elder_terms::open_ssh_socks_proxy_async(proxy, options.connection.address, callbacks,
+          {.known_hosts_file = std::getenv("ELDER_TERMS_TEST_PROXY_KNOWN_HOSTS"), .config_file = {}}, {});
+      options.proxy = std::move(co_await opening);
+      proxy_route = options.proxy;
+    }
     if (options.connection.remote_directory == "/hold") {
       cardio::cancellation_source source;
       auto opening = elder_terms::open_webdav_client_async(std::move(options), source.get_cancellation());
@@ -607,6 +620,7 @@ static cardio::promise<void> check_async(elder_terms::WebdavClientOpenOptions op
       bool canceled = false;
       try { client = co_await opening; } catch (const cardio::canceled_exception &) { canceled = true; }
       expect(canceled, "Pending HTTP work must cancel without waiting for a server response");
+      co_await elder_terms::stop_ssh_socks_proxy_async(proxy_route);
       group.shutdown();
       co_return;
     }
@@ -650,9 +664,11 @@ static cardio::promise<void> check_async(elder_terms::WebdavClientOpenOptions op
       expect(client->try_begin_transfer(), "Transfer slot must be reusable");
       client->end_transfer();
       co_await check_downloads_async(client);
-      co_await check_paused_http_async(transport_options);
-      co_await check_cancelled_pause_async(transport_options, false);
-      co_await check_cancelled_pause_async(transport_options, true);
+      if (!transport_options.proxy) {
+        co_await check_paused_http_async(transport_options);
+        co_await check_cancelled_pause_async(transport_options, false);
+        co_await check_cancelled_pause_async(transport_options, true);
+      }
       co_await check_uploads_async(client, transport_options.connection.authentication);
       const auto capabilities = client->capabilities();
       expect(!capabilities.symbolic_links && !capabilities.permissions && !capabilities.access_time && !capabilities.modification_time,
@@ -661,6 +677,8 @@ static cardio::promise<void> check_async(elder_terms::WebdavClientOpenOptions op
   } catch (...) { failure = std::current_exception(); }
   try { if (client) co_await elder_terms::stop_webdav_client_async(client); }
   catch (...) { failure = std::current_exception(); }
+  try { co_await elder_terms::stop_ssh_socks_proxy_async(proxy_route); }
+  catch (...) { if (!failure) failure = std::current_exception(); }
   group.shutdown();
 }
 
@@ -669,7 +687,7 @@ int main(int argc, char **argv) {
     expect(argc == 7 || argc == 8 || argc == 9, "Expected scheme, port, auth, password, CA path, expected result and optional initial directory");
     elder_terms::WebdavClientOpenOptions options;
     options.connection.scheme = argv[1];
-    options.connection.address = "127.0.0.1";
+    options.connection.address = std::getenv("ELDER_TERMS_TEST_PROXY_PORT") ? "proxy-test.invalid" : "127.0.0.1";
     options.connection.port = std::stoll(argv[2]);
     options.connection.base_path = "/dav/";
     if (argc >= 8) options.connection.remote_directory = argv[7];

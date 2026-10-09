@@ -1,5 +1,6 @@
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
+import { TLSSocket } from 'node:tls';
 import { createServer, type RequestListener } from 'node:http';
 import {
   createServer as createSecureServer,
@@ -26,6 +27,8 @@ export const createWebdavTestServer = async (
   const requests: {
     method: string;
     url: string;
+    host: string | undefined;
+    servername: string | false | null | undefined;
     authenticated: boolean;
     destination: string | undefined;
     overwrite: string | undefined;
@@ -106,6 +109,11 @@ export const createWebdavTestServer = async (
     const observation = {
       method,
       url,
+      host: request.headers.host,
+      servername:
+        request.socket instanceof TLSSocket
+          ? request.socket.servername
+          : undefined,
       authenticated,
       destination:
         typeof request.headers.destination === 'string'

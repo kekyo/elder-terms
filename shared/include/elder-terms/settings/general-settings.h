@@ -100,6 +100,33 @@ general_exterior_background_setting_key();
 ELDER_TERMS_API SettingKey general_background_setting_key();
 
 /**
+ * Returns the setting key for [general] indicator_color.
+ *
+ * @returns Setting key shared by every activity indicator in a connection window.
+ */
+ELDER_TERMS_API SettingKey general_indicator_color_setting_key();
+
+/** @returns Setting key for the color shared by all inactive indicators. */
+ELDER_TERMS_API SettingKey general_indicator_off_color_setting_key();
+
+/**
+ * Extracts the independently configured inactive indicator color.
+ * @param store Source settings containing validated values.
+ * @returns Custom RGB color, or no value to retain the original gray image.
+ */
+ELDER_TERMS_API std::optional<RgbColor>
+general_indicator_off_color(const SettingsStore &store);
+
+/**
+ * Extracts the common activity indicator color.
+ *
+ * @param store Source settings store containing validated values.
+ * @returns Custom RGB color, or no value to use the original green images.
+ */
+ELDER_TERMS_API std::optional<RgbColor>
+general_indicator_color(const SettingsStore &store);
+
+/**
  * Returns the setting key for [general] compact_mode.
  *
  * @returns Setting key for the compact connection window layout.

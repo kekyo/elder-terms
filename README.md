@@ -255,6 +255,11 @@ See the [systemd resolver API documentation](https://github.com/systemd/systemd/
 
 ## Using SSH and SFTP
 
+SSH, SFTP, TELNET, WebDAV and passive FTP/FTPS can use an SSH gateway.
+Configure it in the separate "SSH proxy" tab, keeping the final destination in
+its protocol tab. See [Using SSH proxy](./docs/en/ssh-proxy.md) for inheritance,
+authentication and supported connection modes.
+
 When an SSH terminal or a dedicated SFTP window starts,
 a user-name panel is shown before the SSH connection is opened.
 The initial value is selected in this order:
@@ -600,8 +605,9 @@ compact_mode=true
 
 ## Configuring Indicator Color
 
-On the "Terminal" tab, set "Active indicator color" and "Inactive indicator color" independently.
+On the "General" tab, set "Active indicator color" and "Inactive indicator color" independently.
 Each applies to CONN, LOG, SD, RD, and all serial line indicators.
+SFTP, FTP/FTPS, and WebDAV windows use the same settings for their CONN, SD, and RD indicators.
 Applying colors preserves their current states, blinking, and latched activity.
 The lamps retain their shading and highlights; choose different colors if you want to distinguish active from inactive lamps.
 
@@ -611,7 +617,7 @@ Configuring only the active color leaves the inactive color gray unless a global
 Choose the inherited option to follow connection defaults. Save to keep both colors after restarting.
 
 ```ini
-[terminal]
+[general]
 indicator_color=#3584E4
 indicator_off_color=#808080
 ```

@@ -77,6 +77,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/settings/settings-store.cpp',
   'src/settings/sftp-settings.cpp',
   'src/settings/ssh-settings.cpp',
+  'src/settings/ssh-proxy-settings.cpp',
   'src/settings/telnet-settings.cpp',
   'src/settings/terminal-settings.cpp',
   'src/settings/terminal-type-settings.cpp',
@@ -85,6 +86,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + [
   'src/settings-widget/application-settings-widget.cpp',
   'src/settings-widget/hyperlink-settings-editor.cpp',
   'src/settings-widget/webdav-settings-editor.cpp',
+  'src/settings-widget/ssh-proxy-settings-editor.cpp',
   'src/settings-widget/settings-widget.cpp',
 ]
 
@@ -125,6 +127,14 @@ elder_terms_dep = declare_dependency(
 )
 
 if get_option('build_tests')
+ssh_proxy_widget_test = executable(
+  'ssh-proxy-widget-test', 'tests/ssh-proxy-widget-test.cpp',
+  dependencies: elder_terms_dep,
+)
+test('ssh-proxy-widget-test', find_program('xvfb-run'),
+  args: ['-a', ssh_proxy_widget_test], timeout: 120,
+  env: ['GSETTINGS_BACKEND=memory'])
+
 settings_widget_theme_test = executable(
   'settings-widget-theme-test', 'tests/settings-widget-theme-test.cpp',
   dependencies: elder_terms_dep,
