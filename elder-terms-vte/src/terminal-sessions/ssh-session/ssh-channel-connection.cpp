@@ -1149,6 +1149,12 @@ static bool ssh_worker_result_is_again(const SshWorkerResult &result) {
          (result.value == SSH_ERROR && result.error_code == SSH_AGAIN);
 }
 
+struct SshTransportChannel {
+  ssh_channel channel;
+  int writer_wakeup_fd = -1;
+  std::uint32_t observed_window = 0;
+};
+
 struct AuthenticatedSshTransport::Impl {
   SshEndpointSettings endpoint;
   std::shared_ptr<SshProxyConnection> route;
@@ -1160,7 +1166,7 @@ struct AuthenticatedSshTransport::Impl {
   int command_fd = -1;
   std::mutex command_mutex;
   std::deque<std::function<void()>> commands;
-  std::vector<ssh_channel> channels;
+  std::vector<SshTransportChannel> channels;
   std::thread worker;
   std::atomic_bool sftp_transfer_active = false;
   bool stopping = false;
@@ -1229,6 +1235,7 @@ struct AuthenticatedSshTransport::Impl {
       }
       for (std::function<void()> &command : pending) {
         command();
+        notify_window_growth();
       }
       {
         const std::lock_guard<std::mutex> lock(command_mutex);
@@ -1239,6 +1246,20 @@ struct AuthenticatedSshTransport::Impl {
       }
     }
     close_session_on_worker();
+  }
+
+  void notify_window_growth() {
+    // Any serialized libssh operation can consume another channel's
+    // WINDOW_ADJUST. libssh 0.10 does not invoke write_wontblock for that
+    // packet, so retain a wakeup even if the socket is no longer readable.
+    for (auto &entry : channels) {
+      if (entry.writer_wakeup_fd < 0) continue;
+      const auto window = ssh_channel_window_size(entry.channel);
+      if (window > entry.observed_window) {
+        notify_ssh_event_fd(entry.writer_wakeup_fd);
+      }
+      entry.observed_window = window;
+    }
   }
 
   bool enqueue(std::function<void()> command) {
@@ -1399,8 +1420,8 @@ struct AuthenticatedSshTransport::Impl {
         (void)ssh_channel_close(channel);
       }
       ssh_channel_free(channel);
-      const auto iterator =
-          std::find(channels.begin(), channels.end(), channel);
+      const auto iterator = std::find_if(channels.begin(), channels.end(),
+          [channel](const auto &entry) { return entry.channel == channel; });
       if (iterator != channels.end()) {
         channels.erase(iterator);
       }
@@ -1409,7 +1430,8 @@ struct AuthenticatedSshTransport::Impl {
   }
 
   void close_session_on_worker() {
-    for (ssh_channel channel : channels) {
+    for (const auto &entry : channels) {
+      const auto channel = entry.channel;
       if (channel != nullptr) {
         if (ssh_channel_is_open(channel) != 0) {
           (void)ssh_channel_send_eof(channel);
@@ -1649,7 +1671,7 @@ AuthenticatedSshTransport::execute_command_async(
             throw ssh_failure(owner->impl->session,
                               "Failed to configure SSH command channel");
           }
-          owner->impl->channels.push_back(new_channel);
+          owner->impl->channels.push_back({.channel = new_channel});
           return new_channel;
         },
         false, cancellation);
@@ -1957,7 +1979,8 @@ SshChannelConnection::open_async(
           ssh_channel_free(channel);
           throw std::runtime_error("Failed to register SSH channel readiness");
         }
-        transport->impl->channels.push_back(channel);
+        transport->impl->channels.push_back(
+            {.channel = channel, .writer_wakeup_fd = events->writer.wakeup_fd});
         return channel;
       },
       false, cancellation);
@@ -2085,7 +2108,8 @@ SshChannelConnection::open_forward_async(
           ssh_channel_free(channel);
           throw std::runtime_error("Failed to register SSH channel readiness");
         }
-        transport->impl->channels.push_back(channel);
+        transport->impl->channels.push_back(
+            {.channel = channel, .writer_wakeup_fd = events->writer.wakeup_fd});
         return channel;
       }, false, cancellation);
   connection_impl->channel = co_await allocating;

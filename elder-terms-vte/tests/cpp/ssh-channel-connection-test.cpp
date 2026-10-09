@@ -70,6 +70,7 @@ struct ServerOptions {
   bool reject_forward = false;
   int forward_target_port = 0;
   bool sftp_only = false;
+  int window_gate_fd = -1;
 };
 
 struct ServerState {
@@ -103,6 +104,7 @@ struct ServerState {
   bool window_changed = false;
   bool payload_echoed = false;
   bool release_requested = false;
+  bool window_marker_pending = false;
   std::string username;
   std::string password;
   std::string keyboard_interactive_answer;
@@ -207,6 +209,40 @@ static bool read_all_fd(int fd, void *data, std::size_t size) {
     return false;
   }
   return true;
+}
+
+// Arrange for a read to consume WINDOW_ADJUST before the blocked write returns
+// to its caller. The pipe orders the peer; no scheduling delay is assumed.
+static int window_gate_fd = -1;
+static bool restored_window_observed = false;
+
+extern "C" int __real_ssh_set_channel_callbacks(ssh_channel, ssh_channel_callbacks);
+extern "C" int __wrap_ssh_set_channel_callbacks(ssh_channel channel, ssh_channel_callbacks callbacks) {
+  if (window_gate_fd >= 0) {
+    // Socket writability is independent of remote SSH window growth.
+    callbacks->channel_write_wontblock_function = nullptr;
+  }
+  return __real_ssh_set_channel_callbacks(channel, callbacks);
+}
+
+extern "C" int __real_ssh_channel_write(ssh_channel, const void *, std::uint32_t);
+extern "C" int __wrap_ssh_channel_write(ssh_channel channel, const void *data, std::uint32_t size) {
+  const auto result = __real_ssh_channel_write(channel, data, size);
+  if (window_gate_fd >= 0 && !restored_window_observed && result == 0) {
+    expect_true(ssh_channel_window_size(channel) == 0, "write must exhaust the remote window");
+    const char release = 'w';
+    expect_true(write_all_fd(window_gate_fd, &release, 1), "release the peer receive window");
+    expect_true(ssh_channel_poll_timeout(channel, 30000, 1) == 1, "receive the window-update marker");
+    char marker = 0;
+    expect_true(ssh_channel_read_nonblocking(channel, &marker, 1, 1) == 1 && marker == 'w',
+                "consume the marker after WINDOW_ADJUST");
+    expect_true(ssh_channel_window_size(channel) > 0, "read must restore the remote send window");
+    expect_true(ssh_channel_poll_timeout(channel, 0, 1) == 0, "drain readiness after the window marker");
+    expect_true((ssh_get_poll_flags(ssh_channel_get_session(channel)) & SSH_WRITE_PENDING) == 0,
+                "window recovery must not depend on socket writability");
+    restored_window_observed = true;
+  }
+  return result;
 }
 
 static std::filesystem::path
@@ -466,6 +502,13 @@ static int on_channel_data(ssh_session, ssh_channel channel, void *data,
   auto *state = static_cast<ServerState *>(userdata);
   if (is_stderr != 0 || data == nullptr || size == 0) {
     return static_cast<int>(size);
+  }
+  if (state->options.window_gate_fd >= 0) {
+    char release = 0;
+    if (!read_all_fd(state->options.window_gate_fd, &release, 1) || release != 'w') return -1;
+    (void)::close(state->options.window_gate_fd);
+    state->options.window_gate_fd = -1;
+    state->window_marker_pending = true;
   }
   state->payload.append(static_cast<const char *>(data), size);
   const int written = ssh_channel_write(channel, data, size);
@@ -993,6 +1036,13 @@ static int run_server_process(const ServerOptions &options, int port_fd,
   while (!state.release_requested && ssh_is_connected(session) != 0) {
     if (ssh_event_dopoll(event, -1) == SSH_ERROR) {
       break;
+    }
+    if (state.window_marker_pending) {
+      // libssh grows the receive window after the data callback returns.
+      // Send a marker after that packet so the client can observe its receipt.
+      state.window_marker_pending = false;
+      const char marker = 'w';
+      if (ssh_channel_write_stderr(state.channel, &marker, 1) != 1) break;
     }
   }
 
@@ -1523,6 +1573,60 @@ static std::size_t open_socket_count() {
   return count;
 }
 
+static void test_forward_window_recovery(const ServerOptions &options, const std::filesystem::path &known_hosts) {
+  int gate[2] = {-1, -1};
+  expect_true(::pipe(gate) == 0, "create the receive-window gate");
+  auto server_options = options;
+  server_options.forward_host = "window.proxy-test.invalid";
+  server_options.window_gate_fd = gate[0];
+  server_options.payload.resize(65537);
+  for (std::size_t index = 0; index < server_options.payload.size(); ++index)
+    server_options.payload[index] = static_cast<char>(index % 256);
+  auto server = start_server(server_options);
+  ::close(gate[0]);
+  window_gate_fd = gate[1];
+  restored_window_observed = false;
+  cardio::dispatcher_group_glib group;
+  cardio::dispatcher_host_glib dispatcher(group);
+  std::exception_ptr failure;
+  auto body = [&]() -> cardio::promise<void> {
+    try {
+      elder_terms::TerminalSessionCallbacks callbacks{};
+      callbacks.ssh_prompt = [](const auto &prompt, cardio::cancellation) -> cardio::promise<elder_terms::SshUserPromptResponse> {
+        co_return elder_terms::SshUserPromptResponse{.accepted = true, .text = prompt.initial_text, .reset_host_key = false};
+      };
+      const elder_terms::SshEndpointSettings endpoint{
+          .address = "127.0.0.1", .port = server.port,
+          .username = options.username, .identity_file = {}};
+      auto connecting = elder_terms::AuthenticatedSshTransport::connect_async(endpoint, callbacks,
+          {.known_hosts_file = known_hosts.string(), .config_file = {}}, {});
+      auto transport = co_await connecting;
+      auto opening = elder_terms::SshChannelConnection::open_forward_async(
+          transport, server_options.forward_host, server_options.forward_port, {});
+      auto channel = std::move(co_await opening);
+      co_await channel->write_all_async(bytes(server_options.payload), {});
+      expect_true(restored_window_observed, "exercise an exhausted and restored window");
+      std::string received;
+      std::array<unsigned char, 16384> buffer{};
+      for (;;) {
+        const auto count = co_await channel->read_async(buffer, {});
+        if (!count) break;
+        received.append(reinterpret_cast<const char *>(buffer.data()), count);
+      }
+      expect_true(received == server_options.payload, "forwarding must resume without losing bytes after WINDOW_ADJUST");
+    } catch (...) { failure = std::current_exception(); }
+    group.shutdown();
+  };
+  auto task = body();
+  dispatcher.park();
+  task.unsafe_result();
+  window_gate_fd = -1;
+  ::close(gate[1]);
+  const auto result = wait_for_server(&server);
+  if (failure) std::rethrow_exception(failure);
+  expect_true(result == 0, "server must receive the complete payload after window recovery");
+}
+
 static void test_proxy_forwarding(const ServerOptions &options, const std::filesystem::path &known_hosts, bool socks) {
   auto gateway_options = options;
   gateway_options.forward_host = "internal.proxy-test.invalid";
@@ -1848,6 +1952,7 @@ AAAEA8cCQePgwL2LLorJKJb/mbOaBviLYfCkaS2lc+lgrnvZglDbkkh3abjMMTzSsZS5/X
   options.auth_mode = ServerAuthMode::none;
   options.host_key_path = host_private_key;
   options.host_public_key_path = host_public_key;
+  test_forward_window_recovery(options, root / ".ssh" / "proxy_known_hosts");
   test_proxy_forwarding(options, root / ".ssh" / "proxy_known_hosts", false);
   test_proxy_forwarding(options, root / ".ssh" / "proxy_known_hosts", true);
   test_proxy_rejections(options, root / ".ssh" / "proxy_known_hosts");
