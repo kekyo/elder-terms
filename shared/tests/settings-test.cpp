@@ -651,12 +651,12 @@ static void test_terminal_border_width_range_and_round_trip() {
 static void test_independent_inactive_indicator_color() {
   const auto path = temporary_config_path("inactive-color");
   const auto global = temporary_config_path("inactive-global");
-  const auto on = elder_terms::make_setting_key("terminal", "indicator_color");
-  const auto off = elder_terms::make_setting_key("terminal", "indicator_off_color");
+  const auto on = elder_terms::make_setting_key("general", "indicator_color");
+  const auto off = elder_terms::make_setting_key("general", "indicator_off_color");
   const SettingsLoadOptions options{.config_path = path,
       .startup_config_path = std::nullopt, .global_config_path = global};
-  write_config(global, "[terminal]\nindicator_off_color=#112233\n");
-  write_config(path, "[terminal]\nindicator_color=#FF0000\n");
+  write_config(global, "[general]\nindicator_off_color=#112233\n");
+  write_config(path, "[general]\nindicator_color=#FF0000\n");
   auto loaded = load_settings(options, 1.0);
   expect_true(elder_terms::setting_string_value_or_default(loaded.store, off, "missing") == "#112233",
       "inactive color should inherit independently of the active color");
@@ -673,12 +673,12 @@ static void test_independent_inactive_indicator_color() {
     expect_true(!set_explicit_setting_value(&loaded.store, off, elder_terms::SettingValue{std::string(invalid)}),
         "invalid inactive color should be rejected");
   }
-  write_config(path, "[terminal]\nindicator_off_color=invalid\n");
+  write_config(path, "[general]\nindicator_off_color=invalid\n");
   loaded = load_settings(options, 1.0);
   expect_true(warnings_contain(loaded.warnings, "indicator_off_color") &&
       elder_terms::setting_string_value_or_default(loaded.store, off, "missing") == "#112233",
       "invalid inactive colors should warn and inherit");
-  write_config(global, "[terminal]\nindicator_off_color=invalid\n");
+  write_config(global, "[general]\nindicator_off_color=invalid\n");
   loaded = load_settings(options, 1.0);
   expect_true(elder_terms::setting_string_value_or_default(loaded.store, off, "missing") == "default",
       "invalid inactive colors in all layers should use the original gray lamp");
@@ -686,15 +686,15 @@ static void test_independent_inactive_indicator_color() {
   remove_config(global);
 }
 
-static void test_terminal_indicator_color_round_trip_and_layering() {
-  const auto key = elder_terms::terminal_indicator_color_setting_key();
+static void test_general_indicator_color_round_trip_and_layering() {
+  const auto key = elder_terms::general_indicator_color_setting_key();
   auto defaults = create_default_settings(default_terminal_display_settings(1.0),
                                            "elder-terms");
-  expect_true(!elder_terms::terminal_indicator_color(defaults).has_value(),
+  expect_true(!elder_terms::general_indicator_color(defaults).has_value(),
               "the built-in indicator color should retain the original images");
   const auto global_path = temporary_config_path("global-indicator-color");
   const auto path = temporary_config_path("indicator-color");
-  write_config(global_path, "[terminal]\nindicator_color=#123aBC\n");
+  write_config(global_path, "[general]\nindicator_color=#123aBC\n");
   write_config(path, "[general]\nauto_close=false\n");
   const SettingsLoadOptions options{
       .config_path = path,
@@ -702,7 +702,7 @@ static void test_terminal_indicator_color_round_trip_and_layering() {
       .global_config_path = global_path,
   };
   auto loaded = load_settings(options, 1.0);
-  auto color = elder_terms::terminal_indicator_color(loaded.store);
+  auto color = elder_terms::general_indicator_color(loaded.store);
   expect_true(color.has_value() && color->red == 0x12 &&
                   color->green == 0x3a && color->blue == 0xbc,
               "an inherited indicator color should parse mixed-case RGB");
@@ -723,7 +723,7 @@ static void test_terminal_indicator_color_round_trip_and_layering() {
     expect_true(setting_value_source(loaded.store, key) == SettingValueSource::override,
                 "an explicit default should suppress the inherited indicator color");
   }
-  expect_true(!elder_terms::terminal_indicator_color(loaded.store).has_value(),
+  expect_true(!elder_terms::general_indicator_color(loaded.store).has_value(),
               "an explicit default should restore the original images");
   expect_true(clear_explicit_setting_value(&loaded.store, key),
               "the indicator color override should be clearable");
@@ -735,10 +735,10 @@ static void test_terminal_indicator_color_round_trip_and_layering() {
               "cleared and reloaded indicator colors should inherit again");
   for (const auto &value : {"", "green", "none", "#12345", "#1234567", "123456",
                             "#gg0000", "#-00001", "#12 456", "DEFAULT"}) {
-    write_config(path, std::string("[terminal]\nindicator_color=") + value + "\n");
+    write_config(path, std::string("[general]\nindicator_color=") + value + "\n");
     loaded = load_settings(options, 1.0);
     expect_true(warnings_contain(loaded.warnings,
-                  "invalid configuration value [terminal] indicator_color"),
+                  "invalid configuration value [general] indicator_color"),
                 "invalid indicator colors should warn");
     expect_true(setting_string_value_or_default(loaded.store, key, "missing") == "#123aBC" &&
                     !setting_has_explicit_value(loaded.store, key),
@@ -747,9 +747,9 @@ static void test_terminal_indicator_color_round_trip_and_layering() {
                                              elder_terms::SettingValue{std::string(value)}),
                 "invalid runtime indicator values should not replace the current color");
   }
-  write_config(global_path, "[terminal]\nindicator_color=invalid\n");
+  write_config(global_path, "[general]\nindicator_color=invalid\n");
   loaded = load_settings(options, 1.0);
-  expect_true(!elder_terms::terminal_indicator_color(loaded.store).has_value(),
+  expect_true(!elder_terms::general_indicator_color(loaded.store).has_value(),
               "invalid colors in every layer should use the original green images");
   expect_true(!set_explicit_setting_value(&defaults, key, elder_terms::SettingValue{true}),
               "the indicator color should reject a non-string setting value");
@@ -4603,7 +4603,7 @@ int main() {
     elder_terms_settings_test::test_independent_inactive_indicator_color();
     elder_terms_settings_test::test_terminal_font_list_round_trip_and_validation();
     elder_terms_settings_test::test_default_settings();
-    elder_terms_settings_test::test_terminal_indicator_color_round_trip_and_layering();
+    elder_terms_settings_test::test_general_indicator_color_round_trip_and_layering();
     elder_terms_settings_test::
         test_local_command_line_setting_round_trip_and_layering();
     elder_terms_settings_test::

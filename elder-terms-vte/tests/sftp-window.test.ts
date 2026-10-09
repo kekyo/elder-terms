@@ -402,6 +402,71 @@ describe('SFTP window', () => {
     );
   });
 
+  it('loads general indicator colors and applies independent defaults in the file browser', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      ['indicator_color=#FF0000', 'indicator_off_color=#0000FF'],
+      undefined,
+      async ({ app, evidence }) => {
+        for (const id of ['conn', 'sd', 'rd']) {
+          await waitForResult(async () => {
+            const [r, g, b] = capturePixel(
+              await (await app.getById(`${id}_indicator_image`)).capture(),
+              0.5,
+              0.5
+            );
+            if (id === 'conn') {
+              expect(r - g).toBeGreaterThan(60);
+              expect(r - b).toBeGreaterThan(60);
+            } else {
+              expect(b - r).toBeGreaterThan(60);
+              expect(b - g).toBeGreaterThan(60);
+            }
+          });
+        }
+        for (const field of ['indicator_color', 'indicator_off_color']) {
+          await expectElementKind(
+            await app.getById('application_menu_button'),
+            'toggleButton'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_menu_item'),
+            'menuItem'
+          ).click();
+          const mode = expectElementKind(
+            await app.getById(`settings_general_${field}_mode_combo`),
+            'comboBox'
+          );
+          expect((await mode.info()).states).toContain('showing');
+          await mode.selectChildAt(1);
+          await expectElementKind(
+            await app.getById('settings_apply_button'),
+            'button'
+          ).click();
+          for (const id of ['conn', 'sd', 'rd']) {
+            const capture = await waitForResult(async () => {
+              const image = await (
+                await app.getById(`${id}_indicator_image`)
+              ).capture();
+              const [r, g, b] = capturePixel(image, 0.5, 0.5);
+              if (id === 'conn') expect(g - r).toBeGreaterThan(35);
+              else if (field === 'indicator_color')
+                expect(b - r).toBeGreaterThan(60);
+              else
+                expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(12);
+              return image;
+            });
+            await evidence.captureEvidence(
+              `${field}-default-${id}`,
+              async () => capture
+            );
+          }
+        }
+      }
+    );
+  });
+
   it('shows activity in the title bar and hides the status bar in compact mode', async (context) => {
     await runSftpFixture(
       context,

@@ -160,7 +160,7 @@ static FixtureOptions parse_options(int argc, char **argv) {
           option_value(argument, "--background="));
     } else if (starts_with(argument, "--indicator-color=")) {
       append_connection_assignment(
-          &options, "terminal", "indicator_color",
+          &options, "general", "indicator_color",
           option_value(argument, "--indicator-color="));
     } else if (starts_with(argument, "--encoding=")) {
       append_connection_assignment(
@@ -831,7 +831,7 @@ static void print_store(const char *prefix,
             << " background=" << background
             << " indicator_color="
             << elder_terms::setting_string_value_or_default(
-                   store, elder_terms::make_setting_key("terminal", "indicator_color"),
+                   store, elder_terms::make_setting_key("general", "indicator_color"),
                    "default")
             << " zoom_in_key="
             << elder_terms::terminal_zoom_in_key(store)
@@ -942,7 +942,7 @@ static void print_store(const char *prefix,
                          elder_terms::general_background_setting_key());
   print_setting_metadata(
       store, "indicator_color",
-      elder_terms::make_setting_key("terminal", "indicator_color"));
+      elder_terms::make_setting_key("general", "indicator_color"));
   print_setting_metadata(store, "encoding",
                          elder_terms::terminal_encoding_setting_key());
   print_setting_metadata(store, "backspace_code",

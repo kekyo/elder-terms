@@ -28,6 +28,7 @@
 #include "file-transfer-engine.h"
 #include "activity-file-client.h"
 #include "../activity-indicator.h"
+#include "../indicator-color.h"
 #include "local-file-reveal.h"
 #include "../widget-background.h"
 
@@ -155,6 +156,8 @@ struct FileTransferWindow {
   std::array<ActivityIndicatorWidget, 3> indicators;
   GdkPixbuf *indicator_on = nullptr;
   GdkPixbuf *indicator_off = nullptr;
+  GdkPixbuf *indicator_default_on = nullptr;
+  GdkPixbuf *indicator_default_off = nullptr;
   GtkWidget *status_bar = nullptr;
   GtkWidget *status_content = nullptr;
   GtkWidget *indicator_bar = nullptr;
@@ -2075,6 +2078,8 @@ static void on_file_transfer_window_destroy(GtkWidget *, gpointer data) {
   }
   g_clear_object(&window->indicator_on);
   g_clear_object(&window->indicator_off);
+  g_clear_object(&window->indicator_default_on);
+  g_clear_object(&window->indicator_default_off);
   clear_file_transfer_window_colors(window);
   window->destroyed = true;
   window->window = nullptr;
@@ -2579,6 +2584,36 @@ static void apply_file_transfer_compact_mode(FileTransferWindow *window,
                          compact_mode ? FALSE : TRUE);
 }
 
+void set_file_transfer_window_indicator_colors(
+    const std::shared_ptr<FileTransferWindow> &window,
+    const std::optional<RgbColor> &color,
+    const std::optional<RgbColor> &off_color) {
+  if (window == nullptr || window->destroyed ||
+      window->indicator_default_on == nullptr ||
+      window->indicator_default_off == nullptr) return;
+  auto *on = color.has_value()
+      ? create_colored_indicator_pixbuf(window->indicator_default_on, *color)
+      : GDK_PIXBUF(g_object_ref(window->indicator_default_on));
+  // Custom inactive colors share the active lamp's shading range. Defaults
+  // retain the original gray lamp, independently of the active color.
+  auto *off = off_color.has_value()
+      ? create_colored_indicator_pixbuf(window->indicator_default_on, *off_color)
+      : GDK_PIXBUF(g_object_ref(window->indicator_default_off));
+  if (on == nullptr || off == nullptr) {
+    g_clear_object(&on);
+    g_clear_object(&off);
+    g_warning("Could not allocate colored indicator images");
+    return;
+  }
+  for (auto &indicator : window->indicators) {
+    replace_activity_indicator_widget_images(&indicator, on, off);
+  }
+  g_clear_object(&window->indicator_on);
+  g_clear_object(&window->indicator_off);
+  window->indicator_on = on;
+  window->indicator_off = off;
+}
+
 static void open_file_settings(GtkMenuItem *, gpointer data) {
   auto *window = static_cast<FileTransferWindow *>(data);
   if (window->settings_dialog != nullptr) {
@@ -2599,6 +2634,8 @@ static void open_file_settings(GtkMenuItem *, gpointer data) {
     window->settings = settings;
     set_file_transfer_window_colors(
         window->self.lock(), general_color_settings(settings));
+    set_file_transfer_window_indicator_colors(window->self.lock(),
+        general_indicator_color(settings), general_indicator_off_color(settings));
     apply_file_transfer_compact_mode(window, general_compact_mode(settings));
     schedule_file_settings_close(window);
   };
@@ -2797,6 +2834,10 @@ create_file_transfer_window(FileTransferWindowOptions options) {
       (icon_directory / "green-on.png").c_str(), 18, 18, TRUE, nullptr);
   state->indicator_off = gdk_pixbuf_new_from_file_at_scale(
       (icon_directory / "green-off.png").c_str(), 18, 18, TRUE, nullptr);
+  state->indicator_default_on = state->indicator_on == nullptr
+      ? nullptr : GDK_PIXBUF(g_object_ref(state->indicator_on));
+  state->indicator_default_off = state->indicator_off == nullptr
+      ? nullptr : GDK_PIXBUF(g_object_ref(state->indicator_off));
   const std::array ids{ActivityIndicatorId::conn, ActivityIndicatorId::sd,
                        ActivityIndicatorId::rd};
   for (std::size_t index = 0; index < ids.size(); ++index) {
@@ -2818,6 +2859,9 @@ create_file_transfer_window(FileTransferWindowOptions options) {
         state->indicator_on, state->indicator_off,
         index == 0 ? ActivityIndicatorMode::steady : ActivityIndicatorMode::blink);
   }
+  set_file_transfer_window_indicator_colors(state,
+      general_indicator_color(state->settings),
+      general_indicator_off_color(state->settings));
   apply_file_transfer_compact_mode(
       state.get(), general_compact_mode(state->settings));
 

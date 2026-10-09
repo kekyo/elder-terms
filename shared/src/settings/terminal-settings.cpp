@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
-#include <charconv>
 #include <cmath>
 #include <filesystem>
 #include <string>
@@ -26,8 +25,6 @@ static constexpr char terminal_width_key[] = "width";
 static constexpr char terminal_height_key[] = "height";
 static constexpr char terminal_scrollback_lines_key[] = "scrollback_lines";
 static constexpr char terminal_zoom_key[] = "zoom";
-static constexpr char terminal_indicator_color_key[] = "indicator_color";
-static constexpr char terminal_indicator_off_color_key[] = "indicator_off_color";
 static constexpr char terminal_font_families_key[] = "font_families";
 static constexpr char terminal_show_border_key[] = "show_border";
 static constexpr char terminal_border_width_key[] = "border_width";
@@ -143,34 +140,6 @@ bool terminal_font_families_are_valid(
   return true;
 }
 
-static std::optional<RgbColor> parse_indicator_color(const std::string &text) {
-  if (text.size() != 7 || text.front() != '#') {
-    return std::nullopt;
-  }
-  unsigned int packed = 0;
-  const auto parsed = std::from_chars(text.data() + 1,
-                                      text.data() + text.size(), packed, 16);
-  if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
-    return std::nullopt;
-  }
-  return RgbColor{
-      .red = static_cast<guint8>(packed >> 16),
-      .green = static_cast<guint8>(packed >> 8),
-      .blue = static_cast<guint8>(packed),
-  };
-}
-
-static bool validate_indicator_color(const SettingValue &value,
-                                      std::string *reason) {
-  const auto *text = std::get_if<std::string>(&value);
-  if (text != nullptr && (*text == "default" ||
-                          parse_indicator_color(*text).has_value())) {
-    return true;
-  }
-  *reason = "must be default or #RRGGBB";
-  return false;
-}
-
 static bool validate_font_families(const SettingValue &value,
                                    std::string *reason) {
   return terminal_font_families_are_valid(
@@ -278,24 +247,6 @@ SettingKey terminal_scrollback_lines_setting_key() {
 
 SettingKey terminal_zoom_setting_key() {
   return terminal_key(terminal_zoom_key);
-}
-
-SettingKey terminal_indicator_color_setting_key() {
-  return terminal_key(terminal_indicator_color_key);
-}
-
-std::optional<RgbColor> terminal_indicator_color(const SettingsStore &store) {
-  return parse_indicator_color(setting_string_value_or_default(
-      store, terminal_indicator_color_setting_key(), "default"));
-}
-
-SettingKey terminal_indicator_off_color_setting_key() {
-  return terminal_key(terminal_indicator_off_color_key);
-}
-
-std::optional<RgbColor> terminal_indicator_off_color(const SettingsStore &store) {
-  return parse_indicator_color(setting_string_value_or_default(
-      store, terminal_indicator_off_color_setting_key(), "default"));
 }
 
 SettingKey terminal_font_families_setting_key() {
@@ -438,20 +389,10 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .validate = validate_zoom,
       },
       {
-          .key = terminal_indicator_color_setting_key(),
-          .default_value = SettingValue{std::string("default")},
-          .validate = validate_indicator_color,
-      },
-      {
           .key = terminal_font_families_setting_key(),
           .default_value = SettingValue{std::vector<std::string>{}},
           .validate = validate_font_families,
           .normalize = normalize_font_families,
-      },
-      {
-          .key = terminal_indicator_off_color_setting_key(),
-          .default_value = SettingValue{std::string("default")},
-          .validate = validate_indicator_color,
       },
       {
           .key = terminal_show_border_setting_key(),

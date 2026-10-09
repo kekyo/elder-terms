@@ -735,11 +735,15 @@ static void apply_runtime_settings(ApplicationState *state,
   elder_terms::set_main_window_colors(
       state->main_window, colors);
   elder_terms::set_main_window_indicator_color(
-      state->main_window, elder_terms::terminal_indicator_color(state->settings_store),
-      elder_terms::terminal_indicator_off_color(state->settings_store));
+      state->main_window, elder_terms::general_indicator_color(state->settings_store),
+      elder_terms::general_indicator_off_color(state->settings_store));
   if (state->sftp_window != nullptr) {
     elder_terms::set_file_transfer_window_colors(
         state->sftp_window, colors);
+    elder_terms::set_file_transfer_window_indicator_colors(
+        state->sftp_window,
+        elder_terms::general_indicator_color(state->settings_store),
+        elder_terms::general_indicator_off_color(state->settings_store));
   }
   const elder_terms::TerminalLogSettings log_settings =
       elder_terms::terminal_log_settings(state->settings_store);
@@ -1763,8 +1767,8 @@ int main(int argc, char **argv) {
       &*main_window,
       elder_terms::general_color_settings(settings_result.store));
   elder_terms::set_main_window_indicator_color(
-      &*main_window, elder_terms::terminal_indicator_color(settings_result.store),
-      elder_terms::terminal_indicator_off_color(settings_result.store));
+      &*main_window, elder_terms::general_indicator_color(settings_result.store),
+      elder_terms::general_indicator_off_color(settings_result.store));
   elder_terms::set_main_window_compact_mode(
       &*main_window, elder_terms::general_compact_mode(settings_result.store));
 
