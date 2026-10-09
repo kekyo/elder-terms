@@ -2089,6 +2089,41 @@ describe.concurrent('elder-terms-vte settings', () => {
     );
   });
 
+  it('keeps custom settings backgrounds continuous across link page margins', async (context) => {
+    const background = [0x60, 0x40, 0x20] as const;
+
+    await runGtkTest(
+      context,
+      ['--test-fixture'],
+      async (app, evidence) => {
+        await openSettingsDialog(app);
+        await selectSettingsNotebookTab(
+          app,
+          'Links',
+          'settings_link_enabled_combo'
+        );
+
+        const linkPage = await app.getById('settings_link_page');
+        const capture = await evidence.captureEvidence(
+          'settings-link-page-custom-background',
+          async () => linkPage.capture()
+        );
+        const { width, height } = capture.bounds;
+
+        expect([
+          capturePixel(capture, 6 / width, 0.5),
+          capturePixel(capture, (width - 6) / width, 0.5),
+          capturePixel(capture, 0.5, 6 / height),
+          capturePixel(capture, 0.5, (height - 6) / height),
+        ]).toEqual([background, background, background, background]);
+      },
+      {
+        globalSettings:
+          '[general]\nexterior_background=#204060\nbackground=#604020\n',
+      }
+    );
+  });
+
   it('opens the runtime settings dialog from the application menu', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
       await openSettingsDialog(app);

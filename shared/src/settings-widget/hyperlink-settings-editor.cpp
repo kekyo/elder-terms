@@ -749,7 +749,11 @@ create_hyperlink_settings_editor(HyperlinkSettingsEditorOptions options) {
   gtk_widget_set_margin_bottom(content, 16);
   gtk_widget_set_margin_start(content, 16);
   gtk_widget_set_margin_end(content, 16);
-  gtk_container_add(GTK_CONTAINER(state->root), content);
+  // Keep the margins inside a painted surface instead of exposing the
+  // implicit GtkViewport window around the direct scroll child.
+  GtkWidget *page_surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_container_add(GTK_CONTAINER(page_surface), content);
+  gtk_container_add(GTK_CONTAINER(state->root), page_surface);
 
   GtkWidget *top = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_box_pack_start(GTK_BOX(top), create_label(_("Link actions")), FALSE,
