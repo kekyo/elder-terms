@@ -69,7 +69,7 @@ SshProxySettings ssh_proxy_connection_settings(const SettingsStore &store) {
   const auto kind = general_connection_kind(store);
   if (kind == ConnectionKind::local_shell || kind == ConnectionKind::serial) return {};
   auto result = ssh_proxy_settings(store);
-  if (result.enabled && kind != ConnectionKind::telnet && kind != ConnectionKind::ssh)
+  if (result.enabled && kind != ConnectionKind::telnet && kind != ConnectionKind::ssh && kind != ConnectionKind::sftp)
     result.validation_errors.emplace_back("SSH proxy is not yet supported for this connection type");
   return result;
 }

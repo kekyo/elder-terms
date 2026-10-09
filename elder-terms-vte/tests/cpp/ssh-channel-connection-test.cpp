@@ -67,6 +67,7 @@ struct ServerOptions {
   int forward_port = 23;
   bool reject_forward = false;
   int forward_target_port = 0;
+  bool sftp_only = false;
 };
 
 struct ServerState {
@@ -700,7 +701,7 @@ static ssh_channel on_channel_open(ssh_session session, void *userdata) {
     }
     return channel;
   }
-  if (state->channel != nullptr) {
+  if (state->channel != nullptr || state->options.sftp_only) {
     state->sftp_channel = channel;
     state->sftp_channel_callbacks.userdata = state;
     state->sftp_channel_callbacks.channel_data_function =
@@ -811,6 +812,9 @@ static std::optional<int> bound_port(ssh_bind bind) {
 }
 
 static int validate_server_state(const ServerState &state) {
+  if (state.options.sftp_only)
+    return state.sftp_started && state.sftp_requested && !state.shell_requested &&
+        state.username == state.options.username ? 0 : 39;
   if (state.options.forward_target_port)
     return state.forward_requested && !state.payload.empty() &&
         (state.options.auth_mode != ServerAuthMode::public_key || state.public_key_accepted) ? 0 : 38;
@@ -1118,12 +1122,8 @@ static std::span<const std::byte> byte_span(const std::string &value) {
 
 static cardio::promise<void>
 exercise_sftp_client_async(
-    const std::shared_ptr<elder_terms::AuthenticatedSshTransport>
-        &transport,
+    std::shared_ptr<elder_terms::RemoteFileClient> client,
     cardio::cancellation cancellation) {
-  std::shared_ptr<elder_terms::RemoteFileClient> client =
-      co_await elder_terms::open_sftp_client_async(transport,
-                                                   cancellation);
   expect_true(client != nullptr, "SFTP client was not created");
   const elder_terms::RemoteDirectorySnapshot snapshot =
       co_await client->load_directory_async(".", cancellation);
@@ -1405,7 +1405,8 @@ static int run_client_case(const ServerOptions &server_options,
                 std::to_string(transport.use_count()));
         if (!server_options.sftp_root.empty()) {
           co_await exercise_sftp_client_async(
-              transport, cancellation_source.get_cancellation());
+              co_await elder_terms::open_sftp_client_async(transport, cancellation_source.get_cancellation()),
+              cancellation_source.get_cancellation());
           expect_true(
               transport.use_count() == 1,
               "SFTP client retained the authenticated transport after close");
@@ -1510,6 +1511,16 @@ static std::size_t line_count(const std::filesystem::path &path) {
   return count;
 }
 
+static std::size_t open_socket_count() {
+  std::size_t count = 0;
+  for (const auto &entry : std::filesystem::directory_iterator("/proc/self/fd")) {
+    std::error_code error;
+    const auto target = std::filesystem::read_symlink(entry.path(), error).string();
+    if (!error && target.starts_with("socket:")) ++count;
+  }
+  return count;
+}
+
 static void test_proxy_forwarding(const ServerOptions &options, const std::filesystem::path &known_hosts) {
   auto gateway_options = options;
   gateway_options.forward_host = "internal.proxy-test.invalid";
@@ -1524,16 +1535,7 @@ static void test_proxy_forwarding(const ServerOptions &options, const std::files
   std::exception_ptr failure;
   auto body = [&]() -> cardio::promise<void> {
     try {
-      const auto socket_count = []() {
-        std::size_t count = 0;
-        for (const auto &entry : std::filesystem::directory_iterator("/proc/self/fd")) {
-          std::error_code error;
-          const auto target = std::filesystem::read_symlink(entry.path(), error).string();
-          if (!error && target.starts_with("socket:")) ++count;
-        }
-        return count;
-      };
-      const auto initial_sockets = socket_count();
+      const auto initial_sockets = open_socket_count();
       elder_terms::SshProxySettings proxy;
       proxy.enabled = true;
       proxy.endpoint = {.address = "127.0.0.1", .port = server.port,
@@ -1565,7 +1567,7 @@ static void test_proxy_forwarding(const ServerOptions &options, const std::files
                   "TELNET negotiation and terminal data must survive forwarding");
       co_await elder_terms::stop_ssh_proxy_connection_async(connection);
       connection.reset();
-      expect_true(socket_count() == initial_sockets, "stopping proxy must release gateway and bridge sockets");
+      expect_true(open_socket_count() == initial_sockets, "stopping proxy must release gateway and bridge sockets");
     } catch (...) { failure = std::current_exception(); }
     group.shutdown();
   };
@@ -1632,9 +1634,13 @@ static void test_proxy_rejections(const ServerOptions &options, const std::files
   expect_true(result == 0, "gateway must observe the rejected forwarding request");
 }
 
+enum class ProxySftpMode { none, standalone, shell_first, sftp_first };
+
 static void test_proxy_ssh(ServerOptions target_options, ServerOptions gateway_options,
     const std::filesystem::path &target_identity, const std::filesystem::path &gateway_identity,
-    const std::filesystem::path &known_hosts, bool changed_keys) {
+    const std::filesystem::path &known_hosts, bool changed_keys, ProxySftpMode sftp_mode) {
+  const auto initial_sockets = open_socket_count();
+  target_options.sftp_only = sftp_mode == ProxySftpMode::standalone;
   auto target = start_server(target_options);
   gateway_options.forward_host = "target.proxy-test.invalid";
   gateway_options.forward_port = target.port;
@@ -1677,24 +1683,49 @@ static void test_proxy_ssh(ServerOptions target_options, ServerOptions gateway_o
           .known_hosts_file = known_hosts.string(), .config_file = {},
           .proxy = {.enabled = true, .endpoint = {.address = "127.0.0.1", .port = gateway.port,
               .username = gateway_options.username, .identity_file = gateway_identity.string()}}};
-      auto opening = elder_terms::SshChannelConnection::connect_async(settings,
-          target_options.columns, target_options.rows, callbacks, overrides, {});
-      auto connection = std::move(co_await opening);
-      co_await connection->resize_async(target_options.resized_columns, target_options.resized_rows, {});
-      co_await connection->send_break_async(500, {});
-      co_await connection->write_all_async(bytes(target_options.payload), {});
-      std::string echoed;
-      std::array<unsigned char, 128> buffer{};
-      while (echoed.size() < target_options.payload.size()) {
-        const auto count = co_await connection->read_async(buffer, {});
-        if (!count) break;
-        echoed.append(reinterpret_cast<const char *>(buffer.data()), count);
+      std::unique_ptr<elder_terms::SshChannelConnection> connection;
+      std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport;
+      if (sftp_mode == ProxySftpMode::standalone) {
+        auto opening = elder_terms::AuthenticatedSshTransport::connect_async(settings.endpoint, callbacks, overrides, {});
+        transport = std::move(co_await opening);
+      } else {
+        auto opening = elder_terms::SshChannelConnection::connect_async(settings,
+            target_options.columns, target_options.rows, callbacks, overrides, {});
+        connection = std::move(co_await opening);
+        transport = connection->authenticated_transport();
       }
-      expect_true(echoed == target_options.payload, "SSH shell must operate on the final endpoint");
+      if (sftp_mode == ProxySftpMode::sftp_first) {
+        auto client = co_await elder_terms::open_sftp_client_async(transport, {});
+        co_await exercise_sftp_client_async(std::move(client), {});
+      }
+      if (connection) {
+        co_await connection->resize_async(target_options.resized_columns, target_options.resized_rows, {});
+        co_await connection->send_break_async(500, {});
+        co_await connection->write_all_async(bytes(target_options.payload), {});
+        std::string echoed;
+        std::array<unsigned char, 128> buffer{};
+        while (echoed.size() < target_options.payload.size()) {
+          const auto count = co_await connection->read_async(buffer, {});
+          if (!count) break;
+          echoed.append(reinterpret_cast<const char *>(buffer.data()), count);
+        }
+        expect_true(echoed == target_options.payload, "SSH shell must operate on the final endpoint");
+      }
+      std::shared_ptr<elder_terms::RemoteFileClient> sftp_client;
+      if (sftp_mode == ProxySftpMode::standalone || sftp_mode == ProxySftpMode::shell_first) {
+        sftp_client = co_await elder_terms::open_sftp_client_async(transport, {});
+        if (connection) connection->close();
+        connection.reset();
+        transport.reset();
+        // The SFTP client now owns the final transport and the whole route.
+        co_await exercise_sftp_client_async(sftp_client, {});
+      }
       const unsigned char release = 1;
       expect_true(write_all_fd(target.release_fd, &release, 1), "release final server");
-      connection->close();
+      if (connection) connection->close();
       connection.reset();
+      transport.reset();
+      sftp_client.reset();
     } catch (...) { failure = std::current_exception(); }
     group.shutdown();
   };
@@ -1705,6 +1736,7 @@ static void test_proxy_ssh(ServerOptions target_options, ServerOptions gateway_o
   const auto gateway_result = wait_for_server(&gateway);
   if (failure) std::rethrow_exception(failure);
   expect_true(target_result == 0 && gateway_result == 0, "both SSH servers must validate their distinct sessions");
+  expect_true(open_socket_count() == initial_sockets, "final SSH/SFTP owner must release every routed socket");
   expect_true(gateway_keys == 1 && target_keys == 1, "both SSH host keys must be verified");
   expect_true(!known_hosts_entries(known_hosts, known_hosts_target(gateway_options.forward_host, target.port)).empty(),
               "destination host key must be stored under its original name and port");
@@ -1839,9 +1871,15 @@ AAAEA8cCQePgwL2LLorJKJb/mbOaBviLYfCkaS2lc+lgrnvZglDbkkh3abjMMTzSsZS5/X
   gateway_options.host_public_key_path = changed_host_public_key;
   gateway_options.authorized_key_path = encrypted_public_key;
   test_proxy_ssh(options, gateway_options, plain_private_key, encrypted_private_key,
-                 root / ".ssh" / "nested_known_hosts", false);
+                 root / ".ssh" / "nested_known_hosts", false, ProxySftpMode::none);
   test_proxy_ssh(options, gateway_options, plain_private_key, encrypted_private_key,
-                 root / ".ssh" / "nested_known_hosts", true);
+                 root / ".ssh" / "nested_known_hosts", true, ProxySftpMode::none);
+
+  auto sftp_options = options;
+  sftp_options.sftp_root = root / "sftp-root";
+  for (const auto mode : {ProxySftpMode::standalone, ProxySftpMode::shell_first, ProxySftpMode::sftp_first})
+    test_proxy_ssh(sftp_options, gateway_options, plain_private_key, encrypted_private_key,
+                   root / ".ssh" / "sftp_proxy_known_hosts", false, mode);
 
   options.authorized_key_path = encrypted_public_key;
   run_client_case(

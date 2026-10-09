@@ -215,6 +215,7 @@ start_sftp_application_async(SftpApplicationState *state) {
         .known_hosts_file =
             state->launch_options.test.ssh_known_hosts_file,
         .config_file = {},
+        .proxy = proxy,
     };
     auto connecting = elder_terms::AuthenticatedSshTransport::connect_async(
         state->connection.endpoint, callbacks, options, cancellation);
