@@ -155,6 +155,7 @@ validate_installed_package() {
 		/usr/share/applications/net.kekyo.elder-terms.desktop \
 		/usr/share/applications/net.kekyo.elder-terms-terminal.desktop \
 		/etc/xdg/autostart/net.kekyo.elder-terms.desktop \
+		/usr/share/metainfo/net.kekyo.elder-terms.metainfo.xml \
 		/usr/share/icons/hicolor/256x256/apps/elder-terms.png \
 		/usr/share/locale/ja/LC_MESSAGES/elder-terms.mo \
 		/usr/share/doc/elder-terms/docs/ja/webdav.md \
@@ -295,6 +296,7 @@ for staged_file in \
 	usr/share/applications/net.kekyo.elder-terms.desktop \
 	usr/share/applications/net.kekyo.elder-terms-terminal.desktop \
 	etc/xdg/autostart/net.kekyo.elder-terms.desktop \
+	usr/share/metainfo/net.kekyo.elder-terms.metainfo.xml \
 	usr/share/icons/hicolor/256x256/apps/elder-terms.png \
 	usr/share/locale/ja/LC_MESSAGES/elder-terms.mo \
 	usr/share/doc/elder-terms/docs/ja/webdav.md \
