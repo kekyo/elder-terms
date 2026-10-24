@@ -631,12 +631,24 @@ This is separate from the regular clipboard (CLIPBOARD). Escape and left click c
 During IME composition, Escape cancels composition first; the next Escape clears the selection.
 If an IME consumes Escape before the widget receives it, the IME takes priority. [IBus key snooping](https://github.com/ibus/ibus/blob/1.5.29/client/gtk2/ibusimcontext.c#L643-L752)
 
-Block selections can span more history than fits on screen. Copying preserves whole wide characters, combining sequences, and emoji,
-including blank cells and trailing spaces within the rectangle. Each display row, including a soft-wrapped row, is separated by a newline,
-without an extra final newline. Bidirectional text is copied in logical order within each row.
+Block selections can span more history than fits on screen. Copying preserves whole wide characters, combining sequences, and emoji.
+By default, whitespace continuing to the right edge of each display row is removed within the selection. If text remains to the right of the selection, spaces before it are preserved.
+Only empty cells and standalone ASCII spaces are removed. Full-width spaces, nonbreaking spaces (NBSP), and spaces with combining characters are preserved.
+Each display row, including a soft-wrapped row, is separated by a newline. Rows emptied by trimming are retained, without an extra final newline. Bidirectional text is copied in logical order within each row.
 Reducing the width to zero retains the anchor, so you can expand the rectangle again while holding the button.
 
-“Copy” is disabled for an empty rectangle or a selection invalidated by text changes, and existing clipboard contents are preserved.
+To preserve spaces, disable "Trim trailing spaces in block copies" on the "Terminal" tab. In an INI file, use:
+
+```ini
+[terminal]
+block_copy_trim_trailing_spaces=false
+```
+
+An inherited setting uses its parent's value. When no value is specified, the built-in default is `true`.
+Changes also apply while the terminal is running, so you can copy the same selection again with the new policy. Normal selection text and the displayed block selection are unchanged.
+The setting applies to both PRIMARY and CLIPBOARD. A valid selection with positive width that becomes empty after trimming replaces the clipboard contents with an empty string.
+
+“Copy” is disabled for a zero-width rectangle or a selection invalidated by text changes, and existing clipboard contents are preserved.
 Exceeding a selection or copy limit also preserves the previous result instead of publishing partial text; select a smaller range and try again.
 Focus changes, menus, and disconnection end an active drag. Changing focus alone does not clear a completed selection.
 
