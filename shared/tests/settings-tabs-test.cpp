@@ -142,7 +142,8 @@ static void verify_tab_structure(const Fixture &fixture, bool terminal_visible) 
       "terminal_width_entry", "terminal_height_entry",
       "terminal_scrollback_lines_entry", "terminal_bell_sound_entry",
       "terminal_zoom_in_key_entry", "terminal_zoom_out_key_entry",
-      "terminal_send_break_key_entry", "terminal_accessibility_enabled_combo"};
+      "terminal_send_break_key_entry", "terminal_accessibility_enabled_combo",
+      "terminal_block_copy_trim_trailing_spaces_combo"};
   constexpr std::array appearance_fields{
       "terminal_fonts_mode_combo", "terminal_font_size_dip_entry",
       "terminal_cursor_shape_combo", "terminal_cursor_blink_combo",

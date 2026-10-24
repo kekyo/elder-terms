@@ -192,6 +192,14 @@ ELDER_TERMS_API SettingKey terminal_height_setting_key();
 ELDER_TERMS_API SettingKey terminal_scrollback_lines_setting_key();
 
 /**
+ * Returns the setting key for [terminal] block_copy_trim_trailing_spaces.
+ *
+ * @returns Setting key for removing physical-row trailing spaces from
+ * rectangular copies.
+ */
+ELDER_TERMS_API SettingKey terminal_block_copy_trim_trailing_spaces_setting_key();
+
+/**
  * Returns the setting key for [terminal] font_size_dip.
  *
  * @returns Setting key for terminal character size in DIP.
@@ -325,6 +333,16 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults);
  */
 ELDER_TERMS_API TerminalDisplaySettings
 terminal_display_settings(const SettingsStore &store);
+
+/**
+ * Extracts the rectangular-copy trailing-space preference from a store.
+ *
+ * @param store Source settings store.
+ * @returns True when a rectangular copy removes only the selected portion of
+ * a physical row's trailing ASCII spaces; true by default.
+ */
+ELDER_TERMS_API bool
+terminal_block_copy_trim_trailing_spaces(const SettingsStore &store);
 
 /**
  * Extracts the resolved ordered terminal font families from a store.

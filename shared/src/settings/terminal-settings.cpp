@@ -25,6 +25,8 @@ static constexpr char terminal_section[] = "terminal";
 static constexpr char terminal_width_key[] = "width";
 static constexpr char terminal_height_key[] = "height";
 static constexpr char terminal_scrollback_lines_key[] = "scrollback_lines";
+static constexpr char terminal_block_copy_trim_trailing_spaces_key[] =
+    "block_copy_trim_trailing_spaces";
 static constexpr char terminal_font_size_dip_key[] = "font_size_dip";
 static constexpr char terminal_font_families_key[] = "font_families";
 static constexpr char terminal_accessibility_enabled_key[] = "accessibility_enabled";
@@ -294,6 +296,10 @@ SettingKey terminal_scrollback_lines_setting_key() {
   return terminal_key(terminal_scrollback_lines_key);
 }
 
+SettingKey terminal_block_copy_trim_trailing_spaces_setting_key() {
+  return terminal_key(terminal_block_copy_trim_trailing_spaces_key);
+}
+
 SettingKey terminal_font_size_dip_setting_key() {
   return terminal_key(terminal_font_size_dip_key);
 }
@@ -497,6 +503,11 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .validate = validate_scrollback_lines,
       },
       {
+          .key = terminal_block_copy_trim_trailing_spaces_setting_key(),
+          .default_value = SettingValue{true},
+          .validate = nullptr,
+      },
+      {
           .key = terminal_font_size_dip_setting_key(),
           .default_value = SettingValue{terminal_defaults.font_size_dip},
           .validate = validate_font_size_dip,
@@ -574,6 +585,11 @@ TerminalDisplaySettings terminal_display_settings(const SettingsStore &store) {
       .font_size_dip = setting_double_value_or_default(
           store, terminal_font_size_dip_setting_key(), gdouble{12.0}),
   };
+}
+
+bool terminal_block_copy_trim_trailing_spaces(const SettingsStore &store) {
+  return setting_boolean_value_or_default(
+      store, terminal_block_copy_trim_trailing_spaces_setting_key(), true);
 }
 
 TerminalFontFamilies terminal_font_families(const SettingsStore &store) {

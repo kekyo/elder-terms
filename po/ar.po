@@ -169,6 +169,14 @@ msgstr "الصفوف"
 msgid "Scrollback lines"
 msgstr "أسطر سجل التمرير"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Trim trailing spaces in block copies"
+msgstr "إزالة المسافات اللاحقة في النسخ الكتلي"
+
+#: shared/src/settings-widget/settings-widget.cpp
+msgid "Spaces remain when text is to the right of the rectangular selection."
+msgstr "تُحفظ المسافات عند وجود نص إلى يمين التحديد المستطيل."
+
 #: shared/src/settings-widget/settings-presentation.cpp:66
 msgid "Zoom factor"
 msgstr "عامل التكبير/التصغير"

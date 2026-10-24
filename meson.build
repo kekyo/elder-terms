@@ -135,10 +135,18 @@ install_data(
   'deps/boxrig/deps/zlib/LICENSE',
   'deps/boxrig/resources/unicode/17.0.0/LICENSE.txt',
   'deps/boxrig/data/encoding/whatwg/LICENSE',
-  meson.project_build_root() / 'boxrig/generated/licenses/Wayland-protocols-NOTICES.md',
   rename: ['LICENSE', 'README.md', 'README_ja.md', 'sources.json',
     'utf8proc-LICENSE.md', 'libpng-LICENSE', 'zlib-LICENSE',
-    'Unicode-LICENSE.txt', 'WHATWG-Encoding-LICENSE', 'Wayland-protocols-NOTICES.md'],
+    'Unicode-LICENSE.txt', 'WHATWG-Encoding-LICENSE'],
+  install_dir: get_option('datadir') / 'doc/elder-terms/licenses/boxrig',
+)
+custom_target('boxrig-wayland-protocol-notices',
+  output: 'Wayland-protocols-NOTICES.md',
+  command: [find_program('cp'),
+    meson.project_build_root() / 'boxrig/generated/licenses/Wayland-protocols-NOTICES.md', '@OUTPUT@'],
+  depends: boxrig_sdk_target,
+  build_by_default: true,
+  install: true,
   install_dir: get_option('datadir') / 'doc/elder-terms/licenses/boxrig',
 )
 

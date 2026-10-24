@@ -168,6 +168,14 @@ msgstr "行"
 msgid "Scrollback lines"
 msgstr "滚动缓冲区行数"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Trim trailing spaces in block copies"
+msgstr "移除块复制中的行尾空格"
+
+#: shared/src/settings-widget/settings-widget.cpp
+msgid "Spaces remain when text is to the right of the rectangular selection."
+msgstr "当矩形选择右侧有文本时，将保留空格。"
+
 #: shared/src/settings-widget/settings-presentation.cpp:66
 msgid "Zoom factor"
 msgstr "缩放系数"

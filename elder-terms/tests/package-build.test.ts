@@ -231,7 +231,7 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
   );
 };
 
-describe.sequential('multi-platform Debian package generation', () => {
+describe('Debian package generation', { concurrent: false }, () => {
   let temporaryRoot: string;
 
   beforeAll(() => {
@@ -332,11 +332,11 @@ container_image_for_target debian trixie riscv64
     );
     expectSuccess(versions, 'build SDK version lookup failed');
     expect(versions.stdout.trim().split(/\s+/)).toEqual([
-      '0.6.0',
-      '0.6.0',
-      '0.6.0',
-      '0.6.0',
-      '0.6.0',
+      '0.7.0',
+      '0.7.0',
+      '0.7.0',
+      '0.7.0',
+      '0.7.0',
     ]);
   });
 
@@ -459,7 +459,7 @@ int main(void) {
       { ...process.env, PKG_CONFIG_PATH: join(sdk, 'lib/pkgconfig') }
     );
     expectSuccess(versions, 'prepared SDK version lookup failed');
-    expect(versions.stdout.trim().split(/\s+/)).toEqual(['0.6.0', '0.6.0']);
+    expect(versions.stdout.trim().split(/\s+/)).toEqual(['0.7.0', '0.7.0']);
     const consumer = join(temporaryRoot, 'prepared-sdk-consumer');
     expectSuccess(
       run('cc', [
@@ -603,6 +603,7 @@ exit 0
     expect(() => lstatSync(join(work, 'build', 'warning-fixture'))).toThrow();
   });
 
+  // A fresh Meson setup also builds jemalloc and the boxrig SDK.
   it('disables libxyzm debug information for release package builds', () => {
     const binDirectory = join(temporaryRoot, 'libxyzm-bin');
     const buildDirectory = join(temporaryRoot, 'libxyzm-release-build');
@@ -660,7 +661,7 @@ mkdir -p "$build_dir"
     expect(readFileSync(invocationPath, 'utf8').split('\n')).toContain(
       'LIBXYZM_EXTRA_CXXFLAGS=-g0'
     );
-  });
+  }, 180_000);
 
   it('orchestrates isolated build and installation-validation containers', () => {
     const fakeProject = join(temporaryRoot, 'orchestration-project');

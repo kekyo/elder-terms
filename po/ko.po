@@ -168,6 +168,14 @@ msgstr "행"
 msgid "Scrollback lines"
 msgstr "스크롤백 줄 수"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Trim trailing spaces in block copies"
+msgstr "블록 복사에서 끝 공백 제거"
+
+#: shared/src/settings-widget/settings-widget.cpp
+msgid "Spaces remain when text is to the right of the rectangular selection."
+msgstr "사각형 선택 영역의 오른쪽에 텍스트가 있으면 공백을 유지합니다."
+
 #: shared/src/settings-widget/settings-presentation.cpp:66
 msgid "Zoom factor"
 msgstr "확대/축소 비율"
