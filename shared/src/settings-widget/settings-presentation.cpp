@@ -89,6 +89,8 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"terminal", "height", N_("Rows")},
     SettingLabelEntry{"terminal", "scrollback_lines",
                       N_("Scrollback lines")},
+    SettingLabelEntry{"terminal", "block_copy_trim_trailing_spaces",
+                      N_("Trim trailing spaces in block copies")},
     SettingLabelEntry{"terminal", "font_size_dip", N_("Font size (DIP)")},
     SettingLabelEntry{"general", "indicator_color", N_("Active indicator color")},
     SettingLabelEntry{"general", "indicator_off_color", N_("Inactive indicator color")},

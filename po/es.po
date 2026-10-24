@@ -168,6 +168,14 @@ msgstr "Filas"
 msgid "Scrollback lines"
 msgstr "Líneas del historial"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Trim trailing spaces in block copies"
+msgstr "Recortar los espacios finales en las copias de bloque"
+
+#: shared/src/settings-widget/settings-widget.cpp
+msgid "Spaces remain when text is to the right of the rectangular selection."
+msgstr "Los espacios se conservan si hay texto a la derecha de la selección rectangular."
+
 #: shared/src/settings-widget/settings-presentation.cpp:66
 msgid "Zoom factor"
 msgstr "Factor de zoom"

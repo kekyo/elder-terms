@@ -168,6 +168,14 @@ msgstr "पंक्तियाँ"
 msgid "Scrollback lines"
 msgstr "स्क्रॉलबैक पंक्तियाँ"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Trim trailing spaces in block copies"
+msgstr "ब्लॉक कॉपी में अंत के रिक्त स्थान हटाएँ"
+
+#: shared/src/settings-widget/settings-widget.cpp
+msgid "Spaces remain when text is to the right of the rectangular selection."
+msgstr "आयताकार चयन के दाईं ओर पाठ होने पर रिक्त स्थान बने रहते हैं।"
+
 #: shared/src/settings-widget/settings-presentation.cpp:66
 msgid "Zoom factor"
 msgstr "ज़ूम कारक"
