@@ -231,7 +231,7 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
   );
 };
 
-describe.sequential('multi-platform Debian package generation', () => {
+describe('Debian package generation', { concurrent: false }, () => {
   let temporaryRoot: string;
 
   beforeAll(() => {
