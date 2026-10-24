@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <deque>
+#include <string_view>
 #include <utility>
 
 namespace elder_terms {
@@ -31,7 +32,20 @@ struct TerminalPresentation {
   TerminalCursorSettings cursor{TerminalCursorShape::block, true};
   TerminalBackground *background = nullptr;
   TerminalColorFilterContext colors{};
+  bool block_copy_trim_trailing_spaces = true;
 };
+
+static bool apply_copy_policy(TerminalPresentation *presentation, bool trim) {
+  auto *view = boxrig_gtk3_terminal_widget_view(terminal_runtime_widget(presentation->window->runtime));
+  const auto status = boxrig_ui_view_set_rectangular_copy_policy(view, trim ?
+      BOXRIG_UI_RECTANGULAR_COPY_TRIM_TRAILING_SPACES : BOXRIG_UI_RECTANGULAR_COPY_PRESERVE_SPACES);
+  if (status != BOXRIG_UI_OK) {
+    g_printerr("Terminal block copy: %d\n", status);
+    return false;
+  }
+  presentation->block_copy_trim_trailing_spaces = trim;
+  return true;
+}
 
 static bool apply_colors(TerminalPresentation *presentation, TerminalColorFilterContext context) {
   auto *view = boxrig_gtk3_terminal_widget_view(terminal_runtime_widget(presentation->window->runtime));
@@ -193,6 +207,7 @@ void attach_terminal_presentation(TerminalPresentation *presentation) {
   const auto selection_status = apply_terminal_selection_style(
       boxrig_gtk3_terminal_widget_view(terminal_runtime_widget(presentation->window->runtime)));
   if (selection_status != BOXRIG_UI_OK) g_printerr("Terminal selection: %d\n", selection_status);
+  apply_copy_policy(presentation, presentation->block_copy_trim_trailing_spaces);
   if (!apply_colors(presentation, presentation->colors)) g_printerr("Failed to restore terminal color correction\n");
   attach_terminal_background(presentation->background);
 }
@@ -231,6 +246,7 @@ bool apply_terminal_presentation(TerminalPresentation *presentation, const Setti
   if (!apply_colors(presentation, {general_color_settings(settings).background,
       terminal_color_filter(settings), vision.profile, vision.strength / 100.0})) return false;
   if (!apply_cursor(presentation, terminal_cursor_settings(settings))) return false;
+  if (!apply_copy_policy(presentation, terminal_block_copy_trim_trailing_spaces(settings))) return false;
   if (!apply_terminal_background(presentation->background, settings, std::move(image))) return false;
   const auto accessibility_status = boxrig_gtk3_terminal_widget_set_accessibility_enabled(
       widget, terminal_accessibility_enabled(settings));
@@ -248,8 +264,25 @@ bool apply_terminal_presentation(TerminalPresentation *presentation, const Setti
     font.family_count = native_families.size();
   }
   font.size_dip = static_cast<float>(display.font_size_dip);
-  const auto font_status = boxrig_gtk3_terminal_widget_set_font_specification(widget, &font);
+  boxrig_font_specification current_font{};
+  auto font_status = boxrig_gtk3_terminal_widget_get_font_specification(widget, &current_font);
   if (font_status != BOXRIG_UI_OK) { g_printerr("Terminal font: %d\n", font_status); return false; }
+  bool same_font = current_font.family_count == font.family_count && current_font.size_dip == font.size_dip &&
+      current_font.line_height_adjustment_dip == font.line_height_adjustment_dip && current_font.weight == font.weight &&
+      current_font.style == font.style && current_font.stretch == font.stretch && current_font.fallback == font.fallback &&
+      current_font.monospace == font.monospace && current_font.feature_count == 0 && current_font.variation_count == 0;
+  for (std::size_t index = 0; same_font && index != font.family_count; ++index) {
+    const auto &current = current_font.families[index];
+    const auto &requested = font.families[index];
+    same_font = current.resource_id == requested.resource_id &&
+        std::string_view(current.name, current.name_length) == std::string_view(requested.name, requested.name_length);
+  }
+  // Reapplying an unchanged font invalidates text layout and the selection.
+  // Copy policy edits must leave an existing rectangle available for copying.
+  if (!same_font) {
+    font_status = boxrig_gtk3_terminal_widget_set_font_specification(widget, &font);
+    if (font_status != BOXRIG_UI_OK) { g_printerr("Terminal font: %d\n", font_status); return false; }
+  }
   auto *core = boxrig_ui_model_terminal(boxrig_ui_view_model(boxrig_gtk3_terminal_widget_view(widget)));
   if (boxrig_terminal_set_scrollback_capacity(core, display.scrollback_lines) != BOXRIG_STATUS_OK) return false;
   presentation->bindings = terminal_key_bindings(settings);
