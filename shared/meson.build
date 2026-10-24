@@ -8,7 +8,7 @@ elder_terms_shared_wayland_dep = dependency('wayland-client')
 elder_terms_shared_gdk_wayland_dep = dependency('gdk-wayland-3.0')
 elder_terms_shared_gdk_x11_dep = dependency('gdk-x11-3.0')
 elder_terms_shared_gmodule_dep = dependency('gmodule-2.0')
-add_languages('c')
+add_languages('c', native: false)
 elder_terms_wayland_scanner = find_program('wayland-scanner')
 elder_terms_icon_protocol_xml = meson.project_source_root() / 'deps/boxrig/deps/wayland-protocols/staging/xdg-toplevel-icon/xdg-toplevel-icon-v1.xml'
 elder_terms_xdg_shell_xml = meson.project_source_root() / 'deps/boxrig/deps/wayland-protocols/stable/xdg-shell/xdg-shell.xml'
