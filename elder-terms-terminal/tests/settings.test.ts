@@ -737,6 +737,8 @@ const connectionStatusTextMask = async (
 
 describe.concurrent('elder-terms-terminal settings', () => {
   for (const backend of ['cairo', 'opengl']) {
+    // Two application launches and three settings dialogs need more than the
+    // default minute when the full UI suite shares the host.
     it(`applies and saves block copy trimming without losing the selection (${backend})`, async (context) => {
       await withTemporaryDirectory(async (directory) => {
         const path = join(directory, 'copy.ini');
@@ -838,7 +840,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
           );
         }
       });
-    });
+    }, 120_000);
   }
 
   it('opts in to screen-reader text at startup and live', async (context) => {
