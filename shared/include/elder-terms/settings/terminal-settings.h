@@ -17,6 +17,21 @@
 
 namespace elder_terms {
 
+/** Terminal columns assigned to Unicode East Asian Ambiguous characters. */
+enum class TerminalAmbiguousWidth {
+  narrow, /**< Use one terminal column, the built-in default. */
+  wide,   /**< Use two terminal columns. */
+};
+/** @returns Key for the terminal width of ambiguous characters. */
+ELDER_TERMS_API SettingKey terminal_ambiguous_width_setting_key();
+/**
+ * Reads the width policy used when a new terminal is created.
+ * @param store Layered terminal settings.
+ * @returns Effective one-column or two-column policy.
+ * @remarks Changes do not alter an existing terminal or its history.
+ */
+ELDER_TERMS_API TerminalAmbiguousWidth terminal_ambiguous_width(const SettingsStore &store);
+
 /** Display-only correction; terminal bytes and logical colors are preserved. */
 enum class TerminalColorFilter {
   none,  /**< Preserve the terminal colors after connection defaults. */

@@ -2553,3 +2553,15 @@ msgstr "优化配色后反转 (E)"
 
 msgid "Choose a visibility correction or a background reversal. Only one color filter is applied."
 msgstr "选择可见性校正或背景反转。只能应用一种颜色滤镜。"
+
+msgid "Ambiguous character width"
+msgstr "模糊宽度字符的宽度"
+
+msgid "1 column"
+msgstr "1列"
+
+msgid "2 columns"
+msgstr "2列"
+
+msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
+msgstr "控制①等字符的宽度。请与远程应用预期的宽度保持一致。更改仅对新打开的终端生效。"

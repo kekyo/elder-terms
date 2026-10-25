@@ -180,7 +180,7 @@ int main(int argc, char **argv) {
   fixture.window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   auto *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_container_add(GTK_CONTAINER(fixture.window), content);
-  fixture.runtime = create_terminal_runtime(GTK_WINDOW(fixture.window), GTK_BOX(content), GTK_BOX(content));
+  fixture.runtime = create_terminal_runtime(GTK_WINDOW(fixture.window), GTK_BOX(content), GTK_BOX(content), elder_terms::TerminalAmbiguousWidth::narrow);
   assert(fixture.runtime);
   terminal_runtime_set_prepare_frame_callback(fixture.runtime, [&fixture] {
     auto *view = boxrig_gtk3_terminal_widget_view(terminal_runtime_widget(fixture.runtime));

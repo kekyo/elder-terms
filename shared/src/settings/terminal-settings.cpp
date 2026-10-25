@@ -25,6 +25,7 @@ static constexpr char terminal_section[] = "terminal";
 static constexpr char terminal_width_key[] = "width";
 static constexpr char terminal_height_key[] = "height";
 static constexpr char terminal_scrollback_lines_key[] = "scrollback_lines";
+static constexpr char terminal_ambiguous_width_key[] = "ambiguous_width";
 static constexpr char terminal_block_copy_trim_trailing_spaces_key[] =
     "block_copy_trim_trailing_spaces";
 static constexpr char terminal_font_size_dip_key[] = "font_size_dip";
@@ -79,6 +80,15 @@ static bool validate_positive_integer(const SettingValue &value,
   const auto *integer = std::get_if<gint64>(&value);
   if (integer == nullptr || *integer <= 0) {
     *reason = "must be a positive integer";
+    return false;
+  }
+  return true;
+}
+
+static bool validate_ambiguous_width(const SettingValue &value, std::string *reason) {
+  const auto *width = std::get_if<std::string>(&value);
+  if (width == nullptr || (*width != "narrow" && *width != "wide")) {
+    *reason = "must be narrow or wide";
     return false;
   }
   return true;
@@ -296,6 +306,15 @@ SettingKey terminal_scrollback_lines_setting_key() {
   return terminal_key(terminal_scrollback_lines_key);
 }
 
+SettingKey terminal_ambiguous_width_setting_key() {
+  return terminal_key(terminal_ambiguous_width_key);
+}
+
+TerminalAmbiguousWidth terminal_ambiguous_width(const SettingsStore &store) {
+  return setting_string_value_or_default(store, terminal_ambiguous_width_setting_key(), "narrow") == "wide"
+      ? TerminalAmbiguousWidth::wide : TerminalAmbiguousWidth::narrow;
+}
+
 SettingKey terminal_block_copy_trim_trailing_spaces_setting_key() {
   return terminal_key(terminal_block_copy_trim_trailing_spaces_key);
 }
@@ -470,6 +489,8 @@ bool terminal_bell_sound_is_valid(const std::string &value,
 std::vector<SettingDefinition>
 terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
   return {
+      {.key = terminal_ambiguous_width_setting_key(), .default_value = SettingValue{std::string("narrow")},
+       .validate = validate_ambiguous_width},
       {.key = terminal_cursor_shape_setting_key(), .default_value = SettingValue{std::string("block")},
        .validate = validate_terminal_cursor_shape},
       {.key = terminal_cursor_blink_setting_key(), .default_value = SettingValue{true}, .validate = nullptr},

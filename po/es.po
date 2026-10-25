@@ -2583,3 +2583,15 @@ msgstr "Invertir la paleta optimizada (E)"
 
 msgid "Choose a visibility correction or a background reversal. Only one color filter is applied."
 msgstr "Elija una corrección de visibilidad o una inversión del fondo. Solo se aplica un filtro de color."
+
+msgid "Ambiguous character width"
+msgstr "Ancho de caracteres ambiguos"
+
+msgid "1 column"
+msgstr "1 columna"
+
+msgid "2 columns"
+msgstr "2 columnas"
+
+msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
+msgstr "Controla caracteres como ①. Use el ancho esperado por la aplicación remota. Los cambios se aplican a los terminales que se abran a partir de ahora."

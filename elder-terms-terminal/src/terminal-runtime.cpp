@@ -1134,7 +1134,8 @@ static bool attach_widget(TerminalRuntime *runtime) {
   return true;
 }
 
-TerminalRuntime *create_terminal_runtime(GtkWindow *window, GtkBox *content, GtkBox *attachment) {
+TerminalRuntime *create_terminal_runtime(GtkWindow *window, GtkBox *content, GtkBox *attachment,
+    TerminalAmbiguousWidth ambiguous_width) {
   auto *runtime = new (std::nothrow) TerminalRuntime;
   if (!runtime) return nullptr;
   runtime->window = window;
@@ -1143,6 +1144,8 @@ TerminalRuntime *create_terminal_runtime(GtkWindow *window, GtkBox *content, Gtk
   auto config = boxrig_terminal_config_default();
   config.rows = 24;
   config.columns = 80;
+  config.ambiguous_width = ambiguous_width == TerminalAmbiguousWidth::wide
+      ? BOXRIG_AMBIGUOUS_WIDTH_WIDE : BOXRIG_AMBIGUOUS_WIDTH_NARROW;
   if (boxrig_terminal_create(&config, &runtime->terminal) != BOXRIG_STATUS_OK ||
       !ui_result(boxrig_ui_model_create(runtime->terminal, &runtime->model), "create model") ||
       !attach_widget(runtime)) {

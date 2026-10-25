@@ -2561,3 +2561,15 @@ msgstr "최적화한 팔레트 반전 (E)"
 
 msgid "Choose a visibility correction or a background reversal. Only one color filter is applied."
 msgstr "가시성 보정 또는 배경 반전을 선택하세요. 색상 필터는 하나만 적용됩니다."
+
+msgid "Ambiguous character width"
+msgstr "모호한 너비 문자의 너비"
+
+msgid "1 column"
+msgstr "1열"
+
+msgid "2 columns"
+msgstr "2열"
+
+msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
+msgstr "① 같은 문자의 너비를 원격 애플리케이션이 예상하는 너비에 맞춥니다. 변경 사항은 새로 여는 터미널에 적용됩니다."

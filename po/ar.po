@@ -2579,3 +2579,15 @@ msgstr "عكس لوحة الألوان المحسّنة (E)"
 
 msgid "Choose a visibility correction or a background reversal. Only one color filter is applied."
 msgstr "اختر تحسين الوضوح أو عكس الخلفية. يُطبّق مرشح ألوان واحد فقط."
+
+msgid "Ambiguous character width"
+msgstr "عرض الأحرف ذات العرض الملتبس"
+
+msgid "1 column"
+msgstr "عمود واحد"
+
+msgid "2 columns"
+msgstr "عمودان"
+
+msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
+msgstr "يتحكم في عرض أحرف مثل ①. اختر العرض الذي يتوقعه التطبيق البعيد. تُطبّق التغييرات على الطرفيات المفتوحة حديثًا."

@@ -48,9 +48,11 @@ using TerminalZmodemAutoStart = std::function<cardio::promise<std::optional<Term
  * @param content Borrowed content box, excluding client-side window decorations.
  * @param attachment Borrowed box receiving the standard scroll container; may
  * be content itself or a descendant inside an overlay.
+ * @param ambiguous_width Column width fixed for the lifetime of this terminal.
  * @return An owned runtime, or nullptr after a reported initialization failure.
  */
-TerminalRuntime *create_terminal_runtime(GtkWindow *window, GtkBox *content, GtkBox *attachment);
+TerminalRuntime *create_terminal_runtime(GtkWindow *window, GtkBox *content, GtkBox *attachment,
+    TerminalAmbiguousWidth ambiguous_width);
 
 /**
  * Replaces application hooks for native attachment and terminal host events.
