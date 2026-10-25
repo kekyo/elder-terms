@@ -122,8 +122,8 @@ its settings. Clicking "Apply" applies the changes only to the currently
 running terminal. Clicking "Save" remembers the settings and uses them the next
 time the terminal starts.
 
-Terminal settings are split into two tabs. "Terminal" contains encoding, special
-keys, rows and columns, scrollback, BEL, shortcuts, and screen-reader access.
+Terminal settings are split into two tabs. "Terminal" contains encoding, character width, special
+keys, rows and columns, scrollback, BEL, shortcuts, screen-reader access, and copy settings.
 "Terminal appearance" contains fonts, text size, the cursor, background,
 and color correction. The same layout is used for individual connections and
 "Connection defaults". Neither tab is shown for file transfers.
@@ -936,6 +936,26 @@ color_filter=oklch
 ```
 
 Accepted `color_vision` values are `none`, `protan`, `deutan`, and `tritan`.
+
+## Ambiguous Character Width
+
+Characters such as "①" can occupy one or two terminal columns. These are called ambiguous-width characters.
+On the "Terminal" tab, set "Ambiguous character width" to match the width expected by the remote application. The default is "1 column".
+This setting controls the number of columns used for text placement, separately from font size.
+
+To use two columns, select that option and click "Save", or add the following to the INI file:
+
+```ini
+[terminal]
+ambiguous_width=wide
+```
+
+`narrow` means one column; `wide` means two. Omitting the key inherits the parent's value, falling back to one column if no parent specifies it.
+Invalid values produce a warning and use a valid inherited value or the built-in default.
+
+Changes apply to newly opened terminals. Save the setting, then reopen the terminal.
+An open terminal retains its character width and history, so "Apply" and reconnection in the same window do not change the width.
+A block cursor on a full-width character covers both columns occupied by that character.
 
 ## Configuring Font Families
 
