@@ -224,3 +224,9 @@ boxrigも上流で全体試験を完了しました。端末I/O試験の初期�
 設定定義、既定値を返す処理、設定画面の継承表示を`font`へ変更しました。変更後は、明示した1列／2列を含む設定と描画の14試験、設定画面の画像比較2試験、画面操作・録画の10試験が成功しました。フォント依存の画面試験は、設定ファイルに`ambiguous_width`を書かずに、3列の配置と「フォント依存」の継承表示を確認しています。期待画像は変更していません。
 
 ログは`/tmp/elder-font-default-green.log`、`/tmp/elder-font-default-widget.log`、`/tmp/elder-font-default-ui.log`です。TypeScriptの型検査と書式検査も成功しました。日本語・英語のREADMEと公開コメントを更新し、boxrigは既定値変更を含む`3b5d2b581039944bce4f67160afe42a4262bcc6e`へ更新しました。
+
+上流の全体試験で、描画器の切り替え時に列数が同じでも本文を再配置し、履歴と末尾の空行がある画面では画像とカーソルが動く問題を検出しました。boxrigで回帰試験のREDを確認し、列数に変化がある場合だけ再配置するよう修正しています。コア、画像、GTK3 OpenGL、部分描画の試験が成功した`ac647f7014f6b537638a9d5aef86d894137fcc93`へ参照を更新しました。
+
+この修正を反映するため、`5d775fd9`で実行中だった端末UI試験は中断しました。初回のルート`npm test`では、共有ライブラリ146件、ランチャー114件、C++216件が成功し、C++のSSH接続1件が失敗しています。SSHの個別再実行でも同じ失敗が出ました。中断した端末UIでは、転送中の画面取得1件と遅延開始の転送6件で失敗がありましたが、全件完了の結果ではありません。ログは`/tmp/elder-font-default-full-test.log`、`/tmp/elder-font-default-ssh-retest.log`、`/tmp/elder-font-default-terminal-full-test.log`です。参照更新後の全体試験と区別して記録します。
+
+参照更新後に再ビルドし、設定モデル・設定画面とCairo／OpenGLの計14試験がすべて成功しました。ビルド警告はありません。ログは`/tmp/elder-font-default-stable-build.log`と`/tmp/elder-font-default-stable-green.log`です。
