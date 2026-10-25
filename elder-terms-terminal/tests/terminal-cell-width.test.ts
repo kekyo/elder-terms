@@ -35,6 +35,217 @@ interface CursorReport {
 }
 
 for (const backend of ['cairo', 'opengl']) {
+  it(`keeps default-width TUI meters and unchanged text intact during updates (${backend})`, async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const path = join(directory, 'meter.ini');
+      const peer = join(directory, 'meter.mjs');
+      const report = join(directory, 'report.json');
+      const lines = [
+        `|CPU: ${'■'.repeat(20)} 20%|`,
+        '|NET: ▼①▲ 0 B/s|',
+        '|Keep this text unchanged|',
+      ];
+      await writeFile(
+        peer,
+        `
+import { writeFileSync } from 'node:fs';
+const lines = ${JSON.stringify(lines)};
+let phase = 0, input = '', positions = [];
+process.stdin.setRawMode(true);
+process.stdin.setEncoding('utf8');
+process.stdin.resume();
+process.stdin.on('data', chunk => {
+  input += chunk;
+  for (const match of input.matchAll(/\\x1b\\[(\\d+);(\\d+)R/g))
+    positions.push([Number(match[1]), Number(match[2])]);
+  const end = input.lastIndexOf('R');
+  if (end >= 0) {
+    input = input.slice(end + 1);
+    writeFileSync(${JSON.stringify(report)}, JSON.stringify({ phase, positions }));
+  }
+  for (const key of chunk) {
+    if (key !== 'f' && key !== 'n') continue;
+    phase++;
+    positions = [];
+    if (key === 'f') {
+      process.stdout.write('\\x1b[?1049h\\x1b[?25l\\x1b[38;2;255;255;255m\\x1b[48;2;0;0;0m\\x1b[2J');
+      for (let row = 0; row < lines.length; row++)
+        process.stdout.write('\\x1b[' + (row + 1) + ';1H' + lines[row] + '\\x1b[6n');
+    } else {
+      process.stdout.write('\\x1b[?2026h\\x1b[1;7H\\x1b[' +
+        (phase % 2 ? '38;2;0;0;255' : '38;2;0;255;0') +
+        'm■\\x1b[0m\\x1b[?2026l\\x1b[6n');
+    }
+  }
+});
+`
+      );
+      await writeFile(
+        path,
+        `[terminal]\nfont_families=Boxrig Width ASCII;Noto Sans CJK JP;\nfont_size_dip=20\ncursor_blink=false\n[local]\ncommand_line=${process.execPath} ${peer}\n`
+      );
+      await runGtkTest(
+        context,
+        ['-c', path],
+        async (app, evidence) => {
+          const state = expectElementKind(
+            await app.getById('fixture_terminal_state_label'),
+            'label'
+          );
+          const terminal = await app.getById('terminal_view');
+          await waitForResult(async () =>
+            expect(await state.text()).toContain('ready=1')
+          );
+          let phase = 0;
+          const send = async (key: string) => {
+            phase++;
+            await app.input.pressKey(key);
+            await waitForResult(async () => {
+              const result = JSON.parse(await readFile(report, 'utf8')) as Pick<
+                CursorReport,
+                'phase' | 'positions'
+              >;
+              expect(result.phase).toBe(phase);
+              expect(result.positions).toEqual(
+                phase === 1
+                  ? lines.map((line, row) => [row + 1, [...line].length + 1])
+                  : [[1, 8]]
+              );
+              expect(await state.text()).toContain('ready=1');
+            });
+          };
+          await send('f');
+          const layout = await readTerminalGridLayout(app);
+          const capture = await terminal.capture();
+          await writeFile(
+            join(evidence.directory, 'meter-initial.png'),
+            capture.image
+          );
+          const baseline = PNG.sync.read(capture.image);
+          for (const [row, line] of lines.entries()) {
+            for (const [column, character] of [...line].entries()) {
+              if (character === ' ') continue;
+              let ink = 0;
+              for (
+                let y = row * layout.cellHeight;
+                y < (row + 1) * layout.cellHeight;
+                y++
+              )
+                for (
+                  let x = column * layout.cellWidth;
+                  x < (column + 1) * layout.cellWidth;
+                  x++
+                )
+                  if (baseline.data[(y * baseline.width + x) * 4] > 100) ink++;
+              expect(
+                ink,
+                `visible character ${character} at ${row},${column}`
+              ).toBeGreaterThan(0);
+            }
+          }
+          const width = lines[0].length * layout.cellWidth;
+          const height = lines.length * layout.cellHeight;
+          const env = await app.environment();
+          const video = join(evidence.directory, 'meter-updates.mkv');
+          let recording = true;
+          const record = (async () => {
+            try {
+              await exec(
+                'ffmpeg',
+                [
+                  '-y',
+                  '-hide_banner',
+                  '-loglevel',
+                  'error',
+                  '-f',
+                  'x11grab',
+                  '-framerate',
+                  '30',
+                  '-draw_mouse',
+                  '0',
+                  '-video_size',
+                  `${width}x${height}`,
+                  '-i',
+                  `${env.DISPLAY}+${capture.bounds.x},${capture.bounds.y}`,
+                  '-frames:v',
+                  '90',
+                  '-c:v',
+                  'ffv1',
+                  '-threads',
+                  '1',
+                  video,
+                ],
+                { env }
+              );
+            } finally {
+              recording = false;
+            }
+          })();
+          try {
+            while (recording) await send('n');
+          } finally {
+            await record;
+          }
+          const raw = await exec(
+            'ffmpeg',
+            [
+              '-hide_banner',
+              '-loglevel',
+              'error',
+              '-i',
+              video,
+              '-f',
+              'rawvideo',
+              '-pix_fmt',
+              'rgb24',
+              'pipe:1',
+            ],
+            { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 }
+          );
+          const stride = width * height * 3;
+          expect(raw.stdout.length).toBe(90 * stride);
+          let green = 0,
+            blue = 0,
+            unchangedPixels = 0;
+          for (let start = 0; start < raw.stdout.length; start += stride) {
+            for (let y = 0; y < height; y++)
+              for (let x = 0; x < width; x++) {
+                const offset = start + (y * width + x) * 3;
+                const pixel = raw.stdout.subarray(offset, offset + 3);
+                if (
+                  y < layout.cellHeight &&
+                  x >= 6 * layout.cellWidth &&
+                  x < 7 * layout.cellWidth
+                ) {
+                  if (pixel[1] > 100 && pixel[0] < 30 && pixel[2] < 30) green++;
+                  if (pixel[2] > 100 && pixel[0] < 30 && pixel[1] < 30) blue++;
+                } else {
+                  const from = (y * baseline.width + x) * 4;
+                  if (pixel.equals(baseline.data.subarray(from, from + 3)))
+                    unchangedPixels++;
+                }
+              }
+          }
+          expect(unchangedPixels).toBe(
+            90 * (width * height - layout.cellWidth * layout.cellHeight)
+          );
+          expect(green).toBeGreaterThan(0);
+          expect(blue).toBeGreaterThan(0);
+        },
+        {
+          env: {
+            GTK_IM_MODULE: 'gtk-im-context-simple',
+            ...(backend === 'cairo'
+              ? { GDK_GL: 'disable' }
+              : { LIBGL_ALWAYS_SOFTWARE: '1' }),
+          },
+        }
+      );
+    });
+  }, 30_000);
+}
+
+for (const backend of ['cairo', 'opengl']) {
   for (const span of [2, 3]) {
     it(`records a full-width block cursor on every occupied column (${backend} ${span} columns)`, async (context) => {
       await withTemporaryDirectory(async (directory) => {
@@ -512,7 +723,7 @@ draw();
               );
             },
             {
-              globalSettings: `[terminal]\n${initial === 'font' ? '' : `ambiguous_width=${initial}\n`}font_families=Boxrig Width ASCII;Boxrig Width Fixture;\nfont_size_dip=20\n`,
+              globalSettings: `[terminal]\n${initial === 'narrow' ? '' : `ambiguous_width=${initial}\n`}font_families=Boxrig Width ASCII;Boxrig Width Fixture;\nfont_size_dip=20\n`,
               env: {
                 GTK_IM_MODULE: 'gtk-im-context-simple',
                 ...(backend === 'cairo'

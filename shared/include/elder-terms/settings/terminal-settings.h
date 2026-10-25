@@ -28,7 +28,7 @@ ELDER_TERMS_API SettingKey terminal_ambiguous_width_setting_key();
 /**
  * Reads the width policy used when a new terminal is created.
  * @param store Layered terminal settings.
- * @returns Effective one-column, two-column, or font-dependent policy.
+ * @returns Effective one-column (default), two-column, or font-dependent policy.
  * @remarks Changes do not alter an existing terminal or its history.
  */
 ELDER_TERMS_API TerminalAmbiguousWidth terminal_ambiguous_width(const SettingsStore &store);

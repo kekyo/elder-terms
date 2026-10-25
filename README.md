@@ -940,7 +940,7 @@ Accepted `color_vision` values are `none`, `protan`, `deutan`, and `tritan`.
 ## Ambiguous Character Width
 
 Characters such as "①" can occupy one or two terminal columns. These are called ambiguous-width characters.
-On the "Terminal" tab, choose "1 column", "2 columns", or "Font dependent" for "Ambiguous character width". The default is "Font dependent".
+On the "Terminal" tab, choose "1 column", "2 columns", or "Font dependent" for "Ambiguous character width". The default is "1 column".
 This setting controls the number of columns used for text placement, separately from font size.
 
 To use two columns, select that option and click "Save", or add the following to the INI file:
@@ -950,7 +950,7 @@ To use two columns, select that option and click "Save", or add the following to
 ambiguous_width=wide
 ```
 
-`narrow` means one column, `wide` means two, and `font` means font dependent. Omitting the key inherits the parent's value, falling back to font dependent if no parent specifies it. Explicit one-column or two-column settings are preserved.
+`narrow` means one column, `wide` means two, and `font` means font dependent. Omitting the key inherits the parent's value, falling back to one column if no parent specifies it. Explicit two-column or font-dependent settings are preserved.
 Invalid values produce a warning and use a valid inherited value or the built-in default.
 
 Font dependent divides the actual font advance by the cell width and rounds up to a whole number of columns.

@@ -164,7 +164,7 @@ extern "C" int __wrap_main(int argc, char **argv) {
   auto window = load_main_window(terminal_ambiguous_width(settings));
   if (!window) return 1;
   Fixture fixture{&*window, create_terminal_presentation(&*window, {}, {}, {}), settings, {},
-      width == "font" || width == "default" ? 3u : width == "wide" ? 2u : 1u};
+      width == "font" ? 3u : width == "wide" ? 2u : 1u};
   terminal_runtime_set_host_callbacks(window->runtime, {
       [&fixture](BoxrigGtk3TerminalWidget *) {
         ++fixture.attachments;
