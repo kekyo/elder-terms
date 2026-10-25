@@ -35,190 +35,195 @@ interface CursorReport {
 }
 
 for (const backend of ['cairo', 'opengl']) {
-  it(`records a full-width block cursor on either half of a wide character (${backend})`, async (context) => {
-    await withTemporaryDirectory(async (directory) => {
-      const path = join(directory, 'cursor.ini');
-      const peer = join(directory, 'cursor.mjs');
-      const ready = join(directory, 'ready');
-      await writeFile(
-        peer,
-        String.raw`
+  for (const span of [2, 3]) {
+    it(`records a full-width block cursor on every occupied column (${backend} ${span} columns)`, async (context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const path = join(directory, 'cursor.ini');
+        const peer = join(directory, 'cursor.mjs');
+        const ready = join(directory, 'ready');
+        await writeFile(
+          peer,
+          String.raw`
 import { writeFileSync } from 'node:fs';
 process.stdin.setRawMode(true);
 process.stdin.setEncoding('utf8');
 process.stdin.resume();
-process.stdout.write('\x1b]12;#ffcc00\x07\x1b[?25l\x1b[38;2;255;255;255m\x1b[48;2;0;0;0m\x1b[2J\x1b[HA界B\x1b[6n');
+process.stdout.write('\x1b]12;#ffcc00\x07\x1b[?25l\x1b[38;2;255;255;255m\x1b[48;2;0;0;0m\x1b[2J\x1b[HA${span === 3 ? '①' : '界'}B\x1b[6n');
 let input = '';
 process.stdin.on('data', chunk => {
   input += chunk;
-  if (input.includes('\x1b[1;5R')) {
+  if (input.includes('\x1b[1;${span + 3}R')) {
     writeFileSync(${JSON.stringify(ready)}, 'ready');
     input = '';
   }
   for (const key of chunk) {
-    const column = { l: 2, t: 3, n: 4 }[key];
+    const column = { l: 2, t: 3, s: 4, n: ${span + 2} }[key];
     if (column) process.stdout.write('\x1b[1;' + column + 'H\x1b[?25h');
   }
 });
 `
-      );
-      await writeFile(
-        path,
-        `[terminal]\ncursor_shape=block\ncursor_blink=true\n[local]\ncommand_line=${process.execPath} ${peer}\n`
-      );
-      await runGtkTest(
-        context,
-        ['-c', path],
-        async (app, evidence) => {
-          await waitForResult(async () =>
-            expect(await readFile(ready, 'utf8')).toBe('ready')
-          );
-          const layout = await readTerminalGridLayout(app);
-          const terminal = await app.getById('terminal_view');
-          const width = layout.cellWidth * 4;
-          const height = layout.cellHeight;
-          await app.input.moveMouseTo(
-            layout.terminalCapture.bounds.x + 50,
-            layout.terminalCapture.bounds.y + 50
-          );
-          await app.input.setMouseButton('left', true);
-          await app.input.setMouseButton('left', false);
-          const baseline = await waitForResult(async () => {
-            const png = PNG.sync.read((await terminal.capture()).image);
-            const rgb = Buffer.alloc(width * height * 3);
-            let ink = 0;
-            for (let y = 0; y < height; y++)
-              for (let x = 0; x < width; x++) {
-                const from = (y * png.width + x) * 4;
-                const to = (y * width + x) * 3;
-                png.data.copy(rgb, to, from, from + 3);
-                if (rgb[to] > 100) ink++;
-                // Native font antialiasing can give white text colored edge pixels.
-                expect(
-                  rgb[to] > 200 && rgb[to + 1] > 150 && rgb[to + 2] < 50
-                ).toBe(false);
-              }
-            expect(ink).toBeGreaterThan(0);
-            return rgb;
-          });
-          const env = await app.environment();
-          for (const [key, column, span] of [
-            ['l', 1, 2],
-            ['t', 1, 2],
-            ['n', 3, 1],
-          ] as const) {
-            await app.input.pressKey(key);
-            await waitForResult(async () => {
+        );
+        await writeFile(
+          path,
+          `[terminal]\nambiguous_width=${span === 3 ? 'font' : 'narrow'}\n${span === 3 ? 'font_families=Boxrig Width Fixture;\nfont_size_dip=20\n' : ''}cursor_shape=block\ncursor_blink=true\n[local]\ncommand_line=${process.execPath} ${peer}\n`
+        );
+        await runGtkTest(
+          context,
+          ['-c', path],
+          async (app, evidence) => {
+            await waitForResult(async () =>
+              expect(await readFile(ready, 'utf8')).toBe('ready')
+            );
+            const layout = await readTerminalGridLayout(app);
+            const terminal = await app.getById('terminal_view');
+            const width = layout.cellWidth * (span + 2);
+            const height = layout.cellHeight;
+            await app.input.moveMouseTo(
+              layout.terminalCapture.bounds.x + 50,
+              layout.terminalCapture.bounds.y + 50
+            );
+            await app.input.setMouseButton('left', true);
+            await app.input.setMouseButton('left', false);
+            const baseline = await waitForResult(async () => {
               const png = PNG.sync.read((await terminal.capture()).image);
-              const offset = column * layout.cellWidth * 4;
-              expect([...png.data.subarray(offset, offset + 3)]).toEqual([
-                255, 204, 0,
-              ]);
-            });
-            const video = join(evidence.directory, `wide-cursor-${key}.mkv`);
-            await exec(
-              'ffmpeg',
-              [
-                '-y',
-                '-hide_banner',
-                '-loglevel',
-                'error',
-                '-f',
-                'x11grab',
-                '-framerate',
-                '30',
-                '-draw_mouse',
-                '0',
-                '-video_size',
-                `${width}x${height}`,
-                '-i',
-                `${env.DISPLAY}+${layout.terminalCapture.bounds.x},${layout.terminalCapture.bounds.y}`,
-                '-frames:v',
-                '90',
-                '-c:v',
-                'ffv1',
-                '-threads',
-                '1',
-                video,
-              ],
-              { env }
-            );
-            const raw = await exec(
-              'ffmpeg',
-              [
-                '-hide_banner',
-                '-loglevel',
-                'error',
-                '-i',
-                video,
-                '-f',
-                'rawvideo',
-                '-pix_fmt',
-                'rgb24',
-                'pipe:1',
-              ],
-              { encoding: 'buffer', maxBuffer: 4 * 1024 * 1024 }
-            );
-            const stride = width * height * 3;
-            expect(raw.stdout.length).toBe(90 * stride);
-            let visible = 0,
-              hidden = 0;
-            for (let start = 0; start < raw.stdout.length; start += stride) {
-              const frame = raw.stdout.subarray(start, start + stride);
-              let left = width,
-                right = -1;
+              const rgb = Buffer.alloc(width * height * 3);
+              let ink = 0;
               for (let y = 0; y < height; y++)
                 for (let x = 0; x < width; x++) {
-                  const offset = (y * width + x) * 3;
-                  if (
-                    frame[offset] > 200 &&
-                    frame[offset + 1] > 150 &&
-                    frame[offset + 2] < 50
-                  ) {
-                    left = Math.min(left, x);
-                    right = Math.max(right, x);
-                  }
-                  if (
-                    x < column * layout.cellWidth ||
-                    x >= (column + span) * layout.cellWidth
-                  )
-                    expect(
-                      frame
-                        .subarray(offset, offset + 3)
-                        .equals(baseline.subarray(offset, offset + 3))
-                    ).toBe(true);
+                  const from = (y * png.width + x) * 4;
+                  const to = (y * width + x) * 3;
+                  png.data.copy(rgb, to, from, from + 3);
+                  if (rgb[to] > 100) ink++;
+                  // Native font antialiasing can give white text colored edge pixels.
+                  expect(
+                    rgb[to] > 200 && rgb[to + 1] > 150 && rgb[to + 2] < 50
+                  ).toBe(false);
                 }
-              if (right < 0) {
-                hidden++;
-                expect(
-                  frame.equals(baseline),
-                  'blink restores the underlying glyphs'
-                ).toBe(true);
-              } else {
-                visible++;
-                expect(left).toBe(column * layout.cellWidth);
-                expect(right).toBe((column + span) * layout.cellWidth - 1);
+              expect(ink).toBeGreaterThan(0);
+              return rgb;
+            });
+            const env = await app.environment();
+            for (const [key, column, occupied] of [
+              ['l', 1, span],
+              ['t', 1, span],
+              ...(span === 3 ? [['s', 1, span] as const] : []),
+              ['n', span + 1, 1],
+            ] as const) {
+              await app.input.pressKey(key);
+              await waitForResult(async () => {
+                const png = PNG.sync.read((await terminal.capture()).image);
+                const offset = column * layout.cellWidth * 4;
+                expect([...png.data.subarray(offset, offset + 3)]).toEqual([
+                  255, 204, 0,
+                ]);
+              });
+              const video = join(evidence.directory, `wide-cursor-${key}.mkv`);
+              await exec(
+                'ffmpeg',
+                [
+                  '-y',
+                  '-hide_banner',
+                  '-loglevel',
+                  'error',
+                  '-f',
+                  'x11grab',
+                  '-framerate',
+                  '30',
+                  '-draw_mouse',
+                  '0',
+                  '-video_size',
+                  `${width}x${height}`,
+                  '-i',
+                  `${env.DISPLAY}+${layout.terminalCapture.bounds.x},${layout.terminalCapture.bounds.y}`,
+                  '-frames:v',
+                  '90',
+                  '-c:v',
+                  'ffv1',
+                  '-threads',
+                  '1',
+                  video,
+                ],
+                { env }
+              );
+              const raw = await exec(
+                'ffmpeg',
+                [
+                  '-hide_banner',
+                  '-loglevel',
+                  'error',
+                  '-i',
+                  video,
+                  '-f',
+                  'rawvideo',
+                  '-pix_fmt',
+                  'rgb24',
+                  'pipe:1',
+                ],
+                { encoding: 'buffer', maxBuffer: 4 * 1024 * 1024 }
+              );
+              const stride = width * height * 3;
+              expect(raw.stdout.length).toBe(90 * stride);
+              let visible = 0,
+                hidden = 0;
+              for (let start = 0; start < raw.stdout.length; start += stride) {
+                const frame = raw.stdout.subarray(start, start + stride);
+                let left = width,
+                  right = -1;
+                for (let y = 0; y < height; y++)
+                  for (let x = 0; x < width; x++) {
+                    const offset = (y * width + x) * 3;
+                    if (
+                      frame[offset] > 200 &&
+                      frame[offset + 1] > 150 &&
+                      frame[offset + 2] < 50
+                    ) {
+                      left = Math.min(left, x);
+                      right = Math.max(right, x);
+                    }
+                    if (
+                      x < column * layout.cellWidth ||
+                      x >= (column + occupied) * layout.cellWidth
+                    )
+                      expect(
+                        frame
+                          .subarray(offset, offset + 3)
+                          .equals(baseline.subarray(offset, offset + 3))
+                      ).toBe(true);
+                  }
+                if (right < 0) {
+                  hidden++;
+                  expect(
+                    frame.equals(baseline),
+                    'blink restores the underlying glyphs'
+                  ).toBe(true);
+                } else {
+                  visible++;
+                  expect(left).toBe(column * layout.cellWidth);
+                  expect(right).toBe(
+                    (column + occupied) * layout.cellWidth - 1
+                  );
+                }
               }
+              expect(visible).toBeGreaterThan(0);
+              expect(hidden).toBeGreaterThan(0);
             }
-            expect(visible).toBeGreaterThan(0);
-            expect(hidden).toBeGreaterThan(0);
-          }
-        },
-        {
-          env: {
-            GTK_IM_MODULE: 'gtk-im-context-simple',
-            ...(backend === 'cairo'
-              ? { GDK_GL: 'disable' }
-              : { LIBGL_ALWAYS_SOFTWARE: '1' }),
           },
-        }
-      );
-    });
-  }, 90_000);
+          {
+            env: {
+              GTK_IM_MODULE: 'gtk-im-context-simple',
+              ...(backend === 'cairo'
+                ? { GDK_GL: 'disable' }
+                : { LIBGL_ALWAYS_SOFTWARE: '1' }),
+            },
+          }
+        );
+      });
+    }, 90_000);
+  }
 }
 
 for (const backend of ['cairo', 'opengl']) {
-  for (const initial of ['narrow', 'wide']) {
+  for (const initial of ['narrow', 'wide', 'font']) {
     it(`preserves active ambiguous width and applies saved width to a new terminal (${backend} ${initial})`, async (context) => {
       await withTemporaryDirectory(async (directory) => {
         const path = join(directory, 'width.ini');
@@ -265,10 +270,15 @@ draw();
           `[local]\ncommand_line=${process.execPath} ${peer}\n`
         );
         let firstPid = 0;
-        const saved = initial === 'narrow' ? 'wide' : 'narrow';
+        const saved =
+          initial === 'narrow'
+            ? 'wide'
+            : initial === 'wide'
+              ? 'font'
+              : 'narrow';
         for (const reloaded of [false, true]) {
           const active = reloaded ? saved : initial;
-          const width = active === 'wide' ? 2 : 1;
+          const width = active === 'font' ? 3 : active === 'wide' ? 2 : 1;
           const expectedColumns = [
             17 + width,
             3 + width,
@@ -331,6 +341,35 @@ draw();
                 }
                 return pixels;
               });
+              if (active === 'font') {
+                // Both fixture glyphs have a 2.1-cell advance, centered in 3 cells.
+                for (const column of [0, 3]) {
+                  let left = (column + 3) * layout.cellWidth;
+                  let right = column * layout.cellWidth - 1;
+                  for (
+                    let y = 2 * layout.cellHeight;
+                    y < 3 * layout.cellHeight;
+                    y++
+                  ) {
+                    for (
+                      let x = column * layout.cellWidth;
+                      x < (column + 3) * layout.cellWidth;
+                      x++
+                    ) {
+                      if (before.data[(y * before.width + x) * 4] > 100) {
+                        left = Math.min(left, x);
+                        right = Math.max(right, x);
+                      }
+                    }
+                  }
+                  expect(
+                    Math.abs(left - (column + 0.45) * layout.cellWidth)
+                  ).toBeLessThanOrEqual(2);
+                  expect(
+                    Math.abs(right + 1 - (column + 2.55) * layout.cellWidth)
+                  ).toBeLessThanOrEqual(2);
+                }
+              }
               await app.input.pressKey('c');
               await readReport(1);
               await waitForResult(async () => {
@@ -433,9 +472,15 @@ draw();
               const dialog = await app.getById('settings_dialog');
               expect(
                 (await (await combo.selectedChildAt(0))?.info())?.name
-              ).toContain(width === 1 ? '1 column' : '2 columns');
+              ).toContain(
+                width === 1
+                  ? '1 column'
+                  : width === 2
+                    ? '2 columns'
+                    : 'Font dependent'
+              );
               await combo.selectChildAt(
-                reloaded ? 0 : saved === 'narrow' ? 1 : 2
+                reloaded ? 0 : saved === 'narrow' ? 1 : saved === 'wide' ? 2 : 3
               );
               await expectElementKind(
                 await app.getById(
@@ -467,7 +512,7 @@ draw();
               );
             },
             {
-              globalSettings: `[terminal]\nambiguous_width=${initial}\n`,
+              globalSettings: `[terminal]\nambiguous_width=${initial}\nfont_families=Boxrig Width ASCII;Boxrig Width Fixture;\nfont_size_dip=20\n`,
               env: {
                 GTK_IM_MODULE: 'gtk-im-context-simple',
                 ...(backend === 'cairo'

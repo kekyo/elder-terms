@@ -122,6 +122,14 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
     check_text(fixture);
   }
   if (boxrig_terminal_ambiguous_width(terminal) == BOXRIG_AMBIGUOUS_WIDTH_FONT) {
+    for (const auto size : {30.0, 12.0}) {
+      set_setting_value(&fixture->settings, terminal_font_size_dip_setting_key(), size);
+      expect(apply_terminal_presentation(fixture->presentation, fixture->settings, nullptr), "apply changed font size");
+      while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
+      expect(core(fixture) == terminal && boxrig_terminal_text_fragment_count(terminal,
+          BOXRIG_TEXT_SCREEN_PRIMARY) == fragments, "font size change preserves terminal and history");
+      check_text(fixture);
+    }
     set_setting_value(&fixture->settings, terminal_font_families_setting_key(),
         std::vector<std::string>{"Boxrig Width Narrow"});
     expect(apply_terminal_presentation(fixture->presentation, fixture->settings, nullptr), "apply a font with narrower advances");
