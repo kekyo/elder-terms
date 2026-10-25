@@ -67,7 +67,7 @@ int main(int argc, char **argv) {
   assert(setting_string_value_or_default(settings_widget_draft_store(state), width_key, "") == "narrow");
   assert(gtk_combo_box_set_active_id(GTK_COMBO_BOX(width), "inherit"));
   assert(!setting_has_explicit_value(settings_widget_draft_store(state), width_key));
-  assert(setting_string_value_or_default(settings_widget_draft_store(state), width_key, "") == "narrow");
+  assert(setting_string_value_or_default(settings_widget_draft_store(state), width_key, "") == "font");
   assert(terminal_block_copy_trim_trailing_spaces(settings_widget_draft_store(state)));
   gtk_combo_box_set_active_id(GTK_COMBO_BOX(trim), "disabled");
   assert(setting_has_explicit_value(

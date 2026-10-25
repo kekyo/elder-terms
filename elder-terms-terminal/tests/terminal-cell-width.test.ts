@@ -512,7 +512,7 @@ draw();
               );
             },
             {
-              globalSettings: `[terminal]\nambiguous_width=${initial}\nfont_families=Boxrig Width ASCII;Boxrig Width Fixture;\nfont_size_dip=20\n`,
+              globalSettings: `[terminal]\n${initial === 'font' ? '' : `ambiguous_width=${initial}\n`}font_families=Boxrig Width ASCII;Boxrig Width Fixture;\nfont_size_dip=20\n`,
               env: {
                 GTK_IM_MODULE: 'gtk-im-context-simple',
                 ...(backend === 'cairo'

@@ -1023,9 +1023,9 @@ static void test_terminal_ambiguous_width_setting() {
   write_config(global, "");
   write_config(path, "");
   auto loaded = load_settings(options, 1.0);
-  expect_true(value(loaded.store) == "narrow", "ambiguous width should default to one column");
-  expect_true(elder_terms::terminal_ambiguous_width(loaded.store) == elder_terms::TerminalAmbiguousWidth::narrow,
-              "the terminal should receive the built-in one-column policy");
+  expect_true(value(loaded.store) == "font", "ambiguous width should default to font-dependent columns");
+  expect_true(elder_terms::terminal_ambiguous_width(loaded.store) == elder_terms::TerminalAmbiguousWidth::font,
+              "the terminal should receive the built-in font-dependent policy");
   write_config(global, "[terminal]\nambiguous_width=wide\n");
   loaded = load_settings(options, 1.0);
   expect_true(value(loaded.store) == "wide" &&
@@ -1061,8 +1061,8 @@ static void test_terminal_ambiguous_width_setting() {
               "reset should remove the saved override and restore inheritance");
   write_config(global, "[terminal]\nambiguous_width=invalid\n");
   loaded = load_settings(options, 1.0);
-  expect_true(warnings_contain(loaded.warnings, "ambiguous_width") && value(loaded.store) == "narrow",
-              "an invalid global width should warn and use one column");
+  expect_true(warnings_contain(loaded.warnings, "ambiguous_width") && value(loaded.store) == "font",
+              "an invalid global width should warn and use font-dependent columns");
   remove_config(path);
   remove_config(global);
 }

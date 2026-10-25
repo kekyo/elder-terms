@@ -154,9 +154,9 @@ extern "C" int __wrap_main(int argc, char **argv) {
   cardio::dispatcher_group_glib group;
   cardio::dispatcher_host_glib_auto dispatcher(group);
   auto settings = create_default_settings(default_terminal_display_settings(16), "Cell width");
-  const std::string width = argc > 1 ? argv[1] : "narrow";
-  set_setting_value(&settings, terminal_ambiguous_width_setting_key(), width);
-  if (width == "font") {
+  const std::string width = argc > 1 ? argv[1] : "default";
+  if (width != "default") set_setting_value(&settings, terminal_ambiguous_width_setting_key(), width);
+  if (width == "font" || width == "default") {
     set_setting_value(&settings, terminal_font_families_setting_key(),
         std::vector<std::string>{"Boxrig Width ASCII", "Boxrig Width Fixture"});
     set_setting_value(&settings, terminal_font_size_dip_setting_key(), 20.0);
@@ -164,7 +164,7 @@ extern "C" int __wrap_main(int argc, char **argv) {
   auto window = load_main_window(terminal_ambiguous_width(settings));
   if (!window) return 1;
   Fixture fixture{&*window, create_terminal_presentation(&*window, {}, {}, {}), settings, {},
-      width == "font" ? 3u : width == "wide" ? 2u : 1u};
+      width == "font" || width == "default" ? 3u : width == "wide" ? 2u : 1u};
   terminal_runtime_set_host_callbacks(window->runtime, {
       [&fixture](BoxrigGtk3TerminalWidget *) {
         ++fixture.attachments;

@@ -3411,12 +3411,12 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_we
   }
   if (state->terminal_ambiguous_width_combo != nullptr) {
     const auto key = terminal_ambiguous_width_setting_key();
-    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string("narrow")));
+    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string("font")));
     const std::vector<ComboOption> options = {
         {"narrow", setting_choice_label(key, "narrow")}, {"wide", setting_choice_label(key, "wide")},
         {"font", setting_choice_label(key, "font")}};
     populate_inheritable_combo(state->terminal_ambiguous_width_combo, state->draft_store, key,
-        setting_choice_label(key, fallback), options, setting_string_value_or_default(state->draft_store, key, "narrow"));
+        setting_choice_label(key, fallback), options, setting_string_value_or_default(state->draft_store, key, "font"));
   }
   if (state->terminal_color_filter_combo) {
     const auto key = terminal_color_filter_setting_key();

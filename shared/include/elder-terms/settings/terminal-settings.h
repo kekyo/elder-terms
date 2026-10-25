@@ -19,9 +19,9 @@ namespace elder_terms {
 
 /** Terminal columns assigned to Unicode East Asian Ambiguous characters. */
 enum class TerminalAmbiguousWidth {
-  narrow, /**< Use one terminal column, the built-in default. */
+  narrow, /**< Use one terminal column. */
   wide,   /**< Use two terminal columns. */
-  font,   /**< Round the font advance up to whole columns and center the glyph. */
+  font,   /**< Round the font advance up to whole columns and center the glyph, the built-in default. */
 };
 /** @returns Key for the terminal width of ambiguous characters. */
 ELDER_TERMS_API SettingKey terminal_ambiguous_width_setting_key();

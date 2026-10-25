@@ -244,7 +244,7 @@ foreach backend : ['cairo', 'opengl']
     test('terminal-selection-state-' + backend + '-' + scale, find_program('xvfb-run'),
       args: ['-a', '-s', '-screen 0 2560x2048x24', selection_state_test], timeout: 60,
       env: appearance_env + ['GTK_IM_MODULE=gtk-im-context-simple'])
-    foreach width : ['narrow', 'wide', 'font']
+    foreach width : ['narrow', 'wide', 'default']
       test('terminal-cell-width-' + backend + '-' + scale + '-' + width, find_program('xvfb-run'),
         args: ['-a', '-s', '-screen 0 2560x2048x24', cell_width_test, width], timeout: 60,
         env: appearance_env + ['FONTCONFIG_FILE=' + meson.project_build_root() / 'test-fonts/fonts.conf'])

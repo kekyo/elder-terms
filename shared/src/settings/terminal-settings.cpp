@@ -311,9 +311,9 @@ SettingKey terminal_ambiguous_width_setting_key() {
 }
 
 TerminalAmbiguousWidth terminal_ambiguous_width(const SettingsStore &store) {
-  const auto width = setting_string_value_or_default(store, terminal_ambiguous_width_setting_key(), "narrow");
-  if (width == "font") return TerminalAmbiguousWidth::font;
-  return width == "wide" ? TerminalAmbiguousWidth::wide : TerminalAmbiguousWidth::narrow;
+  const auto width = setting_string_value_or_default(store, terminal_ambiguous_width_setting_key(), "font");
+  if (width == "narrow") return TerminalAmbiguousWidth::narrow;
+  return width == "wide" ? TerminalAmbiguousWidth::wide : TerminalAmbiguousWidth::font;
 }
 
 SettingKey terminal_block_copy_trim_trailing_spaces_setting_key() {
@@ -490,7 +490,7 @@ bool terminal_bell_sound_is_valid(const std::string &value,
 std::vector<SettingDefinition>
 terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
   return {
-      {.key = terminal_ambiguous_width_setting_key(), .default_value = SettingValue{std::string("narrow")},
+      {.key = terminal_ambiguous_width_setting_key(), .default_value = SettingValue{std::string("font")},
        .validate = validate_ambiguous_width},
       {.key = terminal_cursor_shape_setting_key(), .default_value = SettingValue{std::string("block")},
        .validate = validate_terminal_cursor_shape},
