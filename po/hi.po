@@ -2560,3 +2560,18 @@ msgstr "अनुकूलित रंग पैलेट उलटें (E)"
 
 msgid "Choose a visibility correction or a background reversal. Only one color filter is applied."
 msgstr "दृश्यता सुधार या पृष्ठभूमि उलटना चुनें। एक समय में केवल एक रंग फ़िल्टर लागू होता है।"
+
+msgid "Ambiguous character width"
+msgstr "अस्पष्ट चौड़ाई वाले अक्षरों की चौड़ाई"
+
+msgid "1 column"
+msgstr "1 कॉलम"
+
+msgid "2 columns"
+msgstr "2 कॉलम"
+
+msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
+msgstr "① जैसे अक्षरों की चौड़ाई तय करता है। रिमोट ऐप की अपेक्षित चौड़ाई चुनें। बदलाव नए खोले गए टर्मिनलों पर लागू होंगे।"
+
+msgid "Font dependent"
+msgstr "फ़ॉन्ट के अनुसार"

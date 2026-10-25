@@ -221,9 +221,10 @@ struct MainWindow {
 /**
  * Loads the main GTK window from the executable-adjacent UI file.
  *
+ * @param ambiguous_width Column width used when creating the terminal.
  * @returns Loaded window widgets, or std::nullopt after logging an error.
  */
-std::optional<MainWindow> load_main_window();
+std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_width);
 
 /**
  * Applies optional connection colors to the window and terminal.

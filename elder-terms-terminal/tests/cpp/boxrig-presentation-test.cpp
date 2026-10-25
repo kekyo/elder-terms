@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
   Fixture fixture;
   if (argc > 1 && std::string_view(argv[1]) == "cairo") fixture.backend = BOXRIG_GTK_RENDER_BACKEND_CAIRO;
   if (argc > 2) fixture.required_renderer = argv[2];
-  fixture.runtime = create_terminal_runtime(GTK_WINDOW(window), GTK_BOX(content), GTK_BOX(content));
+  fixture.runtime = create_terminal_runtime(GTK_WINDOW(window), GTK_BOX(content), GTK_BOX(content), elder_terms::TerminalAmbiguousWidth::narrow);
   if (!fixture.runtime) return 1;
   fixture.render_hook = g_signal_add_emission_hook(g_signal_lookup("render", GTK_TYPE_GL_AREA), 0,
       report_gl_connection, &fixture, nullptr);

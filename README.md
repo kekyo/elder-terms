@@ -122,8 +122,8 @@ its settings. Clicking "Apply" applies the changes only to the currently
 running terminal. Clicking "Save" remembers the settings and uses them the next
 time the terminal starts.
 
-Terminal settings are split into two tabs. "Terminal" contains encoding, special
-keys, rows and columns, scrollback, BEL, shortcuts, and screen-reader access.
+Terminal settings are split into two tabs. "Terminal" contains encoding, character width, special
+keys, rows and columns, scrollback, BEL, shortcuts, screen-reader access, and copy settings.
 "Terminal appearance" contains fonts, text size, the cursor, background,
 and color correction. The same layout is used for individual connections and
 "Connection defaults". Neither tab is shown for file transfers.
@@ -936,6 +936,35 @@ color_filter=oklch
 ```
 
 Accepted `color_vision` values are `none`, `protan`, `deutan`, and `tritan`.
+
+## Ambiguous Character Width
+
+Characters such as "①" can occupy one or two terminal columns. These are called ambiguous-width characters.
+On the "Terminal" tab, choose "1 column", "2 columns", or "Font dependent" for "Ambiguous character width". The default is "1 column".
+This setting controls the number of columns used for text placement, separately from font size.
+
+To use two columns, select that option and click "Save", or add the following to the INI file:
+
+```ini
+[terminal]
+ambiguous_width=wide
+```
+
+`narrow` means one column, `wide` means two, and `font` means font dependent. Omitting the key inherits the parent's value, falling back to one column if no parent specifies it. Explicit two-column or font-dependent settings are preserved.
+Invalid values produce a warning and use a valid inherited value or the built-in default.
+
+Font dependent divides the actual font advance by the cell width and rounds up to a whole number of columns.
+The advance is the distance to the next character, including spacing within the font; fallback fonts are measured too.
+A character with a 2.1-cell advance occupies three columns and keeps its natural width, centered with a 0.45-cell margin on each side.
+The next character starts three columns later, and centering adds no spaces to copied text.
+The block cursor covers all columns occupied by the character.
+
+Changes to this width policy apply to newly opened terminals. Save the setting, then reopen the terminal.
+"Apply" and reconnection in the same window retain the existing terminal's width policy.
+Changing the font itself in a font-dependent terminal remeasures and reflows its text and history while keeping the connection.
+
+A font's width cannot determine the column count expected by the remote application.
+If input positions or borders become misaligned, select one or two columns to match that application.
 
 ## Configuring Font Families
 

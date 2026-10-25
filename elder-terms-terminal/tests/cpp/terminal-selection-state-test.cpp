@@ -1079,7 +1079,7 @@ extern "C" int __wrap_main(int argc, char **argv) {
   }, nullptr);
   cardio::dispatcher_group_glib group;
   cardio::dispatcher_host_glib_auto dispatcher(group);
-  auto window = load_main_window();
+  auto window = load_main_window(TerminalAmbiguousWidth::narrow);
   if (!window) return 1;
   Fixture fixture{&*window, create_terminal_presentation(&*window, {}, {}, {}), {}, {}, {}, false, {}};
   terminal_runtime_set_host_callbacks(window->runtime, {

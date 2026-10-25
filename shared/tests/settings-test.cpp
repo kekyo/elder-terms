@@ -1011,6 +1011,62 @@ static void test_terminal_cursor_settings() {
   remove_config(global);
 }
 
+static void test_terminal_ambiguous_width_setting() {
+  const auto global = temporary_config_path("ambiguous-width-global");
+  const auto path = temporary_config_path("ambiguous-width-connection");
+  const auto key = elder_terms::terminal_ambiguous_width_setting_key();
+  const SettingsLoadOptions options{.config_path = path,
+      .startup_config_path = std::nullopt, .global_config_path = global};
+  const auto value = [&key](const SettingsStore &store) {
+    return elder_terms::setting_string_value_or_default(store, key, "missing");
+  };
+  write_config(global, "");
+  write_config(path, "");
+  auto loaded = load_settings(options, 1.0);
+  expect_true(value(loaded.store) == "narrow", "ambiguous width should default to one column");
+  expect_true(elder_terms::terminal_ambiguous_width(loaded.store) == elder_terms::TerminalAmbiguousWidth::narrow,
+              "the terminal should receive the built-in one-column policy");
+  write_config(global, "[terminal]\nambiguous_width=wide\n");
+  loaded = load_settings(options, 1.0);
+  expect_true(value(loaded.store) == "wide" &&
+                  setting_value_source(loaded.store, key) == SettingValueSource::global,
+              "ambiguous width should inherit the global two-column preference");
+  for (const auto *width : {"narrow", "font", "wide"}) {
+    expect_true(set_explicit_setting_value(&loaded.store, key, SettingValue{std::string(width)}) &&
+                    save_settings(loaded.store, path).saved,
+                "each width policy should be accepted and saved explicitly");
+    loaded = load_settings(options, 1.0);
+    expect_true(loaded.warnings.empty() && value(loaded.store) == width &&
+                    setting_has_explicit_value(loaded.store, key),
+                "an explicit width should survive restart, including a value matching the global preference");
+    expect_true(elder_terms::terminal_ambiguous_width(loaded.store) ==
+                    (std::string_view(width) == "wide" ? elder_terms::TerminalAmbiguousWidth::wide :
+                     std::string_view(width) == "font" ? elder_terms::TerminalAmbiguousWidth::font :
+                     elder_terms::TerminalAmbiguousWidth::narrow),
+                "the terminal should receive the saved width policy");
+  }
+  for (const auto *invalid : {"", "auto", "WIDE", "1", "2"}) {
+    expect_true(!set_explicit_setting_value(&loaded.store, key, SettingValue{std::string(invalid)}) &&
+                    value(loaded.store) == "wide",
+                "an invalid width must not replace the valid setting");
+    write_config(path, std::string("[terminal]\nambiguous_width=") + invalid + "\n");
+    const auto rejected = load_settings(options, 1.0);
+    expect_true(warnings_contain(rejected.warnings, "ambiguous_width") && value(rejected.store) == "wide",
+                "an invalid connection width should warn and inherit the valid global width");
+  }
+  expect_true(!set_explicit_setting_value(&loaded.store, key, SettingValue{true}),
+              "ambiguous width must reject boolean values");
+  clear_explicit_setting_value(&loaded.store, key);
+  expect_true(value(loaded.store) == "wide" && save_settings(loaded.store, path).saved && read_config(path).empty(),
+              "reset should remove the saved override and restore inheritance");
+  write_config(global, "[terminal]\nambiguous_width=invalid\n");
+  loaded = load_settings(options, 1.0);
+  expect_true(warnings_contain(loaded.warnings, "ambiguous_width") && value(loaded.store) == "narrow",
+              "an invalid global width should warn and use one column");
+  remove_config(path);
+  remove_config(global);
+}
+
 static void test_terminal_block_copy_trailing_spaces_setting() {
   const auto global = temporary_config_path("block-copy-global");
   const auto path = temporary_config_path("block-copy-connection");
@@ -4722,6 +4778,7 @@ int main() {
     elder_terms_settings_test::test_webdav_invalid_numeric_settings_remain_invalid_after_save();
     elder_terms_settings_test::test_independent_inactive_indicator_color();
     elder_terms_settings_test::test_terminal_cursor_settings();
+    elder_terms_settings_test::test_terminal_ambiguous_width_setting();
     elder_terms_settings_test::test_terminal_block_copy_trailing_spaces_setting();
     elder_terms_settings_test::test_terminal_background_settings();
     elder_terms_settings_test::test_terminal_color_filter_settings();

@@ -198,7 +198,7 @@ int main(int argc, char **argv) {
   auto *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   auto *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_container_add(GTK_CONTAINER(window), content);
-  auto *runtime = create_terminal_runtime(GTK_WINDOW(window), GTK_BOX(content), GTK_BOX(content));
+  auto *runtime = create_terminal_runtime(GTK_WINDOW(window), GTK_BOX(content), GTK_BOX(content), elder_terms::TerminalAmbiguousWidth::narrow);
   if (!runtime) return 1;
   cardio::primitives::conditional changed;
   terminal_runtime_set_changed_callback(runtime, +[](void *context) {
