@@ -2572,3 +2572,6 @@ msgstr "2 कॉलम"
 
 msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
 msgstr "① जैसे अक्षरों की चौड़ाई तय करता है। रिमोट ऐप की अपेक्षित चौड़ाई चुनें। बदलाव नए खोले गए टर्मिनलों पर लागू होंगे।"
+
+msgid "Font dependent"
+msgstr "फ़ॉन्ट के अनुसार"

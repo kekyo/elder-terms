@@ -205,6 +205,7 @@ static constexpr std::array setting_choices{
     SettingChoiceEntry{"terminal", "cursor_key_mode", "normal", N_("Normal")},
     SettingChoiceEntry{"terminal", "ambiguous_width", "narrow", N_("1 column")},
     SettingChoiceEntry{"terminal", "ambiguous_width", "wide", N_("2 columns")},
+    SettingChoiceEntry{"terminal", "ambiguous_width", "font", N_("Font dependent")},
     SettingChoiceEntry{"terminal", "cursor_shape", "block", N_("Full box")},
     SettingChoiceEntry{"terminal", "color_filter", "none", N_("No correction")},
     SettingChoiceEntry{"terminal", "color_filter", "oklch", N_("Improve visibility (Oklch)")},

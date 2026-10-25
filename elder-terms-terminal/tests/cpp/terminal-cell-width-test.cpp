@@ -10,6 +10,7 @@
 #include <exception>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 using namespace elder_terms;
 
@@ -68,6 +69,16 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
   auto *runtime = fixture->window->runtime;
   expect(apply_terminal_presentation(fixture->presentation, fixture->settings, nullptr), "apply initial settings");
   while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
+  if (fixture->width == 3) {
+    const struct { const char *text; unsigned width; } samples[] = {
+        {"④", 1}, {"②", 2}, {"③", 2}, {"①", 3}, {"⑤", 5}};
+    for (const auto &sample : samples) {
+      boxrig_text_cluster_measurement measured{};
+      expect(boxrig_terminal_measure_text_cluster(core(fixture),
+          reinterpret_cast<const uint8_t *>(sample.text), 3, &measured) == BOXRIG_STATUS_OK &&
+          measured.column_width == sample.width, "round actual fallback font advances up to columns");
+    }
+  }
   std::string history = "\033[3J\033[2J\033[H";
   for (int row = 0; row != 100; ++row) history += "A①B" + std::string(row == 99 ? "" : "\r\n");
   expect(terminal_runtime_feed(runtime, history), "feed visible and offscreen ambiguous text");
@@ -110,6 +121,16 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
     while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
     check_text(fixture);
   }
+  if (boxrig_terminal_ambiguous_width(terminal) == BOXRIG_AMBIGUOUS_WIDTH_FONT) {
+    set_setting_value(&fixture->settings, terminal_font_families_setting_key(),
+        std::vector<std::string>{"Boxrig Width Narrow"});
+    expect(apply_terminal_presentation(fixture->presentation, fixture->settings, nullptr), "apply a font with narrower advances");
+    while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
+    fixture->width = 1;
+    expect(core(fixture) == terminal && boxrig_terminal_text_fragment_count(terminal,
+        BOXRIG_TEXT_SCREEN_PRIMARY) == fragments, "font change preserves terminal and history");
+    check_text(fixture);
+  }
 }
 
 static cardio::promise<void> run(Fixture *fixture, std::exception_ptr *failure) {
@@ -127,9 +148,15 @@ extern "C" int __wrap_main(int argc, char **argv) {
   auto settings = create_default_settings(default_terminal_display_settings(16), "Cell width");
   const std::string width = argc > 1 ? argv[1] : "narrow";
   set_setting_value(&settings, terminal_ambiguous_width_setting_key(), width);
+  if (width == "font") {
+    set_setting_value(&settings, terminal_font_families_setting_key(),
+        std::vector<std::string>{"Boxrig Width ASCII", "Boxrig Width Fixture"});
+    set_setting_value(&settings, terminal_font_size_dip_setting_key(), 20.0);
+  }
   auto window = load_main_window(terminal_ambiguous_width(settings));
   if (!window) return 1;
-  Fixture fixture{&*window, create_terminal_presentation(&*window, {}, {}, {}), settings, {}, width == "wide" ? 2u : 1u};
+  Fixture fixture{&*window, create_terminal_presentation(&*window, {}, {}, {}), settings, {},
+      width == "font" ? 3u : width == "wide" ? 2u : 1u};
   terminal_runtime_set_host_callbacks(window->runtime, {
       [&fixture](BoxrigGtk3TerminalWidget *) {
         ++fixture.attachments;

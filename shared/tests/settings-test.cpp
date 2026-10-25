@@ -1031,16 +1031,18 @@ static void test_terminal_ambiguous_width_setting() {
   expect_true(value(loaded.store) == "wide" &&
                   setting_value_source(loaded.store, key) == SettingValueSource::global,
               "ambiguous width should inherit the global two-column preference");
-  for (const auto *width : {"narrow", "wide"}) {
+  for (const auto *width : {"narrow", "font", "wide"}) {
     expect_true(set_explicit_setting_value(&loaded.store, key, SettingValue{std::string(width)}) &&
                     save_settings(loaded.store, path).saved,
-                "either width should be accepted and saved explicitly");
+                "each width policy should be accepted and saved explicitly");
     loaded = load_settings(options, 1.0);
     expect_true(loaded.warnings.empty() && value(loaded.store) == width &&
                     setting_has_explicit_value(loaded.store, key),
                 "an explicit width should survive restart, including a value matching the global preference");
     expect_true(elder_terms::terminal_ambiguous_width(loaded.store) ==
-                    (std::string_view(width) == "wide" ? elder_terms::TerminalAmbiguousWidth::wide : elder_terms::TerminalAmbiguousWidth::narrow),
+                    (std::string_view(width) == "wide" ? elder_terms::TerminalAmbiguousWidth::wide :
+                     std::string_view(width) == "font" ? elder_terms::TerminalAmbiguousWidth::font :
+                     elder_terms::TerminalAmbiguousWidth::narrow),
                 "the terminal should receive the saved width policy");
   }
   for (const auto *invalid : {"", "auto", "WIDE", "1", "2"}) {

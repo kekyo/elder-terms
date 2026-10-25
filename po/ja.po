@@ -2744,3 +2744,6 @@ msgstr "2列"
 
 msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
 msgstr "①などの文字の幅を、接続先のアプリが想定する幅に合わせます。変更は新しく開く端末から反映されます。"
+
+msgid "Font dependent"
+msgstr "フォント依存"

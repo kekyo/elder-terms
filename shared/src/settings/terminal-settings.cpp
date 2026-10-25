@@ -87,8 +87,8 @@ static bool validate_positive_integer(const SettingValue &value,
 
 static bool validate_ambiguous_width(const SettingValue &value, std::string *reason) {
   const auto *width = std::get_if<std::string>(&value);
-  if (width == nullptr || (*width != "narrow" && *width != "wide")) {
-    *reason = "must be narrow or wide";
+  if (width == nullptr || (*width != "narrow" && *width != "wide" && *width != "font")) {
+    *reason = "must be narrow, wide, or font";
     return false;
   }
   return true;
@@ -311,8 +311,9 @@ SettingKey terminal_ambiguous_width_setting_key() {
 }
 
 TerminalAmbiguousWidth terminal_ambiguous_width(const SettingsStore &store) {
-  return setting_string_value_or_default(store, terminal_ambiguous_width_setting_key(), "narrow") == "wide"
-      ? TerminalAmbiguousWidth::wide : TerminalAmbiguousWidth::narrow;
+  const auto width = setting_string_value_or_default(store, terminal_ambiguous_width_setting_key(), "narrow");
+  if (width == "font") return TerminalAmbiguousWidth::font;
+  return width == "wide" ? TerminalAmbiguousWidth::wide : TerminalAmbiguousWidth::narrow;
 }
 
 SettingKey terminal_block_copy_trim_trailing_spaces_setting_key() {

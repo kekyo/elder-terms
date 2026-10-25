@@ -2595,3 +2595,6 @@ msgstr "2 столбца"
 
 msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
 msgstr "Задаёт ширину символов, таких как ①. Выберите ширину, ожидаемую удалённым приложением. Изменения применяются к вновь открытым терминалам."
+
+msgid "Font dependent"
+msgstr "По шрифту"

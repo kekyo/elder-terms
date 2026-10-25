@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 import { prepareTestFonts, type TestFontSource } from './test-fonts.mts';
+import { fileURLToPath } from 'node:url';
 import {
   getTestFontEnvironment,
   testFontDirectory,
@@ -67,4 +68,7 @@ await prepareTestFonts({
   directory: testFontDirectory,
   baseConfig: environment.ELDER_TERMS_TEST_FONTCONFIG_BASE,
   sources,
+  localDirectories: [
+    fileURLToPath(new URL('../deps/boxrig/tests/fixtures/', import.meta.url)),
+  ],
 });

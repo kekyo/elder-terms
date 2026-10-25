@@ -2573,3 +2573,6 @@ msgstr "2열"
 
 msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
 msgstr "① 같은 문자의 너비를 원격 애플리케이션이 예상하는 너비에 맞춥니다. 변경 사항은 새로 여는 터미널에 적용됩니다."
+
+msgid "Font dependent"
+msgstr "글꼴에 따름"

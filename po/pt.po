@@ -2589,3 +2589,6 @@ msgstr "2 colunas"
 
 msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
 msgstr "Controla caracteres como ①. Use a largura esperada pela aplicação remota. As alterações aplicam-se aos terminais abertos a partir de agora."
+
+msgid "Font dependent"
+msgstr "Conforme a fonte"

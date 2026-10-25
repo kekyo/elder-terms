@@ -2591,3 +2591,6 @@ msgstr "عمودان"
 
 msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
 msgstr "يتحكم في عرض أحرف مثل ①. اختر العرض الذي يتوقعه التطبيق البعيد. تُطبّق التغييرات على الطرفيات المفتوحة حديثًا."
+
+msgid "Font dependent"
+msgstr "حسب الخط"
