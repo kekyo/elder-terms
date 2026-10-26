@@ -11,6 +11,7 @@ import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import {
+  defaultRows,
   readWindowCellLayout,
   runGtkTest,
   withTemporaryDirectory,
@@ -18,9 +19,14 @@ import {
 import { expectElementKind } from './test-helpers';
 
 describe.concurrent('terminal selection autoscroll video', () => {
-  for (const backend of ['cairo', 'opengl']) {
+  for (const [backend, footerRows] of [
+    ['cairo', 0],
+    ['opengl', 0],
+    ['cairo', 3],
+    ['opengl', 3],
+  ] as const) {
     for (const rectangular of [false, true]) {
-      it(`moves and stops a ${rectangular ? 'rectangular' : 'linear'} selection (${backend})`, async (context) => {
+      it(`moves and stops a ${rectangular ? 'rectangular' : 'linear'} selection with ${footerRows === 0 ? 'full screen' : 'top region'} history (${backend})`, async (context) => {
         await withTemporaryDirectory(async (directory) => {
           const peer = join(directory, 'scroll.mjs');
           const config = join(directory, 'scroll.ini');
@@ -40,9 +46,19 @@ describe.concurrent('terminal selection autoscroll video', () => {
             '\x1b]8;;https://selection.test/last\x1b\\' +
             lines[199] +
             '\x1b]8;;\x1b\\';
+          const contentRows = defaultRows - footerRows;
+          // Keep an input area below a top-anchored scrolling region, as
+          // inline TUIs do when inserting output above their composer.
+          const output =
+            '\x1b[?25l\x1b[2J\x1b[H' +
+            (footerRows === 0
+              ? ''
+              : `\x1b[${contentRows + 1};1Hprompt> \x1b[1;${contentRows}r`) +
+            lines.join('\r\n') +
+            '\x1b[r';
           await writeFile(
             peer,
-            `process.stdin.setRawMode(true); process.stdin.resume();\nprocess.stdout.write(${JSON.stringify('\x1b[?25l\x1b[2J\x1b[H' + lines.join('\r\n'))});`
+            `process.stdin.setRawMode(true); process.stdin.resume();\nprocess.stdout.write(${JSON.stringify(output)});`
           );
           await writeFile(
             config,
@@ -55,6 +71,7 @@ describe.concurrent('terminal selection autoscroll video', () => {
               const layout = await waitForResult(async () =>
                 readWindowCellLayout(app)
               );
+              expect(layout.rows).toBe(defaultRows);
               await layout.mainWindow.activate();
               const terminal = await app.getById('terminal_view');
               const status = expectElementKind(
@@ -75,7 +92,7 @@ describe.concurrent('terminal selection autoscroll video', () => {
               };
               const initial = await waitForResult(async () => {
                 const value = await state();
-                expect(value.history).toBe(200 - layout.rows);
+                expect(value.history).toBe(200 - contentRows);
                 expect(value.ready).toBe(true);
                 return value;
               });
@@ -201,7 +218,25 @@ describe.concurrent('terminal selection autoscroll video', () => {
               };
               const modifier = rectangular ? 'control' : 'shift';
               try {
-                await observe('before');
+                const before = await observe('before');
+                await move(7.5, 0.5);
+                await app.input.scrollWheel(0, -2);
+                await waitForResult(async () =>
+                  expect((await state()).position).toBe(initial.position - 6)
+                );
+                await waitForResult(async () =>
+                  expect(frames[frames.length - 1]?.hash).not.toBe(before.hash)
+                );
+                const scrolled = await observe('wheel-up');
+                expect(scrolled.hash).not.toBe(before.hash);
+                await app.input.scrollWheel(0, 2);
+                await waitForResult(async () =>
+                  expect((await state()).position).toBe(initial.position)
+                );
+                await waitForResult(async () =>
+                  expect(frames[frames.length - 1]?.hash).toBe(before.hash)
+                );
+                expect((await observe('wheel-down')).hash).toBe(before.hash);
                 // Run the complete product workflow before the video checks:
                 // normal selection, Escape, link click, rectangle from that
                 // link, and a wheel extension with Ctrl still held.
@@ -217,7 +252,7 @@ describe.concurrent('terminal selection autoscroll video', () => {
                   expect((await state()).selected).toBe(false)
                 );
                 await app.input.setModifier('control', true);
-                await move(7.5, layout.rows - 0.5);
+                await move(7.5, contentRows - 0.5);
                 await app.input.setMouseButton('left', true);
                 await app.input.setMouseButton('left', false);
                 const expectedAction =
@@ -225,7 +260,7 @@ describe.concurrent('terminal selection autoscroll video', () => {
                 await waitForResult(async () =>
                   expect(await readFile(actions, 'utf8')).toBe(expectedAction)
                 );
-                await move(0.1, layout.rows - 0.5);
+                await move(0.1, contentRows - 0.5);
                 await app.input.setMouseButton('left', true);
                 await move(3.9, 0.5);
                 await app.input.scrollWheel(0, -2);
@@ -246,7 +281,7 @@ describe.concurrent('terminal selection autoscroll video', () => {
                 );
                 expect(await readFile(actions, 'utf8')).toBe(expectedAction);
                 await app.input.setModifier(modifier, true);
-                await move(0.1, layout.rows - 1.5);
+                await move(0.1, contentRows - 1.5);
                 await app.input.setMouseButton('left', true);
                 await move(3.9, -2.5);
                 await waitForResult(async () =>

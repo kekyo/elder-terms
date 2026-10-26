@@ -122,8 +122,8 @@ its settings. Clicking "Apply" applies the changes only to the currently
 running terminal. Clicking "Save" remembers the settings and uses them the next
 time the terminal starts.
 
-Terminal settings are split into two tabs. "Terminal" contains encoding, special
-keys, rows and columns, scrollback, BEL, shortcuts, and screen-reader access.
+Terminal settings are split into two tabs. "Terminal" contains encoding, character width, special
+keys, rows and columns, scrollback, BEL, shortcuts, screen-reader access, and copy settings.
 "Terminal appearance" contains fonts, text size, the cursor, background,
 and color correction. The same layout is used for individual connections and
 "Connection defaults". Neither tab is shown for file transfers.
@@ -631,12 +631,24 @@ This is separate from the regular clipboard (CLIPBOARD). Escape and left click c
 During IME composition, Escape cancels composition first; the next Escape clears the selection.
 If an IME consumes Escape before the widget receives it, the IME takes priority. [IBus key snooping](https://github.com/ibus/ibus/blob/1.5.29/client/gtk2/ibusimcontext.c#L643-L752)
 
-Block selections can span more history than fits on screen. Copying preserves whole wide characters, combining sequences, and emoji,
-including blank cells and trailing spaces within the rectangle. Each display row, including a soft-wrapped row, is separated by a newline,
-without an extra final newline. Bidirectional text is copied in logical order within each row.
+Block selections can span more history than fits on screen. Copying preserves whole wide characters, combining sequences, and emoji.
+By default, whitespace continuing to the right edge of each display row is removed within the selection. If text remains to the right of the selection, spaces before it are preserved.
+Only empty cells and standalone ASCII spaces are removed. Full-width spaces, nonbreaking spaces (NBSP), and spaces with combining characters are preserved.
+Each display row, including a soft-wrapped row, is separated by a newline. Rows emptied by trimming are retained, without an extra final newline. Bidirectional text is copied in logical order within each row.
 Reducing the width to zero retains the anchor, so you can expand the rectangle again while holding the button.
 
-“Copy” is disabled for an empty rectangle or a selection invalidated by text changes, and existing clipboard contents are preserved.
+To preserve spaces, disable "Trim trailing spaces in block copies" on the "Terminal" tab. In an INI file, use:
+
+```ini
+[terminal]
+block_copy_trim_trailing_spaces=false
+```
+
+An inherited setting uses its parent's value. When no value is specified, the built-in default is `true`.
+Changes also apply while the terminal is running, so you can copy the same selection again with the new policy. Normal selection text and the displayed block selection are unchanged.
+The setting applies to both PRIMARY and CLIPBOARD. A valid selection with positive width that becomes empty after trimming replaces the clipboard contents with an empty string.
+
+“Copy” is disabled for a zero-width rectangle or a selection invalidated by text changes, and existing clipboard contents are preserved.
 Exceeding a selection or copy limit also preserves the previous result instead of publishing partial text; select a smaller range and try again.
 Focus changes, menus, and disconnection end an active drag. Changing focus alone does not clear a completed selection.
 
@@ -830,7 +842,7 @@ Desktop transparency requires a compositor that combines the windows on your des
 Frosted glass requests a compositor effect that blurs the desktop behind the terminal; text and background images remain sharp.
 The settings panel reports the actual state. Unavailable blur falls back to transparency, and unavailable transparency falls back to an opaque background.
 "Frosted glass requested" means the request was accepted; compositor effect settings still determine whether the blur appears.
-See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.6.0/docs/en/background.md) for platform requirements.
+See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/background.md) for platform requirements.
 
 ## Improving Text Color Visibility
 
@@ -878,7 +890,7 @@ E's preview uses the standard palette. The actual display can differ when the co
 
 Only one color filter can be selected, so reversal and the existing Oklch filter are mutually exclusive. Color discrimination assistance can be combined with every mode and is applied before reversal. Logical terminal colors, text, communication, copied text, and logs remain unchanged.
 
-Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.6.0/docs/en/color-filters.md).
+Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/color-filters.md).
 
 ```ini
 [terminal]
@@ -914,7 +926,7 @@ Use Apply or Save to apply previewed changes to the terminal. Cancel discards th
 
 Correction affects display only. Communication, logical terminal colors, copied text, and logs remain unchanged.
 Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are excluded.
-See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.6.0/docs/en/color-filters.md) for the supported scope.
+See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/color-filters.md) for the supported scope.
 
 ```ini
 [terminal]
@@ -924,6 +936,35 @@ color_filter=oklch
 ```
 
 Accepted `color_vision` values are `none`, `protan`, `deutan`, and `tritan`.
+
+## Ambiguous Character Width
+
+Characters such as "①" can occupy one or two terminal columns. These are called ambiguous-width characters.
+On the "Terminal" tab, choose "1 column", "2 columns", or "Font dependent" for "Ambiguous character width". The default is "1 column".
+This setting controls the number of columns used for text placement, separately from font size.
+
+To use two columns, select that option and click "Save", or add the following to the INI file:
+
+```ini
+[terminal]
+ambiguous_width=wide
+```
+
+`narrow` means one column, `wide` means two, and `font` means font dependent. Omitting the key inherits the parent's value, falling back to one column if no parent specifies it. Explicit two-column or font-dependent settings are preserved.
+Invalid values produce a warning and use a valid inherited value or the built-in default.
+
+Font dependent divides the actual font advance by the cell width and rounds up to a whole number of columns.
+The advance is the distance to the next character, including spacing within the font; fallback fonts are measured too.
+A character with a 2.1-cell advance occupies three columns and keeps its natural width, centered with a 0.45-cell margin on each side.
+The next character starts three columns later, and centering adds no spaces to copied text.
+The block cursor covers all columns occupied by the character.
+
+Changes to this width policy apply to newly opened terminals. Save the setting, then reopen the terminal.
+"Apply" and reconnection in the same window retain the existing terminal's width policy.
+Changing the font itself in a font-dependent terminal remeasures and reflows its text and history while keeping the connection.
+
+A font's width cannot determine the column count expected by the remote application.
+If input positions or borders become misaligned, select one or two columns to match that application.
 
 ## Configuring Font Families
 
@@ -1285,7 +1326,7 @@ Each rule selects one recognition source:
 - "Visible terminal text" finds a matching substring under the pointer. The
   expression must not match an empty string.
 
-Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.6.0/docs/en/regex.md).
+Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/regex.md).
 Character classes, groups, alternatives, repetition, and numbered or named captures are supported. Backreferences, lookahead, lookbehind, and expressions matching an empty string are not supported.
 `\d`, `\s`, and `\w` cover ASCII. Use Unicode general categories such as `\p{L}` for letters and `\p{Nd}` for decimal digits.
 `.` also matches newlines, and `^` and `$` anchor the complete input. Matching is case-sensitive and chooses the longest match at the same starting position.
@@ -1370,7 +1411,7 @@ version as libcurl; the application checks this before connecting.
 To build on Ubuntu or Debian, install a C++20-capable compiler, Meson, Ninja,
 gettext, and the development packages for the libraries used by elder-terms:
 
-Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later, IBus 1.5.29 or later, and Wayland client 1.22 or later. See the [boxrig build requirements](https://github.com/kekyo/boxrig/blob/0.6.0/docs/en/building.md).
+Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later, IBus 1.5.29 or later, and Wayland client 1.22 or later. See the [boxrig build requirements](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/building.md).
 
 ```bash
 sudo apt update

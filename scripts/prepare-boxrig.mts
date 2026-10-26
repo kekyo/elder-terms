@@ -128,7 +128,7 @@ const makeArgs = [
   `-j${Math.min(availableParallelism(), 8)}`,
   `BUILD_DIR=${build}`,
   "GTK_OPENGL=1",
-  "BOXRIG_VERSION=0.6.0",
+  "BOXRIG_VERSION=0.7.0",
   `PREFIX=${sdk}`,
   ...(prepared === undefined
     ? []

@@ -169,6 +169,14 @@ msgstr "Строки"
 msgid "Scrollback lines"
 msgstr "Строки буфера прокрутки"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Trim trailing spaces in block copies"
+msgstr "Удалять конечные пробелы при блочном копировании"
+
+#: shared/src/settings-widget/settings-widget.cpp
+msgid "Spaces remain when text is to the right of the rectangular selection."
+msgstr "Пробелы сохраняются, если справа от прямоугольного выделения есть текст."
+
 #: shared/src/settings-widget/settings-presentation.cpp:66
 msgid "Zoom factor"
 msgstr "Коэффициент масштабирования"
@@ -2575,3 +2583,18 @@ msgstr "Инверсия оптимизированной палитры (E)"
 
 msgid "Choose a visibility correction or a background reversal. Only one color filter is applied."
 msgstr "Выберите улучшение видимости или инверсию фона. Применяется только один цветовой фильтр."
+
+msgid "Ambiguous character width"
+msgstr "Ширина символов неоднозначной ширины"
+
+msgid "1 column"
+msgstr "1 столбец"
+
+msgid "2 columns"
+msgstr "2 столбца"
+
+msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
+msgstr "Задаёт ширину символов, таких как ①. Выберите ширину, ожидаемую удалённым приложением. Изменения применяются к вновь открытым терминалам."
+
+msgid "Font dependent"
+msgstr "По шрифту"

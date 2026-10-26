@@ -736,6 +736,113 @@ const connectionStatusTextMask = async (
 };
 
 describe.concurrent('elder-terms-terminal settings', () => {
+  for (const backend of ['cairo', 'opengl']) {
+    // Two application launches and three settings dialogs need more than the
+    // default minute when the full UI suite shares the host.
+    it(`applies and saves block copy trimming without losing the selection (${backend})`, async (context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const path = join(directory, 'copy.ini');
+        const peer = join(directory, 'copy.mjs');
+        const clipboardReader = fileURLToPath(
+          new URL(
+            '../../.build/elder-terms-terminal/clipboard-read-helper',
+            import.meta.url
+          )
+        );
+        await writeFile(
+          peer,
+          `process.stdin.setRawMode(true); process.stdin.resume();\nprocess.stdout.write(${JSON.stringify('\x1b[?25l\x1b[2J\x1b[Habc   \r\nxy   ')});`
+        );
+        await writeFile(
+          path,
+          `[local]\ncommand_line=${process.execPath} ${peer}\n`
+        );
+        for (const reloaded of [false, true]) {
+          await runGtkTest(
+            context,
+            ['-c', path],
+            async (app) => {
+              const layout = await waitForResult(async () =>
+                readWindowCellLayout(app)
+              );
+              await layout.mainWindow.activate();
+              const terminal = await app.getById('terminal_view');
+              const state = expectElementKind(
+                await app.getById('fixture_terminal_state_label'),
+                'label'
+              );
+              const bounds = (await terminal.capture()).bounds;
+              const move = async (column: number, row: number) => {
+                await app.input.moveMouseTo(
+                  Math.trunc(bounds.x + column * layout.cellWidth),
+                  Math.trunc(bounds.y + row * layout.cellHeight)
+                );
+              };
+              const expectCopy = async (expected: string) => {
+                await toPass(async () =>
+                  expect(await state.text()).toContain(
+                    'selected=1 selection_rows=2'
+                  )
+                );
+                await pressKeyWithModifiers(app, ['control', 'shift'], 'c');
+                await toPass(async () => {
+                  const result = await execFileAsync(clipboardReader, [], {
+                    env: await app.environment(),
+                  });
+                  expect(result.stdout).toBe(expected);
+                });
+              };
+              const trimmed = 'abc\nxy';
+              const preserved = 'abc  \nxy   ';
+              await toPass(async () => {
+                await app.input.setModifier('control', true);
+                await move(0.1, 0.5);
+                await app.input.setMouseButton('left', true);
+                await move(4.9, 1.5);
+                await app.input.setMouseButton('left', false);
+                await app.input.setModifier('control', false);
+                await expectCopy(reloaded ? preserved : trimmed);
+              });
+              if (reloaded) return;
+              for (const [choice, action, expected] of [
+                [2, 'save', preserved],
+                [1, 'apply', trimmed],
+                [0, 'apply', trimmed],
+              ] as const) {
+                await openSettingsDialog(app);
+                await showTerminalSettingsPage(app);
+                await expectElementKind(
+                  await app.getById(
+                    'settings_terminal_block_copy_trim_trailing_spaces_combo'
+                  ),
+                  'comboBox'
+                ).selectChildAt(choice);
+                await expectElementKind(
+                  await app.getById(`settings_${action}_button`),
+                  'button'
+                ).click();
+                await expectSettingsDialogClosed(app);
+                await expectTerminalFocused(app);
+                await expectCopy(expected);
+                expect(await readFile(path, 'utf8')).toContain(
+                  'block_copy_trim_trailing_spaces=false'
+                );
+              }
+            },
+            {
+              env: {
+                GTK_IM_MODULE: 'gtk-im-context-simple',
+                ...(backend === 'cairo'
+                  ? { GDK_GL: 'disable' }
+                  : { LIBGL_ALWAYS_SOFTWARE: '1' }),
+              },
+            }
+          );
+        }
+      });
+    }, 120_000);
+  }
+
   it('opts in to screen-reader text at startup and live', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const path = join(directory, 'accessibility.ini');

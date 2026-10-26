@@ -53,6 +53,32 @@ int main(int argc, char **argv) {
   gtk_button_clicked(GTK_BUTTON(find(root, "settings_cancel_button")));
   assert(terminal_background_settings(settings_widget_draft_store(state)).opacity == 80);
   auto *shape = find(root, "settings_terminal_cursor_shape_combo");
+  auto *trim = find(root, "settings_terminal_block_copy_trim_trailing_spaces_combo");
+  auto *width = find(root, "settings_terminal_ambiguous_width_combo");
+  assert(width != nullptr);
+  const auto width_key = make_setting_key("terminal", "ambiguous_width");
+  assert(gtk_combo_box_set_active_id(GTK_COMBO_BOX(width), "font"));
+  assert(setting_has_explicit_value(settings_widget_draft_store(state), width_key));
+  assert(setting_string_value_or_default(settings_widget_draft_store(state), width_key, "") == "font");
+  assert(gtk_combo_box_set_active_id(GTK_COMBO_BOX(width), "wide"));
+  assert(setting_has_explicit_value(settings_widget_draft_store(state), width_key));
+  assert(setting_string_value_or_default(settings_widget_draft_store(state), width_key, "") == "wide");
+  assert(gtk_combo_box_set_active_id(GTK_COMBO_BOX(width), "narrow"));
+  assert(setting_string_value_or_default(settings_widget_draft_store(state), width_key, "") == "narrow");
+  assert(gtk_combo_box_set_active_id(GTK_COMBO_BOX(width), "inherit"));
+  assert(!setting_has_explicit_value(settings_widget_draft_store(state), width_key));
+  assert(setting_string_value_or_default(settings_widget_draft_store(state), width_key, "") == "narrow");
+  assert(terminal_block_copy_trim_trailing_spaces(settings_widget_draft_store(state)));
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(trim), "disabled");
+  assert(setting_has_explicit_value(
+      settings_widget_draft_store(state),
+      terminal_block_copy_trim_trailing_spaces_setting_key()));
+  assert(!terminal_block_copy_trim_trailing_spaces(
+      settings_widget_draft_store(state)));
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(trim), "inherit");
+  assert(!setting_has_explicit_value(
+      settings_widget_draft_store(state),
+      terminal_block_copy_trim_trailing_spaces_setting_key()));
   auto *image_path = find(root, "settings_terminal_background_image_entry");
   gtk_entry_set_text(GTK_ENTRY(image_path), "relative.png");
   assert(!gtk_widget_get_sensitive(find(root, "settings_apply_button")));
@@ -70,6 +96,7 @@ int main(int argc, char **argv) {
   assert(gtk_widget_get_sensitive(find(root, "settings_apply_button")));
   gtk_button_clicked(GTK_BUTTON(find(root, "settings_cancel_button")));
   assert(terminal_cursor_settings(settings_widget_draft_store(state)).shape == TerminalCursorShape::block);
+  assert(terminal_block_copy_trim_trailing_spaces(settings_widget_draft_store(state)));
   asynchronous = true;
   gtk_combo_box_set_active_id(GTK_COMBO_BOX(shape), "bar");
   gtk_button_clicked(GTK_BUTTON(find(root, "settings_apply_button")));

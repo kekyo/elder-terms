@@ -168,6 +168,14 @@ msgstr "Lignes"
 msgid "Scrollback lines"
 msgstr "Lignes de défilement arrière"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Trim trailing spaces in block copies"
+msgstr "Supprimer les espaces de fin dans les copies en bloc"
+
+#: shared/src/settings-widget/settings-widget.cpp
+msgid "Spaces remain when text is to the right of the rectangular selection."
+msgstr "Les espaces sont conservés lorsque du texte se trouve à droite de la sélection rectangulaire."
+
 #: shared/src/settings-widget/settings-presentation.cpp:66
 msgid "Zoom factor"
 msgstr "Facteur de zoom"
@@ -2580,3 +2588,18 @@ msgstr "Inverser la palette optimisée (E)"
 
 msgid "Choose a visibility correction or a background reversal. Only one color filter is applied."
 msgstr "Choisissez une correction de visibilité ou une inversion du fond. Un seul filtre de couleur est appliqué."
+
+msgid "Ambiguous character width"
+msgstr "Largeur des caractères ambigus"
+
+msgid "1 column"
+msgstr "1 colonne"
+
+msgid "2 columns"
+msgstr "2 colonnes"
+
+msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
+msgstr "Contrôle les caractères tels que ①. Choisissez la largeur attendue par l’application distante. Les modifications s’appliquent aux terminaux ouverts par la suite."
+
+msgid "Font dependent"
+msgstr "Selon la police"

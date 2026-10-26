@@ -1870,7 +1870,8 @@ int main(int argc, char **argv) {
   // every continuation repeatedly renders partially received output batches.
   cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);
 
-  auto main_window = elder_terms::load_main_window();
+  auto main_window = elder_terms::load_main_window(
+      elder_terms::terminal_ambiguous_width(settings_result.store));
   if (!main_window.has_value()) {
     return 1;
   }

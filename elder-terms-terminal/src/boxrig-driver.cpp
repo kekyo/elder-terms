@@ -686,7 +686,7 @@ int main(int argc, char **argv) {
     gtk_box_pack_start(GTK_BOX(sending), transfer, FALSE, FALSE, 0);
     g_signal_connect(transfer, "clicked", G_CALLBACK(start_transfer), &driver);
   }
-  driver.runtime = elder_terms::create_terminal_runtime(GTK_WINDOW(window), GTK_BOX(content), GTK_BOX(content));
+  driver.runtime = elder_terms::create_terminal_runtime(GTK_WINDOW(window), GTK_BOX(content), GTK_BOX(content), elder_terms::TerminalAmbiguousWidth::narrow);
   if (!driver.runtime) { gtk_widget_destroy(window); return 1; }
   if (driver.links) configure_links(&driver);
   if (!driver.macros.empty()) elder_terms::terminal_runtime_set_macro_rules(driver.runtime,

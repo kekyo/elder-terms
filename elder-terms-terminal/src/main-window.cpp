@@ -1160,7 +1160,7 @@ static void start_main_window_transfer_progress_pulse(MainWindow *main_window) {
                     pulse_main_window_transfer_progress, main_window);
 }
 
-std::optional<MainWindow> load_main_window() {
+std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_width) {
   MainWindow main_window;
   GError *error = nullptr;
   main_window.builder = gtk_builder_new();
@@ -1290,7 +1290,7 @@ std::optional<MainWindow> load_main_window() {
   gtk_widget_show_all(main_window.header_title_box);
   if (main_window.window && main_window.root_box && main_window.terminal_attachment) {
     main_window.runtime = create_terminal_runtime(GTK_WINDOW(main_window.window), GTK_BOX(main_window.root_box),
-        GTK_BOX(main_window.terminal_attachment));
+        GTK_BOX(main_window.terminal_attachment), ambiguous_width);
     if (main_window.runtime) main_window.terminal = GTK_WIDGET(terminal_runtime_widget(main_window.runtime));
   }
   if (!main_window_has_required_widgets(main_window)) {

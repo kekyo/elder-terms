@@ -58,6 +58,8 @@ export interface TestFontOptions {
   readonly baseConfig: string;
   /** Fonts to reuse or download when absent. */
   readonly sources: readonly TestFontSource[];
+  /** Existing local font directories, used without modifying their contents. */
+  readonly localDirectories?: readonly string[];
 }
 
 /**
@@ -72,7 +74,7 @@ export const prepareTestFonts = async (
   const cache = join(options.directory, 'cache');
   await mkdir(cache, { recursive: true });
   const configuration = join(options.directory, 'fonts.conf');
-  const directories: string[] = [];
+  const directories: string[] = [...(options.localDirectories ?? [])];
   await writeConfiguration(
     configuration,
     options.baseConfig,

@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
   prepare_terminal_background_window(window.window);
   window.root_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_container_add(GTK_CONTAINER(window.window), window.root_box);
-  window.runtime = create_terminal_runtime(GTK_WINDOW(window.window), GTK_BOX(window.root_box), GTK_BOX(window.root_box));
+  window.runtime = create_terminal_runtime(GTK_WINDOW(window.window), GTK_BOX(window.root_box), GTK_BOX(window.root_box), elder_terms::TerminalAmbiguousWidth::narrow);
   assert(window.runtime);
   std::vector<std::function<void(TerminalBackgroundImagePtr, std::string)>> requests;
   auto *background = create_terminal_background(&window, [&](std::string, GCancellable *, auto complete) {

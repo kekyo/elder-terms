@@ -168,6 +168,14 @@ msgstr "Filas"
 msgid "Scrollback lines"
 msgstr "Líneas del historial"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Trim trailing spaces in block copies"
+msgstr "Recortar los espacios finales en las copias de bloque"
+
+#: shared/src/settings-widget/settings-widget.cpp
+msgid "Spaces remain when text is to the right of the rectangular selection."
+msgstr "Los espacios se conservan si hay texto a la derecha de la selección rectangular."
+
 #: shared/src/settings-widget/settings-presentation.cpp:66
 msgid "Zoom factor"
 msgstr "Factor de zoom"
@@ -2575,3 +2583,18 @@ msgstr "Invertir la paleta optimizada (E)"
 
 msgid "Choose a visibility correction or a background reversal. Only one color filter is applied."
 msgstr "Elija una corrección de visibilidad o una inversión del fondo. Solo se aplica un filtro de color."
+
+msgid "Ambiguous character width"
+msgstr "Ancho de caracteres ambiguos"
+
+msgid "1 column"
+msgstr "1 columna"
+
+msgid "2 columns"
+msgstr "2 columnas"
+
+msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
+msgstr "Controla caracteres como ①. Use el ancho esperado por la aplicación remota. Los cambios se aplican a los terminales que se abran a partir de ahora."
+
+msgid "Font dependent"
+msgstr "Según la fuente"

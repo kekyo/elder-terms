@@ -169,6 +169,14 @@ msgstr "الصفوف"
 msgid "Scrollback lines"
 msgstr "أسطر سجل التمرير"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Trim trailing spaces in block copies"
+msgstr "إزالة المسافات اللاحقة في النسخ الكتلي"
+
+#: shared/src/settings-widget/settings-widget.cpp
+msgid "Spaces remain when text is to the right of the rectangular selection."
+msgstr "تُحفظ المسافات عند وجود نص إلى يمين التحديد المستطيل."
+
 #: shared/src/settings-widget/settings-presentation.cpp:66
 msgid "Zoom factor"
 msgstr "عامل التكبير/التصغير"
@@ -2571,3 +2579,18 @@ msgstr "عكس لوحة الألوان المحسّنة (E)"
 
 msgid "Choose a visibility correction or a background reversal. Only one color filter is applied."
 msgstr "اختر تحسين الوضوح أو عكس الخلفية. يُطبّق مرشح ألوان واحد فقط."
+
+msgid "Ambiguous character width"
+msgstr "عرض الأحرف ذات العرض الملتبس"
+
+msgid "1 column"
+msgstr "عمود واحد"
+
+msgid "2 columns"
+msgstr "عمودان"
+
+msgid "Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."
+msgstr "يتحكم في عرض أحرف مثل ①. اختر العرض الذي يتوقعه التطبيق البعيد. تُطبّق التغييرات على الطرفيات المفتوحة حديثًا."
+
+msgid "Font dependent"
+msgstr "حسب الخط"

@@ -17,6 +17,22 @@
 
 namespace elder_terms {
 
+/** Terminal columns assigned to Unicode East Asian Ambiguous characters. */
+enum class TerminalAmbiguousWidth {
+  narrow, /**< Use one terminal column. */
+  wide,   /**< Use two terminal columns. */
+  font,   /**< Round the font advance up to whole columns and center the glyph, the built-in default. */
+};
+/** @returns Key for the terminal width of ambiguous characters. */
+ELDER_TERMS_API SettingKey terminal_ambiguous_width_setting_key();
+/**
+ * Reads the width policy used when a new terminal is created.
+ * @param store Layered terminal settings.
+ * @returns Effective one-column (default), two-column, or font-dependent policy.
+ * @remarks Changes do not alter an existing terminal or its history.
+ */
+ELDER_TERMS_API TerminalAmbiguousWidth terminal_ambiguous_width(const SettingsStore &store);
+
 /** Display-only correction; terminal bytes and logical colors are preserved. */
 enum class TerminalColorFilter {
   none,  /**< Preserve the terminal colors after connection defaults. */
@@ -192,6 +208,14 @@ ELDER_TERMS_API SettingKey terminal_height_setting_key();
 ELDER_TERMS_API SettingKey terminal_scrollback_lines_setting_key();
 
 /**
+ * Returns the setting key for [terminal] block_copy_trim_trailing_spaces.
+ *
+ * @returns Setting key for removing physical-row trailing spaces from
+ * rectangular copies.
+ */
+ELDER_TERMS_API SettingKey terminal_block_copy_trim_trailing_spaces_setting_key();
+
+/**
  * Returns the setting key for [terminal] font_size_dip.
  *
  * @returns Setting key for terminal character size in DIP.
@@ -325,6 +349,16 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults);
  */
 ELDER_TERMS_API TerminalDisplaySettings
 terminal_display_settings(const SettingsStore &store);
+
+/**
+ * Extracts the rectangular-copy trailing-space preference from a store.
+ *
+ * @param store Source settings store.
+ * @returns True when a rectangular copy removes only the selected portion of
+ * a physical row's trailing ASCII spaces; true by default.
+ */
+ELDER_TERMS_API bool
+terminal_block_copy_trim_trailing_spaces(const SettingsStore &store);
 
 /**
  * Extracts the resolved ordered terminal font families from a store.

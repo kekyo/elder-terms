@@ -622,8 +622,73 @@ static cardio::promise<void> autoscroll_scenarios(Fixture *fixture) {
   }
 }
 
-static cardio::promise<void> copy_scenarios(Fixture *fixture) {
+static cardio::promise<void> copy_policy_scenarios(Fixture *fixture) {
   auto *runtime = fixture->window->runtime;
+  auto settings = create_default_settings(default_terminal_display_settings(16), "Copy policy");
+  expect(apply_terminal_presentation(fixture->presentation, settings, nullptr), "apply default copy settings");
+  expect(terminal_runtime_feed(runtime, "\033[3J\033[2J\033[Habc   \r\nabc    X\r\n        \r\n       X\r\n  ab    \r\n        "),
+      "prepare trailing whitespace, unselected text, indentation and empty rows");
+  while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
+  mouse(fixture, GDK_BUTTON_PRESS, 0.1, 0.5, GDK_CONTROL_MASK);
+  mouse(fixture, GDK_MOTION_NOTIFY, 4.9, 5.5, GDK_BUTTON1_MASK);
+  mouse(fixture, GDK_BUTTON_RELEASE, 4.9, 5.5, GDK_BUTTON1_MASK);
+  co_await barrier(fixture, false);
+  const std::string trimmed = "abc\nabc  \n\n     \n  ab\n";
+  const std::string preserved = "abc  \nabc  \n     \n     \n  ab \n     ";
+  expect(co_await clipboard(GDK_SELECTION_PRIMARY) == trimmed, "unspecified copy settings trim physical trailing whitespace");
+
+  for (const bool trim : {false, true}) {
+    boxrig_ui_selection before{}, after{};
+    expect(boxrig_ui_view_get_selection(view(fixture), &before), "capture existing rectangular selection");
+    set_setting_value(&settings, terminal_block_copy_trim_trailing_spaces_setting_key(), trim);
+    expect(apply_terminal_presentation(fixture->presentation, settings, nullptr), "apply changed copy settings");
+    while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
+    const auto &expected = trim ? trimmed : preserved;
+    expect(selected_text(fixture) == expected, "changed settings affect the same selection's copy text");
+    expect(boxrig_ui_view_get_selection(view(fixture), &after) &&
+        before.visual_start_column == after.visual_start_column && before.visual_column_count == after.visual_column_count &&
+        before.row_count == after.row_count && before.shape == after.shape,
+        "changing copy settings preserves the displayed rectangle");
+    key(fixture, GDK_KEY_c, GDK_KEY_PRESS, GDK_CONTROL_MASK | GDK_SHIFT_MASK);
+    key(fixture, GDK_KEY_c, GDK_KEY_RELEASE, GDK_CONTROL_MASK | GDK_SHIFT_MASK);
+    co_await barrier(fixture, false);
+    expect(co_await clipboard(GDK_SELECTION_CLIPBOARD) == expected, "keyboard copy uses the current setting");
+
+    mouse(fixture, GDK_BUTTON_PRESS, 2.1, 0.5, 0, GDK_BUTTON_SECONDARY);
+    mouse(fixture, GDK_BUTTON_RELEASE, 2.1, 0.5, GDK_BUTTON3_MASK, GDK_BUTTON_SECONDARY);
+    co_await observe_main_loop(fixture);
+    auto *menu = gtk_grab_get_current();
+    expect(menu && GTK_IS_MENU(menu), "open the copy menu for a retained rectangle");
+    auto *items = gtk_container_get_children(GTK_CONTAINER(menu));
+    expect(items && gtk_widget_get_sensitive(GTK_WIDGET(items->data)), "the retained rectangle enables Copy");
+    gtk_menu_item_activate(GTK_MENU_ITEM(items->data));
+    g_list_free(items);
+    gtk_menu_popdown(GTK_MENU(menu));
+    co_await barrier(fixture, false);
+    expect(co_await clipboard(GDK_SELECTION_CLIPBOARD) == expected, "context-menu copy uses the current setting");
+
+    mouse(fixture, GDK_BUTTON_PRESS, 0.1, 0.5, GDK_CONTROL_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 4.9, 5.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_BUTTON_RELEASE, 4.9, 5.5, GDK_BUTTON1_MASK);
+    co_await barrier(fixture, false);
+    expect(co_await clipboard(GDK_SELECTION_PRIMARY) == expected, "selection completion applies the setting to PRIMARY");
+  }
+  mouse(fixture, GDK_BUTTON_PRESS, 0.1, 2.5, GDK_CONTROL_MASK);
+  mouse(fixture, GDK_MOTION_NOTIFY, 4.9, 2.5, GDK_BUTTON1_MASK);
+  mouse(fixture, GDK_BUTTON_RELEASE, 4.9, 2.5, GDK_BUTTON1_MASK);
+  key(fixture, GDK_KEY_c, GDK_KEY_PRESS, GDK_CONTROL_MASK | GDK_SHIFT_MASK);
+  key(fixture, GDK_KEY_c, GDK_KEY_RELEASE, GDK_CONTROL_MASK | GDK_SHIFT_MASK);
+  co_await barrier(fixture, false);
+  expect(selected_text(fixture).empty() && co_await clipboard(GDK_SELECTION_PRIMARY) == "" &&
+      co_await clipboard(GDK_SELECTION_CLIPBOARD) == "", "a positive-width blank rectangle copies an empty string to both selections");
+}
+
+static cardio::promise<void> copy_scenarios(Fixture *fixture, bool trim) {
+  auto *runtime = fixture->window->runtime;
+  auto settings = create_default_settings(default_terminal_display_settings(16), "Copy policy");
+  set_setting_value(&settings, terminal_block_copy_trim_trailing_spaces_setting_key(), trim);
+  expect(apply_terminal_presentation(fixture->presentation, settings, nullptr), "apply history copy policy");
+  while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
   const auto copy = [&] {
     key(fixture, GDK_KEY_c, GDK_KEY_PRESS, GDK_CONTROL_MASK | GDK_SHIFT_MASK);
     key(fixture, GDK_KEY_c, GDK_KEY_RELEASE, GDK_CONTROL_MASK | GDK_SHIFT_MASK);
@@ -639,7 +704,7 @@ static cardio::promise<void> copy_scenarios(Fixture *fixture) {
   std::string history = "\033[3J\033[2J\033[H\033[?25l0123456789";
   std::string expected = "234";
   const std::string lines[] = {"A界é👩‍💻z  ", "AאבגדZ  ", ""};
-  const std::string slices[] = {"界é👩‍💻", "אבג", "   "};
+  const std::string slices[] = {"界é👩‍💻", "אבג", trim ? "" : "   "};
   for (int row = 0; row != 90; ++row) {
     history += "\r\n" + lines[row % 3];
     expected += "\n" + slices[row % 3];
@@ -680,7 +745,7 @@ static cardio::promise<void> copy_scenarios(Fixture *fixture) {
     mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 2.5, GDK_BUTTON1_MASK);
     mouse(fixture, GDK_BUTTON_RELEASE, 3.9, 2.5, GDK_BUTTON1_MASK);
     co_await barrier(fixture, false);
-    co_await check_text(modifier == GDK_CONTROL_MASK ? "xxxx\nAB  \ntail" : wrapped + "\ntail");
+    co_await check_text(modifier == GDK_CONTROL_MASK ? (trim ? "xxxx\nAB\ntail" : "xxxx\nAB  \ntail") : wrapped + "\ntail");
   }
 
   for (const bool stale : {false, true}) {
@@ -898,7 +963,8 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
   co_await click_scenarios(fixture);
   co_await scroll_scenarios(fixture);
   co_await autoscroll_scenarios(fixture);
-  co_await copy_scenarios(fixture);
+  co_await copy_policy_scenarios(fixture);
+  for (const bool trim : {true, false}) co_await copy_scenarios(fixture, trim);
   while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
   select(fixture, BOXRIG_UI_SELECTION_RECTANGULAR, false);
   auto *composition = boxrig_gtk3_terminal_widget_composition(terminal_runtime_widget(runtime));
@@ -957,6 +1023,10 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
     while (terminal_runtime_connection_state(runtime).phase != TerminalConnectionPhase::connected ||
         !terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
     expect(boxrig_ui_model_terminal(boxrig_ui_view_model(view(fixture))) == terminal, "view replacement retains the terminal core");
+    boxrig_ui_rectangular_copy_policy copy_policy;
+    expect(boxrig_ui_view_get_rectangular_copy_policy(view(fixture), &copy_policy) == BOXRIG_UI_OK &&
+        copy_policy == BOXRIG_UI_RECTANGULAR_COPY_PRESERVE_SPACES,
+        "reconnected and replacement views retain the explicitly disabled trimming setting");
     boxrig_scrollbar_model reconnected{};
     expect(boxrig_scrollbar_model_read(terminal, &reconnected) == 0, "position after reconnect");
     co_await observe_main_loop(fixture);
@@ -1009,7 +1079,7 @@ extern "C" int __wrap_main(int argc, char **argv) {
   }, nullptr);
   cardio::dispatcher_group_glib group;
   cardio::dispatcher_host_glib_auto dispatcher(group);
-  auto window = load_main_window();
+  auto window = load_main_window(TerminalAmbiguousWidth::narrow);
   if (!window) return 1;
   Fixture fixture{&*window, create_terminal_presentation(&*window, {}, {}, {}), {}, {}, {}, false, {}};
   terminal_runtime_set_host_callbacks(window->runtime, {

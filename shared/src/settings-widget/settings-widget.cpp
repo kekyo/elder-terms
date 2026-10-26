@@ -162,6 +162,8 @@ struct SettingsWidgetState {
   std::vector<std::string> terminal_font_draft;
   bool terminal_fonts_valid = true;
   GtkWidget *terminal_accessibility_enabled_combo = nullptr;
+  GtkWidget *terminal_block_copy_trim_trailing_spaces_combo = nullptr;
+  GtkWidget *terminal_ambiguous_width_combo = nullptr;
   GtkWidget *terminal_bell_sound_entry = nullptr;
   GtkWidget *terminal_bell_sound_dialog = nullptr;
   GtkWidget *terminal_encoding_combo = nullptr;
@@ -1194,6 +1196,19 @@ static void update_terminal_accessibility_enabled_from_widget(SettingsWidgetStat
   set_explicit_setting_value(&state->draft_store,
                             terminal_accessibility_enabled_setting_key(),
                             SettingValue{choice == boolean_enabled});
+}
+
+static void update_terminal_block_copy_trim_trailing_spaces_from_widget(
+    SettingsWidgetState *state) {
+  const std::string choice = active_combo_id(
+      state->terminal_block_copy_trim_trailing_spaces_combo, inherit_choice);
+  const auto key = terminal_block_copy_trim_trailing_spaces_setting_key();
+  if (choice == inherit_choice) {
+    clear_explicit_setting_value(&state->draft_store, key);
+    return;
+  }
+  set_explicit_setting_value(&state->draft_store, key,
+                             SettingValue{choice == boolean_enabled});
 }
 
 static void update_terminal_bell_sound_from_widget(
@@ -3388,6 +3403,21 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_we
                            terminal_accessibility_enabled_setting_key(),
                            terminal_accessibility_enabled(state->draft_store));
   }
+  if (state->terminal_block_copy_trim_trailing_spaces_combo != nullptr) {
+    populate_boolean_combo(
+        state->terminal_block_copy_trim_trailing_spaces_combo,
+        state->draft_store, terminal_block_copy_trim_trailing_spaces_setting_key(),
+        terminal_block_copy_trim_trailing_spaces(state->draft_store));
+  }
+  if (state->terminal_ambiguous_width_combo != nullptr) {
+    const auto key = terminal_ambiguous_width_setting_key();
+    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string("narrow")));
+    const std::vector<ComboOption> options = {
+        {"narrow", setting_choice_label(key, "narrow")}, {"wide", setting_choice_label(key, "wide")},
+        {"font", setting_choice_label(key, "font")}};
+    populate_inheritable_combo(state->terminal_ambiguous_width_combo, state->draft_store, key,
+        setting_choice_label(key, fallback), options, setting_string_value_or_default(state->draft_store, key, "narrow"));
+  }
   if (state->terminal_color_filter_combo) {
     const auto key = terminal_color_filter_setting_key();
     const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string("none")));
@@ -3894,6 +3924,14 @@ static void on_terminal_accessibility_enabled_changed(GtkComboBox *, gpointer da
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) return;
   update_terminal_accessibility_enabled_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_terminal_block_copy_trim_trailing_spaces_changed(GtkComboBox *,
+                                                                 gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) return;
+  update_terminal_block_copy_trim_trailing_spaces_from_widget(state);
   notify_changed(state);
 }
 
@@ -5347,6 +5385,33 @@ create_terminal_pages(SettingsWidgetState *state) {
                    G_CALLBACK(on_terminal_accessibility_enabled_changed), state);
   attach_row(page, 11, terminal_accessibility_enabled_setting_key(),
              state->terminal_accessibility_enabled_combo);
+
+  state->terminal_block_copy_trim_trailing_spaces_combo = create_combo_box(
+      widget_id(state, "terminal_block_copy_trim_trailing_spaces_combo").c_str());
+  gtk_widget_set_tooltip_text(
+      state->terminal_block_copy_trim_trailing_spaces_combo,
+      _("Spaces remain when text is to the right of the rectangular selection."));
+  g_signal_connect(state->terminal_block_copy_trim_trailing_spaces_combo,
+                   "changed",
+                   G_CALLBACK(on_terminal_block_copy_trim_trailing_spaces_changed),
+                   state);
+  attach_row(page, 12, terminal_block_copy_trim_trailing_spaces_setting_key(),
+             state->terminal_block_copy_trim_trailing_spaces_combo);
+
+  state->terminal_ambiguous_width_combo = create_combo_box(
+      widget_id(state, "terminal_ambiguous_width_combo").c_str());
+  gtk_widget_set_tooltip_text(state->terminal_ambiguous_width_combo,
+      _("Controls characters such as ①. Match the width expected by the remote application. Changes apply to newly opened terminals."));
+  g_signal_connect(state->terminal_ambiguous_width_combo, "changed", G_CALLBACK(+[](GtkComboBox *, gpointer data) {
+    auto *state = static_cast<SettingsWidgetState *>(data);
+    if (state->synchronizing) return;
+    const auto key = terminal_ambiguous_width_setting_key();
+    const auto choice = active_combo_id(state->terminal_ambiguous_width_combo, inherit_choice);
+    if (choice == inherit_choice) clear_explicit_setting_value(&state->draft_store, key);
+    else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice});
+    notify_changed(state);
+  }), state);
+  attach_row(page, 13, terminal_ambiguous_width_setting_key(), state->terminal_ambiguous_width_combo);
 
   state->terminal_cursor_shape_combo = create_combo_box(widget_id(state, "terminal_cursor_shape_combo").c_str());
   state->terminal_cursor_blink_combo = create_combo_box(widget_id(state, "terminal_cursor_blink_combo").c_str());

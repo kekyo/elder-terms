@@ -192,7 +192,7 @@ int main() {
   fixture.entry = gtk_entry_new();
   gtk_widget_set_no_show_all(fixture.entry, TRUE);
   gtk_overlay_add_overlay(GTK_OVERLAY(overlay), fixture.entry);
-  fixture.runtime = create_terminal_runtime(GTK_WINDOW(window), GTK_BOX(content), GTK_BOX(content));
+  fixture.runtime = create_terminal_runtime(GTK_WINDOW(window), GTK_BOX(content), GTK_BOX(content), elder_terms::TerminalAmbiguousWidth::narrow);
   if (!fixture.runtime) return 1;
   expect(boxrig_gtk3_terminal_widget_set_key_router(terminal_runtime_widget(fixture.runtime),
       +[](const boxrig_key_event *event, void *context) {
