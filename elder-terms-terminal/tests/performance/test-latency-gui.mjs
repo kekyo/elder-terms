@@ -13,12 +13,15 @@ const [peer, input, driver] = process.argv.slice(2);
 if (!peer || !input || !driver)
   throw new Error('Expected peer, input and driver paths');
 const captureMode = process.argv[5] ?? 'video';
+const loadMode = process.argv[6] ?? 'idle';
+const initialHistory = process.argv[7] ?? '0';
+const stopAfter = process.argv[8] ?? '0';
 const directory = await mkdtemp(join(tmpdir(), 'elder-latency-gui-'));
 const report = join(directory, 'child.tsv');
 const log = openSync(join(directory, 'driver.log'), 'w');
 const app = spawn(
   driver,
-  ['--local', '--', peer, report, '0', 'plain', 'idle', '10', '4'],
+  ['--local', '--', peer, report, initialHistory, 'plain', loadMode, '10', '4'],
   {
     env: { ...process.env, GDK_GL: 'disable', NO_AT_BRIDGE: '1' },
     stdio: ['ignore', log, log],
@@ -60,7 +63,7 @@ try {
     await pause(50);
   }
   if (!window) throw new Error('The ready title did not appear');
-  await run(input, [window, directory, '3', '0', captureMode, 'window']);
+  await run(input, [window, directory, '3', stopAfter, captureMode, 'window']);
   for (let attempt = 0; attempt < 200; attempt++) {
     try {
       await access(report);
@@ -77,6 +80,19 @@ try {
     .trim()
     .split('\n')
     .slice(1);
+  if (loadMode === 'transcript') {
+    const geometry = await run('xdotool', [
+      'getwindowgeometry',
+      '--shell',
+      window,
+    ]);
+    const height = Number(/^HEIGHT=(\d+)$/m.exec(geometry)?.[1]);
+    const markerY = Number(frames[0]?.split('\t')[5]);
+    if (!Number.isFinite(height) || !(markerY > height / 2))
+      throw new Error(
+        `Transcript marker was not kept in the footer: ${markerY}/${height}`
+      );
+  }
   if (child.length !== 4 || events.length !== 4 || frames.length < 3)
     throw new Error('Missing measured input or display frames');
   for (let index = 1; index <= 3; index++) {

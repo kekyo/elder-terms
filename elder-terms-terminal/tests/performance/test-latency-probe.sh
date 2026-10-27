@@ -12,7 +12,7 @@ import { readFile } from 'node:fs/promises';
 const lines = (await readFile(process.argv[2], 'utf8')).trim().split('\n');
 if (!lines[0].startsWith('kind\tstart_ns\tend_ns\t')) throw new Error('No latency trace');
 const rows = lines.slice(1).map(line => line.split('\t'));
-for (const kind of ['feed', 'frame', 'recognize', 'model', 'composite']) {
+for (const kind of ['feed', 'frame', 'recognize', 'model', 'composite', 'grid']) {
   const matching = rows.filter(row => row[0] === kind);
   if (matching.length === 0) throw new Error(`No ${kind} observations`);
   for (const row of matching) {

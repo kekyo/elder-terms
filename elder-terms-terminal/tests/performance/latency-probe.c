@@ -159,7 +159,13 @@ static void marker_bytes(marker_reader *reader, const unsigned char *bytes, size
     } \
 } while (0)
 
-/** Observes accepted input bytes while preserving the public feed contract. */
+/** Observes accepted input bytes while preserving the public feed contract.
+ * @param terminal Borrowed terminal on its owning thread.
+ * @param bytes Borrowed input bytes passed unchanged.
+ * @param length Available input byte count.
+ * @param consumed Receives the original function's accepted byte count.
+ * @return The original function's status.
+ */
 boxrig_status boxrig_terminal_feed(boxrig_terminal *terminal, const uint8_t *bytes,
     size_t length, size_t *consumed)
 {
@@ -172,7 +178,13 @@ boxrig_status boxrig_terminal_feed(boxrig_terminal *terminal, const uint8_t *byt
     return status;
 }
 
-/** Observes the public bounded recognition operation without changing its budget. */
+/** Observes recognition without changing its work budget.
+ * @param terminal Borrowed terminal on its owning thread.
+ * @param budget Original work budget.
+ * @param used Receives the original work count.
+ * @param more Receives the original pending-work flag.
+ * @return The original function's status.
+ */
 boxrig_status boxrig_terminal_resume_text_recognizers(boxrig_terminal *terminal,
     size_t budget, size_t *used, bool *more)
 {
@@ -184,7 +196,14 @@ boxrig_status boxrig_terminal_resume_text_recognizers(boxrig_terminal *terminal,
     return status;
 }
 
-/** Records registrations, including application-triggered re-registrations. */
+/** Records registrations, including application-triggered re-registrations.
+ * @param terminal Borrowed terminal on its owning thread.
+ * @param program Compiled program passed unchanged.
+ * @param scope Original recognition scope.
+ * @param limits Original work and storage limits.
+ * @param id Receives the original registration identifier.
+ * @return The original function's status.
+ */
 boxrig_status boxrig_terminal_register_compiled_text_recognizer(boxrig_terminal *terminal,
     boxrig_regex_program *program, boxrig_text_recognizer_scope scope,
     const boxrig_text_recognizer_limits *limits, uint64_t *id)
@@ -198,7 +217,10 @@ boxrig_status boxrig_terminal_register_compiled_text_recognizer(boxrig_terminal 
     return status;
 }
 
-/** Records consumed notification kinds once, without consuming extra events. */
+/** Records consumed notification kinds once, without consuming extra events.
+ * @param terminal Borrowed terminal on its owning thread.
+ * @return The original function's status.
+ */
 boxrig_status boxrig_terminal_text_recognizer_event_consume(boxrig_terminal *terminal)
 {
     static boxrig_status (*next)(boxrig_terminal *);
@@ -211,7 +233,10 @@ boxrig_status boxrig_terminal_text_recognizer_event_consume(boxrig_terminal *ter
     return status;
 }
 
-/** Observes model synchronization through the application's unchanged call. */
+/** Observes model synchronization through the application's unchanged call.
+ * @param model Borrowed model on its owning thread.
+ * @return The original function's status.
+ */
 boxrig_ui_status boxrig_ui_model_synchronize(boxrig_ui_model *model)
 {
     static boxrig_ui_status (*next)(boxrig_ui_model *);
@@ -270,7 +295,13 @@ static gboolean draw_end(GtkWidget *widget, cairo_t *cr, gpointer context)
     return FALSE;
 }
 
-/** Attaches passive GTK observers to the terminal widget created by the application. */
+/** Attaches passive GTK observers to the application's single terminal widget.
+ * @param model Borrowed model owned by the application.
+ * @param config Original widget configuration.
+ * @param widget Receives the original widget and ownership semantics.
+ * @return The original function's status.
+ * @remarks The probe supports one terminal widget per application process.
+ */
 boxrig_ui_status boxrig_gtk3_terminal_widget_create(boxrig_ui_model *model,
     const boxrig_gtk3_terminal_widget_config *config, BoxrigGtk3TerminalWidget **widget)
 {
@@ -286,7 +317,11 @@ boxrig_ui_status boxrig_gtk3_terminal_widget_create(boxrig_ui_model *model,
     return status;
 }
 
-/** Observes one public frame, including its pending work result. */
+/** Observes one public frame, including its pending work result.
+ * @param widget Borrowed widget on its owning GTK thread.
+ * @param result Receives the original frame result.
+ * @return The original function's status.
+ */
 boxrig_ui_status boxrig_gtk3_terminal_widget_frame(BoxrigGtk3TerminalWidget *widget,
     boxrig_ui_component_frame_result *result)
 {
@@ -294,13 +329,20 @@ boxrig_ui_status boxrig_gtk3_terminal_widget_frame(BoxrigGtk3TerminalWidget *wid
     RESOLVE(boxrig_gtk3_terminal_widget_frame);
     interval started = begin_interval();
     boxrig_ui_status status = next(widget, result);
+    size_t rows, columns;
+    boxrig_terminal_size(boxrig_ui_view_terminal(boxrig_gtk3_terminal_widget_view(widget)),
+        &rows, &columns);
+    record("grid", started, sequence, columns, (int)rows, 0, NULL);
     end_interval("frame", started, (size_t)(uintptr_t)gtk_widget_get_window(GTK_WIDGET(widget)),
         status, result && result->additional_dispatch,
         boxrig_ui_view_terminal(boxrig_gtk3_terminal_widget_view(widget)));
     return status;
 }
 
-/** Records GTK/GDK submission completion, which is not physical display time. */
+/** Records GTK/GDK submission completion, which is not physical display time.
+ * @param window Drawing window passed unchanged.
+ * @param context Drawing context passed unchanged.
+ */
 void gdk_window_end_draw_frame(GdkWindow *window, GdkDrawingContext *context)
 {
     static void (*next)(GdkWindow *, GdkDrawingContext *);
@@ -312,7 +354,10 @@ void gdk_window_end_draw_frame(GdkWindow *window, GdkDrawingContext *context)
         (size_t)(uintptr_t)gdk_window_get_toplevel(window), 0, 0, NULL);
 }
 
-/** Tracks the application's PTY descriptor; no I/O state is changed. */
+/** Tracks the application's PTY descriptor; no I/O state is changed.
+ * @param pty Borrowed application PTY.
+ * @return The original descriptor, retaining its ownership.
+ */
 int boxrig_posix_pty_descriptor(const struct boxrig_posix_pty *pty)
 {
     static int (*next)(const struct boxrig_posix_pty *);
@@ -322,7 +367,12 @@ int boxrig_posix_pty_descriptor(const struct boxrig_posix_pty *pty)
     return descriptor;
 }
 
-/** Records only reads from the observed PTY, retaining errno and return values. */
+/** Records only reads from the observed PTY, retaining errno and return values.
+ * @param descriptor Original file descriptor.
+ * @param buffer Original destination buffer.
+ * @param capacity Original buffer capacity.
+ * @return The original byte count or error, with errno preserved.
+ */
 ssize_t read(int descriptor, void *buffer, size_t capacity)
 {
     static ssize_t (*next)(int, void *, size_t);

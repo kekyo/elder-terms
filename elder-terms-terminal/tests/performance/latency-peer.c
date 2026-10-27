@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -17,6 +18,14 @@
 #include <unistd.h>
 
 #define KEY_CAPACITY 16384u
+
+static volatile sig_atomic_t resize_pending;
+
+static void note_resize(int signal_number)
+{
+    (void)signal_number;
+    resize_pending = 1;
+}
 
 typedef struct key_record {
     uint64_t received_ns;
@@ -83,10 +92,11 @@ static bool emit_line(peer_state *state, uint64_t index)
 {
     char line[320];
     int length = 0;
-    if (strcmp(state->mode, "plain") == 0) {
+    if (strcmp(state->mode, "plain") == 0 ||
+        (strcmp(state->mode, "sparse-url") == 0 && index % 100u != 0)) {
         length = snprintf(line, sizeof(line),
             "elder-latency %08" PRIu64 " ordinary terminal line\r\n", index);
-    } else if (strcmp(state->mode, "url") == 0) {
+    } else if (strcmp(state->mode, "url") == 0 || strcmp(state->mode, "sparse-url") == 0) {
         length = snprintf(line, sizeof(line),
             "elder-latency %08" PRIu64 " https://example.org/latency/%08" PRIu64 "\r\n",
             index, index);
@@ -102,15 +112,52 @@ static bool emit_line(peer_state *state, uint64_t index)
     return true;
 }
 
+static bool emit_transcript_line(peer_state *state, uint64_t index, bool update)
+{
+    char line[384];
+    const char *kind = update ? "update" : "line";
+    int length = 0;
+    if (strcmp(state->mode, "url") == 0 ||
+        (strcmp(state->mode, "sparse-url") == 0 && index % 100u == 0)) {
+        length = snprintf(line, sizeof(line),
+            "transcript %s %08" PRIu64 " 日本語 ▸ https://example.org/latency/%08" PRIu64 "\r\n",
+            kind, index, index);
+    } else if (strcmp(state->mode, "wrapped") == 0) {
+        length = snprintf(line, sizeof(line),
+            "transcript %s %08" PRIu64 " 日本語 ▸ "
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789\r\n",
+            kind, index);
+    } else {
+        length = snprintf(line, sizeof(line),
+            "transcript %s %08" PRIu64 " 日本語 ▸ tool result\r\n", kind, index);
+    }
+    if (length <= 0 || (size_t)length >= sizeof(line) ||
+        !write_bytes(state, line, (size_t)length)) return false;
+    state->output_lines++;
+    if (update) state->output_updates++;
+    return true;
+}
+
+static bool set_transcript_region(peer_state *state, bool bottom)
+{
+    char control[64];
+    if (state->rows < 3) return false;
+    int length = snprintf(control, sizeof(control), "\033[1;%ur\033[%u;1H",
+        state->rows - 1u, bottom ? state->rows - 1u : 1u);
+    return length > 0 && (size_t)length < sizeof(control) &&
+        write_bytes(state, control, (size_t)length);
+}
+
 static bool paint_marker(peer_state *state)
 {
-    char marker[128];
+    char marker[160];
     unsigned int red = state->sequence == 0 ? 32u : 64u + (state->sequence % 160u);
     unsigned int green = state->sequence == 0 ? 64u : 80u + ((state->sequence / 160u) % 160u);
     unsigned int blue = state->sequence == 0 ? 96u : 80u;
+    unsigned int row = strcmp(state->load, "transcript") == 0 ? state->rows : 1u;
     int length = snprintf(marker, sizeof(marker),
-        "\0337\033[1;1H\033[48;2;%u;%u;%um        \033[0m\0338",
-        red, green, blue);
+        "\0337\033[%u;1H\033[48;2;%u;%u;%um        \033[0minput %06u\0338",
+        row, red, green, blue, state->sequence);
     return length > 0 && (size_t)length < sizeof(marker) &&
         write_bytes(state, marker, (size_t)length);
 }
@@ -137,17 +184,25 @@ static bool set_running(int timer, const peer_state *state, bool running)
 static bool emit_tick(peer_state *state)
 {
     if (strcmp(state->load, "idle") == 0) return true;
+    if (strcmp(state->load, "transcript") == 0) {
+        if (!write_text(state, "\033[?2026h")) return false;
+        for (unsigned int index = 0; index < state->lines_per_tick; index++) {
+            if (!emit_transcript_line(state, state->output_lines, true)) return false;
+        }
+        return paint_marker(state) && write_text(state, "\033[?2026l");
+    }
     for (unsigned int index = 0; index < state->lines_per_tick; index++) {
         if (strcmp(state->load, "append") == 0) {
             if (!emit_line(state, state->output_lines)) return false;
         } else {
             char line[320];
             int length = 0;
-            if (strcmp(state->mode, "plain") == 0) {
+            if (strcmp(state->mode, "plain") == 0 ||
+                (strcmp(state->mode, "sparse-url") == 0 && state->output_updates % 100u != 0)) {
                 length = snprintf(line, sizeof(line),
                     "\0337\033[3;1H\033[Jelder-latency update %08" PRIu64
                     " ordinary terminal line\0338", state->output_updates);
-            } else if (strcmp(state->mode, "url") == 0) {
+            } else if (strcmp(state->mode, "url") == 0 || strcmp(state->mode, "sparse-url") == 0) {
                 length = snprintf(line, sizeof(line),
                     "\0337\033[3;1H\033[Jelder-latency update %08" PRIu64
                     " https://example.org/latency/%08" PRIu64 "\0338",
@@ -164,6 +219,16 @@ static bool emit_tick(peer_state *state)
         }
     }
     return paint_marker(state);
+}
+
+static bool refresh_size(peer_state *state)
+{
+    struct winsize size = {0};
+    if (ioctl(STDIN_FILENO, TIOCGWINSZ, &size) != 0) return false;
+    if (size.ws_row < 3 || size.ws_row == state->rows) return true;
+    state->rows = size.ws_row;
+    if (strcmp(state->load, "transcript") != 0) return true;
+    return set_transcript_region(state, true) && paint_marker(state);
 }
 
 static bool write_report(const peer_state *state)
@@ -184,8 +249,8 @@ static bool write_report(const peer_state *state)
 int main(int argc, char **argv)
 {
     if (argc != 7) {
-        fprintf(stderr, "usage: %s REPORT HISTORY_LINES plain|url|wrapped "
-            "idle|append|overwrite PERIOD_MS LINES_PER_TICK\n", argv[0]);
+        fprintf(stderr, "usage: %s REPORT HISTORY_LINES plain|url|sparse-url|wrapped "
+            "idle|append|overwrite|transcript PERIOD_MS LINES_PER_TICK\n", argv[0]);
         return 2;
     }
     peer_state state = {.report_path = argv[1], .mode = argv[3], .load = argv[4]};
@@ -194,9 +259,11 @@ int main(int argc, char **argv)
         !parse_uint(argv[5], 1, 60000, &state.period_ms) ||
         !parse_uint(argv[6], 1, 4096, &state.lines_per_tick) ||
         (strcmp(state.mode, "plain") != 0 && strcmp(state.mode, "url") != 0 &&
+            strcmp(state.mode, "sparse-url") != 0 &&
             strcmp(state.mode, "wrapped") != 0) ||
         (strcmp(state.load, "idle") != 0 && strcmp(state.load, "append") != 0 &&
-            strcmp(state.load, "overwrite") != 0)) return 2;
+            strcmp(state.load, "overwrite") != 0 &&
+            strcmp(state.load, "transcript") != 0)) return 2;
 
     struct termios original;
     if (tcgetattr(STDIN_FILENO, &original) != 0) return 1;
@@ -206,19 +273,31 @@ int main(int argc, char **argv)
     struct winsize size = {0};
     if (ioctl(STDIN_FILENO, TIOCGWINSZ, &size) != 0) return 1;
     state.rows = size.ws_row == 0 ? 24u : size.ws_row;
+    struct sigaction action = {0};
+    action.sa_handler = note_resize;
+    if (sigemptyset(&action.sa_mask) != 0 || sigaction(SIGWINCH, &action, NULL) != 0) return 1;
 
     int timer = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
     if (timer < 0) return 1;
-    for (uint64_t line = 0; line < (uint64_t)history_lines + state.rows - 1u; line++) {
-        if (!emit_line(&state, line)) return 1;
+    bool transcript = strcmp(state.load, "transcript") == 0;
+    if (transcript && !set_transcript_region(&state, false)) return 1;
+    uint64_t initial_lines = (uint64_t)history_lines + state.rows - (transcript ? 2u : 1u);
+    for (uint64_t line = 0; line < initial_lines; line++) {
+        if (!(transcript ? emit_transcript_line(&state, line, false) :
+            emit_line(&state, line))) return 1;
     }
     /* The last line stays on the grid without causing another scroll. */
     if (!write_text(&state, "elder-latency ready")) return 1;
+    if (!refresh_size(&state)) return 1;
     if (!paint_marker(&state) || !emit_title(&state, "ready")) return 1;
 
     bool running = false;
     bool done = false;
     while (!done) {
+        if (resize_pending) {
+            resize_pending = 0;
+            if (!refresh_size(&state)) return 1;
+        }
         struct pollfd events[2] = {{STDIN_FILENO, POLLIN, 0}, {timer, POLLIN, 0}};
         int ready = poll(events, 2, 30000);
         if (ready < 0 && errno == EINTR) continue;

@@ -13,13 +13,15 @@ const directory = await mkdtemp(join(tmpdir(), 'elder-latency-runner-'));
 const output = join(directory, 'sample');
 const script = fileURLToPath(new URL('./run-latency.mts', import.meta.url));
 const capture = process.argv[2] ?? 'none';
+const transport = process.argv[3] ?? 'local';
+const mode = process.argv[4] ?? 'plain';
 const child = spawn(
   process.execPath,
   [
     script,
     output,
     '0',
-    'plain',
+    mode,
     'idle',
     '1',
     '0',
@@ -28,6 +30,7 @@ const child = spawn(
     '0',
     'on',
     capture,
+    transport,
   ],
   {
     env: {
@@ -52,6 +55,8 @@ try {
   const config = await readFile(join(output, 'connection.ini'), 'utf8');
   if (!config.includes('width=88\nheight=31\nfont_size_dip=15\n'))
     throw new Error('Runner did not apply the requested display dimensions');
+  if (!config.includes(`type=${transport}\n`))
+    throw new Error(`Runner did not connect through ${transport}`);
   const metadata = JSON.parse(
     await readFile(join(output, 'configuration.json'), 'utf8')
   );
@@ -59,7 +64,9 @@ try {
     metadata.columns !== 88 ||
     metadata.rows !== 31 ||
     metadata.font !== 15 ||
-    metadata.capture !== capture
+    metadata.capture !== capture ||
+    metadata.transport !== transport ||
+    metadata.mode !== mode
   )
     throw new Error('Runner did not record the measurement settings');
   const events = (await readFile(join(output, 'events.tsv'), 'utf8'))
@@ -82,7 +89,9 @@ try {
     await access(join(output, 'video.mkv'));
     await access(join(output, 'frame-00000.ppm'));
   }
-  console.log(`Latency runner capture ${capture} and display settings passed`);
+  console.log(
+    `Latency runner ${transport} ${mode} capture ${capture} and display settings passed`
+  );
 } finally {
   if (child.exitCode === null && child.signalCode === null)
     child.kill('SIGTERM');

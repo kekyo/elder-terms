@@ -28,5 +28,9 @@ test-gui: all
 test-gui-full: all
 	xvfb-run -a --server-args='-screen 0 1600x900x24' dbus-run-session -- node test-latency-gui.mjs $(abspath $(BUILD_DIR)/latency-peer) $(abspath $(BUILD_DIR)/latency-input) $(abspath ../../../.build/elder-terms-terminal/boxrig-driver) full
 
+.PHONY: test-gui-transcript
+test-gui-transcript: all
+	xvfb-run -a --server-args='-screen 0 1600x900x24' dbus-run-session -- node test-latency-gui.mjs $(abspath $(BUILD_DIR)/latency-peer) $(abspath $(BUILD_DIR)/latency-input) $(abspath ../../../.build/elder-terms-terminal/boxrig-driver) video transcript 1000 3
+
 clean:
 	rm -f $(BUILD_DIR)/latency-peer $(BUILD_DIR)/latency-input

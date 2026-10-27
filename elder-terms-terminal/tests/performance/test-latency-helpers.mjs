@@ -29,7 +29,9 @@ try {
   for (const [history, mode, load] of [
     [0, 'plain', 'idle'],
     [1000, 'url', 'append'],
+    [1000, 'sparse-url', 'append'],
     [1001, 'wrapped', 'overwrite'],
+    [1000, 'plain', 'transcript'],
   ]) {
     const report = join(directory, `${history}-${mode}-${load}.tsv`);
     const command = `${peer} ${report} ${history} ${mode} ${load} 10 4`;
@@ -46,10 +48,19 @@ try {
       for (const notify of state.waiters) notify();
     });
     await waitForText(state, 'elder-latency:ready');
+    if (mode === 'sparse-url') {
+      const initial = state.output.split('elder-latency:ready')[0];
+      if (
+        (initial.match(/https:\/\/example.org/g) ?? []).length !== 11 ||
+        !initial.includes('ordinary terminal line')
+      )
+        throw new Error('Sparse URLs must occur once per 100 initial lines');
+    }
     child.stdin.write('g');
     if (load === 'append') await waitForText(state, 'elder-latency 00001023');
     if (load === 'overwrite')
       await waitForText(state, 'elder-latency wrapped update');
+    if (load === 'transcript') await waitForText(state, 'transcript update');
     child.stdin.write('k');
     await waitForText(state, 'elder-latency:1');
     child.stdin.write('skq');
@@ -74,6 +85,25 @@ try {
       !state.output.includes('elder-latency:2')
     )
       throw new Error('Missing visible sequence');
+    if (
+      !state.output.includes('input 000001') ||
+      !state.output.includes('input 000002')
+    )
+      throw new Error('Key responses did not update the terminal text');
+    if (load === 'transcript') {
+      const first = lines[1].split('\t').map(Number);
+      if (first[4] <= 1000 || first[5] === 0)
+        throw new Error('Transcript did not add history under the live UI');
+      if (
+        !/\x1b\[1;\d+r/.test(state.output) ||
+        !state.output.includes('\x1b[?2026h') ||
+        !state.output.includes('\x1b[?2026l') ||
+        !state.output.includes(Buffer.from('日本語').toString('latin1'))
+      )
+        throw new Error(
+          'Transcript omitted region, synchronized update, or Unicode content'
+        );
+    }
   }
   console.log('Latency peer protocol passed');
 } finally {
