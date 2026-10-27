@@ -3,8 +3,8 @@ BUILD := $(ROOT)/.build/latency
 SDK := $(ROOT)/.build/boxrig/sdk
 CC ?= gcc
 
-.PHONY: all test
-all: $(BUILD)/latency-probe.so
+.PHONY: all test test-annotations
+all: $(BUILD)/latency-probe.so $(BUILD)/annotation-cost
 
 $(BUILD):
 	mkdir -p $@
@@ -17,3 +17,10 @@ $(BUILD)/latency-probe.so: $(ROOT)/elder-terms-terminal/tests/performance/latenc
 
 test: all
 	bash $(ROOT)/elder-terms-terminal/tests/performance/test-latency-probe.sh
+
+$(BUILD)/annotation-cost: $(ROOT)/elder-terms-terminal/tests/performance/annotation-cost.c | $(BUILD)
+	$(CC) -std=c99 -O2 -g -Wall -Wextra -Wpedantic -Werror -I$(SDK)/include $< -o $@ \
+	  -L$(SDK)/lib -Wl,-rpath,$(SDK)/lib -lboxrig-ui -lboxrig
+
+test-annotations: $(BUILD)/annotation-cost
+	node $(ROOT)/elder-terms-terminal/tests/performance/test-annotation-cost.mjs $<
