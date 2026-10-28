@@ -98,10 +98,10 @@ const samples = events.map((event, index) => {
       draw.start_ns,
       draw.end_ns,
       composite.start_ns,
-      composite.end_ns,
       event.visible_ns,
     ];
     if (
+      BigInt(composite.end_ns) < BigInt(composite.start_ns) ||
       ordered.some(
         (value, index) =>
           index > 0 && BigInt(value) < BigInt(ordered[index - 1])
@@ -177,7 +177,7 @@ const summary = {
         .map((row) => Number(row.value))
     ),
   ],
-  note: 'Function times overlap; do not sum them. gtkDrawSignalMs is the GTK draw signal, not all rendering work. Cairo renders in frame; GL renders asynchronously. visible_ns is sampled window pixels, not physical display time.',
+  note: 'Function times overlap; do not sum them. gtkDrawSignalMs is the GTK draw signal, not all rendering work. Cairo renders in frame; GL renders asynchronously. visible_ns is sampled window pixels and can precede the end of the composite function, not physical display time.',
 };
 await writeFile(
   join(directory, 'summary.json'),
