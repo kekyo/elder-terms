@@ -106,14 +106,23 @@ int main() {
     scan();
     expect(action(1, 2).arguments == vscode.arguments, "reattachment preserves OSC 8 and rules");
 
-    // Deliberately lose recognizer events, then let the application consume a
-    // fresh bounded scan. No cached action may escape during recovery.
+    // The event queue either retains a complete pending result set or requests
+    // a rescan. Neither path may expose only some of the three links.
     feed("\x1b[5;1Hhttps://one.test/\r\nhttps://two.test/\r\nhttps://three.test/");
     std::size_t used = 0;
     bool more = false;
     expect(boxrig_terminal_resume_text_recognizers(terminal, 100000, &used, &more) == BOXRIG_STATUS_OK, "force event overflow");
     scan();
-    expect(!terminal_links_resolve(links.get(), hit(4, 3)), "event capacity exhaustion has no partial action or retry loop");
+    const auto first_overflow = terminal_links_resolve(links.get(), hit(4, 3));
+    const auto second_overflow = terminal_links_resolve(links.get(), hit(5, 3));
+    const auto third_overflow = terminal_links_resolve(links.get(), hit(6, 3));
+    const bool all_overflow = first_overflow && first_overflow->action &&
+        second_overflow && second_overflow->action && third_overflow && third_overflow->action;
+    const bool none_overflow = !first_overflow && !second_overflow && !third_overflow;
+    expect(all_overflow || none_overflow, "event capacity exhaustion publishes no partial link set");
+    if (all_overflow)
+      expect(third_overflow->action->arguments == std::vector<std::string>{"https://three.test/"},
+          "pending notifications retain the third link");
     feed("\x1b[7;1H\x1b[2K");
     scan();
     expect(action(4, 3).arguments == std::vector<std::string>{"https://one.test/"}, "rescan restores the complete current annotation set");

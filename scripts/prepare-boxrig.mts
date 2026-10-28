@@ -18,14 +18,16 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { availableParallelism } from "node:os";
-import { dirname, join, resolve } from "node:path";
-const [rootArgument, buildArgument, toolsArgument] = process.argv.slice(2);
+import { dirname, isAbsolute, join, resolve } from "node:path";
+const [rootArgument, buildArgument, toolsArgument, sourceArgument] = process.argv.slice(2);
 if (rootArgument === undefined || buildArgument === undefined)
   throw new Error(
-    "Usage: prepare-boxrig <source-directory> <build-directory> [prepared-tools]",
+    "Usage: prepare-boxrig <source-directory> <build-directory> [prepared-tools] [boxrig-source]",
   );
 const root = resolve(rootArgument);
-const upstream = join(root, "deps/boxrig");
+if (sourceArgument !== undefined && !isAbsolute(sourceArgument))
+  throw new Error("boxrig-source must be an absolute path");
+const upstream = sourceArgument ? resolve(sourceArgument) : join(root, "deps/boxrig");
 const build = resolve(buildArgument, "boxrig");
 const prepared = toolsArgument ? resolve(toolsArgument, "boxrig") : undefined;
 const sdk = join(build, "sdk");
