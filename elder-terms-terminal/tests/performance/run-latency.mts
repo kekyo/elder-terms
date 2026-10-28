@@ -134,12 +134,14 @@ try {
     delete env.ELDER_LATENCY_TRACE;
     delete env.ELDER_LATENCY_LIGHT;
   }
-  const revision = (
-    await exec('git', ['rev-parse', 'HEAD'], {
-      cwd: root,
-      signal: cancellation.signal,
-    })
-  ).stdout.trim();
+  const revision =
+    process.env.ELDER_LATENCY_ELDER_REVISION ??
+    (
+      await exec('git', ['rev-parse', 'HEAD'], {
+        cwd: root,
+        signal: cancellation.signal,
+      })
+    ).stdout.trim();
   const boxrigRevision =
     process.env.ELDER_LATENCY_BOXRIG_REVISION ??
     (

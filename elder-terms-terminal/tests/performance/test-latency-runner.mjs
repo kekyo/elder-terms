@@ -63,6 +63,7 @@ const child = spawn(
       ELDER_LATENCY_ACTUAL_BINARY: application,
       ELDER_LATENCY_WRAPPER_MARKER: marker,
       ELDER_LATENCY_BOXRIG_SOURCE: source,
+      ELDER_LATENCY_ELDER_REVISION: 'diagnostic-elder-revision',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   }
@@ -98,6 +99,8 @@ try {
     throw new Error('Runner did not record the measurement settings');
   if (metadata.binary !== wrapper)
     throw new Error('Runner did not record the selected application binary');
+  if (metadata.revision !== 'diagnostic-elder-revision')
+    throw new Error('Runner did not record the application source revision');
   const events = (await readFile(join(output, 'events.tsv'), 'utf8'))
     .trim()
     .split('\n');
