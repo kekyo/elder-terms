@@ -354,9 +354,17 @@ static cardio::promise<void> scroll_scenarios(Fixture *fixture) {
       expect(boxrig_ui_view_hit_test(view(fixture), bottom ? layout.grid_width - 1 : 0,
           bottom ? layout.grid_height - 1 : 0, &edge) == BOXRIG_UI_OK, "clipped edge position");
       boxrig_ui_selection selection{};
+      const auto linear = modifier == GDK_SHIFT_MASK;
+      const auto expected_column = linear && bottom ? 0 : edge.position.column;
       expect(boxrig_ui_view_get_selection(view(fixture), &selection) &&
-          selection.focus.line_id.serial == edge.position.line_id.serial && selection.focus.column == edge.position.column,
-          "outside motion and release extend to the nearest corner of the grid");
+          selection.shape == (linear ? BOXRIG_UI_SELECTION_LINEAR : BOXRIG_UI_SELECTION_RECTANGULAR) &&
+          selection.focus.line_id.serial == edge.position.line_id.serial && selection.focus.column == expected_column,
+          "outside motion and release reach the logical EOF or rectangular grid corner");
+      if (linear && bottom) {
+        const auto expected = std::string("ond row") + std::string(layout.rows - 2, '\n');
+        expect(selected_text(fixture) == expected && co_await clipboard(GDK_SELECTION_PRIMARY) == expected,
+            "linear selection copies line breaks through the last row without padding or a final LF");
+      }
     }
 
     std::string history = "\033[3J\033[2J\033[H";
