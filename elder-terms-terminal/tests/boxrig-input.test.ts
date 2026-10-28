@@ -222,7 +222,7 @@ describe('boxrig input policies', () => {
       );
       await app.input.setMouseButton('left', true);
       await app.input.moveMouseTo(
-        bounds.x + width * 12,
+        Math.trunc(bounds.x + width * 10.5),
         bounds.y + Math.trunc(height / 2)
       );
       await app.input.setMouseButton('left', false);
