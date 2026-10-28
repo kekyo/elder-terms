@@ -114,6 +114,17 @@ int main() {
     expect(terminal_links_cache_statistics(links.get()).matcher_creations == after_oom.matcher_creations + 1,
         "allocation failure does not turn into a cached miss");
 
+    for (const std::size_t length : {std::size_t{1365}, std::size_t{2341}, std::size_t{5461}}) {
+      const std::string prefix = "https://boundary.test/";
+      const auto uri = prefix + std::string(length - prefix.size(), 'x');
+      feed(uri);
+      const auto candidate = hit();
+      expect(candidate.hyperlink_uri_length == length, "work-boundary URI retains its full length");
+      const auto resolved = resolve(candidate);
+      expect(resolved && resolved->action && resolved->action->arguments == std::vector<std::string>{uri},
+          "completed match at a work-budget boundary resolves its action");
+    }
+
     for (int index = 0; index < 140; ++index) {
       feed("https://capacity.test/" + std::to_string(index));
       expect(resolve(hit())->action.has_value(), "capacity URI resolves");

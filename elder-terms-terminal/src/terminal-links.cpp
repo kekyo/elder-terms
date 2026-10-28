@@ -242,8 +242,9 @@ static Osc8RegexOutcome match_osc8(TerminalLinks *links,
   // Pointer handling has a finite work ceiling as well as a URI byte bound.
   for (std::size_t remaining = 1000000; remaining && progress == BOXRIG_REGEX_IN_PROGRESS;) {
     std::size_t used = 0;
+    // Completing after an exact budget boundary may consume no further work.
     if (boxrig_regex_matcher_resume(matcher, std::min(remaining, std::size_t{4096}), &used,
-        &progress, &match) != BOXRIG_STATUS_OK || used == 0) return {};
+        &progress, &match) != BOXRIG_STATUS_OK || (used == 0 && progress == BOXRIG_REGEX_IN_PROGRESS)) return {};
     remaining -= used;
   }
   if (progress == BOXRIG_REGEX_NOT_FOUND ||
