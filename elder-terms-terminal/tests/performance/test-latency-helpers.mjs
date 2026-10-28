@@ -19,6 +19,10 @@ const waitForText = (state, text) =>
       30000
     );
     state.waiters.push(() => {
+      if (state.exit !== null) {
+        clearTimeout(timeout);
+        return reject(new Error(`Peer exited ${state.exit} before ${text}`));
+      }
       if (!state.output.includes(text)) return;
       clearTimeout(timeout);
       resolve();
@@ -30,6 +34,8 @@ try {
     [0, 'plain', 'idle'],
     [1000, 'url', 'append'],
     [1000, 'sparse-url', 'append'],
+    [1000, 'osc8', 'append'],
+    [1000, 'mixed', 'append'],
     [1001, 'wrapped', 'overwrite'],
     [1000, 'plain', 'transcript'],
   ]) {
@@ -42,12 +48,28 @@ try {
         stdio: ['pipe', 'pipe', 'pipe'],
       }
     );
-    const state = { output: '', waiters: [] };
+    const state = { output: '', waiters: [], exit: null };
     child.stdout.on('data', (bytes) => {
       state.output += bytes.toString('latin1');
       for (const notify of state.waiters) notify();
     });
+    child.once('close', (code) => {
+      state.exit = code;
+      for (const notify of state.waiters) notify();
+    });
     await waitForText(state, 'elder-latency:ready');
+    if (mode === 'osc8' || mode === 'mixed') {
+      const initial = state.output.split('elder-latency:ready')[0];
+      if (
+        !initial.includes('\x1b]8;;https://example.org/latency/') ||
+        !initial.includes('\x1b\\link\x1b]8;;\x1b\\')
+      )
+        throw new Error(
+          `${mode} must retain an OSC 8 target and visible link text`
+        );
+      if (initial.includes('https://example.org/text/') !== (mode === 'mixed'))
+        throw new Error(`${mode} has the wrong visible regex URL load`);
+    }
     if (mode === 'sparse-url') {
       const initial = state.output.split('elder-latency:ready')[0];
       if (

@@ -34,7 +34,7 @@ const [
 ] = process.argv.slice(2);
 if (
   !destination ||
-  !['plain', 'url', 'sparse-url', 'wrapped'].includes(mode) ||
+  !['plain', 'url', 'sparse-url', 'wrapped', 'osc8', 'mixed'].includes(mode) ||
   !['idle', 'append', 'overwrite', 'transcript'].includes(load) ||
   !['cairo', 'opengl'].includes(renderer) ||
   !['detail', 'light', 'off'].includes(tracing) ||

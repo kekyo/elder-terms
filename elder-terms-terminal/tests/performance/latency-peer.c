@@ -100,6 +100,11 @@ static bool emit_line(peer_state *state, uint64_t index)
         length = snprintf(line, sizeof(line),
             "elder-latency %08" PRIu64 " https://example.org/latency/%08" PRIu64 "\r\n",
             index, index);
+    } else if (strcmp(state->mode, "osc8") == 0 || strcmp(state->mode, "mixed") == 0) {
+        length = snprintf(line, sizeof(line),
+            "elder-latency %08" PRIu64 " \033]8;;https://example.org/latency/%08" PRIu64
+            "\033\\link\033]8;;\033\\%s\r\n", index, index,
+            strcmp(state->mode, "mixed") == 0 ? " https://example.org/text/visible" : "");
     } else {
         length = snprintf(line, sizeof(line),
             "elder-latency %08" PRIu64 " wrapped ABCDEFGHIJKLMNOPQRSTUVWXYZ "
@@ -122,6 +127,11 @@ static bool emit_transcript_line(peer_state *state, uint64_t index, bool update)
         length = snprintf(line, sizeof(line),
             "transcript %s %08" PRIu64 " 日本語 ▸ https://example.org/latency/%08" PRIu64 "\r\n",
             kind, index, index);
+    } else if (strcmp(state->mode, "osc8") == 0 || strcmp(state->mode, "mixed") == 0) {
+        length = snprintf(line, sizeof(line),
+            "transcript %s %08" PRIu64 " 日本語 ▸ \033]8;;https://example.org/latency/%08" PRIu64
+            "\033\\link\033]8;;\033\\%s\r\n", kind, index, index,
+            strcmp(state->mode, "mixed") == 0 ? " https://example.org/text/visible" : "");
     } else if (strcmp(state->mode, "wrapped") == 0) {
         length = snprintf(line, sizeof(line),
             "transcript %s %08" PRIu64 " 日本語 ▸ "
@@ -207,6 +217,13 @@ static bool emit_tick(peer_state *state)
                     "\0337\033[3;1H\033[Jelder-latency update %08" PRIu64
                     " https://example.org/latency/%08" PRIu64 "\0338",
                     state->output_updates, state->output_updates);
+            } else if (strcmp(state->mode, "osc8") == 0 || strcmp(state->mode, "mixed") == 0) {
+                length = snprintf(line, sizeof(line),
+                    "\0337\033[3;1H\033[Jelder-latency update %08" PRIu64
+                    " \033]8;;https://example.org/latency/%08" PRIu64
+                    "\033\\link\033]8;;\033\\%s\0338",
+                    state->output_updates, state->output_updates,
+                    strcmp(state->mode, "mixed") == 0 ? " https://example.org/text/visible" : "");
             } else {
                 length = snprintf(line, sizeof(line),
                     "\0337\033[3;1H\033[Jelder-latency wrapped update %08" PRIu64
@@ -249,7 +266,7 @@ static bool write_report(const peer_state *state)
 int main(int argc, char **argv)
 {
     if (argc != 7) {
-        fprintf(stderr, "usage: %s REPORT HISTORY_LINES plain|url|sparse-url|wrapped "
+        fprintf(stderr, "usage: %s REPORT HISTORY_LINES plain|url|sparse-url|wrapped|osc8|mixed "
             "idle|append|overwrite|transcript PERIOD_MS LINES_PER_TICK\n", argv[0]);
         return 2;
     }
@@ -260,7 +277,8 @@ int main(int argc, char **argv)
         !parse_uint(argv[6], 1, 4096, &state.lines_per_tick) ||
         (strcmp(state.mode, "plain") != 0 && strcmp(state.mode, "url") != 0 &&
             strcmp(state.mode, "sparse-url") != 0 &&
-            strcmp(state.mode, "wrapped") != 0) ||
+            strcmp(state.mode, "wrapped") != 0 && strcmp(state.mode, "osc8") != 0 &&
+            strcmp(state.mode, "mixed") != 0) ||
         (strcmp(state.load, "idle") != 0 && strcmp(state.load, "append") != 0 &&
             strcmp(state.load, "overwrite") != 0 &&
             strcmp(state.load, "transcript") != 0)) return 2;
