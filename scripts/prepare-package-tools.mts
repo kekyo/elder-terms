@@ -58,7 +58,7 @@ await run(
     'tools/codegen/rules.mk',
     'package-codegen',
     `BUILD_DIR=${join(output, 'boxrig')}`,
-    'BOXRIG_VERSION=0.7.0',
+    'BOXRIG_VERSION=0.9.0',
   ],
   upstream
 );
