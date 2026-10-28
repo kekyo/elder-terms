@@ -67,7 +67,17 @@ const output = resolve(destination);
 await mkdir(output, { recursive: false });
 await mkdir(join(output, 'config'));
 await mkdir(join(output, 'data'));
-const binary = join(root, '.build/elder-terms-terminal/elder-terms-terminal');
+const binary = resolve(
+  process.env.ELDER_LATENCY_BINARY ??
+    join(root, '.build/elder-terms-terminal/elder-terms-terminal')
+);
+const boxrigSource = resolve(
+  process.env.ELDER_LATENCY_BOXRIG_SOURCE ?? join(root, 'deps/boxrig')
+);
+const probe = resolve(
+  process.env.ELDER_LATENCY_PROBE ??
+    join(root, '.build/latency/latency-probe.so')
+);
 const helper = join(root, '.build/latency-performance');
 const quote = (value: string): string => `'${value.split("'").join("'\\''")}'`;
 const peerArgs = [
@@ -116,7 +126,7 @@ try {
   else delete env.GDK_GL;
   env.LD_PRELOAD = join(root, '.build/jemalloc/lib/libjemalloc.so.2');
   if (tracing !== 'off') {
-    env.LD_PRELOAD += `:${join(root, '.build/latency/latency-probe.so')}`;
+    env.LD_PRELOAD += `:${probe}`;
     env.ELDER_LATENCY_TRACE = join(output, 'trace.tsv');
     if (tracing === 'light') env.ELDER_LATENCY_LIGHT = '1';
     else delete env.ELDER_LATENCY_LIGHT;
@@ -130,12 +140,14 @@ try {
       signal: cancellation.signal,
     })
   ).stdout.trim();
-  const boxrigRevision = (
-    await exec('git', ['rev-parse', 'HEAD'], {
-      cwd: join(root, 'deps/boxrig'),
-      signal: cancellation.signal,
-    })
-  ).stdout.trim();
+  const boxrigRevision =
+    process.env.ELDER_LATENCY_BOXRIG_REVISION ??
+    (
+      await exec('git', ['rev-parse', 'HEAD'], {
+        cwd: boxrigSource,
+        signal: cancellation.signal,
+      })
+    ).stdout.trim();
   const hash = createHash('sha256')
     .update(await readFile(binary))
     .digest('hex');
@@ -145,6 +157,9 @@ try {
       {
         revision,
         boxrigRevision,
+        boxrigSource,
+        binary,
+        probe: tracing === 'off' ? null : probe,
         hash,
         history,
         mode,

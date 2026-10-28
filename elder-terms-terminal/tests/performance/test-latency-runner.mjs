@@ -4,7 +4,14 @@
 // https://github.com/kekyo/elder-terms/
 
 import { spawn } from 'node:child_process';
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import {
+  access,
+  chmod,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +19,20 @@ import { fileURLToPath } from 'node:url';
 const directory = await mkdtemp(join(tmpdir(), 'elder-latency-runner-'));
 const output = join(directory, 'sample');
 const script = fileURLToPath(new URL('./run-latency.mts', import.meta.url));
+const application = fileURLToPath(
+  new URL(
+    '../../../.build/elder-terms-terminal/elder-terms-terminal',
+    import.meta.url
+  )
+);
+const source = fileURLToPath(new URL('../../../deps/boxrig/', import.meta.url));
+const wrapper = join(directory, 'application-wrapper.sh');
+const marker = join(directory, 'selected-application.txt');
+await writeFile(
+  wrapper,
+  '#!/bin/sh\nprintf selected > "$ELDER_LATENCY_WRAPPER_MARKER"\nexec "$ELDER_LATENCY_ACTUAL_BINARY" "$@"\n'
+);
+await chmod(wrapper, 0o755);
 const capture = process.argv[2] ?? 'none';
 const transport = process.argv[3] ?? 'local';
 const mode = process.argv[4] ?? 'plain';
@@ -38,6 +59,10 @@ const child = spawn(
       ELDER_LATENCY_COLUMNS: '88',
       ELDER_LATENCY_ROWS: '31',
       ELDER_LATENCY_FONT: '15',
+      ELDER_LATENCY_BINARY: wrapper,
+      ELDER_LATENCY_ACTUAL_BINARY: application,
+      ELDER_LATENCY_WRAPPER_MARKER: marker,
+      ELDER_LATENCY_BOXRIG_SOURCE: source,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   }
@@ -52,6 +77,8 @@ try {
     child.once('close', resolve);
   });
   if (status !== 0) throw new Error(`Runner exited ${status}: ${stderr}`);
+  if ((await readFile(marker, 'utf8')) !== 'selected')
+    throw new Error('Runner did not launch the requested application binary');
   const config = await readFile(join(output, 'connection.ini'), 'utf8');
   if (!config.includes('width=88\nheight=31\nfont_size_dip=15\n'))
     throw new Error('Runner did not apply the requested display dimensions');
@@ -69,6 +96,8 @@ try {
     metadata.mode !== mode
   )
     throw new Error('Runner did not record the measurement settings');
+  if (metadata.binary !== wrapper)
+    throw new Error('Runner did not record the selected application binary');
   const events = (await readFile(join(output, 'events.tsv'), 'utf8'))
     .trim()
     .split('\n');
