@@ -62,21 +62,26 @@ static void measure(std::size_t uri_length, bool matching) {
       create_terminal_links(view, std::move(rules)), destroy_terminal_links);
   const std::size_t repetitions = uri_length == 8192 ? 200 : 2000;
   for (int trial = 0; trial < 3; ++trial) {
+    const auto before = terminal_links_cache_statistics(links.get());
     const auto begin = std::chrono::steady_clock::now();
     for (std::size_t index = 0; index < repetitions; ++index) {
       const auto result = terminal_links_resolve(links.get(), hit);
       expect(static_cast<bool>(result && result->action) == matching, "resolve result");
     }
     const auto end = std::chrono::steady_clock::now();
+    const auto after = terminal_links_cache_statistics(links.get());
     const auto total = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
-    std::printf("%zu,%s,%d,%zu,%.3f\n", uri_length, matching ? "match" : "miss", trial,
-        repetitions, static_cast<double>(total) / repetitions);
+    std::printf("%zu,%s,%d,%zu,%.3f,%llu,%llu,%llu\n", uri_length, matching ? "match" : "miss", trial,
+        repetitions, static_cast<double>(total) / repetitions,
+        static_cast<unsigned long long>(after.matcher_creations - before.matcher_creations),
+        static_cast<unsigned long long>(after.cache_hits - before.cache_hits),
+        static_cast<unsigned long long>(after.cache_evictions - before.cache_evictions));
   }
 }
 
 int main() {
   try {
-    std::puts("uri_bytes,result,trial,repetitions,mean_ns");
+    std::puts("uri_bytes,result,trial,repetitions,mean_ns,matcher_creations,cache_hits,cache_evictions");
     for (const auto length : {std::size_t{64}, std::size_t{512}, std::size_t{8192}}) {
       measure(length, true);
       measure(length, false);

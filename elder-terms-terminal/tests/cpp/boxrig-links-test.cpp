@@ -92,6 +92,12 @@ int main() {
     scan();
     const auto vscode = action(1, 2);
     expect(vscode.command == "code" && vscode.arguments == std::vector<std::string>{"--reuse-window", "--goto", "/tmp/a b.cpp:12:3"}, "default VS Code captures are decoded once");
+    const auto vscode_counters = terminal_links_cache_statistics(links.get());
+    expect(action(1, 2).arguments == vscode.arguments, "repeated OSC 8 hit keeps the action");
+    const auto repeated_counters = terminal_links_cache_statistics(links.get());
+    expect(repeated_counters.matcher_creations == vscode_counters.matcher_creations &&
+        repeated_counters.cache_hits > vscode_counters.cache_hits,
+        "repeated OSC 8 hit reuses completed regex outcomes");
     feed("\x1b[3;1H\x1b]8;;https://good.test/　bad\x1b\\invalid\x1b]8;;\x1b\\");
     scan();
     expect(!terminal_links_resolve(links.get(), hit(2, 2)), "OSC 8 requires full target matching");
@@ -99,6 +105,12 @@ int main() {
     scan();
     const auto rejected = terminal_links_resolve(links.get(), hit(3, 2));
     expect(rejected && !rejected->action && !rejected->error.empty(), "invalid decoded paths are rejected");
+    const auto rejected_counters = terminal_links_cache_statistics(links.get());
+    const auto rejected_again = terminal_links_resolve(links.get(), hit(3, 2));
+    expect(rejected_again && !rejected_again->action && rejected_again->error == rejected->error,
+        "cached regex match still validates the action");
+    expect(terminal_links_cache_statistics(links.get()).matcher_creations == rejected_counters.matcher_creations,
+        "action rejection is not mistaken for a regex miss");
 
     terminal_links_attach_view(links.get(), nullptr);
     expect(!terminal_links_resolve(links.get(), hit(1, 2)), "detached view cannot resolve actions");

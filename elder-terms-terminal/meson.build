@@ -327,6 +327,13 @@ boxrig_links_test = executable('boxrig-links-test',
   dependencies: [boxrig_deps['boxrig-ui'], elder_terms_dep])
 test('boxrig-links-test', boxrig_links_test)
 
+boxrig_links_cache_test = executable('boxrig-links-cache-test',
+  ['tests/cpp/boxrig-links-cache-test.cpp', 'src/terminal-links.cpp',
+   'src/terminal-hyperlink-action.cpp'],
+  cpp_args: ['-DELDER_TERMS_CACHE_TESTING'],
+  dependencies: [boxrig_deps['boxrig-ui'], elder_terms_dep])
+test('boxrig-links-cache-test', boxrig_links_cache_test)
+
 executable('osc8-resolve-cost',
   ['tests/performance/osc8-resolve-cost.cpp', 'src/terminal-links.cpp',
    'src/terminal-hyperlink-action.cpp'],

@@ -13,6 +13,35 @@ namespace elder_terms {
 /** Owns compiled rules and the current screen recognizers on the UI thread. */
 struct TerminalLinks;
 
+/** Counters for the OSC 8 regex cache within one terminal link context. */
+struct TerminalLinksCacheStatistics {
+  /** Number of attempts to construct a boxrig matcher. */
+  std::uint64_t matcher_creations = 0;
+  /** Number of completed regex outcomes reused from the cache. */
+  std::uint64_t cache_hits = 0;
+  /** Number of owned URI entries evicted to keep memory bounded. */
+  std::uint64_t cache_evictions = 0;
+  /** Current number of completed regex outcomes held in the cache. */
+  std::size_t cache_entries = 0;
+  /** Current number of owned URI bytes held in the cache. */
+  std::size_t cache_uri_bytes = 0;
+};
+
+/**
+ * Reads OSC 8 matcher and cache counters for diagnostics.
+ * @param links Live link state.
+ * @return Counters since this link state was created.
+ */
+TerminalLinksCacheStatistics terminal_links_cache_statistics(const TerminalLinks *links);
+
+#if defined(ELDER_TERMS_CACHE_TESTING)
+/**
+ * Makes the next optional cache insertion fail for deterministic OOM tests.
+ * @param links Live link state; matching must continue without the insertion.
+ */
+void terminal_links_fail_next_cache_insert_for_test(TerminalLinks *links);
+#endif
+
 /**
  * Creates ordered link recognition against an existing terminal view.
  * @param view Borrowed view, detached before its destruction.
