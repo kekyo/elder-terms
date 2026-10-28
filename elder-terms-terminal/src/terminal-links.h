@@ -19,6 +19,8 @@ struct TerminalLinksCacheStatistics {
   std::uint64_t matcher_creations = 0;
   /** Number of completed regex outcomes reused from the cache. */
   std::uint64_t cache_hits = 0;
+  /** Number of URI matches stopped at the synchronous work ceiling. */
+  std::uint64_t work_ceiling_exhaustions = 0;
   /** Number of owned URI entries evicted to keep memory bounded. */
   std::uint64_t cache_evictions = 0;
   /** Current number of completed regex outcomes held in the cache. */

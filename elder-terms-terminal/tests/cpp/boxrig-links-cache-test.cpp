@@ -6,9 +6,12 @@
 #include "../../src/terminal-links.h"
 
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unistd.h>
 
 using namespace elder_terms;
 
@@ -154,7 +157,44 @@ int main() {
     terminal_links_attach_view(links.get(), view);
     expect(resolve(hit())->action->command == "second", "reattached context validates current hit");
 
-    std::puts("OSC 8 cache: reuse, URI ownership, authority, OOM, bounds and rule lifetime passed");
+    const auto path = std::filesystem::temp_directory_path() /
+        ("elder-osc8-cache-" + std::to_string(getpid()));
+    std::ofstream(path) << "link\n";
+    auto file_rule = first_rule;
+    file_rule.pattern = R"(^file:(?<path>.+)$)";
+    file_rule.path_validation = HyperlinkPathValidation::existing_local_path;
+    file_rule.path_template = "${path}";
+    file_rule.arguments = {"${path}"};
+    links.reset(create_terminal_links(view, {file_rule}));
+    feed("file:" + path.string());
+    expect(resolve(hit())->action.has_value(), "existing file action succeeds");
+    stats = terminal_links_cache_statistics(links.get());
+    std::filesystem::remove(path);
+    const auto missing_file = resolve(hit());
+    expect(missing_file && !missing_file->action, "cached regex result rechecks missing file");
+    expect(terminal_links_cache_statistics(links.get()).matcher_creations == stats.matcher_creations,
+        "filesystem change rechecks action without repeating regex");
+    std::ofstream(path) << "link again\n";
+    expect(resolve(hit())->action.has_value(), "cached regex result rechecks restored file");
+    std::filesystem::remove(path);
+
+    auto incomplete_rule = first_rule;
+    incomplete_rule.pattern = R"(^(?:a{1,40})+z$)";
+    incomplete_rule.arguments = {"${0}"};
+    links.reset(create_terminal_links(view, {incomplete_rule}));
+    feed(std::string(8192, 'a'));
+    expect(hit().hyperlink_uri_length == 8192, "maximum length incomplete URI is retained");
+    expect(!resolve(hit()), "bounded incomplete match cannot produce an action");
+    stats = terminal_links_cache_statistics(links.get());
+    expect(stats.matcher_creations == 1 && stats.work_ceiling_exhaustions == 1,
+        "first incomplete match reaches the work ceiling");
+    expect(!resolve(hit()), "bounded incomplete match retries without an action");
+    const auto retried = terminal_links_cache_statistics(links.get());
+    expect(retried.matcher_creations == stats.matcher_creations + 1 &&
+        retried.work_ceiling_exhaustions == stats.work_ceiling_exhaustions + 1 && retried.cache_entries == 0,
+        "work ceiling is not cached as a definite regex miss");
+
+    std::puts("OSC 8 cache: reuse, ownership, authority, OOM, bounds, rules and validation passed");
     return 0;
   } catch (const std::exception &error) {
     std::fprintf(stderr, "%s\n", error.what());

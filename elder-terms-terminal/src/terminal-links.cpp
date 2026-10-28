@@ -249,6 +249,10 @@ static Osc8RegexOutcome match_osc8(TerminalLinks *links,
   if (progress == BOXRIG_REGEX_NOT_FOUND ||
       (progress == BOXRIG_REGEX_MATCH && (match.start != 0 || match.end != hit.hyperlink_uri_length)))
     return {true, {}};
+  if (progress == BOXRIG_REGEX_IN_PROGRESS) {
+    links->cache_statistics.work_ceiling_exhaustions++;
+    return {};
+  }
   if (progress != BOXRIG_REGEX_MATCH) return {};
   boxrig_regex_result *result = nullptr;
   if (boxrig_regex_matcher_result(matcher, &result) != BOXRIG_STATUS_OK) return {};
