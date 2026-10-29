@@ -24,7 +24,7 @@ A terminal application, inspired by personal computing in the 1990s.
 ### Features
 
 - Uses Linux GTK3 and [boxrig](https://github.com/kekyo/boxrig), preferring OpenGL rendering and using Cairo when OpenGL is unavailable.
-- Supports local terminals, SSH, SFTP, and FTP as well as serial and TELNET
+- Supports local terminals, SSH, SFTP, FTP, WebDAV, and SMB as well as serial and TELNET
   connections, bringing that familiar terminal experience into the present.
 - Lets you manage multiple connections and launch terminals from the launcher.
 - Stores all connection settings in INI files, which you can freely edit with
@@ -36,7 +36,7 @@ A terminal application, inspired by personal computing in the 1990s.
   `xterm-256color`, for TELNET and SSH.
 - Supports X/Y/ZMODEM file transfers for TELNET, serial, and SSH terminal
   connections. Automatic transfers can be enabled for ZMODEM.
-- Transfers files to and from the host over SFTP/FTP/FTPS and WebDAV.
+- Transfers files to and from the host over SFTP/FTP/FTPS, WebDAV, and SMB.
 - Transfers files over FTP and FTPS using passive or active data connections.
 - Supports pasting text and sending text files. You can specify the send rate
   and newline handling to avoid overflowing the host's buffer or using
@@ -74,9 +74,9 @@ A terminal application, inspired by personal computing in the 1990s.
 
 ![Colored terminal](./images/colored-terminal.png)
 
-### SFTP/FTP/FTPS/WebDAV
+### SFTP/FTP/FTPS/WebDAV/SMB
 
-![SFTP/FTP/FTPS/WebDAV window](./images/sftp.png)
+![File transfer window](./images/sftp.png)
 
 ## Environment
 
@@ -121,6 +121,9 @@ Open the menu at the top-right of the terminal and select "Settings" to change
 its settings. Clicking "Apply" applies the changes only to the currently
 running terminal. Clicking "Save" remembers the settings and uses them the next
 time the terminal starts.
+In terminal and file transfer windows, the settings dialog stays open after Apply so you can continue editing. Save
+records the changes and closes it. Cancel discards edits since the last Apply
+or Save; already applied changes remain active.
 
 Terminal settings are split into two tabs. "Terminal" contains encoding, character width, special
 keys, rows and columns, scrollback, BEL, shortcuts, screen-reader access, and copy settings.
@@ -165,7 +168,7 @@ new_window=Local terminal
 ```
 
 Renaming the connection in the launcher updates the selection. Deleting it or
-saving it as SFTP, FTP, or WebDAV clears the selection. When no connection is
+saving it as SFTP, FTP, WebDAV, or SMB clears the selection. When no connection is
 selected, the terminal uses built-in settings and global defaults. If the named
 connection is missing, unreadable, or not a terminal connection, startup fails.
 
@@ -434,11 +437,22 @@ according to the connection settings.
 
 See [Using WebDAV](./docs/en/webdav.md) for settings and supported operations.
 
-## Managing Items in SFTP/FTP/FTPS and WebDAV
+## Using SMB
+
+Create a connection in the launcher, choose "SMB", and save the server address
+and share name on the SMB tab. Enter only the share name, such as `share`, rather
+than the complete `\\server\share` path. The default direct TCP port is 445.
+The window asks for a username and password when it opens; passwords are not saved.
+
+After connecting, use the same file transfer window to send and receive files
+and manage folders. See [Using SMB](./docs/en/smb.md) for connection settings,
+signing, encryption, and file operation limits.
+
+## Managing Items in SFTP/FTP/FTPS, WebDAV, and SMB
 
 ![File transfer item menu](./images/file-transfer-item-menu.png)
 
-SFTP/FTP/FTPS and WebDAV use the same two-pane file browser.
+SFTP/FTP/FTPS, WebDAV, and SMB use the same two-pane file browser.
 Select an item in either the local or remote pane and right-click it to open the item menu.
 Multiple items can be selected with `Ctrl`+click or a drag rectangle before opening the menu.
 
@@ -454,7 +468,7 @@ Multiple items can be selected with `Ctrl`+click or a drag rectangle before open
   For a local file, elder-terms calculates MD5, SHA-1, and SHA-256 internally.
   For a remote file over SFTP, the SSH server must permit command execution and make `md5sum`, `sha1sum`, and `sha256sum` available in the connected account's command search path.
   Calculation fails if these conditions are not met.
-  Hash calculation for remote files over FTP is not supported;
+  Hash calculation for remote files over FTP or SMB is not supported;
   hash calculation in the local pane remains available.
 
 On a Debian or Ubuntu SFTP server, the required commands are provided by the
@@ -773,7 +787,7 @@ compact_mode=true
 
 On the "General" tab, set "Active indicator color" and "Inactive indicator color" independently.
 Each applies to CONN, LOG, SD, RD, and all serial line indicators.
-SFTP, FTP/FTPS, and WebDAV windows use the same settings for their CONN, SD, and RD indicators.
+SFTP, FTP/FTPS, WebDAV, and SMB windows use the same settings for their CONN, SD, and RD indicators.
 Applying colors preserves their current states, blinking, and latched activity.
 The lamps retain their shading and highlights; choose different colors if you want to distinguish active from inactive lamps.
 
@@ -1021,6 +1035,12 @@ succeeded. This also works while the launcher is hidden. Menu actions use saved
 settings; unsaved edits in the launcher are not passed to the new connection.
 Adding or deleting connections and saving changes to names, icons, or hotkeys
 updates the menu.
+The "Open windows" submenu lists terminal and file transfer windows launched by
+this launcher that are still running. Selecting one requests that window to be
+shown; the desktop environment controls whether it comes to the foreground.
+Windows started directly from a command, SFTP windows opened from an SSH terminal,
+and windows from before a launcher restart are not listed. Without a session bus, the
+list remains visible but its window actions are unavailable.
 
 The deb package and Meson installation install an XDG autostart entry that starts elder-terms when you log in to the desktop.
 Whether autostart shows the launcher and keeps it in the system tray follows "Startup mode" under "Application settings",
@@ -1185,7 +1205,7 @@ Portuguese, Russian, or Simplified Chinese.
 
 The display language is loaded when elder-terms starts, so you must restart
 elder-terms after saving a change. Select "Restart now" in the dialog shown
-when you save, or restart it manually later. Terminal, SFTP, and FTP windows
+when you save, or restart it manually later. Terminal and file transfer windows
 that are already open do not change language immediately either.
 
 ## Checking the Running Version
@@ -1243,7 +1263,7 @@ character encoding has been converted for display.
 Macros (automatic macros) monitor text received from the remote host with
 regular expressions. When a match is found, they either send text to the host
 or run a specified command. They are available for local terminal, TELNET,
-serial, and SSH connections, but cannot be defined for SFTP or FTP connections
+serial, and SSH connections, but cannot be defined for file transfer connections
 or Connection defaults.
 
 In text to send, commands, and command arguments, `${0}` refers to the entire
