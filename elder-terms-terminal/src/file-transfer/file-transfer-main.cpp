@@ -688,7 +688,7 @@ int main(int argc, char **argv) {
   }
   if (kind == elder_terms::ConnectionKind::smb) {
     return elder_terms::run_smb_application(
-        settings_result, launch_options.config_path);
+        settings_result, launch_options.config_path, launch_options.test.ssh_known_hosts_file);
   }
   std::cerr << "Error: configured connection type is not SFTP, FTP, WebDAV or SMB\n";
   return 1;
