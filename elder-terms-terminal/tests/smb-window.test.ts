@@ -312,13 +312,15 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
       await remotePath.setText(path);
       await app.input.pressKey('Return');
     };
-    if (!externalAddress) {
-      await navigate('/empty');
+    const emptyShare = process.env.ELDER_SMB_UI_EMPTY_SHARE ?? 'empty';
+    const deniedShare = process.env.ELDER_SMB_UI_DENIED_SHARE ?? 'denied';
+    {
+      await navigate(`/${emptyShare}`);
       await waitForResult(async () => {
-        expect(await remotePath.text()).toBe('/empty');
+        expect(await remotePath.text()).toBe(`/${emptyShare}`);
         expect(await tree.getRowCount()).toBe(0);
       });
-      await navigate('/denied');
+      await navigate(`/${deniedShare}`);
       const closeError = await app.getById(
         'file_transfer_operation_error_dialog'
       );
@@ -528,28 +530,37 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     await waitForResult(async () =>
       expect((await reconnect.info()).states).toContain('showing')
     );
-    await reconnect.click();
-    await waitForResult(async () => {
-      expect((await prompt.info()).states).toContain('showing');
-      expect(await prompt.text()).toBe(username);
-    });
-    await expectElementKind(
-      await app.getById('file_transfer_prompt_accept_button'),
-      'button'
-    ).click();
-    await waitForResult(async () =>
-      expect(
-        await expectElementKind(
-          await app.getById('file_transfer_prompt_message_label'),
-          'label'
-        ).text()
-      ).toBe('Password:')
-    );
-    await prompt.setText(password);
-    await expectElementKind(
-      await app.getById('file_transfer_prompt_accept_button'),
-      'button'
-    ).click();
+    for (const attempt of ['deliberately-incorrect-password', password]) {
+      await reconnect.click();
+      await waitForResult(async () => {
+        expect((await prompt.info()).states).toContain('showing');
+        expect(await prompt.text()).toBe(username);
+      });
+      const accept = expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      );
+      await accept.click();
+      const message = expectElementKind(
+        await app.getById('file_transfer_prompt_message_label'),
+        'label'
+      );
+      await waitForResult(async () =>
+        expect(await message.text()).toBe('Password:')
+      );
+      await prompt.setText(attempt);
+      await accept.click();
+      if (attempt !== password) {
+        await waitForResult(async () =>
+          expect(await message.text()).toContain('STATUS_LOGON_FAILURE')
+        );
+        await accept.click();
+        await waitForResult(async () => {
+          expect((await reconnect.info()).states).toContain('showing');
+          expect((await reconnect.info()).states).toContain('sensitive');
+        });
+      }
+    }
     await rowForTable(tree, 'kept.txt');
     await waitForResult(async () =>
       expect((await reconnect.info()).states).not.toContain('showing')
@@ -579,20 +590,29 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
   }
 }, 120_000);
 
-const proxyWindowTest = process.env.ELDER_SMB_UI_ADDRESS ? it.skip : it;
-proxyWindowTest(
-  'downloads and uploads over experimental SMB SSH proxy in the transfer window',
-  async (context) => {
-    const fixture = fileURLToPath(new URL('./smb/', import.meta.url));
-    const directory = await mkdtemp(join(tmpdir(), 'elder-smb-proxy-window-'));
-    const container = `elder-smb-proxy-window-${process.pid}-${randomBytes(4).toString('hex')}`;
-    const password = randomBytes(24).toString('hex');
-    const podmanEnv = { ...process.env, ELDER_SMB_PASSWORD: password };
-    const podman = (args: string[]): string =>
-      execFileSync('podman', args, { encoding: 'utf8', env: podmanEnv });
-    const evidence = createTestEvidence(context);
-    let server: ReturnType<typeof spawn> | undefined;
-    try {
+it('downloads and uploads over experimental SMB SSH proxy in the transfer window', async (context) => {
+  const fixture = fileURLToPath(new URL('./smb/', import.meta.url));
+  const directory = await mkdtemp(join(tmpdir(), 'elder-smb-proxy-window-'));
+  const container = `elder-smb-proxy-window-${process.pid}-${randomBytes(4).toString('hex')}`;
+  const externalAddress = process.env.ELDER_SMB_UI_ADDRESS;
+  const password = externalAddress
+    ? process.env.ELDER_SMB_UI_PASSWORD
+    : randomBytes(24).toString('hex');
+  if (!password) throw new Error('SMB UI test password is missing');
+  const share = process.env.ELDER_SMB_UI_SHARE ?? 'probe';
+  const username = process.env.ELDER_SMB_UI_USER ?? 'elder';
+  const download = externalAddress ? 'single.txt' : 'proxy-download.txt';
+  const downloadContent = externalAddress
+    ? 'single SMB file\n'
+    : 'proxy download\n';
+  const podmanEnv = { ...process.env, ELDER_SMB_PASSWORD: password };
+  const podman = (args: string[]): string =>
+    execFileSync('podman', args, { encoding: 'utf8', env: podmanEnv });
+  const evidence = createTestEvidence(context);
+  let server: ReturnType<typeof spawn> | undefined;
+  try {
+    let port = Number(process.env.ELDER_SMB_UI_PORT ?? '445');
+    if (!externalAddress) {
       try {
         podman(['image', 'exists', 'localhost/elder-plan12-samba']);
       } catch {
@@ -652,7 +672,7 @@ proxyWindowTest(
           reject(new Error(`Samba exited ${code}: ${output.slice(-1000)}`));
         });
       });
-      const port = Number(
+      port = Number(
         podman(['port', container, '445/tcp']).trim().split(':').pop()
       );
       podman([
@@ -662,15 +682,19 @@ proxyWindowTest(
         '-c',
         "printf 'proxy download\\n' >/share/proxy-download.txt",
       ]);
-      const local = join(directory, 'local');
-      await mkdir(local);
-      const gatewayExecutable = fileURLToPath(
-        new URL(
-          '../../.build/elder-terms-terminal/ssh-proxy-test-server',
-          import.meta.url
-        )
-      );
-      await withSshGateway(gatewayExecutable, directory, async (gateway) => {
+    }
+    const local = join(directory, 'local');
+    await mkdir(local);
+    const gatewayExecutable = fileURLToPath(
+      new URL(
+        '../../.build/elder-terms-terminal/ssh-proxy-test-server',
+        import.meta.url
+      )
+    );
+    await withSshGateway(
+      gatewayExecutable,
+      directory,
+      async (gateway) => {
         const config = join(directory, 'connection.ini');
         await writeFile(
           config,
@@ -681,8 +705,8 @@ proxyWindowTest(
             '[smb]',
             'address=proxy-test.invalid',
             `port=${port}`,
-            'remote_directory=/probe',
-            'username=elder',
+            'remote_directory=/',
+            `username=${username}`,
             `local_directory=${local}`,
             '[ssh_proxy]',
             'enabled=true',
@@ -744,7 +768,7 @@ proxyWindowTest(
             expect(await title.text()).toBe('SMB authentication')
           );
           await waitForResult(async () =>
-            expect(await entry.text()).toBe('elder')
+            expect(await entry.text()).toBe(username)
           );
           await accept.click();
           await waitForResult(async () =>
@@ -810,16 +834,56 @@ proxyWindowTest(
             });
             await menuItem.click();
           };
+          const remote = expectElementKind(
+            await app.getById('file_transfer_remote_tree'),
+            'table'
+          ) as GtkTableElement;
+          const path = expectElementKind(
+            await app.getById('file_transfer_remote_path_entry'),
+            'entry'
+          );
+          await waitForResult(async () => {
+            const names = [];
+            for (let row = 0; row < (await remote.getRowCount()); row += 1)
+              names.push((await (await remote.cellAt(row, 0))?.info())?.name);
+            expect(names).toContain(share);
+          });
+          await evidence.captureEvidence('smb-proxy-shares', async () =>
+            app.capture()
+          );
+          for (const target of [
+            process.env.ELDER_SMB_UI_EMPTY_SHARE ?? 'empty',
+            process.env.ELDER_SMB_UI_UNICODE_SHARE ?? '日本語 space',
+            share,
+          ]) {
+            const bounds = (await path.capture()).bounds;
+            await app.input.moveMouseTo(
+              bounds.x + 30,
+              Math.round(bounds.y + bounds.height / 2)
+            );
+            await app.input.setMouseButton('left', true);
+            await app.input.setMouseButton('left', false);
+            await waitForResult(async () =>
+              expect((await path.info()).states).toContain('focused')
+            );
+            await path.setText(`/${target}`);
+            await app.input.pressKey('Return');
+            await waitForResult(async () => {
+              expect(await path.text()).toBe(`/${target}`);
+              expect((await remote.info()).states).toContain('sensitive');
+              if (target !== share) expect(await remote.getRowCount()).toBe(0);
+            });
+          }
           await selectMenu(
             'file_transfer_remote_tree',
-            'proxy-download.txt',
+            download,
             'file_transfer_receive_item'
           );
           await waitForResult(
             async () =>
-              expect(
-                await readFile(join(local, 'proxy-download.txt'), 'utf8')
-              ).toBe('proxy download\n'),
+              expect(await readFile(join(local, download), 'utf8')).toBe(
+                downloadContent
+              ),
             { timeoutMs: 30_000 }
           );
           await writeFile(join(local, 'proxy-upload.txt'), 'proxy upload\n');
@@ -832,35 +896,67 @@ proxyWindowTest(
             'proxy-upload.txt',
             'file_transfer_send_item'
           );
-          await waitForResult(
-            async () =>
-              expect(
-                podman(['exec', container, 'cat', '/share/proxy-upload.txt'])
-              ).toBe('proxy upload\n'),
-            { timeoutMs: 30_000 }
-          );
-          expect(gateway.requests).toContainEqual({
-            host: 'proxy-test.invalid',
-            port,
+          await waitForResult(async () => {
+            expect((await remote.info()).states).toContain('sensitive');
+            const names = [];
+            for (let row = 0; row < (await remote.getRowCount()); row += 1)
+              names.push((await (await remote.cellAt(row, 0))?.info())?.name);
+            expect(names).toContain('proxy-upload.txt');
           });
+          await rm(join(local, 'proxy-upload.txt'));
+          await selectMenu(
+            'file_transfer_remote_tree',
+            'proxy-upload.txt',
+            'file_transfer_receive_item'
+          );
+          await waitForResult(async () =>
+            expect(
+              await readFile(join(local, 'proxy-upload.txt'), 'utf8')
+            ).toBe('proxy upload\n')
+          );
+          await waitForResult(async () =>
+            expect((await remote.info()).states).toContain('sensitive')
+          );
+          await selectMenu(
+            'file_transfer_remote_tree',
+            'proxy-upload.txt',
+            'file_transfer_remote_delete_item'
+          );
+          await waitForResult(async () =>
+            expect(await title.text()).toBe('Delete selected item?')
+          );
+          await accept.click();
+          await waitForResult(async () => {
+            expect((await remote.info()).states).toContain('sensitive');
+            const names = [];
+            for (let row = 0; row < (await remote.getRowCount()); row += 1)
+              names.push((await (await remote.cellAt(row, 0))?.info())?.name);
+            expect(names).not.toContain('proxy-upload.txt');
+          });
+          expect(gateway.requests).toEqual(
+            Array.from({ length: 4 }, () => ({
+              host: 'proxy-test.invalid',
+              port,
+            }))
+          );
         } finally {
           await evidence.flushOutputs([], launcher);
           await launcher.release();
         }
-      });
-    } finally {
-      await evidence.release();
-      if (server !== undefined) {
-        try {
-          podman(['rm', '-f', container]);
-        } catch {
-          /* The fixture is already gone. */
-        }
-        if (server.exitCode === null && server.signalCode === null)
-          await once(server, 'exit');
+      },
+      externalAddress ?? '127.0.0.1'
+    );
+  } finally {
+    await evidence.release();
+    if (server !== undefined) {
+      try {
+        podman(['rm', '-f', container]);
+      } catch {
+        /* The fixture is already gone. */
       }
-      await rm(directory, { recursive: true, force: true });
+      if (server.exitCode === null && server.signalCode === null)
+        await once(server, 'exit');
     }
-  },
-  120_000
-);
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 120_000);

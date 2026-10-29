@@ -25,9 +25,10 @@ static cardio::promise<void> exercise(Fixture &fixture, int argc, char **argv) {
   require(argc == 5, "Usage: smb-server-test host share user port");
   SmbClientOpenOptions options;
   options.connection.address = argv[1];
-
   options.connection.username = argv[3];
   options.connection.port = std::stoi(argv[4]);
+  if (g_getenv("ELDER_SMB_DENY_ENUMERATION"))
+    options.connection.remote_directory = "/" + std::string(argv[2]);
   options.password = g_getenv("ELDER_SMB_PASSWORD");
   int prompts = 0;
   if (g_getenv("ELDER_SMB_PROXY_PORT")) {
@@ -50,6 +51,13 @@ static cardio::promise<void> exercise(Fixture &fixture, int argc, char **argv) {
   fixture.server = server;
   auto client = create_activity_file_client(server, [](ActivityIndicatorId) {}, {});
   const std::string share = "/" + std::string(argv[2]);
+  const auto share_path = [](const char *variable, const char *fallback) {
+    const auto *value = g_getenv(variable);
+    return "/" + std::string(value ? value : fallback);
+  };
+  const auto empty = share_path("ELDER_SMB_EMPTY_SHARE", "empty");
+  const auto unicode = share_path("ELDER_SMB_UNICODE_SHARE", "日本語 space");
+  const auto denied = share_path("ELDER_SMB_DENIED_SHARE", "denied");
   require(!client->path_capabilities("/").create_children && !client->path_capabilities("/").modify &&
       client->path_capabilities(share).create_children && !client->path_capabilities(share).modify &&
       client->path_capabilities(share + "/file").modify,
@@ -79,12 +87,12 @@ static cardio::promise<void> exercise(Fixture &fixture, int argc, char **argv) {
     const auto destination = share + "/server-test.bin";
     auto writer = std::move(co_await client->open_write_async(temporary, content.size(), {}, {}));
     co_await writer->write_all_async(std::as_bytes(std::span(content).first(65536)), {});
-    (void)co_await client->load_directory_async("/empty", {});
+    (void)co_await client->load_directory_async(empty, {});
     co_await writer->write_all_async(std::as_bytes(std::span(content).subspan(65536)), {});
     co_await writer->close_async({});
     co_await client->commit_upload_async(temporary, destination, false, {});
     auto reader = std::move(co_await client->open_read_async(destination, {}));
-    (void)co_await client->load_directory_async("/日本語 space", {});
+    (void)co_await client->load_directory_async(unicode, {});
     std::array<std::byte, 65536> bytes{};
     std::string actual;
     for (;;) {
@@ -95,24 +103,25 @@ static cardio::promise<void> exercise(Fixture &fixture, int argc, char **argv) {
     co_await reader->close_async({});
     require(actual == content, "Browsing another share changed the open file session");
     bool cross_share = false;
-    try { co_await client->rename_async(destination, "/empty/changed.bin", {}); }
+    try { co_await client->rename_async(destination, empty + "/changed.bin", {}); }
     catch (const RemoteFileError &error) { cross_share = !error.connection_lost; }
     require(cross_share && (co_await client->lstat_async(destination, {})).has_value(), "Cross-share rename moved or removed its source");
     co_await client->remove_file_async(destination, {});
     // The engine must reject a share before descending into its contents.
-    auto protected_writer = std::move(co_await client->open_write_async("/empty/protected.txt", 4, {}, {}));
+    auto protected_writer = std::move(co_await client->open_write_async(empty + "/protected.txt", 4, {}, {}));
     const std::string sentinel = "keep";
     co_await protected_writer->write_all_async(std::as_bytes(std::span(sentinel)), {});
     co_await protected_writer->close_async({});
     bool protected_share = false;
-    try { co_await delete_file_transfer_items_async(client, FileTransferEndpoint::remote, {"/empty"}, {}); }
+    std::vector<std::string> protected_paths{empty};
+    try { co_await delete_file_transfer_items_async(client, FileTransferEndpoint::remote, std::move(protected_paths), {}); }
     catch (const RemoteFileError &error) { protected_share = !error.connection_lost; }
-    require(protected_share && (co_await client->lstat_async("/empty/protected.txt", {})).has_value(),
+    require(protected_share && (co_await client->lstat_async(empty + "/protected.txt", {})).has_value(),
         "Deleting a protected share removed its contents before rejection");
-    co_await client->remove_file_async("/empty/protected.txt", {});
+    co_await client->remove_file_async(empty + "/protected.txt", {});
   }
   bool denied_share = false;
-  try { (void)co_await client->load_directory_async("/denied", {}); }
+  try { (void)co_await client->load_directory_async(denied, {}); }
   catch (const RemoteFileError &error) { denied_share = !error.connection_lost; }
   require(denied_share, "An inaccessible share must not disconnect the server browser");
   (void)co_await client->load_directory_async(share, {});

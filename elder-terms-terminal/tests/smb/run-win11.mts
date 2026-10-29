@@ -254,16 +254,20 @@ try {
       typeof readOnly === 'string'
   );
 
-  if (process.env.ELDER_SMB_ENUM_DRIVER) {
+  const serverDriver = process.env.ELDER_SMB_SERVER_DRIVER;
+  if (process.env.ELDER_SMB_ENUM_DRIVER || serverDriver) {
     const directory = await mkdtemp(resolve(tmpdir(), 'elder-smb-enum-win-'));
     const check = async (extra: Record<string, string>): Promise<void> => {
       const child = spawn(
-        process.env.ELDER_SMB_ENUM_DRIVER!,
+        serverDriver ?? process.env.ELDER_SMB_ENUM_DRIVER!,
         [target.address, plain, user, '445'],
         {
           env: {
             ...process.env,
             ELDER_SMB_PASSWORD: password,
+            ELDER_SMB_EMPTY_SHARE: String(fixture.emptyShare),
+            ELDER_SMB_UNICODE_SHARE: String(fixture.unicodeShare),
+            ELDER_SMB_DENIED_SHARE: String(fixture.deniedShare),
             ELDER_SMB_EXPECT_SHARES: [
               plain,
               encrypted,
@@ -289,7 +293,7 @@ try {
       assert.equal(code, 0, diagnostic(output));
       assert.match(output, /PASS SMB client/);
       console.log(
-        `PASS win11 share enumeration ${extra.ELDER_SMB_PROXY_PORT ? 'SSH proxy' : 'direct'}: ${diagnostic(output).trim()}`
+        `PASS win11 ${serverDriver ? 'server browsing and transfer' : 'share enumeration'} ${extra.ELDER_SMB_PROXY_PORT ? 'SSH proxy' : 'direct'}: ${diagnostic(output).trim()}`
       );
     };
     try {
@@ -305,9 +309,13 @@ try {
             ELDER_SMB_PROXY_PORT: String(gateway.port),
             ELDER_SMB_PROXY_KNOWN_HOSTS: gateway.knownHosts,
           });
-          assert.deepEqual(gateway.requests, [
-            { host: 'proxy-test.invalid', port: 445 },
-          ]);
+          assert.deepEqual(
+            gateway.requests,
+            Array.from({ length: serverDriver ? 5 : 1 }, () => ({
+              host: 'proxy-test.invalid',
+              port: 445,
+            }))
+          );
         },
         target.address
       );
@@ -454,13 +462,16 @@ try {
               process.env.ELDER_TERMS_TEST_FTP_APP ??
               resolve(
                 terminalDirectory,
-                '../.build/plan12-stage5-build/elder-terms-terminal/elder-terms-file-transfer'
+                '../.build/elder-terms-terminal/elder-terms-file-transfer'
               ),
             ELDER_SMB_UI_ADDRESS: target.address,
             ELDER_SMB_UI_PORT: '445',
             ELDER_SMB_UI_SHARE: plain,
             ELDER_SMB_UI_USER: user,
             ELDER_SMB_UI_PASSWORD: password,
+            ELDER_SMB_UI_EMPTY_SHARE: String(fixture.emptyShare),
+            ELDER_SMB_UI_UNICODE_SHARE: String(fixture.unicodeShare),
+            ELDER_SMB_UI_DENIED_SHARE: String(fixture.deniedShare),
           },
           stdio: ['ignore', 'pipe', 'pipe'],
           signal: AbortSignal.timeout(180_000),
@@ -538,3 +549,4 @@ try {
   }
 }
 if (failure !== undefined) throw failure;
+console.log('PASS win11 fixture cleanup and agent release');

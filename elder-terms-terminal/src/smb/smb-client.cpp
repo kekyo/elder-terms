@@ -644,6 +644,15 @@ static cardio::promise<std::vector<std::string>> resolve_async(std::string host,
   co_return result;
 }
 
+struct SmbConnectError : RemoteFileError {
+  bool share_unavailable;
+
+  SmbConnectError(const RemoteFileError &error, uint32_t status)
+      : RemoteFileError(error), share_unavailable(!error.connection_lost &&
+          (status == SMB2_STATUS_ACCESS_DENIED || status == SMB2_STATUS_BAD_NETWORK_NAME ||
+           status == SMB2_STATUS_OBJECT_NAME_NOT_FOUND || status == SMB2_STATUS_NOT_SUPPORTED)) {}
+};
+
 static cardio::promise<std::shared_ptr<SmbSession>> open_session_async(
     SmbClientOpenOptions options, std::string share, cardio::cancellation cancellation) {
   if (!options.connection.validation_errors.empty())
@@ -673,10 +682,16 @@ static cardio::promise<std::shared_ptr<SmbSession>> open_session_async(
       const auto address = (ip.find(':') != std::string::npos ? "[" + ip + "]" : ip) + ":" +
           std::to_string(options.connection.port);
       try {
-        check(co_await execute_async(session, [&](auto cb, auto data) {
+        const auto connected = co_await execute_async(session, [&](auto cb, auto data) {
           return smb2_connect_share_async(session->context, address.c_str(), share.c_str(),
               options.connection.username.c_str(), cb, data);
-        }, {}, canceled.get_cancellation()), "connect");
+        }, {}, canceled.get_cancellation());
+        try { check(connected, "connect"); }
+        catch (const RemoteFileError &error) {
+          // errno maps authentication and share ACL failures to EACCES alike.
+          // Preserve the server status before retiring this failed connection.
+          throw SmbConnectError(error, static_cast<uint32_t>(smb2_get_nterror(session->context)));
+        }
         session->disconnected = std::move(options.disconnected);
         (void)deadline.cancel();
         co_return session;
@@ -762,16 +777,18 @@ class SmbServerClient final : public RemoteFileClient {
     co_return client;
   }
 
-  cardio::promise<RemoteDirectorySnapshot> list_shares_async(cardio::cancellation cancellation) {
+  cardio::promise<std::shared_ptr<SmbSession>> ipc_async(cardio::cancellation cancellation) {
     require_alive();
     ScopedSmbCancellation stop{cardio::cancellations::any(cancellation, lifetime_->stopping.get_cancellation())};
-    std::shared_ptr<SmbSession> session;
-    {
-      auto lock = std::move(co_await connections_.lock(stop.get_cancellation()));
-      require_alive();
-      if (!enumeration_) enumeration_ = co_await open_session_async(options_, "IPC$", stop.get_cancellation());
-      session = enumeration_;
-    }
+    auto lock = std::move(co_await connections_.lock(stop.get_cancellation()));
+    require_alive();
+    if (!enumeration_) enumeration_ = co_await open_session_async(options_, "IPC$", stop.get_cancellation());
+    co_return enumeration_;
+  }
+
+  cardio::promise<RemoteDirectorySnapshot> list_shares_async(cardio::cancellation cancellation) {
+    ScopedSmbCancellation stop{cardio::cancellations::any(cancellation, lifetime_->stopping.get_cancellation())};
+    auto session = co_await ipc_async(stop.get_cancellation());
     auto lock = std::move(co_await session->operations.lock(stop.get_cancellation()));
     RemoteDirectorySnapshot listing;
     const auto result = co_await execute_async(session, [&](auto, auto data) {
@@ -796,6 +813,17 @@ public:
   ~SmbServerClient() override {
     lifetime_->stopping.cancel();
     if (enumeration_) enumeration_->request_stop();
+  }
+  cardio::promise<void> prepare_async(cardio::cancellation cancellation) {
+    const auto path = server_path(options_.connection.remote_directory);
+    try {
+      if (path.share.empty()) (void)co_await ipc_async(cancellation);
+      else (void)co_await share_async(path.share, cancellation);
+    } catch (const SmbConnectError &error) {
+      // A rejected IPC$ or share must leave the browser available for a known
+      // path. Authentication/transport failures belong to the connection UI.
+      if (!error.share_unavailable) throw;
+    }
   }
   RemoteFileCapabilities capabilities() const noexcept override {
     return {.write_operations = true, .modification_time = true, .upload_commit = true};
@@ -918,7 +946,9 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb_server_async(
     SmbClientOpenOptions options, cardio::cancellation cancellation) {
   cancellation.throw_if_cancellation_requested();
   if (!options.connection.validation_errors.empty()) throw std::invalid_argument(options.connection.validation_errors.front());
-  co_return std::make_shared<SmbServerClient>(std::move(options));
+  auto client = std::make_shared<SmbServerClient>(std::move(options));
+  co_await client->prepare_async(cancellation);
+  co_return client;
 }
 
 } // namespace elder_terms
