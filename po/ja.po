@@ -2500,6 +2500,9 @@ msgstr "SSH proxy"
 msgid "Use SSH proxy"
 msgstr "SSH proxyを使用"
 
+msgid "SMB over SSH proxy is experimental."
+msgstr "SMBでのSSH proxyはexperimental機能です。"
+
 msgid "SSH proxy forwarding failed"
 msgstr "SSH proxyのTCP転送に失敗しました"
 

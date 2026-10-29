@@ -211,6 +211,7 @@ struct SettingsWidgetState {
   WebdavSettingsEditor *webdav_editor = nullptr;
   SmbSettingsEditor *smb_editor = nullptr;
   SshProxySettingsEditor *ssh_proxy_editor = nullptr;
+  GtkWidget *ssh_proxy_experimental_label = nullptr;
   int selected_macro = -1;
   unsigned int next_macro_number = 1;
   GtkWidget *telnet_address_entry = nullptr;
@@ -884,6 +885,11 @@ static void update_connection_pages(SettingsWidgetState *state) {
                     });
     gtk_widget_set_visible(page.page, visible);
     gtk_widget_set_visible(page.tab_label, visible);
+  }
+  if (state->ssh_proxy_experimental_label != nullptr) {
+    gtk_widget_set_visible(state->ssh_proxy_experimental_label,
+                           active_type == smb_connection_type &&
+                           state->mode != SettingsWidgetMode::global_defaults);
   }
   const bool terminal_type_visible =
       state->mode == SettingsWidgetMode::global_defaults ||
@@ -6570,6 +6576,12 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
         notify_changed(state);
       });
   auto *proxy_page = ssh_proxy_settings_editor_root(state->ssh_proxy_editor);
+  state->ssh_proxy_experimental_label = gtk_label_new(_("SMB over SSH proxy is experimental."));
+  gtk_label_set_xalign(GTK_LABEL(state->ssh_proxy_experimental_label), 0);
+  gtk_label_set_line_wrap(GTK_LABEL(state->ssh_proxy_experimental_label), TRUE);
+  assign_accessible_id(state->ssh_proxy_experimental_label,
+                       widget_id(state, "ssh_proxy_experimental_label").c_str());
+  gtk_grid_attach(GTK_GRID(proxy_page), state->ssh_proxy_experimental_label, 0, 6, 2, 1);
   auto *proxy_tab = create_tab_label(_("SSH proxy"), widget_id(state, "ssh_proxy_tab").c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), proxy_page, proxy_tab);
   gtk_widget_show_all(proxy_page);
@@ -6577,7 +6589,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_widget_set_no_show_all(proxy_page, TRUE);
   gtk_widget_set_no_show_all(proxy_tab, TRUE);
   state->connection_pages.push_back({
-      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type, webdav_connection_type, ftp_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
+      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type, webdav_connection_type, ftp_connection_type, smb_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
 
   auto [terminal_page, terminal_appearance_page] = create_terminal_pages(state);
   const std::string terminal_tab_id = widget_id(state, "terminal_tab");

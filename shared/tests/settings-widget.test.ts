@@ -932,7 +932,7 @@ describe.concurrent('shared settings widget', () => {
       },
       {
         args: ['--type=smb'] as const,
-        expected: ['General', 'SMB'],
+        expected: ['General', 'SMB', 'SSH proxy'],
       },
     ] as const;
 

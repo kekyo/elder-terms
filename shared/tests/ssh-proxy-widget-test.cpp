@@ -28,9 +28,13 @@ int main(int argc, char **argv) {
   gtk_init(&argc, &argv);
   try {
     using namespace elder_terms;
-    for (const auto *type : {"telnet", "ssh", "sftp", "webdav", "ftp", "local", "serial"}) {
+    for (const auto *type : {"telnet", "ssh", "sftp", "webdav", "ftp", "smb", "local", "serial"}) {
       auto store = create_default_settings({}, "proxy test");
       set_explicit_setting_value(&store, general_type_setting_key(), std::string(type));
+      if (std::string_view(type) == "smb") {
+        set_explicit_setting_value(&store, smb_setting_key("address"), std::string("files.example"));
+        set_explicit_setting_value(&store, smb_setting_key("share"), std::string("team"));
+      }
       SettingsWidgetOptions options;
       options.store = store;
       auto *state = create_settings_widget(std::move(options));
@@ -44,6 +48,12 @@ int main(int argc, char **argv) {
       require(page != nullptr, "SSH proxy must have an independent settings page");
       const bool network = std::string_view(type) != "local" && std::string_view(type) != "serial";
       require(static_cast<bool>(gtk_widget_get_visible(page)) == network, "proxy page visibility must follow connection type");
+      auto *experimental = find_widget(root, "settings_ssh_proxy_experimental_label");
+      require(experimental != nullptr, "SMB experimental notice must exist on the proxy page");
+      require(static_cast<bool>(gtk_widget_get_visible(experimental)) == (std::string_view(type) == "smb"),
+              "SMB must show the experimental proxy notice");
+      require(std::string_view(gtk_label_get_text(GTK_LABEL(experimental))).find("experimental") != std::string_view::npos,
+              "the notice must identify SMB proxy support as experimental");
       if (network) {
         auto *enabled = find_widget(root, "settings_ssh_proxy_enabled_combo");
         auto *address = find_widget(root, "settings_ssh_proxy_address_entry");

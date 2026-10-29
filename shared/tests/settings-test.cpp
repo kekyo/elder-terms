@@ -4784,8 +4784,13 @@ static void test_smb_settings_round_trip_and_validation() {
   expect_true(set_explicit_setting_value(&store,
                   elder_terms::ssh_proxy_setting_key("enabled"), true),
               "An inherited SSH proxy can be enabled independently");
-  expect_true(!elder_terms::ssh_proxy_connection_settings(store).enabled,
-              "SMB must use direct TCP even when an SSH proxy is configured");
+  expect_true(elder_terms::ssh_proxy_connection_settings(store).enabled &&
+                  !elder_terms::ssh_proxy_connection_settings(store).validation_errors.empty(),
+              "SMB must reject an enabled SSH proxy without a gateway address");
+  expect_true(set_explicit_setting_value(&store, elder_terms::ssh_proxy_setting_key("address"),
+                                         std::string("bastion.example")) &&
+                  elder_terms::ssh_proxy_connection_settings(store).validation_errors.empty(),
+              "SMB must accept a configured SSH gateway");
   expect_true(!set_explicit_setting_value(&store, elder_terms::smb_setting_key("share"), std::string("team/docs")),
               "An SMB share must be a single name");
   expect_true(!set_explicit_setting_value(&store, elder_terms::smb_setting_key("remote_directory"), std::string("/../outside")),

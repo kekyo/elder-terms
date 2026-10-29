@@ -76,8 +76,7 @@ SshProxySettings ssh_proxy_settings(const SettingsStore &store) {
 
 SshProxySettings ssh_proxy_connection_settings(const SettingsStore &store) {
   const auto kind = general_connection_kind(store);
-  if (kind == ConnectionKind::local_shell || kind == ConnectionKind::serial ||
-      kind == ConnectionKind::smb) return {};
+  if (kind == ConnectionKind::local_shell || kind == ConnectionKind::serial) return {};
   auto result = ssh_proxy_settings(store);
   if (result.enabled && kind == ConnectionKind::ftp &&
       ftp_connection_settings(store).data_connection_mode == FtpDataConnectionMode::active)
