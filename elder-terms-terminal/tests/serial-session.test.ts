@@ -408,6 +408,15 @@ describe.concurrent('elder-terms-terminal serial session', () => {
             await app.getById('settings_apply_button'),
             'button'
           ).click();
+          await waitForResult(async () => {
+            expect(
+              (await (await app.getById('settings_dialog')).info()).states
+            ).toContain('showing');
+          });
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
 
           await toPass(async () => {
             expect((await app.output()).exitCode).toBeNull();

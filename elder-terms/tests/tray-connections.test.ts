@@ -505,11 +505,11 @@ server.listen(${JSON.stringify(directory)} + '/' + process.pid + '.sock', () => 
         );
         await writeFile(
           join(connections, 'Terminal.ini'),
-          '[general]\ntype=local\n'
+          '[general]\ntype=local\nconnection_id=38ef378f-315b-4881-8df0-a26f852f8771\n'
         );
         await writeFile(
           join(connections, 'Transfer.ini'),
-          '[general]\ntype=sftp\n'
+          '[general]\ntype=sftp\nconnection_id=793d1c9f-0e3d-4b92-b9dd-99c6eeb472ec\n'
         );
       },
       async ({ app }) => {
@@ -534,15 +534,18 @@ server.listen(${JSON.stringify(directory)} + '/' + process.pid + '.sock', () => 
           );
         const layout = async (id: string): Promise<string> =>
           await menu('GetLayout', [id, '-1', "['label','enabled']"]);
-        const all = menuItems(await layout('0'));
-        const windows = all.find((item) => item.label === 'Open windows');
+        const windows = menuItems(await layout('0')).find(
+          (item) => item.label === 'Open windows'
+        );
         expect(windows).toBeDefined();
         for (const [index, name] of [
           'Terminal',
           'Terminal',
           'Transfer',
         ].entries()) {
-          const item = all.find((item) => item.label === name)!;
+          const item = menuItems(await layout('0')).find(
+            (entry) => entry.label === name
+          )!;
           await menu('Event', [item.id, 'clicked', '<0>', '0']);
           await waitForResult(async () => {
             const launched: number[] = JSON.parse(

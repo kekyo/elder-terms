@@ -183,8 +183,14 @@ it('renders missing glyphs with the third ordered family and tolerates unavailab
                 'button'
               ).click();
               await waitForResult(async () => {
-                expect(await app.findById('settings_dialog')).toBeUndefined();
+                expect(
+                  (await (await app.getById('settings_dialog')).info()).states
+                ).toContain('showing');
               });
+              await expectElementKind(
+                await app.getById('settings_cancel_button'),
+                'button'
+              ).click();
               const applied = await waitForResult(async () => {
                 const current = await terminal.capture();
                 const pixels = PNG.sync.read(current.image);

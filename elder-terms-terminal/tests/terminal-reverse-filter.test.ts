@@ -137,6 +137,17 @@ for (const backend of ['cairo', 'opengl'])
               );
               await scroll.setValue((await scroll.valueInfo()).maximum);
             };
+            const closeAfterApply = async (): Promise<void> => {
+              await waitForResult(async () => {
+                expect(
+                  (await (await app.getById('settings_dialog')).info()).states
+                ).toContain('showing');
+              });
+              await expectElementKind(
+                await app.getById('settings_cancel_button'),
+                'button'
+              ).click();
+            };
             const select = async (index: number): Promise<void> => {
               const combo = expectElementKind(
                 await app.getById('settings_terminal_color_filter_combo'),
@@ -170,6 +181,7 @@ for (const backend of ['cairo', 'opengl'])
               await app.getById('settings_apply_button'),
               'button'
             ).click();
+            await closeAfterApply();
             await waitForResult(async () =>
               expectColors((await terminal.capture()).image, true)
             );
@@ -190,6 +202,7 @@ for (const backend of ['cairo', 'opengl'])
               await app.getById('settings_apply_button'),
               'button'
             ).click();
+            await closeAfterApply();
             await waitForResult(async () =>
               expectColors((await terminal.capture()).image, false)
             );

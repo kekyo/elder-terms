@@ -176,6 +176,17 @@ for (const backend of ['cairo', 'opengl']) {
               );
               await scrollbar.setValue((await scrollbar.valueInfo()).maximum);
             };
+            const closeAfterApply = async (): Promise<void> => {
+              await waitForResult(async () => {
+                expect(
+                  (await (await app.getById('settings_dialog')).info()).states
+                ).toContain('showing');
+              });
+              await expectElementKind(
+                await app.getById('settings_cancel_button'),
+                'button'
+              ).click();
+            };
             const mode = async (index: number): Promise<void> => {
               const combo = expectElementKind(
                 await app.getById('settings_terminal_background_mode_combo'),
@@ -255,6 +266,7 @@ for (const backend of ['cairo', 'opengl']) {
               await app.getById('settings_apply_button'),
               'button'
             ).click();
+            await closeAfterApply();
             await expectBlur(false);
             await evidence.captureEvidence('blur-withdrawn', async () =>
               app.capture()
@@ -326,6 +338,7 @@ for (const backend of ['cairo', 'opengl']) {
               await app.getById('settings_apply_button'),
               'button'
             ).click();
+            await closeAfterApply();
             await waitForResult(async () => {
               const frame = PNG.sync.read((await terminal.capture()).image);
               let red = 0,
