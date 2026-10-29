@@ -725,6 +725,8 @@ static cardio::promise<void>
 remove_remote_tree_async(
     const std::shared_ptr<RemoteFileClient> &client, const std::string &path,
     cardio::cancellation cancellation) {
+  if (!client->path_capabilities(path).modify)
+    throw RemoteFileError("This remote path cannot be deleted", false);
   const std::optional<RemoteFileAttributes> attributes =
       co_await client->lstat_async(path, cancellation);
   if (!attributes.has_value()) {
@@ -1512,6 +1514,11 @@ cardio::promise<void> delete_file_transfer_items_async(
     throw std::invalid_argument("Remote file client is required");
   }
   cancellation.throw_if_cancellation_requested();
+  if (endpoint == FileTransferEndpoint::remote) {
+    for (const auto &path : paths)
+      if (!client->path_capabilities(path).modify)
+        throw RemoteFileError("This remote path cannot be deleted", false);
+  }
   for (const std::string &path : paths) {
     if (endpoint == FileTransferEndpoint::remote) {
       co_await remove_remote_tree_async(client, path, cancellation);

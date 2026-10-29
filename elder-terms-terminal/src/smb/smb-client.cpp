@@ -4,15 +4,18 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "smb-client.h"
+#include "smb-share-list.h"
 
 #include <smb2/smb2.h>
 #include <smb2/libsmb2.h>
 #include <smb2/libsmb2-raw.h>
 #include <smb2/smb2-errors.h>
+#include <smb2/libsmb2-share-enum.h>
 #include <poll.h>
 #include <algorithm>
 #include <cstring>
 #include <functional>
+#include <map>
 
 namespace elder_terms {
 
@@ -641,8 +644,8 @@ static cardio::promise<std::vector<std::string>> resolve_async(std::string host,
   co_return result;
 }
 
-cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb_client_async(
-    SmbClientOpenOptions options, cardio::cancellation cancellation) {
+static cardio::promise<std::shared_ptr<SmbSession>> open_session_async(
+    SmbClientOpenOptions options, std::string share, cardio::cancellation cancellation) {
   if (!options.connection.validation_errors.empty())
     throw std::invalid_argument(options.connection.validation_errors.front());
   auto session = std::make_shared<SmbSession>();
@@ -671,12 +674,12 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb_client_async(
           std::to_string(options.connection.port);
       try {
         check(co_await execute_async(session, [&](auto cb, auto data) {
-          return smb2_connect_share_async(session->context, address.c_str(), options.connection.share.c_str(),
+          return smb2_connect_share_async(session->context, address.c_str(), share.c_str(),
               options.connection.username.c_str(), cb, data);
         }, {}, canceled.get_cancellation()), "connect");
         session->disconnected = std::move(options.disconnected);
         (void)deadline.cancel();
-        co_return std::make_shared<SmbClient>(session);
+        co_return session;
       } catch (const cardio::canceled_exception &) { throw; }
       catch (...) { failure = std::current_exception(); }
     }
@@ -688,8 +691,235 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb_client_async(
   }
 }
 
+struct SmbServerLifetime {
+  cardio::cancellation_source stopping;
+  std::function<void()> disconnected;
+  bool lost = false;
+};
+
+struct SmbServerPath {
+  std::string canonical;
+  std::string share;
+  std::string relative;
+};
+
+static SmbServerPath server_path(std::string path) {
+  path = canonical_path(std::move(path));
+  if (path == "/") return {"/", {}, "/"};
+  const auto end = path.find('/', 1);
+  const auto share = path.substr(1, end == std::string::npos ? end : end - 1);
+  if (g_ascii_strcasecmp(share.c_str(), "IPC$") == 0)
+    throw RemoteFileError("IPC$ is not a file share", false);
+  return {path, share, end == std::string::npos ? "/" : path.substr(end)};
+}
+
+static std::string share_key(const std::string &share) {
+  if (!g_utf8_validate(share.c_str(), -1, nullptr)) throw RemoteFileError("Invalid SMB share name", false);
+  auto *folded = g_utf8_casefold(share.c_str(), -1);
+  std::string result(folded);
+  g_free(folded);
+  return result;
+}
+
+static void shares_completed(smb2_context *context, int status, void *data, void *opaque) {
+  // Share enumeration owns its decoded reply even for positive WERROR results.
+  // completed() retains only copied data and captures exceptions from decoding.
+  completed(context, status, data, opaque);
+  if (data) smb2_free_data(context, data);
+  static_cast<SmbCompletion *>(opaque)->data = nullptr;
+}
+
+class SmbServerClient final : public RemoteFileClient {
+  SmbClientOpenOptions options_;
+  std::shared_ptr<SmbServerLifetime> lifetime_ = std::make_shared<SmbServerLifetime>();
+  cardio::primitives::mutex connections_;
+  std::map<std::string, std::shared_ptr<SmbClient>> shares_;
+  std::shared_ptr<SmbSession> enumeration_;
+  bool transferring_ = false;
+
+  void require_alive() const {
+    if (lifetime_->lost || lifetime_->stopping.get_cancellation().is_cancellation_requested())
+      throw RemoteFileError("SMB server connection has ended. Reconnect to continue.", true);
+  }
+
+  static void require_mutable(const SmbServerPath &path) {
+    if (path.share.empty() || path.relative == "/")
+      throw RemoteFileError("SMB server and share roots cannot be changed", false);
+  }
+
+  cardio::promise<std::shared_ptr<SmbClient>> share_async(const std::string &share,
+      cardio::cancellation cancellation) {
+    require_alive();
+    ScopedSmbCancellation stop{cardio::cancellations::any(cancellation, lifetime_->stopping.get_cancellation())};
+    auto lock = std::move(co_await connections_.lock(stop.get_cancellation()));
+    require_alive();
+    const auto key = share_key(share);
+    const auto found = shares_.find(key);
+    if (found != shares_.end()) co_return found->second;
+    auto session = co_await open_session_async(options_, share, stop.get_cancellation());
+    auto client = std::make_shared<SmbClient>(std::move(session));
+    shares_.emplace(key, client);
+    co_return client;
+  }
+
+  cardio::promise<RemoteDirectorySnapshot> list_shares_async(cardio::cancellation cancellation) {
+    require_alive();
+    ScopedSmbCancellation stop{cardio::cancellations::any(cancellation, lifetime_->stopping.get_cancellation())};
+    std::shared_ptr<SmbSession> session;
+    {
+      auto lock = std::move(co_await connections_.lock(stop.get_cancellation()));
+      require_alive();
+      if (!enumeration_) enumeration_ = co_await open_session_async(options_, "IPC$", stop.get_cancellation());
+      session = enumeration_;
+    }
+    auto lock = std::move(co_await session->operations.lock(stop.get_cancellation()));
+    RemoteDirectorySnapshot listing;
+    const auto result = co_await execute_async(session, [&](auto, auto data) {
+      return smb2_share_enum_async(session->context, SMB2_SHARE_INFO_1, shares_completed, data);
+    }, [&](void *data) {
+      listing = decode_smb_share_list(0, static_cast<smb2_share_enum_reply *>(data));
+    }, stop.get_cancellation());
+    if (result.status != 0) (void)decode_smb_share_list(result.status, nullptr);
+    co_return listing;
+  }
+
+public:
+  explicit SmbServerClient(SmbClientOpenOptions options) : options_(std::move(options)) {
+    lifetime_->disconnected = std::move(options_.disconnected);
+    options_.disconnected = [weak = std::weak_ptr<SmbServerLifetime>(lifetime_)] {
+      auto state = weak.lock();
+      if (!state || state->lost || state->stopping.get_cancellation().is_cancellation_requested()) return;
+      state->lost = true;
+      if (state->disconnected) state->disconnected();
+    };
+  }
+  ~SmbServerClient() override {
+    lifetime_->stopping.cancel();
+    if (enumeration_) enumeration_->request_stop();
+  }
+  RemoteFileCapabilities capabilities() const noexcept override {
+    return {.write_operations = true, .modification_time = true, .upload_commit = true};
+  }
+  RemotePathCapabilities path_capabilities(const std::string &path) const override {
+    const auto parts = server_path(path);
+    return {.create_children = !parts.share.empty(), .modify = !parts.share.empty() && parts.relative != "/"};
+  }
+  cardio::promise<void> stop_async() {
+    lifetime_->stopping.cancel();
+    auto lock = std::move(co_await connections_.lock());
+    if (enumeration_) enumeration_->request_stop();
+    for (const auto &[name, client] : shares_) { (void)name; co_await client->stop_async(); }
+    if (enumeration_) {
+      auto operation = std::move(co_await enumeration_->operations.lock());
+      enumeration_->abort();
+    }
+    shares_.clear();
+    enumeration_.reset();
+  }
+  cardio::promise<RemoteDirectorySnapshot> load_directory_async(std::string path,
+      cardio::cancellation cancellation) override {
+    const auto parts = server_path(std::move(path));
+    if (parts.share.empty()) co_return co_await list_shares_async(cancellation);
+    auto client = co_await share_async(parts.share, cancellation);
+    auto result = co_await client->load_directory_async(parts.relative, cancellation);
+    const auto prefix = "/" + parts.share;
+    result.canonical_path = prefix + (result.canonical_path == "/" ? "" : result.canonical_path);
+    for (auto &entry : result.entries) entry.path = prefix + entry.path;
+    co_return result;
+  }
+  cardio::promise<std::optional<RemoteFileAttributes>> lstat_async(std::string path,
+      cardio::cancellation cancellation) override {
+    require_alive();
+    cancellation.throw_if_cancellation_requested();
+    const auto parts = server_path(std::move(path));
+    if (parts.share.empty()) co_return RemoteFileAttributes{.name = {}, .path = "/", .type = RemoteFileType::directory,
+        .size = {}, .permissions = {}, .access_time_unix_seconds = {}, .modification_time_unix_seconds = {}};
+    auto client = co_await share_async(parts.share, cancellation);
+    auto result = co_await client->lstat_async(parts.relative, cancellation);
+    if (result) {
+      result->path = "/" + parts.share + (result->path == "/" ? "" : result->path);
+      if (parts.relative == "/") result->name = parts.share;
+    }
+    co_return result;
+  }
+  cardio::promise<std::unique_ptr<RemoteFileReader>> open_read_async(std::string path,
+      cardio::cancellation cancellation) override {
+    const auto parts = server_path(std::move(path));
+    if (parts.share.empty() || parts.relative == "/") throw RemoteFileError("SMB read requires a file path", false);
+    auto client = co_await share_async(parts.share, cancellation);
+    co_return std::move(co_await client->open_read_async(parts.relative, cancellation));
+  }
+  cardio::promise<std::unique_ptr<RemoteFileWriter>> open_write_async(std::string path, uint64_t size,
+      std::optional<uint32_t> permissions, cardio::cancellation cancellation) override {
+    const auto parts = server_path(std::move(path)); require_mutable(parts);
+    auto client = co_await share_async(parts.share, cancellation);
+    co_return std::move(co_await client->open_write_async(parts.relative, size, permissions, cancellation));
+  }
+  cardio::promise<void> make_directory_async(std::string path, std::optional<uint32_t> permissions,
+      cardio::cancellation cancellation) override {
+    const auto parts = server_path(std::move(path)); require_mutable(parts);
+    auto client = co_await share_async(parts.share, cancellation);
+    co_await client->make_directory_async(parts.relative, permissions, cancellation);
+  }
+  cardio::promise<void> remove_file_async(std::string path, cardio::cancellation cancellation) override {
+    const auto parts = server_path(std::move(path)); require_mutable(parts);
+    auto client = co_await share_async(parts.share, cancellation);
+    co_await client->remove_file_async(parts.relative, cancellation);
+  }
+  cardio::promise<void> remove_directory_async(std::string path, cardio::cancellation cancellation) override {
+    const auto parts = server_path(std::move(path)); require_mutable(parts);
+    auto client = co_await share_async(parts.share, cancellation);
+    co_await client->remove_directory_async(parts.relative, cancellation);
+  }
+  cardio::promise<void> rename_async(std::string source, std::string destination,
+      cardio::cancellation cancellation) override {
+    const auto from = server_path(std::move(source)), to = server_path(std::move(destination));
+    require_mutable(from); require_mutable(to);
+    if (share_key(from.share) != share_key(to.share)) throw RemoteFileError("SMB rename cannot cross shares", false);
+    auto client = co_await share_async(from.share, cancellation);
+    co_await client->rename_async(from.relative, to.relative, cancellation);
+  }
+  cardio::promise<void> commit_upload_async(std::string source, std::string destination,
+      bool overwrite, cardio::cancellation cancellation) override {
+    const auto from = server_path(std::move(source)), to = server_path(std::move(destination));
+    require_mutable(from); require_mutable(to);
+    if (share_key(from.share) != share_key(to.share)) throw RemoteFileError("SMB upload commit cannot cross shares", false);
+    auto client = co_await share_async(from.share, cancellation);
+    co_await client->commit_upload_async(from.relative, to.relative, overwrite, cancellation);
+  }
+  cardio::promise<void> set_attributes_async(std::string path, RemoteFileAttributes attributes,
+      cardio::cancellation cancellation) override {
+    const auto parts = server_path(std::move(path)); require_mutable(parts);
+    auto client = co_await share_async(parts.share, cancellation);
+    co_await client->set_attributes_async(parts.relative, std::move(attributes), cancellation);
+  }
+  cardio::promise<std::string> read_link_async(std::string, cardio::cancellation) override {
+    throw RemoteFileError("SMB links are not supported", false); co_return "";
+  }
+  cardio::promise<void> make_symbolic_link_async(std::string, std::string, cardio::cancellation) override {
+    throw RemoteFileError("SMB links are not supported", false); co_return;
+  }
+  bool try_begin_transfer() override { if (transferring_) return false; transferring_ = true; return true; }
+  void end_transfer() override { transferring_ = false; }
+};
+
+cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb_client_async(
+    SmbClientOpenOptions options, cardio::cancellation cancellation) {
+  const auto share = options.connection.share;
+  auto session = co_await open_session_async(std::move(options), share, cancellation);
+  co_return std::make_shared<SmbClient>(std::move(session));
+}
+
 cardio::promise<void> stop_smb_client_async(std::shared_ptr<RemoteFileClient> client) {
   if (auto smb = std::dynamic_pointer_cast<SmbClient>(client)) co_await smb->stop_async();
+  if (auto server = std::dynamic_pointer_cast<SmbServerClient>(client)) co_await server->stop_async();
+}
+
+cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb_server_async(
+    SmbClientOpenOptions options, cardio::cancellation cancellation) {
+  cancellation.throw_if_cancellation_requested();
+  if (!options.connection.validation_errors.empty()) throw std::invalid_argument(options.connection.validation_errors.front());
+  co_return std::make_shared<SmbServerClient>(std::move(options));
 }
 
 } // namespace elder_terms

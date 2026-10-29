@@ -30,8 +30,17 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb_client_async(
     SmbClientOpenOptions options, cardio::cancellation cancellation);
 
 /**
+ * Creates a server browser with lazy IPC and per-share connections.
+ * @param options Server endpoint and runtime credentials; the share field is ignored.
+ * @param cancellation Cancels creation before a browser is returned.
+ * @returns Client whose root lists shares and whose paths begin with a share name.
+ */
+cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb_server_async(
+    SmbClientOpenOptions options, cardio::cancellation cancellation);
+
+/**
  * Cancels pending SMB operations and retires callbacks before shutdown.
- * @param client Client returned by open_smb_client_async; null is ignored.
+ * @param client Client returned by either SMB factory; null is ignored.
  */
 cardio::promise<void> stop_smb_client_async(std::shared_ptr<RemoteFileClient> client);
 

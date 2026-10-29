@@ -13,7 +13,7 @@ const directory = fileURLToPath(new URL('.', import.meta.url));
 const root = resolve(directory, '../../..');
 const name = `elder-smb-client-${process.pid}`;
 const proxyDirectory =
-  process.argv[3] === '--proxy'
+  ['--proxy', '--server-proxy'].includes(process.argv[3])
     ? await mkdtemp(resolve(tmpdir(), 'elder-smb-proxy-'))
     : undefined;
 const env = {
@@ -223,7 +223,7 @@ try {
       console.log(`${share}: ${output.trim()}`);
     };
     if (proxyDirectory) {
-      for (const mode of share === 'probe'
+      for (const mode of share === 'probe' && process.argv[3] !== '--server-proxy'
         ? ['transfer', 'pending']
         : ['transfer']) {
         await withSshGateway(
@@ -235,9 +235,13 @@ try {
               ELDER_SMB_PROXY_KNOWN_HOSTS: gateway.knownHosts,
               ELDER_SMB_PROXY_MODE: mode,
             });
-            assert.deepEqual(gateway.requests, [
-              { host: 'proxy-test.invalid', port: Number(port) },
-            ]);
+            if (process.argv[3] === '--server-proxy') {
+              assert.equal(gateway.requests.length, share === 'readonly' ? 3 : 5);
+              for (const request of gateway.requests)
+                assert.deepEqual(request, { host: 'proxy-test.invalid', port: Number(port) });
+            } else {
+              assert.deepEqual(gateway.requests, [{ host: 'proxy-test.invalid', port: Number(port) }]);
+            }
           }
         );
       }

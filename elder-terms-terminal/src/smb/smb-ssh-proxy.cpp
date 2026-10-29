@@ -14,23 +14,31 @@
 #include <system_error>
 #include <unistd.h>
 #include <utility>
+#include <vector>
 
 namespace elder_terms {
 
+struct SmbProxyPeer {
+  int descriptor = -1;
+  std::optional<cardio::promise<void>> task;
+  void close() { if (descriptor >= 0) ::close(std::exchange(descriptor, -1)); }
+  ~SmbProxyPeer() { close(); }
+};
+
 struct SmbProxyState {
   int listener = -1;
-  int peer = -1;
   std::uint16_t port = 0;
-  std::unique_ptr<SshChannelConnection> channel;
+  std::string host;
+  std::uint16_t destination_port = 0;
+  std::shared_ptr<AuthenticatedSshTransport> gateway;
+  std::unique_ptr<SshChannelConnection> first_channel;
+  std::vector<std::shared_ptr<SmbProxyPeer>> peers;
   cardio::cancellation_source stopping;
 
   void close_listener() {
     if (listener >= 0) ::close(std::exchange(listener, -1));
   }
-  void close_peer() {
-    if (peer >= 0) ::close(std::exchange(peer, -1));
-  }
-  ~SmbProxyState() { close_listener(); close_peer(); }
+  ~SmbProxyState() { close_listener(); }
 };
 
 struct SmbSshProxy {
@@ -43,30 +51,46 @@ struct SmbSshProxy {
   }
 };
 
+static cardio::promise<void> serve_smb_peer_async(std::shared_ptr<SmbProxyState> state,
+    std::shared_ptr<SmbProxyPeer> peer, std::unique_ptr<SshChannelConnection> channel) {
+  const auto cancellation = state->stopping.get_cancellation();
+  try {
+    if (!channel) channel = std::move(co_await SshChannelConnection::open_forward_async(
+        state->gateway, state->host, state->destination_port, cancellation));
+    co_await bridge_ssh_channel_async(std::move(channel), peer->descriptor, cancellation);
+  } catch (...) {
+    // Closing this endpoint reports route failure to libsmb2. Other share
+    // channels retain their own lifetime; no request falls back to direct TCP.
+  }
+  peer->close();
+}
+
 static cardio::promise<void> serve_smb_proxy_async(std::shared_ptr<SmbProxyState> state) {
   const auto cancellation = state->stopping.get_cancellation();
   try {
     for (;;) {
       cancellation.throw_if_cancellation_requested();
-      state->peer = ::accept4(state->listener, nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK);
-      if (state->peer >= 0) break;
+      const int accepted = ::accept4(state->listener, nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK);
+      if (accepted >= 0) {
+        std::erase_if(state->peers, [](const auto &peer) { return peer->task && peer->task->is_ready(); });
+        auto peer = std::make_shared<SmbProxyPeer>();
+        peer->descriptor = accepted;
+        state->peers.push_back(peer);
+        peer->task.emplace(serve_smb_peer_async(state, peer, std::move(state->first_channel)));
+        continue;
+      }
       if (errno == EINTR) continue;
       if (errno != EAGAIN && errno != EWOULDBLOCK)
         throw std::system_error(errno, std::generic_category(), "SMB SSH proxy accept");
       (void)co_await cardio::from_fd(state->listener,
           cardio::fd_event::read | cardio::fd_event::error | cardio::fd_event::hangup, cancellation);
     }
-    // One SMB session owns this channel. Reconnecting opens a fresh route.
-    state->close_listener();
-    co_await bridge_ssh_channel_async(std::move(state->channel), state->peer, cancellation);
-  } catch (...) {
-    // Closing the endpoint reports route failure to libsmb2 without ever
-    // retrying against the SMB server directly.
-    state->stopping.cancel();
-  }
+  } catch (...) { state->stopping.cancel(); }
   state->close_listener();
-  state->close_peer();
-  state->channel.reset();
+  for (auto &peer : state->peers) if (peer->task) co_await *peer->task;
+  state->peers.clear();
+  state->first_channel.reset();
+  state->gateway.reset();
 }
 
 cardio::promise<std::shared_ptr<SmbSshProxy>> open_smb_ssh_proxy_async(
@@ -79,9 +103,12 @@ cardio::promise<std::shared_ptr<SmbSshProxy>> open_smb_ssh_proxy_async(
   if (host.empty() || !port) throw std::invalid_argument("SMB SSH proxy destination is required");
   auto connecting = connect_ssh_gateway_async(std::move(proxy), std::move(callbacks), std::move(options), cancellation);
   auto gateway = std::move(co_await connecting);
-  auto opening = SshChannelConnection::open_forward_async(std::move(gateway), std::move(host), port, cancellation);
+  auto opening = SshChannelConnection::open_forward_async(gateway, host, port, cancellation);
   auto state = std::make_shared<SmbProxyState>();
-  state->channel = std::move(co_await opening);
+  state->first_channel = std::move(co_await opening);
+  state->gateway = std::move(gateway);
+  state->host = std::move(host);
+  state->destination_port = port;
   cancellation.throw_if_cancellation_requested();
   state->listener = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
   if (state->listener < 0) throw std::system_error(errno, std::generic_category(), "SMB SSH proxy listener");
@@ -89,7 +116,7 @@ cardio::promise<std::shared_ptr<SmbSshProxy>> open_smb_ssh_proxy_async(
   address.sin_family = AF_INET;
   address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
   if (::bind(state->listener, reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0 ||
-      ::listen(state->listener, 1) != 0)
+      ::listen(state->listener, 16) != 0)
     throw std::system_error(errno, std::generic_category(), "SMB SSH proxy listen");
   socklen_t length = sizeof(address);
   if (::getsockname(state->listener, reinterpret_cast<sockaddr *>(&address), &length) != 0)
