@@ -162,15 +162,13 @@ struct MainWindow {
   GtkWidget *settings_dialog = nullptr;
   /** Root of the open settings widget receiving connection backgrounds. */
   GtkWidget *settings_widget_root = nullptr;
+  /** Effective connection colors, also applied when opening settings. */
+  GeneralColorSettings colors;
   /** Provider applying the configured header-bar and status-bar background. */
   GtkCssProvider *exterior_background_provider = nullptr;
-  /** Screen provider scoped to Settings title and selection controls. */
-  GtkCssProvider *settings_exterior_background_provider = nullptr;
   /** Screen provider applying exterior-derived colors below exterior
    * surfaces. */
   GtkCssProvider *exterior_component_background_provider = nullptr;
-  /** Screen provider scoped to Settings content surfaces. */
-  GtkCssProvider *settings_background_provider = nullptr;
   /** Provider applying the configured background to terminal overlay panels. */
   GtkCssProvider *overlay_background_provider = nullptr;
   /** Provider applying background-derived colors to content controls. */

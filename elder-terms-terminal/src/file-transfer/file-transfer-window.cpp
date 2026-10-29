@@ -2695,6 +2695,7 @@ static void open_file_settings(GtkMenuItem *, gpointer data) {
   gtk_window_set_title(GTK_WINDOW(dialog), _("Settings"));
   gtk_window_set_default_size(GTK_WINDOW(dialog), 720, 495);
   GtkWidget *header = gtk_header_bar_new();
+  gestament_gtk_assign_accessible_id(header, "settings_dialog_header_bar");
   gtk_header_bar_set_title(GTK_HEADER_BAR(header), _("Settings"));
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header), TRUE);
   gtk_window_set_titlebar(GTK_WINDOW(dialog), header);
@@ -2734,6 +2735,8 @@ static void open_file_settings(GtkMenuItem *, gpointer data) {
       .callbacks = std::move(callbacks)});
   gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(dialog))),
                     settings_widget_root(window->settings_widget));
+  set_settings_dialog_colors(dialog, settings_widget_root(window->settings_widget),
+      general_color_settings(window->settings));
   g_signal_connect(dialog, "destroy", G_CALLBACK(+[](GtkWidget *, gpointer data) {
     auto *owner = static_cast<FileTransferWindow *>(data);
     if (owner->settings_close_idle != 0) {
@@ -3245,6 +3248,9 @@ void set_file_transfer_window_colors(
   }
 
   clear_file_transfer_window_colors(window.get());
+  if (window->settings_dialog && window->settings_widget)
+    set_settings_dialog_colors(window->settings_dialog,
+        settings_widget_root(window->settings_widget), settings);
   if (settings.exterior_background.has_value()) {
     window->exterior_background_provider =
         create_widget_background_provider(
