@@ -4869,11 +4869,6 @@ static void test_smb_remote_directory_matches_transfer_paths() {
 
 int main() {
   try {
-    {
-      auto store = elder_terms::create_default_settings(elder_terms::default_terminal_display_settings(1.0), "Removed SMB share setting");
-      if (elder_terms::set_explicit_setting_value(&store, elder_terms::smb_setting_key("share"), std::string("team")))
-        throw std::runtime_error("Temporary removal check: separate SMB share setting still exists");
-    }
     elder_terms_settings_test::test_general_borders_round_trip_and_layering();
     elder_terms_settings_test::test_webdav_settings_round_trip();
     elder_terms_settings_test::test_webdav_invalid_numeric_settings_remain_invalid_after_save();

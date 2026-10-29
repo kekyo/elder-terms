@@ -3749,17 +3749,6 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
-  it('temporarily verifies removal of the separate SMB share field', async (context) => {
-    await runSharedGtkTest(
-      context,
-      ['--page=smb', '--type=smb'],
-      async ({ app }) => {
-        await selectSettingsTab(app, 'SMB');
-        await expect(app.getById('settings_smb_share_entry')).rejects.toThrow();
-      }
-    );
-  });
-
   it('applies FTPS modes, protocol ranges and independent certificate policy', async (context) => {
     await runSharedGtkTest(
       context,
