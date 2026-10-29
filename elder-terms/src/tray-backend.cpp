@@ -46,6 +46,8 @@ static constexpr int application_settings_menu_item_id = 3;
 static constexpr int about_menu_item_id = 4;
 static constexpr int connections_menu_item_id = 5;
 static constexpr int empty_connections_menu_item_id = 6;
+static constexpr int windows_menu_item_id = 7;
+static constexpr int empty_windows_menu_item_id = 8;
 static constexpr int first_connection_menu_item_id = 100;
 static constexpr std::array<int, 8> tray_icon_sizes = {
     16, 22, 24, 32, 48, 64, 128, 256,
@@ -154,6 +156,8 @@ static constexpr char dbus_menu_xml[] = R"XML(
 
 struct TrayConnectionEntry {
   int id;
+  bool window = false;
+  bool enabled = true;
   TrayConnectionItem item;
   std::shared_ptr<GdkPixbuf> pixels;
   std::vector<std::uint8_t> png;
@@ -180,6 +184,8 @@ struct TrayBackendImplementation {
   GtkStatusIcon *status_icon = nullptr;
   GtkWidget *status_menu = nullptr;
   GtkWidget *connections_submenu = nullptr;
+  GtkWidget *windows_submenu = nullptr;
+  std::vector<std::shared_ptr<TrayConnectionEntry>> windows;
   std::vector<std::shared_ptr<TrayConnectionEntry>> connections;
   std::int64_t next_connection_id = first_connection_menu_item_id;
   guint menu_revision = 1;
@@ -382,8 +388,9 @@ static std::string resolve_tray_icon_theme_path(
 
 static std::shared_ptr<TrayConnectionEntry> connection_for_id(
     const TrayBackendImplementation *implementation, int id) {
-  for (const auto &entry : implementation->connections) {
-    if (entry->id == id) return entry;
+  for (const auto *entries : {&implementation->connections, &implementation->windows}) {
+    for (const auto &entry : *entries)
+      if (entry->id == id) return entry;
   }
   return {};
 }
@@ -393,6 +400,8 @@ static bool valid_menu_id(const TrayBackendImplementation *implementation,
   return id == 0 || id == open_menu_item_id || id == quit_menu_item_id ||
          id == application_settings_menu_item_id ||
          id == about_menu_item_id || id == connections_menu_item_id ||
+         id == windows_menu_item_id ||
+         (id == empty_windows_menu_item_id && implementation->windows.empty()) ||
          (id == empty_connections_menu_item_id &&
           implementation->connections.empty()) ||
          connection_for_id(implementation, id) != nullptr;
@@ -405,6 +414,8 @@ static std::string menu_item_label(
   if (id == application_settings_menu_item_id)
     return _("Application settings");
   if (id == about_menu_item_id) return _("About elder-terms");
+  if (id == windows_menu_item_id) return _("Open windows");
+  if (id == empty_windows_menu_item_id) return _("No open windows");
   if (id == connections_menu_item_id) return _("Connections");
   if (id == empty_connections_menu_item_id)
     return _("No saved connections");
@@ -424,16 +435,17 @@ static std::string menu_item_label(
 static std::vector<int> menu_children(
     const TrayBackendImplementation *implementation, int id) {
   if (id == 0) {
-    return {open_menu_item_id, connections_menu_item_id,
+    return {open_menu_item_id, connections_menu_item_id, windows_menu_item_id,
             application_settings_menu_item_id, about_menu_item_id,
             quit_menu_item_id};
   }
-  if (id != connections_menu_item_id) return {};
-  if (implementation->connections.empty())
-    return {empty_connections_menu_item_id};
+  if (id != connections_menu_item_id && id != windows_menu_item_id) return {};
+  const auto &entries = id == windows_menu_item_id ? implementation->windows : implementation->connections;
+  if (entries.empty())
+    return {id == windows_menu_item_id ? empty_windows_menu_item_id : empty_connections_menu_item_id};
   std::vector<int> children;
-  children.reserve(implementation->connections.size());
-  for (const auto &entry : implementation->connections)
+  children.reserve(entries.size());
+  for (const auto &entry : entries)
     children.push_back(entry->id);
   return children;
 }
@@ -457,11 +469,13 @@ static GVariant *build_menu_item_properties(
   if (wants_property(names, "enabled"))
     g_variant_builder_add(
         &properties, "{sv}", "enabled",
-        g_variant_new_boolean(id != empty_connections_menu_item_id));
+        g_variant_new_boolean(id != empty_connections_menu_item_id &&
+            id != empty_windows_menu_item_id &&
+            (!connection_for_id(implementation, id) || connection_for_id(implementation, id)->enabled)));
   if (wants_property(names, "visible"))
     g_variant_builder_add(&properties, "{sv}", "visible",
                           g_variant_new_boolean(TRUE));
-  if (id == connections_menu_item_id &&
+  if ((id == connections_menu_item_id || id == windows_menu_item_id) &&
       wants_property(names, "children-display"))
     g_variant_builder_add(&properties, "{sv}", "children-display",
                           g_variant_new_string("submenu"));
@@ -501,6 +515,8 @@ static GVariant *build_menu_group_properties(
     ids = menu_children(implementation, 0);
     for (const int child : menu_children(implementation,
                                          connections_menu_item_id))
+      ids.push_back(child);
+    for (const int child : menu_children(implementation, windows_menu_item_id))
       ids.push_back(child);
   }
   GVariantBuilder builder;
@@ -585,9 +601,11 @@ static void handle_menu_event(TrayBackendImplementation *implementation,
     quit_backend(implementation);
   } else {
     const auto entry = connection_for_id(implementation, item_id);
-    if (entry && implementation->options.callbacks.open_connection)
-      implementation->options.callbacks.open_connection(
-          entry->item.key, build_tray_activation_context(timestamp));
+    if (entry && entry->enabled) {
+      const auto &callback = entry->window ? implementation->options.callbacks.show_window :
+          implementation->options.callbacks.open_connection;
+      if (callback) callback(entry->item.key, build_tray_activation_context(timestamp));
+    }
   }
 }
 
@@ -1034,11 +1052,7 @@ static void on_status_icon_connection(GtkMenuItem *menu_item,
       static_cast<TrayBackendImplementation *>(user_data);
   const int id = GPOINTER_TO_INT(g_object_get_data(
       G_OBJECT(menu_item), "elder-terms-connection-menu-id"));
-  const auto entry = connection_for_id(implementation, id);
-  if (entry && implementation->options.callbacks.open_connection)
-    implementation->options.callbacks.open_connection(
-        entry->item.key,
-        build_tray_activation_context(gtk_get_current_event_time()));
+  handle_menu_event(implementation, id, "clicked", gtk_get_current_event_time());
 }
 
 static void render_xembed_connection_icon(TrayConnectionEntry *entry) {
@@ -1058,26 +1072,28 @@ static void on_xembed_connection_scale_changed(GObject *, GParamSpec *,
   render_xembed_connection_icon(holder->get());
 }
 
-static void refresh_xembed_connections(
-    TrayBackendImplementation *implementation) {
-  if (implementation->connections_submenu == nullptr) return;
-  for (const auto &entry : implementation->connections)
+static void refresh_xembed_menu(
+    TrayBackendImplementation *implementation, GtkWidget *submenu,
+    const std::vector<std::shared_ptr<TrayConnectionEntry>> &entries,
+    const char *empty_label) {
+  if (submenu == nullptr) return;
+  for (const auto &entry : entries)
     entry->xembed_image = nullptr;
   GList *children = gtk_container_get_children(
-      GTK_CONTAINER(implementation->connections_submenu));
+      GTK_CONTAINER(submenu));
   for (GList *child = children; child != nullptr; child = child->next)
     gtk_widget_destroy(GTK_WIDGET(child->data));
   g_list_free(children);
 
-  if (implementation->connections.empty()) {
-    GtkWidget *empty = gtk_menu_item_new_with_label(
-        _("No saved connections"));
+  if (entries.empty()) {
+    GtkWidget *empty = gtk_menu_item_new_with_label(empty_label);
     gtk_widget_set_sensitive(empty, FALSE);
     gtk_menu_shell_append(
-        GTK_MENU_SHELL(implementation->connections_submenu), empty);
+        GTK_MENU_SHELL(submenu), empty);
   }
-  for (const auto &entry : implementation->connections) {
+  for (const auto &entry : entries) {
     GtkWidget *item = gtk_menu_item_new();
+    gtk_widget_set_sensitive(item, entry->enabled);
     GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GtkWidget *image = gtk_image_new();
     std::string label = entry->item.name;
@@ -1089,7 +1105,7 @@ static void refresh_xembed_connections(
     gtk_box_pack_start(GTK_BOX(row), text, TRUE, TRUE, 0);
     gtk_container_add(GTK_CONTAINER(item), row);
     gtk_menu_shell_append(
-        GTK_MENU_SHELL(implementation->connections_submenu), item);
+        GTK_MENU_SHELL(submenu), item);
     entry->xembed_image = image;
     auto *holder = new std::shared_ptr<TrayConnectionEntry>(entry);
     g_object_set_data_full(
@@ -1105,7 +1121,14 @@ static void refresh_xembed_connections(
     g_signal_connect(item, "activate",
                      G_CALLBACK(on_status_icon_connection), implementation);
   }
-  gtk_widget_show_all(implementation->connections_submenu);
+  gtk_widget_show_all(submenu);
+}
+
+static void refresh_xembed_connections(TrayBackendImplementation *implementation) {
+  refresh_xembed_menu(implementation, implementation->connections_submenu,
+      implementation->connections, _("No saved connections"));
+  refresh_xembed_menu(implementation, implementation->windows_submenu,
+      implementation->windows, _("No open windows"));
 }
 
 static void on_status_icon_embedded_changed(GObject *object, GParamSpec *,
@@ -1141,6 +1164,9 @@ static void create_xembed_backend(
   implementation->connections_submenu = gtk_menu_new();
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(connections_item),
                             implementation->connections_submenu);
+  GtkWidget *windows_item = gtk_menu_item_new_with_label(_("Open windows"));
+  implementation->windows_submenu = gtk_menu_new();
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(windows_item), implementation->windows_submenu);
   GtkWidget *application_settings_item =
       gtk_menu_item_new_with_label(_("Application settings"));
   GtkWidget *about_item =
@@ -1150,6 +1176,7 @@ static void create_xembed_backend(
                         open_item);
   gtk_menu_shell_append(GTK_MENU_SHELL(implementation->status_menu),
                         connections_item);
+  gtk_menu_shell_append(GTK_MENU_SHELL(implementation->status_menu), windows_item);
   gtk_menu_shell_append(GTK_MENU_SHELL(implementation->status_menu),
                         application_settings_item);
   gtk_menu_shell_append(GTK_MENU_SHELL(implementation->status_menu),
@@ -1191,6 +1218,8 @@ static void destroy_xembed_backend(
     gtk_widget_destroy(implementation->status_menu);
     implementation->status_menu = nullptr;
     implementation->connections_submenu = nullptr;
+    implementation->windows_submenu = nullptr;
+    for (const auto &entry : implementation->windows) entry->xembed_image = nullptr;
   }
   if (implementation->status_icon != nullptr) {
     if (implementation->embedded_signal_id != 0) {
@@ -1252,7 +1281,7 @@ static cardio::promise<void> load_tray_connection_icon_async(
         connection_for_id(implementation.get(), entry->id) != entry)
       co_return;
     set_connection_entry_pixels(entry.get(), std::move(result.image));
-    emit_menu_layout_updated(implementation.get(), connections_menu_item_id);
+    emit_menu_layout_updated(implementation.get(), entry->window ? windows_menu_item_id : connections_menu_item_id);
   } catch (const cardio::canceled_exception &) {
     // A newer menu owns the visible entry.
   } catch (const std::exception &error) {
@@ -1472,6 +1501,7 @@ void destroy_tray_backend(TrayBackendState *state) {
   const std::shared_ptr<TrayBackendImplementation> implementation =
       state->implementation;
   implementation->destroyed = true;
+  for (const auto &entry : implementation->windows) (void)entry->cancellation.cancel();
   for (const auto &entry : implementation->connections)
     (void)entry->cancellation.cancel();
   implementation->availability =
@@ -1518,6 +1548,31 @@ void update_tray_connections(TrayBackendState *state,
   emit_menu_layout_updated(implementation.get(), connections_menu_item_id);
   if (implementation->options.dispatcher == nullptr) return;
   for (const auto &entry : implementation->connections) {
+    if (entry->item.icon.empty() || entry->item.icon == "default") continue;
+    cardio::fire_and_forget(load_tray_connection_icon_async(
+        implementation, entry, entry->cancellation.get_cancellation()));
+  }
+}
+
+void update_tray_windows(TrayBackendState *state, std::vector<TrayWindowItem> windows) {
+  if (state == nullptr || state->implementation->destroyed) return;
+  const auto implementation = state->implementation;
+  for (const auto &entry : implementation->windows) (void)entry->cancellation.cancel();
+  implementation->windows.clear();
+  for (auto &item : windows) {
+    if (implementation->next_connection_id > std::numeric_limits<int>::max()) break;
+    auto entry = std::make_shared<TrayConnectionEntry>();
+    entry->id = static_cast<int>(implementation->next_connection_id++);
+    entry->window = true;
+    entry->enabled = item.ready;
+    entry->item = {std::move(item.key), std::move(item.name), {}, std::move(item.icon)};
+    set_connection_entry_pixels(entry.get(), default_connection_icon());
+    implementation->windows.push_back(std::move(entry));
+  }
+  refresh_xembed_connections(implementation.get());
+  emit_menu_layout_updated(implementation.get(), windows_menu_item_id);
+  if (implementation->options.dispatcher == nullptr) return;
+  for (const auto &entry : implementation->windows) {
     if (entry->item.icon.empty() || entry->item.icon == "default") continue;
     cardio::fire_and_forget(load_tray_connection_icon_async(
         implementation, entry, entry->cancellation.get_cancellation()));

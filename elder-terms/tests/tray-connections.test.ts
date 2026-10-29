@@ -120,6 +120,8 @@ it('shows all saved connections in the tray and follows changes while the launch
             'Alpha__One (Ctrl+Alt+X)',
             'Beta transfer',
             'Conflict (Ctrl+Alt+X)',
+            'Open windows',
+            'No open windows',
             'Application settings',
             'About elder-terms',
             'Quit',
@@ -181,6 +183,8 @@ it('shows all saved connections in the tray and follows changes while the launch
             'Added',
             'Alpha__One (Ctrl+Alt+Z)',
             'Renamed transfer',
+            'Open windows',
+            'No open windows',
             'Application settings',
             'About elder-terms',
             'Quit',
@@ -329,6 +333,134 @@ it('does not launch a replacement profile through a stale legacy tray item', asy
       }
     );
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 60_000);
+
+it('tracks duplicate terminal and transfer launches until each child exits', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'elder-tray-windows-'));
+  const child = join(directory, 'child.mjs');
+  const capture = join(directory, 'children.json');
+  const pids: number[] = [];
+  await writeFile(
+    child,
+    `#!/usr/bin/env node
+import fs from 'node:fs';
+import net from 'node:net';
+const output = ${JSON.stringify(capture)};
+const server = net.createServer();
+server.listen(${JSON.stringify(directory)} + '/' + process.pid + '.sock', () => {
+  const previous = fs.existsSync(output) ? JSON.parse(fs.readFileSync(output, 'utf8')) : [];
+  fs.writeFileSync(output, JSON.stringify([...previous, process.pid]));
+});
+`
+  );
+  await chmod(child, 0o700);
+  try {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[general]\nstartup_mode=tray\nopen_application=\n'
+        );
+        await writeFile(
+          join(connections, 'Terminal.ini'),
+          '[general]\ntype=local\n'
+        );
+        await writeFile(
+          join(connections, 'Transfer.ini'),
+          '[general]\ntype=sftp\n'
+        );
+      },
+      async ({ app }) => {
+        await app.getTrayItem({ id: 'elder-terms' });
+        const registered = await callBus(
+          app,
+          'org.kde.StatusNotifierWatcher',
+          '/StatusNotifierWatcher',
+          'org.freedesktop.DBus.Properties.Get',
+          ['org.kde.StatusNotifierWatcher', 'RegisteredStatusNotifierItems']
+        );
+        const bus = registered.match(
+          /['"]([^'"]+)\/StatusNotifierItem['"]/u
+        )![1]!;
+        const menu = async (method: string, args: string[]): Promise<string> =>
+          await callBus(
+            app,
+            bus,
+            '/StatusNotifierMenu',
+            `com.canonical.dbusmenu.${method}`,
+            args
+          );
+        const layout = async (id: string): Promise<string> =>
+          await menu('GetLayout', [id, '-1', "['label','enabled']"]);
+        const all = menuItems(await layout('0'));
+        const windows = all.find((item) => item.label === 'Open windows');
+        expect(windows).toBeDefined();
+        for (const [index, name] of [
+          'Terminal',
+          'Terminal',
+          'Transfer',
+        ].entries()) {
+          const item = all.find((item) => item.label === name)!;
+          await menu('Event', [item.id, 'clicked', '<0>', '0']);
+          await waitForResult(async () => {
+            const launched: number[] = JSON.parse(
+              await readFile(capture, 'utf8')
+            );
+            expect(launched).toHaveLength(index + 1);
+            pids.splice(0, pids.length, ...launched);
+          });
+        }
+        const entries = await waitForResult(async () => {
+          const value = await layout(windows!.id);
+          expect(menuItems(value).map((item) => item.label)).toEqual([
+            'Open windows',
+            'Terminal (Terminal) #1',
+            'Terminal (Terminal) #2',
+            'Transfer (File transfer)',
+          ]);
+          // Fixtures never register a window, so presenting them remains disabled.
+          expect(value.match(/'enabled': <false>/gu)).toHaveLength(3);
+          return menuItems(value);
+        });
+        process.kill(pids[0]!, 'SIGTERM');
+        await waitForResult(async () => {
+          expect(
+            menuItems(await layout(windows!.id)).map((item) => item.label)
+          ).toEqual([
+            'Open windows',
+            'Terminal (Terminal)',
+            'Transfer (File transfer)',
+          ]);
+        });
+        await menu('Event', [entries[1]!.id, 'clicked', '<0>', '0']);
+        expect(JSON.parse(await readFile(capture, 'utf8'))).toHaveLength(3);
+        process.kill(pids[1]!, 'SIGKILL');
+        process.kill(pids[2]!, 'SIGTERM');
+        await waitForResult(async () => {
+          expect(
+            menuItems(await layout(windows!.id)).map((item) => item.label)
+          ).toEqual(['Open windows', 'No open windows']);
+        });
+      },
+      {
+        args: [],
+        env: {
+          ELDER_TERMS_TERMINAL_PATH: child,
+          ELDER_TERMS_FILE_TRANSFER_PATH: child,
+        },
+      }
+    );
+  } finally {
+    for (const pid of pids) {
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+      }
+    }
     await rm(directory, { recursive: true, force: true });
   }
 }, 60_000);

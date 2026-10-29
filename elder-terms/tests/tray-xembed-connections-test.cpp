@@ -21,10 +21,10 @@ static void require(bool condition, const char *message) {
   if (!condition) throw std::runtime_error(message);
 }
 
-static GtkWidget *find_connections_item(GtkWidget *widget) {
+static GtkWidget *find_connections_item(GtkWidget *widget, const char *name) {
   if (GTK_IS_MENU_ITEM(widget)) {
     const char *label = gtk_menu_item_get_label(GTK_MENU_ITEM(widget));
-    if (label != nullptr && std::strcmp(label, "Connections") == 0)
+    if (label != nullptr && std::strcmp(label, name) == 0)
       return widget;
   }
   if (!GTK_IS_CONTAINER(widget)) return nullptr;
@@ -32,17 +32,17 @@ static GtkWidget *find_connections_item(GtkWidget *widget) {
   GtkWidget *result = nullptr;
   for (GList *child = children; child != nullptr && result == nullptr;
        child = child->next)
-    result = find_connections_item(GTK_WIDGET(child->data));
+    result = find_connections_item(GTK_WIDGET(child->data), name);
   g_list_free(children);
   return result;
 }
 
-static GtkWidget *find_connections_item() {
+static GtkWidget *find_connections_item(const char *name = "Connections") {
   GList *windows = gtk_window_list_toplevels();
   GtkWidget *result = nullptr;
   for (GList *window = windows; window != nullptr && result == nullptr;
        window = window->next)
-    result = find_connections_item(GTK_WIDGET(window->data));
+    result = find_connections_item(GTK_WIDGET(window->data), name);
   g_list_free(windows);
   return result;
 }
@@ -99,6 +99,7 @@ static cardio::promise<void> exercise_async(
   try {
     Availability availability;
     std::vector<std::string> opened;
+    std::vector<std::string> presented;
     backend = elder_terms::create_tray_backend({
         .application = application,
         .dispatcher = &dispatcher,
@@ -115,6 +116,7 @@ static cardio::promise<void> exercise_async(
                 const elder_terms::TrayActivationContext &) {
               opened.push_back(key);
             },
+            .show_window = [&presented](const std::string &key, const elder_terms::TrayActivationContext &) { presented.push_back(key); },
             .availability_changed = [&availability](
                 elder_terms::TrayBackendAvailabilityState) {
               availability.changed = true;
@@ -191,6 +193,22 @@ static cardio::promise<void> exercise_async(
                                 GTK_MENU_ITEM(items.front())),
                             "No saved connections") == 0,
             "An empty GTK submenu must show a disabled explanation");
+    GtkWidget *windows_item = find_connections_item("Open windows");
+    require(windows_item != nullptr, "The XEmbed menu must contain Open windows");
+    elder_terms::update_tray_windows(backend, {{"launch-a", "Alpha (Terminal)", "default", false}});
+    auto windows = submenu_items(windows_item);
+    require(windows.size() == 1 && !gtk_widget_get_sensitive(windows.front()), "An unready window cannot be presented");
+    gtk_menu_item_activate(GTK_MENU_ITEM(windows.front()));
+    require(presented.empty(), "An unready window must ignore activation");
+    elder_terms::update_tray_windows(backend, {{"launch-a", "Alpha (Terminal)", "default", true}});
+    windows = submenu_items(windows_item);
+    require(gtk_widget_get_sensitive(windows.front()), "Ready windows can be presented");
+    require(gtk_image_get_storage_type(GTK_IMAGE(row_widgets(windows.front()).image)) == GTK_IMAGE_SURFACE, "Tracked windows have connection icons");
+    gtk_menu_item_activate(GTK_MENU_ITEM(windows.front()));
+    require(presented == std::vector<std::string>{"launch-a"}, "Presentation uses the launch identity");
+    elder_terms::update_tray_windows(backend, {});
+    windows = submenu_items(windows_item);
+    require(windows.size() == 1 && !gtk_widget_get_sensitive(windows.front()), "Exited windows leave a disabled empty state");
     gtk_menu_popdown(GTK_MENU(submenu));
     gtk_widget_destroy(anchor);
     elder_terms::destroy_tray_backend(backend);

@@ -92,6 +92,7 @@ struct ChildLaunch {
   ApplicationState *application = nullptr;
   GSubprocess *process = nullptr;
   std::filesystem::path temporary_startup_path;
+  elder_terms::TrayWindowItem window;
 };
 
 // The asynchronous launch borrows its arguments until its completion callback.
@@ -1843,6 +1844,22 @@ create_temporary_startup_profile(ApplicationState *state,
   return path;
 }
 
+static void refresh_tracked_windows(ApplicationState *state) {
+  std::vector<elder_terms::TrayWindowItem> windows;
+  for (const auto *launch : state->child_launches) windows.push_back(launch->window);
+  for (std::size_t i = 0; i < windows.size(); ++i) {
+    std::size_t total = 0, ordinal = 0;
+    for (std::size_t j = 0; j < state->child_launches.size(); ++j) {
+      if (state->child_launches[j]->window.name == state->child_launches[i]->window.name) {
+        ++total;
+        if (j <= i) ++ordinal;
+      }
+    }
+    if (total > 1) windows[i].name += " #" + std::to_string(ordinal);
+  }
+  elder_terms::update_tray_windows(state->tray_backend, std::move(windows));
+}
+
 static void on_child_finished(GObject *source, GAsyncResult *result,
                               gpointer user_data) {
   auto *launch = static_cast<ChildLaunch *>(user_data);
@@ -1860,6 +1877,7 @@ static void on_child_finished(GObject *source, GAsyncResult *result,
     auto &launches = launch->application->child_launches;
     launches.erase(std::remove(launches.begin(), launches.end(), launch),
                    launches.end());
+    refresh_tracked_windows(launch->application);
   }
   g_object_unref(launch->process);
   delete launch;
@@ -1870,7 +1888,8 @@ static void launch_child_process(
     const char *executable_name,
     const std::vector<std::string> &arguments,
     const std::filesystem::path &temporary_startup_path,
-    const std::optional<std::string> &activation_token) {
+    const std::optional<std::string> &activation_token,
+    const elder_terms::SettingsStore &settings, bool file_transfer) {
   const std::string error_summary =
       format_translated_string(_("Failed to start %s"), executable_name);
   if (executable.empty()) {
@@ -1915,12 +1934,18 @@ static void launch_child_process(
     return;
   }
 
+  gchar *launch_id = g_uuid_string_random();
   auto *launch = new ChildLaunch{
       .application = state,
       .process = process,
       .temporary_startup_path = temporary_startup_path,
+      .window = {launch_id, elder_terms::general_connection_name(settings) + " (" +
+          (file_transfer ? _("File transfer") : _("Terminal")) + ")",
+          elder_terms::general_connection_icon(settings), false},
   };
+  g_free(launch_id);
   state->child_launches.push_back(launch);
+  refresh_tracked_windows(state);
   g_subprocess_wait_async(process, nullptr, on_child_finished, launch);
 }
 
@@ -1967,7 +1992,7 @@ static void launch_selected_connection(ApplicationState *state) {
   }
 
   launch_child_process(state, executable, executable_name, arguments,
-                       temporary_startup_path, std::nullopt);
+                       temporary_startup_path, std::nullopt, draft_store, file_transfer);
 }
 
 static void launch_saved_connection(
@@ -2005,7 +2030,7 @@ static void launch_saved_connection(
       path.string(),
   };
   launch_child_process(state, executable, executable_name, arguments, {},
-                       activation_token);
+                       activation_token, loaded.store, file_transfer);
 }
 
 static void perform_pending_action(ApplicationState *state,
@@ -3353,6 +3378,7 @@ static void on_application_startup(GApplication *,
           },
   });
   elder_terms::update_tray_connections(state->tray_backend, state->tray_connections);
+  refresh_tracked_windows(state);
 }
 
 static void on_application_activate(GApplication *,
