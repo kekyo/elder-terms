@@ -390,9 +390,8 @@ static cardio::promise<void> verify_async(
       co_await client->pane_enabled.wait();
       expect(gtk_widget_is_sensitive(tree) && gtk_widget_is_sensitive(path),
              "The browser must accept input after directory loading completes");
-      expect(gtk_widget_is_sensitive(rename) == client->allow_changes &&
-             gtk_widget_is_sensitive(remove) == client->allow_changes,
-             "The context menu must respect the client's write capability after loading");
+      expect(!gtk_widget_is_sensitive(rename) && !gtk_widget_is_sensitive(remove),
+             "Rename and delete must stay disabled until an item is selected");
       auto *create = find_widget(GTK_WIDGET(menus->data), "file_transfer_remote_new_directory_item");
       expect(create && gtk_widget_is_sensitive(create) == client->allow_changes,
              "Remote folder creation must respect the client's write capability");

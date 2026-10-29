@@ -2595,9 +2595,6 @@ msgstr "يتحكم في عرض أحرف مثل ①. اختر العرض الذي
 msgid "Font dependent"
 msgstr "حسب الخط"
 
-msgid "Share name"
-msgstr "اسم المشاركة"
-
 msgid "Domain"
 msgstr "المجال"
 

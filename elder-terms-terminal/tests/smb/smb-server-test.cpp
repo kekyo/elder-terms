@@ -25,7 +25,7 @@ static cardio::promise<void> exercise(Fixture &fixture, int argc, char **argv) {
   require(argc == 5, "Usage: smb-server-test host share user port");
   SmbClientOpenOptions options;
   options.connection.address = argv[1];
-  options.connection.share = argv[2];
+
   options.connection.username = argv[3];
   options.connection.port = std::stoi(argv[4]);
   options.password = g_getenv("ELDER_SMB_PASSWORD");

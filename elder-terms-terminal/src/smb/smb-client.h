@@ -23,15 +23,16 @@ struct SmbClientOpenOptions {
 /**
  * Connects to one SMB share using the caller's cardio/GIO dispatcher.
  * @param options Endpoint, security requirements and runtime credentials.
+ * @param share Single share name, supplied by the server browser or a test driver.
  * @param cancellation Cancellation covering DNS and connection setup.
  * @returns Remote client whose paths are rooted at the configured share.
  */
 cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb_client_async(
-    SmbClientOpenOptions options, cardio::cancellation cancellation);
+    SmbClientOpenOptions options, std::string share, cardio::cancellation cancellation);
 
 /**
  * Creates a server browser with lazy IPC and per-share connections.
- * @param options Server endpoint and runtime credentials; the share field is ignored.
+ * @param options Server endpoint and runtime credentials.
  * @param cancellation Cancels creation before a browser is returned.
  * @returns Client whose root lists shares and whose paths begin with a share name.
  */

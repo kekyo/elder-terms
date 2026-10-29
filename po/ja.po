@@ -2755,9 +2755,6 @@ msgstr "①などの文字の幅を、接続先のアプリが想定する幅に
 msgid "Font dependent"
 msgstr "フォント依存"
 
-msgid "Share name"
-msgstr "共有名"
-
 msgid "Domain"
 msgstr "ドメイン"
 

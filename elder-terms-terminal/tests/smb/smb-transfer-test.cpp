@@ -75,11 +75,11 @@ static cardio::promise<void> exercise_async(int argc, char **argv) {
   require(argc == 5 || argc == 6, "Usage: smb-transfer-test host share user port [readonly]");
   SmbClientOpenOptions options;
   options.connection.address = argv[1];
-  options.connection.share = argv[2];
+
   options.connection.username = argv[3];
   options.connection.port = std::stoi(argv[4]);
   options.password = g_getenv("ELDER_SMB_PASSWORD");
-  auto client = co_await open_smb_client_async(std::move(options), {});
+  auto client = co_await open_smb_client_async(std::move(options), argv[2], {});
   const auto capabilities = client->capabilities();
   require(capabilities.write_operations && capabilities.upload_commit && capabilities.modification_time,
           "SMB upload, conditional commit and modification time must be supported");

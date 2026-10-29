@@ -46,7 +46,6 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"webdav", "idle_timeout_seconds", N_("Idle timeout (seconds)")},
     SettingLabelEntry{"smb", "address", N_("Address")},
     SettingLabelEntry{"smb", "port", N_("Port")},
-    SettingLabelEntry{"smb", "share", N_("Share name")},
     SettingLabelEntry{"smb", "domain", N_("Domain")},
     SettingLabelEntry{"smb", "username", N_("User name")},
     SettingLabelEntry{"smb", "local_directory", N_("Local directory")},

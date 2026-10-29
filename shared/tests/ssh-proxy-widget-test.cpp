@@ -33,7 +33,6 @@ int main(int argc, char **argv) {
       set_explicit_setting_value(&store, general_type_setting_key(), std::string(type));
       if (std::string_view(type) == "smb") {
         set_explicit_setting_value(&store, smb_setting_key("address"), std::string("files.example"));
-        set_explicit_setting_value(&store, smb_setting_key("share"), std::string("team"));
       }
       SettingsWidgetOptions options;
       options.store = store;

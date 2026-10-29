@@ -118,10 +118,10 @@ static cardio::promise<void> probe(int argc, char **argv) {
       SmbClientOpenOptions options;
       options.connection.address = argv[1];
       options.connection.port = std::stoi(argv[4]);
-      options.connection.share = argv[2];
+
       options.connection.username = argv[3];
       options.password = g_getenv("ELDER_SMB_PASSWORD");
-      auto client = co_await open_smb_client_async(options, {});
+      auto client = co_await open_smb_client_async(options, argv[2], {});
       const auto files = co_await client->load_directory_async("/", {});
       require(!files.entries.empty(), "Known share could not be browsed after IPC denial");
       co_await stop_smb_client_async(client);

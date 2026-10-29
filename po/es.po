@@ -2599,9 +2599,6 @@ msgstr "Controla caracteres como ①. Use el ancho esperado por la aplicación r
 msgid "Font dependent"
 msgstr "Según la fuente"
 
-msgid "Share name"
-msgstr "Nombre del recurso compartido"
-
 msgid "Domain"
 msgstr "Dominio"
 

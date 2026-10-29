@@ -904,9 +904,8 @@ public:
 };
 
 cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb_client_async(
-    SmbClientOpenOptions options, cardio::cancellation cancellation) {
-  const auto share = options.connection.share;
-  auto session = co_await open_session_async(std::move(options), share, cancellation);
+    SmbClientOpenOptions options, std::string share, cardio::cancellation cancellation) {
+  auto session = co_await open_session_async(std::move(options), std::move(share), cancellation);
   co_return std::make_shared<SmbClient>(std::move(session));
 }
 

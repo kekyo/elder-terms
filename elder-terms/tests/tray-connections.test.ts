@@ -86,7 +86,7 @@ it('shows all saved connections in the tray and follows changes while the launch
         );
         await writeFile(
           join(connections, 'SMB share.ini'),
-          '[general]\ntype=smb\nconnection_id=bdd60b23-0e7e-4e29-aec5-a8e988f9e5db\n[smb]\naddress=files.example.test\nshare=team\n'
+          '[general]\ntype=smb\nconnection_id=bdd60b23-0e7e-4e29-aec5-a8e988f9e5db\n[smb]\naddress=files.example.test\nremote_directory=/team\n'
         );
       },
       async ({ app, connections }) => {

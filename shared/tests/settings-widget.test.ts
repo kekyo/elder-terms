@@ -96,7 +96,7 @@ interface AppliedStore {
   readonly sftp_remote_directory: string;
   readonly smb_address: string;
   readonly smb_port: string;
-  readonly smb_share: string;
+  readonly smb_remote_directory: string;
   readonly smb_signing: string;
   readonly smb_encryption: string;
   readonly ftp_address: string;
@@ -2217,7 +2217,7 @@ describe.concurrent('shared settings widget', () => {
             ...(connectionType === 'smb'
               ? [
                   '--connection=smb.address=files.example.test',
-                  '--connection=smb.share=team',
+                  '--connection=smb.remote_directory=/team',
                 ]
               : []),
           ],
@@ -3702,8 +3702,8 @@ describe.concurrent('shared settings widget', () => {
           await app.getById('settings_smb_port_entry'),
           'entry'
         );
-        const share = expectElementKind(
-          await app.getById('settings_smb_share_entry'),
+        const remoteDirectory = expectElementKind(
+          await app.getById('settings_smb_remote_directory_entry'),
           'entry'
         );
         await expectInheritedEntry(
@@ -3712,9 +3712,9 @@ describe.concurrent('shared settings widget', () => {
           '445 (built-in default)'
         );
         await address.setText('files.example.test');
-        await share.setText('team/docs');
+        await remoteDirectory.setText('team/docs');
         await expectInsensitive(await app.getById('settings_apply_button'));
-        await share.setText('team');
+        await remoteDirectory.setText('/team/docs');
         await port.setText('0');
         await expectInsensitive(await app.getById('settings_apply_button'));
         await port.setText('1446');
@@ -3741,10 +3741,21 @@ describe.concurrent('shared settings widget', () => {
           type: 'smb',
           smb_address: 'files.example.test',
           smb_port: '1446',
-          smb_share: 'team',
+          smb_remote_directory: '/team/docs',
           smb_signing: 'true',
           smb_encryption: 'true',
         });
+      }
+    );
+  });
+
+  it('temporarily verifies removal of the separate SMB share field', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=smb', '--type=smb'],
+      async ({ app }) => {
+        await selectSettingsTab(app, 'SMB');
+        await expect(app.getById('settings_smb_share_entry')).rejects.toThrow();
       }
     );
   });

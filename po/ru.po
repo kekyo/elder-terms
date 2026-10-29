@@ -2599,9 +2599,6 @@ msgstr "Задаёт ширину символов, таких как ①. Вы�
 msgid "Font dependent"
 msgstr "По шрифту"
 
-msgid "Share name"
-msgstr "Имя общего ресурса"
-
 msgid "Domain"
 msgstr "Домен"
 

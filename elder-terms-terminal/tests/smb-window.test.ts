@@ -128,6 +128,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     }
     const local = join(directory, 'local');
     await mkdir(local);
+    await writeFile(join(local, 'root-upload.txt'), 'must stay local\n');
     upstreamPort = Number(port);
     await new Promise<void>((resolve, reject) => {
       bridge.once('error', reject);
@@ -147,7 +148,6 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
         '[smb]',
         'address=127.0.0.1',
         `port=${bridgeAddress.port}`,
-        `share=${share}`,
         `username=${username}`,
         `local_directory=${local}`,
         'remote_directory=/',
@@ -216,11 +216,118 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     ) as GtkTableElement;
     const rowFor = async (name: string): Promise<number> =>
       await waitForResult(async () => {
+        expect((await tree.info()).states).toContain('sensitive');
         for (let row = 0; row < (await tree.getRowCount()); row += 1)
           if ((await (await tree.cellAt(row, 0))?.info())?.name === name)
             return row;
         throw new Error(`Missing SMB row: ${name}`);
       });
+    const shareRow = await rowFor(share);
+    await tree.selectRow(shareRow);
+    const shareCell = (await tree.cellAt(shareRow, 0))!;
+    const shareBounds = (await shareCell.capture()).bounds;
+    await app.input.moveMouseTo(
+      Math.round(shareBounds.x + shareBounds.width / 2),
+      Math.round(shareBounds.y + shareBounds.height / 2)
+    );
+    await app.input.setMouseButton('right', true);
+    await app.input.setMouseButton('right', false);
+    for (const id of [
+      'file_transfer_remote_new_directory_item',
+      'file_transfer_remote_rename_item',
+      'file_transfer_remote_delete_item',
+    ])
+      expect((await (await app.getById(id)).info()).states).not.toContain(
+        'sensitive'
+      );
+    expect(
+      (await (await app.getById('file_transfer_receive_item')).info()).states
+    ).toContain('sensitive');
+    await evidence.captureEvidence('smb-shares', async () => app.capture());
+    await app.input.pressKey('Escape');
+    const localTree = expectElementKind(
+      await app.getById('file_transfer_local_tree'),
+      'table'
+    ) as GtkTableElement;
+    await waitForResult(async () =>
+      expect(await localTree.getRowCount()).toBe(1)
+    );
+    const localBounds = (await (await localTree.cellAt(0, 0))!.capture())
+      .bounds;
+    await app.input.moveMouseTo(
+      Math.round(localBounds.x + localBounds.width / 2),
+      Math.round(localBounds.y + localBounds.height / 2)
+    );
+    await app.input.setMouseButton('right', true);
+    await app.input.setMouseButton('right', false);
+    expect(
+      (await (await app.getById('file_transfer_send_item')).info()).states
+    ).not.toContain('sensitive');
+    await app.input.pressKey('Escape');
+    const treeBounds = (await tree.capture()).bounds;
+    await app.input.moveMouseTo(
+      treeBounds.x + 10,
+      Math.round(shareBounds.y + shareBounds.height / 2)
+    );
+    await app.input.setMouseButton('left', true);
+    await app.input.setMouseButton('left', false);
+    await rowFor('single.txt');
+    // Enter the share itself, then return to the virtual server root.
+    const expandedShare = (await tree.cellAt(await rowFor(share), 0))!;
+    const expandedBounds = (await expandedShare.capture()).bounds;
+    await app.input.moveMouseTo(
+      Math.round(expandedBounds.x + expandedBounds.width / 2),
+      Math.round(expandedBounds.y + expandedBounds.height / 2)
+    );
+    await app.input.setMouseButton('left', true);
+    await app.input.setMouseButton('left', false);
+    await waitForResult(async () =>
+      expect((await tree.info()).states).toContain('focused')
+    );
+    await app.input.pressKey('Return');
+    const remotePath = expectElementKind(
+      await app.getById('file_transfer_remote_path_entry'),
+      'entry'
+    );
+    await waitForResult(async () =>
+      expect(await remotePath.text()).toBe(`/${share}`)
+    );
+    await expectElementKind(
+      await app.getById('file_transfer_remote_up_button'),
+      'button'
+    ).click();
+    await rowFor(share);
+    expect(await remotePath.text()).toBe('/');
+    const navigate = async (path: string): Promise<void> => {
+      const bounds = (await remotePath.capture()).bounds;
+      await app.input.moveMouseTo(
+        bounds.x + 30,
+        Math.round(bounds.y + bounds.height / 2)
+      );
+      await app.input.setMouseButton('left', true);
+      await app.input.setMouseButton('left', false);
+      await waitForResult(async () =>
+        expect((await remotePath.info()).states).toContain('focused')
+      );
+      await remotePath.setText(path);
+      await app.input.pressKey('Return');
+    };
+    if (!externalAddress) {
+      await navigate('/empty');
+      await waitForResult(async () => {
+        expect(await remotePath.text()).toBe('/empty');
+        expect(await tree.getRowCount()).toBe(0);
+      });
+      await navigate('/denied');
+      const closeError = await app.getById(
+        'file_transfer_operation_error_dialog'
+      );
+      await waitForResult(async () =>
+        expect((await closeError.info()).states).toContain('showing')
+      );
+      await app.input.pressKey('Escape');
+    }
+    await navigate(`/${share}`);
     expect(await rowFor('single.txt')).toBeGreaterThanOrEqual(0);
     expect(await rowFor('folder')).toBeGreaterThanOrEqual(0);
     for (const name of ['single.txt', 'folder']) {
@@ -259,10 +366,6 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     );
     await evidence.captureEvidence('smb-downloaded', async () => app.capture());
 
-    const localTree = expectElementKind(
-      await app.getById('file_transfer_local_tree'),
-      'table'
-    ) as GtkTableElement;
     const rowForTable = async (
       table: GtkTableElement,
       name: string
@@ -578,7 +681,7 @@ proxyWindowTest(
             '[smb]',
             'address=proxy-test.invalid',
             `port=${port}`,
-            'share=probe',
+            'remote_directory=/probe',
             'username=elder',
             `local_directory=${local}`,
             '[ssh_proxy]',

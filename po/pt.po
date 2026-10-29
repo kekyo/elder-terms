@@ -2593,9 +2593,6 @@ msgstr "Controla caracteres como ①. Use a largura esperada pela aplicação re
 msgid "Font dependent"
 msgstr "Conforme a fonte"
 
-msgid "Share name"
-msgstr "Nome do compartilhamento"
-
 msgid "Domain"
 msgstr "Domínio"
 

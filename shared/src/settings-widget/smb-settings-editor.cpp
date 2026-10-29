@@ -40,7 +40,7 @@ struct SmbSettingsEditor {
   GtkWidget *error;
   bool synchronizing = false;
   std::vector<SmbField> fields{
-      {"address"}, {"port"}, {"share"}, {"domain"}, {"username"},
+      {"address"}, {"port"}, {"domain"}, {"username"},
       {"local_directory"}, {"remote_directory"},
       {"require_signing", true}, {"require_encryption", true},
       {"connect_timeout_seconds"}, {"idle_timeout_seconds"}};

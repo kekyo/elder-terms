@@ -813,7 +813,7 @@ static void print_store(const char *prefix,
             << " webdav_certificate_action=" << (elder_terms::webdav_connection_settings(store).prompt_certificate ? "prompt" : "reject")
             << " smb_address=" << elder_terms::smb_connection_settings(store).address
             << " smb_port=" << elder_terms::smb_connection_settings(store).port
-            << " smb_share=" << elder_terms::smb_connection_settings(store).share
+            << " smb_remote_directory=" << elder_terms::smb_connection_settings(store).remote_directory
             << " smb_signing=" << (elder_terms::smb_connection_settings(store).require_signing ? "true" : "false")
             << " smb_encryption=" << (elder_terms::smb_connection_settings(store).require_encryption ? "true" : "false")
             << " width=" << display.width << " height=" << display.height
