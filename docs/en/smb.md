@@ -27,7 +27,7 @@ Connection settings are saved under `[smb]`. A connection can inherit each value
 | Remote directory `remote_directory` | `/` | Initial absolute path within the share. |
 | Require signing `require_signing` | `true` | Require SMB message signing. |
 | Require encryption `require_encryption` | `false` | `true` rejects connections without encryption. `false` still allows encryption required by the server. |
-| Connection timeout `connect_timeout_seconds` | `30` | Seconds allowed for name resolution and connection, 1–86400. |
+| Connection timeout `connect_timeout_seconds` | `30` | Seconds allowed for SMB connection, 1–86400. Does not apply to SSH gateway connection or authentication. |
 | Idle timeout `idle_timeout_seconds` | `60` | Seconds allowed without network progress, 1–86400. |
 
 For example, these settings open `/Documents` within a share. The password is not recorded.
@@ -52,6 +52,7 @@ require_encryption=false
 Enable the gateway on the connection's SSH proxy tab to let it connect to the server and port configured on the SMB tab. Authenticate separately to the gateway and the SMB share. The gateway must be able to reach the share server and permit TCP forwarding. See [Using SSH proxy](ssh-proxy.md) for setup.
 
 SSH encrypts traffic between the client and the gateway. SMB signing and encryption settings apply to traffic between the gateway and the share server.
+The SMB connection timeout does not apply while connecting to or authenticating with the gateway. Close the connection window to cancel the wait.
 
 ## File operation notes
 
