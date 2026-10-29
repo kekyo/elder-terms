@@ -862,7 +862,7 @@ describe.concurrent('shared settings widget', () => {
     }
   });
 
-  it('orders connection settings before Terminal when available', async (context) => {
+  describe('orders connection settings before Terminal when available', () => {
     const cases = [
       {
         args: [] as const,
@@ -937,8 +937,10 @@ describe.concurrent('shared settings widget', () => {
     ] as const;
 
     for (const testCase of cases) {
-      await runSharedGtkTest(context, testCase.args, async ({ app }) => {
-        expect(await visibleSettingsTabNames(app)).toEqual(testCase.expected);
+      it(testCase.args[0] ?? '--type=local', async (context) => {
+        await runSharedGtkTest(context, testCase.args, async ({ app }) => {
+          expect(await visibleSettingsTabNames(app)).toEqual(testCase.expected);
+        });
       });
     }
   });
