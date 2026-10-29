@@ -276,6 +276,7 @@ executable(
     'src/webdav/webdav-metadata.cpp',
     'src/smb/smb-application.cpp',
     'src/smb/smb-client.cpp',
+    'src/smb/smb-ssh-proxy.cpp',
     'src/sftp/sftp-client.cpp',
     'src/sftp/sftp-fixture-client.cpp',
     'src/file-transfer/file-hash.cpp',
@@ -464,6 +465,12 @@ test('webdav-metadata-test', webdav_metadata_test)
 
 ssh_proxy_test_server = executable('ssh-proxy-test-server',
   'tests/cpp/ssh-proxy-test-server.cpp', dependencies: [libssh_dep])
+
+smb_ssh_proxy_test = executable('smb-ssh-proxy-test',
+  ['tests/smb/smb-ssh-proxy-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-ssh-proxy.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep])
+test('smb-ssh-proxy', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_ssh_proxy_test, '--proxy', ssh_proxy_test_server], timeout: 180)
 
 webdav_client_test = executable(
   'webdav-client-test',

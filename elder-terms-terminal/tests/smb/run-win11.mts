@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { win32 } from 'node:path';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { connectRemoteAgent, type RemoteAgent } from 'agent-rover';
+import { withSshGateway } from '../ssh-proxy-test-helper.mjs';
 
 const probe = fileURLToPath(
   new URL('../../../.build/smb-probe/smb-probe', import.meta.url)
@@ -249,121 +251,195 @@ try {
       typeof readOnly === 'string'
   );
 
-  await probeShare(target.address, plain, user, 'basic', 0, undefined, false);
-  await probeShare(target.address, plain, user, 'smb2', 0, undefined, false);
-  await probeShare(
-    target.address,
-    encrypted,
-    user,
-    'encrypt',
-    0,
-    undefined,
-    false
-  );
-  await probeShare(
-    target.address,
-    encrypted,
-    user,
-    'encrypt2',
-    1,
-    /SMB connect failed:.*(?:remote closed connection|encryption|dialect|not supported|reset|STATUS_NOT_SUPPORTED)/iu,
-    false
-  );
-  await probeShare(
-    target.address,
-    `missing-${runId}`,
-    user,
-    'basic',
-    1,
-    /SMB connect failed:.*STATUS_BAD_NETWORK_NAME/iu,
-    false
-  );
-  await probeShare(
-    target.address,
-    plain,
-    user,
-    'basic',
-    1,
-    /SMB connect failed:.*STATUS_LOGON_FAILURE/iu,
-    true
-  );
-  await probeShare(
-    target.address,
-    readOnly,
-    user,
-    'basic',
-    1,
-    /SMB mkdir failed: -13\b/u,
-    false
-  );
-  const verified = await remoteCommand(agent, uploadedScript, 'verify', '');
-  assert.equal(verified.sentinelIntact, true);
-  assert.equal(verified.sharedDirectoryClean, true);
-  if (process.env.ELDER_SMB_TRANSFER_DRIVER) {
-    const driver = process.env.ELDER_SMB_TRANSFER_DRIVER;
-    await transferShare(driver, target.address, plain, user, false);
-    await transferShare(driver, target.address, encrypted, user, false);
-    await transferShare(driver, target.address, readOnly, user, true);
-    const afterTransfer = await remoteCommand(
-      agent,
-      uploadedScript,
-      'verify',
-      ''
+  if (process.env.ELDER_SMB_SSH_PROXY_DRIVER) {
+    const localDirectory = await mkdtemp(
+      resolve(tmpdir(), 'elder-smb-win-proxy-')
     );
-    assert.equal(afterTransfer.sentinelIntact, true);
-    assert.equal(afterTransfer.sharedDirectoryClean, true);
-  }
-  const seeded = await remoteCommand(agent, uploadedScript, 'ui-seed', '');
-  assert.equal(seeded.seeded, true);
-  try {
-    const child = spawn(
-      'npx',
-      ['vitest', 'run', 'tests/smb-window.test.ts', '--reporter=dot'],
-      {
-        cwd: terminalDirectory,
-        env: {
-          ...process.env,
-          ELDER_TERMS_TEST_FTP_APP:
-            process.env.ELDER_TERMS_TEST_FTP_APP ??
-            resolve(
-              terminalDirectory,
-              '../.build/plan12-stage5-build/elder-terms-terminal/elder-terms-file-transfer'
-            ),
-          ELDER_SMB_UI_ADDRESS: target.address,
-          ELDER_SMB_UI_PORT: '445',
-          ELDER_SMB_UI_SHARE: plain,
-          ELDER_SMB_UI_USER: user,
-          ELDER_SMB_UI_PASSWORD: password,
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-        signal: AbortSignal.timeout(180_000),
+    try {
+      for (const [share, mode] of [
+        [plain, 'transfer'],
+        [encrypted, 'encrypted'],
+        [readOnly, 'readonly'],
+      ]) {
+        await withSshGateway(
+          resolve(
+            terminalDirectory,
+            '../.build/elder-terms-terminal/ssh-proxy-test-server'
+          ),
+          localDirectory,
+          async (gateway) => {
+            const child = spawn(
+              process.env.ELDER_SMB_SSH_PROXY_DRIVER!,
+              [target.address, share, user, '445'],
+              {
+                env: {
+                  ...process.env,
+                  ELDER_SMB_PASSWORD: password,
+                  ELDER_SMB_PROXY_PORT: String(gateway.port),
+                  ELDER_SMB_PROXY_KNOWN_HOSTS: gateway.knownHosts,
+                  ELDER_SMB_PROXY_MODE: mode,
+                },
+                stdio: ['ignore', 'pipe', 'pipe'],
+                signal: AbortSignal.timeout(60_000),
+              }
+            );
+            let output = '';
+            child.stdout.on('data', (data) => {
+              output += data;
+            });
+            child.stderr.on('data', (data) => {
+              output += data;
+            });
+            const [code] = await once(child, 'close');
+            assert.equal(code, 0, diagnostic(output));
+            assert.match(output, /PASS SMB client SSH proxy/);
+            assert.deepEqual(gateway.requests, [
+              { host: 'proxy-test.invalid', port: 445 },
+            ]);
+          },
+          target.address
+        );
+        console.log(`PASS win11 SMB SSH proxy ${mode}`);
       }
+      const afterProxy = await remoteCommand(
+        agent,
+        uploadedScript,
+        'verify',
+        ''
+      );
+      assert.equal(afterProxy.sentinelIntact, true);
+      assert.equal(afterProxy.sharedDirectoryClean, true);
+    } finally {
+      await rm(localDirectory, { recursive: true, force: true });
+    }
+  } else {
+    await probeShare(target.address, plain, user, 'basic', 0, undefined, false);
+    await probeShare(target.address, plain, user, 'smb2', 0, undefined, false);
+    await probeShare(
+      target.address,
+      encrypted,
+      user,
+      'encrypt',
+      0,
+      undefined,
+      false
     );
-    let output = '';
-    child.stdout.setEncoding('utf8').on('data', (text: string) => {
-      output += text;
-    });
-    child.stderr.setEncoding('utf8').on('data', (text: string) => {
-      output += text;
-    });
-    const [code] = await once(child, 'exit');
-    assert.equal(code, 0, `Windows SMB UI test failed: ${diagnostic(output)}`);
-    const uiVerified = await remoteCommand(
-      agent,
-      uploadedScript,
-      'ui-verify',
-      ''
+    await probeShare(
+      target.address,
+      encrypted,
+      user,
+      'encrypt2',
+      1,
+      /SMB connect failed:.*(?:remote closed connection|encryption|dialect|not supported|reset|STATUS_NOT_SUPPORTED)/iu,
+      false
     );
-    assert.equal(uiVerified.verified, true);
-    console.log('PASS win11 SMB UI bidirectional transfer and file management');
-  } finally {
-    const cleared = await remoteCommand(agent, uploadedScript, 'ui-clear', '');
-    assert.equal(cleared.cleared, true);
+    await probeShare(
+      target.address,
+      `missing-${runId}`,
+      user,
+      'basic',
+      1,
+      /SMB connect failed:.*STATUS_BAD_NETWORK_NAME/iu,
+      false
+    );
+    await probeShare(
+      target.address,
+      plain,
+      user,
+      'basic',
+      1,
+      /SMB connect failed:.*STATUS_LOGON_FAILURE/iu,
+      true
+    );
+    await probeShare(
+      target.address,
+      readOnly,
+      user,
+      'basic',
+      1,
+      /SMB mkdir failed: -13\b/u,
+      false
+    );
+    const verified = await remoteCommand(agent, uploadedScript, 'verify', '');
+    assert.equal(verified.sentinelIntact, true);
+    assert.equal(verified.sharedDirectoryClean, true);
+    if (process.env.ELDER_SMB_TRANSFER_DRIVER) {
+      const driver = process.env.ELDER_SMB_TRANSFER_DRIVER;
+      await transferShare(driver, target.address, plain, user, false);
+      await transferShare(driver, target.address, encrypted, user, false);
+      await transferShare(driver, target.address, readOnly, user, true);
+      const afterTransfer = await remoteCommand(
+        agent,
+        uploadedScript,
+        'verify',
+        ''
+      );
+      assert.equal(afterTransfer.sentinelIntact, true);
+      assert.equal(afterTransfer.sharedDirectoryClean, true);
+    }
+    const seeded = await remoteCommand(agent, uploadedScript, 'ui-seed', '');
+    assert.equal(seeded.seeded, true);
+    try {
+      const child = spawn(
+        'npx',
+        ['vitest', 'run', 'tests/smb-window.test.ts', '--reporter=dot'],
+        {
+          cwd: terminalDirectory,
+          env: {
+            ...process.env,
+            ELDER_TERMS_TEST_FTP_APP:
+              process.env.ELDER_TERMS_TEST_FTP_APP ??
+              resolve(
+                terminalDirectory,
+                '../.build/plan12-stage5-build/elder-terms-terminal/elder-terms-file-transfer'
+              ),
+            ELDER_SMB_UI_ADDRESS: target.address,
+            ELDER_SMB_UI_PORT: '445',
+            ELDER_SMB_UI_SHARE: plain,
+            ELDER_SMB_UI_USER: user,
+            ELDER_SMB_UI_PASSWORD: password,
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
+          signal: AbortSignal.timeout(180_000),
+        }
+      );
+      let output = '';
+      child.stdout.setEncoding('utf8').on('data', (text: string) => {
+        output += text;
+      });
+      child.stderr.setEncoding('utf8').on('data', (text: string) => {
+        output += text;
+      });
+      const [code] = await once(child, 'exit');
+      assert.equal(
+        code,
+        0,
+        `Windows SMB UI test failed: ${diagnostic(output)}`
+      );
+      const uiVerified = await remoteCommand(
+        agent,
+        uploadedScript,
+        'ui-verify',
+        ''
+      );
+      assert.equal(uiVerified.verified, true);
+      console.log(
+        'PASS win11 SMB UI bidirectional transfer and file management'
+      );
+    } finally {
+      const cleared = await remoteCommand(
+        agent,
+        uploadedScript,
+        'ui-clear',
+        ''
+      );
+      assert.equal(cleared.cleared, true);
+    }
+    const afterUi = await remoteCommand(agent, uploadedScript, 'verify', '');
+    assert.equal(afterUi.sentinelIntact, true);
+    assert.equal(afterUi.sharedDirectoryClean, true);
+    console.log('PASS win11 SMB probe and outside-junction sentinel');
   }
-  const afterUi = await remoteCommand(agent, uploadedScript, 'verify', '');
-  assert.equal(afterUi.sentinelIntact, true);
-  assert.equal(afterUi.sharedDirectoryClean, true);
-  console.log('PASS win11 SMB probe and outside-junction sentinel');
 } catch (error) {
   failure = error;
 } finally {

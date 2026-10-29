@@ -18,8 +18,8 @@
 #include <string>
 #include <vector>
 
-// This fixture maps the requested remote hostname to loopback and records every
-// TCP forwarding request, including FTP's dynamically chosen passive ports.
+// This fixture maps the requested remote hostname to a test server (loopback by
+// default) and records every TCP forwarding request, including passive FTP.
 struct Forward {
   ssh_channel channel = nullptr;
   ssh_event event = nullptr;
@@ -35,6 +35,7 @@ struct Forward {
 };
 struct Gateway {
   ssh_event event = nullptr;
+  in_addr destination{htonl(INADDR_LOOPBACK)};
   std::vector<std::unique_ptr<Forward>> forwards;
 };
 
@@ -122,7 +123,7 @@ static int on_message(ssh_session, ssh_message message, void *opaque) {
   forward->fd = ::socket(name == "::1" ? AF_INET6 : AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
   sockaddr_in peer{};
   peer.sin_family = AF_INET;
-  peer.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  peer.sin_addr = name == "proxy-test.invalid" ? gateway.destination : in_addr{htonl(INADDR_LOOPBACK)};
   peer.sin_port = htons(port);
   sockaddr_in6 peer6{};
   peer6.sin6_family = AF_INET6;
@@ -149,7 +150,9 @@ static int on_message(ssh_session, ssh_message message, void *opaque) {
 }
 
 int main(int argc, char **argv) {
-  if (argc != 2) return 2;
+  if (argc != 2 && argc != 3) return 2;
+  Gateway gateway;
+  if (argc == 3 && ::inet_pton(AF_INET, argv[2], &gateway.destination) != 1) return 2;
   ::signal(SIGPIPE, SIG_IGN);
   ::alarm(300);
   ssh_bind listener = ssh_bind_new();
@@ -163,7 +166,6 @@ int main(int argc, char **argv) {
   std::cout << "PORT " << ntohs(address.sin_port) << std::endl;
   ssh_session session = ssh_new();
   if (!session || ssh_bind_accept(listener, session) != SSH_OK) return 5;
-  Gateway gateway;
   ssh_server_callbacks_struct callbacks{};
   callbacks.auth_none_function = on_none;
   ssh_callbacks_init(&callbacks);

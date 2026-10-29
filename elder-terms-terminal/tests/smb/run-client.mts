@@ -5,10 +5,17 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { once } from 'node:events';
 import { createConnection, createServer, type Socket } from 'node:net';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { withSshGateway } from '../ssh-proxy-test-helper.mjs';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const root = resolve(directory, '../../..');
 const name = `elder-smb-client-${process.pid}`;
+const proxyDirectory =
+  process.argv[3] === '--proxy'
+    ? await mkdtemp(resolve(tmpdir(), 'elder-smb-proxy-'))
+    : undefined;
 const env = {
   ...process.env,
   ELDER_SMB_PASSWORD: randomBytes(24).toString('hex'),
@@ -186,29 +193,53 @@ try {
     "printf 'SMB fixture content\\n' >/share/sample.txt",
   ]);
   for (const share of ['probe', 'encrypted', 'readonly']) {
-    const child = spawn(
-      process.argv[2] ??
-        process.env.ELDER_SMB_CLIENT_DRIVER ??
-        resolve(root, '.build/smb-probe/smb-client-test'),
-      ['localhost', share, 'elder', port],
-      {
-        env,
-        stdio: ['ignore', 'pipe', 'pipe'],
+    const runDriver = async (
+      extraEnv: Record<string, string>
+    ): Promise<void> => {
+      const child = spawn(
+        process.argv[2] ??
+          process.env.ELDER_SMB_CLIENT_DRIVER ??
+          resolve(root, '.build/smb-probe/smb-client-test'),
+        ['localhost', share, 'elder', port],
+        {
+          env: { ...env, ...extraEnv },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }
+      );
+      let output = '';
+      child.stdout.on('data', (chunk) => {
+        output += chunk;
+      });
+      child.stderr.on('data', (chunk) => {
+        output += chunk;
+      });
+      const [status] = await once(child, 'exit');
+      assert.equal(status, 0, output);
+      assert.match(output, /PASS SMB client/);
+      console.log(`${share}: ${output.trim()}`);
+    };
+    if (proxyDirectory) {
+      for (const mode of share === 'probe'
+        ? ['transfer', 'pending']
+        : ['transfer']) {
+        await withSshGateway(
+          process.argv[4],
+          proxyDirectory,
+          async (gateway) => {
+            await runDriver({
+              ELDER_SMB_PROXY_PORT: String(gateway.port),
+              ELDER_SMB_PROXY_KNOWN_HOSTS: gateway.knownHosts,
+              ELDER_SMB_PROXY_MODE: mode,
+            });
+            assert.deepEqual(gateway.requests, [
+              { host: 'proxy-test.invalid', port: Number(port) },
+            ]);
+          }
+        );
       }
-    );
-    let output = '';
-    child.stdout.on('data', (chunk) => {
-      output += chunk;
-    });
-    child.stderr.on('data', (chunk) => {
-      output += chunk;
-    });
-    const [status] = await once(child, 'exit');
-    assert.equal(status, 0, output);
-    assert.match(output, /PASS SMB client/);
-    console.log(`${share}: ${output.trim()}`);
+    } else await runDriver({});
   }
-  if (process.argv[3])
+  if (process.argv[3] && !proxyDirectory)
     for (const mode of process.env.ELDER_SMB_FAULT_MODES?.split(',') ?? [
       'cancel-read',
       'disconnect-read',
@@ -224,4 +255,6 @@ try {
   );
 } finally {
   podman(['rm', '-f', name]);
+  if (proxyDirectory)
+    await rm(proxyDirectory, { recursive: true, force: true });
 }

@@ -9,8 +9,13 @@ import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-/** Runs a gateway that resolves proxy-test.invalid to the test service on loopback. */
-export const withSshGateway = async (executable, directory, check) => {
+/** Runs a gateway resolving proxy-test.invalid to the given test server IPv4 address. */
+export const withSshGateway = async (
+  executable,
+  directory,
+  check,
+  destination = '127.0.0.1'
+) => {
   const key = join(directory, 'gateway-' + randomUUID());
   const generating = spawn('ssh-keygen', [
     '-q',
@@ -24,7 +29,7 @@ export const withSshGateway = async (executable, directory, check) => {
   const [keyCode] = await once(generating, 'close');
   if (keyCode !== 0)
     throw new Error('Could not generate SSH gateway fixture key');
-  const child = spawn(executable, [key], {
+  const child = spawn(executable, [key, destination], {
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   const completion = once(child, 'close');
