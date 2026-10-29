@@ -469,22 +469,19 @@ static void update_application_reconnect_presentation(ApplicationState *state) {
   if (state == nullptr || state->window == nullptr) {
     return;
   }
-  const auto profile =
-      elder_terms::terminal_connection_profile(state->settings_store);
-  if (!profile.has_value()) {
-    return;
-  }
   elder_terms::set_main_window_reconnect_presentation(
       state->main_window,
       elder_terms::terminal_reconnect_presentation(
-          profile->kind, state->auto_close, state->connection_phase,
-          (elder_terms::terminal_runtime_connection_state(state->runtime).phase == elder_terms::TerminalConnectionPhase::closed && !state->closing),
-          false));
+          state->auto_close, state->connection_phase,
+          elder_terms::terminal_runtime_can_connect(state->runtime),
+          state->closing));
 }
 
 static void on_reconnect_clicked(GtkButton *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
-  if (state == nullptr || state->window == nullptr || state->auto_close) {
+  if (state == nullptr || state->window == nullptr || state->auto_close || state->closing ||
+      state->connection_phase != elder_terms::TerminalSessionConnectionPhase::disconnected ||
+      !elder_terms::terminal_runtime_can_connect(state->runtime)) {
     return;
   }
   (void)connect_application_terminal(state);
@@ -750,6 +747,7 @@ static void application_terminal_changed(void *context) {
     if (state->auto_close && !state->connection_failed && state->active_profile.kind != elder_terms::TerminalConnectionKind::serial)
       gtk_window_close(GTK_WINDOW(state->window));
   }
+  update_application_reconnect_presentation(state);
 }
 
 static void on_settings_dialog_destroy(GtkWidget *, gpointer user_data) {

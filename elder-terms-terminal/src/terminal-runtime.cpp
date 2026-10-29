@@ -722,6 +722,7 @@ static bool process_input_policy(TerminalRuntime *runtime) {
     if (!ui_result(boxrig_gtk3_terminal_widget_get_input_state(runtime->widget, &input), "input state")) return false;
   }
   if (runtime->pending_connection && input.phase == BOXRIG_UI_INPUT_DISABLED &&
+      (connection.phase == TerminalConnectionPhase::idle || connection.phase == TerminalConnectionPhase::closed) &&
       (runtime->pending_recovery || !runtime->recovery_completion || runtime->recovery_completion->is_ready())) {
     auto command = std::move(*runtime->pending_connection);
     runtime->pending_connection.reset();
@@ -1339,11 +1340,18 @@ bool terminal_runtime_is_settled(const TerminalRuntime *runtime) {
       state == BOXRIG_UI_SIZE_COMMAND_IDLE;
 }
 
-bool terminal_runtime_connect_local(TerminalRuntime *runtime, TerminalLocalCommand command) {
-  const auto phase = terminal_connection_state(runtime->connection).phase;
+bool terminal_runtime_can_connect(const TerminalRuntime *runtime) {
+  const auto connection = terminal_connection_state(runtime->connection);
   if (runtime->stopped || runtime->pending_connection || runtime->pending_service || runtime->service_active ||
-      (phase != TerminalConnectionPhase::idle && phase != TerminalConnectionPhase::closed)) return false;
+      runtime->encoding_active || runtime->break_active) return false;
+  return connection.phase == TerminalConnectionPhase::idle || connection.phase == TerminalConnectionPhase::closed ||
+      (connection.phase == TerminalConnectionPhase::connected && !connection.carrier_connected);
+}
+
+bool terminal_runtime_connect_local(TerminalRuntime *runtime, TerminalLocalCommand command) {
+  if (!terminal_runtime_can_connect(runtime)) return false;
   if (runtime->ui_failed && !attach_widget(runtime)) return false;
+  terminal_connection_stop(runtime->connection);
   runtime->recovery_request.reset();
   runtime->recovery_stop.cancel();
   runtime->pending_recovery = false;
@@ -1358,10 +1366,11 @@ void terminal_runtime_refresh(TerminalRuntime *runtime) {
 }
 
 bool terminal_runtime_connect_transport(TerminalRuntime *runtime, TerminalTransportRequest request) {
-  const auto phase = terminal_connection_state(runtime->connection).phase;
-  if (runtime->stopped || runtime->pending_connection || runtime->pending_service || runtime->service_active ||
-      (phase != TerminalConnectionPhase::idle && phase != TerminalConnectionPhase::closed)) return false;
+  if (!terminal_runtime_can_connect(runtime)) return false;
   if (runtime->ui_failed && !attach_widget(runtime)) return false;
+  // Carrier loss can leave the physical port open for passive reception.
+  // The frame loop waits for its close completion before starting this request.
+  terminal_connection_stop(runtime->connection);
   runtime->recovery_request.reset();
   runtime->recovery_stop.cancel();
   runtime->pending_recovery = false;

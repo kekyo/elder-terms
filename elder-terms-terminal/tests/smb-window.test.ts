@@ -6,6 +6,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
+import { createConnection, createServer, type Socket } from 'node:net';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -30,9 +31,29 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     execFileSync('podman', args, { encoding: 'utf8', env: podmanEnv });
   let server: ReturnType<typeof spawn> | undefined;
   let launcher: ReturnType<typeof createGtkAppLauncher> | undefined;
+  const sockets = new Set<Socket>();
+  let upstreamPort = 445;
+  const bridge = createServer((incoming) => {
+    const upstream = createConnection({
+      host: externalAddress ?? '127.0.0.1',
+      port: upstreamPort,
+    });
+    sockets.add(incoming);
+    sockets.add(upstream);
+    incoming.pipe(upstream).pipe(incoming);
+    incoming.on('error', () => upstream.destroy());
+    upstream.on('error', () => incoming.destroy());
+    incoming.on('close', () => {
+      sockets.delete(incoming);
+      upstream.destroy();
+    });
+    upstream.on('close', () => {
+      sockets.delete(upstream);
+      incoming.destroy();
+    });
+  });
   const evidence = createTestEvidence(context);
   try {
-    const address = externalAddress ?? '127.0.0.1';
     let port = process.env.ELDER_SMB_UI_PORT ?? '445';
     const share = process.env.ELDER_SMB_UI_SHARE ?? 'probe';
     const username = process.env.ELDER_SMB_UI_USER ?? 'elder';
@@ -107,16 +128,25 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     }
     const local = join(directory, 'local');
     await mkdir(local);
+    upstreamPort = Number(port);
+    await new Promise<void>((resolve, reject) => {
+      bridge.once('error', reject);
+      bridge.listen(0, '127.0.0.1', resolve);
+    });
+    const bridgeAddress = bridge.address();
+    if (!bridgeAddress || typeof bridgeAddress === 'string')
+      throw new Error('No SMB bridge address');
     const config = join(directory, 'connection.ini');
     await writeFile(
       config,
       [
         '[general]',
         'type=smb',
+        'auto_close=false',
         'name=SMB files',
         '[smb]',
-        `address=${address}`,
-        `port=${port}`,
+        'address=127.0.0.1',
+        `port=${bridgeAddress.port}`,
         `share=${share}`,
         `username=${username}`,
         `local_directory=${local}`,
@@ -383,12 +413,56 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
         'replacement upload\n'
       );
     await evidence.captureEvidence('smb-uploaded', async () => app.capture());
+    for (const socket of sockets) socket.destroy();
+    await expectElementKind(
+      await app.getById('file_transfer_remote_refresh_button'),
+      'button'
+    ).click();
+    const reconnect = expectElementKind(
+      await app.getById('file_transfer_reconnect_button'),
+      'button'
+    );
+    await waitForResult(async () =>
+      expect((await reconnect.info()).states).toContain('showing')
+    );
+    await reconnect.click();
+    await waitForResult(async () => {
+      expect((await prompt.info()).states).toContain('showing');
+      expect(await prompt.text()).toBe(username);
+    });
+    await expectElementKind(
+      await app.getById('file_transfer_prompt_accept_button'),
+      'button'
+    ).click();
+    await waitForResult(async () =>
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_message_label'),
+          'label'
+        ).text()
+      ).toBe('Password:')
+    );
+    await prompt.setText(password);
+    await expectElementKind(
+      await app.getById('file_transfer_prompt_accept_button'),
+      'button'
+    ).click();
+    await rowForTable(tree, 'kept.txt');
+    await waitForResult(async () =>
+      expect((await reconnect.info()).states).not.toContain('showing')
+    );
+    await evidence.captureEvidence('smb-reconnected', async () =>
+      app.capture()
+    );
   } finally {
     if (launcher !== undefined) {
       await evidence.flushOutputs([], launcher);
       await launcher.release();
     }
     await evidence.release();
+    for (const socket of sockets) socket.destroy();
+    if (bridge.listening)
+      await new Promise<void>((resolve) => bridge.close(() => resolve()));
     if (server !== undefined) {
       try {
         podman(['rm', '-f', container]);
