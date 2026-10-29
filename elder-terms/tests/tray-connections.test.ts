@@ -14,6 +14,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import type { GtkApp } from 'gestament';
 import { waitForResult } from 'gestament/testing';
@@ -234,6 +235,144 @@ it('shows all saved connections in the tray and follows changes while the launch
       }
     );
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 60_000);
+
+it('presents only the ready tracked child and removes it after exit', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'elder-tray-present-'));
+  const capture = join(directory, 'present.txt');
+  const pidPath = join(directory, 'pid');
+  let pid: number | undefined;
+  try {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[general]\nstartup_mode=tray\nopen_application=\n'
+        );
+        await writeFile(
+          join(connections, 'Terminal.ini'),
+          '[general]\ntype=local\n'
+        );
+      },
+      async ({ app, x11MapRecorder }) => {
+        await app.getTrayItem({ id: 'elder-terms' });
+        const registered = await callBus(
+          app,
+          'org.kde.StatusNotifierWatcher',
+          '/StatusNotifierWatcher',
+          'org.freedesktop.DBus.Properties.Get',
+          ['org.kde.StatusNotifierWatcher', 'RegisteredStatusNotifierItems']
+        );
+        const bus = registered.match(
+          /['"]([^'"]+)\/StatusNotifierItem['"]/u
+        )?.[1];
+        expect(bus).toBeDefined();
+        const menu = async (method: string, args: string[]): Promise<string> =>
+          await callBus(
+            app,
+            bus!,
+            '/StatusNotifierMenu',
+            `com.canonical.dbusmenu.${method}`,
+            args
+          );
+        const layout = async (): Promise<string> =>
+          await menu('GetLayout', ['0', '-1', "['label', 'enabled']"]);
+        const connection = menuItems(await layout()).find(
+          (item) => item.label === 'Terminal'
+        );
+        expect(connection).toBeDefined();
+        await menu('Event', [connection!.id, 'clicked', '<0>', '0']);
+        pid = await waitForResult(async () =>
+          Number(await readFile(pidPath, 'utf8'))
+        );
+        const ready = await waitForResult(async () => {
+          const value = await layout();
+          const item = menuItems(value).find(
+            (entry) => entry.label === 'Terminal (Terminal)'
+          );
+          expect(item).toBeDefined();
+          expect(value).toMatch(
+            /Terminal \(Terminal\)'[^}]*'enabled': <true>/u
+          );
+          return item!;
+        });
+        await execute(
+          'gdbus',
+          [
+            'emit',
+            '--session',
+            '--dest',
+            bus!,
+            '--object-path',
+            '/net/kekyo/ElderTerms/TrackedWindow',
+            '--signal',
+            'net.kekyo.ElderTerms.TrackedWindow.Ready',
+            '42',
+          ],
+          { env: { ...process.env, ...(await app.environment()) } }
+        );
+        expect(
+          menuItems(await layout()).some((item) => item.id === ready.id)
+        ).toBe(true);
+        await x11MapRecorder?.flush();
+        const childWindow = x11MapRecorder
+          ?.events()
+          .find((event) => event.name === 'Tracked window fixture');
+        expect(childWindow).toBeDefined();
+        const competitor = await x11MapRecorder?.focusCompetitor();
+        expect(await x11MapRecorder?.focusedWindow()).toBe(competitor);
+        await menu('Event', [ready.id, 'clicked', '<0>', '0']);
+        await waitForResult(async () => {
+          expect(await readFile(capture, 'utf8')).toBe('present\n');
+          expect(await x11MapRecorder?.focusedWindow()).toBe(
+            childWindow!.windowId
+          );
+        });
+        await menu('Event', [ready.id, 'clicked', '<0>', '0']);
+        await waitForResult(async () => {
+          expect(await readFile(capture, 'utf8')).toBe('present\npresent\n');
+        });
+        expect(
+          menuItems(await layout()).filter(
+            (item) => item.label === 'Terminal (Terminal)'
+          )
+        ).toHaveLength(1);
+        process.kill(pid!, 'SIGTERM');
+        await waitForResult(async () => {
+          expect(menuItems(await layout()).map((item) => item.label)).toContain(
+            'No open windows'
+          );
+        });
+        await menu('Event', [ready.id, 'clicked', '<0>', '0']);
+        expect(await readFile(capture, 'utf8')).toBe('present\npresent\n');
+      },
+      {
+        args: [],
+        recordX11Maps: true,
+        env: {
+          G_DEBUG: 'fatal-criticals',
+          ELDER_TERMS_TERMINAL_PATH: fileURLToPath(
+            new URL(
+              '../../.build/elder-terms/tracked-window-child',
+              import.meta.url
+            )
+          ),
+          ELDER_TERMS_TRACKED_WINDOW_CAPTURE: capture,
+          ELDER_TERMS_TRACKED_WINDOW_PID: pidPath,
+        },
+      }
+    );
+  } finally {
+    if (pid !== undefined) {
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+      }
+    }
     await rm(directory, { recursive: true, force: true });
   }
 }, 60_000);

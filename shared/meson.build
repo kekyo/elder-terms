@@ -121,6 +121,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + elder_terms_noto_pre
   'src/key-binding-input-widget.cpp',
   'src/localization.cpp',
   'src/modal-dialog.cpp',
+  'src/tracked-window.cpp',
   'src/modal-color-button.cpp',
   'src/ip-scanner.cpp',
   'src/ip-scan-name-resolver.cpp',
@@ -226,6 +227,15 @@ test('native-window-icon-test', find_program('xvfb-run'),
 
 shared_regex_test = executable('shared-regex-test', 'tests/regex-test.cpp', dependencies: elder_terms_dep)
 test('shared-regex-test', shared_regex_test)
+
+tracked_window_test = executable('tracked-window-test',
+  'tests/tracked-window-test.cpp', dependencies: elder_terms_dep)
+test('tracked-window-test', find_program('dbus-run-session'),
+  args: ['--', find_program('xvfb-run').full_path(), '-a', tracked_window_test],
+  env: ['GDK_BACKEND=x11', 'NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals'])
+test('tracked-window-no-bus-test', find_program('xvfb-run'),
+  args: ['-a', tracked_window_test, '--no-bus'],
+  env: ['GDK_BACKEND=x11', 'NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals'])
 
 ssh_proxy_widget_test = executable(
   'ssh-proxy-widget-test', 'tests/ssh-proxy-widget-test.cpp',

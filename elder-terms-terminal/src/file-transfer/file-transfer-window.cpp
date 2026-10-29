@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include <elder-terms/modal-dialog.h>
+#include <elder-terms/tracked-window.h>
 #include <elder-terms/connection-icon-image.h>
 #include <elder-terms/connection-desktop-session.h>
 #include <elder-terms/settings-widget.h>
@@ -3058,8 +3059,10 @@ void show_file_transfer_window(const std::shared_ptr<FileTransferWindow> &window
       window->destroyed) {
     return;
   }
+  const bool first_show = !window->shown;
   window->shown = true;
   gtk_widget_show_all(window->window);
+  if (first_show) attach_tracked_window(window->window, present_tracked_window);
   update_file_transfer_overlay_presentation(window.get());
   if (!window->local_load_started) {
     window->local_load_started = true;

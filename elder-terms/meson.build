@@ -52,6 +52,8 @@ elder_terms_launcher = executable(
 )
 
 if get_option('build_tests')
+executable('tracked-window-child', 'tests/tracked-window-child.cpp',
+  dependencies: elder_terms_dep)
 executable(
   'x11-map-recorder',
   'tests/x11-map-recorder.cpp',

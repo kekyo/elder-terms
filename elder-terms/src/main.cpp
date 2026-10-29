@@ -93,6 +93,7 @@ struct ChildLaunch {
   GSubprocess *process = nullptr;
   std::filesystem::path temporary_startup_path;
   elder_terms::TrayWindowItem window;
+  std::string bus_name;
 };
 
 // The asynchronous launch borrows its arguments until its completion callback.
@@ -183,6 +184,8 @@ struct ApplicationState {
   std::string controller_executable;
   std::string launcher_argv0;
   std::vector<ChildLaunch *> child_launches;
+  GDBusConnection *tracked_window_bus = nullptr;
+  guint tracked_window_ready_subscription = 0;
   std::vector<EditorLaunch *> editor_launches;
   std::vector<ConnectionHotkeyTarget> connection_hotkey_targets;
   elder_terms::StartupMode startup_mode =
@@ -1860,6 +1863,68 @@ static void refresh_tracked_windows(ApplicationState *state) {
   elder_terms::update_tray_windows(state->tray_backend, std::move(windows));
 }
 
+static void on_tracked_window_ready(GDBusConnection *, const gchar *sender,
+                                    const gchar *, const gchar *, const gchar *,
+                                    GVariant *parameters, gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (sender == nullptr || sender[0] != ':' ||
+      !g_variant_is_of_type(parameters, G_VARIANT_TYPE("(s)"))) return;
+  const gchar *id = nullptr;
+  g_variant_get(parameters, "(&s)", &id);
+  if (id == nullptr || !g_uuid_string_is_valid(id)) return;
+  const auto found = std::find_if(state->child_launches.begin(),
+      state->child_launches.end(), [id](const ChildLaunch *launch) {
+        return launch->window.key == id;
+      });
+  if (found == state->child_launches.end() || (*found)->window.ready) return;
+  (*found)->bus_name = sender;
+  (*found)->window.ready = true;
+  refresh_tracked_windows(state);
+}
+
+static bool ensure_tracked_window_bus(ApplicationState *state) {
+  if (state->tracked_window_bus != nullptr) return true;
+  GError *error = nullptr;
+  auto *connection = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, &error);
+  if (connection == nullptr) {
+    if (error != nullptr) g_error_free(error);
+    return false;
+  }
+  state->tracked_window_ready_subscription = g_dbus_connection_signal_subscribe(
+      connection, nullptr, "net.kekyo.ElderTerms.TrackedWindow", "Ready",
+      "/net/kekyo/ElderTerms/TrackedWindow", nullptr,
+      G_DBUS_SIGNAL_FLAGS_NONE, on_tracked_window_ready, state, nullptr);
+  state->tracked_window_bus = connection;
+  return true;
+}
+
+static void on_tracked_window_presented(GObject *source, GAsyncResult *result,
+                                        gpointer) {
+  GError *error = nullptr;
+  GVariant *reply = g_dbus_connection_call_finish(
+      G_DBUS_CONNECTION(source), result, &error);
+  if (reply != nullptr) g_variant_unref(reply);
+  if (error != nullptr) g_error_free(error);
+}
+
+static void show_tracked_window(ApplicationState *state, const std::string &key,
+                                const elder_terms::TrayActivationContext &context) {
+  if (state->application_shutting_down || state->quitting ||
+      state->tracked_window_bus == nullptr) return;
+  const auto found = std::find_if(state->child_launches.begin(),
+      state->child_launches.end(), [&key](const ChildLaunch *launch) {
+        return launch->window.key == key;
+      });
+  if (found == state->child_launches.end() || !(*found)->window.ready ||
+      (*found)->bus_name.empty()) return;
+  const std::string bus_name = (*found)->bus_name;
+  g_dbus_connection_call(state->tracked_window_bus, bus_name.c_str(),
+      "/net/kekyo/ElderTerms/TrackedWindow", "net.kekyo.ElderTerms.TrackedWindow",
+      "Present", g_variant_new("(us)", context.activation_time.value_or(0), ""),
+      G_VARIANT_TYPE_UNIT, G_DBUS_CALL_FLAGS_NONE, 3000, nullptr,
+      on_tracked_window_presented, nullptr);
+}
+
 static void on_child_finished(GObject *source, GAsyncResult *result,
                               gpointer user_data) {
   auto *launch = static_cast<ChildLaunch *>(user_data);
@@ -1911,6 +1976,13 @@ static void launch_child_process(
 
   GSubprocessLauncher *launcher =
       g_subprocess_launcher_new(G_SUBPROCESS_FLAGS_NONE);
+  gchar *launch_id = g_uuid_string_random();
+  if (ensure_tracked_window_bus(state)) {
+    g_subprocess_launcher_setenv(launcher, "ELDER_TERMS_LAUNCH_ID",
+                                launch_id, TRUE);
+    g_subprocess_launcher_setenv(launcher, "ELDER_TERMS_LAUNCHER_BUS",
+        g_dbus_connection_get_unique_name(state->tracked_window_bus), TRUE);
+  }
   if (activation_token.has_value() &&
       !activation_token->empty()) {
     g_subprocess_launcher_setenv(
@@ -1922,6 +1994,7 @@ static void launch_child_process(
       g_subprocess_launcher_spawnv(launcher, argv.data(), &error);
   g_object_unref(launcher);
   if (process == nullptr) {
+    g_free(launch_id);
     if (!temporary_startup_path.empty()) {
       g_remove(temporary_startup_path.c_str());
     }
@@ -1934,7 +2007,6 @@ static void launch_child_process(
     return;
   }
 
-  gchar *launch_id = g_uuid_string_random();
   auto *launch = new ChildLaunch{
       .application = state,
       .process = process,
@@ -1942,6 +2014,7 @@ static void launch_child_process(
       .window = {launch_id, elder_terms::general_connection_name(settings) + " (" +
           (file_transfer ? _("File transfer") : _("Terminal")) + ")",
           elder_terms::general_connection_icon(settings), false},
+      .bus_name = {},
   };
   g_free(launch_id);
   state->child_launches.push_back(launch);
@@ -3370,6 +3443,10 @@ static void on_application_startup(GApplication *,
                   launch_saved_connection(state, target->path, std::nullopt,
                                           target->connection_id);
               },
+              .show_window = [state](const std::string &key,
+                  const elder_terms::TrayActivationContext &context) {
+                show_tracked_window(state, key, context);
+              },
               .availability_changed =
                   [state](elder_terms::TrayBackendAvailabilityState
                               availability) {
@@ -3445,6 +3522,13 @@ static void on_application_shutdown(GApplication *,
                                     gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
   state->application_shutting_down = true;
+  if (state->tracked_window_bus != nullptr) {
+    g_dbus_connection_signal_unsubscribe(
+        state->tracked_window_bus, state->tracked_window_ready_subscription);
+    g_object_unref(state->tracked_window_bus);
+    state->tracked_window_bus = nullptr;
+    state->tracked_window_ready_subscription = 0;
+  }
   elder_terms::destroy_control_server(state->control_server);
   state->control_server = nullptr;
   if (state->hotkey_backend != nullptr) {
