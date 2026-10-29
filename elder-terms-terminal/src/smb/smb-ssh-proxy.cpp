@@ -32,7 +32,7 @@ struct SmbProxyState {
   std::uint16_t destination_port = 0;
   std::shared_ptr<AuthenticatedSshTransport> gateway;
   std::unique_ptr<SshChannelConnection> first_channel;
-  std::vector<std::shared_ptr<SmbProxyPeer>> peers;
+  std::vector<std::unique_ptr<SmbProxyPeer>> peers;
   cardio::cancellation_source stopping;
 
   void close_listener() {
@@ -51,18 +51,20 @@ struct SmbSshProxy {
   }
 };
 
-static cardio::promise<void> serve_smb_peer_async(std::shared_ptr<SmbProxyState> state,
-    std::shared_ptr<SmbProxyPeer> peer, std::unique_ptr<SshChannelConnection> channel) {
-  const auto cancellation = state->stopping.get_cancellation();
+static cardio::promise<void> serve_smb_peer_async(SmbProxyState &state,
+    SmbProxyPeer &peer, std::unique_ptr<SshChannelConnection> channel) {
+  // The accept loop owns both objects and joins every peer before releasing
+  // them. Borrowing here avoids a peer owning its own coroutine frame.
+  const auto cancellation = state.stopping.get_cancellation();
   try {
     if (!channel) channel = std::move(co_await SshChannelConnection::open_forward_async(
-        state->gateway, state->host, state->destination_port, cancellation));
-    co_await bridge_ssh_channel_async(std::move(channel), peer->descriptor, cancellation);
+        state.gateway, state.host, state.destination_port, cancellation));
+    co_await bridge_ssh_channel_async(std::move(channel), peer.descriptor, cancellation);
   } catch (...) {
     // Closing this endpoint reports route failure to libsmb2. Other share
     // channels retain their own lifetime; no request falls back to direct TCP.
   }
-  peer->close();
+  peer.close();
 }
 
 static cardio::promise<void> serve_smb_proxy_async(std::shared_ptr<SmbProxyState> state) {
@@ -73,10 +75,11 @@ static cardio::promise<void> serve_smb_proxy_async(std::shared_ptr<SmbProxyState
       const int accepted = ::accept4(state->listener, nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK);
       if (accepted >= 0) {
         std::erase_if(state->peers, [](const auto &peer) { return peer->task && peer->task->is_ready(); });
-        auto peer = std::make_shared<SmbProxyPeer>();
+        auto peer = std::make_unique<SmbProxyPeer>();
         peer->descriptor = accepted;
-        state->peers.push_back(peer);
-        peer->task.emplace(serve_smb_peer_async(state, peer, std::move(state->first_channel)));
+        state->peers.push_back(std::move(peer));
+        auto &active = *state->peers.back();
+        active.task.emplace(serve_smb_peer_async(*state, active, std::move(state->first_channel)));
         continue;
       }
       if (errno == EINTR) continue;

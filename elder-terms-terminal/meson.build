@@ -482,6 +482,16 @@ test('smb-server', find_program('node'),
   args: [files('tests/smb/run-client.mts'), smb_server_test], timeout: 180)
 test('smb-server-proxy', find_program('node'),
   args: [files('tests/smb/run-client.mts'), smb_server_test, '--server-proxy', ssh_proxy_test_server], timeout: 180)
+if meson.get_compiler('cpp').has_link_argument('-fsanitize=leak')
+  # Standalone LeakSanitizer needs only a different link of the same driver.
+  smb_server_lifetime_test = executable('smb-server-lifetime-test',
+    objects: smb_server_test.extract_all_objects(recursive: false),
+    dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep],
+    link_language: 'cpp', link_args: ['-fsanitize=leak'])
+  test('smb-server-proxy-lifetime', find_program('node'),
+    args: [files('tests/smb/run-client.mts'), smb_server_lifetime_test, '--server-proxy', ssh_proxy_test_server],
+    env: ['LSAN_OPTIONS=detect_leaks=1:exitcode=23'], timeout: 180)
+endif
 
 smb_share_list_test = executable('smb-share-list-test',
   ['tests/smb/smb-share-list-test.cpp', 'src/smb/smb-share-list.cpp'],
