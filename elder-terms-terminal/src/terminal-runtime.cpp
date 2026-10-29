@@ -233,6 +233,34 @@ static gboolean selection_native_event(GtkWidget *, GdkEvent *event, gpointer co
   return FALSE;
 }
 
+static bool same_text_boundary(const boxrig_text_position &left, const boxrig_text_position &right) {
+  return left.screen == right.screen && left.line_id.epoch == right.line_id.epoch &&
+      left.line_id.serial == right.line_id.serial && left.line_revision == right.line_revision && left.column == right.column;
+}
+
+static bool refresh_selection_press(TerminalRuntime *runtime) {
+  auto &pressed = runtime->selection_press.hit;
+  boxrig_ui_hit_test_result current{};
+  // Row publication may advance layout generations without changing the
+  // pressed grapheme. Re-hit its coordinates, but never retarget a gesture
+  // after text replacement, scrolling, bidi changes or a transient overlay.
+  if (boxrig_ui_view_hit_test_with_composition(boxrig_gtk3_terminal_widget_view(runtime->widget),
+      boxrig_gtk3_terminal_widget_composition(runtime->widget), pressed.x, pressed.y, &current) != BOXRIG_UI_OK ||
+      !current.inside_grid || !current.text_position_valid ||
+      (current.overlay_roles & (BOXRIG_UI_OVERLAY_IME | BOXRIG_UI_OVERLAY_CANDIDATES)) ||
+      current.row != pressed.row || current.visual_column != pressed.visual_column ||
+      current.logical_column != pressed.logical_column || current.trailing_half != pressed.trailing_half ||
+      current.hyperlink_handle != pressed.hyperlink_handle ||
+      !same_text_boundary(current.leading_position, pressed.leading_position) ||
+      !same_text_boundary(current.trailing_position, pressed.trailing_position) ||
+      !same_text_boundary(current.position, pressed.position)) return false;
+  pressed = current;
+  // Borrowed hyperlink storage must not survive this synchronous hit.
+  pressed.hyperlink_uri = nullptr;
+  pressed.hyperlink_id = nullptr;
+  return true;
+}
+
 static void validate_selection_gesture(TerminalRuntime *runtime) {
   if (!selecting(runtime)) return;
   auto *view = boxrig_gtk3_terminal_widget_view(runtime->widget);
@@ -248,10 +276,7 @@ static void validate_selection_gesture(TerminalRuntime *runtime) {
     boxrig_ui_selection selection{};
     valid = valid && boxrig_ui_view_get_selection(view, &selection) && !selection.stale;
   } else {
-    std::size_t count = 0;
-    const auto status = boxrig_ui_view_query_text_annotation_hits(view, &runtime->selection_press.hit,
-        BOXRIG_UI_ANNOTATION_HIT_ALL, nullptr, 0, &count, nullptr);
-    valid = valid && (status == BOXRIG_UI_OK || status == BOXRIG_UI_LIMIT_EXCEEDED);
+    valid = valid && refresh_selection_press(runtime);
   }
   if (!valid) cancel_selection_gesture(runtime);
 }
@@ -375,6 +400,7 @@ static void schedule_selection_scroll(TerminalRuntime *runtime) {
 
 static std::optional<TerminalHyperlinkResolution> released_link(
     TerminalRuntime *runtime, const boxrig_ui_hit_test_result &hit) {
+  if (!refresh_selection_press(runtime)) return std::nullopt;
   const auto &press = runtime->selection_press;
   if (!runtime->links || !press.link) return std::nullopt;
   std::size_t required = 0;
@@ -440,7 +466,8 @@ static boxrig_input_mouse_route route_mouse(
       }
       return BOXRIG_INPUT_MOUSE_ROUTE_APPLICATION;
     }
-    const auto status = boxrig_ui_view_begin_selection_with_options(view, &press.options, &press.hit);
+    const auto status = refresh_selection_press(runtime) ?
+        boxrig_ui_view_begin_selection_with_options(view, &press.options, &press.hit) : BOXRIG_UI_STALE;
     runtime->selection_press = {};
     if (status != BOXRIG_UI_OK) {
       if (selection_result(runtime, status, "selection start") == BOXRIG_UI_OK)

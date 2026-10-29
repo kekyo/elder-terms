@@ -264,7 +264,49 @@ static cardio::promise<void> click_scenarios(Fixture *fixture) {
         co_await clipboard(GDK_SELECTION_PRIMARY) == "cancel pending", "Escape cancels a pending click without side effects");
   }
 
-  // A retained press must never acquire a new generation after terminal output.
+  for (const auto modifier : {GDK_SHIFT_MASK, GDK_CONTROL_MASK}) for (const bool same_target : {true, false}) {
+    gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY), "layout pending", -1);
+    mouse(fixture, GDK_BUTTON_PRESS, 0.1, 0.5, modifier);
+    co_await barrier(fixture, false);
+    boxrig_ui_hit_test_result before{}, after{};
+    expect(boxrig_ui_view_hit_test(view(fixture), BOXRIG_UI_FIXED_ONE,
+        metrics.cell_height / 2 * BOXRIG_UI_FIXED_ONE, &before) == BOXRIG_UI_OK,
+        "read the pending press before layout publication");
+    boxrig_ui_layout_result grid{};
+    expect(boxrig_ui_view_get_layout(view(fixture), &grid) == BOXRIG_UI_OK, "read the current grid");
+    std::vector<boxrig_text_cluster_input> clusters(grid.columns);
+    for (std::size_t column = 0; column < clusters.size(); ++column) {
+      clusters[column].logical_column = column;
+      clusters[column].column_count = 1;
+      clusters[column].text_offset = column;
+      clusters[column].text_length = 1;
+      clusters[column].bidi_level = same_target ? 0 : 1;
+    }
+    boxrig_text_layout *layout = nullptr;
+    expect(boxrig_text_layout_create(clusters.data(), clusters.size(), grid.columns,
+        same_target ? BOXRIG_TEXT_DIRECTION_LTR : BOXRIG_TEXT_DIRECTION_RTL, &layout) == BOXRIG_TEXT_LAYOUT_OK,
+        "create republished row geometry");
+    expect(boxrig_ui_view_store_row_layout(view(fixture), 0, layout, 4096, before.layout_generation + 1) == BOXRIG_UI_OK,
+        "publish new row geometry while the button is held");
+    expect(boxrig_ui_view_hit_test(view(fixture), before.x, before.y, &after) == BOXRIG_UI_OK &&
+        after.layout_generation != before.layout_generation, "row publication advances the layout generation");
+    if (same_target) expect(after.position.line_id.serial == before.position.line_id.serial &&
+        after.position.line_revision == before.position.line_revision && after.position.column == before.position.column,
+        "layout publication changes its generation without replacing the pressed text");
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 0.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_BUTTON_RELEASE, 3.9, 0.5, GDK_BUTTON1_MASK);
+    co_await barrier(fixture, false);
+    if (same_target) expect(selected(fixture) && co_await clipboard(GDK_SELECTION_PRIMARY) == "alph",
+        "a pending drag survives equivalent row layout publication");
+    else expect(!selected(fixture) && co_await clipboard(GDK_SELECTION_PRIMARY) == "layout pending",
+        "changed visual-to-logical mapping must not retarget a pending drag");
+    expect(terminal_runtime_feed(runtime, "\033[Halpha beta gamma\r\nsecond row"),
+        "restore renderer-owned row geometry before the next gesture");
+    while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
+  }
+
+  // A retained press must never acquire replacement text after terminal output.
+  gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY), "cancel pending", -1);
   mouse(fixture, GDK_BUTTON_PRESS, 0.1, 0.5, GDK_CONTROL_MASK);
   co_await barrier(fixture, false);
   expect(terminal_runtime_feed(runtime, "\033[Hchanged text"), "replace text under a pending click");
