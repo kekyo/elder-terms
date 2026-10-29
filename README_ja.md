@@ -755,7 +755,7 @@ OpenGLを利用できずCairoへ切り替わった場合も、現在使ってい
 すりガラスは対応するコンポジターへ要求し、背後のデスクトップをぼかします。端末の文字や背景画像はぼかしません。
 設定画面には実際の利用状態を表示します。すりガラスが使えない場合は単純透過へ、透過自体を使えない場合は不透明へ切り替わります。
 「すりガラスを要求しています」は要求が受け付けられた状態です。ぼかしの表示には、コンポジター側の効果設定も影響します。
-対応条件は[boxrigの背景効果](https://github.com/kekyo/boxrig/blob/0.9.0/docs/ja/background.md#osのすりガラス効果を要求する)を参照してください。
+対応条件は[boxrigの背景効果](https://github.com/kekyo/boxrig/blob/0.10.0/docs/ja/background.md#osのすりガラス効果を要求する)を参照してください。
 
 ## 文字色の視認性を改善する
 
@@ -803,7 +803,7 @@ Eのプレビューは標準パレットを使った見本です。接続先が�
 
 選べる色フィルタは一つです。既存のOklchと反転フィルタを同時に指定することはできません。「色の区別を補助」は各方式と併用でき、その再配色の後に反転します。端末に保存された文字や色、通信内容、コピー、ログは変わりません。
 
-背景画像、透過先のデスクトップ、Kitty画像、カラー絵文字そのものの画素は反転しません。透過や画像を重ねた場合の読みやすさは、実際の表示で確認してください。[boxrigの色補正の対象範囲](https://github.com/kekyo/boxrig/blob/0.9.0/docs/ja/color-filters.md)
+背景画像、透過先のデスクトップ、Kitty画像、カラー絵文字そのものの画素は反転しません。透過や画像を重ねた場合の読みやすさは、実際の表示で確認してください。[boxrigの色補正の対象範囲](https://github.com/kekyo/boxrig/blob/0.10.0/docs/ja/color-filters.md)
 
 ```ini
 [terminal]
@@ -839,7 +839,7 @@ ANSI16色は端末の基本パレット、256色は番号で指定する拡張�
 
 補正は表示だけに適用し、送受信内容、端末が保持する色、コピー、ログは変えません。
 背景画像、透過先のデスクトップ、Kitty画像、カラー絵文字の画素は対象外です。
-対象範囲の詳細は[boxrigの表示色補正](https://github.com/kekyo/boxrig/blob/0.9.0/docs/ja/color-filters.md)を参照してください。
+対象範囲の詳細は[boxrigの表示色補正](https://github.com/kekyo/boxrig/blob/0.10.0/docs/ja/color-filters.md)を参照してください。
 
 ```ini
 [terminal]
@@ -1193,7 +1193,7 @@ OSC 8リンクでは元のリンク先URIをコピーします。メニュー表
 - 「OSC 8ターゲット」は、生のターゲット全体に正規表現を適用します。
 - 「表示中の端末テキスト」は、ポインター位置にある一致部分を検索します。空文字列に一致する正規表現は指定出来ません。
 
-リンクと受信マクロの正規表現には、[boxrigのパターン構文](https://github.com/kekyo/boxrig/blob/0.9.0/docs/ja/regex.md)を使用します。
+リンクと受信マクロの正規表現には、[boxrigのパターン構文](https://github.com/kekyo/boxrig/blob/0.10.0/docs/ja/regex.md)を使用します。
 文字クラス、グループ、選択、反復、番号付き・名前付きキャプチャを使えます。後方参照、先読み・後読み、空文字列に一致する式には対応していません。
 `\d`、`\s`、`\w`はASCIIの範囲です。Unicodeの文字には`\p{L}`、十進数字には`\p{Nd}`などの一般カテゴリを指定します。
 `.`は改行にも一致し、`^`と`$`は照合する入力全体の先頭・末尾を指します。同じ開始位置では最長の一致を選び、大文字・小文字を区別します。
@@ -1257,7 +1257,7 @@ WebDAVにはHTTP/HTTPSと非同期DNSを有効にしたlibcurl 7.88.1以降、�
 FTPクライアントには、FTPと非同期DNSを有効にした[libcurl](https://curl.se/libcurl/) 7.88.1以降が必要です。FTPSには[TLSを有効にしたlibcurl](https://curl.se/libcurl/c/libcurl-tutorial.html)が必要です。Debian／Ubuntuの配布パッケージはOpenSSL版libcurlを使用し、既定の信頼ストアのために `ca-certificates` に依存します。ソースからビルドする場合はOpenSSLのヘッダーとライブラリも必要です。証明書確認ではlibcurlと同じバージョンのOpenSSLが必要で、接続前にアプリケーションが確認します。
 
 UbuntuまたはDebianでビルドする場合は、C++20対応コンパイラ、Meson、Ninja、gettextと、使用するライブラリの開発パッケージをインストールします。
-描画にはGTK3 3.24以降、Pango 1.50以降、Cairo 1.18以降、IBus 1.5.29以降、Wayland client 1.22以降が必要です。[boxrigのビルド要件](https://github.com/kekyo/boxrig/blob/0.9.0/docs/ja/building.md)も参照してください。
+描画にはGTK3 3.24以降、Pango 1.50以降、Cairo 1.18以降、IBus 1.5.29以降、Wayland client 1.22以降が必要です。[boxrigのビルド要件](https://github.com/kekyo/boxrig/blob/0.10.0/docs/ja/building.md)も参照してください。
 
 ```bash
 sudo apt update
