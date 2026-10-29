@@ -1689,6 +1689,10 @@ msgstr "転送中..."
 msgid "Copy"
 msgstr "コピー"
 
+#: elder-terms-terminal/src/main-window.cpp
+msgid "Copy Link"
+msgstr "リンクをコピー"
+
 #: elder-terms-terminal/src/main-window.cpp:351
 msgid "Paste"
 msgstr "貼り付け"

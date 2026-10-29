@@ -618,6 +618,7 @@ A normal selection follows text order; a block selection is a rectangle aligned 
 | Double / triple click | Selects a word / line |
 | Ctrl + left drag | Makes a block selection. Releasing Ctrl during the drag keeps its rectangular shape |
 | Ctrl + click on a link | Opens the link when you release over the same link. Dragging instead makes a block selection |
+| Right-click on a link, then “Copy Link” | Copies the link target to the clipboard |
 | Escape | Cancels the selection and any active drag |
 | Mouse wheel during a drag | Extends the selection through history while retaining its anchor. Ctrl does not zoom during this operation |
 | Drag beyond the top or bottom edge | Scrolls through history automatically until you release the button |
@@ -1301,6 +1302,11 @@ Hold `Ctrl` and left-click a recognized link to run its configured external
 command. A rule can inspect either the target of an OSC 8 escape sequence or a
 matching substring in visible terminal text. Rules are evaluated in their
 displayed order, and only the first matching rule is run.
+
+Right-click a recognized link and choose "Copy Link" to copy its target to the
+clipboard. For visible-text links, this copies the entire matched text. For
+OSC 8 links, it copies the original target URI. If terminal output changes while
+the menu is open, the target from when you opened the menu is still copied.
 
 Select a connection in the launcher and open its "Links" tab to enable or
 disable link actions, add and remove rules, change their order, edit command

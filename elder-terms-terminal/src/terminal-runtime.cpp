@@ -1265,6 +1265,10 @@ void terminal_runtime_set_hyperlink_rules(TerminalRuntime *runtime,
 
 bool terminal_runtime_has_link_hover(const TerminalRuntime *runtime) { return runtime->link_hover; }
 
+std::optional<std::string> terminal_runtime_link_text(TerminalRuntime *runtime, const boxrig_ui_hit_test_result &hit) {
+  return runtime->links ? terminal_links_copy_target(runtime->links.get(), hit) : std::nullopt;
+}
+
 void terminal_runtime_set_macro_rules(TerminalRuntime *runtime, std::vector<MacroRule> rules,
     bool follow_return_code, std::function<void(std::string, std::vector<std::string>)> command,
     std::function<void(std::string)> error) {

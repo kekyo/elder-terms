@@ -77,6 +77,17 @@ std::optional<TerminalHyperlinkResolution> terminal_links_resolve(
     TerminalLinks *links, const boxrig_ui_hit_test_result &hit);
 
 /**
+ * Copies the complete recognized text or OSC 8 target at a current pointer hit.
+ * @param links Live link state with an attached view.
+ * @param hit Revisioned pointer hit; stale and incomplete results are ignored.
+ * @return Owned UTF-8 target, or no value for an absent or non-textual target.
+ * @remarks Uses action rule priority without executing commands or expanding
+ * the copied text. An action rejection does not prevent copying its target.
+ */
+std::optional<std::string> terminal_links_copy_target(
+    TerminalLinks *links, const boxrig_ui_hit_test_result &hit);
+
+/**
  * Clears annotations and unregisters recognizers before releasing rules.
  * @param links Owned state, or nullptr.
  */

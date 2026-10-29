@@ -73,6 +73,8 @@ static constexpr const char *indicator_on_icon_file_name = "green-on.png";
 static constexpr const char *indicator_off_icon_file_name = "green-off.png";
 static constexpr const char *terminal_context_copy_item_id =
     "terminal_context_copy_item";
+static constexpr const char *terminal_context_copy_link_item_id =
+    "terminal_context_copy_link_item";
 static constexpr const char *terminal_context_paste_item_id =
     "terminal_context_paste_item";
 static constexpr const char *terminal_context_break_item_id =
@@ -86,6 +88,8 @@ struct TerminalContextMenuState {
   BoxrigGtk3TerminalWidget *terminal = nullptr;
   GtkWidget *menu = nullptr;
   GtkWidget *copy_item = nullptr;
+  GtkWidget *copy_link_item = nullptr;
+  std::optional<std::string> link_text;
   GtkWidget *paste_item = nullptr;
   GtkWidget *break_item = nullptr;
   guint paste_query_generation = 0;
@@ -156,6 +160,13 @@ static void on_clipboard_targets_received(GtkClipboard *, GdkAtom *atoms,
       request->can_paste && request->can_paste();
   gtk_widget_set_sensitive(request->paste_item,
                            text_available && application_available);
+}
+
+static void on_terminal_context_copy_link_activate(GtkMenuItem *, gpointer data) {
+  const auto *state = static_cast<TerminalContextMenuState *>(data);
+  if (!state->link_text) return;
+  gtk_clipboard_set_text(gtk_widget_get_clipboard(GTK_WIDGET(state->terminal), GDK_SELECTION_CLIPBOARD),
+      state->link_text->c_str(), -1);
 }
 
 static void update_terminal_context_paste_sensitivity(
@@ -229,7 +240,10 @@ static void on_terminal_context_break_activate(GtkMenuItem *, gpointer data) {
   }
 }
 
-static void show_terminal_context_menu(TerminalContextMenuState *state, const boxrig_mouse_event &event) {
+static void show_terminal_context_menu(TerminalContextMenuState *state, const boxrig_mouse_event &event,
+    std::optional<std::string> link_text) {
+  state->link_text = std::move(link_text);
+  gtk_widget_set_visible(state->copy_link_item, state->link_text.has_value());
   // Copy is a view action and remains available when screen-reader text is off.
   boxrig_ui_selection selection{};
   const bool selected = boxrig_ui_view_get_selection(
@@ -277,7 +291,8 @@ boxrig_input_key_route route_main_window_terminal_key(MainWindow *main_window, c
   return BOXRIG_INPUT_KEY_ROUTE_APPLICATION;
 }
 
-boxrig_input_mouse_route route_main_window_terminal_mouse(MainWindow *main_window, const boxrig_mouse_event &event) {
+boxrig_input_mouse_route route_main_window_terminal_mouse(MainWindow *main_window, const boxrig_mouse_event &event,
+    const boxrig_ui_hit_test_result &hit) {
   if (event.action != BOXRIG_MOUSE_PRESS && event.action != BOXRIG_MOUSE_RELEASE)
     return BOXRIG_INPUT_MOUSE_ROUTE_TERMINAL;
   auto *state = static_cast<TerminalContextMenuState *>(g_object_get_data(
@@ -287,7 +302,8 @@ boxrig_input_mouse_route route_main_window_terminal_mouse(MainWindow *main_windo
   } else if (event.button == BOXRIG_MOUSE_BUTTON_RIGHT) {
     // The original button release has already reached GTK by frame dispatch.
     // Opening here prevents that release from immediately dismissing the menu.
-    if (event.action == BOXRIG_MOUSE_RELEASE) show_terminal_context_menu(state, event);
+    if (event.action == BOXRIG_MOUSE_RELEASE) show_terminal_context_menu(state, event,
+        terminal_runtime_link_text(main_window->runtime, hit));
   }
   else return BOXRIG_INPUT_MOUSE_ROUTE_TERMINAL;
   return BOXRIG_INPUT_MOUSE_ROUTE_APPLICATION;
@@ -310,6 +326,10 @@ static void install_terminal_context_menu(GtkWidget *terminal_widget,
   gestament_gtk_assign_accessible_id(state->copy_item,
                                      terminal_context_copy_item_id);
   gtk_menu_shell_append(GTK_MENU_SHELL(state->menu), state->copy_item);
+  state->copy_link_item = gtk_menu_item_new_with_label(_("Copy Link"));
+  gestament_gtk_assign_accessible_id(state->copy_link_item,
+                                     terminal_context_copy_link_item_id);
+  gtk_menu_shell_append(GTK_MENU_SHELL(state->menu), state->copy_link_item);
   state->paste_item = gtk_menu_item_new_with_label(_("Paste"));
   gestament_gtk_assign_accessible_id(state->paste_item,
                                      terminal_context_paste_item_id);
@@ -324,6 +344,8 @@ static void install_terminal_context_menu(GtkWidget *terminal_widget,
 
   g_signal_connect(state->copy_item, "activate",
                    G_CALLBACK(on_terminal_context_copy_activate), state);
+  g_signal_connect(state->copy_link_item, "activate",
+                   G_CALLBACK(on_terminal_context_copy_link_activate), state);
   g_signal_connect(state->paste_item, "activate",
                    G_CALLBACK(on_terminal_context_paste_activate), state);
   g_signal_connect(state->break_item, "activate",

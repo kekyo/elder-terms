@@ -553,6 +553,70 @@ static cardio::promise<void> observe_main_loop(Fixture *fixture) {
     co_await fixture->changed.wait();
 }
 
+static cardio::promise<void> link_copy_scenarios(Fixture *fixture) {
+  auto *runtime = fixture->window->runtime;
+  std::size_t activations = 0;
+  GtkWidget *copy_link = nullptr;
+  terminal_runtime_set_hyperlink_rules(runtime, default_hyperlink_action_rules(),
+      [&activations](TerminalHyperlinkResolution) { ++activations; });
+  for (const bool osc8 : {false, true}) {
+    const std::string target = osc8 ? "vscode://file/tmp/source%20file.cpp:12:3" : "https://example.みんな/docs?q=1&v=2";
+    const std::string text = osc8 ? "\033]8;;" + target + "\033\\Open file\033]8;;\033\\" : target;
+    expect(terminal_runtime_feed(runtime, "\033[?1002l\033[?1006l\033[2J\033[Hprefix " + text + "\r\nordinary text"),
+        "prepare detected links for the context menu");
+    while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
+    expect(boxrig_ui_view_clear_selection(view(fixture)) == BOXRIG_UI_OK, "copy a link without a text selection");
+    gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY), "link primary", -1);
+    gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD), "link clipboard", -1);
+    mouse(fixture, GDK_BUTTON_PRESS, 8.1, 0.5, 0, GDK_BUTTON_SECONDARY);
+    mouse(fixture, GDK_BUTTON_RELEASE, 8.1, 0.5, GDK_BUTTON3_MASK, GDK_BUTTON_SECONDARY);
+    co_await observe_main_loop(fixture);
+    auto *menu = gtk_grab_get_current();
+    expect(menu && GTK_IS_MENU(menu), "open the context menu over a detected link");
+    auto *items = gtk_container_get_children(GTK_CONTAINER(menu));
+    copy_link = nullptr;
+    for (auto *item = items; item; item = item->next) {
+      const auto *label = gtk_menu_item_get_label(GTK_MENU_ITEM(item->data));
+      if (label && std::string(label) == "Copy Link") copy_link = GTK_WIDGET(item->data);
+    }
+    g_list_free(items);
+    expect(copy_link && gtk_widget_get_visible(copy_link) && gtk_widget_get_sensitive(copy_link),
+        "a detected link exposes the enabled Copy Link action");
+    // A popup owns the clicked target even if asynchronous output replaces it.
+    if (osc8) {
+      expect(terminal_runtime_feed(runtime, "\033[H\033[2Kreplacement text"), "replace the link while its menu is open");
+      while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
+    }
+    gtk_menu_item_activate(GTK_MENU_ITEM(copy_link));
+    gtk_menu_popdown(GTK_MENU(menu));
+    co_await barrier(fixture, false);
+    expect(co_await clipboard(GDK_SELECTION_CLIPBOARD) == target,
+        "Copy Link exports the full match or original OSC 8 URI, not the label or expanded command arguments");
+    expect(!selected(fixture) && co_await clipboard(GDK_SELECTION_PRIMARY) == "link primary" && activations == 0,
+        "Copy Link neither selects text, replaces PRIMARY nor launches the link");
+
+    mouse(fixture, GDK_BUTTON_PRESS, 2.1, 1.5, 0, GDK_BUTTON_SECONDARY);
+    mouse(fixture, GDK_BUTTON_RELEASE, 2.1, 1.5, GDK_BUTTON3_MASK, GDK_BUTTON_SECONDARY);
+    co_await observe_main_loop(fixture);
+    menu = gtk_grab_get_current();
+    expect(menu && GTK_IS_MENU(menu) && !gtk_widget_get_visible(copy_link),
+        "opening the menu over ordinary text hides the previous link action");
+    gtk_menu_popdown(GTK_MENU(menu));
+    co_await barrier(fixture, false);
+  }
+  terminal_runtime_set_hyperlink_rules(runtime, {}, {});
+  expect(terminal_runtime_feed(runtime, "\033[2J\033[Hhttps://disabled.test/"), "show a URL with recognition disabled");
+  while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
+  mouse(fixture, GDK_BUTTON_PRESS, 2.1, 0.5, 0, GDK_BUTTON_SECONDARY);
+  mouse(fixture, GDK_BUTTON_RELEASE, 2.1, 0.5, GDK_BUTTON3_MASK, GDK_BUTTON_SECONDARY);
+  co_await observe_main_loop(fixture);
+  auto *menu = gtk_grab_get_current();
+  expect(menu && GTK_IS_MENU(menu) && !gtk_widget_get_visible(copy_link),
+      "disabled recognition does not expose a link-copy action");
+  gtk_menu_popdown(GTK_MENU(menu));
+  co_await barrier(fixture, false);
+}
+
 static cardio::promise<void> autoscroll_scenarios(Fixture *fixture) {
   auto *runtime = fixture->window->runtime;
   auto *terminal = boxrig_ui_model_terminal(boxrig_ui_view_model(view(fixture)));
@@ -1011,6 +1075,7 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
     expect(terminal_runtime_feed(runtime, "\033[?1002l\033[?1006l"), "restore ordinary mouse input");
   }
   co_await click_scenarios(fixture);
+  co_await link_copy_scenarios(fixture);
   co_await scroll_scenarios(fixture);
   co_await autoscroll_scenarios(fixture);
   co_await copy_policy_scenarios(fixture);
@@ -1136,8 +1201,8 @@ extern "C" int __wrap_main(int argc, char **argv) {
       [&fixture](BoxrigGtk3TerminalWidget *) {
         attach_main_window_terminal(fixture.window);
         attach_terminal_presentation(fixture.presentation);
-      }, {}, {}, [&fixture](const boxrig_mouse_event *event, const boxrig_ui_hit_test_result *) {
-        const auto route = route_main_window_terminal_mouse(fixture.window, *event);
+      }, {}, {}, [&fixture](const boxrig_mouse_event *event, const boxrig_ui_hit_test_result *hit) {
+        const auto route = route_main_window_terminal_mouse(fixture.window, *event, *hit);
         return route == BOXRIG_INPUT_MOUSE_ROUTE_TERMINAL ?
             route_terminal_presentation_mouse(fixture.presentation, *event) : route;
       }});

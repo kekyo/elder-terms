@@ -305,7 +305,12 @@ static std::shared_ptr<boxrig_regex_result> cached_match_osc8(TerminalLinks *lin
   return outcome.result;
 }
 
-std::optional<TerminalHyperlinkResolution> terminal_links_resolve(
+struct ResolvedLink {
+  TerminalHyperlinkResolution resolution;
+  std::shared_ptr<boxrig_regex_result> match;
+};
+
+static std::optional<ResolvedLink> resolve_link(
     TerminalLinks *links, const boxrig_ui_hit_test_result &hit) {
   if (!links->view || !hit.inside_grid || !hit.text_position_valid ||
       (hit.overlay_roles & (BOXRIG_UI_OVERLAY_IME | BOXRIG_UI_OVERLAY_CANDIDATES))) return std::nullopt;
@@ -315,7 +320,7 @@ std::optional<TerminalHyperlinkResolution> terminal_links_resolve(
   std::size_t count = 0;
   if (boxrig_ui_view_query_text_annotation_hits(links->view, &hit, BOXRIG_UI_ANNOTATION_HIT_ALL,
       annotations.data(), annotations.size(), &count, nullptr) != BOXRIG_UI_OK) return std::nullopt;
-  std::optional<TerminalHyperlinkResolution> rejection;
+  std::optional<ResolvedLink> rejection;
   for (const auto &rule : links->rules) {
     std::shared_ptr<boxrig_regex_result> result;
     std::uint64_t match_id = 0;
@@ -341,11 +346,28 @@ std::optional<TerminalHyperlinkResolution> terminal_links_resolve(
     auto action = expand_terminal_hyperlink_action(rule.rule,
         [&result](const std::string &capture) { return regular_expression_capture(result.get(), capture); }, &reason);
     const auto hyperlink_handle = rule.recognizer ? 0 : hit.hyperlink_handle;
-    if (action) return TerminalHyperlinkResolution{std::move(action), {}, rule.recognizer, match_id, hyperlink_handle};
-    if (!rejection) rejection = TerminalHyperlinkResolution{std::nullopt, "rule " + rule.rule.id + ": " + reason,
-        rule.recognizer, match_id, hyperlink_handle};
+    if (action) return ResolvedLink{{std::move(action), {}, rule.recognizer, match_id, hyperlink_handle}, std::move(result)};
+    if (!rejection) rejection = ResolvedLink{{std::nullopt, "rule " + rule.rule.id + ": " + reason,
+        rule.recognizer, match_id, hyperlink_handle}, std::move(result)};
   }
   return rejection;
+}
+
+std::optional<TerminalHyperlinkResolution> terminal_links_resolve(
+    TerminalLinks *links, const boxrig_ui_hit_test_result &hit) {
+  auto resolved = resolve_link(links, hit);
+  return resolved ? std::optional{std::move(resolved->resolution)} : std::nullopt;
+}
+
+std::optional<std::string> terminal_links_copy_target(
+    TerminalLinks *links, const boxrig_ui_hit_test_result &hit) {
+  const auto resolved = resolve_link(links, hit);
+  if (!resolved) return std::nullopt;
+  // Group zero owns the full text match or OSC 8 URI. Extract it only for
+  // copying, rather than allocating another string on every hover query.
+  auto target = regular_expression_capture(resolved->match.get(), "0");
+  if (!target || target->empty() || target->find('\0') != std::string::npos) return std::nullopt;
+  return target;
 }
 
 void destroy_terminal_links(TerminalLinks *links) {

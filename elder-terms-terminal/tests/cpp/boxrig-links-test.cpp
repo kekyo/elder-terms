@@ -75,6 +75,8 @@ int main() {
     expect(!terminal_links_resolve(links.get(), hit(0, 4)), "unscanned text is not a complete link");
     scan();
     expect(action(0, 4).arguments == std::vector<std::string>{"https://example.みんな/"}, "Unicode space ends the first screen URL");
+    expect(terminal_links_copy_target(links.get(), hit(0, 4)) == "https://example.みんな/",
+        "copy the complete recognized UTF-8 URL");
     expect(action(0, 32).arguments == std::vector<std::string>{"https://second.test/"}, "multiple links on one logical line");
     std::size_t annotations = 0;
     expect(boxrig_ui_view_query_text_annotation_visual_ranges(view, 0, nullptr, 0, &annotations) == BOXRIG_UI_LIMIT_EXCEEDED && annotations == 2, "both links have annotations");
@@ -85,12 +87,15 @@ int main() {
     const auto old_hit = hit(0, 4);
     feed("\x1b[1;1H\x1b[2Kreplacement");
     expect(!terminal_links_resolve(links.get(), old_hit), "old text revision cannot launch a command");
+    expect(!terminal_links_copy_target(links.get(), old_hit), "stale text cannot be offered for link copying");
     scan();
     expect(!terminal_links_resolve(links.get(), hit(0, 4)), "replaced text removes the action");
 
     feed("\x1b[2;1H\x1b]8;;vscode://file/tmp/a%20b.cpp:12:3\x1b\\open file\x1b]8;;\x1b\\");
     scan();
     const auto vscode = action(1, 2);
+    expect(terminal_links_copy_target(links.get(), hit(1, 2)) == "vscode://file/tmp/a%20b.cpp:12:3",
+        "copy the original OSC 8 URI without decoding or command expansion");
     expect(vscode.command == "code" && vscode.arguments == std::vector<std::string>{"--reuse-window", "--goto", "/tmp/a b.cpp:12:3"}, "default VS Code captures are decoded once");
     const auto vscode_counters = terminal_links_cache_statistics(links.get());
     expect(action(1, 2).arguments == vscode.arguments, "repeated OSC 8 hit keeps the action");
@@ -107,6 +112,8 @@ int main() {
     expect(rejected && !rejected->action && !rejected->error.empty(), "invalid decoded paths are rejected");
     const auto rejected_counters = terminal_links_cache_statistics(links.get());
     const auto rejected_again = terminal_links_resolve(links.get(), hit(3, 2));
+    expect(terminal_links_copy_target(links.get(), hit(3, 2)) == "vscode://file/tmp/a%00b.cpp:12",
+        "copying a detected target does not require permission to execute its action");
     expect(rejected_again && !rejected_again->action && rejected_again->error == rejected->error,
         "cached regex match still validates the action");
     expect(terminal_links_cache_statistics(links.get()).matcher_creations == rejected_counters.matcher_creations,
@@ -194,6 +201,8 @@ int main() {
     scan();
     const auto first = action(0, 4);
     expect(first.command == "first" && first.arguments == std::vector<std::string>{"https", "example.みんな", "example.みんな", "$https://example.みんな"}, "screen captures retain UTF-8 offsets and rule priority");
+    expect(terminal_links_copy_target(links.get(), hit(0, 4)) == "https://example.みんな",
+        "copy the full rule match rather than any expanded action argument");
 
     links.reset();
     custom.pattern = "x";
@@ -202,6 +211,7 @@ int main() {
     feed("\x1b[2J\x1b[H" + std::string(4097, 'x'));
     scan();
     expect(!terminal_links_resolve(links.get(), hit(0, 2)), "incomplete scope never publishes a partial link set");
+    expect(!terminal_links_copy_target(links.get(), hit(0, 2)), "incomplete recognition cannot be copied as a link");
     annotations = 0;
     expect(boxrig_ui_view_query_text_annotation_visual_ranges(view, 0, nullptr, 0, &annotations) == BOXRIG_UI_OK && annotations == 0, "incomplete recognition clears annotations");
 
@@ -250,6 +260,11 @@ int main() {
         "evicted link has no hit on the newly empty row");
     expect(!terminal_links_resolve(links.get(), empty_hit), "evicted link has no action");
     expect(action(0, 3).arguments == std::vector<std::string>{"https://retained.test/"}, "eviction preserves surviving link annotations");
+    const auto wrapped_url = "https://wrapped.test/" + std::string(130, 'a');
+    feed("\x1b[2J\x1b[H" + wrapped_url);
+    scan();
+    expect(terminal_links_copy_target(links.get(), hit(1, 2)) == wrapped_url,
+        "a hit on a wrapped URL copies the whole logical match");
     std::puts("boxrig links: Unicode boundaries, captures, annotations and stale hits passed");
     return 0;
   } catch (const std::exception &error) {

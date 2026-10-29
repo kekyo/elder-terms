@@ -292,9 +292,11 @@ boxrig_input_key_route route_main_window_terminal_key(MainWindow *main_window, c
  * Routes middle-button paste and the terminal context menu.
  * @param main_window Window owning clipboard and menu callbacks.
  * @param event Borrowed portable pointer event.
+ * @param hit Current hit associated with the event, including link metadata.
  * @return Application for a handled button, otherwise terminal routing.
  */
-boxrig_input_mouse_route route_main_window_terminal_mouse(MainWindow *main_window, const boxrig_mouse_event &event);
+boxrig_input_mouse_route route_main_window_terminal_mouse(MainWindow *main_window, const boxrig_mouse_event &event,
+    const boxrig_ui_hit_test_result &hit);
 
 /**
  * Records activity against one status-bar activity indicator.
