@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { once } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { win32 } from 'node:path';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { connectRemoteAgent, type RemoteAgent } from 'agent-rover';
 
 const probe = fileURLToPath(
   new URL('../../../.build/smb-probe/smb-probe', import.meta.url)
 );
+const terminalDirectory = fileURLToPath(new URL('../../', import.meta.url));
 const fixtureSource = await readFile(
   new URL('./windows-fixture.ps1', import.meta.url)
 );
@@ -20,7 +23,7 @@ const diagnostic = (text: string): string =>
 const remoteCommand = async (
   agent: RemoteAgent,
   script: string,
-  action: 'inspect' | 'setup' | 'verify' | 'cleanup',
+  action: 'inspect' | 'setup' | 'verify' | 'ui-seed' | 'ui-clear' | 'cleanup',
   clientAddress: string
 ): Promise<Record<string, unknown>> => {
   const remote = await agent.processes.launchManaged({
@@ -248,6 +251,51 @@ try {
   const verified = await remoteCommand(agent, uploadedScript, 'verify', '');
   assert.equal(verified.sentinelIntact, true);
   assert.equal(verified.sharedDirectoryClean, true);
+  const seeded = await remoteCommand(agent, uploadedScript, 'ui-seed', '');
+  assert.equal(seeded.seeded, true);
+  try {
+    const child = spawn(
+      'npx',
+      ['vitest', 'run', 'tests/smb-window.test.ts', '--reporter=dot'],
+      {
+        cwd: terminalDirectory,
+        env: {
+          ...process.env,
+          ELDER_TERMS_TEST_FTP_APP:
+            process.env.ELDER_TERMS_TEST_FTP_APP ??
+            resolve(
+              terminalDirectory,
+              '../.build/plan12-stage5-build/elder-terms-terminal/elder-terms-file-transfer'
+            ),
+          ELDER_SMB_UI_ADDRESS: target.address,
+          ELDER_SMB_UI_PORT: '445',
+          ELDER_SMB_UI_SHARE: plain,
+          ELDER_SMB_UI_USER: user,
+          ELDER_SMB_UI_PASSWORD: password,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+        signal: AbortSignal.timeout(120_000),
+      }
+    );
+    let output = '';
+    child.stdout.setEncoding('utf8').on('data', (text: string) => {
+      output += text;
+    });
+    child.stderr.setEncoding('utf8').on('data', (text: string) => {
+      output += text;
+    });
+    const [code] = await once(child, 'exit');
+    assert.equal(code, 0, `Windows SMB UI test failed: ${diagnostic(output)}`);
+    console.log(
+      'PASS win11 SMB UI authenticate/list/single/recursive download'
+    );
+  } finally {
+    const cleared = await remoteCommand(agent, uploadedScript, 'ui-clear', '');
+    assert.equal(cleared.cleared, true);
+  }
+  const afterUi = await remoteCommand(agent, uploadedScript, 'verify', '');
+  assert.equal(afterUi.sentinelIntact, true);
+  assert.equal(afterUi.sharedDirectoryClean, true);
   console.log('PASS win11 SMB probe and outside-junction sentinel');
 } catch (error) {
   failure = error;

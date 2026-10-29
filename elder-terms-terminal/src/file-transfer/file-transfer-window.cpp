@@ -601,9 +601,10 @@ static void update_file_transfer_sensitivity(FileTransferWindow *window) {
   const bool remote_ready =
       idle && !window->remote.busy && window->connection_available;
   const bool transfer_ready = local_ready && remote_ready;
+  const bool remote_writable = window->client && window->client->capabilities().write_operations;
   gtk_widget_set_sensitive(window->local.frame, local_ready);
   gtk_widget_set_sensitive(window->remote.frame, remote_ready);
-  gtk_widget_set_sensitive(window->local.transfer_item, transfer_ready);
+  gtk_widget_set_sensitive(window->local.transfer_item, transfer_ready && remote_writable);
   gtk_widget_set_sensitive(window->remote.transfer_item, transfer_ready);
   if (window->local.hash_item != nullptr) {
     gtk_widget_set_sensitive(window->local.hash_item, local_ready);
@@ -618,11 +619,11 @@ static void update_file_transfer_sensitivity(FileTransferWindow *window) {
         local_ready && gtk_tree_selection_count_selected_rows(selection) == 1);
   }
   gtk_widget_set_sensitive(window->local.new_directory_item, local_ready);
-  gtk_widget_set_sensitive(window->remote.new_directory_item, remote_ready);
+  gtk_widget_set_sensitive(window->remote.new_directory_item, remote_ready && remote_writable);
   gtk_widget_set_sensitive(window->local.rename_item, local_ready);
-  gtk_widget_set_sensitive(window->remote.rename_item, remote_ready);
+  gtk_widget_set_sensitive(window->remote.rename_item, remote_ready && remote_writable);
   gtk_widget_set_sensitive(window->local.delete_item, local_ready);
-  gtk_widget_set_sensitive(window->remote.delete_item, remote_ready);
+  gtk_widget_set_sensitive(window->remote.delete_item, remote_ready && remote_writable);
 }
 
 static void set_file_transfer_pane_busy(FileTransferPaneState *pane, bool busy) {
@@ -1342,9 +1343,13 @@ static gboolean on_file_transfer_tree_button_press(
   const auto items = selected_file_transfer_items(pane);
   const bool transfer_ready = !pane->window->local.busy &&
       !pane->window->remote.busy && pane->window->connection_available;
-  gtk_widget_set_sensitive(pane->new_directory_item, TRUE);
-  gtk_widget_set_sensitive(pane->transfer_item, transfer_ready && !items.empty());
-  gtk_widget_set_sensitive(pane->rename_item, items.size() == 1);
+  const bool remote_writable = pane->window->client &&
+      pane->window->client->capabilities().write_operations;
+  const bool writable = !pane->remote || remote_writable;
+  gtk_widget_set_sensitive(pane->new_directory_item, writable);
+  gtk_widget_set_sensitive(pane->transfer_item,
+      transfer_ready && !items.empty() && (pane->remote || remote_writable));
+  gtk_widget_set_sensitive(pane->rename_item, writable && items.size() == 1);
   if (pane->open_directory_item != nullptr) {
     gtk_menu_item_set_label(GTK_MENU_ITEM(pane->open_directory_item),
         items.size() == 1 && items.front().type == RemoteFileType::directory
@@ -1354,7 +1359,7 @@ static gboolean on_file_transfer_tree_button_press(
   if (pane->hash_item != nullptr)
     gtk_widget_set_sensitive(pane->hash_item,
         items.size() == 1 && items.front().type == RemoteFileType::regular);
-  gtk_widget_set_sensitive(pane->delete_item, !items.empty());
+  gtk_widget_set_sensitive(pane->delete_item, writable && !items.empty());
   gtk_menu_popup_at_pointer(GTK_MENU(pane->menu), reinterpret_cast<GdkEvent *>(event));
   return TRUE;
 }
@@ -1493,7 +1498,8 @@ static void on_file_transfer_new_directory_item_activate(GtkMenuItem *, gpointer
   if (!pane || !pane->window || pane->window->destroyed || pane->busy ||
       pane->window->transfer_active || pane->window->browser_action_active ||
       pane->window->certificate_confirmation ||
-      (pane->remote && !pane->window->connection_available)) return;
+      (pane->remote && (!pane->window->connection_available ||
+          !pane->window->client->capabilities().write_operations))) return;
   pane->window->browser_action_task.reset();
   pane->window->browser_action_task.emplace(run_file_transfer_new_directory_async(pane));
 }
@@ -1629,7 +1635,8 @@ static void start_file_transfer_rename(FileTransferPaneState *pane) {
   if (pane == nullptr || pane->window == nullptr ||
       pane->window->destroyed || pane->window->transfer_active ||
       pane->window->browser_action_active ||
-      (pane->remote && !pane->window->connection_available)) {
+      (pane->remote && (!pane->window->connection_available ||
+          !pane->window->client->capabilities().write_operations))) {
     return;
   }
   const std::vector<FileTransferSelectedItem> items =
@@ -1903,7 +1910,8 @@ static void start_file_transfer_delete(FileTransferPaneState *pane) {
   if (pane == nullptr || pane->window == nullptr ||
       pane->window->destroyed || pane->window->transfer_active ||
       pane->window->browser_action_active ||
-      (pane->remote && !pane->window->connection_available)) {
+      (pane->remote && (!pane->window->connection_available ||
+          !pane->window->client->capabilities().write_operations))) {
     return;
   }
   std::vector<FileTransferSelectedItem> items =
@@ -2019,7 +2027,9 @@ static void start_file_transfer_transfer(
     FileTransferWindow *window, FileTransferDirection direction) {
   if (window == nullptr || window->destroyed ||
       window->transfer_active || window->browser_action_active ||
-      !window->connection_available) {
+      !window->connection_available ||
+      (direction == FileTransferDirection::send &&
+       !window->client->capabilities().write_operations)) {
     return;
   }
   FileTransferPaneState *source =

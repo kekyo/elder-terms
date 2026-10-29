@@ -84,6 +84,10 @@ it('shows all saved connections in the tray and follows changes while the launch
           join(connections, 'Conflict.ini'),
           '[general]\nopen_connection=Ctrl+Alt+X\n'
         );
+        await writeFile(
+          join(connections, 'SMB share.ini'),
+          '[general]\ntype=smb\nconnection_id=bdd60b23-0e7e-4e29-aec5-a8e988f9e5db\n[smb]\naddress=files.example.test\nshare=team\n'
+        );
       },
       async ({ app, connections }) => {
         expect(await app.getWindowCount()).toBe(0);
@@ -121,6 +125,7 @@ it('shows all saved connections in the tray and follows changes while the launch
             'Alpha__One (Ctrl+Alt+X)',
             'Beta transfer',
             'Conflict (Ctrl+Alt+X)',
+            'SMB share',
             'Open windows',
             'No open windows',
             'Application settings',
@@ -145,7 +150,7 @@ it('shows all saved connections in the tray and follows changes while the launch
             '1',
             "['icon-data']",
           ]);
-          expect(icons.match(/'icon-data'/gu)?.length).toBe(3);
+          expect(icons.match(/'icon-data'/gu)?.length).toBe(4);
         });
         const open = async (label: string): Promise<void> => {
           const item = menuItems(await layout()).find(
@@ -163,6 +168,14 @@ it('shows all saved connections in the tray and follows changes while the launch
         });
         expect(await app.getWindowCount()).toBe(0);
         await rm(capture);
+        await open('SMB share');
+        await waitForResult(async () => {
+          expect(JSON.parse(await readFile(capture, 'utf8'))).toEqual({
+            kind: 'file-transfer',
+            args: ['-c', join(connections, 'SMB share.ini')],
+          });
+        });
+        await rm(capture);
         await rename(
           join(connections, 'Beta transfer.ini'),
           join(connections, 'Renamed transfer.ini')
@@ -172,6 +185,7 @@ it('shows all saved connections in the tray and follows changes while the launch
           '[general]\nicon=material:action/home\nopen_connection=Ctrl+Alt+Z\n'
         );
         await rm(join(connections, 'Conflict.ini'));
+        await rm(join(connections, 'SMB share.ini'));
         await writeFile(
           join(connections, 'Added.ini'),
           '[general]\nconnection_id=862a2557-01de-47c8-9a64-5b0aceb2543a\n'

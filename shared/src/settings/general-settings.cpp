@@ -42,6 +42,7 @@ static constexpr char serial_connection_type[] = "serial";
 static constexpr char sftp_connection_type[] = "sftp";
 static constexpr char ftp_connection_type[] = "ftp";
 static constexpr char webdav_connection_type[] = "webdav";
+static constexpr char smb_connection_type[] = "smb";
 
 static bool validate_border_width(const SettingValue &value,
                                   std::string *reason) {
@@ -80,8 +81,9 @@ static bool validate_connection_type(const SettingValue &value,
       (*text != local_connection_type && *text != telnet_connection_type &&
        *text != ssh_connection_type &&
        *text != serial_connection_type && *text != sftp_connection_type &&
-       *text != ftp_connection_type && *text != webdav_connection_type)) {
-    *reason = "must be local, telnet, ssh, serial, sftp, ftp, or webdav";
+       *text != ftp_connection_type && *text != webdav_connection_type &&
+       *text != smb_connection_type)) {
+    *reason = "must be local, telnet, ssh, serial, sftp, ftp, webdav, or smb";
     return false;
   }
   return true;
@@ -387,6 +389,9 @@ ConnectionKind general_connection_kind(const SettingsStore &store) {
   }
   if (configured == webdav_connection_type) {
     return ConnectionKind::webdav;
+  }
+  if (configured == smb_connection_type) {
+    return ConnectionKind::smb;
   }
   return ConnectionKind::local_shell;
 }

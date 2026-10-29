@@ -1,5 +1,5 @@
 param(
-  [Parameter(Mandatory = $true)][ValidateSet('inspect', 'setup', 'verify', 'cleanup')][string]$Action,
+  [Parameter(Mandatory = $true)][ValidateSet('inspect', 'setup', 'verify', 'ui-seed', 'ui-clear', 'cleanup')][string]$Action,
   [string]$RunId = '',
   [string]$ClientAddress = ''
 )
@@ -97,6 +97,32 @@ if ($Action -eq 'verify') {
     throw 'Probe files remain in the shared directory'
   }
   @{ sentinelIntact = $true; sharedDirectoryClean = $true } | ConvertTo-Json -Compress
+  exit 0
+}
+
+if ($Action -eq 'ui-seed') {
+  $single = Join-Path $shareRoot 'single.txt'
+  $folder = Join-Path $shareRoot 'folder'
+  if ((Test-Path -LiteralPath $single) -or (Test-Path -LiteralPath $folder)) {
+    throw 'SMB UI fixture files already exist'
+  }
+  [IO.File]::WriteAllText($single, "single SMB file`n")
+  New-Item -ItemType Directory -Path $folder | Out-Null
+  [IO.File]::WriteAllText((Join-Path $folder 'nested.txt'), "nested SMB file`n")
+  @{ seeded = $true } | ConvertTo-Json -Compress
+  exit 0
+}
+
+if ($Action -eq 'ui-clear') {
+  $single = Join-Path $shareRoot 'single.txt'
+  $folder = Join-Path $shareRoot 'folder'
+  if ([IO.File]::ReadAllText($single) -ne "single SMB file`n" -or
+      [IO.File]::ReadAllText((Join-Path $folder 'nested.txt')) -ne "nested SMB file`n") {
+    throw 'SMB UI fixture content changed'
+  }
+  Remove-Item -LiteralPath $single -Force
+  Remove-Item -LiteralPath $folder -Recurse -Force
+  @{ cleared = $true } | ConvertTo-Json -Compress
   exit 0
 }
 

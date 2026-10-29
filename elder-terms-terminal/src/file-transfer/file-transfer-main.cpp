@@ -25,6 +25,7 @@
 
 #include "../ftp/ftp-client.h"
 #include "../webdav/webdav-application.h"
+#include "../smb/smb-application.h"
 #include "../launch-options.h"
 #include "../sftp/sftp-client.h"
 #include "../sftp/sftp-fixture-client.h"
@@ -685,6 +686,10 @@ int main(int argc, char **argv) {
     return elder_terms::run_webdav_application(
         settings_result, launch_options.config_path);
   }
-  std::cerr << "Error: configured connection type is not SFTP, FTP or WebDAV\n";
+  if (kind == elder_terms::ConnectionKind::smb) {
+    return elder_terms::run_smb_application(
+        settings_result, launch_options.config_path);
+  }
+  std::cerr << "Error: configured connection type is not SFTP, FTP, WebDAV or SMB\n";
   return 1;
 }

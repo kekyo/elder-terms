@@ -274,6 +274,8 @@ executable(
     'src/webdav/curl-http-session.cpp',
     'src/webdav/webdav-url.cpp',
     'src/webdav/webdav-metadata.cpp',
+    'src/smb/smb-application.cpp',
+    'src/smb/smb-client.cpp',
     'src/sftp/sftp-client.cpp',
     'src/sftp/sftp-fixture-client.cpp',
     'src/file-transfer/file-hash.cpp',
@@ -303,6 +305,7 @@ executable(
     libcurl_dep,
     libxml2_dep,
     openssl_dep,
+    libsmb2_dep,
   ],
   install: true,
   install_dir: elder_terms_private_install_dir / 'elder-terms-terminal',
@@ -310,6 +313,12 @@ executable(
 )
 
 if get_option('build_tests')
+smb_client_test = executable('smb-client-test',
+  ['tests/smb/smb-client-test.cpp', 'src/smb/smb-client.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
+test('smb-client', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_client_test], timeout: 180)
+
 boxrig_serial_transport_test = executable('boxrig-serial-transport-test',
   'tests/cpp/boxrig-serial-transport-test.cpp', dependencies: boxrig_runtime_dep,
   link_args: ['-Wl,--wrap=ioctl', '-Wl,--wrap=tcsetattr'])

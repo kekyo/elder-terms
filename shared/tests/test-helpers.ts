@@ -26,12 +26,14 @@ import {
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
 
-const appPath = fileURLToPath(
-  new URL(
-    '../../.build/shared/elder-terms-settings-widget-fixture',
-    import.meta.url
-  )
-);
+const appPath =
+  process.env.ELDER_TERMS_TEST_SETTINGS_APP ??
+  fileURLToPath(
+    new URL(
+      '../../.build/shared/elder-terms-settings-widget-fixture',
+      import.meta.url
+    )
+  );
 
 const maxPathSegmentLength = 120;
 

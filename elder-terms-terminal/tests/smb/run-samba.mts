@@ -162,6 +162,8 @@ try {
     'podman',
     [
       'build',
+      '--platform',
+      `linux/${process.arch === 'x64' ? 'amd64' : process.arch}`,
       '-t',
       image,
       '-f',

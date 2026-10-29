@@ -225,7 +225,7 @@ int main(int argc, char **argv) {
   try {
     require(gtk_init_check(&argc, &argv), "GTK initialization failed");
     verify_actions();
-    for (const char *type : {"sftp", "ftp", "webdav"}) {
+    for (const char *type : {"sftp", "ftp", "webdav", "smb"}) {
       Fixture transfer = create_fixture(type, SettingsWidgetMode::connection);
       verify_tab_structure(transfer, false);
       destroy_fixture(&transfer);
