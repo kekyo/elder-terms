@@ -624,7 +624,10 @@ proxyWindowTest(
             );
             await app.input.setMouseButton('right', true);
             await app.input.setMouseButton('right', false);
-            const menuItem = expectElementKind(await app.getById(menuId), 'menuItem');
+            const menuItem = expectElementKind(
+              await app.getById(menuId),
+              'menuItem'
+            );
             await waitForResult(async () => {
               expect((await menuItem.info()).states).toContain('showing');
             });
