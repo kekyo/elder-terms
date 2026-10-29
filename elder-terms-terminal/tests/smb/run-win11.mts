@@ -208,7 +208,7 @@ try {
   remoteDirectory = await agent.files.mkdtemp('elder-plan12-smb-');
   const uploadedScript = win32.join(remoteDirectory, 'windows-fixture.ps1');
   script = uploadedScript;
-  await agent.files.writeFile(uploadedScript, fixtureSource);
+  await agent.files.writeFile(uploadedScript, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), fixtureSource]));
 
   const inspected = await remoteCommand(agent, uploadedScript, 'inspect', '');
   assert.equal(
@@ -251,7 +251,31 @@ try {
       typeof readOnly === 'string'
   );
 
-  if (process.env.ELDER_SMB_SSH_PROXY_DRIVER) {
+  if (process.env.ELDER_SMB_ENUM_DRIVER) {
+    const directory = await mkdtemp(resolve(tmpdir(), 'elder-smb-enum-win-'));
+    const check = async (extra: Record<string, string>): Promise<void> => {
+      const child = spawn(process.env.ELDER_SMB_ENUM_DRIVER!, [target.address, plain, user, '445'], {
+        env: { ...process.env, ELDER_SMB_PASSWORD: password,
+          ELDER_SMB_EXPECT_SHARES: [plain, encrypted, readOnly, fixture.emptyShare, fixture.unicodeShare, fixture.deniedShare].join('\n'), ...extra },
+        stdio: ['ignore', 'pipe', 'pipe'], signal: AbortSignal.timeout(60000),
+      });
+      let output = '';
+      child.stdout.on('data', bytes => { output += bytes; });
+      child.stderr.on('data', bytes => { output += bytes; });
+      const [code] = await once(child, 'close');
+      assert.equal(code, 0, diagnostic(output));
+      assert.match(output, /PASS SMB client/);
+      console.log(`PASS win11 share enumeration ${extra.ELDER_SMB_PROXY_PORT ? 'SSH proxy' : 'direct'}: ${diagnostic(output).trim()}`);
+    };
+    try {
+      await check({});
+      await withSshGateway(resolve(terminalDirectory, '../.build/elder-terms-terminal/ssh-proxy-test-server'), directory,
+        async gateway => {
+          await check({ ELDER_SMB_PROXY_PORT: String(gateway.port), ELDER_SMB_PROXY_KNOWN_HOSTS: gateway.knownHosts });
+          assert.deepEqual(gateway.requests, [{ host: 'proxy-test.invalid', port: 445 }]);
+        }, target.address);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  } else if (process.env.ELDER_SMB_SSH_PROXY_DRIVER) {
     const localDirectory = await mkdtemp(
       resolve(tmpdir(), 'elder-smb-win-proxy-')
     );

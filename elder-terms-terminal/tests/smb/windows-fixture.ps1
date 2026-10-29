@@ -6,6 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 
 function Test-Administrator {
   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -34,6 +35,10 @@ $user = 'et' + $RunId.Substring(0, 12)
 $plainShare = 'et' + $RunId.Substring(0, 10)
 $encryptedShare = 'ee' + $RunId.Substring(0, 10)
 $readOnlyShare = 'er' + $RunId.Substring(0, 10)
+$emptyShare = 'em' + $RunId.Substring(0, 10)
+$unicodeShare = '日本語 space ' + $RunId.Substring(0, 10)
+$deniedShare = 'ed' + $RunId.Substring(0, 10)
+$emptyRoot = Join-Path $base 'empty'
 $firewall = 'elder-plan12-smb-' + $RunId
 $account = $env:COMPUTERNAME + '\' + $user
 
@@ -48,7 +53,7 @@ if ($Action -eq 'setup') {
   }
   if (Test-Path -LiteralPath $base) { throw 'Fixture path already exists' }
   if (Get-LocalUser -Name $user -ErrorAction SilentlyContinue) { throw 'Fixture account already exists' }
-  foreach ($name in @($plainShare, $encryptedShare, $readOnlyShare)) {
+  foreach ($name in @($plainShare, $encryptedShare, $readOnlyShare, $emptyShare, $unicodeShare, $deniedShare)) {
     if (Get-SmbShare -Name $name -ErrorAction SilentlyContinue) { throw 'Fixture share already exists' }
   }
   if (Get-NetFirewallRule -Name $firewall -ErrorAction SilentlyContinue) {
@@ -58,6 +63,7 @@ if ($Action -eq 'setup') {
   New-Item -ItemType Directory -Path $base -Force | Out-Null
   Set-Content -LiteralPath $marker -Value $RunId -NoNewline
   New-Item -ItemType Directory -Path $shareRoot -Force | Out-Null
+  New-Item -ItemType Directory -Path $emptyRoot -Force | Out-Null
   New-Item -ItemType Directory -Path $outside -Force | Out-Null
   Set-Content -LiteralPath (Join-Path $outside 'sentinel.txt') -Value 'outside sentinel' -NoNewline
   & cmd.exe /d /c ('mklink /J "' + $junction + '" "' + $outside + '"') | Out-Null
@@ -68,13 +74,19 @@ if ($Action -eq 'setup') {
     -Description ('elder-plan12-smb-' + $RunId) | Out-Null
   & icacls.exe $shareRoot /grant ('{0}:(OI)(CI)M' -f $account) | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Could not grant fixture directory access' }
+  & icacls.exe $emptyRoot /grant ('{0}:(OI)(CI)M' -f $account) | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'Could not grant empty fixture directory access' }
   New-SmbShare -Name $plainShare -Path $shareRoot -FullAccess $account | Out-Null
   New-SmbShare -Name $encryptedShare -Path $shareRoot -FullAccess $account -EncryptData $true | Out-Null
   New-SmbShare -Name $readOnlyShare -Path $shareRoot -ReadAccess $account | Out-Null
+  New-SmbShare -Name $emptyShare -Path $emptyRoot -FullAccess $account | Out-Null
+  New-SmbShare -Name $unicodeShare -Path $emptyRoot -FullAccess $account | Out-Null
+  New-SmbShare -Name $deniedShare -Path $shareRoot -NoAccess $account | Out-Null
   New-NetFirewallRule -Name $firewall -DisplayName $firewall -Direction Inbound -Action Allow `
     -Protocol TCP -LocalPort 445 -RemoteAddress $ClientAddress -Profile Any | Out-Null
   @{ user = $user; plainShare = $plainShare; encryptedShare = $encryptedShare;
-    readOnlyShare = $readOnlyShare; reparsePath = 'outside-link' } |
+    readOnlyShare = $readOnlyShare; emptyShare = $emptyShare;
+    unicodeShare = $unicodeShare; deniedShare = $deniedShare; reparsePath = 'outside-link' } |
     ConvertTo-Json -Compress
   exit 0
 }
@@ -139,10 +151,11 @@ if ($Action -eq 'ui-clear') {
   exit 0
 }
 
-foreach ($name in @($plainShare, $encryptedShare, $readOnlyShare)) {
+foreach ($name in @($plainShare, $encryptedShare, $readOnlyShare, $emptyShare, $unicodeShare, $deniedShare)) {
   $existing = Get-SmbShare -Name $name -ErrorAction SilentlyContinue
   if ($existing) {
-    if ($existing.Path -ne $shareRoot) { throw 'A share name was reused by another path' }
+    $expectedPath = if ($name -eq $emptyShare -or $name -eq $unicodeShare) { $emptyRoot } else { $shareRoot }
+    if ($existing.Path -ne $expectedPath) { throw 'A share name was reused by another path' }
     Remove-SmbShare -Name $name -Force | Out-Null
   }
 }

@@ -466,6 +466,14 @@ test('webdav-metadata-test', webdav_metadata_test)
 ssh_proxy_test_server = executable('ssh-proxy-test-server',
   'tests/cpp/ssh-proxy-test-server.cpp', dependencies: [libssh_dep])
 
+smb_share_probe = executable('smb-share-probe',
+  ['tests/smb/smb-share-probe.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-ssh-proxy.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep])
+test('smb-share-probe', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_share_probe], timeout: 180)
+test('smb-share-probe-proxy', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_share_probe, '--proxy', ssh_proxy_test_server], timeout: 180)
+
 smb_ssh_proxy_test = executable('smb-ssh-proxy-test',
   ['tests/smb/smb-ssh-proxy-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-ssh-proxy.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep])
