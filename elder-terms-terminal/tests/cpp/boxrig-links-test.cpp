@@ -210,9 +210,45 @@ int main() {
     feed("\x1b[2J\x1b[Hhttps://evicted.test/\r\nhttps://retained.test/\x1b[8;1H");
     links.reset(create_terminal_links(view, default_hyperlink_action_rules()));
     scan();
+    const auto annotation_at = [&](std::size_t row) {
+      boxrig_ui_text_annotation_visual_range ranges[2]{};
+      std::size_t count = 0;
+      expect(boxrig_ui_view_query_text_annotation_visual_ranges(view, row, ranges, 2, &count) == BOXRIG_UI_OK && count == 1,
+          "one visible link annotation");
+      expect((ranges[0].annotation.style.field_mask & BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE) != 0 &&
+          ranges[0].annotation.style.underline_style == BOXRIG_UNDERLINE_SINGLE,
+          "visible link keeps its underline");
+      return ranges[0].annotation;
+    };
+    const auto evicted_annotation = annotation_at(0);
+    const auto retained_annotation = annotation_at(1);
+    expect(evicted_annotation.source_id == retained_annotation.source_id &&
+        evicted_annotation.item_id != retained_annotation.item_id,
+        "different links have stable item identities within one recognizer");
     expect(action(1, 3).arguments == std::vector<std::string>{"https://retained.test/"}, "recognize links before eviction");
     feed("\n");
     scan();
+    const auto surviving_annotation = annotation_at(0);
+    expect(surviving_annotation.source_id == retained_annotation.source_id &&
+        surviving_annotation.item_id == retained_annotation.item_id,
+        "eviction keeps the surviving recognizer and match identities");
+    for (std::size_t row = 0; row < config.rows; ++row) {
+      boxrig_ui_text_annotation_visual_range ranges[2]{};
+      std::size_t count = 0;
+      expect(boxrig_ui_view_query_text_annotation_visual_ranges(view, row, ranges, 2, &count) == BOXRIG_UI_OK,
+          "query current link annotations after eviction");
+      for (std::size_t index = 0; index < count; ++index)
+        expect(ranges[index].annotation.item_id != evicted_annotation.item_id ||
+            ranges[index].annotation.source_id != evicted_annotation.source_id,
+            "evicted link annotation is absent");
+    }
+    const auto empty_hit = hit(1, 3);
+    boxrig_ui_text_annotation empty_annotations[2]{};
+    std::size_t empty_count = 0;
+    expect(boxrig_ui_view_query_text_annotation_hits(view, &empty_hit,
+        BOXRIG_UI_ANNOTATION_HIT_ALL, empty_annotations, 2, &empty_count, nullptr) == BOXRIG_UI_OK && empty_count == 0,
+        "evicted link has no hit on the newly empty row");
+    expect(!terminal_links_resolve(links.get(), empty_hit), "evicted link has no action");
     expect(action(0, 3).arguments == std::vector<std::string>{"https://retained.test/"}, "eviction preserves surviving link annotations");
     std::puts("boxrig links: Unicode boundaries, captures, annotations and stale hits passed");
     return 0;

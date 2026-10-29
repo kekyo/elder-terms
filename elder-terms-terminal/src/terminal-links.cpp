@@ -210,10 +210,10 @@ bool terminal_links_dispatch(TerminalLinks *links, std::size_t budget) {
     if (event.kind == BOXRIG_TEXT_RECOGNIZER_EVENT_LINE_REPLACED) {
       update_annotations(links, event);
     } else if (event.kind == BOXRIG_TEXT_RECOGNIZER_EVENT_LINE_EVICTED) {
-      // The removed line cannot be passed to replace_text_annotations(). A
-      // fresh registration repopulates surviving lines after clearing the source.
-      for (auto &rule : links->rules) if (rule.recognizer == event.recognizer_id)
-        more = restart_recognizer(links, rule) || more;
+      // Retired lines can be cleared without replacing surviving matches.
+      if (links->view && boxrig_ui_view_clear_text_annotation_line(links->view,
+          event.recognizer_id, event.screen, event.line_id) != BOXRIG_UI_OK)
+        clear_annotations(links, event.recognizer_id);
     } else {
       clear_annotations(links, event.recognizer_id);
       // Loss is retried at the next dispatch through the revision guard above.
