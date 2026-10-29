@@ -54,8 +54,13 @@ install_data('deps/jemalloc/COPYING',
   install_dir: get_option('datadir') / 'doc/elder-terms/licenses/jemalloc',
 )
 
+boxrig_source = get_option('boxrig_source')
+if boxrig_source == ''
+  boxrig_source = meson.project_source_root() / 'deps/boxrig'
+endif
 boxrig_prepare_args = [boxrig_node, boxrig_prepare,
-  meson.project_source_root(), meson.project_build_root(), package_build_tools]
+  meson.project_source_root(), meson.project_build_root(), package_build_tools,
+  boxrig_source]
 run_command(boxrig_prepare_args, check: true)
 boxrig_sdk_target = custom_target(
   'boxrig-shared-sdk',

@@ -1951,8 +1951,8 @@ int main(int argc, char **argv) {
         if (app_state.audible_bell) gdk_display_beep(gtk_widget_get_display(app_state.main_window->terminal));
         else elder_terms::ring_terminal_bell(app_state.bell_state);
       },
-      [&app_state](const boxrig_mouse_event *event, const boxrig_ui_hit_test_result *) {
-        const auto route = elder_terms::route_main_window_terminal_mouse(app_state.main_window, *event);
+      [&app_state](const boxrig_mouse_event *event, const boxrig_ui_hit_test_result *hit) {
+        const auto route = elder_terms::route_main_window_terminal_mouse(app_state.main_window, *event, *hit);
         return route == BOXRIG_INPUT_MOUSE_ROUTE_TERMINAL && app_state.presentation ?
             elder_terms::route_terminal_presentation_mouse(app_state.presentation, *event) : route;
       }});

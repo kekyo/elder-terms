@@ -107,6 +107,15 @@ void terminal_runtime_set_hyperlink_rules(TerminalRuntime *runtime,
 bool terminal_runtime_has_link_hover(const TerminalRuntime *runtime);
 
 /**
+ * Retrieves an owned link target for the terminal context menu.
+ * @param runtime Live runtime owning the current recognition rules.
+ * @param hit Borrowed current pointer hit from the attached widget.
+ * @return Full matched text or OSC 8 URI, or no value when no link is detected.
+ * @remarks Disabled recognition and stale hits never produce a target.
+ */
+std::optional<std::string> terminal_runtime_link_text(TerminalRuntime *runtime, const boxrig_ui_hit_test_result &hit);
+
+/**
  * Replaces received-line macros and discards work from the previous rule set.
  * @param runtime Live communication and presentation owner.
  * @param rules Ordered patterns and actions; an empty list disables macros.

@@ -5,7 +5,8 @@
   "scripts": {
     "prebuild": "node ../scripts/prepare-test-fonts.mts",
     "build": "meson setup ../.build .. --reconfigure || meson setup ../.build .. && meson compile -C ../.build",
-    "test": "npm run build && meson test -C ../.build && vitest run"
+    "test": "npm run build && meson test -C ../.build && vitest run && npm run test:latency",
+    "test:latency": "make -C tests/performance test test-gui test-gui-full test-gui-transcript && make -f tests/performance/probe.mk test test-annotations && bash tests/performance/test-latency-native.sh && node tests/performance/test-latency-analyzer.mjs && xvfb-run -a node tests/performance/test-latency-runner.mjs none && xvfb-run -a node tests/performance/test-latency-runner.mjs none ssh && node tests/performance/test-ssh-latency-fixture.mjs && xvfb-run -a node tests/performance/test-latency-runner-signal.mjs"
   },
   "devDependencies": {
     "@types/node": ">=24.0.0",

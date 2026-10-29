@@ -618,6 +618,7 @@ A normal selection follows text order; a block selection is a rectangle aligned 
 | Double / triple click | Selects a word / line |
 | Ctrl + left drag | Makes a block selection. Releasing Ctrl during the drag keeps its rectangular shape |
 | Ctrl + click on a link | Opens the link when you release over the same link. Dragging instead makes a block selection |
+| Right-click on a link, then “Copy Link” | Copies the link target to the clipboard |
 | Escape | Cancels the selection and any active drag |
 | Mouse wheel during a drag | Extends the selection through history while retaining its anchor. Ctrl does not zoom during this operation |
 | Drag beyond the top or bottom edge | Scrolls through history automatically until you release the button |
@@ -842,7 +843,7 @@ Desktop transparency requires a compositor that combines the windows on your des
 Frosted glass requests a compositor effect that blurs the desktop behind the terminal; text and background images remain sharp.
 The settings panel reports the actual state. Unavailable blur falls back to transparency, and unavailable transparency falls back to an opaque background.
 "Frosted glass requested" means the request was accepted; compositor effect settings still determine whether the blur appears.
-See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/background.md) for platform requirements.
+See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/background.md) for platform requirements.
 
 ## Improving Text Color Visibility
 
@@ -890,7 +891,7 @@ E's preview uses the standard palette. The actual display can differ when the co
 
 Only one color filter can be selected, so reversal and the existing Oklch filter are mutually exclusive. Color discrimination assistance can be combined with every mode and is applied before reversal. Logical terminal colors, text, communication, copied text, and logs remain unchanged.
 
-Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/color-filters.md).
+Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/color-filters.md).
 
 ```ini
 [terminal]
@@ -926,7 +927,7 @@ Use Apply or Save to apply previewed changes to the terminal. Cancel discards th
 
 Correction affects display only. Communication, logical terminal colors, copied text, and logs remain unchanged.
 Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are excluded.
-See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/color-filters.md) for the supported scope.
+See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/color-filters.md) for the supported scope.
 
 ```ini
 [terminal]
@@ -1302,6 +1303,11 @@ command. A rule can inspect either the target of an OSC 8 escape sequence or a
 matching substring in visible terminal text. Rules are evaluated in their
 displayed order, and only the first matching rule is run.
 
+Right-click a recognized link and choose "Copy Link" to copy its target to the
+clipboard. For visible-text links, this copies the entire matched text. For
+OSC 8 links, it copies the original target URI. If terminal output changes while
+the menu is open, the target from when you opened the menu is still copied.
+
 Select a connection in the launcher and open its "Links" tab to enable or
 disable link actions, add and remove rules, change their order, edit command
 arguments, and restore the built-in defaults. The same tab is available from
@@ -1326,7 +1332,7 @@ Each rule selects one recognition source:
 - "Visible terminal text" finds a matching substring under the pointer. The
   expression must not match an empty string.
 
-Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/regex.md).
+Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/regex.md).
 Character classes, groups, alternatives, repetition, and numbered or named captures are supported. Backreferences, lookahead, lookbehind, and expressions matching an empty string are not supported.
 `\d`, `\s`, and `\w` cover ASCII. Use Unicode general categories such as `\p{L}` for letters and `\p{Nd}` for decimal digits.
 `.` also matches newlines, and `^` and `$` anchor the complete input. Matching is case-sensitive and chooses the longest match at the same starting position.
@@ -1411,7 +1417,7 @@ version as libcurl; the application checks this before connecting.
 To build on Ubuntu or Debian, install a C++20-capable compiler, Meson, Ninja,
 gettext, and the development packages for the libraries used by elder-terms:
 
-Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later, IBus 1.5.29 or later, and Wayland client 1.22 or later. See the [boxrig build requirements](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/building.md).
+Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later, IBus 1.5.29 or later, and Wayland client 1.22 or later. See the [boxrig build requirements](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/building.md).
 
 ```bash
 sudo apt update

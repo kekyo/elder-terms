@@ -82,7 +82,7 @@ executable('boxrig-driver', ['src/boxrig-driver.cpp', 'src/inline-prompt.cpp', '
 boxrig_regex_flags = run_command(boxrig_pkg_config, '--cflags', '--libs', 'boxrig',
   env: boxrig_pkg_env, check: true).stdout().strip().split()
 custom_target('boxrig-regex',
-  input: '../deps/boxrig/examples/core/regex.c', output: 'boxrig-regex',
+  input: boxrig_source / 'examples/core/regex.c', output: 'boxrig-regex',
   command: [find_program('cc'), '-std=c99', '-Wall', '-Wextra', '-Wpedantic', '-Werror',
     '@INPUT@', '-o', '@OUTPUT@', '-L' + jemalloc_library_dir, '-ljemalloc',
     '-Wl,-rpath,' + jemalloc_library_dir,
@@ -326,6 +326,18 @@ boxrig_links_test = executable('boxrig-links-test',
    'src/terminal-hyperlink-action.cpp'],
   dependencies: [boxrig_deps['boxrig-ui'], elder_terms_dep])
 test('boxrig-links-test', boxrig_links_test)
+
+boxrig_links_cache_test = executable('boxrig-links-cache-test',
+  ['tests/cpp/boxrig-links-cache-test.cpp', 'src/terminal-links.cpp',
+   'src/terminal-hyperlink-action.cpp'],
+  cpp_args: ['-DELDER_TERMS_CACHE_TESTING'],
+  dependencies: [boxrig_deps['boxrig-ui'], elder_terms_dep])
+test('boxrig-links-cache-test', boxrig_links_cache_test)
+
+executable('osc8-resolve-cost',
+  ['tests/performance/osc8-resolve-cost.cpp', 'src/terminal-links.cpp',
+   'src/terminal-hyperlink-action.cpp'],
+  dependencies: [boxrig_deps['boxrig-ui'], elder_terms_dep])
 
 boxrig_presentation_test = executable('boxrig-presentation-test',
   'tests/cpp/boxrig-presentation-test.cpp', dependencies: [boxrig_runtime_dep, dependency('epoxy')])

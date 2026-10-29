@@ -93,6 +93,8 @@ struct ServerState {
   int sftp_server_input_fd = -1;
   int sftp_server_output_fd = -1;
   int forward_fd = -1;
+  bool sftp_output_closed = false;
+  bool forward_input_closed = false;
   bool sftp_requested = false;
   bool sftp_started = false;
   bool exec_requested = false;
@@ -579,10 +581,7 @@ static int on_sftp_server_output(socket_t fd, int revents,
   std::array<unsigned char, 32768> buffer{};
   const ssize_t size = ::read(fd, buffer.data(), buffer.size());
   if (size == 0) {
-    if (state->event != nullptr) {
-      ssh_event_remove_fd(state->event, fd);
-    }
-    close_server_fd(&state->sftp_server_output_fd);
+    state->sftp_output_closed = true;
     (void)ssh_channel_send_eof(state->sftp_channel);
     return 0;
   }
@@ -815,7 +814,7 @@ static int on_forward_peer_data(socket_t fd, int, void *userdata) {
     }
   } else if (!count) {
     (void)ssh_channel_send_eof(state->channel);
-    ssh_event_remove_fd(state->event, fd);
+    state->forward_input_closed = true;
   }
   return 0;
 }
@@ -944,7 +943,7 @@ static int validate_server_state(const ServerState &state) {
 
 static int run_server_process(const ServerOptions &options, int port_fd,
                               int release_fd) {
-  ::alarm(8);
+  ::alarm(30);
   ServerState state;
   state.options = options;
   if (options.auth_mode == ServerAuthMode::public_key &&
@@ -1060,6 +1059,17 @@ static int run_server_process(const ServerOptions &options, int port_fd,
   while (!state.release_requested && ssh_is_connected(session) != 0) {
     if (ssh_event_dopoll(event, -1) == SSH_ERROR) {
       break;
+    }
+    // Removing an fd from its own callback frees the poll entry while libssh
+    // is still iterating it. Apply removals after dopoll has returned.
+    if (state.sftp_output_closed) {
+      ssh_event_remove_fd(event, state.sftp_server_output_fd);
+      close_server_fd(&state.sftp_server_output_fd);
+      state.sftp_output_closed = false;
+    }
+    if (state.forward_input_closed) {
+      ssh_event_remove_fd(event, state.forward_fd);
+      state.forward_input_closed = false;
     }
     if (state.window_marker_pending) {
       // libssh grows the receive window after the data callback returns.

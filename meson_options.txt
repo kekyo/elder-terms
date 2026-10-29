@@ -20,6 +20,13 @@ option(
 )
 
 option(
+  'boxrig_source',
+  type: 'string',
+  value: '',
+  description: 'Absolute path to an independent boxrig source checkout for diagnostic builds',
+)
+
+option(
   'application_version',
   type: 'string',
   value: '',
