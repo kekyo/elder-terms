@@ -2700,7 +2700,6 @@ static void open_file_settings(GtkMenuItem *, gpointer data) {
     apply_file_transfer_compact_mode(window, general_compact_mode(settings));
     apply_file_transfer_border(window);
     action.complete(true, {});
-    schedule_file_settings_close(window);
   };
   if (window->config_path) {
     callbacks.save = [window, apply = callbacks.apply](
@@ -2711,6 +2710,7 @@ static void open_file_settings(GtkMenuItem *, gpointer data) {
       }
       if (result.saved) {
         apply(settings, action);
+        schedule_file_settings_close(window);
       } else {
         action.complete(false, _("Failed to save connection"));
       }

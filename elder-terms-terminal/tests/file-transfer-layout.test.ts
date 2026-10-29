@@ -191,15 +191,15 @@ describe.concurrent('file transfer compact title bar', () => {
           });
 
           // Reapplying Enabled must not shrink an already compact header.
+          await expectElementKind(
+            await app.getById('application_menu_button'),
+            'toggleButton'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_menu_item'),
+            'menuItem'
+          ).click();
           for (const enabled of [true, false, true, true, false]) {
-            await expectElementKind(
-              await app.getById('application_menu_button'),
-              'toggleButton'
-            ).click();
-            await expectElementKind(
-              await app.getById('settings_menu_item'),
-              'menuItem'
-            ).click();
             await expectElementKind(
               await app.getById('settings_general_compact_mode_combo'),
               'comboBox'
@@ -209,7 +209,7 @@ describe.concurrent('file transfer compact title bar', () => {
               'button'
             ).click();
             await waitForResult(async () => {
-              expect(await app.getWindowCount()).toBe(1);
+              expect(await app.getWindowCount()).toBe(2);
               expect((await header.capture()).bounds.height).toBe(
                 enabled ? compactHeight : regularHeight
               );
@@ -232,6 +232,10 @@ describe.concurrent('file transfer compact title bar', () => {
               expect(bottom.states.includes('showing')).toBe(enabled);
             });
           }
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
         }
       } finally {
         try {
@@ -446,8 +450,12 @@ describe('file transfer window border', () => {
         expect(resizedPane.bounds.width).toBe(plainPane.bounds.width - 24);
       });
       await waitForResult(async () => {
-        expect(await withBorder.getWindowCount()).toBe(1);
+        expect(await withBorder.getWindowCount()).toBe(2);
       });
+      await expectElementKind(
+        await withBorder.getById('settings_cancel_button'),
+        'button'
+      ).click();
 
       await expectElementKind(
         await withBorder.getById('application_menu_button'),
@@ -473,8 +481,12 @@ describe('file transfer window border', () => {
         expect((await bottom.capture()).bounds.height).toBe(12);
       });
       await waitForResult(async () => {
-        expect(await withBorder.getWindowCount()).toBe(1);
+        expect(await withBorder.getWindowCount()).toBe(2);
       });
+      await expectElementKind(
+        await withBorder.getById('settings_cancel_button'),
+        'button'
+      ).click();
 
       await expectElementKind(
         await withBorder.getById('application_menu_button'),
@@ -524,8 +536,12 @@ describe('file transfer window border', () => {
         ).not.toContain('showing');
       });
       await waitForResult(async () => {
-        expect(await withBorder.getWindowCount()).toBe(1);
+        expect(await withBorder.getWindowCount()).toBe(2);
       });
+      await expectElementKind(
+        await withBorder.getById('settings_cancel_button'),
+        'button'
+      ).click();
 
       await expectElementKind(
         await withBorder.getById('application_menu_button'),

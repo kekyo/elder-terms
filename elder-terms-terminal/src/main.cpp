@@ -922,7 +922,7 @@ static void request_runtime_settings(ApplicationState *state, const elder_terms:
         const bool accepted = save ? save_runtime_settings(state, store, std::move(image)) :
             apply_runtime_settings(state, store, std::move(image));
         action.complete(accepted, accepted ? "" : save ? _("Failed to save connection") : _("Failed to apply terminal settings"));
-        if (accepted) schedule_settings_dialog_close(state);
+        if (accepted && save) schedule_settings_dialog_close(state);
       });
 }
 

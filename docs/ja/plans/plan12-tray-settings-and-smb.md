@@ -244,3 +244,9 @@ Applyとトレイの最終確認に加え、SFTP・FTP・FTPS・WebDAVの回帰�
 [libsmbclient-api]: https://github.com/samba-team/samba/blob/master/source3/include/libsmbclient.h
 [smbclient-man]: https://www.samba.org/samba/docs/current/man-html/smbclient.1.html
 [curl-man]: https://curl.se/docs/manpage.html
+
+### 段階1の結果
+
+2026年10月29日、Apply後も設定画面を保持する変更を実装しました。ターミナルはSave成功時だけ閉じ、転送ウインドウはApplyの共通処理から閉じる処理を分離しています。
+
+変更前には、端末で設定画面が見つからない失敗と、転送でウインドウ数が期待と異なる失敗を確認しました。変更後は設定試験57件と転送画面試験9件が成功しています。同じ設定画面からの再Applyも検証し、転送では5回の連続適用を確認しました。両実行ファイルのビルドとTypeScriptの型検査も成功しました。
