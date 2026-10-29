@@ -174,7 +174,14 @@ custom_target('libsmb2-private-runtime',
   command: [find_program('cp'), libsmb2_sdk / 'lib/libsmb2.so.7', '@OUTPUT@'],
   depends: libsmb2_build_target, build_by_default: true,
   install: true, install_dir: elder_terms_private_install_dir)
-install_data('deps/libsmb2/LICENCE-LGPL-2.1.txt',
+custom_target('libsmb2-license-bundle',
+  output: ['COPYING', 'LICENCE-LGPL-2.1.txt', 'libsmb2-source.tar.gz'],
+  command: [find_program('cp'),
+    meson.project_source_root() / 'deps/libsmb2/COPYING',
+    meson.project_source_root() / 'deps/libsmb2/LICENCE-LGPL-2.1.txt',
+    libsmb2_sdk / 'libsmb2-source.tar.gz', '@OUTDIR@'],
+  depends: libsmb2_build_target, build_by_default: true,
+  install: true,
   install_dir: get_option('datadir') / 'doc/elder-terms/licenses/libsmb2')
 
 cardio_root_dir = meson.project_source_root() / 'deps/cardio'
@@ -232,6 +239,7 @@ install_data(
 foreach language : ['ja', 'en']
   install_data(
     'docs' / language / 'webdav.md',
+    'docs' / language / 'smb.md',
     install_dir: get_option('datadir') / 'doc/elder-terms/docs' / language,
   )
 endforeach

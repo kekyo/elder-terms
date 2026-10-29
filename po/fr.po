@@ -2603,3 +2603,33 @@ msgstr "Contrôle les caractères tels que ①. Choisissez la largeur attendue p
 
 msgid "Font dependent"
 msgstr "Selon la police"
+
+msgid "Share name"
+msgstr "Nom du partage"
+
+msgid "Domain"
+msgstr "Domaine"
+
+msgid "Require signing"
+msgstr "Exiger la signature"
+
+msgid "Require encryption"
+msgstr "Exiger le chiffrement"
+
+msgid "SMB"
+msgstr "SMB"
+
+msgid "Open windows"
+msgstr "Fenêtres ouvertes"
+
+msgid "No open windows"
+msgstr "Aucune fenêtre ouverte"
+
+msgid "SMB authentication"
+msgstr "Authentification SMB"
+
+msgid "Failed to start SMB"
+msgstr "Impossible de démarrer SMB"
+
+msgid "File transfer"
+msgstr "Transfert de fichiers"

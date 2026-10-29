@@ -2592,3 +2592,33 @@ msgstr "Controla caracteres como ①. Use a largura esperada pela aplicação re
 
 msgid "Font dependent"
 msgstr "Conforme a fonte"
+
+msgid "Share name"
+msgstr "Nome do compartilhamento"
+
+msgid "Domain"
+msgstr "Domínio"
+
+msgid "Require signing"
+msgstr "Exigir assinatura"
+
+msgid "Require encryption"
+msgstr "Exigir criptografia"
+
+msgid "SMB"
+msgstr "SMB"
+
+msgid "Open windows"
+msgstr "Janelas abertas"
+
+msgid "No open windows"
+msgstr "Nenhuma janela aberta"
+
+msgid "SMB authentication"
+msgstr "Autenticação SMB"
+
+msgid "Failed to start SMB"
+msgstr "Falha ao iniciar o SMB"
+
+msgid "File transfer"
+msgstr "Transferência de arquivos"

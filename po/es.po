@@ -2598,3 +2598,33 @@ msgstr "Controla caracteres como ①. Use el ancho esperado por la aplicación r
 
 msgid "Font dependent"
 msgstr "Según la fuente"
+
+msgid "Share name"
+msgstr "Nombre del recurso compartido"
+
+msgid "Domain"
+msgstr "Dominio"
+
+msgid "Require signing"
+msgstr "Exigir firma"
+
+msgid "Require encryption"
+msgstr "Exigir cifrado"
+
+msgid "SMB"
+msgstr "SMB"
+
+msgid "Open windows"
+msgstr "Ventanas abiertas"
+
+msgid "No open windows"
+msgstr "No hay ventanas abiertas"
+
+msgid "SMB authentication"
+msgstr "Autenticación SMB"
+
+msgid "Failed to start SMB"
+msgstr "No se pudo iniciar SMB"
+
+msgid "File transfer"
+msgstr "Transferencia de archivos"

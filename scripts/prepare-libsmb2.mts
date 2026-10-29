@@ -15,6 +15,13 @@ const root = resolve(rootArgument);
 const output = resolve(buildArgument);
 const build = join(output, 'libsmb2/build');
 const sdk = join(output, 'libsmb2/sdk');
+const jobsArgument = process.env.ELDER_TERMS_MAKE_JOBS;
+if (jobsArgument !== undefined &&
+    (!/^[0-9]+$/.test(jobsArgument) ||
+      !Number.isSafeInteger(Number(jobsArgument)) || Number(jobsArgument) < 1))
+  throw new Error(`ELDER_TERMS_MAKE_JOBS must be a positive integer: ${jobsArgument}`);
+const makeJobs = jobsArgument === undefined
+  ? Math.min(availableParallelism(), 8) : Number(jobsArgument);
 const run = async (command: string, args: string[]): Promise<void> => {
   const child = spawn(command, args, { stdio: 'inherit' });
   const code = await new Promise<number | null>((resolveExit, reject) => {
@@ -35,6 +42,11 @@ await run('cmake', [
   '-DENABLE_LIBQUIC=OFF', '-DENABLE_RDMA=OFF', '-DENABLE_UTILS=OFF',
   '-DENABLE_EXAMPLES=OFF',
 ]);
-await run('cmake', ['--build', build, '--parallel', String(Math.min(availableParallelism(), 8))]);
+await run('cmake', ['--build', build, '--parallel', String(makeJobs)]);
 await run('cmake', ['--install', build]);
+await run('tar', [
+  '--exclude=.git', '--sort=name', '--mtime=@0', '--owner=0', '--group=0',
+  '--numeric-owner', '-czf', join(sdk, 'libsmb2-source.tar.gz'),
+  '-C', join(root, 'deps'), 'libsmb2',
+]);
 await writeFile(join(output, 'libsmb2-build.stamp'), 'ready\n');

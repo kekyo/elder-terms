@@ -2598,3 +2598,33 @@ msgstr "Задаёт ширину символов, таких как ①. Вы�
 
 msgid "Font dependent"
 msgstr "По шрифту"
+
+msgid "Share name"
+msgstr "Имя общего ресурса"
+
+msgid "Domain"
+msgstr "Домен"
+
+msgid "Require signing"
+msgstr "Требовать подпись"
+
+msgid "Require encryption"
+msgstr "Требовать шифрование"
+
+msgid "SMB"
+msgstr "SMB"
+
+msgid "Open windows"
+msgstr "Открытые окна"
+
+msgid "No open windows"
+msgstr "Нет открытых окон"
+
+msgid "SMB authentication"
+msgstr "Аутентификация SMB"
+
+msgid "Failed to start SMB"
+msgstr "Не удалось запустить SMB"
+
+msgid "File transfer"
+msgstr "Передача файлов"

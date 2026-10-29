@@ -2576,3 +2576,33 @@ msgstr "① 같은 문자의 너비를 원격 애플리케이션이 예상하는
 
 msgid "Font dependent"
 msgstr "글꼴에 따름"
+
+msgid "Share name"
+msgstr "공유 이름"
+
+msgid "Domain"
+msgstr "도메인"
+
+msgid "Require signing"
+msgstr "서명 필수"
+
+msgid "Require encryption"
+msgstr "암호화 필수"
+
+msgid "SMB"
+msgstr "SMB"
+
+msgid "Open windows"
+msgstr "열린 창"
+
+msgid "No open windows"
+msgstr "열린 창 없음"
+
+msgid "SMB authentication"
+msgstr "SMB 인증"
+
+msgid "Failed to start SMB"
+msgstr "SMB를 시작하지 못했습니다"
+
+msgid "File transfer"
+msgstr "파일 전송"

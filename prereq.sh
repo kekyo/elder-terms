@@ -32,6 +32,7 @@ container_packages() {
 binutils
 autoconf
 build-essential
+cmake
 ca-certificates
 dbus-user-session
 dpkg-dev
