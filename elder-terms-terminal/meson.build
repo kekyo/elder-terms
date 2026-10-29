@@ -316,8 +316,18 @@ if get_option('build_tests')
 smb_client_test = executable('smb-client-test',
   ['tests/smb/smb-client-test.cpp', 'src/smb/smb-client.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
+smb_fault_test = executable('smb-fault-test',
+  ['tests/smb/smb-fault-test.cpp', 'src/smb/smb-client.cpp',
+   'src/file-transfer/file-transfer-engine.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
 test('smb-client', find_program('node'),
-  args: [files('tests/smb/run-client.mts'), smb_client_test], timeout: 180)
+  args: [files('tests/smb/run-client.mts'), smb_client_test, smb_fault_test], timeout: 180)
+smb_transfer_test = executable('smb-transfer-test',
+  ['tests/smb/smb-transfer-test.cpp', 'src/smb/smb-client.cpp',
+   'src/file-transfer/file-transfer-engine.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
+test('smb-transfer', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_transfer_test], timeout: 180)
 
 boxrig_serial_transport_test = executable('boxrig-serial-transport-test',
   'tests/cpp/boxrig-serial-transport-test.cpp', dependencies: boxrig_runtime_dep,

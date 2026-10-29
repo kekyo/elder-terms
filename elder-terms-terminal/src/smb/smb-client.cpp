@@ -16,6 +16,15 @@
 
 namespace elder_terms {
 
+// Linked cancellation sources retain their input registrations. Retire those
+// registrations when a request finishes, including successful short requests.
+struct ScopedSmbCancellation {
+  cardio::cancellation_source source;
+  ~ScopedSmbCancellation() { (void)source.cancel(); }
+  cardio::cancellation get_cancellation() const { return source.get_cancellation(); }
+  bool cancel() { return source.cancel(); }
+};
+
 struct SmbSession {
   smb2_context *context = nullptr;
   cardio::primitives::mutex operations;
@@ -75,7 +84,7 @@ static cardio::promise<SmbCompletion> execute_async(
     std::function<void(void *)> consume, cardio::cancellation cancellation) {
   cancellation.throw_if_cancellation_requested();
   require_connected(*session);
-  auto stopped = cardio::cancellations::any(cancellation, session->stopping.get_cancellation());
+  ScopedSmbCancellation stopped{cardio::cancellations::any(cancellation, session->stopping.get_cancellation())};
   SmbCompletion result;
   result.consume = std::move(consume);
   session->command_active = true;
@@ -93,8 +102,8 @@ static cardio::promise<SmbCompletion> execute_async(
       auto interest = cardio::fd_event::none;
       if (wanted & POLLIN) interest |= cardio::fd_event::read;
       if (wanted & POLLOUT) interest |= cardio::fd_event::write;
-      auto deadline = cardio::cancellations::timeout(session->idle_timeout_ms);
-      auto waiting = cardio::cancellations::any(stopped.get_cancellation(), deadline.get_cancellation());
+      ScopedSmbCancellation deadline{cardio::cancellations::timeout(session->idle_timeout_ms)};
+      ScopedSmbCancellation waiting{cardio::cancellations::any(stopped.get_cancellation(), deadline.get_cancellation())};
       const auto ready = co_await cardio::from_fd(fd, interest, waiting.get_cancellation());
       (void)deadline.cancel();
       int events = 0;
@@ -172,14 +181,14 @@ static cardio::promise<void> close_raw_async(const std::shared_ptr<SmbSession> &
 
 static cardio::promise<std::optional<smb2_create_reply>> open_raw_async(
     const std::shared_ptr<SmbSession> &session, const std::string &path,
-    uint32_t access, uint32_t disposition, cardio::cancellation cancellation) {
+    uint32_t access, uint32_t disposition, uint32_t create_options, cardio::cancellation cancellation) {
   const auto name = share_path(path);
   smb2_create_request request{};
   request.impersonation_level = SMB2_IMPERSONATION_IMPERSONATION;
   request.desired_access = access;
   request.share_access = SMB2_FILE_SHARE_READ | SMB2_FILE_SHARE_WRITE | SMB2_FILE_SHARE_DELETE;
   request.create_disposition = disposition;
-  request.create_options = SMB2_FILE_OPEN_REPARSE_POINT;
+  request.create_options = SMB2_FILE_OPEN_REPARSE_POINT | create_options;
   request.name = name.c_str();
   smb2_create_reply handle{};
   auto result = co_await execute_async(session, [&](auto cb, auto data) {
@@ -187,7 +196,15 @@ static cardio::promise<std::optional<smb2_create_reply>> open_raw_async(
     if (!pdu) return -ENOMEM;
     smb2_queue_pdu(session->context, pdu);
     return 0;
-  }, [&](void *data) { handle = *static_cast<smb2_create_reply *>(data); }, cancellation);
+  }, [&](void *data) {
+    const auto &reply = *static_cast<smb2_create_reply *>(data);
+    // Decoded create contexts belong to the callback. Retain only value fields.
+    std::memcpy(handle.file_id, reply.file_id, SMB2_FD_SIZE);
+    handle.file_attributes = reply.file_attributes;
+    handle.end_of_file = reply.end_of_file;
+    handle.last_access_time = reply.last_access_time;
+    handle.last_write_time = reply.last_write_time;
+  }, cancellation);
   if (result.status != 0 && error_number(result) == ENOENT) co_return std::nullopt;
   check(result, "open");
   co_return handle;
@@ -200,7 +217,7 @@ static cardio::promise<bool> inspect_ancestors_async(const std::shared_ptr<SmbSe
   for (auto separator = path.find('/', 1); separator != std::string::npos;
        separator = path.find('/', separator + 1)) {
     const auto parent = path.substr(0, separator);
-    auto handle = co_await open_raw_async(session, parent, SMB2_FILE_READ_ATTRIBUTES, SMB2_FILE_OPEN, cancellation);
+    auto handle = co_await open_raw_async(session, parent, SMB2_FILE_READ_ATTRIBUTES, SMB2_FILE_OPEN, 0, cancellation);
     if (!handle) co_return false;
     const auto attributes = handle->file_attributes;
     co_await close_raw_async(session, *handle, cancellation);
@@ -274,12 +291,183 @@ public:
   }
 };
 
+class SmbWriter final : public RemoteFileWriter {
+  std::shared_ptr<SmbSession> session_;
+  std::string path_;
+  uint64_t expected_;
+  uint64_t offset_ = 0;
+  std::optional<smb2_create_reply> handle_;
+  RemoteFileCreationState creation_ = RemoteFileCreationState::not_created;
+  std::exception_ptr failure_;
+  cardio::cancellation parent_cancellation_;
+  bool closed_ = false;
+
+  cardio::promise<void> create_async(cardio::cancellation cancellation) {
+    if (failure_) std::rethrow_exception(failure_);
+    if (handle_) co_return;
+    ScopedSmbCancellation combined{cardio::cancellations::any(cancellation, parent_cancellation_)};
+    combined.get_cancellation().throw_if_cancellation_requested();
+    if (!co_await inspect_ancestors_async(session_, path_, combined.get_cancellation()))
+      throw RemoteFileError("SMB upload parent does not exist", false);
+    // Defer CREATE until this writer is returned to the engine. If the server
+    // creates the file but its reply is lost, the engine can then report the
+    // uncertain path without deleting a file whose ownership was not proven.
+    creation_ = RemoteFileCreationState::unknown;
+    try {
+      handle_ = co_await open_raw_async(session_, path_, SMB2_FILE_WRITE_DATA | SMB2_FILE_READ_ATTRIBUTES,
+          SMB2_FILE_CREATE, SMB2_FILE_NON_DIRECTORY_FILE, combined.get_cancellation());
+      if (!handle_) {
+        creation_ = RemoteFileCreationState::not_created;
+        throw RemoteFileError("SMB upload parent does not exist", false);
+      }
+      creation_ = RemoteFileCreationState::created;
+    } catch (const RemoteFileError &error) {
+      if (!error.connection_lost) creation_ = RemoteFileCreationState::not_created;
+      failure_ = std::current_exception();
+      throw;
+    } catch (...) {
+      failure_ = std::current_exception();
+      throw;
+    }
+  }
+
+public:
+  SmbWriter(std::shared_ptr<SmbSession> session, std::string path,
+      uint64_t expected, cardio::cancellation cancellation)
+      : session_(std::move(session)), path_(std::move(path)), expected_(expected),
+        parent_cancellation_(std::move(cancellation)) {}
+  ~SmbWriter() override { if (handle_ && !closed_) session_->request_stop(); }
+  RemoteFileCreationState creation_state() const noexcept override { return creation_; }
+
+  cardio::promise<void> write_all_async(std::span<const std::byte> buffer,
+      cardio::cancellation cancellation) override {
+    ScopedSmbCancellation combined{cardio::cancellations::any(cancellation, parent_cancellation_)};
+    auto lock = std::move(co_await session_->operations.lock(combined.get_cancellation()));
+    require_connected(*session_);
+    if (closed_) throw RemoteFileError("SMB writer is closed", false);
+    if (buffer.size() > expected_ - offset_)
+      throw RemoteFileError("SMB upload exceeds its expected size", false);
+    co_await create_async(combined.get_cancellation());
+    while (!buffer.empty()) {
+      const auto amount = std::min<std::size_t>(buffer.size(), smb2_get_max_write_size(session_->context));
+      if (!amount) throw RemoteFileError("SMB server supplied an invalid write limit", true);
+      smb2_write_request request{};
+      request.length = amount;
+      request.offset = offset_;
+      request.buf = reinterpret_cast<const uint8_t *>(buffer.data());
+      std::memcpy(request.file_id, handle_->file_id, SMB2_FD_SIZE);
+      std::size_t written = 0;
+      auto result = co_await execute_async(session_, [&](auto cb, auto data) {
+        auto *pdu = smb2_cmd_write_async(session_->context, &request, 0, cb, data);
+        if (!pdu) return -ENOMEM;
+        smb2_queue_pdu(session_->context, pdu);
+        return 0;
+      }, [&](void *data) {
+        if (!data) throw RemoteFileError("SMB write response is missing", true);
+        written = static_cast<smb2_write_reply *>(data)->count;
+        if (!written || written > amount)
+          throw RemoteFileError("SMB server returned an invalid write count", true);
+      }, combined.get_cancellation());
+      check(result, "write");
+      offset_ += written;
+      buffer = buffer.subspan(written);
+    }
+  }
+
+  cardio::promise<void> close_async(cardio::cancellation cancellation) override {
+    auto lock = std::move(co_await session_->operations.lock(cancellation));
+    if (closed_) co_return;
+    require_connected(*session_);
+    co_await create_async(cancellation);
+    if (offset_ == expected_) {
+      smb2_flush_request request{};
+      std::memcpy(request.file_id, handle_->file_id, SMB2_FD_SIZE);
+      auto result = co_await execute_async(session_, [&](auto cb, auto data) {
+        auto *pdu = smb2_cmd_flush_async(session_->context, &request, cb, data);
+        if (!pdu) return -ENOMEM;
+        smb2_queue_pdu(session_->context, pdu);
+        return 0;
+      }, {}, cancellation);
+      check(result, "flush");
+    }
+    co_await close_raw_async(session_, *handle_, cancellation);
+    closed_ = true;
+    if (offset_ != expected_)
+      throw RemoteFileError("SMB upload ended before its expected size", false);
+  }
+};
+
+static cardio::promise<void> set_info_async(const std::shared_ptr<SmbSession> &session,
+    const smb2_create_reply &handle, uint8_t information_class, void *information,
+    cardio::cancellation cancellation) {
+  smb2_set_info_request request{};
+  request.info_type = SMB2_0_INFO_FILE;
+  request.file_info_class = information_class;
+  request.input_data = information;
+  std::memcpy(request.file_id, handle.file_id, SMB2_FD_SIZE);
+  auto result = co_await execute_async(session, [&](auto cb, auto data) {
+    auto *pdu = smb2_cmd_set_info_async(session->context, &request, cb, data);
+    if (!pdu) return -ENOMEM;
+    smb2_queue_pdu(session->context, pdu);
+    return 0;
+  }, {}, cancellation);
+  check(result, "update item");
+}
+
+// Attribute changes, deletion and renaming operate on the opened item itself,
+// including the no-follow check. Always release that handle on operation errors.
+static cardio::promise<void> modify_async(const std::shared_ptr<SmbSession> &session,
+    const std::string &path, uint32_t access, std::optional<RemoteFileType> required_type,
+    std::function<cardio::promise<void>(const smb2_create_reply &)> operation,
+    cardio::cancellation cancellation) {
+  if (path == "/") throw RemoteFileError("SMB share root cannot be changed", false);
+  if (!co_await inspect_ancestors_async(session, path, cancellation))
+    throw RemoteFileError("SMB item does not exist", false);
+  auto handle = co_await open_raw_async(session, path, access | SMB2_FILE_READ_ATTRIBUTES,
+      SMB2_FILE_OPEN, 0, cancellation);
+  if (!handle) throw RemoteFileError("SMB item does not exist", false);
+  std::exception_ptr failure;
+  try {
+    const auto type = file_type(handle->file_attributes);
+    if (type == RemoteFileType::other || (required_type && type != *required_type))
+      throw RemoteFileError("Unsupported SMB item type", false);
+    co_await operation(*handle);
+  } catch (...) { failure = std::current_exception(); }
+  try { co_await close_raw_async(session, *handle, cancellation); }
+  catch (...) {
+    session->request_stop();
+    if (!failure) failure = std::current_exception();
+  }
+  if (failure) std::rethrow_exception(failure);
+}
+
+static cardio::promise<void> rename_raw_async(const std::shared_ptr<SmbSession> &session,
+    const std::string &source, const std::string &destination, bool overwrite,
+    cardio::cancellation cancellation) {
+  if (destination == "/") throw RemoteFileError("SMB share root cannot be replaced", false);
+  if (!co_await inspect_ancestors_async(session, destination, cancellation))
+    throw RemoteFileError("SMB destination parent does not exist", false);
+  auto target = co_await open_raw_async(session, destination, SMB2_FILE_READ_ATTRIBUTES, SMB2_FILE_OPEN, 0, cancellation);
+  if (target) {
+    const auto type = file_type(target->file_attributes);
+    co_await close_raw_async(session, *target, cancellation);
+    if (type == RemoteFileType::other) throw RemoteFileError("SMB links cannot be replaced", false);
+  }
+  co_await modify_async(session, source, SMB2_DELETE, {}, [&](const auto &handle) -> cardio::promise<void> {
+    const auto name = share_path(destination);
+    smb2_file_rename_info information{};
+    information.replace_if_exist = overwrite;
+    information.file_name = reinterpret_cast<const uint8_t *>(name.c_str());
+    co_await set_info_async(session, handle, SMB2_FILE_RENAME_INFORMATION, &information, cancellation);
+  }, cancellation);
+}
+
 class SmbClient final : public RemoteFileClient {
   std::shared_ptr<SmbSession> session_;
 public:
   explicit SmbClient(std::shared_ptr<SmbSession> session) : session_(std::move(session)) {}
   ~SmbClient() override { session_->request_stop(); }
-  RemoteFileCapabilities capabilities() const noexcept override { return {.write_operations = false}; }
+  RemoteFileCapabilities capabilities() const noexcept override { return {.write_operations = true, .modification_time = true, .upload_commit = true}; }
   cardio::promise<void> stop_async() {
     session_->request_stop();
     auto lock = std::move(co_await session_->operations.lock());
@@ -292,7 +480,7 @@ public:
     require_connected(*session_);
     if (!co_await inspect_ancestors_async(session_, path, cancellation))
       throw RemoteFileError("SMB directory does not exist", false);
-    auto handle = co_await open_raw_async(session_, path, SMB2_FILE_READ_ATTRIBUTES, SMB2_FILE_OPEN, cancellation);
+    auto handle = co_await open_raw_async(session_, path, SMB2_FILE_READ_ATTRIBUTES, SMB2_FILE_OPEN, 0, cancellation);
     if (!handle) throw RemoteFileError("SMB directory does not exist", false);
     const auto type = file_type(handle->file_attributes);
     co_await close_raw_async(session_, *handle, cancellation);
@@ -326,7 +514,7 @@ public:
     auto lock = std::move(co_await session_->operations.lock(cancellation));
     require_connected(*session_);
     if (!co_await inspect_ancestors_async(session_, path, cancellation)) co_return std::nullopt;
-    auto handle = co_await open_raw_async(session_, path, SMB2_FILE_READ_ATTRIBUTES, SMB2_FILE_OPEN, cancellation);
+    auto handle = co_await open_raw_async(session_, path, SMB2_FILE_READ_ATTRIBUTES, SMB2_FILE_OPEN, 0, cancellation);
     if (!handle) co_return std::nullopt;
     auto attributes = attributes_for(path, *handle);
     co_await close_raw_async(session_, *handle, cancellation);
@@ -340,7 +528,7 @@ public:
     if (!co_await inspect_ancestors_async(session_, path, cancellation))
       throw RemoteFileError("SMB file does not exist", false);
     auto handle = co_await open_raw_async(session_, path, SMB2_FILE_READ_DATA | SMB2_FILE_READ_ATTRIBUTES,
-        SMB2_FILE_OPEN, cancellation);
+        SMB2_FILE_OPEN, 0, cancellation);
     if (!handle) throw RemoteFileError("SMB file does not exist", false);
     if (file_type(handle->file_attributes) != RemoteFileType::regular) {
       co_await close_raw_async(session_, *handle, cancellation);
@@ -351,25 +539,78 @@ public:
   cardio::promise<std::string> read_link_async(std::string, cardio::cancellation) override {
     throw RemoteFileError("SMB links are not supported", false); co_return "";
   }
-  cardio::promise<void> make_directory_async(std::string, std::optional<uint32_t>, cardio::cancellation) override {
-    throw RemoteFileError("SMB changes are not available", false); co_return;
+  cardio::promise<void> make_directory_async(std::string path, std::optional<uint32_t>,
+      cardio::cancellation cancellation) override {
+    path = canonical_path(std::move(path));
+    auto lock = std::move(co_await session_->operations.lock(cancellation));
+    require_connected(*session_);
+    if (path == "/") throw RemoteFileError("SMB share root already exists", false);
+    if (!co_await inspect_ancestors_async(session_, path, cancellation))
+      throw RemoteFileError("SMB parent directory does not exist", false);
+    auto handle = co_await open_raw_async(session_, path, SMB2_FILE_READ_ATTRIBUTES,
+        SMB2_FILE_CREATE, SMB2_FILE_DIRECTORY_FILE, cancellation);
+    if (!handle) throw RemoteFileError("SMB parent directory does not exist", false);
+    co_await close_raw_async(session_, *handle, cancellation);
   }
-  cardio::promise<void> remove_file_async(std::string, cardio::cancellation) override {
-    throw RemoteFileError("SMB changes are not available", false); co_return;
+  cardio::promise<void> remove_file_async(std::string path, cardio::cancellation cancellation) override {
+    path = canonical_path(std::move(path));
+    auto lock = std::move(co_await session_->operations.lock(cancellation));
+    require_connected(*session_);
+    co_await modify_async(session_, path, SMB2_DELETE, RemoteFileType::regular,
+        [&](const auto &handle) -> cardio::promise<void> {
+      smb2_file_disposition_info information{1};
+      co_await set_info_async(session_, handle, SMB2_FILE_DISPOSITION_INFORMATION, &information, cancellation);
+    }, cancellation);
   }
-  cardio::promise<void> remove_directory_async(std::string, cardio::cancellation) override {
-    throw RemoteFileError("SMB changes are not available", false); co_return;
+  cardio::promise<void> remove_directory_async(std::string path, cardio::cancellation cancellation) override {
+    path = canonical_path(std::move(path));
+    auto lock = std::move(co_await session_->operations.lock(cancellation));
+    require_connected(*session_);
+    co_await modify_async(session_, path, SMB2_DELETE, RemoteFileType::directory,
+        [&](const auto &handle) -> cardio::promise<void> {
+      smb2_file_disposition_info information{1};
+      co_await set_info_async(session_, handle, SMB2_FILE_DISPOSITION_INFORMATION, &information, cancellation);
+    }, cancellation);
   }
-  cardio::promise<void> rename_async(std::string, std::string, cardio::cancellation) override {
-    throw RemoteFileError("SMB changes are not available", false); co_return;
+  cardio::promise<void> rename_async(std::string source, std::string destination,
+      cardio::cancellation cancellation) override {
+    source = canonical_path(std::move(source));
+    destination = canonical_path(std::move(destination));
+    auto lock = std::move(co_await session_->operations.lock(cancellation));
+    require_connected(*session_);
+    co_await rename_raw_async(session_, source, destination, false, cancellation);
+  }
+  cardio::promise<void> commit_upload_async(std::string source, std::string destination,
+      bool overwrite, cardio::cancellation cancellation) override {
+    source = canonical_path(std::move(source));
+    destination = canonical_path(std::move(destination));
+    auto lock = std::move(co_await session_->operations.lock(cancellation));
+    require_connected(*session_);
+    co_await rename_raw_async(session_, source, destination, overwrite, cancellation);
   }
   cardio::promise<void> make_symbolic_link_async(std::string, std::string, cardio::cancellation) override {
     throw RemoteFileError("SMB links are not supported", false); co_return;
   }
-  cardio::promise<void> set_attributes_async(std::string, RemoteFileAttributes, cardio::cancellation) override { co_return; }
-  cardio::promise<std::unique_ptr<RemoteFileWriter>> open_write_async(std::string, uint64_t,
-      std::optional<uint32_t>, cardio::cancellation) override {
-    throw RemoteFileError("SMB changes are not available", false); co_return nullptr;
+  cardio::promise<void> set_attributes_async(std::string path, RemoteFileAttributes attributes,
+      cardio::cancellation cancellation) override {
+    if (!attributes.modification_time_unix_seconds) co_return;
+    path = canonical_path(std::move(path));
+    auto lock = std::move(co_await session_->operations.lock(cancellation));
+    require_connected(*session_);
+    co_await modify_async(session_, path, SMB2_FILE_WRITE_ATTRIBUTES, {},
+        [&](const auto &handle) -> cardio::promise<void> {
+      smb2_file_basic_info information{};
+      information.last_write_time.tv_sec = *attributes.modification_time_unix_seconds;
+      co_await set_info_async(session_, handle, SMB2_FILE_BASIC_INFORMATION, &information, cancellation);
+    }, cancellation);
+  }
+  cardio::promise<std::unique_ptr<RemoteFileWriter>> open_write_async(std::string path, uint64_t expected,
+      std::optional<uint32_t>, cardio::cancellation cancellation) override {
+    cancellation.throw_if_cancellation_requested();
+    require_connected(*session_);
+    path = canonical_path(std::move(path));
+    if (path == "/") throw RemoteFileError("SMB upload requires a file path", false);
+    co_return std::make_unique<SmbWriter>(session_, std::move(path), expected, cancellation);
   }
   bool try_begin_transfer() override {
     if (session_->transfer_active) return false;
@@ -406,8 +647,8 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb_client_async(
     throw std::invalid_argument(options.connection.validation_errors.front());
   auto session = std::make_shared<SmbSession>();
   session->idle_timeout_ms = static_cast<int>(options.connection.idle_timeout_seconds * 1000);
-  auto deadline = cardio::cancellations::timeout(options.connection.connect_timeout_seconds * 1000);
-  auto canceled = cardio::cancellations::any(cancellation, deadline.get_cancellation());
+  ScopedSmbCancellation deadline{cardio::cancellations::timeout(options.connection.connect_timeout_seconds * 1000)};
+  ScopedSmbCancellation canceled{cardio::cancellations::any(cancellation, deadline.get_cancellation())};
   std::exception_ptr failure;
   try {
     const auto addresses = co_await resolve_async(options.connection.address, canceled.get_cancellation());

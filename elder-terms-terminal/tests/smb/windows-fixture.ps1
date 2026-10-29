@@ -1,5 +1,5 @@
 param(
-  [Parameter(Mandatory = $true)][ValidateSet('inspect', 'setup', 'verify', 'ui-seed', 'ui-clear', 'cleanup')][string]$Action,
+  [Parameter(Mandatory = $true)][ValidateSet('inspect', 'setup', 'verify', 'ui-seed', 'ui-verify', 'ui-clear', 'cleanup')][string]$Action,
   [string]$RunId = '',
   [string]$ClientAddress = ''
 )
@@ -113,15 +113,28 @@ if ($Action -eq 'ui-seed') {
   exit 0
 }
 
-if ($Action -eq 'ui-clear') {
+if ($Action -eq 'ui-verify') {
   $single = Join-Path $shareRoot 'single.txt'
   $folder = Join-Path $shareRoot 'folder'
+  $uploaded = Join-Path $shareRoot 'kept.txt'
   if ([IO.File]::ReadAllText($single) -ne "single SMB file`n" -or
-      [IO.File]::ReadAllText((Join-Path $folder 'nested.txt')) -ne "nested SMB file`n") {
+      [IO.File]::ReadAllText((Join-Path $folder 'nested.txt')) -ne "nested SMB file`n" -or
+      [IO.File]::ReadAllText($uploaded) -ne "replacement upload`n" -or
+      (Test-Path -LiteralPath (Join-Path $shareRoot 'ui-folder')) -or
+      (Test-Path -LiteralPath (Join-Path $shareRoot 'ui-renamed'))) {
     throw 'SMB UI fixture content changed'
   }
-  Remove-Item -LiteralPath $single -Force
-  Remove-Item -LiteralPath $folder -Recurse -Force
+  @{ verified = $true } | ConvertTo-Json -Compress
+  exit 0
+}
+
+if ($Action -eq 'ui-clear') {
+  foreach ($name in @('single.txt', 'folder', 'kept.txt', 'ui-folder', 'ui-renamed')) {
+    $path = Join-Path $shareRoot $name
+    if (Test-Path -LiteralPath $path) {
+      Remove-Item -LiteralPath $path -Recurse -Force
+    }
+  }
   @{ cleared = $true } | ConvertTo-Json -Compress
   exit 0
 }

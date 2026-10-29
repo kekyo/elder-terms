@@ -227,6 +227,161 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
       { timeoutMs: 30_000 }
     );
     await evidence.captureEvidence('smb-downloaded', async () => app.capture());
+
+    const localTree = expectElementKind(
+      await app.getById('file_transfer_local_tree'),
+      'table'
+    ) as GtkTableElement;
+    const rowForTable = async (
+      table: GtkTableElement,
+      name: string
+    ): Promise<number> =>
+      await waitForResult(async () => {
+        for (let row = 0; row < (await table.getRowCount()); row += 1)
+          if ((await (await table.cellAt(row, 0))?.info())?.name === name)
+            return row;
+        throw new Error(`Missing SMB row: ${name}`);
+      });
+    const contextMenu = async (
+      table: GtkTableElement,
+      name: string
+    ): Promise<void> => {
+      for (const selected of await table.selectedRows())
+        await table.deselectRow(selected);
+      const row = await rowForTable(table, name);
+      await table.selectRow(row);
+      const cell = await table.cellAt(row, 0);
+      if (cell === undefined) throw new Error(`Missing SMB cell: ${name}`);
+      const bounds = (await cell.capture()).bounds;
+      await app.input.moveMouseTo(
+        Math.round(bounds.x + bounds.width / 2),
+        Math.round(bounds.y + bounds.height / 2)
+      );
+      await app.input.setMouseButton('right', true);
+      await app.input.setMouseButton('right', false);
+    };
+    const acceptName = async (name: string): Promise<void> => {
+      const entry = expectElementKind(
+        await app.getById('file_transfer_prompt_entry'),
+        'entry'
+      );
+      await waitForResult(async () =>
+        expect((await entry.info()).states).toContain('showing')
+      );
+      await entry.setText(name);
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+    };
+    await contextMenu(tree, 'single.txt');
+    const newFolder = expectElementKind(
+      await app.getById('file_transfer_remote_new_directory_item'),
+      'menuItem'
+    );
+    expect((await newFolder.info()).states).toContain('sensitive');
+    await newFolder.click();
+    await acceptName('ui-folder');
+    await rowFor('ui-folder');
+    await contextMenu(tree, 'ui-folder');
+    await expectElementKind(
+      await app.getById('file_transfer_remote_rename_item'),
+      'menuItem'
+    ).click();
+    await acceptName('ui-renamed');
+    await rowFor('ui-renamed');
+    await contextMenu(tree, 'ui-renamed');
+    await expectElementKind(
+      await app.getById('file_transfer_remote_delete_item'),
+      'menuItem'
+    ).click();
+    await expectElementKind(
+      await app.getById('file_transfer_prompt_accept_button'),
+      'button'
+    ).click();
+    await waitForResult(async () => {
+      const names = [];
+      for (let row = 0; row < (await tree.getRowCount()); row += 1)
+        names.push((await (await tree.cellAt(row, 0))?.info())?.name);
+      expect(names).not.toContain('ui-renamed');
+    });
+
+    const upload = join(local, 'kept.txt');
+    await writeFile(upload, 'first upload\n');
+    await expectElementKind(
+      await app.getById('file_transfer_local_refresh_button'),
+      'button'
+    ).click();
+    await contextMenu(localTree, 'kept.txt');
+    await expectElementKind(
+      await app.getById('file_transfer_send_item'),
+      'menuItem'
+    ).click();
+    await rowFor('kept.txt');
+    await writeFile(upload, 'replacement upload\n');
+    await contextMenu(localTree, 'kept.txt');
+    await expectElementKind(
+      await app.getById('file_transfer_send_item'),
+      'menuItem'
+    ).click();
+    await waitForResult(async () => {
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_title_label'),
+          'label'
+        ).text()
+      ).toBe('Destination already exists');
+    });
+    await expectElementKind(
+      await app.getById('file_transfer_prompt_alternative_button'),
+      'button'
+    ).click();
+    await waitForResult(async () => {
+      expect((await localTree.info()).states).toContain('sensitive');
+    });
+    await rm(upload);
+    await expectElementKind(
+      await app.getById('file_transfer_local_refresh_button'),
+      'button'
+    ).click();
+    await contextMenu(tree, 'kept.txt');
+    await expectElementKind(
+      await app.getById('file_transfer_receive_item'),
+      'menuItem'
+    ).click();
+    await waitForResult(async () => {
+      expect(await readFile(upload, 'utf8')).toBe('first upload\n');
+    });
+    await writeFile(upload, 'replacement upload\n');
+    await expectElementKind(
+      await app.getById('file_transfer_local_refresh_button'),
+      'button'
+    ).click();
+    await contextMenu(localTree, 'kept.txt');
+    await expectElementKind(
+      await app.getById('file_transfer_send_item'),
+      'menuItem'
+    ).click();
+    await waitForResult(async () => {
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_prompt_title_label'),
+          'label'
+        ).text()
+      ).toBe('Destination already exists');
+    });
+    await expectElementKind(
+      await app.getById('file_transfer_prompt_accept_button'),
+      'button'
+    ).click();
+    await waitForResult(async () => {
+      expect((await localTree.info()).states).toContain('sensitive');
+    });
+    if (!externalAddress)
+      expect(podman(['exec', container, 'cat', '/share/kept.txt'])).toBe(
+        'replacement upload\n'
+      );
+    await evidence.captureEvidence('smb-uploaded', async () => app.capture());
   } finally {
     if (launcher !== undefined) {
       await evidence.flushOutputs([], launcher);

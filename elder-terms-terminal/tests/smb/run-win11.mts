@@ -23,7 +23,14 @@ const diagnostic = (text: string): string =>
 const remoteCommand = async (
   agent: RemoteAgent,
   script: string,
-  action: 'inspect' | 'setup' | 'verify' | 'ui-seed' | 'ui-clear' | 'cleanup',
+  action:
+    | 'inspect'
+    | 'setup'
+    | 'verify'
+    | 'ui-seed'
+    | 'ui-verify'
+    | 'ui-clear'
+    | 'cleanup',
   clientAddress: string
 ): Promise<Record<string, unknown>> => {
   const remote = await agent.processes.launchManaged({
@@ -148,6 +155,47 @@ const probeShare = async (
   console.log(`PASS ${share}/${mode} (${expectedExit})`);
 };
 
+const transferShare = async (
+  driver: string,
+  address: string,
+  share: string,
+  user: string,
+  readOnly: boolean
+): Promise<void> => {
+  const args = [address, share, user, '445'];
+  if (readOnly) args.push('readonly');
+  const child = spawn(driver, args, {
+    env: { ...process.env, ELDER_SMB_PASSWORD: password },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    signal: AbortSignal.timeout(180_000),
+  });
+  let output = '';
+  child.stdout.setEncoding('utf8').on('data', (text: string) => {
+    output += text;
+  });
+  child.stderr.setEncoding('utf8').on('data', (text: string) => {
+    output += text;
+  });
+  const exitCode = await new Promise<number | null>((resolve, reject) => {
+    child.once('error', reject);
+    child.once('exit', resolve);
+  });
+  assert.equal(
+    exitCode,
+    0,
+    `Windows SMB transfer driver failed: ${diagnostic(output)}`
+  );
+  assert.match(
+    output,
+    readOnly
+      ? /PASS SMB client read-only access refusal/u
+      : /PASS SMB client recursive upload\/download\/commit\/metadata\/cancellation\/delete/u
+  );
+  console.log(
+    `PASS win11 SMB native transfer ${readOnly ? 'readonly' : share}`
+  );
+};
+
 const agent = await connectRemoteAgent({ section: 'win11' });
 let remoteDirectory: string | undefined;
 let script: string | undefined;
@@ -251,6 +299,20 @@ try {
   const verified = await remoteCommand(agent, uploadedScript, 'verify', '');
   assert.equal(verified.sentinelIntact, true);
   assert.equal(verified.sharedDirectoryClean, true);
+  if (process.env.ELDER_SMB_TRANSFER_DRIVER) {
+    const driver = process.env.ELDER_SMB_TRANSFER_DRIVER;
+    await transferShare(driver, target.address, plain, user, false);
+    await transferShare(driver, target.address, encrypted, user, false);
+    await transferShare(driver, target.address, readOnly, user, true);
+    const afterTransfer = await remoteCommand(
+      agent,
+      uploadedScript,
+      'verify',
+      ''
+    );
+    assert.equal(afterTransfer.sentinelIntact, true);
+    assert.equal(afterTransfer.sharedDirectoryClean, true);
+  }
   const seeded = await remoteCommand(agent, uploadedScript, 'ui-seed', '');
   assert.equal(seeded.seeded, true);
   try {
@@ -274,7 +336,7 @@ try {
           ELDER_SMB_UI_PASSWORD: password,
         },
         stdio: ['ignore', 'pipe', 'pipe'],
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(180_000),
       }
     );
     let output = '';
@@ -286,9 +348,14 @@ try {
     });
     const [code] = await once(child, 'exit');
     assert.equal(code, 0, `Windows SMB UI test failed: ${diagnostic(output)}`);
-    console.log(
-      'PASS win11 SMB UI authenticate/list/single/recursive download'
+    const uiVerified = await remoteCommand(
+      agent,
+      uploadedScript,
+      'ui-verify',
+      ''
     );
+    assert.equal(uiVerified.verified, true);
+    console.log('PASS win11 SMB UI bidirectional transfer and file management');
   } finally {
     const cleared = await remoteCommand(agent, uploadedScript, 'ui-clear', '');
     assert.equal(cleared.cleared, true);
