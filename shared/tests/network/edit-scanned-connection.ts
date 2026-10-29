@@ -59,10 +59,14 @@ await writeFile('/evidence/editor-path.txt', path);
   let app: GtkApp | undefined;
   try {
     app = await launcher.launch([]);
-    const list = await app.getById('connection_list');
-    assert.equal(list.kind, 'table');
-    const bounds = (await (await list.cellAt(0, 0))?.capture())?.bounds;
-    assert(bounds);
+    const bounds = await waitForResult(async () => {
+      const list = await app!.getById('connection_list');
+      assert.equal(list.kind, 'table');
+      const cell = await list.cellAt(0, 0);
+      const current = (await cell?.capture())?.bounds;
+      assert(current && current.width > 0 && current.height > 0);
+      return current;
+    });
     await app.input.moveMouseTo(
       Math.round(bounds.x + bounds.width / 2),
       Math.round(bounds.y + bounds.height / 2)
