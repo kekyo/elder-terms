@@ -624,10 +624,11 @@ proxyWindowTest(
             );
             await app.input.setMouseButton('right', true);
             await app.input.setMouseButton('right', false);
-            await expectElementKind(
-              await app.getById(menuId),
-              'menuItem'
-            ).click();
+            const menuItem = expectElementKind(await app.getById(menuId), 'menuItem');
+            await waitForResult(async () => {
+              expect((await menuItem.info()).states).toContain('showing');
+            });
+            await menuItem.click();
           };
           await selectMenu(
             'file_transfer_remote_tree',
