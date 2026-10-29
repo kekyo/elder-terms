@@ -238,7 +238,8 @@ try {
             if (process.argv[3] === '--server-proxy') {
               assert.equal(
                 gateway.requests.length,
-                share === 'readonly' ? 3 : 5
+                (share === 'readonly' ? 3 : 5) +
+                  (process.env.ELDER_SMB_DENY_ENUMERATION ? 3 : 0)
               );
               for (const request of gateway.requests)
                 assert.deepEqual(request, {

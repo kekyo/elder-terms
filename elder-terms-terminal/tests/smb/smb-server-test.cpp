@@ -131,6 +131,18 @@ static cardio::promise<void> exercise(Fixture &fixture, int argc, char **argv) {
   try { (void)co_await client->load_directory_async(share, {}); }
   catch (const RemoteFileError &error) { stopped = error.connection_lost; }
   require(stopped, "Server shutdown left a share usable");
+  if (g_getenv("ELDER_SMB_DENY_ENUMERATION")) {
+    // Starting at the server root must also allow recovery to a known share.
+    options.connection.remote_directory = "/";
+    fixture.server = co_await open_smb_server_async(options, {});
+    bool denied = false;
+    try { (void)co_await fixture.server->load_directory_async("/", {}); }
+    catch (const RemoteFileError &error) { denied = !error.connection_lost; }
+    require(denied, "Initial enumeration denial must leave the browser available");
+    const auto known = co_await fixture.server->load_directory_async(share, {});
+    require(known.canonical_path == share, "Initial enumeration denial blocked a known share");
+    co_await stop_smb_client_async(fixture.server);
+  }
   std::cout << "PASS SMB client server shares/paths/independent streams/permissions/delete/cleanup\n";
 }
 
