@@ -1,6 +1,6 @@
 # SMBの使用
 
-SMBは、WindowsやSambaが公開する共有フォルダーに接続する方式です。elder-termsはSMB2/3でサーバーのTCPポートへ直接接続します。GVfsやSSH proxyは経由しません。サーバー側で共有と利用者のアクセス権を用意してください。
+SMBは、WindowsやSambaが公開する共有フォルダーに接続する方式です。elder-termsはSMB2/3でサーバーのTCPポートへ接続します。直接接続のほか、experimental機能としてSSH proxyを経由できます。GVfsは使用しません。サーバー側で共有と利用者のアクセス権を用意してください。
 
 ## 接続する
 
@@ -19,7 +19,7 @@ SMBは、WindowsやSambaが公開する共有フォルダーに接続する方�
 | 項目・INIキー | 既定値 | 指定方法 |
 | --- | --- | --- |
 | アドレス `address` | 空 | ホスト名、IPv4、IPv6。接続時に必須。 |
-| ポート `port` | `445` | SMBの直接TCP接続先。1～65535。 |
+| ポート `port` | `445` | SMBサーバーのTCPポート。1～65535。 |
 | 共有名 `share` | 空 | パス区切りを含まない一つの共有名。接続時に必須。 |
 | ドメイン `domain` | 空 | NTLM認証のドメイン。空ならドメインを指定しない。 |
 | ユーザー名 `username` | 空 | 認証画面に表示する初期値。 |
@@ -46,6 +46,12 @@ remote_directory=/Documents
 require_signing=true
 require_encryption=false
 ```
+
+## SSH proxy経由の接続（experimental）
+
+接続の「SSH proxy」タブで踏み台を有効にすると、踏み台からSMBタブで指定したサーバーとポートへTCP接続します。踏み台とSMB共有には別々に認証します。踏み台から共有サーバーへ到達でき、TCP転送が許可されている必要があります。設定方法は[SSH proxyの使用](ssh-proxy.md)を参照してください。
+
+SSHによる暗号化は手元から踏み台までです。踏み台から共有サーバーまでの通信については、SMBタブの署名と暗号化の設定が適用されます。
 
 ## ファイル操作の注意点
 

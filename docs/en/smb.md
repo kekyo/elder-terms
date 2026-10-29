@@ -1,6 +1,6 @@
 # Using SMB
 
-SMB connects to folders shared by Windows or Samba. elder-terms connects directly to the server's TCP port using SMB2/3. It does not use GVfs or an SSH proxy. Set up the share and user access on the server first.
+SMB connects to folders shared by Windows or Samba. elder-terms connects to the server's TCP port using SMB2/3. Direct connections are supported, and SSH proxy is available as an experimental feature. GVfs is not used. Set up the share and user access on the server first.
 
 ## Connect
 
@@ -19,7 +19,7 @@ Connection settings are saved under `[smb]`. A connection can inherit each value
 | Setting and INI key | Default | Value |
 | --- | --- | --- |
 | Address `address` | Empty | Hostname, IPv4, or IPv6. Required to connect. |
-| Port `port` | `445` | Direct SMB TCP port, 1–65535. |
+| Port `port` | `445` | SMB server TCP port, 1–65535. |
 | Share name `share` | Empty | One share name without a path separator. Required to connect. |
 | Domain `domain` | Empty | NTLM authentication domain; empty leaves the domain unspecified. |
 | User name `username` | Empty | Initial value in the authentication prompt. |
@@ -46,6 +46,12 @@ remote_directory=/Documents
 require_signing=true
 require_encryption=false
 ```
+
+## Connect through SSH proxy (experimental)
+
+Enable the gateway on the connection's SSH proxy tab to let it connect to the server and port configured on the SMB tab. Authenticate separately to the gateway and the SMB share. The gateway must be able to reach the share server and permit TCP forwarding. See [Using SSH proxy](ssh-proxy.md) for setup.
+
+SSH encrypts traffic between the client and the gateway. SMB signing and encryption settings apply to traffic between the gateway and the share server.
 
 ## File operation notes
 
