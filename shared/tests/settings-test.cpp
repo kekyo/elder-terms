@@ -4851,6 +4851,17 @@ static void test_smb_invalid_numeric_input_remains_invalid_after_save() {
               "Correcting the SMB port must restore a valid connection");
 }
 
+static void test_smb_remote_directory_matches_transfer_paths() {
+  auto store = create_default_settings(default_terminal_display_settings(1.0), "SMB paths");
+  const auto key = elder_terms::smb_setting_key("remote_directory");
+  for (const auto &path : {"/folder.", "/a:b", "/folder "})
+    expect_true(!set_explicit_setting_value(&store, key, std::string(path)),
+                "SMB settings must reject a remote path the transfer cannot use: " + std::string(path));
+  for (const auto &path : {"/valid path", "/日本語"})
+    expect_true(set_explicit_setting_value(&store, key, std::string(path)),
+                "SMB settings must accept a usable remote path: " + std::string(path));
+}
+
 } // namespace elder_terms_settings_test
 
 int main() {
@@ -4860,6 +4871,7 @@ int main() {
     elder_terms_settings_test::test_webdav_invalid_numeric_settings_remain_invalid_after_save();
     elder_terms_settings_test::test_smb_settings_round_trip_and_validation();
     elder_terms_settings_test::test_smb_invalid_numeric_input_remains_invalid_after_save();
+    elder_terms_settings_test::test_smb_remote_directory_matches_transfer_paths();
     elder_terms_settings_test::test_independent_inactive_indicator_color();
     elder_terms_settings_test::test_terminal_cursor_settings();
     elder_terms_settings_test::test_terminal_ambiguous_width_setting();

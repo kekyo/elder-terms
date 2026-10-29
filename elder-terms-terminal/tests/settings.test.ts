@@ -3554,7 +3554,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
     });
   });
 
-  it('closes and applies runtime terminal grid size changes without saving when applied', async (context) => {
+  it('keeps settings open and applies runtime terminal grid size changes without saving', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'apply-grid.ini');
       const initialConfig = `[terminal]\nwidth=${defaultColumns}\nheight=${defaultRows}\n`;

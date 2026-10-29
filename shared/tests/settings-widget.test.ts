@@ -2208,7 +2208,17 @@ describe.concurrent('shared settings widget', () => {
       try {
         await runSharedGtkTest(
           context,
-          ['--page=general', `--type=${connectionType}`, `--save-file=${path}`],
+          [
+            '--page=general',
+            `--type=${connectionType}`,
+            `--save-file=${path}`,
+            ...(connectionType === 'smb'
+              ? [
+                  '--connection=smb.address=files.example.test',
+                  '--connection=smb.share=team',
+                ]
+              : []),
+          ],
           async ({ app }) => {
             await expectPageLabels(app, 'settings_general_page', [
               'Active indicator color',
@@ -2224,6 +2234,7 @@ describe.concurrent('shared settings widget', () => {
               ).toContain('showing');
               await chooseNamedColor(app, buttonId, color);
             }
+            await expectSensitive(await app.getById('settings_save_button'));
             await expectElementKind(
               await app.getById('settings_save_button'),
               'button'

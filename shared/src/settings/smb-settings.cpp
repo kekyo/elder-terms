@@ -64,13 +64,15 @@ static bool validate_remote_directory(const SettingValue &value,
     while (start < path.size()) {
       const auto end = path.find('/', start);
       const auto part = path.substr(start, end == std::string::npos ? end : end - start);
-      if (part == "." || part == ".." || part.empty()) break;
+      if (part.empty() || part == "." || part == ".." ||
+          part.find(':') != std::string::npos || part.back() == '.' ||
+          part.back() == ' ') break;
       if (end == std::string::npos) return true;
       start = end + 1;
     }
     if (start == path.size()) return true;
   }
-  *reason = "must be an absolute path without dot segments or control characters";
+  *reason = "must be an absolute path without dot segments, colons, trailing dots or spaces, or control characters";
   return false;
 }
 
