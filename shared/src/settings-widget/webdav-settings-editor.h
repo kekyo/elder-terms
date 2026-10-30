@@ -18,10 +18,13 @@ struct WebdavSettingsEditor;
  * @param prefix Accessible ID prefix.
  * @param read_only Whether connection controls are read-only at runtime.
  * @param changed Parent validation and dirty-state callback.
+ * @param create_address_row Wraps the address entry in its parent row. Called
+ * synchronously during construction; the row owns the entry after attachment.
  * @returns Editor state, released using destroy_webdav_settings_editor().
  */
 WebdavSettingsEditor *create_webdav_settings_editor(SettingsStore *store,
-    std::string prefix, bool read_only, std::function<void()> changed);
+    std::string prefix, bool read_only, std::function<void()> changed,
+    std::function<GtkWidget *(GtkWidget *)> create_address_row);
 /** @param editor Editor state. @returns Root GTK widget owned by its parent. */
 GtkWidget *webdav_settings_editor_root(WebdavSettingsEditor *editor);
 /**

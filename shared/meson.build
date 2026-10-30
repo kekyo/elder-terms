@@ -381,6 +381,14 @@ test('elder-terms-ip-scan-name-resolver-test',
 
 test('elder-terms-ip-scanner-test', elder_terms_ip_scanner_test)
 
+ip_scan_dialog_test = executable(
+  'ip-scan-dialog-test', 'tests/ip-scan-dialog-test.cpp',
+  dependencies: [elder_terms_dep, cardio_dep],
+)
+test('ip-scan-dialog-test', find_program('xvfb-run'),
+  args: ['-a', ip_scan_dialog_test], timeout: 30,
+)
+
 executable(
   'elder-terms-settings-widget-fixture',
   'tests/settings-widget-fixture.cpp',

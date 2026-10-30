@@ -820,11 +820,14 @@ static void print_store(const char *prefix,
             << connection_type_name(
                    elder_terms::general_connection_kind(store))
             << " name=" << elder_terms::general_connection_name(store)
+            << " webdav_address=" << elder_terms::webdav_connection_settings(store).address
             << " webdav_scheme=" << elder_terms::webdav_connection_settings(store).scheme
             << " webdav_port=" << elder_terms::webdav_connection_settings(store).port
             << " webdav_base_path=" << elder_terms::webdav_connection_settings(store).base_path
             << " webdav_ca_file=" << elder_terms::webdav_connection_settings(store).ca_file
             << " webdav_certificate_action=" << (elder_terms::webdav_connection_settings(store).prompt_certificate ? "prompt" : "reject")
+            << " smb_domain=" << elder_terms::smb_connection_settings(store).domain
+            << " smb_username=" << elder_terms::smb_connection_settings(store).username
             << " smb_address=" << elder_terms::smb_connection_settings(store).address
             << " smb_port=" << elder_terms::smb_connection_settings(store).port
             << " smb_remote_directory=" << elder_terms::smb_connection_settings(store).remote_directory

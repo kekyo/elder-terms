@@ -6559,6 +6559,10 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       &state->draft_store, state->id_prefix, state->is_runtime, [state] {
         update_action_sensitivity(state);
         notify_changed(state);
+      }, [state](GtkWidget *entry) {
+        return create_ip_scan_address_row(
+            state, entry, "webdav_ip_scan_button",
+            state->is_runtime ? FALSE : TRUE);
       });
   GtkWidget *webdav_page = gtk_scrolled_window_new(nullptr, nullptr);
   assign_accessible_id(webdav_page, widget_id(state, "webdav_page").c_str());
@@ -6583,6 +6587,10 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       &state->draft_store, state->id_prefix, state->is_runtime, [state] {
         update_action_sensitivity(state);
         notify_changed(state);
+      }, [state](GtkWidget *entry) {
+        return create_ip_scan_address_row(
+            state, entry, "smb_ip_scan_button",
+            state->is_runtime ? FALSE : TRUE);
       });
   GtkWidget *smb_page = gtk_scrolled_window_new(nullptr, nullptr);
   assign_accessible_id(smb_page, widget_id(state, "smb_page").c_str());

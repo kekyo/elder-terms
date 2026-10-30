@@ -20,10 +20,13 @@ struct SmbSettingsEditor;
  * @param prefix Accessible ID prefix.
  * @param read_only Whether controls are read-only at runtime.
  * @param changed Parent validation and dirty-state callback.
+ * @param create_address_row Wraps the address entry in its parent row. Called
+ * synchronously during construction; the row owns the entry after attachment.
  * @returns Editor state, released using destroy_smb_settings_editor().
  */
 SmbSettingsEditor *create_smb_settings_editor(SettingsStore *store,
-    std::string prefix, bool read_only, std::function<void()> changed);
+    std::string prefix, bool read_only, std::function<void()> changed,
+    std::function<GtkWidget *(GtkWidget *)> create_address_row);
 
 /** @param editor Editor state. @returns Root GTK widget. */
 GtkWidget *smb_settings_editor_root(SmbSettingsEditor *editor);

@@ -4351,6 +4351,8 @@ describe.concurrent('shared settings widget', () => {
           'settings_telnet_ip_scan_button',
           'settings_ssh_ip_scan_button',
           'settings_ftp_ip_scan_button',
+          'settings_webdav_ip_scan_button',
+          'settings_smb_ip_scan_button',
         ]) {
           const button = expectElementKind(await app.getById(id), 'button');
           expect((await button.info()).name).toBe('IP scan');
@@ -4626,7 +4628,7 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
-  for (const type of ['ssh', 'sftp', 'telnet', 'ftp']) {
+  for (const type of ['ssh', 'sftp', 'telnet', 'ftp', 'webdav', 'smb']) {
     for (const mode of ['complete', 'no-name', 'pending', 'mdns', 'llmnr']) {
       it(`selects and persists the ${mode} IP scan result for ${type}`, async (context) => {
         const section = type === 'sftp' ? 'ssh' : type;
@@ -4645,8 +4647,8 @@ describe.concurrent('shared settings widget', () => {
             [
               `--page=${section}`,
               `--type=${type}`,
-              `--${section}-address=before.example.test`,
-              `--${section}-port=2222`,
+              `--connection=${section}.address=before.example.test`,
+              `--connection=${section}.port=2222`,
               `--ip-scan=${mode}`,
               `--save-file=${join(directory, 'connection.ini')}`,
             ],
@@ -4655,8 +4657,13 @@ describe.concurrent('shared settings widget', () => {
                 await showSshPage(app);
               } else if (section === 'telnet') {
                 await showTelnetPage(app);
-              } else {
+              } else if (section === 'ftp') {
                 await showFtpPage(app);
+              } else {
+                await selectSettingsTab(
+                  app,
+                  section === 'webdav' ? 'WebDAV' : 'SMB'
+                );
               }
               await expectElementKind(
                 await app.getById(`settings_${section}_ip_scan_button`),
@@ -4711,6 +4718,261 @@ describe.concurrent('shared settings widget', () => {
         }
       });
     }
+  }
+
+  for (const scenario of [
+    {
+      type: 'webdav',
+      mode: 'https',
+      port: 8443,
+      probe: 443,
+      settings: [
+        'scheme=https',
+        'base_path=/dav/',
+        'remote_directory=/team/',
+        'ca_file=/tmp/scan-ca.pem',
+      ],
+      retained: {
+        webdav_scheme: 'https',
+        webdav_base_path: '/dav/',
+        webdav_ca_file: '/tmp/scan-ca.pem',
+      },
+    },
+    {
+      type: 'webdav',
+      mode: 'http',
+      port: 8080,
+      probe: 80,
+      settings: ['scheme=http', 'base_path=/dav/', 'remote_directory=/team/'],
+      retained: { webdav_scheme: 'http', webdav_base_path: '/dav/' },
+    },
+    {
+      type: 'smb',
+      mode: 'smb',
+      port: 1445,
+      probe: 445,
+      settings: [
+        'domain=WORKGROUP',
+        'username=alice',
+        'remote_directory=/team/docs',
+        'require_signing=true',
+        'require_encryption=true',
+      ],
+      retained: {
+        smb_domain: 'WORKGROUP',
+        smb_username: 'alice',
+        smb_remote_directory: '/team/docs',
+        smb_signing: 'true',
+        smb_encryption: 'true',
+      },
+    },
+    {
+      type: 'ftp',
+      mode: 'explicit',
+      port: 2021,
+      probe: 21,
+      settings: ['tls_mode=explicit'],
+      retained: { ftp_tls_mode: 'explicit' },
+    },
+    {
+      type: 'ftp',
+      mode: 'implicit',
+      port: 2990,
+      probe: 990,
+      settings: ['tls_mode=implicit'],
+      retained: { ftp_tls_mode: 'implicit' },
+    },
+  ]) {
+    for (const language of ['C', 'ja']) {
+      it(`preserves ${scenario.type} ${scenario.mode} settings after IP scan in ${language}`, async (context) => {
+        const directory = await mkdtemp(join(tmpdir(), 'elder-scan-transfer-'));
+        try {
+          await runSharedGtkTest(
+            context,
+            [
+              `--page=${scenario.type}`,
+              `--type=${scenario.type}`,
+              `--connection=${scenario.type}.address=before.example.test`,
+              `--connection=${scenario.type}.port=${scenario.port}`,
+              ...scenario.settings.map(
+                (setting) => `--connection=${scenario.type}.${setting}`
+              ),
+              '--ip-scan=pending',
+              `--ip-scan-ports=${scenario.probe}`,
+              `--save-file=${join(directory, 'connection.ini')}`,
+            ],
+            async ({ app, directory: evidence }) => {
+              await selectSettingsTab(
+                app,
+                scenario.type === 'webdav'
+                  ? 'WebDAV'
+                  : scenario.type.toUpperCase()
+              );
+              const button = expectElementKind(
+                await app.getById(`settings_${scenario.type}_ip_scan_button`),
+                'button'
+              );
+              const entry = expectElementKind(
+                await app.getById(`settings_${scenario.type}_address_entry`),
+                'entry'
+              );
+              const addressBounds = (await entry.capture()).bounds;
+              const buttonBounds = (await button.capture()).bounds;
+              expect(buttonBounds.x).toBeGreaterThanOrEqual(
+                addressBounds.x + addressBounds.width
+              );
+              expect(
+                Math.abs(buttonBounds.y - addressBounds.y)
+              ).toBeLessThanOrEqual(4);
+              expect((await button.info()).name).toBe(
+                language === 'ja' ? 'IPスキャン' : 'IP scan'
+              );
+              await writeFile(
+                join(evidence, 'transfer-settings.png'),
+                (await app.capture()).image
+              );
+              await button.click();
+              const table = expectElementKind(
+                await app.getById('settings_ip_scan_results'),
+                'table'
+              );
+              await waitForResult(async () => {
+                expect(await table.getRowCount()).toBe(1);
+              });
+              if (language === 'ja') {
+                expect(
+                  (
+                    await (
+                      await app.getById('settings_ip_scan_description')
+                    ).info()
+                  ).name
+                ).toBe(
+                  'TCPポートの応答を表示します。各サービスへの対応や認証の成功は確認しません。'
+                );
+              }
+              await writeFile(
+                join(evidence, 'transfer-scan.png'),
+                (await app.capture()).image
+              );
+              await doubleClickTableRow(app, table, 0);
+              await waitForResult(async () => {
+                expect(
+                  await app.findById('settings_ip_scan_dialog')
+                ).toBeUndefined();
+              });
+              expect(await entry.text()).toBe('192.0.2.25');
+              if (scenario.type === 'webdav') {
+                expect(
+                  await expectElementKind(
+                    await app.getById('settings_webdav_url_label'),
+                    'label'
+                  ).text()
+                ).toBe(
+                  `${scenario.mode}://192.0.2.25:${scenario.port}/dav/team`
+                );
+              }
+              await expectElementKind(
+                await app.getById('settings_apply_button'),
+                'button'
+              ).click();
+              const expected = {
+                type: scenario.type,
+                name: 'fixture',
+                [`${scenario.type}_address`]: '192.0.2.25',
+                [`${scenario.type}_port`]: String(scenario.port),
+                ...scenario.retained,
+              };
+              expect(await waitForAppliedStore(app)).toMatchObject(expected);
+              await expectElementKind(
+                await app.getById('settings_save_button'),
+                'button'
+              ).click();
+              expect(await waitForPrintedStore(app, 'SAVED')).toMatchObject(
+                expected
+              );
+            },
+            language === 'ja' ? { env: japaneseTestEnvironment } : undefined
+          );
+        } finally {
+          await rm(directory, { recursive: true, force: true });
+        }
+      });
+    }
+  }
+
+  for (const type of ['webdav', 'smb']) {
+    it(`disables IP scan for runtime ${type}`, async (context) => {
+      await runSharedGtkTest(
+        context,
+        ['--runtime', `--page=${type}`, `--type=${type}`],
+        async ({ app }) => {
+          await selectSettingsTab(app, type === 'webdav' ? 'WebDAV' : 'SMB');
+          await expectInsensitive(
+            await app.getById(`settings_${type}_ip_scan_button`)
+          );
+          await expectInsensitive(
+            await app.getById(`settings_${type}_address_entry`)
+          );
+          expect(await app.findById('settings_ip_scan_dialog')).toBeUndefined();
+        }
+      );
+    });
+    it(`keeps unfinished ${type} settings through IP scan selection and cancellation`, async (context) => {
+      await runSharedGtkTest(
+        context,
+        [
+          `--page=${type}`,
+          `--type=${type}`,
+          `--connection=${type}.address=before.example.test`,
+          '--ip-scan=pending',
+          `--ip-scan-ports=${type === 'webdav' ? 80 : 445}`,
+        ],
+        async ({ app }) => {
+          await selectSettingsTab(app, type === 'webdav' ? 'WebDAV' : 'SMB');
+          const entry = expectElementKind(
+            await app.getById(`settings_${type}_address_entry`),
+            'entry'
+          );
+          const port = expectElementKind(
+            await app.getById(`settings_${type}_port_entry`),
+            'entry'
+          );
+          const button = expectElementKind(
+            await app.getById(`settings_${type}_ip_scan_button`),
+            'button'
+          );
+          await port.setText('unfinished');
+          await button.click();
+          await expectElementKind(
+            await app.getById('settings_ip_scan_cancel_button'),
+            'button'
+          ).click();
+          await waitForResult(async () => {
+            expect(
+              await app.findById('settings_ip_scan_dialog')
+            ).toBeUndefined();
+          });
+          expect(await entry.text()).toBe('before.example.test');
+          await button.click();
+          const results = expectElementKind(
+            await app.getById('settings_ip_scan_results'),
+            'table'
+          );
+          await waitForResult(async () => {
+            expect(await results.getRowCount()).toBe(1);
+          });
+          await doubleClickTableRow(app, results, 0);
+          await waitForResult(async () => {
+            expect(
+              await app.findById('settings_ip_scan_dialog')
+            ).toBeUndefined();
+          });
+          expect(await entry.text()).toBe('192.0.2.25');
+          expect(await port.text()).toBe('unfinished');
+          await expectInsensitive(await app.getById('settings_apply_button'));
+        }
+      );
+    });
   }
 
   it('uses a discovered IP from an active scan for SFTP', async (context) => {
