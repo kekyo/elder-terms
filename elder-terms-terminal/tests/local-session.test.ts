@@ -551,6 +551,11 @@ describe.concurrent('elder-terms-terminal local session', () => {
           await expectMainWindowTitle(app, `${connectedTitle} (Disconnected)`);
           await expectMainWindowStatus(app, 'local terminal');
           await expectDisconnectedNoticeVisibleAtTerminalTopRight(app);
+          await waitForResult(async () =>
+            expect(
+              (await (await app.getById('reconnect_button')).info()).states
+            ).toContain('sensitive')
+          );
           for (const [widgetId, horizontalRatio] of [
             ['disconnected_notice', 0.05],
             ['disconnected_notice_background', 0.05],
@@ -615,16 +620,22 @@ describe.concurrent('elder-terms-terminal local session', () => {
           await writeFile(shell.releasePath, 'exit\n', 'utf8');
           await waitForShellExit(shell.markerPath);
           await waitForActivityIndicatorImageState(app, 'conn', 'off');
-          await assertTerminalCaptureMatches(
-            terminal,
-            'local-terminal-disconnected-dim',
-            localTerminalDisconnectedDimPath,
-            evidence,
-            {
-              // The disconnected terminal cursor may be captured in either blink phase.
-              maxDiffPixels: 160,
-            }
-          );
+          await waitForResult(async () => {
+            expect(
+              (await (await app.getById('reconnect_button')).info()).states
+            ).toContain('sensitive');
+            // Sensitivity and the GTK button's colors settle in separate frames.
+            await assertTerminalCaptureMatches(
+              terminal,
+              'local-terminal-disconnected-dim',
+              localTerminalDisconnectedDimPath,
+              evidence,
+              {
+                // The disconnected terminal cursor may be captured in either blink phase.
+                maxDiffPixels: 160,
+              }
+            );
+          });
         },
         {
           env: {
