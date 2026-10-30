@@ -839,8 +839,8 @@ msgid "TELNET(23)"
 msgstr "TELNET(23)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:348
-msgid "FTP(21)"
-msgstr "FTP(21)"
+msgid "FTP/FTPS(21)"
+msgstr "FTP/FTPS(21)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:350
 msgid "Scanning…"
@@ -2603,3 +2603,23 @@ msgstr "SMB를 시작하지 못했습니다"
 
 msgid "File transfer"
 msgstr "파일 전송"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "FTPS(990)"
+msgstr "FTPS(990)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "WebDAV(443)"
+msgstr "WebDAV(443)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "WebDAV(80)"
+msgstr "WebDAV(80)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "SMB(445)"
+msgstr "SMB(445)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Shows TCP port responses. Service support and authentication are not verified."
+msgstr "TCP 포트 응답을 표시합니다. 서비스 지원 여부와 인증 성공 여부는 확인하지 않습니다."

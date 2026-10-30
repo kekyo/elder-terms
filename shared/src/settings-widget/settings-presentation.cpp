@@ -410,7 +410,17 @@ const char *settings_ui_text(SettingsUiText text) {
   case SettingsUiText::telnet_port_column:
     return _("TELNET(23)");
   case SettingsUiText::ftp_port_column:
-    return _("FTP(21)");
+    return _("FTP/FTPS(21)");
+  case SettingsUiText::ftps_port_column:
+    return _("FTPS(990)");
+  case SettingsUiText::webdav_https_port_column:
+    return _("WebDAV(443)");
+  case SettingsUiText::webdav_http_port_column:
+    return _("WebDAV(80)");
+  case SettingsUiText::smb_port_column:
+    return _("SMB(445)");
+  case SettingsUiText::ip_scan_description:
+    return _("Shows TCP port responses. Service support and authentication are not verified.");
   case SettingsUiText::scanning:
     return _("Scanning…");
   case SettingsUiText::scan_complete:

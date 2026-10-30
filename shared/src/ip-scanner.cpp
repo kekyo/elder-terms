@@ -51,6 +51,9 @@ struct PortProbeResult {
   std::exception_ptr error;
 };
 
+static constexpr std::array<std::uint16_t, 7> standard_service_ports{
+    21, 22, 23, 80, 443, 445, 990};
+
 static constexpr std::uint32_t ipv4_loopback_network = UINT32_C(0x7f000000);
 static constexpr std::uint32_t ipv4_loopback_mask = UINT32_C(0xff000000);
 static constexpr std::uint32_t maximum_scan_host_mask = UINT32_C(0x000000ff);
@@ -294,18 +297,14 @@ scan_hosts_worker_async(std::shared_ptr<IpScannerState> state,
     std::uint32_t address = 0;
     while (next_ipv4_address(&state->cursor, &address)) {
       cancellation.throw_if_cancellation_requested();
-      const auto port_results = co_await cardio::promises::all(
-          observe_port_probe_async(
-              state->dependencies.probe_port(address, 21, cancellation)),
-          observe_port_probe_async(
-              state->dependencies.probe_port(address, 22, cancellation)),
-          observe_port_probe_async(
-              state->dependencies.probe_port(address, 23, cancellation)));
-      const std::array<PortProbeResult, 3> probes = {
-          std::get<0>(port_results),
-          std::get<1>(port_results),
-          std::get<2>(port_results),
-      };
+      std::vector<cardio::promise<PortProbeResult>> pending_probes;
+      pending_probes.reserve(standard_service_ports.size());
+      for (const auto port : standard_service_ports) {
+        pending_probes.push_back(observe_port_probe_async(
+            state->dependencies.probe_port(address, port, cancellation)));
+      }
+      const auto probes =
+          co_await cardio::promises::all(std::move(pending_probes));
       for (const PortProbeResult &probe : probes) {
         if (probe.error != nullptr) {
           std::rethrow_exception(probe.error);
@@ -317,14 +316,10 @@ scan_hosts_worker_async(std::shared_ptr<IpScannerState> state,
           .resolved_name = {},
           .open_ports = {},
       };
-      if (probes[0].open) {
-        entry.open_ports.push_back(21);
-      }
-      if (probes[1].open) {
-        entry.open_ports.push_back(22);
-      }
-      if (probes[2].open) {
-        entry.open_ports.push_back(23);
+      for (std::size_t index = 0; index < standard_service_ports.size(); ++index) {
+        if (probes[index].open) {
+          entry.open_ports.push_back(standard_service_ports[index]);
+        }
       }
 
       if (!entry.open_ports.empty()) {

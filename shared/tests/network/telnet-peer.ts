@@ -27,6 +27,19 @@ const server = createServer((socket) => {
     }
   });
 });
-server.listen(23, '0.0.0.0', () => {
-  writeFileSync('/run/ip-scan-server-ready', 'ready\n');
+// These peers accept TCP only: a scan must not require TLS or authentication.
+for (const port of [80, 443, 445, 990]) {
+  const peer = createServer((socket) => {
+    socket.on('error', () => {});
+    socket.end();
+  });
+  await new Promise<void>((resolve, reject) => {
+    peer.once('error', reject);
+    peer.listen(port, '0.0.0.0', resolve);
+  });
+}
+await new Promise<void>((resolve, reject) => {
+  server.once('error', reject);
+  server.listen(23, '0.0.0.0', resolve);
 });
+writeFileSync('/run/ip-scan-server-ready', 'ready\n');

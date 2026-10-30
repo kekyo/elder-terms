@@ -149,7 +149,8 @@ static void combo_changed(GtkComboBox *widget, gpointer data) {
 }
 
 SmbSettingsEditor *create_smb_settings_editor(SettingsStore *store,
-    std::string prefix, bool read_only, std::function<void()> changed) {
+    std::string prefix, bool read_only, std::function<void()> changed,
+    std::function<GtkWidget *(GtkWidget *)> create_address_row) {
   auto *editor = new SmbSettingsEditor{store, std::move(prefix), read_only,
       std::move(changed), gtk_grid_new(), gtk_label_new("")};
   gtk_grid_set_row_spacing(GTK_GRID(editor->root), 8);
@@ -170,7 +171,8 @@ SmbSettingsEditor *create_smb_settings_editor(SettingsStore *store,
       field.entry = gtk_entry_new();
       assign_accessible_id(field.entry, id + "_entry");
       g_signal_connect(field.entry, "changed", G_CALLBACK(entry_changed), editor);
-      control = field.entry;
+      control = std::string_view(field.name) == "address"
+          ? create_address_row(field.entry) : field.entry;
     }
     gtk_widget_set_hexpand(control, TRUE);
     gtk_grid_attach(GTK_GRID(editor->root), label, 0, row, 1, 1);

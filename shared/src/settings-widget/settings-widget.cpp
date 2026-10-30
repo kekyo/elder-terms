@@ -288,6 +288,10 @@ enum IpScanResultColumn {
   ip_scan_ssh_sftp_column,
   ip_scan_telnet_column,
   ip_scan_ftp_column,
+  ip_scan_ftps_column,
+  ip_scan_webdav_https_column,
+  ip_scan_webdav_http_column,
+  ip_scan_smb_column,
   ip_scan_result_column_count,
 };
 
@@ -5529,7 +5533,15 @@ static void update_ip_scan_result(
                      ip_scan_telnet_column,
                      ip_scan_check_mark_for_port(entry.open_ports, 23),
                      ip_scan_ftp_column,
-                     ip_scan_check_mark_for_port(entry.open_ports, 21), -1);
+                     ip_scan_check_mark_for_port(entry.open_ports, 21),
+                     ip_scan_ftps_column,
+                     ip_scan_check_mark_for_port(entry.open_ports, 990),
+                     ip_scan_webdav_https_column,
+                     ip_scan_check_mark_for_port(entry.open_ports, 443),
+                     ip_scan_webdav_http_column,
+                     ip_scan_check_mark_for_port(entry.open_ports, 80),
+                     ip_scan_smb_column,
+                     ip_scan_check_mark_for_port(entry.open_ports, 445), -1);
 }
 
 static void update_ip_scan_progress(
@@ -5688,7 +5700,7 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
   dialog_state->dialog = dialog;
   assign_accessible_id(dialog, widget_id(state, "ip_scan_dialog").c_str());
 
-  gtk_window_set_default_size(GTK_WINDOW(dialog), 640, 360);
+  gtk_window_set_default_size(GTK_WINDOW(dialog), 1000, 360);
   gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
   GtkWidget *cancel_button = gtk_dialog_get_widget_for_response(
       GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
@@ -5704,8 +5716,15 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
       GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), panel, TRUE,
       TRUE, 0);
 
+  GtkWidget *description = gtk_label_new(settings_ui_text(SettingsUiText::ip_scan_description));
+  assign_accessible_id(description, widget_id(state, "ip_scan_description").c_str());
+  gtk_label_set_line_wrap(GTK_LABEL(description), TRUE);
+  gtk_label_set_xalign(GTK_LABEL(description), 0.0F);
+  gtk_box_pack_start(GTK_BOX(panel), description, FALSE, FALSE, 0);
+
   GtkListStore *result_store = gtk_list_store_new(
       ip_scan_result_column_count, G_TYPE_STRING, G_TYPE_STRING,
+      G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
       G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
   GtkWidget *results =
       gtk_tree_view_new_with_model(GTK_TREE_MODEL(result_store));
@@ -5731,6 +5750,18 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
   append_ip_scan_column(GTK_TREE_VIEW(results),
                         settings_ui_text(SettingsUiText::ftp_port_column),
                         ip_scan_ftp_column, false);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::ftps_port_column),
+                        ip_scan_ftps_column, false);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::webdav_https_port_column),
+                        ip_scan_webdav_https_column, false);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::webdav_http_port_column),
+                        ip_scan_webdav_http_column, false);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::smb_port_column),
+                        ip_scan_smb_column, false);
   g_signal_connect(results, "row-activated",
                    G_CALLBACK(on_ip_scan_result_activated),
                    dialog_state.get());
@@ -6528,6 +6559,10 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       &state->draft_store, state->id_prefix, state->is_runtime, [state] {
         update_action_sensitivity(state);
         notify_changed(state);
+      }, [state](GtkWidget *entry) {
+        return create_ip_scan_address_row(
+            state, entry, "webdav_ip_scan_button",
+            state->is_runtime ? FALSE : TRUE);
       });
   GtkWidget *webdav_page = gtk_scrolled_window_new(nullptr, nullptr);
   assign_accessible_id(webdav_page, widget_id(state, "webdav_page").c_str());
@@ -6552,6 +6587,10 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       &state->draft_store, state->id_prefix, state->is_runtime, [state] {
         update_action_sensitivity(state);
         notify_changed(state);
+      }, [state](GtkWidget *entry) {
+        return create_ip_scan_address_row(
+            state, entry, "smb_ip_scan_button",
+            state->is_runtime ? FALSE : TRUE);
       });
   GtkWidget *smb_page = gtk_scrolled_window_new(nullptr, nullptr);
   assign_accessible_id(smb_page, widget_id(state, "smb_page").c_str());
