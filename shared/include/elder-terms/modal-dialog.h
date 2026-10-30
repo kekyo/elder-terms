@@ -34,6 +34,14 @@ ELDER_TERMS_API void show_modal_dialog(GtkWidget *dialog, GtkWindow *parent);
 ELDER_TERMS_API void present_modal_dialog(GtkWidget *window);
 
 /**
+ * Presents a window's deepest modal descendant with a supplied event time.
+ * @param window Window or dialog to present; null is ignored.
+ * @param time User activation time, or GDK_CURRENT_TIME if unavailable.
+ * @remarks Call on the GTK thread.
+ */
+ELDER_TERMS_API void present_modal_dialog(GtkWidget *window, guint32 time);
+
+/**
  * Reports whether a window is blocked by an open modal child.
  * @param window Window to query; null has no modal children.
  * @return True while at least one managed child remains open.

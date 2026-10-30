@@ -405,6 +405,7 @@ validate_deb_package() {
 		usr/lib/elder-terms/libboxrig-posix.so.0 \
 		usr/lib/elder-terms/libboxrig-gtk3.so.0 \
 		usr/lib/elder-terms/libjemalloc.so.2 \
+		usr/lib/elder-terms/libsmb2.so.7 \
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/launcher/main-window.ui \
 		usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
@@ -421,6 +422,8 @@ validate_deb_package() {
 		usr/share/doc/elder-terms/README_ja.md \
 		usr/share/doc/elder-terms/docs/ja/webdav.md \
 		usr/share/doc/elder-terms/docs/en/webdav.md \
+		usr/share/doc/elder-terms/docs/ja/smb.md \
+		usr/share/doc/elder-terms/docs/en/smb.md \
 		usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 		usr/share/doc/elder-terms/licenses/boxrig/LICENSE \
 		usr/share/doc/elder-terms/licenses/boxrig/README.md \
@@ -433,6 +436,9 @@ validate_deb_package() {
 		usr/share/doc/elder-terms/licenses/boxrig/WHATWG-Encoding-LICENSE \
 		usr/share/doc/elder-terms/licenses/boxrig/Wayland-protocols-NOTICES.md \
 		usr/share/doc/elder-terms/licenses/jemalloc/COPYING \
+		usr/share/doc/elder-terms/licenses/libsmb2/COPYING \
+		usr/share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt \
+		usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz \
 		usr/share/doc/elder-terms/licenses/connection-icons/NOTO-LICENSE \
 		usr/share/doc/elder-terms/licenses/connection-icons/NOTO-FLAGS-NOTICE \
 		usr/share/doc/elder-terms/licenses/connection-icons/MATERIAL-LICENSE \
@@ -457,6 +463,7 @@ validate_deb_package() {
 		usr/lib/elder-terms/libboxrig-posix.so.0 \
 		usr/lib/elder-terms/libboxrig-gtk3.so.0 \
 		usr/lib/elder-terms/libjemalloc.so.2 \
+		usr/lib/elder-terms/libsmb2.so.7 \
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
 		usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer; do

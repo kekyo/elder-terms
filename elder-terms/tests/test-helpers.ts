@@ -25,9 +25,11 @@ import {
   type GtkCaptureLookSimilarOptions,
 } from 'gestament/testing';
 
-const defaultAppPath = fileURLToPath(
-  new URL('../../.build/elder-terms/elder-terms', import.meta.url)
-);
+const defaultAppPath =
+  process.env.ELDER_TERMS_TEST_LAUNCHER_APP ??
+  fileURLToPath(
+    new URL('../../.build/elder-terms/elder-terms', import.meta.url)
+  );
 const x11MapRecorderPath = fileURLToPath(
   new URL('../../.build/elder-terms/x11-map-recorder', import.meta.url)
 );

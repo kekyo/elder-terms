@@ -192,6 +192,15 @@ it('shows a saved connection icon at the left of the terminal title bar', async 
         'button'
       ).click();
       await waitForResult(async () => {
+        expect(
+          (await (await app.getById('settings_dialog')).info()).states
+        ).toContain('showing');
+      });
+      await expectElementKind(
+        await app.getById('settings_cancel_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
         expect(await app.findById('settings_dialog')).toBeUndefined();
         const [red, green, blue] = capturePixel(
           await titleIcon.capture(),

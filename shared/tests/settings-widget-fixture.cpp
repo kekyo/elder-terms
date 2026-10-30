@@ -678,6 +678,9 @@ connection_type_name(elder_terms::ConnectionKind kind) {
   if (kind == elder_terms::ConnectionKind::webdav) {
     return "webdav";
   }
+  if (kind == elder_terms::ConnectionKind::smb) {
+    return "smb";
+  }
   return "local";
 }
 
@@ -808,6 +811,11 @@ static void print_store(const char *prefix,
             << " webdav_base_path=" << elder_terms::webdav_connection_settings(store).base_path
             << " webdav_ca_file=" << elder_terms::webdav_connection_settings(store).ca_file
             << " webdav_certificate_action=" << (elder_terms::webdav_connection_settings(store).prompt_certificate ? "prompt" : "reject")
+            << " smb_address=" << elder_terms::smb_connection_settings(store).address
+            << " smb_port=" << elder_terms::smb_connection_settings(store).port
+            << " smb_share=" << elder_terms::smb_connection_settings(store).share
+            << " smb_signing=" << (elder_terms::smb_connection_settings(store).require_signing ? "true" : "false")
+            << " smb_encryption=" << (elder_terms::smb_connection_settings(store).require_encryption ? "true" : "false")
             << " width=" << display.width << " height=" << display.height
             << " scrollback_lines=" << display.scrollback_lines
             << " font_size_dip=" << display.font_size_dip

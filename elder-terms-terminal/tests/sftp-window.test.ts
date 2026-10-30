@@ -532,6 +532,15 @@ describe('SFTP window', () => {
             await app.getById('settings_apply_button'),
             'button'
           ).click();
+          await waitForResult(async () => {
+            expect(
+              (await (await app.getById('settings_dialog')).info()).states
+            ).toContain('showing');
+          });
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
           for (const id of ['conn', 'sd', 'rd']) {
             const capture = await waitForResult(async () => {
               const image = await (

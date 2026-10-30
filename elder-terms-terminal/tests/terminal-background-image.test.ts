@@ -152,6 +152,15 @@ for (const backend of ['cairo', 'opengl']) {
               await app.getById('settings_apply_button'),
               'button'
             ).click();
+            await waitForResult(async () => {
+              expect(
+                (await (await app.getById('settings_dialog')).info()).states
+              ).toContain('showing');
+            });
+            await expectElementKind(
+              await app.getById('settings_cancel_button'),
+              'button'
+            ).click();
             await expectImage(fit, 128);
             await evidence.captureEvidence(`image-${fit}`, async () =>
               app.capture()

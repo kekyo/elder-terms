@@ -41,6 +41,8 @@ enum class RemoteFileType {
 
 /** Optional remote filesystem features understood by the transfer engine. */
 struct RemoteFileCapabilities {
+  /** True when uploads and remote filesystem changes are available. */
+  bool write_operations = true;
   /** True when symbolic links can be inspected and created. */
   bool symbolic_links = false;
   /** True when POSIX permission bits can be read and applied. */

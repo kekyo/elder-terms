@@ -2594,3 +2594,33 @@ msgstr "يتحكم في عرض أحرف مثل ①. اختر العرض الذي
 
 msgid "Font dependent"
 msgstr "حسب الخط"
+
+msgid "Share name"
+msgstr "اسم المشاركة"
+
+msgid "Domain"
+msgstr "المجال"
+
+msgid "Require signing"
+msgstr "اشتراط التوقيع"
+
+msgid "Require encryption"
+msgstr "اشتراط التشفير"
+
+msgid "SMB"
+msgstr "SMB"
+
+msgid "Open windows"
+msgstr "النوافذ المفتوحة"
+
+msgid "No open windows"
+msgstr "لا توجد نوافذ مفتوحة"
+
+msgid "SMB authentication"
+msgstr "مصادقة SMB"
+
+msgid "Failed to start SMB"
+msgstr "تعذر بدء اتصال SMB"
+
+msgid "File transfer"
+msgstr "نقل الملفات"

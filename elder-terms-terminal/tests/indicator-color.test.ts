@@ -100,6 +100,18 @@ const selectBlueAndGreenIndicatorColors = async (
   }
 };
 
+const closeSettingsAfterApply = async (app: GtkApp): Promise<void> => {
+  await waitForResult(async () => {
+    expect(
+      (await (await app.getById('settings_dialog')).info()).states
+    ).toContain('showing');
+  });
+  await expectElementKind(
+    await app.getById('settings_cancel_button'),
+    'button'
+  ).click();
+};
+
 type VideoIndicatorState = 'red-on' | 'yellow-off' | 'blue-on' | 'green-off';
 
 const expectVideoPixel = (
@@ -433,6 +445,7 @@ describe.concurrent('terminal indicator color', () => {
             await app.getById('settings_apply_button'),
             'button'
           ).click();
+          await closeSettingsAfterApply(app);
           for (const id of ['conn', 'log', 'sd', 'rd']) {
             const capture = await waitForResult(async () => {
               const image = await (
@@ -672,6 +685,7 @@ describe.concurrent('terminal indicator color', () => {
                   await app.getById('settings_apply_button'),
                   'button'
                 ).click();
+                await closeSettingsAfterApply(app);
                 await expectNextFrame('blue-on');
                 if (!latched) {
                   await expectNextFrame('green-off');

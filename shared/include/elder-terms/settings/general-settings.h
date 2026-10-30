@@ -33,6 +33,8 @@ enum class ConnectionKind {
   ftp,
   /** Browses and transfers files over WebDAV HTTP(S) without a terminal. */
   webdav,
+  /** Browses and transfers files over SMB without a terminal. */
+  smb,
 };
 
 /**

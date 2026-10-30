@@ -274,6 +274,9 @@ executable(
     'src/webdav/curl-http-session.cpp',
     'src/webdav/webdav-url.cpp',
     'src/webdav/webdav-metadata.cpp',
+    'src/smb/smb-application.cpp',
+    'src/smb/smb-client.cpp',
+    'src/smb/smb-ssh-proxy.cpp',
     'src/sftp/sftp-client.cpp',
     'src/sftp/sftp-fixture-client.cpp',
     'src/file-transfer/file-hash.cpp',
@@ -303,6 +306,7 @@ executable(
     libcurl_dep,
     libxml2_dep,
     openssl_dep,
+    libsmb2_dep,
   ],
   install: true,
   install_dir: elder_terms_private_install_dir / 'elder-terms-terminal',
@@ -310,6 +314,22 @@ executable(
 )
 
 if get_option('build_tests')
+smb_client_test = executable('smb-client-test',
+  ['tests/smb/smb-client-test.cpp', 'src/smb/smb-client.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
+smb_fault_test = executable('smb-fault-test',
+  ['tests/smb/smb-fault-test.cpp', 'src/smb/smb-client.cpp',
+   'src/file-transfer/file-transfer-engine.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
+test('smb-client', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_client_test, smb_fault_test], timeout: 180)
+smb_transfer_test = executable('smb-transfer-test',
+  ['tests/smb/smb-transfer-test.cpp', 'src/smb/smb-client.cpp',
+   'src/file-transfer/file-transfer-engine.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
+test('smb-transfer', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_transfer_test], timeout: 180)
+
 boxrig_serial_transport_test = executable('boxrig-serial-transport-test',
   'tests/cpp/boxrig-serial-transport-test.cpp', dependencies: boxrig_runtime_dep,
   link_args: ['-Wl,--wrap=ioctl', '-Wl,--wrap=tcsetattr'])
@@ -445,6 +465,12 @@ test('webdav-metadata-test', webdav_metadata_test)
 
 ssh_proxy_test_server = executable('ssh-proxy-test-server',
   'tests/cpp/ssh-proxy-test-server.cpp', dependencies: [libssh_dep])
+
+smb_ssh_proxy_test = executable('smb-ssh-proxy-test',
+  ['tests/smb/smb-ssh-proxy-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-ssh-proxy.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep])
+test('smb-ssh-proxy', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_ssh_proxy_test, '--proxy', ssh_proxy_test_server], timeout: 180)
 
 webdav_client_test = executable(
   'webdav-client-test',

@@ -2500,6 +2500,9 @@ msgstr "SSH proxy"
 msgid "Use SSH proxy"
 msgstr "SSH proxyを使用"
 
+msgid "SMB over SSH proxy is experimental."
+msgstr "SMBでのSSH proxyはexperimental機能です。"
+
 msgid "SSH proxy forwarding failed"
 msgstr "SSH proxyのTCP転送に失敗しました"
 
@@ -2751,3 +2754,33 @@ msgstr "①などの文字の幅を、接続先のアプリが想定する幅に
 
 msgid "Font dependent"
 msgstr "フォント依存"
+
+msgid "Share name"
+msgstr "共有名"
+
+msgid "Domain"
+msgstr "ドメイン"
+
+msgid "Require signing"
+msgstr "署名を必須にする"
+
+msgid "Require encryption"
+msgstr "暗号化を必須にする"
+
+msgid "SMB"
+msgstr "SMB"
+
+msgid "Open windows"
+msgstr "起動中のウインドウ"
+
+msgid "No open windows"
+msgstr "起動中のウインドウはありません"
+
+msgid "SMB authentication"
+msgstr "SMB認証"
+
+msgid "Failed to start SMB"
+msgstr "SMBを開始できませんでした"
+
+msgid "File transfer"
+msgstr "ファイル転送"

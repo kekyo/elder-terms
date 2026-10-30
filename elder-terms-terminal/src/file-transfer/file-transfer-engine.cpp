@@ -938,8 +938,10 @@ send_regular_file_async(TransferRunState *state,
     temporary_created = false;
   } catch (...) { failure = std::current_exception(); }
 
+  // Retire the linked cancellation registrations after success as well as
+  // failure; their lifetime must not extend to the caller's next transfer.
+  (void)upload_stopping.cancel();
   if (failure) {
-    if (explicit_commit) (void)upload_stopping.cancel();
     if (input != nullptr) {
       try { co_await close_local_input_async(G_INPUT_STREAM(input.get()), {}); }
       catch (...) {}
@@ -958,7 +960,7 @@ send_regular_file_async(TransferRunState *state,
           cleanup_message = "Could not remove temporary upload " + temporary_path + ": " + exception_message(std::current_exception());
         }
       }
-      // A failed If-None-Match precondition proves this path is foreign. Never
+      // A failed exclusive-creation precondition proves this path is foreign. Never
       // delete it, and do not confuse it with an owned or uncertain upload.
       if (!cleanup_message.empty())
         throw FileTransferCleanupFailure(exception_message(failure) + "\n" + cleanup_message,

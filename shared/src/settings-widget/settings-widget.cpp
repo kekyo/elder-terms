@@ -34,6 +34,7 @@
 #include "hyperlink-settings-editor.h"
 #include "connection-icon-editor.h"
 #include "webdav-settings-editor.h"
+#include "smb-settings-editor.h"
 #include "ssh-proxy-settings-editor.h"
 #include "terminal-background-editor.h"
 #include "terminal-color-preview.h"
@@ -56,6 +57,7 @@ static constexpr char ssh_connection_type[] = "ssh";
 static constexpr char sftp_connection_type[] = "sftp";
 static constexpr char ftp_connection_type[] = "ftp";
 static constexpr char webdav_connection_type[] = "webdav";
+static constexpr char smb_connection_type[] = "smb";
 static constexpr char zmodem_autostart_enabled[] = "enabled";
 static constexpr char zmodem_autostart_disabled[] = "disabled";
 static constexpr char terminal_text_default[] = "default";
@@ -207,7 +209,9 @@ struct SettingsWidgetState {
   GtkWidget *macro_move_down_button = nullptr;
   HyperlinkSettingsEditorState *hyperlink_editor = nullptr;
   WebdavSettingsEditor *webdav_editor = nullptr;
+  SmbSettingsEditor *smb_editor = nullptr;
   SshProxySettingsEditor *ssh_proxy_editor = nullptr;
+  GtkWidget *ssh_proxy_experimental_label = nullptr;
   int selected_macro = -1;
   unsigned int next_macro_number = 1;
   GtkWidget *telnet_address_entry = nullptr;
@@ -881,6 +885,11 @@ static void update_connection_pages(SettingsWidgetState *state) {
                     });
     gtk_widget_set_visible(page.page, visible);
     gtk_widget_set_visible(page.tab_label, visible);
+  }
+  if (state->ssh_proxy_experimental_label != nullptr) {
+    gtk_widget_set_visible(state->ssh_proxy_experimental_label,
+                           active_type == smb_connection_type &&
+                           state->mode != SettingsWidgetMode::global_defaults);
   }
   const bool terminal_type_visible =
       state->mode == SettingsWidgetMode::global_defaults ||
@@ -1559,6 +1568,8 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
          (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != ftp_connection_type)) &&
          (webdav_settings_editor_is_valid(state->webdav_editor) ||
           (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != webdav_connection_type)) &&
+         (smb_settings_editor_is_valid(state->smb_editor) ||
+          (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != smb_connection_type)) &&
          state->serial_baudrate_valid &&
          state->transfer_text_send_rate_valid &&
          terminal_key_binding_inputs_valid(state) &&
@@ -2815,6 +2826,8 @@ static void sync_general_type_combo(SettingsWidgetState *state) {
            .label = connection_type_label(ftp_connection_type)},
           {.id = webdav_connection_type,
            .label = connection_type_label(webdav_connection_type)},
+          {.id = smb_connection_type,
+           .label = connection_type_label(smb_connection_type)},
       },
       effective);
 }
@@ -3305,13 +3318,14 @@ static void create_ftp_tls_controls(SettingsWidgetState *state, GtkWidget *page)
   gtk_grid_attach(GTK_GRID(page), state->ftp_tls_error_label, 0, row, 2, 1);
 }
 
-static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_webdav_draft) {
+static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_invalid_draft) {
   sync_connection_icon_editor(state->connection_icon_editor);
-  sync_terminal_background_editor(state->terminal_background_editor, preserve_webdav_draft);
+  sync_terminal_background_editor(state->terminal_background_editor, preserve_invalid_draft);
   sync_terminal_color_preview(state->terminal_color_preview);
   sync_ftp_tls_controls(state);
-  sync_webdav_settings_editor(state->webdav_editor, preserve_webdav_draft);
-  sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, preserve_webdav_draft);
+  sync_webdav_settings_editor(state->webdav_editor, preserve_invalid_draft);
+  sync_smb_settings_editor(state->smb_editor, preserve_invalid_draft);
+  sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, preserve_invalid_draft);
   const TerminalDisplaySettings display =
       terminal_display_settings(state->draft_store);
   const GeneralColorSettings colors =
@@ -6534,6 +6548,27 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   state->connection_pages.push_back({
       .connection_types = {webdav_connection_type}, .page = webdav_page, .tab_label = webdav_tab});
 
+  state->smb_editor = create_smb_settings_editor(
+      &state->draft_store, state->id_prefix, state->is_runtime, [state] {
+        update_action_sensitivity(state);
+        notify_changed(state);
+      });
+  GtkWidget *smb_page = gtk_scrolled_window_new(nullptr, nullptr);
+  assign_accessible_id(smb_page, widget_id(state, "smb_page").c_str());
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(smb_page), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_overlay_scrolling(GTK_SCROLLED_WINDOW(smb_page), FALSE);
+  assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(smb_page)),
+      widget_id(state, "smb_page_scrollbar").c_str());
+  gtk_container_add(GTK_CONTAINER(smb_page), smb_settings_editor_root(state->smb_editor));
+  GtkWidget *smb_tab = create_tab_label("SMB", widget_id(state, "smb_tab").c_str());
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), smb_page, smb_tab);
+  gtk_widget_show_all(smb_page);
+  gtk_widget_show_all(smb_tab);
+  gtk_widget_set_no_show_all(smb_page, TRUE);
+  gtk_widget_set_no_show_all(smb_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {smb_connection_type}, .page = smb_page, .tab_label = smb_tab});
+
   state->ssh_proxy_editor = create_ssh_proxy_settings_editor(
       &state->draft_store, state->id_prefix, state->is_runtime,
       state->mode == SettingsWidgetMode::global_defaults, [state] {
@@ -6541,6 +6576,12 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
         notify_changed(state);
       });
   auto *proxy_page = ssh_proxy_settings_editor_root(state->ssh_proxy_editor);
+  state->ssh_proxy_experimental_label = gtk_label_new(_("SMB over SSH proxy is experimental."));
+  gtk_label_set_xalign(GTK_LABEL(state->ssh_proxy_experimental_label), 0);
+  gtk_label_set_line_wrap(GTK_LABEL(state->ssh_proxy_experimental_label), TRUE);
+  assign_accessible_id(state->ssh_proxy_experimental_label,
+                       widget_id(state, "ssh_proxy_experimental_label").c_str());
+  gtk_grid_attach(GTK_GRID(proxy_page), state->ssh_proxy_experimental_label, 0, 6, 2, 1);
   auto *proxy_tab = create_tab_label(_("SSH proxy"), widget_id(state, "ssh_proxy_tab").c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), proxy_page, proxy_tab);
   gtk_widget_show_all(proxy_page);
@@ -6548,7 +6589,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_widget_set_no_show_all(proxy_page, TRUE);
   gtk_widget_set_no_show_all(proxy_tab, TRUE);
   state->connection_pages.push_back({
-      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type, webdav_connection_type, ftp_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
+      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type, webdav_connection_type, ftp_connection_type, smb_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
 
   auto [terminal_page, terminal_appearance_page] = create_terminal_pages(state);
   const std::string terminal_tab_id = widget_id(state, "terminal_tab");
@@ -6955,6 +6996,7 @@ void destroy_settings_widget(SettingsWidgetState *state) {
       state->general_open_connection_input);
   destroy_hyperlink_settings_editor(state->hyperlink_editor);
   destroy_webdav_settings_editor(state->webdav_editor);
+  destroy_smb_settings_editor(state->smb_editor);
   destroy_ssh_proxy_settings_editor(state->ssh_proxy_editor);
   if (state->root != nullptr && gtk_widget_get_parent(state->root) == nullptr) {
     gtk_widget_destroy(state->root);

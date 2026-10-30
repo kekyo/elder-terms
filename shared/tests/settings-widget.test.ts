@@ -94,6 +94,11 @@ interface AppliedStore {
   readonly ui_language: string;
   readonly sftp_local_directory: string;
   readonly sftp_remote_directory: string;
+  readonly smb_address: string;
+  readonly smb_port: string;
+  readonly smb_share: string;
+  readonly smb_signing: string;
+  readonly smb_encryption: string;
   readonly ftp_address: string;
   readonly ftp_port: string;
   readonly ftp_username: string;
@@ -857,7 +862,7 @@ describe.concurrent('shared settings widget', () => {
     }
   });
 
-  it('orders connection settings before Terminal when available', async (context) => {
+  describe('orders connection settings before Terminal when available', () => {
     const cases = [
       {
         args: [] as const,
@@ -925,11 +930,17 @@ describe.concurrent('shared settings widget', () => {
         args: ['--type=webdav'] as const,
         expected: ['General', 'WebDAV', 'SSH proxy'],
       },
+      {
+        args: ['--type=smb'] as const,
+        expected: ['General', 'SMB', 'SSH proxy'],
+      },
     ] as const;
 
     for (const testCase of cases) {
-      await runSharedGtkTest(context, testCase.args, async ({ app }) => {
-        expect(await visibleSettingsTabNames(app)).toEqual(testCase.expected);
+      it(testCase.args[0] ?? '--type=local', async (context) => {
+        await runSharedGtkTest(context, testCase.args, async ({ app }) => {
+          expect(await visibleSettingsTabNames(app)).toEqual(testCase.expected);
+        });
       });
     }
   });
@@ -1156,6 +1167,7 @@ describe.concurrent('shared settings widget', () => {
           'SFTP',
           'FTP',
           'WebDAV',
+          'SMB',
           'SSH proxy',
           '端末',
           '端末の外観',
@@ -2188,6 +2200,7 @@ describe.concurrent('shared settings widget', () => {
     'sftp',
     'ftp',
     'webdav',
+    'smb',
   ]) {
     it(`edits and saves both indicator colors from General for ${connectionType} connections`, async (context) => {
       const directory = await mkdtemp(
@@ -2197,7 +2210,17 @@ describe.concurrent('shared settings widget', () => {
       try {
         await runSharedGtkTest(
           context,
-          ['--page=general', `--type=${connectionType}`, `--save-file=${path}`],
+          [
+            '--page=general',
+            `--type=${connectionType}`,
+            `--save-file=${path}`,
+            ...(connectionType === 'smb'
+              ? [
+                  '--connection=smb.address=files.example.test',
+                  '--connection=smb.share=team',
+                ]
+              : []),
+          ],
           async ({ app }) => {
             await expectPageLabels(app, 'settings_general_page', [
               'Active indicator color',
@@ -2213,6 +2236,7 @@ describe.concurrent('shared settings widget', () => {
               ).toContain('showing');
               await chooseNamedColor(app, buttonId, color);
             }
+            await expectSensitive(await app.getById('settings_save_button'));
             await expectElementKind(
               await app.getById('settings_save_button'),
               'button'
@@ -3660,6 +3684,67 @@ describe.concurrent('shared settings widget', () => {
         await expectInsensitive(await app.getById('settings_apply_button'));
         await port.setText('8081');
         await expectSensitive(await app.getById('settings_apply_button'));
+      }
+    );
+  });
+
+  it('validates and applies SMB settings with independently inherited defaults', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=smb', '--type=smb', '--rebase-global=smb.port=1445'],
+      async ({ app }) => {
+        await selectSettingsTab(app, 'SMB');
+        const address = expectElementKind(
+          await app.getById('settings_smb_address_entry'),
+          'entry'
+        );
+        const port = expectElementKind(
+          await app.getById('settings_smb_port_entry'),
+          'entry'
+        );
+        const share = expectElementKind(
+          await app.getById('settings_smb_share_entry'),
+          'entry'
+        );
+        await expectInheritedEntry(
+          app,
+          'settings_smb_port_entry',
+          '445 (built-in default)'
+        );
+        await address.setText('files.example.test');
+        await share.setText('team/docs');
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await share.setText('team');
+        await port.setText('0');
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await port.setText('1446');
+        await expectElementKind(
+          await app.getById('rebase_fallbacks_button'),
+          'button'
+        ).click();
+        expect(await port.text()).toBe('1446');
+        const scroll = expectElementKind(
+          await app.getById('settings_smb_page_scrollbar'),
+          'scrollbar'
+        );
+        await scroll.setValue((await scroll.valueInfo()).maximum);
+        await expectElementKind(
+          await app.getById('settings_smb_require_encryption_combo'),
+          'comboBox'
+        ).selectChildAt(1);
+        await expectSensitive(await app.getById('settings_apply_button'));
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        expect(await waitForAppliedStore(app)).toMatchObject({
+          type: 'smb',
+          smb_address: 'files.example.test',
+          smb_port: '1446',
+          smb_share: 'team',
+          smb_signing: 'true',
+          smb_encryption: 'true',
+        });
       }
     );
   });
@@ -6727,6 +6812,7 @@ describe.concurrent('shared settings widget', () => {
           'SFTP',
           'FTP',
           'WebDAV',
+          'SMB',
           'SSH proxy',
           'Terminal',
           'Terminal appearance',

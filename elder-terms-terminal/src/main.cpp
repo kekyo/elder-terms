@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include <elder-terms/modal-dialog.h>
+#include <elder-terms/tracked-window.h>
 #include <algorithm>
 #include <clocale>
 #include <cstdarg>
@@ -922,7 +923,7 @@ static void request_runtime_settings(ApplicationState *state, const elder_terms:
         const bool accepted = save ? save_runtime_settings(state, store, std::move(image)) :
             apply_runtime_settings(state, store, std::move(image));
         action.complete(accepted, accepted ? "" : save ? _("Failed to save connection") : _("Failed to apply terminal settings"));
-        if (accepted) schedule_settings_dialog_close(state);
+        if (accepted && save) schedule_settings_dialog_close(state);
       });
 }
 
@@ -2053,6 +2054,8 @@ int main(int argc, char **argv) {
 
   gtk_widget_show_all(main_window->window);
   gtk_window_present_with_time(GTK_WINDOW(main_window->window), GDK_CURRENT_TIME);
+  elder_terms::attach_tracked_window(main_window->window,
+      elder_terms::present_tracked_window);
   if (launch_options.test.show_transfer_progress) {
     elder_terms::set_main_window_transfer_progress_visible(
         &*main_window, true);

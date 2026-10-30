@@ -1,6 +1,6 @@
 # Using SSH proxy
 
-Use an SSH gateway to reach SSH, SFTP, Telnet, WebDAV and passive FTP/FTPS destinations.
+Use an SSH gateway to reach SSH, SFTP, Telnet, WebDAV, passive FTP/FTPS and SMB destinations. SMB over SSH proxy is experimental.
 Keep the destination address and login in its protocol tab. Enter the gateway details in the separate SSH proxy tab and enable it.
 SSH and SFTP authenticate the gateway and destination separately and verify both host keys.
 Gateway prompts include the SSH proxy label.
@@ -49,6 +49,7 @@ The gateway must permit TCP forwarding. For OpenSSH, check `AllowTcpForwarding`,
 
 SSH/SFTP retain SSH to the final destination. HTTPS and explicit/implicit FTPS retain end-to-end TLS and certificate name verification.
 For Telnet, HTTP and plain FTP, SSH encrypts the connection only as far as the gateway; the gateway-to-destination segment is plaintext.
+For SMB, traffic between the gateway and the share server is also outside the SSH encryption boundary. SMB signing and encryption follow the SMB tab settings.
 
 Select Passive in the FTP tab. Both the control connection and each listing/upload/download data connection pass through the gateway.
 The gateway must be able to reach the server's control port and passive data ports.
@@ -58,5 +59,8 @@ See [FTP/SFTP details](ftp-sftp.md).
 
 SFTP opened from an SSH terminal shares the authenticated destination connection. Either window can remain usable after closing the other.
 Standalone SFTP and reconnection use the same gateway settings.
+
+For SMB, the gateway connects to the server and port configured on the SMB tab. Enter the SMB user name and password separately from the gateway credentials.
+If the connection fails, check whether TCP forwarding from the gateway to the SMB server is permitted. See [Using SMB](smb.md).
 
 One gateway is supported. Multiple hops, arbitrary ProxyCommand execution and a general-purpose SOCKS service for external clients are outside this scope.

@@ -225,6 +225,15 @@ process.stdout.write('\\x1b]12;#ffffff\\x07\\x1b[48;2;0;0;0m\\x1b[2J\\x1b[H\\x1b
               await app.getById('settings_apply_button'),
               'button'
             ).click();
+            await waitForResult(async () => {
+              expect(
+                (await (await app.getById('settings_dialog')).info()).states
+              ).toContain('showing');
+            });
+            await expectElementKind(
+              await app.getById('settings_cancel_button'),
+              'button'
+            ).click();
             expect(await readFile(config, 'utf8')).toContain(
               'cursor_blink=false'
             );

@@ -2575,3 +2575,33 @@ msgstr "① जैसे अक्षरों की चौड़ाई तय 
 
 msgid "Font dependent"
 msgstr "फ़ॉन्ट के अनुसार"
+
+msgid "Share name"
+msgstr "शेयर का नाम"
+
+msgid "Domain"
+msgstr "डोमेन"
+
+msgid "Require signing"
+msgstr "हस्ताक्षर अनिवार्य करें"
+
+msgid "Require encryption"
+msgstr "एन्क्रिप्शन अनिवार्य करें"
+
+msgid "SMB"
+msgstr "SMB"
+
+msgid "Open windows"
+msgstr "खुली विंडो"
+
+msgid "No open windows"
+msgstr "कोई खुली विंडो नहीं"
+
+msgid "SMB authentication"
+msgstr "SMB प्रमाणीकरण"
+
+msgid "Failed to start SMB"
+msgstr "SMB शुरू नहीं हो सका"
+
+msgid "File transfer"
+msgstr "फ़ाइल स्थानांतरण"
