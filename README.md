@@ -1,6 +1,6 @@
 # elder-terms
 
-A Terminal emulator for local shell, serial, TELNET, FTP, FTPS, SSH, and SFTP connections.
+A Terminal emulator for local shell, SSH, TELNET, serial, FTP, FTPS, SFTP, WebDAV and SMB connections.
 '90s, come back in this time. This is all we need.
 
 ![elder-terms](./images/elder-terms-128.png)

@@ -1,6 +1,6 @@
 # elder-terms
 
-ローカルシェル・シリアル・TELNET・FTP・SSH・SFTPで接続できるターミナルエミュレータ。
+ローカルシェル・SSH・TELNET・シリアル・FTP・FTPS・SFTP・WebDAV・SMBで接続できるターミナルエミュレータ。
 '90s、あの頃のパラダイス。こういうのでいいんだよ。
 
 ![elder-terms](./images/elder-terms-128.png)
