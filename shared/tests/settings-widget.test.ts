@@ -3749,6 +3749,66 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
+  it('preserves inherited SMB fields while correcting invalid overrides', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=smb',
+        '--type=smb',
+        '--global=smb.address=files.example.test',
+        '--global=smb.port=1445',
+        '--global=smb.require_signing=false',
+        '--connection=smb.port=unfinished',
+        '--connection=smb.require_signing=true',
+        '--allow-invalid-connection-values',
+      ],
+      async ({ app }) => {
+        await selectSettingsTab(app, 'SMB');
+        await expectInheritedEntry(
+          app,
+          'settings_smb_address_entry',
+          'files.example.test (global default)'
+        );
+        const port = expectElementKind(
+          await app.getById('settings_smb_port_entry'),
+          'entry'
+        );
+        expect(await port.text()).toBe('unfinished');
+        await waitForEntryPlaceholder(
+          app,
+          'settings_smb_port_entry',
+          '1445 (global default)'
+        );
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await port.setText('');
+        await expectInheritedEntry(
+          app,
+          'settings_smb_port_entry',
+          '1445 (global default)'
+        );
+        const scroll = expectElementKind(
+          await app.getById('settings_smb_page_scrollbar'),
+          'scrollbar'
+        );
+        await scroll.setValue((await scroll.valueInfo()).maximum);
+        await expectElementKind(
+          await app.getById('settings_smb_require_signing_combo'),
+          'comboBox'
+        ).selectChildAt(0);
+        await expectSensitive(await app.getById('settings_apply_button'));
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        expect(await waitForAppliedStore(app)).toMatchObject({
+          smb_address: 'files.example.test',
+          smb_port: '1445',
+          smb_signing: 'false',
+        });
+      }
+    );
+  });
+
   it('applies FTPS modes, protocol ranges and independent certificate policy', async (context) => {
     await runSharedGtkTest(
       context,

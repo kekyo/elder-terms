@@ -50,13 +50,18 @@ static bool numeric_field(std::string_view name) {
   return name == "port" || name.ends_with("_timeout_seconds");
 }
 
-static std::string effective_text(const SettingsStore &store, const char *name) {
-  for (const auto &entry : store.entries)
-    if (entry.definition.key.section == "smb" && entry.definition.key.name == name && entry.invalid_raw_value)
-      return *entry.invalid_raw_value;
-  if (numeric_field(name))
-    return std::to_string(setting_integer_value_or_default(store, smb_setting_key(name), 0));
-  return setting_string_value_or_default(store, smb_setting_key(name), "");
+static std::string setting_text(const SettingsStore &store, const char *name,
+                                bool inherited) {
+  for (const auto &entry : store.entries) {
+    if (entry.definition.key.section != "smb" || entry.definition.key.name != name)
+      continue;
+    const auto &raw = inherited ? entry.fallback_invalid_raw_value : entry.invalid_raw_value;
+    if (raw) return *raw;
+    const auto &value = inherited ? entry.fallback_value : entry.value;
+    return numeric_field(name) ? std::to_string(std::get<gint64>(value))
+                               : std::get<std::string>(value);
+  }
+  return numeric_field(name) ? "0" : "";
 }
 
 static void update_validation(SmbSettingsEditor *editor) {
@@ -81,11 +86,9 @@ void sync_smb_settings_editor(SmbSettingsEditor *editor, bool preserve_invalid) 
     const bool unfinished = preserve_invalid && !field.valid && field.entry;
     const std::string unfinished_text = unfinished ? gtk_entry_get_text(GTK_ENTRY(field.entry)) : "";
     const auto key = smb_setting_key(field.name);
-    SettingsStore fallback = *editor->store;
-    clear_explicit_setting_value(&fallback, key);
     const bool explicit_value = setting_has_explicit_value(*editor->store, key);
     if (field.boolean) {
-      const bool inherited = setting_boolean_value_or_default(fallback, key, false);
+      const bool inherited = std::get<bool>(setting_fallback_value(*editor->store, key, false));
       const bool effective = setting_boolean_value_or_default(*editor->store, key, false);
       gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(field.combo));
       gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.combo), "inherit",
@@ -96,8 +99,8 @@ void sync_smb_settings_editor(SmbSettingsEditor *editor, bool preserve_invalid) 
       gtk_combo_box_set_active_id(GTK_COMBO_BOX(field.combo),
           explicit_value ? (effective ? "enabled" : "disabled") : "inherit");
     } else {
-      const auto effective = effective_text(*editor->store, field.name);
-      const auto inherited = effective_text(fallback, field.name);
+      const auto effective = setting_text(*editor->store, field.name, false);
+      const auto inherited = setting_text(*editor->store, field.name, true);
       gtk_entry_set_text(GTK_ENTRY(field.entry), explicit_value ? effective.c_str() : "");
       gtk_entry_set_placeholder_text(GTK_ENTRY(field.entry),
           inherited_setting_label(inherited, setting_fallback_source(*editor->store, key)).c_str());
