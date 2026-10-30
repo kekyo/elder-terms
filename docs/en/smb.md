@@ -24,6 +24,20 @@ You cannot upload to or create folders at the share list `/`, or rename or delet
 
 Disable "Close window when session ends" to keep the window open after disconnection and reconnect using "Reconnect". Canceling an operation in progress may also require reconnection. Interrupted operations are not retried automatically. After reconnecting, refresh the listing and check what the server completed before trying again.
 
+## Find a host with IP scan
+
+Use the "IP scan" button beside the address field on the SMB tab to find a host.
+A check mark in SMB (445) identifies a candidate that accepted a TCP connection.
+Connect to the server to verify SMB support, authentication, and access to its shares.
+
+Double-click a row to fill the address field with its resolved host name, or its numeric IP address.
+The port, domain, user name, remote directory, signing and encryption settings are preserved.
+Check the connection settings and save them. The scan button is unavailable in the read-only
+settings of an active connection.
+
+See [Finding a Host with IP Scan](../../README.md#finding-a-host-with-ip-scan)
+for scan ranges and name lookup shared with the other connection types.
+
 ## When shares cannot be listed or opened
 
 A listed share does not necessarily permit access by your user. If access is denied, an error is shown for that share and other shares remain available.

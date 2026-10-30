@@ -302,29 +302,35 @@ In an INI file, `[general] icon` accepts these forms:
 
 ![IP scan results](./images/ip-scan-results.png)
 
-The TELNET, SSH/SFTP, and FTP settings place an "IP scan" button beside the
+The TELNET, SSH/SFTP, FTP/FTPS, WebDAV, and SMB settings place an "IP scan" button beside the
 address field.
 Opening it immediately scans the IPv4 ranges of all configured network interfaces
-for the standard FTP (21), SSH/SFTP (22), and TELNET (23) TCP ports.
+for the standard FTP/explicit FTPS (21), SSH/SFTP (22), TELNET (23), WebDAV HTTP (80),
+WebDAV HTTPS (443), SMB (445), and implicit FTPS (990) TCP ports.
+All connection settings scan the same seven ports.
 
 For example, a `/24` interface scans every address whose final octet is 0 through 255.
 A range wider than `/24` is limited to its first 256 addresses by treating the additional upper host bits as zero.
 For example, an address on `172.20.0.0/16` scans `172.20.0.0` through `172.20.0.255`.
 
-Discovered hosts appear as the scan proceeds, together with their resolved host name when available.
-The SSH/SFTP (22), TELNET (23), and FTP (21) columns show a check mark when the corresponding port was found.
-The progress bar shows how much of the combined range has been checked.
+You can select discovered hosts while the scan is still running. Resolved host names appear as they become available.
+The table has columns for the IP address, host name, and seven ports, with a check mark for each port that accepted a TCP connection.
+A check mark identifies a candidate host; it does not verify service support such as WebDAV, successful authentication, or TLS certificate validity.
+The FTP/FTPS (21) column covers both plain FTP and explicit FTPS.
+The progress bar counts checked addresses in the scan range. Scroll horizontally if the table does not fit.
 
 Double-click a row to stop the scan, close the dialog,
 and copy the resolved name into the setting if it is already available.
 Otherwise, the numeric IP address is used.
-The connection type, port, and entry name are unchanged.
+Only the address changes. The connection type, port, entry name, WebDAV HTTPS/HTTP choice,
+FTP TLS mode, paths, and authentication settings are preserved.
+Check the connection settings and save them after selecting a host.
 
 Click "Cancel" to stop and close the scan without changing the address.
 
-Only locally configured IPv4 ranges are scanned.
-Interfaces without an IPv4 address are skipped.
-Loopback interfaces scan only their assigned addresses, rather than the whole loopback range.
+Only local interfaces with an IPv4 address are scanned.
+Scanning runs from this machine even when SSH proxy is configured.
+Loopback interfaces scan only their assigned addresses.
 
 Name lookup uses the system resolver first, then mDNS and LLMNR in parallel,
 preferring mDNS if both return names. It keeps `.local` and single-label names unchanged.
