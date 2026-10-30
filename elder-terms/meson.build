@@ -204,6 +204,11 @@ install_data(
   install_dir: get_option('datadir') / 'applications',
 )
 
+install_data(
+  'packaging/metainfo/net.kekyo.elder-terms.metainfo.xml',
+  install_dir: get_option('datadir') / 'metainfo',
+)
+
 foreach icon_size : ['16', '22', '24', '32', '48', '64', '128', '256']
   install_data(
     '../data/icons/hicolor/' + icon_size + 'x' + icon_size + '/apps/elder-terms.png',
