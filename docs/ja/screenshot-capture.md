@@ -28,6 +28,8 @@ IPスキャン画像は、このボタンから実際の探索を完了し、9�
 
 撮影用スクリプトと取得結果の記録は`artifacts/plan14/capture.mts`と`artifacts/plan14/capture.json`にあります。[画像の記録](../../images/capture-manifest.json)では、更新した2枚に個別の`application`と`environment`を保存しました。これらの項目がある画像では、その内容を最上位の共通項目より優先します。切り出し座標、取得日時、画像のハッシュも更新済みです。
 
+同日、列見出しを`WebDAV(443)`・`WebDAV(80)`へ短縮した後、IPスキャン画像を再撮影しました。バージョンは1.10.72、対象ソースは`cee8b4a12541235618f901d584f278e2baff6e6f`です。表示先は`DISPLAY=:605`で、ほかの撮影条件は同じです。スクリプトと取得結果は`artifacts/plan14/header-labels/capture.mts`と`artifacts/plan14/header-labels/capture.json`に保存しています。
+
 ## 画像ごとの条件
 
 | 用途 | 画像 | 再撮影する状態 |

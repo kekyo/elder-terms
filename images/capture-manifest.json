@@ -206,7 +206,7 @@
     {
       "file": "ip-scan-results.png",
       "scope": "detail",
-      "capturedAt": "2026-10-30T02:22:27.355Z",
+      "capturedAt": "2026-10-30T03:13:05.986Z",
       "bounds": {
         "x": 94,
         "y": 160,
@@ -214,14 +214,14 @@
         "height": 48
       },
       "description": "Nine-column header and localhost result of a completed live IP scan from WebDAV settings.",
-      "sha256": "5990653e9b373273dafd8c10b4cdf80ea1c17f7e33787e0d6a2df15e5cea01f7",
+      "sha256": "c2f807b37d658fd456fa7db9d82ecfb9b6955310fe0a803090e8bd82963f9c0f",
       "application": {
-        "version": "1.10.69",
-        "sourceCommit": "413bce3258efbaf3d925ecaaf136601e1b4032a1",
+        "version": "1.10.72",
+        "sourceCommit": "cee8b4a12541235618f901d584f278e2baff6e6f",
         "buildCommand": "make test"
       },
       "environment": {
-        "display": ":600",
+        "display": ":605",
         "screen": "1600x1000x24",
         "scale": 1,
         "gtkTheme": "Yaru-dark",

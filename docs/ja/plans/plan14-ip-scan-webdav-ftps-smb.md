@@ -42,8 +42,8 @@ IPスキャンでWebDAVのHTTPS・HTTP、FTPS、SMBの代表的なTCPポート�
 | TELNET | 23 | `TELNET(23)` | 既存 |
 | FTP・明示的TLSのFTPS | 21 | `FTP/FTPS(21)` | 既存の21番を共用し、見出しを変更 |
 | 暗黙的TLSのFTPS | 990 | `FTPS(990)` | 追加 |
-| WebDAVのHTTPS | 443 | `WebDAV HTTPS(443)` | 追加 |
-| WebDAVのHTTP | 80 | `WebDAV HTTP(80)` | 追加 |
+| WebDAVのHTTPS | 443 | `WebDAV(443)` | 追加 |
+| WebDAVのHTTP | 80 | `WebDAV(80)` | 追加 |
 | SMB | 445 | `SMB(445)` | 追加 |
 
 HTTPS・HTTP・SMB・FTPSの番号は、現在の設定実装とIANAの登録に合わせます。根拠は[HTTPSの登録](https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml?search=443)、[HTTPの登録](https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml?search=80)、[Microsoft-DSの登録](https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml?search=445)、[FTPSの登録](https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml?search=ftps)です。
@@ -244,3 +244,9 @@ IPスキャン結果とWebDAV設定の画像を、撮影用のXvfbと独立し�
 | 9：説明・翻訳・画像と段階別コミット | 日本語から英語へ説明を反映し、実画面と期待画像を目視確認。実装2段階、掲載画像、利用者向け説明を分けて保存 |
 
 変更は`feature/plan14`にコミットしています。段階1は`855f347a`、段階2は`413bce32`です。掲載画像と利用者向け説明は、それぞれ後続の`chore:`・`doc:`コミットにまとめました。
+
+### 追加修正：WebDAV列見出しの短縮
+
+利用者の指定に合わせ、443番の見出しを`WebDAV(443)`、80番を`WebDAV(80)`へ短縮しました。全9言語の翻訳と既存のGUI試験を更新しています。変更前の表示で試験が失敗することを確認し、修正後は成功しました。更新した期待画像も目視確認済みです。実装のコミットは`cee8b4a1`です。
+
+掲載画像を実画面から撮り直し、目視確認と撮影条件の記録を終えました。`make test`の再実行も終了コード0で完了し、1,247件成功・13件スキップ・失敗0件です。性能試験はすべて成功しています。ビルド警告はありません。スキップ理由と性能試験の環境由来の出力は、先の全体検証と同じです。記録は`artifacts/plan14/header-labels/full-test.log`に保存しました。
