@@ -2609,12 +2609,12 @@ msgid "FTPS(990)"
 msgstr "FTPS(990)"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "WebDAV HTTPS(443)"
-msgstr "WebDAV HTTPS(443)"
+msgid "WebDAV(443)"
+msgstr "WebDAV(443)"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "WebDAV HTTP(80)"
-msgstr "WebDAV HTTP(80)"
+msgid "WebDAV(80)"
+msgstr "WebDAV(80)"
 
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "SMB(445)"

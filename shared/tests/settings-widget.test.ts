@@ -4402,8 +4402,8 @@ describe.concurrent('shared settings widget', () => {
           'TELNET(23)',
           'FTP/FTPS(21)',
           'FTPS(990)',
-          'WebDAV HTTPS(443)',
-          'WebDAV HTTP(80)',
+          'WebDAV(443)',
+          'WebDAV(80)',
           'SMB(445)',
         ]) {
           expect(await dialog.findText(heading)).toBeDefined();

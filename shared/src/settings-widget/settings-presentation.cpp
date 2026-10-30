@@ -414,9 +414,9 @@ const char *settings_ui_text(SettingsUiText text) {
   case SettingsUiText::ftps_port_column:
     return _("FTPS(990)");
   case SettingsUiText::webdav_https_port_column:
-    return _("WebDAV HTTPS(443)");
+    return _("WebDAV(443)");
   case SettingsUiText::webdav_http_port_column:
-    return _("WebDAV HTTP(80)");
+    return _("WebDAV(80)");
   case SettingsUiText::smb_port_column:
     return _("SMB(445)");
   case SettingsUiText::ip_scan_description:
