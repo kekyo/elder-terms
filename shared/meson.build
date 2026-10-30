@@ -121,6 +121,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + elder_terms_noto_pre
   'src/key-binding-input-widget.cpp',
   'src/localization.cpp',
   'src/modal-dialog.cpp',
+  'src/tracked-window.cpp',
   'src/modal-color-button.cpp',
   'src/ip-scanner.cpp',
   'src/ip-scan-name-resolver.cpp',
@@ -129,6 +130,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + elder_terms_noto_pre
   'src/settings/application-settings.cpp',
   'src/settings/ftp-settings.cpp',
   'src/settings/webdav-settings.cpp',
+  'src/settings/smb-settings.cpp',
   'src/settings/general-settings.cpp',
   'src/settings/hyperlink-settings.cpp',
   'src/settings/local-session-settings.cpp',
@@ -151,6 +153,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + elder_terms_noto_pre
   'src/settings-widget/connection-icon-picker.cpp',
   'src/settings-widget/hyperlink-settings-editor.cpp',
   'src/settings-widget/webdav-settings-editor.cpp',
+  'src/settings-widget/smb-settings-editor.cpp',
   'src/settings-widget/ssh-proxy-settings-editor.cpp',
   'src/settings-widget/settings-widget.cpp',
   'src/settings-widget/terminal-background-editor.cpp',
@@ -226,6 +229,15 @@ test('native-window-icon-test', find_program('xvfb-run'),
 
 shared_regex_test = executable('shared-regex-test', 'tests/regex-test.cpp', dependencies: elder_terms_dep)
 test('shared-regex-test', shared_regex_test)
+
+tracked_window_test = executable('tracked-window-test',
+  'tests/tracked-window-test.cpp', dependencies: elder_terms_dep)
+test('tracked-window-test', find_program('dbus-run-session'),
+  args: ['--', find_program('xvfb-run').full_path(), '-a', tracked_window_test],
+  env: ['GDK_BACKEND=x11', 'NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals'])
+test('tracked-window-no-bus-test', find_program('xvfb-run'),
+  args: ['-a', tracked_window_test, '--no-bus'],
+  env: ['GDK_BACKEND=x11', 'NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals'])
 
 ssh_proxy_widget_test = executable(
   'ssh-proxy-widget-test', 'tests/ssh-proxy-widget-test.cpp',
@@ -368,6 +380,14 @@ test('elder-terms-ip-scan-name-resolver-test',
      elder_terms_ip_scan_name_resolver_test)
 
 test('elder-terms-ip-scanner-test', elder_terms_ip_scanner_test)
+
+ip_scan_dialog_test = executable(
+  'ip-scan-dialog-test', 'tests/ip-scan-dialog-test.cpp',
+  dependencies: [elder_terms_dep, cardio_dep],
+)
+test('ip-scan-dialog-test', find_program('xvfb-run'),
+  args: ['-a', ip_scan_dialog_test], timeout: 30,
+)
 
 executable(
   'elder-terms-settings-widget-fixture',

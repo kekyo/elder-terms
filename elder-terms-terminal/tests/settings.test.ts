@@ -248,6 +248,19 @@ const expectSettingsDialogClosed = async (app: GtkApp): Promise<void> => {
   });
 };
 
+const closeSettingsDialogAfterApply = async (app: GtkApp): Promise<void> => {
+  await toPass(async () => {
+    expect(
+      (await (await app.getById('settings_dialog')).info()).states
+    ).toContain('showing');
+  });
+  await expectElementKind(
+    await app.getById('settings_cancel_button'),
+    'button'
+  ).click();
+  await expectSettingsDialogClosed(app);
+};
+
 const expectTerminalFocused = async (app: GtkApp): Promise<void> => {
   await toPass(async () => {
     expect(
@@ -821,7 +834,9 @@ describe.concurrent('elder-terms-terminal settings', () => {
                   await app.getById(`settings_${action}_button`),
                   'button'
                 ).click();
-                await expectSettingsDialogClosed(app);
+                if (action === 'apply')
+                  await closeSettingsDialogAfterApply(app);
+                else await expectSettingsDialogClosed(app);
                 await expectTerminalFocused(app);
                 await expectCopy(expected);
                 expect(await readFile(path, 'utf8')).toContain(
@@ -888,13 +903,47 @@ describe.concurrent('elder-terms-terminal settings', () => {
           await app.getById('settings_apply_button'),
           'button'
         ).click();
-        await expectSettingsDialogClosed(app);
+        await toPass(async () => {
+          expect(
+            (await (await app.getById('settings_dialog')).info()).states
+          ).toContain('showing');
+        });
         await toPass(async () =>
           expect(await state.text()).toContain('a11y=off')
         );
         expect(await readFile(path, 'utf8')).toContain(
           'accessibility_enabled=true'
         );
+        await expectElementKind(
+          await app.getById('settings_terminal_accessibility_enabled_combo'),
+          'comboBox'
+        ).selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await toPass(async () => {
+          expect(await state.text()).toContain('a11y=on');
+          expect(
+            (await (await app.getById('settings_dialog')).info()).states
+          ).toContain('showing');
+        });
+        await expectElementKind(
+          await app.getById('settings_terminal_accessibility_enabled_combo'),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await toPass(async () =>
+          expect(await state.text()).toContain('a11y=off')
+        );
+        await expectElementKind(
+          await app.getById('settings_cancel_button'),
+          'button'
+        ).click();
+        await expectSettingsDialogClosed(app);
       });
       await runGtkTest(context, ['--test-fixture', '-c', path], async (app) => {
         const state = expectElementKind(
@@ -2216,7 +2265,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
               await app.getById('settings_apply_button'),
               'button'
             ).click();
-            await expectSettingsDialogClosed(app);
+            await closeSettingsDialogAfterApply(app);
             const defaultPixels = await captureWindowBackgroundPixels(app);
             expect(defaultPixels).not.toEqual({
               header: exterior,
@@ -2253,7 +2302,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
               await app.getById('settings_apply_button'),
               'button'
             ).click();
-            await expectSettingsDialogClosed(app);
+            await closeSettingsDialogAfterApply(app);
             await expectWindowBackgroundPixels(app, {
               header: exterior,
               status: exterior,
@@ -2541,7 +2590,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
             await app.getById('settings_apply_button'),
             'button'
           ).click();
-          await expectSettingsDialogClosed(app);
+          await closeSettingsDialogAfterApply(app);
           await waitForActivityIndicatorImageState(app, 'log', 'on');
 
           logItem = await openLogRecordingMenuItem(app);
@@ -2634,7 +2683,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
         await app.getById('settings_apply_button'),
         'button'
       ).click();
-      await expectSettingsDialogClosed(app);
+      await closeSettingsDialogAfterApply(app);
 
       const borderedLayout = await waitForResult(async () => {
         const layout = await readTerminalGridLayout(app);
@@ -2673,7 +2722,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
         await app.getById('settings_apply_button'),
         'button'
       ).click();
-      await expectSettingsDialogClosed(app);
+      await closeSettingsDialogAfterApply(app);
 
       const widenedLayout = await waitForResult(async () => {
         const layout = await readTerminalGridLayout(app);
@@ -2704,7 +2753,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
         await app.getById('settings_apply_button'),
         'button'
       ).click();
-      await expectSettingsDialogClosed(app);
+      await closeSettingsDialogAfterApply(app);
 
       await waitForResult(async () => {
         const layout = await readTerminalGridLayout(app);
@@ -2730,7 +2779,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
         await app.getById('settings_apply_button'),
         'button'
       ).click();
-      await expectSettingsDialogClosed(app);
+      await closeSettingsDialogAfterApply(app);
 
       await waitForResult(async () => {
         const layout = await readTerminalGridLayout(app);
@@ -2934,7 +2983,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
               await app.getById('settings_apply_button'),
               'button'
             ).click();
-            await expectSettingsDialogClosed(app);
+            await closeSettingsDialogAfterApply(app);
             await waitForResult(async () => {
               const layout = await readTerminalGridLayout(app);
               expectWindowCellSize(layout, defaultColumns, defaultRows);
@@ -3120,7 +3169,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
         await app.getById('settings_apply_button'),
         'button'
       ).click();
-      await expectSettingsDialogClosed(app);
+      await closeSettingsDialogAfterApply(app);
       await expectTerminalFocused(app);
 
       await pressKeyWithModifiers(app, ['alt'], 'Up');
@@ -3372,7 +3421,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
             await app.getById('settings_apply_button'),
             'button'
           ).click();
-          await expectSettingsDialogClosed(app);
+          await closeSettingsDialogAfterApply(app);
 
           await expectMainWindowTitle(app, 'elder-terms | serial-apply-title');
           await expectMainWindowStatus(app, 'serial: /dev/ttyUSB1:57600:o52h');
@@ -3505,7 +3554,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
     });
   });
 
-  it('closes and applies runtime terminal grid size changes without saving when applied', async (context) => {
+  it('keeps settings open and applies runtime terminal grid size changes without saving', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const configPath = join(directory, 'apply-grid.ini');
       const initialConfig = `[terminal]\nwidth=${defaultColumns}\nheight=${defaultRows}\n`;
@@ -3536,7 +3585,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
             await app.getById('settings_apply_button'),
             'button'
           ).click();
-          await expectSettingsDialogClosed(app);
+          await closeSettingsDialogAfterApply(app);
 
           await toPass(async () => {
             await expectFixtureTerminalGridSize(
@@ -3572,7 +3621,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
         await app.getById('settings_apply_button'),
         'button'
       ).click();
-      await expectSettingsDialogClosed(app);
+      await closeSettingsDialogAfterApply(app);
 
       await waitForResult(async () => {
         expect(await readFixtureTerminalScrollbackLines(app)).toBe(54321);
@@ -3642,7 +3691,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
         await app.getById('settings_apply_button'),
         'button'
       ).click();
-      await expectSettingsDialogClosed(app);
+      await closeSettingsDialogAfterApply(app);
       await delay(300);
 
       const layout = await waitForResult(async () => {
@@ -3689,7 +3738,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
             await app.getById('settings_apply_button'),
             'button'
           ).click();
-          await expectSettingsDialogClosed(app);
+          await closeSettingsDialogAfterApply(app);
 
           await writeFile(shell.releasePath, 'exit\n', 'utf8');
           await waitForShellExit(shell.markerPath);

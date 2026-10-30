@@ -83,6 +83,18 @@ struct TrayConnectionItem {
   std::string icon;
 };
 
+/** One tracked child window shown in launch order. */
+struct TrayWindowItem {
+  /** Opaque launch identity, independent of saved profiles and process IDs. */
+  std::string key;
+  /** Literal label, including kind and duplicate-instance suffix. */
+  std::string name;
+  /** Connection icon specification captured at launch. */
+  std::string icon;
+  /** True after the child reports that its window can be presented. */
+  bool ready = false;
+};
+
 /**
  * Receives events produced by a tray backend.
  */
@@ -98,6 +110,8 @@ struct TrayBackendCallbacks {
   /** Opens the current connection for an opaque key and event context. */
   std::function<void(const std::string &, const TrayActivationContext &)>
       open_connection;
+  /** Presents a tracked window without launching another process. */
+  std::function<void(const std::string &, const TrayActivationContext &)> show_window{};
   /** Reports changes to tray discovery and host availability. */
   std::function<void(TrayBackendAvailabilityState)> availability_changed;
 };
@@ -199,6 +213,13 @@ void destroy_tray_backend(TrayBackendState *state);
  */
 void update_tray_connections(TrayBackendState *state,
                              std::vector<TrayConnectionItem> connections);
+
+/**
+ * Replaces tracked windows in both tray menus.
+ * @param state Backend state, or null.
+ * @param windows Owned snapshot in launch order. Removed identities never activate.
+ */
+void update_tray_windows(TrayBackendState *state, std::vector<TrayWindowItem> windows);
 
 /**
  * Returns the currently selected backend kind.

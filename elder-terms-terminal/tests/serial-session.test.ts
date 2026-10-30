@@ -408,6 +408,15 @@ describe.concurrent('elder-terms-terminal serial session', () => {
             await app.getById('settings_apply_button'),
             'button'
           ).click();
+          await waitForResult(async () => {
+            expect(
+              (await (await app.getById('settings_dialog')).info()).states
+            ).toContain('showing');
+          });
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
 
           await toPass(async () => {
             expect((await app.output()).exitCode).toBeNull();
@@ -723,6 +732,27 @@ describe.concurrent('elder-terms-terminal serial session', () => {
           await expectMainWindowTitle(app, `${connectedTitle} (Disconnected)`);
           await expectMainWindowStatus(app, connectionStatus);
           await expectDisconnectedNoticeVisibleAtTerminalTopRight(app);
+
+          const reconnect = expectElementKind(
+            await app.getById('reconnect_button'),
+            'button'
+          );
+          await toPass(async () => {
+            expect((await reconnect.info()).states).toContain('showing');
+            expect((await reconnect.info()).states).toContain('sensitive');
+          });
+          const failures =
+            (await app.output()).stderr.match(/serial device not found/g)
+              ?.length ?? 0;
+          await reconnect.click();
+          await toPass(async () => {
+            expect(
+              (await app.output()).stderr.match(/serial device not found/g)
+                ?.length ?? 0
+            ).toBeGreaterThan(failures);
+            expect((await reconnect.info()).states).toContain('showing');
+            expect((await reconnect.info()).states).toContain('sensitive');
+          });
 
           secondHelper = await startSerialPtyHelper();
           await symlink(secondHelper.slavePath, serialDevicePath);

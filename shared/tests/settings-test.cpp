@@ -607,7 +607,7 @@ static void test_general_borders_round_trip_and_layering() {
   const SettingsLoadOptions options{.config_path = path,
       .startup_config_path = std::nullopt, .global_config_path = global};
   write_config(global, "[general]\nshow_border=true\nborder_width=7\n");
-  for (const char *type : {"local", "telnet", "ssh", "serial", "sftp", "ftp", "webdav"}) {
+  for (const char *type : {"local", "telnet", "ssh", "serial", "sftp", "ftp", "webdav", "smb"}) {
     write_config(path, std::string("[general]\ntype=") + type + "\n");
     auto loaded = load_settings(options, 1.0);
     expect_true(elder_terms::setting_boolean_value_or_default(loaded.store, visible, false),
@@ -4769,6 +4769,102 @@ static void test_webdav_invalid_numeric_settings_remain_invalid_after_save() {
               "Correcting a port must clear the retained malformed input");
 }
 
+static void test_smb_settings_round_trip_and_validation() {
+  auto store = create_default_settings(default_terminal_display_settings(1.0), "SMB");
+  expect_true(set_explicit_setting_value(&store, general_type_setting_key(), std::string("smb")),
+              "SMB must be selectable as an independent connection type");
+  expect_true(!terminal_connection_profile(store).has_value(),
+              "SMB must not start a terminal session");
+  const auto defaults = elder_terms::smb_connection_settings(store);
+  expect_true(defaults.port == 445 && defaults.remote_directory == "/" &&
+                  defaults.require_signing && !defaults.require_encryption,
+              "SMB must have direct TCP and secure signing defaults");
+  expect_true(defaults.validation_errors.size() == 1,
+              "An SMB connection requires a server address");
+  expect_true(set_explicit_setting_value(&store,
+                  elder_terms::ssh_proxy_setting_key("enabled"), true),
+              "An inherited SSH proxy can be enabled independently");
+  expect_true(elder_terms::ssh_proxy_connection_settings(store).enabled &&
+                  !elder_terms::ssh_proxy_connection_settings(store).validation_errors.empty(),
+              "SMB must reject an enabled SSH proxy without a gateway address");
+  expect_true(set_explicit_setting_value(&store, elder_terms::ssh_proxy_setting_key("address"),
+                                         std::string("bastion.example")) &&
+                  elder_terms::ssh_proxy_connection_settings(store).validation_errors.empty(),
+              "SMB must accept a configured SSH gateway");
+  expect_true(!set_explicit_setting_value(&store, elder_terms::smb_setting_key("remote_directory"), std::string("/../outside")),
+              "An SMB remote path must not escape the server root");
+  expect_true(!set_explicit_setting_value(&store, elder_terms::smb_setting_key("port"), gint64{0}),
+              "SMB port must be bounded");
+  expect_true(!set_explicit_setting_value(&store, elder_terms::smb_setting_key("idle_timeout_seconds"), gint64{0}),
+              "SMB idle timeout must be bounded");
+  auto globals = create_default_settings(default_terminal_display_settings(1.0), "Defaults");
+  expect_true(set_explicit_setting_value(&globals, elder_terms::smb_setting_key("port"), gint64{1445}),
+              "Global SMB port must be configurable");
+  elder_terms::rebase_settings_store_fallbacks(&store, globals);
+  expect_true(elder_terms::smb_connection_settings(store).port == 1445,
+              "SMB port must inherit from global defaults");
+  expect_true(set_explicit_setting_value(&store, elder_terms::smb_setting_key("port"), gint64{1446}),
+              "Connection SMB port must be configurable");
+  expect_true(elder_terms::smb_connection_settings(store).port == 1446,
+              "Connection SMB port must override global defaults");
+  const std::vector<std::pair<std::string, std::string>> values{
+      {"address", "files.example.test"},
+      {"domain", "EXAMPLE"}, {"username", "alice"},
+      {"local_directory", "/tmp/downloads"}, {"remote_directory", "/team/Docs"}};
+  for (const auto &[name, value] : values)
+    expect_true(set_explicit_setting_value(&store, elder_terms::smb_setting_key(name), value),
+                "SMB setting must be accepted: " + name);
+  expect_true(set_explicit_setting_value(&store, elder_terms::smb_setting_key("require_encryption"), true),
+              "SMB encryption requirement must be configurable");
+  expect_true(elder_terms::smb_connection_settings(store).validation_errors.empty(),
+              "A complete SMB connection must validate");
+  const auto path = temporary_config_path("smb-round-trip");
+  expect_true(save_settings(store, path).saved, "SMB settings must be saved");
+  const auto loaded = load_settings({.config_path = path,
+                                    .startup_config_path = std::nullopt}, 1.0);
+  remove_config(path);
+  for (const auto &[name, value] : values)
+    expect_true(elder_terms::setting_string_value_or_default(
+                    loaded.store, elder_terms::smb_setting_key(name), "missing") == value,
+                "SMB setting must survive reload: " + name);
+  const auto resolved = elder_terms::smb_connection_settings(loaded.store);
+  expect_true(resolved.port == 1446 && resolved.require_signing &&
+                  resolved.require_encryption && resolved.validation_errors.empty(),
+              "SMB numeric and security settings must survive reload");
+}
+
+static void test_smb_invalid_numeric_input_remains_invalid_after_save() {
+  const auto path = temporary_config_path("smb-invalid-number");
+  write_config(path, "[general]\ntype=smb\n[smb]\naddress=localhost\nremote_directory=/team\nport=not-a-number\n");
+  const auto loaded = load_settings({.config_path = path,
+                                    .startup_config_path = std::nullopt}, 1.0);
+  expect_true(!elder_terms::smb_connection_settings(loaded.store).validation_errors.empty(),
+              "Malformed SMB port must prevent connecting");
+  expect_true(save_settings(loaded.store, path).saved,
+              "Saving unrelated settings must retain invalid SMB input");
+  const auto reloaded = load_settings({.config_path = path,
+                                      .startup_config_path = std::nullopt}, 1.0);
+  remove_config(path);
+  expect_true(!elder_terms::smb_connection_settings(reloaded.store).validation_errors.empty(),
+              "Saving must not silently repair a malformed SMB port");
+  auto corrected = reloaded.store;
+  expect_true(set_explicit_setting_value(&corrected, elder_terms::smb_setting_key("port"), gint64{445}),
+              "A valid SMB port must replace invalid raw input");
+  expect_true(elder_terms::smb_connection_settings(corrected).validation_errors.empty(),
+              "Correcting the SMB port must restore a valid connection");
+}
+
+static void test_smb_remote_directory_matches_transfer_paths() {
+  auto store = create_default_settings(default_terminal_display_settings(1.0), "SMB paths");
+  const auto key = elder_terms::smb_setting_key("remote_directory");
+  for (const auto &path : {"/folder.", "/a:b", "/folder "})
+    expect_true(!set_explicit_setting_value(&store, key, std::string(path)),
+                "SMB settings must reject a remote path the transfer cannot use: " + std::string(path));
+  for (const auto &path : {"/valid path", "/日本語"})
+    expect_true(set_explicit_setting_value(&store, key, std::string(path)),
+                "SMB settings must accept a usable remote path: " + std::string(path));
+}
+
 } // namespace elder_terms_settings_test
 
 int main() {
@@ -4776,6 +4872,9 @@ int main() {
     elder_terms_settings_test::test_general_borders_round_trip_and_layering();
     elder_terms_settings_test::test_webdav_settings_round_trip();
     elder_terms_settings_test::test_webdav_invalid_numeric_settings_remain_invalid_after_save();
+    elder_terms_settings_test::test_smb_settings_round_trip_and_validation();
+    elder_terms_settings_test::test_smb_invalid_numeric_input_remains_invalid_after_save();
+    elder_terms_settings_test::test_smb_remote_directory_matches_transfer_paths();
     elder_terms_settings_test::test_independent_inactive_indicator_color();
     elder_terms_settings_test::test_terminal_cursor_settings();
     elder_terms_settings_test::test_terminal_ambiguous_width_setting();

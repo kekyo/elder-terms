@@ -41,6 +41,8 @@ enum class RemoteFileType {
 
 /** Optional remote filesystem features understood by the transfer engine. */
 struct RemoteFileCapabilities {
+  /** True when uploads and remote filesystem changes are available. */
+  bool write_operations = true;
   /** True when symbolic links can be inspected and created. */
   bool symbolic_links = false;
   /** True when POSIX permission bits can be read and applied. */
@@ -53,6 +55,14 @@ struct RemoteFileCapabilities {
   bool upload_commit = false;
   /** True when a collection can be explicitly deleted with all descendants. */
   bool recursive_directory_delete = false;
+};
+
+/** Operations permitted at a particular remote path, before server ACL checks. */
+struct RemotePathCapabilities {
+  /** True when files or directories may be created inside this directory. */
+  bool create_children;
+  /** True when this item may be removed, renamed, replaced, or have metadata changed. */
+  bool modify;
 };
 
 /** Portable attributes used by the remote browser and transfer engine. */
@@ -163,6 +173,17 @@ public:
    */
   virtual auto capabilities() const noexcept
       -> RemoteFileCapabilities = 0;
+
+  /**
+   * Reports structural restrictions for one path, including virtual roots.
+   * @param path Remote path to inspect without performing network I/O.
+   * @returns Allowed mutations; servers may impose additional access restrictions.
+   */
+  virtual RemotePathCapabilities path_capabilities(const std::string &path) const {
+    (void)path;
+    const bool writable = capabilities().write_operations;
+    return {.create_children = writable, .modify = writable};
+  }
 
   /**
    * Loads one directory as a single logical remote operation.

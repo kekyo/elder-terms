@@ -719,6 +719,7 @@ SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
   append_definitions(&definitions, sftp_connection_setting_definitions());
   append_definitions(&definitions, ftp_connection_setting_definitions());
   append_definitions(&definitions, webdav_connection_setting_definitions());
+  append_definitions(&definitions, smb_connection_setting_definitions());
   append_definitions(&definitions, serial_connection_setting_definitions());
   append_definitions(&definitions, transfer_setting_definitions());
   return create_settings_store(std::move(definitions));
@@ -818,6 +819,10 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_font_
     const auto connection = webdav_connection_settings(result.store);
     result.warnings.insert(result.warnings.end(), connection.validation_errors.begin(), connection.validation_errors.end());
     if (connection.address.empty()) result.warnings.emplace_back("WebDAV server address is required");
+  }
+  if (general_connection_kind(result.store) == ConnectionKind::smb) {
+    const auto connection = smb_connection_settings(result.store);
+    result.warnings.insert(result.warnings.end(), connection.validation_errors.begin(), connection.validation_errors.end());
   }
   if (general_settings_select_serial_connection(result.store)) {
     append_serial_connection_warnings(result.store, &result.warnings);
@@ -987,7 +992,8 @@ std::optional<TerminalConnectionProfile>
 terminal_connection_profile(const SettingsStore &store) {
   if (general_settings_select_sftp_connection(store) ||
       general_settings_select_ftp_connection(store) ||
-      general_connection_kind(store) == ConnectionKind::webdav) {
+      general_connection_kind(store) == ConnectionKind::webdav ||
+      general_connection_kind(store) == ConnectionKind::smb) {
     return std::nullopt;
   }
 

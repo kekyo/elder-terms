@@ -144,6 +144,17 @@ for (const backend of ['cairo', 'opengl']) {
                 await app.getById(`settings_${action}_button`),
                 'button'
               ).click();
+              if (action === 'apply') {
+                await waitForResult(async () => {
+                  expect(
+                    (await (await app.getById('settings_dialog')).info()).states
+                  ).toContain('showing');
+                });
+                await expectElementKind(
+                  await app.getById('settings_cancel_button'),
+                  'button'
+                ).click();
+              }
             };
             await open();
             await select(1);

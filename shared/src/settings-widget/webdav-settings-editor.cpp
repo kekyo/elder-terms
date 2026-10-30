@@ -240,7 +240,8 @@ static void browse_clicked(GtkButton *, gpointer data) {
 }
 
 WebdavSettingsEditor *create_webdav_settings_editor(SettingsStore *store,
-    std::string prefix, bool read_only, std::function<void()> changed) {
+    std::string prefix, bool read_only, std::function<void()> changed,
+    std::function<GtkWidget *(GtkWidget *)> create_address_row) {
   auto *editor = new WebdavSettingsEditor{store, std::move(prefix), read_only, std::move(changed), gtk_grid_new(), gtk_label_new("")};
   gtk_grid_set_row_spacing(GTK_GRID(editor->root), 8);
   gtk_grid_set_column_spacing(GTK_GRID(editor->root), 12);
@@ -260,7 +261,9 @@ WebdavSettingsEditor *create_webdav_settings_editor(SettingsStore *store,
     if (field.choices.empty() || std::string_view(field.name) == "ca_file") {
       field.entry = gtk_entry_new();
       assign_accessible_id(field.entry, id + "_entry");
-      gtk_box_pack_start(GTK_BOX(box), field.entry, FALSE, FALSE, 0);
+      auto *control = std::string_view(field.name) == "address"
+          ? create_address_row(field.entry) : field.entry;
+      gtk_box_pack_start(GTK_BOX(box), control, FALSE, FALSE, 0);
       g_signal_connect(field.entry, "changed", G_CALLBACK(entry_changed), editor);
     }
     if (std::string_view(field.name) == "ca_file") {

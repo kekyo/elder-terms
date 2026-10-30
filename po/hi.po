@@ -839,8 +839,8 @@ msgid "TELNET(23)"
 msgstr "TELNET(23)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:348
-msgid "FTP(21)"
-msgstr "FTP(21)"
+msgid "FTP/FTPS(21)"
+msgstr "FTP/FTPS(21)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:350
 msgid "Scanning…"
@@ -2575,3 +2575,50 @@ msgstr "① जैसे अक्षरों की चौड़ाई तय 
 
 msgid "Font dependent"
 msgstr "फ़ॉन्ट के अनुसार"
+
+msgid "Domain"
+msgstr "डोमेन"
+
+msgid "Require signing"
+msgstr "हस्ताक्षर अनिवार्य करें"
+
+msgid "Require encryption"
+msgstr "एन्क्रिप्शन अनिवार्य करें"
+
+msgid "SMB"
+msgstr "SMB"
+
+msgid "Open windows"
+msgstr "खुली विंडो"
+
+msgid "No open windows"
+msgstr "कोई खुली विंडो नहीं"
+
+msgid "SMB authentication"
+msgstr "SMB प्रमाणीकरण"
+
+msgid "Failed to start SMB"
+msgstr "SMB शुरू नहीं हो सका"
+
+msgid "File transfer"
+msgstr "फ़ाइल स्थानांतरण"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "FTPS(990)"
+msgstr "FTPS(990)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "WebDAV(443)"
+msgstr "WebDAV(443)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "WebDAV(80)"
+msgstr "WebDAV(80)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "SMB(445)"
+msgstr "SMB(445)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Shows TCP port responses. Service support and authentication are not verified."
+msgstr "TCP पोर्ट के जवाब दिखाए जाते हैं। सेवा समर्थन और प्रमाणीकरण की पुष्टि नहीं की जाती।"

@@ -89,6 +89,7 @@ calculate_shlibdeps() {
 			"$private_dir/libboxrig-posix.so.0" \
 			"$private_dir/libboxrig-gtk3.so.0" \
 			"$private_dir/libjemalloc.so.2" \
+			"$private_dir/libsmb2.so.7" \
 			"$private_dir/launcher/elder-terms" \
 			"$private_dir/elder-terms-terminal/elder-terms-terminal" \
 			"$private_dir/elder-terms-terminal/elder-terms-file-transfer" |
@@ -145,6 +146,7 @@ validate_installed_package() {
 		/usr/lib/elder-terms/libboxrig-posix.so.0 \
 		/usr/lib/elder-terms/libboxrig-gtk3.so.0 \
 		/usr/lib/elder-terms/libjemalloc.so.2 \
+		/usr/lib/elder-terms/libsmb2.so.7 \
 		/usr/lib/elder-terms/launcher/elder-terms \
 		/usr/lib/elder-terms/launcher/main-window.ui \
 		/usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
@@ -159,6 +161,8 @@ validate_installed_package() {
 		/usr/share/locale/ja/LC_MESSAGES/elder-terms.mo \
 		/usr/share/doc/elder-terms/docs/ja/webdav.md \
 		/usr/share/doc/elder-terms/docs/en/webdav.md \
+		/usr/share/doc/elder-terms/docs/ja/smb.md \
+		/usr/share/doc/elder-terms/docs/en/smb.md \
 		/usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 		/usr/share/doc/elder-terms/licenses/boxrig/LICENSE \
 		/usr/share/doc/elder-terms/licenses/boxrig/README.md \
@@ -171,6 +175,9 @@ validate_installed_package() {
 		/usr/share/doc/elder-terms/licenses/boxrig/WHATWG-Encoding-LICENSE \
 		/usr/share/doc/elder-terms/licenses/boxrig/Wayland-protocols-NOTICES.md \
 		/usr/share/doc/elder-terms/licenses/jemalloc/COPYING \
+		/usr/share/doc/elder-terms/licenses/libsmb2/COPYING \
+		/usr/share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt \
+		/usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz \
 		/usr/share/doc/elder-terms/copyright; do
 		assert_file "$installed_file"
 	done
@@ -215,6 +222,7 @@ require_command dpkg-architecture
 require_command dpkg-shlibdeps
 require_env ELDER_TERMS_PACKAGE_TOOLS
 require_command make
+require_command cmake
 require_command autoconf
 require_command meson
 require_command pkg-config
@@ -285,6 +293,7 @@ for staged_file in \
 	usr/lib/elder-terms/libboxrig-posix.so.0 \
 	usr/lib/elder-terms/libboxrig-gtk3.so.0 \
 	usr/lib/elder-terms/libjemalloc.so.2 \
+	usr/lib/elder-terms/libsmb2.so.7 \
 	usr/lib/elder-terms/launcher/elder-terms \
 	usr/lib/elder-terms/launcher/main-window.ui \
 	usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
@@ -299,6 +308,8 @@ for staged_file in \
 	usr/share/locale/ja/LC_MESSAGES/elder-terms.mo \
 	usr/share/doc/elder-terms/docs/ja/webdav.md \
 	usr/share/doc/elder-terms/docs/en/webdav.md \
+	usr/share/doc/elder-terms/docs/ja/smb.md \
+	usr/share/doc/elder-terms/docs/en/smb.md \
 	usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 	usr/share/doc/elder-terms/licenses/boxrig/LICENSE \
 	usr/share/doc/elder-terms/licenses/boxrig/README.md \
@@ -311,6 +322,9 @@ for staged_file in \
 	usr/share/doc/elder-terms/licenses/boxrig/WHATWG-Encoding-LICENSE \
 	usr/share/doc/elder-terms/licenses/boxrig/Wayland-protocols-NOTICES.md \
 	usr/share/doc/elder-terms/licenses/jemalloc/COPYING \
+	usr/share/doc/elder-terms/licenses/libsmb2/COPYING \
+	usr/share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt \
+	usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz \
 	usr/share/doc/elder-terms/copyright; do
 	assert_file "$stage_dir/$staged_file"
 done

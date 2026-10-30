@@ -107,6 +107,15 @@ void terminal_runtime_set_hyperlink_rules(TerminalRuntime *runtime,
 bool terminal_runtime_has_link_hover(const TerminalRuntime *runtime);
 
 /**
+ * Retrieves an owned link target for the terminal context menu.
+ * @param runtime Live runtime owning the current recognition rules.
+ * @param hit Borrowed current pointer hit from the attached widget.
+ * @return Full matched text or OSC 8 URI, or no value when no link is detected.
+ * @remarks Disabled recognition and stale hits never produce a target.
+ */
+std::optional<std::string> terminal_runtime_link_text(TerminalRuntime *runtime, const boxrig_ui_hit_test_result &hit);
+
+/**
  * Replaces received-line macros and discards work from the previous rule set.
  * @param runtime Live communication and presentation owner.
  * @param rules Ordered patterns and actions; an empty list disables macros.
@@ -167,6 +176,14 @@ void terminal_runtime_set_prepare_frame_callback(TerminalRuntime *runtime, std::
 void terminal_runtime_refresh(TerminalRuntime *runtime);
 
 /**
+ * Reports whether a manual connection request can be accepted.
+ * @param runtime Live runtime whose pending operations are inspected.
+ * @return True when idle, closed, or retaining a channel whose carrier is lost.
+ * @remarks A retained channel is closed and joined before its replacement opens.
+ */
+bool terminal_runtime_can_connect(const TerminalRuntime *runtime);
+
+/**
  * Starts a local command while retaining this runtime's display and history.
  * @param runtime Live runtime.
  * @param command Owned command and communication limits.
@@ -176,9 +193,10 @@ bool terminal_runtime_connect_local(TerminalRuntime *runtime, TerminalLocalComma
 
 /**
  * Starts a remote or serial channel after invalidating old widget input.
- * @param runtime Live runtime with no active connection.
+ * @param runtime Live runtime without a connected peer or with a lost carrier.
  * @param request Reusable channel factory and stream policy.
  * @return Whether a new connection generation was accepted.
+ * @remarks Joins an old carrier-disconnected channel before opening the new one.
  */
 bool terminal_runtime_connect_transport(TerminalRuntime *runtime, TerminalTransportRequest request);
 

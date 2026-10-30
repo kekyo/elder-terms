@@ -42,7 +42,7 @@ bool has_modal_dialog(GtkWidget *window) {
   return state != nullptr && !state->destroyed && !state->children.empty();
 }
 
-static void present_modal_dialog_at_time(GtkWidget *window, guint32 time) {
+void present_modal_dialog(GtkWidget *window, guint32 time) {
   if (window == nullptr) return;
   auto *state = modal_state(window);
   if (state != nullptr) {
@@ -63,7 +63,7 @@ static void present_modal_dialog_at_time(GtkWidget *window, guint32 time) {
 }
 
 void present_modal_dialog(GtkWidget *window) {
-  present_modal_dialog_at_time(window, gtk_get_current_event_time());
+  present_modal_dialog(window, gtk_get_current_event_time());
 }
 
 static void dispatch_modal_event(GdkEvent *event, gpointer) {
@@ -75,7 +75,7 @@ static void dispatch_modal_event(GdkEvent *event, gpointer) {
       // GTK drops button events for insensitive widgets before their signals
       // run. Handle blocked owners here, using the click's timestamp because
       // GTK has not yet made this the current event.
-      present_modal_dialog_at_time(window, event->button.time);
+      present_modal_dialog(window, event->button.time);
       return;
     }
   }

@@ -725,6 +725,8 @@ static cardio::promise<void>
 remove_remote_tree_async(
     const std::shared_ptr<RemoteFileClient> &client, const std::string &path,
     cardio::cancellation cancellation) {
+  if (!client->path_capabilities(path).modify)
+    throw RemoteFileError("This remote path cannot be deleted", false);
   const std::optional<RemoteFileAttributes> attributes =
       co_await client->lstat_async(path, cancellation);
   if (!attributes.has_value()) {
@@ -938,8 +940,10 @@ send_regular_file_async(TransferRunState *state,
     temporary_created = false;
   } catch (...) { failure = std::current_exception(); }
 
+  // Retire the linked cancellation registrations after success as well as
+  // failure; their lifetime must not extend to the caller's next transfer.
+  (void)upload_stopping.cancel();
   if (failure) {
-    if (explicit_commit) (void)upload_stopping.cancel();
     if (input != nullptr) {
       try { co_await close_local_input_async(G_INPUT_STREAM(input.get()), {}); }
       catch (...) {}
@@ -958,7 +962,7 @@ send_regular_file_async(TransferRunState *state,
           cleanup_message = "Could not remove temporary upload " + temporary_path + ": " + exception_message(std::current_exception());
         }
       }
-      // A failed If-None-Match precondition proves this path is foreign. Never
+      // A failed exclusive-creation precondition proves this path is foreign. Never
       // delete it, and do not confuse it with an owned or uncertain upload.
       if (!cleanup_message.empty())
         throw FileTransferCleanupFailure(exception_message(failure) + "\n" + cleanup_message,
@@ -1510,6 +1514,11 @@ cardio::promise<void> delete_file_transfer_items_async(
     throw std::invalid_argument("Remote file client is required");
   }
   cancellation.throw_if_cancellation_requested();
+  if (endpoint == FileTransferEndpoint::remote) {
+    for (const auto &path : paths)
+      if (!client->path_capabilities(path).modify)
+        throw RemoteFileError("This remote path cannot be deleted", false);
+  }
   for (const std::string &path : paths) {
     if (endpoint == FileTransferEndpoint::remote) {
       co_await remove_remote_tree_async(client, path, cancellation);

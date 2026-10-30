@@ -40,8 +40,13 @@ public:
   cardio::primitives::manually_conditional cleanup_started{false};
   cardio::primitives::manually_conditional cleanup_allowed{false};
   bool cleanup_finished = false;
+  bool allow_changes = true;
 
-  RemoteFileCapabilities capabilities() const noexcept override { return delegate->capabilities(); }
+  RemoteFileCapabilities capabilities() const noexcept override {
+    auto result = delegate->capabilities();
+    result.write_operations = allow_changes;
+    return result;
+  }
   cardio::promise<RemoteDirectorySnapshot> load_directory_async(
       std::string path, cardio::cancellation cancellation) override {
     started.raise();
@@ -385,8 +390,11 @@ static cardio::promise<void> verify_async(
       co_await client->pane_enabled.wait();
       expect(gtk_widget_is_sensitive(tree) && gtk_widget_is_sensitive(path),
              "The browser must accept input after directory loading completes");
-      expect(gtk_widget_is_sensitive(rename) && gtk_widget_is_sensitive(remove),
-             "The context menu must become available after directory loading");
+      expect(!gtk_widget_is_sensitive(rename) && !gtk_widget_is_sensitive(remove),
+             "Rename and delete must stay disabled until an item is selected");
+      auto *create = find_widget(GTK_WIDGET(menus->data), "file_transfer_remote_new_directory_item");
+      expect(create && gtk_widget_is_sensitive(create) == client->allow_changes,
+             "Remote folder creation must respect the client's write capability");
       expect(std::strcmp(gtk_entry_get_text(GTK_ENTRY(path)), "/remote/loaded") == 0,
              "The canonical path must be applied before input is enabled");
       set_file_transfer_window_connection_available(window, false);
@@ -484,11 +492,13 @@ int main(int argc, char **argv) {
   std::copy(pattern.begin(), pattern.end(), path.begin());
   if (::mkdtemp(path.data()) == nullptr) return 1;
   std::exception_ptr failure;
-  for (const bool complete_listing : {false, true}) {
+  for (const auto &[complete_listing, allow_changes] :
+       {std::pair{false, true}, std::pair{true, true}, std::pair{true, false}}) {
     cardio::dispatcher_group_glib group;
     cardio::dispatcher_host_glib dispatcher(group);
     auto client = std::make_shared<GatedClient>();
     client->complete_listing = complete_listing;
+    client->allow_changes = allow_changes;
     auto settings = create_default_settings({}, "Window lifetime");
     set_setting_value(&settings, general_auto_close_setting_key(), SettingValue{false});
     auto window = create_file_transfer_window({

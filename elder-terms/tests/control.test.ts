@@ -424,7 +424,11 @@ it('automatically configures the detected Sway session without OS labels', async
         );
 
         const profile = join(configHome, 'elder-terms/connections/Alpha.ini');
-        await writeFile(profile, '[general]\nopen_connection=ctrl+alt+t\n');
+        const connectionId = '87d2c26d-46c4-49ad-b799-df86d8750c79';
+        await writeFile(
+          profile,
+          `[general]\nconnection_id=${connectionId}\nopen_connection=ctrl+alt+t\n`
+        );
         await waitForResult(async () => {
           const updated = await readFile(
             join(configHome, 'sway/config'),
@@ -436,7 +440,10 @@ it('automatically configures the detected Sway session without OS labels', async
             (await readFile(capture, 'utf8')).match(/reload\n/g)
           ).toHaveLength(4);
         });
-        await writeFile(profile, '[general]\nopen_connection=ctrl+alt+y\n');
+        await writeFile(
+          profile,
+          `[general]\nconnection_id=${connectionId}\nopen_connection=ctrl+alt+y\n`
+        );
         await waitForResult(async () => {
           const updated = await readFile(
             join(configHome, 'sway/config'),

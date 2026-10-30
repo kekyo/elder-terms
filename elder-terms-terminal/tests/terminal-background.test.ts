@@ -165,6 +165,17 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
               );
               await scrollbar.setValue((await scrollbar.valueInfo()).maximum);
             };
+            const closeAfterApply = async (): Promise<void> => {
+              await waitForResult(async () => {
+                expect(
+                  (await (await app.getById('settings_dialog')).info()).states
+                ).toContain('showing');
+              });
+              await expectElementKind(
+                await app.getById('settings_cancel_button'),
+                'button'
+              ).click();
+            };
             const setEntry = async (
               name: string,
               value: string
@@ -265,6 +276,7 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
                 await app.getById('settings_apply_button'),
                 'button'
               ).click();
+              await closeAfterApply();
               await expectBackground(step.rgb);
               expect(await readFile(config, 'utf8')).not.toContain(
                 'background_tint_color'
@@ -314,6 +326,7 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
               await app.getById('settings_apply_button'),
               'button'
             ).click();
+            await closeAfterApply();
             await expectBackground([0, 0, 0]);
             await openSettings();
             expect(
@@ -342,6 +355,7 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
               await app.getById('settings_apply_button'),
               'button'
             ).click();
+            await closeAfterApply();
             await expectBackground([168, 100, 24]);
             await evidence.captureEvidence(
               'transparent-image-alpha',
@@ -353,6 +367,7 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
               await app.getById('settings_apply_button'),
               'button'
             ).click();
+            await closeAfterApply();
             await expectBackground([84, 50, 140]);
             await openSettings();
             await expectElementKind(

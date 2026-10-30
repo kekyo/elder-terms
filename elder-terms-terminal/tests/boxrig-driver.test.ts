@@ -109,7 +109,7 @@ describe('boxrig GTK3 driver', () => {
         );
         await app.input.setMouseButton('left', true);
         await app.input.moveMouseTo(
-          origin.x + cellWidth * 26,
+          Math.trunc(origin.x + cellWidth * 25.5),
           Math.trunc(origin.y + cellHeight * 2.5)
         );
         await app.input.setMouseButton('left', false);

@@ -17,11 +17,13 @@ package_build_tools = get_option('package_build_tools')
 if package_build_tools == ''
   boxrig_prepare = files('scripts/prepare-boxrig.mts')
   jemalloc_prepare = files('scripts/prepare-jemalloc.mts')
+  libsmb2_prepare = files('scripts/prepare-libsmb2.mts')
   gestament_config = find_program(meson.project_source_root() / 'node_modules/.bin/gestament-config')
   gestament_include_dir = run_command(gestament_config, '--includedir', check: true).stdout().strip()
 else
   boxrig_prepare = package_build_tools / 'prepare-boxrig.mjs'
   jemalloc_prepare = package_build_tools / 'prepare-jemalloc.mjs'
+  libsmb2_prepare = package_build_tools / 'prepare-libsmb2.mjs'
   gestament_include_dir = package_build_tools / 'include'
 endif
 
@@ -54,8 +56,13 @@ install_data('deps/jemalloc/COPYING',
   install_dir: get_option('datadir') / 'doc/elder-terms/licenses/jemalloc',
 )
 
+boxrig_source = get_option('boxrig_source')
+if boxrig_source == ''
+  boxrig_source = meson.project_source_root() / 'deps/boxrig'
+endif
 boxrig_prepare_args = [boxrig_node, boxrig_prepare,
-  meson.project_source_root(), meson.project_build_root(), package_build_tools]
+  meson.project_source_root(), meson.project_build_root(), package_build_tools,
+  boxrig_source]
 run_command(boxrig_prepare_args, check: true)
 boxrig_sdk_target = custom_target(
   'boxrig-shared-sdk',
@@ -150,6 +157,33 @@ custom_target('boxrig-wayland-protocol-notices',
   install_dir: get_option('datadir') / 'doc/elder-terms/licenses/boxrig',
 )
 
+libsmb2_prepare_args = [boxrig_node, libsmb2_prepare,
+  meson.project_source_root(), meson.project_build_root()]
+run_command(libsmb2_prepare_args, check: true)
+libsmb2_build_target = custom_target('libsmb2-build',
+  output: 'libsmb2-build.stamp', command: libsmb2_prepare_args,
+  build_by_default: true, build_always_stale: true)
+libsmb2_sdk = meson.project_build_root() / 'libsmb2/sdk'
+libsmb2_dep = declare_dependency(
+  compile_args: ['-isystem', libsmb2_sdk / 'include'],
+  dependencies: meson.get_compiler('cpp').find_library('smb2',
+    dirs: libsmb2_sdk / 'lib', static: false),
+  sources: libsmb2_build_target)
+custom_target('libsmb2-private-runtime',
+  output: 'libsmb2.so.7',
+  command: [find_program('cp'), libsmb2_sdk / 'lib/libsmb2.so.7', '@OUTPUT@'],
+  depends: libsmb2_build_target, build_by_default: true,
+  install: true, install_dir: elder_terms_private_install_dir)
+custom_target('libsmb2-license-bundle',
+  output: ['COPYING', 'LICENCE-LGPL-2.1.txt', 'libsmb2-source.tar.gz'],
+  command: [find_program('cp'),
+    meson.project_source_root() / 'deps/libsmb2/COPYING',
+    meson.project_source_root() / 'deps/libsmb2/LICENCE-LGPL-2.1.txt',
+    libsmb2_sdk / 'libsmb2-source.tar.gz', '@OUTDIR@'],
+  depends: libsmb2_build_target, build_by_default: true,
+  install: true,
+  install_dir: get_option('datadir') / 'doc/elder-terms/licenses/libsmb2')
+
 cardio_root_dir = meson.project_source_root() / 'deps/cardio'
 cardio_include_dir = include_directories('deps/cardio/include')
 cardio_gio_dep = dependency('gio-2.0')
@@ -205,6 +239,7 @@ install_data(
 foreach language : ['ja', 'en']
   install_data(
     'docs' / language / 'webdav.md',
+    'docs' / language / 'smb.md',
     install_dir: get_option('datadir') / 'doc/elder-terms/docs' / language,
   )
 endforeach

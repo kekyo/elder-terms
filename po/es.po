@@ -839,8 +839,8 @@ msgid "TELNET(23)"
 msgstr "TELNET(23)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:348
-msgid "FTP(21)"
-msgstr "FTP(21)"
+msgid "FTP/FTPS(21)"
+msgstr "FTP/FTPS(21)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:350
 msgid "Scanning…"
@@ -2598,3 +2598,50 @@ msgstr "Controla caracteres como ①. Use el ancho esperado por la aplicación r
 
 msgid "Font dependent"
 msgstr "Según la fuente"
+
+msgid "Domain"
+msgstr "Dominio"
+
+msgid "Require signing"
+msgstr "Exigir firma"
+
+msgid "Require encryption"
+msgstr "Exigir cifrado"
+
+msgid "SMB"
+msgstr "SMB"
+
+msgid "Open windows"
+msgstr "Ventanas abiertas"
+
+msgid "No open windows"
+msgstr "No hay ventanas abiertas"
+
+msgid "SMB authentication"
+msgstr "Autenticación SMB"
+
+msgid "Failed to start SMB"
+msgstr "No se pudo iniciar SMB"
+
+msgid "File transfer"
+msgstr "Transferencia de archivos"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "FTPS(990)"
+msgstr "FTPS(990)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "WebDAV(443)"
+msgstr "WebDAV(443)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "WebDAV(80)"
+msgstr "WebDAV(80)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "SMB(445)"
+msgstr "SMB(445)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Shows TCP port responses. Service support and authentication are not verified."
+msgstr "Muestra las respuestas de los puertos TCP. No se comprueban la compatibilidad con los servicios ni la autenticación."

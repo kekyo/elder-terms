@@ -82,7 +82,7 @@ executable('boxrig-driver', ['src/boxrig-driver.cpp', 'src/inline-prompt.cpp', '
 boxrig_regex_flags = run_command(boxrig_pkg_config, '--cflags', '--libs', 'boxrig',
   env: boxrig_pkg_env, check: true).stdout().strip().split()
 custom_target('boxrig-regex',
-  input: '../deps/boxrig/examples/core/regex.c', output: 'boxrig-regex',
+  input: boxrig_source / 'examples/core/regex.c', output: 'boxrig-regex',
   command: [find_program('cc'), '-std=c99', '-Wall', '-Wextra', '-Wpedantic', '-Werror',
     '@INPUT@', '-o', '@OUTPUT@', '-L' + jemalloc_library_dir, '-ljemalloc',
     '-Wl,-rpath,' + jemalloc_library_dir,
@@ -274,6 +274,9 @@ executable(
     'src/webdav/curl-http-session.cpp',
     'src/webdav/webdav-url.cpp',
     'src/webdav/webdav-metadata.cpp',
+    'src/smb/smb-application.cpp',
+    'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp',
+    'src/smb/smb-ssh-proxy.cpp',
     'src/sftp/sftp-client.cpp',
     'src/sftp/sftp-fixture-client.cpp',
     'src/file-transfer/file-hash.cpp',
@@ -303,6 +306,7 @@ executable(
     libcurl_dep,
     libxml2_dep,
     openssl_dep,
+    libsmb2_dep,
   ],
   install: true,
   install_dir: elder_terms_private_install_dir / 'elder-terms-terminal',
@@ -310,6 +314,22 @@ executable(
 )
 
 if get_option('build_tests')
+smb_client_test = executable('smb-client-test',
+  ['tests/smb/smb-client-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
+smb_fault_test = executable('smb-fault-test',
+  ['tests/smb/smb-fault-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp',
+   'src/file-transfer/file-transfer-engine.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
+test('smb-client', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_client_test, smb_fault_test], timeout: 180)
+smb_transfer_test = executable('smb-transfer-test',
+  ['tests/smb/smb-transfer-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp',
+   'src/file-transfer/file-transfer-engine.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
+test('smb-transfer', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_transfer_test], timeout: 180)
+
 boxrig_serial_transport_test = executable('boxrig-serial-transport-test',
   'tests/cpp/boxrig-serial-transport-test.cpp', dependencies: boxrig_runtime_dep,
   link_args: ['-Wl,--wrap=ioctl', '-Wl,--wrap=tcsetattr'])
@@ -326,6 +346,18 @@ boxrig_links_test = executable('boxrig-links-test',
    'src/terminal-hyperlink-action.cpp'],
   dependencies: [boxrig_deps['boxrig-ui'], elder_terms_dep])
 test('boxrig-links-test', boxrig_links_test)
+
+boxrig_links_cache_test = executable('boxrig-links-cache-test',
+  ['tests/cpp/boxrig-links-cache-test.cpp', 'src/terminal-links.cpp',
+   'src/terminal-hyperlink-action.cpp'],
+  cpp_args: ['-DELDER_TERMS_CACHE_TESTING'],
+  dependencies: [boxrig_deps['boxrig-ui'], elder_terms_dep])
+test('boxrig-links-cache-test', boxrig_links_cache_test)
+
+executable('osc8-resolve-cost',
+  ['tests/performance/osc8-resolve-cost.cpp', 'src/terminal-links.cpp',
+   'src/terminal-hyperlink-action.cpp'],
+  dependencies: [boxrig_deps['boxrig-ui'], elder_terms_dep])
 
 boxrig_presentation_test = executable('boxrig-presentation-test',
   'tests/cpp/boxrig-presentation-test.cpp', dependencies: [boxrig_runtime_dep, dependency('epoxy')])
@@ -433,6 +465,44 @@ test('webdav-metadata-test', webdav_metadata_test)
 
 ssh_proxy_test_server = executable('ssh-proxy-test-server',
   'tests/cpp/ssh-proxy-test-server.cpp', dependencies: [libssh_dep])
+
+smb_share_probe = executable('smb-share-probe',
+  ['tests/smb/smb-share-probe.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp', 'src/smb/smb-ssh-proxy.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep])
+test('smb-share-probe', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_share_probe], timeout: 180)
+test('smb-share-probe-proxy', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_share_probe, '--proxy', ssh_proxy_test_server], timeout: 180)
+
+smb_server_test = executable('smb-server-test',
+  ['tests/smb/smb-server-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp',
+   'src/smb/smb-ssh-proxy.cpp', 'src/file-transfer/activity-file-client.cpp', 'src/file-transfer/file-transfer-engine.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep])
+test('smb-server', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_server_test], timeout: 180)
+test('smb-server-proxy', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_server_test, '--server-proxy', ssh_proxy_test_server], timeout: 180)
+if meson.get_compiler('cpp').has_link_argument('-fsanitize=leak')
+  # Standalone LeakSanitizer needs only a different link of the same driver.
+  smb_server_lifetime_test = executable('smb-server-lifetime-test',
+    objects: smb_server_test.extract_all_objects(recursive: false),
+    dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep],
+    link_language: 'cpp', link_args: ['-fsanitize=leak'])
+  test('smb-server-proxy-lifetime', find_program('node'),
+    args: [files('tests/smb/run-client.mts'), smb_server_lifetime_test, '--server-proxy', ssh_proxy_test_server],
+    env: ['LSAN_OPTIONS=detect_leaks=1:exitcode=23'], timeout: 180)
+endif
+
+smb_share_list_test = executable('smb-share-list-test',
+  ['tests/smb/smb-share-list-test.cpp', 'src/smb/smb-share-list.cpp'],
+  dependencies: [cardio_dep, libsmb2_dep])
+test('smb-share-list', smb_share_list_test)
+
+smb_ssh_proxy_test = executable('smb-ssh-proxy-test',
+  ['tests/smb/smb-ssh-proxy-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp', 'src/smb/smb-ssh-proxy.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep])
+test('smb-ssh-proxy', find_program('node'),
+  args: [files('tests/smb/run-client.mts'), smb_ssh_proxy_test, '--proxy', ssh_proxy_test_server], timeout: 180)
 
 webdav_client_test = executable(
   'webdav-client-test',

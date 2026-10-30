@@ -1,6 +1,6 @@
 # elder-terms
 
-A Terminal emulator for local shell, serial, TELNET, FTP, FTPS, SSH, and SFTP connections.
+A Terminal emulator for local shell, SSH, TELNET, serial, FTP, FTPS, SFTP, WebDAV and SMB connections.
 '90s, come back in this time. This is all we need.
 
 ![elder-terms](./images/elder-terms-128.png)
@@ -24,7 +24,7 @@ A terminal application, inspired by personal computing in the 1990s.
 ### Features
 
 - Uses Linux GTK3 and [boxrig](https://github.com/kekyo/boxrig), preferring OpenGL rendering and using Cairo when OpenGL is unavailable.
-- Supports local terminals, SSH, SFTP, and FTP as well as serial and TELNET
+- Supports local terminals, SSH, SFTP, FTP, WebDAV, and SMB as well as serial and TELNET
   connections, bringing that familiar terminal experience into the present.
 - Lets you manage multiple connections and launch terminals from the launcher.
 - Stores all connection settings in INI files, which you can freely edit with
@@ -36,7 +36,7 @@ A terminal application, inspired by personal computing in the 1990s.
   `xterm-256color`, for TELNET and SSH.
 - Supports X/Y/ZMODEM file transfers for TELNET, serial, and SSH terminal
   connections. Automatic transfers can be enabled for ZMODEM.
-- Transfers files to and from the host over SFTP/FTP/FTPS and WebDAV.
+- Transfers files to and from the host over SFTP/FTP/FTPS, WebDAV, and SMB.
 - Transfers files over FTP and FTPS using passive or active data connections.
 - Supports pasting text and sending text files. You can specify the send rate
   and newline handling to avoid overflowing the host's buffer or using
@@ -74,9 +74,9 @@ A terminal application, inspired by personal computing in the 1990s.
 
 ![Colored terminal](./images/colored-terminal.png)
 
-### SFTP/FTP/FTPS/WebDAV
+### SFTP/FTP/FTPS/WebDAV/SMB
 
-![SFTP/FTP/FTPS/WebDAV window](./images/sftp.png)
+![File transfer window](./images/sftp.png)
 
 ## Environment
 
@@ -121,6 +121,9 @@ Open the menu at the top-right of the terminal and select "Settings" to change
 its settings. Clicking "Apply" applies the changes only to the currently
 running terminal. Clicking "Save" remembers the settings and uses them the next
 time the terminal starts.
+In terminal and file transfer windows, the settings dialog stays open after Apply so you can continue editing. Save
+records the changes and closes it. Cancel discards edits since the last Apply
+or Save; already applied changes remain active.
 
 Terminal settings are split into two tabs. "Terminal" contains encoding, character width, special
 keys, rows and columns, scrollback, BEL, shortcuts, screen-reader access, and copy settings.
@@ -165,7 +168,7 @@ new_window=Local terminal
 ```
 
 Renaming the connection in the launcher updates the selection. Deleting it or
-saving it as SFTP, FTP, or WebDAV clears the selection. When no connection is
+saving it as SFTP, FTP, WebDAV, or SMB clears the selection. When no connection is
 selected, the terminal uses built-in settings and global defaults. If the named
 connection is missing, unreadable, or not a terminal connection, startup fails.
 
@@ -299,29 +302,35 @@ In an INI file, `[general] icon` accepts these forms:
 
 ![IP scan results](./images/ip-scan-results.png)
 
-The TELNET, SSH/SFTP, and FTP settings place an "IP scan" button beside the
+The TELNET, SSH/SFTP, FTP/FTPS, WebDAV, and SMB settings place an "IP scan" button beside the
 address field.
 Opening it immediately scans the IPv4 ranges of all configured network interfaces
-for the standard FTP (21), SSH/SFTP (22), and TELNET (23) TCP ports.
+for the standard FTP/explicit FTPS (21), SSH/SFTP (22), TELNET (23), WebDAV HTTP (80),
+WebDAV HTTPS (443), SMB (445), and implicit FTPS (990) TCP ports.
+All connection settings scan the same seven ports.
 
 For example, a `/24` interface scans every address whose final octet is 0 through 255.
 A range wider than `/24` is limited to its first 256 addresses by treating the additional upper host bits as zero.
 For example, an address on `172.20.0.0/16` scans `172.20.0.0` through `172.20.0.255`.
 
-Discovered hosts appear as the scan proceeds, together with their resolved host name when available.
-The SSH/SFTP (22), TELNET (23), and FTP (21) columns show a check mark when the corresponding port was found.
-The progress bar shows how much of the combined range has been checked.
+You can select discovered hosts while the scan is still running. Resolved host names appear as they become available.
+The table has columns for the IP address, host name, and seven ports, with a check mark for each port that accepted a TCP connection.
+A check mark identifies a candidate host; it does not verify service support such as WebDAV, successful authentication, or TLS certificate validity.
+The FTP/FTPS (21) column covers both plain FTP and explicit FTPS.
+The progress bar counts checked addresses in the scan range. Scroll horizontally if the table does not fit.
 
 Double-click a row to stop the scan, close the dialog,
 and copy the resolved name into the setting if it is already available.
 Otherwise, the numeric IP address is used.
-The connection type, port, and entry name are unchanged.
+Only the address changes. The connection type, port, entry name, WebDAV HTTPS/HTTP choice,
+FTP TLS mode, paths, and authentication settings are preserved.
+Check the connection settings and save them after selecting a host.
 
 Click "Cancel" to stop and close the scan without changing the address.
 
-Only locally configured IPv4 ranges are scanned.
-Interfaces without an IPv4 address are skipped.
-Loopback interfaces scan only their assigned addresses, rather than the whole loopback range.
+Only local interfaces with an IPv4 address are scanned.
+Scanning runs from this machine even when SSH proxy is configured.
+Loopback interfaces scan only their assigned addresses.
 
 Name lookup uses the system resolver first, then mDNS and LLMNR in parallel,
 preferring mDNS if both return names. It keeps `.local` and single-label names unchanged.
@@ -364,16 +373,22 @@ An SFTP window opened from an already authenticated SSH terminal reuses that ter
 including its selected user name and authentication,
 and therefore does not ask for them again.
 
-## Reconnecting SSH and TELNET
+## Reconnecting after Disconnection
 
 ![Reconnect button after disconnection](./images/ssh-telnet-reconnect.png)
 
-To keep a disconnected terminal open,
+To keep a disconnected terminal or file transfer window open,
 turn off "Close window when session ends" in its General settings (`[general] auto_close=false`).
-The disconnected overlay then offers a "Reconnect" button for SSH and TELNET.
+The disconnected overlay then offers a "Reconnect" button for SSH, TELNET, serial,
+local shells, SFTP, FTP/FTPS, WebDAV, and SMB.
 It becomes clickable after the previous connection's pending work has stopped.
 
-This button is not available with automatic closing enabled or for local and serial terminals.
+For serial connections, this reopens the device. For local shells, it starts a new
+shell or configured command. An SFTP window opened from an SSH terminal can also
+reconnect independently.
+
+If reconnection fails, review the reason and retry from the same window.
+Interrupted transfers are not resumed automatically.
 
 ## Using FTP/FTPS
 
@@ -434,11 +449,23 @@ according to the connection settings.
 
 See [Using WebDAV](./docs/en/webdav.md) for settings and supported operations.
 
-## Managing Items in SFTP/FTP/FTPS and WebDAV
+## Using SMB
+
+Create a connection in the launcher, choose "SMB", and save the server address
+on the SMB tab. The default direct TCP port is 445.
+The window asks for a username and password when it opens; passwords are not saved.
+
+After connecting, `/` on the remote side lists shares. Open a share or enter a
+path such as `/share-name/folder` to browse it. Within a share, use the same file
+browser as other transfer types to send, receive, and manage folders.
+See [Using SMB](./docs/en/smb.md) for connection settings,
+signing, encryption, and file operation limits.
+
+## Managing Items in SFTP/FTP/FTPS, WebDAV, and SMB
 
 ![File transfer item menu](./images/file-transfer-item-menu.png)
 
-SFTP/FTP/FTPS and WebDAV use the same two-pane file browser.
+SFTP/FTP/FTPS, WebDAV, and SMB use the same two-pane file browser.
 Select an item in either the local or remote pane and right-click it to open the item menu.
 Multiple items can be selected with `Ctrl`+click or a drag rectangle before opening the menu.
 
@@ -454,7 +481,7 @@ Multiple items can be selected with `Ctrl`+click or a drag rectangle before open
   For a local file, elder-terms calculates MD5, SHA-1, and SHA-256 internally.
   For a remote file over SFTP, the SSH server must permit command execution and make `md5sum`, `sha1sum`, and `sha256sum` available in the connected account's command search path.
   Calculation fails if these conditions are not met.
-  Hash calculation for remote files over FTP is not supported;
+  Hash calculation for remote files over FTP or SMB is not supported;
   hash calculation in the local pane remains available.
 
 On a Debian or Ubuntu SFTP server, the required commands are provided by the
@@ -618,6 +645,7 @@ A normal selection follows text order; a block selection is a rectangle aligned 
 | Double / triple click | Selects a word / line |
 | Ctrl + left drag | Makes a block selection. Releasing Ctrl during the drag keeps its rectangular shape |
 | Ctrl + click on a link | Opens the link when you release over the same link. Dragging instead makes a block selection |
+| Right-click on a link, then “Copy Link” | Copies the link target to the clipboard |
 | Escape | Cancels the selection and any active drag |
 | Mouse wheel during a drag | Extends the selection through history while retaining its anchor. Ctrl does not zoom during this operation |
 | Drag beyond the top or bottom edge | Scrolls through history automatically until you release the button |
@@ -772,7 +800,7 @@ compact_mode=true
 
 On the "General" tab, set "Active indicator color" and "Inactive indicator color" independently.
 Each applies to CONN, LOG, SD, RD, and all serial line indicators.
-SFTP, FTP/FTPS, and WebDAV windows use the same settings for their CONN, SD, and RD indicators.
+SFTP, FTP/FTPS, WebDAV, and SMB windows use the same settings for their CONN, SD, and RD indicators.
 Applying colors preserves their current states, blinking, and latched activity.
 The lamps retain their shading and highlights; choose different colors if you want to distinguish active from inactive lamps.
 
@@ -842,7 +870,7 @@ Desktop transparency requires a compositor that combines the windows on your des
 Frosted glass requests a compositor effect that blurs the desktop behind the terminal; text and background images remain sharp.
 The settings panel reports the actual state. Unavailable blur falls back to transparency, and unavailable transparency falls back to an opaque background.
 "Frosted glass requested" means the request was accepted; compositor effect settings still determine whether the blur appears.
-See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/background.md) for platform requirements.
+See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/background.md) for platform requirements.
 
 ## Improving Text Color Visibility
 
@@ -890,7 +918,7 @@ E's preview uses the standard palette. The actual display can differ when the co
 
 Only one color filter can be selected, so reversal and the existing Oklch filter are mutually exclusive. Color discrimination assistance can be combined with every mode and is applied before reversal. Logical terminal colors, text, communication, copied text, and logs remain unchanged.
 
-Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/color-filters.md).
+Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/color-filters.md).
 
 ```ini
 [terminal]
@@ -926,7 +954,7 @@ Use Apply or Save to apply previewed changes to the terminal. Cancel discards th
 
 Correction affects display only. Communication, logical terminal colors, copied text, and logs remain unchanged.
 Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are excluded.
-See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/color-filters.md) for the supported scope.
+See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/color-filters.md) for the supported scope.
 
 ```ini
 [terminal]
@@ -1020,6 +1048,12 @@ succeeded. This also works while the launcher is hidden. Menu actions use saved
 settings; unsaved edits in the launcher are not passed to the new connection.
 Adding or deleting connections and saving changes to names, icons, or hotkeys
 updates the menu.
+The "Open windows" submenu lists terminal and file transfer windows launched by
+this launcher that are still running. Selecting one requests that window to be
+shown; the desktop environment controls whether it comes to the foreground.
+Windows started directly from a command, SFTP windows opened from an SSH terminal,
+and windows from before a launcher restart are not listed. Without a session bus, the
+list remains visible but its window actions are unavailable.
 
 The deb package and Meson installation install an XDG autostart entry that starts elder-terms when you log in to the desktop.
 Whether autostart shows the launcher and keeps it in the system tray follows "Startup mode" under "Application settings",
@@ -1184,7 +1218,7 @@ Portuguese, Russian, or Simplified Chinese.
 
 The display language is loaded when elder-terms starts, so you must restart
 elder-terms after saving a change. Select "Restart now" in the dialog shown
-when you save, or restart it manually later. Terminal, SFTP, and FTP windows
+when you save, or restart it manually later. Terminal and file transfer windows
 that are already open do not change language immediately either.
 
 ## Checking the Running Version
@@ -1242,7 +1276,7 @@ character encoding has been converted for display.
 Macros (automatic macros) monitor text received from the remote host with
 regular expressions. When a match is found, they either send text to the host
 or run a specified command. They are available for local terminal, TELNET,
-serial, and SSH connections, but cannot be defined for SFTP or FTP connections
+serial, and SSH connections, but cannot be defined for file transfer connections
 or Connection defaults.
 
 In text to send, commands, and command arguments, `${0}` refers to the entire
@@ -1302,6 +1336,11 @@ command. A rule can inspect either the target of an OSC 8 escape sequence or a
 matching substring in visible terminal text. Rules are evaluated in their
 displayed order, and only the first matching rule is run.
 
+Right-click a recognized link and choose "Copy Link" to copy its target to the
+clipboard. For visible-text links, this copies the entire matched text. For
+OSC 8 links, it copies the original target URI. If terminal output changes while
+the menu is open, the target from when you opened the menu is still copied.
+
 Select a connection in the launcher and open its "Links" tab to enable or
 disable link actions, add and remove rules, change their order, edit command
 arguments, and restore the built-in defaults. The same tab is available from
@@ -1326,7 +1365,7 @@ Each rule selects one recognition source:
 - "Visible terminal text" finds a matching substring under the pointer. The
   expression must not match an empty string.
 
-Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/regex.md).
+Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/regex.md).
 Character classes, groups, alternatives, repetition, and numbered or named captures are supported. Backreferences, lookahead, lookbehind, and expressions matching an empty string are not supported.
 `\d`, `\s`, and `\w` cover ASCII. Use Unicode general categories such as `\p{L}` for letters and `\p{Nd}` for decimal digits.
 `.` also matches newlines, and `^` and `$` anchor the complete input. Matching is case-sensitive and chooses the longest match at the same starting position.
@@ -1411,7 +1450,7 @@ version as libcurl; the application checks this before connecting.
 To build on Ubuntu or Debian, install a C++20-capable compiler, Meson, Ninja,
 gettext, and the development packages for the libraries used by elder-terms:
 
-Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later, IBus 1.5.29 or later, and Wayland client 1.22 or later. See the [boxrig build requirements](https://github.com/kekyo/boxrig/blob/0.7.0/docs/en/building.md).
+Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later, IBus 1.5.29 or later, and Wayland client 1.22 or later. See the [boxrig build requirements](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/building.md).
 
 ```bash
 sudo apt update

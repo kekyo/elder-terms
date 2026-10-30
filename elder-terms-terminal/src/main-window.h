@@ -162,15 +162,13 @@ struct MainWindow {
   GtkWidget *settings_dialog = nullptr;
   /** Root of the open settings widget receiving connection backgrounds. */
   GtkWidget *settings_widget_root = nullptr;
+  /** Effective connection colors, also applied when opening settings. */
+  GeneralColorSettings colors;
   /** Provider applying the configured header-bar and status-bar background. */
   GtkCssProvider *exterior_background_provider = nullptr;
-  /** Screen provider scoped to Settings title and selection controls. */
-  GtkCssProvider *settings_exterior_background_provider = nullptr;
   /** Screen provider applying exterior-derived colors below exterior
    * surfaces. */
   GtkCssProvider *exterior_component_background_provider = nullptr;
-  /** Screen provider scoped to Settings content surfaces. */
-  GtkCssProvider *settings_background_provider = nullptr;
   /** Provider applying the configured background to terminal overlay panels. */
   GtkCssProvider *overlay_background_provider = nullptr;
   /** Provider applying background-derived colors to content controls. */
@@ -292,9 +290,11 @@ boxrig_input_key_route route_main_window_terminal_key(MainWindow *main_window, c
  * Routes middle-button paste and the terminal context menu.
  * @param main_window Window owning clipboard and menu callbacks.
  * @param event Borrowed portable pointer event.
+ * @param hit Current hit associated with the event, including link metadata.
  * @return Application for a handled button, otherwise terminal routing.
  */
-boxrig_input_mouse_route route_main_window_terminal_mouse(MainWindow *main_window, const boxrig_mouse_event &event);
+boxrig_input_mouse_route route_main_window_terminal_mouse(MainWindow *main_window, const boxrig_mouse_event &event,
+    const boxrig_ui_hit_test_result &hit);
 
 /**
  * Records activity against one status-bar activity indicator.

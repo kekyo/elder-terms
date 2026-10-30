@@ -106,6 +106,7 @@ const createPackageStage = (
     'usr/share/doc/elder-terms/docs/en',
     'usr/share/doc/elder-terms/licenses/boxrig',
     'usr/share/doc/elder-terms/licenses/jemalloc',
+    'usr/share/doc/elder-terms/licenses/libsmb2',
     'usr/share/doc/elder-terms/licenses/connection-icons',
     'usr/share/icons/hicolor/256x256/apps',
     'usr/share/locale/ja/LC_MESSAGES',
@@ -137,6 +138,7 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     'usr/lib/elder-terms/libboxrig-posix.so.0',
     'usr/lib/elder-terms/libboxrig-gtk3.so.0',
     'usr/lib/elder-terms/libjemalloc.so.2',
+    'usr/lib/elder-terms/libsmb2.so.7',
     'usr/lib/elder-terms/launcher/elder-terms',
     'usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal',
     'usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer',
@@ -171,6 +173,8 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     ['usr/share/doc/elder-terms/README_ja.md', '# elder-terms\n'],
     ['usr/share/doc/elder-terms/docs/ja/webdav.md', '# WebDAV\n'],
     ['usr/share/doc/elder-terms/docs/en/webdav.md', '# WebDAV\n'],
+    ['usr/share/doc/elder-terms/docs/ja/smb.md', '# SMB\n'],
+    ['usr/share/doc/elder-terms/docs/en/smb.md', '# SMB\n'],
     [
       'usr/share/doc/elder-terms/docs/en/webdav-validation.md',
       '# WebDAV validation\n',
@@ -200,6 +204,15 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     'usr/share/doc/elder-terms/licenses/jemalloc/COPYING',
     'license fixture\n'
   );
+  for (const name of [
+    'COPYING',
+    'LICENCE-LGPL-2.1.txt',
+    'libsmb2-source.tar.gz',
+  ])
+    textFiles.set(
+      `usr/share/doc/elder-terms/licenses/libsmb2/${name}`,
+      'source fixture\n'
+    );
   for (const name of [
     'NOTO-LICENSE',
     'NOTO-FLAGS-NOTICE',
@@ -332,11 +345,11 @@ container_image_for_target debian trixie riscv64
     );
     expectSuccess(versions, 'build SDK version lookup failed');
     expect(versions.stdout.trim().split(/\s+/)).toEqual([
-      '0.7.0',
-      '0.7.0',
-      '0.7.0',
-      '0.7.0',
-      '0.7.0',
+      '0.10.0',
+      '0.10.0',
+      '0.10.0',
+      '0.10.0',
+      '0.10.0',
     ]);
   });
 
@@ -352,6 +365,9 @@ container_image_for_target debian trixie riscv64
     const relocated = join(temporaryRoot, 'relocated-tools');
     renameSync(prepared, relocated);
     expect(lstatSync(join(relocated, 'prepare-jemalloc.mjs')).isFile()).toBe(
+      true
+    );
+    expect(lstatSync(join(relocated, 'prepare-libsmb2.mjs')).isFile()).toBe(
       true
     );
     const resourceDriver = join(temporaryRoot, 'material-resource-driver.c');
@@ -459,7 +475,7 @@ int main(void) {
       { ...process.env, PKG_CONFIG_PATH: join(sdk, 'lib/pkgconfig') }
     );
     expectSuccess(versions, 'prepared SDK version lookup failed');
-    expect(versions.stdout.trim().split(/\s+/)).toEqual(['0.7.0', '0.7.0']);
+    expect(versions.stdout.trim().split(/\s+/)).toEqual(['0.10.0', '0.10.0']);
     const consumer = join(temporaryRoot, 'prepared-sdk-consumer');
     expectSuccess(
       run('cc', [
@@ -1002,8 +1018,8 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     for (const language of ['ja', 'en']) {
       const documents =
         language === 'en'
-          ? ['webdav.md', 'webdav-validation.md']
-          : ['webdav.md'];
+          ? ['webdav.md', 'webdav-validation.md', 'smb.md']
+          : ['webdav.md', 'smb.md'];
       for (const document of documents) {
         const missingPath = `usr/share/doc/elder-terms/docs/${language}/${document}`;
         const stage = join(
@@ -1035,6 +1051,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       ...[
         'libcardio.so.0',
         'libjemalloc.so.2',
+        'libsmb2.so.7',
         'libboxrig.so.0',
         'libboxrig-ui.so.0',
         'libboxrig-session.so.0',
@@ -1054,6 +1071,9 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
         'Wayland-protocols-NOTICES.md',
       ].map((name) => `usr/share/doc/elder-terms/licenses/boxrig/${name}`),
       'usr/share/doc/elder-terms/licenses/jemalloc/COPYING',
+      ...['COPYING', 'LICENCE-LGPL-2.1.txt', 'libsmb2-source.tar.gz'].map(
+        (name) => `usr/share/doc/elder-terms/licenses/libsmb2/${name}`
+      ),
       ...[
         'NOTO-LICENSE',
         'NOTO-FLAGS-NOTICE',
@@ -1181,6 +1201,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     for (const relativePath of [
       join(libraryDirectory, 'elder-terms/libelder-terms.so.0'),
       join(libraryDirectory, 'elder-terms/libjemalloc.so.2'),
+      join(libraryDirectory, 'elder-terms/libsmb2.so.7'),
       join(libraryDirectory, 'elder-terms/launcher/elder-terms'),
       join(libraryDirectory, 'elder-terms/launcher/main-window.ui'),
       join(
@@ -1197,6 +1218,11 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'share/applications/net.kekyo.elder-terms.desktop',
       'share/applications/net.kekyo.elder-terms-terminal.desktop',
       'share/doc/elder-terms/licenses/jemalloc/COPYING',
+      'share/doc/elder-terms/licenses/libsmb2/COPYING',
+      'share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt',
+      'share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz',
+      'share/doc/elder-terms/docs/ja/smb.md',
+      'share/doc/elder-terms/docs/en/smb.md',
     ]) {
       expect(lstatSync(join(installedRoot, relativePath)).isFile()).toBe(true);
     }
@@ -1218,6 +1244,30 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     const loaded = run('ldd', [realpathSync(terminal)], environment);
     expectSuccess(loaded, 'installed terminal dependency resolution failed');
     expect(loaded.stdout).not.toContain('not found');
+    const transfer = join(installedRoot, 'bin/elder-terms-file-transfer');
+    const transferLibraries = run('ldd', [realpathSync(transfer)], environment);
+    expectSuccess(
+      transferLibraries,
+      'installed file transfer dependency resolution failed'
+    );
+    const smbLibrary = join(
+      installedRoot,
+      libraryDirectory,
+      'elder-terms/libsmb2.so.7'
+    );
+    const smbResolved = transferLibraries.stdout
+      .split('\n')
+      .find((line) => line.trimStart().startsWith('libsmb2.so.7 => '))
+      ?.split(' => ')[1]
+      ?.split(' (')[0];
+    expect(
+      smbResolved,
+      'libsmb2 must load from the installation'
+    ).toBeDefined();
+    expect(realpathSync(smbResolved!)).toBe(realpathSync(smbLibrary));
+    const smbDynamic = run('readelf', ['-d', smbLibrary]);
+    expectSuccess(smbDynamic, 'installed libsmb2 ELF inspection failed');
+    expect(smbDynamic.stdout).toContain('Library soname: [libsmb2.so.7]');
     for (const component of [
       'elder-terms',
       'cardio',

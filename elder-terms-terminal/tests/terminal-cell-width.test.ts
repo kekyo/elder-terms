@@ -699,6 +699,15 @@ draw();
                 ),
                 'button'
               ).click();
+              if (reloaded) {
+                await waitForResult(async () => {
+                  expect((await dialog.info()).states).toContain('showing');
+                });
+                await expectElementKind(
+                  await app.getById('settings_cancel_button'),
+                  'button'
+                ).click();
+              }
               await waitForResult(async () => {
                 let showing = false;
                 try {

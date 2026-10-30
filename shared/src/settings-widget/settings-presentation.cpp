@@ -44,6 +44,16 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"webdav", "certificate_error_action", N_("Certificate validation failure")},
     SettingLabelEntry{"webdav", "connect_timeout_seconds", N_("Connection timeout (seconds)")},
     SettingLabelEntry{"webdav", "idle_timeout_seconds", N_("Idle timeout (seconds)")},
+    SettingLabelEntry{"smb", "address", N_("Address")},
+    SettingLabelEntry{"smb", "port", N_("Port")},
+    SettingLabelEntry{"smb", "domain", N_("Domain")},
+    SettingLabelEntry{"smb", "username", N_("User name")},
+    SettingLabelEntry{"smb", "local_directory", N_("Local directory")},
+    SettingLabelEntry{"smb", "remote_directory", N_("Remote directory")},
+    SettingLabelEntry{"smb", "require_signing", N_("Require signing")},
+    SettingLabelEntry{"smb", "require_encryption", N_("Require encryption")},
+    SettingLabelEntry{"smb", "connect_timeout_seconds", N_("Connection timeout (seconds)")},
+    SettingLabelEntry{"smb", "idle_timeout_seconds", N_("Idle timeout (seconds)")},
     SettingLabelEntry{"ftp", "tls_min_version", N_("Minimum TLS version")},
     SettingLabelEntry{"ftp", "tls_max_version", N_("Maximum TLS version")},
     SettingLabelEntry{"ftp", "tls_auth_order", N_("AUTH command preference")},
@@ -169,6 +179,7 @@ static constexpr std::array setting_choices{
     SettingChoiceEntry{"general", "type", "sftp", N_("SFTP")},
     SettingChoiceEntry{"general", "type", "ftp", N_("FTP")},
     SettingChoiceEntry{"general", "type", "webdav", N_("WebDAV")},
+    SettingChoiceEntry{"general", "type", "smb", N_("SMB")},
     SettingChoiceEntry{"webdav", "scheme", "https", N_("HTTPS (encrypted)")},
     SettingChoiceEntry{"webdav", "scheme", "http", N_("HTTP (unencrypted)")},
     SettingChoiceEntry{"webdav", "authentication", "auto", N_("Automatic (Basic or Digest)")},
@@ -399,7 +410,17 @@ const char *settings_ui_text(SettingsUiText text) {
   case SettingsUiText::telnet_port_column:
     return _("TELNET(23)");
   case SettingsUiText::ftp_port_column:
-    return _("FTP(21)");
+    return _("FTP/FTPS(21)");
+  case SettingsUiText::ftps_port_column:
+    return _("FTPS(990)");
+  case SettingsUiText::webdav_https_port_column:
+    return _("WebDAV(443)");
+  case SettingsUiText::webdav_http_port_column:
+    return _("WebDAV(80)");
+  case SettingsUiText::smb_port_column:
+    return _("SMB(445)");
+  case SettingsUiText::ip_scan_description:
+    return _("Shows TCP port responses. Service support and authentication are not verified.");
   case SettingsUiText::scanning:
     return _("Scanning…");
   case SettingsUiText::scan_complete:

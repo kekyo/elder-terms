@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include <elder-terms/modal-dialog.h>
+#include <elder-terms/tracked-window.h>
 #include <algorithm>
 #include <clocale>
 #include <cstdarg>
@@ -468,22 +469,19 @@ static void update_application_reconnect_presentation(ApplicationState *state) {
   if (state == nullptr || state->window == nullptr) {
     return;
   }
-  const auto profile =
-      elder_terms::terminal_connection_profile(state->settings_store);
-  if (!profile.has_value()) {
-    return;
-  }
   elder_terms::set_main_window_reconnect_presentation(
       state->main_window,
       elder_terms::terminal_reconnect_presentation(
-          profile->kind, state->auto_close, state->connection_phase,
-          (elder_terms::terminal_runtime_connection_state(state->runtime).phase == elder_terms::TerminalConnectionPhase::closed && !state->closing),
-          false));
+          state->auto_close, state->connection_phase,
+          elder_terms::terminal_runtime_can_connect(state->runtime),
+          state->closing));
 }
 
 static void on_reconnect_clicked(GtkButton *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
-  if (state == nullptr || state->window == nullptr || state->auto_close) {
+  if (state == nullptr || state->window == nullptr || state->auto_close || state->closing ||
+      state->connection_phase != elder_terms::TerminalSessionConnectionPhase::disconnected ||
+      !elder_terms::terminal_runtime_can_connect(state->runtime)) {
     return;
   }
   (void)connect_application_terminal(state);
@@ -749,6 +747,7 @@ static void application_terminal_changed(void *context) {
     if (state->auto_close && !state->connection_failed && state->active_profile.kind != elder_terms::TerminalConnectionKind::serial)
       gtk_window_close(GTK_WINDOW(state->window));
   }
+  update_application_reconnect_presentation(state);
 }
 
 static void on_settings_dialog_destroy(GtkWidget *, gpointer user_data) {
@@ -922,7 +921,7 @@ static void request_runtime_settings(ApplicationState *state, const elder_terms:
         const bool accepted = save ? save_runtime_settings(state, store, std::move(image)) :
             apply_runtime_settings(state, store, std::move(image));
         action.complete(accepted, accepted ? "" : save ? _("Failed to save connection") : _("Failed to apply terminal settings"));
-        if (accepted) schedule_settings_dialog_close(state);
+        if (accepted && save) schedule_settings_dialog_close(state);
       });
 }
 
@@ -1951,8 +1950,8 @@ int main(int argc, char **argv) {
         if (app_state.audible_bell) gdk_display_beep(gtk_widget_get_display(app_state.main_window->terminal));
         else elder_terms::ring_terminal_bell(app_state.bell_state);
       },
-      [&app_state](const boxrig_mouse_event *event, const boxrig_ui_hit_test_result *) {
-        const auto route = elder_terms::route_main_window_terminal_mouse(app_state.main_window, *event);
+      [&app_state](const boxrig_mouse_event *event, const boxrig_ui_hit_test_result *hit) {
+        const auto route = elder_terms::route_main_window_terminal_mouse(app_state.main_window, *event, *hit);
         return route == BOXRIG_INPUT_MOUSE_ROUTE_TERMINAL && app_state.presentation ?
             elder_terms::route_terminal_presentation_mouse(app_state.presentation, *event) : route;
       }});
@@ -2053,6 +2052,8 @@ int main(int argc, char **argv) {
 
   gtk_widget_show_all(main_window->window);
   gtk_window_present_with_time(GTK_WINDOW(main_window->window), GDK_CURRENT_TIME);
+  elder_terms::attach_tracked_window(main_window->window,
+      elder_terms::present_tracked_window);
   if (launch_options.test.show_transfer_progress) {
     elder_terms::set_main_window_transfer_progress_visible(
         &*main_window, true);

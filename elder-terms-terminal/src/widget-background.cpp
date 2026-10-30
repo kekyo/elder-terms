@@ -7,12 +7,101 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace elder_terms {
+
+// The dialog owns this state. Providers refer to a screen, never back to the
+// dialog; destruction can release them even after the widget children are gone.
+struct SettingsDialogColors {
+  GdkScreen *screen;
+  std::vector<GtkCssProvider *> providers;
+  std::string content_class;
+  std::string exterior_class;
+  GtkCssProvider *components = nullptr;
+
+  void clear() {
+    for (auto *provider : providers) {
+      gtk_style_context_remove_provider_for_screen(screen, GTK_STYLE_PROVIDER(provider));
+      g_object_unref(provider);
+    }
+    providers.clear();
+    g_clear_object(&components);
+  }
+
+  void add(GtkCssProvider *provider, guint priority) {
+    if (!provider) return;
+    providers.push_back(provider);
+    gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(provider), priority);
+  }
+
+  ~SettingsDialogColors() {
+    clear();
+    g_object_unref(screen);
+  }
+};
+
+static constexpr const char *settings_dialog_colors_key = "elder-terms-settings-colors";
+
+static void mark_settings_action_surfaces(GtkWidget *widget, gpointer data) {
+  const auto *style_class = static_cast<const char *>(data);
+  if (GTK_IS_BUTTON_BOX(widget)) {
+    gtk_style_context_add_class(gtk_widget_get_style_context(widget), style_class);
+    gtk_style_context_add_class(gtk_widget_get_style_context(gtk_widget_get_parent(widget)), style_class);
+  } else if (GTK_IS_CONTAINER(widget)) {
+    gtk_container_forall(GTK_CONTAINER(widget), mark_settings_action_surfaces, data);
+  }
+}
+
+void set_settings_dialog_colors(GtkWidget *dialog, GtkWidget *settings_root,
+    const GeneralColorSettings &colors) {
+  if (!dialog || !settings_root) return;
+  auto *state = static_cast<SettingsDialogColors *>(
+      g_object_get_data(G_OBJECT(dialog), settings_dialog_colors_key));
+  if (!state) {
+    auto *screen = gtk_widget_get_screen(dialog);
+    if (!screen) return;
+    // Unique scopes keep simultaneously open terminal and transfer dialogs
+    // from borrowing one another's colors through screen-wide CSS providers.
+    const auto suffix = std::to_string(reinterpret_cast<std::uintptr_t>(dialog));
+    state = new SettingsDialogColors{
+        GDK_SCREEN(g_object_ref(screen)), {},
+        "settings-content-" + suffix, "settings-exterior-" + suffix};
+    g_object_set_data_full(G_OBJECT(dialog), settings_dialog_colors_key, state,
+        +[](gpointer data) { delete static_cast<SettingsDialogColors *>(data); });
+    g_signal_connect(dialog, "destroy", G_CALLBACK(+[](GtkWidget *widget, gpointer) {
+      g_object_set_data(G_OBJECT(widget), settings_dialog_colors_key, nullptr);
+    }), nullptr);
+  }
+  remove_widget_tree_background_provider(settings_root, state->components);
+  state->clear();
+  gtk_style_context_add_class(
+      gtk_widget_get_style_context(gtk_bin_get_child(GTK_BIN(dialog))), state->content_class.c_str());
+  if (auto *titlebar = gtk_window_get_titlebar(GTK_WINDOW(dialog)))
+    gtk_style_context_add_class(gtk_widget_get_style_context(titlebar), state->exterior_class.c_str());
+  mark_settings_action_surfaces(settings_root, state->exterior_class.data());
+  if (colors.background) {
+    state->add(create_scoped_widget_background_provider(*colors.background,
+        state->content_class.c_str(), "color", "settings content"), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    // Scope existing controls by widget, as in the terminal settings dialog.
+    // A screen-scoped cellview rule also reaches GTK's popup descendants and
+    // would override the selected-row highlight supplied by the popup provider.
+    state->components = create_widget_component_background_provider(*colors.background, "settings controls");
+    add_widget_tree_background_provider_at_priority(settings_root, state->components,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
+  }
+  if (colors.exterior_background) {
+    state->add(create_scoped_widget_surface_background_provider(*colors.exterior_background,
+        state->exterior_class.c_str(), "settings exterior"), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+    state->add(create_scoped_widget_component_background_provider(*colors.exterior_background,
+        state->exterior_class.c_str(), "settings exterior controls"), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 3);
+  }
+}
 
 static constexpr double component_lightness_delta = 0.04;
 static constexpr double component_highlight_lightness_delta = 0.20;

@@ -44,15 +44,10 @@ static constexpr const char *transfer_progress_notice_background_style_class =
     "transfer-progress-notice-background";
 static constexpr const char *transfer_progress_notice_label_style_class =
     "transfer-progress-notice-label";
-static constexpr const char *settings_exterior_background_style_class =
-    "settings-exterior-background";
 static constexpr const char *frame_border_style_class =
     "terminal-window-frame-border";
 static constexpr const char *main_exterior_component_style_class =
     "main-exterior-components";
-static constexpr const char *settings_background_style_class =
-    "settings-background";
-static constexpr const char *gtk_color_button_style_class = "color";
 static constexpr const char *main_window_css =
     ".terminal-dim-overlay {"
     "  background-color: rgba(0, 0, 0, 0.35);"
@@ -73,6 +68,8 @@ static constexpr const char *indicator_on_icon_file_name = "green-on.png";
 static constexpr const char *indicator_off_icon_file_name = "green-off.png";
 static constexpr const char *terminal_context_copy_item_id =
     "terminal_context_copy_item";
+static constexpr const char *terminal_context_copy_link_item_id =
+    "terminal_context_copy_link_item";
 static constexpr const char *terminal_context_paste_item_id =
     "terminal_context_paste_item";
 static constexpr const char *terminal_context_break_item_id =
@@ -86,6 +83,8 @@ struct TerminalContextMenuState {
   BoxrigGtk3TerminalWidget *terminal = nullptr;
   GtkWidget *menu = nullptr;
   GtkWidget *copy_item = nullptr;
+  GtkWidget *copy_link_item = nullptr;
+  std::optional<std::string> link_text;
   GtkWidget *paste_item = nullptr;
   GtkWidget *break_item = nullptr;
   guint paste_query_generation = 0;
@@ -156,6 +155,13 @@ static void on_clipboard_targets_received(GtkClipboard *, GdkAtom *atoms,
       request->can_paste && request->can_paste();
   gtk_widget_set_sensitive(request->paste_item,
                            text_available && application_available);
+}
+
+static void on_terminal_context_copy_link_activate(GtkMenuItem *, gpointer data) {
+  const auto *state = static_cast<TerminalContextMenuState *>(data);
+  if (!state->link_text) return;
+  gtk_clipboard_set_text(gtk_widget_get_clipboard(GTK_WIDGET(state->terminal), GDK_SELECTION_CLIPBOARD),
+      state->link_text->c_str(), -1);
 }
 
 static void update_terminal_context_paste_sensitivity(
@@ -229,7 +235,10 @@ static void on_terminal_context_break_activate(GtkMenuItem *, gpointer data) {
   }
 }
 
-static void show_terminal_context_menu(TerminalContextMenuState *state, const boxrig_mouse_event &event) {
+static void show_terminal_context_menu(TerminalContextMenuState *state, const boxrig_mouse_event &event,
+    std::optional<std::string> link_text) {
+  state->link_text = std::move(link_text);
+  gtk_widget_set_visible(state->copy_link_item, state->link_text.has_value());
   // Copy is a view action and remains available when screen-reader text is off.
   boxrig_ui_selection selection{};
   const bool selected = boxrig_ui_view_get_selection(
@@ -277,7 +286,8 @@ boxrig_input_key_route route_main_window_terminal_key(MainWindow *main_window, c
   return BOXRIG_INPUT_KEY_ROUTE_APPLICATION;
 }
 
-boxrig_input_mouse_route route_main_window_terminal_mouse(MainWindow *main_window, const boxrig_mouse_event &event) {
+boxrig_input_mouse_route route_main_window_terminal_mouse(MainWindow *main_window, const boxrig_mouse_event &event,
+    const boxrig_ui_hit_test_result &hit) {
   if (event.action != BOXRIG_MOUSE_PRESS && event.action != BOXRIG_MOUSE_RELEASE)
     return BOXRIG_INPUT_MOUSE_ROUTE_TERMINAL;
   auto *state = static_cast<TerminalContextMenuState *>(g_object_get_data(
@@ -287,7 +297,8 @@ boxrig_input_mouse_route route_main_window_terminal_mouse(MainWindow *main_windo
   } else if (event.button == BOXRIG_MOUSE_BUTTON_RIGHT) {
     // The original button release has already reached GTK by frame dispatch.
     // Opening here prevents that release from immediately dismissing the menu.
-    if (event.action == BOXRIG_MOUSE_RELEASE) show_terminal_context_menu(state, event);
+    if (event.action == BOXRIG_MOUSE_RELEASE) show_terminal_context_menu(state, event,
+        terminal_runtime_link_text(main_window->runtime, hit));
   }
   else return BOXRIG_INPUT_MOUSE_ROUTE_TERMINAL;
   return BOXRIG_INPUT_MOUSE_ROUTE_APPLICATION;
@@ -310,6 +321,10 @@ static void install_terminal_context_menu(GtkWidget *terminal_widget,
   gestament_gtk_assign_accessible_id(state->copy_item,
                                      terminal_context_copy_item_id);
   gtk_menu_shell_append(GTK_MENU_SHELL(state->menu), state->copy_item);
+  state->copy_link_item = gtk_menu_item_new_with_label(_("Copy Link"));
+  gestament_gtk_assign_accessible_id(state->copy_link_item,
+                                     terminal_context_copy_link_item_id);
+  gtk_menu_shell_append(GTK_MENU_SHELL(state->menu), state->copy_link_item);
   state->paste_item = gtk_menu_item_new_with_label(_("Paste"));
   gestament_gtk_assign_accessible_id(state->paste_item,
                                      terminal_context_paste_item_id);
@@ -324,6 +339,8 @@ static void install_terminal_context_menu(GtkWidget *terminal_widget,
 
   g_signal_connect(state->copy_item, "activate",
                    G_CALLBACK(on_terminal_context_copy_activate), state);
+  g_signal_connect(state->copy_link_item, "activate",
+                   G_CALLBACK(on_terminal_context_copy_link_activate), state);
   g_signal_connect(state->paste_item, "activate",
                    G_CALLBACK(on_terminal_context_paste_activate), state);
   g_signal_connect(state->break_item, "activate",
@@ -585,164 +602,7 @@ static void update_widget_style_class(
   }
 }
 
-struct SettingsStyleClassUpdate {
-  const char *style_class = nullptr;
-  bool enabled = false;
-};
-
-static void update_settings_background_class(
-    MainWindow *main_window, bool enabled) {
-  if (main_window->settings_dialog == nullptr) {
-    return;
-  }
-
-  GtkWidget *dialog_body = gtk_bin_get_child(
-      GTK_BIN(main_window->settings_dialog));
-  update_widget_style_class(
-      dialog_body,
-      settings_background_style_class, enabled);
-}
-
-static void update_settings_exterior_classes_callback(
-    GtkWidget *widget, gpointer data) {
-  auto *update = static_cast<SettingsStyleClassUpdate *>(data);
-  if (widget == nullptr || update == nullptr) {
-    return;
-  }
-  if (GTK_IS_BUTTON_BOX(widget)) {
-    update_widget_style_class(
-        widget, update->style_class, update->enabled);
-    update_widget_style_class(
-        gtk_widget_get_parent(widget),
-        update->style_class, update->enabled);
-    return;
-  }
-  if (GTK_IS_CONTAINER(widget)) {
-    gtk_container_forall(
-        GTK_CONTAINER(widget),
-        update_settings_exterior_classes_callback, update);
-  }
-}
-
-static void update_settings_exterior_classes(
-    MainWindow *main_window, const char *style_class, bool enabled) {
-  if (main_window->settings_dialog == nullptr) {
-    return;
-  }
-
-  GtkWidget *titlebar = gtk_window_get_titlebar(
-      GTK_WINDOW(main_window->settings_dialog));
-  update_widget_style_class(
-      titlebar, style_class, enabled);
-  SettingsStyleClassUpdate update{
-      .style_class = style_class,
-      .enabled = enabled,
-  };
-  update_settings_exterior_classes_callback(
-      main_window->settings_widget_root, &update);
-}
-
-static void remove_main_window_settings_component_background(
-    MainWindow *main_window, GtkCssProvider *provider) {
-  if (main_window->settings_widget_root == nullptr || provider == nullptr) {
-    return;
-  }
-  remove_widget_tree_background_provider(
-      main_window->settings_widget_root, provider);
-}
-
-static void add_main_window_settings_component_background(
-    MainWindow *main_window, GtkCssProvider *provider) {
-  if (main_window->settings_widget_root == nullptr || provider == nullptr) {
-    return;
-  }
-  add_widget_tree_background_provider_at_priority(
-      main_window->settings_widget_root, provider,
-      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
-}
-
-static void remove_main_window_settings_provider(
-    MainWindow *main_window, GtkCssProvider *provider) {
-  if (main_window->settings_dialog == nullptr || provider == nullptr) {
-    return;
-  }
-  GdkScreen *screen =
-      gtk_widget_get_screen(main_window->settings_dialog);
-  if (screen != nullptr) {
-    gtk_style_context_remove_provider_for_screen(
-        screen, GTK_STYLE_PROVIDER(provider));
-  }
-}
-
-static void add_main_window_settings_provider(
-    MainWindow *main_window, GtkCssProvider *provider,
-    guint priority) {
-  if (main_window->settings_dialog == nullptr || provider == nullptr) {
-    return;
-  }
-  GdkScreen *screen =
-      gtk_widget_get_screen(main_window->settings_dialog);
-  if (screen != nullptr) {
-    gtk_style_context_add_provider_for_screen(
-        screen, GTK_STYLE_PROVIDER(provider),
-        priority);
-  }
-}
-
-static void remove_main_window_settings_exterior_background(
-    MainWindow *main_window) {
-  GtkCssProvider *surface_provider =
-      main_window->settings_exterior_background_provider;
-  if (surface_provider != nullptr) {
-    remove_main_window_settings_provider(
-        main_window, surface_provider);
-    update_settings_exterior_classes(
-        main_window, settings_exterior_background_style_class, false);
-  }
-  update_settings_exterior_classes(
-      main_window, main_exterior_component_style_class, false);
-}
-
-static void add_main_window_settings_exterior_background(
-    MainWindow *main_window) {
-  GtkCssProvider *surface_provider =
-      main_window->settings_exterior_background_provider;
-  if (surface_provider != nullptr) {
-    update_settings_exterior_classes(
-        main_window, settings_exterior_background_style_class, true);
-    add_main_window_settings_provider(
-        main_window, surface_provider,
-        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
-  }
-  if (main_window->exterior_component_background_provider != nullptr) {
-    update_settings_exterior_classes(
-        main_window, main_exterior_component_style_class, true);
-  }
-}
-
-static void remove_main_window_settings_background(
-    MainWindow *main_window) {
-  GtkCssProvider *provider = main_window->settings_background_provider;
-  if (provider == nullptr) {
-    return;
-  }
-  remove_main_window_settings_provider(main_window, provider);
-  update_settings_background_class(main_window, false);
-}
-
-static void add_main_window_settings_background(MainWindow *main_window) {
-  GtkCssProvider *provider = main_window->settings_background_provider;
-  if (provider == nullptr) {
-    return;
-  }
-  update_settings_background_class(main_window, true);
-  add_main_window_settings_provider(
-      main_window, provider,
-      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-}
-
 static void clear_main_window_exterior_background(MainWindow *main_window) {
-  remove_main_window_settings_exterior_background(main_window);
   GtkCssProvider *component_provider =
       main_window->exterior_component_background_provider;
   if (component_provider != nullptr) {
@@ -775,15 +635,7 @@ static void clear_main_window_exterior_background(MainWindow *main_window) {
   }
   g_clear_object(&main_window->exterior_background_provider);
   g_clear_object(
-      &main_window->settings_exterior_background_provider);
-  g_clear_object(
       &main_window->exterior_component_background_provider);
-}
-
-static void clear_main_window_settings_background(
-    MainWindow *main_window) {
-  remove_main_window_settings_background(main_window);
-  g_clear_object(&main_window->settings_background_provider);
 }
 
 static std::array<GtkWidget *, 3>
@@ -816,8 +668,6 @@ static void clear_main_window_component_background(
   if (provider != nullptr) {
     remove_widget_tree_background_provider(
         main_window->terminal_overlay, provider);
-    remove_main_window_settings_component_background(
-        main_window, provider);
     g_clear_object(&main_window->component_background_provider);
   }
 
@@ -849,8 +699,6 @@ static void set_main_window_component_background(
     add_widget_tree_background_provider_at_priority(
         main_window->terminal_overlay, provider,
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
-    add_main_window_settings_component_background(
-        main_window, provider);
   }
 
   GtkCssProvider *popup_provider =
@@ -907,17 +755,11 @@ static void set_main_window_exterior_background(
     return;
   }
 
-  GtkCssProvider *settings_provider =
-      create_scoped_widget_surface_background_provider(
-          color.value(), settings_exterior_background_style_class,
-          "settings exterior");
   GtkCssProvider *component_provider =
       create_scoped_widget_component_background_provider(
           color.value(), main_exterior_component_style_class,
           "exterior controls");
   main_window->exterior_background_provider = provider;
-  main_window->settings_exterior_background_provider =
-      settings_provider;
   main_window->exterior_component_background_provider =
       component_provider;
   add_main_window_exterior_provider(
@@ -948,26 +790,9 @@ static void set_main_window_exterior_background(
           &main_window->exterior_component_background_provider);
     }
   }
-  add_main_window_settings_exterior_background(main_window);
-}
-
-static void set_main_window_settings_background(
-    MainWindow *main_window, const std::optional<RgbColor> &color) {
-  clear_main_window_settings_background(main_window);
-  if (!color.has_value()) {
-    return;
-  }
-
-  main_window->settings_background_provider =
-      create_scoped_widget_background_provider(
-          color.value(), settings_background_style_class,
-          gtk_color_button_style_class,
-          "settings");
-  add_main_window_settings_background(main_window);
 }
 
 static void set_main_window_terminal_background(MainWindow *main_window, const std::optional<RgbColor> &color) {
-  set_main_window_settings_background(main_window, color);
   set_main_window_overlay_background(main_window, color);
   set_main_window_component_background(main_window, color);
   main_window->terminal_color = color;
@@ -1404,6 +1229,8 @@ void set_main_window_colors(MainWindow *main_window,
     return;
   }
 
+  main_window->colors = settings;
+  set_settings_dialog_colors(main_window->settings_dialog, main_window->settings_widget_root, settings);
   set_main_window_exterior_background(main_window,
                                       settings.exterior_background);
   set_main_window_terminal_background(main_window,
@@ -1417,20 +1244,11 @@ void set_main_window_settings_dialog(
     return;
   }
 
-  if (main_window->settings_background_provider != nullptr) {
-    remove_main_window_settings_background(main_window);
-  }
-  remove_main_window_settings_component_background(
-      main_window, main_window->component_background_provider);
-  remove_main_window_settings_exterior_background(main_window);
+  if (main_window->settings_dialog && main_window->settings_dialog != dialog)
+    set_settings_dialog_colors(main_window->settings_dialog, main_window->settings_widget_root, {});
   main_window->settings_dialog = dialog;
   main_window->settings_widget_root = settings_root;
-  if (main_window->settings_background_provider != nullptr) {
-    add_main_window_settings_background(main_window);
-  }
-  add_main_window_settings_component_background(
-      main_window, main_window->component_background_provider);
-  add_main_window_settings_exterior_background(main_window);
+  set_settings_dialog_colors(dialog, settings_root, main_window->colors);
 }
 
 void set_main_window_terminal_paste_callbacks(
@@ -1841,7 +1659,6 @@ void release_main_window(MainWindow *main_window) {
     g_clear_object(&main_window->header_provider);
   }
   clear_main_window_exterior_background(main_window);
-  clear_main_window_settings_background(main_window);
   clear_main_window_overlay_background(main_window);
   clear_main_window_component_background(main_window);
   g_clear_object(&main_window->indicator_on_icon);

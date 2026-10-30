@@ -36,6 +36,7 @@ await run(
     join(root, 'node_modules/typescript/bin/tsc'),
     join(root, 'scripts/prepare-boxrig.mts'),
     join(root, 'scripts/prepare-jemalloc.mts'),
+    join(root, 'scripts/prepare-libsmb2.mts'),
     '--module',
     'NodeNext',
     '--target',
@@ -58,7 +59,7 @@ await run(
     'tools/codegen/rules.mk',
     'package-codegen',
     `BUILD_DIR=${join(output, 'boxrig')}`,
-    'BOXRIG_VERSION=0.7.0',
+    'BOXRIG_VERSION=0.10.0',
   ],
   upstream
 );

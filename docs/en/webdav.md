@@ -1,5 +1,19 @@
 # Using WebDAV
 
+## Find a host with IP scan
+
+Use the "IP scan" button beside the address field on the WebDAV tab to find a host.
+Check the 443 column for HTTPS or the 80 column for HTTP. Results are candidates that accepted
+a TCP connection; they do not verify the WebDAV path, authentication, or certificate.
+
+Double-click a row to fill the address field with its resolved host name, or its numeric IP address.
+The HTTPS/HTTP choice, port, published path, authentication and certificate settings are preserved,
+and the connection URL display updates. Check the connection settings and save them.
+The scan button is unavailable in the read-only settings of an active connection.
+
+See [Finding a Host with IP Scan](../../README.md#finding-a-host-with-ip-scan)
+for scan ranges and name lookup shared with the other connection types.
+
 ## File operations
 
 WebDAV uses the same two-pane browser as SFTP, FTP and FTPS. Select items and use the context menu to send, receive,

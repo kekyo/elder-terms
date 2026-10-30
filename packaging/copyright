@@ -7,6 +7,9 @@ Comment: The bundled boxrig runtime includes third-party code and data under
  See https://github.com/kekyo/boxrig/tree/e327a39/packaging/licenses
  The bundled jemalloc license is installed in
  /usr/share/doc/elder-terms/licenses/jemalloc/COPYING.
+ The bundled libsmb2 license index, LGPL 2.1 text, and corresponding unmodified
+ source archive are installed in /usr/share/doc/elder-terms/licenses/libsmb2/.
+ See https://github.com/sahlberg/libsmb2/tree/727feaaa6d0f4fed1bae57745fbc2c5db9a30e64
 
 Files: *
 Copyright: Kouji Matsui
@@ -28,6 +31,14 @@ License: MIT
  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
+
+Files: deps/libsmb2/lib/* deps/libsmb2/include/*
+Copyright: libsmb2 contributors
+License: LGPL-2.1+
+ The complete license text is installed at
+ /usr/share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt.
+ Other components in the corresponding source archive have the licenses
+ recorded in its COPYING file.
 
 Files: deps/jemalloc/src/* deps/jemalloc/include/jemalloc/* deps/jemalloc/COPYING
 Copyright: 2002-present Jason Evans <jasone@canonware.com>

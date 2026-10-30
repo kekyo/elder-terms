@@ -6,7 +6,7 @@
 
 以前の画像のうち8枚には、`gnome-screenshot`で2026年8月5日または8月9日に撮影したメタデータが残っていました。残り4枚はGitの履歴から更新時期を確認しました。当時の実装はVTEを使っていました。正確なアプリのバージョン、表示倍率、撮影時の設定値は特定できません。
 
-## 今回の撮影環境
+## 2026年10月23日の一括撮影
 
 - アプリのバージョンは1.8.189です。対象ソースは`e3a88ab759ae061587e1f80238c75282aa778ce8`です。
 - 現在のユーザーのX11セッションで`DISPLAY=:1`を使います。撮影するのはディスプレイ2の`DP-4`で、仮想デスクトップ上の範囲は`x=3840, y=1080, 幅=3840, 高さ=1600`です。
@@ -15,6 +15,20 @@
 - 物理画面の取得にはFFmpegの`x11grab`を使います。生成AIによる描画、画像合成、リサイズは行いません。各画像の正確な切り出し座標は`images/capture-manifest.json`を参照してください。
 
 撮影中の状態と操作は`artifacts/readme-capture/shots.json`および`artifacts/readme-capture/actions.jsonl`に記録しています。これらは作業用の記録です。接続設定の例は`/tmp/elder-terms-readme/*.ini`にあります。一時ファイルを削除した後も再撮影できるよう、下記に画面の条件を残します。
+
+## 2026年10月30日のIPスキャン・WebDAV画像の更新
+
+`ip-scan-results.png`と`webdav-settings.png`を、バージョン1.10.69で再撮影しました。対象ソースは`413bce3258efbaf3d925ecaaf136601e1b4032a1`で、`make test`のビルド結果を使用しています。残り42枚は一括撮影時の画像です。
+
+表示先には、撮影専用のXvfb（1600×1000、24 bit、`DISPLAY=:600`）を使用しました。表示倍率1、Yaru-dark、Ubuntu Sans 11、英語表示の条件は一括撮影時と同じです。個別のXDG設定ディレクトリとprivate D-Busでランチャーを起動し、FFmpegの`x11grab`で取得しました。画像の合成やリサイズは行っていません。
+
+WebDAVのサンプル接続はHTTPS、アドレス`cloud.example.net`、公開パス`/remote.php/dav/files/demo`、ユーザー名`demo`です。ポート443とリモートディレクトリ`/`は組み込み既定値を使用します。アドレス欄の右側のIPスキャンボタンから接続URLまでが、画像の範囲です。
+
+IPスキャン画像は、このボタンから実際の探索を完了し、9列の見出しとlocalhostの行を切り出しました。撮影時のlocalhostでは21・22・23番がTCP接続を受け付け、80・443・445・990番の列は空欄です。スキャン画面の大きさは1200×400です。
+
+撮影用スクリプトと取得結果の記録は`artifacts/plan14/capture.mts`と`artifacts/plan14/capture.json`にあります。[画像の記録](../../images/capture-manifest.json)では、更新した2枚に個別の`application`と`environment`を保存しました。これらの項目がある画像では、その内容を最上位の共通項目より優先します。切り出し座標、取得日時、画像のハッシュも更新済みです。
+
+同日、列見出しを`WebDAV(443)`・`WebDAV(80)`へ短縮した後、IPスキャン画像を再撮影しました。バージョンは1.10.72、対象ソースは`cee8b4a12541235618f901d584f278e2baff6e6f`です。表示先は`DISPLAY=:605`で、ほかの撮影条件は同じです。スクリプトと取得結果は`artifacts/plan14/header-labels/capture.mts`と`artifacts/plan14/header-labels/capture.json`に保存しています。
 
 ## 画像ごとの条件
 
@@ -33,11 +47,11 @@
 | 基本操作 | `serial-indicator.png` | シリアル端末の接続・通信インジケーター。PTYには物理モデムラインがないため、実機の信号状態として説明しない |
 | 接続設定 | `configuration-structure.png` | 「General」で明示した自動終了の値と、組み込み既定値を継承するコンパクトモードを並べる |
 | 接続設定 | `connection-icon-picker.png` | Noto Color Emojiの選択ポップアップを開き、絵文字の候補と画像ファイル選択を表示 |
-| 接続設定 | `ip-scan-results.png` | 実際にIPスキャンを完了し、結果表の見出しとlocalhostの行だけを切り出す |
+| 接続設定 | `ip-scan-results.png` | 実際にIPスキャンを完了し、9列の見出しとlocalhostの行だけを切り出す |
 | 接続設定 | `ssh-sftp-settings.png` | 「SSH」タブのアドレス、ユーザー名、秘密鍵、端末種別。SFTPも共有する設定 |
 | 接続設定 | `ssh-telnet-reconnect.png` | ループバックのTELNET接続を切断し、再接続ボタンが使える状態 |
 | 接続設定 | `ftp-ftps-settings.png` | 「FTP」タブでパッシブ転送、明示的FTPS、証明書確認を設定 |
-| 接続設定 | `webdav-settings.png` | 「WebDAV」タブでHTTPS、公開パス、認証、完成したURLを表示 |
+| 接続設定 | `webdav-settings.png` | 「WebDAV」タブでHTTPS、アドレス欄右側のIPスキャンボタン、公開パス、認証、完成したURLを表示 |
 | ファイル転送 | `file-transfer-item-menu.png` | 実SFTP接続でサンプルのリモートファイルを選択し、右クリックメニューを開く |
 | 端末とシリアル | `local-startup-process.png` | 「Local」の起動コマンドを`/bin/bash --login`に指定 |
 | 端末とシリアル | `serial-device-selector.png` | 「Serial」で安定デバイスID、検出されたFTDIデバイス、現在のデバイスノードを表示。実ハードウェアの設定変更は行わない |
