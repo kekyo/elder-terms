@@ -6,6 +6,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
+import { createConnection, createServer, type Socket } from 'node:net';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -30,9 +31,29 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     execFileSync('podman', args, { encoding: 'utf8', env: podmanEnv });
   let server: ReturnType<typeof spawn> | undefined;
   let launcher: ReturnType<typeof createGtkAppLauncher> | undefined;
+  const sockets = new Set<Socket>();
+  let upstreamPort = 445;
+  const bridge = createServer((incoming) => {
+    const upstream = createConnection({
+      host: externalAddress ?? '127.0.0.1',
+      port: upstreamPort,
+    });
+    sockets.add(incoming);
+    sockets.add(upstream);
+    incoming.pipe(upstream).pipe(incoming);
+    incoming.on('error', () => upstream.destroy());
+    upstream.on('error', () => incoming.destroy());
+    incoming.on('close', () => {
+      sockets.delete(incoming);
+      upstream.destroy();
+    });
+    upstream.on('close', () => {
+      sockets.delete(upstream);
+      incoming.destroy();
+    });
+  });
   const evidence = createTestEvidence(context);
   try {
-    const address = externalAddress ?? '127.0.0.1';
     let port = process.env.ELDER_SMB_UI_PORT ?? '445';
     const share = process.env.ELDER_SMB_UI_SHARE ?? 'probe';
     const username = process.env.ELDER_SMB_UI_USER ?? 'elder';
@@ -107,17 +128,26 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     }
     const local = join(directory, 'local');
     await mkdir(local);
+    await writeFile(join(local, 'root-upload.txt'), 'must stay local\n');
+    upstreamPort = Number(port);
+    await new Promise<void>((resolve, reject) => {
+      bridge.once('error', reject);
+      bridge.listen(0, '127.0.0.1', resolve);
+    });
+    const bridgeAddress = bridge.address();
+    if (!bridgeAddress || typeof bridgeAddress === 'string')
+      throw new Error('No SMB bridge address');
     const config = join(directory, 'connection.ini');
     await writeFile(
       config,
       [
         '[general]',
         'type=smb',
+        'auto_close=false',
         'name=SMB files',
         '[smb]',
-        `address=${address}`,
-        `port=${port}`,
-        `share=${share}`,
+        'address=127.0.0.1',
+        `port=${bridgeAddress.port}`,
         `username=${username}`,
         `local_directory=${local}`,
         'remote_directory=/',
@@ -186,11 +216,120 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     ) as GtkTableElement;
     const rowFor = async (name: string): Promise<number> =>
       await waitForResult(async () => {
+        expect((await tree.info()).states).toContain('sensitive');
         for (let row = 0; row < (await tree.getRowCount()); row += 1)
           if ((await (await tree.cellAt(row, 0))?.info())?.name === name)
             return row;
         throw new Error(`Missing SMB row: ${name}`);
       });
+    const shareRow = await rowFor(share);
+    await tree.selectRow(shareRow);
+    const shareCell = (await tree.cellAt(shareRow, 0))!;
+    const shareBounds = (await shareCell.capture()).bounds;
+    await app.input.moveMouseTo(
+      Math.round(shareBounds.x + shareBounds.width / 2),
+      Math.round(shareBounds.y + shareBounds.height / 2)
+    );
+    await app.input.setMouseButton('right', true);
+    await app.input.setMouseButton('right', false);
+    for (const id of [
+      'file_transfer_remote_new_directory_item',
+      'file_transfer_remote_rename_item',
+      'file_transfer_remote_delete_item',
+    ])
+      expect((await (await app.getById(id)).info()).states).not.toContain(
+        'sensitive'
+      );
+    expect(
+      (await (await app.getById('file_transfer_receive_item')).info()).states
+    ).toContain('sensitive');
+    await evidence.captureEvidence('smb-shares', async () => app.capture());
+    await app.input.pressKey('Escape');
+    const localTree = expectElementKind(
+      await app.getById('file_transfer_local_tree'),
+      'table'
+    ) as GtkTableElement;
+    await waitForResult(async () =>
+      expect(await localTree.getRowCount()).toBe(1)
+    );
+    const localBounds = (await (await localTree.cellAt(0, 0))!.capture())
+      .bounds;
+    await app.input.moveMouseTo(
+      Math.round(localBounds.x + localBounds.width / 2),
+      Math.round(localBounds.y + localBounds.height / 2)
+    );
+    await app.input.setMouseButton('right', true);
+    await app.input.setMouseButton('right', false);
+    expect(
+      (await (await app.getById('file_transfer_send_item')).info()).states
+    ).not.toContain('sensitive');
+    await app.input.pressKey('Escape');
+    const treeBounds = (await tree.capture()).bounds;
+    await app.input.moveMouseTo(
+      treeBounds.x + 10,
+      Math.round(shareBounds.y + shareBounds.height / 2)
+    );
+    await app.input.setMouseButton('left', true);
+    await app.input.setMouseButton('left', false);
+    await rowFor('single.txt');
+    // Enter the share itself, then return to the virtual server root.
+    const expandedShare = (await tree.cellAt(await rowFor(share), 0))!;
+    const expandedBounds = (await expandedShare.capture()).bounds;
+    await app.input.moveMouseTo(
+      Math.round(expandedBounds.x + expandedBounds.width / 2),
+      Math.round(expandedBounds.y + expandedBounds.height / 2)
+    );
+    await app.input.setMouseButton('left', true);
+    await app.input.setMouseButton('left', false);
+    await waitForResult(async () =>
+      expect((await tree.info()).states).toContain('focused')
+    );
+    await app.input.pressKey('Return');
+    const remotePath = expectElementKind(
+      await app.getById('file_transfer_remote_path_entry'),
+      'entry'
+    );
+    await waitForResult(async () =>
+      expect(await remotePath.text()).toBe(`/${share}`)
+    );
+    await expectElementKind(
+      await app.getById('file_transfer_remote_up_button'),
+      'button'
+    ).click();
+    await rowFor(share);
+    expect(await remotePath.text()).toBe('/');
+    const navigate = async (path: string): Promise<void> => {
+      const bounds = (await remotePath.capture()).bounds;
+      await app.input.moveMouseTo(
+        bounds.x + 30,
+        Math.round(bounds.y + bounds.height / 2)
+      );
+      await app.input.setMouseButton('left', true);
+      await app.input.setMouseButton('left', false);
+      await waitForResult(async () =>
+        expect((await remotePath.info()).states).toContain('focused')
+      );
+      await remotePath.setText(path);
+      await app.input.pressKey('Return');
+    };
+    const emptyShare = process.env.ELDER_SMB_UI_EMPTY_SHARE ?? 'empty';
+    const deniedShare = process.env.ELDER_SMB_UI_DENIED_SHARE ?? 'denied';
+    {
+      await navigate(`/${emptyShare}`);
+      await waitForResult(async () => {
+        expect(await remotePath.text()).toBe(`/${emptyShare}`);
+        expect(await tree.getRowCount()).toBe(0);
+      });
+      await navigate(`/${deniedShare}`);
+      const closeError = await app.getById(
+        'file_transfer_operation_error_dialog'
+      );
+      await waitForResult(async () =>
+        expect((await closeError.info()).states).toContain('showing')
+      );
+      await app.input.pressKey('Escape');
+    }
+    await navigate(`/${share}`);
     expect(await rowFor('single.txt')).toBeGreaterThanOrEqual(0);
     expect(await rowFor('folder')).toBeGreaterThanOrEqual(0);
     for (const name of ['single.txt', 'folder']) {
@@ -229,10 +368,6 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     );
     await evidence.captureEvidence('smb-downloaded', async () => app.capture());
 
-    const localTree = expectElementKind(
-      await app.getById('file_transfer_local_tree'),
-      'table'
-    ) as GtkTableElement;
     const rowForTable = async (
       table: GtkTableElement,
       name: string
@@ -383,12 +518,65 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
         'replacement upload\n'
       );
     await evidence.captureEvidence('smb-uploaded', async () => app.capture());
+    for (const socket of sockets) socket.destroy();
+    await expectElementKind(
+      await app.getById('file_transfer_remote_refresh_button'),
+      'button'
+    ).click();
+    const reconnect = expectElementKind(
+      await app.getById('file_transfer_reconnect_button'),
+      'button'
+    );
+    await waitForResult(async () =>
+      expect((await reconnect.info()).states).toContain('showing')
+    );
+    for (const attempt of ['deliberately-incorrect-password', password]) {
+      await reconnect.click();
+      await waitForResult(async () => {
+        expect((await prompt.info()).states).toContain('showing');
+        expect(await prompt.text()).toBe(username);
+      });
+      const accept = expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      );
+      await accept.click();
+      const message = expectElementKind(
+        await app.getById('file_transfer_prompt_message_label'),
+        'label'
+      );
+      await waitForResult(async () =>
+        expect(await message.text()).toBe('Password:')
+      );
+      await prompt.setText(attempt);
+      await accept.click();
+      if (attempt !== password) {
+        await waitForResult(async () =>
+          expect(await message.text()).toContain('STATUS_LOGON_FAILURE')
+        );
+        await accept.click();
+        await waitForResult(async () => {
+          expect((await reconnect.info()).states).toContain('showing');
+          expect((await reconnect.info()).states).toContain('sensitive');
+        });
+      }
+    }
+    await rowForTable(tree, 'kept.txt');
+    await waitForResult(async () =>
+      expect((await reconnect.info()).states).not.toContain('showing')
+    );
+    await evidence.captureEvidence('smb-reconnected', async () =>
+      app.capture()
+    );
   } finally {
     if (launcher !== undefined) {
       await evidence.flushOutputs([], launcher);
       await launcher.release();
     }
     await evidence.release();
+    for (const socket of sockets) socket.destroy();
+    if (bridge.listening)
+      await new Promise<void>((resolve) => bridge.close(() => resolve()));
     if (server !== undefined) {
       try {
         podman(['rm', '-f', container]);
@@ -402,20 +590,29 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
   }
 }, 120_000);
 
-const proxyWindowTest = process.env.ELDER_SMB_UI_ADDRESS ? it.skip : it;
-proxyWindowTest(
-  'downloads and uploads over experimental SMB SSH proxy in the transfer window',
-  async (context) => {
-    const fixture = fileURLToPath(new URL('./smb/', import.meta.url));
-    const directory = await mkdtemp(join(tmpdir(), 'elder-smb-proxy-window-'));
-    const container = `elder-smb-proxy-window-${process.pid}-${randomBytes(4).toString('hex')}`;
-    const password = randomBytes(24).toString('hex');
-    const podmanEnv = { ...process.env, ELDER_SMB_PASSWORD: password };
-    const podman = (args: string[]): string =>
-      execFileSync('podman', args, { encoding: 'utf8', env: podmanEnv });
-    const evidence = createTestEvidence(context);
-    let server: ReturnType<typeof spawn> | undefined;
-    try {
+it('downloads and uploads over experimental SMB SSH proxy in the transfer window', async (context) => {
+  const fixture = fileURLToPath(new URL('./smb/', import.meta.url));
+  const directory = await mkdtemp(join(tmpdir(), 'elder-smb-proxy-window-'));
+  const container = `elder-smb-proxy-window-${process.pid}-${randomBytes(4).toString('hex')}`;
+  const externalAddress = process.env.ELDER_SMB_UI_ADDRESS;
+  const password = externalAddress
+    ? process.env.ELDER_SMB_UI_PASSWORD
+    : randomBytes(24).toString('hex');
+  if (!password) throw new Error('SMB UI test password is missing');
+  const share = process.env.ELDER_SMB_UI_SHARE ?? 'probe';
+  const username = process.env.ELDER_SMB_UI_USER ?? 'elder';
+  const download = externalAddress ? 'single.txt' : 'proxy-download.txt';
+  const downloadContent = externalAddress
+    ? 'single SMB file\n'
+    : 'proxy download\n';
+  const podmanEnv = { ...process.env, ELDER_SMB_PASSWORD: password };
+  const podman = (args: string[]): string =>
+    execFileSync('podman', args, { encoding: 'utf8', env: podmanEnv });
+  const evidence = createTestEvidence(context);
+  let server: ReturnType<typeof spawn> | undefined;
+  try {
+    let port = Number(process.env.ELDER_SMB_UI_PORT ?? '445');
+    if (!externalAddress) {
       try {
         podman(['image', 'exists', 'localhost/elder-plan12-samba']);
       } catch {
@@ -475,7 +672,7 @@ proxyWindowTest(
           reject(new Error(`Samba exited ${code}: ${output.slice(-1000)}`));
         });
       });
-      const port = Number(
+      port = Number(
         podman(['port', container, '445/tcp']).trim().split(':').pop()
       );
       podman([
@@ -485,15 +682,19 @@ proxyWindowTest(
         '-c',
         "printf 'proxy download\\n' >/share/proxy-download.txt",
       ]);
-      const local = join(directory, 'local');
-      await mkdir(local);
-      const gatewayExecutable = fileURLToPath(
-        new URL(
-          '../../.build/elder-terms-terminal/ssh-proxy-test-server',
-          import.meta.url
-        )
-      );
-      await withSshGateway(gatewayExecutable, directory, async (gateway) => {
+    }
+    const local = join(directory, 'local');
+    await mkdir(local);
+    const gatewayExecutable = fileURLToPath(
+      new URL(
+        '../../.build/elder-terms-terminal/ssh-proxy-test-server',
+        import.meta.url
+      )
+    );
+    await withSshGateway(
+      gatewayExecutable,
+      directory,
+      async (gateway) => {
         const config = join(directory, 'connection.ini');
         await writeFile(
           config,
@@ -504,8 +705,8 @@ proxyWindowTest(
             '[smb]',
             'address=proxy-test.invalid',
             `port=${port}`,
-            'share=probe',
-            'username=elder',
+            'remote_directory=/',
+            `username=${username}`,
             `local_directory=${local}`,
             '[ssh_proxy]',
             'enabled=true',
@@ -567,7 +768,7 @@ proxyWindowTest(
             expect(await title.text()).toBe('SMB authentication')
           );
           await waitForResult(async () =>
-            expect(await entry.text()).toBe('elder')
+            expect(await entry.text()).toBe(username)
           );
           await accept.click();
           await waitForResult(async () =>
@@ -633,16 +834,56 @@ proxyWindowTest(
             });
             await menuItem.click();
           };
+          const remote = expectElementKind(
+            await app.getById('file_transfer_remote_tree'),
+            'table'
+          ) as GtkTableElement;
+          const path = expectElementKind(
+            await app.getById('file_transfer_remote_path_entry'),
+            'entry'
+          );
+          await waitForResult(async () => {
+            const names = [];
+            for (let row = 0; row < (await remote.getRowCount()); row += 1)
+              names.push((await (await remote.cellAt(row, 0))?.info())?.name);
+            expect(names).toContain(share);
+          });
+          await evidence.captureEvidence('smb-proxy-shares', async () =>
+            app.capture()
+          );
+          for (const target of [
+            process.env.ELDER_SMB_UI_EMPTY_SHARE ?? 'empty',
+            process.env.ELDER_SMB_UI_UNICODE_SHARE ?? '日本語 space',
+            share,
+          ]) {
+            const bounds = (await path.capture()).bounds;
+            await app.input.moveMouseTo(
+              bounds.x + 30,
+              Math.round(bounds.y + bounds.height / 2)
+            );
+            await app.input.setMouseButton('left', true);
+            await app.input.setMouseButton('left', false);
+            await waitForResult(async () =>
+              expect((await path.info()).states).toContain('focused')
+            );
+            await path.setText(`/${target}`);
+            await app.input.pressKey('Return');
+            await waitForResult(async () => {
+              expect(await path.text()).toBe(`/${target}`);
+              expect((await remote.info()).states).toContain('sensitive');
+              if (target !== share) expect(await remote.getRowCount()).toBe(0);
+            });
+          }
           await selectMenu(
             'file_transfer_remote_tree',
-            'proxy-download.txt',
+            download,
             'file_transfer_receive_item'
           );
           await waitForResult(
             async () =>
-              expect(
-                await readFile(join(local, 'proxy-download.txt'), 'utf8')
-              ).toBe('proxy download\n'),
+              expect(await readFile(join(local, download), 'utf8')).toBe(
+                downloadContent
+              ),
             { timeoutMs: 30_000 }
           );
           await writeFile(join(local, 'proxy-upload.txt'), 'proxy upload\n');
@@ -655,35 +896,67 @@ proxyWindowTest(
             'proxy-upload.txt',
             'file_transfer_send_item'
           );
-          await waitForResult(
-            async () =>
-              expect(
-                podman(['exec', container, 'cat', '/share/proxy-upload.txt'])
-              ).toBe('proxy upload\n'),
-            { timeoutMs: 30_000 }
-          );
-          expect(gateway.requests).toContainEqual({
-            host: 'proxy-test.invalid',
-            port,
+          await waitForResult(async () => {
+            expect((await remote.info()).states).toContain('sensitive');
+            const names = [];
+            for (let row = 0; row < (await remote.getRowCount()); row += 1)
+              names.push((await (await remote.cellAt(row, 0))?.info())?.name);
+            expect(names).toContain('proxy-upload.txt');
           });
+          await rm(join(local, 'proxy-upload.txt'));
+          await selectMenu(
+            'file_transfer_remote_tree',
+            'proxy-upload.txt',
+            'file_transfer_receive_item'
+          );
+          await waitForResult(async () =>
+            expect(
+              await readFile(join(local, 'proxy-upload.txt'), 'utf8')
+            ).toBe('proxy upload\n')
+          );
+          await waitForResult(async () =>
+            expect((await remote.info()).states).toContain('sensitive')
+          );
+          await selectMenu(
+            'file_transfer_remote_tree',
+            'proxy-upload.txt',
+            'file_transfer_remote_delete_item'
+          );
+          await waitForResult(async () =>
+            expect(await title.text()).toBe('Delete selected item?')
+          );
+          await accept.click();
+          await waitForResult(async () => {
+            expect((await remote.info()).states).toContain('sensitive');
+            const names = [];
+            for (let row = 0; row < (await remote.getRowCount()); row += 1)
+              names.push((await (await remote.cellAt(row, 0))?.info())?.name);
+            expect(names).not.toContain('proxy-upload.txt');
+          });
+          expect(gateway.requests).toEqual(
+            Array.from({ length: 4 }, () => ({
+              host: 'proxy-test.invalid',
+              port,
+            }))
+          );
         } finally {
           await evidence.flushOutputs([], launcher);
           await launcher.release();
         }
-      });
-    } finally {
-      await evidence.release();
-      if (server !== undefined) {
-        try {
-          podman(['rm', '-f', container]);
-        } catch {
-          /* The fixture is already gone. */
-        }
-        if (server.exitCode === null && server.signalCode === null)
-          await once(server, 'exit');
+      },
+      externalAddress ?? '127.0.0.1'
+    );
+  } finally {
+    await evidence.release();
+    if (server !== undefined) {
+      try {
+        podman(['rm', '-f', container]);
+      } catch {
+        /* The fixture is already gone. */
       }
-      await rm(directory, { recursive: true, force: true });
+      if (server.exitCode === null && server.signalCode === null)
+        await once(server, 'exit');
     }
-  },
-  120_000
-);
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 120_000);

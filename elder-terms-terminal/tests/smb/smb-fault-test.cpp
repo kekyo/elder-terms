@@ -33,13 +33,13 @@ static cardio::promise<std::shared_ptr<elder_terms::RemoteFileClient>> connect_a
     int port, int &disconnects, int idle_seconds) {
   elder_terms::SmbClientOpenOptions options;
   options.connection.address = host;
-  options.connection.share = share;
+
   options.connection.username = user;
   options.connection.port = port;
   options.connection.idle_timeout_seconds = idle_seconds;
   options.password = g_getenv("ELDER_SMB_PASSWORD");
   options.disconnected = [&disconnects] { ++disconnects; };
-  co_return co_await elder_terms::open_smb_client_async(std::move(options), {});
+  co_return co_await elder_terms::open_smb_client_async(std::move(options), share, {});
 }
 
 static cardio::promise<void> write_text_async(

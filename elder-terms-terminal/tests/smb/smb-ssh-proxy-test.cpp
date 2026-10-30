@@ -53,11 +53,11 @@ static cardio::promise<void> exercise_async(int argc, char **argv) {
     SmbClientOpenOptions options;
     options.connection.address = "127.0.0.1";
     options.connection.port = smb_ssh_proxy_port(route);
-    options.connection.share = argv[2];
+
     options.connection.username = argv[3];
     options.connection.require_encryption = std::string(argv[2]) == "encrypted" || mode == "encrypted";
     options.password = g_getenv("ELDER_SMB_PASSWORD");
-    client = co_await open_smb_client_async(std::move(options), {});
+    client = co_await open_smb_client_async(std::move(options), argv[2], {});
     const auto listing = co_await client->load_directory_async("/", {});
     require(listing.canonical_path == "/", "Proxy share root differs");
     if (std::string(argv[2]) == "readonly" || mode == "readonly") {

@@ -367,16 +367,22 @@ An SFTP window opened from an already authenticated SSH terminal reuses that ter
 including its selected user name and authentication,
 and therefore does not ask for them again.
 
-## Reconnecting SSH and TELNET
+## Reconnecting after Disconnection
 
 ![Reconnect button after disconnection](./images/ssh-telnet-reconnect.png)
 
-To keep a disconnected terminal open,
+To keep a disconnected terminal or file transfer window open,
 turn off "Close window when session ends" in its General settings (`[general] auto_close=false`).
-The disconnected overlay then offers a "Reconnect" button for SSH and TELNET.
+The disconnected overlay then offers a "Reconnect" button for SSH, TELNET, serial,
+local shells, SFTP, FTP/FTPS, WebDAV, and SMB.
 It becomes clickable after the previous connection's pending work has stopped.
 
-This button is not available with automatic closing enabled or for local and serial terminals.
+For serial connections, this reopens the device. For local shells, it starts a new
+shell or configured command. An SFTP window opened from an SSH terminal can also
+reconnect independently.
+
+If reconnection fails, review the reason and retry from the same window.
+Interrupted transfers are not resumed automatically.
 
 ## Using FTP/FTPS
 
@@ -440,12 +446,13 @@ See [Using WebDAV](./docs/en/webdav.md) for settings and supported operations.
 ## Using SMB
 
 Create a connection in the launcher, choose "SMB", and save the server address
-and share name on the SMB tab. Enter only the share name, such as `share`, rather
-than the complete `\\server\share` path. The default direct TCP port is 445.
+on the SMB tab. The default direct TCP port is 445.
 The window asks for a username and password when it opens; passwords are not saved.
 
-After connecting, use the same file transfer window to send and receive files
-and manage folders. See [Using SMB](./docs/en/smb.md) for connection settings,
+After connecting, `/` on the remote side lists shares. Open a share or enter a
+path such as `/share-name/folder` to browse it. Within a share, use the same file
+browser as other transfer types to send, receive, and manage folders.
+See [Using SMB](./docs/en/smb.md) for connection settings,
 signing, encryption, and file operation limits.
 
 ## Managing Items in SFTP/FTP/FTPS, WebDAV, and SMB

@@ -208,7 +208,10 @@ try {
   remoteDirectory = await agent.files.mkdtemp('elder-plan12-smb-');
   const uploadedScript = win32.join(remoteDirectory, 'windows-fixture.ps1');
   script = uploadedScript;
-  await agent.files.writeFile(uploadedScript, fixtureSource);
+  await agent.files.writeFile(
+    uploadedScript,
+    Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), fixtureSource])
+  );
 
   const inspected = await remoteCommand(agent, uploadedScript, 'inspect', '');
   assert.equal(
@@ -251,7 +254,75 @@ try {
       typeof readOnly === 'string'
   );
 
-  if (process.env.ELDER_SMB_SSH_PROXY_DRIVER) {
+  const serverDriver = process.env.ELDER_SMB_SERVER_DRIVER;
+  if (process.env.ELDER_SMB_ENUM_DRIVER || serverDriver) {
+    const directory = await mkdtemp(resolve(tmpdir(), 'elder-smb-enum-win-'));
+    const check = async (extra: Record<string, string>): Promise<void> => {
+      const child = spawn(
+        serverDriver ?? process.env.ELDER_SMB_ENUM_DRIVER!,
+        [target.address, plain, user, '445'],
+        {
+          env: {
+            ...process.env,
+            ELDER_SMB_PASSWORD: password,
+            ELDER_SMB_EMPTY_SHARE: String(fixture.emptyShare),
+            ELDER_SMB_UNICODE_SHARE: String(fixture.unicodeShare),
+            ELDER_SMB_DENIED_SHARE: String(fixture.deniedShare),
+            ELDER_SMB_EXPECT_SHARES: [
+              plain,
+              encrypted,
+              readOnly,
+              fixture.emptyShare,
+              fixture.unicodeShare,
+              fixture.deniedShare,
+            ].join('\n'),
+            ...extra,
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
+          signal: AbortSignal.timeout(60000),
+        }
+      );
+      let output = '';
+      child.stdout.on('data', (bytes) => {
+        output += bytes;
+      });
+      child.stderr.on('data', (bytes) => {
+        output += bytes;
+      });
+      const [code] = await once(child, 'close');
+      assert.equal(code, 0, diagnostic(output));
+      assert.match(output, /PASS SMB client/);
+      console.log(
+        `PASS win11 ${serverDriver ? 'server browsing and transfer' : 'share enumeration'} ${extra.ELDER_SMB_PROXY_PORT ? 'SSH proxy' : 'direct'}: ${diagnostic(output).trim()}`
+      );
+    };
+    try {
+      await check({});
+      await withSshGateway(
+        resolve(
+          terminalDirectory,
+          '../.build/elder-terms-terminal/ssh-proxy-test-server'
+        ),
+        directory,
+        async (gateway) => {
+          await check({
+            ELDER_SMB_PROXY_PORT: String(gateway.port),
+            ELDER_SMB_PROXY_KNOWN_HOSTS: gateway.knownHosts,
+          });
+          assert.deepEqual(
+            gateway.requests,
+            Array.from({ length: serverDriver ? 5 : 1 }, () => ({
+              host: 'proxy-test.invalid',
+              port: 445,
+            }))
+          );
+        },
+        target.address
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  } else if (process.env.ELDER_SMB_SSH_PROXY_DRIVER) {
     const localDirectory = await mkdtemp(
       resolve(tmpdir(), 'elder-smb-win-proxy-')
     );
@@ -391,13 +462,16 @@ try {
               process.env.ELDER_TERMS_TEST_FTP_APP ??
               resolve(
                 terminalDirectory,
-                '../.build/plan12-stage5-build/elder-terms-terminal/elder-terms-file-transfer'
+                '../.build/elder-terms-terminal/elder-terms-file-transfer'
               ),
             ELDER_SMB_UI_ADDRESS: target.address,
             ELDER_SMB_UI_PORT: '445',
             ELDER_SMB_UI_SHARE: plain,
             ELDER_SMB_UI_USER: user,
             ELDER_SMB_UI_PASSWORD: password,
+            ELDER_SMB_UI_EMPTY_SHARE: String(fixture.emptyShare),
+            ELDER_SMB_UI_UNICODE_SHARE: String(fixture.unicodeShare),
+            ELDER_SMB_UI_DENIED_SHARE: String(fixture.deniedShare),
           },
           stdio: ['ignore', 'pipe', 'pipe'],
           signal: AbortSignal.timeout(180_000),
@@ -475,3 +549,4 @@ try {
   }
 }
 if (failure !== undefined) throw failure;
+console.log('PASS win11 fixture cleanup and agent release');

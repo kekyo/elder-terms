@@ -84,6 +84,9 @@ struct ActivityFileClient final : RemoteFileClient {
   RemoteFileCapabilities capabilities() const noexcept override {
     return delegate->capabilities();
   }
+  RemotePathCapabilities path_capabilities(const std::string &path) const override {
+    return delegate->path_capabilities(path);
+  }
   bool try_begin_transfer() override { return delegate->try_begin_transfer(); }
   void end_transfer() override { delegate->end_transfer(); }
 

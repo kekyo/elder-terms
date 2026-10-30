@@ -2604,9 +2604,6 @@ msgstr "Contrôle les caractères tels que ①. Choisissez la largeur attendue p
 msgid "Font dependent"
 msgstr "Selon la police"
 
-msgid "Share name"
-msgstr "Nom du partage"
-
 msgid "Domain"
 msgstr "Domaine"
 

@@ -2576,9 +2576,6 @@ msgstr "① जैसे अक्षरों की चौड़ाई तय 
 msgid "Font dependent"
 msgstr "फ़ॉन्ट के अनुसार"
 
-msgid "Share name"
-msgstr "शेयर का नाम"
-
 msgid "Domain"
 msgstr "डोमेन"
 

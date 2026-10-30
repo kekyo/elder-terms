@@ -13,6 +13,7 @@ BUILD_DIR := $(BUILD_DIR)-asan
 CXXFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer
 endif
 CLIENT_SOURCE := $(ROOT)/elder-terms-terminal/src/smb/smb-client.cpp
+CLIENT_OBJECTS = $(BUILD_DIR)/smb-client.o $(BUILD_DIR)/smb-share-list.o
 ENGINE_SOURCE := $(ROOT)/elder-terms-terminal/src/file-transfer/file-transfer-engine.cpp
 SMB_FLAGS = $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config --cflags --libs libsmb2 gio-2.0)
 .PHONY: build deps test test-client
@@ -37,7 +38,10 @@ $(BUILD_DIR)/smb-client.o: $(CLIENT_SOURCE) $(ROOT)/elder-terms-terminal/src/smb
 $(BUILD_DIR)/file-transfer-engine.o: $(ENGINE_SOURCE) Makefile
 	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I$(ROOT)/shared/include $(SMB_FLAGS) -c $< -o $@
-$(BUILD_DIR)/smb-client-test: smb-client-test.cpp $(BUILD_DIR)/smb-client.o Makefile
-	$(CXX) $(CXXFLAGS) -I$(ROOT)/shared/include $< $(BUILD_DIR)/smb-client.o -o $@ $(SMB_FLAGS) -Wl,-rpath,$(SMB2_PREFIX)/lib
-$(BUILD_DIR)/smb-%-test: smb-%-test.cpp $(BUILD_DIR)/smb-client.o $(BUILD_DIR)/file-transfer-engine.o Makefile
-	$(CXX) $(CXXFLAGS) -I$(ROOT)/shared/include $< $(BUILD_DIR)/smb-client.o $(BUILD_DIR)/file-transfer-engine.o -o $@ $(SMB_FLAGS) -Wl,-rpath,$(SMB2_PREFIX)/lib
+$(BUILD_DIR)/smb-share-list.o: $(ROOT)/elder-terms-terminal/src/smb/smb-share-list.cpp $(ROOT)/elder-terms-terminal/src/smb/smb-share-list.h Makefile
+	mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -I$(ROOT)/shared/include $(SMB_FLAGS) -c $< -o $@
+$(BUILD_DIR)/smb-client-test: smb-client-test.cpp $(CLIENT_OBJECTS) Makefile
+	$(CXX) $(CXXFLAGS) -I$(ROOT)/shared/include $< $(CLIENT_OBJECTS) -o $@ $(SMB_FLAGS) -Wl,-rpath,$(SMB2_PREFIX)/lib
+$(BUILD_DIR)/smb-%-test: smb-%-test.cpp $(CLIENT_OBJECTS) $(BUILD_DIR)/file-transfer-engine.o Makefile
+	$(CXX) $(CXXFLAGS) -I$(ROOT)/shared/include $< $(CLIENT_OBJECTS) $(BUILD_DIR)/file-transfer-engine.o -o $@ $(SMB_FLAGS) -Wl,-rpath,$(SMB2_PREFIX)/lib

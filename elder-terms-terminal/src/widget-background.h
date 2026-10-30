@@ -12,6 +12,17 @@
 namespace elder_terms {
 
 /**
+ * Applies connection colors to a runtime settings dialog and its controls.
+ * @param dialog Dialog owning the CSS resources, or null for no operation.
+ * @param settings_root Root containing the settings pages and action buttons.
+ * @param colors Effective connection colors; absent colors restore the theme.
+ * @remarks Resources are replaced on Apply and released on dialog destruction.
+ * Popup colors are supplied by the owning connection window.
+ */
+void set_settings_dialog_colors(GtkWidget *dialog, GtkWidget *settings_root,
+    const GeneralColorSettings &colors);
+
+/**
  * Selects black or white text for the greatest contrast with a background.
  *
  * @param background Opaque RGB surface color.

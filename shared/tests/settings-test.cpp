@@ -4779,8 +4779,8 @@ static void test_smb_settings_round_trip_and_validation() {
   expect_true(defaults.port == 445 && defaults.remote_directory == "/" &&
                   defaults.require_signing && !defaults.require_encryption,
               "SMB must have direct TCP and secure signing defaults");
-  expect_true(defaults.validation_errors.size() == 2,
-              "An SMB connection requires an address and share");
+  expect_true(defaults.validation_errors.size() == 1,
+              "An SMB connection requires a server address");
   expect_true(set_explicit_setting_value(&store,
                   elder_terms::ssh_proxy_setting_key("enabled"), true),
               "An inherited SSH proxy can be enabled independently");
@@ -4791,10 +4791,8 @@ static void test_smb_settings_round_trip_and_validation() {
                                          std::string("bastion.example")) &&
                   elder_terms::ssh_proxy_connection_settings(store).validation_errors.empty(),
               "SMB must accept a configured SSH gateway");
-  expect_true(!set_explicit_setting_value(&store, elder_terms::smb_setting_key("share"), std::string("team/docs")),
-              "An SMB share must be a single name");
   expect_true(!set_explicit_setting_value(&store, elder_terms::smb_setting_key("remote_directory"), std::string("/../outside")),
-              "An SMB remote path must not escape its share");
+              "An SMB remote path must not escape the server root");
   expect_true(!set_explicit_setting_value(&store, elder_terms::smb_setting_key("port"), gint64{0}),
               "SMB port must be bounded");
   expect_true(!set_explicit_setting_value(&store, elder_terms::smb_setting_key("idle_timeout_seconds"), gint64{0}),
@@ -4810,9 +4808,9 @@ static void test_smb_settings_round_trip_and_validation() {
   expect_true(elder_terms::smb_connection_settings(store).port == 1446,
               "Connection SMB port must override global defaults");
   const std::vector<std::pair<std::string, std::string>> values{
-      {"address", "files.example.test"}, {"share", "team"},
+      {"address", "files.example.test"},
       {"domain", "EXAMPLE"}, {"username", "alice"},
-      {"local_directory", "/tmp/downloads"}, {"remote_directory", "/Docs"}};
+      {"local_directory", "/tmp/downloads"}, {"remote_directory", "/team/Docs"}};
   for (const auto &[name, value] : values)
     expect_true(set_explicit_setting_value(&store, elder_terms::smb_setting_key(name), value),
                 "SMB setting must be accepted: " + name);
@@ -4837,7 +4835,7 @@ static void test_smb_settings_round_trip_and_validation() {
 
 static void test_smb_invalid_numeric_input_remains_invalid_after_save() {
   const auto path = temporary_config_path("smb-invalid-number");
-  write_config(path, "[general]\ntype=smb\n[smb]\naddress=localhost\nshare=team\nport=not-a-number\n");
+  write_config(path, "[general]\ntype=smb\n[smb]\naddress=localhost\nremote_directory=/team\nport=not-a-number\n");
   const auto loaded = load_settings({.config_path = path,
                                     .startup_config_path = std::nullopt}, 1.0);
   expect_true(!elder_terms::smb_connection_settings(loaded.store).validation_errors.empty(),

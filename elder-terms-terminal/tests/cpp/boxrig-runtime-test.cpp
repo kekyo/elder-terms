@@ -561,6 +561,27 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
       boxrig_gtk3_terminal_widget_get_input_state(terminal_runtime_widget(fixture->runtime), &input);
     } while (input.phase != BOXRIG_UI_INPUT_ENABLED);
   }
+  fixture->notify_carrier(false);
+  do {
+    co_await fixture->changed.wait();
+    boxrig_gtk3_terminal_widget_get_input_state(terminal_runtime_widget(fixture->runtime), &input);
+  } while (input.phase != BOXRIG_UI_INPUT_DISABLED);
+  const auto old_generation = terminal_runtime_connection_state(fixture->runtime).generation;
+  expect(terminal_runtime_connect_transport(fixture->runtime, request(fixture)),
+      "manual reconnect accepts a carrier-disconnected physical channel");
+  expect(!terminal_runtime_connect_transport(fixture->runtime, request(fixture)),
+      "a pending manual reconnect rejects a duplicate request");
+  while (terminal_runtime_connection_state(fixture->runtime).generation == old_generation ||
+      terminal_runtime_connection_state(fixture->runtime).phase != TerminalConnectionPhase::connected)
+    co_await fixture->changed.wait();
+  expect(!fixture->closed_during_carrier_monitor,
+      "manual reconnect joins the old carrier monitor before closing its channel");
+  const auto before_reconnected_output = fixture->outgoing;
+  fixture->incoming = "\033[H\033[6n";
+  fixture->received.trigger();
+  while (fixture->outgoing == before_reconnected_output) co_await fixture->changed.wait();
+  expect(fixture->outgoing == before_reconnected_output + "\033[1;1R",
+      "fresh input and output resume on the manually reopened channel");
   co_await terminal_runtime_disconnect(fixture->runtime);
   expect(!fixture->closed_during_carrier_monitor && !fixture->carrier_monitoring && !fixture->notify_carrier,
       "shutdown joins carrier observation before closing the physical channel");

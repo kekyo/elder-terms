@@ -104,11 +104,11 @@ static cardio::promise<void> start_application_async(SmbApplication *state) {
     }
     if (state->route) {
       // Keep the saved endpoint and authentication prompts addressed to the
-      // real server; only this one libsmb2 connection uses the local relay.
+      // real server; all libsmb2 share connections use the local relay.
       options.connection.address = "127.0.0.1";
       options.connection.port = smb_ssh_proxy_port(state->route);
     }
-    state->client = co_await open_smb_client_async(std::move(options), cancellation);
+    state->client = co_await open_smb_server_async(std::move(options), cancellation);
     attach_file_transfer_window_client(state->window, state->client);
     co_return;
   } catch (const cardio::canceled_exception &) {

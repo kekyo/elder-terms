@@ -898,6 +898,137 @@ describe('SFTP window', () => {
     );
   });
 
+  it('colors the transfer settings dialog and updates it after Apply', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      ['exterior_background=#7A2468', 'background=#183C58'],
+      undefined,
+      async ({ app, evidence }) => {
+        for (let opening = 0; opening < 2; ++opening) {
+          await expectElementKind(
+            await app.getById('application_menu_button'),
+            'toggleButton'
+          ).click();
+          await expectElementKind(
+            await app.getById('settings_menu_item'),
+            'menuItem'
+          ).click();
+          const root = await app.getById('settings_widget_root');
+          const footer = await app.getById('settings_action_row');
+          await waitForResult(async () => {
+            expect(capturePixel(await root.capture(), 0.01, 0.5)).toEqual([
+              0x18, 0x3c, 0x58,
+            ]);
+            expect(capturePixel(await footer.capture(), 0.01, 0.5)).toEqual([
+              0x7a, 0x24, 0x68,
+            ]);
+          });
+          const header = await app.getById('settings_dialog_header_bar');
+          expect(capturePixel(await header.capture(), 0.1, 0.5)).toEqual([
+            0x7a, 0x24, 0x68,
+          ]);
+          expect(
+            capturePixel(
+              await (await app.getById('settings_apply_button')).capture(),
+              0.15,
+              0.5
+            )
+          ).toEqual([0x85, 0x27, 0x71]);
+          const windowCount = await app.getWindowCount();
+          await expectElementKind(
+            await app.getById('settings_general_background_mode_combo'),
+            'comboBox'
+          ).click();
+          await app.input.moveMouseTo(0, 0);
+          await waitForResult(async () => {
+            expect(await app.getWindowCount()).toBeGreaterThan(windowCount);
+            const popup = await app.windowAt(windowCount);
+            expect(popup).toBeDefined();
+            const capture = await popup!.capture();
+            expect(capturePixel(capture, 0.8, 0.5)).toEqual([0x1b, 0x45, 0x65]);
+            expect(capturePixel(capture, 0.8, 0.83)).not.toEqual([
+              0x1b, 0x45, 0x65,
+            ]);
+          });
+          await app.input.pressKey('Escape');
+          await evidence.captureEvidence(
+            `transfer-settings-colors-${opening}`,
+            async () => (await app.getById('settings_dialog')).capture()
+          );
+          if (opening === 1) {
+            for (const field of ['exterior_background', 'background']) {
+              await expectElementKind(
+                await app.getById(`settings_general_${field}_mode_combo`),
+                'comboBox'
+              ).selectChildAt(1);
+            }
+            await expectElementKind(
+              await app.getById('settings_apply_button'),
+              'button'
+            ).click();
+            await waitForResult(async () => {
+              expect(
+                (await (await app.getById('settings_dialog')).info()).states
+              ).toContain('showing');
+              expect(capturePixel(await root.capture(), 0.01, 0.5)).not.toEqual(
+                [0x18, 0x3c, 0x58]
+              );
+              expect(
+                capturePixel(await footer.capture(), 0.01, 0.5)
+              ).not.toEqual([0x7a, 0x24, 0x68]);
+              expect(
+                capturePixel(await header.capture(), 0.1, 0.5)
+              ).not.toEqual([0x7a, 0x24, 0x68]);
+            });
+            for (const field of ['exterior_background', 'background']) {
+              await expectElementKind(
+                await app.getById(`settings_general_${field}_mode_combo`),
+                'comboBox'
+              ).selectChildAt(2);
+            }
+            const newBackground = capturePixel(
+              await (
+                await app.getById('settings_general_background_button')
+              ).capture(),
+              0.5,
+              0.5
+            );
+            const newExterior = capturePixel(
+              await (
+                await app.getById('settings_general_exterior_background_button')
+              ).capture(),
+              0.5,
+              0.5
+            );
+            await expectElementKind(
+              await app.getById('settings_apply_button'),
+              'button'
+            ).click();
+            await waitForResult(async () => {
+              expect(capturePixel(await root.capture(), 0.01, 0.5)).toEqual(
+                newBackground
+              );
+              expect(capturePixel(await footer.capture(), 0.01, 0.5)).toEqual(
+                newExterior
+              );
+              expect(capturePixel(await header.capture(), 0.1, 0.5)).toEqual(
+                newExterior
+              );
+            });
+          }
+          await expectElementKind(
+            await app.getById('settings_cancel_button'),
+            'button'
+          ).click();
+          await waitForResult(async () =>
+            expect(await app.findById('settings_dialog')).toBeUndefined()
+          );
+        }
+      }
+    );
+  });
+
   it('applies configured exterior and browser RGB backgrounds', async (context) => {
     await runSftpFixture(
       context,

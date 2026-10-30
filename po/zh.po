@@ -2569,9 +2569,6 @@ msgstr "控制①等字符的宽度。请与远程应用预期的宽度保持一
 msgid "Font dependent"
 msgstr "依字体而定"
 
-msgid "Share name"
-msgstr "共享名称"
-
 msgid "Domain"
 msgstr "域"
 

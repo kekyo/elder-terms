@@ -19,15 +19,13 @@ struct SmbConnectionSettings {
   std::string address;
   /** SMB direct TCP port. */
   gint64 port = 445;
-  /** Required single SMB share name. */
-  std::string share;
   /** Authentication domain, or empty for the server default. */
   std::string domain;
   /** Initial username for the runtime authentication prompt. */
   std::string username;
   /** Initial local directory, or empty for the runtime fallback. */
   std::string local_directory;
-  /** Initial absolute path within the share. */
+  /** Initial server path: / lists shares; /share/path addresses a share. */
   std::string remote_directory = "/";
   /** Require SMB message signing. */
   bool require_signing = true;

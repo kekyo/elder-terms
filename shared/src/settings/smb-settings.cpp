@@ -47,14 +47,6 @@ static bool validate_timeout(const SettingValue &value, std::string *reason) {
   return false;
 }
 
-static bool validate_share(const SettingValue &value, std::string *reason) {
-  const auto &text = std::get<std::string>(value);
-  if (clean_text(text) && text != "." && text != ".." &&
-      text.find_first_of("/\\") == std::string::npos) return true;
-  *reason = "must be a single share name without path separators";
-  return false;
-}
-
 static bool validate_remote_directory(const SettingValue &value,
                                       std::string *reason) {
   const auto &path = std::get<std::string>(value);
@@ -84,7 +76,6 @@ std::vector<SettingDefinition> smb_connection_setting_definitions() {
   return {
       {.key = smb_setting_key("address"), .default_value = std::string(), .validate = validate_address, .retain_invalid = true},
       {.key = smb_setting_key("port"), .default_value = gint64{445}, .validate = validate_port, .retain_invalid = true},
-      {.key = smb_setting_key("share"), .default_value = std::string(), .validate = validate_share, .retain_invalid = true},
       {.key = smb_setting_key("domain"), .default_value = std::string(), .validate = validate_text, .retain_invalid = true},
       {.key = smb_setting_key("username"), .default_value = std::string(), .validate = validate_text, .retain_invalid = true},
       {.key = smb_setting_key("local_directory"), .default_value = std::string(), .validate = validate_text, .retain_invalid = true},
@@ -103,7 +94,6 @@ SmbConnectionSettings smb_connection_settings(const SettingsStore &store) {
   SmbConnectionSettings result;
   result.address = text("address", "");
   result.port = setting_integer_value_or_default(store, smb_setting_key("port"), 445);
-  result.share = text("share", "");
   result.domain = text("domain", "");
   result.username = text("username", "");
   result.local_directory = text("local_directory", "");
@@ -120,7 +110,6 @@ SmbConnectionSettings smb_connection_settings(const SettingsStore &store) {
   }
   if (general_connection_kind(store) == ConnectionKind::smb) {
     if (result.address.empty()) result.validation_errors.emplace_back("SMB server address is required");
-    if (result.share.empty()) result.validation_errors.emplace_back("SMB share name is required");
   }
   return result;
 }

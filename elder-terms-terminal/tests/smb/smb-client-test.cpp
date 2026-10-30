@@ -15,13 +15,13 @@ static cardio::promise<void> test_async(int argc, char **argv) {
   require(argc == 5, "Usage: smb-client-test host share user port (ELDER_SMB_PASSWORD)");
   elder_terms::SmbClientOpenOptions options;
   options.connection.address = argv[1];
-  options.connection.share = argv[2];
+
   options.connection.username = argv[3];
   options.connection.port = std::stoi(argv[4]);
   options.password = g_getenv("ELDER_SMB_PASSWORD");
   int disconnects = 0;
   options.disconnected = [&] { ++disconnects; };
-  auto client = co_await elder_terms::open_smb_client_async(std::move(options), {});
+  auto client = co_await elder_terms::open_smb_client_async(std::move(options), argv[2], {});
   auto directory = co_await client->load_directory_async("/", {});
   require(directory.canonical_path == "/", "Share root differs");
   require(!directory.entries.empty(), "Expected server fixtures");

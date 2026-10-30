@@ -2577,9 +2577,6 @@ msgstr "① 같은 문자의 너비를 원격 애플리케이션이 예상하는
 msgid "Font dependent"
 msgstr "글꼴에 따름"
 
-msgid "Share name"
-msgstr "공유 이름"
-
 msgid "Domain"
 msgstr "도메인"
 
