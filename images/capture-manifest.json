@@ -206,15 +206,32 @@
     {
       "file": "ip-scan-results.png",
       "scope": "detail",
-      "capturedAt": "2026-10-23T00:52:23.247Z",
+      "capturedAt": "2026-10-30T02:22:27.355Z",
       "bounds": {
-        "x": 5038,
-        "y": 1556,
-        "width": 612,
-        "height": 49
+        "x": 94,
+        "y": 160,
+        "width": 1172,
+        "height": 48
       },
-      "description": "Table header and localhost result of the completed live IP scan",
-      "sha256": "666d6d293f601c77e7990c91e47d8a2f128678f5a7f603d7a73a26b1cc1810db"
+      "description": "Nine-column header and localhost result of a completed live IP scan from WebDAV settings.",
+      "sha256": "5990653e9b373273dafd8c10b4cdf80ea1c17f7e33787e0d6a2df15e5cea01f7",
+      "application": {
+        "version": "1.10.69",
+        "sourceCommit": "413bce3258efbaf3d925ecaaf136601e1b4032a1",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "display": ":600",
+        "screen": "1600x1000x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "session": "X11 (Xvfb)",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      }
     },
     {
       "file": "ssh-sftp-settings.png",
@@ -258,15 +275,32 @@
     {
       "file": "webdav-settings.png",
       "scope": "detail",
-      "capturedAt": "2026-10-23T00:33:38.107Z",
+      "capturedAt": "2026-10-30T02:22:10.272Z",
       "bounds": {
-        "x": 5044,
-        "y": 1446,
-        "width": 809,
+        "x": 263,
+        "y": 137,
+        "width": 923,
         "height": 362
       },
-      "description": "HTTPS WebDAV host, published path, authentication, directories and effective URL.",
-      "sha256": "2b870ffa0e66fc3d93757fb6c2d61d03cb9d36a34a2ff89519836fa1da21d3ef"
+      "description": "HTTPS WebDAV settings with IP scan beside the address, published path, authentication, directories and effective URL.",
+      "sha256": "6a98d42bd26ec5c247c75be02dba90827374eccf995b03ecdbc1c831a36f423e",
+      "application": {
+        "version": "1.10.69",
+        "sourceCommit": "413bce3258efbaf3d925ecaaf136601e1b4032a1",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "display": ":600",
+        "screen": "1600x1000x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "session": "X11 (Xvfb)",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      }
     },
     {
       "file": "file-transfer-item-menu.png",
