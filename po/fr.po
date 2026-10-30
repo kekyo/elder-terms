@@ -839,8 +839,8 @@ msgid "TELNET(23)"
 msgstr "TELNET(23)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:348
-msgid "FTP(21)"
-msgstr "FTP(21)"
+msgid "FTP/FTPS(21)"
+msgstr "FTP/FTPS(21)"
 
 #: shared/src/settings-widget/settings-presentation.cpp:350
 msgid "Scanning…"
@@ -2630,3 +2630,23 @@ msgstr "Impossible de démarrer SMB"
 
 msgid "File transfer"
 msgstr "Transfert de fichiers"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "FTPS(990)"
+msgstr "FTPS(990)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "WebDAV HTTPS(443)"
+msgstr "WebDAV HTTPS(443)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "WebDAV HTTP(80)"
+msgstr "WebDAV HTTP(80)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "SMB(445)"
+msgstr "SMB(445)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Shows TCP port responses. Service support and authentication are not verified."
+msgstr "Affiche les réponses des ports TCP. La prise en charge des services et l’authentification ne sont pas vérifiées."

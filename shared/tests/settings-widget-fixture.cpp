@@ -5,6 +5,7 @@
 
 #include <elder-terms/settings-widget.h>
 
+#include <algorithm>
 #include <clocale>
 #include <cstdint>
 #include <cstdlib>
@@ -13,6 +14,7 @@
 #include <iostream>
 #include <iomanip>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -44,6 +46,7 @@ struct FixtureOptions {
   std::string ftp_ca_dialog_file;
   std::string webdav_ca_dialog_file;
   std::string ip_scan_mode;
+  std::optional<std::vector<std::uint16_t>> ip_scan_ports;
   std::string page = "general";
   std::vector<ConfigAssignment> connection_assignments;
   std::vector<ConfigAssignment> global_assignments;
@@ -204,6 +207,17 @@ static FixtureOptions parse_options(int argc, char **argv) {
     } else if (starts_with(argument, "--bell-sound-dialog-file=")) {
       options.bell_sound_dialog_file =
           option_value(argument, "--bell-sound-dialog-file=");
+    } else if (starts_with(argument, "--ip-scan-ports=")) {
+      options.ip_scan_ports.emplace();
+      std::istringstream ports(option_value(argument, "--ip-scan-ports="));
+      std::string value;
+      while (std::getline(ports, value, ',')) {
+        std::size_t consumed = 0;
+        const auto port = std::stoul(value, &consumed);
+        if (consumed != value.size() || port == 0 || port > UINT16_MAX)
+          throw std::invalid_argument("invalid IP scan fixture port");
+        options.ip_scan_ports->push_back(static_cast<std::uint16_t>(port));
+      }
     } else if (starts_with(argument, "--ip-scan=")) {
       options.ip_scan_mode = option_value(argument, "--ip-scan=");
     } else if (starts_with(argument, "--telnet-address=")) {
@@ -1207,9 +1221,16 @@ int main(int argc, char **argv) {
     };
     if (!options.ip_scan_mode.empty()) {
       widget_options.ip_scanner_dependencies_factory =
-          [mode = options.ip_scan_mode]() {
-            return elder_terms_settings_widget_fixture::
+          [mode = options.ip_scan_mode, ports = options.ip_scan_ports]() {
+            auto dependencies = elder_terms_settings_widget_fixture::
                 create_ip_scanner_dependencies(mode);
+            if (ports) {
+              dependencies.probe_port = [open_ports = *ports](std::uint32_t,
+                  std::uint16_t port, cardio::cancellation) {
+                return cardio::resolved(std::find(open_ports.begin(), open_ports.end(), port) != open_ports.end());
+              };
+            }
+            return dependencies;
           };
     }
     state.settings_widget =

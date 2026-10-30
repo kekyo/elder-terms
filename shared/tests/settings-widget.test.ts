@@ -4394,8 +4394,16 @@ describe.concurrent('shared settings widget', () => {
         await waitForResult(async () => {
           expect(await results.getRowCount()).toBe(1);
         });
-        expect(await results.getColumnCount()).toBe(5);
-        for (const heading of ['SSH/SFTP(22)', 'TELNET(23)', 'FTP(21)']) {
+        expect(await results.getColumnCount()).toBe(9);
+        for (const heading of [
+          'SSH/SFTP(22)',
+          'TELNET(23)',
+          'FTP/FTPS(21)',
+          'FTPS(990)',
+          'WebDAV HTTPS(443)',
+          'WebDAV HTTP(80)',
+          'SMB(445)',
+        ]) {
           expect(await dialog.findText(heading)).toBeDefined();
         }
         const expectedCells = [
@@ -4404,6 +4412,10 @@ describe.concurrent('shared settings widget', () => {
           '',
           '✓',
           '✓',
+          '',
+          '',
+          '',
+          '',
         ];
         for (let column = 0; column < expectedCells.length; column += 1) {
           const cell = await results.cellAt(0, column);
@@ -4444,6 +4456,65 @@ describe.concurrent('shared settings widget', () => {
       }
     );
   });
+
+  for (const ports of [
+    '80',
+    '443',
+    '445',
+    '990',
+    '21,22,23,80,443,445,990',
+    '21,443,990',
+    '',
+  ]) {
+    it(`shows only the responding IP scan ports: ${ports || 'none'}`, async (context) => {
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=ftp',
+          '--type=ftp',
+          '--ip-scan=complete',
+          `--ip-scan-ports=${ports}`,
+        ],
+        async ({ app }) => {
+          await showFtpPage(app);
+          await expectElementKind(
+            await app.getById('settings_ftp_ip_scan_button'),
+            'button'
+          ).click();
+          const progress = expectElementKind(
+            await app.getById('settings_ip_scan_progress'),
+            'progressBar'
+          );
+          await waitForResult(async () => {
+            const value = await progress.valueInfo();
+            expect(value.value).toBe(value.maximum);
+          });
+          const results = expectElementKind(
+            await app.getById('settings_ip_scan_results'),
+            'table'
+          );
+          expect(await results.getColumnCount()).toBe(9);
+          expect(await results.getRowCount()).toBe(ports ? 1 : 0);
+          if (ports) {
+            const open = ports.split(',').map(Number);
+            for (const [index, port] of [
+              22, 23, 21, 990, 443, 80, 445,
+            ].entries()) {
+              expect(
+                (await (await results.cellAt(0, index + 2))?.info())?.name
+              ).toBe(open.includes(port) ? '✓' : '');
+            }
+          }
+          expect(
+            (await (await app.getById('settings_ip_scan_description')).info())
+              .name
+          ).toBe(
+            'Shows TCP port responses. Service support and authentication are not verified.'
+          );
+        }
+      );
+    });
+  }
 
   it('keeps a wide active IP scan bounded and responsive while resizing', async (context) => {
     await runSharedGtkTest(
@@ -4490,7 +4561,20 @@ describe.concurrent('shared settings widget', () => {
           'table'
         );
         expect(await results.getRowCount()).toBe(256);
-        for (const [column, expected] of ['✓', '', ''].entries()) {
+        await dialog.resizeTo(640, 360);
+        await waitForResult(async () => {
+          expect((await dialog.bounds()).width).toBeLessThanOrEqual(640);
+        });
+        expect(await results.getColumnCount()).toBe(9);
+        for (const [column, expected] of [
+          '✓',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+        ].entries()) {
           const cell = await results.cellAt(0, column + 2);
           expect((await cell?.info())?.name).toBe(expected);
         }
