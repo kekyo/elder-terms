@@ -44,6 +44,9 @@ struct Driver {
   bool connection_mode = false;
   bool zmodem_auto = false;
   bool links = false;
+  bool defer_link_validation = false;
+  std::shared_ptr<cardio::primitives::manually_conditional> link_validation_ready =
+      std::make_shared<cardio::primitives::manually_conditional>();
   bool context_loss_control = false;
   gulong context_loss_hook = 0;
   std::vector<elder_terms::MacroRule> macros;
@@ -417,6 +420,14 @@ static cardio::promise<elder_terms::SshUserPromptResponse> prompt_ssh(Driver *dr
 }
 
 static void configure_links(Driver *driver) {
+  elder_terms::TerminalHyperlinkPathValidator validate = elder_terms::validate_terminal_hyperlink_path_async;
+  if (driver->defer_link_validation) {
+    validate = [ready = driver->link_validation_ready](std::string path, cardio::cancellation cancellation)
+        -> cardio::promise<std::string> {
+      co_await ready->wait(cancellation);
+      co_return co_await elder_terms::validate_terminal_hyperlink_path_async(std::move(path), cancellation);
+    };
+  }
   elder_terms::terminal_runtime_set_hyperlink_rules(driver->runtime,
       driver->links ? elder_terms::default_hyperlink_action_rules() : std::vector<elder_terms::HyperlinkActionRule>{}, [](elder_terms::TerminalHyperlinkResolution resolved) {
         if (resolved.action) {
@@ -432,7 +443,7 @@ static void configure_links(Driver *driver) {
           std::fprintf(stderr, "Link rejected: %s\n", resolved.error.c_str());
         }
         std::fflush(stdout);
-      });
+      }, std::move(validate));
 }
 
 static void toggle_links(GtkButton *, gpointer context) {
@@ -458,6 +469,10 @@ int main(int argc, char **argv) {
   for (int index = 1; index < argc; ++index) {
     if (std::string_view(argv[index]) == "--local") driver.connection_mode = true;
     else if (std::string_view(argv[index]) == "--links") driver.links = true;
+    else if (std::string_view(argv[index]) == "--defer-link-validation") {
+      driver.links = true;
+      driver.defer_link_validation = true;
+    }
     else if (std::string_view(argv[index]) == "--context-loss") driver.context_loss_control = true;
     else if (std::string_view(argv[index]) == "--macro-send" && index + 2 < argc) {
       const std::string pattern = argv[++index];
@@ -609,6 +624,14 @@ int main(int argc, char **argv) {
     gestament_gtk_assign_accessible_id(button, "driver_links_toggle");
     gtk_box_pack_start(GTK_BOX(controls), button, FALSE, FALSE, 0);
     g_signal_connect(button, "clicked", G_CALLBACK(toggle_links), &driver);
+    if (driver.defer_link_validation) {
+      auto *validate = gtk_button_new_with_label("Validate paths");
+      gestament_gtk_assign_accessible_id(validate, "driver_validate_paths");
+      gtk_box_pack_start(GTK_BOX(controls), validate, FALSE, FALSE, 0);
+      g_signal_connect(validate, "clicked", G_CALLBACK(+[](GtkButton *, gpointer data) {
+        static_cast<Driver *>(data)->link_validation_ready->raise();
+      }), &driver);
+    }
   }
   driver.status = gtk_label_new("Starting boxrig");
   gestament_gtk_assign_accessible_id(driver.status, "driver_status");

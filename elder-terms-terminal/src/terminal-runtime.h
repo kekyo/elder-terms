@@ -94,10 +94,12 @@ boxrig_input_key_route terminal_runtime_route_selection_key(TerminalRuntime *run
  * @param runtime Live runtime; current recognition is invalidated atomically.
  * @param rules Screen and OSC 8 rules, or an empty list to disable links.
  * @param activate Called on Ctrl+click with the resolved action or rejection.
+ * @param validate Asynchronous local path checker; defaults to filesystem queries.
  * @remarks The callback decides how to launch commands or display errors.
  */
 void terminal_runtime_set_hyperlink_rules(TerminalRuntime *runtime,
-    std::vector<HyperlinkActionRule> rules, std::function<void(TerminalHyperlinkResolution)> activate);
+    std::vector<HyperlinkActionRule> rules, std::function<void(TerminalHyperlinkResolution)> activate,
+    TerminalHyperlinkPathValidator validate = validate_terminal_hyperlink_path_async);
 
 /**
  * Reports whether the pointer currently resolves to an executable link.

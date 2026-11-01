@@ -261,7 +261,7 @@ static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &ke
       }
       auto annotation = item.annotation;
       annotation.priority = -static_cast<std::int32_t>(rule.generation);
-      if (annotation_action_rejected(item)) {
+      if (!annotation_action_valid(item)) {
         annotation.style.field_mask |= BOXRIG_UI_ANNOTATION_FOREGROUND | BOXRIG_UI_ANNOTATION_UNDERLINE_COLOR;
         annotation.style.foreground = dim;
         annotation.style.underline_color = dim;

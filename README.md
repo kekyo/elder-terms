@@ -1386,8 +1386,8 @@ is not run. Relative paths are rejected because terminal display text does not
 provide a reliable local working directory, particularly for remote sessions.
 
 The built-in absolute path rule enables path validation. Visible-text links
-are underlined before validation completes; invalid links keep their underline
-with dimmed text and underline colors. Terminal input and drawing continue
+start with dimmed text and underline colors. Successful validation restores
+normal brightness; invalid links remain dimmed. Terminal input and drawing continue
 while existence checks run. `Ctrl`+click checks the path again, running the
 command if valid or showing a modal dialog with the reason if invalid.
 

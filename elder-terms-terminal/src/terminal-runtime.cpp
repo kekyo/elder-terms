@@ -1256,11 +1256,12 @@ void terminal_runtime_set_host_callbacks(TerminalRuntime *runtime, TerminalRunti
 }
 
 void terminal_runtime_set_hyperlink_rules(TerminalRuntime *runtime,
-    std::vector<HyperlinkActionRule> rules, std::function<void(TerminalHyperlinkResolution)> activate) {
+    std::vector<HyperlinkActionRule> rules, std::function<void(TerminalHyperlinkResolution)> activate,
+    TerminalHyperlinkPathValidator validate) {
   runtime->links.reset();
   update_link_cursor(runtime, {});
   if (!rules.empty()) runtime->links.reset(create_terminal_links(
-      boxrig_gtk3_terminal_widget_view(runtime->widget), std::move(rules)));
+      boxrig_gtk3_terminal_widget_view(runtime->widget), std::move(rules), std::move(validate)));
   runtime->activate_link = std::move(activate);
   request_frame(runtime);
 }

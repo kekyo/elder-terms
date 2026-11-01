@@ -64,6 +64,16 @@ int main() {
         g_main_context_iteration(nullptr, TRUE);
       while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
     };
+    const auto link_style = [&](std::size_t row) {
+      const auto point = hit(row, 2);
+      boxrig_ui_text_annotation_style style{};
+      boxrig_ui_text_annotation annotations[8]{};
+      std::size_t required = 0;
+      expect(boxrig_ui_view_query_text_annotation_hits(view, &point, BOXRIG_UI_ANNOTATION_HIT_ALL,
+          annotations, 8, &required, &style) == BOXRIG_UI_OK && required > 0,
+          "read current link appearance");
+      return style;
+    };
 
     feed("/foo/bar/baz\r\n\"/foo/bar/baz\"\r\n/tmp\r\n/proc/self/exe\r\nhttps://example.test/tmp\r\n");
     wait_checks();
@@ -125,6 +135,14 @@ int main() {
     const auto pending = terminal_links_resolve(links.get(), hit(0, 2));
     expect(pending && pending->candidate && !pending->action && pending->error.empty(),
         "pending validation returns immediately with an owned clickable candidate");
+    const auto pending_style = link_style(1);
+    expect(pending_style.underline_style == BOXRIG_UNDERLINE_SINGLE &&
+        (pending_style.field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) != 0 &&
+        (pending_style.field_mask & BOXRIG_UI_ANNOTATION_UNDERLINE_COLOR) != 0 &&
+        pending_style.foreground.kind == BOXRIG_COLOR_RGB && pending_style.foreground.red < 128,
+        "a newly recognized path is dimmed and underlined while validation is pending");
+    expect((link_style(2).field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) == 0,
+        "URLs without path validation immediately retain their normal brightness");
     for (int index = 0; index < 10; ++index)
       expect(terminal_links_copy_target(links.get(), hit(0, 2)) == "/foo/bar/baz", "pending links remain copyable");
     expect(requests.size() == 1, "pointer movement and copying reuse pending validation");
@@ -145,6 +163,10 @@ int main() {
     requests[2]->resolve(std::string{});
     while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
     expect(activated && activated->action, "the newest click delivers its fresh validation");
+    expect((link_style(1).field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) == 0 &&
+        (link_style(1).field_mask & BOXRIG_UI_ANNOTATION_UNDERLINE_COLOR) == 0 &&
+        link_style(1).underline_style == BOXRIG_UNDERLINE_SINGLE,
+        "successful validation restores normal text and underline brightness");
     requests[0]->resolve("expanded path does not exist: /foo/bar/baz");
     requests[1]->resolve("expanded path does not exist: /foo/bar/baz");
     wait_checks();
@@ -158,6 +180,9 @@ int main() {
     wait_checks();
     expect(activated && !activated->action && activated->error.find("does not exist") != std::string::npos,
         "the completed click delivers the path error for its modal dialog");
+    expect(link_style(1).foreground.red == pending_style.foreground.red &&
+        link_style(1).underline_color.red == pending_style.underline_color.red,
+        "rejected paths keep the same dimmed appearance as pending paths");
     expect(!terminal_links_resolve(links.get(), hit(0, 2)), "late validation does not restore replaced text");
 
     requests.clear();
