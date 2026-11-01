@@ -38,6 +38,7 @@
 #include <elder-terms/settings-widget.h>
 
 #include "launch-options.h"
+#include "gtk-initialization.h"
 #include "main-window.h"
 #include "file-transfer/file-hash.h"
 #include "file-transfer/file-transfer-paths.h"
@@ -1832,7 +1833,7 @@ int main(int argc, char **argv) {
   if (!select_new_window_connection(&launch_options)) {
     return 1;
   }
-  gtk_init(&argc, &argv);
+  elder_terms::initialize_terminal_gtk(&argc, &argv);
   g_set_prgname(terminal_application_id);
   (void)elder_terms::initialize_application_window_icon();
 

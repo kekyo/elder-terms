@@ -91,6 +91,7 @@ custom_target('boxrig-regex',
 
 telnet_protocol_source = 'src/terminal-sessions/telnet-session/telnet-protocol.cpp'
 elder_terms_sources = [
+  'src/gtk-initialization.cpp',
   'src/activity-indicator.cpp',
   'src/compact-header.cpp',
   'src/indicator-color.cpp',
@@ -365,8 +366,16 @@ executable('osc8-resolve-cost',
    'src/terminal-hyperlink-action.cpp'],
   dependencies: [boxrig_deps['boxrig-ui'], elder_terms_dep])
 
+gtk_initialization_test = executable('gtk-initialization-test',
+  ['tests/cpp/gtk-initialization-test.cpp', 'src/gtk-initialization.cpp'], dependencies: gtk_dep)
+foreach mode : ['default', 'override']
+  test('gtk-initialization-' + mode + '-test', find_program('xvfb-run'),
+    args: ['-a', gtk_initialization_test, mode], env: ['GDK_BACKEND=x11'], timeout: 30)
+endforeach
+
 boxrig_presentation_test = executable('boxrig-presentation-test',
-  'tests/cpp/boxrig-presentation-test.cpp', dependencies: [boxrig_runtime_dep, dependency('epoxy')])
+  ['tests/cpp/boxrig-presentation-test.cpp', 'src/gtk-initialization.cpp'],
+  dependencies: [boxrig_runtime_dep, dependency('epoxy')])
 foreach backend : ['opengl', 'cairo']
   test('boxrig-presentation-' + backend + '-test', find_program('xvfb-run'),
     args: ['-a', boxrig_presentation_test, backend], timeout: 30,
