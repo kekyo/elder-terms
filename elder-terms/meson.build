@@ -206,8 +206,21 @@ install_data(
   install_dir: get_option('datadir') / 'applications',
 )
 
+if package_build_tools == ''
+  elder_terms_metainfo = configure_file(
+    input: 'packaging/metainfo/net.kekyo.elder-terms.metainfo.xml.in',
+    output: 'net.kekyo.elder-terms.metainfo.xml',
+    command: [
+      boxrig_node,
+      files('../scripts/prepare-appstream-metainfo.mts'),
+      '@INPUT@', '@OUTPUT@', elder_terms_application_version,
+    ],
+  )
+else
+  elder_terms_metainfo = package_build_tools / 'net.kekyo.elder-terms.metainfo.xml'
+endif
 install_data(
-  'packaging/metainfo/net.kekyo.elder-terms.metainfo.xml',
+  elder_terms_metainfo,
   install_dir: get_option('datadir') / 'metainfo',
 )
 

@@ -625,7 +625,7 @@ main() {
 	require_command readelf
 	require_command node
 	CONTAINER_ENGINE_BIN=$(choose_container_engine)
-	node "$PROJECT_ROOT/scripts/prepare-package-tools.mts" "$TMP_ROOT/tools"
+	node "$PROJECT_ROOT/scripts/prepare-package-tools.mts" "$TMP_ROOT/tools" "$VERSION"
 	schedule_deb_builds
 	wait_for_all_jobs
 	validate_deb_artifacts

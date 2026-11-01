@@ -110,6 +110,7 @@ const createPackageStage = (
     'usr/share/doc/elder-terms/licenses/connection-icons',
     'usr/share/icons/hicolor/256x256/apps',
     'usr/share/locale/ja/LC_MESSAGES',
+    'usr/share/metainfo',
   ];
   for (const directory of directories) {
     mkdirSync(join(stageRoot, directory), { recursive: true });
@@ -182,6 +183,10 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     ['usr/share/doc/elder-terms/copyright', 'MIT\n'],
     ['usr/share/icons/hicolor/256x256/apps/elder-terms.png', 'icon\n'],
     ['usr/share/locale/ja/LC_MESSAGES/elder-terms.mo', 'locale\n'],
+    [
+      'usr/share/metainfo/net.kekyo.elder-terms.metainfo.xml',
+      '<component type="desktop-application"/>\n',
+    ],
   ]);
   for (const name of [
     'LICENSE',
@@ -327,6 +332,28 @@ container_image_for_target debian trixie riscv64
     );
   });
 
+  it('renders AppStream releases using the application version', () => {
+    const detectedVersion = run(packageScript, ['--print-version']);
+    expectSuccess(detectedVersion, 'application version lookup failed');
+    for (const version of [detectedVersion.stdout.trim(), '2.4.6-custom']) {
+      const output = join(temporaryRoot, `metainfo-${version}.xml`);
+      const generated = run(process.execPath, [
+        join(projectRoot, 'scripts/prepare-appstream-metainfo.mts'),
+        join(
+          projectRoot,
+          'elder-terms/packaging/metainfo/net.kekyo.elder-terms.metainfo.xml.in'
+        ),
+        output,
+        version,
+      ]);
+      expectSuccess(generated, 'AppStream metadata generation failed');
+      const metadata = readFileSync(output, 'utf8');
+      expect(metadata).toContain(`<release version="${version}"`);
+      expect(metadata).toMatch(/date="\d{4}-\d{2}-\d{2}"/);
+      expect(metadata).not.toContain('{{');
+    }
+  });
+
   it('reports the boxrig release version from the build SDK', () => {
     const versions = run(
       'pkg-config',
@@ -359,11 +386,18 @@ container_image_for_target debian trixie riscv64
       run(process.execPath, [
         join(projectRoot, 'scripts/prepare-package-tools.mts'),
         prepared,
+        '2.4.6-custom',
       ]),
       'host build-tool preparation failed'
     );
     const relocated = join(temporaryRoot, 'relocated-tools');
     renameSync(prepared, relocated);
+    expect(
+      readFileSync(
+        join(relocated, 'net.kekyo.elder-terms.metainfo.xml'),
+        'utf8'
+      )
+    ).toContain('<release version="2.4.6-custom"');
     expect(lstatSync(join(relocated, 'prepare-jemalloc.mjs')).isFile()).toBe(
       true
     );
@@ -1048,6 +1082,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     }
 
     for (const missingPath of [
+      'usr/share/metainfo/net.kekyo.elder-terms.metainfo.xml',
       ...[
         'libcardio.so.0',
         'libjemalloc.so.2',
@@ -1171,6 +1206,22 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     expectSuccess(install, 'Meson package installation failed');
 
     const installedRoot = join(destination, prefix);
+    const detectedVersion = run(packageScript, ['--print-version']);
+    expectSuccess(
+      detectedVersion,
+      'installed application version lookup failed'
+    );
+    const installedVersion =
+      stringOption('application_version') || detectedVersion.stdout.trim();
+    expect(
+      readFileSync(
+        join(
+          installedRoot,
+          'share/metainfo/net.kekyo.elder-terms.metainfo.xml'
+        ),
+        'utf8'
+      )
+    ).toContain(`<release version="${installedVersion}"`);
     const expectedLinks = new Map([
       [
         'bin/elder-terms',
@@ -1217,6 +1268,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       join(libraryDirectory, 'elder-terms/elder-terms-terminal/green-off.png'),
       'share/applications/net.kekyo.elder-terms.desktop',
       'share/applications/net.kekyo.elder-terms-terminal.desktop',
+      'share/metainfo/net.kekyo.elder-terms.metainfo.xml',
       'share/doc/elder-terms/licenses/jemalloc/COPYING',
       'share/doc/elder-terms/licenses/libsmb2/COPYING',
       'share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt',
