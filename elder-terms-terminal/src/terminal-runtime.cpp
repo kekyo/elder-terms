@@ -967,7 +967,13 @@ static gboolean dispatch_frame(gpointer context) {
     fail_ui(runtime);
     return G_SOURCE_REMOVE;
   }
-  runtime->links_pending = runtime->links && terminal_links_dispatch(runtime->links.get(), 4096);
+  // Preparing a validated image needs a larger, still bounded recognition
+  // slice so ordinary new paths acquire their pending style before painting.
+  // Long/custom matches continue in smaller background slices; filesystem
+  // validation remains asynchronous and never holds presentation here.
+  const std::size_t link_budget = runtime->widget_frame_requested &&
+      runtime->link_decoration == TerminalLinkDecoration::validated ? 65536 : 4096;
+  runtime->links_pending = runtime->links && terminal_links_dispatch(runtime->links.get(), link_budget);
   if (runtime->links_pending) request_continuation(runtime);
   // Communication and stream finalization continue while the window is hidden.
   if (!runtime->widget_allocated || !gtk_widget_get_mapped(GTK_WIDGET(runtime->widget))) return G_SOURCE_REMOVE;
