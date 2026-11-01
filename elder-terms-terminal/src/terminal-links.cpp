@@ -35,11 +35,14 @@ struct LinkAnnotation {
   std::optional<TerminalHyperlinkAction> candidate;
   std::shared_ptr<PathCheck> path_check;
   std::uint32_t hyperlink_handle = 0;
+  std::string recognized_text{};
 };
 
 struct LinkLine {
   boxrig_text_recognizer_event event{};
   std::vector<LinkAnnotation> items;
+  std::vector<boxrig_ui_text_annotation> published{};
+  std::uint64_t published_revision = 0;
 };
 
 struct LinkRule {
@@ -113,7 +116,7 @@ struct TerminalLinks {
   std::shared_ptr<LinkValidationState> validation;
   TerminalLinkDecoration decoration = TerminalLinkDecoration::underline;
   bool osc8_dirty = true;
-  std::uint64_t next_osc8_annotation_id = 1;
+  std::uint64_t next_annotation_id = 1;
 #if defined(ELDER_TERMS_CACHE_TESTING)
   bool fail_next_cache_insert = false;
 #endif
@@ -237,6 +240,15 @@ static bool annotation_action_rejected(const LinkAnnotation &item) {
   return !item.candidate || (item.path_check && item.path_check->error && !item.path_check->error->empty());
 }
 
+static bool same_published_annotation(const boxrig_ui_text_annotation &left,
+    const boxrig_ui_text_annotation &right) {
+  // All remaining fields are fixed by the owning rule/line or stay zero.
+  return left.item_id == right.item_id && left.priority == right.priority &&
+      left.range.start.column == right.range.start.column && left.range.end.column == right.range.end.column &&
+      left.style.field_mask == right.style.field_mask && left.style.underline_style == right.style.underline_style &&
+      left.style.color_tag == right.style.color_tag;
+}
+
 static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &key) {
   if (!links->view) return;
   for (auto &rule : links->rules) {
@@ -279,10 +291,17 @@ static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &ke
       }
       annotations.push_back(annotation);
     }
-    const auto &event = line->second.event;
+    auto &retained = line->second;
+    const auto &event = retained.event;
+    if (retained.published_revision == event.line_revision &&
+        retained.published.size() == annotations.size() &&
+        std::equal(retained.published.begin(), retained.published.end(), annotations.begin(), same_published_annotation)) continue;
     // The view rejects a completion after its logical text revision changed.
-    boxrig_ui_view_replace_text_annotations(links->view, annotation_source(rule), event.screen,
-        event.line_id, event.line_revision, annotations.data(), annotations.size());
+    if (boxrig_ui_view_replace_text_annotations(links->view, annotation_source(rule), event.screen,
+        event.line_id, event.line_revision, annotations.data(), annotations.size()) == BOXRIG_UI_OK) {
+      retained.published = std::move(annotations);
+      retained.published_revision = event.line_revision;
+    }
   }
 }
 
@@ -376,8 +395,9 @@ void terminal_links_attach_view(TerminalLinks *links, boxrig_ui_view *view) {
 }
 
 static bool token_boundary(boxrig_terminal *terminal,
-    boxrig_text_position position, bool before) {
+    boxrig_text_position position, bool before, std::size_t *remaining = nullptr) {
   if (before && position.column == 0) return true;
+  if (remaining && !*remaining) return false;
   std::size_t rows = 0, columns = 0;
   boxrig_terminal_size(terminal, &rows, &columns);
   if (!columns) return false;
@@ -386,9 +406,10 @@ static bool token_boundary(boxrig_terminal *terminal,
   boxrig_text_range range{position, position};
   if (before) range.start.column = ((position.column - 1) / columns) * columns;
   else range.end.column += columns - position.column % columns;
-  const boxrig_text_snapshot_options options{position.screen, &range, 65536, 1};
+  const boxrig_text_snapshot_options options{position.screen, &range, remaining ? *remaining : 65536, 1};
   boxrig_text_snapshot *snapshot = nullptr;
   const auto status = boxrig_terminal_create_text_snapshot(terminal, &options, &snapshot);
+  if (remaining && status == BOXRIG_STATUS_LIMIT_EXCEEDED) *remaining = 0;
   // Beyond the final physical fragment is a hard line end. Other failures,
   // including oversized projections and stale positions, fail closed.
   if (status != BOXRIG_STATUS_OK)
@@ -396,6 +417,7 @@ static bool token_boundary(boxrig_terminal *terminal,
   const std::unique_ptr<boxrig_text_snapshot, decltype(&boxrig_text_snapshot_destroy)> owner(snapshot, boxrig_text_snapshot_destroy);
   std::size_t length = 0;
   const auto *bytes = reinterpret_cast<const char *>(boxrig_text_snapshot_data(snapshot, &length));
+  if (remaining) *remaining -= length;
   if (!length) return true;
   const auto character = g_utf8_get_char(before ? g_utf8_find_prev_char(bytes, bytes + length) : bytes);
   return g_unichar_isspace(character) || character == 0x85 || character == 0x180e ||
@@ -429,7 +451,9 @@ static void update_annotations(TerminalLinks *links, const boxrig_text_recognize
   const auto key = line_key(event.screen, event.line_id);
   auto &line = rule->lines[key];
   unsubscribe_line(key, line);
-  line = {event, {}};
+  auto previous = std::move(line.items);
+  line.event = event;
+  line.items.clear();
   line.items.reserve(results.size());
   for (const auto &result : results) {
     if (rule->rule.whole_token &&
@@ -437,7 +461,10 @@ static void update_annotations(TerminalLinks *links, const boxrig_text_recognize
          !token_boundary(links->terminal, result.range.end, false))) continue;
     boxrig_ui_text_annotation annotation{};
     annotation.source_id = result.recognizer_id;
-    annotation.item_id = result.match_id;
+    const auto old = std::lower_bound(previous.begin(), previous.end(), result.range.start.column,
+        [](const LinkAnnotation &item, std::size_t column) { return item.annotation.range.start.column < column; });
+    annotation.item_id = old != previous.end() && old->annotation.range.start.column == result.range.start.column &&
+        old->annotation.range.end.column == result.range.end.column ? old->annotation.item_id : links->next_annotation_id++;
     annotation.range = result.range;
     boxrig_regex_result *captured = nullptr;
     if (boxrig_terminal_text_recognizer_result(links->terminal, result.recognizer_id,
@@ -446,7 +473,10 @@ static void update_annotations(TerminalLinks *links, const boxrig_text_recognize
     std::string reason;
     auto candidate = expand_terminal_hyperlink_action(rule->rule,
         [captured](const std::string &name) { return regular_expression_capture(captured, name); }, &reason);
-    line.items.push_back({annotation, std::move(candidate), {}});
+    auto text = regular_expression_capture(captured, "0").value_or(std::string{});
+    // Very large matches continue through the normal bounded recognizer only.
+    if (text.size() > 65536) text.clear();
+    line.items.push_back({annotation, std::move(candidate), {}, 0, std::move(text)});
   }
   publish_line_annotations(links, key);
 }
@@ -581,6 +611,60 @@ static std::shared_ptr<boxrig_regex_result> cached_match_osc8(TerminalLinks *lin
   return outcome.result;
 }
 
+static bool retained_text_unchanged(TerminalLinks *links, const LinkRule &rule,
+    LinkAnnotation &item, const boxrig_text_position &position, std::size_t &remaining) {
+  if (item.recognized_text.empty() || item.recognized_text.size() > remaining) return false;
+  auto range = item.annotation.range;
+  range.start.line_revision = range.end.line_revision = position.line_revision;
+  range.start.text_revision = range.end.text_revision = position.text_revision;
+  const boxrig_text_snapshot_options options{position.screen, &range, remaining, 1};
+  boxrig_text_snapshot *snapshot = nullptr;
+  const auto status = boxrig_terminal_create_text_snapshot(links->terminal, &options, &snapshot);
+  if (status == BOXRIG_STATUS_LIMIT_EXCEEDED) remaining = 0;
+  if (status != BOXRIG_STATUS_OK) return false;
+  const std::unique_ptr<boxrig_text_snapshot, decltype(&boxrig_text_snapshot_destroy)> owner(snapshot, boxrig_text_snapshot_destroy);
+  std::size_t length = 0;
+  const auto *bytes = reinterpret_cast<const char *>(boxrig_text_snapshot_data(snapshot, &length));
+  remaining -= length;
+  if (std::string_view(bytes, length) != item.recognized_text ||
+      (rule.rule.whole_token && (!token_boundary(links->terminal, range.start, true, &remaining) ||
+          !token_boundary(links->terminal, range.end, false, &remaining)))) return false;
+  item.annotation.range = range;
+  return true;
+}
+
+static void refresh_visible_text_annotations(TerminalLinks *links, std::size_t rows) {
+  // Bound the extra projection work independently of history and rule count.
+  // Matches beyond this limit still finish through the incremental recognizer.
+  std::size_t remaining = 65536;
+  for (std::size_t row = 0; row < rows; ++row) {
+    boxrig_viewport_cell_resolution position{};
+    if (boxrig_terminal_resolve_viewport_cell(links->terminal, row, 0, &position) != BOXRIG_STATUS_OK) continue;
+    const auto key = line_key(position.fragment.screen, position.fragment.line_id);
+    bool changed = false;
+    for (auto &rule : links->rules) {
+      if (!rule.recognizer) continue;
+      const auto found = rule.lines.find(key);
+      if (found == rule.lines.end() || found->second.event.line_revision == position.fragment.line_revision) continue;
+      auto &line = found->second;
+      // Retain only the appearance of byte-identical text, with current token
+      // boundaries. Activation still requires fresh recognizer captures below.
+      std::erase_if(line.items, [&](LinkAnnotation &item) {
+        if (retained_text_unchanged(links, rule, item, position.range.start, remaining)) return false;
+        if (item.path_check) {
+          auto subscriber = item.path_check->subscribers.find(key);
+          if (subscriber != item.path_check->subscribers.end() && --subscriber->second == 0)
+            item.path_check->subscribers.erase(subscriber);
+        }
+        return true;
+      });
+      line.event.line_revision = position.fragment.line_revision;
+      changed = true;
+    }
+    if (changed) publish_line_annotations(links, key);
+  }
+}
+
 void terminal_links_refresh_viewport(TerminalLinks *links) {
   if (!links->view) return;
   boxrig_ui_dirty dirty{};
@@ -589,6 +673,7 @@ void terminal_links_refresh_viewport(TerminalLinks *links) {
   std::vector<std::map<LinkLineKey, LinkLine>> visible(links->rules.size());
   std::size_t rows = 0, columns = 0;
   boxrig_terminal_size(links->terminal, &rows, &columns);
+  refresh_visible_text_annotations(links, rows);
   for (std::size_t row = 0; row < rows; ++row) {
     for (std::size_t column = 0; column < columns; ++column) {
       boxrig_cell_view cell{};
@@ -620,7 +705,7 @@ void terminal_links_refresh_viewport(TerminalLinks *links) {
         boxrig_ui_text_annotation annotation{};
         annotation.source_id = annotation_source(rule);
         // Source/item identities are unique across the view, not just one line.
-        annotation.item_id = links->next_osc8_annotation_id++;
+        annotation.item_id = links->next_annotation_id++;
         annotation.range = position.range;
         line.items.push_back({annotation, std::move(action), {}, cell.hyperlink_handle});
       }
@@ -685,12 +770,14 @@ static std::optional<ResolvedLink> resolve_link(
       const auto annotation = std::find_if(annotations.begin(), annotations.begin() + count,
           [&rule](const auto &item) { return item.source_id == rule.recognizer; });
       if (annotation == annotations.begin() + count) continue;
-      match_id = annotation->item_id;
       const boxrig_text_range grapheme{hit.leading_position, hit.trailing_position};
       boxrig_text_recognition_result current{};
       std::size_t required = 0;
       if (boxrig_terminal_query_recognition_hits(links->terminal, &grapheme, rule.recognizer,
-          &current, 1, &required) != BOXRIG_STATUS_OK || required != 1 || current.match_id != annotation->item_id) continue;
+          &current, 1, &required) != BOXRIG_STATUS_OK || required != 1 ||
+          current.range.start.column != annotation->range.start.column ||
+          current.range.end.column != annotation->range.end.column) continue;
+      match_id = current.match_id;
       boxrig_regex_result *captured = nullptr;
       if (boxrig_terminal_text_recognizer_result(links->terminal, current.recognizer_id,
           current.match_id, current.result_set_revision, &captured) != BOXRIG_STATUS_OK) continue;

@@ -75,9 +75,12 @@ void terminal_links_attach_view(TerminalLinks *links, boxrig_ui_view *view);
 void terminal_links_set_decoration(TerminalLinks *links, TerminalLinkDecoration decoration);
 
 /**
- * Refreshes OSC 8 annotations in the synchronized visible viewport.
+ * Refreshes OSC 8 annotations and retains unchanged visible link decoration.
  * @param links Live link state. Call after model synchronization, before rendering.
- * @remarks Reads only the visible grid; filesystem work remains asynchronous.
+ * @remarks Checks retained match text only on visible logical lines, with a
+ * 64 KiB projection limit per refresh. Activation requires current recognition results;
+ * preserving appearance never grants authority to an old action. Filesystem
+ * work remains asynchronous.
  */
 void terminal_links_refresh_viewport(TerminalLinks *links);
 

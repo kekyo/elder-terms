@@ -267,6 +267,26 @@ int main() {
     scan();
     expect(terminal_links_copy_target(links.get(), hit(1, 2)) == wrapped_url,
         "a hit on a wrapped URL copies the whole logical match");
+
+    feed("\x1b[2J\x1b[H00000 https://retained.test/");
+    scan();
+    const auto before_counter = annotation_at(0);
+    const auto before_counter_hit = hit(0, 10);
+    feed("\x1b[H00001");
+    terminal_links_refresh_viewport(links.get());
+    expect(annotation_at(0).item_id == before_counter.item_id,
+        "unrelated text updates retain the visible link identity before recognition completes");
+    expect(!terminal_links_resolve(links.get(), before_counter_hit) && !terminal_links_resolve(links.get(), hit(0, 10)),
+        "retaining decoration never authorizes an obsolete capture or pointer hit");
+    scan();
+    expect(annotation_at(0).item_id == before_counter.item_id &&
+        action(0, 10).arguments == std::vector<std::string>{"https://retained.test/"},
+        "fresh recognition restores activation without replacing identical decoration");
+    feed("\x1b[1;7H                     ");
+    terminal_links_refresh_viewport(links.get());
+    annotations = 0;
+    expect(boxrig_ui_view_query_text_annotation_visual_ranges(view, 0, nullptr, 0, &annotations) == BOXRIG_UI_OK && annotations == 0,
+        "changed link text loses its decoration before recognition completes");
     std::puts("boxrig links: Unicode boundaries, captures, annotations and stale hits passed");
     return 0;
   } catch (const std::exception &error) {

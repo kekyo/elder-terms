@@ -307,6 +307,21 @@ int main() {
     expect(activated && activated->action && terminal_links_cache_statistics(links.get()).path_queries_pending == 0,
         "disabling validation per rule preserves immediate activation without filesystem I/O");
 
+    for (const auto &[change, visible] : std::vector<std::pair<std::string, bool>>{
+        {"\x1b[1;6H00001", true}, {"\x1b[1;5H$", false},
+        {"\x1b[1;5H//more", false}, {"\x1b[1;2HX", false}}) {
+      feed("\x1b[2J\x1b[H/tmp 00000");
+      std::size_t consumed = 0;
+      expect(boxrig_terminal_feed(terminal, reinterpret_cast<const uint8_t *>(change.data()),
+          change.size(), &consumed) == BOXRIG_STATUS_OK && consumed == change.size(), "update a path row");
+      expect(boxrig_ui_model_synchronize(model) == BOXRIG_UI_OK, "synchronize changed path row");
+      terminal_links_refresh_viewport(links.get());
+      std::size_t annotations = 0;
+      boxrig_ui_view_query_text_annotation_visual_ranges(view, 0, nullptr, 0, &annotations);
+      expect(annotations == (visible ? 1u : 0u),
+          "pending recognition retains only unchanged paths with valid token boundaries");
+    }
+
     links.reset();
     expect(boxrig_terminal_set_scrollback_capacity(terminal, 0) == BOXRIG_STATUS_OK, "limit retained text");
     links.reset(create_terminal_links(view, default_hyperlink_action_rules(),
