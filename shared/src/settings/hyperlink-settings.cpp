@@ -73,11 +73,12 @@ std::vector<HyperlinkActionRule> default_hyperlink_action_rules() {
       {
           .id = "local-path-text",
           .recognition_source = HyperlinkRecognitionSource::terminal_text,
-          .pattern = R"(~?/[^\s\p{Z})" "\u0085\u180e" R"(<>"']*)",
+          .pattern = R"(~?/(?:[\p{L}\p{M}\p{Nd}_.-]+(?:/[\p{L}\p{M}\p{Nd}_.-]+)*/?)?)",
           .command = "xdg-open",
           .arguments = {"${0}"},
           .path_validation = HyperlinkPathValidation::existing_local_path,
           .path_template = "${0}",
+          .whole_token = true,
       },
   };
 }

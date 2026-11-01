@@ -360,6 +360,11 @@ load_hyperlink_rules_from_key_file(GKeyFile *key_file,
       rule.path_template =
           key_file_string(key_file, group, "path", &error);
     }
+    if (error == nullptr && g_key_file_has_key(
+        key_file, group.c_str(), "whole_token", nullptr)) {
+      rule.whole_token = g_key_file_get_boolean(
+          key_file, group.c_str(), "whole_token", &error) != FALSE;
+    }
     if (error != nullptr) {
       warn_invalid_hyperlink(warnings, group, glib_error_message(error));
       g_clear_error(&error);
@@ -427,6 +432,7 @@ static void set_key_file_hyperlink_rule(GKeyFile *key_file,
                         rule.pattern.c_str());
   g_key_file_set_string(key_file, group.c_str(), "command",
                         rule.command.c_str());
+  g_key_file_set_boolean(key_file, group.c_str(), "whole_token", rule.whole_token);
   if (!rule.arguments.empty()) {
     std::vector<const gchar *> arguments;
     arguments.reserve(rule.arguments.size());

@@ -133,6 +133,23 @@ int main() {
             std::vector<std::string>{"https://example.test/~/Downloads/"},
         "a tilde inside an HTTP URL remains part of the unmodified URL");
 
+    for (const std::string path : {"/foo//bar", "/foo/bar$", "~/foo//bar", "~/foo/bar$",
+        "relative/foo/bar", "~user/foo", "//foo", "/foo:bar", "/foo/bar@baz", "/foo/bar\\baz"}) {
+      feed("\x1b[2J\x1b[H" + path);
+      for (std::size_t column = 0; column < path.size(); ++column)
+        expect(!terminal_links_copy_target(links.get(), hit(0, column)),
+            "invalid path tokens must not produce partial links");
+    }
+    for (const std::string path : {"/", "~/", "/foo/bar", "~/Downloads/", "/foo_bar/a-b.txt", "/日本語/資料"}) {
+      feed("\x1b[2J\x1b[H\"" + path + "\" /tmp /proc/self/exe");
+      expect(terminal_links_copy_target(links.get(), hit(0, 1)) == path,
+          "complete root, home, Unicode and permitted-punctuation paths are recognized");
+    }
+    feed("\x1b[2J\x1b[H" + std::string(97, ' ') + "/foo/bar$");
+    expect(!terminal_links_copy_target(links.get(), hit(0, 98)) &&
+        !terminal_links_copy_target(links.get(), hit(1, 2)),
+        "path boundaries are checked across soft wraps");
+
     links.reset();
     std::vector<std::shared_ptr<cardio::promise_source<std::string>>> requests;
     std::vector<std::string> requested_paths;

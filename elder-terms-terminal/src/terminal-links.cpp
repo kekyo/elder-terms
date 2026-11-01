@@ -354,6 +354,33 @@ void terminal_links_attach_view(TerminalLinks *links, boxrig_ui_view *view) {
   }
 }
 
+static bool token_boundary(boxrig_terminal *terminal,
+    boxrig_text_position position, bool before) {
+  if (before && position.column == 0) return true;
+  std::size_t rows = 0, columns = 0;
+  boxrig_terminal_size(terminal, &rows, &columns);
+  if (!columns) return false;
+  // Read at most one physical fragment. Fragment edges are grapheme boundaries,
+  // including font-measured wide characters; soft wraps are not token breaks.
+  boxrig_text_range range{position, position};
+  if (before) range.start.column = ((position.column - 1) / columns) * columns;
+  else range.end.column += columns - position.column % columns;
+  const boxrig_text_snapshot_options options{position.screen, &range, 65536, 1};
+  boxrig_text_snapshot *snapshot = nullptr;
+  const auto status = boxrig_terminal_create_text_snapshot(terminal, &options, &snapshot);
+  // Beyond the final physical fragment is a hard line end. Other failures,
+  // including oversized projections and stale positions, fail closed.
+  if (status != BOXRIG_STATUS_OK)
+    return !before && position.column % columns == 0 && status == BOXRIG_STATUS_INVALID_ARGUMENT;
+  const std::unique_ptr<boxrig_text_snapshot, decltype(&boxrig_text_snapshot_destroy)> owner(snapshot, boxrig_text_snapshot_destroy);
+  std::size_t length = 0;
+  const auto *bytes = reinterpret_cast<const char *>(boxrig_text_snapshot_data(snapshot, &length));
+  if (!length) return true;
+  const auto character = g_utf8_get_char(before ? g_utf8_find_prev_char(bytes, bytes + length) : bytes);
+  return g_unichar_isspace(character) || character == 0x85 || character == 0x180e ||
+      character == '\'' || character == '"';
+}
+
 static void update_annotations(TerminalLinks *links, const boxrig_text_recognizer_event &event) {
   if (!links->view) return;
   std::size_t required = 0;
@@ -384,6 +411,9 @@ static void update_annotations(TerminalLinks *links, const boxrig_text_recognize
   line = {event, {}};
   line.items.reserve(results.size());
   for (const auto &result : results) {
+    if (rule->rule.whole_token &&
+        (!token_boundary(links->terminal, result.range.start, true) ||
+         !token_boundary(links->terminal, result.range.end, false))) continue;
     boxrig_ui_text_annotation annotation{};
     annotation.source_id = result.recognizer_id;
     annotation.item_id = result.match_id;

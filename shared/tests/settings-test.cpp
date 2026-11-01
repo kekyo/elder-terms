@@ -4351,6 +4351,7 @@ static void test_connection_hyperlink_actions_override_built_in_defaults() {
                "arguments=--line;${line};${path|uri-decode};\n"
                "path_validation=existing-local-path\n"
                "path=${path|uri-decode}\n"
+               "whole_token=true\n"
                "\n"
                "[hyperlink.first]\n"
                "source=osc8\n"
@@ -4388,6 +4389,7 @@ static void test_connection_hyperlink_actions_override_built_in_defaults() {
                           existing_local_path &&
                   loaded.store.hyperlink_rules[0].path_template ==
                       "${path|uri-decode}" &&
+                  loaded.store.hyperlink_rules[0].whole_token &&
                   loaded.store.hyperlink_rules[1].id == "first" &&
                   loaded.store.hyperlink_rules[1].recognition_source ==
                       elder_terms::HyperlinkRecognitionSource::osc8,

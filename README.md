@@ -1369,6 +1369,13 @@ Each rule selects one recognition source:
 - "Visible terminal text" finds a matching substring under the pointer. The
   expression must not match an empty string.
 
+The default local path rule recognizes paths starting with `/` or `~/`, with
+components containing letters, digits, combining marks, `_`, `.`, and `-`.
+A trailing `/` is allowed; `/foo//bar` and `/foo/bar$` are not recognized.
+Setting "Text boundaries" to "Whitespace, quotes or line ends" prevents partial
+links inside invalid candidates. The default local path rule enables this
+option. Custom rules can change both the expression and boundary setting.
+
 Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.11.0/docs/en/regex.md).
 Character classes, groups, alternatives, repetition, and numbered or named captures are supported. Backreferences, lookahead, lookbehind, and expressions matching an empty string are not supported.
 `\d`, `\s`, and `\w` cover ASCII. Use Unicode general categories such as `\p{L}` for letters and `\p{Nd}` for decimal digits.
@@ -1414,6 +1421,8 @@ path=${path}
 ```
 
 `source` is `osc8` or `terminal-text` and defaults to `osc8` when omitted.
+`whole_token=true` requires whitespace, quotes or line ends around visible-text
+matches. It defaults to `false` and does not affect OSC 8 targets.
 `path_validation` is `none` or `existing-local-path`; `path` is required for
 the latter. `[hyperlink.<rule-id>]` sections are evaluated in file order. Rule
 IDs may contain letters, digits, `-`, and `_`.
