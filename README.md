@@ -1354,6 +1354,9 @@ When a connection defines no link rules, the built-in rules recognize:
 - OSC 8 targets in `vscode://file/absolute/path:line` and
   `vscode://file/absolute/path:line:column` form, opened with `code
   --reuse-window --goto`.
+- Absolute paths such as `/foo/bar/baz` in visible terminal text, opened with
+  `xdg-open` when they name a local file or directory. Surrounding quotes are
+  excluded from the link.
 
 URI escapes in captures, such as `%20`, can be decoded before a value is
 passed to the command. "Restore defaults" removes the connection's explicit
@@ -1375,11 +1378,18 @@ The command is a fixed executable name or path. It is launched directly without 
 so pipes, redirections, and other shell syntax are not interpreted. Capture
 templates are expanded only in arguments and in the optional validation path.
 
-Path validation can be set to "Existing local file or directory". In that
+Each rule's "Path validation" setting can be switched between "Do not validate"
+and "Existing local file or directory". In the latter
 mode, the expanded path must be absolute and must name an existing regular
 file or directory on the computer running elder-terms; otherwise the command
 is not run. Relative paths are rejected because terminal display text does not
 provide a reliable local working directory, particularly for remote sessions.
+
+The built-in absolute path rule enables path validation. Visible-text links
+are underlined before validation completes; invalid links keep their underline
+with dimmed text and underline colors. Terminal input and drawing continue
+while existence checks run. `Ctrl`+click checks the path again, running the
+command if valid or showing a modal dialog with the reason if invalid.
 
 The same settings can be edited directly in a connection's INI file. This
 example recognizes an absolute local source path followed by a line number:

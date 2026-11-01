@@ -409,10 +409,11 @@ static std::optional<TerminalHyperlinkResolution> released_link(
   if (status != BOXRIG_UI_OK && status != BOXRIG_UI_LIMIT_EXCEEDED) return std::nullopt;
   const auto current = terminal_links_resolve(runtime->links.get(), hit);
   if (!current || current->source_id != press.link->source_id || current->match_id != press.link->match_id ||
-      current->hyperlink_handle != press.link->hyperlink_handle || current->error != press.link->error ||
-      current->action.has_value() != press.link->action.has_value()) return std::nullopt;
-  if (current->action && (current->action->command != press.link->action->command ||
-      current->action->arguments != press.link->action->arguments)) return std::nullopt;
+      current->hyperlink_handle != press.link->hyperlink_handle || current->candidate != press.link->candidate)
+    return std::nullopt;
+  // Background validation may complete between press and release. The captured
+  // candidate, rather than that transient outcome, identifies the click.
+  if (!current->candidate && current->error != press.link->error) return std::nullopt;
   return current;
 }
 
@@ -462,7 +463,7 @@ static boxrig_input_mouse_route route_mouse(
         const auto link = released_link(runtime, *hit);
         runtime->selection_phase = SelectionPhase::idle;
         runtime->selection_press = {};
-        if (link && runtime->activate_link) runtime->activate_link(*link);
+        if (link && runtime->activate_link) terminal_links_activate(runtime->links.get(), *link, runtime->activate_link);
       }
       return BOXRIG_INPUT_MOUSE_ROUTE_APPLICATION;
     }

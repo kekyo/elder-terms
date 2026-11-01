@@ -42,6 +42,7 @@ import {
   saveTerminalGridLayoutEvidence,
   scrollWheelWithControl,
   terminalGrid81x25ConfigPath,
+  terminalPlainTextGridConfigPath,
   terminalInvalidValuesConfigPath,
   terminalTextGrid80x24Path,
   telnetMissingAddressConfigPath,
@@ -3477,34 +3478,38 @@ describe.concurrent('elder-terms-terminal settings', () => {
   });
 
   it('does not apply runtime terminal font size changes when cancelled', async (context) => {
-    await runGtkTest(context, ['--test-fixture'], async (app, evidence) => {
-      await openSettingsDialog(app);
-      await showTerminalAppearanceSettingsPage(app);
+    await runGtkTest(
+      context,
+      ['--test-fixture', '-c', terminalPlainTextGridConfigPath],
+      async (app, evidence) => {
+        await openSettingsDialog(app);
+        await showTerminalAppearanceSettingsPage(app);
 
-      await expectElementKind(
-        await app.getById('settings_terminal_font_size_dip_entry'),
-        'entry'
-      ).setText('14.5');
-      await expectElementKind(
-        await app.getById('settings_cancel_button'),
-        'button'
-      ).click();
-      await expectSettingsDialogClosed(app);
-      await delay(300);
+        await expectElementKind(
+          await app.getById('settings_terminal_font_size_dip_entry'),
+          'entry'
+        ).setText('14.5');
+        await expectElementKind(
+          await app.getById('settings_cancel_button'),
+          'button'
+        ).click();
+        await expectSettingsDialogClosed(app);
+        await delay(300);
 
-      const layout = await waitForResult(async () => {
-        const currentLayout = await readTerminalGridLayout(app);
-        expectWindowCellSize(currentLayout, defaultColumns, defaultRows);
-        await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
-        return currentLayout;
-      });
-      await assertTerminalTextGridMatches(
-        layout.terminal,
-        'fixture-terminal-cancelled-runtime-zoom',
-        terminalTextGrid80x24Path,
-        evidence
-      );
-    });
+        const layout = await waitForResult(async () => {
+          const currentLayout = await readTerminalGridLayout(app);
+          expectWindowCellSize(currentLayout, defaultColumns, defaultRows);
+          await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
+          return currentLayout;
+        });
+        await assertTerminalTextGridMatches(
+          layout.terminal,
+          'fixture-terminal-cancelled-runtime-zoom',
+          terminalTextGrid80x24Path,
+          evidence
+        );
+      }
+    );
   });
 
   it('does not apply runtime auto_close changes when cancelled', async (context) => {
@@ -3678,35 +3683,39 @@ describe.concurrent('elder-terms-terminal settings', () => {
   });
 
   it('applies runtime terminal font size changes', async (context) => {
-    await runGtkTest(context, ['--test-fixture'], async (app, evidence) => {
-      await openSettingsDialog(app);
-      await showTerminalAppearanceSettingsPage(app);
+    await runGtkTest(
+      context,
+      ['--test-fixture', '-c', terminalPlainTextGridConfigPath],
+      async (app, evidence) => {
+        await openSettingsDialog(app);
+        await showTerminalAppearanceSettingsPage(app);
 
-      const zoom = expectElementKind(
-        await app.getById('settings_terminal_font_size_dip_entry'),
-        'entry'
-      );
-      await setNumericEntryValue(zoom, 14.5);
-      await expectElementKind(
-        await app.getById('settings_apply_button'),
-        'button'
-      ).click();
-      await closeSettingsDialogAfterApply(app);
-      await delay(300);
+        const zoom = expectElementKind(
+          await app.getById('settings_terminal_font_size_dip_entry'),
+          'entry'
+        );
+        await setNumericEntryValue(zoom, 14.5);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await closeSettingsDialogAfterApply(app);
+        await delay(300);
 
-      const layout = await waitForResult(async () => {
-        const currentLayout = await readTerminalGridLayout(app);
-        expectWindowCellSize(currentLayout, defaultColumns, defaultRows);
-        await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
-        return currentLayout;
-      });
-      await assertTerminalTextGridMatches(
-        layout.terminal,
-        'fixture-terminal-runtime-zoom',
-        terminalTextGrid80x24Font145Path,
-        evidence
-      );
-    });
+        const layout = await waitForResult(async () => {
+          const currentLayout = await readTerminalGridLayout(app);
+          expectWindowCellSize(currentLayout, defaultColumns, defaultRows);
+          await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
+          return currentLayout;
+        });
+        await assertTerminalTextGridMatches(
+          layout.terminal,
+          'fixture-terminal-runtime-zoom',
+          terminalTextGrid80x24Font145Path,
+          evidence
+        );
+      }
+    );
   });
 
   it('applies runtime auto_close changes before the local shell exits', async (context) => {

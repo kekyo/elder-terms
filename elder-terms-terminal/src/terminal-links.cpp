@@ -8,13 +8,37 @@
 
 #include <algorithm>
 #include <array>
+#include <deque>
 #include <glib.h>
 #include <list>
+#include <map>
 #include <new>
+#include <set>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 
 namespace elder_terms {
+
+using LinkLineKey = std::tuple<boxrig_text_screen, std::uint64_t, std::uint64_t>;
+
+struct PathCheck {
+  std::string path;
+  std::optional<std::string> error;
+  std::map<LinkLineKey, std::size_t> subscribers;
+  std::uint64_t generation = 0;
+};
+
+struct LinkAnnotation {
+  boxrig_ui_text_annotation annotation{};
+  std::optional<TerminalHyperlinkAction> candidate;
+  std::shared_ptr<PathCheck> path_check;
+};
+
+struct LinkLine {
+  boxrig_text_recognizer_event event{};
+  std::vector<LinkAnnotation> items;
+};
 
 struct LinkRule {
   HyperlinkActionRule rule;
@@ -22,6 +46,24 @@ struct LinkRule {
   std::uint64_t recognizer = 0;
   std::uint64_t rescan_revision = 0;
   std::uint64_t generation = 0;
+  std::map<LinkLineKey, LinkLine> lines;
+};
+
+struct LinkValidationState {
+  TerminalLinks *owner = nullptr;
+  TerminalHyperlinkPathValidator validate;
+  cardio::cancellation_source stop;
+  cardio::cancellation_source activation_stop;
+  cardio::primitives::semaphore slots{8};
+  std::unordered_map<std::string, std::shared_ptr<PathCheck>> cache;
+  std::deque<std::weak_ptr<PathCheck>> queue;
+  std::size_t insertions_since_prune = 0;
+  std::set<LinkLineKey> dirty;
+  guint presentation_source = 0;
+  std::uint64_t activation_generation = 0;
+  std::size_t queries = 0;
+  std::size_t pending = 0;
+  std::size_t workers = 0;
 };
 
 struct Osc8CacheKey {
@@ -66,6 +108,8 @@ struct TerminalLinks {
   std::list<Osc8CacheEntry> osc8_cache;
   std::unordered_map<Osc8CacheKey, std::list<Osc8CacheEntry>::iterator, Osc8CacheHash> osc8_index;
   std::size_t osc8_cache_bytes = 0;
+  std::shared_ptr<LinkValidationState> validation;
+  std::uint64_t color_revision = 0;
 #if defined(ELDER_TERMS_CACHE_TESTING)
   bool fail_next_cache_insert = false;
 #endif
@@ -75,6 +119,8 @@ TerminalLinksCacheStatistics terminal_links_cache_statistics(const TerminalLinks
   auto result = links->cache_statistics;
   result.cache_entries = links->osc8_cache.size();
   result.cache_uri_bytes = links->osc8_cache_bytes;
+  result.path_queries = links->validation->queries;
+  result.path_queries_pending = links->validation->pending;
   return result;
 }
 
@@ -84,8 +130,162 @@ void terminal_links_fail_next_cache_insert_for_test(TerminalLinks *links) {
 }
 #endif
 
+static LinkLineKey line_key(boxrig_text_screen screen, boxrig_text_line_id line) {
+  return {screen, line.epoch, line.serial};
+}
+
+static void unsubscribe_line(const LinkLineKey &key, LinkLine &line) {
+  for (auto &item : line.items) {
+    if (!item.path_check) continue;
+    const auto found = item.path_check->subscribers.find(key);
+    if (found != item.path_check->subscribers.end() && --found->second == 0)
+      item.path_check->subscribers.erase(found);
+  }
+}
+
 static void clear_annotations(TerminalLinks *links, std::uint64_t source) {
+  for (auto &rule : links->rules) if (rule.recognizer == source) {
+    for (auto &[key, line] : rule.lines) unsubscribe_line(key, line);
+    rule.lines.clear();
+  }
   if (links->view) boxrig_ui_view_clear_text_annotations(links->view, source);
+}
+
+static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &key);
+
+static void schedule_validation_presentation(const std::shared_ptr<LinkValidationState> &state) {
+  if (!state->owner || state->presentation_source || state->dirty.empty()) return;
+  state->presentation_source = g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,
+      +[](gpointer data) -> gboolean {
+        const auto state = *static_cast<std::shared_ptr<LinkValidationState> *>(data);
+        state->presentation_source = 0;
+        auto dirty = std::move(state->dirty);
+        state->dirty.clear();
+        if (state->owner) for (const auto &key : dirty) publish_line_annotations(state->owner, key);
+        return G_SOURCE_REMOVE;
+      }, new std::shared_ptr<LinkValidationState>(state),
+      +[](gpointer data) { delete static_cast<std::shared_ptr<LinkValidationState> *>(data); });
+}
+
+static cardio::promise<void> check_paths_async(std::shared_ptr<LinkValidationState> state) {
+  ++state->workers;
+  while (state->owner && !state->queue.empty()) {
+    const auto check = state->queue.front().lock();
+    state->queue.pop_front();
+    if (check) {
+      const auto generation = check->generation;
+      try {
+        const auto cancellation = state->stop.get_cancellation();
+        const auto slot = std::move(co_await state->slots.acquire(cancellation));
+        cancellation.throw_if_cancellation_requested();
+        ++state->queries;
+        auto error = co_await state->validate(check->path, cancellation);
+        if (state->owner && generation == check->generation) {
+          check->error = std::move(error);
+          for (const auto &[key, count] : check->subscribers) { (void)count; state->dirty.insert(key); }
+          schedule_validation_presentation(state);
+        }
+      } catch (const cardio::canceled_exception &) {
+        // Detached views and terminal destruction retire every pending delivery.
+      } catch (const std::exception &error) {
+        if (state->owner && generation == check->generation) {
+          check->error = error.what();
+          for (const auto &[key, count] : check->subscribers) { (void)count; state->dirty.insert(key); }
+          schedule_validation_presentation(state);
+        }
+      }
+    }
+    --state->pending;
+  }
+  --state->workers;
+}
+
+static std::shared_ptr<PathCheck> path_check(TerminalLinks *links, const std::string &path) {
+  auto &state = links->validation;
+  if (const auto found = state->cache.find(path); found != state->cache.end()) return found->second;
+  // Retained text owns its checks. A weak queue lets replaced text release even
+  // unfinished checks, without allocating a suspended coroutine for every path.
+  // Prune periodically so a large retained document is not scanned on every match.
+  if (++state->insertions_since_prune >= 256) {
+    state->insertions_since_prune = 0;
+    std::erase_if(state->cache, [](const auto &entry) { return entry.second.use_count() == 1; });
+    state->pending -= std::erase_if(state->queue, [](const auto &entry) { return entry.expired(); });
+  }
+  auto check = std::make_shared<PathCheck>();
+  check->path = path;
+  state->cache.emplace(path, check);
+  state->queue.push_back(check);
+  ++state->pending;
+  if (state->workers < 8) cardio::fire_and_forget(check_paths_async(state));
+  return check;
+}
+
+static bool annotation_action_valid(const LinkAnnotation &item) {
+  return item.candidate && (!item.candidate->validation_path ||
+      (item.path_check && item.path_check->error && item.path_check->error->empty()));
+}
+
+static bool annotation_action_rejected(const LinkAnnotation &item) {
+  return !item.candidate || (item.path_check && item.path_check->error && !item.path_check->error->empty());
+}
+
+static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &key) {
+  if (!links->view) return;
+  boxrig_rgb foreground{};
+  boxrig_terminal_get_dynamic_color(links->terminal, BOXRIG_DYNAMIC_COLOR_FOREGROUND, &foreground);
+  const boxrig_color dim{BOXRIG_COLOR_RGB, 0, static_cast<std::uint8_t>(foreground.red / 2),
+      static_cast<std::uint8_t>(foreground.green / 2), static_cast<std::uint8_t>(foreground.blue / 2)};
+  for (auto &rule : links->rules) {
+    const auto line = rule.lines.find(key);
+    if (line == rule.lines.end()) continue;
+    std::vector<boxrig_ui_text_annotation> annotations;
+    for (auto &item : line->second.items) {
+      bool covered = false;
+      for (const auto &other : links->rules) {
+        if (&other == &rule) continue;
+        const auto previous = other.lines.find(key);
+        if (previous == other.lines.end() || previous->second.event.line_revision != line->second.event.line_revision) continue;
+        const auto &items = previous->second.items;
+        auto candidate = std::upper_bound(items.begin(), items.end(), item.annotation.range.start.column,
+            [](std::size_t column, const LinkAnnotation &value) { return column < value.annotation.range.start.column; });
+        if (candidate == items.begin()) continue;
+        --candidate;
+        if (candidate->annotation.range.end.column >= item.annotation.range.end.column &&
+            annotation_action_valid(*candidate) &&
+            (other.generation < rule.generation || annotation_action_rejected(item))) { covered = true; break; }
+      }
+      if (covered) continue;
+      if (item.candidate && item.candidate->validation_path && !item.path_check) {
+        item.path_check = path_check(links, *item.candidate->validation_path);
+        ++item.path_check->subscribers[key];
+      }
+      auto annotation = item.annotation;
+      annotation.priority = -static_cast<std::int32_t>(rule.generation);
+      if (annotation_action_rejected(item)) {
+        annotation.style.field_mask |= BOXRIG_UI_ANNOTATION_FOREGROUND | BOXRIG_UI_ANNOTATION_UNDERLINE_COLOR;
+        annotation.style.foreground = dim;
+        annotation.style.underline_color = dim;
+      }
+      annotations.push_back(annotation);
+    }
+    const auto &event = line->second.event;
+    // The view rejects a completion after its logical text revision changed.
+    boxrig_ui_view_replace_text_annotations(links->view, rule.recognizer, event.screen,
+        event.line_id, event.line_revision, annotations.data(), annotations.size());
+  }
+}
+
+static void stop_validation(TerminalLinks *links) {
+  const auto state = links->validation;
+  state->owner = nullptr;
+  state->stop.cancel();
+  state->activation_stop.cancel();
+  state->pending -= state->queue.size();
+  state->queue.clear();
+  if (state->presentation_source) {
+    g_source_remove(state->presentation_source);
+    state->presentation_source = 0;
+  }
 }
 
 static bool restart_recognizer(TerminalLinks *links, LinkRule &rule) {
@@ -102,8 +302,12 @@ static bool restart_recognizer(TerminalLinks *links, LinkRule &rule) {
   return status == BOXRIG_STATUS_OK;
 }
 
-TerminalLinks *create_terminal_links(boxrig_ui_view *view, std::vector<HyperlinkActionRule> rules) {
+TerminalLinks *create_terminal_links(boxrig_ui_view *view, std::vector<HyperlinkActionRule> rules,
+    TerminalHyperlinkPathValidator validate) {
   auto *links = new TerminalLinks;
+  links->validation = std::make_shared<LinkValidationState>();
+  links->validation->owner = links;
+  links->validation->validate = std::move(validate);
   links->terminal = boxrig_ui_view_terminal(view);
   links->view = view;
   const auto limits = boxrig_text_recognizer_limits_default();
@@ -124,12 +328,17 @@ TerminalLinks *create_terminal_links(boxrig_ui_view *view, std::vector<Hyperlink
       }
     }
     links->rules.push_back({std::move(rule), std::move(program), recognizer, 0,
-        static_cast<std::uint64_t>(links->rules.size() + 1)});
+        static_cast<std::uint64_t>(links->rules.size() + 1), {}});
   }
   return links;
 }
 
 void terminal_links_attach_view(TerminalLinks *links, boxrig_ui_view *view) {
+  stop_validation(links);
+  auto validation = std::make_shared<LinkValidationState>();
+  validation->owner = links;
+  validation->validate = links->validation->validate;
+  links->validation = std::move(validation);
   for (const auto &rule : links->rules) {
     if (rule.recognizer) clear_annotations(links, rule.recognizer);
   }
@@ -166,8 +375,14 @@ static void update_annotations(TerminalLinks *links, const boxrig_text_recognize
     clear_annotations(links, event.recognizer_id);
     return;
   }
-  std::vector<boxrig_ui_text_annotation> annotations;
-  annotations.reserve(results.size());
+  const auto rule = std::find_if(links->rules.begin(), links->rules.end(),
+      [&event](const LinkRule &rule) { return rule.recognizer == event.recognizer_id; });
+  if (rule == links->rules.end()) return;
+  const auto key = line_key(event.screen, event.line_id);
+  auto &line = rule->lines[key];
+  unsubscribe_line(key, line);
+  line = {event, {}};
+  line.items.reserve(results.size());
   for (const auto &result : results) {
     boxrig_ui_text_annotation annotation{};
     annotation.source_id = result.recognizer_id;
@@ -175,14 +390,26 @@ static void update_annotations(TerminalLinks *links, const boxrig_text_recognize
     annotation.range = result.range;
     annotation.style.field_mask = BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE;
     annotation.style.underline_style = BOXRIG_UNDERLINE_SINGLE;
-    annotations.push_back(annotation);
+    boxrig_regex_result *captured = nullptr;
+    if (boxrig_terminal_text_recognizer_result(links->terminal, result.recognizer_id,
+        result.match_id, result.result_set_revision, &captured) != BOXRIG_STATUS_OK) continue;
+    const std::unique_ptr<boxrig_regex_result, decltype(&boxrig_regex_result_destroy)> capture(captured, boxrig_regex_result_destroy);
+    std::string reason;
+    auto candidate = expand_terminal_hyperlink_action(rule->rule,
+        [captured](const std::string &name) { return regular_expression_capture(captured, name); }, &reason);
+    line.items.push_back({annotation, std::move(candidate), {}});
   }
-  if (boxrig_ui_view_replace_text_annotations(links->view, event.recognizer_id, event.screen,
-      event.line_id, event.line_revision, annotations.data(), annotations.size()) != BOXRIG_UI_OK)
-    clear_annotations(links, event.recognizer_id);
+  publish_line_annotations(links, key);
 }
 
 bool terminal_links_dispatch(TerminalLinks *links, std::size_t budget) {
+  const auto color_revision = boxrig_terminal_color_revision(links->terminal);
+  if (links->color_revision != color_revision) {
+    links->color_revision = color_revision;
+    for (const auto &rule : links->rules)
+      for (const auto &[key, line] : rule.lines) { (void)line; links->validation->dirty.insert(key); }
+    schedule_validation_presentation(links->validation);
+  }
   // Sticky loss must be handled even when the event queue itself overflowed.
   bool rescanning = false;
   for (auto &rule : links->rules) {
@@ -210,6 +437,13 @@ bool terminal_links_dispatch(TerminalLinks *links, std::size_t budget) {
     if (event.kind == BOXRIG_TEXT_RECOGNIZER_EVENT_LINE_REPLACED) {
       update_annotations(links, event);
     } else if (event.kind == BOXRIG_TEXT_RECOGNIZER_EVENT_LINE_EVICTED) {
+      const auto key = line_key(event.screen, event.line_id);
+      for (auto &rule : links->rules) if (rule.recognizer == event.recognizer_id) {
+        if (const auto found = rule.lines.find(key); found != rule.lines.end()) {
+          unsubscribe_line(key, found->second);
+          rule.lines.erase(found);
+        }
+      }
       // Retired lines can be cleared without replacing surviving matches.
       if (links->view && boxrig_ui_view_clear_text_annotation_line(links->view,
           event.recognizer_id, event.screen, event.line_id) != BOXRIG_UI_OK)
@@ -346,9 +580,19 @@ static std::optional<ResolvedLink> resolve_link(
     auto action = expand_terminal_hyperlink_action(rule.rule,
         [&result](const std::string &capture) { return regular_expression_capture(result.get(), capture); }, &reason);
     const auto hyperlink_handle = rule.recognizer ? 0 : hit.hyperlink_handle;
-    if (action) return ResolvedLink{{std::move(action), {}, rule.recognizer, match_id, hyperlink_handle}, std::move(result)};
-    if (!rejection) rejection = ResolvedLink{{std::nullopt, "rule " + rule.rule.id + ": " + reason,
-        rule.recognizer, match_id, hyperlink_handle}, std::move(result)};
+    const auto candidate = action;
+    if (action && action->validation_path) {
+      auto check = path_check(links, *action->validation_path);
+      if (!check->error || !check->error->empty()) {
+        reason = check->error.value_or(std::string{});
+        action.reset();
+      }
+    }
+    ResolvedLink resolved{{std::move(action), reason.empty() ? std::string{} : "rule " + rule.rule.id + ": " + reason,
+        rule.recognizer, match_id, hyperlink_handle, candidate}, std::move(result)};
+    // Pending validation must retain priority until its outcome is known.
+    if (resolved.resolution.action || (candidate && reason.empty())) return resolved;
+    if (!rejection) rejection = std::move(resolved);
   }
   return rejection;
 }
@@ -357,6 +601,53 @@ std::optional<TerminalHyperlinkResolution> terminal_links_resolve(
     TerminalLinks *links, const boxrig_ui_hit_test_result &hit) {
   auto resolved = resolve_link(links, hit);
   return resolved ? std::optional{std::move(resolved->resolution)} : std::nullopt;
+}
+
+static cardio::promise<void> activate_path_async(std::shared_ptr<LinkValidationState> state,
+    TerminalHyperlinkResolution resolution, std::function<void(TerminalHyperlinkResolution)> activate,
+    std::uint64_t generation, cardio::cancellation cancellation) {
+  ++state->pending;
+  try {
+    const auto slot = std::move(co_await state->slots.acquire(cancellation));
+    cancellation.throw_if_cancellation_requested();
+    ++state->queries;
+    const auto path = *resolution.candidate->validation_path;
+    auto error = co_await state->validate(path, cancellation);
+    if (state->owner && generation == state->activation_generation && !cancellation.is_cancellation_requested()) {
+      if (const auto found = state->cache.find(path); found != state->cache.end()) {
+        ++found->second->generation;
+        found->second->error = error;
+        for (const auto &[key, count] : found->second->subscribers) { (void)count; state->dirty.insert(key); }
+        schedule_validation_presentation(state);
+      }
+      resolution.action = error.empty() ? resolution.candidate : std::nullopt;
+      resolution.error = std::move(error);
+      activate(std::move(resolution));
+    }
+  } catch (const cardio::canceled_exception &) {
+    // A newer click, detached view or destroyed terminal owns subsequent UI.
+  } catch (const std::exception &error) {
+    if (state->owner && generation == state->activation_generation) {
+      resolution.action.reset();
+      resolution.error = error.what();
+      activate(std::move(resolution));
+    }
+  }
+  --state->pending;
+}
+
+void terminal_links_activate(TerminalLinks *links, TerminalHyperlinkResolution resolution,
+    std::function<void(TerminalHyperlinkResolution)> activate) {
+  if (!links || !links->view) return;
+  if (!resolution.candidate || !resolution.candidate->validation_path) {
+    activate(std::move(resolution));
+    return;
+  }
+  auto state = links->validation;
+  state->activation_stop.cancel();
+  state->activation_stop = cardio::cancellation_source{};
+  cardio::fire_and_forget(activate_path_async(state, std::move(resolution), std::move(activate),
+      ++state->activation_generation, state->activation_stop.get_cancellation()));
 }
 
 std::optional<std::string> terminal_links_copy_target(
@@ -372,6 +663,7 @@ std::optional<std::string> terminal_links_copy_target(
 
 void destroy_terminal_links(TerminalLinks *links) {
   if (!links) return;
+  stop_validation(links);
   for (const auto &rule : links->rules) {
     if (rule.recognizer) {
       clear_annotations(links, rule.recognizer);

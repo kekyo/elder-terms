@@ -23,8 +23,8 @@ static std::optional<std::string> expand_hyperlink_template(
       RegexCaptureTemplateOptions{.allow_uri_decode = true}, reason);
 }
 
-static bool validate_hyperlink_path(const std::string &value,
-                                    std::string *reason) {
+static bool validate_hyperlink_path_syntax(const std::string &value,
+                                         std::string *reason) {
   if (value.find('\0') != std::string::npos) {
     *reason = "expanded path contains a NUL byte";
     return false;
@@ -36,28 +36,33 @@ static bool validate_hyperlink_path(const std::string &value,
     return false;
   }
 
-  std::error_code status_error;
-  const std::filesystem::file_status status =
-      std::filesystem::status(path, status_error);
-  if (status_error) {
-    if (status_error == std::errc::no_such_file_or_directory) {
-      *reason = "expanded path does not exist: " + value;
-    } else {
-      *reason = "expanded path could not be inspected: " + value + ": " +
-                status_error.message();
-    }
-    return false;
-  }
-  if (!std::filesystem::exists(status)) {
-    *reason = "expanded path does not exist: " + value;
-    return false;
-  }
-  if (!std::filesystem::is_regular_file(status) &&
-      !std::filesystem::is_directory(status)) {
-    *reason = "expanded path is not a regular file or directory: " + value;
-    return false;
-  }
   return true;
+}
+
+cardio::promise<std::string> validate_terminal_hyperlink_path_async(
+    std::string path, cardio::cancellation cancellation) {
+  std::string reason;
+  if (!validate_hyperlink_path_syntax(path, &reason)) co_return reason;
+  const std::unique_ptr<GFile, decltype(&g_object_unref)> file(g_file_new_for_path(path.c_str()), g_object_unref);
+  try {
+    const std::unique_ptr<GFileInfo, decltype(&g_object_unref)> info(
+        co_await cardio::gio::submit<GFileInfo *>(
+            [file = file.get()](GCancellable *cancel, GAsyncReadyCallback callback, gpointer data) {
+              g_file_query_info_async(file, G_FILE_ATTRIBUTE_STANDARD_TYPE,
+                  G_FILE_QUERY_INFO_NONE, G_PRIORITY_DEFAULT, cancel, callback, data);
+            },
+            [](GObject *file, GAsyncResult *result, GError **error) {
+              return g_file_query_info_finish(G_FILE(file), result, error);
+            }, cancellation), g_object_unref);
+    const auto type = g_file_info_get_file_type(info.get());
+    if (type != G_FILE_TYPE_REGULAR && type != G_FILE_TYPE_DIRECTORY)
+      co_return "expanded path is not a regular file or directory: " + path;
+    co_return std::string{};
+  } catch (const cardio::gio::gio_error &error) {
+    if (error.domain() == G_IO_ERROR && error.code() == G_IO_ERROR_NOT_FOUND)
+      co_return "expanded path does not exist: " + path;
+    co_return "expanded path could not be inspected: " + path + ": " + error.what();
+  }
 }
 
 std::optional<TerminalHyperlinkAction> expand_terminal_hyperlink_action(
@@ -66,6 +71,7 @@ std::optional<TerminalHyperlinkAction> expand_terminal_hyperlink_action(
   TerminalHyperlinkAction action{
       .command = rule.command,
       .arguments = {},
+      .validation_path = {},
   };
   if (rule.command.empty() || rule.command.find('\0') != std::string::npos) {
     *reason = "command must be nonempty and must not contain a NUL byte";
@@ -89,9 +95,10 @@ std::optional<TerminalHyperlinkAction> expand_terminal_hyperlink_action(
       HyperlinkPathValidation::existing_local_path) {
     const std::optional<std::string> path =
         expand_hyperlink_template(rule.path_template, capture, reason);
-    if (!path.has_value() || !validate_hyperlink_path(*path, reason)) {
+    if (!path.has_value() || !validate_hyperlink_path_syntax(*path, reason)) {
       return std::nullopt;
     }
+    action.validation_path = *path;
   }
   return action;
 }

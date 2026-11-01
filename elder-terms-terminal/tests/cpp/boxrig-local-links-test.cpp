@@ -18,6 +18,8 @@ static void expect(bool condition, const char *message) {
 
 int main() {
   try {
+    cardio::dispatcher_group_glib group;
+    cardio::dispatcher_host_glib_auto dispatcher(group);
     auto config = boxrig_terminal_config_default();
     config.rows = 8;
     config.columns = 100;
@@ -57,8 +59,14 @@ int main() {
           (row * 10 + 1) * BOXRIG_UI_FIXED_ONE, &result) == BOXRIG_UI_OK && result.text_position_valid, "current pointer hit");
       return result;
     };
+    const auto wait_checks = [&] {
+      while (terminal_links_cache_statistics(links.get()).path_queries_pending)
+        g_main_context_iteration(nullptr, TRUE);
+      while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
+    };
 
     feed("/foo/bar/baz\r\n\"/foo/bar/baz\"\r\n/tmp\r\n/proc/self/exe\r\nhttps://example.test/tmp\r\n");
+    wait_checks();
     for (const std::size_t row : {0u, 1u}) {
       const auto point = hit(row, 2);
       expect(terminal_links_copy_target(links.get(), point) == "/foo/bar/baz",
@@ -73,6 +81,13 @@ int main() {
           annotations, 8, &required, &style) == BOXRIG_UI_OK && required > 0 &&
           style.underline_style == BOXRIG_UNDERLINE_SINGLE,
           "missing paths remain underlined");
+      boxrig_rgb foreground{};
+      expect(boxrig_terminal_get_dynamic_color(terminal, BOXRIG_DYNAMIC_COLOR_FOREGROUND, &foreground) == BOXRIG_STATUS_OK,
+          "read normal link foreground");
+      expect((style.field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) != 0 &&
+          style.foreground.kind == BOXRIG_COLOR_RGB && style.foreground.red < foreground.red &&
+          style.foreground.green < foreground.green && style.foreground.blue < foreground.blue,
+          "invalid paths have lower brightness while retaining their underline");
     }
     expect(!terminal_links_copy_target(links.get(), hit(1, 0)) && !terminal_links_copy_target(links.get(), hit(1, 13)),
         "quotation marks are outside the link");
@@ -88,9 +103,136 @@ int main() {
     expect(terminal_links_copy_target(links.get(), hit(4, 21)) == "https://example.test/tmp",
         "the HTTP rule wins over an embedded absolute path");
     feed("\x1b[6;1H/tmp\u3000/proc/self/exe");
+    wait_checks();
     expect(terminal_links_copy_target(links.get(), hit(5, 1)) == "/tmp" &&
         terminal_links_copy_target(links.get(), hit(5, 8)) == "/proc/self/exe",
         "Unicode whitespace separates absolute paths");
+
+    links.reset();
+    std::vector<std::shared_ptr<cardio::promise_source<std::string>>> requests;
+    std::vector<std::string> requested_paths;
+    links.reset(create_terminal_links(view, default_hyperlink_action_rules(),
+        [&requests, &requested_paths](std::string path, cardio::cancellation) {
+          auto request = std::make_shared<cardio::promise_source<std::string>>();
+          requests.push_back(request);
+          requested_paths.push_back(std::move(path));
+          return request->get_promise();
+        }));
+    feed("\x1b[2J\x1b[H/foo/bar/baz\r\n/foo/bar/baz\r\nhttps://example.test/");
+    while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
+    expect(requested_paths == std::vector<std::string>{"/foo/bar/baz"},
+        "duplicate paths share one pending asynchronous check");
+    const auto pending = terminal_links_resolve(links.get(), hit(0, 2));
+    expect(pending && pending->candidate && !pending->action && pending->error.empty(),
+        "pending validation returns immediately with an owned clickable candidate");
+    for (int index = 0; index < 10; ++index)
+      expect(terminal_links_copy_target(links.get(), hit(0, 2)) == "/foo/bar/baz", "pending links remain copyable");
+    expect(requests.size() == 1, "pointer movement and copying reuse pending validation");
+    bool superseded_activated = false;
+    terminal_links_activate(links.get(), *pending, [&](auto) { superseded_activated = true; });
+    while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
+    expect(!superseded_activated && requests.size() == 2, "click validation waits asynchronously");
+    std::optional<TerminalHyperlinkResolution> activated;
+    terminal_links_activate(links.get(), *pending, [&](auto result) { activated = std::move(result); });
+    while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
+    expect(!activated && requests.size() == 3, "a newer click can supersede a pending check");
+    bool url_activated = false;
+    terminal_links_activate(links.get(), *terminal_links_resolve(links.get(), hit(2, 2)),
+        [&](auto result) { url_activated = result.action.has_value(); });
+    expect(url_activated, "an unrelated URL activates while path checks remain pending");
+    feed("\x1b[1;1H\x1b[2Kreplacement");
+    expect(!terminal_links_resolve(links.get(), hit(0, 2)), "new terminal input replaces a pending link immediately");
+    requests[2]->resolve(std::string{});
+    while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
+    expect(activated && activated->action, "the newest click delivers its fresh validation");
+    requests[0]->resolve("expanded path does not exist: /foo/bar/baz");
+    requests[1]->resolve("expanded path does not exist: /foo/bar/baz");
+    wait_checks();
+    expect(!superseded_activated && terminal_links_resolve(links.get(), hit(1, 2))->action,
+        "older background and click results cannot overwrite the newest validation");
+    activated.reset();
+    terminal_links_activate(links.get(), *terminal_links_resolve(links.get(), hit(1, 2)),
+        [&](auto result) { activated = std::move(result); });
+    while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
+    requests.back()->resolve("expanded path does not exist: /foo/bar/baz");
+    wait_checks();
+    expect(activated && !activated->action && activated->error.find("does not exist") != std::string::npos,
+        "the completed click delivers the path error for its modal dialog");
+    expect(!terminal_links_resolve(links.get(), hit(0, 2)), "late validation does not restore replaced text");
+
+    requests.clear();
+    std::string many_paths = "\x1b[2J\x1b[H";
+    for (int index = 0; index < 20; ++index) many_paths += "/pending/" + std::to_string(index) + " ";
+    feed(many_paths);
+    while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
+    expect(requests.size() == 8 && terminal_links_cache_statistics(links.get()).path_queries_pending == 20,
+        "at most eight filesystem queries run while the rest wait without blocking");
+    bool retired_activated = false;
+    terminal_links_activate(links.get(), *terminal_links_resolve(links.get(), hit(0, 2)),
+        [&](auto) { retired_activated = true; });
+    links.reset();
+    for (auto &request : requests) request->resolve(std::string{});
+    while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
+    expect(requests.size() == 8 && !retired_activated,
+        "destruction cancels queued checks and discards late activation callbacks");
+
+    requests.clear();
+    auto preferred = default_hyperlink_action_rules().back();
+    preferred.command = "preferred";
+    auto fallback = preferred;
+    fallback.id = "fallback";
+    fallback.command = "fallback";
+    fallback.path_validation = HyperlinkPathValidation::none;
+    links.reset(create_terminal_links(view, {preferred, fallback},
+        [&](std::string, cardio::cancellation) {
+          auto request = std::make_shared<cardio::promise_source<std::string>>();
+          requests.push_back(request);
+          return request->get_promise();
+        }));
+    feed("\x1b[2J\x1b[H/priority/path");
+    while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
+    const auto preferred_pending = terminal_links_resolve(links.get(), hit(0, 2));
+    expect(preferred_pending && !preferred_pending->action && preferred_pending->candidate &&
+        preferred_pending->candidate->command == "preferred",
+        "pending validation preserves rule priority instead of running a lower-priority command");
+    requests.front()->resolve("expanded path does not exist: /priority/path");
+    wait_checks();
+    expect(terminal_links_resolve(links.get(), hit(0, 2))->action->command == "fallback",
+        "a definite validation rejection still permits the next valid rule");
+
+    links.reset();
+    requests.clear();
+    auto unchecked_rules = default_hyperlink_action_rules();
+    unchecked_rules.back().path_validation = HyperlinkPathValidation::none;
+    links.reset(create_terminal_links(view, std::move(unchecked_rules),
+        [&](std::string, cardio::cancellation) -> cardio::promise<std::string> {
+          throw std::runtime_error("disabled path validation must not query the filesystem");
+          co_return std::string{};
+        }));
+    feed("\x1b[2J\x1b[H/foo/bar/baz");
+    activated.reset();
+    terminal_links_activate(links.get(), *terminal_links_resolve(links.get(), hit(0, 2)),
+        [&](auto result) { activated = std::move(result); });
+    expect(activated && activated->action && terminal_links_cache_statistics(links.get()).path_queries_pending == 0,
+        "disabling validation per rule preserves immediate activation without filesystem I/O");
+
+    links.reset();
+    expect(boxrig_terminal_set_scrollback_capacity(terminal, 0) == BOXRIG_STATUS_OK, "limit retained text");
+    links.reset(create_terminal_links(view, default_hyperlink_action_rules(),
+        [&](std::string, cardio::cancellation) {
+          auto request = std::make_shared<cardio::promise_source<std::string>>();
+          requests.push_back(request);
+          return request->get_promise();
+        }));
+    for (int index = 0; index < 600; ++index) {
+      feed("\x1b[2J\x1b[H/stalled/" + std::to_string(index));
+      while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
+    }
+    expect(requests.size() == 8 && terminal_links_cache_statistics(links.get()).path_queries_pending <= 264,
+        "replaced text cannot accumulate unbounded waiting filesystem checks");
+    links.reset();
+    for (auto &request : requests) request->resolve(std::string{});
+    while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
     std::puts("boxrig local links: absolute paths, validation, quoting and URL priority passed");
     return 0;
   } catch (const std::exception &error) {

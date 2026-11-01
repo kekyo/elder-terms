@@ -19,6 +19,8 @@ static void expect(bool condition, const char *message) {
 
 int main() {
   try {
+    cardio::dispatcher_group_glib group;
+    cardio::dispatcher_host_glib_auto dispatcher(group);
     auto config = boxrig_terminal_config_default();
     config.rows = 8;
     config.columns = 100;
@@ -79,7 +81,7 @@ int main() {
         "copy the complete recognized UTF-8 URL");
     expect(action(0, 32).arguments == std::vector<std::string>{"https://second.test/"}, "multiple links on one logical line");
     std::size_t annotations = 0;
-    expect(boxrig_ui_view_query_text_annotation_visual_ranges(view, 0, nullptr, 0, &annotations) == BOXRIG_UI_LIMIT_EXCEEDED && annotations >= 2, "both links have annotations");
+    expect(boxrig_ui_view_query_text_annotation_visual_ranges(view, 0, nullptr, 0, &annotations) == BOXRIG_UI_LIMIT_EXCEEDED && annotations == 2, "both links have annotations");
     terminal_links_attach_view(links.get(), nullptr);
     terminal_links_attach_view(links.get(), view);
     scan();
@@ -223,8 +225,8 @@ int main() {
     const auto annotation_at = [&](std::size_t row) {
       boxrig_ui_text_annotation_visual_range ranges[2]{};
       std::size_t count = 0;
-      expect(boxrig_ui_view_query_text_annotation_visual_ranges(view, row, ranges, 2, &count) == BOXRIG_UI_OK && count >= 1,
-          "visible link annotations");
+      expect(boxrig_ui_view_query_text_annotation_visual_ranges(view, row, ranges, 2, &count) == BOXRIG_UI_OK && count == 1,
+          "one visible link annotation");
       expect((ranges[0].annotation.style.field_mask & BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE) != 0 &&
           ranges[0].annotation.style.underline_style == BOXRIG_UNDERLINE_SINGLE,
           "visible link keeps its underline");

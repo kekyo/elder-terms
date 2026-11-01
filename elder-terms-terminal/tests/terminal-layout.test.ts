@@ -30,6 +30,7 @@ import {
   terminalTextGrid80x24VisualStepPath,
   terminalTextGrid80x24Path,
   terminalTextGrid81x25Path,
+  terminalPlainTextGridConfigPath,
   withTemporaryDirectory,
 } from './gtk-test-helpers';
 import { capturePixel } from './test-helpers';
@@ -455,59 +456,71 @@ describe.concurrent('elder-terms-terminal terminal layout', () => {
   });
 
   it('fills the whole terminal image up to the right and bottom edges', async (context) => {
-    await runGtkTest(context, ['--test-fixture'], async (app, evidence) => {
-      const layout = await waitForResult(async () =>
-        readTerminalGridLayout(app)
-      );
-      await toPass(async () => {
-        await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
-      });
-      await saveTerminalGridLayoutEvidence(evidence, layout, 'initial-layout');
-      await assertTerminalTextGridMatches(
-        layout.terminal,
-        'fixture-terminal-initial',
-        terminalTextGrid80x24Path,
-        evidence
-      );
-    });
+    await runGtkTest(
+      context,
+      ['--test-fixture', '-c', terminalPlainTextGridConfigPath],
+      async (app, evidence) => {
+        const layout = await waitForResult(async () =>
+          readTerminalGridLayout(app)
+        );
+        await toPass(async () => {
+          await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
+        });
+        await saveTerminalGridLayoutEvidence(
+          evidence,
+          layout,
+          'initial-layout'
+        );
+        await assertTerminalTextGridMatches(
+          layout.terminal,
+          'fixture-terminal-initial',
+          terminalTextGrid80x24Path,
+          evidence
+        );
+      }
+    );
   });
 
   it('resizes to the requested whole-cell window size', async (context) => {
-    await runGtkTest(context, ['--test-fixture'], async (app, evidence) => {
-      const initialLayout = await waitForResult(async () =>
-        readTerminalGridLayout(app)
-      );
-      expectWindowCellSize(initialLayout, defaultColumns, defaultRows);
-      await toPass(async () => {
-        await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
-      });
-      await initialLayout.mainWindow.resizeTo(
-        initialLayout.mainBounds.width + initialLayout.cellWidth,
-        initialLayout.mainBounds.height + initialLayout.cellHeight
-      );
-
-      const resizedLayout = await waitForResult(async () => {
-        const layout = await readTerminalGridLayout(app);
-        expectWindowCellSize(layout, defaultColumns + 1, defaultRows + 1);
-        await expectFixtureTerminalGridSize(
-          app,
-          defaultColumns + 1,
-          defaultRows + 1
+    await runGtkTest(
+      context,
+      ['--test-fixture', '-c', terminalPlainTextGridConfigPath],
+      async (app, evidence) => {
+        const initialLayout = await waitForResult(async () =>
+          readTerminalGridLayout(app)
         );
-        return layout;
-      });
-      await saveTerminalGridLayoutEvidence(
-        evidence,
-        resizedLayout,
-        'whole-cell-resize-layout'
-      );
-      await assertTerminalTextGridMatches(
-        resizedLayout.terminal,
-        'fixture-terminal-whole-cell-resize',
-        terminalTextGrid81x25Path,
-        evidence
-      );
-    });
+        expectWindowCellSize(initialLayout, defaultColumns, defaultRows);
+        await toPass(async () => {
+          await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
+        });
+        await initialLayout.mainWindow.resizeTo(
+          initialLayout.mainBounds.width + initialLayout.cellWidth,
+          initialLayout.mainBounds.height + initialLayout.cellHeight
+        );
+
+        const resizedLayout = await waitForResult(async () => {
+          const layout = await readTerminalGridLayout(app);
+          expectWindowCellSize(layout, defaultColumns + 1, defaultRows + 1);
+          await expectFixtureTerminalGridSize(
+            app,
+            defaultColumns + 1,
+            defaultRows + 1
+          );
+          return layout;
+        });
+        await saveTerminalGridLayoutEvidence(
+          evidence,
+          resizedLayout,
+          'whole-cell-resize-layout'
+        );
+        await assertTerminalTextGridMatches(
+          resizedLayout.terminal,
+          'fixture-terminal-whole-cell-resize',
+          terminalTextGrid81x25Path,
+          evidence
+        );
+      }
+    );
   });
 
   it('keeps whole-cell geometry while showing colored window side borders', async (context) => {
@@ -515,7 +528,7 @@ describe.concurrent('elder-terms-terminal terminal layout', () => {
       const configPath = join(directory, 'window-side-borders.ini');
       await writeFile(
         configPath,
-        '[general]\nexterior_background=#800000\nshow_border=true\nborder_width=7\n',
+        '[general]\nexterior_background=#800000\nshow_border=true\nborder_width=7\n\n[hyperlink]\nenabled=false\n',
         'utf8'
       );
 
@@ -751,41 +764,45 @@ describe.concurrent('elder-terms-terminal terminal layout', () => {
   });
 
   it('keeps the window constrained to whole terminal cells after Ctrl+wheel font zoom', async (context) => {
-    await runGtkTest(context, ['--test-fixture'], async (app, evidence) => {
-      const initialLayout = await waitForResult(async () =>
-        readTerminalGridLayout(app)
-      );
-      expectWindowCellSize(initialLayout, defaultColumns, defaultRows);
-      await toPass(async () => {
-        await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
-      });
+    await runGtkTest(
+      context,
+      ['--test-fixture', '-c', terminalPlainTextGridConfigPath],
+      async (app, evidence) => {
+        const initialLayout = await waitForResult(async () =>
+          readTerminalGridLayout(app)
+        );
+        expectWindowCellSize(initialLayout, defaultColumns, defaultRows);
+        await toPass(async () => {
+          await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
+        });
 
-      await moveMouseToTerminalCenter(app, initialLayout);
-      await scrollWheelWithControl(app, -1);
+        await moveMouseToTerminalCenter(app, initialLayout);
+        await scrollWheelWithControl(app, -1);
 
-      const zoomedLayout = await waitForResult(async () => {
-        const layout = await readTerminalGridLayout(app);
-        expect(layout.fontSizeDip).not.toBe(initialLayout.fontSizeDip);
-        expect([layout.cellWidth, layout.cellHeight]).not.toEqual([
-          initialLayout.cellWidth,
-          initialLayout.cellHeight,
-        ]);
-        expectWindowCellSize(layout, defaultColumns, defaultRows);
-        await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
-        return layout;
-      });
-      await saveTerminalGridLayoutEvidence(
-        evidence,
-        zoomedLayout,
-        'font-zoom-layout'
-      );
-      await assertTerminalTextGridMatches(
-        zoomedLayout.terminal,
-        'fixture-terminal-font-zoom',
-        terminalTextGrid80x24VisualStepPath,
-        evidence
-      );
-    });
+        const zoomedLayout = await waitForResult(async () => {
+          const layout = await readTerminalGridLayout(app);
+          expect(layout.fontSizeDip).not.toBe(initialLayout.fontSizeDip);
+          expect([layout.cellWidth, layout.cellHeight]).not.toEqual([
+            initialLayout.cellWidth,
+            initialLayout.cellHeight,
+          ]);
+          expectWindowCellSize(layout, defaultColumns, defaultRows);
+          await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
+          return layout;
+        });
+        await saveTerminalGridLayoutEvidence(
+          evidence,
+          zoomedLayout,
+          'font-zoom-layout'
+        );
+        await assertTerminalTextGridMatches(
+          zoomedLayout.terminal,
+          'fixture-terminal-font-zoom',
+          terminalTextGrid80x24VisualStepPath,
+          evidence
+        );
+      }
+    );
   });
 
   it('lets repeated border-like resize steps accumulate after Ctrl+wheel font zoom', async (context) => {
@@ -959,44 +976,48 @@ describe.concurrent('elder-terms-terminal terminal layout', () => {
   });
 
   it('keeps terminal text stable after rapid Ctrl+wheel zoom in and out burst', async (context) => {
-    await runGtkTest(context, ['--test-fixture'], async (app, evidence) => {
-      const initialLayout = await waitForResult(async () =>
-        readTerminalGridLayout(app)
-      );
-      expectWindowCellSize(initialLayout, defaultColumns, defaultRows);
-      await toPass(async () => {
-        await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
-      });
+    await runGtkTest(
+      context,
+      ['--test-fixture', '-c', terminalPlainTextGridConfigPath],
+      async (app, evidence) => {
+        const initialLayout = await waitForResult(async () =>
+          readTerminalGridLayout(app)
+        );
+        expectWindowCellSize(initialLayout, defaultColumns, defaultRows);
+        await toPass(async () => {
+          await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
+        });
 
-      await moveMouseToTerminalCenter(app, initialLayout);
-      await scrollWheelBurstWithControl(app, [
-        -rapidFontZoomBurstSteps,
-        rapidFontZoomBurstSteps,
-        -rapidFontZoomBurstSteps,
-        rapidFontZoomBurstSteps,
-      ]);
-      await delay(100);
+        await moveMouseToTerminalCenter(app, initialLayout);
+        await scrollWheelBurstWithControl(app, [
+          -rapidFontZoomBurstSteps,
+          rapidFontZoomBurstSteps,
+          -rapidFontZoomBurstSteps,
+          rapidFontZoomBurstSteps,
+        ]);
+        await delay(100);
 
-      const restoredLayout = await waitForResult(async () => {
-        const layout = await readTerminalGridLayout(app);
-        expect(layout.cellWidth).toBe(initialLayout.cellWidth);
-        expect(layout.cellHeight).toBe(initialLayout.cellHeight);
-        expectWindowCellSize(layout, defaultColumns, defaultRows);
-        await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
-        return layout;
-      });
-      await saveTerminalGridLayoutEvidence(
-        evidence,
-        restoredLayout,
-        'rapid-font-zoom-burst-restored-layout'
-      );
-      await assertTerminalTextGridMatches(
-        restoredLayout.terminal,
-        'fixture-terminal-rapid-font-zoom-burst-restored',
-        terminalTextGrid80x24Path,
-        evidence
-      );
-    });
+        const restoredLayout = await waitForResult(async () => {
+          const layout = await readTerminalGridLayout(app);
+          expect(layout.cellWidth).toBe(initialLayout.cellWidth);
+          expect(layout.cellHeight).toBe(initialLayout.cellHeight);
+          expectWindowCellSize(layout, defaultColumns, defaultRows);
+          await expectFixtureTerminalGridSize(app, defaultColumns, defaultRows);
+          return layout;
+        });
+        await saveTerminalGridLayoutEvidence(
+          evidence,
+          restoredLayout,
+          'rapid-font-zoom-burst-restored-layout'
+        );
+        await assertTerminalTextGridMatches(
+          restoredLayout.terminal,
+          'fixture-terminal-rapid-font-zoom-burst-restored',
+          terminalTextGrid80x24Path,
+          evidence
+        );
+      }
+    );
   });
 
   it('keeps the user resized terminal grid size after returning from font zoom', async (context) => {
