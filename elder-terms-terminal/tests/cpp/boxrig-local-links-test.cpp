@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "../../src/terminal-links.h"
+#include <elder-terms/terminal-color-filter.h>
 
 #include <cstdio>
 #include <filesystem>
@@ -78,7 +79,7 @@ int main() {
     };
 
     feed("/foo/bar/baz\r\n\"/foo/bar/baz\"\r\n/tmp\r\n/proc/self/exe\r\nhttps://example.test/tmp\r\n");
-    expect(link_style(0).field_mask == BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE,
+    expect(link_style(0).field_mask == (BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE | BOXRIG_UI_ANNOTATION_UNDERLINE_FALLBACK),
         "the default decoration underlines unconfirmed paths without dimming");
     terminal_links_set_decoration(links.get(), TerminalLinkDecoration::none);
     expect(link_style(0).field_mask == 0 && terminal_links_copy_target(links.get(), hit(0, 2)) == "/foo/bar/baz",
@@ -99,13 +100,11 @@ int main() {
           annotations, 8, &required, &style) == BOXRIG_UI_OK && required > 0 &&
           style.underline_style == BOXRIG_UNDERLINE_SINGLE,
           "missing paths remain underlined");
-      boxrig_rgb foreground{};
-      expect(boxrig_terminal_get_dynamic_color(terminal, BOXRIG_DYNAMIC_COLOR_FOREGROUND, &foreground) == BOXRIG_STATUS_OK,
-          "read normal link foreground");
-      expect((style.field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) != 0 &&
-          style.foreground.kind == BOXRIG_COLOR_RGB && style.foreground.red < foreground.red &&
-          style.foreground.green < foreground.green && style.foreground.blue < foreground.blue,
-          "invalid paths have lower brightness while retaining their underline");
+      expect((style.field_mask & BOXRIG_UI_ANNOTATION_COLOR_TAG) != 0 &&
+          style.color_tag == terminal_dim_link_color_tag &&
+          (style.field_mask & (BOXRIG_UI_ANNOTATION_FOREGROUND | BOXRIG_UI_ANNOTATION_BACKGROUND |
+              BOXRIG_UI_ANNOTATION_UNDERLINE_COLOR)) == 0,
+          "invalid paths request relative dimming without overriding any terminal colors");
     }
     expect(!terminal_links_copy_target(links.get(), hit(1, 0)) && !terminal_links_copy_target(links.get(), hit(1, 13)),
         "quotation marks are outside the link");
@@ -159,23 +158,33 @@ int main() {
 
     feed("\x1b[2J\x1b[H\x1b]8;;https://example.test/\x1b\\web\x1b]8;;\x1b\\\r\n"
         "\x1b]8;;file:///tmp\x1b\\directory\x1b]8;;\x1b\\\r\n"
-        "\x1b]8;;/foo/bar/baz\x1b\\missing\x1b]8;;\x1b\\");
+        "\x1b]8;;/foo/bar/baz\x1b\\missing\x1b]8;;\x1b\\\r\n"
+        "\x1b]8;;file:///tmp\x1b\\repeated directory\x1b]8;;\x1b\\");
     wait_checks();
     expect(terminal_links_copy_target(links.get(), hit(1, 2)) == "file:///tmp" &&
         terminal_links_resolve(links.get(), hit(1, 2))->action->arguments == std::vector<std::string>{"/tmp"},
         "local OSC 8 file URIs validate the decoded target instead of the visible label");
-    expect((link_style(0).field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) == 0 &&
-        (link_style(1).field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) == 0 &&
-        (link_style(2).field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) != 0,
+    expect(link_style(0).color_tag == 0 && link_style(1).color_tag == 0 &&
+        link_style(2).color_tag == terminal_dim_link_color_tag,
         "OSC 8 labels retain underlines and dim only invalid local targets");
+    expect(link_style(3).underline_style == BOXRIG_UNDERLINE_SINGLE,
+        "the same OSC 8 target is decorated independently on every logical line");
     for (const auto mode : {TerminalLinkDecoration::none, TerminalLinkDecoration::underline}) {
       terminal_links_set_decoration(links.get(), mode);
       for (std::size_t row = 0; row < 3; ++row)
-        expect(link_style(row).field_mask == (mode == TerminalLinkDecoration::none ? 0u : static_cast<unsigned>(BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE)),
+        expect(link_style(row).field_mask == (mode == TerminalLinkDecoration::none ? 0u :
+            static_cast<unsigned>(BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE | BOXRIG_UI_ANNOTATION_UNDERLINE_FALLBACK)),
             "OSC 8 decoration follows the selected mode without pointer movement");
       expect(terminal_links_copy_target(links.get(), hit(2, 2)) == "/foo/bar/baz",
           "changing OSC 8 decoration keeps its target recognizable");
     }
+
+    terminal_links_set_decoration(links.get(), TerminalLinkDecoration::validated);
+    feed("\x1b[2J\x1b[H\x1b]8;;/foo/bar/baz\x1b\\https://example.test/ label\x1b]8;;\x1b\\");
+    wait_checks();
+    expect(terminal_links_copy_target(links.get(), hit(0, 2)) == "https://example.test/" &&
+        link_style(0).color_tag == 0,
+        "a higher-priority URL retains normal brightness inside a larger invalid OSC 8 path label");
 
     links.reset();
     std::vector<std::shared_ptr<cardio::promise_source<std::string>>> requests;
@@ -197,11 +206,10 @@ int main() {
         "pending validation returns immediately with an owned clickable candidate");
     const auto pending_style = link_style(1);
     expect(pending_style.underline_style == BOXRIG_UNDERLINE_SINGLE &&
-        (pending_style.field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) != 0 &&
-        (pending_style.field_mask & BOXRIG_UI_ANNOTATION_UNDERLINE_COLOR) != 0 &&
-        pending_style.foreground.kind == BOXRIG_COLOR_RGB && pending_style.foreground.red < 128,
+        (pending_style.field_mask & BOXRIG_UI_ANNOTATION_COLOR_TAG) != 0 &&
+        pending_style.color_tag == terminal_dim_link_color_tag,
         "a newly recognized path is dimmed and underlined while validation is pending");
-    expect((link_style(2).field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) == 0,
+    expect(link_style(2).color_tag == 0,
         "URLs without path validation immediately retain their normal brightness");
     for (int index = 0; index < 10; ++index)
       expect(terminal_links_copy_target(links.get(), hit(0, 2)) == "/foo/bar/baz", "pending links remain copyable");
@@ -223,8 +231,7 @@ int main() {
     requests[2]->resolve(std::string{});
     while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
     expect(activated && activated->action, "the newest click delivers its fresh validation");
-    expect((link_style(1).field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) == 0 &&
-        (link_style(1).field_mask & BOXRIG_UI_ANNOTATION_UNDERLINE_COLOR) == 0 &&
+    expect(link_style(1).color_tag == 0 &&
         link_style(1).underline_style == BOXRIG_UNDERLINE_SINGLE,
         "successful validation restores normal text and underline brightness");
     requests[0]->resolve("expanded path does not exist: /foo/bar/baz");
@@ -240,8 +247,7 @@ int main() {
     wait_checks();
     expect(activated && !activated->action && activated->error.find("does not exist") != std::string::npos,
         "the completed click delivers the path error for its modal dialog");
-    expect(link_style(1).foreground.red == pending_style.foreground.red &&
-        link_style(1).underline_color.red == pending_style.underline_color.red,
+    expect(link_style(1).color_tag == pending_style.color_tag,
         "rejected paths keep the same dimmed appearance as pending paths");
     expect(!terminal_links_resolve(links.get(), hit(0, 2)), "late validation does not restore replaced text");
 

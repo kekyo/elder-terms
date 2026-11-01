@@ -271,7 +271,7 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
                 ) {
                   const offset = (y * frame.width + x) * 4;
                   const [r, g, b] = frame.data.subarray(offset, offset + 3);
-                  if (y < cellHeight && r === 127 && g === 127 && b === 127)
+                  if (y < cellHeight && r === 99 && g === 99 && b === 99)
                     dimRow++;
                   if (r === 255 && g === 255 && b === 255) {
                     if (y >= cellHeight && y < cellHeight * 2) validPixels++;

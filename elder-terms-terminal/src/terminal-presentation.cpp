@@ -53,7 +53,7 @@ static bool apply_colors(TerminalPresentation *presentation, TerminalColorFilter
   if (!prepare_terminal_color_filter(&context, boxrig_ui_model_terminal(boxrig_ui_view_model(view)))) return false;
   const auto previous = presentation->colors;
   presentation->colors = context;
-  const bool enabled = context.background.has_value() || context.filter != TerminalColorFilter::none ||
+  const bool enabled = context.dim_links || context.background.has_value() || context.filter != TerminalColorFilter::none ||
       (context.color_vision != TerminalColorVision::none && context.color_vision_strength > 0);
   const auto status = boxrig_ui_view_set_color_filter(view, enabled ? filter_terminal_colors : nullptr,
       enabled ? &presentation->colors : nullptr);
@@ -244,7 +244,8 @@ bool apply_terminal_presentation(TerminalPresentation *presentation, const Setti
   const auto display = terminal_display_settings(settings);
   const auto vision = terminal_color_vision_settings(settings);
   if (!apply_colors(presentation, {general_color_settings(settings).background,
-      terminal_color_filter(settings), vision.profile, vision.strength / 100.0})) return false;
+      terminal_color_filter(settings), vision.profile, vision.strength / 100.0, {},
+      terminal_link_decoration(settings) == TerminalLinkDecoration::validated})) return false;
   if (!apply_cursor(presentation, terminal_cursor_settings(settings))) return false;
   if (!apply_copy_policy(presentation, terminal_block_copy_trim_trailing_spaces(settings))) return false;
   if (!apply_terminal_background(presentation->background, settings, std::move(image))) return false;

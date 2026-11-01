@@ -5,6 +5,7 @@
 
 #include "terminal-links.h"
 #include <elder-terms/settings/regular-expression.h>
+#include <elder-terms/terminal-color-filter.h>
 
 #include <algorithm>
 #include <array>
@@ -110,9 +111,9 @@ struct TerminalLinks {
   std::unordered_map<Osc8CacheKey, std::list<Osc8CacheEntry>::iterator, Osc8CacheHash> osc8_index;
   std::size_t osc8_cache_bytes = 0;
   std::shared_ptr<LinkValidationState> validation;
-  std::uint64_t color_revision = 0;
   TerminalLinkDecoration decoration = TerminalLinkDecoration::underline;
   bool osc8_dirty = true;
+  std::uint64_t next_osc8_annotation_id = 1;
 #if defined(ELDER_TERMS_CACHE_TESTING)
   bool fail_next_cache_insert = false;
 #endif
@@ -238,10 +239,6 @@ static bool annotation_action_rejected(const LinkAnnotation &item) {
 
 static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &key) {
   if (!links->view) return;
-  boxrig_rgb foreground{};
-  boxrig_terminal_get_dynamic_color(links->terminal, BOXRIG_DYNAMIC_COLOR_FOREGROUND, &foreground);
-  const boxrig_color dim{BOXRIG_COLOR_RGB, 0, static_cast<std::uint8_t>(foreground.red / 2),
-      static_cast<std::uint8_t>(foreground.green / 2), static_cast<std::uint8_t>(foreground.blue / 2)};
   for (auto &rule : links->rules) {
     const auto line = rule.lines.find(key);
     if (line == rule.lines.end()) continue;
@@ -270,14 +267,15 @@ static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &ke
       annotation.priority = -static_cast<std::int32_t>(rule.generation);
       annotation.style = {};
       if (links->decoration != TerminalLinkDecoration::none) {
-        annotation.style.field_mask = BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE;
+        annotation.style.field_mask = BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE | BOXRIG_UI_ANNOTATION_UNDERLINE_FALLBACK;
         annotation.style.underline_style = BOXRIG_UNDERLINE_SINGLE;
       }
-      if (links->decoration == TerminalLinkDecoration::validated &&
-          rule.rule.path_validation == HyperlinkPathValidation::existing_local_path && !annotation_action_valid(item)) {
-        annotation.style.field_mask |= BOXRIG_UI_ANNOTATION_FOREGROUND | BOXRIG_UI_ANNOTATION_UNDERLINE_COLOR;
-        annotation.style.foreground = dim;
-        annotation.style.underline_color = dim;
+      if (links->decoration == TerminalLinkDecoration::validated) {
+        // A valid higher-priority match must also clear dimming contributed
+        // by a partially overlapping lower-priority path annotation.
+        annotation.style.field_mask |= BOXRIG_UI_ANNOTATION_COLOR_TAG;
+        if (rule.rule.path_validation == HyperlinkPathValidation::existing_local_path && !annotation_action_valid(item))
+          annotation.style.color_tag = terminal_dim_link_color_tag;
       }
       annotations.push_back(annotation);
     }
@@ -454,13 +452,6 @@ static void update_annotations(TerminalLinks *links, const boxrig_text_recognize
 }
 
 bool terminal_links_dispatch(TerminalLinks *links, std::size_t budget) {
-  const auto color_revision = boxrig_terminal_color_revision(links->terminal);
-  if (links->color_revision != color_revision) {
-    links->color_revision = color_revision;
-    for (const auto &rule : links->rules)
-      for (const auto &[key, line] : rule.lines) { (void)line; links->validation->dirty.insert(key); }
-    schedule_validation_presentation(links->validation);
-  }
   // Sticky loss must be handled even when the event queue itself overflowed.
   bool rescanning = false;
   for (auto &rule : links->rules) {
@@ -628,7 +619,8 @@ void terminal_links_refresh_viewport(TerminalLinks *links) {
         line.event.line_revision = position.fragment.line_revision;
         boxrig_ui_text_annotation annotation{};
         annotation.source_id = annotation_source(rule);
-        annotation.item_id = position.range.start.column + 1;
+        // Source/item identities are unique across the view, not just one line.
+        annotation.item_id = links->next_osc8_annotation_id++;
         annotation.range = position.range;
         line.items.push_back({annotation, std::move(action), {}, cell.hyperlink_handle});
       }

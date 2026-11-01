@@ -22,9 +22,9 @@ describe('local link validation appearance', () => {
   for (const backend of ['opengl', 'cairo']) {
     it(`keeps pending and invalid paths dim throughout the recording with ${backend}`, async () => {
       const missing = '/proc/self/elder-terms-missing-link';
-      const fixture = `\x1b[2J\x1b[H/tmp\r\n${missing}\r\n`;
+      const fixture = `\x1b[2J\x1b[H/tmp\r\n${missing}\r\n\x1b]8;;file:///tmp\x1b\\directory\x1b]8;;\x1b\\\r\n\x1b]8;;${missing}\x1b\\missing\x1b]8;;\x1b\\`;
       const peer = `process.stdin.setRawMode(true);
-        process.stdout.write('\x1b[?25l\x1b]10;#ffffff\x07\x1b]11;#000000\x07\x1b[4;1HREADY');
+        process.stdout.write('\x1b[?25l\x1b]10;#ffffff\x07\x1b]11;#000000\x07\x1b[6;1HREADY');
         process.stdin.once('data', () => process.stdout.write(${JSON.stringify(fixture)}));`;
       const launcher = createGtkAppLauncher({
         appPath,
@@ -138,7 +138,7 @@ describe('local link validation appearance', () => {
             const frame = pending.subarray(0, frameSize);
             pending = pending.subarray(frameSize);
             frames.push(
-              [4, missing.length].map((columns, row) => {
+              [4, missing.length, 9, 7].map((columns, row) => {
                 let maximum = 0;
                 for (
                   let y = bounds.y + row * cellHeight;
@@ -171,18 +171,18 @@ describe('local link validation appearance', () => {
           await toPass(async () => {
             if (recorderError) throw recorderError;
             expect(frames.length).toBeGreaterThan(1);
-            expect(frames[frames.length - 1]).toEqual([0, 0]);
+            expect(frames[frames.length - 1]).toEqual([0, 0, 0, 0]);
           });
           await app.input.pressKey('p');
           await toPass(async () => {
             expect(
-              frames.filter((frame) => frame[0] === 127 && frame[1] === 127)
+              frames.filter((frame) => frame.every((value) => value === 99))
                 .length
             ).toBeGreaterThanOrEqual(5);
           });
           const pendingFrames = frames.length;
           expect(
-            frames.every((frame) => frame.every((value) => value <= 127))
+            frames.every((frame) => frame.every((value) => value <= 99))
           ).toBe(true);
           const validate = await app.getById('driver_validate_paths');
           if (validate.kind !== 'button')
@@ -190,15 +190,24 @@ describe('local link validation appearance', () => {
           await validate.click();
           await toPass(async () => {
             expect(
-              frames.filter((frame) => frame[0] === 255 && frame[1] === 127)
-                .length
+              frames.filter(
+                (frame) =>
+                  frame[0] === 255 &&
+                  frame[1] === 99 &&
+                  frame[2] === 255 &&
+                  frame[3] === 99
+              ).length
             ).toBeGreaterThanOrEqual(5);
           });
-          expect(frames.every((frame) => frame[1] <= 127)).toBe(true);
+          expect(
+            frames.every((frame) => frame[1] <= 99 && frame[3] <= 99)
+          ).toBe(true);
           const validFrame = frames.findIndex((frame) => frame[0] === 255);
           expect(validFrame).toBeGreaterThanOrEqual(pendingFrames);
           expect(
-            frames.slice(validFrame).every((frame) => frame[0] === 255)
+            frames
+              .slice(validFrame)
+              .every((frame) => frame[0] === 255 && frame[2] === 255)
           ).toBe(true);
           await writeFile(
             join(directory, `${backend}-frames.json`),

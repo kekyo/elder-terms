@@ -1404,6 +1404,10 @@ applies to visible text and OSC 8. Recognition, copying, and Ctrl+click remain
 available in every mode. No decoration adds no link styling; always underline
 adds underlines without changing brightness. Validation mode dims local paths
 until confirmed valid; other links look the same as always underline.
+Original text and background colors, inverse, bold, and existing underline styles
+are preserved. Dimming operates on corrected display colors in Oklch, halving
+the lightness difference from the background. Hue is retained; chroma is reduced
+only when needed to fit the display gamut.
 The built-in local path rules enable path validation. OSC 8 also recognizes
 absolute paths, home-relative paths starting with `~/`, and URIs starting with
 `file:///` or `file://localhost/`. The decoded URI path is validated and its

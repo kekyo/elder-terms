@@ -9,6 +9,7 @@
 #include "inline-prompt.h"
 #include "terminal-log.h"
 #include "sftp/sftp-client.h"
+#include <elder-terms/terminal-color-filter.h>
 
 #include <gestament/gtk.h>
 #include <glib-unix.h>
@@ -45,6 +46,7 @@ struct Driver {
   bool zmodem_auto = false;
   bool links = false;
   bool defer_link_validation = false;
+  elder_terms::TerminalColorFilterContext link_colors{};
   elder_terms::TerminalLinkDecoration link_decoration = elder_terms::TerminalLinkDecoration::underline;
   std::shared_ptr<cardio::primitives::manually_conditional> link_validation_ready =
       std::make_shared<cardio::primitives::manually_conditional>();
@@ -422,6 +424,9 @@ static cardio::promise<elder_terms::SshUserPromptResponse> prompt_ssh(Driver *dr
 
 static void configure_links(Driver *driver) {
   elder_terms::terminal_runtime_set_link_decoration(driver->runtime, driver->link_decoration);
+  driver->link_colors.dim_links = driver->link_decoration == elder_terms::TerminalLinkDecoration::validated;
+  boxrig_ui_view_set_color_filter(boxrig_gtk3_terminal_widget_view(elder_terms::terminal_runtime_widget(driver->runtime)),
+      driver->link_colors.dim_links ? elder_terms::filter_terminal_colors : nullptr, &driver->link_colors);
   elder_terms::TerminalHyperlinkPathValidator validate = elder_terms::validate_terminal_hyperlink_path_async;
   if (driver->defer_link_validation) {
     validate = [ready = driver->link_validation_ready](std::string path, cardio::cancellation cancellation)

@@ -7,6 +7,7 @@
 #include <boxrig/ui/color.h>
 #include <elder-terms/settings/terminal-settings.h>
 #include <memory>
+#include <cstdint>
 
 namespace elder_terms {
 /** Perceptual color in D65 Oklch, used for display correction. */
@@ -40,6 +41,8 @@ ELDER_TERMS_API RgbColor correct_color_vision(RgbColor color, TerminalColorVisio
 ELDER_TERMS_API RgbColor simulate_color_vision(RgbColor color, TerminalColorVision profile);
 /** Immutable precomputed palette and interpolation data for filter E. */
 struct ReversePalette;
+/** Application annotation tag requesting local-link dimming after color correction. */
+inline constexpr std::uint64_t terminal_dim_link_color_tag = 1;
 /** Stable application-owned color hook context. */
 struct TerminalColorFilterContext {
   std::optional<RgbColor> background; /**< Connection override for the default background. */
@@ -47,6 +50,7 @@ struct TerminalColorFilterContext {
   TerminalColorVision color_vision = TerminalColorVision::none; /**< Independent recoloring profile. */
   double color_vision_strength = 1; /**< Recoloring amount from zero through one. */
   std::shared_ptr<const ReversePalette> reverse_palette{}; /**< Prepared outside the display callback. */
+  bool dim_links = false; /**< Applies Oklch dimming to tagged local-link cells. */
 };
 /** Prepares the palette filter when settings or the terminal's color revision change.
  * @param context Application-owned context, outside a rendering callback.
