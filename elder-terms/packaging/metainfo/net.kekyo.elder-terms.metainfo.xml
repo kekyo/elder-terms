@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>net.kekyo.elder-terms</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>elder-terms</name>
+  <summary>GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP connections</summary>
+  <description>
+    <p>
+      A terminal emulator inspired by personal computing in the 1990s. It supports
+      local shells as well as serial, TELNET, FTP, FTPS, SSH, SFTP, and WebDAV
+      connections from a single GTK3 application.
+    </p>
+    <p>Features include:</p>
+    <ul>
+      <li>Multiple saved connections launched from a tray-capable launcher</li>
+      <li>INI-based connection settings you can edit with any text editor</li>
+      <li>Character encoding, BS/DEL, cursor keys, and Enter/Return conversion</li>
+      <li>X/Y/ZMODEM transfers for TELNET, serial, and SSH sessions</li>
+      <li>File transfer windows for SFTP, FTP, FTPS, and WebDAV</li>
+      <li>Custom exterior colors, BEL sounds, fonts, and per-connection layout</li>
+    </ul>
+  </description>
+  <url type="homepage">https://github.com/kekyo/elder-terms</url>
+  <url type="bugtracker">https://github.com/kekyo/elder-terms/issues</url>
+  <developer id="net.kekyo">
+    <name>Kouji Matsui</name>
+  </developer>
+  <launchable type="desktop-id">net.kekyo.elder-terms.desktop</launchable>
+  <!-- Theme icon installed from data/icons/hicolor (same artwork as images/elder-terms-128.png). -->
+  <icon type="stock">elder-terms</icon>
+  <categories>
+    <category>System</category>
+    <category>TerminalEmulator</category>
+  </categories>
+  <provides>
+    <binary>elder-terms</binary>
+    <binary>elder-terms-terminal</binary>
+    <binary>etctl</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+</component>
