@@ -783,6 +783,7 @@ bottom status bar and puts the activity indicators beside the title. The
 dropdown can also use the global default or explicitly disable compact mode.
 It works for terminal and FTP, FTPS, SFTP, and WebDAV file browser windows. The
 built-in default is off.
+
 Enable window side borders on the "General" tab to show borders of the chosen
 width on both sides of the window. Compact mode also shows a bottom border
 of the same width. In INI files, use `show_border` and `border_width` in
@@ -859,9 +860,11 @@ Opacity ranges from 0 to 100%; a 0% tint adds no visible color. Text itself stay
 
 Choose a local PNG or JPEG file, or enter its absolute path.
 Image placement can preserve the aspect ratio while covering the viewport, contain the whole image, or stretch both axes.
+
 The image stays fixed within the terminal viewport while text scrolls.
 Image opacity and transparent PNG pixels let the image combine with desktop transparency.
 Images also work in opaque mode; lower the background opacity if the image is difficult to see.
+
 "Clear image" explicitly selects no image for this connection. "Inherit" follows connection defaults.
 The file is neither moved nor embedded, so keep it available at the same path for future starts.
 Both the file and decoded RGBA pixels are limited to 64 MiB, with a maximum of 16384 pixels per edge.
@@ -870,7 +873,7 @@ Desktop transparency requires a compositor that combines the windows on your des
 Frosted glass requests a compositor effect that blurs the desktop behind the terminal; text and background images remain sharp.
 The settings panel reports the actual state. Unavailable blur falls back to transparency, and unavailable transparency falls back to an opaque background.
 "Frosted glass requested" means the request was accepted; compositor effect settings still determine whether the blur appears.
-See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.11.0/docs/en/background.md) for platform requirements.
+See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/background.md) for platform requirements.
 
 ## Improving Text Color Visibility
 
@@ -918,7 +921,7 @@ E's preview uses the standard palette. The actual display can differ when the co
 
 Only one color filter can be selected, so reversal and the existing Oklch filter are mutually exclusive. Color discrimination assistance can be combined with every mode and is applied before reversal. Logical terminal colors, text, communication, copied text, and logs remain unchanged.
 
-Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.11.0/docs/en/color-filters.md).
+Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/color-filters.md).
 
 ```ini
 [terminal]
@@ -954,7 +957,7 @@ Use Apply or Save to apply previewed changes to the terminal. Cancel discards th
 
 Correction affects display only. Communication, logical terminal colors, copied text, and logs remain unchanged.
 Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are excluded.
-See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.11.0/docs/en/color-filters.md) for the supported scope.
+See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/color-filters.md) for the supported scope.
 
 ```ini
 [terminal]
@@ -1376,7 +1379,7 @@ Setting "Text boundaries" to "Whitespace, quotes or line ends" prevents partial
 links inside invalid candidates. The default local path rule enables this
 option. Custom rules can change both the expression and boundary setting.
 
-Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.11.0/docs/en/regex.md).
+Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/regex.md).
 Character classes, groups, alternatives, repetition, and numbered or named captures are supported. Backreferences, lookahead, lookbehind, and expressions matching an empty string are not supported.
 `\d`, `\s`, and `\w` cover ASCII. Use Unicode general categories such as `\p{L}` for letters and `\p{Nd}` for decimal digits.
 `.` also matches newlines, and `^` and `$` anchor the complete input. Matching is case-sensitive and chooses the longest match at the same starting position.
@@ -1488,7 +1491,7 @@ version as libcurl; the application checks this before connecting.
 To build on Ubuntu or Debian, install a C++20-capable compiler, Meson, Ninja,
 gettext, and the development packages for the libraries used by elder-terms:
 
-Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later, IBus 1.5.29 or later, and Wayland client 1.22 or later. See the [boxrig build requirements](https://github.com/kekyo/boxrig/blob/0.11.0/docs/en/building.md).
+Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later, IBus 1.5.29 or later, and Wayland client 1.22 or later. See the [boxrig build requirements](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/building.md).
 
 ```bash
 sudo apt update
