@@ -1106,6 +1106,18 @@ msgstr "パス検証"
 msgid "Text boundaries"
 msgstr "テキストの区切り"
 
+msgid "Link decoration"
+msgstr "リンクの装飾"
+
+msgid "No decoration"
+msgstr "無装飾"
+
+msgid "Always underline"
+msgstr "常に下線"
+
+msgid "Validate links (with dimming)"
+msgstr "リンク有効判定（減光あり）"
+
 msgid "Partial match"
 msgstr "部分一致"
 

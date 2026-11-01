@@ -246,6 +246,8 @@ static void spawn_macro_command(ApplicationState *state, std::string command,
 }
 
 static void apply_terminal_hyperlink_settings(ApplicationState *state) {
+  elder_terms::terminal_runtime_set_link_decoration(state->runtime,
+      elder_terms::terminal_link_decoration(state->settings_store));
   elder_terms::terminal_runtime_set_hyperlink_rules(state->runtime,
       elder_terms::effective_hyperlink_action_rules(state->settings_store),
       [state](elder_terms::TerminalHyperlinkResolution resolution) {

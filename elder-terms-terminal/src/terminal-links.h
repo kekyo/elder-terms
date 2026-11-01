@@ -7,6 +7,7 @@
 
 #include <boxrig/ui.h>
 #include "terminal-hyperlink-action.h"
+#include <elder-terms/settings/terminal-settings.h>
 
 namespace elder_terms {
 
@@ -65,6 +66,20 @@ TerminalLinks *create_terminal_links(boxrig_ui_view *view, std::vector<Hyperlink
  * @param view Borrowed replacement, or nullptr while detached.
  */
 void terminal_links_attach_view(TerminalLinks *links, boxrig_ui_view *view);
+
+/**
+ * Changes decoration without resetting recognition, validation or activation.
+ * @param links Live link state.
+ * @param decoration Presentation shared by text and OSC 8 links.
+ */
+void terminal_links_set_decoration(TerminalLinks *links, TerminalLinkDecoration decoration);
+
+/**
+ * Refreshes OSC 8 annotations in the synchronized visible viewport.
+ * @param links Live link state. Call after model synchronization, before rendering.
+ * @remarks Reads only the visible grid; filesystem work remains asynchronous.
+ */
+void terminal_links_refresh_viewport(TerminalLinks *links);
 
 /**
  * Advances bounded recognition and updates link annotations.

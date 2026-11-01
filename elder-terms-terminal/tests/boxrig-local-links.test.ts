@@ -37,6 +37,7 @@ describe('local link validation appearance', () => {
       try {
         const app = await launcher.launch([
           '--defer-link-validation',
+          '--link-decoration=validated',
           '--local',
           '--',
           process.execPath,

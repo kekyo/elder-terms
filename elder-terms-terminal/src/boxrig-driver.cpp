@@ -45,6 +45,7 @@ struct Driver {
   bool zmodem_auto = false;
   bool links = false;
   bool defer_link_validation = false;
+  elder_terms::TerminalLinkDecoration link_decoration = elder_terms::TerminalLinkDecoration::underline;
   std::shared_ptr<cardio::primitives::manually_conditional> link_validation_ready =
       std::make_shared<cardio::primitives::manually_conditional>();
   bool context_loss_control = false;
@@ -420,6 +421,7 @@ static cardio::promise<elder_terms::SshUserPromptResponse> prompt_ssh(Driver *dr
 }
 
 static void configure_links(Driver *driver) {
+  elder_terms::terminal_runtime_set_link_decoration(driver->runtime, driver->link_decoration);
   elder_terms::TerminalHyperlinkPathValidator validate = elder_terms::validate_terminal_hyperlink_path_async;
   if (driver->defer_link_validation) {
     validate = [ready = driver->link_validation_ready](std::string path, cardio::cancellation cancellation)
@@ -469,6 +471,12 @@ int main(int argc, char **argv) {
   for (int index = 1; index < argc; ++index) {
     if (std::string_view(argv[index]) == "--local") driver.connection_mode = true;
     else if (std::string_view(argv[index]) == "--links") driver.links = true;
+    else if (std::string_view(argv[index]).starts_with("--link-decoration=")) {
+      const auto mode = std::string_view(argv[index]).substr(18);
+      if (mode != "none" && mode != "underline" && mode != "validated") return 2;
+      driver.link_decoration = mode == "none" ? elder_terms::TerminalLinkDecoration::none :
+          mode == "validated" ? elder_terms::TerminalLinkDecoration::validated : elder_terms::TerminalLinkDecoration::underline;
+    }
     else if (std::string_view(argv[index]) == "--defer-link-validation") {
       driver.links = true;
       driver.defer_link_validation = true;

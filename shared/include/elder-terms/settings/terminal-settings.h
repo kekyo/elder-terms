@@ -229,6 +229,26 @@ ELDER_TERMS_API SettingKey terminal_font_size_dip_setting_key();
  */
 ELDER_TERMS_API SettingKey terminal_font_families_setting_key();
 
+/** Link-only presentation, independent of recognition and activation. */
+enum class TerminalLinkDecoration {
+  /** Retains terminal-provided attributes without adding decoration. */
+  none,
+  /** Adds an underline without changing brightness. */
+  underline,
+  /** Underlines links and dims unconfirmed or invalid local paths. */
+  validated,
+};
+
+/** Returns the ordinary, inheritable [terminal] link_decoration key. */
+ELDER_TERMS_API SettingKey terminal_link_decoration_setting_key();
+
+/**
+ * Reads link presentation for both text and OSC 8 targets.
+ * @param store Effective settings.
+ * @return Selected mode, defaulting to always underline.
+ */
+ELDER_TERMS_API TerminalLinkDecoration terminal_link_decoration(const SettingsStore &store);
+
 /**
  * Validates ordered terminal font family names without requiring installed fonts.
  * @param families Candidate list; an empty list selects the built-in defaults.

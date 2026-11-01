@@ -248,7 +248,7 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
         );
         await writeFile(
           config,
-          `[local]\ncommand_line=${process.execPath} ${peer}\n`
+          `[terminal]\nlink_decoration=validated\n[local]\ncommand_line=${process.execPath} ${peer}\n`
         );
         await runGtkTest(
           context,

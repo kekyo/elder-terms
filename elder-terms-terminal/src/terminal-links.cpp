@@ -33,6 +33,7 @@ struct LinkAnnotation {
   boxrig_ui_text_annotation annotation{};
   std::optional<TerminalHyperlinkAction> candidate;
   std::shared_ptr<PathCheck> path_check;
+  std::uint32_t hyperlink_handle = 0;
 };
 
 struct LinkLine {
@@ -110,6 +111,8 @@ struct TerminalLinks {
   std::size_t osc8_cache_bytes = 0;
   std::shared_ptr<LinkValidationState> validation;
   std::uint64_t color_revision = 0;
+  TerminalLinkDecoration decoration = TerminalLinkDecoration::underline;
+  bool osc8_dirty = true;
 #if defined(ELDER_TERMS_CACHE_TESTING)
   bool fail_next_cache_insert = false;
 #endif
@@ -134,6 +137,10 @@ static LinkLineKey line_key(boxrig_text_screen screen, boxrig_text_line_id line)
   return {screen, line.epoch, line.serial};
 }
 
+static std::uint64_t annotation_source(const LinkRule &rule) {
+  return rule.recognizer ? rule.recognizer : UINT64_MAX - rule.generation;
+}
+
 static void unsubscribe_line(const LinkLineKey &key, LinkLine &line) {
   for (auto &item : line.items) {
     if (!item.path_check) continue;
@@ -144,7 +151,7 @@ static void unsubscribe_line(const LinkLineKey &key, LinkLine &line) {
 }
 
 static void clear_annotations(TerminalLinks *links, std::uint64_t source) {
-  for (auto &rule : links->rules) if (rule.recognizer == source) {
+  for (auto &rule : links->rules) if (annotation_source(rule) == source) {
     for (auto &[key, line] : rule.lines) unsubscribe_line(key, line);
     rule.lines.clear();
   }
@@ -261,7 +268,13 @@ static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &ke
       }
       auto annotation = item.annotation;
       annotation.priority = -static_cast<std::int32_t>(rule.generation);
-      if (!annotation_action_valid(item)) {
+      annotation.style = {};
+      if (links->decoration != TerminalLinkDecoration::none) {
+        annotation.style.field_mask = BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE;
+        annotation.style.underline_style = BOXRIG_UNDERLINE_SINGLE;
+      }
+      if (links->decoration == TerminalLinkDecoration::validated &&
+          rule.rule.path_validation == HyperlinkPathValidation::existing_local_path && !annotation_action_valid(item)) {
         annotation.style.field_mask |= BOXRIG_UI_ANNOTATION_FOREGROUND | BOXRIG_UI_ANNOTATION_UNDERLINE_COLOR;
         annotation.style.foreground = dim;
         annotation.style.underline_color = dim;
@@ -270,9 +283,18 @@ static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &ke
     }
     const auto &event = line->second.event;
     // The view rejects a completion after its logical text revision changed.
-    boxrig_ui_view_replace_text_annotations(links->view, rule.recognizer, event.screen,
+    boxrig_ui_view_replace_text_annotations(links->view, annotation_source(rule), event.screen,
         event.line_id, event.line_revision, annotations.data(), annotations.size());
   }
+}
+
+void terminal_links_set_decoration(TerminalLinks *links, TerminalLinkDecoration decoration) {
+  if (links->decoration == decoration) return;
+  links->decoration = decoration;
+  std::set<LinkLineKey> keys;
+  for (const auto &rule : links->rules)
+    for (const auto &[key, line] : rule.lines) { (void)line; keys.insert(key); }
+  for (const auto &key : keys) publish_line_annotations(links, key);
 }
 
 static void stop_validation(TerminalLinks *links) {
@@ -340,9 +362,10 @@ void terminal_links_attach_view(TerminalLinks *links, boxrig_ui_view *view) {
   validation->validate = links->validation->validate;
   links->validation = std::move(validation);
   for (const auto &rule : links->rules) {
-    if (rule.recognizer) clear_annotations(links, rule.recognizer);
+    clear_annotations(links, annotation_source(rule));
   }
   links->view = view;
+  links->osc8_dirty = true;
   if (view) {
     for (auto &rule : links->rules) {
       if (rule.rule.recognition_source == HyperlinkRecognitionSource::terminal_text) {
@@ -418,8 +441,6 @@ static void update_annotations(TerminalLinks *links, const boxrig_text_recognize
     annotation.source_id = result.recognizer_id;
     annotation.item_id = result.match_id;
     annotation.range = result.range;
-    annotation.style.field_mask = BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE;
-    annotation.style.underline_style = BOXRIG_UNDERLINE_SINGLE;
     boxrig_regex_result *captured = nullptr;
     if (boxrig_terminal_text_recognizer_result(links->terminal, result.recognizer_id,
         result.match_id, result.result_set_revision, &captured) != BOXRIG_STATUS_OK) continue;
@@ -569,6 +590,84 @@ static std::shared_ptr<boxrig_regex_result> cached_match_osc8(TerminalLinks *lin
   return outcome.result;
 }
 
+void terminal_links_refresh_viewport(TerminalLinks *links) {
+  if (!links->view) return;
+  boxrig_ui_dirty dirty{};
+  if (!links->osc8_dirty && !boxrig_ui_view_peek_dirty(links->view, BOXRIG_UI_DIRTY_MODEL, &dirty)) return;
+  links->osc8_dirty = false;
+  std::vector<std::map<LinkLineKey, LinkLine>> visible(links->rules.size());
+  std::size_t rows = 0, columns = 0;
+  boxrig_terminal_size(links->terminal, &rows, &columns);
+  for (std::size_t row = 0; row < rows; ++row) {
+    for (std::size_t column = 0; column < columns; ++column) {
+      boxrig_cell_view cell{};
+      if (boxrig_terminal_get_cell(links->terminal, row, column, &cell) != BOXRIG_STATUS_OK ||
+          cell.continuation || !cell.hyperlink_handle) continue;
+      boxrig_viewport_cell_resolution position{};
+      if (boxrig_terminal_resolve_viewport_cell(links->terminal, row, column, &position) != BOXRIG_STATUS_OK) continue;
+      const auto key = line_key(position.fragment.screen, position.fragment.line_id);
+      for (std::size_t index = 0; index < links->rules.size(); ++index) {
+        const auto &rule = links->rules[index];
+        if (rule.recognizer) continue;
+        auto &line = visible[index][key];
+        if (!line.items.empty() && line.items.back().hyperlink_handle == cell.hyperlink_handle &&
+            line.items.back().annotation.range.end.column == position.range.start.column) {
+          line.items.back().annotation.range.end = position.range.end;
+          continue;
+        }
+        boxrig_ui_hit_test_result target{};
+        target.hyperlink_uri = cell.hyperlink_uri;
+        target.hyperlink_uri_length = cell.hyperlink_uri_length;
+        const auto match = cached_match_osc8(links, rule, target);
+        if (!match) continue;
+        std::string reason;
+        auto action = expand_terminal_hyperlink_action(rule.rule,
+            [&match](const std::string &name) { return regular_expression_capture(match.get(), name); }, &reason);
+        line.event.screen = position.fragment.screen;
+        line.event.line_id = position.fragment.line_id;
+        line.event.line_revision = position.fragment.line_revision;
+        boxrig_ui_text_annotation annotation{};
+        annotation.source_id = annotation_source(rule);
+        annotation.item_id = position.range.start.column + 1;
+        annotation.range = position.range;
+        line.items.push_back({annotation, std::move(action), {}, cell.hyperlink_handle});
+      }
+    }
+  }
+  std::set<LinkLineKey> changed;
+  for (std::size_t index = 0; index < links->rules.size(); ++index) {
+    auto &rule = links->rules[index];
+    if (rule.recognizer) continue;
+    auto &current = visible[index];
+    for (auto found = rule.lines.begin(); found != rule.lines.end();) {
+      if (!current.contains(found->first) || current.at(found->first).items.empty()) {
+        unsubscribe_line(found->first, found->second);
+        boxrig_ui_view_clear_text_annotation_line(links->view, annotation_source(rule),
+            found->second.event.screen, found->second.event.line_id);
+        changed.insert(found->first);
+        found = rule.lines.erase(found);
+      } else ++found;
+    }
+    for (auto &[key, line] : current) {
+      if (line.items.empty()) continue;
+      auto &previous = rule.lines[key];
+      const bool same = previous.event.line_revision == line.event.line_revision &&
+          previous.items.size() == line.items.size() &&
+          std::equal(previous.items.begin(), previous.items.end(), line.items.begin(),
+              [](const LinkAnnotation &left, const LinkAnnotation &right) {
+                return left.hyperlink_handle == right.hyperlink_handle && left.candidate == right.candidate &&
+                    left.annotation.range.start.column == right.annotation.range.start.column &&
+                    left.annotation.range.end.column == right.annotation.range.end.column;
+              });
+      if (same) continue;
+      unsubscribe_line(key, previous);
+      previous = std::move(line);
+      changed.insert(key);
+    }
+  }
+  for (const auto &key : changed) publish_line_annotations(links, key);
+}
+
 struct ResolvedLink {
   TerminalHyperlinkResolution resolution;
   std::shared_ptr<boxrig_regex_result> match;
@@ -695,8 +794,8 @@ void destroy_terminal_links(TerminalLinks *links) {
   if (!links) return;
   stop_validation(links);
   for (const auto &rule : links->rules) {
+    clear_annotations(links, annotation_source(rule));
     if (rule.recognizer) {
-      clear_annotations(links, rule.recognizer);
       boxrig_terminal_unregister_text_recognizer(links->terminal, rule.recognizer);
     }
   }

@@ -6,6 +6,7 @@
 #pragma once
 
 #include <elder-terms/settings/macro-settings.h>
+#include <elder-terms/settings/terminal-settings.h>
 
 #include <boxrig/gtk3.h>
 #include <string_view>
@@ -100,6 +101,13 @@ boxrig_input_key_route terminal_runtime_route_selection_key(TerminalRuntime *run
 void terminal_runtime_set_hyperlink_rules(TerminalRuntime *runtime,
     std::vector<HyperlinkActionRule> rules, std::function<void(TerminalHyperlinkResolution)> activate,
     TerminalHyperlinkPathValidator validate = validate_terminal_hyperlink_path_async);
+
+/**
+ * Applies link-only decoration to the current and subsequent rule sets.
+ * @param runtime Live runtime.
+ * @param decoration Text and OSC 8 presentation mode.
+ */
+void terminal_runtime_set_link_decoration(TerminalRuntime *runtime, TerminalLinkDecoration decoration);
 
 /**
  * Reports whether the pointer currently resolves to an executable link.

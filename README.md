@@ -1398,11 +1398,20 @@ file or directory on the computer running elder-terms; otherwise the command
 is not run. Relative paths are rejected because terminal display text does not
 provide a reliable local working directory, particularly for remote sessions.
 
-The built-in local path rule enables path validation. Visible-text links
-start with dimmed text and underline colors. Successful validation restores
-normal brightness; invalid links remain dimmed. Terminal input and drawing continue
+"Link decoration" in the "Appearance" tab offers "No decoration", "Always
+underline" (the default), and "Validate links (with dimming)". This setting
+applies to visible text and OSC 8. Recognition, copying, and Ctrl+click remain
+available in every mode. No decoration adds no link styling; always underline
+adds underlines without changing brightness. Validation mode dims local paths
+until confirmed valid; other links look the same as always underline.
+The built-in local path rules enable path validation. OSC 8 also recognizes
+absolute paths, home-relative paths starting with `~/`, and URIs starting with
+`file:///` or `file://localhost/`. The decoded URI path is validated and its
+visible label is decorated. Terminal input and drawing continue
 while existence checks run. `Ctrl`+click checks the path again, running the
 command if valid or showing a modal dialog with the reason if invalid.
+Decoration inherits as an ordinary setting. In INI files, set
+`[terminal] link_decoration` to `none`, `underline`, or `validated`.
 
 The same settings can be edited directly in a connection's INI file. This
 example recognizes an absolute local source path followed by a line number:

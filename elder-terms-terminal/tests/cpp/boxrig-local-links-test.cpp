@@ -53,6 +53,7 @@ int main() {
       std::size_t dispatches = 0;
       while (terminal_links_dispatch(links.get(), 4096))
         expect(++dispatches < 10000, "recognition completes");
+      terminal_links_refresh_viewport(links.get());
     };
     const auto hit = [&](std::size_t row, std::size_t column) {
       boxrig_ui_hit_test_result result{};
@@ -77,6 +78,12 @@ int main() {
     };
 
     feed("/foo/bar/baz\r\n\"/foo/bar/baz\"\r\n/tmp\r\n/proc/self/exe\r\nhttps://example.test/tmp\r\n");
+    expect(link_style(0).field_mask == BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE,
+        "the default decoration underlines unconfirmed paths without dimming");
+    terminal_links_set_decoration(links.get(), TerminalLinkDecoration::none);
+    expect(link_style(0).field_mask == 0 && terminal_links_copy_target(links.get(), hit(0, 2)) == "/foo/bar/baz",
+        "no decoration preserves recognition without changing terminal attributes");
+    terminal_links_set_decoration(links.get(), TerminalLinkDecoration::validated);
     wait_checks();
     for (const std::size_t row : {0u, 1u}) {
       const auto point = hit(row, 2);
@@ -150,6 +157,26 @@ int main() {
         !terminal_links_copy_target(links.get(), hit(1, 2)),
         "path boundaries are checked across soft wraps");
 
+    feed("\x1b[2J\x1b[H\x1b]8;;https://example.test/\x1b\\web\x1b]8;;\x1b\\\r\n"
+        "\x1b]8;;file:///tmp\x1b\\directory\x1b]8;;\x1b\\\r\n"
+        "\x1b]8;;/foo/bar/baz\x1b\\missing\x1b]8;;\x1b\\");
+    wait_checks();
+    expect(terminal_links_copy_target(links.get(), hit(1, 2)) == "file:///tmp" &&
+        terminal_links_resolve(links.get(), hit(1, 2))->action->arguments == std::vector<std::string>{"/tmp"},
+        "local OSC 8 file URIs validate the decoded target instead of the visible label");
+    expect((link_style(0).field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) == 0 &&
+        (link_style(1).field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) == 0 &&
+        (link_style(2).field_mask & BOXRIG_UI_ANNOTATION_FOREGROUND) != 0,
+        "OSC 8 labels retain underlines and dim only invalid local targets");
+    for (const auto mode : {TerminalLinkDecoration::none, TerminalLinkDecoration::underline}) {
+      terminal_links_set_decoration(links.get(), mode);
+      for (std::size_t row = 0; row < 3; ++row)
+        expect(link_style(row).field_mask == (mode == TerminalLinkDecoration::none ? 0u : static_cast<unsigned>(BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE)),
+            "OSC 8 decoration follows the selected mode without pointer movement");
+      expect(terminal_links_copy_target(links.get(), hit(2, 2)) == "/foo/bar/baz",
+          "changing OSC 8 decoration keeps its target recognizable");
+    }
+
     links.reset();
     std::vector<std::shared_ptr<cardio::promise_source<std::string>>> requests;
     std::vector<std::string> requested_paths;
@@ -160,6 +187,7 @@ int main() {
           requested_paths.push_back(std::move(path));
           return request->get_promise();
         }));
+    terminal_links_set_decoration(links.get(), TerminalLinkDecoration::validated);
     feed("\x1b[2J\x1b[H/foo/bar/baz\r\n/foo/bar/baz\r\nhttps://example.test/");
     while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
     expect(requested_paths == std::vector<std::string>{"/foo/bar/baz"},
@@ -234,7 +262,7 @@ int main() {
         "destruction cancels queued checks and discards late activation callbacks");
 
     requests.clear();
-    auto preferred = default_hyperlink_action_rules().back();
+    auto preferred = default_hyperlink_action_rules()[4];
     preferred.command = "preferred";
     auto fallback = preferred;
     fallback.id = "fallback";
@@ -260,7 +288,7 @@ int main() {
     links.reset();
     requests.clear();
     auto unchecked_rules = default_hyperlink_action_rules();
-    unchecked_rules.back().path_validation = HyperlinkPathValidation::none;
+    unchecked_rules[4].path_validation = HyperlinkPathValidation::none;
     links.reset(create_terminal_links(view, std::move(unchecked_rules),
         [&](std::string, cardio::cancellation) -> cardio::promise<std::string> {
           throw std::runtime_error("disabled path validation must not query the filesystem");

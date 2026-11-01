@@ -38,7 +38,7 @@ struct TerminalRuntime {
   std::function<void(TerminalHyperlinkResolution)> activate_link;
   std::optional<std::pair<boxrig_ui_fixed, boxrig_ui_fixed>> pointer_position;
   bool link_hover = false;
-  bool osc8_hover = false;
+  TerminalLinkDecoration link_decoration = TerminalLinkDecoration::underline;
   bool links_pending = false;
   std::unique_ptr<TerminalReceivedMacros, decltype(&destroy_terminal_received_macros)> macros{
       nullptr, destroy_terminal_received_macros};
@@ -152,13 +152,6 @@ static gboolean drawn(GtkWidget *, cairo_t *, gpointer context) {
 static void update_link_cursor(TerminalRuntime *runtime, const boxrig_ui_hit_test_result &hit) {
   const auto resolved = runtime->links ? terminal_links_resolve(runtime->links.get(), hit) : std::nullopt;
   const bool active = resolved && resolved->action.has_value();
-  auto *view = boxrig_gtk3_terminal_widget_view(runtime->widget);
-  if (active && hit.hyperlink_handle) {
-    runtime->osc8_hover = boxrig_ui_view_update_hyperlink_hover(view, &hit) == BOXRIG_UI_OK;
-  } else if (runtime->osc8_hover) {
-    boxrig_ui_view_clear_hyperlink_hover(view);
-    runtime->osc8_hover = false;
-  }
   if (active != runtime->link_hover) {
     runtime->link_hover = active;
     if (auto *window = gtk_widget_get_window(GTK_WIDGET(runtime->widget))) {
@@ -984,6 +977,7 @@ static gboolean dispatch_frame(gpointer context) {
     fail_ui(runtime);
     return G_SOURCE_REMOVE;
   }
+  if (runtime->links) terminal_links_refresh_viewport(runtime->links.get());
   // Stream and recognizer continuations do not necessarily change the view.
   // Widget callbacks and received input request component frames,
   // which also publish accessible text; matching alone does not need one.
@@ -1130,7 +1124,6 @@ static bool attach_widget(TerminalRuntime *runtime) {
   if (runtime->links) terminal_links_attach_view(runtime->links.get(), boxrig_gtk3_terminal_widget_view(widget));
   runtime->pointer_position.reset();
   runtime->link_hover = false;
-  runtime->osc8_hover = false;
   runtime->scroll = scroll;
   runtime->size_command = {};
   runtime->selection_phase = SelectionPhase::idle;
@@ -1262,7 +1255,14 @@ void terminal_runtime_set_hyperlink_rules(TerminalRuntime *runtime,
   update_link_cursor(runtime, {});
   if (!rules.empty()) runtime->links.reset(create_terminal_links(
       boxrig_gtk3_terminal_widget_view(runtime->widget), std::move(rules), std::move(validate)));
+  if (runtime->links) terminal_links_set_decoration(runtime->links.get(), runtime->link_decoration);
   runtime->activate_link = std::move(activate);
+  request_frame(runtime);
+}
+
+void terminal_runtime_set_link_decoration(TerminalRuntime *runtime, TerminalLinkDecoration decoration) {
+  runtime->link_decoration = decoration;
+  if (runtime->links) terminal_links_set_decoration(runtime->links.get(), decoration);
   request_frame(runtime);
 }
 

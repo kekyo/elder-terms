@@ -31,6 +31,7 @@ static std::string trim_ascii_whitespace(const std::string &value) {
 }
 
 std::vector<HyperlinkActionRule> default_hyperlink_action_rules() {
+  const std::string local_path = R"(~?/(?:[\p{L}\p{M}\p{Nd}_.-]+(?:/[\p{L}\p{M}\p{Nd}_.-]+)*/?)?)";
   return {
       {
           .id = "http-url-osc8",
@@ -73,12 +74,30 @@ std::vector<HyperlinkActionRule> default_hyperlink_action_rules() {
       {
           .id = "local-path-text",
           .recognition_source = HyperlinkRecognitionSource::terminal_text,
-          .pattern = R"(~?/(?:[\p{L}\p{M}\p{Nd}_.-]+(?:/[\p{L}\p{M}\p{Nd}_.-]+)*/?)?)",
+          .pattern = local_path,
           .command = "xdg-open",
           .arguments = {"${0}"},
           .path_validation = HyperlinkPathValidation::existing_local_path,
           .path_template = "${0}",
           .whole_token = true,
+      },
+      {
+          .id = "local-path-osc8",
+          .recognition_source = HyperlinkRecognitionSource::osc8,
+          .pattern = "^(?:" + local_path + ")$",
+          .command = "xdg-open",
+          .arguments = {"${0}"},
+          .path_validation = HyperlinkPathValidation::existing_local_path,
+          .path_template = "${0}",
+      },
+      {
+          .id = "local-file-uri-osc8",
+          .recognition_source = HyperlinkRecognitionSource::osc8,
+          .pattern = R"(^file://(?:localhost)?(?<path>/[^\r\n?#]*)$)",
+          .command = "xdg-open",
+          .arguments = {"${path|uri-decode}"},
+          .path_validation = HyperlinkPathValidation::existing_local_path,
+          .path_template = "${path|uri-decode}",
       },
   };
 }

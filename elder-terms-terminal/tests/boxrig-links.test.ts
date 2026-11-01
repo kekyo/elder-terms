@@ -224,7 +224,7 @@ describe('boxrig link actions', () => {
               .find((line) => line.startsWith('backend='));
             expect(status).toContain('link_hover=1');
             expect(frameNumber).toBeGreaterThan(unhoveredFrame);
-            expect(region(frame)).not.toEqual(unhovered);
+            expect(region(frame)).toEqual(unhovered);
           });
           const hoveredFrame = frameNumber;
           await app.input.moveMouseTo(
