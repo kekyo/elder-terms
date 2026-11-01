@@ -1103,6 +1103,27 @@ msgstr "存在するローカルファイルまたはディレクトリ"
 msgid "Path validation"
 msgstr "パス検証"
 
+msgid "Text boundaries"
+msgstr "テキストの区切り"
+
+msgid "Link decoration"
+msgstr "リンクの装飾"
+
+msgid "No decoration"
+msgstr "無装飾"
+
+msgid "Always underline"
+msgstr "常に下線"
+
+msgid "Validate links (with dimming)"
+msgstr "リンク有効判定（減光あり）"
+
+msgid "Partial match"
+msgstr "部分一致"
+
+msgid "Whitespace, quotes or line ends"
+msgstr "空白・引用符・行端"
+
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:715
 msgid ""
 "Path validation requires an absolute expanded path. Relative paths are "

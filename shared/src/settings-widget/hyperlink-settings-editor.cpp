@@ -39,6 +39,7 @@ struct HyperlinkSettingsEditorState {
   GtkWidget *id_entry = nullptr;
   GtkWidget *source_combo = nullptr;
   GtkWidget *regex_entry = nullptr;
+  GtkWidget *whole_token_combo = nullptr;
   GtkWidget *command_entry = nullptr;
   GtkWidget *arguments_box = nullptr;
   GtkWidget *argument_add_button = nullptr;
@@ -296,6 +297,10 @@ static void sync_editor(HyperlinkSettingsEditorState *state) {
           : "osc8");
   gtk_entry_set_text(GTK_ENTRY(state->regex_entry),
                      has_selection ? rule->pattern.c_str() : "");
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->whole_token_combo),
+      has_selection && rule->whole_token ? "whole-token" : "substring");
+  gtk_widget_set_sensitive(state->whole_token_combo,
+      has_selection && rule->recognition_source == HyperlinkRecognitionSource::terminal_text);
   gtk_entry_set_text(GTK_ENTRY(state->command_entry),
                      has_selection ? rule->command.c_str() : "");
   gtk_combo_box_set_active_id(
@@ -429,6 +434,16 @@ static void on_source_changed(GtkComboBox *, gpointer data) {
               "terminal-text"
           ? HyperlinkRecognitionSource::terminal_text
           : HyperlinkRecognitionSource::osc8;
+  gtk_widget_set_sensitive(state->whole_token_combo,
+      rule->recognition_source == HyperlinkRecognitionSource::terminal_text);
+  mark_rules_changed(state);
+}
+
+static void on_whole_token_changed(GtkComboBox *, gpointer data) {
+  auto *state = static_cast<HyperlinkSettingsEditorState *>(data);
+  auto *rule = selected_rule(state);
+  if (state->synchronizing || rule == nullptr) return;
+  rule->whole_token = std::string(active_combo_id(state->whole_token_combo, "substring")) == "whole-token";
   mark_rules_changed(state);
 }
 
@@ -724,13 +739,21 @@ static GtkWidget *create_rule_editor(HyperlinkSettingsEditorState *state) {
   attach_editor_row(state->editor, 6, _("Path template"),
                     state->path_entry);
 
+  state->whole_token_combo = create_combo(state, "link_whole_token_combo");
+  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(state->whole_token_combo),
+      "substring", _("Partial match"));
+  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(state->whole_token_combo),
+      "whole-token", _("Whitespace, quotes or line ends"));
+  g_signal_connect(state->whole_token_combo, "changed", G_CALLBACK(on_whole_token_changed), state);
+  attach_editor_row(state->editor, 7, _("Text boundaries"), state->whole_token_combo);
+
   state->validation_label = gtk_label_new("");
   gtk_label_set_xalign(GTK_LABEL(state->validation_label), 0.0F);
   gtk_label_set_line_wrap(GTK_LABEL(state->validation_label), TRUE);
   GtkStyleContext *context =
       gtk_widget_get_style_context(state->validation_label);
   gtk_style_context_add_class(context, GTK_STYLE_CLASS_ERROR);
-  gtk_grid_attach(GTK_GRID(state->editor), state->validation_label, 0, 7, 2,
+  gtk_grid_attach(GTK_GRID(state->editor), state->validation_label, 0, 8, 2,
                   1);
   return state->editor;
 }
@@ -750,10 +773,10 @@ create_hyperlink_settings_editor(HyperlinkSettingsEditorOptions options) {
   assign_accessible_id(state->root, widget_id(state, "link_page"));
 
   GtkWidget *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
-  gtk_widget_set_margin_top(content, 16);
-  gtk_widget_set_margin_bottom(content, 16);
-  gtk_widget_set_margin_start(content, 16);
-  gtk_widget_set_margin_end(content, 16);
+  gtk_widget_set_margin_top(content, 12);
+  gtk_widget_set_margin_bottom(content, 12);
+  gtk_widget_set_margin_start(content, 12);
+  gtk_widget_set_margin_end(content, 12);
   // Keep the margins inside a painted surface instead of exposing the
   // implicit GtkViewport window around the direct scroll child.
   GtkWidget *page_surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);

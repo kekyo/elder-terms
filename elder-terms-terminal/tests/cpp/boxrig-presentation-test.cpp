@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "../../src/terminal-runtime.h"
+#include "../../src/gtk-initialization.h"
 
 #include <epoxy/gl.h>
 #include <cstdio>
@@ -84,7 +85,7 @@ static gboolean observe(gpointer context) {
 }
 
 int main(int argc, char **argv) {
-  gtk_init(&argc, &argv);
+  initialize_terminal_gtk(&argc, &argv);
   cardio::dispatcher_group_glib group;
   cardio::dispatcher_host_glib_auto dispatcher(group);
   auto *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);

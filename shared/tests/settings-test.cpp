@@ -895,6 +895,31 @@ static void test_terminal_background_settings() {
   remove_config(global);
 }
 
+static void test_terminal_link_decoration_settings() {
+  const auto global = temporary_config_path("link-decoration-global");
+  const auto path = temporary_config_path("link-decoration-connection");
+  const auto key = elder_terms::make_setting_key("terminal", "link_decoration");
+  const SettingsLoadOptions options{.config_path = path, .startup_config_path = std::nullopt, .global_config_path = global};
+  write_config(global, ""); write_config(path, "");
+  auto loaded = load_settings(options, 1.0);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "underline",
+      "link decoration defaults to always underline");
+  write_config(global, "[terminal]\nlink_decoration=none\n");
+  loaded = load_settings(options, 1.0);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "none" &&
+      setting_value_source(loaded.store, key) == SettingValueSource::global, "link decoration inherits normally");
+  for (const auto *value : {"none", "underline", "validated"}) {
+    expect_true(set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{std::string(value)}) &&
+        save_settings(loaded.store, path).saved, "link decoration selection saves");
+    loaded = load_settings(options, 1.0);
+    expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == value,
+        "link decoration survives restart");
+  }
+  expect_true(!set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{std::string("unknown")}),
+      "unknown decoration is rejected");
+  remove_config(path); remove_config(global);
+}
+
 static void test_terminal_color_filter_settings() {
   const auto global = temporary_config_path("filter-global");
   const auto path = temporary_config_path("filter-connection");
@@ -4351,6 +4376,7 @@ static void test_connection_hyperlink_actions_override_built_in_defaults() {
                "arguments=--line;${line};${path|uri-decode};\n"
                "path_validation=existing-local-path\n"
                "path=${path|uri-decode}\n"
+               "whole_token=true\n"
                "\n"
                "[hyperlink.first]\n"
                "source=osc8\n"
@@ -4388,6 +4414,7 @@ static void test_connection_hyperlink_actions_override_built_in_defaults() {
                           existing_local_path &&
                   loaded.store.hyperlink_rules[0].path_template ==
                       "${path|uri-decode}" &&
+                  loaded.store.hyperlink_rules[0].whole_token &&
                   loaded.store.hyperlink_rules[1].id == "first" &&
                   loaded.store.hyperlink_rules[1].recognition_source ==
                       elder_terms::HyperlinkRecognitionSource::osc8,
@@ -4401,7 +4428,7 @@ static void test_connection_hyperlink_actions_override_built_in_defaults() {
   expect_true(global.store.hyperlink_rules.empty() &&
                   !global.store.hyperlink_settings_configured &&
                   elder_terms::effective_hyperlink_action_rules(global.store)
-                          .size() == 4,
+                          .size() == 7,
               "global hyperlink sections should be ignored");
 
   const SettingsSaveResult saved =
@@ -4469,7 +4496,7 @@ static void test_connection_hyperlink_actions_override_built_in_defaults() {
       elder_terms::effective_hyperlink_action_rules(startup_defaults.store);
   expect_true(startup_defaults.store.hyperlink_rules.empty() &&
                   !startup_defaults.store.hyperlink_settings_configured &&
-                  startup_rules.size() == 4 &&
+                  startup_rules.size() == 7 &&
                   startup_rules[0].id == "http-url-osc8",
               "a startup profile without link rules should replace connection "
               "rules with built-in defaults");
@@ -4487,7 +4514,7 @@ static void test_hyperlink_defaults_disable_and_invalid_rules() {
       elder_terms::effective_hyperlink_action_rules(defaults);
   expect_true(defaults.hyperlink_actions_enabled &&
                   defaults.hyperlink_rules.empty() &&
-                  default_rules.size() == 4 &&
+                  default_rules.size() == 7 &&
                   default_rules[0].id == "http-url-osc8" &&
                   default_rules[0].recognition_source ==
                       elder_terms::HyperlinkRecognitionSource::osc8 &&
@@ -4499,8 +4526,15 @@ static void test_hyperlink_defaults_disable_and_invalid_rules() {
                       elder_terms::HyperlinkRecognitionSource::terminal_text &&
                   default_rules[2].id == "vscode-line-column" &&
                   default_rules[3].id == "vscode-line" &&
+                  default_rules[4].id == "local-path-text" &&
+                  default_rules[4].recognition_source ==
+                      elder_terms::HyperlinkRecognitionSource::terminal_text &&
+                  default_rules[4].command == "xdg-open" &&
+                  default_rules[4].path_validation ==
+                      elder_terms::HyperlinkPathValidation::existing_local_path &&
+                  default_rules[4].path_template == "${0}" &&
                   !defaults.hyperlink_settings_configured,
-              "URL and VS Code hyperlink actions should be built in by "
+              "URL, VS Code and local path hyperlink actions should be built in by "
               "default");
 
   const std::filesystem::path disabled_path =
@@ -4537,7 +4571,7 @@ static void test_hyperlink_defaults_disable_and_invalid_rules() {
   expect_true(empty.store.hyperlink_rules.empty() &&
                   empty.store.hyperlink_settings_configured &&
                   elder_terms::effective_hyperlink_action_rules(empty.store)
-                          .size() == 4,
+                          .size() == 7,
               "built-in rules should apply when no connection rule is "
               "defined");
 
@@ -4880,6 +4914,7 @@ int main() {
     elder_terms_settings_test::test_terminal_ambiguous_width_setting();
     elder_terms_settings_test::test_terminal_block_copy_trailing_spaces_setting();
     elder_terms_settings_test::test_terminal_background_settings();
+    elder_terms_settings_test::test_terminal_link_decoration_settings();
     elder_terms_settings_test::test_terminal_color_filter_settings();
     elder_terms_settings_test::test_terminal_color_vision_settings();
     elder_terms_settings_test::test_terminal_background_image_settings();

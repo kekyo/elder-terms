@@ -14,6 +14,8 @@
 using namespace elder_terms;
 
 static std::size_t frames = 0;
+static std::size_t retained_link_rows = 0;
+static std::size_t frames_without_retained_links = 0;
 
 extern "C" boxrig_ui_status __real_boxrig_gtk3_terminal_widget_frame(
     BoxrigGtk3TerminalWidget *, boxrig_ui_component_frame_result *);
@@ -21,7 +23,17 @@ extern "C" boxrig_ui_status __real_boxrig_gtk3_terminal_widget_frame(
 extern "C" boxrig_ui_status __wrap_boxrig_gtk3_terminal_widget_frame(
     BoxrigGtk3TerminalWidget *widget, boxrig_ui_component_frame_result *result) {
   ++frames;
-  return __real_boxrig_gtk3_terminal_widget_frame(widget, result);
+  const auto status = __real_boxrig_gtk3_terminal_widget_frame(widget, result);
+  auto *view = boxrig_gtk3_terminal_widget_view(widget);
+  for (std::size_t row = 0; row < retained_link_rows; ++row) {
+    std::size_t annotations = 0;
+    boxrig_ui_view_query_text_annotation_visual_ranges(view, row, nullptr, 0, &annotations);
+    if (annotations != 1) {
+      ++frames_without_retained_links;
+      break;
+    }
+  }
+  return status;
 }
 
 static cardio::promise<void> run(TerminalRuntime *runtime,
@@ -62,6 +74,27 @@ static cardio::promise<void> run(TerminalRuntime *runtime,
         std::string(text).find(std::string(70, 'a')) != std::string::npos;
     g_free(text);
     if (!retained) throw std::runtime_error("accessible text follows actual changes after recognition");
+
+    // A process table updates counters beside unchanged command paths. Every
+    // presented image must retain those links while recognition catches up.
+    std::string table = "\033[2J\033[H";
+    for (std::size_t row = 0; row < 20; ++row)
+      table += "00000     /usr/bin/btop\r\n";
+    if (!terminal_runtime_feed(runtime, table)) throw std::runtime_error("feed process table");
+    while (!terminal_runtime_is_settled(runtime)) co_await changed->wait();
+    retained_link_rows = 20;
+    frames = frames_without_retained_links = 0;
+    std::string counters;
+    for (std::size_t row = 0; row < 20; ++row)
+      counters += "\033[" + std::to_string(row + 1) + ";1H00001";
+    if (!terminal_runtime_feed(runtime, counters)) throw std::runtime_error("update process counters");
+    while (!terminal_runtime_is_settled(runtime)) co_await changed->wait();
+    retained_link_rows = 0;
+    g_print("Process-table frames: %zu, frames missing unchanged links: %zu\n", frames, frames_without_retained_links);
+    if (frames_without_retained_links != 0)
+      throw std::runtime_error("updating counters must not blink unchanged command links");
+    if (frames > 1)
+      throw std::runtime_error("unchanged link recognition must not prepare another process-table image");
 
     // Chrome can cause another window allocation without changing the terminal
     // grid. That notification must not prepare the same terminal image again.

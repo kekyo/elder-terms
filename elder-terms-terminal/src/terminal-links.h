@@ -7,13 +7,14 @@
 
 #include <boxrig/ui.h>
 #include "terminal-hyperlink-action.h"
+#include <elder-terms/settings/terminal-settings.h>
 
 namespace elder_terms {
 
 /** Owns compiled rules and the current screen recognizers on the UI thread. */
 struct TerminalLinks;
 
-/** Counters for the OSC 8 regex cache within one terminal link context. */
+/** Counters for regex caching and path validation within one link context. */
 struct TerminalLinksCacheStatistics {
   /** Number of attempts to construct a boxrig matcher. */
   std::uint64_t matcher_creations = 0;
@@ -27,10 +28,14 @@ struct TerminalLinksCacheStatistics {
   std::size_t cache_entries = 0;
   /** Current number of owned URI bytes held in the cache. */
   std::size_t cache_uri_bytes = 0;
+  /** Number of asynchronous filesystem queries submitted, including activation. */
+  std::size_t path_queries = 0;
+  /** Queued or running filesystem checks; waiting never requests an idle dispatch. */
+  std::size_t path_queries_pending = 0;
 };
 
 /**
- * Reads OSC 8 matcher and cache counters for diagnostics.
+ * Reads matcher, cache and asynchronous path check counters for diagnostics.
  * @param links Live link state.
  * @return Counters since this link state was created.
  */
@@ -48,9 +53,12 @@ void terminal_links_fail_next_cache_insert_for_test(TerminalLinks *links);
  * Creates ordered link recognition against an existing terminal view.
  * @param view Borrowed view, detached before its destruction.
  * @param rules Ordered OSC 8 and visible-text rules.
+ * @param validate Asynchronous local path validator, replaceable by a deterministic fixture.
  * @return Owned link state; invalid rules are diagnosed and omitted.
+ * @remarks Requires a cardio dispatcher with GIO support for path validation.
  */
-TerminalLinks *create_terminal_links(boxrig_ui_view *view, std::vector<HyperlinkActionRule> rules);
+TerminalLinks *create_terminal_links(boxrig_ui_view *view, std::vector<HyperlinkActionRule> rules,
+    TerminalHyperlinkPathValidator validate = validate_terminal_hyperlink_path_async);
 
 /**
  * Moves link presentation to another view of the same terminal.
@@ -58,6 +66,23 @@ TerminalLinks *create_terminal_links(boxrig_ui_view *view, std::vector<Hyperlink
  * @param view Borrowed replacement, or nullptr while detached.
  */
 void terminal_links_attach_view(TerminalLinks *links, boxrig_ui_view *view);
+
+/**
+ * Changes decoration without resetting recognition, validation or activation.
+ * @param links Live link state.
+ * @param decoration Presentation shared by text and OSC 8 links.
+ */
+void terminal_links_set_decoration(TerminalLinks *links, TerminalLinkDecoration decoration);
+
+/**
+ * Refreshes OSC 8 annotations and retains unchanged visible link decoration.
+ * @param links Live link state. Call after model synchronization, before rendering.
+ * @remarks Checks retained match text only on visible logical lines, with a
+ * 64 KiB projection limit per refresh. Activation requires current recognition results;
+ * preserving appearance never grants authority to an old action. Filesystem
+ * work remains asynchronous.
+ */
+void terminal_links_refresh_viewport(TerminalLinks *links);
 
 /**
  * Advances bounded recognition and updates link annotations.
@@ -71,10 +96,21 @@ bool terminal_links_dispatch(TerminalLinks *links, std::size_t budget);
  * Resolves a current pointer hit using retained captures and rule priority.
  * @param links Live link state with an attached view.
  * @param hit Revisioned pointer hit; stale and incomplete results are ignored.
- * @return Expanded action, rejection reason, or no matching rule.
+ * @return Expanded action, pending candidate, rejection reason, or no matching rule.
  */
 std::optional<TerminalHyperlinkResolution> terminal_links_resolve(
     TerminalLinks *links, const boxrig_ui_hit_test_result &hit);
+
+/**
+ * Revalidates a clicked path asynchronously before delivering its action or error.
+ * @param links Live link state; detachment or destruction cancels pending delivery.
+ * @param resolution Owned result from the validated click gesture.
+ * @param activate Receives the validated action or rejection on the UI thread.
+ * @remarks URL actions without path validation are delivered immediately. A new
+ * path activation cancels the previous activation. Queries share an eight-slot limit.
+ */
+void terminal_links_activate(TerminalLinks *links, TerminalHyperlinkResolution resolution,
+    std::function<void(TerminalHyperlinkResolution)> activate);
 
 /**
  * Copies the complete recognized text or OSC 8 target at a current pointer hit.

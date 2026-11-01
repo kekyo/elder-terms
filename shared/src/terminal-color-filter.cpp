@@ -257,7 +257,7 @@ static boxrig_rgb reverse_foreground(boxrig_rgb value, boxrig_rgb background, Te
   return {result.red, result.green, result.blue};
 }
 
-boxrig_ui_color_filter_result filter_terminal_colors(const boxrig_ui_color_filter_input *input, void *data) {
+static boxrig_ui_color_filter_result filter_terminal_base_colors(const boxrig_ui_color_filter_input *input, void *data) {
   const auto &context = *static_cast<const TerminalColorFilterContext *>(data);
   auto result = boxrig_ui_color_filter_result_default(input);
   if (context.background) {
@@ -337,6 +337,26 @@ boxrig_ui_color_filter_result filter_terminal_colors(const boxrig_ui_color_filte
     // contrast reference; do not apply defaults or correction to it again.
     result.marker = correct(result.marker, input->underlay_valid ? input->underlay.background : result.background);
   }
+  return result;
+}
+
+boxrig_ui_color_filter_result filter_terminal_colors(const boxrig_ui_color_filter_input *input, void *data) {
+  auto result = filter_terminal_base_colors(input, data);
+  const auto &context = *static_cast<const TerminalColorFilterContext *>(data);
+  if (!context.dim_links || input->target != BOXRIG_UI_COLOR_CELL ||
+      input->annotation_color_tag != terminal_dim_link_color_tag) return result;
+  // Work on final display colors, after inverse/default resolution and other
+  // corrections. Moving toward background lightness also dims dark text on a
+  // light background; reducing lightness alone would increase its contrast.
+  const auto background = srgb_to_oklch({result.background.red, result.background.green, result.background.blue});
+  const auto dim = [&](boxrig_rgb value) {
+    auto color = srgb_to_oklch({value.red, value.green, value.blue});
+    color.lightness = background.lightness + .5 * (color.lightness - background.lightness);
+    const auto adjusted = oklch_to_srgb(color);
+    return boxrig_rgb{adjusted.red, adjusted.green, adjusted.blue};
+  };
+  result.foreground = dim(result.foreground);
+  result.underline = result.underline_follows_foreground ? result.foreground : dim(result.underline);
   return result;
 }
 }

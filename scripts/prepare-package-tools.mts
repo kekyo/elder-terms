@@ -10,8 +10,11 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const outputArgument = process.argv[2];
-if (outputArgument === undefined)
-  throw new Error('Usage: prepare-package-tools.mts <output-directory>');
+const version = process.argv[3];
+if (outputArgument === undefined || version === undefined)
+  throw new Error(
+    'Usage: prepare-package-tools.mts <output-directory> <version>'
+  );
 const output = resolve(outputArgument);
 const upstream = join(root, 'deps/boxrig');
 
@@ -30,6 +33,19 @@ const run = async (
 
 // Containers use their distribution's Node.js without loading host native addons.
 await mkdir(output, { recursive: true });
+await run(
+  process.execPath,
+  [
+    join(root, 'scripts/prepare-appstream-metainfo.mts'),
+    join(
+      root,
+      'elder-terms/packaging/metainfo/net.kekyo.elder-terms.metainfo.xml.in'
+    ),
+    join(output, 'net.kekyo.elder-terms.metainfo.xml'),
+    version,
+  ],
+  root
+);
 await run(
   process.execPath,
   [
@@ -59,7 +75,7 @@ await run(
     'tools/codegen/rules.mk',
     'package-codegen',
     `BUILD_DIR=${join(output, 'boxrig')}`,
-    'BOXRIG_VERSION=0.10.0',
+    'BOXRIG_VERSION=0.12.0',
   ],
   upstream
 );

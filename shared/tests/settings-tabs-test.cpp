@@ -152,7 +152,7 @@ static void verify_tab_structure(const Fixture &fixture, bool terminal_visible) 
       "terminal_background_image_entry", "terminal_background_image_opacity_entry",
       "terminal_background_image_fit_combo", "terminal_color_filter_combo",
       "terminal_color_vision_combo", "terminal_color_vision_strength_entry",
-      "terminal_color_preview"};
+      "terminal_link_decoration_combo", "terminal_color_preview"};
   for (const char *field : behavior_fields) {
     const std::string name = id(field);
     GtkWidget *widget = find_widget(fixture.root, name.c_str());

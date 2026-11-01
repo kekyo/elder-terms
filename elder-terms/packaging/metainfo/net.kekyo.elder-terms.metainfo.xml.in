@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>net.kekyo.elder-terms</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>elder-terms</name>
+  <summary>Terminal emulator and file transfer client</summary>
+  <summary xml:lang="ja">端末エミュレーターとファイル転送クライアント</summary>
+  <description>
+    <p>
+      A terminal emulator inspired by personal computing in the 1990s. Connect to
+      local shells, serial devices, TELNET, and SSH, or transfer files with SFTP,
+      FTP, FTPS, WebDAV, and SMB.
+    </p>
+    <p xml:lang="ja">
+      1990年代のパソコン通信を思い起こさせる端末エミュレーターです。
+      ローカルシェル、シリアル、TELNET、SSHに接続できます。
+      SFTP、FTP、FTPS、WebDAV、SMBでのファイル転送にも対応しています。
+    </p>
+    <p>
+      Manage saved connections from a launcher with optional system tray support.
+      Connection settings are stored in INI files you can edit with a text editor.
+    </p>
+    <p xml:lang="ja">
+      ランチャーで接続先を管理し、必要に応じてシステムトレイから起動できます。
+      接続設定はINIファイルに保存され、テキストエディターでも編集できます。
+    </p>
+    <p>
+      Configure character encoding, Backspace/Delete and cursor keys, and newline
+      conversion. Transfer files with X/Y/ZMODEM over TELNET, serial, or SSH.
+      Customize window colors, fonts, bell sounds, and terminal rows and columns
+      for each connection.
+    </p>
+    <p xml:lang="ja">
+      文字コード、Backspace/Deleteやカーソルキーの動作、改行コードの変換を設定できます。
+      TELNET、シリアル、SSHではX/Y/ZMODEMによるファイル送受信も可能です。
+      ウインドウの色、フォント、ベル音、端末の行数と桁数を接続ごとに指定できます。
+    </p>
+  </description>
+  <url type="homepage">https://github.com/kekyo/elder-terms</url>
+  <url type="bugtracker">https://github.com/kekyo/elder-terms/issues</url>
+  <developer id="net.kekyo">
+    <name>Kouji Matsui</name>
+  </developer>
+  <launchable type="desktop-id">net.kekyo.elder-terms.desktop</launchable>
+  <!-- Theme icon installed from data/icons/hicolor (same artwork as images/elder-terms-128.png). -->
+  <icon type="stock">elder-terms</icon>
+  <categories>
+    <category>System</category>
+    <category>TerminalEmulator</category>
+  </categories>
+  <provides>
+    <binary>elder-terms</binary>
+    <binary>elder-terms-terminal</binary>
+    <binary>etctl</binary>
+  </provides>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Local terminal with Unicode and color support</caption>
+      <caption xml:lang="ja">Unicodeとカラー表示に対応したローカル端末</caption>
+      <image type="source">https://raw.githubusercontent.com/kekyo/elder-terms/3d780c8dab7d03672f7d22f42f196529d36a3ad5/images/terminal.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>SFTP file browser with local and remote panes</caption>
+      <caption xml:lang="ja">ローカルとリモートを並べて表示するSFTPファイルブラウザー</caption>
+      <image type="source">https://raw.githubusercontent.com/kekyo/elder-terms/3d780c8dab7d03672f7d22f42f196529d36a3ad5/images/sftp.png</image>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="{{version}}" date="{{date}}">
+      <url>https://github.com/kekyo/elder-terms/releases</url>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>

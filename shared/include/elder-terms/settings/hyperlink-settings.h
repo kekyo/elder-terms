@@ -53,14 +53,16 @@ struct HyperlinkActionRule {
       HyperlinkPathValidation::none;
   /** Capture template expanded to the local path that is validated. */
   std::string path_template = {};
+  /** Requires text matches to be separated by whitespace, quotes or line ends. */
+  bool whole_token = false;
 
   bool operator==(const HyperlinkActionRule &) const = default;
 };
 
 /**
- * Returns the built-in URL and VS Code link actions.
+ * Returns the built-in URL, VS Code and absolute local path link actions.
  *
- * @returns Ordered URL rules followed by VS Code OSC 8 target rules.
+ * @returns Ordered URL and VS Code rules followed by validated local paths.
  */
 ELDER_TERMS_API std::vector<HyperlinkActionRule>
 default_hyperlink_action_rules();

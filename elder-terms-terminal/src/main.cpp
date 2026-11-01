@@ -38,6 +38,7 @@
 #include <elder-terms/settings-widget.h>
 
 #include "launch-options.h"
+#include "gtk-initialization.h"
 #include "main-window.h"
 #include "file-transfer/file-hash.h"
 #include "file-transfer/file-transfer-paths.h"
@@ -246,6 +247,8 @@ static void spawn_macro_command(ApplicationState *state, std::string command,
 }
 
 static void apply_terminal_hyperlink_settings(ApplicationState *state) {
+  elder_terms::terminal_runtime_set_link_decoration(state->runtime,
+      elder_terms::terminal_link_decoration(state->settings_store));
   elder_terms::terminal_runtime_set_hyperlink_rules(state->runtime,
       elder_terms::effective_hyperlink_action_rules(state->settings_store),
       [state](elder_terms::TerminalHyperlinkResolution resolution) {
@@ -1830,7 +1833,7 @@ int main(int argc, char **argv) {
   if (!select_new_window_connection(&launch_options)) {
     return 1;
   }
-  gtk_init(&argc, &argv);
+  elder_terms::initialize_terminal_gtk(&argc, &argv);
   g_set_prgname(terminal_application_id);
   (void)elder_terms::initialize_application_window_icon();
 

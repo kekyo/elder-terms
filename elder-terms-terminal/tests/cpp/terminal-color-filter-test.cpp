@@ -80,7 +80,40 @@ static void test_color_vision_hook() {
   }
 }
 
+static void test_link_dimming() {
+  for (const auto filter : {TerminalColorFilter::none, TerminalColorFilter::oklch,
+      TerminalColorFilter::reverse_lightness, TerminalColorFilter::reverse_contrast,
+      TerminalColorFilter::reverse_roles, TerminalColorFilter::reverse_cam16, TerminalColorFilter::reverse_palette}) {
+    for (const auto background : {boxrig_rgb{10, 10, 10}, boxrig_rgb{235, 235, 235}}) {
+      TerminalColorFilterContext context{};
+      context.filter = filter;
+      context.dim_links = true;
+      boxrig_ui_color_filter_input input{};
+      input.target = BOXRIG_UI_COLOR_CELL;
+      input.attributes = BOXRIG_CELL_INVERSE | BOXRIG_CELL_BOLD;
+      input.colors = {{170, 100, 110}, background, {75, 140, 170}, {}, false};
+      input.foreground_source.role = input.background_source.role = input.underline_source.role = BOXRIG_UI_COLOR_RGB;
+      const auto original = filter_terminal_colors(&input, &context);
+      input.annotation_color_tag = terminal_dim_link_color_tag;
+      const auto dim = filter_terminal_colors(&input, &context);
+      assert(equal(rgb(dim.background), rgb(original.background)));
+      const auto bg = srgb_to_oklch(rgb(original.background));
+      for (const auto &pair : {std::pair{original.foreground, dim.foreground}, std::pair{original.underline, dim.underline}}) {
+        const auto before = srgb_to_oklch(rgb(pair.first));
+        const auto after = srgb_to_oklch(rgb(pair.second));
+        assert(std::abs(after.lightness - bg.lightness) < std::abs(before.lightness - bg.lightness) * .65);
+        const auto hue_difference = std::abs(std::remainder(after.hue - before.hue, 360));
+        if (after.chroma > .02) assert(hue_difference < 4);
+      }
+      assert(!dim.underline_follows_foreground && input.attributes == (BOXRIG_CELL_INVERSE | BOXRIG_CELL_BOLD));
+      context.dim_links = false;
+      assert(equal(rgb(filter_terminal_colors(&input, &context).foreground), rgb(original.foreground)));
+    }
+  }
+}
+
 int main() {
+  test_link_dimming();
   test_color_vision_hook();
   // Reference sRGB primaries from the D65 Oklab matrices, independent of the filter.
   const auto red = srgb_to_oklch({255, 0, 0});

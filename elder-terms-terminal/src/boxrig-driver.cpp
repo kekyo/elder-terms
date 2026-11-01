@@ -9,6 +9,7 @@
 #include "inline-prompt.h"
 #include "terminal-log.h"
 #include "sftp/sftp-client.h"
+#include <elder-terms/terminal-color-filter.h>
 
 #include <gestament/gtk.h>
 #include <glib-unix.h>
@@ -44,6 +45,11 @@ struct Driver {
   bool connection_mode = false;
   bool zmodem_auto = false;
   bool links = false;
+  bool defer_link_validation = false;
+  elder_terms::TerminalColorFilterContext link_colors{};
+  elder_terms::TerminalLinkDecoration link_decoration = elder_terms::TerminalLinkDecoration::underline;
+  std::shared_ptr<cardio::primitives::manually_conditional> link_validation_ready =
+      std::make_shared<cardio::primitives::manually_conditional>();
   bool context_loss_control = false;
   gulong context_loss_hook = 0;
   std::vector<elder_terms::MacroRule> macros;
@@ -417,6 +423,18 @@ static cardio::promise<elder_terms::SshUserPromptResponse> prompt_ssh(Driver *dr
 }
 
 static void configure_links(Driver *driver) {
+  elder_terms::terminal_runtime_set_link_decoration(driver->runtime, driver->link_decoration);
+  driver->link_colors.dim_links = driver->link_decoration == elder_terms::TerminalLinkDecoration::validated;
+  boxrig_ui_view_set_color_filter(boxrig_gtk3_terminal_widget_view(elder_terms::terminal_runtime_widget(driver->runtime)),
+      driver->link_colors.dim_links ? elder_terms::filter_terminal_colors : nullptr, &driver->link_colors);
+  elder_terms::TerminalHyperlinkPathValidator validate = elder_terms::validate_terminal_hyperlink_path_async;
+  if (driver->defer_link_validation) {
+    validate = [ready = driver->link_validation_ready](std::string path, cardio::cancellation cancellation)
+        -> cardio::promise<std::string> {
+      co_await ready->wait(cancellation);
+      co_return co_await elder_terms::validate_terminal_hyperlink_path_async(std::move(path), cancellation);
+    };
+  }
   elder_terms::terminal_runtime_set_hyperlink_rules(driver->runtime,
       driver->links ? elder_terms::default_hyperlink_action_rules() : std::vector<elder_terms::HyperlinkActionRule>{}, [](elder_terms::TerminalHyperlinkResolution resolved) {
         if (resolved.action) {
@@ -432,7 +450,7 @@ static void configure_links(Driver *driver) {
           std::fprintf(stderr, "Link rejected: %s\n", resolved.error.c_str());
         }
         std::fflush(stdout);
-      });
+      }, std::move(validate));
 }
 
 static void toggle_links(GtkButton *, gpointer context) {
@@ -458,6 +476,16 @@ int main(int argc, char **argv) {
   for (int index = 1; index < argc; ++index) {
     if (std::string_view(argv[index]) == "--local") driver.connection_mode = true;
     else if (std::string_view(argv[index]) == "--links") driver.links = true;
+    else if (std::string_view(argv[index]).starts_with("--link-decoration=")) {
+      const auto mode = std::string_view(argv[index]).substr(18);
+      if (mode != "none" && mode != "underline" && mode != "validated") return 2;
+      driver.link_decoration = mode == "none" ? elder_terms::TerminalLinkDecoration::none :
+          mode == "validated" ? elder_terms::TerminalLinkDecoration::validated : elder_terms::TerminalLinkDecoration::underline;
+    }
+    else if (std::string_view(argv[index]) == "--defer-link-validation") {
+      driver.links = true;
+      driver.defer_link_validation = true;
+    }
     else if (std::string_view(argv[index]) == "--context-loss") driver.context_loss_control = true;
     else if (std::string_view(argv[index]) == "--macro-send" && index + 2 < argc) {
       const std::string pattern = argv[++index];
@@ -609,6 +637,14 @@ int main(int argc, char **argv) {
     gestament_gtk_assign_accessible_id(button, "driver_links_toggle");
     gtk_box_pack_start(GTK_BOX(controls), button, FALSE, FALSE, 0);
     g_signal_connect(button, "clicked", G_CALLBACK(toggle_links), &driver);
+    if (driver.defer_link_validation) {
+      auto *validate = gtk_button_new_with_label("Validate paths");
+      gestament_gtk_assign_accessible_id(validate, "driver_validate_paths");
+      gtk_box_pack_start(GTK_BOX(controls), validate, FALSE, FALSE, 0);
+      g_signal_connect(validate, "clicked", G_CALLBACK(+[](GtkButton *, gpointer data) {
+        static_cast<Driver *>(data)->link_validation_ready->raise();
+      }), &driver);
+    }
   }
   driver.status = gtk_label_new("Starting boxrig");
   gestament_gtk_assign_accessible_id(driver.status, "driver_status");

@@ -783,6 +783,7 @@ bottom status bar and puts the activity indicators beside the title. The
 dropdown can also use the global default or explicitly disable compact mode.
 It works for terminal and FTP, FTPS, SFTP, and WebDAV file browser windows. The
 built-in default is off.
+
 Enable window side borders on the "General" tab to show borders of the chosen
 width on both sides of the window. Compact mode also shows a bottom border
 of the same width. In INI files, use `show_border` and `border_width` in
@@ -859,9 +860,11 @@ Opacity ranges from 0 to 100%; a 0% tint adds no visible color. Text itself stay
 
 Choose a local PNG or JPEG file, or enter its absolute path.
 Image placement can preserve the aspect ratio while covering the viewport, contain the whole image, or stretch both axes.
+
 The image stays fixed within the terminal viewport while text scrolls.
 Image opacity and transparent PNG pixels let the image combine with desktop transparency.
 Images also work in opaque mode; lower the background opacity if the image is difficult to see.
+
 "Clear image" explicitly selects no image for this connection. "Inherit" follows connection defaults.
 The file is neither moved nor embedded, so keep it available at the same path for future starts.
 Both the file and decoded RGBA pixels are limited to 64 MiB, with a maximum of 16384 pixels per edge.
@@ -870,7 +873,7 @@ Desktop transparency requires a compositor that combines the windows on your des
 Frosted glass requests a compositor effect that blurs the desktop behind the terminal; text and background images remain sharp.
 The settings panel reports the actual state. Unavailable blur falls back to transparency, and unavailable transparency falls back to an opaque background.
 "Frosted glass requested" means the request was accepted; compositor effect settings still determine whether the blur appears.
-See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/background.md) for platform requirements.
+See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/background.md) for platform requirements.
 
 ## Improving Text Color Visibility
 
@@ -918,7 +921,7 @@ E's preview uses the standard palette. The actual display can differ when the co
 
 Only one color filter can be selected, so reversal and the existing Oklch filter are mutually exclusive. Color discrimination assistance can be combined with every mode and is applied before reversal. Logical terminal colors, text, communication, copied text, and logs remain unchanged.
 
-Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/color-filters.md).
+Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/color-filters.md).
 
 ```ini
 [terminal]
@@ -954,7 +957,7 @@ Use Apply or Save to apply previewed changes to the terminal. Cancel discards th
 
 Correction affects display only. Communication, logical terminal colors, copied text, and logs remain unchanged.
 Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are excluded.
-See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/color-filters.md) for the supported scope.
+See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/color-filters.md) for the supported scope.
 
 ```ini
 [terminal]
@@ -1354,6 +1357,10 @@ When a connection defines no link rules, the built-in rules recognize:
 - OSC 8 targets in `vscode://file/absolute/path:line` and
   `vscode://file/absolute/path:line:column` form, opened with `code
   --reuse-window --goto`.
+- Absolute paths such as `/foo/bar/baz` and home-relative paths such as
+  `~/Downloads/` in visible terminal text, opened with
+  `xdg-open` when they name a local file or directory. Surrounding quotes are
+  excluded from the link.
 
 URI escapes in captures, such as `%20`, can be decoded before a value is
 passed to the command. "Restore defaults" removes the connection's explicit
@@ -1365,7 +1372,14 @@ Each rule selects one recognition source:
 - "Visible terminal text" finds a matching substring under the pointer. The
   expression must not match an empty string.
 
-Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/regex.md).
+The default local path rule recognizes paths starting with `/` or `~/`, with
+components containing letters, digits, combining marks, `_`, `.`, and `-`.
+A trailing `/` is allowed; `/foo//bar` and `/foo/bar$` are not recognized.
+Setting "Text boundaries" to "Whitespace, quotes or line ends" prevents partial
+links inside invalid candidates. The default local path rule enables this
+option. Custom rules can change both the expression and boundary setting.
+
+Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/regex.md).
 Character classes, groups, alternatives, repetition, and numbered or named captures are supported. Backreferences, lookahead, lookbehind, and expressions matching an empty string are not supported.
 `\d`, `\s`, and `\w` cover ASCII. Use Unicode general categories such as `\p{L}` for letters and `\p{Nd}` for decimal digits.
 `.` also matches newlines, and `^` and `$` anchor the complete input. Matching is case-sensitive and chooses the longest match at the same starting position.
@@ -1374,12 +1388,37 @@ A complete match cannot split a visible character composed of multiple Unicode c
 The command is a fixed executable name or path. It is launched directly without a shell,
 so pipes, redirections, and other shell syntax are not interpreted. Capture
 templates are expanded only in arguments and in the optional validation path.
+An expanded argument or validation path starting with `~/` uses the home
+directory specified by `HOME` on the computer running elder-terms. If `HOME`
+is unset or is not an absolute path, the home-relative link cannot be opened.
+A tilde inside a URL or path is preserved, and copying a link retains its
+original text.
 
-Path validation can be set to "Existing local file or directory". In that
+Each rule's "Path validation" setting can be switched between "Do not validate"
+and "Existing local file or directory". In the latter
 mode, the expanded path must be absolute and must name an existing regular
 file or directory on the computer running elder-terms; otherwise the command
 is not run. Relative paths are rejected because terminal display text does not
 provide a reliable local working directory, particularly for remote sessions.
+
+"Link decoration" in the "Appearance" tab offers "No decoration", "Always
+underline" (the default), and "Validate links (with dimming)". This setting
+applies to visible text and OSC 8. Recognition, copying, and Ctrl+click remain
+available in every mode. No decoration adds no link styling; always underline
+adds underlines without changing brightness. Validation mode dims local paths
+until confirmed valid; other links look the same as always underline.
+Original text and background colors, inverse, bold, and existing underline styles
+are preserved. Dimming operates on corrected display colors in Oklch, halving
+the lightness difference from the background. Hue is retained; chroma is reduced
+only when needed to fit the display gamut.
+The built-in local path rules enable path validation. OSC 8 also recognizes
+absolute paths, home-relative paths starting with `~/`, and URIs starting with
+`file:///` or `file://localhost/`. The decoded URI path is validated and its
+visible label is decorated. Terminal input and drawing continue
+while existence checks run. `Ctrl`+click checks the path again, running the
+command if valid or showing a modal dialog with the reason if invalid.
+Decoration inherits as an ordinary setting. In INI files, set
+`[terminal] link_decoration` to `none`, `underline`, or `validated`.
 
 The same settings can be edited directly in a connection's INI file. This
 example recognizes an absolute local source path followed by a line number:
@@ -1398,6 +1437,8 @@ path=${path}
 ```
 
 `source` is `osc8` or `terminal-text` and defaults to `osc8` when omitted.
+`whole_token=true` requires whitespace, quotes or line ends around visible-text
+matches. It defaults to `false` and does not affect OSC 8 targets.
 `path_validation` is `none` or `existing-local-path`; `path` is required for
 the latter. `[hyperlink.<rule-id>]` sections are evaluated in file order. Rule
 IDs may contain letters, digits, `-`, and `_`.
@@ -1450,7 +1491,7 @@ version as libcurl; the application checks this before connecting.
 To build on Ubuntu or Debian, install a C++20-capable compiler, Meson, Ninja,
 gettext, and the development packages for the libraries used by elder-terms:
 
-Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later, IBus 1.5.29 or later, and Wayland client 1.22 or later. See the [boxrig build requirements](https://github.com/kekyo/boxrig/blob/0.10.0/docs/en/building.md).
+Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later, IBus 1.5.29 or later, and Wayland client 1.22 or later. See the [boxrig build requirements](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/building.md).
 
 ```bash
 sudo apt update

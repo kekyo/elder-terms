@@ -215,6 +215,13 @@ static bool validate_color_filter(const SettingValue &value, std::string *reason
   return false;
 }
 
+static bool validate_link_decoration(const SettingValue &value, std::string *reason) {
+  const auto *text = std::get_if<std::string>(&value);
+  if (text && (*text == "none" || *text == "underline" || *text == "validated")) return true;
+  *reason = "must be none, underline, or validated";
+  return false;
+}
+
 static bool validate_color_vision(const SettingValue &value, std::string *reason) {
   const auto *text = std::get_if<std::string>(&value);
   if (text && (*text == "none" || *text == "protan" || *text == "deutan" || *text == "tritan")) return true;
@@ -331,6 +338,12 @@ SettingKey terminal_font_families_setting_key() {
 SettingKey terminal_cursor_shape_setting_key() { return terminal_key("cursor_shape"); }
 SettingKey terminal_cursor_blink_setting_key() { return terminal_key("cursor_blink"); }
 SettingKey terminal_color_filter_setting_key() { return terminal_key("color_filter"); }
+SettingKey terminal_link_decoration_setting_key() { return terminal_key("link_decoration"); }
+TerminalLinkDecoration terminal_link_decoration(const SettingsStore &store) {
+  const auto value = setting_string_value_or_default(store, terminal_link_decoration_setting_key(), "underline");
+  return value == "none" ? TerminalLinkDecoration::none :
+      value == "validated" ? TerminalLinkDecoration::validated : TerminalLinkDecoration::underline;
+}
 TerminalColorFilter terminal_color_filter(const SettingsStore &store) {
   const auto value = setting_string_value_or_default(store, terminal_color_filter_setting_key(), "none");
   if (value == "reverse-palette") return TerminalColorFilter::reverse_palette;
@@ -496,6 +509,7 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
        .validate = validate_terminal_cursor_shape},
       {.key = terminal_cursor_blink_setting_key(), .default_value = SettingValue{true}, .validate = nullptr},
       {.key = terminal_color_filter_setting_key(), .default_value = SettingValue{std::string("none")}, .validate = validate_color_filter},
+      {.key = terminal_link_decoration_setting_key(), .default_value = SettingValue{std::string("underline")}, .validate = validate_link_decoration},
       {.key = terminal_color_vision_setting_key(), .default_value = SettingValue{std::string("none")}, .validate = validate_color_vision},
       {.key = terminal_color_vision_strength_setting_key(), .default_value = SettingValue{gint64{100}}, .validate = validate_background_percent},
       {.key = terminal_background_mode_setting_key(), .default_value = SettingValue{std::string("opaque")}, .validate = validate_background_mode},

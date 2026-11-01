@@ -156,6 +156,11 @@ export const transferProgressNoticeZmodemSendPath = fileURLToPath(
   )
 );
 
+/** INI fixture that disables link decorations for glyph layout assertions. */
+export const terminalPlainTextGridConfigPath = fileURLToPath(
+  new URL('./fixtures/terminal-plain-text-grid.ini', import.meta.url)
+);
+
 /** INI fixture that configures the terminal grid to 81x25. */
 export const terminalGrid81x25ConfigPath = fileURLToPath(
   new URL('./fixtures/terminal-grid-81x25.ini', import.meta.url)

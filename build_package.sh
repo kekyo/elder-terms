@@ -416,6 +416,7 @@ validate_deb_package() {
 		usr/share/applications/net.kekyo.elder-terms.desktop \
 		usr/share/applications/net.kekyo.elder-terms-terminal.desktop \
 		etc/xdg/autostart/net.kekyo.elder-terms.desktop \
+		usr/share/metainfo/net.kekyo.elder-terms.metainfo.xml \
 		usr/share/icons/hicolor/256x256/apps/elder-terms.png \
 		usr/share/locale/ja/LC_MESSAGES/elder-terms.mo \
 		usr/share/doc/elder-terms/README.md \
@@ -624,7 +625,7 @@ main() {
 	require_command readelf
 	require_command node
 	CONTAINER_ENGINE_BIN=$(choose_container_engine)
-	node "$PROJECT_ROOT/scripts/prepare-package-tools.mts" "$TMP_ROOT/tools"
+	node "$PROJECT_ROOT/scripts/prepare-package-tools.mts" "$TMP_ROOT/tools" "$VERSION"
 	schedule_deb_builds
 	wait_for_all_jobs
 	validate_deb_artifacts

@@ -206,6 +206,24 @@ install_data(
   install_dir: get_option('datadir') / 'applications',
 )
 
+if package_build_tools == ''
+  elder_terms_metainfo = configure_file(
+    input: 'packaging/metainfo/net.kekyo.elder-terms.metainfo.xml.in',
+    output: 'net.kekyo.elder-terms.metainfo.xml',
+    command: [
+      boxrig_node,
+      files('../scripts/prepare-appstream-metainfo.mts'),
+      '@INPUT@', '@OUTPUT@', elder_terms_application_version,
+    ],
+  )
+else
+  elder_terms_metainfo = package_build_tools / 'net.kekyo.elder-terms.metainfo.xml'
+endif
+install_data(
+  elder_terms_metainfo,
+  install_dir: get_option('datadir') / 'metainfo',
+)
+
 foreach icon_size : ['16', '22', '24', '32', '48', '64', '128', '256']
   install_data(
     '../data/icons/hicolor/' + icon_size + 'x' + icon_size + '/apps/elder-terms.png',

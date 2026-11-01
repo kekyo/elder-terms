@@ -21,6 +21,8 @@ static void expect(bool condition, const char *message) {
 
 int main() {
   try {
+    cardio::dispatcher_group_glib group;
+    cardio::dispatcher_host_glib_auto dispatcher(group);
     auto config = boxrig_terminal_config_default();
     config.rows = 3;
     config.columns = 40;
@@ -178,15 +180,23 @@ int main() {
     file_rule.arguments = {"${path}"};
     links.reset(create_terminal_links(view, {file_rule}));
     feed("file:" + path.string());
+    expect(!resolve(hit())->action, "filesystem validation initially remains pending");
+    while (terminal_links_cache_statistics(links.get()).path_queries_pending) g_main_context_iteration(nullptr, TRUE);
     expect(resolve(hit())->action.has_value(), "existing file action succeeds");
     stats = terminal_links_cache_statistics(links.get());
     std::filesystem::remove(path);
-    const auto missing_file = resolve(hit());
+    expect(resolve(hit())->action.has_value(), "hover reuses validation without filesystem I/O");
+    std::optional<TerminalHyperlinkResolution> missing_file;
+    terminal_links_activate(links.get(), *resolve(hit()), [&](auto result) { missing_file = std::move(result); });
+    while (!missing_file) g_main_context_iteration(nullptr, TRUE);
     expect(missing_file && !missing_file->action, "cached regex result rechecks missing file");
     expect(terminal_links_cache_statistics(links.get()).matcher_creations == stats.matcher_creations,
         "filesystem change rechecks action without repeating regex");
     std::ofstream(path) << "link again\n";
-    expect(resolve(hit())->action.has_value(), "cached regex result rechecks restored file");
+    std::optional<TerminalHyperlinkResolution> restored_file;
+    terminal_links_activate(links.get(), *resolve(hit()), [&](auto result) { restored_file = std::move(result); });
+    while (!restored_file) g_main_context_iteration(nullptr, TRUE);
+    expect(restored_file->action.has_value(), "activation rechecks the restored file asynchronously");
     std::filesystem::remove(path);
 
     auto incomplete_rule = first_rule;
