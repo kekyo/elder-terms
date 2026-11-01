@@ -3,7 +3,7 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
-import { chmod, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
@@ -124,17 +124,23 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
     });
   });
 
-  for (const kind of ['url', 'directory', 'file']) {
+  for (const kind of ['url', 'directory', 'file', 'home-directory']) {
     it(`opens a visible ${kind} with the built-in xdg-open rule`, async (context) => {
       await withTemporaryDirectory(async (directory) => {
         const targetFile = join(directory, 'target.txt');
         await writeFile(targetFile, 'target\n', 'utf8');
+        const homeDirectory = join(directory, 'local home');
+        await mkdir(join(homeDirectory, 'Downloads'), { recursive: true });
         const target =
           kind === 'url'
             ? 'https://example.test/docs'
             : kind === 'directory'
               ? directory
-              : targetFile;
+              : kind === 'home-directory'
+                ? '~/Downloads/'
+                : targetFile;
+        const expectedTarget =
+          kind === 'home-directory' ? `${homeDirectory}/Downloads/` : target;
         const actionPath = join(directory, 'xdg-open');
         const actionTemporaryPath = join(directory, 'url.tmp');
         const actionArgumentsPath = join(directory, 'url.txt');
@@ -160,7 +166,7 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
           shellPath,
           [
             '#!/bin/sh',
-            `printf '%s\\r\\n' ${shellQuote(target)}`,
+            `printf '%s\\r\\n' ${shellQuote(kind === 'home-directory' ? `"${target}"` : target)}`,
             `printf ready > ${shellQuote(shellReadyPath)}`,
             `while [ ! -f ${shellQuote(shellReleasePath)} ]; do sleep 0.02; done`,
             '',
@@ -204,7 +210,7 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
                     await app.input.setModifier('control', false);
                   }
                   expect(await readFile(actionArgumentsPath, 'utf8')).toBe(
-                    `${target}\n`
+                    `${expectedTarget}\n`
                   );
                 },
                 {
@@ -218,6 +224,7 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
               env: {
                 PATH: `${directory}:${process.env.PATH ?? ''}`,
                 SHELL: shellPath,
+                HOME: homeDirectory,
               },
             }
           );

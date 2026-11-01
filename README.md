@@ -1354,7 +1354,8 @@ When a connection defines no link rules, the built-in rules recognize:
 - OSC 8 targets in `vscode://file/absolute/path:line` and
   `vscode://file/absolute/path:line:column` form, opened with `code
   --reuse-window --goto`.
-- Absolute paths such as `/foo/bar/baz` in visible terminal text, opened with
+- Absolute paths such as `/foo/bar/baz` and home-relative paths such as
+  `~/Downloads/` in visible terminal text, opened with
   `xdg-open` when they name a local file or directory. Surrounding quotes are
   excluded from the link.
 
@@ -1377,6 +1378,11 @@ A complete match cannot split a visible character composed of multiple Unicode c
 The command is a fixed executable name or path. It is launched directly without a shell,
 so pipes, redirections, and other shell syntax are not interpreted. Capture
 templates are expanded only in arguments and in the optional validation path.
+An expanded argument or validation path starting with `~/` uses the home
+directory specified by `HOME` on the computer running elder-terms. If `HOME`
+is unset or is not an absolute path, the home-relative link cannot be opened.
+A tilde inside a URL or path is preserved, and copying a link retains its
+original text.
 
 Each rule's "Path validation" setting can be switched between "Do not validate"
 and "Existing local file or directory". In the latter
@@ -1385,7 +1391,7 @@ file or directory on the computer running elder-terms; otherwise the command
 is not run. Relative paths are rejected because terminal display text does not
 provide a reliable local working directory, particularly for remote sessions.
 
-The built-in absolute path rule enables path validation. Visible-text links
+The built-in local path rule enables path validation. Visible-text links
 start with dimmed text and underline colors. Successful validation restores
 normal brightness; invalid links remain dimmed. Terminal input and drawing continue
 while existence checks run. `Ctrl`+click checks the path again, running the

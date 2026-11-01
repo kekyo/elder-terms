@@ -48,6 +48,36 @@ int main() {
   path = directory.string();
   if (!expand_terminal_hyperlink_action(rule, capture, &reason) || !validate(path).empty())
     throw std::runtime_error("an existing directory should be accepted");
+  const char *home = g_getenv("HOME");
+  if (!home || !std::filesystem::path(home).is_absolute())
+    throw std::runtime_error("the test requires an absolute HOME directory");
+  const std::string home_prefix = std::string(home) + (std::string_view(home).ends_with('/') ? "" : "/");
+  path = "~/Downloads/source%20file.cpp";
+  const auto home_action = expand_terminal_hyperlink_action(rule, capture, &reason);
+  if (!home_action || home_action->validation_path != home_prefix + "Downloads/source file.cpp" ||
+      home_action->arguments != std::vector<std::string>{home_prefix + "Downloads/source file.cpp", "$42"})
+    throw std::runtime_error("leading tilde expands to the same home path for validation and command arguments");
+  path = "~/";
+  const auto home_directory_action = expand_terminal_hyperlink_action(rule, capture, &reason);
+  if (!home_directory_action || home_directory_action->validation_path != home_prefix ||
+      !validate(*home_directory_action->validation_path).empty())
+    throw std::runtime_error("a home directory link is accepted");
+  path = "~//Downloads/";
+  const auto repeated_separator = expand_terminal_hyperlink_action(rule, capture, &reason);
+  if (!repeated_separator || repeated_separator->validation_path != home_prefix + "/Downloads/")
+    throw std::runtime_error("repeated separators after tilde must not discard the home directory");
+  auto unchecked = rule;
+  unchecked.path_validation = HyperlinkPathValidation::none;
+  path = "~/Downloads/";
+  const auto unchecked_home = expand_terminal_hyperlink_action(unchecked, capture, &reason);
+  if (!unchecked_home || unchecked_home->validation_path || unchecked_home->arguments[0] != home_prefix + "Downloads/")
+    throw std::runtime_error("disabling validation still expands home-relative command arguments");
+  for (const auto &literal : {"https://example.test/~/Downloads/", "/tmp/~literal", "~another/Downloads/"}) {
+    path = literal;
+    const auto literal_action = expand_terminal_hyperlink_action(unchecked, capture, &reason);
+    if (!literal_action || literal_action->arguments[0] != literal)
+      throw std::runtime_error("only a leading tilde followed by a slash is expanded");
+  }
   path = "relative.cpp";
   if (expand_terminal_hyperlink_action(rule, capture, &reason) || reason.find("absolute") == std::string::npos)
     throw std::runtime_error("a relative path must be rejected");

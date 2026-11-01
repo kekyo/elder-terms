@@ -55,6 +55,8 @@ struct TerminalHyperlinkResolution {
  * @param capture Borrowed lookup into an immutable match.
  * @param reason Receives a template or path rejection reason.
  * @return Command, arguments and optional validation path, or no value on rejection.
+ * @remarks Leading ~/ in expanded arguments and the validation path uses HOME.
+ * An unset or non-absolute HOME rejects home-relative paths without filesystem I/O.
  */
 std::optional<TerminalHyperlinkAction> expand_terminal_hyperlink_action(
     const HyperlinkActionRule &rule, const RegexCaptureLookup &capture, std::string *reason);

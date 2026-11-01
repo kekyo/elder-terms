@@ -23,6 +23,22 @@ static std::optional<std::string> expand_hyperlink_template(
       RegexCaptureTemplateOptions{.allow_uri_decode = true}, reason);
 }
 
+static std::optional<std::string> expand_home_path(std::string value,
+                                                std::string *reason) {
+  if (!value.starts_with("~/")) return value;
+  // Read HOME directly: passwd lookup and filesystem inspection must never
+  // run in synchronous recognition, pointer hit testing or template expansion.
+  const char *home = g_getenv("HOME");
+  if (!home || !std::filesystem::path(home).is_absolute()) {
+    *reason = "cannot expand home-relative path: HOME must be an absolute path";
+    return std::nullopt;
+  }
+  std::string expanded(home);
+  if (!expanded.ends_with('/')) expanded += '/';
+  expanded += value.substr(2);
+  return expanded;
+}
+
 static bool validate_hyperlink_path_syntax(const std::string &value,
                                          std::string *reason) {
   if (value.find('\0') != std::string::npos) {
@@ -88,17 +104,21 @@ std::optional<TerminalHyperlinkAction> expand_terminal_hyperlink_action(
       *reason = "expanded argument contains a NUL byte";
       return std::nullopt;
     }
-    action.arguments.push_back(*expanded);
+    const auto local_argument = expand_home_path(*expanded, reason);
+    if (!local_argument) return std::nullopt;
+    action.arguments.push_back(*local_argument);
   }
 
   if (rule.path_validation ==
       HyperlinkPathValidation::existing_local_path) {
     const std::optional<std::string> path =
         expand_hyperlink_template(rule.path_template, capture, reason);
-    if (!path.has_value() || !validate_hyperlink_path_syntax(*path, reason)) {
+    if (!path) return std::nullopt;
+    const auto local_path = expand_home_path(*path, reason);
+    if (!local_path || !validate_hyperlink_path_syntax(*local_path, reason)) {
       return std::nullopt;
     }
-    action.validation_path = *path;
+    action.validation_path = *local_path;
   }
   return action;
 }

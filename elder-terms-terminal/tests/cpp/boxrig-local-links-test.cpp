@@ -6,6 +6,7 @@
 #include "../../src/terminal-links.h"
 
 #include <cstdio>
+#include <filesystem>
 #include <memory>
 #include <stdexcept>
 #include <string_view>
@@ -117,6 +118,20 @@ int main() {
     expect(terminal_links_copy_target(links.get(), hit(5, 1)) == "/tmp" &&
         terminal_links_copy_target(links.get(), hit(5, 8)) == "/proc/self/exe",
         "Unicode whitespace separates absolute paths");
+    feed("\x1b[2J\x1b[H~/\r\n\"~/Downloads/\"\r\nhttps://example.test/~/Downloads/");
+    wait_checks();
+    expect(terminal_links_copy_target(links.get(), hit(0, 0)) == "~/" &&
+        terminal_links_copy_target(links.get(), hit(1, 1)) == "~/Downloads/",
+        "home-relative links include the tilde and exclude surrounding quotes");
+    expect(!terminal_links_copy_target(links.get(), hit(1, 0)) &&
+        !terminal_links_copy_target(links.get(), hit(1, 13)), "home link quotes are outside the target");
+    const auto home = terminal_links_resolve(links.get(), hit(0, 0));
+    expect(home && home->action && std::filesystem::path(home->action->arguments[0]).is_absolute(),
+        "a home-relative directory resolves to an existing absolute local path");
+    expect(terminal_links_copy_target(links.get(), hit(2, 22)) == "https://example.test/~/Downloads/" &&
+        terminal_links_resolve(links.get(), hit(2, 22))->action->arguments ==
+            std::vector<std::string>{"https://example.test/~/Downloads/"},
+        "a tilde inside an HTTP URL remains part of the unmodified URL");
 
     links.reset();
     std::vector<std::shared_ptr<cardio::promise_source<std::string>>> requests;
