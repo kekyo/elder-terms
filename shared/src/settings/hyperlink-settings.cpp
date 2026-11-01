@@ -70,6 +70,15 @@ std::vector<HyperlinkActionRule> default_hyperlink_action_rules() {
           .path_validation = HyperlinkPathValidation::none,
           .path_template = {},
       },
+      {
+          .id = "local-path-text",
+          .recognition_source = HyperlinkRecognitionSource::terminal_text,
+          .pattern = R"(/[^\s\p{Z})" "\u0085\u180e" R"(<>"']*)",
+          .command = "xdg-open",
+          .arguments = {"${0}"},
+          .path_validation = HyperlinkPathValidation::existing_local_path,
+          .path_template = "${0}",
+      },
   };
 }
 

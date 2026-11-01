@@ -347,6 +347,12 @@ boxrig_links_test = executable('boxrig-links-test',
   dependencies: [boxrig_deps['boxrig-ui'], elder_terms_dep])
 test('boxrig-links-test', boxrig_links_test)
 
+boxrig_local_links_test = executable('boxrig-local-links-test',
+  ['tests/cpp/boxrig-local-links-test.cpp', 'src/terminal-links.cpp',
+   'src/terminal-hyperlink-action.cpp'],
+  dependencies: [boxrig_deps['boxrig-ui'], elder_terms_dep])
+test('boxrig-local-links-test', boxrig_local_links_test)
+
 boxrig_links_cache_test = executable('boxrig-links-cache-test',
   ['tests/cpp/boxrig-links-cache-test.cpp', 'src/terminal-links.cpp',
    'src/terminal-hyperlink-action.cpp'],

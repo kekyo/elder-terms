@@ -4401,7 +4401,7 @@ static void test_connection_hyperlink_actions_override_built_in_defaults() {
   expect_true(global.store.hyperlink_rules.empty() &&
                   !global.store.hyperlink_settings_configured &&
                   elder_terms::effective_hyperlink_action_rules(global.store)
-                          .size() == 4,
+                          .size() == 5,
               "global hyperlink sections should be ignored");
 
   const SettingsSaveResult saved =
@@ -4469,7 +4469,7 @@ static void test_connection_hyperlink_actions_override_built_in_defaults() {
       elder_terms::effective_hyperlink_action_rules(startup_defaults.store);
   expect_true(startup_defaults.store.hyperlink_rules.empty() &&
                   !startup_defaults.store.hyperlink_settings_configured &&
-                  startup_rules.size() == 4 &&
+                  startup_rules.size() == 5 &&
                   startup_rules[0].id == "http-url-osc8",
               "a startup profile without link rules should replace connection "
               "rules with built-in defaults");
@@ -4487,7 +4487,7 @@ static void test_hyperlink_defaults_disable_and_invalid_rules() {
       elder_terms::effective_hyperlink_action_rules(defaults);
   expect_true(defaults.hyperlink_actions_enabled &&
                   defaults.hyperlink_rules.empty() &&
-                  default_rules.size() == 4 &&
+                  default_rules.size() == 5 &&
                   default_rules[0].id == "http-url-osc8" &&
                   default_rules[0].recognition_source ==
                       elder_terms::HyperlinkRecognitionSource::osc8 &&
@@ -4499,8 +4499,15 @@ static void test_hyperlink_defaults_disable_and_invalid_rules() {
                       elder_terms::HyperlinkRecognitionSource::terminal_text &&
                   default_rules[2].id == "vscode-line-column" &&
                   default_rules[3].id == "vscode-line" &&
+                  default_rules[4].id == "local-path-text" &&
+                  default_rules[4].recognition_source ==
+                      elder_terms::HyperlinkRecognitionSource::terminal_text &&
+                  default_rules[4].command == "xdg-open" &&
+                  default_rules[4].path_validation ==
+                      elder_terms::HyperlinkPathValidation::existing_local_path &&
+                  default_rules[4].path_template == "${0}" &&
                   !defaults.hyperlink_settings_configured,
-              "URL and VS Code hyperlink actions should be built in by "
+              "URL, VS Code and local path hyperlink actions should be built in by "
               "default");
 
   const std::filesystem::path disabled_path =
@@ -4537,7 +4544,7 @@ static void test_hyperlink_defaults_disable_and_invalid_rules() {
   expect_true(empty.store.hyperlink_rules.empty() &&
                   empty.store.hyperlink_settings_configured &&
                   elder_terms::effective_hyperlink_action_rules(empty.store)
-                          .size() == 4,
+                          .size() == 5,
               "built-in rules should apply when no connection rule is "
               "defined");
 
