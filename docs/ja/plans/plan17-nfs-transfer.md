@@ -2,7 +2,7 @@
 
 作成日：2026年11月2日
 
-状態：計画作成。実装は未着手です。NFS v2の補完、NFS v4専用サーバーの公開ルート探索、ファイル名の文字コード指定を段階的に検証します。
+状態：段階1の検証ドライバーと共通転送の識別子修正を完了しました。各版の実通信と非同期停止を確認済みです。段階2以降の転送画面、送信・変更操作、設定統合、全体試験は未完了です。
 
 ## 目的と前提
 
@@ -139,6 +139,34 @@ SSH proxyは今回の必須対応に含めません。NFSのポート探索やUD
 表示名と操作対象の分離を共通転送の試験用クライアントで先にRED・GREEN確認します。UTF-8、CP932、EUC-JPの名前と復号不能な名前について、実通信のドライバーで列挙・表示・読み取りまで観測します。選択した項目へ送る名前が元のバイト列と一致することを検査し、表示名の一致だけを合格条件にしません。
 
 v2対応サーバー、v3サーバー、MOUNTを提供しないv4専用サーバーを試験環境として確保します。新しいLinux環境でv2が無効な場合は、v2対応の隔離VMなどを用意します。v3の成功をv2の代用にしません。完了条件は、各版の実通信と非同期停止、元の名前での再アクセスを観測でき、採用版・API・試験環境が確定することです。
+
+### 段階1の実施結果
+
+作業ブランチは`feature/nfs-transfer`です。libnfsを`affe4c88829cd07bba082fe544df05d89c770d49`でサブモジュールへ追加し、外部ソースを変更せずにビルドしました。実行経路は高水準の非同期APIとRAW RPC APIです。内部ワーカースレッド、再送、自動再接続を無効にし、Cardioのソケット待機と要求全体の期限を組み合わせています。
+
+試験用サーバーには、Debian bullseyeのLinux 5.10.0-46-amd64を使います。`CONFIG_NFSD_V2=y`を確認したゲストをQEMUで起動し、ホストのNFSサービスや公開設定は変更しません。標準ポート111を使う試験は、Podmanの非特権ネットワーク名前空間内で実行します。VMはスナップショットで動かし、試験後に破棄します。
+
+| 検証 | 確認した結果 |
+| --- | --- |
+| v2専用サーバー | MOUNT v1、exports列挙、cookie付きREADDIR、LOOKUP、3バイト単位のREADとEOFを実通信で確認 |
+| v3専用サーバー | MOUNT v3、exports列挙、高水準APIによる一覧・OPEN・分割READ・CLOSEを確認 |
+| v4.0専用サーバー | v2・v3・v4.1・v4.2を無効にし、MOUNTとPORTMAPの待ち受けを停止。公開パス`/public`から一覧・受信を確認 |
+| 名前のバイト列 | UTF-8、CP932、SHIFT-JIS、EUC-JP、不正バイトが混在する一覧で、元の名前から受信した内容を照合 |
+| 名前の境界 | 空白、`?`、`#`、`%`、CP932の途中の`0x5c`、NFC/NFD、ゼロバイトのファイルを確認 |
+| 接続先ポート | v2/v3でPORTMAP探索と固定ポートをそれぞれ確認 |
+| 予約済み送信元ポート | 必須のexportに、ネットワーク名前空間内の権限で接続。`CAP_NET_BIND_SERVICE`を外すと拒否されることを確認 |
+| 非同期停止 | 各版で要求が相手へ届いた後に中止・切断・無応答を注入。コールバック回収、コンテキスト解放、失敗理由を確認。ASan/UBSanでも成功 |
+| 共通転送 | 表示名からパスを再構築すると再帰受信・削除が失敗するREDを確認。取得済みの`child.path`を引き継ぐ修正後、既存の転送エンジン試験も成功 |
+
+名前の変換部品は、iconvで指定した変換と逆変換を検証します。新規名の不正なUTF-8、非可逆変換、NUL、区切り、`.`・`..`、長さ超過を拒否します。既存名の復号失敗はUTF-8の16進表示へ変え、操作用の元のバイト列は保持します。APIの契約は[GNU C Libraryの公式文書](https://sourceware.org/glibc/manual/latest/html_node/Generic-Conversion-Interface.html)と`/usr/include/iconv.h`で照合しました。
+
+初期実装で提供する転送はTCPとし、NFS v4は4.0を対象にします。libnfsの高水準APIが公開するトランスポートはTCPとRDMAであり、UDPをv3の選択肢として表示しません。v2のUDPとv4.2も対応済みとは表示しません。根拠は[採用版の公開ヘッダー](https://github.com/sahlberg/libnfs/blob/affe4c88829cd07bba082fe544df05d89c770d49/include/nfsc/libnfs.h)です。
+
+libnfsのビルドで出た警告は、rpcgenが生成したMOUNTコードの未使用変数への代入でした。[生成元の外部コード](https://github.com/sahlberg/libnfs/blob/affe4c88829cd07bba082fe544df05d89c770d49/mount/libnfs-raw-mount.c)を編集せず、依存ライブラリのビルドだけに`-Wno-unused-but-set-variable`を適用しました。再ビルドでは警告がなく、アプリ側は`-Werror`を維持しています。
+
+再現コマンドは`make -C elder-terms-terminal/tests/nfs deps test`です。`SANITIZE=1`でアプリ側のASan/UBSan検証を実行できます。実通信のログは`.build/nfs-evidence/`に出力します。共通転送は`meson compile -C .build sftp-transfer-engine-test`と`.build/elder-terms-terminal/sftp-transfer-engine-test`で確認しました。全体の`make test`は段階6で実行します。
+
+plan23のテーマ機能は現在のコードでは未実装です。NFSに必要な読み込み・継承まで本planに含めるか、テーマ連携をplan23へ回すかを確認中です。段階2の通信・転送部分は先に進めます。
 
 ## 段階2：NFS v3と公開ルートを画面で利用する
 

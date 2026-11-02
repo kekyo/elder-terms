@@ -562,17 +562,6 @@ static bool valid_child_name(const std::string &name) {
          name.find('/') == std::string::npos;
 }
 
-static std::string remote_basename(const std::string &path) {
-  std::string trimmed = path;
-  while (trimmed.size() > 1 && trimmed.back() == '/') {
-    trimmed.pop_back();
-  }
-  const std::size_t separator = trimmed.find_last_of('/');
-  return separator == std::string::npos
-             ? trimmed
-             : trimmed.substr(separator + 1);
-}
-
 static std::string remote_child_path(const std::string &directory,
                                      const std::string &name) {
   if (!valid_child_name(name)) {
@@ -702,7 +691,7 @@ discover_remote_node_async(
           "Remote service returned an invalid item name");
     }
     TransferNode child_node = co_await discover_remote_node_async(
-        client, remote_child_path(node.source_path, child.name),
+        client, child.path,
         local_child_path(node.destination_path, child.name),
         cancellation);
     node.total_bytes = sum_discovered_bytes(node.total_bytes, child_node.total_bytes);
@@ -753,7 +742,7 @@ remove_remote_tree_async(
       (co_await client->load_directory_async(path, cancellation)).entries;
   for (const RemoteFileAttributes &child : children) {
     co_await remove_remote_tree_async(
-        client, remote_child_path(path, child.name), cancellation);
+        client, child.path, cancellation);
   }
   co_await client->remove_directory_async(path, cancellation);
 }
@@ -1330,7 +1319,9 @@ discover_selected_source_async(
             cancellation);
       }
 
-      const std::string basename = remote_basename(source_path);
+      const auto attributes = co_await state->client->lstat_async(source_path, cancellation);
+      if (!attributes) throw std::runtime_error("Remote transfer source does not exist: " + source_path);
+      const std::string &basename = attributes->name;
       if (!valid_child_name(basename)) {
         throw std::runtime_error(
             "Selected remote transfer source has no valid item name");

@@ -81,9 +81,13 @@ struct RemotePathCapabilities {
 
 /** Portable attributes used by the remote browser and transfer engine. */
 struct RemoteFileAttributes {
-  /** Item name without its parent path. */
+  /** UTF-8 display name without its parent; never reconstruct path from it. */
   std::string name;
-  /** Full remote path. */
+  /**
+   * Client-owned operation identity, retained exactly as returned by the client.
+   * The identity belongs to this connection; it must not be reused after reconnect.
+   * UTF-8 presentation and new destination names are separate from this value.
+   */
   std::string path;
   /** Remote item kind, determined without following symbolic links. */
   RemoteFileType type = RemoteFileType::other;

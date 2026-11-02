@@ -1117,6 +1117,43 @@ static cardio::promise<void> test_job_partial_failure_and_commit_boundary() {
       "Cancellation after the last commit must not relabel a completed copy as canceled");
 }
 
+static cardio::promise<void> test_receive_preserves_remote_identity() {
+  using namespace elder_terms;
+  const auto root = test_root_directory() / "identities";
+  const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+  std::filesystem::create_directories(root);
+  auto client = std::make_shared<FakeSftpClient>();
+  client->add_directory("/opaque-root");
+  client->nodes.at("/opaque-root").attributes.name = "日本語";
+  client->add_directory("/opaque-root/opaque-directory");
+  client->nodes.at("/opaque-root/opaque-directory").attributes.name = "資料";
+  client->add_file("/opaque-root/opaque-directory/opaque-file", "original bytes\n");
+  client->nodes.at("/opaque-root/opaque-directory/opaque-file").attributes.name = "名前%?#.txt";
+  FileTransferRequest request;
+  request.direction = FileTransferDirection::receive;
+  request.source_paths = {"/opaque-root"};
+  request.destination_directory = root.string();
+  co_await run_file_transfer_async(client, request, {});
+  expect_true(read_file(root / "日本語/資料/名前%?#.txt") == "original bytes\n",
+      "Receive must retain the listed remote identity and use the display name only for local naming");
+  expect_true(!std::filesystem::exists(root / "opaque-root"),
+      "Remote identifiers must never become local filenames");
+}
+
+static cardio::promise<void> test_delete_preserves_remote_identity() {
+  using namespace elder_terms;
+  auto client = std::make_shared<FakeSftpClient>();
+  client->add_directory("/opaque-root");
+  client->add_file("/opaque-root/opaque-one", "one");
+  client->add_file("/opaque-root/opaque-two", "two");
+  // Two different byte strings may decode to the same display name.
+  client->nodes.at("/opaque-root/opaque-one").attributes.name = "同じ名前";
+  client->nodes.at("/opaque-root/opaque-two").attributes.name = "同じ名前";
+  std::vector<std::string> paths{"/opaque-root"};
+  co_await delete_file_transfer_items_async(client, FileTransferEndpoint::remote, paths, {});
+  expect_true(client->nodes.empty(), "Recursive removal must operate on both distinct listed identities");
+}
+
 static cardio::promise<void> test_rejects_parallel_bulk_transfer() {
   auto client = std::make_shared<FakeSftpClient>();
   client->add_directory("/");
@@ -1155,6 +1192,8 @@ int main() {
     try {
       std::string failures;
       for (const auto &[name, run] : std::vector<std::pair<const char *, cardio::promise<void>(*)()>>{
+          {"test_receive_preserves_remote_identity", test_receive_preserves_remote_identity},
+          {"test_delete_preserves_remote_identity", test_delete_preserves_remote_identity},
           {"test_job_results_and_lifecycle", test_job_results_and_lifecycle},
           {"test_job_partial_failure_and_commit_boundary", test_job_partial_failure_and_commit_boundary},
           {"test_job_queue_and_disconnect", test_job_queue_and_disconnect},
