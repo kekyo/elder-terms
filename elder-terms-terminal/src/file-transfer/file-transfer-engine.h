@@ -118,7 +118,11 @@ struct FileTransferProgress {
 };
 
 /** Terminal outcome, published only after transfer cleanup has finished. */
-enum class FileTransferOutcome { completed, failed, cancelled };
+enum class FileTransferOutcome {
+  completed, /**< Processing finished; skipped items remain separate from copies. */
+  failed,    /**< An unrecovered failure stopped processing. */
+  cancelled, /**< Cancellation and cleanup finished. */
+};
 
 /** Result of one recursive request, including partially completed batches. */
 struct FileTransferResult {

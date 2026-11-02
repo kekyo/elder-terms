@@ -1199,7 +1199,12 @@ transfer_node_with_recovery_async(
       throw;
     } catch (const FileTransferCleanupFailure &error) {
       state->result.temporary_paths.push_back(error.temporary_path);
-      if (error.cancelled) throw;
+      if (error.cancelled || cancellation.is_cancellation_requested()) throw;
+      failure = std::current_exception();
+    } catch (const RemoteFileError &error) {
+      // A disconnect observer can also cancel the owner. Keep the transport
+      // error instead of replacing it with cancellation in a recovery prompt.
+      if (error.connection_lost) throw;
       failure = std::current_exception();
     } catch (...) {
       failure = std::current_exception();
@@ -1266,6 +1271,9 @@ discover_selected_source_async(
           cancellation);
     } catch (const cardio::canceled_exception &) {
       throw;
+    } catch (const RemoteFileError &error) {
+      if (error.connection_lost) throw;
+      failure = std::current_exception();
     } catch (...) {
       failure = std::current_exception();
     }

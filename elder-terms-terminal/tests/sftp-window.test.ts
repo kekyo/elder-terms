@@ -1696,6 +1696,14 @@ describe('SFTP window', () => {
         '',
       ].join('\n'),
       async ({ app, evidence, localDirectory }) => {
+        // Measure the complete mixed-script filename, including the glyphs
+        // beside the new node icon, instead of a horizontally clipped prefix.
+        const window = expectElementKind(
+          await app.getById('file_transfer_window'),
+          'window'
+        );
+        const bounds = (await window.capture()).bounds;
+        await window.resizeTo(1250, bounds.height);
         const localTree = expectTable(
           await app.getById('file_transfer_local_tree')
         );

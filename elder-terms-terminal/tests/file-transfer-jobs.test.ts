@@ -4,7 +4,14 @@
 // https://github.com/kekyo/elder-terms/
 
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +21,7 @@ import { createGtkAppLauncher, type GtkTableElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import { createTestEvidence, expectElementKind } from './test-helpers.ts';
+import { createWebdavTestServer } from './webdav-test-server.ts';
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
 
@@ -223,6 +231,21 @@ for (const scale of [1, 2]) {
       expect(await state(2)).toBe('Waiting');
       expect(await state(3)).toBe('Waiting');
       expect(await state(4)).toBe('Waiting');
+      const jobs = await app.getById('file_transfer_jobs');
+      const beforeResize = (await jobs.capture()).bounds;
+      const dividerX = Math.round(
+        (beforeResize.x + beforeResize.width / 2) * scale
+      );
+      const dividerY = (beforeResize.y - 1) * scale;
+      await app.input.moveMouseTo(dividerX, dividerY);
+      await app.input.setMouseButton('left', true);
+      await app.input.moveMouseTo(dividerX, dividerY - 100 * scale);
+      await app.input.setMouseButton('left', false);
+      await waitForResult(async () =>
+        expect((await jobs.capture()).bounds.height).toBeGreaterThan(
+          beforeResize.height + 80
+        )
+      );
       await observeVideo('jobs-queued');
       const expander = expectElementKind(
         await app.getById('file_transfer_jobs_expander'),
@@ -288,3 +311,236 @@ for (const scale of [1, 2]) {
     }
   }, 90_000);
 }
+
+it('retains unknown progress and disconnected jobs until explicit retry', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'elder-plan15-retry-'));
+  const evidence = createTestEvidence(context);
+  const server = await createWebdavTestServer('none', undefined);
+  server.files.set('/dav/unknown-held.bin', {
+    content: Buffer.alloc(2048, 42),
+    reportedSize: undefined,
+  });
+  let serverClosed = false;
+  const launcher = createGtkAppLauncher({
+    appPath: fileURLToPath(
+      new URL(
+        '../../.build/elder-terms-terminal/elder-terms-file-transfer',
+        import.meta.url
+      )
+    ),
+    env: {
+      LANGUAGE: 'en',
+      LC_ALL: 'C.UTF-8',
+      XDG_CONFIG_HOME: join(directory, 'config'),
+      XDG_DATA_HOME: join(directory, 'data'),
+    },
+    onSystemOutput: evidence.recordSystemOutputEvent,
+    xvfbTrayHost: true,
+  });
+  try {
+    const config = join(directory, 'connection.ini');
+    await writeFile(
+      config,
+      `[general]\ntype=webdav\nauto_close=false\n[webdav]\nscheme=http\nauthentication=none\naddress=127.0.0.1\nport=${server.port}\nbase_path=/dav/\nremote_directory=/\nlocal_directory=${directory}\n`
+    );
+    const app = await launcher.launch(['-c', config], {
+      onOutput: evidence.recordAppOutputEvent,
+    });
+    const tree = expectElementKind(
+      await app.getById('file_transfer_remote_tree'),
+      'table'
+    );
+    const receive = async (name: string) => {
+      const row = await waitForResult(async () => {
+        for (let i = 0; i < (await tree.getRowCount()); i++)
+          if ((await (await tree.cellAt(i, 0))?.info())?.name === name)
+            return i;
+        throw new Error(`Missing ${name}`);
+      });
+      for (const i of await tree.selectedRows()) await tree.deselectRow(i);
+      await tree.selectRow(row);
+      const bounds = (await (await tree.cellAt(row, 0))!.capture()).bounds;
+      await app.input.moveMouseTo(
+        Math.round(bounds.x + bounds.width / 2),
+        Math.round(bounds.y + bounds.height / 2)
+      );
+      await app.input.setMouseButton('right', true);
+      await app.input.setMouseButton('right', false);
+      await expectElementKind(
+        await app.getById('file_transfer_receive_item'),
+        'menuItem'
+      ).click();
+    };
+    const state = async (id: number) =>
+      await expectElementKind(
+        await app.getById(`file_transfer_job_${id}_state`),
+        'label'
+      ).text();
+    await receive('unknown-held.bin');
+    await waitForResult(async () => {
+      expect(await state(1)).toBe('Transferring');
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_jobs_summary'),
+          'label'
+        ).text()
+      ).toContain('1024 bytes');
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_jobs_summary'),
+          'label'
+        ).text()
+      ).not.toContain('%');
+    });
+    await receive('hello.txt');
+    expect(await state(2)).toBe('Waiting');
+    // The refresh must wait behind the held download, then observe that the
+    // service has disconnected before the next transfer is allowed to start.
+    await expectElementKind(
+      await app.getById('file_transfer_remote_refresh_button'),
+      'button'
+    ).click();
+    const summary = expectElementKind(
+      await app.getById('file_transfer_jobs_summary'),
+      'label'
+    );
+    const folding = expectElementKind(
+      await app.getById('file_transfer_jobs_expander'),
+      'expander'
+    );
+    await folding.collapse();
+    expect(await summary.text()).toContain('1024 bytes');
+    expect(await summary.text()).not.toContain('%');
+    await evidence.captureEvidence('unknown-progress-collapsed', async () =>
+      app.capture()
+    );
+    await server.close();
+    serverClosed = true;
+    await waitForResult(async () =>
+      expect(['Awaiting decision', 'Failed']).toContain(await state(1))
+    );
+    if ((await state(1)) === 'Awaiting decision') {
+      // An interrupted HTTP body is a request failure; the subsequent refresh
+      // confirms that the endpoint itself is unavailable.
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_cancel_button'),
+        'button'
+      ).click();
+    }
+    await waitForResult(async () => {
+      expect(await state(1)).toBe('Failed');
+      expect(await state(2)).toBe('Failed');
+    });
+    await folding.expand();
+    await expectElementKind(
+      await app.getById('file_transfer_job_2_row'),
+      'expander'
+    ).expand();
+    expect(
+      await expectElementKind(
+        await app.getById('file_transfer_job_2_details'),
+        'label'
+      ).text()
+    ).toContain('Disconnected before execution');
+    const retry = expectElementKind(
+      await app.getById('file_transfer_job_2_retry'),
+      'button'
+    );
+    expect((await retry.info()).states).not.toContain('sensitive');
+    await server.restart();
+    serverClosed = false;
+    const reconnect = expectElementKind(
+      await app.getById('file_transfer_reconnect_button'),
+      'button'
+    );
+    await waitForResult(async () =>
+      expect((await reconnect.info()).states).toContain('sensitive')
+    );
+    await reconnect.click();
+    await waitForResult(async () =>
+      expect((await retry.info()).states).toContain('sensitive')
+    );
+    expect(
+      server.requests.filter(
+        (r) => r.method === 'GET' && r.url === '/dav/hello.txt'
+      )
+    ).toHaveLength(0);
+    expect(await state(2)).toBe('Failed');
+    await expectElementKind(
+      await app.getById('file_transfer_job_2_row'),
+      'expander'
+    ).collapse();
+    await retry.click();
+    await waitForResult(async () => expect(await state(3)).toBe('Completed'));
+    expect(await readFile(join(directory, 'hello.txt'), 'utf8')).toBe(
+      'Hello DAV!\r\n'
+    );
+    expect(await state(2)).toBe('Failed');
+    await retry.click();
+    await waitForResult(async () =>
+      expect(await state(4)).toBe('Awaiting decision')
+    );
+    await expectElementKind(
+      await app.getById('file_transfer_prompt_alternative_button'),
+      'button'
+    ).click();
+    await waitForResult(async () => expect(await state(4)).toBe('Completed'));
+    await expectElementKind(
+      await app.getById('file_transfer_job_4_row'),
+      'expander'
+    ).expand();
+    expect(
+      await expectElementKind(
+        await app.getById('file_transfer_job_4_details'),
+        'label'
+      ).text()
+    ).toContain('Copied: 0; skipped: 1; failed: 0; unprocessed: 0');
+    expect(
+      await expectElementKind(
+        await app.getById('file_transfer_job_4_progress'),
+        'progressBar'
+      ).value()
+    ).toBe(0);
+    expect(
+      server.requests.filter(
+        (r) => r.method === 'GET' && r.url === '/dav/hello.txt'
+      )
+    ).toHaveLength(1);
+    expect(
+      (await readdir(directory)).some((name) =>
+        name.includes('.elder-terms-part-')
+      )
+    ).toBe(false);
+    const jobBounds = (
+      await (await app.getById('file_transfer_jobs')).capture()
+    ).bounds;
+    await app.input.moveMouseTo(
+      Math.round(jobBounds.x + jobBounds.width / 2),
+      jobBounds.y - 1
+    );
+    await app.input.setMouseButton('left', true);
+    await app.input.moveMouseTo(
+      Math.round(jobBounds.x + jobBounds.width / 2),
+      jobBounds.y - 251
+    );
+    await app.input.setMouseButton('left', false);
+    let previous: Buffer | undefined;
+    const finalCapture = await waitForResult(async () => {
+      const capture = await app.capture();
+      const stable = previous?.equals(capture.image);
+      previous = capture.image;
+      expect(stable).toBe(true);
+      return capture;
+    });
+    await evidence.captureEvidence(
+      'explicit-retry-and-skip',
+      async () => finalCapture
+    );
+    await evidence.flushOutputs([app], launcher);
+  } finally {
+    await launcher.release();
+    if (!serverClosed) await server.close();
+    await evidence.release();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 60_000);

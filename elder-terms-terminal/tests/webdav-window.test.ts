@@ -613,7 +613,7 @@ describe('WebDAV window', () => {
               await app.getById('file_transfer_status_label'),
               'label'
             ).text()
-          ).toBe('Sent 1 item');
+          ).toBe('Sent 4 items');
           expect(
             server.files.get('/dav/send-tree/資料 #+%.txt')?.content.toString()
           ).toBe('upload from shared UI');
@@ -648,7 +648,7 @@ describe('WebDAV window', () => {
               await app.getById('file_transfer_status_label'),
               'label'
             ).text()
-          ).toBe('Sent 1 item');
+          ).toBe('Sent 4 items');
           expect(
             server.files.get('/dav/send-tree/資料 #+%.txt')?.content.toString()
           ).toBe('replacement from shared UI');
@@ -761,7 +761,7 @@ describe('WebDAV window', () => {
         ).toBe(false);
         await evidence.captureEvidence(
           'webdav-cancelled-upload-notice',
-          async () => notice.capture()
+          async () => app.capture()
         );
       } catch (error) {
         await evidence.log('WebDAV UI failure', error);

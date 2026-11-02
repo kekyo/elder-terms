@@ -12,8 +12,14 @@ namespace elder_terms {
 
 /** Lifecycle of one user-requested transfer, independent of any widget. */
 enum class FileTransferJobState {
-  queued, discovering, transferring, awaiting_decision, cancelling,
-  completed, failed, cancelled,
+  queued,            /**< Waiting for the connection's execution slot. */
+  discovering,       /**< Enumerating sources with an incomplete total. */
+  transferring,      /**< Copying discovered sources. */
+  awaiting_decision, /**< Waiting for conflict or failure input. */
+  cancelling,        /**< Stopping I/O and retiring temporary resources. */
+  completed,         /**< Finished, including requests that skipped all items. */
+  failed,            /**< Stopped by an unrecovered failure. */
+  cancelled,         /**< Cancellation and cleanup have finished. */
 };
 
 /** Presentation-safe data for one job; contains no client or authentication data. */
@@ -78,6 +84,7 @@ void cancel_file_transfer_job(const std::shared_ptr<FileTransferJob> &job);
  * @param client Client for the captured connection generation.
  * @param callbacks Decision and progress handlers; may be empty.
  * @param cancellation Owner shutdown signal.
+ * @returns Completion after the terminal result is published.
  * @remarks Runs on the owner dispatcher. Repeated calls do not repeat I/O.
  */
 cardio::promise<void> run_file_transfer_job_async(std::shared_ptr<FileTransferJob> job,
@@ -108,6 +115,7 @@ void disconnect_file_transfer_queue(const std::shared_ptr<FileTransferQueue> &qu
  * Drains waiting requests in order; waits for cleanup before starting the next.
  * @param queue Queue retained until the drain ends. @param callbacks Decision handlers.
  * @param cancellation Owner shutdown. @remarks Caller must await this before replacing or releasing a connection.
+ * @returns Completion after pending jobs and active cleanup have stopped.
  */
 cardio::promise<void> run_file_transfer_queue_async(std::shared_ptr<FileTransferQueue> queue,
     FileTransferCallbacks callbacks, cardio::cancellation cancellation);

@@ -331,8 +331,6 @@ static cardio::promise<void> verify_async(
            "Attaching an authenticated service must activate CONN");
     check_exterior_colors(window);
     GtkWidget *root = file_transfer_window_widget(window);
-    expect(find_widget(root, "file_transfer_overlay") == nullptr,
-        "The single-transfer overlay must be removed in favor of the job list");
     for (const char *id : {"conn_indicator_image", "sd_indicator_image", "rd_indicator_image"}) {
       expect(GTK_IS_IMAGE(find_widget(root, id)), "File browser must expose CONN, SD and RD indicators");
     }

@@ -430,6 +430,12 @@ export const createWebdavTestServer = async (
         return;
       }
       if (file !== undefined) {
+        if (decodedPath === '/dav/unknown-held.bin') {
+          response.writeHead(200);
+          response.write(file.content.subarray(0, 1024));
+          // Keep the chunked response open until the test disconnects the service.
+          return;
+        }
         response.writeHead(
           200,
           file.reportedSize === undefined

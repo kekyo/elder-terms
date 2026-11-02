@@ -86,10 +86,10 @@ private:
   std::vector<std::byte> content;
   std::size_t offset = 0;
   bool closed = false;
-  std::function<void()> before_close;
+  std::function<cardio::promise<void>()> before_close;
 
 public:
-  FakeSftpReader(std::vector<std::byte> content, std::function<void()> before_close)
+  FakeSftpReader(std::vector<std::byte> content, std::function<cardio::promise<void>()> before_close)
       : content(std::move(content)), before_close(std::move(before_close)) {
   }
 
@@ -110,7 +110,7 @@ public:
   cardio::promise<void>
   close_async(cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
-    if (!closed && before_close) before_close();
+    if (!closed && before_close) co_await before_close();
     closed = true;
     co_return;
   }
@@ -147,7 +147,11 @@ public:
   std::map<std::string, FakeNode> nodes;
   bool transfer_active = false;
   bool fail_next_write = false;
-  std::function<void()> before_read_close;
+  std::function<cardio::promise<void>()> before_read_close;
+  std::function<cardio::promise<void>(cardio::cancellation)> before_listing;
+  std::function<void()> before_stat;
+  std::function<void()> before_write;
+  std::function<void()> before_remove;
 
   void add_directory(const std::string &path,
                      std::uint32_t permissions = 0755,
@@ -223,6 +227,7 @@ public:
                        cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
     const std::string normalized = normalize_remote_path(path);
+    if (before_listing) co_await before_listing(cancellation);
     const auto directory = nodes.find(normalized);
     if (directory == nodes.end() ||
         directory->second.attributes.type !=
@@ -247,6 +252,7 @@ public:
   lstat_async(std::string path,
               cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
+    if (before_stat) before_stat();
     const auto iterator = nodes.find(normalize_remote_path(path));
     if (iterator == nodes.end()) {
       co_return std::nullopt;
@@ -280,6 +286,7 @@ public:
   remove_file_async(std::string path,
                     cardio::cancellation cancellation) override {
     cancellation.throw_if_cancellation_requested();
+    if (before_remove) before_remove();
     const std::string normalized = normalize_remote_path(path);
     const auto iterator = nodes.find(normalized);
     if (iterator == nodes.end() ||
@@ -414,6 +421,7 @@ FakeSftpWriter::write_all_async(
     client->fail_next_write = false;
     throw std::runtime_error("injected remote write failure");
   }
+  if (client->before_write) client->before_write();
   FakeNode &node = client->nodes.at(path);
   node.content.insert(node.content.end(), buffer.begin(), buffer.end());
   node.attributes.size = node.content.size();
@@ -790,7 +798,7 @@ static cardio::promise<void> test_failed_local_commit_preserves_completed_file()
   client->add_directory("/");
   client->add_file("/retained.txt", "replacement download");
   bool removed_temporary = false;
-  client->before_read_close = [&] {
+  client->before_read_close = [&]() -> cardio::promise<void> {
     // A concurrent cleanup removes the incomplete local download before commit.
     // The old completed destination must survive the resulting move failure.
     for (const auto &entry : std::filesystem::directory_iterator(root)) {
@@ -799,6 +807,7 @@ static cardio::promise<void> test_failed_local_commit_preserves_completed_file()
         removed_temporary = true;
       }
     }
+    co_return;
   };
   elder_terms::FileTransferRequest request;
   request.direction = elder_terms::FileTransferDirection::receive;
@@ -962,6 +971,152 @@ static cardio::promise<void> test_job_queue_and_disconnect() {
       "Execution must revalidate a queued destination before modifying the remote service");
 }
 
+static cardio::promise<void> test_job_cancellation_waits_for_cleanup() {
+  using namespace elder_terms;
+  const auto root = test_root_directory() / "job-cleanup";
+  const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+  for (const bool closing : {false, true}) {
+    std::filesystem::create_directories(root);
+    auto client = std::make_shared<FakeSftpClient>();
+    client->add_file("/first.txt", "first");
+    client->add_file("/second.txt", "second");
+    cardio::primitives::manually_conditional cleaning{false}, release{false};
+    client->before_read_close = [&]() -> cardio::promise<void> {
+      cleaning.raise();
+      co_await release.wait();
+    };
+    auto queue = create_file_transfer_queue("cleanup", {});
+    attach_file_transfer_queue(queue, client, "SFTP");
+    FileTransferRequest request;
+    request.direction = FileTransferDirection::receive;
+    request.source_paths = {"/first.txt"};
+    request.destination_directory = root.string();
+    const auto first = enqueue_file_transfer_job(queue, request);
+    request.source_paths = {"/second.txt"};
+    const auto second = enqueue_file_transfer_job(queue, request);
+    FileTransferCallbacks callbacks;
+    callbacks.progress = [&](const FileTransferProgress &progress) {
+      if (progress.current_path == "/first.txt" && progress.transferred_bytes)
+        cancel_file_transfer_job(first);
+    };
+    auto running = run_file_transfer_queue_async(queue, callbacks, {});
+    co_await cleaning.wait();
+    if (closing) disconnect_file_transfer_queue(queue, true);
+    expect_true(!running.is_ready() && client->transfer_active &&
+        file_transfer_job_snapshot(first).state == FileTransferJobState::cancelling &&
+        !file_transfer_job_snapshot(first).finished_at && !file_transfer_job_snapshot(second).started_at,
+        "Cancellation must retain handles and the connection slot until asynchronous cleanup finishes");
+    release.raise();
+    co_await running;
+    expect_true(!client->transfer_active && file_transfer_job_snapshot(first).state == FileTransferJobState::cancelled &&
+        file_transfer_job_snapshot(first).result->temporary_paths.empty() &&
+        !std::filesystem::exists(root / "first.txt"), "Canceled downloads must retire their temporary files before finishing");
+    expect_true(file_transfer_job_snapshot(second).state ==
+        (closing ? FileTransferJobState::cancelled : FileTransferJobState::completed),
+        "Only the canceled job stops; owner close also retires waiting jobs");
+    for (const auto &entry : std::filesystem::directory_iterator(root))
+      expect_true(entry.path().filename() == "second.txt", "Cleanup must leave no temporary download");
+    std::filesystem::remove_all(root);
+  }
+}
+
+static cardio::promise<void> test_job_discovery_cancel_and_transport_failure() {
+  using namespace elder_terms;
+  const auto root = test_root_directory() / "job-discovery";
+  const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+  std::filesystem::create_directories(root);
+  auto client = std::make_shared<FakeSftpClient>();
+  client->add_directory("/directory");
+  cardio::primitives::manually_conditional entered{false}, listing{false};
+  client->before_listing = [&](cardio::cancellation stop) -> cardio::promise<void> {
+    entered.raise();
+    co_await listing.wait(stop);
+  };
+  auto queue = create_file_transfer_queue("discovery", {});
+  attach_file_transfer_queue(queue, client, "SFTP");
+  FileTransferRequest request;
+  request.direction = FileTransferDirection::receive;
+  request.source_paths = {"/directory"};
+  request.destination_directory = root.string();
+  const auto job = enqueue_file_transfer_job(queue, request);
+  auto running = run_file_transfer_queue_async(queue, {}, {});
+  co_await entered.wait();
+  expect_true(file_transfer_job_snapshot(job).state == FileTransferJobState::discovering &&
+      !file_transfer_job_snapshot(job).progress.discovery_complete, "Recursive discovery must remain indeterminate and cancellable");
+  cancel_file_transfer_job(job);
+  co_await running;
+  expect_true(file_transfer_job_snapshot(job).state == FileTransferJobState::cancelled &&
+      !file_transfer_job_snapshot(job).result->unprocessed_items, "Canceled discovery must not invent an undiscovered item count");
+  client->before_stat = [&] {
+    disconnect_file_transfer_queue(queue, false);
+    throw RemoteFileError("transport closed during discovery", true);
+  };
+  const auto failed = enqueue_file_transfer_job(queue, request);
+  co_await run_file_transfer_queue_async(queue, {}, {});
+  const auto &result = file_transfer_job_snapshot(failed);
+  expect_true(result.state == FileTransferJobState::failed && !result.result->failures.empty() &&
+      result.result->failures.front().message == "transport closed during discovery",
+      "Connection loss must preserve the transport failure even when its observer also cancels the owner");
+  attach_file_transfer_queue(queue, client, "SFTP");
+  client->before_stat = {};
+  client->add_directory("/destination");
+  write_file(root / "upload.txt", "upload");
+  client->before_write = [&] {
+    disconnect_file_transfer_queue(queue, false);
+    throw RemoteFileError("transport closed during upload", true);
+  };
+  client->before_remove = [] { throw RemoteFileError("cleanup connection unavailable", true); };
+  request.direction = FileTransferDirection::send;
+  request.source_paths = {(root / "upload.txt").string()};
+  request.destination_directory = "/destination";
+  const auto cleanup_failed = enqueue_file_transfer_job(queue, request);
+  co_await run_file_transfer_queue_async(queue, {}, {});
+  const auto &cleanup_result = *file_transfer_job_snapshot(cleanup_failed).result;
+  expect_true(cleanup_result.outcome == FileTransferOutcome::failed && cleanup_result.temporary_paths.size() == 1 &&
+      cleanup_result.failures.front().message.find("transport closed during upload") != std::string::npos &&
+      cleanup_result.failures.front().message.find("cleanup connection unavailable") != std::string::npos,
+      "Cleanup failure must preserve the original transport error and the remaining path after disconnect cancellation");
+}
+
+static cardio::promise<void> test_job_partial_failure_and_commit_boundary() {
+  using namespace elder_terms;
+  const auto root = test_root_directory() / "partial-job";
+  const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+  std::filesystem::create_directories(root);
+  auto client = std::make_shared<FakeSftpClient>();
+  client->add_file("/first.txt", "first");
+  client->add_file("/second.txt", "second");
+  client->add_file("/third.txt", "third");
+  unsigned closed = 0;
+  client->before_read_close = [&]() -> cardio::promise<void> {
+    if (++closed >= 2) throw std::runtime_error("second source failed on close");
+    co_return;
+  };
+  FileTransferRequest request;
+  request.direction = FileTransferDirection::receive;
+  request.source_paths = {"/first.txt", "/second.txt", "/third.txt"};
+  request.destination_directory = root.string();
+  auto job = create_file_transfer_job("partial", 1, "SFTP", request, {});
+  co_await run_file_transfer_job_async(job, client, {}, {});
+  const auto &result = *file_transfer_job_snapshot(job).result;
+  expect_true(result.outcome == FileTransferOutcome::failed && result.succeeded_items == 1 &&
+      result.failed_items == 1 && result.skipped_items == 0 && result.unprocessed_items == 1 &&
+      result.failures.front().source_path == "/second.txt" && read_file(root / "first.txt") == "first" &&
+      !std::filesystem::exists(root / "second.txt") && !std::filesystem::exists(root / "third.txt"),
+      "Partial failure must retain committed results and distinguish the failed item from unprocessed items");
+  client->before_read_close = {};
+  request.source_paths = {"/third.txt"};
+  auto late = create_file_transfer_job("partial", 1, "SFTP", request, {});
+  FileTransferCallbacks callbacks;
+  callbacks.progress = [&](const FileTransferProgress &progress) {
+    if (progress.completed_items == 1) cancel_file_transfer_job(late);
+  };
+  co_await run_file_transfer_job_async(late, client, callbacks, {});
+  expect_true(file_transfer_job_snapshot(late).state == FileTransferJobState::completed &&
+      file_transfer_job_snapshot(late).result->succeeded_items == 1 && read_file(root / "third.txt") == "third",
+      "Cancellation after the last commit must not relabel a completed copy as canceled");
+}
+
 static cardio::promise<void> test_rejects_parallel_bulk_transfer() {
   auto client = std::make_shared<FakeSftpClient>();
   client->add_directory("/");
@@ -1001,7 +1156,10 @@ int main() {
       std::string failures;
       for (const auto &[name, run] : std::vector<std::pair<const char *, cardio::promise<void>(*)()>>{
           {"test_job_results_and_lifecycle", test_job_results_and_lifecycle},
+          {"test_job_partial_failure_and_commit_boundary", test_job_partial_failure_and_commit_boundary},
           {"test_job_queue_and_disconnect", test_job_queue_and_disconnect},
+          {"test_job_cancellation_waits_for_cleanup", test_job_cancellation_waits_for_cleanup},
+          {"test_job_discovery_cancel_and_transport_failure", test_job_discovery_cancel_and_transport_failure},
           {"test_receive_preserves_unknown_aggregate_size", test_receive_preserves_unknown_aggregate_size},
           {"test_receive_reports_unrepresentable_total_as_unknown", test_receive_reports_unrepresentable_total_as_unknown},
           {"test_receive_does_not_replace_a_directory_with_a_file", test_receive_does_not_replace_a_directory_with_a_file},
