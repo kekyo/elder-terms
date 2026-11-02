@@ -15,6 +15,25 @@ struct FileTransferJob {
   cardio::cancellation_source cancellation;
 };
 
+std::string file_transfer_job_path_label(const FileTransferJobSnapshot &job, const std::string &path) {
+  const auto found = job.path_labels.find(path);
+  return found == job.path_labels.end() ? path : found->second;
+}
+
+static void remember_remote_path(const std::shared_ptr<FileTransferJob> &job,
+    const std::shared_ptr<RemoteFileClient> &client, const std::string &path) {
+  if (path.empty() || job->snapshot.path_labels.contains(path)) return;
+  try { job->snapshot.path_labels.emplace(path, client->display_path(path)); }
+  catch (const std::exception &) { job->snapshot.path_labels.emplace(path, "[unavailable remote path]"); }
+}
+
+static void remember_request_paths(const std::shared_ptr<FileTransferJob> &job,
+    const std::shared_ptr<RemoteFileClient> &client) {
+  if (job->snapshot.direction == FileTransferDirection::receive) {
+    for (const auto &source : job->snapshot.source_paths) remember_remote_path(job, client, source);
+  } else remember_remote_path(job, client, job->snapshot.destination_directory);
+}
+
 static void publish_job(const std::shared_ptr<FileTransferJob> &job) {
   if (job->changed) job->changed(job->snapshot);
 }
@@ -73,6 +92,7 @@ cardio::promise<void> run_file_transfer_job_async(std::shared_ptr<FileTransferJo
     cardio::cancellation cancellation) {
   if (job->snapshot.state != FileTransferJobState::queued) co_return;
   if (cancellation.is_cancellation_requested()) { cancel_file_transfer_job(job); co_return; }
+  remember_request_paths(job, client);
   job->snapshot.started_at = std::chrono::system_clock::now();
   job->snapshot.state = FileTransferJobState::discovering;
   auto stopping = cancellation.on_cancellation_requested([weak = std::weak_ptr(job)] {
@@ -96,10 +116,12 @@ cardio::promise<void> run_file_transfer_job_async(std::shared_ptr<FileTransferJo
     publish_job(job);
     co_return decision;
   };
-  request.callbacks.failure = [job, handler = callbacks.failure](const FileTransferFailure &failure,
+  request.callbacks.failure = [job, client, handler = callbacks.failure](const FileTransferFailure &failure,
       cardio::cancellation stop) -> cardio::promise<FileTransferFailureAction> {
     stop.throw_if_cancellation_requested();
     const auto previous = job->snapshot.state;
+    remember_remote_path(job, client, failure.direction == FileTransferDirection::receive
+        ? failure.source_path : failure.destination_path);
     job->snapshot.state = FileTransferJobState::awaiting_decision;
     publish_job(job);
     const auto decision = handler ? co_await handler(failure, stop) : FileTransferFailureAction::abort;
@@ -119,12 +141,17 @@ cardio::promise<void> run_file_transfer_job_async(std::shared_ptr<FileTransferJo
   std::optional<FileTransferResult> result;
   request.callbacks.finished = [&result](const FileTransferResult &value) { result = value; };
   try {
-    co_await run_file_transfer_async(std::move(client), std::move(request), job->cancellation.get_cancellation());
+    co_await run_file_transfer_async(client, std::move(request), job->cancellation.get_cancellation());
   } catch (...) {
     // The engine reports the result only after its handles and temporary files
     // have been retired. Preserve that result instead of parsing error text.
     if (!result) throw;
   }
+  for (const auto &failure : result->failures)
+    remember_remote_path(job, client, failure.direction == FileTransferDirection::receive
+        ? failure.source_path : failure.destination_path);
+  if (job->snapshot.direction == FileTransferDirection::send)
+    for (const auto &path : result->temporary_paths) remember_remote_path(job, client, path);
   finish_job(job, std::move(*result));
   if (callbacks.finished) callbacks.finished(*job->snapshot.result);
 }
@@ -166,6 +193,7 @@ std::shared_ptr<FileTransferJob> enqueue_file_transfer_job(const std::shared_ptr
     const FileTransferRequest &request) {
   if (!queue->available) throw std::logic_error("Reconnect before submitting a transfer");
   auto job = create_file_transfer_job(queue->connection_id, queue->generation, queue->protocol, request, queue->changed);
+  remember_request_paths(job, queue->client);
   queue->jobs.push_back(job);
   publish_job(job);
   return job;

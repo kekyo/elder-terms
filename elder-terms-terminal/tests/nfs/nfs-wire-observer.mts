@@ -29,6 +29,8 @@ export interface NfsWireObserver {
   calls: NfsObservedCall[];
   /** Malformed records encountered by the observer. */
   errors: string[];
+  /** Rejects only MOUNT EXPORT while allowing known-export MNT calls through. */
+  rejectExports: (enabled: boolean) => void;
   /** Closes listeners and sockets, including interrupted clients. */
   close: () => Promise<void>;
 }
@@ -44,6 +46,7 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
   const errors: string[] = [];
   const sockets = new Set<Socket>();
   const servers: Server[] = [];
+  let rejectExports = false;
   const close = async (): Promise<void> => {
     for (const socket of sockets) socket.destroy();
     for (const server of servers)
@@ -103,6 +106,18 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
                 minor = record.readUInt32BE(offset);
               }
               calls.push({ program, version, procedure, minor });
+              if (rejectExports && program === 100005 && procedure === 5) {
+                const reply = Buffer.alloc(28);
+                reply.writeUInt32BE(0x80000018, 0);
+                reply.writeUInt32BE(record.readUInt32BE(0), 4);
+                reply.writeUInt32BE(1, 8);
+                reply.writeUInt32BE(5, 24); // RPC accepted, SYSTEM_ERR.
+                client.write(reply);
+              } else {
+                const header = Buffer.alloc(4);
+                header.writeUInt32BE((record.length | 0x80000000) >>> 0);
+                upstream.write(Buffer.concat([header, record]));
+              }
             }
           } catch (error) {
             errors.push(String(error));
@@ -110,14 +125,20 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
             upstream.destroy();
           }
         });
-        client.pipe(upstream);
         upstream.pipe(client);
       });
       servers.push(server);
       server.listen(port, '127.0.0.1');
       await once(server, 'listening');
     }
-    return { calls, errors, close };
+    return {
+      calls,
+      errors,
+      close,
+      rejectExports: (enabled) => {
+        rejectExports = enabled;
+      },
+    };
   } catch (error) {
     await close();
     throw error;

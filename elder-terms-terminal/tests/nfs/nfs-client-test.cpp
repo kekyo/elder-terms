@@ -8,6 +8,7 @@
 #include "../../src/file-transfer/file-transfer-engine.h"
 #include "../../src/file-transfer/activity-file-client.h"
 #include <filesystem>
+#include <array>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -20,6 +21,16 @@ static void require(bool condition, const char *message) {
 }
 
 static cardio::promise<void> test_client(const std::string &encoding) {
+  if (encoding == "UTF-8") {
+    NfsClientOpenOptions unresolved;
+    unresolved.address = "elder-nfs-unresolvable.invalid";
+    unresolved.known_exports = {"/srv/public"};
+    unresolved.discover_exports = false;
+    bool failed = false;
+    try { (void)co_await open_nfs_server_async(unresolved, {}); }
+    catch (const std::exception &) { failed = true; }
+    require(failed, "An unresolvable hostname must fail before publishing an available server");
+  }
   NfsClientOpenOptions options;
   options.address = "127.0.0.1";
   options.filename_encoding = encoding;
@@ -36,6 +47,11 @@ static cardio::promise<void> test_client(const std::string &encoding) {
   }
   require(!root.empty() && !other.empty() && !nested.empty() && root != other && root != nested,
       "Same-basename and nested exports must have distinct operation identities");
+  require(observed->parent_path(root) == "/" && observed->parent_path("/") == "/" &&
+      observed->display_path(root) == "/srv/public:/" && !observed->path_input_editable(),
+      "Browser navigation must use identities while displaying the export path");
+  require(nfs_export_identity(client, "/srv/public") == root,
+      "An explicitly configured export must resolve to this connection's identity");
   const auto listing = co_await observed->load_directory_async(root, {});
   require(listing.entries.size() >= 8, "A real export must be browsable");
   require(!client->path_capabilities("/").create_children, "The server root is not a writable directory");
@@ -61,6 +77,9 @@ static cardio::promise<void> test_client(const std::string &encoding) {
       "Recursive upload must complete including an empty file");
   const auto remote_folder = observed->child_path(root, folder);
   const auto remote_file = observed->child_path(observed->child_path(remote_folder, "深い"), name);
+  require(observed->parent_path(remote_folder) == root &&
+      observed->display_path(remote_file) == "/srv/public:/" + folder + "/深い/" + name,
+      "Display paths must decode every component without becoming operation identities");
   require((co_await observed->lstat_async(remote_file, {}))->size == content.size(),
       "New encoded child paths must identify the uploaded bytes");
   const auto link_bytes = co_await observed->read_link_async(observed->child_path(remote_folder, "link"), {});
@@ -116,14 +135,55 @@ static cardio::promise<void> test_client(const std::string &encoding) {
   std::vector<std::string> removals{remote_folder};
   co_await delete_file_transfer_items_async(observed, FileTransferEndpoint::remote, std::move(removals), {});
   require(!(co_await observed->lstat_async(remote_folder, {})), "Recursive deletion must use the original child identities");
+  options.address = "localhost";
+  options.known_exports = {"/srv/public"};
+  options.discover_exports = false;
   auto second = co_await open_nfs_server_async(options, {});
   rejected = false;
   try { (void)co_await second->load_directory_async(root, {}); }
   catch (const std::exception &) { rejected = true; }
   require(rejected, "Identifiers from an earlier connection must not address a new session");
+  require(!(co_await second->load_directory_async(nfs_export_identity(second, "/srv/public"), {})).entries.empty(),
+      "Known exports must work through asynchronous hostname resolution without enumeration");
   co_await stop_nfs_client_async(second);
   co_await stop_nfs_client_async(client);
   std::cout << "PASS NFS client 3 " << encoding << '\n';
+}
+
+static cardio::promise<void> test_known_exports() {
+  NfsClientOpenOptions options;
+  options.address = "127.0.0.1";
+  options.uid = options.gid = 0;
+  options.known_exports = {"/srv/public", "/srv/other/public", "/srv/restricted", "/srv/readonly"};
+  auto client = co_await open_nfs_server_async(options, {});
+  const auto root = co_await client->load_directory_async("/", {});
+  require(!root.notice.empty() && root.entries.size() == 4,
+      "Failed export enumeration must show configured roots with a visible explanation");
+  const auto restricted = nfs_export_identity(client, "/srv/restricted");
+  bool denied = false;
+  try { (void)co_await client->load_directory_async(restricted, {}); }
+  catch (const RemoteFileError &error) { denied = !error.connection_lost; }
+  require(denied, "AUTH_SYS root squashing must remain an export-specific permission failure");
+  const auto public_path = nfs_export_identity(client, "/srv/public");
+  require(!(co_await client->load_directory_async(public_path, {})).entries.empty(),
+      "An inaccessible export must not prevent browsing another known export");
+  const auto readonly = client->child_path(nfs_export_identity(client, "/srv/readonly"), "must-not-create");
+  denied = false;
+  try { auto writer = std::move(co_await client->open_write_async(readonly, 0, std::nullopt, {})); co_await writer->close_async({}); }
+  catch (const RemoteFileError &error) { denied = !error.connection_lost; }
+  require(denied && !(co_await client->lstat_async(readonly, {})), "Read-only export errors must not create a file or drop the server");
+  auto reader = std::move(co_await client->open_read_async(client->child_path(public_path, "plain.txt"), {}));
+  const auto temporary = client->child_path(public_path, "abandoned-upload");
+  auto writer = std::move(co_await client->open_write_async(temporary, 100, std::nullopt, {}));
+  const std::array<std::byte, 3> bytes{std::byte{1}, std::byte{0}, std::byte{255}};
+  co_await writer->write_all_async(bytes, {});
+  writer.reset();
+  co_await reader->close_async({});
+  co_await stop_nfs_client_async(client);
+  client = co_await open_nfs_server_async(options, {});
+  co_await client->remove_file_async(client->child_path(nfs_export_identity(client, "/srv/public"), "abandoned-upload"), {});
+  co_await stop_nfs_client_async(client);
+  std::cout << "PASS NFS configured exports, access errors, and abandoned handles\n";
 }
 
 int main(int argc, char **argv) {
@@ -132,7 +192,10 @@ int main(int argc, char **argv) {
   cardio::dispatcher_host_glib dispatcher(group);
   std::exception_ptr failure;
   auto body = [&]() -> cardio::promise<void> {
-    try { co_await test_client(argv[1]); }
+    try {
+      if (std::string_view(argv[1]) == "--known-exports") co_await test_known_exports();
+      else co_await test_client(argv[1]);
+    }
     catch (...) { failure = std::current_exception(); }
     group.shutdown();
   };

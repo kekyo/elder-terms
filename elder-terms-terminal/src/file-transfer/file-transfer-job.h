@@ -7,6 +7,7 @@
 
 #include "file-transfer-engine.h"
 #include <chrono>
+#include <map>
 
 namespace elder_terms {
 
@@ -50,7 +51,12 @@ struct FileTransferJobSnapshot {
   FileTransferProgress progress;
   /** Final result, absent while waiting or executing. */
   std::optional<FileTransferResult> result;
+  /** Display paths captured using this connection's encoding; operation identities remain unchanged. */
+  std::map<std::string, std::string> path_labels;
 };
+
+/** @param job Captured job view. @param path Original path. @returns Presentation retained across reconnection. */
+std::string file_transfer_job_path_label(const FileTransferJobSnapshot &job, const std::string &path);
 
 /** Opaque dispatcher-owned job and its cancellation state. */
 struct FileTransferJob;

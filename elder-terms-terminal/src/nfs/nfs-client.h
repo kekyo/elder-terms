@@ -9,6 +9,15 @@
 
 namespace elder_terms {
 
+/**
+ * Resolves an explicitly configured export into the current connection's identity.
+ * @param client Open NFS server client.
+ * @param export_path UTF-8 configured path; empty selects the virtual server root.
+ * @returns Identity for browsing, independent of its display text.
+ * @throws RemoteFileError When the export has not been registered or the client stopped.
+ */
+std::string nfs_export_identity(const std::shared_ptr<RemoteFileClient> &client, const std::string &export_path);
+
 /** Immutable endpoint and filename policy for one NFS server browser. */
 struct NfsClientOpenOptions {
   /** Server hostname or numeric address, without a URL scheme. */

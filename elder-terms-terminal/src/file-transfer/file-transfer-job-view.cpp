@@ -96,8 +96,9 @@ static std::string job_time_text(std::chrono::system_clock::time_point time) {
 }
 
 static std::string job_details_text(const FileTransferJobSnapshot &job) {
-  auto text = format_job_text(_("Protocol: %s\nDestination: %s"), job.protocol.c_str(), job.destination_directory.c_str());
-  for (const auto &source : job.source_paths) text += "\n" + source;
+  auto text = format_job_text(_("Protocol: %s\nDestination: %s"), job.protocol.c_str(),
+      file_transfer_job_path_label(job, job.destination_directory).c_str());
+  for (const auto &source : job.source_paths) text += "\n" + file_transfer_job_path_label(job, source);
   if (job.started_at) text += "\n" + format_job_text(_("Started: %s"), job_time_text(*job.started_at).c_str());
   if (job.finished_at) text += "\n" + format_job_text(_("Finished: %s"), job_time_text(*job.finished_at).c_str());
   if (job.result) {
@@ -107,9 +108,9 @@ static std::string job_details_text(const FileTransferJobSnapshot &job) {
         static_cast<unsigned long long>(result.succeeded_items), static_cast<unsigned long long>(result.skipped_items),
         static_cast<unsigned long long>(result.failed_items), remaining.c_str());
     for (const auto &failure : result.failures)
-      text += "\n" + failure.source_path + "\n" + failure.message;
+      text += "\n" + file_transfer_job_path_label(job, failure.source_path) + "\n" + failure.message;
     for (const auto &path : result.temporary_paths)
-      text += "\n" + format_job_text(_("Temporary file remaining: %s"), path.c_str());
+      text += "\n" + format_job_text(_("Temporary file remaining: %s"), file_transfer_job_path_label(job, path).c_str());
   }
   return text;
 }
@@ -123,7 +124,8 @@ static std::unique_ptr<JobRow> create_job_row(FileTransferJobView *view, const s
   row->root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
   auto *header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_box_pack_start(GTK_BOX(row->root), header, FALSE, TRUE, 0);
-  auto name = snapshot.source_paths.empty() ? std::string() : std::filesystem::path(snapshot.source_paths.front()).filename().string();
+  auto name = snapshot.source_paths.empty() ? std::string() :
+      std::filesystem::path(file_transfer_job_path_label(snapshot, snapshot.source_paths.front())).filename().string();
   if (!snapshot.source_paths.empty() &&
       (snapshot.source_paths.front().starts_with("http://") || snapshot.source_paths.front().starts_with("https://")))
     name = http_resource_name(snapshot.source_paths.front());

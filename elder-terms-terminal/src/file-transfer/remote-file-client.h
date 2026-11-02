@@ -111,6 +111,8 @@ struct RemoteDirectorySnapshot {
   std::vector<RemoteFileAttributes> entries;
   /** Actual resource type after an attempted expansion. */
   RemoteFileType resource_type = RemoteFileType::directory;
+  /** Nonfatal discovery information, such as using configured exports after enumeration failed. */
+  std::string notice{};
 };
 
 /** Asynchronous reader for one remote regular file. */
@@ -226,6 +228,21 @@ public:
     const bool writable = capabilities().write_operations;
     return {.create_children = writable, .modify = writable};
   }
+
+  /** @param path Existing operation identity. @returns Identity of its parent, or itself at the root. */
+  virtual std::string parent_path(const std::string &path) const {
+    auto normalized = path;
+    while (normalized.size() > 1 && normalized.back() == '/') normalized.pop_back();
+    const auto separator = normalized.find_last_of('/');
+    if (separator == std::string::npos) return ".";
+    return separator == 0 ? "/" : normalized.substr(0, separator);
+  }
+
+  /** @param path Operation identity. @returns Human-readable path, never used to reconstruct the identity. */
+  virtual std::string display_path(const std::string &path) const { return path; }
+
+  /** @returns Whether arbitrary address-entry text can be used as an operation path. */
+  virtual bool path_input_editable() const noexcept { return true; }
 
   /**
    * Builds a new child identity using this connection's filename rules.

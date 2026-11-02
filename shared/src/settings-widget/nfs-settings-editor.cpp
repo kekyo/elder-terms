@@ -28,7 +28,7 @@ struct NfsField {
 
 struct NfsSettingsEditor {
   SettingsStore *store;
-  bool read_only;
+  bool runtime;
   std::function<void()> changed;
   GtkWidget *root;
   GtkWidget *error;
@@ -62,8 +62,9 @@ static void update_validation(NfsSettingsEditor *editor) {
   auto errors = nfs_connection_settings(*editor->store).validation_errors;
   for (auto &field : editor->fields) {
     const bool inherited = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(field.inherit));
-    gtk_widget_set_sensitive(field.control, !editor->read_only && !inherited);
-    gtk_widget_set_sensitive(field.inherit, !editor->read_only);
+    const bool editable = !editor->runtime || std::string_view(field.name) == "filename_encoding";
+    gtk_widget_set_sensitive(field.control, editable && !inherited);
+    gtk_widget_set_sensitive(field.inherit, editable);
     if (GTK_IS_ENTRY(field.control))
       gtk_entry_set_icon_from_icon_name(GTK_ENTRY(field.control), GTK_ENTRY_ICON_SECONDARY,
           field.valid ? nullptr : "dialog-error-symbolic");
@@ -101,7 +102,7 @@ void sync_nfs_settings_editor(NfsSettingsEditor *editor, bool preserve_invalid) 
 static void field_changed(GObject *, gpointer data) {
   auto *field = static_cast<NfsField *>(data);
   auto *editor = field->owner;
-  if (editor->synchronizing || editor->read_only) return;
+  if (editor->synchronizing || (editor->runtime && std::string_view(field->name) != "filename_encoding")) return;
   const auto key = nfs_setting_key(field->name);
   if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(field->inherit))) {
     clear_explicit_setting_value(editor->store, key);
@@ -138,8 +139,8 @@ static void field_changed(GObject *, gpointer data) {
 }
 
 NfsSettingsEditor *create_nfs_settings_editor(SettingsStore *store, std::string prefix,
-    bool read_only, std::function<void()> changed) {
-  auto *editor = new NfsSettingsEditor{store, read_only, std::move(changed), gtk_grid_new(), gtk_label_new("")};
+    bool runtime, std::function<void()> changed) {
+  auto *editor = new NfsSettingsEditor{store, runtime, std::move(changed), gtk_grid_new(), gtk_label_new("")};
   editor->synchronizing = true;
   gtk_grid_set_row_spacing(GTK_GRID(editor->root), 8);
   gtk_grid_set_column_spacing(GTK_GRID(editor->root), 12);
@@ -186,6 +187,11 @@ NfsSettingsEditor *create_nfs_settings_editor(SettingsStore *store, std::string 
   assign_id(editor->error, prefix + "_nfs_error_label");
   gtk_label_set_line_wrap(GTK_LABEL(editor->error), TRUE);
   gtk_grid_attach(GTK_GRID(editor->root), editor->error, 0, row, 3, 1);
+  if (runtime) {
+    auto *note = gtk_label_new(_("Filename encoding changes apply after reconnecting."));
+    gtk_label_set_line_wrap(GTK_LABEL(note), TRUE);
+    gtk_grid_attach(GTK_GRID(editor->root), note, 0, row + 1, 3, 1);
+  }
   sync_nfs_settings_editor(editor, false);
   return editor;
 }

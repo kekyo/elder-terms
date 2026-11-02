@@ -100,6 +100,16 @@ int main(int argc, char **argv) {
         std::string(gtk_entry_get_text(GTK_ENTRY(encoding))) == "CP932", "Inheritance must restore the global encoding");
     expect(!gtk_widget_get_visible(find_widget(root, "settings_ssh_proxy_page")), "NFS must not advertise an unsupported SSH proxy");
     destroy_settings_widget(widget);
+    SettingsWidgetOptions runtime_options;
+    runtime_options.store = inherited;
+    runtime_options.is_runtime = true;
+    auto *runtime = create_settings_widget(std::move(runtime_options));
+    auto *runtime_root = settings_widget_root(runtime);
+    expect(gtk_widget_get_sensitive(find_widget(runtime_root, "settings_nfs_filename_encoding_entry")),
+        "Runtime encoding edits must be available for the next connection without changing the active client's encoding");
+    expect(!gtk_widget_get_sensitive(find_widget(runtime_root, "settings_nfs_address_entry")),
+        "Runtime encoding edits must not unlock the active endpoint");
+    destroy_settings_widget(runtime);
     std::cout << "PASS NFS settings and inheritance\n";
   } catch (const std::exception &error) { std::cerr << error.what() << '\n'; return 1; }
 }

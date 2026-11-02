@@ -22,6 +22,40 @@ namespace elder_terms {
 
 static std::atomic<std::uint64_t> next_generation{1};
 
+struct NfsResolveCancellation {
+  cardio::cancellation_source source;
+  ~NfsResolveCancellation() { (void)source.cancel(); }
+};
+
+static cardio::promise<std::vector<std::string>> resolve_addresses_async(
+    const std::string &host, int timeout_ms, cardio::cancellation cancellation) {
+  auto resolver = std::shared_ptr<GResolver>(g_resolver_get_default(), g_object_unref);
+  NfsResolveCancellation deadline{cardio::cancellations::timeout(timeout_ms)};
+  NfsResolveCancellation stopped{cardio::cancellations::any(cancellation, deadline.source.get_cancellation())};
+  auto lookup = cardio::gio::submit<GList *>(
+      [&](GCancellable *stop, GAsyncReadyCallback callback, gpointer data) {
+        g_resolver_lookup_by_name_async(resolver.get(), host.c_str(), stop, callback, data);
+      }, [](GObject *source, GAsyncResult *result, GError **error) {
+        return g_resolver_lookup_by_name_finish(G_RESOLVER(source), result, error);
+      }, stopped.source.get_cancellation());
+  std::vector<std::string> result;
+  try {
+    auto addresses = std::unique_ptr<GList, decltype(&g_resolver_free_addresses)>(co_await lookup, g_resolver_free_addresses);
+    for (auto *node = addresses.get(); node; node = node->next) {
+      auto *text = g_inet_address_to_string(G_INET_ADDRESS(node->data));
+      result.emplace_back(text);
+      g_free(text);
+    }
+  } catch (...) {
+    cancellation.throw_if_cancellation_requested();
+    if (deadline.source.get_cancellation().is_cancellation_requested())
+      throw RemoteFileError("NFS address lookup timed out", true);
+    throw;
+  }
+  if (result.empty()) throw RemoteFileError("NFS hostname has no usable addresses", false);
+  co_return result;
+}
+
 static void require_session(const std::shared_ptr<NfsRpcSession> &session) {
   if (!session->nfs || session->stopping.get_cancellation().is_cancellation_requested())
     throw RemoteFileError("NFS connection has ended. Reconnect to continue.", true);
@@ -150,6 +184,7 @@ struct NfsLocation {
 
 struct NfsServer final : RemoteFileClient {
   NfsClientOpenOptions options;
+  std::vector<std::string> addresses;
   std::string generation;
   std::map<std::string, NfsExport> exports;
   cardio::primitives::mutex operations;
@@ -171,7 +206,6 @@ struct NfsServer final : RemoteFileClient {
     exports.try_emplace("/" + generation + nfs_identifier_component(bytes), NfsExport{bytes, {}});
   }
   NfsLocation locate(const std::string &path) const {
-    require_open();
     const auto separator = path.find('/', 1);
     const auto root = path.substr(0, separator);
     const auto found = exports.find(root);
@@ -204,9 +238,29 @@ struct NfsServer final : RemoteFileClient {
     return {true, target.bytes != "/"};
   }
   std::string child_path(const std::string &parent, const std::string &name) const override {
+    require_open();
     (void)locate(parent);
     return parent + "/" + nfs_identifier_component(encode_nfs_name(name, options.filename_encoding, 255));
   }
+  std::string parent_path(const std::string &path) const override {
+    if (path == "/") return path;
+    (void)locate(path);
+    return RemoteFileClient::parent_path(path);
+  }
+  std::string display_path(const std::string &path) const override {
+    if (path == "/" || path.empty()) return path;
+    const auto target = locate(path);
+    auto result = display_nfs_name(exports.at(target.root).bytes, options.filename_encoding).text + ":";
+    for (std::size_t start = 0; start < target.bytes.size();) {
+      const auto next = target.bytes.find('/', start + 1);
+      result += "/" + display_nfs_name(target.bytes.substr(start + 1,
+          next == std::string::npos ? next : next - start - 1), options.filename_encoding).text;
+      if (next == std::string::npos) break;
+      start = next;
+    }
+    return result;
+  }
+  bool path_input_editable() const noexcept override { return false; }
   std::optional<std::string> local_filename(const RemoteFileAttributes &item) const override {
     if (item.path == "/") return std::nullopt;
     auto raw = locate(item.path).name;
@@ -234,21 +288,29 @@ struct NfsServer final : RemoteFileClient {
 
   cardio::promise<std::shared_ptr<NfsRpcSession>> mounted(const NfsLocation &path,
       cardio::cancellation cancellation) {
+    require_open();
     auto &entry = exports.at(path.root);
     if (!entry.session) {
-      auto session = create_nfs_rpc_session(options.version, options.connect_timeout_ms);
-      configure_nfs_ports(session, options.nfs_port, options.mount_port);
-      if (options.uid) nfs_set_uid(session->nfs, std::bit_cast<std::int32_t>(*options.uid));
-      if (options.gid) nfs_set_gid(session->nfs, std::bit_cast<std::int32_t>(*options.gid));
-      auto groups = options.supplementary_gids;
-      nfs_set_auxiliary_gids(session->nfs, groups.size(), groups.data());
-      entry.session = session;
-      try {
-        co_await perform(session, "mount", [&](auto cb, auto data) {
-          return nfs_mount_async(session->nfs, options.address.c_str(), entry.bytes.c_str(), cb, data);
-        }, cancellation);
-      } catch (...) { entry.session.reset(); throw; }
-      session->timeout_ms = options.request_timeout_ms;
+      std::exception_ptr failure;
+      for (const auto &address : addresses) {
+        auto session = create_nfs_rpc_session(options.version, options.connect_timeout_ms);
+        configure_nfs_ports(session, options.nfs_port, options.mount_port);
+        if (options.uid) nfs_set_uid(session->nfs, std::bit_cast<std::int32_t>(*options.uid));
+        if (options.gid) nfs_set_gid(session->nfs, std::bit_cast<std::int32_t>(*options.gid));
+        auto groups = options.supplementary_gids;
+        nfs_set_auxiliary_gids(session->nfs, groups.size(), groups.data());
+        entry.session = session;
+        try {
+          co_await perform(session, "mount", [&](auto cb, auto data) {
+            return nfs_mount_async(session->nfs, address.c_str(), entry.bytes.c_str(), cb, data);
+          }, cancellation);
+        } catch (const cardio::canceled_exception &) { entry.session.reset(); throw; }
+        catch (...) { entry.session.reset(); failure = std::current_exception(); continue; }
+        session->timeout_ms = options.request_timeout_ms;
+        nfs_set_timeout(session->nfs, options.request_timeout_ms);
+        break;
+      }
+      if (!entry.session) std::rethrow_exception(failure);
     }
     require_session(entry.session);
     co_return entry.session;
@@ -260,6 +322,7 @@ struct NfsServer final : RemoteFileClient {
     require_open();
     RemoteDirectorySnapshot snapshot{path, {}};
     if (path == "/") {
+      if (!discovery_error.empty()) snapshot.notice = "Export discovery failed; showing configured paths. " + discovery_error;
       for (const auto &[id, item] : exports) {
         RemoteFileAttributes entry;
         entry.path = id;
@@ -491,28 +554,36 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_nfs_server_async(
   validate_nfs_filename_encoding(options.filename_encoding);
   auto server = std::make_shared<NfsServer>();
   server->options = std::move(options);
+  // libnfs's public connect entry points resolve hostnames synchronously. Pass
+  // only numeric addresses after completing cancellable GIO resolution.
+  server->addresses = co_await resolve_addresses_async(server->options.address, server->options.connect_timeout_ms, cancellation);
   server->generation = "nfs-" + std::to_string(next_generation.fetch_add(1)) + "-";
   for (const auto &path : server->options.known_exports)
     server->add_export(encode_export(path, server->options.filename_encoding));
   if (server->options.discover_exports) {
-    try {
-      auto mount = create_nfs_raw_session(server->options.connect_timeout_ms);
-      if (server->options.uid) rpc_set_uid(mount->rpc, std::bit_cast<std::int32_t>(*server->options.uid));
-      if (server->options.gid) rpc_set_gid(mount->rpc, std::bit_cast<std::int32_t>(*server->options.gid));
-      auto groups = server->options.supplementary_gids;
-      rpc_set_auxiliary_gids(mount->rpc, groups.size(), groups.data());
-      co_await connect_nfs_raw_async(mount, server->options.address, server->options.mount_port, MOUNT_PROGRAM, MOUNT_V3, cancellation);
-      co_await execute_nfs_raw_async(mount, [&](auto cb, auto data) {
-        return ELDER_NFS_RAW_CALL(rpc_mount3_export, mount->rpc, cb, data);
-      }, [&](void *data) {
-        for (auto *entry = *static_cast<::exports *>(data); entry; entry = entry->ex_next)
-          server->add_export(entry->ex_dir);
-      }, cancellation);
-    } catch (const cardio::canceled_exception &) { throw; }
-    catch (const std::exception &error) {
-      if (server->exports.empty()) throw;
-      server->discovery_error = error.what();
+    for (const auto &address : server->addresses) {
+      try {
+        auto mount = create_nfs_raw_session(server->options.connect_timeout_ms);
+        if (server->options.uid) rpc_set_uid(mount->rpc, std::bit_cast<std::int32_t>(*server->options.uid));
+        if (server->options.gid) rpc_set_gid(mount->rpc, std::bit_cast<std::int32_t>(*server->options.gid));
+        auto groups = server->options.supplementary_gids;
+        rpc_set_auxiliary_gids(mount->rpc, groups.size(), groups.data());
+        co_await connect_nfs_raw_async(mount, address, server->options.mount_port, MOUNT_PROGRAM, MOUNT_V3, cancellation);
+        co_await execute_nfs_raw_async(mount, [&](auto cb, auto data) {
+          return ELDER_NFS_RAW_CALL(rpc_mount3_export, mount->rpc, cb, data);
+        }, [&](void *data) {
+          for (auto *entry = *static_cast<::exports *>(data); entry; entry = entry->ex_next)
+            server->add_export(entry->ex_dir);
+        }, cancellation);
+        server->discovery_error.clear();
+        break;
+      } catch (const cardio::canceled_exception &) { throw; }
+      catch (const std::exception &error) {
+        server->discovery_error = error.what();
+      }
     }
+    if (server->exports.empty() && !server->discovery_error.empty())
+      throw RemoteFileError(server->discovery_error, true);
   }
   if (server->exports.empty()) throw RemoteFileError("No NFS exports were found; configure a known export path", false);
   co_return server;
@@ -528,6 +599,16 @@ cardio::promise<void> stop_nfs_client_async(std::shared_ptr<RemoteFileClient> cl
     (void)id;
     if (item.session) { auto session_lock = std::move(co_await item.session->operations.lock()); }
   }
+}
+
+std::string nfs_export_identity(const std::shared_ptr<RemoteFileClient> &client, const std::string &export_path) {
+  const auto server = std::dynamic_pointer_cast<NfsServer>(client);
+  if (!server) throw std::invalid_argument("Expected an NFS server client");
+  server->require_open();
+  if (export_path.empty()) return "/";
+  const auto raw = encode_export(export_path, server->options.filename_encoding);
+  for (const auto &[id, item] : server->exports) if (item.bytes == raw) return id;
+  throw RemoteFileError("The configured NFS export is unavailable", false);
 }
 
 } // namespace elder_terms

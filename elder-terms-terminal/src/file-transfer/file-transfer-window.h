@@ -84,11 +84,12 @@ void show_file_transfer_window(const std::shared_ptr<FileTransferWindow> &window
  *
  * @param window File-transfer window waiting for its remote service.
  * @param client Initialized remote service used by browsing and transfers.
+ * @param initial_directory Optional connection-owned initial identity; empty preserves the configured path.
  * @remarks A remote service may be attached initially or during the reconnect callback.
  */
 void attach_file_transfer_window_client(
     const std::shared_ptr<FileTransferWindow> &window,
-    std::shared_ptr<RemoteFileClient> client);
+    std::shared_ptr<RemoteFileClient> client, std::string initial_directory = {});
 
 /**
  * Collects authentication input inside the file-transfer surface.

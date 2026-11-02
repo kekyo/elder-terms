@@ -187,6 +187,7 @@ custom_target('libsmb2-license-bundle',
 cardio_root_dir = meson.project_source_root() / 'deps/cardio'
 cardio_include_dir = include_directories('deps/cardio/include')
 cardio_gio_dep = dependency('gio-2.0')
+nfs_dep = dependency('libnfs', version: '>=5.0.2')
 cardio_liburing_dep = dependency('liburing')
 cardio_cpp_args = [
   '-DCARDIO_SHARED_LIB=1',

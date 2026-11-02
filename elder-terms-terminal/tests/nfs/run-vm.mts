@@ -18,12 +18,17 @@ const evidence = resolve(root, '.build/nfs-evidence');
 const driver =
   process.env.ELDER_NFS_PROBE ?? resolve(root, '.build/nfs/nfs-probe');
 const clientDriver = resolve(dirname(driver), 'nfs-client-test');
+const uiOnly = process.argv.includes('--ui-window-only');
 const run = async (
   command: string,
   args: string[],
-  timeout = 60000
+  timeout = 60000,
+  env: NodeJS.ProcessEnv = process.env
 ): Promise<string> => {
-  const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(command, args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env,
+  });
   let output = '';
   child.stdout.on('data', (bytes) => {
     output += bytes;
@@ -55,6 +60,7 @@ if (!process.argv.includes('--isolated')) {
         process.execPath,
         fileURLToPath(import.meta.url),
         '--isolated',
+        ...(uiOnly ? ['--ui-window-only'] : []),
       ],
       240000
     )
@@ -126,7 +132,7 @@ if (!process.argv.includes('--isolated')) {
     ]);
   try {
     await ready;
-    for (const version of [2, 3, 4]) {
+    for (const version of uiOnly ? [3] : [2, 3, 4]) {
       const options =
         version === 2
           ? '-V 2 -N 3 -N 4'
@@ -158,6 +164,36 @@ if (!process.argv.includes('--isolated')) {
         );
       }
       await writeFile(resolve(evidence, `server-v${version}.txt`), state);
+      if (uiOnly) {
+        const output = await run(
+          process.execPath,
+          [
+            resolve(root, 'node_modules/vitest/vitest.mjs'),
+            'run',
+            '--root',
+            resolve(root, 'elder-terms-terminal'),
+            'tests/nfs-window.test.ts',
+          ],
+          180000,
+          { ...process.env, ELDER_NFS_VM_ACTIVE: '1' }
+        );
+        process.stdout.write(output);
+        assert.deepEqual(
+          [
+            ...new Set(
+              observer.calls
+                .filter((call) => call.program === 100003)
+                .map((call) => call.version)
+            ),
+          ],
+          [3]
+        );
+        await writeFile(
+          resolve(evidence, 'window-v3-rpc.json'),
+          JSON.stringify(observer.calls, null, 2)
+        );
+        continue;
+      }
       for (const encoding of ['UTF-8', 'CP932', 'SHIFT-JIS', 'EUC-JP']) {
         for (const fixed of version === 4 ? [false] : [false, true]) {
           observer.calls.length = 0;
@@ -208,6 +244,20 @@ if (!process.argv.includes('--isolated')) {
         }
       }
       if (version === 3) {
+        observer.rejectExports(true);
+        try {
+          const output = await run(clientDriver, ['--known-exports']);
+          await writeFile(
+            resolve(evidence, 'client-v3-known-exports.log'),
+            output
+          );
+          assert.match(output, /PASS NFS configured exports/);
+          console.log(
+            'PASS configured exports after discovery rejection, permissions, and handle cleanup'
+          );
+        } finally {
+          observer.rejectExports(false);
+        }
         for (const encoding of ['UTF-8', 'CP932', 'SHIFT-JIS', 'EUC-JP']) {
           observer.calls.length = 0;
           const output = await run(clientDriver, [encoding]);

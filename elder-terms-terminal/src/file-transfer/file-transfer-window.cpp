@@ -569,29 +569,6 @@ static std::string canonical_local_directory(
   return canonical.get();
 }
 
-static std::string remote_parent_directory(
-    const std::string &path) {
-  if (path.starts_with("http://") || path.starts_with("https://")) {
-    const auto url_path = path.substr(0, path.find('?'));
-    return http_resolve_url(path, url_path.ends_with('/') ? "../" : "./");
-  }
-  std::string normalized = path;
-  while (normalized.size() > 1 && normalized.back() == '/') {
-    normalized.pop_back();
-  }
-  if (normalized == "/") {
-    return normalized;
-  }
-  const std::size_t separator = normalized.find_last_of('/');
-  if (separator == std::string::npos) {
-    return ".";
-  }
-  if (separator == 0) {
-    return "/";
-  }
-  return normalized.substr(0, separator);
-}
-
 static std::string local_parent_directory(
     const std::string &path) {
   const std::filesystem::path parent =
@@ -851,7 +828,8 @@ prompt_file_transfer_conflict_async(
           window, _("Destination already exists"),
           format_translated_string(
               _("%s\nThe selected decision applies to all remaining conflicts."),
-              conflict.destination_path.c_str()),
+              (conflict.direction == FileTransferDirection::send
+                  ? window->client->display_path(conflict.destination_path) : conflict.destination_path).c_str()),
           _("Cancel"), _("Skip"), _("Overwrite"), cancellation);
   if (response.accepted) {
     co_return FileTransferConflictAction::overwrite;
@@ -871,8 +849,10 @@ prompt_file_transfer_failure_async(
           window, _("File transfer failed"),
           format_translated_string(_("%s\n\n%s\n→ %s"),
                                    failure.message.c_str(),
-                                   failure.source_path.c_str(),
-                                   failure.destination_path.c_str()),
+                                   (failure.direction == FileTransferDirection::receive
+                                       ? window->client->display_path(failure.source_path) : failure.source_path).c_str(),
+                                   (failure.direction == FileTransferDirection::send
+                                       ? window->client->display_path(failure.destination_path) : failure.destination_path).c_str()),
           _("Abort"), _("Skip"), _("Retry"), cancellation);
   if (response.accepted) {
     co_return FileTransferFailureAction::retry;
@@ -949,7 +929,8 @@ static cardio::promise<void> load_file_transfer_pane_root_async(
     }
     if (snapshot.resource_type != RemoteFileType::directory) {
       set_file_transfer_status(window, _("This response is a file; use Receive as file"));
-      gtk_entry_set_text(GTK_ENTRY(pane->path_entry), pane->current_directory.c_str());
+      const auto display = pane->remote ? window->client->display_path(pane->current_directory) : pane->current_directory;
+      gtk_entry_set_text(GTK_ENTRY(pane->path_entry), display.c_str());
       set_file_transfer_pane_busy(pane, false);
       co_return;
     }
@@ -957,8 +938,10 @@ static cardio::promise<void> load_file_transfer_pane_root_async(
     append_browser_entries(
         pane->store, nullptr, std::move(snapshot.entries));
     pane->current_directory = std::move(snapshot.canonical_path);
+    const auto display = pane->remote ? window->client->display_path(pane->current_directory) : pane->current_directory;
     gtk_entry_set_text(GTK_ENTRY(pane->path_entry),
-                       pane->current_directory.c_str());
+                       display.c_str());
+    if (!snapshot.notice.empty()) set_file_transfer_status(window, snapshot.notice);
   } catch (const cardio::canceled_exception &) {
   } catch (...) {
     if (!window->destroyed) {
@@ -966,8 +949,9 @@ static cardio::promise<void> load_file_transfer_pane_root_async(
                                   ? _("Failed to load remote directory")
                                   : _("Failed to load local directory"));
       show_file_transfer_error(window, exception_text(std::current_exception()), std::current_exception());
-      gtk_entry_set_text(GTK_ENTRY(pane->path_entry),
-                         pane->current_directory.c_str());
+      const auto display = pane->remote && window->client
+          ? window->client->display_path(pane->current_directory) : pane->current_directory;
+      gtk_entry_set_text(GTK_ENTRY(pane->path_entry), display.c_str());
     }
   }
   set_file_transfer_pane_busy(pane, false);
@@ -1111,6 +1095,7 @@ static void on_file_transfer_row_expanded(
 
 static void on_file_transfer_path_activate(GtkEntry *entry, gpointer data) {
   auto *pane = static_cast<FileTransferPaneState *>(data);
+  if (pane->remote && (!pane->window->client || !pane->window->client->path_input_editable())) return;
   const char *text = gtk_entry_get_text(entry);
   start_file_transfer_pane_navigation(
       pane, text == nullptr ? std::string() : std::string(text));
@@ -1120,7 +1105,7 @@ static void on_file_transfer_up_clicked(GtkButton *, gpointer data) {
   auto *pane = static_cast<FileTransferPaneState *>(data);
   const std::string parent =
       pane->remote
-          ? remote_parent_directory(pane->current_directory)
+          ? pane->window->client->parent_path(pane->current_directory)
           : local_parent_directory(pane->current_directory);
   start_file_transfer_pane_navigation(pane, parent);
 }
@@ -1380,15 +1365,8 @@ static std::string file_transfer_renamed_item_path(
     return (std::filesystem::path(item.path).parent_path() / new_name)
         .string();
   }
-  const std::string parent = remote_parent_directory(item.path);
-  if (parent.empty()) {
-    return new_name;
-  }
-  if (parent == "/") {
-    return "/" + new_name;
-  }
-  return parent == "." ? "./" + new_name
-                       : parent + "/" + new_name;
+  const auto &client = pane->window->client;
+  return client->child_path(client->parent_path(item.path), new_name);
 }
 
 static cardio::promise<std::optional<std::string>>
@@ -1448,9 +1426,7 @@ show_file_transfer_browser_action_error_async(
 static std::string file_transfer_new_directory_path(
     const FileTransferPaneState *pane, const std::string &name) {
   if (!pane->remote) return (std::filesystem::path(pane->current_directory) / name).string();
-  const auto &directory = pane->current_directory;
-  if (directory.empty()) return name;
-  return directory.ends_with('/') ? directory + name : directory + '/' + name;
+  return pane->window->client->child_path(pane->current_directory, name);
 }
 
 static cardio::promise<void> run_file_transfer_new_directory_async(FileTransferPaneState *pane) {
@@ -3205,7 +3181,7 @@ void show_file_transfer_window(const std::shared_ptr<FileTransferWindow> &window
 
 void attach_file_transfer_window_client(
     const std::shared_ptr<FileTransferWindow> &window,
-    std::shared_ptr<RemoteFileClient> client) {
+    std::shared_ptr<RemoteFileClient> client, std::string initial_directory) {
   if (window == nullptr || window->destroyed) {
     return;
   }
@@ -3215,6 +3191,10 @@ void attach_file_transfer_window_client(
   if (window->client != nullptr) {
     throw std::logic_error("Remote file client is already attached");
   }
+  if (!initial_directory.empty()) window->remote.current_directory = std::move(initial_directory);
+  gtk_editable_set_editable(GTK_EDITABLE(window->remote.path_entry), client->path_input_editable());
+  gtk_widget_set_tooltip_text(window->remote.path_entry, client->path_input_editable() ? nullptr :
+      _("Use the folder list and Up button to navigate this server."));
   window->client = create_activity_file_client(std::move(client),
       [weak = std::weak_ptr<FileTransferWindow>(window)](ActivityIndicatorId id) {
         const auto owner = weak.lock();
