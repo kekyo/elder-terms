@@ -108,6 +108,7 @@ elder_terms_sources = [
   'src/file-transfer/file-transfer-engine.cpp',
   'src/file-transfer/file-transfer-paths.cpp',
   'src/file-transfer/file-transfer-window.cpp',
+    'src/file-transfer/file-transfer-job.cpp',
   'src/file-transfer/activity-file-client.cpp',
   'src/file-transfer/local-file-reveal.cpp',
   'src/terminal-connection-phase.cpp',
@@ -287,6 +288,7 @@ executable(
     'src/file-transfer/file-transfer-certificate-prompt.cpp',
     'src/file-transfer/file-transfer-paths.cpp',
     'src/file-transfer/file-transfer-window.cpp',
+    'src/file-transfer/file-transfer-job.cpp',
     'src/file-transfer/activity-file-client.cpp',
     'src/activity-indicator.cpp',
     'src/indicator-color.cpp',
@@ -685,6 +687,7 @@ file_transfer_window_lifetime_test = executable(
     'src/file-transfer/file-transfer-engine.cpp',
     'src/file-transfer/file-transfer-paths.cpp',
     'src/file-transfer/file-transfer-window.cpp',
+    'src/file-transfer/file-transfer-job.cpp',
     'src/file-transfer/activity-file-client.cpp',
     'src/activity-indicator.cpp',
     'src/indicator-color.cpp',
@@ -871,6 +874,7 @@ sftp_transfer_engine_test = executable(
   'sftp-transfer-engine-test',
   [
     'tests/cpp/sftp-transfer-engine-test.cpp',
+    'src/file-transfer/file-transfer-job.cpp',
     'src/file-transfer/file-transfer-engine.cpp',
   ],
   dependencies: [

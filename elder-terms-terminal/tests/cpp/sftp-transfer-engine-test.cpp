@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "../../src/file-transfer/file-transfer-engine.h"
+#include "../../src/file-transfer/file-transfer-job.h"
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -835,6 +836,62 @@ static cardio::promise<void> test_receive_does_not_replace_a_directory_with_a_fi
               "A regular-file commit must preserve a conflicting directory and its completed children");
 }
 
+static cardio::promise<void> test_job_results_and_lifecycle() {
+  using namespace elder_terms;
+  const auto root = test_root_directory() / "jobs";
+  const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+  std::filesystem::create_directories(root);
+  write_file(root / "existing.txt", "local");
+  auto client = std::make_shared<FakeSftpClient>();
+  client->add_directory("/");
+  client->add_file("/existing.txt", "remote");
+  client->add_file("/zero.txt", "");
+  FileTransferRequest request;
+  request.direction = FileTransferDirection::receive;
+  request.source_paths = {"/existing.txt"};
+  request.destination_directory = root.string();
+  std::vector<FileTransferJobState> states;
+  auto job = create_file_transfer_job("test-connection", 1, "SFTP", request,
+      [&](const FileTransferJobSnapshot &snapshot) { states.push_back(snapshot.state); });
+  FileTransferCallbacks callbacks;
+  callbacks.conflict = [](const FileTransferConflict &, cardio::cancellation)
+      -> cardio::promise<FileTransferConflictAction> { co_return FileTransferConflictAction::skip; };
+  co_await run_file_transfer_job_async(job, client, callbacks, {});
+  const auto &done = file_transfer_job_snapshot(job);
+  expect_true(done.state == FileTransferJobState::completed && done.result &&
+      done.result->succeeded_items == 0 && done.result->skipped_items == 1 &&
+      done.result->unprocessed_items == 0 && done.progress.transferred_bytes == 0,
+      "All-skipped jobs must not report successful copies or fabricated bytes");
+  expect_true(done.started_at && done.finished_at &&
+      std::find(states.begin(), states.end(), FileTransferJobState::awaiting_decision) != states.end(),
+      "A job must report its decision wait and retain timestamps");
+  const auto notifications = states.size();
+  cancel_file_transfer_job(job);
+  co_await run_file_transfer_job_async(job, client, callbacks, {});
+  expect_true(states.size() == notifications && done.state == FileTransferJobState::completed,
+      "Completed jobs must not run or finish twice, including late cancellation");
+  request.source_paths = {"/zero.txt"};
+  auto zero = create_file_transfer_job("test-connection", 2, "SFTP", request, {});
+  co_await run_file_transfer_job_async(zero, client, {}, {});
+  const auto &zero_done = file_transfer_job_snapshot(zero);
+  expect_true(zero_done.id != done.id && zero_done.connection_generation == 2 &&
+      zero_done.result->succeeded_items == 1 && zero_done.progress.total_bytes == 0,
+      "Zero-byte transfers must complete and reconnects must use distinct job identities");
+  auto cancelled = create_file_transfer_job("test-connection", 2, "SFTP", request, {});
+  cancel_file_transfer_job(cancelled);
+  co_await run_file_transfer_job_async(cancelled, client, {}, {});
+  expect_true(file_transfer_job_snapshot(cancelled).state == FileTransferJobState::cancelled &&
+      !file_transfer_job_snapshot(cancelled).started_at, "Waiting cancellation must never start I/O");
+  request.source_paths = {"/missing.txt", "/zero.txt"};
+  auto failed = create_file_transfer_job("test-connection", 2, "SFTP", request, {});
+  co_await run_file_transfer_job_async(failed, client, {}, {});
+  const auto &failure = file_transfer_job_snapshot(failed);
+  expect_true(failure.state == FileTransferJobState::failed && failure.result->failed_items == 1 &&
+      !failure.result->failures.empty() && failure.result->failures[0].source_path == "/missing.txt" &&
+      !failure.result->unprocessed_items,
+      "Discovery failure must retain the failed path and leave undiscovered totals unknown");
+}
+
 static cardio::promise<void> test_rejects_parallel_bulk_transfer() {
   auto client = std::make_shared<FakeSftpClient>();
   client->add_directory("/");
@@ -873,6 +930,7 @@ int main() {
     try {
       std::string failures;
       for (const auto &[name, run] : std::vector<std::pair<const char *, cardio::promise<void>(*)()>>{
+          {"test_job_results_and_lifecycle", test_job_results_and_lifecycle},
           {"test_receive_preserves_unknown_aggregate_size", test_receive_preserves_unknown_aggregate_size},
           {"test_receive_reports_unrepresentable_total_as_unknown", test_receive_reports_unrepresentable_total_as_unknown},
           {"test_receive_does_not_replace_a_directory_with_a_file", test_receive_does_not_replace_a_directory_with_a_file},

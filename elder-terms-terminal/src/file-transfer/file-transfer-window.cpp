@@ -36,6 +36,7 @@
 #include <glib/gi18n-lib.h>
 
 #include "file-transfer-engine.h"
+#include "file-transfer-job.h"
 #include "file-transfer-node-icon.h"
 #include "activity-file-client.h"
 #include "../activity-indicator.h"
@@ -195,6 +196,10 @@ struct FileTransferWindow {
   FileTransferPaneState local;
   FileTransferPaneState remote;
   std::shared_ptr<RemoteFileClient> client;
+  std::shared_ptr<FileTransferJob> active_job;
+  std::string protocol_name;
+  std::string connection_id;
+  std::uint64_t connection_generation = 0;
   std::shared_ptr<InlinePromptController> prompt;
   std::function<cardio::promise<FileHashes>(
       std::string, cardio::cancellation)> remote_file_hash;
@@ -856,7 +861,7 @@ static void update_file_transfer_progress(
   gtk_label_set_text(GTK_LABEL(window->transfer_label),
                      label.c_str());
 
-  if (progress.total_bytes && *progress.total_bytes > 0) {
+  if (progress.discovery_complete && progress.total_bytes && *progress.total_bytes > 0) {
     stop_file_transfer_pulse(window);
     const double fraction = std::min(
         1.0,
@@ -864,7 +869,7 @@ static void update_file_transfer_progress(
             static_cast<double>(*progress.total_bytes));
     gtk_progress_bar_set_fraction(
         GTK_PROGRESS_BAR(window->transfer_progress), fraction);
-  } else if (progress.total_items > 0) {
+  } else if (progress.discovery_complete && progress.total_bytes && progress.total_items > 0) {
     stop_file_transfer_pulse(window);
     const double fraction = std::min(
         1.0,
@@ -1965,85 +1970,38 @@ static void refresh_file_transfer_panes(FileTransferWindow *window) {
 }
 
 static cardio::promise<void> run_file_transfer_window_transfer_async(
-    FileTransferWindow *window, FileTransferDirection direction,
-    std::vector<std::string> sources,
-    std::string destination) {
-  const std::size_t selected_count = sources.size();
-  const cardio::cancellation cancellation =
-      window->transfer_cancel_source->get_cancellation();
-  bool succeeded = false;
-  try {
-    FileTransferRequest request{
-        .direction = direction,
-        .source_paths = std::move(sources),
-        .destination_directory = std::move(destination),
-        .callbacks =
-            {
-                .conflict =
-                    [window](
-                        const FileTransferConflict &conflict,
-                        cardio::cancellation callback_cancellation) {
-                      return prompt_file_transfer_conflict_async(
-                          window, conflict,
-                          std::move(callback_cancellation));
-                    },
-                .failure =
-                    [window](
-                        const FileTransferFailure &failure,
-                        cardio::cancellation callback_cancellation) {
-                      return prompt_file_transfer_failure_async(
-                          window, failure,
-                          std::move(callback_cancellation));
-                    },
-                .progress =
-                    [window](
-                        const FileTransferProgress &progress) {
-                      update_file_transfer_progress(window,
-                                                    progress);
-                    },
-            },
-    };
-    auto pending = run_file_transfer_async(
-        window->client, std::move(request), cancellation);
-    co_await pending;
-    succeeded = true;
-  } catch (const FileTransferCleanupFailure &error) {
-    if (!window->destroyed) {
-      set_file_transfer_status(window, error.cancelled ? _("Transfer cancelled") : _("Transfer failed"));
-      show_file_transfer_error(window, error.what(), std::current_exception());
-    }
-  } catch (const cardio::canceled_exception &) {
-    if (!window->destroyed) {
-      set_file_transfer_status(window, _("Transfer cancelled"));
-    }
-  } catch (...) {
-    if (!window->destroyed) {
-      const std::string message =
-          exception_text(std::current_exception());
-      if (message.find("canceled") != std::string::npos ||
-          message.find("cancelled") != std::string::npos) {
-        set_file_transfer_status(window, _("Transfer cancelled"));
-      } else {
-        set_file_transfer_status(window, _("Transfer failed"));
-        show_file_transfer_error(window, message, std::current_exception());
-      }
-    }
-  }
-
-  if (window->destroyed) {
-    co_return;
-  }
-  window->transfer_cancel_source.reset();
+    FileTransferWindow *window, std::shared_ptr<FileTransferJob> job) {
+  const auto weak = window->self;
+  FileTransferCallbacks callbacks;
+  callbacks.conflict = [weak](const FileTransferConflict &conflict,
+      cardio::cancellation cancellation) -> cardio::promise<FileTransferConflictAction> {
+    const auto owner = weak.lock();
+    if (!owner || owner->destroyed) throw cardio::canceled_exception();
+    co_return co_await prompt_file_transfer_conflict_async(owner.get(), conflict, cancellation);
+  };
+  callbacks.failure = [weak](const FileTransferFailure &failure,
+      cardio::cancellation cancellation) -> cardio::promise<FileTransferFailureAction> {
+    const auto owner = weak.lock();
+    if (!owner || owner->destroyed) throw cardio::canceled_exception();
+    co_return co_await prompt_file_transfer_failure_async(owner.get(), failure, cancellation);
+  };
+  co_await run_file_transfer_job_async(job, window->client, std::move(callbacks), window->stop_source.get_cancellation());
+  if (window->destroyed) co_return;
   set_file_transfer_active(window, false);
-  if (succeeded) {
-    const char *format =
-        direction == FileTransferDirection::send
-            ? g_dngettext(GETTEXT_PACKAGE, "Sent %zu item", "Sent %zu items",
-                          selected_count)
-            : g_dngettext(GETTEXT_PACKAGE, "Received %zu item",
-                          "Received %zu items", selected_count);
-    set_file_transfer_status(window,
-                    format_translated_string(format, selected_count));
+  const auto &snapshot = file_transfer_job_snapshot(job);
+  const auto &result = *snapshot.result;
+  if (result.outcome == FileTransferOutcome::completed) {
+    const auto count = static_cast<std::size_t>(result.succeeded_items);
+    const char *format = snapshot.direction == FileTransferDirection::send
+        ? g_dngettext(GETTEXT_PACKAGE, "Sent %zu item", "Sent %zu items", count)
+        : g_dngettext(GETTEXT_PACKAGE, "Received %zu item", "Received %zu items", count);
+    auto status = format_translated_string(format, count);
+    if (result.skipped_items) status += format_translated_string(_("; skipped %llu"),
+        static_cast<unsigned long long>(result.skipped_items));
+    set_file_transfer_status(window, status);
+  } else {
+    set_file_transfer_status(window, result.outcome == FileTransferOutcome::cancelled ? _("Transfer cancelled") : _("Transfer failed"));
+    if (!result.failures.empty()) show_file_transfer_error(window, result.failures.back().message, {});
   }
   refresh_file_transfer_panes(window);
 }
@@ -2075,11 +2033,24 @@ static void start_file_transfer_transfer(
   }
 
   window->transfer_task.reset();
-  window->transfer_cancel_source.emplace();
+  FileTransferRequest request;
+  request.direction = direction;
+  request.source_paths = sources;
+  request.destination_directory = destination;
+  window->active_job = create_file_transfer_job(window->connection_id, window->connection_generation,
+      window->protocol_name, request, [weak = window->self](const FileTransferJobSnapshot &snapshot) {
+        const auto owner = weak.lock();
+        if (!owner || owner->destroyed || snapshot.connection_generation != owner->connection_generation) return;
+        update_file_transfer_progress(owner.get(), snapshot.progress);
+        if (snapshot.state == FileTransferJobState::discovering)
+          gtk_label_set_text(GTK_LABEL(owner->transfer_label), _("Discovering…"));
+        else if (snapshot.state == FileTransferJobState::awaiting_decision)
+          gtk_label_set_text(GTK_LABEL(owner->transfer_label), _("Awaiting decision"));
+        else if (snapshot.state == FileTransferJobState::cancelling)
+          gtk_label_set_text(GTK_LABEL(owner->transfer_label), _("Cancelling…"));
+      });
   set_file_transfer_active(window, true);
-  window->transfer_task.emplace(
-      run_file_transfer_window_transfer_async(
-          window, direction, sources, destination));
+  window->transfer_task.emplace(run_file_transfer_window_transfer_async(window, window->active_job));
 }
 
 static void on_file_transfer_item_activate(
@@ -2094,6 +2065,11 @@ static void on_file_transfer_item_activate(
 static void on_file_transfer_cancel_clicked(
     GtkButton *, gpointer data) {
   auto *window = static_cast<FileTransferWindow *>(data);
+  if (window && window->transfer_active && window->active_job) {
+    cancel_file_transfer_job(window->active_job);
+    gtk_widget_set_sensitive(window->transfer_cancel_button, FALSE);
+    return;
+  }
   if (window == nullptr ||
       !window->transfer_cancel_source.has_value()) {
     return;
@@ -2874,6 +2850,9 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   }
   auto state = std::make_shared<FileTransferWindow>();
   state->self = state;
+  state->protocol_name = options.protocol_name;
+  FileTransferGCharPtr identity(g_uuid_string_random());
+  state->connection_id = identity.get();
   state->remote_file_hash = std::move(options.remote_file_hash);
   state->closed = std::move(options.closed);
   state->reconnect = std::move(options.reconnect);
@@ -3167,6 +3146,7 @@ void attach_file_transfer_window_client(
   if (window->client != nullptr) {
     throw std::logic_error("Remote file client is already attached");
   }
+  ++window->connection_generation;
   window->client = create_activity_file_client(std::move(client),
       [weak = std::weak_ptr<FileTransferWindow>(window)](ActivityIndicatorId id) {
         const auto owner = weak.lock();
@@ -3290,6 +3270,7 @@ void set_file_transfer_window_connection_available(
                                  ? FileTransferConnectionState::ready
                                  : FileTransferConnectionState::disconnected;
   if (!available) {
+    if (window->active_job) cancel_file_transfer_job(window->active_job);
     if (window->transfer_cancel_source.has_value()) {
       (void)window->transfer_cancel_source->cancel();
     }
