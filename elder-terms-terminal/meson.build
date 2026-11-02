@@ -274,7 +274,7 @@ executable(
     'src/ftp/ftp-metadata.cpp',
     'src/webdav/webdav-application.cpp',
     'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
-    'src/webdav/curl-http-session.cpp',
+    'src/http/curl-http-session.cpp', 'src/http/curl-http-stream.cpp',
     'src/webdav/webdav-url.cpp',
     'src/webdav/webdav-metadata.cpp',
     'src/smb/smb-application.cpp',
@@ -474,10 +474,20 @@ telnet_protocol_test = executable(
 
 test('telnet-protocol-test', telnet_protocol_test)
 
+http_client_test = executable(
+  'http-client-test',
+  ['tests/cpp/http-client-test.cpp', 'src/http/http-client.cpp', 'src/http/http-crawler.cpp',
+   'src/file-transfer/file-transfer-engine.cpp', 'src/http/curl-http-session.cpp', 'src/http/curl-http-stream.cpp', 'src/tls/certificate-policy.cpp'],
+  include_directories: include_directories('src/http'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, libxml2_dep, openssl_dep],
+)
+test('http-client-test', find_program('node'),
+  args: [files('tests/http-client-runner.mjs'), http_client_test], timeout: 60)
+
 http_crawler_test = executable(
   'http-crawler-test',
   ['tests/cpp/http-crawler-test.cpp', 'src/http/http-crawler.cpp',
-   'src/webdav/curl-http-session.cpp', 'src/tls/certificate-policy.cpp'],
+   'src/http/curl-http-session.cpp', 'src/http/curl-http-stream.cpp', 'src/tls/certificate-policy.cpp'],
   include_directories: include_directories('src/http'),
   dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, libxml2_dep, openssl_dep],
 )
@@ -536,7 +546,7 @@ test('smb-ssh-proxy', find_program('node'),
 webdav_client_test = executable(
   'webdav-client-test',
   ['tests/cpp/webdav-client-test.cpp', 'src/file-transfer/file-transfer-engine.cpp', 'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
-   'src/webdav/curl-http-session.cpp', 'src/tls/certificate-policy.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
+   'src/http/curl-http-session.cpp', 'src/http/curl-http-stream.cpp', 'src/tls/certificate-policy.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
   include_directories: include_directories('src/webdav'),
   dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, libxml2_dep, openssl_dep],
 )
@@ -1178,7 +1188,7 @@ configure_file(
 
 webdav_tls_session_test = executable(
   'webdav-tls-session-test',
-  ['tests/cpp/webdav-tls-session-test.cpp', 'src/webdav/curl-http-session.cpp',
+  ['tests/cpp/webdav-tls-session-test.cpp', 'src/http/curl-http-session.cpp', 'src/http/curl-http-stream.cpp',
    'src/tls/certificate-policy.cpp'],
   include_directories: include_directories('src/webdav'),
   dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, openssl_dep],
@@ -1193,7 +1203,7 @@ endif
 webdav_apache_test = executable(
   'webdav-apache-test',
   ['tests/cpp/webdav-apache-test.cpp', 'src/file-transfer/file-transfer-engine.cpp', 'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
-   'src/webdav/curl-http-session.cpp', 'src/tls/certificate-policy.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
+   'src/http/curl-http-session.cpp', 'src/http/curl-http-stream.cpp', 'src/tls/certificate-policy.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
   include_directories: include_directories('src/webdav'),
   dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, libxml2_dep, openssl_dep],
 )

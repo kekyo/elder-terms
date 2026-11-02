@@ -4,7 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "webdav-client.h"
-#include "curl-http-session.h"
+#include "../http/curl-http-session.h"
 #include "webdav-metadata.h"
 #include "webdav-stream.h"
 
@@ -30,7 +30,7 @@ static cardio::promise<std::pair<CurlHttpResult, std::string>> propfind_webdav_a
         "<d:getcontentlength/><d:getlastmodified/></d:prop></d:propfind>";
     request.headers = {"Depth: " + std::to_string(depth), "Content-Type: application/xml; charset=utf-8"};
     auto result = co_await perform_http_request_async(connection->session, std::move(request), cancellation);
-    if (result.code != CURLE_OK) throw webdav_http_error(result);
+    if (result.code != CURLE_OK) throw http_error(result);
     if (result.status != 301 && result.status != 302 && result.status != 307 && result.status != 308)
       co_return std::make_pair(std::move(result), std::move(url));
     if (redirects == 5 || !result.headers.contains("location"))
@@ -48,7 +48,7 @@ static cardio::promise<RemoteDirectorySnapshot> load_webdav_directory_async(
   path = webdav_virtual_path(std::move(path));
   const auto response = co_await propfind_webdav_async(connection, path, 1, cancellation);
   const auto &[result, url] = response;
-  if (result.status != 207) throw webdav_http_error(result);
+  if (result.status != 207) throw http_error(result);
   const auto canonical = webdav_reference_path(connection->endpoint, url, url);
   const auto resources = parse_webdav_multistatus(result.body, connection->endpoint, url);
   RemoteDirectorySnapshot snapshot{canonical, {}};
@@ -77,7 +77,7 @@ static cardio::promise<std::optional<RemoteFileAttributes>> inspect_webdav_async
       connection, webdav_virtual_path(std::move(path)), 0, cancellation);
   const auto &[result, url] = response;
   if (result.status == 404) co_return std::nullopt;
-  if (result.status != 207) throw webdav_http_error(result);
+  if (result.status != 207) throw http_error(result);
   const auto canonical = webdav_reference_path(connection->endpoint, url, url);
   const auto resources = parse_webdav_multistatus(result.body, connection->endpoint, url);
   if (resources.size() != 1 || resources.front().attributes.path != canonical)
@@ -108,8 +108,8 @@ static cardio::promise<void> mutate_webdav_async(
   const auto url = request.url;
   const auto result = co_await perform_http_request_async(connection->session, std::move(request), cancellation);
   if (result.code != CURLE_OK)
-    throw RemoteFileError("WebDAV " + method + " result is uncertain for " + path + ": " + webdav_http_error(result).what(),
-                          webdav_http_error(result).connection_lost);
+    throw RemoteFileError("WebDAV " + method + " result is uncertain for " + path + ": " + http_error(result).what(),
+                          http_error(result).connection_lost);
   if (result.status >= 300 && result.status < 400)
     throw std::runtime_error("WebDAV " + method + " redirect was not followed; check the configured resource path: " + path);
   if (result.status == 207) {
@@ -126,7 +126,7 @@ static cardio::promise<void> mutate_webdav_async(
   const bool succeeded = method == "MKCOL" ? result.status == 201
       : method == "MOVE" ? result.status == 201 || result.status == 204
       : result.status == 200 || result.status == 204;
-  if (!succeeded) throw webdav_http_error(result);
+  if (!succeeded) throw http_error(result);
 }
 
 static cardio::promise<void> make_webdav_directory_async(
@@ -252,7 +252,7 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_webdav_client_async(
   client->connection = std::make_shared<WebdavConnection>();
   client->connection->endpoint = webdav_endpoint(options.connection);
   const auto directory = options.connection.remote_directory;
-  client->connection->session = create_curl_http_session(std::move(options.connection), std::move(options.password),
+  client->connection->session = create_curl_http_session(webdav_http_settings(options.connection), std::move(options.password),
       std::move(options.confirm_certificate), std::move(options.proxy));
   co_await client->load_directory_async(directory, cancellation);
   co_return client;

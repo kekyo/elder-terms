@@ -12,10 +12,10 @@ static cardio::promise<void> run_async(
   try {
     using namespace elder_terms;
     const auto scope = http_scope_url(argv[1]);
-    WebdavConnectionSettings settings;
+    CurlHttpSettings settings;
     settings.scheme = scope.starts_with("https:") ? "https" : "http";
     settings.address = "127.0.0.1";
-    settings.authentication = WebdavAuthentication::none;
+    settings.authentication = HttpAuthentication::none;
     session = create_curl_http_session(settings, "");
     for (int index = 2; index < argc; ++index) {
       const auto url = http_resolve_url(scope, argv[index]);

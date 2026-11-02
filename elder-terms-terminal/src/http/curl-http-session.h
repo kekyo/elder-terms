@@ -17,12 +17,38 @@
 
 #include <cardio.h>
 #include <curl/curl.h>
-#include <elder-terms/settings/webdav-settings.h>
 #include "../tls/certificate-failure.h"
 #include "../file-transfer/remote-file-client.h"
 #include "../terminal-sessions/ssh-session/ssh-socks-proxy.h"
 
 namespace elder_terms {
+
+/** Supported HTTP authentication schemes. */
+enum class HttpAuthentication { automatic, basic, digest, none };
+
+/** Protocol-independent settings for one immutable HTTP transport. */
+struct CurlHttpSettings {
+  /** HTTP or HTTPS scheme. */
+  std::string scheme = "https";
+  /** Hostname used for certificate validation. */
+  std::string address;
+  /** Effective TCP port. */
+  gint64 port = 443;
+  /** Permitted authentication schemes. */
+  HttpAuthentication authentication = HttpAuthentication::automatic;
+  /** Runtime username. */
+  std::string username;
+  /** PEM CA bundle, or empty for system trust. */
+  std::string ca_file;
+  /** Allow an explicit session-local certificate decision. */
+  bool prompt_certificate = false;
+  /** Connection deadline in seconds. */
+  gint64 connect_timeout_seconds = 30;
+  /** Inactivity deadline excluding consumer pauses. */
+  gint64 idle_timeout_seconds = 60;
+  /** Invalid configuration prevents network access. */
+  std::vector<std::string> validation_errors;
+};
 
 /**
  * Asynchronous decision for one immutable TLS failure on the owning dispatcher.
@@ -32,10 +58,10 @@ namespace elder_terms {
  * @remarks Runs after the failed handshake has released its request resources.
  * Decisions are retained only by the logical session and are never persisted.
  */
-using WebdavCertificateConfirmation = std::function<cardio::promise<bool>(
+using HttpCertificateConfirmation = std::function<cardio::promise<bool>(
     const TlsCertificateFailure &, cardio::cancellation)>;
 
-/** HTTP transport owned by one logical WebDAV connection and dispatcher. */
+/** HTTP transport owned by one logical HTTP connection and dispatcher. */
 struct CurlHttpSession;
 struct CurlHttpResult;
 
@@ -43,7 +69,7 @@ struct CurlHttpResult;
 struct CurlHttpRequest {
   /** Absolute URL without credentials. */
   std::string url;
-  /** Method selected by the WebDAV backend, never arbitrary user input. */
+  /** Method selected by the HTTP backend, never arbitrary user input. */
   std::string method = "PROPFIND";
   /** Small, repeatable XML request body, or empty. */
   std::string body;
@@ -80,7 +106,7 @@ struct CurlHttpResult {
  * @param result Completed transport and HTTP status.
  * @returns Exception with the status and supported failure category.
  */
-RemoteFileError webdav_http_error(const CurlHttpResult &result);
+RemoteFileError http_error(const CurlHttpResult &result);
 
 /**
  * Creates an HTTP transport without starting a worker or network request.
@@ -91,8 +117,8 @@ RemoteFileError webdav_http_error(const CurlHttpResult &result);
  * @returns Session bound to the caller's dispatcher.
  */
 std::shared_ptr<CurlHttpSession> create_curl_http_session(
-    WebdavConnectionSettings settings, std::string password,
-    WebdavCertificateConfirmation confirm_certificate = {},
+    CurlHttpSettings settings, std::string password,
+    HttpCertificateConfirmation confirm_certificate = {},
     std::shared_ptr<SshSocksProxy> proxy = {});
 
 /**

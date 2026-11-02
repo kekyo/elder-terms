@@ -230,9 +230,7 @@ cardio::promise<HttpCrawlerPage> fetch_http_page_async(
     request.accept_response = [&page, force_html](const CurlHttpResult &headers) {
       if (headers.status < 200 || headers.status == 401) return true;
       if (headers.status != 200) return false;
-      const auto type = media_token(header_value(headers, "content-type"));
-      page.html = force_html || ((type == "text/html" || type == "application/xhtml+xml") &&
-          media_token(header_value(headers, "content-disposition")) != "attachment");
+      page.html = force_html || http_response_is_html(headers);
       return page.html;
     };
     request.receive = [&body, limits](std::span<const std::byte> bytes) {
@@ -241,15 +239,30 @@ cardio::promise<HttpCrawlerPage> fetch_http_page_async(
       return bytes.size();
     };
     response = co_await perform_http_request_async(session, std::move(request), cancellation);
-    if (response.code != CURLE_OK && !response.body_stopped) throw webdav_http_error(response);
+    if (response.code != CURLE_OK && !response.body_stopped) throw http_error(response);
     if (response.status == 200) break;
     if (response.status != 301 && response.status != 302 && response.status != 303 && response.status != 307 && response.status != 308)
-      throw webdav_http_error(response);
+      throw http_error(response);
     if (redirects == limits.redirects) throw std::runtime_error("HTTP redirect limit exceeded");
     const auto location = header_value(response, "location");
     if (location.empty()) throw std::runtime_error("HTTP redirect is missing Location");
     url = http_resolve_url(url, location);
   }
+  co_return parse_http_page(scope, url, response, body, page.aliases, force_html, limits);
+}
+
+bool http_response_is_html(const CurlHttpResult &response) {
+  const auto type = media_token(header_value(response, "content-type"));
+  return (type == "text/html" || type == "application/xhtml+xml") &&
+      media_token(header_value(response, "content-disposition")) != "attachment";
+}
+
+HttpCrawlerPage parse_http_page(const std::string &scope, const std::string &url,
+    const CurlHttpResult &response, const std::string &body,
+    const std::vector<std::string> &aliases, bool force_html, HttpCrawlerLimits limits) {
+  HttpCrawlerPage page;
+  page.html = force_html || http_response_is_html(response);
+  page.aliases = aliases;
   page.resource.path = url;
   page.resource.name = http_resource_name(url);
   page.resource.type = page.html ? RemoteFileType::directory : RemoteFileType::regular;
@@ -258,7 +271,7 @@ cardio::promise<HttpCrawlerPage> fetch_http_page_async(
   const auto converted = std::from_chars(length.data(), length.data() + length.size(), size);
   if (!length.empty() && converted.ec == std::errc{} && converted.ptr == length.data() + length.size()) page.resource.size = size;
   page.directory.canonical_path = url;
-  if (!page.html) co_return page;
+  if (!page.html) return page;
   const bool xhtml = media_token(header_value(response, "content-type")) == "application/xhtml+xml";
   const auto document = parse_html(body, url, header_value(response, "content-type"), xhtml);
   auto base = url;
@@ -277,14 +290,15 @@ cardio::promise<HttpCrawlerPage> fetch_http_page_async(
     std::string child;
     try { child = http_resolve_url(base, trim(property(node, "href"))); }
     catch (const std::invalid_argument &) { continue; }
-    if (!http_url_in_scope(scope, child) || !seen.insert(child).second) continue;
+    if (!http_url_in_scope(scope, child) || !seen.insert(child).second ||
+        (child.ends_with('/') && url.starts_with(child))) continue;
     RemoteFileAttributes item;
     item.name = http_resource_name(child);
     item.path = std::move(child);
     item.type = RemoteFileType::unresolved;
     page.directory.entries.push_back(std::move(item));
   }
-  co_return page;
+  return page;
 }
 
 } // namespace elder_terms

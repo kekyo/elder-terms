@@ -172,6 +172,8 @@ struct FileTransferRequest {
   std::string destination_directory;
   /** Conflict, failure, and progress callbacks. */
   FileTransferCallbacks callbacks;
+  /** Save selected HTTP responses verbatim instead of recursively expanding HTML. */
+  bool receive_as_file = false;
 };
 
 /**

@@ -82,6 +82,9 @@ struct TransferRunState {
   FileTransferProgress progress;
   FileTransferResult result;
   std::set<std::string> finished_sources;
+  std::unique_ptr<RemoteFileReader> prepared_reader{};
+  std::size_t discovered_pages = 0;
+  std::size_t discovered_links = 0;
 };
 
 struct DestinationResolution {
@@ -981,7 +984,8 @@ receive_regular_file_async(TransferRunState *state,
   std::exception_ptr failure;
 
   try {
-    input = std::move(co_await state->client->open_read_async(
+    input = std::move(state->prepared_reader);
+    if (!input) input = std::move(co_await state->client->open_read_async(
         node.source_path, cancellation));
     output.reset(
         co_await open_local_replace_async(temporary.get(), cancellation));
@@ -1237,6 +1241,73 @@ transfer_node_with_recovery_async(
   }
 }
 
+static std::string receive_child_name(const std::string &candidate, std::set<std::string> &names) {
+  if (!valid_child_name(candidate) || candidate.find('\0') != std::string::npos ||
+      candidate.find('\\') != std::string::npos || !g_utf8_validate(candidate.data(), candidate.size(), nullptr))
+    throw std::runtime_error("Remote service returned an unsafe save name");
+  auto base = candidate.substr(0, 220);
+  while (!g_utf8_validate(base.data(), base.size(), nullptr)) base.pop_back();
+  auto name = base;
+  for (std::size_t suffix = 2; !names.insert(name).second; ++suffix)
+    name = base + " (" + std::to_string(suffix) + ")";
+  return name;
+}
+
+static cardio::promise<void> receive_incremental_async(
+    TransferRunState *state, std::string path, std::string destination,
+    std::size_t depth, bool as_file, cardio::cancellation cancellation) {
+  const auto limits = state->client->receive_limits();
+  if (depth > limits.depth) throw std::runtime_error("HTTP traversal depth limit exceeded");
+  std::optional<RemoteReceiveSource> source;
+  for (;;) {
+    cancellation.throw_if_cancellation_requested();
+    publish_progress(state, path);
+    std::exception_ptr failure;
+    try { source = std::move(co_await state->client->prepare_receive_async(path, as_file, cancellation)); }
+    catch (const cardio::canceled_exception &) { throw; }
+    catch (const RemoteFileError &error) { if (error.connection_lost) throw; failure = std::current_exception(); }
+    catch (...) { failure = std::current_exception(); }
+    if (!failure) break;
+    if (!state->request.callbacks.failure) std::rethrow_exception(failure);
+    const FileTransferFailure notification{state->request.direction, path, destination, exception_message(failure)};
+    const auto action = co_await state->request.callbacks.failure(notification, cancellation);
+    if (action == FileTransferFailureAction::retry) continue;
+    state->result.failures.push_back(notification);
+    if (action == FileTransferFailureAction::skip) {
+      ++state->progress.skipped_items; ++state->progress.total_items; co_return;
+    }
+    throw FileTransferAbort(exception_message(failure));
+  }
+  if (!source) co_return;
+  const bool directory = source->attributes.type == RemoteFileType::directory;
+  if (directory && ++state->discovered_pages > limits.pages)
+    throw std::runtime_error("HTTP page limit exceeded");
+  if (source->children.size() > limits.links - state->discovered_links)
+    throw std::runtime_error("HTTP traversal link limit exceeded");
+  state->discovered_links += source->children.size();
+  ++state->progress.total_items;
+  TransferNode node{.source_path = source->attributes.path,
+      .destination_path = destination, .attributes = source->attributes,
+      .link_target = {}, .children = {}, .total_bytes = std::nullopt, .total_items = 1};
+  state->prepared_reader = std::move(source->reader);
+  const auto skipped = state->progress.skipped_items;
+  std::exception_ptr failure;
+  try { co_await transfer_node_with_recovery_async(state, node, cancellation); }
+  catch (...) { failure = std::current_exception(); }
+  if (state->prepared_reader) {
+    co_await state->prepared_reader->close_async({});
+    state->prepared_reader.reset();
+  }
+  if (failure) std::rethrow_exception(failure);
+  if (!directory || state->progress.skipped_items != skipped) co_return;
+  std::set<std::string> names;
+  for (const auto &child : source->children) {
+    const auto name = receive_child_name(child.name, names);
+    co_await receive_incremental_async(state, child.path, local_child_path(destination, name),
+        depth + 1, false, cancellation);
+  }
+}
+
 static cardio::promise<std::optional<TransferNode>>
 discover_selected_source_async(
     TransferRunState *state, const std::string &source_path,
@@ -1334,6 +1405,20 @@ run_file_transfer_async(std::shared_ptr<RemoteFileClient> client,
       if (!destination || (destination->type != RemoteFileType::directory && destination->type != RemoteFileType::symbolic_link))
         throw std::runtime_error("The local destination directory no longer exists");
     }
+    if (state.request.direction == FileTransferDirection::receive && state.client->capabilities().incremental_receive) {
+      state.progress.total_bytes = std::nullopt;
+      std::set<std::string> names;
+      for (const auto &path : state.request.source_paths) {
+        const auto attributes = co_await state.client->lstat_async(path, cancellation);
+        if (!attributes) throw std::runtime_error("Remote transfer source does not exist");
+        const auto name = receive_child_name(attributes->name, names);
+        co_await receive_incremental_async(&state, path,
+            local_child_path(state.request.destination_directory, name), 0,
+            state.request.receive_as_file, cancellation);
+      }
+      state.progress.discovery_complete = true;
+      publish_progress(&state, {});
+    } else {
     std::vector<TransferNode> roots;
     for (const auto &source_path : state.request.source_paths) {
       cancellation.throw_if_cancellation_requested();
@@ -1348,6 +1433,7 @@ run_file_transfer_async(std::shared_ptr<RemoteFileClient> client,
     publish_progress(&state, {});
     for (const auto &node : roots)
       co_await transfer_node_with_recovery_async(&state, node, cancellation);
+    }
   } catch (...) {
     failure = std::current_exception();
     state.result.outcome = transfer_was_cancelled(failure)

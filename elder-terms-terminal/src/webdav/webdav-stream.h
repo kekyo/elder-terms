@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "curl-http-session.h"
+#include "../http/curl-http-session.h"
 #include "webdav-url.h"
 #include "../file-transfer/remote-file-client.h"
 

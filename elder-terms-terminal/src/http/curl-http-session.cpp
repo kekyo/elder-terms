@@ -3,7 +3,7 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
-#include "curl-http-session.h"
+#include "../http/curl-http-session.h"
 #include "../tls/certificate-policy.h"
 
 #include <algorithm>
@@ -54,18 +54,18 @@ static bool has_only_unsupported_authentication(const CurlHttpResult &result) {
   return found;
 }
 
-RemoteFileError webdav_http_error(const CurlHttpResult &result) {
+RemoteFileError http_error(const CurlHttpResult &result) {
   const char *reason = curl_easy_strerror(result.code);
-  if (result.code == CURLE_OK) {
+  if (result.code == CURLE_OK || result.body_stopped) {
     switch (result.status) {
     case 401:
       reason = has_only_unsupported_authentication(result)
-          ? "Unsupported authentication; WebDAV supports Basic and Digest"
+          ? "Unsupported authentication; HTTP supports Basic and Digest"
           : "Authentication was rejected";
       break;
     case 403: reason = "Access denied"; break;
     case 404: reason = "Resource not found"; break;
-    case 405: case 501: reason = "The server does not support this WebDAV operation"; break;
+    case 405: case 501: reason = "The server does not support this HTTP operation"; break;
     case 409: reason = "Parent collection or resource conflict"; break;
     case 412: reason = "Destination exists or a request precondition failed"; break;
     case 423: reason = "Resource is locked"; break;
@@ -73,7 +73,7 @@ RemoteFileError webdav_http_error(const CurlHttpResult &result) {
     default: reason = "Unexpected server response"; break;
     }
   }
-  return RemoteFileError("WebDAV request failed (HTTP " + std::to_string(result.status) +
+  return RemoteFileError("HTTP request failed (HTTP " + std::to_string(result.status) +
       ", curl " + std::to_string(result.code) + "): " + reason,
       result.code == CURLE_COULDNT_CONNECT || result.code == CURLE_SEND_ERROR ||
       result.code == CURLE_RECV_ERROR || result.code == CURLE_GOT_NOTHING);
@@ -99,10 +99,10 @@ struct HttpWake {
 };
 
 struct CurlHttpSession {
-  WebdavConnectionSettings settings;
+  CurlHttpSettings settings;
   std::string password;
   std::shared_ptr<SshSocksProxy> proxy;
-  WebdavCertificateConfirmation confirm_certificate;
+  HttpCertificateConfirmation confirm_certificate;
   std::shared_ptr<TlsCertificatePolicy> certificates;
   CURLM *multi = nullptr;
   CURL *easy = nullptr;
@@ -230,7 +230,7 @@ static std::size_t receive_body(char *bytes, std::size_t size,
   auto &operation = *static_cast<HttpOperation *>(data);
   try {
     if (size && count > std::numeric_limits<std::size_t>::max() / size)
-      throw std::runtime_error("WebDAV response size overflow");
+      throw std::runtime_error("HTTP response size overflow");
     const auto length = size * count;
     operation.activity = HttpClock::now();
     if (operation.request.receive && operation.result.status >= 200 && operation.result.status < 300) {
@@ -242,7 +242,7 @@ static std::size_t receive_body(char *bytes, std::size_t size,
     }
     constexpr std::size_t limit = 32 * 1024 * 1024;
     if (length > limit - operation.result.body.size())
-      throw std::runtime_error("WebDAV response exceeds the 32 MiB limit");
+      throw std::runtime_error("HTTP response exceeds the 32 MiB limit");
     operation.result.body.append(bytes, length);
     return length;
   } catch (...) {
@@ -256,7 +256,7 @@ static std::size_t send_body(char *bytes, std::size_t size,
   auto &operation = *static_cast<HttpOperation *>(data);
   try {
     if (size && count > std::numeric_limits<std::size_t>::max() / size)
-      throw std::runtime_error("WebDAV upload buffer size overflow");
+      throw std::runtime_error("HTTP upload buffer size overflow");
     const auto capacity = size * count;
     const auto sent = operation.request.send({reinterpret_cast<std::byte *>(bytes), capacity});
     if (sent == CURL_READFUNC_PAUSE) {
@@ -265,7 +265,7 @@ static std::size_t send_body(char *bytes, std::size_t size,
     }
     operation.pause_mask &= ~CURLPAUSE_SEND;
     if (sent > capacity || sent > *operation.request.upload_size - operation.input_consumed)
-      throw std::runtime_error("WebDAV upload exceeded its declared size");
+      throw std::runtime_error("HTTP upload exceeded its declared size");
     operation.input_consumed += sent;
     if (sent) operation.activity = HttpClock::now();
     return sent;
@@ -280,7 +280,7 @@ static int seek_body(void *data, curl_off_t offset, int origin) noexcept {
   if (offset == 0 && origin == SEEK_SET && operation.input_consumed == 0)
     return CURL_SEEKFUNC_OK;
   try {
-    throw std::runtime_error("WebDAV cannot replay an upload after its input has been consumed");
+    throw std::runtime_error("HTTP cannot replay an upload after its input has been consumed");
   } catch (...) { operation.failure = std::current_exception(); }
   return CURL_SEEKFUNC_FAIL;
 }
@@ -290,10 +290,10 @@ static std::size_t receive_header(char *bytes, std::size_t size,
   auto &operation = *static_cast<HttpOperation *>(data);
   try {
     if (size && count > std::numeric_limits<std::size_t>::max() / size)
-      throw std::runtime_error("WebDAV header size overflow");
+      throw std::runtime_error("HTTP header size overflow");
     const auto length = size * count;
     if (length > 1024 * 1024 - operation.header_bytes)
-      throw std::runtime_error("WebDAV headers exceed the 1 MiB limit");
+      throw std::runtime_error("HTTP headers exceed the 1 MiB limit");
     operation.header_bytes += length;
     operation.activity = HttpClock::now();
     std::string_view line(bytes, length);
@@ -307,7 +307,7 @@ static std::size_t receive_header(char *bytes, std::size_t size,
       // Abort before libcurl can replay even a small internally retained body.
       // A challenge before consuming input can still negotiate Basic/Digest.
       if (operation.result.status == 401 && operation.request.send && operation.input_consumed)
-        throw std::runtime_error("WebDAV authentication changed after upload input was consumed; the request was not replayed");
+        throw std::runtime_error("HTTP authentication changed after upload input was consumed; the request was not replayed");
     } else if ((line == "\r\n" || line == "\n") && operation.request.accept_response) {
       if (!operation.request.accept_response(operation.result)) {
         operation.result.body_stopped = true;
@@ -322,7 +322,7 @@ static std::size_t receive_header(char *bytes, std::size_t size,
       if (name == "content-encoding" && operation.result.status >= 200 &&
           operation.result.status < 300 && !value.empty() &&
           g_ascii_strcasecmp(std::string(value).c_str(), "identity") != 0)
-        throw std::runtime_error("WebDAV server returned an unsupported Content-Encoding; use an endpoint that honors Accept-Encoding: identity");
+        throw std::runtime_error("HTTP server returned an unsupported Content-Encoding; use an endpoint that honors Accept-Encoding: identity");
       auto &stored = operation.result.headers[name];
       if (!stored.empty()) stored += ", ";
       stored.append(value);
@@ -346,19 +346,19 @@ static int progress_changed(void *data, curl_off_t, curl_off_t downloaded,
 }
 
 std::shared_ptr<CurlHttpSession> create_curl_http_session(
-    WebdavConnectionSettings settings, std::string password,
-    WebdavCertificateConfirmation confirm_certificate, std::shared_ptr<SshSocksProxy> proxy) {
+    CurlHttpSettings settings, std::string password,
+    HttpCertificateConfirmation confirm_certificate, std::shared_ptr<SshSocksProxy> proxy) {
   if (!settings.validation_errors.empty()) throw std::invalid_argument(settings.validation_errors.front());
-  if (settings.scheme != "https" && settings.scheme != "http") throw std::invalid_argument("WebDAV requires HTTP or HTTPS");
+  if (settings.scheme != "https" && settings.scheme != "http") throw std::invalid_argument("HTTP requires HTTP or HTTPS");
   static const HttpCurlGlobal global;
   (void)global;
   const auto *version = curl_version_info(CURLVERSION_NOW);
-  if (!version || version->version_num < 0x075801) throw std::runtime_error("WebDAV requires libcurl 7.88.1 or newer");
-  if (!(version->features & CURL_VERSION_ASYNCHDNS)) throw std::runtime_error("WebDAV requires libcurl with asynchronous DNS");
+  if (!version || version->version_num < 0x075801) throw std::runtime_error("HTTP requires libcurl 7.88.1 or newer");
+  if (!(version->features & CURL_VERSION_ASYNCHDNS)) throw std::runtime_error("HTTP requires libcurl with asynchronous DNS");
   bool supported = false;
   for (auto protocol = version->protocols; protocol && *protocol; ++protocol)
     supported = supported || settings.scheme == *protocol;
-  if (!supported) throw std::runtime_error("libcurl does not support the selected WebDAV scheme");
+  if (!supported) throw std::runtime_error("libcurl does not support the selected HTTP scheme");
   auto session = std::make_shared<CurlHttpSession>();
   session->settings = std::move(settings);
   session->password = std::move(password);
@@ -369,7 +369,7 @@ std::shared_ptr<CurlHttpSession> create_curl_http_session(
         session->settings.address, session->settings.port, session->settings.scheme, 1);
   session->multi = curl_multi_init();
   session->easy = curl_easy_init();
-  if (!session->multi || !session->easy) throw std::runtime_error("Could not initialize WebDAV HTTP transport");
+  if (!session->multi || !session->easy) throw std::runtime_error("Could not initialize HTTP transport");
   require_multi(curl_multi_setopt(session->multi, CURLMOPT_SOCKETFUNCTION, socket_changed));
   require_multi(curl_multi_setopt(session->multi, CURLMOPT_SOCKETDATA, session.get()));
   require_multi(curl_multi_setopt(session->multi, CURLMOPT_TIMERFUNCTION, timer_changed));
@@ -410,7 +410,7 @@ static cardio::promise<CurlHttpResult> perform_http_attempt_async(
   operation.request.headers.emplace_back("Accept-Encoding: identity");
   for (const auto &header : operation.request.headers) {
     if (header.find_first_of("\r\n") != std::string::npos || header.find('\0') != std::string::npos)
-      throw std::invalid_argument("Invalid WebDAV request header");
+      throw std::invalid_argument("Invalid HTTP request header");
     auto *next = curl_slist_append(headers.get(), header.c_str());
     if (!next) throw std::bad_alloc();
     (void)headers.release();
@@ -456,10 +456,10 @@ static cardio::promise<CurlHttpResult> perform_http_attempt_async(
   if (!session->settings.ca_file.empty())
     require_curl(curl_easy_setopt(easy, CURLOPT_CAINFO, session->settings.ca_file.c_str()));
   require_curl(curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT, static_cast<long>(session->settings.connect_timeout_seconds)));
-  if (session->settings.authentication != WebdavAuthentication::none) {
+  if (session->settings.authentication != HttpAuthentication::none) {
     const auto auth = session->settings.authentication;
-    const long allowed = auth == WebdavAuthentication::basic ? CURLAUTH_BASIC
-        : auth == WebdavAuthentication::digest ? CURLAUTH_DIGEST : CURLAUTH_BASIC | CURLAUTH_DIGEST;
+    const long allowed = auth == HttpAuthentication::basic ? CURLAUTH_BASIC
+        : auth == HttpAuthentication::digest ? CURLAUTH_DIGEST : CURLAUTH_BASIC | CURLAUTH_DIGEST;
     require_curl(curl_easy_setopt(easy, CURLOPT_HTTPAUTH, allowed));
     require_curl(curl_easy_setopt(easy, CURLOPT_USERNAME, session->settings.username.c_str()));
     require_curl(curl_easy_setopt(easy, CURLOPT_PASSWORD, session->password.c_str()));
@@ -467,7 +467,7 @@ static cardio::promise<CurlHttpResult> perform_http_attempt_async(
   if (operation.request.send) {
     if (!operation.request.upload_size || !operation.request.body.empty() ||
         *operation.request.upload_size > static_cast<std::uint64_t>(std::numeric_limits<curl_off_t>::max()))
-      throw std::invalid_argument("WebDAV upload requires one representable known size");
+      throw std::invalid_argument("HTTP upload requires one representable known size");
     require_curl(curl_easy_setopt(easy, CURLOPT_UPLOAD, 1L));
     require_curl(curl_easy_setopt(easy, CURLOPT_INFILESIZE_LARGE, static_cast<curl_off_t>(*operation.request.upload_size)));
     require_curl(curl_easy_setopt(easy, CURLOPT_READFUNCTION, send_body));
@@ -475,7 +475,7 @@ static cardio::promise<CurlHttpResult> perform_http_attempt_async(
     require_curl(curl_easy_setopt(easy, CURLOPT_SEEKFUNCTION, seek_body));
     require_curl(curl_easy_setopt(easy, CURLOPT_SEEKDATA, &operation));
   } else if (operation.request.upload_size) {
-    throw std::invalid_argument("WebDAV upload has no body producer");
+    throw std::invalid_argument("HTTP upload has no body producer");
   }
   if (!operation.request.body.empty()) {
     require_curl(curl_easy_setopt(easy, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(operation.request.body.size())));
@@ -544,7 +544,7 @@ static cardio::promise<CurlHttpResult> perform_http_attempt_async(
       const auto idle_deadline = operation.pause_mask != CURLPAUSE_CONT ? std::nullopt
           : std::optional(operation.activity + std::chrono::seconds(session->settings.idle_timeout_seconds));
       if (idle_deadline && HttpClock::now() >= *idle_deadline)
-        throw std::runtime_error("WebDAV connection stopped making progress");
+        throw std::runtime_error("HTTP connection stopped making progress");
       event = co_await wait_http_event_async(session, idle_deadline, cancellation);
     }
     require_curl(curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &operation.result.status));
@@ -580,7 +580,7 @@ cardio::promise<CurlHttpResult> perform_http_request_async(
         !session->certificates->failure || !session->confirm_certificate)
       co_return result;
     if (confirmations == 16)
-      throw std::runtime_error("WebDAV certificate verification did not converge");
+      throw std::runtime_error("HTTP certificate verification did not converge");
     // The failed attempt has already detached its easy handle and retired all
     // watchers. Confirmation runs outside OpenSSL and retains only copied data.
     const auto failure = *session->certificates->failure;
@@ -595,7 +595,7 @@ cardio::promise<CurlHttpResult> perform_http_request_async(
       continue;
     // A mutation remains failed even when its handshake failed before HTTP.
     // Approval applies to a distinct explicit retry, never an automatic replay.
-    throw std::runtime_error("WebDAV certificate accepted for this connection; the failed operation was not retried");
+    throw std::runtime_error("HTTP certificate accepted for this connection; the failed operation was not retried");
   }
 }
 

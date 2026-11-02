@@ -4,7 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "webdav-client.h"
-#include "curl-http-session.h"
+#include "../../src/http/curl-http-session.h"
 #include "webdav-url.h"
 #include "../../src/file-transfer/file-transfer-engine.h"
 
@@ -50,8 +50,8 @@ static cardio::promise<void> check_paused_http_async(elder_terms::WebdavClientOp
   using namespace elder_terms;
   options.connection.idle_timeout_seconds = 1;
   const auto endpoint = webdav_endpoint(options.connection);
-  auto session = create_curl_http_session(options.connection, options.password);
-  auto probe_session = create_curl_http_session(options.connection, options.password);
+  auto session = create_curl_http_session(webdav_http_settings(options.connection), options.password);
+  auto probe_session = create_curl_http_session(webdav_http_settings(options.connection), options.password);
   auto state = std::make_shared<PausedResponse>();
   auto paused = state->paused.get_promise();
   CurlHttpRequest request;
@@ -95,7 +95,7 @@ static cardio::promise<void> check_cancelled_pause_async(
     elder_terms::WebdavClientOpenOptions options, bool upload) {
   using namespace elder_terms;
   const auto endpoint = webdav_endpoint(options.connection);
-  auto session = create_curl_http_session(options.connection, options.password);
+  auto session = create_curl_http_session(webdav_http_settings(options.connection), options.password);
   if (upload) {
     CurlHttpRequest initial;
     initial.method = "GET";
@@ -154,8 +154,8 @@ static cardio::promise<void> check_cancelled_pause_async(
 static cardio::promise<void> check_rejected_pause_async(elder_terms::WebdavClientOpenOptions options) {
   using namespace elder_terms;
   const auto endpoint = webdav_endpoint(options.connection);
-  auto session = create_curl_http_session(options.connection, options.password);
-  auto probe = create_curl_http_session(options.connection, options.password);
+  auto session = create_curl_http_session(webdav_http_settings(options.connection), options.password);
+  auto probe = create_curl_http_session(webdav_http_settings(options.connection), options.password);
   auto state = std::make_shared<PausedResponse>();
   auto paused = state->paused.get_promise();
   CurlHttpRequest request;

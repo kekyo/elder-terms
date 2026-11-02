@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "../webdav/curl-http-session.h"
+#include "curl-http-session.h"
 
 namespace elder_terms {
 
@@ -65,6 +65,28 @@ bool http_url_in_scope(const std::string &scope, const std::string &url);
  * @returns UTF-8 name or an encoded name when decoding is not possible.
  */
 std::string http_resource_name(const std::string &url);
+
+/**
+ * Checks successful-response media type and attachment disposition.
+ * @param response Successful HTTP response headers.
+ * @returns True for navigable HTML or XHTML.
+ */
+bool http_response_is_html(const CurlHttpResult &response);
+
+/**
+ * Builds an immediate listing from an already received bounded response.
+ * @param scope Canonical allowed directory URL.
+ * @param url Final canonical response URL.
+ * @param response Successful response headers.
+ * @param body Complete HTML body; empty for ordinary content.
+ * @param aliases Requested and redirected resource URLs.
+ * @param force_html Explicit media-type override.
+ * @param limits Page parsing limits.
+ * @returns Classified resource and unresolved immediate children.
+ */
+HttpCrawlerPage parse_http_page(const std::string &scope, const std::string &url,
+    const CurlHttpResult &response, const std::string &body,
+    const std::vector<std::string> &aliases, bool force_html, HttpCrawlerLimits limits);
 
 /**
  * Fetches and classifies just one page, checking each redirect before connecting.

@@ -67,6 +67,8 @@ struct RemoteFileCapabilities {
   bool upload_commit = false;
   /** True when a collection can be explicitly deleted with all descendants. */
   bool recursive_directory_delete = false;
+  /** True for graph-like sources received incrementally without a pre-scan. */
+  bool incremental_receive = false;
 };
 
 /** Operations permitted at a particular remote path, before server ACL checks. */
@@ -103,6 +105,8 @@ struct RemoteDirectorySnapshot {
   std::string canonical_path;
   /** Directory entries excluding service-specific self and parent records. */
   std::vector<RemoteFileAttributes> entries;
+  /** Actual resource type after an attempted expansion. */
+  RemoteFileType resource_type = RemoteFileType::directory;
 };
 
 /** Asynchronous reader for one remote regular file. */
@@ -175,6 +179,26 @@ public:
 };
 
 /** Asynchronous filesystem operations for one authenticated remote service. */
+/** One lazily classified source, optionally retaining its already-started stream. */
+struct RemoteReceiveSource {
+  /** Actual resource attributes with canonical identity and safe name candidate. */
+  RemoteFileAttributes attributes;
+  /** Immediate children for a directory; never a recursively discovered tree. */
+  std::vector<RemoteFileAttributes> children;
+  /** Started content stream, or null for a directory. */
+  std::unique_ptr<RemoteFileReader> reader;
+};
+
+/** Limits of a single incremental transfer operation. */
+struct RemoteReceiveLimits {
+  /** Maximum child depth. */
+  std::size_t depth = 32;
+  /** Maximum expanded pages. */
+  std::size_t pages = 1000;
+  /** Maximum discovered child links. */
+  std::size_t links = 10000;
+};
+
 class RemoteFileClient {
 public:
   /** Releases the remote service session. */
@@ -209,6 +233,37 @@ public:
   virtual cardio::promise<RemoteDirectorySnapshot>
   load_directory_async(std::string path,
                        cardio::cancellation cancellation) = 0;
+
+  /**
+   * Loads a directory with explicit refresh or HTML interpretation options.
+   * @param path Selected resource path.
+   * @param refresh Invalidate the selected page's cached listing.
+   * @param force_html Interpret only this selected response as HTML.
+   * @param cancellation Operation cancellation signal.
+   * @returns Immediate directory snapshot and actual resource type.
+   */
+  virtual cardio::promise<RemoteDirectorySnapshot> browse_directory_async(
+      std::string path, bool refresh, bool force_html, cardio::cancellation cancellation) {
+    (void)refresh; (void)force_html;
+    co_return co_await load_directory_async(std::move(path), cancellation);
+  }
+
+  /** @returns Limits used for a graph-like incremental receive. */
+  virtual RemoteReceiveLimits receive_limits() const { return {}; }
+
+  /**
+   * Classifies and starts one incremental source without probing its children.
+   * @param path Selected or discovered resource identity.
+   * @param as_file Save the response itself, including HTML.
+   * @param cancellation Operation cancellation signal.
+   * @returns Source or no value when already visited in the active transfer.
+   */
+  virtual cardio::promise<std::optional<RemoteReceiveSource>> prepare_receive_async(
+      std::string path, bool as_file, cardio::cancellation cancellation) {
+    (void)path; (void)as_file; (void)cancellation;
+    throw std::logic_error("Incremental receive is not supported");
+    co_return std::nullopt;
+  }
 
   /**
    * Reads remote attributes without following a symbolic link.
