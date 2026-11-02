@@ -1019,6 +1019,7 @@ receive_regular_file_async(TransferRunState *state,
         co_await open_local_replace_async(temporary.get(), cancellation));
     temporary_created = true;
     std::array<std::byte, file_transfer_chunk_size> buffer{};
+    std::uint64_t copied = 0;
     for (;;) {
       cancellation.throw_if_cancellation_requested();
       const std::size_t size = co_await input->read_async(
@@ -1027,13 +1028,19 @@ receive_regular_file_async(TransferRunState *state,
       if (size == 0) {
         break;
       }
+      if (size > UINT64_MAX - copied ||
+          (node.attributes.size && (copied > *node.attributes.size || size > *node.attributes.size - copied)))
+        throw std::runtime_error("The remote source grew after discovery");
       co_await write_local_stream_async(
           G_OUTPUT_STREAM(output.get()),
           std::span<const std::byte>(buffer.data(), size),
           cancellation);
+      copied += size;
       state->progress.transferred_bytes += size;
       publish_progress(state, node.source_path);
     }
+    if (node.attributes.size && copied != *node.attributes.size)
+      throw std::runtime_error("The remote source became shorter after discovery");
     co_await input->close_async(cancellation);
     input.reset();
     co_await close_local_output_async(G_OUTPUT_STREAM(output.get()),

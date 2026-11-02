@@ -784,6 +784,34 @@ static cardio::promise<void> test_changed_source_does_not_commit_partial_upload(
   }
 }
 
+static cardio::promise<void> test_changed_remote_size_preserves_local_destination() {
+  for (const std::uint64_t reported : {3U, 30U}) {
+    const auto root = test_root_directory() / "changed-remote-size";
+    const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+    std::filesystem::create_directories(root);
+    write_file(root / "file.txt", "original");
+    auto client = std::make_shared<FakeSftpClient>();
+    client->add_directory("/");
+    client->add_file("/file.txt", "payload");
+    client->nodes.at("/file.txt").attributes.size = reported;
+    elder_terms::FileTransferResult result;
+    elder_terms::FileTransferRequest request;
+    request.direction = elder_terms::FileTransferDirection::receive;
+    request.source_paths = {"/file.txt"};
+    request.destination_directory = root.string();
+    request.callbacks.conflict = overwrite_changed_source_conflict;
+    request.callbacks.finished = [&](const auto &value) { result = value; };
+    bool failed = false;
+    try { (void)co_await elder_terms::run_file_transfer_async(client, request, {}); }
+    catch (const std::exception &) { failed = true; }
+    expect_true(failed && result.outcome == elder_terms::FileTransferOutcome::failed && result.succeeded_items == 0,
+        "A remote size mismatch must fail before committing the received file");
+    expect_true(read_file(root / "file.txt") == "original" && result.temporary_paths.empty() &&
+        std::distance(std::filesystem::directory_iterator(root), std::filesystem::directory_iterator{}) == 1,
+        "Failed receive must preserve the destination and clean its adjacent temporary file");
+  }
+}
+
 static cardio::promise<void> test_receive_reports_unrepresentable_total_as_unknown() {
   const auto root = test_root_directory() / "overflow";
   const TemporaryDirectoryCleanup cleanup{test_root_directory()};
@@ -795,17 +823,22 @@ static cardio::promise<void> test_receive_reports_unrepresentable_total_as_unkno
   client->add_file("/bundle/second.txt", "b");
   client->nodes.at("/bundle/first.txt").attributes.size = UINT64_MAX;
   elder_terms::FileTransferProgress final_progress;
+  cardio::cancellation_source stopping;
   elder_terms::FileTransferRequest request;
   request.direction = elder_terms::FileTransferDirection::receive;
   request.source_paths = {"/bundle"};
   request.destination_directory = root.string();
-  request.callbacks.progress = [&final_progress](const elder_terms::FileTransferProgress &progress) {
+  request.callbacks.progress = [&](const elder_terms::FileTransferProgress &progress) {
     final_progress = progress;
+    if (progress.discovery_complete) (void)stopping.cancel();
   };
-  auto pending = elder_terms::run_file_transfer_async(client, std::move(request), {});
-  co_await pending;
+  // The huge metadata exercises aggregate accounting, without pretending the
+  // small fixture contains UINT64_MAX bytes. Stop before opening any file.
+  bool cancelled = false;
+  try { (void)co_await elder_terms::run_file_transfer_async(client, std::move(request), stopping.get_cancellation()); }
+  catch (const cardio::canceled_exception &) { cancelled = true; }
   const std::optional<std::uint64_t> total = final_progress.total_bytes;
-  expect_true(!total && final_progress.transferred_bytes == 2 && final_progress.completed_items == 3,
+  expect_true(cancelled && !total && final_progress.transferred_bytes == 0 && final_progress.completed_items == 0,
               "An unrepresentable recursive total must remain unknown instead of wrapping to zero");
 }
 
@@ -1334,6 +1367,7 @@ int main() {
           {"test_receive_reports_unrepresentable_total_as_unknown", test_receive_reports_unrepresentable_total_as_unknown},
           {"test_receive_does_not_replace_a_directory_with_a_file", test_receive_does_not_replace_a_directory_with_a_file},
           {"test_changed_source_does_not_commit_partial_upload", test_changed_source_does_not_commit_partial_upload},
+          {"test_changed_remote_size_preserves_local_destination", test_changed_remote_size_preserves_local_destination},
           {"test_failed_local_commit_preserves_completed_file", test_failed_local_commit_preserves_completed_file},
           {"test_recursive_send_preserves_links_metadata_and_recovers", test_recursive_send_preserves_links_metadata_and_recovers},
           {"test_recursive_receive_preserves_links_and_metadata", test_recursive_receive_preserves_links_and_metadata},
