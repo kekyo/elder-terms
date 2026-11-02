@@ -56,10 +56,14 @@ static cardio::promise<void> transfer_async(
     if (cancel_after_chunk && progressed) (void)stopping.cancel();
   };
   bool cancelled = false;
-  try { co_await elder_terms::run_file_transfer_async(client, std::move(request), stopping.get_cancellation()); }
+  elder_terms::FileTransferResult result;
+  try { result = co_await elder_terms::run_file_transfer_async(client, std::move(request), stopping.get_cancellation()); }
   catch (const cardio::canceled_exception &) { cancelled = true; }
   require(cancelled == cancel_after_chunk, "Transfer cancellation result differs");
-  require(progressed, "Transfer did not publish completed bytes");
+  if (conflict == elder_terms::FileTransferConflictAction::skip) {
+    require(!progressed && result.skipped_items == 1,
+            "Skipping an existing destination must report one skip without transferred bytes");
+  } else require(progressed, "Transfer did not publish completed bytes");
 }
 
 struct LocalFixture {
