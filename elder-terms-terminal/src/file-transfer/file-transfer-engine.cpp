@@ -562,22 +562,6 @@ static bool valid_child_name(const std::string &name) {
          name.find('/') == std::string::npos;
 }
 
-static std::string remote_child_path(const std::string &directory,
-                                     const std::string &name) {
-  if (!valid_child_name(name)) {
-    throw std::runtime_error(
-        "Remote service returned an invalid item name");
-  }
-  if (directory.empty() || directory == ".") {
-    return directory.empty() ? name : "./" + name;
-  }
-  if (directory == "/") {
-    return "/" + name;
-  }
-  return directory.back() == '/' ? directory + name
-                                 : directory + "/" + name;
-}
-
 static std::string local_child_path(const std::string &directory,
                                     const std::string &name) {
   if (!valid_child_name(name)) {
@@ -593,7 +577,8 @@ static std::string local_link_target(GFileInfo *info) {
 }
 
 static cardio::promise<TransferNode>
-discover_local_node_async(GFile *file, std::string destination_path,
+discover_local_node_async(const std::shared_ptr<RemoteFileClient> &client,
+                          GFile *file, std::string destination_path,
                           cardio::cancellation cancellation) {
   GObjectPtr<GFileInfo> info(
       co_await query_local_info_async(file, cancellation));
@@ -630,7 +615,7 @@ discover_local_node_async(GFile *file, std::string destination_path,
     cancellation.throw_if_cancellation_requested();
     GObjectPtr<GFile> child(g_file_get_child(file, name.c_str()));
     TransferNode child_node = co_await discover_local_node_async(
-        child.get(), remote_child_path(node.destination_path, name),
+        client, child.get(), client->child_path(node.destination_path, name),
         cancellation);
     node.total_bytes = sum_discovered_bytes(node.total_bytes, child_node.total_bytes);
     node.total_items += child_node.total_items;
@@ -822,7 +807,7 @@ available_remote_temporary_path_async(
     const std::string &destination,
     cardio::cancellation cancellation) {
   for (std::size_t attempt = 0; attempt < 100; ++attempt) {
-    const std::string candidate = next_temporary_path(destination);
+    const std::string candidate = client->upload_temporary_path(destination, next_temporary_path(""));
     if (!(co_await client->lstat_async(candidate, cancellation))
              .has_value()) {
       co_return candidate;
@@ -1313,8 +1298,8 @@ discover_selected_source_async(
               "Selected local transfer source has no item name");
         }
         co_return co_await discover_local_node_async(
-            source.get(),
-            remote_child_path(state->request.destination_directory,
+            state->client, source.get(),
+            state->client->child_path(state->request.destination_directory,
                               basename.get()),
             cancellation);
       }

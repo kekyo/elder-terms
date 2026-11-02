@@ -899,6 +899,7 @@ sftp_transfer_engine_test = executable(
   'sftp-transfer-engine-test',
   [
     'tests/cpp/sftp-transfer-engine-test.cpp',
+    'src/file-transfer/activity-file-client.cpp',
     'src/file-transfer/file-transfer-job.cpp',
     'src/file-transfer/file-transfer-engine.cpp',
   ],

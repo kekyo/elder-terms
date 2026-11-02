@@ -228,6 +228,30 @@ public:
   }
 
   /**
+   * Builds a new child identity using this connection's filename rules.
+   * @param parent Existing parent identity, never a display path.
+   * @param name New UTF-8 filename, without directory separators.
+   * @returns Child identity; encoding failures throw before any remote changes.
+   */
+  virtual std::string child_path(const std::string &parent, const std::string &name) const {
+    if (name.empty() || name == "." || name == ".." ||
+        name.find('/') != std::string::npos || name.find('\0') != std::string::npos)
+      throw std::invalid_argument("Invalid new remote item name");
+    return parent.empty() || parent.back() == '/' ? parent + name : parent + "/" + name;
+  }
+
+  /**
+   * Builds an adjacent temporary upload identity without altering opaque paths.
+   * @param destination Final destination identity.
+   * @param suffix Unique ASCII filename suffix supplied by the transfer engine.
+   * @returns Candidate identity; allocation and ownership require remote I/O.
+   */
+  virtual std::string upload_temporary_path(const std::string &destination,
+                                           const std::string &suffix) const {
+    return destination + suffix;
+  }
+
+  /**
    * Loads one directory as a single logical remote operation.
    *
    * @param path Remote path accepted by the service.
