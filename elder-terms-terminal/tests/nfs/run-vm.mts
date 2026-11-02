@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createNfsWireObserver } from './nfs-wire-observer.mts';
 
@@ -17,6 +17,7 @@ const vmDirectory = resolve(root, '.build/nfs-vm');
 const evidence = resolve(root, '.build/nfs-evidence');
 const driver =
   process.env.ELDER_NFS_PROBE ?? resolve(root, '.build/nfs/nfs-probe');
+const clientDriver = resolve(dirname(driver), 'nfs-client-test');
 const run = async (
   command: string,
   args: string[],
@@ -207,6 +208,27 @@ if (!process.argv.includes('--isolated')) {
         }
       }
       if (version === 3) {
+        for (const encoding of ['UTF-8', 'CP932', 'SHIFT-JIS', 'EUC-JP']) {
+          observer.calls.length = 0;
+          const output = await run(clientDriver, [encoding]);
+          await writeFile(
+            resolve(evidence, `client-v3-${encoding}.log`),
+            output
+          );
+          assert.deepEqual(observer.errors, []);
+          assert.deepEqual(
+            [
+              ...new Set(
+                observer.calls
+                  .filter((call) => call.program === 100003)
+                  .map((call) => call.version)
+              ),
+            ],
+            [3]
+          );
+          assert.match(output, /PASS NFS client 3/);
+          console.log(`PASS client-v3-${encoding}`);
+        }
         await ssh(
           "sed -i '/^\\/srv\\/public /s/,insecure,/,secure,/' /etc/exports; exportfs -ra"
         );

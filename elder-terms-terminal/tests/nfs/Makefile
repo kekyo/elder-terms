@@ -29,3 +29,8 @@ build: $(BUILD_DIR)/nfs-probe
 $(BUILD_DIR)/nfs-probe: nfs-probe.cpp $(SOURCE)/nfs-rpc.cpp $(SOURCE)/nfs-rpc.h $(SOURCE)/nfs-api.h $(SOURCE)/nfs-name.cpp $(SOURCE)/nfs-name.h Makefile | deps
 	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) nfs-probe.cpp $(SOURCE)/nfs-rpc.cpp $(SOURCE)/nfs-name.cpp -o $@ $(GLIB_FLAGS) $(NFS_FLAGS)
+
+build: $(BUILD_DIR)/nfs-client-test
+$(BUILD_DIR)/nfs-client-test: nfs-client-test.cpp $(SOURCE)/nfs-client.cpp $(SOURCE)/nfs-client.h $(SOURCE)/nfs-rpc.cpp $(SOURCE)/nfs-rpc.h $(SOURCE)/nfs-name.cpp $(SOURCE)/nfs-name.h $(SOURCE)/nfs-api.h ../../src/file-transfer/file-transfer-engine.cpp ../../src/file-transfer/remote-file-client.h ../../src/file-transfer/activity-file-client.cpp Makefile | deps
+	mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) nfs-client-test.cpp $(SOURCE)/nfs-client.cpp $(SOURCE)/nfs-rpc.cpp $(SOURCE)/nfs-name.cpp ../../src/file-transfer/file-transfer-engine.cpp ../../src/file-transfer/activity-file-client.cpp -o $@ $(GLIB_FLAGS) $(NFS_FLAGS)

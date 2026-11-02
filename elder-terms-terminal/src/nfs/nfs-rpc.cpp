@@ -20,6 +20,15 @@ void NfsRpcSession::stop() {
   if (!active) abort();
 }
 void NfsRpcSession::abort() {
+  // libnfs does not own open nfsfh objects through its context. Transfer each
+  // remaining handle to its public asynchronous close operation before context
+  // destruction drains the pending requests. Read-only v3 closes immediately;
+  // dirty v3 and v4 closes release their handles in the cancellation callback.
+  if (nfs) {
+    for (auto *handle : handles)
+      (void)nfs_close_async(nfs, handle, +[](int, nfs_context *, void *, void *) {}, nullptr);
+    handles.clear();
+  }
   // Destruction delivers cancellation callbacks while their state is alive.
   if (nfs) nfs_destroy_context(nfs);
   else if (rpc) rpc_destroy_context(rpc);

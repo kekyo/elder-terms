@@ -96,6 +96,40 @@ std::string encode_nfs_name(std::string_view name, const std::string &encoding,
 
 std::string nfs_identifier_component(std::string_view bytes) { return hex_bytes(bytes, true); }
 
+static std::string convert_link_target(std::string_view target, const std::string &encoding, bool encode) {
+  validate_nfs_filename_encoding(encoding);
+  if (target.empty() || target.find('\0') != std::string_view::npos)
+    throw std::runtime_error("Invalid symbolic-link target");
+  std::string result;
+  for (std::size_t start = 0;;) {
+    const auto end = target.find('/', start);
+    const auto part = target.substr(start, end == std::string_view::npos ? end : end - start);
+    if (part.empty() || part == "." || part == "..") result += part;
+    else if (encode) result += encode_nfs_name(part, encoding, 255);
+    else {
+      const auto name = display_nfs_name(part, encoding);
+      if (!name.decoded || encode_nfs_name(name.text, encoding, 255) != part)
+        throw std::runtime_error("Symbolic-link target cannot be copied without changing its byte identity");
+      result += name.text;
+    }
+    if (end == std::string_view::npos) break;
+    result += '/';
+    start = end + 1;
+  }
+  return result;
+}
+
+std::string encode_nfs_link_target(std::string_view target, const std::string &encoding,
+                                  std::size_t maximum_bytes) {
+  const auto bytes = convert_link_target(target, encoding, true);
+  if (bytes.size() > maximum_bytes) throw std::runtime_error("Symbolic-link target exceeds the NFS path limit");
+  return bytes;
+}
+
+std::string decode_nfs_link_target(std::string_view target, const std::string &encoding) {
+  return convert_link_target(target, encoding, false);
+}
+
 std::string nfs_identifier_bytes(std::string_view identifier) {
   if (identifier.empty() || identifier.size() % 3 != 0)
     throw std::runtime_error("Invalid NFS identifier");

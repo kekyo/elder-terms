@@ -46,6 +46,26 @@ std::string encode_nfs_name(std::string_view name, const std::string &encoding,
                           std::size_t maximum_bytes);
 
 /**
+ * Converts a new symbolic-link target without normalizing its path.
+ * @param target Stored local UTF-8 path, including relative segments.
+ * @param encoding Immutable connection encoding.
+ * @param maximum_bytes Protocol limit for the complete target.
+ * @returns Strictly encoded target with its original separators.
+ * @throws std::runtime_error If any component or the complete target is invalid.
+ */
+std::string encode_nfs_link_target(std::string_view target, const std::string &encoding,
+                                  std::size_t maximum_bytes);
+
+/**
+ * Converts stored remote link bytes for a local copy.
+ * @param target Original remote bytes, including relative segments.
+ * @param encoding Immutable connection encoding.
+ * @returns UTF-8 path preserving the exact target under reverse conversion.
+ * @throws std::runtime_error When decoding or reverse conversion loses identity.
+ */
+std::string decode_nfs_link_target(std::string_view target, const std::string &encoding);
+
+/**
  * Encodes bytes as one ASCII identifier component, independently of URLs.
  * @param bytes Original name or absolute export path.
  * @returns Collision-free percent representation, including every slash.

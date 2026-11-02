@@ -10,6 +10,7 @@
 #include <nfsc/libnfs-raw.h>
 #include <functional>
 #include <span>
+#include <set>
 
 namespace elder_terms {
 
@@ -27,6 +28,8 @@ struct NfsRpcSession {
   int timeout_ms = 10000;
   /** True while a coroutine owns callback state. */
   bool active = false;
+  /** Open high-level handles not yet transferred to a close callback. */
+  std::set<nfsfh *> handles;
   /** Releases the context after pending callbacks have been drained. */
   ~NfsRpcSession();
   /** Stops pending work; active callback state remains owned by its coroutine. */

@@ -29,6 +29,11 @@ int main() {
       const auto displayed = display_nfs_name(bytes, encoding);
       require(displayed.decoded && displayed.text == "日本語表", "Server bytes must decode using the explicit encoding");
       require(encode_nfs_name(displayed.text, encoding, 255) == bytes, "New names must round-trip exactly");
+      const auto target = "/./日本語表//../日本語表/";
+      const auto wire = "/./" + bytes + "//../" + bytes + "/";
+      require(encode_nfs_link_target(target, encoding, 4096) == wire &&
+          decode_nfs_link_target(wire, encoding) == target,
+          "Link targets must convert names while preserving every separator and relative segment");
     }
     for (const std::string encoding : {"UTF-8", "CP932", "EUC-JP"}) {
       const auto invalid = display_nfs_name(std::string("\xff", 1), encoding);
@@ -43,6 +48,11 @@ int main() {
     rejects([] { (void)encode_nfs_name("a", "UTF-16LE", 255); });
     rejects([] { (void)encode_nfs_name("日本語表", "CP932", 7); });
     rejects([] { (void)encode_nfs_name("¥", "CP932", 255); });
+    rejects([] { (void)encode_nfs_link_target("../😀", "CP932", 4096); });
+    rejects([] { (void)encode_nfs_link_target("a/b", "UTF-8", 2); });
+    rejects([] { (void)encode_nfs_link_target("", "UTF-8", 4096); });
+    rejects([] { (void)decode_nfs_link_target("../\xff", "CP932"); });
+    rejects([] { (void)decode_nfs_link_target("../\xed\x40", "CP932"); });
     for (const std::string encoding : {"UTF-8//IGNORE", "CP932//TRANSLIT", "unknown-encoding", ""})
       rejects([&] { validate_nfs_filename_encoding(encoding); });
     for (const auto &bytes : std::vector<std::string>{"/", "/srv/public", "?foo#%20", cp932, "\xff", " a "}) {
