@@ -22,7 +22,7 @@ import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import { createTestEvidence, expectElementKind } from './test-helpers.ts';
 
-it.for([3, 4])(
+it.for([2, 3, 4])(
   'transfers encoded NFS v%i files through protected public roots',
   { timeout: 360000 },
   async (version, context) => {
@@ -68,7 +68,7 @@ it.for([3, 4])(
         'name=NFS files',
         '[nfs]',
         'address=127.0.0.1',
-        `version=${version === 4 ? '4.0' : '3'}`,
+        `version=${version === 4 ? '4.0' : version}`,
         'known_namespace_paths=/other/public;/public/deep;',
         'filename_encoding=CP932',
         `local_directory=${local}`,
@@ -171,6 +171,41 @@ it.for([3, 4])(
         expect(await remotePath.text()).toBe(`${prefix}/public:/`)
       );
       await rowFor(remote, '日本語表');
+      if (version === 2) {
+        await select(remote, 'deep', 'right');
+        for (const action of ['new_directory', 'rename', 'delete'])
+          expect(
+            (
+              await (
+                await app.getById(`file_transfer_remote_${action}_item`)
+              ).info()
+            ).states
+          ).not.toContain('sensitive');
+        await menu('file_transfer_receive_item');
+        await waitForResult(async () =>
+          expect(
+            await readFile(join(local, 'deep', 'inside', 'payload.txt'), 'utf8')
+          ).toBe('nested\n')
+        );
+        await select(remote, '日本語表', 'right');
+        await menu('file_transfer_receive_item');
+        await waitForResult(async () =>
+          expect(await readFile(join(local, '日本語表'), 'utf8')).toBe(
+            'CP932\n'
+          )
+        );
+        const state = expectElementKind(
+          await app.getById('file_transfer_job_2_state'),
+          'label'
+        );
+        await waitForResult(async () =>
+          expect(await state.text()).toBe('Completed')
+        );
+        await evidence.captureEvidence('nfs-v2-received', async () =>
+          app.capture()
+        );
+        return;
+      }
       await select(localTree, '送信表', 'right');
       await menu('file_transfer_send_item');
       await rowFor(remote, '送信表');

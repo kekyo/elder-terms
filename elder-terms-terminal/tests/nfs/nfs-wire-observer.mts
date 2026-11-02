@@ -37,6 +37,10 @@ export interface NfsWireObserver {
   rejectV4Name: (bytes: Buffer) => void;
   /** Denies the first v4 directory listing for namespace-root access tests. */
   rejectNamespaceListing: () => void;
+  /** Caps v2 READ counts before forwarding, to exercise short successful replies. */
+  limitV2Reads: (maximum: number) => void;
+  /** Returns a nonadvancing v2 READDIR cookie once, without claiming EOF. */
+  repeatV2Cookie: () => void;
   /** Closes listeners and sockets, including interrupted clients. */
   close: () => Promise<void>;
 }
@@ -56,6 +60,8 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
   let loseCreateReply = false;
   let rejectedV4Name: Buffer | undefined;
   let rejectNamespaceListing = false;
+  let v2ReadLimit = 8192;
+  let repeatV2Cookie = false;
   const close = async (): Promise<void> => {
     for (const socket of sockets) socket.destroy();
     for (const server of servers)
@@ -84,6 +90,7 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
         let pending = Buffer.alloc(0);
         let fragments: Buffer[] = [];
         const lostReplies = new Set<number>();
+        const repeatedCookies = new Map<number, Buffer>();
         client.on('data', (bytes: Buffer) => {
           try {
             pending = Buffer.concat([pending, bytes]);
@@ -107,6 +114,17 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
               const program = record.readUInt32BE(12);
               const version = record.readUInt32BE(16);
               const procedure = record.readUInt32BE(20);
+              let bodyOffset = 24;
+              for (let auth = 0; auth < 2; auth++)
+                bodyOffset += 8 + ((record.readUInt32BE(bodyOffset + 4) + 3) & ~3);
+              if (program === 100003 && version === 2 && procedure === 6) {
+                const count = bodyOffset + 36;
+                record.writeUInt32BE(Math.min(record.readUInt32BE(count), v2ReadLimit), count);
+              }
+              if (repeatV2Cookie && program === 100003 && version === 2 && procedure === 16) {
+                repeatedCookies.set(record.readUInt32BE(0), Buffer.from(record.subarray(bodyOffset + 32, bodyOffset + 36)));
+                repeatV2Cookie = false;
+              }
               let minor: number | undefined;
               let opensFile = false;
               let readsDirectory = false;
@@ -201,6 +219,25 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
             if ((marker & 0x80000000) === 0) continue;
             const record = Buffer.concat(replyFragments);
             replyFragments = [];
+            const cookie = repeatedCookies.get(record.readUInt32BE(0));
+            if (cookie) {
+              repeatedCookies.delete(record.readUInt32BE(0));
+              let offset = 12;
+              offset += 8 + ((record.readUInt32BE(offset + 4) + 3) & ~3);
+              if (record.readUInt32BE(offset) !== 0 || record.readUInt32BE(offset + 4) !== 0)
+                throw new Error('Expected successful v2 READDIR reply');
+              offset += 8;
+              let lastCookie = -1;
+              while (record.readUInt32BE(offset) !== 0) {
+                offset += 8; // Entry-present flag and file ID.
+                offset += 4 + ((record.readUInt32BE(offset) + 3) & ~3);
+                lastCookie = offset;
+                offset += 4;
+              }
+              if (lastCookie < 0) throw new Error('Expected a v2 directory entry');
+              cookie.copy(record, lastCookie);
+              record.writeUInt32BE(0, offset + 4); // No EOF, no cookie progress.
+            }
             if (lostReplies.delete(record.readUInt32BE(0))) {
               client.destroy();
               upstream.destroy();
@@ -229,6 +266,8 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
       rejectNamespaceListing: () => {
         rejectNamespaceListing = true;
       },
+      limitV2Reads: (maximum) => { v2ReadLimit = maximum; },
+      repeatV2Cookie: () => { repeatV2Cookie = true; },
       rejectV4Name: (bytes) => {
         rejectedV4Name = bytes;
       },

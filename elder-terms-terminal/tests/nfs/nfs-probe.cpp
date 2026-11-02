@@ -49,8 +49,12 @@ static cardio::promise<void> probe_exports(Probe &probe) {
     return mount_version == MOUNT_V1 ? ELDER_NFS_RAW_CALL(rpc_mount1_export, mount->rpc, cb, data)
         : ELDER_NFS_RAW_CALL(rpc_mount3_export, mount->rpc, cb, data);
   }, [&](void *data) {
-    for (auto *entry = *static_cast<exports *>(data); entry; entry = entry->ex_next)
-      paths.emplace_back(entry->ex_dir);
+    for (auto *node = *static_cast<exports *>(data); node;) {
+      exportnode entry{};
+      std::memcpy(&entry, node, sizeof(entry));
+      paths.emplace_back(entry.ex_dir);
+      node = entry.ex_next;
+    }
   }, {});
   require(std::find(paths.begin(), paths.end(), probe.export_path) != paths.end(), "MOUNT exports must include the original export path");
   std::cout << "exports=" << paths.size() << " mount-version=" << mount_version << '\n';
@@ -126,10 +130,13 @@ static cardio::promise<void> probe_v2(Probe &probe) {
       check_v2(reply.status);
       const auto &page = reply.READDIR2res_u.resok;
       eof = page.eof;
-      for (auto *entry = page.entries; entry; entry = entry->nextentry) {
-        const std::string name(entry->name);
+      for (auto *node = page.entries; node;) {
+        entry2 entry{};
+        std::memcpy(&entry, node, sizeof(entry));
+        const std::string name(entry.name);
         if (name != "." && name != "..") names.push_back(name);
-        std::memcpy(listing.cookie, entry->cookie, sizeof(listing.cookie));
+        std::memcpy(listing.cookie, entry.cookie, sizeof(listing.cookie));
+        node = entry.nextentry;
       }
     }, {});
     require(eof || cookies.insert(std::string(listing.cookie, sizeof(listing.cookie))).second,

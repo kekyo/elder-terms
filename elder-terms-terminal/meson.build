@@ -280,6 +280,7 @@ executable(
     'src/webdav/webdav-metadata.cpp',
     'src/smb/smb-application.cpp',
     'src/nfs/nfs-application.cpp', 'src/nfs/nfs-client.cpp',
+    'src/nfs/nfs-v2.cpp',
     'src/nfs/nfs-name.cpp', 'src/nfs/nfs-rpc.cpp',
     'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp',
     'src/smb/smb-ssh-proxy.cpp',

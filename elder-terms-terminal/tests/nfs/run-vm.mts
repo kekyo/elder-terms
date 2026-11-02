@@ -24,7 +24,7 @@ const uiVersion = Number(
     .find((argument) => argument.startsWith('--ui-version='))
     ?.split('=')[1] ?? '3'
 );
-assert.ok(uiVersion === 3 || uiVersion === 4);
+assert.ok([2, 3, 4].includes(uiVersion));
 const run = async (
   command: string,
   args: string[],
@@ -250,6 +250,33 @@ if (!process.argv.includes('--isolated')) {
           assert.match(output, new RegExp(`PASS NFS ${version} ${encoding}`));
           console.log(`PASS ${label}`);
         }
+      }
+      if (version === 2) {
+        await ssh('mkdir -p /srv/public/pages /srv/public/limits; for item in $(seq 1 600); do touch /srv/public/pages/item-$item; done; truncate -s 4294967295 /srv/public/limits/at-limit; truncate -s 4294967296 /srv/public/limits/too-large');
+        const boundaries = await run(clientDriver, ['--v2-boundaries']);
+        await writeFile(resolve(evidence, 'client-v2-boundaries.log'), boundaries);
+        assert.match(boundaries, /PASS v2 directory and size boundary/);
+        observer.repeatV2Cookie();
+        const cookie = await run(clientDriver, ['--v2-cookie']);
+        await writeFile(resolve(evidence, 'client-v2-cookie.log'), cookie);
+        assert.match(cookie, /PASS v2 directory and size boundary/);
+        observer.limitV2Reads(2);
+        for (const encoding of ['UTF-8', 'CP932', 'SHIFT-JIS', 'EUC-JP']) {
+          observer.calls.length = 0;
+          const output = await run(clientDriver, [encoding, '2']);
+          assert.match(output, /PASS NFS client 2/);
+          assert.ok(
+            observer.calls
+              .filter((call) => call.program === 100003)
+              .every((call) => call.version === 2)
+          );
+          await writeFile(
+            resolve(evidence, `client-v2-${encoding}.log`),
+            output
+          );
+          console.log(`PASS client-v2-${encoding}`);
+        }
+        observer.limitV2Reads(8192);
       }
       if (version === 3) {
         observer.rejectExports(true);

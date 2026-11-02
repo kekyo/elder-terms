@@ -20,7 +20,58 @@ static void require(bool condition, const char *message) {
   if (!condition) throw std::runtime_error(message);
 }
 
+static cardio::promise<void> test_v2_receive(const std::string &encoding) {
+  NfsClientOpenOptions options;
+  options.address = "127.0.0.1";
+  options.version = 2;
+  options.filename_encoding = encoding;
+  auto client = co_await open_nfs_server_async(options, {});
+  require(!client->capabilities().write_operations, "The first v2 integration must advertise read-only operations");
+  const auto root = nfs_export_identity(client, "/srv/public");
+  const auto entries = co_await client->load_directory_async(root, {});
+  require(entries.entries.size() >= 8, "NFS v2 must list real export contents");
+  std::array<std::byte, 3> bytes{};
+  bool raw_found = false, japanese_found = false;
+  for (const auto &entry : entries.entries) {
+    if (entry.type != RemoteFileType::regular) continue;
+    auto reader = std::move(co_await client->open_read_async(entry.path, {}));
+    std::string received;
+    for (;;) {
+      const auto count = co_await reader->read_async(bytes, {});
+      if (count == 0) break;
+      received.append(reinterpret_cast<const char *>(bytes.data()), count);
+    }
+    co_await reader->close_async({});
+    if (entry.name == "[undecodable: FF]") { raw_found = true; require(received == "raw\n", "Undecodable original names must remain readable"); }
+    if (entry.name == "日本語表") {
+      japanese_found = true;
+      const auto expected = encoding == "UTF-8" ? "UTF-8\n" : encoding == "EUC-JP" ? "EUC-JP\n" : "CP932\n";
+      require(received == expected, "v2 reads must address the selected original encoded bytes");
+    }
+    if (entry.name == "zero") require(received.empty(), "A zero-byte v2 file must reach EOF without invented bytes");
+  }
+  require(raw_found && japanese_found, "v2 listing must retain all encoded and undecodable entries");
+  char pattern[] = "/tmp/elder-nfs2-receive-XXXXXX";
+  const char *directory = mkdtemp(pattern);
+  require(directory != nullptr, "A local directory must be available");
+  const std::filesystem::path local(directory);
+  struct Cleanup { std::filesystem::path path; ~Cleanup() { std::filesystem::remove_all(path); } } cleanup{local};
+  FileTransferRequest request;
+  request.direction = FileTransferDirection::receive;
+  request.source_paths = {client->child_path(root, "deep")};
+  request.destination_directory = local.string();
+  const auto result = co_await run_file_transfer_async(client, request, {});
+  require(result.outcome == FileTransferOutcome::completed && result.succeeded_items == 4,
+      "v2 recursive receive must copy directories and a cyclic link without following it");
+  std::ifstream file(local / "deep" / "inside" / "payload.txt");
+  require(std::string{std::istreambuf_iterator<char>(file), {}} == "nested\n" &&
+      std::filesystem::read_symlink(local / "deep" / "cycle") == "..", "v2 recursive data and link targets must remain exact");
+  co_await stop_nfs_client_async(client);
+  std::cout << "PASS NFS client 2 " << encoding << " recursive receive\n";
+}
+
 static cardio::promise<void> test_client(const std::string &encoding, int version) {
+  if (version == 2) { co_await test_v2_receive(encoding); co_return; }
   const std::string prefix = version == 4 ? "" : "/srv";
   if (encoding == "UTF-8") {
     NfsClientOpenOptions unresolved;
@@ -274,6 +325,41 @@ static cardio::promise<void> test_v4_name_rejection() {
   std::cout << "PASS v4 filename rejection\n";
 }
 
+static cardio::promise<void> test_v2_boundaries(bool repeated_cookie) {
+  NfsClientOpenOptions options;
+  options.address = "127.0.0.1";
+  options.version = 2;
+  options.known_exports = {"/srv/public"};
+  options.discover_exports = false;
+  auto client = co_await open_nfs_server_async(options, {});
+  const auto root = nfs_export_identity(client, "/srv/public");
+  if (repeated_cookie) {
+    bool rejected = false;
+    try { (void)co_await client->load_directory_async(root, {}); }
+    catch (const RemoteFileError &error) { rejected = !error.connection_lost && std::string(error.what()).find("cookie") != std::string::npos; }
+    require(rejected, "A repeated v2 directory cookie must stop instead of looping or claiming completion");
+    require(!(co_await client->load_directory_async(root, {})).entries.empty(), "A fresh listing must remain possible after a cookie error");
+  } else {
+    const auto pages = co_await client->load_directory_async(client->child_path(root, "pages"), {});
+    require(pages.entries.size() == 600, "v2 directory pagination must retain every entry");
+    for (const auto &name : {"at-limit", "too-large"}) {
+      const auto path = client->child_path(client->child_path(root, "limits"), name);
+      bool rejected = false;
+      try {
+        const auto attributes = co_await client->lstat_async(path, {});
+        if (attributes) std::cout << "v2 boundary " << name << " size=" << attributes->size.value_or(0) << '\n';
+        auto reader = std::move(co_await client->open_read_async(path, {}));
+        std::array<std::byte, 3> bytes{};
+        (void)co_await reader->read_async(bytes, {});
+        co_await reader->close_async({});
+      } catch (const RemoteFileError &error) { rejected = !error.connection_lost; }
+      require(rejected, "v2 files at or above its ambiguous 32-bit size boundary must be refused");
+    }
+  }
+  co_await stop_nfs_client_async(client);
+  std::cout << "PASS v2 directory and size boundary\n";
+}
+
 int main(int argc, char **argv) {
   if (argc < 2 || argc > 3) return 2;
   const int version = argc == 3 ? std::stoi(argv[2]) : 3;
@@ -285,6 +371,8 @@ int main(int argc, char **argv) {
       if (std::string_view(argv[1]) == "--known-exports") co_await test_known_exports(version);
       else if (std::string_view(argv[1]) == "--lost-create") co_await test_lost_create(version);
       else if (std::string_view(argv[1]) == "--reject-name") co_await test_v4_name_rejection();
+      else if (std::string_view(argv[1]) == "--v2-cookie") co_await test_v2_boundaries(true);
+      else if (std::string_view(argv[1]) == "--v2-boundaries") co_await test_v2_boundaries(false);
       else co_await test_client(argv[1], version);
     }
     catch (...) { failure = std::current_exception(); }

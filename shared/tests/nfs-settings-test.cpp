@@ -41,6 +41,8 @@ int main(int argc, char **argv) {
     expect(!set_explicit_setting_value(&store, nfs_setting_key("version"), std::string("4.2")),
         "An unimplemented minor version must not silently select v4.0");
     expect(set_explicit_setting_value(&store, nfs_setting_key("version"), std::string("3")), "Restore v3");
+    expect(set_explicit_setting_value(&store, nfs_setting_key("version"), std::string("2")), "NFS v2 must be explicitly selectable");
+    expect(set_explicit_setting_value(&store, nfs_setting_key("version"), std::string("3")), "Restore default protocol");
     expect(!set_explicit_setting_value(&store, nfs_setting_key("filename_encoding"), std::string("CP932//TRANSLIT")),
         "Lossy conversion modifiers must be rejected");
     expect(!set_explicit_setting_value(&store, nfs_setting_key("filename_encoding"), std::string("unknown-encoding")),

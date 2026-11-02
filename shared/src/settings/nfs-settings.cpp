@@ -32,8 +32,8 @@ static bool validate_address(const SettingValue &value, std::string *reason) {
 
 static bool validate_version(const SettingValue &value, std::string *reason) {
   const auto &version = std::get<std::string>(value);
-  if (version == "3" || version == "4.0") return true;
-  *reason = "must select NFS version 3 or 4.0";
+  if (version == "2" || version == "3" || version == "4.0") return true;
+  *reason = "must select NFS version 2, 3 or 4.0";
   return false;
 }
 

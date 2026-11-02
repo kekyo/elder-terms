@@ -53,7 +53,7 @@ static cardio::promise<void> start_application_async(NfsApplication *state) {
     if (!state->connection.validation_errors.empty()) throw std::invalid_argument(state->connection.validation_errors.front());
     NfsClientOpenOptions options;
     options.address = state->connection.address;
-    options.version = state->connection.version == "4.0" ? 4 : 3;
+    options.version = state->connection.version == "4.0" ? 4 : state->connection.version == "2" ? 2 : 3;
     options.nfs_port = static_cast<int>(state->connection.nfs_port);
     options.mount_port = static_cast<int>(state->connection.mount_port);
     options.filename_encoding = state->connection.filename_encoding;

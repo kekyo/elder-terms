@@ -4,7 +4,7 @@ CXXFLAGS := -std=c++20 -Wall -Wextra -Wpedantic -Werror -g -pthread -DCARDIO_WIT
 SANITIZE ?= 0
 ifeq ($(SANITIZE),1)
 BUILD_DIR := $(BUILD_DIR)-asan
-CXXFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer
+CXXFLAGS += -fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer
 endif
 GLIB_FLAGS := $(shell pkg-config --cflags --libs gio-2.0)
 NFS_FLAGS = $(shell pkg-config --cflags --libs libnfs)
@@ -31,6 +31,6 @@ $(BUILD_DIR)/nfs-probe: nfs-probe.cpp $(SOURCE)/nfs-rpc.cpp $(SOURCE)/nfs-rpc.h 
 	$(CXX) $(CXXFLAGS) nfs-probe.cpp $(SOURCE)/nfs-rpc.cpp $(SOURCE)/nfs-name.cpp -o $@ $(GLIB_FLAGS) $(NFS_FLAGS)
 
 build: $(BUILD_DIR)/nfs-client-test
-$(BUILD_DIR)/nfs-client-test: nfs-client-test.cpp $(SOURCE)/nfs-client.cpp $(SOURCE)/nfs-client.h $(SOURCE)/nfs-rpc.cpp $(SOURCE)/nfs-rpc.h $(SOURCE)/nfs-name.cpp $(SOURCE)/nfs-name.h $(SOURCE)/nfs-api.h ../../src/file-transfer/file-transfer-engine.cpp ../../src/file-transfer/remote-file-client.h ../../src/file-transfer/activity-file-client.cpp Makefile | deps
+$(BUILD_DIR)/nfs-client-test: nfs-client-test.cpp $(SOURCE)/nfs-client.cpp $(SOURCE)/nfs-v2.cpp $(SOURCE)/nfs-v2.h $(SOURCE)/nfs-client.h $(SOURCE)/nfs-rpc.cpp $(SOURCE)/nfs-rpc.h $(SOURCE)/nfs-name.cpp $(SOURCE)/nfs-name.h $(SOURCE)/nfs-api.h ../../src/file-transfer/file-transfer-engine.cpp ../../src/file-transfer/remote-file-client.h ../../src/file-transfer/activity-file-client.cpp Makefile | deps
 	mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) nfs-client-test.cpp $(SOURCE)/nfs-client.cpp $(SOURCE)/nfs-rpc.cpp $(SOURCE)/nfs-name.cpp ../../src/file-transfer/file-transfer-engine.cpp ../../src/file-transfer/activity-file-client.cpp -o $@ $(GLIB_FLAGS) $(NFS_FLAGS)
+	$(CXX) $(CXXFLAGS) nfs-client-test.cpp $(SOURCE)/nfs-client.cpp $(SOURCE)/nfs-v2.cpp $(SOURCE)/nfs-rpc.cpp $(SOURCE)/nfs-name.cpp ../../src/file-transfer/file-transfer-engine.cpp ../../src/file-transfer/activity-file-client.cpp -o $@ $(GLIB_FLAGS) $(NFS_FLAGS)

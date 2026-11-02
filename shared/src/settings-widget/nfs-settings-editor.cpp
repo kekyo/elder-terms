@@ -165,6 +165,7 @@ NfsSettingsEditor *create_nfs_settings_editor(SettingsStore *store, std::string 
       signal = "toggled"; suffix = "_check";
     } else if (field.kind == NfsFieldKind::version) {
       field.control = gtk_combo_box_text_new();
+      gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.control), "2", "NFS v2 (TCP, read-only)");
       gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.control), "3", "NFS v3 (TCP)");
       gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.control), "4.0", "NFS v4.0 (TCP)");
       suffix = "_combo";
