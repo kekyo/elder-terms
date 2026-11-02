@@ -3,6 +3,7 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 #include "file-transfer-job-view.h"
+#include <elder-terms/http-url.h>
 #include <algorithm>
 #include <filesystem>
 #include <map>
@@ -119,6 +120,9 @@ static std::unique_ptr<JobRow> create_job_row(FileTransferJobView *view, const s
   auto *header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_box_pack_start(GTK_BOX(row->root), header, FALSE, TRUE, 0);
   auto name = snapshot.source_paths.empty() ? std::string() : std::filesystem::path(snapshot.source_paths.front()).filename().string();
+  if (!snapshot.source_paths.empty() &&
+      (snapshot.source_paths.front().starts_with("http://") || snapshot.source_paths.front().starts_with("https://")))
+    name = http_resource_name(snapshot.source_paths.front());
   if (snapshot.source_paths.size() > 1) name += " (+" + std::to_string(snapshot.source_paths.size() - 1) + ")";
   name = std::string(snapshot.direction == FileTransferDirection::send ? _("Send") : _("Receive")) + " · " + name;
   auto *title = gtk_label_new(name.c_str());

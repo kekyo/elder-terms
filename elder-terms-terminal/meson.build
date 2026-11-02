@@ -273,6 +273,7 @@ executable(
     'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
     'src/ftp/ftp-metadata.cpp',
     'src/webdav/webdav-application.cpp',
+    'src/http/http-application.cpp', 'src/http/http-client.cpp', 'src/http/http-crawler.cpp',
     'src/webdav/webdav-client.cpp', 'src/webdav/webdav-stream.cpp',
     'src/http/curl-http-session.cpp', 'src/http/curl-http-stream.cpp',
     'src/webdav/webdav-url.cpp',
@@ -477,6 +478,7 @@ test('telnet-protocol-test', telnet_protocol_test)
 http_client_test = executable(
   'http-client-test',
   ['tests/cpp/http-client-test.cpp', 'src/http/http-client.cpp', 'src/http/http-crawler.cpp',
+   'src/file-transfer/file-transfer-job.cpp',
    'src/file-transfer/file-transfer-engine.cpp', 'src/http/curl-http-session.cpp', 'src/http/curl-http-stream.cpp', 'src/tls/certificate-policy.cpp'],
   include_directories: include_directories('src/http'),
   dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, libxml2_dep, openssl_dep],

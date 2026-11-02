@@ -6,6 +6,7 @@
 #pragma once
 
 #include "curl-http-session.h"
+#include <elder-terms/http-url.h>
 
 namespace elder_terms {
 
@@ -34,37 +35,6 @@ struct HttpCrawlerPage {
   /** Requested and redirected URLs identifying this resource. */
   std::vector<std::string> aliases;
 };
-
-/**
- * Resolves and normalizes an HTTP reference, preserving encoded URL bytes.
- * @param page Absolute resolution base, or empty for an absolute reference.
- * @param reference Absolute or relative URL without embedded credentials.
- * @returns Canonical URL without a fragment.
- * @throws std::invalid_argument For unsupported or ambiguous URLs.
- */
-std::string http_resolve_url(const std::string &page, const std::string &reference);
-
-/**
- * Validates a directory URL defining the permitted origin and path boundary.
- * @param url Absolute URL ending in a slash, without query or credentials.
- * @returns Canonical scope URL.
- */
-std::string http_scope_url(const std::string &url);
-
-/**
- * Checks a canonical URL against the configured origin and directory boundary.
- * @param scope Canonical directory URL.
- * @param url Canonical resource URL.
- * @returns True only inside the configured scope.
- */
-bool http_url_in_scope(const std::string &scope, const std::string &url);
-
-/**
- * Produces a safe filename candidate without changing the resource URL.
- * @param url Canonical resource URL.
- * @returns UTF-8 name or an encoded name when decoding is not possible.
- */
-std::string http_resource_name(const std::string &url);
 
 /**
  * Checks successful-response media type and attachment disposition.

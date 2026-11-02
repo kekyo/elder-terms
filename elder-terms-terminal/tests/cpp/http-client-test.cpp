@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 #include "http-client.h"
 #include "../../src/file-transfer/file-transfer-engine.h"
+#include "../../src/file-transfer/file-transfer-job.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -50,13 +51,17 @@ static cardio::promise<void> run_async(
     expect(contents(std::filesystem::path(directory) / "tree" / "unknown.bin") == "unknown bytes", "Chunked download must match exactly");
     expect(contents(std::filesystem::path(directory) / "tree" / "nested" / "file.bin") == "nested bytes", "Selected subtree download must match");
     expect(contents(std::filesystem::path(directory) / "tree" / "%82%A0.txt") == "encoded bytes", "Non-UTF-8 URL must retain its identity");
+    const auto classified = co_await client->load_directory_async(base, {});
+    expect(classified.entries.front().type == RemoteFileType::directory,
+        "Revisiting a list must retain already classified child resources without requests");
     std::size_t variants = 0;
     for (const auto &entry : std::filesystem::directory_iterator(std::filesystem::path(directory) / "tree"))
       if (entry.path().filename().string().starts_with("same.bin")) ++variants;
     expect(variants == 2, "Query variants must have distinct safe local names");
     request.source_paths = {base + "document.html"};
     request.receive_as_file = true;
-    (void)co_await run_file_transfer_async(client, request, {});
+    const auto raw_job = create_file_transfer_job("http-test", 1, "HTTP", request, {});
+    co_await run_file_transfer_job_async(raw_job, client, {}, {});
     expect(contents(std::filesystem::path(directory) / "document.html") == "<a href=\"untouched/\">original</a>",
         "Receiving HTML as a file must preserve its body without traversing links");
     request.receive_as_file = false;

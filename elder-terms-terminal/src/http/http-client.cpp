@@ -40,7 +40,16 @@ static cardio::promise<RemoteDirectorySnapshot> browse_async(
         url, force_html, connection->options.limits, cancellation);
     cache_page(*connection, page);
   }
-  co_return connection->pages.at(url)->directory;
+  auto directory = connection->pages.at(url)->directory;
+  for (auto &entry : directory.entries) {
+    const auto known = connection->pages.find(entry.path);
+    if (known == connection->pages.end()) continue;
+    auto attributes = known->second->resource;
+    attributes.path = entry.path;
+    attributes.name = entry.name;
+    entry = std::move(attributes);
+  }
+  co_return directory;
 }
 
 struct HttpAlreadyVisited {};

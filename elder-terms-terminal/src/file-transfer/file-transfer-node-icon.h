@@ -16,6 +16,7 @@ namespace elder_terms {
  * @returns Material preset identifier; unknown items use the generic file glyph.
  */
 inline std::string_view file_transfer_node_icon(const RemoteFileAttributes &item) {
+  if (item.type == RemoteFileType::unresolved) return "action/help_outline";
   if (item.type == RemoteFileType::symbolic_link) return "content/link";
   if (item.type == RemoteFileType::directory) {
     if (item.role == RemoteFileRole::smb_share) return "file/folder_shared";

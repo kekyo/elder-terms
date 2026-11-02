@@ -38,6 +38,8 @@ struct FileTransferJobSnapshot {
   std::vector<std::string> source_paths;
   /** Destination captured at submission, unaffected by later navigation. */
   std::string destination_directory;
+  /** Whether selected HTTP responses are saved verbatim. */
+  bool receive_as_file = false;
   /** Current lifecycle state. */
   FileTransferJobState state = FileTransferJobState::queued;
   /** Start time, absent for a job cancelled before execution. */
@@ -123,8 +125,11 @@ cardio::promise<void> run_file_transfer_queue_async(std::shared_ptr<FileTransfer
  * Loads a browser directory in the connection's operation order.
  * @param queue Service queue. @param path Directory to load. @param cancellation Owner cancellation.
  * @returns Directory snapshot. @remarks Reads wait behind active transfers, including decision and cleanup phases.
+ * @param refresh Explicitly refresh this page rather than using a cached listing.
+ * @param force_html Interpret this response as HTML when explicitly requested.
  */
 cardio::promise<RemoteDirectorySnapshot> load_file_transfer_queue_directory_async(
-    std::shared_ptr<FileTransferQueue> queue, std::string path, cardio::cancellation cancellation);
+    std::shared_ptr<FileTransferQueue> queue, std::string path, cardio::cancellation cancellation,
+    bool refresh = false, bool force_html = false);
 
 } // namespace elder_terms

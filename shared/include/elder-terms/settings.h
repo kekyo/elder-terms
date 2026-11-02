@@ -15,6 +15,7 @@
 #include <elder-terms/settings/application-settings.h>
 #include <elder-terms/settings/ftp-settings.h>
 #include <elder-terms/settings/webdav-settings.h>
+#include <elder-terms/settings/http-settings.h>
 #include <elder-terms/settings/general-settings.h>
 #include <elder-terms/settings/hyperlink-settings.h>
 #include <elder-terms/settings/local-session-settings.h>

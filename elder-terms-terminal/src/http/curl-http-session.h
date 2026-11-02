@@ -17,14 +17,12 @@
 
 #include <cardio.h>
 #include <curl/curl.h>
+#include <elder-terms/http-authentication.h>
 #include "../tls/certificate-failure.h"
 #include "../file-transfer/remote-file-client.h"
 #include "../terminal-sessions/ssh-session/ssh-socks-proxy.h"
 
 namespace elder_terms {
-
-/** Supported HTTP authentication schemes. */
-enum class HttpAuthentication { automatic, basic, digest, none };
 
 /** Protocol-independent settings for one immutable HTTP transport. */
 struct CurlHttpSettings {
