@@ -9,6 +9,7 @@ import { once } from 'node:events';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createNfsWireObserver } from './nfs-wire-observer.mts';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const root = resolve(directory, '../../..');
@@ -75,7 +76,7 @@ if (!process.argv.includes('--isolated')) {
     '-drive',
     `file=${resolve(vmDirectory, 'base.ext4')},format=raw,if=virtio,snapshot=on`,
     '-netdev',
-    'user,id=nfs,hostfwd=tcp:127.0.0.1:111-:111,hostfwd=tcp:127.0.0.1:2049-:2049,hostfwd=tcp:127.0.0.1:20048-:20048,hostfwd=tcp:127.0.0.1:22022-:22',
+    'user,id=nfs,hostfwd=tcp:127.0.0.1:111-:111,hostfwd=tcp:127.0.0.1:22049-:2049,hostfwd=tcp:127.0.0.1:22048-:20048,hostfwd=tcp:127.0.0.1:22022-:22',
     '-device',
     'virtio-net-pci,netdev=nfs',
     '-display',
@@ -84,6 +85,7 @@ if (!process.argv.includes('--isolated')) {
     'stdio',
     '-no-reboot',
   ];
+  const observer = await createNfsWireObserver();
   const vm = spawn('qemu-system-x86_64', args, {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -157,6 +159,7 @@ if (!process.argv.includes('--isolated')) {
       await writeFile(resolve(evidence, `server-v${version}.txt`), state);
       for (const encoding of ['UTF-8', 'CP932', 'SHIFT-JIS', 'EUC-JP']) {
         for (const fixed of version === 4 ? [false] : [false, true]) {
+          observer.calls.length = 0;
           const output = await run(driver, [
             String(version),
             '127.0.0.1',
@@ -168,6 +171,37 @@ if (!process.argv.includes('--isolated')) {
           ]);
           const label = `v${version}-${encoding}-${fixed ? 'fixed' : 'discovery'}`;
           await writeFile(resolve(evidence, `${label}.log`), output);
+          await writeFile(
+            resolve(evidence, `${label}-rpc.json`),
+            JSON.stringify(observer.calls, null, 2)
+          );
+          assert.deepEqual(observer.errors, []);
+          const nfsCalls = observer.calls.filter(
+            (call) => call.program === 100003
+          );
+          const mountCalls = observer.calls.filter(
+            (call) => call.program === 100005
+          );
+          assert.ok(nfsCalls.length > 0, 'A real NFS request must be observed');
+          assert.deepEqual(
+            [...new Set(nfsCalls.map((call) => call.version))],
+            [version]
+          );
+          assert.deepEqual(
+            [...new Set(mountCalls.map((call) => call.version))],
+            version === 4 ? [] : [version === 2 ? 1 : 3]
+          );
+          if (version === 4)
+            assert.deepEqual(
+              [
+                ...new Set(
+                  nfsCalls
+                    .filter((call) => call.procedure === 1)
+                    .map((call) => call.minor)
+                ),
+              ],
+              [0]
+            );
           assert.match(output, new RegExp(`PASS NFS ${version} ${encoding}`));
           console.log(`PASS ${label}`);
         }
@@ -180,8 +214,8 @@ if (!process.argv.includes('--isolated')) {
           '3',
           '127.0.0.1',
           '/srv/public',
-          '2049',
-          '20048',
+          '22049',
+          '22048',
           'UTF-8',
           'fixture',
         ];
@@ -205,6 +239,7 @@ if (!process.argv.includes('--isolated')) {
       }
     }
   } finally {
+    await observer.close();
     clearTimeout(watchdog);
     vm.kill('SIGTERM');
     await ended;

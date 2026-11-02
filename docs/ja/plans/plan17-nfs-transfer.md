@@ -2,7 +2,7 @@
 
 作成日：2026年11月2日
 
-状態：段階1の検証ドライバーと共通転送の識別子修正を完了しました。各版の実通信と非同期停止を確認済みです。段階2以降の転送画面、送信・変更操作、設定統合、全体試験は未完了です。
+状態：段階1の検証ドライバーと共通転送の識別子修正を完了しました。各版の実通信と非同期停止を確認済みです。plan17本体は一時停止中で、追加指示のシステム版libnfsへの切り替えを反映しました。段階2以降の転送画面、送信・変更操作、設定統合、全体試験は未完了です。
 
 ## 目的と前提
 
@@ -18,14 +18,18 @@ NFS v2はlibnfsの低水準RPC APIを使い、アプリ側で不足するファ�
 
 [RemoteFileClient](../../../elder-terms-terminal/src/file-transfer/remote-file-client.h)には、一覧、属性、読み書き、変更操作、能力情報が定義されています。[SMBのサーバークライアント](../../../elder-terms-terminal/src/smb/smb-client.cpp)はサーバールートと共有内パスを分け、共有ごとの接続を遅延して開始します。この責任分担をNFSでも使用します。
 
-確認したlibnfsは`affe4c88829cd07bba082fe544df05d89c770d49`です。[公式README](https://github.com/sahlberg/libnfs/blob/affe4c88829cd07bba082fe544df05d89c770d49/README)では高水準の同期・非同期APIとRAW RPC APIを区別しています。[公開ヘッダー](https://github.com/sahlberg/libnfs/blob/affe4c88829cd07bba082fe544df05d89c770d49/include/nfsc/libnfs.h)と[RAW APIのコメント](https://github.com/sahlberg/libnfs/blob/affe4c88829cd07bba082fe544df05d89c770d49/include/nfsc/libnfs-raw.h)も確認しました。採用版は段階1で固定します。
+利用者の指定により、libnfsはシステムライブラリを使います。`pkg-config`で5.0.2以上の開発パッケージを検出し、サブモジュールへの追加や独自ビルドは行いません。検証環境はUbuntu 24.04で、`libnfs-dev`と`libnfs14`の版は`5.0.2-1ubuntu0.24.04.1`です。`pkg-config --modversion libnfs`では`5.0.2`を返します。
 
-この版の`LIBNFS_API_V2`はライブラリAPIの世代であり、NFSプロトコルv2の意味ではありません。RAW APIには`rpc_nfs2_*_task()`と`rpc_mount1_*_task()`があります。古い例にある`*_async()`の名前や戻り値を混用せず、採用した公開契約で実装します。
+[5.0.2の公式README](https://github.com/sahlberg/libnfs/blob/libnfs-5.0.2/README)では高水準の同期・非同期APIとRAW RPC APIを区別しています。[公開ヘッダー](https://github.com/sahlberg/libnfs/blob/libnfs-5.0.2/include/nfsc/libnfs.h)と[RAW APIのコメント](https://github.com/sahlberg/libnfs/blob/libnfs-5.0.2/include/nfsc/libnfs-raw.h)を、実際の`/usr/include/nfsc/`と照合しました。
+
+システム版5.0.2のRAW APIは`*_async()`で、要求を登録できると整数の0を返します。当初調査した[新しいAPIの公開契約](https://github.com/sahlberg/libnfs/blob/affe4c88829cd07bba082fe544df05d89c770d49/include/nfsc/libnfs-raw.h)では`*_task()`が要求へのポインターを返すため、そのままではビルドできませんでした。`LIBNFS_API_V2`でAPIの世代を判定し、呼び出しを切り替えます。この定数はNFSプロトコルv2の意味ではありません。
+
+高水準の読み取りAPIも、5.0.2ではコールバック中だけ有効な受信データを返します。新しいAPIで使う呼び出し側のバッファへ統一するため、その有効期間内にコピーする構成です。ポート設定は5.0.2の公開URL解析APIで指定し、名前のバイト列と設定値を分離します。非公開APIや外部コードの修正は不要です。
 
 | 対象 | 実装方針 |
 | --- | --- |
 | NFS v3 | libnfsの高水準非同期APIを使う |
-| NFS v4 | まずv4.0を必須の検証対象とする。調査版にあるv4.2はビルド条件と実通信を確認し、対応を別表示する。v4.1など未検証のminor versionまで一括して対応済みとしない |
+| NFS v4 | v4.0を必須の検証対象とする。v4.2を追加する場合は、システムライブラリの対応と実通信を確認する。未検証のminor versionまで一括して対応済みとしない |
 | NFS v2 | RAW RPCでmount、ファイルハンドル解決、列挙、属性、送受信、変更操作を組み立てる |
 | 非同期実行 | ソケットのreadinessとRPCの期限をCardioに接続する。libnfsの同期APIや内部ワーカースレッドを通常の実行経路にしない |
 
@@ -54,7 +58,7 @@ v4の名前空間上のパスと、v3のexportパスは別の値として保持�
 
 NFS接続へ「ファイル名の文字コード」を追加します。設定キーの案は`[nfs] filename_encoding`、既定値は`UTF-8`です。`CP932`、`SHIFT-JIS`、`EUC-JP`など、実行環境で利用できる文字コードを選べるようにします。CP932とShift_JISは同一視せず、指定した変換を使います。
 
-これはディレクトリ・ファイル名、公開パス、新しいリンク先の名前を解釈する設定です。端末通信の`[terminal] encoding`やファイル本文の文字コードとは独立させ、転送する本文のバイト列は変更しません。グローバル既定値、plan23のテーマ、接続ごとの上書きに対応させます。どの設定層にも指定がない場合は、OSのロケールによらずUTF-8を使います。
+これはディレクトリ・ファイル名、公開パス、新しいリンク先の名前を解釈する設定です。端末通信の`[terminal] encoding`やファイル本文の文字コードとは独立させ、転送する本文のバイト列は変更しません。2026年11月2日の利用者の指定により、今回の対象はグローバル既定値と接続ごとの上書きです。テーマからの継承はplan23で実装します。どの設定層にも指定がない場合は、OSのロケールによらずUTF-8を使います。
 
 指定の単位は接続で、一つの接続内のexportsへ共通に適用する構成です。異なる文字コードのexportは別の接続設定で扱えます。exportごとの上書きは将来の拡張候補とし、最初の実装に必須とはしません。名前ごとの自動推定や、UTF-8として読めたかどうかによる無断の切替は行いません。
 
@@ -91,7 +95,9 @@ Unicode正規化は、同じ文字を表す異なるUnicode列を一定の形式
 
 パスの区切りは名前の変換前に構造として扱います。各要素の変換後にもNUL、`/`、`.`、`..`、空名、プロトコルのバイト数上限を検査します。NFSでは`0x5c`をSMBのような区切りにしないため、CP932の複数バイト文字の途中に現れる値も保持します。UTF-16などNULを含む表現を、libnfsの通常のパス引数へそのまま渡すことはできません。
 
-libnfsのパスAPIには、符号化済みの実際のバイト列を渡します。NFS URLの解析APIは通常の操作経路に使用せず、ホスト、export、ファイルパスを個別に指定します。共有議論で指摘されたURL解析順序は、[調査版の`nfs_parse_url()`](https://github.com/sahlberg/libnfs/blob/affe4c88829cd07bba082fe544df05d89c770d49/lib/libnfs.c)でも、パーセント表記の復号後に`?`を解釈する順序でした。文字コード変換、アプリ内部の識別子表記、URLのパーセント表記を別の処理にし、`?`、`#`、`%`を含む実名を変えません。
+libnfsのパスAPIには、符号化済みの実際のバイト列を渡します。ホスト、export、ファイルパスを個別に指定し、これらをNFS URLの解析APIへ渡しません。共有議論で指摘されたURL解析順序は、[5.0.2の`nfs_parse_url()`](https://github.com/sahlberg/libnfs/blob/libnfs-5.0.2/lib/libnfs.c)でも、パーセント表記の復号後に`?`を解釈する順序でした。文字コード変換、アプリ内部の識別子表記、URLのパーセント表記を別の処理にし、`?`、`#`、`%`を含む実名を変えません。
+
+5.0.2にはポートを指定する専用の公開関数がありません。この設定に限り、固定ASCII文字列と検証済みの数値から作ったURLを`nfs_parse_url_incomplete()`へ渡します。同時に入れ子のexportへの暗黙の接続を無効にします。実際のホストやパスを含めないため、名前のバイト列には影響しません。設定項目は[公式READMEのURL書式](https://github.com/sahlberg/libnfs/blob/libnfs-5.0.2/README)で確認済みです。
 
 ### 共通転送コードへの変更
 
@@ -134,7 +140,7 @@ SSH proxyは今回の必須対応に含めません。NFSのポート探索やUD
 
 ## 段階1：採用APIと実通信の検証ドライバー
 
-外部ソースを変更せずにlibnfsを固定してビルドし、各版を明示するドライバーを作ります。v3・v4.0の一覧と1ファイル受信、v2のMOUNT・LOOKUP・READを動かし、実際に使用したプロトコルの版を確認します。
+システム版libnfsの公開APIを確認し、各版を明示するドライバーを作ります。動作の確認対象は、v3・v4.0の一覧と1ファイル受信、v2のMOUNT・LOOKUP・READです。実際に使用したプロトコルの版も確認します。
 
 表示名と操作対象の分離を共通転送の試験用クライアントで先にRED・GREEN確認します。UTF-8、CP932、EUC-JPの名前と復号不能な名前について、実通信のドライバーで列挙・表示・読み取りまで観測します。選択した項目へ送る名前が元のバイト列と一致することを検査し、表示名の一致だけを合格条件にしません。
 
@@ -142,7 +148,9 @@ v2対応サーバー、v3サーバー、MOUNTを提供しないv4専用サーバ
 
 ### 段階1の実施結果
 
-作業ブランチは`feature/nfs-transfer`です。libnfsを`affe4c88829cd07bba082fe544df05d89c770d49`でサブモジュールへ追加し、外部ソースを変更せずにビルドしました。実行経路は高水準の非同期APIとRAW RPC APIです。内部ワーカースレッド、再送、自動再接続を無効にし、Cardioのソケット待機と要求全体の期限を組み合わせています。
+作業ブランチは`feature/nfs-transfer`です。システム版libnfs 5.0.2を使い、`ldd`で`/lib/x86_64-linux-gnu/libnfs.so.14`へのリンクを確認しました。libnfsのサブモジュールと専用ビルド設定は削除済みです。独自ライブラリへのRPATHも残っていません。
+
+実行経路は高水準の非同期APIとRAW RPC APIです。内部ワーカースレッドを起動せず、再接続を無効にしています。Cardioのソケット待機と要求全体の期限を組み合わせる構成です。5.0.2のRAW APIに公開タイムアウト設定がなくても、無応答の要求を停止できます。停止後はコンテキストを破棄してコールバックを回収します。
 
 試験用サーバーには、Debian bullseyeのLinux 5.10.0-46-amd64を使います。`CONFIG_NFSD_V2=y`を確認したゲストをQEMUで起動し、ホストのNFSサービスや公開設定は変更しません。標準ポート111を使う試験は、Podmanの非特権ネットワーク名前空間内で実行します。VMはスナップショットで動かし、試験後に破棄します。
 
@@ -151,6 +159,7 @@ v2対応サーバー、v3サーバー、MOUNTを提供しないv4専用サーバ
 | v2専用サーバー | MOUNT v1、exports列挙、cookie付きREADDIR、LOOKUP、3バイト単位のREADとEOFを実通信で確認 |
 | v3専用サーバー | MOUNT v3、exports列挙、高水準APIによる一覧・OPEN・分割READ・CLOSEを確認 |
 | v4.0専用サーバー | v2・v3・v4.1・v4.2を無効にし、MOUNTとPORTMAPの待ち受けを停止。公開パス`/public`から一覧・受信を確認 |
+| 実際のプロトコル | TCP上のRPC要求を観測し、選択したNFS・MOUNTの版とv4のminor version 0を確認。ライブラリの診断用APIに依存しない |
 | 名前のバイト列 | UTF-8、CP932、SHIFT-JIS、EUC-JP、不正バイトが混在する一覧で、元の名前から受信した内容を照合 |
 | 名前の境界 | 空白、`?`、`#`、`%`、CP932の途中の`0x5c`、NFC/NFD、ゼロバイトのファイルを確認 |
 | 接続先ポート | v2/v3でPORTMAP探索と固定ポートをそれぞれ確認 |
@@ -160,13 +169,13 @@ v2対応サーバー、v3サーバー、MOUNTを提供しないv4専用サーバ
 
 名前の変換部品は、iconvで指定した変換と逆変換を検証します。新規名の不正なUTF-8、非可逆変換、NUL、区切り、`.`・`..`、長さ超過を拒否します。既存名の復号失敗はUTF-8の16進表示へ変え、操作用の元のバイト列は保持します。APIの契約は[GNU C Libraryの公式文書](https://sourceware.org/glibc/manual/latest/html_node/Generic-Conversion-Interface.html)と`/usr/include/iconv.h`で照合しました。
 
-初期実装で提供する転送はTCPとし、NFS v4は4.0を対象にします。libnfsの高水準APIが公開するトランスポートはTCPとRDMAであり、UDPをv3の選択肢として表示しません。v2のUDPとv4.2も対応済みとは表示しません。根拠は[採用版の公開ヘッダー](https://github.com/sahlberg/libnfs/blob/affe4c88829cd07bba082fe544df05d89c770d49/include/nfsc/libnfs.h)です。
+初期実装で提供する転送はTCPとし、NFS v4は4.0を対象にします。5.0.2の[公開ヘッダー](https://github.com/sahlberg/libnfs/blob/libnfs-5.0.2/include/nfsc/libnfs.h)にある高水準APIはv3とv4を選択する契約です。UDPやv4.2は今回の実装・検証の対象に含めません。
 
-libnfsのビルドで出た警告は、rpcgenが生成したMOUNTコードの未使用変数への代入でした。[生成元の外部コード](https://github.com/sahlberg/libnfs/blob/affe4c88829cd07bba082fe544df05d89c770d49/mount/libnfs-raw-mount.c)を編集せず、依存ライブラリのビルドだけに`-Wno-unused-but-set-variable`を適用しました。再ビルドでは警告がなく、アプリ側は`-Werror`を維持しています。
+システム版への切り替えでは、まず既存コードのビルドがAPI差異で失敗することを確認しました。公開APIに合わせた修正後は`-Werror`でビルドでき、上記の実通信試験と各版の中止・切断・無応答試験が成功しています。依存ライブラリを独自ビルドしないため、そのビルド専用だった警告抑制も削除しました。
 
-再現コマンドは`make -C elder-terms-terminal/tests/nfs deps test`です。`SANITIZE=1`でアプリ側のASan/UBSan検証を実行できます。実通信のログは`.build/nfs-evidence/`に出力します。共通転送は`meson compile -C .build sftp-transfer-engine-test`と`.build/elder-terms-terminal/sftp-transfer-engine-test`で確認しました。全体の`make test`は段階6で実行します。
+再現コマンドは`make -C elder-terms-terminal/tests/nfs deps test`です。`SANITIZE=1`を指定した試験も、システム版で成功しました。アプリ側のASan/UBSan検証を有効にし、実通信のログを`.build/nfs-evidence/`へ出力します。共通転送は段階1のコミット時点で、`meson compile -C .build sftp-transfer-engine-test`と`.build/elder-terms-terminal/sftp-transfer-engine-test`で確認済みです。全体の`make test`は段階6で実行します。
 
-plan23のテーマ機能は現在のコードでは未実装です。NFSに必要な読み込み・継承まで本planに含めるか、テーマ連携をplan23へ回すかを確認中です。段階2の通信・転送部分は先に進めます。
+plan23のテーマ機能は現在のコードでは未実装です。利用者への確認により、今回の設定対象をグローバル既定値と接続設定に確定しました。テーマ連携はplan23で実装します。
 
 ## 段階2：NFS v3と公開ルートを画面で利用する
 

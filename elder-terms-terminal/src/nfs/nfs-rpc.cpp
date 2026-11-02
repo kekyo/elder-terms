@@ -5,6 +5,7 @@
 
 #include "nfs-rpc.h"
 #include <poll.h>
+#include <cstring>
 
 namespace elder_terms {
 
@@ -37,9 +38,16 @@ std::shared_ptr<NfsRpcSession> create_nfs_rpc_session(int version, int timeout_m
   if (nfs_set_version(session->nfs, version) != 0)
     throw RemoteFileError("The selected NFS version is unavailable", false);
   nfs_set_autoreconnect(session->nfs, 0);
+#ifdef LIBNFS_API_V2
   nfs_set_retrans(session->nfs, 0);
+#else
+  // API v1 has no configurable TCP RPC retransmissions. Reconnect is disabled,
+  // and Cardio still bounds the entire operation with an absolute deadline.
+  nfs_set_readahead(session->nfs, 0);
+  nfs_set_pagecache(session->nfs, 0);
+#endif
   nfs_set_dircache(session->nfs, 0);
-  nfs_set_auto_traverse_mounts(session->nfs, 0);
+  configure_nfs_ports(session, 0, 0);
   nfs_set_timeout(session->nfs, timeout_ms);
   return session;
 }
@@ -49,8 +57,28 @@ std::shared_ptr<NfsRpcSession> create_nfs_raw_session(int timeout_ms) {
   session->rpc = rpc_init_context();
   if (!session->rpc) throw std::bad_alloc();
   session->timeout_ms = timeout_ms;
+#ifdef LIBNFS_API_V2
   rpc_set_timeout(session->rpc, timeout_ms);
+#endif
+  // API v1 does not publish rpc_set_timeout(). The Cardio deadline applies to
+  // raw contexts too, and retires callbacks before their storage is released.
   return session;
+}
+
+void configure_nfs_ports(const std::shared_ptr<NfsRpcSession> &session, int nfs_port, int mount_port) {
+  if (!session->nfs || nfs_port < 0 || nfs_port > 65535 || mount_port < 0 || mount_port > 65535)
+    throw std::invalid_argument("Invalid NFS service port");
+#ifdef LIBNFS_API_V2
+  nfs_set_auto_traverse_mounts(session->nfs, 0);
+  nfs_set_nfsport(session->nfs, nfs_port);
+  nfs_set_mountport(session->nfs, mount_port);
+#else
+  const auto options = "nfs:///?auto-traverse-mounts=0&nfsport=" + std::to_string(nfs_port) +
+      "&mountport=" + std::to_string(mount_port);
+  auto *parsed = nfs_parse_url_incomplete(session->nfs, options.c_str());
+  if (!parsed) throw RemoteFileError(nfs_get_error(session->nfs), false);
+  nfs_destroy_url(parsed);
+#endif
 }
 
 struct NfsCompletion {
@@ -176,6 +204,27 @@ void check_nfs_result(const NfsRpcResult &result, const char *operation) {
   const int error = -result.status;
   const bool lost = error == ECONNRESET || error == ENOTCONN || error == EPIPE || error == ETIMEDOUT || error == ESTALE;
   throw RemoteFileError(std::string("NFS ") + operation + ": " + result.message, lost);
+}
+
+cardio::promise<std::size_t> read_nfs_async(std::shared_ptr<NfsRpcSession> session,
+    nfsfh *handle, std::span<std::byte> buffer, std::uint64_t offset, cardio::cancellation cancellation) {
+  const auto result = co_await execute_nfs_async(session, [&](auto cb, auto data) {
+#ifdef LIBNFS_API_V2
+    return nfs_pread_async(session->nfs, handle, buffer.data(), buffer.size(), offset, cb, data);
+#else
+    return nfs_pread_async(session->nfs, handle, offset, buffer.size(), cb, data);
+#endif
+  }, [&](int count, void *data) {
+    if (static_cast<std::size_t>(count) > buffer.size())
+      throw RemoteFileError("NFS read returned more bytes than requested", true);
+#ifndef LIBNFS_API_V2
+    if (count != 0) std::memcpy(buffer.data(), data, count);
+#else
+    (void)data;
+#endif
+  }, cancellation);
+  check_nfs_result(result, "read");
+  co_return static_cast<std::size_t>(result.status);
 }
 
 } // namespace elder_terms

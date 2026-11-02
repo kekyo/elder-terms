@@ -13,6 +13,3 @@
 [submodule "deps/libsmb2"]
 	path = deps/libsmb2
 	url = https://github.com/sahlberg/libsmb2.git
-[submodule "deps/libnfs"]
-	path = deps/libnfs
-	url = https://github.com/sahlberg/libnfs.git
