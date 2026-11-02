@@ -93,6 +93,11 @@ struct ActivityFileClient final : RemoteFileClient {
   std::string upload_temporary_path(const std::string &destination, const std::string &suffix) const override {
     return delegate->upload_temporary_path(destination, suffix);
   }
+  std::optional<std::string> local_filename(const RemoteFileAttributes &item) const override {
+    return delegate->local_filename(item);
+  }
+  std::string import_link_target(const std::string &target) const override { return delegate->import_link_target(target); }
+  std::string export_link_target(const std::string &target) const override { return delegate->export_link_target(target); }
   bool try_begin_transfer() override { return delegate->try_begin_transfer(); }
   void end_transfer() override { delegate->end_transfer(); }
   RemoteReceiveLimits receive_limits() const override { return delegate->receive_limits(); }

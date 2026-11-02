@@ -20,6 +20,7 @@
 #include <fstream>
 #include <functional>
 #include <map>
+#include <set>
 #include <memory>
 #include <span>
 #include <stdexcept>
@@ -149,6 +150,8 @@ public:
   bool transfer_active = false;
   bool fail_next_write = false;
   bool encoded_child_names = false;
+  std::set<std::string> undecodable_names;
+  bool encoded_link_targets = false;
   std::function<cardio::promise<void>()> before_read_close;
   std::function<cardio::promise<void>(cardio::cancellation)> before_listing;
   std::function<void()> before_stat;
@@ -162,6 +165,18 @@ public:
   std::string upload_temporary_path(const std::string &destination, const std::string &suffix) const override {
     if (!encoded_child_names) return destination + suffix;
     return destination.substr(0, destination.find_last_of('/')) + "/id-" + suffix;
+  }
+
+  std::optional<std::string> local_filename(const elder_terms::RemoteFileAttributes &item) const override {
+    return undecodable_names.contains(item.path) ? std::nullopt : std::optional(item.name);
+  }
+  std::string import_link_target(const std::string &target) const override {
+    return encoded_link_targets ? "wire:" + target : target;
+  }
+  std::string export_link_target(const std::string &target) const override {
+    if (!encoded_link_targets) return target;
+    if (!target.starts_with("wire:")) throw std::runtime_error("Undecodable link target");
+    return target.substr(5);
   }
 
   void add_directory(const std::string &path,
@@ -1186,6 +1201,87 @@ static cardio::promise<void> test_delete_preserves_remote_identity() {
   expect_true(client->nodes.empty(), "Recursive removal must operate on both distinct listed identities");
 }
 
+static cardio::promise<void> test_receive_ambiguous_and_undecodable_names() {
+  using namespace elder_terms;
+  const auto root = test_root_directory() / "ambiguous-receive";
+  const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+  std::filesystem::create_directories(root / "source");
+  write_file(root / "source/same.txt", "keep existing content");
+  auto client = std::make_shared<FakeSftpClient>();
+  client->add_directory("/source");
+  client->add_file("/source/first-identity", "first");
+  client->add_file("/source/second-identity", "second");
+  client->add_file("/source/invalid-identity", "invalid bytes");
+  client->add_file("/source/good.txt", "good");
+  client->nodes.at("/source/first-identity").attributes.name = "same.txt";
+  client->nodes.at("/source/second-identity").attributes.name = "same.txt";
+  client->nodes.at("/source/invalid-identity").attributes.name = "[undecodable: FF]";
+  client->undecodable_names.insert("/source/invalid-identity");
+  FileTransferRequest request;
+  request.direction = FileTransferDirection::receive;
+  request.source_paths = {"/source"};
+  request.destination_directory = root.string();
+  request.callbacks.conflict = [](const FileTransferConflict &, cardio::cancellation) -> cardio::promise<FileTransferConflictAction> {
+    co_return FileTransferConflictAction::overwrite;
+  };
+  request.callbacks.failure = [](const FileTransferFailure &, cardio::cancellation) -> cardio::promise<FileTransferFailureAction> {
+    co_return FileTransferFailureAction::skip;
+  };
+  auto observed = create_activity_file_client(client, [](ActivityIndicatorId) {}, {});
+  auto result = co_await run_file_transfer_async(observed, request, {});
+  expect_true(read_file(root / "source/same.txt") == "keep existing content" &&
+      !std::filesystem::exists(root / "source/[undecodable: FF]") && read_file(root / "source/good.txt") == "good",
+      "Ambiguous and undecodable local names must never create or replace files, even with overwrite selected");
+  expect_true(result.skipped_items == 3 && result.succeeded_items == 2 && result.failures.size() == 3,
+      "Skipping unsafe names must retain each original item's failure and copy unaffected siblings");
+  std::set<std::string> failed;
+  for (const auto &item : result.failures) failed.insert(item.source_path);
+  expect_true(failed == std::set<std::string>{"/source/first-identity", "/source/second-identity", "/source/invalid-identity"},
+      "Name failures must identify each original remote item");
+  request.source_paths = {"/source/first-identity", "/source/second-identity", "/source/invalid-identity"};
+  request.destination_directory = (root / "source").string();
+  result = co_await run_file_transfer_async(observed, request, {});
+  expect_true(result.skipped_items == 3 && result.succeeded_items == 0 && read_file(root / "source/same.txt") == "keep existing content",
+      "Selected roots must apply the same collision and undecodable-name rules as recursive children");
+}
+
+static cardio::promise<void> test_link_target_conversion_boundary() {
+  using namespace elder_terms;
+  const auto root = test_root_directory() / "link-conversion";
+  const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+  std::filesystem::create_directories(root / "source");
+  write_file(root / "source/日本語", "linked content");
+  std::filesystem::create_symlink("日本語", root / "source/link");
+  std::filesystem::create_symlink("missing", root / "source/dangling");
+  auto client = std::make_shared<FakeSftpClient>();
+  client->encoded_link_targets = true;
+  client->add_directory("/destination");
+  FileTransferRequest request;
+  request.direction = FileTransferDirection::send;
+  request.source_paths = {(root / "source").string()};
+  request.destination_directory = "/destination";
+  auto observed = create_activity_file_client(client, [](ActivityIndicatorId) {}, {});
+  co_await run_file_transfer_async(observed, request, {});
+  expect_true(client->nodes.at("/destination/source/link").link_target == "wire:日本語",
+      "New remote links must convert local targets at the remote client's boundary");
+  client->nodes.at("/destination/source/link").attributes.modification_time_unix_seconds = 123;
+  client->nodes.at("/destination/source/dangling").attributes.modification_time_unix_seconds = 456;
+  std::filesystem::create_directory(root / "received");
+  request.direction = FileTransferDirection::receive;
+  request.source_paths = {"/destination/source"};
+  request.destination_directory = (root / "received").string();
+  co_await run_file_transfer_async(observed, request, {});
+  expect_true(std::filesystem::read_symlink(root / "received/source/link") == "日本語" &&
+      read_file(root / "received/source/link") == "linked content", "Received links must still resolve to the copied file");
+  struct stat link_attributes{}, dangling_attributes{}, target_attributes{};
+  expect_true(lstat((root / "received/source/link").c_str(), &link_attributes) == 0 &&
+      lstat((root / "received/source/dangling").c_str(), &dangling_attributes) == 0 &&
+      stat((root / "received/source/日本語").c_str(), &target_attributes) == 0 &&
+      link_attributes.st_mtime == 123 && dangling_attributes.st_mtime == 456 &&
+      target_attributes.st_mtime == *client->nodes.at("/destination/source/日本語").attributes.modification_time_unix_seconds,
+      "Receiving link timestamps must work for dangling links and preserve the target's timestamps");
+}
+
 static cardio::promise<void> test_rejects_parallel_bulk_transfer() {
   auto client = std::make_shared<FakeSftpClient>();
   client->add_directory("/");
@@ -1226,6 +1322,8 @@ int main() {
       for (const auto &[name, run] : std::vector<std::pair<const char *, cardio::promise<void>(*)()>>{
           {"test_receive_preserves_remote_identity", test_receive_preserves_remote_identity},
           {"test_send_uses_client_name_boundary", test_send_uses_client_name_boundary},
+          {"test_receive_ambiguous_and_undecodable_names", test_receive_ambiguous_and_undecodable_names},
+          {"test_link_target_conversion_boundary", test_link_target_conversion_boundary},
           {"test_delete_preserves_remote_identity", test_delete_preserves_remote_identity},
           {"test_job_results_and_lifecycle", test_job_results_and_lifecycle},
           {"test_job_partial_failure_and_commit_boundary", test_job_partial_failure_and_commit_boundary},

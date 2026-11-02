@@ -252,6 +252,29 @@ public:
   }
 
   /**
+   * Suggests a local UTF-8 filename for an existing remote identity.
+   * @param item Listed or statted item, including its original identity.
+   * @returns Losslessly decoded filename, or no value when explicit naming is required.
+   */
+  virtual std::optional<std::string> local_filename(const RemoteFileAttributes &item) const {
+    return item.name;
+  }
+
+  /**
+   * Converts a local symbolic-link target for creation on this service.
+   * @param target Stored local target, retaining relative segments and separators.
+   * @returns Remote target bytes; throws when the mapping is not lossless.
+   */
+  virtual std::string import_link_target(const std::string &target) const { return target; }
+
+  /**
+   * Converts a remote symbolic-link target for creation in the local filesystem.
+   * @param target Original stored remote bytes, never its display representation.
+   * @returns Local target; throws when conversion would change its meaning.
+   */
+  virtual std::string export_link_target(const std::string &target) const { return target; }
+
+  /**
    * Loads one directory as a single logical remote operation.
    *
    * @param path Remote path accepted by the service.
