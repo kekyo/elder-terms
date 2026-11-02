@@ -1,14 +1,16 @@
-# plan20：リンクの終端認識、設定配置、ホバー下線
+# plan20：任意テキストのリンク認識とregex・OSC別の表示設定
 
 作成日：2026年11月2日
 
 状態：計画作成。実装は未着手です。
 
-## 目的と再現例
+## 目的と入力例
 
-隣接するMarkdown形式のリンクを、一続きのURLとして認識する問題を修正します。リンク表示の設定を色補正の途中から移し、ポインターが重なったときだけ下線を追加するモードを加えます。
+任意の端末テキストからリンクを認識する際に、URLの後ろの文章や記号、隣のリンクまで取り込む問題を修正します。入力はログ、コマンド出力、文章などで、Markdownは不正な範囲を認識してしまう一例です。
 
-再現に使う端末出力は次の文字列です。Markdownのラベルを隠して描画する機能の追加は含めず、表示されたURL部分の範囲と操作対象を正しくすることを目的とします。
+リンク表示はregexリンクとOSC 8リンクで別々に設定できるようにします。regexリンクは端末テキストから正規表現で見つけるリンク、OSC 8リンクは端末の制御シーケンスでリンク先と表示範囲が明示されたリンクです。既定値はregexがホバー時の下線、OSC 8が常時の下線とします。設定は色補正の途中からリンク設定ページへ移します。
+
+回帰例の一つとして、次の文字列をそのまま端末へ出力します。Markdown専用の解析やラベルの描き換えは行いません。
 
 ```text
 "[Combine Streamの仕様](https://docs.pipewire.org/page_module_combine_stream.html)、[PipeWire 1.0.5のcombine-stream実装](https://github.com/PipeWire/pipewire/blob/1.0.5/src/modules/module-combine-stream.c)"
@@ -30,7 +32,8 @@ https://github.com/PipeWire/pipewire/blob/1.0.5/src/modules/module-combine-strea
 | 既定ルール | [hyperlink-settings.cpp](../../../shared/src/settings/hyperlink-settings.cpp)の`http-url-text`は空白・引用符・山括弧など以外を広く許可し、閉じ括弧や読点で停止しない |
 | 認識と装飾 | [terminal-links.cpp](../../../elder-terms-terminal/src/terminal-links.cpp)が文字列・OSC 8のルール、注釈、パス検証、キャッシュを管理する |
 | ポインター | [terminal-runtime.cpp](../../../elder-terms-terminal/src/terminal-runtime.cpp)が座標、リンクのhover、Ctrlクリック、選択ドラッグを扱う |
-| 表示設定 | [terminal-settings.h](../../../shared/include/elder-terms/settings/terminal-settings.h)の`TerminalLinkDecoration`は`none`、`underline`、`validated` |
+| 表示設定 | [terminal-settings.h](../../../shared/include/elder-terms/settings/terminal-settings.h)の`TerminalLinkDecoration`は`none`、`underline`、`validated`。現在は一つの設定をregex・OSC 8で共用する |
+| 設定の伝達 | [terminal-presentation.cpp](../../../elder-terms-terminal/src/terminal-presentation.cpp)と`terminal-runtime.cpp`が単一の装飾値を渡し、`terminal-links.cpp`が各ルールへ適用する。認識元は既に`HyperlinkRecognitionSource`で区別できる |
 | 配置 | [settings-widget.cpp](../../../shared/src/settings-widget/settings-widget.cpp)では色補正・色覚補正の後、色プレビューの前にリンク表示設定が置かれる |
 | リンク設定ページ | [hyperlink-settings-editor.cpp](../../../shared/src/settings-widget/hyperlink-settings-editor.cpp)に認識ルールと操作設定の画面がある |
 
@@ -40,6 +43,9 @@ https://github.com/PipeWire/pipewire/blob/1.0.5/src/modules/module-combine-strea
 
 | 入力 | 期待する扱い |
 | --- | --- |
+| `参照: https://host/a、詳細は後述`などの通常文 | URLだけを認識し、後続の文章を取り込まない |
+| ログ中の`url="https://host/a" status=200` | 引用符と次のフィールドを含めない |
+| 空白や句読点で隣接する複数URL | それぞれを独立した範囲として認識する |
 | `(https://host/a)`、`[label](https://host/a)` | 外側の閉じ括弧を含めずURLを認識する |
 | `https://host/a_(b)` | URL内で対応する括弧を保持する |
 | `https://host/a)、次の文章` | 未対応の閉じ括弧と日本語の区切りで終了する |
@@ -55,9 +61,24 @@ https://github.com/PipeWire/pipewire/blob/1.0.5/src/modules/module-combine-strea
 
 URIで許される文字と文章中の自動認識は別の契約です。文字の解釈は[RFC 3986](https://www.rfc-editor.org/rfc/rfc3986.html)に照らして確認し、曖昧な末尾をすべてのURLで完全判定できるとは説明しません。明示的なOSC 8や利用者ルールを保持します。
 
+## 認識元ごとの表示設定
+
+| 認識元 | 設定キーの案 | 未設定時の表示 |
+| --- | --- | --- |
+| regex・端末テキスト | `[terminal] regex_link_decoration` | `hover`。ポインターが重なっている間だけ下線を追加する |
+| OSC 8 | `[terminal] osc8_link_decoration` | `underline`。ポインターの位置にかかわらず下線を追加する |
+
+それぞれに`none`、`underline`、`hover`、`validated`を選べる構成です。`validated`は現在と同じく下線とローカルパスの検証表示を行います。片方の表示設定を変えても、もう片方の装飾、既定値、継承値を変更しません。
+
+分類の基準は認識元です。OSC 8のURIを起動ルールの正規表現と照合していても、そのリンクはOSC側の設定に従います。OSC 8の範囲にURLの見た目が含まれ、テキスト認識とも重なる場合はOSC側の表示を優先し、regexのホバー解除で常時下線が消えないようにします。表示の優先と、既存の起動ルールによる操作先の解決は別に扱います。
+
+OSC 8が明示したリンクの表示と、起動ルールに一致して操作可能かどうかも分けます。常時表示を選んだこと自体は、新しいURIスキームや起動操作を許可する意味にはしません。表示用注釈の生成と、クリック時の操作解決をアプリ側で整理します。
+
+単一の`link_decoration`から、認識元ごとの値を保持する設定へ置き換えます。後方互換性のために旧値を両方へ適用する分岐は設けず、不要になる旧定義・ヘルパーを削除します。削除のRED・GREEN、いったんコミットした後の一時テストの撤去はplan15の共通条件に従います。
+
 ## ホバー下線
 
-新しい表示値の案は`hover`です。既存の3モードを残し、ポインターが対象リンクに重なっている間だけ、アプリが下線を追加します。Ctrlキーの押下は下線表示の条件にせず、開く操作は現在のCtrlクリックのままです。
+新しい表示値は`hover`です。その認識元でこの値を選んだ場合に、ポインターが対象リンクに重なっている間だけ下線を追加します。Ctrlキーの押下は下線表示の条件にせず、開く操作は現在のCtrlクリックのままです。既定ではregexに適用し、OSC 8はホバー外でも下線を保ちます。
 
 | 場面 | ホバーモードの動作 |
 | --- | --- |
@@ -71,36 +92,36 @@ URIで許される文字と文章中の自動認識は別の契約です。文�
 
 リンクの同一性には画面、論理行とその世代、ルール、認識範囲、OSC 8の識別情報を使います。URL文字列だけで同一視しません。折り返された一つのリンクは対応する範囲をまとめて強調します。
 
-装飾は現在の注釈APIを使い、端末が指定する下線を補う`UNDERLINE_FALLBACK`の契約を維持します。根拠は[boxrigの色補正文書](../../../deps/boxrig/docs/ja/color-filters.md)と[公開コメント](../../../deps/boxrig/include/boxrig/ui/view.h)です。認識結果やパス検証キャッシュを、hoverが変わるたびに作り直さない構成にします。
+装飾は現在の注釈APIを使い、端末が指定する下線を補う`UNDERLINE_FALLBACK`の契約を維持します。根拠は[boxrigの色補正文書](../../../deps/boxrig/docs/ja/color-filters.md)と[公開コメント](../../../deps/boxrig/include/boxrig/ui/view.h)です。認識元別の値とhover状態はアプリ側が保持できるため、本planにboxrigのAPI追加は想定しません。認識結果やパス検証キャッシュを、hoverが変わるたびに作り直さない構成にします。
 
 ## 設定位置
 
-「リンク表示」は既存のリンク設定ページの先頭へ移す案を採用候補とします。同じページで表示方法を選び、その下で認識ルールと起動動作を編集できる並びです。色補正ページでは補正項目と色プレビューを連続させます。
+既存のリンク設定ページの先頭に「regexリンクの表示」と「OSC 8リンクの表示」を並べます。その下で認識ルールと起動動作を編集できる構成です。色補正ページでは補正項目と色プレビューを連続させます。
 
-設定キーは通常の継承可能な`[terminal] link_decoration`のまま使えます。画面上の配置と保存先は独立しているため、位置を移すためだけに設定ファイルを移行する必要はありません。グローバル設定、接続設定、実行中の設定のすべてで、保存・継承・Apply・Cancelを確認します。
+二つの設定は通常の継承可能なキーとして扱います。グローバル設定、接続設定、実行中の設定のすべてで、別々の保存・継承・Apply・Cancelを確認します。色補正の有効化も両方の値を参照し、片方で`validated`を選んだ場合に必要な補正を適用する構成です。
 
-## 段階1：再現文字列の認識と操作を修正する
+## 段階1：任意テキストの終端認識と操作を修正する
 
-[boxrig-links-test.cpp](../../../elder-terms-terminal/tests/cpp/boxrig-links-test.cpp)などへ提示文字列をそのまま出力する回帰テストを追加します。検証対象は2件の範囲とリンク先、括弧・読点の非リンク領域、折り返しです。現状のREDを確認してから修正します。
+[boxrig-links-test.cpp](../../../elder-terms-terminal/tests/cpp/boxrig-links-test.cpp)などへ、通常文、ログ、括弧付きURL、Markdownの提示例をそのまま出力する回帰テストを追加します。検証対象はリンクごとの範囲と操作先、隣接する非リンク領域、折り返しです。現状のREDを確認してから修正します。
 
-正当な括弧、IPv6、クエリー、OSC 8、利用者ルールのケースも確認します。GUIでCtrlクリック先を試験用の起動先へ記録し、「リンクをコピー」の内容を比較します。完了条件は、提示例の2件が別々に正しく操作でき、既存の認識方式が維持されることです。
+正当な括弧、IPv6、クエリー、OSC 8、利用者ルールのケースも確認します。GUIでCtrlクリック先を試験用の起動先へ記録し、「リンクをコピー」の内容を比較します。完了条件は、通常文・ログ・提示例のすべてでリンクの範囲と操作先が一致し、既存の認識方式が維持されることです。
 
 ## 段階2：設定を移し、ホバーモードを追加する
 
-設定値と配置を変更し、保存・継承・適用を実装します。既存のhover判定から装飾を更新する処理を追加し、静止したポインターの下で出力が変わる場合も反映します。
+regex用とOSC 8用の二つの表示設定を定義し、保存・継承・実行中の端末への適用と、設定画面の配置変更を実装します。既存のhover判定から装飾を更新する処理を追加し、静止したポインターの下で出力が変わる場合も反映します。
 
-完了条件は、ホバーの前後で追加下線が出入りし、端末自身の下線が消えないことです。画面上の色補正項目とプレビューも連続して表示されます。
+完了条件は、未設定時にregexはホバー下線、OSC 8は常時下線となり、それぞれを独立して変更できることです。端末自身の下線を保持し、画面上の色補正項目とプレビューも連続して表示します。
 
 ## 段階3：ポインター操作と全体検証
 
-[terminal-hyperlink.test.ts](../../../elder-terms-terminal/tests/terminal-hyperlink.test.ts)、[boxrig-link-styles.test.ts](../../../elder-terms-terminal/tests/boxrig-link-styles.test.ts)、[boxrig-link-refresh.test.ts](../../../elder-terms-terminal/tests/boxrig-link-refresh.test.ts)へ機能検証を追加します。ドラッグによる選択、Ctrlクリック、スクロール、出力更新、再接続、破棄を確認します。
+[terminal-hyperlink.test.ts](../../../elder-terms-terminal/tests/terminal-hyperlink.test.ts)、[boxrig-link-styles.test.ts](../../../elder-terms-terminal/tests/boxrig-link-styles.test.ts)、[boxrig-link-refresh.test.ts](../../../elder-terms-terminal/tests/boxrig-link-refresh.test.ts)へ機能検証を追加します。同じ画面にregexとOSC 8のリンクを表示し、各設定の組合せ、片側だけの変更、継承、重複範囲、未対応の操作先を確認します。ドラッグによる選択、Ctrlクリック、スクロール、出力更新、再接続、破棄も検証対象です。
 
 ポインターの移動と下線の出入りを動画でアサートし、設定画面と表示を目視確認します。入力・描画の既存性能試験を含む`make test`を実行し、利用者向け説明を更新して完了とします。
 
 ## 最終完了条件
 
-1. 提示された文字列から2件のURLを正しい終端で認識し、表示・実行・コピーの対象が一致する。
+1. 任意の端末テキストでURLの後ろの文章や隣のリンクを取り込まず、表示・実行・コピーの対象が一致する。Markdownの提示例も2件のURLとして正しく扱う。
 2. URL内部の正当な括弧、IPv6、折り返し、OSC 8、利用者定義ルールを損なわない。
-3. リンク表示をリンク設定ページで操作でき、色補正とプレビューの間に挟まらない。
-4. ホバー時だけ追加下線が現れ、出力・スクロール・退出で更新され、元の端末属性は保持される。
+3. regexとOSC 8の表示をリンク設定ページで独立して設定・継承でき、既定値はそれぞれホバー下線・常時下線となる。色補正とプレビューの間には挟まらない。
+4. ホバーモードを選んだ認識元だけで追加下線が出入りし、出力・スクロール・退出で更新される。OSC 8との重複範囲や元の端末属性を正しく扱う。
 5. 動画、目視確認、リンク・選択・全体テストが完了している。

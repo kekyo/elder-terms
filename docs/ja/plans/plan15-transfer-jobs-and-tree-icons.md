@@ -4,6 +4,8 @@
 
 状態：計画作成。実装は未着手です。ジョブ一覧の配置は比較案と推奨案を示しており、確定事項とは区別しています。
 
+対象はFTP、FTPS、SFTP、WebDAV、SMBなど、ファイル転送画面で扱う転送です。追加予定のHTTP/HTTPSとNFSも同じジョブへ接続します。端末内のX/Y/ZMODEMとテキスト送信は対象外です。
+
 ## 計画群の分割と実装順
 
 今回の要求を次の8本に分けます。調査基準は`develop`の`43d301c01cdb3b98ed75fec01386715ae215d405`です。実装開始時には、対象ファイルと依存ライブラリの差分を再確認します。
@@ -15,11 +17,25 @@
 | [plan17](plan17-nfs-transfer.md) | NFS v2・v3・v4と公開ルートの探索 | plan15に接続。NFS v2の補完は独立して検証する |
 | [plan18](plan18-smb1-transfer.md) | SMBのバージョン設定とlibdsm接続 | plan15に接続。同期APIの実行方法を先に検証する |
 | [plan19](plan19-titlebar-effects.md) | BELのフラッシュとタイトル変更時のグラデーション | 転送方式の追加から独立 |
-| [plan20](plan20-hyperlink-recognition-and-hover.md) | URL終端認識、設定位置、ホバー下線 | plan21と同じポインター処理を変更するため先に統合する |
+| [plan20](plan20-hyperlink-recognition-and-hover.md) | 任意の端末テキストのURL終端認識、regex・OSC別の表示設定、ホバー下線 | plan21と同じポインター処理を変更するため先に統合する |
 | [plan21](plan21-selection-mode-during-drag.md) | マウス移動時の通常・ブロック選択切替 | plan20統合後にリンク操作との競合を確認する |
 | [plan22](plan22-explicit-background-opacity.md) | 明示された文字背景色の不透明表示 | boxrigの公開APIを確認してから製品へ組み込む |
 
 推奨順はplan15、plan16、plan17、plan18です。端末側はplan19、plan20、plan21を進められます。plan22の依存API調査は早めに行い、上流側の対応が必要なら、その待ち時間とアプリ側の作業を分けます。
+
+## boxrigへの影響
+
+現在の公開APIを基準とした見込みは次のとおりです。実際に必要になる変更と、このリポジトリ内で行う作業を分けて扱います。
+
+| 計画 | boxrig側のコード変更 | 根拠と必要な契約 |
+| --- | --- | --- |
+| plan15～18 | 想定しない | 転送クライアント、ジョブ、GTKツリーの変更。端末内の転送は対象外 |
+| plan19 | 想定しない | 既存のタイトル・BEL通知を受け、アプリのGTKヘッダーと周期状態を更新する |
+| plan20 | 想定しない | 認識元の区別と表示設定はアプリが持つ。既存の注釈APIでregexとOSC 8の装飾を別々に反映する |
+| plan21 | 公開APIと選択状態の変更が必要になる見込み | 現在は表示領域のヒット結果からの開始と終点更新が中心。画面外の開始点を保ったまま形状・単位を変更する契約が必要 |
+| plan22 | 公開APIと描画処理の変更が必要 | 背景alphaは現在全体で一つ。色補正からalphaを変更できないため、背景色の出自ごとに不透明度を決める契約が必要 |
+
+根拠は[boxrigの選択・注釈・透過設定API](../../../deps/boxrig/include/boxrig/ui/view.h)と[色補正API](../../../deps/boxrig/include/boxrig/ui/color.h)です。plan21・22には、依存側で必要な契約の検証と、アプリ側への統合を分けて記載します。今回の計画書更新では、boxrigのコードもサブモジュール参照も変更しません。
 
 ## 全計画に共通する実施条件
 
@@ -41,7 +57,6 @@ GTKの試験には既存のC++ドライバーとVitest・gestamentを使用し�
 | 接続の機能差 | [remote-file-client.h](../../../elder-terms-terminal/src/file-transfer/remote-file-client.h)が読み書きの能力とパス単位の変更可否を持つ。`try_begin_transfer()`で接続ごとに一つの転送を制御する |
 | 転送画面 | [file-transfer-window.cpp](../../../elder-terms-terminal/src/file-transfer/file-transfer-window.cpp)が一つの転送とキャンセル元を保持し、進捗をオーバーレイに表示する。転送中はブラウザー操作を制限する |
 | ファイルツリー | 同ファイルの`GtkTreeStore`に名前・サイズ・更新時刻・パス・種別などを保存する。ノードごとのアイコン列はない |
-| 端末内の転送 | [terminal-transfer-runner.h](../../../elder-terms-terminal/src/terminal-transfer-runner.h)と[terminal-transfer.cpp](../../../elder-terms-terminal/src/terminal-transfer.cpp)がX/Y/ZMODEMを扱い、別の進捗通知を使う |
 | アイコン資産 | [Materialアイコン](../../../data/connection-icons/material-svg/)と[接続アイコンの読み込み](../../../shared/src/connection-icon-image.cpp)がある。既存の[file-transfer-icon.test.ts](../../../elder-terms-terminal/tests/file-transfer-icon.test.ts)はウインドウのアイコンを対象とする |
 
 ## ツリーノードの表示
@@ -94,7 +109,7 @@ GTKの試験には既存のC++ドライバーとVitest・gestamentを使用し�
 
 A案の初期表示は、方向、対象名、状態、進捗、中止ボタンをまとめた一行です。選択した行を展開すると転送先と結果の詳細を確認できます。実行・判断待ち・失敗の行を優先し、終了済みの履歴は手動で消せる構成です。履歴はそのプロセスの実行中だけ保持し、再起動後のジョブ復元は今回の対象に含めません。
 
-推奨する所有単位はウインドウです。ツリー型転送は転送ウインドウ、X/Y/ZMODEMは端末ウインドウに同じ一覧部品を置きます。すべての接続を一つの一覧へ集めるC案は別の選択肢として残します。タイトルバーの演出とは独立した表示であり、ジョブ継続のためにタイトルを更新する設計にはしません。
+推奨する所有単位は転送ウインドウです。そのウインドウのFTP、FTPS、SFTP、WebDAV、SMBなどのジョブを一覧に表示します。複数の転送接続を一つの一覧へ集めるC案も選択肢です。端末ウインドウへの一覧追加や、X/Y/ZMODEM・テキスト送信との統合は行いません。
 
 画面の折り畳みではジョブを継続します。所有ウインドウを閉じると待機ジョブを取り消し、実行中の処理と後始末を終了させてから接続を破棄する方針です。ブラウザー操作を転送中も許す段階では、読み取り要求を接続側で直列化し、同じ転送先への削除や名前変更を禁止します。
 
@@ -116,22 +131,16 @@ A案の初期表示は、方向、対象名、状態、進捗、中止ボタン�
 
 一覧で中止したジョブだけが止まること、探索中にも中止できること、判断待ちで後続処理が割り込まないことを確認します。切断後の待機ジョブは自動実行せず、再接続後の再試行対象として明示します。完了条件は、二つ以上のジョブを順に実行し、画面を操作しながら状態と結果を追えることです。
 
-## 段階4：端末内のファイル転送を共通モデルへ接続する
+## 段階4：寿命・表示・全体検証
 
-X/Y/ZMODEMの転送要求と進捗をアダプターでジョブへ接続します。バイトストリームの占有、端末入力の抑止、自動ZMODEM開始は既存runnerの責任とし、共通化するのはジョブの状態・結果・表示です。テキスト送信や一般的な端末コマンドのジョブ化は含めません。
-
-端末ウインドウでも開始・進捗・中止・終了を確認できる状態でコミットします。完了条件は、X/Y/ZMODEMの各方式が共通一覧に現れ、転送終了後に同じ端末セッションへ戻れることです。
-
-## 段階5：寿命・表示・全体検証
-
-既存の[file-transfer-contract-test.cpp](../../../elder-terms-terminal/tests/cpp/file-transfer-contract-test.cpp)、[sftp-transfer-engine-test.cpp](../../../elder-terms-terminal/tests/cpp/sftp-transfer-engine-test.cpp)、[file-transfer-window-lifetime-test.cpp](../../../elder-terms-terminal/tests/cpp/file-transfer-window-lifetime-test.cpp)へ検証を追加します。GUIでは各転送方式、X/Y/ZMODEM、未知の総量、ゼロバイト、全スキップ、切断、再接続、終了直前のキャンセルを確認します。
+既存の[file-transfer-contract-test.cpp](../../../elder-terms-terminal/tests/cpp/file-transfer-contract-test.cpp)、[sftp-transfer-engine-test.cpp](../../../elder-terms-terminal/tests/cpp/sftp-transfer-engine-test.cpp)、[file-transfer-window-lifetime-test.cpp](../../../elder-terms-terminal/tests/cpp/file-transfer-window-lifetime-test.cpp)へ検証を追加します。GUIではFTP、FTPS、SFTP、WebDAV、SMBと、未知の総量、ゼロバイト、全スキップ、切断、再接続、終了直前のキャンセルを確認します。
 
 一覧の進捗変化と折り畳み操作を動画で検証し、不要になった単一進捗用コードを整理します。`make test`と完了条件を照合し、利用者向け説明を更新して完了とします。
 
 ## 最終完了条件
 
 1. 左右のツリーでフォルダー、主要なファイル種別、SMB共有を識別でき、NFS公開ルートの表示契約が用意されている。
-2. ツリー型転送とX/Y/ZMODEMをジョブとして観測でき、既存の転送機能が維持されている。
+2. ファイル転送画面のFTP、FTPS、SFTP、WebDAV、SMBをジョブとして観測でき、HTTP/HTTPS・NFSを同じ契約で追加できる。端末内の転送は対象に含めない。
 3. 採用した一覧で状態、進捗、結果、キャンセルを扱える。総量不明や全スキップを誤表示しない。
 4. 待機、判断待ち、切断、再接続、ウインドウ破棄でジョブや通信処理が残らない。
 5. 画像の目視確認、動画による時間軸の検証、全体テストが完了している。
