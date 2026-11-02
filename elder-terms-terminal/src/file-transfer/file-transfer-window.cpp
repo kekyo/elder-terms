@@ -2231,6 +2231,49 @@ static FileTransferTreeRowMetrics get_file_transfer_tree_row_metrics(
   };
 }
 
+static std::shared_ptr<cairo_surface_t> create_file_transfer_node_icon(
+    const std::string &icon, int scale) {
+  // Bundled white glyphs include a black outline for light and selected rows.
+  // Their connection-icon margins would shrink the visible tree glyph, so fit
+  // the nontransparent bounds, including the outline, into the 16px row slot.
+  const auto source = connection_icon_preset_thumbnail("material:white:" + icon, 256);
+  if (!source) return {};
+  const int width = gdk_pixbuf_get_width(source.get());
+  const int height = gdk_pixbuf_get_height(source.get());
+  const int stride = gdk_pixbuf_get_rowstride(source.get());
+  const auto *pixels = gdk_pixbuf_read_pixels(source.get());
+  int left = width, top = height, right = -1, bottom = -1;
+  for (int y = 0; y < height; ++y) {
+    for (int x = 0; x < width; ++x) {
+      // The preset API guarantees RGBA pixels.
+      if (pixels[y * stride + x * 4 + 3] == 0) continue;
+      left = std::min(left, x);
+      right = std::max(right, x);
+      top = std::min(top, y);
+      bottom = std::max(bottom, y);
+    }
+  }
+  if (right < left || bottom < top) return {};
+  const int glyph_width = right - left + 1;
+  const int glyph_height = bottom - top + 1;
+  const int longest_side = std::max(glyph_width, glyph_height);
+  const int size = 16 * scale;
+  const int fitted_width = std::max(1, (glyph_width * size + longest_side / 2) / longest_side);
+  const int fitted_height = std::max(1, (glyph_height * size + longest_side / 2) / longest_side);
+  FileTransferGObjectPtr<GdkPixbuf> cropped(gdk_pixbuf_new_subpixbuf(
+      source.get(), left, top, glyph_width, glyph_height));
+  if (!cropped) return {};
+  FileTransferGObjectPtr<GdkPixbuf> fitted(gdk_pixbuf_scale_simple(
+      cropped.get(), fitted_width, fitted_height, GDK_INTERP_BILINEAR));
+  FileTransferGObjectPtr<GdkPixbuf> canvas(gdk_pixbuf_new(
+      GDK_COLORSPACE_RGB, TRUE, 8, size, size));
+  if (!fitted || !canvas) return {};
+  gdk_pixbuf_fill(canvas.get(), 0);
+  gdk_pixbuf_copy_area(fitted.get(), 0, 0, fitted_width, fitted_height,
+      canvas.get(), (size - fitted_width) / 2, (size - fitted_height) / 2);
+  return {gdk_cairo_surface_create_from_pixbuf(canvas.get(), scale, nullptr), cairo_surface_destroy};
+}
+
 static void render_file_transfer_node_icon(GtkTreeViewColumn *, GtkCellRenderer *renderer,
     GtkTreeModel *model, GtkTreeIter *iterator, gpointer data) {
   auto *tree = GTK_WIDGET(data);
@@ -2248,9 +2291,7 @@ static void render_file_transfer_node_icon(GtkTreeViewColumn *, GtkCellRenderer 
   const int scale = gtk_widget_get_scale_factor(tree);
   auto &surface = (*cache)[{icon, scale}];
   if (!surface) {
-    // Bundled glyphs already include a contrasting outline for selected/dark rows.
-    const auto pixels = connection_icon_preset_thumbnail("material:" + icon, 16 * scale);
-    if (pixels) surface = {gdk_cairo_surface_create_from_pixbuf(pixels.get(), scale, nullptr), cairo_surface_destroy};
+    surface = create_file_transfer_node_icon(icon, scale);
   }
   g_object_set_data_full(G_OBJECT(renderer), "node-icon",
       surface ? cairo_surface_reference(surface.get()) : nullptr,

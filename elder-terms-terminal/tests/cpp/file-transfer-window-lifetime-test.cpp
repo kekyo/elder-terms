@@ -381,6 +381,55 @@ static cardio::promise<void> verify_async(
       auto *surface = static_cast<cairo_surface_t *>(g_object_get_data(G_OBJECT(cells->data), "node-icon"));
       expect(surface != nullptr && cairo_surface_status(surface) == CAIRO_STATUS_SUCCESS,
           "File rows must provide a decoded drawable icon");
+      // Check the actual cell rendering, including the visible glyph size and
+      // colors on light/dark backgrounds and selected rows, not the source PNG.
+      auto *renderer = GTK_CELL_RENDERER(cells->data);
+      const int scale = gtk_widget_get_scale_factor(GTK_WIDGET(browser));
+      const GdkRectangle area{0, 0, 120, 24};
+      for (const char *icon : {"file/folder", "editor/insert_drive_file"}) {
+        gtk_tree_store_set(GTK_TREE_STORE(model), &entry, 7, icon, -1);
+        gtk_tree_view_column_cell_set_cell_data(column, model, &entry, FALSE, FALSE);
+        for (const auto background : {RgbColor{24, 60, 88}, RgbColor{224, 232, 240}}) {
+          for (const auto flags : {GtkCellRendererState(0), GTK_CELL_RENDERER_SELECTED}) {
+            auto *canvas = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, area.width * scale, area.height * scale);
+            cairo_surface_set_device_scale(canvas, scale, scale);
+            auto *cr = cairo_create(canvas);
+            cairo_set_source_rgb(cr, background.red / 255.0, background.green / 255.0, background.blue / 255.0);
+            cairo_paint(cr);
+            gtk_cell_renderer_render(renderer, cr, GTK_WIDGET(browser), &area, &area, flags);
+            cairo_destroy(cr);
+            auto *rendered = gdk_pixbuf_get_from_surface(canvas, 0, 0, area.width * scale, area.height * scale);
+            cairo_surface_destroy(canvas);
+            expect(rendered != nullptr, "Rendered tree rows must be readable");
+            const auto *pixels = gdk_pixbuf_read_pixels(rendered);
+            const int stride = gdk_pixbuf_get_rowstride(rendered);
+            const int channels = gdk_pixbuf_get_n_channels(rendered);
+            int left = 20 * scale, top = area.height * scale, right = -1, bottom = -1;
+            int white = 0, dark_outline = 0;
+            for (int y = 0; y < area.height * scale; ++y) {
+              for (int x = 0; x < 20 * scale; ++x) {
+                const auto *pixel = pixels + y * stride + x * channels;
+                if (std::abs(int(pixel[0]) - background.red) < 24 &&
+                    std::abs(int(pixel[1]) - background.green) < 24 &&
+                    std::abs(int(pixel[2]) - background.blue) < 24) continue;
+                left = std::min(left, x); right = std::max(right, x);
+                top = std::min(top, y); bottom = std::max(bottom, y);
+                white += pixel[0] > 220 && pixel[1] > 220 && pixel[2] > 220;
+                // Antialiasing blends the thin black outline with the background.
+                dark_outline += pixel[0] < 80 && pixel[1] < 80 && pixel[2] < 80;
+              }
+            }
+            g_object_unref(rendered);
+            expect(std::max(right - left + 1, bottom - top + 1) >= 15 * scale &&
+                std::max(right - left + 1, bottom - top + 1) <= 16 * scale,
+                "Visible tree glyphs must fill approximately 16 logical pixels without increasing the row height");
+            expect(white > dark_outline && dark_outline > 0,
+                "Tree glyphs must have a white body and a black outline in both selection states");
+            expect(top >= 3 * scale && bottom < 21 * scale && right < 20 * scale,
+                "Tree glyphs must stay centered and clear of the filename");
+          }
+        }
+      }
       auto *entry_path = gtk_tree_model_get_path(model, &entry);
       const int row = gtk_tree_path_get_indices(entry_path)[0];
       gtk_tree_path_free(entry_path);
