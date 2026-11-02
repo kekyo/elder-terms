@@ -2822,3 +2822,82 @@ msgstr "SMB(445)"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Shows TCP port responses. Service support and authentication are not verified."
 msgstr "TCPポートの応答を表示します。各サービスへの対応や認証の成功は確認しません。"
+
+msgid "Waiting"
+msgstr "待機中"
+
+msgid "Discovering…"
+msgstr "調査中…"
+
+msgid "Awaiting decision"
+msgstr "判断待ち"
+
+msgid "Cancelling…"
+msgstr "中止処理中…"
+
+msgid "Completed"
+msgstr "完了"
+
+msgid "Failed"
+msgstr "失敗"
+
+msgid "Cancelled"
+msgstr "中止済み"
+
+msgid "Total unknown"
+msgstr "総量未確定"
+
+#, c-format
+msgid "%llu copied, %llu skipped"
+msgstr "成功 %llu 件、スキップ %llu 件"
+
+#, c-format
+msgid "%llu / %llu items"
+msgstr "%llu / %llu 件"
+
+#, c-format
+msgid "%llu bytes · %s"
+msgstr "%llu バイト · %s"
+
+#, c-format
+msgid "Protocol: %s\nDestination: %s"
+msgstr "方式: %s\n転送先: %s"
+
+#, c-format
+msgid "Started: %s"
+msgstr "開始: %s"
+
+#, c-format
+msgid "Finished: %s"
+msgstr "終了: %s"
+
+msgid "Unknown"
+msgstr "不明"
+
+#, c-format
+msgid "Copied: %llu; skipped: %llu; failed: %llu; unprocessed: %s"
+msgstr "成功: %llu、スキップ: %llu、失敗: %llu、未処理: %s"
+
+#, c-format
+msgid "Temporary file remaining: %s"
+msgstr "残った一時ファイル: %s"
+
+msgid "Retry as new job"
+msgstr "新しいジョブで再試行"
+
+msgid "Transfers"
+msgstr "転送ジョブ"
+
+msgid "No transfers"
+msgstr "転送はありません"
+
+msgid "Clear finished jobs"
+msgstr "終了したジョブを消去"
+
+#, c-format
+msgid "%zu active, %zu waiting, %zu finished"
+msgstr "実行中 %zu 件、待機中 %zu 件、終了 %zu 件"
+
+#, c-format
+msgid "; skipped %llu"
+msgstr "、スキップ %llu 件"

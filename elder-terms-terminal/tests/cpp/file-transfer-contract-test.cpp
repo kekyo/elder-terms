@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "../../src/file-transfer/remote-file-client.h"
+#include "../../src/file-transfer/file-transfer-node-icon.h"
 
 #include <iostream>
 #include <optional>
@@ -21,6 +22,29 @@ auto expect(bool condition, const char *message) -> bool {
 } // namespace
 
 auto main() -> int {
+  using namespace elder_terms;
+  for (const auto &[name, icon] : {
+           std::pair{"README", "editor/insert_drive_file"},
+           {"notes.TXT", "action/description"}, {"manual.PDF", "image/picture_as_pdf"},
+           {"code.TS", "action/code"}, {"image.PNG", "image/image"},
+           {"sound.WAV", "image/audiotrack"}, {"video.MP4", "av/movie"},
+           {"backup.TAR.GZ", "content/archive"}, {"unknown.xyz", "editor/insert_drive_file"}}) {
+    RemoteFileAttributes item;
+    item.name = name;
+    item.type = RemoteFileType::regular;
+    if (!expect(file_transfer_node_icon(item) == std::string(icon),
+                "File classification must recognize case-insensitive and compound extensions")) return 1;
+  }
+  RemoteFileAttributes folder;
+  folder.name = "misleading.pdf";
+  folder.type = RemoteFileType::directory;
+  if (!expect(file_transfer_node_icon(folder) == std::string("file/folder"), "Directories ignore extensions")) return 1;
+  folder.role = RemoteFileRole::smb_share;
+  if (!expect(file_transfer_node_icon(folder) == std::string("file/folder_shared"), "Shares have a distinct directory icon")) return 1;
+  folder.role = RemoteFileRole::nfs_export;
+  if (!expect(file_transfer_node_icon(folder) == std::string("device/storage"), "Exports have a distinct directory icon")) return 1;
+  folder.type = RemoteFileType::symbolic_link;
+  if (!expect(file_transfer_node_icon(folder) == std::string("content/link"), "Links show their own type without following targets")) return 1;
   const elder_terms::RemoteFileCapabilities sftp{
       .symbolic_links = true,
       .permissions = true,

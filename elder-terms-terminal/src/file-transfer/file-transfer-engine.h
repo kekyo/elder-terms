@@ -107,10 +107,39 @@ struct FileTransferProgress {
   std::uint64_t transferred_bytes = 0;
   /** Total discovered bytes, or no value if a size is unknown or overflows. */
   std::optional<std::uint64_t> total_bytes = 0;
-  /** Completed item count. */
+  /** Successfully completed item count, excluding skipped items. */
   std::uint64_t completed_items = 0;
   /** Total discovered item count. */
   std::uint64_t total_items = 0;
+  /** Items intentionally left unchanged, including skipped subtrees. */
+  std::uint64_t skipped_items = 0;
+  /** True only after recursive discovery has finished. */
+  bool discovery_complete = false;
+};
+
+/** Terminal outcome, published only after transfer cleanup has finished. */
+enum class FileTransferOutcome {
+  completed, /**< Processing finished; skipped items remain separate from copies. */
+  failed,    /**< An unrecovered failure stopped processing. */
+  cancelled, /**< Cancellation and cleanup finished. */
+};
+
+/** Result of one recursive request, including partially completed batches. */
+struct FileTransferResult {
+  /** Overall outcome; skipped items do not count as successful copies. */
+  FileTransferOutcome outcome = FileTransferOutcome::completed;
+  /** Successfully copied files, links, and directories. */
+  std::uint64_t succeeded_items = 0;
+  /** Items skipped by a conflict or failure decision. */
+  std::uint64_t skipped_items = 0;
+  /** Items stopped by an unrecovered failure. */
+  std::uint64_t failed_items = 0;
+  /** Remaining discovered items, or unknown when discovery did not finish. */
+  std::optional<std::uint64_t> unprocessed_items;
+  /** Unrecovered failures and failures explicitly skipped by the user. */
+  std::vector<FileTransferFailure> failures;
+  /** Temporary paths that require inspection after unsuccessful cleanup. */
+  std::vector<std::string> temporary_paths;
 };
 
 /**
@@ -127,6 +156,8 @@ struct FileTransferCallbacks {
       failure;
   /** Called after discovery and after each copied chunk or completed item. */
   std::function<void(const FileTransferProgress &)> progress;
+  /** Called exactly once after cleanup, including before an exception propagates. */
+  std::function<void(const FileTransferResult &)> finished = {};
 };
 
 /**
@@ -149,6 +180,7 @@ struct FileTransferRequest {
  * @param client Initialized remote file client.
  * @param request Transfer request.
  * @param cancellation Operation cancellation signal.
+ * @returns Counts and details after a successful batch, including skipped items.
  *
  * @remarks
  * The first conflict decision is reused for the remainder of the batch.
@@ -157,7 +189,7 @@ struct FileTransferRequest {
  * removed after failure or cancellation only when ownership is established.
  * Uncertain ownership or failed cleanup reports the temporary path.
  */
-cardio::promise<void>
+cardio::promise<FileTransferResult>
 run_file_transfer_async(std::shared_ptr<RemoteFileClient> client,
                         FileTransferRequest request,
                         cardio::cancellation cancellation);

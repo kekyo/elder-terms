@@ -473,7 +473,12 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
       'button'
     ).click();
     await waitForResult(async () => {
-      expect((await localTree.info()).states).toContain('sensitive');
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_jobs_summary'),
+          'label'
+        ).text()
+      ).toContain('0 active, 0 waiting');
     });
     await rm(upload);
     await expectElementKind(
@@ -511,7 +516,12 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
       'button'
     ).click();
     await waitForResult(async () => {
-      expect((await localTree.info()).states).toContain('sensitive');
+      expect(
+        await expectElementKind(
+          await app.getById('file_transfer_jobs_summary'),
+          'label'
+        ).text()
+      ).toContain('0 active, 0 waiting');
     });
     if (!externalAddress)
       expect(podman(['exec', container, 'cat', '/share/kept.txt'])).toBe(

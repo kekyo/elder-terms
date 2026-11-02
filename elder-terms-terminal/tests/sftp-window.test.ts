@@ -48,12 +48,6 @@ const sftpAppPath = fileURLToPath(
 const sftpConnectionColorsFixturePath = fileURLToPath(
   new URL('./fixtures/sftp-connection-colors.png', import.meta.url)
 );
-const sftpConnectionColorsTransferOverlayFixturePath = fileURLToPath(
-  new URL(
-    './fixtures/sftp-connection-colors-transfer-overlay.png',
-    import.meta.url
-  )
-);
 const stableLocalModificationTime = new Date('2020-01-02T03:04:00Z');
 
 interface SftpFixture {
@@ -677,16 +671,16 @@ describe('SFTP window', () => {
         expect((await send.info()).name).toBe('送信');
         await send.click();
 
-        const overlay = await app.getById('file_transfer_overlay');
+        const row = await app.getById('file_transfer_job_1_row');
         const transferLabel = expectElementKind(
-          await app.getById('file_transfer_label'),
+          await app.getById('file_transfer_job_1_state'),
           'label'
         );
         const cancel = expectElementKind(
-          await app.getById('file_transfer_cancel_button'),
+          await app.getById('file_transfer_job_1_cancel'),
           'button'
         );
-        await expectShowing(overlay);
+        await expectShowing(row);
         await waitForResult(async () => {
           expect(await transferLabel.text()).toMatch(/^転送/);
           const cancelInfo = await cancel.info();
@@ -694,7 +688,9 @@ describe('SFTP window', () => {
           expect(cancelInfo.states).toContain('showing');
         });
         await cancel.click();
-        await expectHidden(overlay);
+        await waitForResult(async () =>
+          expect(await transferLabel.text()).toBe('中止済み')
+        );
         await waitForResult(async () => {
           expect(
             await expectElementKind(
@@ -1700,6 +1696,14 @@ describe('SFTP window', () => {
         '',
       ].join('\n'),
       async ({ app, evidence, localDirectory }) => {
+        // Measure the complete mixed-script filename, including the glyphs
+        // beside the new node icon, instead of a horizontally clipped prefix.
+        const window = expectElementKind(
+          await app.getById('file_transfer_window'),
+          'window'
+        );
+        const bounds = (await window.capture()).bounds;
+        await window.resizeTo(1250, bounds.height);
         const localTree = expectTable(
           await app.getById('file_transfer_local_tree')
         );
@@ -2173,16 +2177,16 @@ describe('SFTP window', () => {
         'menuItem'
       ).click();
 
-      await expectShowing(await app.getById('file_transfer_overlay'));
+      await expectShowing(await app.getById('file_transfer_action_overlay'));
       await expectShowing(await app.getById('file_transfer_dim_overlay'));
       expect(
         await expectElementKind(
-          await app.getById('file_transfer_label'),
+          await app.getById('file_transfer_action_label'),
           'label'
         ).text()
       ).toBe('Calculating hash values…');
       const progress = expectElementKind(
-        await app.getById('file_transfer_progress'),
+        await app.getById('file_transfer_action_progress'),
         'progressBar'
       );
       const initialProgressImage = (await progress.capture()).image;
@@ -2193,10 +2197,10 @@ describe('SFTP window', () => {
       });
 
       await expectElementKind(
-        await app.getById('file_transfer_cancel_button'),
+        await app.getById('file_transfer_action_cancel_button'),
         'button'
       ).click();
-      await expectHidden(await app.getById('file_transfer_overlay'));
+      await expectHidden(await app.getById('file_transfer_action_overlay'));
       await expectHidden(await app.getById('file_transfer_dim_overlay'));
       await waitForResult(async () => {
         expect(
@@ -2558,11 +2562,10 @@ describe('SFTP window', () => {
           }
 
           await expectElementKind(
-            await app.getById('file_transfer_cancel_button'),
+            await app.getById('file_transfer_job_1_cancel'),
             'button'
           ).click();
           await expectHidden(promptPanel);
-          await expectHidden(await app.getById('file_transfer_overlay'));
           await waitForResult(async () => {
             expect(
               await expectElementKind(
@@ -2575,94 +2578,6 @@ describe('SFTP window', () => {
         } finally {
           await chmod(localDirectory, 0o755);
         }
-      }
-    );
-  });
-
-  it('dims both panes during transfer and cancels from the progress overlay', async (context) => {
-    await runSftpFixture(
-      context,
-      true,
-      ['background=#183C58'],
-      undefined,
-      async ({ app, evidence }) => {
-        const background = [0x18, 0x3c, 0x58] as const;
-        const componentBackground = [0x1b, 0x45, 0x65] as const;
-        const localTree = expectTable(
-          await app.getById('file_transfer_local_tree')
-        );
-        await openContextMenu(
-          app,
-          localTree,
-          await findRow(localTree, 'hello.txt')
-        );
-        const sendItem = expectElementKind(
-          await app.getById('file_transfer_send_item'),
-          'menuItem'
-        );
-        expect(capturePixel(await sendItem.capture(), 0.8, 0.5)).toEqual(
-          componentBackground
-        );
-        await sendItem.click();
-
-        const overlay = await app.getById('file_transfer_overlay');
-        const dim = await app.getById('file_transfer_dim_overlay');
-        await expectShowing(overlay);
-        await expectShowing(dim);
-        for (const [widgetId, horizontalRatio] of [
-          ['file_transfer_overlay', 0.05],
-        ] as const) {
-          expect(
-            capturePixel(
-              await (await app.getById(widgetId)).capture(),
-              horizontalRatio,
-              0.5
-            )
-          ).toEqual(background);
-        }
-        for (const [widgetId, horizontalRatio] of [
-          ['file_transfer_progress', 0.05],
-          ['file_transfer_cancel_button', 0.15],
-        ] as const) {
-          expect(
-            capturePixel(
-              await (await app.getById(widgetId)).capture(),
-              horizontalRatio,
-              0.5
-            )
-          ).toEqual(componentBackground);
-        }
-        const overlayCapture = await evidence.captureEvidence(
-          'sftp-connection-colors-transfer-overlay',
-          async () => overlay.capture()
-        );
-        await expectCaptureToMatchFixture(
-          overlayCapture,
-          'sftp-connection-colors-transfer-overlay',
-          sftpConnectionColorsTransferOverlayFixturePath,
-          evidence,
-          {
-            maxDiffPixels: 800,
-            threshold: 0.01,
-          }
-        );
-        expect((await localTree.info()).states).not.toContain('sensitive');
-        await expectElementKind(
-          await app.getById('file_transfer_cancel_button'),
-          'button'
-        ).click();
-
-        await expectHidden(overlay);
-        await expectHidden(dim);
-        await waitForResult(async () => {
-          expect((await localTree.info()).states).toContain('sensitive');
-          expect(
-            await expectElementKind(
-              await app.getById('file_transfer_status_label'),
-              'label'
-            ).text()
-          ).toBe('Transfer cancelled');
-        });
       }
     );
   });

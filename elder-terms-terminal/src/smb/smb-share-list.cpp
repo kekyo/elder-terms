@@ -38,7 +38,8 @@ RemoteDirectorySnapshot decode_smb_share_list(int status, const smb2_share_enum_
     g_free(folded);
     if (!names.insert(key).second) throw RemoteFileError("Duplicate SMB share name", false);
     result.entries.push_back({.name = name, .path = "/" + name, .type = RemoteFileType::directory,
-        .size = {}, .permissions = {}, .access_time_unix_seconds = {}, .modification_time_unix_seconds = {}});
+        .size = {}, .permissions = {}, .access_time_unix_seconds = {}, .modification_time_unix_seconds = {},
+        .role = RemoteFileRole::smb_share});
   }
   return result;
 }

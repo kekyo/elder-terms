@@ -866,7 +866,10 @@ public:
     auto result = co_await client->lstat_async(parts.relative, cancellation);
     if (result) {
       result->path = "/" + parts.share + (result->path == "/" ? "" : result->path);
-      if (parts.relative == "/") result->name = parts.share;
+      if (parts.relative == "/") {
+        result->name = parts.share;
+        result->role = RemoteFileRole::smb_share;
+      }
     }
     co_return result;
   }

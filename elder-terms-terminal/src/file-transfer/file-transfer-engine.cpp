@@ -18,6 +18,7 @@
 #include <limits>
 #include <optional>
 #include <span>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -79,6 +80,8 @@ struct TransferRunState {
   FileTransferRequest request;
   std::optional<FileTransferConflictAction> conflict_action;
   FileTransferProgress progress;
+  FileTransferResult result;
+  std::set<std::string> finished_sources;
 };
 
 struct DestinationResolution {
@@ -716,8 +719,9 @@ static void publish_progress(TransferRunState *state,
 
 static void complete_subtree(TransferRunState *state,
                              const TransferNode &node) {
-  state->progress.transferred_bytes += node.total_bytes.value_or(0);
-  state->progress.completed_items += node.total_items;
+  if (state->finished_sources.insert(node.source_path).second)
+    ++state->progress.skipped_items;
+  for (const auto &child : node.children) complete_subtree(state, child);
   publish_progress(state, node.source_path);
 }
 
@@ -798,7 +802,7 @@ resolve_conflict_async(
         co_await state->request.callbacks.conflict(conflict, cancellation);
   }
   if (*state->conflict_action == FileTransferConflictAction::cancel) {
-    throw FileTransferAbort("File transfer canceled at a conflict");
+    throw cardio::canceled_exception();
   }
   if (*state->conflict_action == FileTransferConflictAction::skip) {
     co_return DestinationResolution{
@@ -853,28 +857,10 @@ available_local_temporary_path_async(
       "Could not reserve a local temporary path");
 }
 
-static cardio::promise<void>
-cleanup_remote_temporary_file_async(
-    const std::shared_ptr<RemoteFileClient> &client,
-    const std::string &path) {
-  try {
-    co_await client->remove_file_async(path, {});
-  } catch (...) {
-  }
-}
-
-static cardio::promise<void>
-cleanup_local_temporary_file_async(const std::string &path) {
-  try {
-    GObjectPtr<GFile> file(g_file_new_for_path(path.c_str()));
-    co_await delete_local_async(file.get(), {});
-  } catch (...) {
-  }
-}
-
 static bool transfer_was_cancelled(std::exception_ptr failure) {
   try { std::rethrow_exception(failure); }
   catch (const cardio::canceled_exception &) { return true; }
+  catch (const FileTransferCleanupFailure &error) { return error.cancelled; }
   catch (...) { return false; }
 }
 
@@ -968,7 +954,11 @@ send_regular_file_async(TransferRunState *state,
         throw FileTransferCleanupFailure(exception_message(failure) + "\n" + cleanup_message,
             temporary_path, cancellation.is_cancellation_requested() || transfer_was_cancelled(failure));
     } else if (temporary_created) {
-      co_await cleanup_remote_temporary_file_async(state->client, temporary_path);
+      try { co_await state->client->remove_file_async(temporary_path, {}); }
+      catch (...) {
+        throw FileTransferCleanupFailure(exception_message(failure) + "\nCould not remove temporary upload: " +
+            exception_message(std::current_exception()), temporary_path, transfer_was_cancelled(failure));
+      }
     }
     std::rethrow_exception(failure);
   }
@@ -1046,7 +1036,11 @@ receive_regular_file_async(TransferRunState *state,
       }
     }
     if (temporary_created) {
-      co_await cleanup_local_temporary_file_async(temporary_path);
+      try { co_await delete_local_async(temporary.get(), {}); }
+      catch (...) {
+        throw FileTransferCleanupFailure(exception_message(failure) + "\nCould not remove temporary download: " +
+            exception_message(std::current_exception()), temporary_path, transfer_was_cancelled(failure));
+      }
     }
     std::rethrow_exception(failure);
   }
@@ -1185,12 +1179,11 @@ static cardio::promise<void>
 transfer_node_with_recovery_async(
     TransferRunState *state, const TransferNode &node,
     cardio::cancellation cancellation) {
-  const std::uint64_t baseline_bytes =
-      state->progress.transferred_bytes;
-  const std::uint64_t baseline_items =
-      state->progress.completed_items;
+  if (state->finished_sources.contains(node.source_path)) co_return;
+  const auto baseline_bytes = state->progress.transferred_bytes;
   for (;;) {
     cancellation.throw_if_cancellation_requested();
+    publish_progress(state, node.source_path);
     std::exception_ptr failure;
     try {
       if (state->request.direction == FileTransferDirection::send) {
@@ -1198,20 +1191,28 @@ transfer_node_with_recovery_async(
       } else {
         co_await receive_node_once_async(state, node, cancellation);
       }
+      state->finished_sources.insert(node.source_path);
       co_return;
     } catch (const cardio::canceled_exception &) {
       throw;
     } catch (const FileTransferAbort &) {
       throw;
     } catch (const FileTransferCleanupFailure &error) {
-      if (error.cancelled) throw;
+      state->result.temporary_paths.push_back(error.temporary_path);
+      if (error.cancelled || cancellation.is_cancellation_requested()) throw;
+      failure = std::current_exception();
+    } catch (const RemoteFileError &error) {
+      // A disconnect observer can also cancel the owner. Keep the transport
+      // error instead of replacing it with cancellation in a recovery prompt.
+      if (error.connection_lost) throw;
       failure = std::current_exception();
     } catch (...) {
       failure = std::current_exception();
     }
 
-    state->progress.transferred_bytes = baseline_bytes;
-    state->progress.completed_items = baseline_items;
+    // Retrying a directory must retain already finished children and their counts.
+    if (node.attributes.type != RemoteFileType::directory)
+      state->progress.transferred_bytes = baseline_bytes;
     publish_progress(state, node.source_path);
     if (!state->request.callbacks.failure) {
       std::rethrow_exception(failure);
@@ -1227,6 +1228,7 @@ transfer_node_with_recovery_async(
     if (action == FileTransferFailureAction::retry) {
       continue;
     }
+    state->result.failures.push_back(notification);
     if (action == FileTransferFailureAction::skip) {
       complete_subtree(state, node);
       co_return;
@@ -1269,6 +1271,9 @@ discover_selected_source_async(
           cancellation);
     } catch (const cardio::canceled_exception &) {
       throw;
+    } catch (const RemoteFileError &error) {
+      if (error.connection_lost) throw;
+      failure = std::current_exception();
     } catch (...) {
       failure = std::current_exception();
     }
@@ -1288,59 +1293,86 @@ discover_selected_source_async(
     if (action == FileTransferFailureAction::retry) {
       continue;
     }
+    state->result.failures.push_back(notification);
     if (action == FileTransferFailureAction::skip) {
+      ++state->progress.skipped_items;
+      ++state->progress.total_items;
+      state->progress.total_bytes = std::nullopt;
       co_return std::nullopt;
     }
     throw FileTransferAbort(exception_message(failure));
   }
 }
 
-cardio::promise<void>
+cardio::promise<FileTransferResult>
 run_file_transfer_async(std::shared_ptr<RemoteFileClient> client,
                         FileTransferRequest request,
                         cardio::cancellation cancellation) {
-  if (client == nullptr) {
-    throw std::invalid_argument("Remote file client is required");
-  }
-  if (request.source_paths.empty()) {
-    throw std::invalid_argument(
-        "At least one file transfer source path is required");
-  }
-  if (request.destination_directory.empty()) {
-    throw std::invalid_argument(
-        "A file transfer destination directory is required");
-  }
-  if (!client->try_begin_transfer()) {
-    throw std::runtime_error(
-        "A bulk file transfer is already in progress");
-  }
-  TransferSlotGuard slot(client);
   TransferRunState state{
-      .client = std::move(client),
-      .request = std::move(request),
-      .conflict_action = std::nullopt,
-      .progress = {},
+      .client = std::move(client), .request = std::move(request),
+      .conflict_action = std::nullopt, .progress = {}, .result = {}, .finished_sources = {},
   };
-
-  std::vector<TransferNode> roots;
-  for (const std::string &source_path : state.request.source_paths) {
+  std::exception_ptr failure;
+  try {
+    if (!state.client) throw std::invalid_argument("Remote file client is required");
+    if (state.request.source_paths.empty()) throw std::invalid_argument("At least one file transfer source path is required");
+    if (state.request.destination_directory.empty()) throw std::invalid_argument("A file transfer destination directory is required");
     cancellation.throw_if_cancellation_requested();
-    std::optional<TransferNode> node =
-        co_await discover_selected_source_async(
-            &state, source_path, cancellation);
-    if (!node.has_value()) {
-      continue;
+    if (!state.client->try_begin_transfer()) throw std::runtime_error("A bulk file transfer is already in progress");
+    TransferSlotGuard slot(state.client);
+    // Queue admission cannot guarantee that the target still exists or is writable.
+    if (state.request.direction == FileTransferDirection::send) {
+      if (!state.client->capabilities().write_operations ||
+          !state.client->path_capabilities(state.request.destination_directory).create_children)
+        throw std::runtime_error("The remote destination does not permit uploads");
+      const auto destination = co_await state.client->lstat_async(state.request.destination_directory, cancellation);
+      if (!destination || destination->type != RemoteFileType::directory)
+        throw std::runtime_error("The remote destination directory no longer exists");
+    } else {
+      GObjectPtr<GFile> directory(g_file_new_for_path(state.request.destination_directory.c_str()));
+      const auto destination = co_await query_optional_local_attributes_async(directory.get(), cancellation);
+      if (!destination || (destination->type != RemoteFileType::directory && destination->type != RemoteFileType::symbolic_link))
+        throw std::runtime_error("The local destination directory no longer exists");
     }
-    state.progress.total_bytes = sum_discovered_bytes(state.progress.total_bytes, node->total_bytes);
-    state.progress.total_items += node->total_items;
-    roots.push_back(std::move(*node));
+    std::vector<TransferNode> roots;
+    for (const auto &source_path : state.request.source_paths) {
+      cancellation.throw_if_cancellation_requested();
+      publish_progress(&state, source_path);
+      auto node = co_await discover_selected_source_async(&state, source_path, cancellation);
+      if (!node) continue;
+      state.progress.total_bytes = sum_discovered_bytes(state.progress.total_bytes, node->total_bytes);
+      state.progress.total_items += node->total_items;
+      roots.push_back(std::move(*node));
+    }
+    state.progress.discovery_complete = true;
+    publish_progress(&state, {});
+    for (const auto &node : roots)
+      co_await transfer_node_with_recovery_async(&state, node, cancellation);
+  } catch (...) {
+    failure = std::current_exception();
+    state.result.outcome = transfer_was_cancelled(failure)
+        ? FileTransferOutcome::cancelled : FileTransferOutcome::failed;
+    state.result.failed_items = state.result.outcome == FileTransferOutcome::failed ? 1 : 0;
+    try { std::rethrow_exception(failure); }
+    catch (const FileTransferCleanupFailure &error) {
+      if (std::find(state.result.temporary_paths.begin(), state.result.temporary_paths.end(), error.temporary_path) == state.result.temporary_paths.end())
+        state.result.temporary_paths.push_back(error.temporary_path);
+    } catch (...) {}
+    if (state.result.outcome == FileTransferOutcome::failed || !state.result.temporary_paths.empty()) {
+      if (state.result.failures.empty() || state.result.failures.back().source_path != state.progress.current_path)
+        state.result.failures.push_back({state.request.direction, state.progress.current_path,
+            state.request.destination_directory, exception_message(failure)});
+    }
   }
-  publish_progress(&state, {});
-
-  for (const TransferNode &node : roots) {
-    co_await transfer_node_with_recovery_async(
-        &state, node, cancellation);
+  state.result.succeeded_items = state.progress.completed_items;
+  state.result.skipped_items = state.progress.skipped_items;
+  if (state.progress.discovery_complete) {
+    const auto processed = state.result.succeeded_items + state.result.skipped_items + state.result.failed_items;
+    state.result.unprocessed_items = state.progress.total_items - std::min(processed, state.progress.total_items);
   }
+  if (state.request.callbacks.finished) state.request.callbacks.finished(state.result);
+  if (failure) std::rethrow_exception(failure);
+  co_return state.result;
 }
 
 cardio::promise<void> create_file_transfer_directory_async(

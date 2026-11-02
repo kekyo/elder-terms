@@ -373,6 +373,36 @@ An SFTP window opened from an already authenticated SSH terminal reuses that ter
 including its selected user name and authentication,
 and therefore does not ask for them again.
 
+## File Transfers and Jobs
+
+The FTP, FTPS, SFTP, WebDAV, and SMB windows show local files on the left and remote files on the right.
+Icons beside names distinguish folders, documents, images, source code, archives, links, and other file types.
+SMB shares have a different icon from ordinary folders.
+
+Select items, right-click, and choose "Send" or "Receive".
+Each selection becomes one transfer job in the "Transfers" list at the bottom of the window.
+The destination is the folder selected when you submit the request. Additional jobs run in order.
+
+Expand "Transfers" to see each job's state, progress, and Cancel button.
+Drag the divider above the list to change its height.
+Transfers continue while the list is collapsed; the summary still shows active and waiting counts and progress.
+Discovery and transfers with unknown total sizes show known item counts or transferred bytes without a percentage.
+
+Expand a row to see its destination, start and finish times, and copied, skipped, failed, and unprocessed counts.
+The unprocessed count remains "Unknown" if discovery did not finish.
+Failure locations and temporary files that could not be removed are also retained here.
+Skipped items are excluded from the copied count.
+
+Cancel affects the selected job. Active jobs show "Cancelling…" until cleanup finishes.
+"Retry as new job" submits a new request with the same sources and destination after failure or cancellation.
+It does not resume from the interrupted byte position.
+Jobs waiting at disconnection do not run automatically after reconnection; explicitly retry the ones you still need.
+
+You can browse during transfers. Remote reads wait for the active transfer to finish.
+Creation, rename, deletion, and hash calculation become available after active and waiting transfers finish.
+Use "Clear finished jobs" to remove history, which otherwise lasts until the window closes.
+Closing the window cancels waiting jobs and finishes active-transfer cleanup before closing the connection.
+
 ## Reconnecting after Disconnection
 
 ![Reconnect button after disconnection](./images/ssh-telnet-reconnect.png)
