@@ -37,6 +37,8 @@ enum class RemoteFileType {
   directory,
   symbolic_link,
   other,
+  /** HTTP link whose response has not been requested or classified. */
+  unresolved,
 };
 
 /** Display-only role of a remote item; permissions still use path_capabilities(). */

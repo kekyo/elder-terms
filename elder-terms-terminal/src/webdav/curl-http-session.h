@@ -37,6 +37,7 @@ using WebdavCertificateConfirmation = std::function<cardio::promise<bool>(
 
 /** HTTP transport owned by one logical WebDAV connection and dispatcher. */
 struct CurlHttpSession;
+struct CurlHttpResult;
 
 /** One HTTP request; all referenced data is owned until completion. */
 struct CurlHttpRequest {
@@ -54,12 +55,16 @@ struct CurlHttpRequest {
   std::function<std::size_t(std::span<std::byte>)> send;
   /** Optional successful-body receiver; may return CURL_WRITEFUNC_PAUSE. */
   std::function<std::size_t(std::span<const std::byte>)> receive;
+  /** Called after each complete header block; false stops before its body. */
+  std::function<bool(const CurlHttpResult &)> accept_response;
 };
 
 /** Final HTTP response, including protocol errors rather than hiding them. */
 struct CurlHttpResult {
   /** Transport completion code. */
   CURLcode code = CURLE_OK;
+  /** True when accept_response intentionally stopped body reception. */
+  bool body_stopped = false;
   /** Final HTTP response status. */
   long status = 0;
   /** Final response headers, indexed by lowercase name. */

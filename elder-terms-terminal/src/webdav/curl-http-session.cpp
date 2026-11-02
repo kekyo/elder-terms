@@ -308,6 +308,11 @@ static std::size_t receive_header(char *bytes, std::size_t size,
       // A challenge before consuming input can still negotiate Basic/Digest.
       if (operation.result.status == 401 && operation.request.send && operation.input_consumed)
         throw std::runtime_error("WebDAV authentication changed after upload input was consumed; the request was not replayed");
+    } else if ((line == "\r\n" || line == "\n") && operation.request.accept_response) {
+      if (!operation.request.accept_response(operation.result)) {
+        operation.result.body_stopped = true;
+        return 0;
+      }
     } else if (const auto colon = line.find(':'); colon != std::string_view::npos) {
       std::string name(line.substr(0, colon));
       std::transform(name.begin(), name.end(), name.begin(), [](unsigned char value) { return g_ascii_tolower(value); });

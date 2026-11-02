@@ -474,6 +474,16 @@ telnet_protocol_test = executable(
 
 test('telnet-protocol-test', telnet_protocol_test)
 
+http_crawler_test = executable(
+  'http-crawler-test',
+  ['tests/cpp/http-crawler-test.cpp', 'src/http/http-crawler.cpp',
+   'src/webdav/curl-http-session.cpp', 'src/tls/certificate-policy.cpp'],
+  include_directories: include_directories('src/http'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, libxml2_dep, openssl_dep],
+)
+test('http-crawler-test', find_program('node'),
+  args: [files('tests/http-crawler-runner.mjs'), http_crawler_test], timeout: 60)
+
 webdav_metadata_test = executable(
   'webdav-metadata-test',
   ['tests/cpp/webdav-metadata-test.cpp', 'src/webdav/webdav-metadata.cpp', 'src/webdav/webdav-url.cpp'],
