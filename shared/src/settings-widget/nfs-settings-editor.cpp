@@ -35,7 +35,9 @@ struct NfsSettingsEditor {
   bool synchronizing = false;
   std::vector<NfsField> fields{
       {"address"}, {"version", NfsFieldKind::version}, {"filename_encoding"}, {"export_path"},
-      {"known_exports", NfsFieldKind::list}, {"discover_exports", NfsFieldKind::boolean}, {"local_directory"},
+      {"known_exports", NfsFieldKind::list}, {"discover_exports", NfsFieldKind::boolean},
+      {"namespace_path"}, {"known_namespace_paths", NfsFieldKind::list},
+      {"discover_namespace", NfsFieldKind::boolean}, {"local_directory"},
       {"nfs_port", NfsFieldKind::integer}, {"mount_port", NfsFieldKind::integer},
       {"uid", NfsFieldKind::integer}, {"gid", NfsFieldKind::integer}, {"supplementary_gids", NfsFieldKind::list},
       {"connect_timeout_seconds", NfsFieldKind::integer}, {"request_timeout_seconds", NfsFieldKind::integer}};
@@ -59,10 +61,15 @@ static std::string value_text(const SettingValue &value) {
 }
 
 static void update_validation(NfsSettingsEditor *editor) {
-  auto errors = nfs_connection_settings(*editor->store).validation_errors;
+  const auto settings = nfs_connection_settings(*editor->store);
+  auto errors = settings.validation_errors;
   for (auto &field : editor->fields) {
+    const std::string_view name(field.name);
+    const bool applicable = settings.version == "4.0" ?
+        name != "export_path" && name != "known_exports" && name != "discover_exports" && name != "mount_port" :
+        name != "namespace_path" && name != "known_namespace_paths" && name != "discover_namespace";
     const bool inherited = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(field.inherit));
-    const bool editable = !editor->runtime || std::string_view(field.name) == "filename_encoding";
+    const bool editable = applicable && (!editor->runtime || name == "filename_encoding");
     gtk_widget_set_sensitive(field.control, editable && !inherited);
     gtk_widget_set_sensitive(field.inherit, editable);
     if (GTK_IS_ENTRY(field.control))
@@ -159,6 +166,7 @@ NfsSettingsEditor *create_nfs_settings_editor(SettingsStore *store, std::string 
     } else if (field.kind == NfsFieldKind::version) {
       field.control = gtk_combo_box_text_new();
       gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.control), "3", "NFS v3 (TCP)");
+      gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.control), "4.0", "NFS v4.0 (TCP)");
       suffix = "_combo";
     } else if (field.kind == NfsFieldKind::list) {
       field.control = gtk_text_view_new();

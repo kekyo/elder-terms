@@ -31,8 +31,9 @@ static bool validate_address(const SettingValue &value, std::string *reason) {
 }
 
 static bool validate_version(const SettingValue &value, std::string *reason) {
-  if (std::get<std::string>(value) == "3") return true;
-  *reason = "must select the supported NFS version 3";
+  const auto &version = std::get<std::string>(value);
+  if (version == "3" || version == "4.0") return true;
+  *reason = "must select NFS version 3 or 4.0";
   return false;
 }
 
@@ -123,6 +124,9 @@ std::vector<SettingDefinition> nfs_connection_setting_definitions() {
       {.key = nfs_setting_key("export_path"), .default_value = std::string(), .validate = validate_path, .retain_invalid = true},
       {.key = nfs_setting_key("known_exports"), .default_value = std::vector<std::string>(), .validate = validate_paths, .retain_invalid = true},
       {.key = nfs_setting_key("discover_exports"), .default_value = true},
+      {.key = nfs_setting_key("namespace_path"), .default_value = std::string(), .validate = validate_path, .retain_invalid = true},
+      {.key = nfs_setting_key("known_namespace_paths"), .default_value = std::vector<std::string>(), .validate = validate_paths, .retain_invalid = true},
+      {.key = nfs_setting_key("discover_namespace"), .default_value = true},
       {.key = nfs_setting_key("filename_encoding"), .default_value = std::string("UTF-8"), .validate = validate_encoding, .retain_invalid = true},
       {.key = nfs_setting_key("local_directory"), .default_value = std::string(), .validate = validate_text, .retain_invalid = true},
       {.key = nfs_setting_key("uid"), .default_value = gint64{-1}, .validate = validate_id, .retain_invalid = true},
@@ -151,6 +155,9 @@ NfsConnectionSettings nfs_connection_settings(const SettingsStore &store) {
   result.export_path = text("export_path", "");
   result.known_exports = list("known_exports");
   result.discover_exports = setting_boolean_value_or_default(store, nfs_setting_key("discover_exports"), true);
+  result.namespace_path = text("namespace_path", "");
+  result.known_namespace_paths = list("known_namespace_paths");
+  result.discover_namespace = setting_boolean_value_or_default(store, nfs_setting_key("discover_namespace"), true);
   result.filename_encoding = text("filename_encoding", "UTF-8");
   result.local_directory = text("local_directory", "");
   const auto uid = number("uid", -1), gid = number("gid", -1);
@@ -169,8 +176,10 @@ NfsConnectionSettings nfs_connection_settings(const SettingsStore &store) {
   }
   if (general_connection_kind(store) == ConnectionKind::nfs && result.address.empty())
     result.validation_errors.emplace_back("NFS server address is required");
-  if (!result.discover_exports && result.export_path.empty() && result.known_exports.empty())
+  if (result.version != "4.0" && !result.discover_exports && result.export_path.empty() && result.known_exports.empty())
     result.validation_errors.emplace_back("A known export path is required when export discovery is disabled");
+  if (result.version == "4.0" && !result.discover_namespace && result.namespace_path.empty() && result.known_namespace_paths.empty())
+    result.validation_errors.emplace_back("A known NFS v4 namespace path is required when namespace discovery is disabled");
   return result;
 }
 

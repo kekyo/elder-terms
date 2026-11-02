@@ -31,6 +31,12 @@ export interface NfsWireObserver {
   errors: string[];
   /** Rejects only MOUNT EXPORT while allowing known-export MNT calls through. */
   rejectExports: (enabled: boolean) => void;
+  /** Drops the next CREATE/OPEN reply after the real server has processed it. */
+  loseCreateReply: () => void;
+  /** Rejects the next v4 request containing a specific encoded name. */
+  rejectV4Name: (bytes: Buffer) => void;
+  /** Denies the first v4 directory listing for namespace-root access tests. */
+  rejectNamespaceListing: () => void;
   /** Closes listeners and sockets, including interrupted clients. */
   close: () => Promise<void>;
 }
@@ -47,6 +53,9 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
   const sockets = new Set<Socket>();
   const servers: Server[] = [];
   let rejectExports = false;
+  let loseCreateReply = false;
+  let rejectedV4Name: Buffer | undefined;
+  let rejectNamespaceListing = false;
   const close = async (): Promise<void> => {
     for (const socket of sockets) socket.destroy();
     for (const server of servers)
@@ -74,6 +83,7 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
         upstream.on('close', () => client.destroy());
         let pending = Buffer.alloc(0);
         let fragments: Buffer[] = [];
+        const lostReplies = new Set<number>();
         client.on('data', (bytes: Buffer) => {
           try {
             pending = Buffer.concat([pending, bytes]);
@@ -98,20 +108,73 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
               const version = record.readUInt32BE(16);
               const procedure = record.readUInt32BE(20);
               let minor: number | undefined;
+              let opensFile = false;
+              let readsDirectory = false;
               if (program === 100003 && version === 4 && procedure === 1) {
                 let offset = 24;
                 for (let auth = 0; auth < 2; auth++)
                   offset += 8 + ((record.readUInt32BE(offset + 4) + 3) & ~3);
                 offset += 4 + ((record.readUInt32BE(offset) + 3) & ~3);
                 minor = record.readUInt32BE(offset);
+                offset += 4;
+                const count = record.readUInt32BE(offset);
+                offset += 4;
+                for (let index = 0; index < count; index++) {
+                  const op = record.readUInt32BE(offset);
+                  offset += 4;
+                  if (op === 18) {
+                    opensFile = true;
+                    break;
+                  } // OPEN
+                  if (op === 26) {
+                    readsDirectory = true;
+                    break;
+                  } // READDIR
+                  if ([10, 24, 31, 32].includes(op)) continue;
+                  if (op === 3) {
+                    offset += 4;
+                  } // ACCESS
+                  else if (op === 15 || op === 22) {
+                    // LOOKUP / PUTFH
+                    offset += 4 + ((record.readUInt32BE(offset) + 3) & ~3);
+                  } else if (op === 9) {
+                    // GETATTR bitmap
+                    offset += 4 + record.readUInt32BE(offset) * 4;
+                  } else break;
+                }
               }
               calls.push({ program, version, procedure, minor });
+              if (
+                loseCreateReply &&
+                program === 100003 &&
+                ((version === 3 && procedure === 8) ||
+                  (version === 4 && opensFile)) &&
+                record.includes(Buffer.from('.elder-terms-part-'))
+              ) {
+                lostReplies.add(record.readUInt32BE(0));
+                loseCreateReply = false;
+              }
               if (rejectExports && program === 100005 && procedure === 5) {
                 const reply = Buffer.alloc(28);
                 reply.writeUInt32BE(0x80000018, 0);
                 reply.writeUInt32BE(record.readUInt32BE(0), 4);
                 reply.writeUInt32BE(1, 8);
                 reply.writeUInt32BE(5, 24); // RPC accepted, SYSTEM_ERR.
+                client.write(reply);
+              } else if (
+                version === 4 &&
+                ((rejectedV4Name && record.includes(rejectedV4Name)) ||
+                  (rejectNamespaceListing && readsDirectory))
+              ) {
+                const status =
+                  rejectNamespaceListing && readsDirectory ? 13 : 22;
+                if (status === 13) rejectNamespaceListing = false;
+                else rejectedV4Name = undefined;
+                const reply = Buffer.alloc(40);
+                reply.writeUInt32BE(0x80000024, 0);
+                reply.writeUInt32BE(record.readUInt32BE(0), 4);
+                reply.writeUInt32BE(1, 8);
+                reply.writeUInt32BE(status, 28); // NFS error, empty tag and result list.
                 client.write(reply);
               } else {
                 const header = Buffer.alloc(4);
@@ -125,7 +188,29 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
             upstream.destroy();
           }
         });
-        upstream.pipe(client);
+        let replies = Buffer.alloc(0);
+        let replyFragments: Buffer[] = [];
+        upstream.on('data', (bytes: Buffer) => {
+          replies = Buffer.concat([replies, bytes]);
+          while (replies.length >= 4) {
+            const marker = replies.readUInt32BE(0);
+            const length = marker & 0x7fffffff;
+            if (replies.length < length + 4) break;
+            replyFragments.push(replies.subarray(4, length + 4));
+            replies = replies.subarray(length + 4);
+            if ((marker & 0x80000000) === 0) continue;
+            const record = Buffer.concat(replyFragments);
+            replyFragments = [];
+            if (lostReplies.delete(record.readUInt32BE(0))) {
+              client.destroy();
+              upstream.destroy();
+              return;
+            }
+            const header = Buffer.alloc(4);
+            header.writeUInt32BE((record.length | 0x80000000) >>> 0);
+            client.write(Buffer.concat([header, record]));
+          }
+        });
       });
       servers.push(server);
       server.listen(port, '127.0.0.1');
@@ -137,6 +222,15 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
       close,
       rejectExports: (enabled) => {
         rejectExports = enabled;
+      },
+      loseCreateReply: () => {
+        loseCreateReply = true;
+      },
+      rejectNamespaceListing: () => {
+        rejectNamespaceListing = true;
+      },
+      rejectV4Name: (bytes) => {
+        rejectedV4Name = bytes;
       },
     };
   } catch (error) {

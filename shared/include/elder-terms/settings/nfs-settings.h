@@ -30,6 +30,12 @@ struct NfsConnectionSettings {
   std::vector<std::string> known_exports;
   /** Request the MOUNT export list in addition to configured paths. */
   bool discover_exports = true;
+  /** Initial NFS v4 namespace path, independent of v2/v3 exports. */
+  std::string namespace_path;
+  /** Additional absolute paths in the NFS v4 public namespace. */
+  std::vector<std::string> known_namespace_paths;
+  /** Explore the NFS v4 namespace root in addition to registered paths. */
+  bool discover_namespace = true;
   /** Filename and symbolic-link target encoding; never affects file contents. */
   std::string filename_encoding = "UTF-8";
   /** Initial local directory, or empty for the application's default. */

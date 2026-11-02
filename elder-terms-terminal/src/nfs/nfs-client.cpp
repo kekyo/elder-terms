@@ -8,6 +8,7 @@
 #include "nfs-api.h"
 #include "nfs-name.h"
 #include <nfsc/libnfs-raw-mount.h>
+#include <nfsc/libnfs-raw-nfs4.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <fcntl.h>
@@ -15,12 +16,110 @@
 #include <atomic>
 #include <bit>
 #include <climits>
+#include <cstring>
 #include <map>
 #include <utility>
 
 namespace elder_terms {
 
 static std::atomic<std::uint64_t> next_generation{1};
+
+// Operation names borrow the owned path until the asynchronous compound completes.
+static std::vector<nfs_argop4> v4_path_operations(std::string &path, nfs_opnum4 final) {
+  std::vector<nfs_argop4> operations(1);
+  operations.front().argop = OP_PUTROOTFH;
+  for (std::size_t start = 1; start < path.size();) {
+    const auto end = path.find('/', start);
+    auto &op = operations.emplace_back();
+    op.argop = OP_LOOKUP;
+    op.nfs_argop4_u.oplookup.objname = {
+        static_cast<u_int>((end == std::string::npos ? path.size() : end) - start), path.data() + start};
+    if (end == std::string::npos) break;
+    start = end + 1;
+  }
+  operations.emplace_back().argop = final;
+  return operations;
+}
+
+struct NfsTransferLimits { std::uint64_t read; std::uint64_t write; };
+
+static cardio::promise<NfsTransferLimits> load_v4_transfer_limits(const std::shared_ptr<NfsRpcSession> &session,
+    std::string path, cardio::cancellation cancellation) {
+  // libnfs 5.0.2 does not populate readmax/writemax when mounting v4. Query
+  // the public protocol attributes through the same authenticated RPC context.
+  auto operations = v4_path_operations(path, OP_GETATTR);
+  std::uint32_t mask = (1U << FATTR4_MAXREAD) | (1U << FATTR4_MAXWRITE);
+  operations.back().argop = OP_GETATTR;
+  operations.back().nfs_argop4_u.opgetattr.attr_request = {1, &mask};
+  COMPOUND4args args{};
+  args.minorversion = 0;
+  args.argarray = {static_cast<u_int>(operations.size()), operations.data()};
+  NfsTransferLimits limits{};
+  nfsstat4 status = NFS4_OK;
+  co_await execute_nfs_raw_async(session, [&](auto cb, auto data) {
+    return ELDER_NFS_RAW_CALL(rpc_nfs4_compound, session->rpc, cb, &args, data);
+  }, [&](void *data) {
+    const auto &result = *static_cast<COMPOUND4res *>(data);
+    status = result.status;
+    if (status != NFS4_OK) return;
+    if (result.resarray.resarray_len != operations.size())
+      throw RemoteFileError("Invalid NFS v4 transfer limit response", true);
+    // libnfs 5.0.2's decoded array may be only four-byte aligned. Copy its
+    // public value into aligned storage before accessing the 64-bit union.
+    nfs_resop4 last{};
+    std::memcpy(&last, reinterpret_cast<const char *>(result.resarray.resarray_val) +
+        (result.resarray.resarray_len - 1) * sizeof(last), sizeof(last));
+    if (last.resop != OP_GETATTR || last.nfs_resop4_u.opgetattr.status != NFS4_OK)
+      throw RemoteFileError("Invalid NFS v4 transfer limit response", true);
+    const auto &attributes = last.nfs_resop4_u.opgetattr.GETATTR4res_u.resok4.obj_attributes;
+    if (attributes.attrmask.bitmap4_len != 1 || attributes.attrmask.bitmap4_val[0] != mask ||
+        attributes.attr_vals.attrlist4_len != 16)
+      throw RemoteFileError("NFS v4 server did not provide its read and write limits", false);
+    const auto number = [&](std::size_t offset) {
+      std::uint64_t value = 0;
+      for (std::size_t index = 0; index < 8; ++index)
+        value = (value << 8) | static_cast<unsigned char>(attributes.attr_vals.attrlist4_val[offset + index]);
+      return value;
+    };
+    const auto read_limit = number(0), write_limit = number(8);
+    if (!read_limit || !write_limit) throw RemoteFileError("NFS v4 server reported a zero transfer limit", false);
+    // Public read/write completion counts are signed ints. The transfer engine
+    // may request less, but no request can exceed either this bound or the server.
+    limits = {std::min<std::uint64_t>(read_limit, INT_MAX), std::min<std::uint64_t>(write_limit, INT_MAX)};
+  }, cancellation);
+  if (status != NFS4_OK) throw RemoteFileError("NFS v4 transfer limit query failed: " + std::to_string(status), status == NFS4ERR_STALE);
+  co_return limits;
+}
+
+static cardio::promise<std::string> read_v4_link(const std::shared_ptr<NfsRpcSession> &session,
+    std::string path, cardio::cancellation cancellation) {
+  auto operations = v4_path_operations(path, OP_READLINK);
+  COMPOUND4args args{};
+  args.minorversion = 0;
+  args.argarray = {static_cast<u_int>(operations.size()), operations.data()};
+  std::string value;
+  nfsstat4 status = NFS4_OK;
+  co_await execute_nfs_raw_async(session, [&](auto cb, auto data) {
+    return ELDER_NFS_RAW_CALL(rpc_nfs4_compound, session->rpc, cb, &args, data);
+  }, [&](void *data) {
+    const auto &result = *static_cast<COMPOUND4res *>(data);
+    status = result.status;
+    if (status != NFS4_OK) return;
+    if (result.resarray.resarray_len != operations.size())
+      throw RemoteFileError("Invalid NFS v4 read link response", true);
+    nfs_resop4 last{};
+    std::memcpy(&last, reinterpret_cast<const char *>(result.resarray.resarray_val) +
+        (result.resarray.resarray_len - 1) * sizeof(last), sizeof(last));
+    if (last.resop != OP_READLINK || last.nfs_resop4_u.opreadlink.status != NFS4_OK)
+      throw RemoteFileError("Invalid NFS v4 read link response", true);
+    // In 5.0.2 the high-level v4 readlink uses strdup on an XDR byte array.
+    // Its length is authoritative; the wire value need not be NUL-terminated.
+    const auto &link = last.nfs_resop4_u.opreadlink.READLINK4res_u.resok4.link;
+    value.assign(link.utf8string_val, link.utf8string_len);
+  }, cancellation);
+  if (status != NFS4_OK) throw RemoteFileError("NFS v4 read link failed: " + std::to_string(status), status == NFS4ERR_STALE);
+  co_return value;
+}
 
 struct NfsResolveCancellation {
   cardio::cancellation_source source;
@@ -111,6 +210,7 @@ static cardio::promise<void> close_handle(const std::shared_ptr<NfsRpcSession> &
 struct NfsReader final : RemoteFileReader {
   std::shared_ptr<NfsRpcSession> session;
   nfsfh *handle = nullptr;
+  std::uint64_t chunk_limit = 0;
   std::uint64_t offset = 0;
   ~NfsReader() override { if (handle) session->stop(); }
   cardio::promise<std::size_t> read_async(std::span<std::byte> buffer,
@@ -119,7 +219,7 @@ struct NfsReader final : RemoteFileReader {
     require_session(session);
     if (!handle) throw RemoteFileError("NFS reader is closed", false);
     if (buffer.empty()) co_return 0;
-    const auto amount = std::min<std::uint64_t>(buffer.size(), nfs_get_readmax(session->nfs));
+    const auto amount = std::min<std::uint64_t>(buffer.size(), chunk_limit);
     if (!amount || offset > UINT64_MAX - amount) throw RemoteFileError("Invalid NFS read range", false);
     const auto count = co_await read_nfs_async(session, handle, buffer.first(amount), offset, cancellation);
     offset += count;
@@ -134,19 +234,46 @@ struct NfsReader final : RemoteFileReader {
 struct NfsWriter final : RemoteFileWriter {
   std::shared_ptr<NfsRpcSession> session;
   nfsfh *handle = nullptr;
+  std::uint64_t chunk_limit = 0;
+  std::string path;
+  std::uint32_t permissions = 0600;
   std::uint64_t offset = 0;
   std::uint64_t expected_size = 0;
+  RemoteFileCreationState creation = RemoteFileCreationState::not_created;
+  bool attempted = false;
+  bool closed = false;
   ~NfsWriter() override { if (handle) session->stop(); }
-  RemoteFileCreationState creation_state() const noexcept override { return RemoteFileCreationState::created; }
+  RemoteFileCreationState creation_state() const noexcept override { return creation; }
+  cardio::promise<void> ensure_open(cardio::cancellation cancellation) {
+    require_session(session);
+    if (handle) co_return;
+    if (attempted || closed) throw RemoteFileError("NFS upload creation cannot be replayed", false);
+    cancellation.throw_if_cancellation_requested();
+    attempted = true;
+    const auto result = co_await execute_nfs_async(session, [&](auto cb, auto data) {
+      creation = RemoteFileCreationState::unknown;
+      const int status = nfs_create_async(session->nfs, path.c_str(), O_EXCL | O_WRONLY | O_NOFOLLOW,
+          permissions & 0777, cb, data);
+      if (status < 0) creation = RemoteFileCreationState::not_created;
+      return status;
+    }, [&](int, void *data) {
+      handle = static_cast<nfsfh *>(data);
+      session->handles.insert(handle);
+      creation = RemoteFileCreationState::created;
+    }, cancellation);
+    if (result.status == -EEXIST) creation = RemoteFileCreationState::not_created;
+    check_nfs_result(result, "create upload");
+  }
   cardio::promise<void> write_all_async(std::span<const std::byte> buffer,
       cardio::cancellation cancellation) override {
     auto lock = std::move(co_await session->operations.lock(cancellation));
-    require_session(session);
-    if (!handle) throw RemoteFileError("NFS writer is closed", false);
+    if (closed) throw RemoteFileError("NFS writer is closed", false);
     if (offset > expected_size || buffer.size() > expected_size - offset)
       throw RemoteFileError("NFS upload exceeded its declared size", false);
+    if (buffer.empty()) co_return;
+    co_await ensure_open(cancellation);
     while (!buffer.empty()) {
-      const auto amount = std::min<std::uint64_t>(buffer.size(), nfs_get_writemax(session->nfs));
+      const auto amount = std::min<std::uint64_t>(buffer.size(), chunk_limit);
       if (!amount) throw RemoteFileError("Invalid NFS write limit", true);
       const auto result = co_await execute_nfs_async(session, [&](auto cb, auto data) {
 #ifdef LIBNFS_API_V2
@@ -164,7 +291,16 @@ struct NfsWriter final : RemoteFileWriter {
   }
   cardio::promise<void> close_async(cardio::cancellation cancellation) override {
     auto lock = std::move(co_await session->operations.lock(cancellation));
-    if (!handle) co_return;
+    if (closed) co_return;
+    // Empty files have no write call. A failed CREATE is never retried during
+    // cleanup, and an abandoned nonempty writer must not create a new file.
+    if (!attempted && expected_size == 0) co_await ensure_open(cancellation);
+    closed = true;
+    if (!handle) {
+      if (!attempted && expected_size != 0)
+        throw RemoteFileError("NFS upload ended before its declared size", false);
+      co_return;
+    }
     const bool complete = offset == expected_size;
     co_await close_handle(session, handle, cancellation);
     if (!complete) throw RemoteFileError("NFS upload ended before its declared size", false);
@@ -174,12 +310,14 @@ struct NfsWriter final : RemoteFileWriter {
 struct NfsExport {
   std::string bytes;
   std::shared_ptr<NfsRpcSession> session;
+  std::optional<NfsTransferLimits> limits;
 };
 
 struct NfsLocation {
   std::string root;
   std::string bytes;
   std::string name;
+  std::string native;
 };
 
 struct NfsServer final : RemoteFileClient {
@@ -187,6 +325,7 @@ struct NfsServer final : RemoteFileClient {
   std::vector<std::string> addresses;
   std::string generation;
   std::map<std::string, NfsExport> exports;
+  std::shared_ptr<NfsRpcSession> namespace_session;
   cardio::primitives::mutex operations;
   bool stopped = false;
   bool transfer_active = false;
@@ -195,6 +334,7 @@ struct NfsServer final : RemoteFileClient {
   ~NfsServer() override { stop(); }
   void stop() {
     stopped = true;
+    if (namespace_session) namespace_session->stop();
     for (auto &[id, item] : exports) { (void)id; if (item.session) item.session->stop(); }
   }
   void require_open() const {
@@ -203,14 +343,14 @@ struct NfsServer final : RemoteFileClient {
   void add_export(const std::string &bytes) {
     if (bytes.empty() || bytes.front() != '/' || bytes.find('\0') != std::string::npos)
       throw RemoteFileError("NFS server returned an invalid export path", false);
-    exports.try_emplace("/" + generation + nfs_identifier_component(bytes), NfsExport{bytes, {}});
+    exports.try_emplace("/" + generation + nfs_identifier_component(bytes), NfsExport{bytes, {}, {}});
   }
   NfsLocation locate(const std::string &path) const {
     const auto separator = path.find('/', 1);
     const auto root = path.substr(0, separator);
     const auto found = exports.find(root);
     if (found == exports.end()) throw RemoteFileError("Unknown or expired NFS path identity", false);
-    NfsLocation result{root, "", found->second.bytes};
+    NfsLocation result{root, "", found->second.bytes, ""};
     for (auto start = separator; start != std::string::npos;) {
       const auto next = path.find('/', start + 1);
       const auto component = path.substr(start + 1, next == std::string::npos ? next : next - start - 1);
@@ -222,10 +362,23 @@ struct NfsServer final : RemoteFileClient {
       start = next;
     }
     if (result.bytes.empty()) result.bytes = "/";
+    result.native = result.bytes;
+    if (options.version == 4) {
+      const auto &base = found->second.bytes;
+      result.native = result.bytes == "/" ? base : (base == "/" ? "" : base) + result.bytes;
+    }
     return result;
   }
+  bool is_public_root(const NfsLocation &path) const {
+    if (path.bytes == "/") return true;
+    const auto &base = exports.at(path.root).bytes;
+    const auto absolute = (base == "/" ? "" : base) + path.bytes;
+    return std::any_of(exports.begin(), exports.end(), [&](const auto &entry) {
+      return entry.second.bytes == absolute;
+    });
+  }
   void require_mutable(const NfsLocation &path) const {
-    if (path.bytes == "/") throw RemoteFileError("NFS exported roots cannot be modified", false);
+    if (is_public_root(path)) throw RemoteFileError("NFS public roots cannot be modified", false);
   }
   RemoteFileCapabilities capabilities() const noexcept override {
     return {.symbolic_links = true, .permissions = true, .access_time = true,
@@ -235,7 +388,7 @@ struct NfsServer final : RemoteFileClient {
     require_open();
     if (path == "/") return {false, false};
     const auto target = locate(path);
-    return {true, target.bytes != "/"};
+    return {true, !is_public_root(target)};
   }
   std::string child_path(const std::string &parent, const std::string &name) const override {
     require_open();
@@ -290,6 +443,7 @@ struct NfsServer final : RemoteFileClient {
       cardio::cancellation cancellation) {
     require_open();
     auto &entry = exports.at(path.root);
+    if (options.version == 4 && namespace_session) entry.session = namespace_session;
     if (!entry.session) {
       std::exception_ptr failure;
       for (const auto &address : addresses) {
@@ -302,17 +456,23 @@ struct NfsServer final : RemoteFileClient {
         entry.session = session;
         try {
           co_await perform(session, "mount", [&](auto cb, auto data) {
-            return nfs_mount_async(session->nfs, address.c_str(), entry.bytes.c_str(), cb, data);
+            return nfs_mount_async(session->nfs, address.c_str(), options.version == 4 ? "/" : entry.bytes.c_str(), cb, data);
           }, cancellation);
         } catch (const cardio::canceled_exception &) { entry.session.reset(); throw; }
         catch (...) { entry.session.reset(); failure = std::current_exception(); continue; }
         session->timeout_ms = options.request_timeout_ms;
         nfs_set_timeout(session->nfs, options.request_timeout_ms);
+        if (options.version == 4) namespace_session = session;
         break;
       }
       if (!entry.session) std::rethrow_exception(failure);
     }
     require_session(entry.session);
+    if (!entry.limits) {
+      auto session_lock = std::move(co_await entry.session->operations.lock(cancellation));
+      if (options.version == 4) entry.limits = co_await load_v4_transfer_limits(entry.session, entry.bytes, cancellation);
+      else entry.limits = NfsTransferLimits{nfs_get_readmax(entry.session->nfs), nfs_get_writemax(entry.session->nfs)};
+    }
     co_return entry.session;
   }
 
@@ -322,7 +482,10 @@ struct NfsServer final : RemoteFileClient {
     require_open();
     RemoteDirectorySnapshot snapshot{path, {}};
     if (path == "/") {
-      if (!discovery_error.empty()) snapshot.notice = "Export discovery failed; showing configured paths. " + discovery_error;
+      if (options.version == 4) snapshot.notice = "NFS v4 public namespace";
+      if (!discovery_error.empty()) snapshot.notice =
+          (options.version == 4 ? "Namespace discovery failed; showing configured paths. " :
+           "Export discovery failed; showing configured paths. ") + discovery_error;
       for (const auto &[id, item] : exports) {
         RemoteFileAttributes entry;
         entry.path = id;
@@ -337,7 +500,7 @@ struct NfsServer final : RemoteFileClient {
     auto session = co_await mounted(target, cancellation);
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
     check_nfs_result(co_await execute_nfs_async(session, [&](auto cb, auto data) {
-      return nfs_opendir_async(session->nfs, target.bytes.c_str(), cb, data);
+      return nfs_opendir_async(session->nfs, target.native.c_str(), cb, data);
     }, [&](int, void *data) {
       auto *directory = static_cast<nfsdir *>(data);
       struct DirectoryClose { nfs_context *context; nfsdir *directory; ~DirectoryClose() { nfs_closedir(context, directory); } } close{session->nfs, directory};
@@ -353,6 +516,7 @@ struct NfsServer final : RemoteFileClient {
         item.permissions = entry->mode;
         item.access_time_unix_seconds = entry->atime.tv_sec;
         item.modification_time_unix_seconds = entry->mtime.tv_sec;
+        if (is_public_root(locate(item.path))) item.role = RemoteFileRole::nfs_export;
         snapshot.entries.push_back(std::move(item));
       }
     }, cancellation), "list directory");
@@ -372,10 +536,10 @@ struct NfsServer final : RemoteFileClient {
     const auto target = locate(path);
     auto session = co_await mounted(target, cancellation);
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
-    const auto value = co_await stat_native(session, target.bytes, cancellation);
+    const auto value = co_await stat_native(session, target.native, cancellation);
     if (!value) co_return std::nullopt;
     auto attributes = attributes_for(path, target.name, options.filename_encoding, *value);
-    if (target.bytes == "/") attributes.role = RemoteFileRole::nfs_export;
+    if (is_public_root(target)) attributes.role = RemoteFileRole::nfs_export;
     co_return attributes;
   }
 
@@ -387,8 +551,9 @@ struct NfsServer final : RemoteFileClient {
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
     auto reader = std::make_unique<NfsReader>();
     reader->session = session;
+    reader->chunk_limit = exports.at(target.root).limits->read;
     check_nfs_result(co_await execute_nfs_async(session, [&](auto cb, auto data) {
-      return nfs_open_async(session->nfs, target.bytes.c_str(), O_RDONLY | O_NOFOLLOW, cb, data);
+      return nfs_open_async(session->nfs, target.native.c_str(), O_RDONLY | O_NOFOLLOW, cb, data);
     }, [&](int, void *data) {
       reader->handle = static_cast<nfsfh *>(data);
       session->handles.insert(reader->handle);
@@ -405,14 +570,12 @@ struct NfsServer final : RemoteFileClient {
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
     auto writer = std::make_unique<NfsWriter>();
     writer->session = session;
+    writer->path = target.native;
+    writer->chunk_limit = exports.at(target.root).limits->write;
+    writer->permissions = permissions.value_or(0600);
     writer->expected_size = size;
-    check_nfs_result(co_await execute_nfs_async(session, [&](auto cb, auto data) {
-      return nfs_create_async(session->nfs, target.bytes.c_str(), O_EXCL | O_WRONLY | O_NOFOLLOW,
-          permissions.value_or(0600) & 0777, cb, data);
-    }, [&](int, void *data) {
-      writer->handle = static_cast<nfsfh *>(data);
-      session->handles.insert(writer->handle);
-    }, cancellation), "create upload");
+    // Return ownership tracking before CREATE can reach the server. If its
+    // reply is lost, the transfer engine can report the uncertain temporary.
     co_return writer;
   }
 
@@ -424,7 +587,7 @@ struct NfsServer final : RemoteFileClient {
     auto session = co_await mounted(target, cancellation);
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
     co_await perform(session, "create directory", [&](auto cb, auto data) {
-      return nfs_mkdir2_async(session->nfs, target.bytes.c_str(), permissions.value_or(0755) & 0777, cb, data);
+      return nfs_mkdir2_async(session->nfs, target.native.c_str(), permissions.value_or(0755) & 0777, cb, data);
     }, cancellation);
   }
 
@@ -435,8 +598,8 @@ struct NfsServer final : RemoteFileClient {
     auto session = co_await mounted(target, cancellation);
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
     co_await perform(session, "remove", [&](auto cb, auto data) {
-      return directory ? nfs_rmdir_async(session->nfs, target.bytes.c_str(), cb, data) :
-          nfs_unlink_async(session->nfs, target.bytes.c_str(), cb, data);
+      return directory ? nfs_rmdir_async(session->nfs, target.native.c_str(), cb, data) :
+          nfs_unlink_async(session->nfs, target.native.c_str(), cb, data);
     }, cancellation);
   }
   cardio::promise<void> remove_file_async(std::string path, cardio::cancellation cancellation) override {
@@ -458,16 +621,16 @@ struct NfsServer final : RemoteFileClient {
       // LINK creates the final name atomically only when absent. The adjacent
       // exclusive upload remains owned until its own temporary name is removed.
       co_await perform(session, "commit upload", [&](auto cb, auto data) {
-        return nfs_link_async(session->nfs, from.bytes.c_str(), to.bytes.c_str(), cb, data);
+        return nfs_link_async(session->nfs, from.native.c_str(), to.native.c_str(), cb, data);
       }, cancellation);
       co_await perform(session, "remove committed temporary", [&](auto cb, auto data) {
-        return nfs_unlink_async(session->nfs, from.bytes.c_str(), cb, data);
+        return nfs_unlink_async(session->nfs, from.native.c_str(), cb, data);
       }, cancellation);
     } else {
-      if (!overwrite && (co_await stat_native(session, to.bytes, cancellation)))
+      if (!overwrite && (co_await stat_native(session, to.native, cancellation)))
         throw RemoteFileError("NFS rename destination already exists", false);
       co_await perform(session, "rename", [&](auto cb, auto data) {
-        return nfs_rename_async(session->nfs, from.bytes.c_str(), to.bytes.c_str(), cb, data);
+        return nfs_rename_async(session->nfs, from.native.c_str(), to.native.c_str(), cb, data);
       }, cancellation);
     }
   }
@@ -485,9 +648,12 @@ struct NfsServer final : RemoteFileClient {
     const auto target = locate(path);
     auto session = co_await mounted(target, cancellation);
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
+    if (options.version == 4) {
+      co_return co_await read_v4_link(session, target.native, cancellation);
+    }
     std::string value;
     check_nfs_result(co_await execute_nfs_async(session, [&](auto cb, auto data) {
-      return nfs_readlink_async(session->nfs, target.bytes.c_str(), cb, data);
+      return nfs_readlink_async(session->nfs, target.native.c_str(), cb, data);
     }, [&](int, void *data) { value = static_cast<char *>(data); }, cancellation), "read link");
     co_return value;
   }
@@ -500,7 +666,7 @@ struct NfsServer final : RemoteFileClient {
     auto session = co_await mounted(location, cancellation);
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
     co_await perform(session, "create link", [&](auto cb, auto data) {
-      return nfs_symlink_async(session->nfs, target.c_str(), location.bytes.c_str(), cb, data);
+      return nfs_symlink_async(session->nfs, target.c_str(), location.native.c_str(), cb, data);
     }, cancellation);
   }
 
@@ -513,16 +679,16 @@ struct NfsServer final : RemoteFileClient {
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
     if (attributes.permissions && attributes.type != RemoteFileType::symbolic_link)
       co_await perform(session, "permissions", [&](auto cb, auto data) {
-        return nfs_lchmod_async(session->nfs, target.bytes.c_str(), *attributes.permissions & 0777, cb, data);
+        return nfs_lchmod_async(session->nfs, target.native.c_str(), *attributes.permissions & 0777, cb, data);
       }, cancellation);
     if (attributes.access_time_unix_seconds || attributes.modification_time_unix_seconds) {
-      const auto current = co_await stat_native(session, target.bytes, cancellation);
+      const auto current = co_await stat_native(session, target.native, cancellation);
       if (!current) throw RemoteFileError("NFS item disappeared before updating timestamps", false);
       timeval times[2]{};
       times[0].tv_sec = attributes.access_time_unix_seconds.value_or(current->nfs_atime);
       times[1].tv_sec = attributes.modification_time_unix_seconds.value_or(current->nfs_mtime);
       co_await perform(session, "timestamps", [&](auto cb, auto data) {
-        return nfs_lutimes_async(session->nfs, target.bytes.c_str(), times, cb, data);
+        return nfs_lutimes_async(session->nfs, target.native.c_str(), times, cb, data);
       }, cancellation);
     }
   }
@@ -545,7 +711,8 @@ static std::string encode_export(const std::string &input, const std::string &en
 cardio::promise<std::shared_ptr<RemoteFileClient>> open_nfs_server_async(
     NfsClientOpenOptions options, cardio::cancellation cancellation) {
   cancellation.throw_if_cancellation_requested();
-  if (options.version != 3) throw RemoteFileError("This implementation currently requires NFS v3", false);
+  if (options.version != 3 && options.version != 4)
+    throw RemoteFileError("Select NFS v3 or v4.0", false);
   if (options.address.empty() || options.address.find_first_of(" /\\@?#\r\n") != std::string::npos ||
       options.address.find('\0') != std::string::npos || options.nfs_port < 0 || options.nfs_port > 65535 ||
       options.mount_port < 0 || options.mount_port > 65535 || options.connect_timeout_ms <= 0 ||
@@ -558,9 +725,27 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_nfs_server_async(
   // only numeric addresses after completing cancellable GIO resolution.
   server->addresses = co_await resolve_addresses_async(server->options.address, server->options.connect_timeout_ms, cancellation);
   server->generation = "nfs-" + std::to_string(next_generation.fetch_add(1)) + "-";
-  for (const auto &path : server->options.known_exports)
+  const auto &paths = server->options.version == 4 ? server->options.known_namespace_paths : server->options.known_exports;
+  for (const auto &path : paths)
     server->add_export(encode_export(path, server->options.filename_encoding));
-  if (server->options.discover_exports) {
+  if (server->options.version == 4 && server->options.discover_namespace) {
+    const auto root_id = "/" + server->generation + nfs_identifier_component("/");
+    const bool registered_root = server->exports.contains(root_id);
+    server->add_export("/");
+    try {
+      const auto root = co_await server->load_directory_async(root_id, cancellation);
+      for (const auto &entry : root.entries) {
+        if (entry.type == RemoteFileType::directory)
+          server->add_export("/" + nfs_identifier_bytes(entry.path.substr(entry.path.find_last_of('/') + 1)));
+      }
+    } catch (const cardio::canceled_exception &) { throw; }
+    catch (const std::exception &error) {
+      if (!registered_root) server->exports.erase(root_id);
+      server->discovery_error = error.what();
+      if (server->exports.empty()) throw;
+    }
+  }
+  if (server->options.version == 3 && server->options.discover_exports) {
     for (const auto &address : server->addresses) {
       try {
         auto mount = create_nfs_raw_session(server->options.connect_timeout_ms);
@@ -585,7 +770,7 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_nfs_server_async(
     if (server->exports.empty() && !server->discovery_error.empty())
       throw RemoteFileError(server->discovery_error, true);
   }
-  if (server->exports.empty()) throw RemoteFileError("No NFS exports were found; configure a known export path", false);
+  if (server->exports.empty()) throw RemoteFileError("No NFS public paths were found; configure a known path", false);
   co_return server;
 }
 

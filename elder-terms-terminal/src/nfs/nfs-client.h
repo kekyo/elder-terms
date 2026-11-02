@@ -34,6 +34,10 @@ struct NfsClientOpenOptions {
   std::vector<std::string> known_exports;
   /** Whether to discover exports in addition to configured paths. */
   bool discover_exports = true;
+  /** Known paths in the NFS v4 namespace; never interpreted as v2/v3 exports. */
+  std::vector<std::string> known_namespace_paths;
+  /** Explore the NFS v4 namespace root and expose accessible directory entries. */
+  bool discover_namespace = true;
   /** AUTH_SYS user, or the current process identity when omitted. */
   std::optional<std::uint32_t> uid;
   /** AUTH_SYS primary group, or the current process identity when omitted. */

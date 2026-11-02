@@ -16,6 +16,10 @@ modprobe nfsd
 mount -t nfsd nfsd /proc/fs/nfsd
 mount -t rpc_pipefs sunrpc /var/lib/nfs/rpc_pipefs
 mkdir -p /srv/public/deep/inside /srv/other/public /srv/readonly /srv/restricted
+# Separate filesystems make the v4 namespace cross an export boundary, so
+# read-only and root-squash policies are tested independently of /srv's policy.
+mount -t tmpfs -o mode=0755 tmpfs /srv/readonly
+mount -t tmpfs -o mode=0700 tmpfs /srv/restricted
 chmod 777 /srv/public /srv/public/deep /srv/public/deep/inside /srv/other/public
 chmod 700 /srv/restricted
 printf 'plain\n' > /srv/public/plain.txt
@@ -34,8 +38,8 @@ cat > /etc/exports <<'EXPORTS'
 /srv/public *(rw,sync,no_subtree_check,insecure,no_root_squash)
 /srv/other/public *(rw,sync,no_subtree_check,insecure,no_root_squash)
 /srv/public/deep *(rw,sync,no_subtree_check,insecure,no_root_squash)
-/srv/readonly *(ro,sync,no_subtree_check,insecure,no_root_squash)
-/srv/restricted *(rw,sync,no_subtree_check,insecure,root_squash)
+/srv/readonly *(ro,sync,no_subtree_check,insecure,no_root_squash,fsid=10)
+/srv/restricted *(rw,sync,no_subtree_check,insecure,root_squash,fsid=11)
 EXPORTS
 rpcbind -w
 rpc.mountd -p 20048

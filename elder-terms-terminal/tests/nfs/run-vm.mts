@@ -19,6 +19,12 @@ const driver =
   process.env.ELDER_NFS_PROBE ?? resolve(root, '.build/nfs/nfs-probe');
 const clientDriver = resolve(dirname(driver), 'nfs-client-test');
 const uiOnly = process.argv.includes('--ui-window-only');
+const uiVersion = Number(
+  process.argv
+    .find((argument) => argument.startsWith('--ui-version='))
+    ?.split('=')[1] ?? '3'
+);
+assert.ok(uiVersion === 3 || uiVersion === 4);
 const run = async (
   command: string,
   args: string[],
@@ -60,7 +66,7 @@ if (!process.argv.includes('--isolated')) {
         process.execPath,
         fileURLToPath(import.meta.url),
         '--isolated',
-        ...(uiOnly ? ['--ui-window-only'] : []),
+        ...(uiOnly ? ['--ui-window-only', `--ui-version=${uiVersion}`] : []),
       ],
       240000
     )
@@ -132,7 +138,7 @@ if (!process.argv.includes('--isolated')) {
     ]);
   try {
     await ready;
-    for (const version of uiOnly ? [3] : [2, 3, 4]) {
+    for (const version of uiOnly ? [uiVersion] : [2, 3, 4]) {
       const options =
         version === 2
           ? '-V 2 -N 3 -N 4'
@@ -173,6 +179,8 @@ if (!process.argv.includes('--isolated')) {
             '--root',
             resolve(root, 'elder-terms-terminal'),
             'tests/nfs-window.test.ts',
+            '--testNamePattern',
+            `NFS v${version} files`,
           ],
           180000,
           { ...process.env, ELDER_NFS_VM_ACTIVE: '1' }
@@ -186,10 +194,10 @@ if (!process.argv.includes('--isolated')) {
                 .map((call) => call.version)
             ),
           ],
-          [3]
+          [version]
         );
         await writeFile(
-          resolve(evidence, 'window-v3-rpc.json'),
+          resolve(evidence, `window-v${version}-rpc.json`),
           JSON.stringify(observer.calls, null, 2)
         );
         continue;
@@ -258,11 +266,42 @@ if (!process.argv.includes('--isolated')) {
         } finally {
           observer.rejectExports(false);
         }
+      }
+      if (version === 3 || version === 4) {
+        observer.loseCreateReply();
+        const lost = await run(clientDriver, [
+          '--lost-create',
+          String(version),
+        ]);
+        await writeFile(
+          resolve(evidence, `client-v${version}-lost-create.log`),
+          lost
+        );
+        assert.match(lost, /PASS lost CREATE/);
+        if (version === 4) {
+          observer.rejectV4Name(Buffer.from('8b9194db955c', 'hex'));
+          const rejected = await run(clientDriver, ['--reject-name']);
+          await writeFile(
+            resolve(evidence, 'client-v4-rejected-name.log'),
+            rejected
+          );
+          assert.match(rejected, /PASS v4 filename rejection/);
+          observer.rejectNamespaceListing();
+          const output = await run(clientDriver, ['--known-exports', '4']);
+          await writeFile(
+            resolve(evidence, 'client-v4-known-paths.log'),
+            output
+          );
+          assert.match(output, /PASS NFS configured exports/);
+          console.log(
+            'PASS v4 registered paths, permissions, and handle cleanup'
+          );
+        }
         for (const encoding of ['UTF-8', 'CP932', 'SHIFT-JIS', 'EUC-JP']) {
           observer.calls.length = 0;
-          const output = await run(clientDriver, [encoding]);
+          const output = await run(clientDriver, [encoding, String(version)]);
           await writeFile(
-            resolve(evidence, `client-v3-${encoding}.log`),
+            resolve(evidence, `client-v${version}-${encoding}.log`),
             output
           );
           assert.deepEqual(observer.errors, []);
@@ -274,11 +313,21 @@ if (!process.argv.includes('--isolated')) {
                   .map((call) => call.version)
               ),
             ],
-            [3]
+            [version]
           );
-          assert.match(output, /PASS NFS client 3/);
-          console.log(`PASS client-v3-${encoding}`);
+          if (version === 4) {
+            assert.ok(observer.calls.every((call) => call.program === 100003));
+            assert.ok(
+              observer.calls.every(
+                (call) => call.procedure !== 1 || call.minor === 0
+              )
+            );
+          }
+          assert.match(output, new RegExp(`PASS NFS client ${version}`));
+          console.log(`PASS client-v${version}-${encoding}`);
         }
+      }
+      if (version === 3) {
         await ssh(
           "sed -i '/^\\/srv\\/public /s/,insecure,/,secure,/' /etc/exports; exportfs -ra"
         );

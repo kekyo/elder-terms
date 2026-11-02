@@ -36,6 +36,11 @@ int main(int argc, char **argv) {
     expect(set_explicit_setting_value(&store, nfs_setting_key("address"), std::string("localhost")), "Accept a hostname");
     expect(nfs_connection_settings(store).filename_encoding == "UTF-8", "The default encoding must be explicit UTF-8");
     expect(nfs_connection_settings(store).validation_errors.empty(), "Default NFS v3 settings must be valid");
+    expect(set_explicit_setting_value(&store, nfs_setting_key("version"), std::string("4.0")),
+        "NFS v4.0 must be selectable without ambiguous minor-version negotiation");
+    expect(!set_explicit_setting_value(&store, nfs_setting_key("version"), std::string("4.2")),
+        "An unimplemented minor version must not silently select v4.0");
+    expect(set_explicit_setting_value(&store, nfs_setting_key("version"), std::string("3")), "Restore v3");
     expect(!set_explicit_setting_value(&store, nfs_setting_key("filename_encoding"), std::string("CP932//TRANSLIT")),
         "Lossy conversion modifiers must be rejected");
     expect(!set_explicit_setting_value(&store, nfs_setting_key("filename_encoding"), std::string("unknown-encoding")),
@@ -74,6 +79,16 @@ int main(int argc, char **argv) {
     expect(nfs_connection_settings(loaded).filename_encoding == "EUC-JP" &&
         nfs_connection_settings(loaded).known_exports == std::vector<std::string>{"/srv/public", "/other/public"},
         "Connection settings must survive save and reload");
+    expect(set_explicit_setting_value(&loaded, nfs_setting_key("namespace_path"), std::string("/public")) &&
+        set_explicit_setting_value(&loaded, nfs_setting_key("known_namespace_paths"), std::vector<std::string>{"/public/deep"}) &&
+        set_explicit_setting_value(&loaded, nfs_setting_key("version"), std::string("4.0")),
+        "Namespace paths must be configured independently of MOUNT exports");
+    expect(save_settings(loaded, connection_path).saved, "Save v4 namespace settings");
+    const auto v4 = nfs_connection_settings(load_settings(load_options, 1.0).store);
+    expect(v4.version == "4.0" && v4.namespace_path == "/public" &&
+        v4.known_namespace_paths == std::vector<std::string>{"/public/deep"} &&
+        v4.known_exports == std::vector<std::string>{"/srv/public", "/other/public"},
+        "Saving v4 settings must preserve separate paths for each protocol");
     clear_explicit_setting_value(&loaded, nfs_setting_key("filename_encoding"));
     expect(nfs_connection_settings(loaded).filename_encoding == "CP932", "Clearing an override restores the global value");
     { std::ofstream file(connection_path); file << "[general]\ntype=nfs\n[nfs]\naddress=localhost\nfilename_encoding=UTF-8//IGNORE\n"; }
@@ -99,6 +114,13 @@ int main(int argc, char **argv) {
     expect(settings_widget_is_valid(widget) && !gtk_widget_get_sensitive(encoding) &&
         std::string(gtk_entry_get_text(GTK_ENTRY(encoding))) == "CP932", "Inheritance must restore the global encoding");
     expect(!gtk_widget_get_visible(find_widget(root, "settings_ssh_proxy_page")), "NFS must not advertise an unsupported SSH proxy");
+    auto *version_inherit = find_widget(root, "settings_nfs_version_inherit");
+    auto *version = find_widget(root, "settings_nfs_version_combo");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(version_inherit), FALSE);
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(version), "4.0");
+    expect(!gtk_widget_get_sensitive(find_widget(root, "settings_nfs_known_exports_inherit")) &&
+        gtk_widget_get_sensitive(find_widget(root, "settings_nfs_known_namespace_paths_inherit")),
+        "The v4 editor must distinguish namespace inputs from inactive v3 export settings");
     destroy_settings_widget(widget);
     SettingsWidgetOptions runtime_options;
     runtime_options.store = inherited;
