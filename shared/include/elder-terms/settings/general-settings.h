@@ -37,6 +37,8 @@ enum class ConnectionKind {
   http,
   /** Browses and transfers files over SMB without a terminal. */
   smb,
+  /** Browses and transfers files over NFS without a terminal. */
+  nfs,
 };
 
 /**

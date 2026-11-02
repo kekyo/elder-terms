@@ -3690,6 +3690,43 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
+  it('edits NFS filename encoding with explicit inheritance and validation', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=nfs',
+        '--type=nfs',
+        '--global=nfs.address=localhost',
+        '--global=nfs.filename_encoding=CP932',
+      ],
+      async ({ app, directory }) => {
+        await selectSettingsTab(app, 'NFS');
+        const encoding = expectElementKind(
+          await app.getById('settings_nfs_filename_encoding_entry'),
+          'entry'
+        );
+        const inherit = expectElementKind(
+          await app.getById('settings_nfs_filename_encoding_inherit'),
+          'checkbox'
+        );
+        expect(await encoding.text()).toBe('CP932');
+        expect(await inherit.isChecked()).toBe(true);
+        await inherit.toggle();
+        await encoding.setText('CP932//IGNORE');
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await encoding.setText('EUC-JP');
+        await expectSensitive(await app.getById('settings_apply_button'));
+        await writeFile(
+          join(directory, 'nfs-settings.png'),
+          (await app.capture()).image
+        );
+        await inherit.toggle();
+        expect(await encoding.text()).toBe('CP932');
+        await expectInsensitive(encoding);
+      }
+    );
+  });
+
   it('validates and applies SMB settings with independently inherited defaults', async (context) => {
     await runSharedGtkTest(
       context,
