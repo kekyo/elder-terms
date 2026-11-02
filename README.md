@@ -1,6 +1,6 @@
 # elder-terms
 
-A Terminal emulator for local shell, SSH, TELNET, serial, FTP, FTPS, SFTP, HTTP/HTTPS, WebDAV and SMB connections.
+A Terminal emulator for local shell, SSH, TELNET, serial, FTP, FTPS, SFTP, HTTP/HTTPS, WebDAV, SMB, and NFS connections.
 '90s, come back in this time. This is all we need.
 
 ![elder-terms](./images/elder-terms-128.png)
@@ -36,7 +36,7 @@ A terminal application, inspired by personal computing in the 1990s.
   `xterm-256color`, for TELNET and SSH.
 - Supports X/Y/ZMODEM file transfers for TELNET, serial, and SSH terminal
   connections. Automatic transfers can be enabled for ZMODEM.
-- Transfers files to and from the host over SFTP/FTP/FTPS, WebDAV, and SMB.
+- Transfers files to and from the host over SFTP/FTP/FTPS, WebDAV, SMB, and NFS.
 - Transfers files over FTP and FTPS using passive or active data connections.
 - Supports pasting text and sending text files. You can specify the send rate
   and newline handling to avoid overflowing the host's buffer or using
@@ -497,11 +497,16 @@ browser as other transfer types to send, receive, and manage folders.
 See [Using SMB](./docs/en/smb.md) for connection settings,
 signing, encryption, and file operation limits.
 
-## Managing Items in SFTP/FTP/FTPS, WebDAV, and SMB
+## Using NFS
+
+Choose "NFS" as the connection type and specify the server address and NFS version. NFS v2, v3, and v4.0 over TCP support listing public directories, transfers, renaming, and deletion.
+Filename encoding defaults to UTF-8 and can be set to CP932, EUC-JP, or another supported encoding. See [Using NFS](./docs/en/nfs.md) for public paths and numeric identity settings.
+
+## Managing Items in SFTP/FTP/FTPS, WebDAV, SMB, and NFS
 
 ![File transfer item menu](./images/file-transfer-item-menu.png)
 
-SFTP/FTP/FTPS, WebDAV, and SMB use the same two-pane file browser.
+SFTP/FTP/FTPS, WebDAV, SMB, and NFS use the same two-pane file browser.
 Select an item in either the local or remote pane and right-click it to open the item menu.
 Multiple items can be selected with `Ctrl`+click or a drag rectangle before opening the menu.
 
@@ -1514,6 +1519,8 @@ and values changed for an individual connection take precedence over them.
 
 ## Building from Source
 
+NFS requires system [libnfs](https://github.com/sahlberg/libnfs) 5.0.2 or later and its development headers.
+
 WebDAV requires libcurl 7.88.1 or newer with HTTP/HTTPS and asynchronous DNS, plus [libxml2](https://gnome.pages.gitlab.gnome.org/libxml2/) 2.9.14 or newer.
 
 The FTP client requires [libcurl](https://curl.se/libcurl/) 7.88.1 or newer
@@ -1533,7 +1540,7 @@ Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later,
 sudo apt update
 sudo apt install build-essential git meson ninja-build pkg-config gettext imagemagick libgdk-pixbuf2.0-bin librsvg2-common \
   libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev libxfixes-dev \
-  libxkbcommon-dev liburing-dev libudev-dev libsystemd-dev libssh-dev libcurl4-openssl-dev \
+  libxkbcommon-dev liburing-dev libudev-dev libsystemd-dev libssh-dev libnfs-dev libcurl4-openssl-dev \
   libcairo2-dev libpango1.0-dev libfontconfig1-dev libepoxy-dev libibus-1.0-dev \
   libwayland-dev libgl-dev libegl-dev libssl-dev libxml2-dev ca-certificates xdg-utils
 ```

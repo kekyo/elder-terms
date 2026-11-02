@@ -1,6 +1,6 @@
 # elder-terms
 
-ローカルシェル・SSH・TELNET・シリアル・FTP・FTPS・SFTP・HTTP/HTTPS・WebDAV・SMBで接続できるターミナルエミュレータ。
+ローカルシェル・SSH・TELNET・シリアル・FTP・FTPS・SFTP・HTTP/HTTPS・WebDAV・SMB・NFSで接続できるターミナルエミュレータ。
 '90s、あの頃のパラダイス。こういうのでいいんだよ。
 
 ![elder-terms](./images/elder-terms-128.png)
@@ -31,7 +31,7 @@
 - TELNET/SSHで、ターミナル種別 (`xterm`や`xterm-256color`など) を明示的に指定できます。
 - TELNET、シリアル、SSHの各ターミナル接続で、X/Y/ZMODEMファイル送受信をサポートしています。
   ZMODEMなら、自動送受信を有効化出来ます。
-- SFTP/FTP/FTPS/WebDAV/SMBで、ホストとファイルの送受信を実行出来ます。
+- SFTP/FTP/FTPS/WebDAV/SMB/NFSで、ホストとファイルの送受信を実行出来ます。
 - PassiveまたはActiveのデータ接続を使用して、FTP/FTPSでファイルを送受信出来ます。
 - テキストのペーストやテキストファイルの送信を実行出来ます。
   その際に、送信速度と改行コードの扱いを指定して、ホスト側のバッファオーバーフローや改行コードの不一致を回避出来ます。
@@ -424,11 +424,16 @@ HTTPS証明書の検証に失敗した場合は、設定に応じて接続を拒
 共有内では、他のファイル転送と同じ画面で送受信やフォルダーの操作ができます。
 接続設定、署名と暗号化、ファイル操作の制限は[SMBの使用](./docs/ja/smb.md)を参照してください。
 
-## SFTP/FTP/FTPS/WebDAV/SMBの項目操作
+## NFSの使用
+
+接続種別を「NFS」にし、サーバーのアドレスとNFSの版を指定します。NFS v2・v3・v4.0へTCPで接続し、公開ディレクトリの一覧、送受信、名前変更、削除を行えます。
+ファイル名の文字コードはUTF-8が既定で、CP932やEUC-JPなども指定できます。公開パスと数値の利用者IDの設定は[NFSの使用](./docs/ja/nfs.md)を参照してください。
+
+## SFTP/FTP/FTPS/WebDAV/SMB/NFSの項目操作
 
 ![ファイル転送の項目メニュー](./images/file-transfer-item-menu.png)
 
-SFTP/FTP/FTPS/WebDAV/SMBは、同じ2ペインのファイルブラウザを使用します。
+SFTP/FTP/FTPS/WebDAV/SMB/NFSは、同じ2ペインのファイルブラウザを使用します。
 ローカルまたはリモートペーンで項目を選択して右クリックすると、項目メニューが開きます。
 メニューを開く前に、`Ctrl`+クリックまたは矩形ドラッグで複数の項目を選択出来ます。
 
@@ -1324,6 +1329,8 @@ OSC 8ターゲットと表示テキストは接続先から与えられる可能
 
 ## セルフビルド
 
+NFSにはシステム版の[libnfs](https://github.com/sahlberg/libnfs) 5.0.2以降と開発用ヘッダーが必要です。
+
 WebDAVにはHTTP/HTTPSと非同期DNSを有効にしたlibcurl 7.88.1以降、および[libxml2](https://gnome.pages.gitlab.gnome.org/libxml2/) 2.9.14以降が必要です。
 
 FTPクライアントには、FTPと非同期DNSを有効にした[libcurl](https://curl.se/libcurl/) 7.88.1以降が必要です。FTPSには[TLSを有効にしたlibcurl](https://curl.se/libcurl/c/libcurl-tutorial.html)が必要です。Debian／Ubuntuの配布パッケージはOpenSSL版libcurlを使用し、既定の信頼ストアのために `ca-certificates` に依存します。ソースからビルドする場合はOpenSSLのヘッダーとライブラリも必要です。証明書確認ではlibcurlと同じバージョンのOpenSSLが必要で、接続前にアプリケーションが確認します。
@@ -1335,7 +1342,7 @@ UbuntuまたはDebianでビルドする場合は、C++20対応コンパイラ、
 sudo apt update
 sudo apt install build-essential git meson ninja-build pkg-config gettext imagemagick libgdk-pixbuf2.0-bin librsvg2-common \
   libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev libxfixes-dev \
-  libxkbcommon-dev liburing-dev libudev-dev libsystemd-dev libssh-dev libcurl4-openssl-dev \
+  libxkbcommon-dev liburing-dev libudev-dev libsystemd-dev libssh-dev libnfs-dev libcurl4-openssl-dev \
   libcairo2-dev libpango1.0-dev libfontconfig1-dev libepoxy-dev libibus-1.0-dev \
   libwayland-dev libgl-dev libegl-dev libssl-dev libxml2-dev ca-certificates xdg-utils
 ```

@@ -247,6 +247,7 @@ for pkg_config_module in \
 	libxml-2.0 \
 	openssl \
 	libssh \
+	'libnfs >= 5.0.2' \
 	libudev \
 	liburing \
 	x11 \

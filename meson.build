@@ -241,6 +241,7 @@ foreach language : ['ja', 'en']
   install_data(
     'docs' / language / 'webdav.md',
     'docs' / language / 'smb.md',
+    'docs' / language / 'nfs.md',
     'docs' / language / 'http.md',
     install_dir: get_option('datadir') / 'doc/elder-terms/docs' / language,
   )
