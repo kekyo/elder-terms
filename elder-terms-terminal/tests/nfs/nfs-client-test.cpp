@@ -26,7 +26,8 @@ static cardio::promise<void> test_v2_receive(const std::string &encoding) {
   options.version = 2;
   options.filename_encoding = encoding;
   auto client = co_await open_nfs_server_async(options, {});
-  require(!client->capabilities().write_operations, "The first v2 integration must advertise read-only operations");
+  require(client->capabilities().write_operations && client->capabilities().upload_commit,
+      "v2 must advertise verified writes and conditional upload commits");
   const auto root = nfs_export_identity(client, "/srv/public");
   const auto entries = co_await client->load_directory_async(root, {});
   require(entries.entries.size() >= 8, "NFS v2 must list real export contents");
@@ -70,8 +71,79 @@ static cardio::promise<void> test_v2_receive(const std::string &encoding) {
   std::cout << "PASS NFS client 2 " << encoding << " recursive receive\n";
 }
 
+static cardio::promise<void> test_v2_upload_guards() {
+  NfsClientOpenOptions options;
+  options.address = "127.0.0.1";
+  options.version = 2;
+  options.known_exports = {"/srv/public"};
+  options.discover_exports = false;
+  auto client = co_await open_nfs_server_async(options, {});
+  const auto root = nfs_export_identity(client, "/srv/public");
+  const auto existing = client->child_path(root, "plain.txt");
+  const auto before = co_await client->lstat_async(existing, {});
+  auto foreign = std::move(co_await client->open_write_async(existing, 0, std::nullopt, {}));
+  bool rejected = false;
+  try { co_await foreign->close_async({}); }
+  catch (const RemoteFileError &) { rejected = true; }
+  require(rejected && foreign->creation_state() == RemoteFileCreationState::not_created &&
+      (co_await client->lstat_async(existing, {}))->size == before->size,
+      "A colliding v2 upload must not claim or truncate the existing file");
+  foreign.reset();
+  foreign = std::move(co_await client->open_write_async(existing, 0, std::nullopt, {}));
+  rejected = false;
+  try { co_await foreign->close_async({}); }
+  catch (const RemoteFileError &) { rejected = true; }
+  require(rejected && foreign->creation_state() == RemoteFileCreationState::not_created,
+      "Retrying a rejected creation must reach the server without retaining a false ownership claim");
+  foreign.reset();
+  const auto temporary = client->child_path(root, ".elder-terms-part-guard");
+  for (const std::uint64_t size : {UINT64_C(4294967295), UINT64_C(4294967296)}) {
+    rejected = false;
+    try { (void)co_await client->open_write_async(temporary, size, std::nullopt, {}); }
+    catch (const RemoteFileError &) { rejected = true; }
+    require(rejected && !(co_await client->lstat_async(temporary, {})),
+        "An unrepresentable v2 upload size must fail before any creation");
+  }
+  std::vector<std::byte> bytes(25000);
+  for (std::size_t index = 0; index < bytes.size(); ++index) bytes[index] = std::byte(index % 251);
+  auto writer = std::move(co_await client->open_write_async(temporary, bytes.size(), 0440, {}));
+  require(writer->creation_state() == RemoteFileCreationState::not_created,
+      "Preparing a writer must not claim a remote path before creating it");
+  co_await writer->write_all_async(bytes, {});
+  co_await writer->close_async({});
+  require(writer->creation_state() == RemoteFileCreationState::created, "Successful v2 writes must prove temporary ownership");
+  rejected = false;
+  try { co_await client->commit_upload_async(temporary, existing, false, {}); }
+  catch (const RemoteFileError &) { rejected = true; }
+  require(rejected && (co_await client->lstat_async(existing, {}))->size == before->size,
+      "A conditional v2 commit must never replace an existing destination");
+  const auto destination = client->child_path(root, "v2-commit-guard");
+  co_await client->commit_upload_async(temporary, destination, false, {});
+  require(!(co_await client->lstat_async(temporary, {})), "A successful commit must remove its temporary upload resources");
+  require(((co_await client->lstat_async(destination, {}))->permissions.value() & 0777) == 0440,
+      "An upload must preserve a read-only source mode after finishing writes");
+  auto reader = std::move(co_await client->open_read_async(destination, {}));
+  std::vector<std::byte> received;
+  std::array<std::byte, 4096> buffer{};
+  for (;;) {
+    const auto count = co_await reader->read_async(buffer, {});
+    if (!count) break;
+    received.insert(received.end(), buffer.begin(), buffer.begin() + count);
+  }
+  co_await reader->close_async({});
+  require(received == bytes, "Multiple v2 WRITE requests must preserve the exact binary content");
+  writer = std::move(co_await client->open_write_async(temporary, 0, std::nullopt, {}));
+  co_await writer->close_async({});
+  co_await client->commit_upload_async(temporary, destination, true, {});
+  require((co_await client->lstat_async(destination, {}))->size == 0 && !(co_await client->lstat_async(temporary, {})),
+      "An authorized replacement must atomically install the completed empty file and clean up");
+  co_await client->remove_file_async(destination, {});
+  co_await stop_nfs_client_async(client);
+  std::cout << "PASS v2 upload ownership and commit guards\n";
+}
+
 static cardio::promise<void> test_client(const std::string &encoding, int version) {
-  if (version == 2) { co_await test_v2_receive(encoding); co_return; }
+  if (version == 2) co_await test_v2_receive(encoding);
   const std::string prefix = version == 4 ? "" : "/srv";
   if (encoding == "UTF-8") {
     NfsClientOpenOptions unresolved;
@@ -220,6 +292,59 @@ static cardio::promise<void> test_client(const std::string &encoding, int versio
   std::cout << "PASS NFS client " << version << " " << encoding << '\n';
 }
 
+static cardio::promise<void> test_v2_write_failure(const std::string &mode) {
+  NfsClientOpenOptions options;
+  options.address = "127.0.0.1";
+  options.version = 2;
+  options.known_exports = {"/srv/public"};
+  options.discover_exports = false;
+  auto client = co_await open_nfs_server_async(options, {});
+  const auto root = nfs_export_identity(client, "/srv/public");
+  char pattern[] = "/tmp/elder-nfs2-failure-XXXXXX";
+  const char *directory = mkdtemp(pattern);
+  require(directory != nullptr, "A local directory must be available");
+  const std::filesystem::path local(directory);
+  struct Cleanup { std::filesystem::path path; ~Cleanup() { std::filesystem::remove_all(path); } } cleanup{local};
+  const std::string name = "failed-v2-upload";
+  { std::ofstream file(local / name); file << std::string(300000, 'x'); }
+  FileTransferResult result;
+  FileTransferRequest request;
+  request.source_paths = {(local / name).string()};
+  request.destination_directory = root;
+  cardio::cancellation_source stopping;
+  request.callbacks.progress = [&](const FileTransferProgress &progress) {
+    if (mode == "cancel" && progress.transferred_bytes > 0) (void)stopping.cancel();
+  };
+  request.callbacks.finished = [&](const FileTransferResult &value) { result = value; };
+  bool failed = false;
+  try { (void)co_await run_file_transfer_async(client, request, stopping.get_cancellation()); }
+  catch (const std::exception &) { failed = true; }
+  require(failed && result.succeeded_items == 0 && result.outcome ==
+      (mode == "cancel" ? FileTransferOutcome::cancelled : FileTransferOutcome::failed),
+      "Interrupted v2 writes must publish failure or cancellation after cleanup, never completion");
+  require(result.temporary_paths.size() == (mode == "disconnect" ? 1U : 0U),
+      "Only failed cleanup after a lost connection should retain the owned temporary path");
+  if (mode == "nospace") {
+    require(!result.failures.empty() && result.failures.front().message.find("NOSPC") != std::string::npos,
+        "Capacity failures must retain the server's NFS error");
+  }
+  co_await stop_nfs_client_async(client);
+  client = co_await open_nfs_server_async(options, {});
+  const auto new_root = nfs_export_identity(client, "/srv/public");
+  require(!(co_await client->lstat_async(client->child_path(new_root, name), {})),
+      "An incomplete upload must not appear at the final destination");
+  const auto listing = co_await client->load_directory_async(new_root, {});
+  std::vector<std::string> leftovers;
+  for (const auto &entry : listing.entries)
+    if (entry.name.starts_with(".elder-terms-part-")) leftovers.push_back(entry.path);
+  require(leftovers.size() == result.temporary_paths.size(), "Reported temporary resources must agree with the real server");
+  if (!leftovers.empty()) co_await delete_file_transfer_items_async(client, FileTransferEndpoint::remote, std::move(leftovers), {});
+  require((co_await client->lstat_async(client->child_path(new_root, "plain.txt"), {}))->size.value_or(0) > 0,
+      "Failed upload cleanup must leave unrelated files intact");
+  co_await stop_nfs_client_async(client);
+  std::cout << "PASS v2 interrupted write " << mode << '\n';
+}
+
 static cardio::promise<void> test_known_exports(int version) {
   const std::string prefix = version == 4 ? "" : "/srv";
   NfsClientOpenOptions options;
@@ -260,7 +385,8 @@ static cardio::promise<void> test_known_exports(int version) {
   co_await reader->close_async({});
   co_await stop_nfs_client_async(client);
   client = co_await open_nfs_server_async(options, {});
-  co_await client->remove_file_async(client->child_path(nfs_export_identity(client, prefix + "/public"), "abandoned-upload"), {});
+  std::vector<std::string> abandoned{client->child_path(nfs_export_identity(client, prefix + "/public"), "abandoned-upload")};
+  co_await delete_file_transfer_items_async(client, FileTransferEndpoint::remote, std::move(abandoned), {});
   co_await stop_nfs_client_async(client);
   std::cout << "PASS NFS configured exports, access errors, and abandoned handles\n";
 }
@@ -301,7 +427,8 @@ static cardio::promise<void> test_lost_create(int version) {
   const auto left = client->child_path(new_root, temporary);
   require((co_await client->lstat_async(left, {})).has_value(),
       "Unknown ownership must not trigger deletion or CREATE replay");
-  co_await client->remove_file_async(left, {});
+  if (version == 2) co_await client->remove_directory_async(left, {});
+  else co_await client->remove_file_async(left, {});
   co_await stop_nfs_client_async(client);
   std::cout << "PASS lost CREATE reply retained for inspection\n";
 }
@@ -373,6 +500,8 @@ int main(int argc, char **argv) {
       else if (std::string_view(argv[1]) == "--reject-name") co_await test_v4_name_rejection();
       else if (std::string_view(argv[1]) == "--v2-cookie") co_await test_v2_boundaries(true);
       else if (std::string_view(argv[1]) == "--v2-boundaries") co_await test_v2_boundaries(false);
+      else if (std::string_view(argv[1]) == "--v2-upload-guards") co_await test_v2_upload_guards();
+      else if (std::string_view(argv[1]).starts_with("--v2-write-")) co_await test_v2_write_failure(std::string(argv[1]).substr(11));
       else co_await test_client(argv[1], version);
     }
     catch (...) { failure = std::current_exception(); }

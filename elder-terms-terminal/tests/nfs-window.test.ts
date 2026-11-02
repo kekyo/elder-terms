@@ -171,41 +171,6 @@ it.for([2, 3, 4])(
         expect(await remotePath.text()).toBe(`${prefix}/public:/`)
       );
       await rowFor(remote, '日本語表');
-      if (version === 2) {
-        await select(remote, 'deep', 'right');
-        for (const action of ['new_directory', 'rename', 'delete'])
-          expect(
-            (
-              await (
-                await app.getById(`file_transfer_remote_${action}_item`)
-              ).info()
-            ).states
-          ).not.toContain('sensitive');
-        await menu('file_transfer_receive_item');
-        await waitForResult(async () =>
-          expect(
-            await readFile(join(local, 'deep', 'inside', 'payload.txt'), 'utf8')
-          ).toBe('nested\n')
-        );
-        await select(remote, '日本語表', 'right');
-        await menu('file_transfer_receive_item');
-        await waitForResult(async () =>
-          expect(await readFile(join(local, '日本語表'), 'utf8')).toBe(
-            'CP932\n'
-          )
-        );
-        const state = expectElementKind(
-          await app.getById('file_transfer_job_2_state'),
-          'label'
-        );
-        await waitForResult(async () =>
-          expect(await state.text()).toBe('Completed')
-        );
-        await evidence.captureEvidence('nfs-v2-received', async () =>
-          app.capture()
-        );
-        return;
-      }
       await select(localTree, '送信表', 'right');
       await menu('file_transfer_send_item');
       await rowFor(remote, '送信表');
@@ -349,7 +314,9 @@ it.for([2, 3, 4])(
       await ssh(
         version === 4
           ? 'rpc.nfsd -N 2 -N 3 -V 4 -N 4.1 -N 4.2 -U -G 10 -L 10 8; echo Y > /proc/fs/nfsd/v4_end_grace'
-          : 'rpc.nfsd -N 2 -V 3 -N 4 -U 8'
+          : version === 2
+            ? 'rpc.nfsd -V 2 -N 3 -N 4 -U 8'
+            : 'rpc.nfsd -N 2 -V 3 -N 4 -U 8'
       );
       await reconnect.click();
       await enterPublic();

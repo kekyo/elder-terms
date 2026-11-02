@@ -380,16 +380,15 @@ struct NfsServer final : RemoteFileClient {
     });
   }
   void require_mutable(const NfsLocation &path) const {
-    if (options.version == 2) throw RemoteFileError("NFS v2 is currently read-only", false);
     if (is_public_root(path)) throw RemoteFileError("NFS public roots cannot be modified", false);
   }
   RemoteFileCapabilities capabilities() const noexcept override {
-    return {.write_operations = options.version != 2, .symbolic_links = true, .permissions = true, .access_time = true,
-        .modification_time = true, .upload_commit = options.version != 2};
+    return {.write_operations = true, .symbolic_links = true, .permissions = true, .access_time = true,
+        .modification_time = true, .upload_commit = true};
   }
   RemotePathCapabilities path_capabilities(const std::string &path) const override {
     require_open();
-    if (path == "/" || options.version == 2) return {false, false};
+    if (path == "/") return {false, false};
     const auto target = locate(path);
     return {true, !is_public_root(target)};
   }
@@ -601,6 +600,10 @@ struct NfsServer final : RemoteFileClient {
     const auto target = locate(path);
     require_mutable(target);
     auto session = co_await mounted(target, cancellation);
+    if (options.version == 2) {
+      auto writer = std::move(co_await write_nfs2_file_async(exports.at(target.root).v2, target.native, size, permissions, cancellation));
+      co_return writer;
+    }
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
     auto writer = std::make_unique<NfsWriter>();
     writer->session = session;
@@ -619,6 +622,10 @@ struct NfsServer final : RemoteFileClient {
     const auto target = locate(path);
     require_mutable(target);
     auto session = co_await mounted(target, cancellation);
+    if (options.version == 2) {
+      co_await make_nfs2_directory_async(exports.at(target.root).v2, target.native, permissions, cancellation);
+      co_return;
+    }
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
     co_await perform(session, "create directory", [&](auto cb, auto data) {
       return nfs_mkdir2_async(session->nfs, target.native.c_str(), permissions.value_or(0755) & 0777, cb, data);
@@ -630,6 +637,10 @@ struct NfsServer final : RemoteFileClient {
     const auto target = locate(path);
     require_mutable(target);
     auto session = co_await mounted(target, cancellation);
+    if (options.version == 2) {
+      co_await remove_nfs2_async(exports.at(target.root).v2, target.native, directory, cancellation);
+      co_return;
+    }
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
     co_await perform(session, "remove", [&](auto cb, auto data) {
       return directory ? nfs_rmdir_async(session->nfs, target.native.c_str(), cb, data) :
@@ -650,6 +661,10 @@ struct NfsServer final : RemoteFileClient {
     require_mutable(from); require_mutable(to);
     if (from.root != to.root) throw RemoteFileError("Cannot rename across NFS exports", false);
     auto session = co_await mounted(from, cancellation);
+    if (options.version == 2) {
+      co_await rename_nfs2_async(exports.at(from.root).v2, from.native, to.native, overwrite, upload, cancellation);
+      co_return;
+    }
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
     if (upload && !overwrite) {
       // LINK creates the final name atomically only when absent. The adjacent
@@ -700,6 +715,10 @@ struct NfsServer final : RemoteFileClient {
     const auto location = locate(path);
     require_mutable(location);
     auto session = co_await mounted(location, cancellation);
+    if (options.version == 2) {
+      co_await make_nfs2_link_async(exports.at(location.root).v2, target, location.native, cancellation);
+      co_return;
+    }
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
     co_await perform(session, "create link", [&](auto cb, auto data) {
       return nfs_symlink_async(session->nfs, target.c_str(), location.native.c_str(), cb, data);
@@ -712,6 +731,10 @@ struct NfsServer final : RemoteFileClient {
     const auto target = locate(path);
     require_mutable(target);
     auto session = co_await mounted(target, cancellation);
+    if (options.version == 2) {
+      co_await set_nfs2_attributes_async(exports.at(target.root).v2, target.native, attributes, cancellation);
+      co_return;
+    }
     auto session_lock = std::move(co_await session->operations.lock(cancellation));
     if (attributes.permissions && attributes.type != RemoteFileType::symbolic_link)
       co_await perform(session, "permissions", [&](auto cb, auto data) {

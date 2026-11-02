@@ -11,14 +11,24 @@
 #include <array>
 #include <bit>
 #include <cstring>
+#include <map>
 #include <set>
 
 namespace elder_terms {
+
+struct Nfs2Upload {
+  std::array<char, FHSIZE> parent{}, directory{}, file{};
+  std::string path, name;
+  std::uint32_t expected_size = 0, offset = 0, permissions = 0600;
+  RemoteFileCreationState creation = RemoteFileCreationState::not_created;
+  bool attempted = false, ready = false, closed = false;
+};
 
 struct Nfs2Filesystem {
   std::shared_ptr<NfsRpcSession> session;
   std::array<char, FHSIZE> root{};
   std::uint32_t chunk_size = NFSMAXDATA2;
+  std::map<std::string, std::shared_ptr<Nfs2Upload>> uploads;
 };
 
 static void require_nfs2(const std::shared_ptr<Nfs2Filesystem> &filesystem) {
@@ -99,12 +109,16 @@ struct Nfs2Location {
   fattr2 attributes;
 };
 
-static cardio::promise<std::optional<Nfs2Location>> nfs2_lookup_child(
-    const std::shared_ptr<Nfs2Filesystem> &filesystem, const std::array<char, FHSIZE> &parent,
-    std::string name, cardio::cancellation cancellation) {
+static void nfs2_check_name(const std::string &name) {
   if (name.empty() || name == "." || name == ".." || name.size() > MAXNAMLEN2 ||
       name.find('/') != std::string::npos || name.find('\0') != std::string::npos)
     throw RemoteFileError("Invalid NFS v2 path component", false);
+}
+
+static cardio::promise<std::optional<Nfs2Location>> nfs2_lookup_child(
+    const std::shared_ptr<Nfs2Filesystem> &filesystem, const std::array<char, FHSIZE> &parent,
+    std::string name, cardio::cancellation cancellation) {
+  nfs2_check_name(name);
   LOOKUP2args args{};
   std::memcpy(args.what.dir, parent.data(), parent.size());
   args.what.name = name.data();
@@ -275,6 +289,306 @@ cardio::promise<std::string> read_nfs2_link_async(
   }, cancellation);
   check_nfs2(status, "read link");
   co_return value;
+}
+
+// v2 uses all-one fields to leave individual attributes unchanged. The public
+// libnfs type calls the subsecond member nseconds, but v2 transmits microseconds.
+static sattr2 nfs2_unchanged_attributes() {
+  return {UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX,
+      {UINT32_MAX, UINT32_MAX}, {UINT32_MAX, UINT32_MAX}};
+}
+
+struct Nfs2Parent {
+  std::array<char, FHSIZE> handle;
+  std::string name;
+};
+
+static cardio::promise<Nfs2Parent> nfs2_parent(const std::shared_ptr<Nfs2Filesystem> &filesystem,
+    const std::string &path, cardio::cancellation cancellation) {
+  const auto slash = path.find_last_of('/');
+  if (slash == std::string::npos) throw RemoteFileError("NFS v2 requires an absolute path", false);
+  auto name = path.substr(slash + 1);
+  nfs2_check_name(name);
+  const auto parent = co_await nfs2_resolve(filesystem, slash == 0 ? "/" : path.substr(0, slash), cancellation);
+  if (!parent || parent->attributes.type != NF2DIR) throw RemoteFileError("NFS v2 parent is not a directory", false);
+  co_return Nfs2Parent{parent->handle, std::move(name)};
+}
+
+static cardio::promise<void> nfs2_set_attributes(const std::shared_ptr<Nfs2Filesystem> &filesystem,
+    const std::array<char, FHSIZE> &handle, sattr2 attributes, cardio::cancellation cancellation) {
+  SETATTR2args args{};
+  std::memcpy(args.fhandle, handle.data(), handle.size());
+  args.attributes = attributes;
+  SETATTR2res reply{};
+  co_await execute_nfs_raw_async(filesystem->session, [&](auto cb, auto data) {
+    return ELDER_NFS_RAW_CALL(rpc_nfs2_setattr, filesystem->session->rpc, cb, &args, data);
+  }, [&](void *data) { std::memcpy(&reply, data, sizeof(reply)); }, cancellation);
+  check_nfs2(reply.status, "set attributes");
+}
+
+static cardio::promise<void> nfs2_remove_child(const std::shared_ptr<Nfs2Filesystem> &filesystem,
+    const std::array<char, FHSIZE> &parent, std::string name, bool directory, cardio::cancellation cancellation) {
+  REMOVE2args file{};
+  std::memcpy(file.what.dir, parent.data(), parent.size());
+  file.what.name = name.data();
+  RMDIR2args folder{file.what};
+  nfsstat3 status = NFS3_OK;
+  co_await execute_nfs_raw_async(filesystem->session, [&](auto cb, auto data) {
+    return directory ? ELDER_NFS_RAW_CALL(rpc_nfs2_rmdir, filesystem->session->rpc, cb, &folder, data) :
+        ELDER_NFS_RAW_CALL(rpc_nfs2_remove, filesystem->session->rpc, cb, &file, data);
+  }, [&](void *data) { std::memcpy(&status, data, sizeof(status)); }, cancellation);
+  check_nfs2(status, directory ? "remove directory" : "remove file");
+}
+
+static cardio::promise<void> nfs2_clean_upload(const std::shared_ptr<Nfs2Filesystem> &filesystem,
+    const std::shared_ptr<Nfs2Upload> &upload, cardio::cancellation cancellation) {
+  if (upload->creation != RemoteFileCreationState::created)
+    throw RemoteFileError("NFS v2 temporary upload ownership is not proven", false);
+  const auto directory = co_await nfs2_lookup_child(filesystem, upload->parent, upload->name, cancellation);
+  if (!directory || directory->handle != upload->directory)
+    throw RemoteFileError("NFS v2 temporary directory identity changed; inspect it before cleanup", false);
+  const auto file = co_await nfs2_lookup_child(filesystem, upload->directory, "payload", cancellation);
+  if (file) {
+    if (upload->ready && file->handle != upload->file)
+      throw RemoteFileError("NFS v2 temporary file identity changed; inspect it before cleanup", false);
+    co_await nfs2_remove_child(filesystem, upload->directory, "payload", false, cancellation);
+  }
+  co_await nfs2_remove_child(filesystem, upload->parent, upload->name, true, cancellation);
+  filesystem->uploads.erase(upload->path);
+}
+
+struct Nfs2Writer final : RemoteFileWriter {
+  std::shared_ptr<Nfs2Filesystem> filesystem;
+  std::shared_ptr<Nfs2Upload> upload;
+  ~Nfs2Writer() override {
+    // Rejected or never-started creation owns no remote resource. Retaining
+    // that local reservation would prevent a later explicit retry.
+    if (upload->creation == RemoteFileCreationState::not_created) {
+      const auto found = filesystem->uploads.find(upload->path);
+      if (found != filesystem->uploads.end() && found->second == upload) filesystem->uploads.erase(found);
+    }
+  }
+  RemoteFileCreationState creation_state() const noexcept override { return upload->creation; }
+
+  cardio::promise<void> ensure_created(cardio::cancellation cancellation) {
+    require_nfs2(filesystem);
+    if (upload->ready) co_return;
+    if (upload->attempted || upload->closed) throw RemoteFileError("NFS v2 upload creation cannot be replayed", false);
+    cancellation.throw_if_cancellation_requested();
+    upload->attempted = true;
+    MKDIR2args directory{};
+    std::memcpy(directory.where.dir, upload->parent.data(), upload->parent.size());
+    directory.where.name = upload->name.data();
+    directory.attributes = nfs2_unchanged_attributes();
+    directory.attributes.mode = 0700;
+    MKDIR2res made{};
+    co_await execute_nfs_raw_async(filesystem->session, [&](auto cb, auto data) {
+      upload->creation = RemoteFileCreationState::unknown;
+      const int queued = ELDER_NFS_RAW_CALL(rpc_nfs2_mkdir, filesystem->session->rpc, cb, &directory, data);
+      if (queued < 0) upload->creation = RemoteFileCreationState::not_created;
+      return queued;
+    }, [&](void *data) {
+      std::memcpy(&made, data, sizeof(made));
+      upload->creation = made.status == NFS3_OK ? RemoteFileCreationState::created : RemoteFileCreationState::not_created;
+      if (made.status == NFS3_OK)
+        std::memcpy(upload->directory.data(), made.MKDIR2res_u.resok.file, upload->directory.size());
+    }, cancellation);
+    check_nfs2(made.status, "claim upload directory");
+    // CREATE itself is not exclusive. It is safe only inside the fresh private
+    // directory whose successful MKDIR response proved this upload owns it.
+    CREATE2args file{};
+    std::memcpy(file.where.dir, upload->directory.data(), upload->directory.size());
+    std::string payload = "payload";
+    file.where.name = payload.data();
+    file.attributes = nfs2_unchanged_attributes();
+    file.attributes.mode = 0600;
+    file.attributes.size = 0;
+    CREATE2res created{};
+    co_await execute_nfs_raw_async(filesystem->session, [&](auto cb, auto data) {
+      return ELDER_NFS_RAW_CALL(rpc_nfs2_create, filesystem->session->rpc, cb, &file, data);
+    }, [&](void *data) { std::memcpy(&created, data, sizeof(created)); }, cancellation);
+    check_nfs2(created.status, "create upload payload");
+    std::memcpy(upload->file.data(), created.CREATE2res_u.resok.file, upload->file.size());
+    upload->ready = true;
+  }
+
+  cardio::promise<void> write_all_async(std::span<const std::byte> buffer, cardio::cancellation cancellation) override {
+    auto lock = std::move(co_await filesystem->session->operations.lock(cancellation));
+    if (upload->closed) throw RemoteFileError("NFS v2 writer is closed", false);
+    if (upload->offset > upload->expected_size || buffer.size() > upload->expected_size - upload->offset)
+      throw RemoteFileError("NFS v2 upload exceeds its declared size", false);
+    if (buffer.empty()) co_return;
+    co_await ensure_created(cancellation);
+    while (!buffer.empty()) {
+      const auto count = static_cast<std::uint32_t>(std::min<std::size_t>(buffer.size(), filesystem->chunk_size));
+      WRITE2args args{};
+      std::memcpy(args.file, upload->file.data(), upload->file.size());
+      args.offset = upload->offset;
+      // Although unused by the protocol, system libnfs 5.0.2 sizes its outgoing
+      // buffer from totalcount. It must cover the encoded data in this request.
+      args.totalcount = count;
+      args.data.nfsdata2_len = count;
+      args.data.nfsdata2_val = reinterpret_cast<char *>(const_cast<std::byte *>(buffer.data()));
+      WRITE2res reply{};
+      co_await execute_nfs_raw_async(filesystem->session, [&](auto cb, auto data) {
+        return ELDER_NFS_RAW_CALL(rpc_nfs2_write, filesystem->session->rpc, cb, &args, data);
+      }, [&](void *data) { std::memcpy(&reply, data, sizeof(reply)); }, cancellation);
+      check_nfs2(reply.status, "write");
+      // v2 acknowledges the whole request, without a separate byte count.
+      if (reply.WRITE2res_u.resok.attributes.size != upload->offset + count)
+        throw RemoteFileError("NFS v2 WRITE returned an incomplete or changed file size", false);
+      upload->offset += count;
+      buffer = buffer.subspan(count);
+    }
+  }
+
+  cardio::promise<void> close_async(cardio::cancellation cancellation) override {
+    auto lock = std::move(co_await filesystem->session->operations.lock(cancellation));
+    if (upload->closed) co_return;
+    if (!upload->attempted && upload->expected_size == 0) co_await ensure_created(cancellation);
+    upload->closed = true;
+    if (!upload->ready || upload->offset != upload->expected_size)
+      throw RemoteFileError("NFS v2 upload did not finish its declared size", false);
+    auto attributes = nfs2_unchanged_attributes();
+    attributes.mode = upload->permissions & 0777;
+    co_await nfs2_set_attributes(filesystem, upload->file, attributes, cancellation);
+  }
+};
+
+cardio::promise<std::unique_ptr<RemoteFileWriter>> write_nfs2_file_async(
+    std::shared_ptr<Nfs2Filesystem> filesystem, std::string path, std::uint64_t size,
+    std::optional<std::uint32_t> permissions, cardio::cancellation cancellation) {
+  auto lock = std::move(co_await filesystem->session->operations.lock(cancellation));
+  if (size >= UINT32_MAX) throw RemoteFileError("NFS v2 upload size reaches its 32-bit limit", false);
+  if (filesystem->uploads.contains(path)) throw RemoteFileError("NFS v2 upload path is already in use", false);
+  auto parent = co_await nfs2_parent(filesystem, path, cancellation);
+  auto upload = std::make_shared<Nfs2Upload>();
+  upload->parent = parent.handle;
+  upload->path = path;
+  upload->name = std::move(parent.name);
+  upload->expected_size = static_cast<std::uint32_t>(size);
+  upload->permissions = permissions.value_or(0600);
+  filesystem->uploads[path] = upload;
+  auto writer = std::make_unique<Nfs2Writer>();
+  writer->filesystem = filesystem;
+  writer->upload = upload;
+  co_return writer;
+}
+
+cardio::promise<void> make_nfs2_directory_async(std::shared_ptr<Nfs2Filesystem> filesystem,
+    std::string path, std::optional<std::uint32_t> permissions, cardio::cancellation cancellation) {
+  auto lock = std::move(co_await filesystem->session->operations.lock(cancellation));
+  auto parent = co_await nfs2_parent(filesystem, path, cancellation);
+  MKDIR2args args{};
+  std::memcpy(args.where.dir, parent.handle.data(), parent.handle.size());
+  args.where.name = parent.name.data();
+  args.attributes = nfs2_unchanged_attributes();
+  args.attributes.mode = permissions.value_or(0755) & 0777;
+  MKDIR2res reply{};
+  co_await execute_nfs_raw_async(filesystem->session, [&](auto cb, auto data) {
+    return ELDER_NFS_RAW_CALL(rpc_nfs2_mkdir, filesystem->session->rpc, cb, &args, data);
+  }, [&](void *data) { std::memcpy(&reply, data, sizeof(reply)); }, cancellation);
+  check_nfs2(reply.status, "create directory");
+}
+
+cardio::promise<void> remove_nfs2_async(std::shared_ptr<Nfs2Filesystem> filesystem,
+    std::string path, bool directory, cardio::cancellation cancellation) {
+  auto lock = std::move(co_await filesystem->session->operations.lock(cancellation));
+  require_nfs2(filesystem);
+  if (const auto found = filesystem->uploads.find(path); found != filesystem->uploads.end()) {
+    auto upload = found->second;
+    co_await nfs2_clean_upload(filesystem, upload, cancellation);
+    co_return;
+  }
+  const auto parent = co_await nfs2_parent(filesystem, path, cancellation);
+  co_await nfs2_remove_child(filesystem, parent.handle, parent.name, directory, cancellation);
+}
+
+cardio::promise<void> rename_nfs2_async(std::shared_ptr<Nfs2Filesystem> filesystem,
+    std::string source, std::string destination, bool overwrite, bool upload, cardio::cancellation cancellation) {
+  auto lock = std::move(co_await filesystem->session->operations.lock(cancellation));
+  auto to = co_await nfs2_parent(filesystem, destination, cancellation);
+  std::shared_ptr<Nfs2Upload> state;
+  Nfs2Parent from{};
+  if (upload) {
+    const auto found = filesystem->uploads.find(source);
+    if (found == filesystem->uploads.end()) throw RemoteFileError("NFS v2 upload ownership is unavailable", false);
+    state = found->second;
+    if (state->creation != RemoteFileCreationState::created || !state->ready || !state->closed ||
+        state->offset != state->expected_size) throw RemoteFileError("NFS v2 upload is incomplete", false);
+    from = {state->directory, "payload"};
+  } else {
+    from = co_await nfs2_parent(filesystem, source, cancellation);
+    if (!overwrite && (co_await nfs2_lookup_child(filesystem, to.handle, to.name, cancellation)))
+      throw RemoteFileError("NFS v2 rename destination already exists", false);
+  }
+  nfsstat3 status = NFS3_OK;
+  if (upload && !overwrite) {
+    LINK2args args{};
+    std::memcpy(args.from, state->file.data(), state->file.size());
+    std::memcpy(args.to.dir, to.handle.data(), to.handle.size());
+    args.to.name = to.name.data();
+    co_await execute_nfs_raw_async(filesystem->session, [&](auto cb, auto data) {
+      return ELDER_NFS_RAW_CALL(rpc_nfs2_link, filesystem->session->rpc, cb, &args, data);
+    }, [&](void *data) { std::memcpy(&status, data, sizeof(status)); }, cancellation);
+  } else {
+    RENAME2args args{};
+    std::memcpy(args.from.dir, from.handle.data(), from.handle.size());
+    args.from.name = from.name.data();
+    std::memcpy(args.to.dir, to.handle.data(), to.handle.size());
+    args.to.name = to.name.data();
+    co_await execute_nfs_raw_async(filesystem->session, [&](auto cb, auto data) {
+      return ELDER_NFS_RAW_CALL(rpc_nfs2_rename, filesystem->session->rpc, cb, &args, data);
+    }, [&](void *data) { std::memcpy(&status, data, sizeof(status)); }, cancellation);
+  }
+  check_nfs2(status, upload ? "commit upload" : "rename");
+  if (state) co_await nfs2_clean_upload(filesystem, state, cancellation);
+}
+
+cardio::promise<void> make_nfs2_link_async(std::shared_ptr<Nfs2Filesystem> filesystem,
+    std::string target, std::string path, cardio::cancellation cancellation) {
+  auto lock = std::move(co_await filesystem->session->operations.lock(cancellation));
+  if (target.empty() || target.size() > MAXPATHLEN2 || target.find('\0') != std::string::npos)
+    throw RemoteFileError("Invalid NFS v2 link target", false);
+  auto parent = co_await nfs2_parent(filesystem, path, cancellation);
+  SYMLINK2args args{};
+  std::memcpy(args.from.dir, parent.handle.data(), parent.handle.size());
+  args.from.name = parent.name.data();
+  args.to = target.data();
+  args.attributes = nfs2_unchanged_attributes();
+  args.attributes.mode = 0777;
+  SYMLINK2res reply{};
+  co_await execute_nfs_raw_async(filesystem->session, [&](auto cb, auto data) {
+    return ELDER_NFS_RAW_CALL(rpc_nfs2_symlink, filesystem->session->rpc, cb, &args, data);
+  }, [&](void *data) { std::memcpy(&reply, data, sizeof(reply)); }, cancellation);
+  check_nfs2(reply.status, "create link");
+}
+
+cardio::promise<void> set_nfs2_attributes_async(std::shared_ptr<Nfs2Filesystem> filesystem,
+    std::string path, RemoteFileAttributes attributes, cardio::cancellation cancellation) {
+  auto lock = std::move(co_await filesystem->session->operations.lock(cancellation));
+  require_nfs2(filesystem);
+  auto value = nfs2_unchanged_attributes();
+  if (attributes.permissions && attributes.type != RemoteFileType::symbolic_link) value.mode = *attributes.permissions & 0777;
+  const auto set_time = [](nfstime3 &field, const std::optional<std::int64_t> &seconds) {
+    if (!seconds) return;
+    if (*seconds < 0 || static_cast<std::uint64_t>(*seconds) >= UINT32_MAX)
+      throw RemoteFileError("NFS v2 timestamp exceeds its 32-bit range", false);
+    field = {static_cast<std::uint32_t>(*seconds), 0};
+  };
+  set_time(value.atime, attributes.access_time_unix_seconds);
+  set_time(value.mtime, attributes.modification_time_unix_seconds);
+  std::array<char, FHSIZE> handle;
+  if (const auto found = filesystem->uploads.find(path); found != filesystem->uploads.end()) {
+    if (found->second->creation != RemoteFileCreationState::created || !found->second->ready)
+      throw RemoteFileError("NFS v2 upload attributes require proven ownership", false);
+    handle = found->second->file;
+  } else {
+    const auto item = co_await nfs2_resolve(filesystem, path, cancellation);
+    if (!item) throw RemoteFileError("NFS v2 item disappeared before updating attributes", false);
+    handle = item->handle;
+  }
+  co_await nfs2_set_attributes(filesystem, handle, value, cancellation);
 }
 
 } // namespace elder_terms

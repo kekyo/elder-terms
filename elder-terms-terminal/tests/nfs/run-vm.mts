@@ -252,9 +252,38 @@ if (!process.argv.includes('--isolated')) {
         }
       }
       if (version === 2) {
-        await ssh('mkdir -p /srv/public/pages /srv/public/limits; for item in $(seq 1 600); do touch /srv/public/pages/item-$item; done; truncate -s 4294967295 /srv/public/limits/at-limit; truncate -s 4294967296 /srv/public/limits/too-large');
+        const guards = await run(clientDriver, ['--v2-upload-guards']);
+        await writeFile(
+          resolve(evidence, 'client-v2-upload-guards.log'),
+          guards
+        );
+        assert.match(guards, /PASS v2 upload ownership and commit guards/);
+        for (const fault of [
+          'nospace',
+          'short',
+          'disconnect',
+          'cancel',
+        ] as const) {
+          if (fault !== 'cancel') observer.failV2Write(fault);
+          const failure = await run(clientDriver, [`--v2-write-${fault}`]);
+          await writeFile(
+            resolve(evidence, `client-v2-write-${fault}.log`),
+            failure
+          );
+          assert.match(failure, /PASS v2 interrupted write/);
+        }
+        observer.loseCreateReply();
+        const lost = await run(clientDriver, ['--lost-create', '2']);
+        await writeFile(resolve(evidence, 'client-v2-lost-create.log'), lost);
+        assert.match(lost, /PASS lost CREATE/);
+        await ssh(
+          'mkdir -p /srv/public/pages /srv/public/limits; for item in $(seq 1 600); do touch /srv/public/pages/item-$item; done; truncate -s 4294967295 /srv/public/limits/at-limit; truncate -s 4294967296 /srv/public/limits/too-large'
+        );
         const boundaries = await run(clientDriver, ['--v2-boundaries']);
-        await writeFile(resolve(evidence, 'client-v2-boundaries.log'), boundaries);
+        await writeFile(
+          resolve(evidence, 'client-v2-boundaries.log'),
+          boundaries
+        );
         assert.match(boundaries, /PASS v2 directory and size boundary/);
         observer.repeatV2Cookie();
         const cookie = await run(clientDriver, ['--v2-cookie']);
@@ -278,12 +307,15 @@ if (!process.argv.includes('--isolated')) {
         }
         observer.limitV2Reads(8192);
       }
-      if (version === 3) {
+      if (version === 2 || version === 3) {
         observer.rejectExports(true);
         try {
-          const output = await run(clientDriver, ['--known-exports']);
+          const output = await run(clientDriver, [
+            '--known-exports',
+            String(version),
+          ]);
           await writeFile(
-            resolve(evidence, 'client-v3-known-exports.log'),
+            resolve(evidence, `client-v${version}-known-exports.log`),
             output
           );
           assert.match(output, /PASS NFS configured exports/);

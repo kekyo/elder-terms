@@ -41,6 +41,8 @@ export interface NfsWireObserver {
   limitV2Reads: (maximum: number) => void;
   /** Returns a nonadvancing v2 READDIR cookie once, without claiming EOF. */
   repeatV2Cookie: () => void;
+  /** Makes the next v2 WRITE fail, lose its reply, or acknowledge a short size. */
+  failV2Write: (fault: 'nospace' | 'short' | 'disconnect') => void;
   /** Closes listeners and sockets, including interrupted clients. */
   close: () => Promise<void>;
 }
@@ -62,6 +64,7 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
   let rejectNamespaceListing = false;
   let v2ReadLimit = 8192;
   let repeatV2Cookie = false;
+  let v2WriteFault: 'nospace' | 'short' | 'disconnect' | undefined;
   const close = async (): Promise<void> => {
     for (const socket of sockets) socket.destroy();
     for (const server of servers)
@@ -91,6 +94,7 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
         let fragments: Buffer[] = [];
         const lostReplies = new Set<number>();
         const repeatedCookies = new Map<number, Buffer>();
+        const shortWrites = new Set<number>();
         client.on('data', (bytes: Buffer) => {
           try {
             pending = Buffer.concat([pending, bytes]);
@@ -116,13 +120,25 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
               const procedure = record.readUInt32BE(20);
               let bodyOffset = 24;
               for (let auth = 0; auth < 2; auth++)
-                bodyOffset += 8 + ((record.readUInt32BE(bodyOffset + 4) + 3) & ~3);
+                bodyOffset +=
+                  8 + ((record.readUInt32BE(bodyOffset + 4) + 3) & ~3);
               if (program === 100003 && version === 2 && procedure === 6) {
                 const count = bodyOffset + 36;
-                record.writeUInt32BE(Math.min(record.readUInt32BE(count), v2ReadLimit), count);
+                record.writeUInt32BE(
+                  Math.min(record.readUInt32BE(count), v2ReadLimit),
+                  count
+                );
               }
-              if (repeatV2Cookie && program === 100003 && version === 2 && procedure === 16) {
-                repeatedCookies.set(record.readUInt32BE(0), Buffer.from(record.subarray(bodyOffset + 32, bodyOffset + 36)));
+              if (
+                repeatV2Cookie &&
+                program === 100003 &&
+                version === 2 &&
+                procedure === 16
+              ) {
+                repeatedCookies.set(
+                  record.readUInt32BE(0),
+                  Buffer.from(record.subarray(bodyOffset + 32, bodyOffset + 36))
+                );
                 repeatV2Cookie = false;
               }
               let minor: number | undefined;
@@ -163,9 +179,31 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
               }
               calls.push({ program, version, procedure, minor });
               if (
+                v2WriteFault &&
+                program === 100003 &&
+                version === 2 &&
+                procedure === 8
+              ) {
+                const fault = v2WriteFault;
+                v2WriteFault = undefined;
+                const xid = record.readUInt32BE(0);
+                if (fault === 'disconnect') lostReplies.add(xid);
+                else if (fault === 'short') shortWrites.add(xid);
+                else {
+                  const reply = Buffer.alloc(32);
+                  reply.writeUInt32BE(0x8000001c, 0);
+                  reply.writeUInt32BE(xid, 4);
+                  reply.writeUInt32BE(1, 8);
+                  reply.writeUInt32BE(28, 28); // NFSERR_NOSPC, request not forwarded.
+                  client.write(reply);
+                  continue;
+                }
+              }
+              if (
                 loseCreateReply &&
                 program === 100003 &&
-                ((version === 3 && procedure === 8) ||
+                ((version === 2 && procedure === 14) ||
+                  (version === 3 && procedure === 8) ||
                   (version === 4 && opensFile)) &&
                 record.includes(Buffer.from('.elder-terms-part-'))
               ) {
@@ -219,12 +257,29 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
             if ((marker & 0x80000000) === 0) continue;
             const record = Buffer.concat(replyFragments);
             replyFragments = [];
+            if (shortWrites.delete(record.readUInt32BE(0))) {
+              let offset = 12;
+              offset += 8 + ((record.readUInt32BE(offset + 4) + 3) & ~3);
+              if (
+                record.readUInt32BE(offset) !== 0 ||
+                record.readUInt32BE(offset + 4) !== 0
+              )
+                throw new Error('Expected successful v2 WRITE reply');
+              const size = offset + 28; // RPC accept status, NFS status, then fattr2 size.
+              record.writeUInt32BE(
+                Math.max(0, record.readUInt32BE(size) - 1),
+                size
+              );
+            }
             const cookie = repeatedCookies.get(record.readUInt32BE(0));
             if (cookie) {
               repeatedCookies.delete(record.readUInt32BE(0));
               let offset = 12;
               offset += 8 + ((record.readUInt32BE(offset + 4) + 3) & ~3);
-              if (record.readUInt32BE(offset) !== 0 || record.readUInt32BE(offset + 4) !== 0)
+              if (
+                record.readUInt32BE(offset) !== 0 ||
+                record.readUInt32BE(offset + 4) !== 0
+              )
                 throw new Error('Expected successful v2 READDIR reply');
               offset += 8;
               let lastCookie = -1;
@@ -234,7 +289,8 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
                 lastCookie = offset;
                 offset += 4;
               }
-              if (lastCookie < 0) throw new Error('Expected a v2 directory entry');
+              if (lastCookie < 0)
+                throw new Error('Expected a v2 directory entry');
               cookie.copy(record, lastCookie);
               record.writeUInt32BE(0, offset + 4); // No EOF, no cookie progress.
             }
@@ -266,8 +322,15 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
       rejectNamespaceListing: () => {
         rejectNamespaceListing = true;
       },
-      limitV2Reads: (maximum) => { v2ReadLimit = maximum; },
-      repeatV2Cookie: () => { repeatV2Cookie = true; },
+      limitV2Reads: (maximum) => {
+        v2ReadLimit = maximum;
+      },
+      repeatV2Cookie: () => {
+        repeatV2Cookie = true;
+      },
+      failV2Write: (fault) => {
+        v2WriteFault = fault;
+      },
       rejectV4Name: (bytes) => {
         rejectedV4Name = bytes;
       },
