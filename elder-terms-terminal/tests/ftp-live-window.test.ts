@@ -746,11 +746,11 @@ for (const testCase of [
             ).text()
           ).toBe('Failed to start FTPS')
         );
-        const close = expectElementKind(
+        const acknowledge = expectElementKind(
           await app.getById('file_transfer_prompt_accept_button'),
           'button'
         );
-        expect((await close.info()).name).toBe('Close');
+        expect((await acknowledge.info()).name).toBe('OK');
         expect(
           (
             await (
@@ -763,11 +763,14 @@ for (const testCase of [
         await evidence.captureEvidence('certificate-rejected', async () =>
           app.capture()
         );
-        await close.click();
+        await acknowledge.click();
         await waitForResult(async () => {
           const output = await app.output();
-          expect(output.exitCode, output.stderr).toBe(0);
+          expect(output.exitCode, output.stderr).toBeNull();
           expect(output.exitSignal).toBeNull();
+          const reconnect = await app.getById('file_transfer_reconnect_button');
+          expect((await reconnect.info()).states).toContain('showing');
+          expect((await reconnect.info()).states).toContain('sensitive');
         });
         expect(serverLog).not.toContain('COMMAND USER');
         expect(serverLog).not.toContain('COMMAND PASS');
