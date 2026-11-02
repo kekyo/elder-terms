@@ -2928,3 +2928,51 @@ msgstr "HTTP認証"
 
 msgid "Failed to start HTTP"
 msgstr "HTTP接続を開始できませんでした"
+
+msgid "NFS version"
+msgstr "NFSの版"
+
+msgid "Filename encoding"
+msgstr "ファイル名の文字コード"
+
+msgid "Initial export path (empty: server root)"
+msgstr "最初に開くexport（空欄: サーバールート）"
+
+msgid "Known exports (one path per line)"
+msgstr "既知のexport（1行に1パス）"
+
+msgid "Discover exports"
+msgstr "exportの一覧を取得"
+
+msgid "Initial v4 namespace path (empty: server root)"
+msgstr "最初に開くv4の公開パス（空欄: サーバールート）"
+
+msgid "Known v4 namespace paths (one per line)"
+msgstr "既知のv4公開パス（1行に1パス）"
+
+msgid "Explore v4 public namespace"
+msgstr "v4の公開ツリーを探索"
+
+msgid "NFS port (0: automatic)"
+msgstr "NFSポート（0: 自動）"
+
+msgid "MOUNT port (0: automatic)"
+msgstr "MOUNTポート（0: 自動）"
+
+msgid "User ID (-1: current process)"
+msgstr "利用者ID（-1: 現在のプロセス）"
+
+msgid "Group ID (-1: current process)"
+msgstr "グループID（-1: 現在のプロセス）"
+
+msgid "Additional group IDs (one per line)"
+msgstr "補助グループID（1行に1個）"
+
+msgid "Request timeout (seconds)"
+msgstr "要求タイムアウト（秒）"
+
+msgid "Filename encoding changes apply after reconnecting."
+msgstr "ファイル名の文字コードの変更は再接続後に反映されます。"
+
+msgid "Failed to start NFS"
+msgstr "NFS接続を開始できませんでした"

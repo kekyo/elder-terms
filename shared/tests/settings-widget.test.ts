@@ -579,20 +579,49 @@ const selectSettingsTab = async (
     'tabList'
   );
   const childCount = await notebook.getChildCount();
+  const visibleIndices: number[] = [];
+  let selectedIndex = -1;
+  let targetIndex = -1;
   for (let index = 0; index < childCount; ++index) {
     const tab = await notebook.childAt(index);
+    if (tab === undefined) continue;
+    const info = await tab.info();
+    if (info.states.includes('visible')) visibleIndices.push(index);
+    if (info.states.includes('selected')) selectedIndex = index;
     if (
-      tab !== undefined &&
       (typeof expectedName === 'string'
         ? [expectedName]
         : expectedName
-      ).includes((await tab.info()).name)
+      ).includes(info.name)
     ) {
-      await notebook.selectChildAt(index);
-      return;
+      targetIndex = index;
     }
   }
-  throw new Error(`settings tab was not found: ${expectedName}`);
+  if (targetIndex < 0 || selectedIndex < 0) {
+    throw new Error(`settings tab was not found: ${expectedName}`);
+  }
+  // A tab outside the scrollable strip cannot be clicked. Keyboard navigation
+  // reaches adjacent pages without depending on the strip's visible bounds.
+  const path = visibleIndices.filter((index) =>
+    selectedIndex < targetIndex
+      ? selectedIndex < index && index <= targetIndex
+      : targetIndex <= index && index < selectedIndex
+  );
+  if (targetIndex < selectedIndex) path.reverse();
+  await notebook.selectChildAt(selectedIndex);
+  await app.input.setModifier('control', true);
+  try {
+    for (const index of path) {
+      await app.input.pressKey(
+        targetIndex < selectedIndex ? 'Page_Up' : 'Page_Down'
+      );
+      await waitForResult(async () => {
+        expect(await notebook.isChildSelected(index)).toBe(true);
+      });
+    }
+  } finally {
+    await app.input.setModifier('control', false);
+  }
 };
 
 const expectPageVisualFixture = async (
@@ -1170,6 +1199,7 @@ describe.concurrent('shared settings widget', () => {
           'WebDAV',
           'HTTP/HTTPS',
           'SMB',
+          'NFS',
           'SSH proxy',
           '端末',
           '端末の外観',
@@ -1237,6 +1267,17 @@ describe.concurrent('shared settings widget', () => {
               '証明書検証の失敗時',
               '接続タイムアウト（秒）',
               '無通信タイムアウト（秒）',
+            ],
+          },
+          {
+            id: 'global_settings_nfs_page',
+            labels: [
+              'NFSの版',
+              'ファイル名の文字コード',
+              '既知のexport（1行に1パス）',
+              'v4の公開ツリーを探索',
+              '利用者ID（-1: 現在のプロセス）',
+              '要求タイムアウト（秒）',
             ],
           },
           {
@@ -7247,7 +7288,7 @@ describe.concurrent('shared settings widget', () => {
     await runSharedGtkTest(
       context,
       ['--global-mode', '--page=terminal', '--global=terminal.width=97'],
-      async ({ app }) => {
+      async ({ app, directory }) => {
         expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual([
           'General',
           'Local',
@@ -7259,6 +7300,7 @@ describe.concurrent('shared settings widget', () => {
           'WebDAV',
           'HTTP/HTTPS',
           'SMB',
+          'NFS',
           'SSH proxy',
           'Terminal',
           'Terminal appearance',
@@ -7289,6 +7331,10 @@ describe.concurrent('shared settings widget', () => {
           'comboBox'
         );
         await selectSettingsTab(app, 'SSH', 'global_settings');
+        await writeFile(
+          join(directory, 'ssh-selected.png'),
+          (await app.capture()).image
+        );
         await waitForResult(async () => {
           expect(
             (
