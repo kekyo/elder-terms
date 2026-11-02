@@ -53,6 +53,8 @@ plan25はplan24と独立して実装できます。最初に通常ウインド�
 
 2026年11月2日、`7ba9df61`のコードと採用ライブラリ・プロトコルの仕様を照合しました。対象はファイル転送画面の名前とパスです。端末通信の文字コードや、転送するファイル本文の変換とは分けて扱います。以下は適用要否の調査結果であり、非UTF-8名の実通信試験は各方式の実装段階で行います。
 
+ファイル名・パス用の文字コード設定の製品既定値は、UTF-8に確定します。NFS、FTP/FTPS、SFTPに共通の方針です。グローバル設定、テーマ、接続のいずれにも指定がない場合はUTF-8を使い、明示された設定がある場合は既存の継承順で上書きします。OSのロケールや端末通信の文字コードを、この既定値の代わりに使いません。
+
 | 転送方式 | 名前の文字コード設定の要否 | 現在のコード・推奨する対応 |
 | --- | --- | --- |
 | NFS v2/v3 | 必要 | plan17へ接続単位の設定を追加する。libnfsへ渡す名前のバイト列とGTK用の表示名を分ける |
@@ -68,13 +70,13 @@ plan25はplan24と独立して実装できます。最初に通常ウインド�
 
 [ftp-client.cpp](../../../elder-terms-terminal/src/ftp/ftp-client.cpp)の`directory_snapshot()`は、LIST・MLSDで得た名前へ`g_utf8_validate()`を適用し、失敗すると一覧を返しません。接続時はFEATにUTF8があれば`OPTS UTF8 ON`を試みますが、ファイル名の符号化を選ぶ設定はありません。FTPSも同じクライアントを使うため、暗号化の有無によらず同じ対応が必要です。
 
-[RFC 2640の3節](https://www.rfc-editor.org/rfc/rfc2640.html#section-3)はUTF-8の利用と、別の符号化や未判定のバイト列の扱いを述べています。推奨はUTF-8を既定とした接続別の明示指定です。非UTF-8を指定した接続でUTF8を有効にしないこと、UTF8の機能広告と設定コマンドの応答を分けること、必要なら無効化を要求して結果を検証することまで計画します。コマンドの成功だけから、任意の文字コードをサーバーが使用しているとは推定しません。
+[RFC 2640の3節](https://www.rfc-editor.org/rfc/rfc2640.html#section-3)はUTF-8の利用と、別の符号化や未判定のバイト列の扱いを述べています。FTP/FTPSの設定はUTF-8を既定とし、接続ごとの明示指定を認めます。非UTF-8を指定した接続でUTF8を有効にしないこと、UTF8の機能広告と設定コマンドの応答を分けること、必要なら無効化を要求して結果を検証することまで計画します。コマンドの成功だけから、任意の文字コードをサーバーが使用しているとは推定しません。
 
 LIST・MLSDの構造と属性はバイト列のまま解析し、取り出した名前だけを表示用に復号します。PWD、初期パス、MLST、転送、RNFR/RNTO、作成・削除、一時ファイルも同じ符号化境界を使う必要があります。libcurlのURLへ渡す経路では、文字コード変換後のバイト列をパーセント表記にし、FTPコマンドへ渡す経路では実際のバイト列を使います。変換後もCR・LF・NULなど現在のコマンド引数制約を維持します。
 
 [sftp-client.cpp](../../../elder-terms-terminal/src/sftp/sftp-client.cpp)は、libsshの`attributes->name`と正規パスをそのまま保存・表示・送信します。使用環境のlibsshは0.10.6で、[公開API](https://api.libssh.org/stable/group__libssh__sftp.html)のSFTP版は3です。[v3に対応するドラフトの6.2節](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02#section-6.2)ではUTF-8を必須としておらず、[libssh 0.10.6の実装](https://github.com/libssh/libssh-mirror/blob/libssh-0.10.6/src/sftp.c)でも名前を送受信する際の文字コード変換はありません。「SFTPなら常にUTF-8」とする前提は置けません。
 
-SFTPもUTF-8を既定とするファイル名用設定を推奨します。SSH端末の`encoding`から自動継承せず、REALPATH、READDIR、OPEN、名前変更、削除、リンクを含め、元のパスと表示を分離します。対象サーバーの例として、[OpenSSHのREADDIR実装](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/sftp-server.c)はファイルシステムから得た名前をそのまま返します。
+SFTPのファイル名用設定も既定値をUTF-8とします。SSH端末の`encoding`から自動継承せず、REALPATH、READDIR、OPEN、名前変更、削除、リンクを含め、元のパスと表示を分離します。対象サーバーの例として、[OpenSSHのREADDIR実装](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/sftp-server.c)はファイルシステムから得た名前をそのまま返します。
 
 ### SMBとURLを扱う方式の違い
 
@@ -82,13 +84,15 @@ SMB v2/v3の文字列は[MS-SMB2の規定](https://learn.microsoft.com/en-us/ope
 
 WebDAVは[URLの扱い](https://www.rfc-editor.org/rfc/rfc4918.html#section-8.3)と[XMLの文字コード](https://www.rfc-editor.org/rfc/rfc4918.html#section-19)が別の契約です。XMLがUTF-8でも、hrefのパーセント表記の内容までUTF-8とは限りません。現在の[webdav-url.cpp](../../../elder-terms-terminal/src/webdav/webdav-url.cpp)はパスを復号してUTF-8検証し、その文字列からURLを再生成します。非UTF-8のパスを扱うなら、この部分を変え、既存hrefを表示文字列から作り直さないことが必要です。
 
-WebDAVの互換設定を追加する場合は、URLパスの表示と新規名からURLを作るための文字コードとして定義します。PROPFINDのXMLやファイル本文へ一律に適用せず、既存hrefのバイト列を変更しません。HTTP/HTTPSの簡易クローラでは、元のURLを保持する設計をplan16へ補足します。
+WebDAVの互換設定を追加する場合は、URLパスの表示と新規名からURLを作るための文字コードとして定義し、既定値をUTF-8とします。PROPFINDのXMLやファイル本文へ一律に適用せず、既存hrefのバイト列を変更しません。HTTP/HTTPSの簡易クローラでは、元のURLを保持する設計をplan16へ補足します。
 
 ### 共通部分の変更と試験の境界
 
 全方式で、表示名と操作対象を識別するパス・URLを分けることが前提です。現在の[file-transfer-engine.cpp](../../../elder-terms-terminal/src/file-transfer/file-transfer-engine.cpp)には、取得済みの`child.path`を使わず、親と`child.name`を連結する再帰探索・削除があります。NFS対応時にはこれを直し、新規の子の生成も各クライアントの変換境界へ渡します。UTF-8へ復号できない名前や、同じ表示名になる別の名前を識別できる契約が必要です。
 
 変換不能な名前、CP932の途中の`0x5c`、Unicodeの合成形・分解形（NFC/NFD）、`%`・`?`・`#`、混在符号化、ローカル保存名の衝突を試験対象にします。既存項目への要求で元のバイト列が維持されること、新規名の変換不能時にリモートを変更しないことを確認します。ファイル本文、端末表示、認証情報の変換はこの設定へ混在させません。
+
+文字コード設定を追加する各方式で、どの設定層にも指定がない場合にUTF-8になることを確認します。OSのロケールや端末通信の設定を変えても既定値が変わらないこと、明示値の継承・上書き・解除が働くことも検証します。
 
 NFSに必要な共通契約はplan17の段階1・2で扱います。FTP/FTPS・SFTPの設定追加とWebDAVの互換対応は追加の実装計画へ分ける対象とし、plan15のジョブ・アイコンの実装へ混在させません。今回の調査では、必要な変更箇所と適用要否を記録します。
 
