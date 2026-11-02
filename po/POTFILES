@@ -27,3 +27,5 @@ shared/src/settings-widget/ssh-proxy-settings-editor.cpp
 shared/src/settings/ssh-proxy-settings.cpp
 elder-terms-terminal/src/webdav/webdav-application.cpp
 elder-terms-terminal/src/smb/smb-application.cpp
+shared/src/settings-widget/http-settings-editor.cpp
+elder-terms-terminal/src/http/http-application.cpp

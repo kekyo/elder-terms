@@ -1,6 +1,6 @@
 # elder-terms
 
-A Terminal emulator for local shell, SSH, TELNET, serial, FTP, FTPS, SFTP, WebDAV and SMB connections.
+A Terminal emulator for local shell, SSH, TELNET, serial, FTP, FTPS, SFTP, HTTP/HTTPS, WebDAV and SMB connections.
 '90s, come back in this time. This is all we need.
 
 ![elder-terms](./images/elder-terms-128.png)
@@ -456,6 +456,12 @@ remote_directory=.
 ```
 
 For more information about FTPS and FTP details, see [the document](./docs/ja/ftp-ftps.md).
+
+## Receiving over HTTP/HTTPS
+
+HTTP/HTTPS connections expand HTML links for file reception. A base URL bounds the permitted scope, and targets are fetched only when needed. Choose between saving original HTML and receiving a selected subtree recursively. The remote side is read-only.
+
+See [Receiving files over HTTP/HTTPS](./docs/en/http.md) for configuration and supported behavior.
 
 ## Using WebDAV
 

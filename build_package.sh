@@ -425,6 +425,8 @@ validate_deb_package() {
 		usr/share/doc/elder-terms/docs/en/webdav.md \
 		usr/share/doc/elder-terms/docs/ja/smb.md \
 		usr/share/doc/elder-terms/docs/en/smb.md \
+		usr/share/doc/elder-terms/docs/ja/http.md \
+		usr/share/doc/elder-terms/docs/en/http.md \
 		usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 		usr/share/doc/elder-terms/licenses/boxrig/LICENSE \
 		usr/share/doc/elder-terms/licenses/boxrig/README.md \

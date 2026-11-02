@@ -101,6 +101,21 @@ static cardio::promise<void> run_async(
     try { (void)co_await run_file_transfer_async(client, request, {}); }
     catch (const std::exception &error) { limited = std::string(error.what()).find("limit exceeded") != std::string::npos; }
     expect(limited, "An infinite query graph must end as a failed transfer at the depth limit");
+    for (const auto limit : {"pages", "links"}) {
+      co_await stop_http_client_async(client);
+      options.limits.depth = 32;
+      options.limits.pages = std::string(limit) == "pages" ? 1 : 1000;
+      options.limits.links = std::string(limit) == "links" ? 2 : 10000;
+      client = co_await open_http_client_async(options, {});
+      request.source_paths = {base + "infinite?n=100"};
+      const auto destination = std::filesystem::path(directory) / limit;
+      std::filesystem::create_directory(destination);
+      request.destination_directory = destination;
+      bool failed = false;
+      try { (void)co_await run_file_transfer_async(client, request, {}); }
+      catch (const std::exception &error) { failed = std::string(error.what()).find("limit exceeded") != std::string::npos; }
+      expect(failed, "Cumulative page and link budgets must prevent an infinite query graph from succeeding");
+    }
   } catch (...) { failure = std::current_exception(); }
   if (client) co_await stop_http_client_async(client);
   group.shutdown();

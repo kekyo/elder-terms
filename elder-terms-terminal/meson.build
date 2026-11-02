@@ -1211,3 +1211,15 @@ webdav_apache_test = executable(
 )
 test('webdav-apache-test', find_program('node'),
   args: [files('tests/webdav-apache-runner.mjs'), webdav_apache_test], timeout: 900, is_parallel: false)
+
+if get_option('build_tests')
+http_integration_test = executable(
+  'http-integration-test',
+  ['tests/cpp/http-integration-test.cpp', 'src/http/http-client.cpp', 'src/http/http-crawler.cpp',
+   'src/file-transfer/file-transfer-engine.cpp', 'src/http/curl-http-session.cpp', 'src/http/curl-http-stream.cpp', 'src/tls/certificate-policy.cpp'],
+  include_directories: include_directories('src/http'),
+  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libcurl_dep, ssh_transport_dep, libxml2_dep, openssl_dep],
+)
+test('http-integration-test', find_program('node'),
+  args: [files('tests/http-integration-runner.mjs'), http_integration_test, ssh_proxy_test_server], timeout: 120)
+endif

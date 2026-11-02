@@ -1,6 +1,6 @@
 # elder-terms
 
-ローカルシェル・SSH・TELNET・シリアル・FTP・FTPS・SFTP・WebDAV・SMBで接続できるターミナルエミュレータ。
+ローカルシェル・SSH・TELNET・シリアル・FTP・FTPS・SFTP・HTTP/HTTPS・WebDAV・SMBで接続できるターミナルエミュレータ。
 '90s、あの頃のパラダイス。こういうのでいいんだよ。
 
 ![elder-terms](./images/elder-terms-128.png)
@@ -390,6 +390,12 @@ remote_directory=.
 ```
 
 FTPSやFTPの詳細は、 [別のドキュメント](./docs/ja/ftp-ftps.md) を参照して下さい。
+
+## HTTP/HTTPSからの受信
+
+HTTP/HTTPS接続では、HTMLのリンクを展開してファイルを受信できます。基準URLで取得範囲を指定し、必要な項目だけを取得します。HTML原文の保存と、選択した配下の再帰受信を選べます。リモート側は読み取り専用です。
+
+設定と対応範囲は[HTTP/HTTPSからファイルを受信する](./docs/ja/http.md)を参照してください。
 
 ## WebDAVの使用
 

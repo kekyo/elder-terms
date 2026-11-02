@@ -1,6 +1,6 @@
 # Using SSH proxy
 
-Use an SSH gateway to reach SSH, SFTP, Telnet, WebDAV, passive FTP/FTPS and SMB destinations. SMB over SSH proxy is experimental.
+Use an SSH gateway to reach SSH, SFTP, Telnet, HTTP/HTTPS, WebDAV, passive FTP/FTPS and SMB destinations. SMB over SSH proxy is experimental.
 Keep the destination address and login in its protocol tab. Enter the gateway details in the separate SSH proxy tab and enable it.
 SSH and SFTP authenticate the gateway and destination separately and verify both host keys.
 Gateway prompts include the SSH proxy label.

@@ -85,9 +85,9 @@ try {
         request.startsWith('GET /pub/') && !request.includes('untouched')
     )
   );
-  assert.equal(requests.filter((request) => request === 'GET /pub/').length, 3);
+  assert.equal(requests.filter((request) => request === 'GET /pub/').length, 5);
   assert.equal(
-    requests.filter((request) => request.startsWith('GET /pub/infinite?'))
+    requests.filter((request) => /^GET \/pub\/infinite\?n=[012]$/.test(request))
       .length,
     3
   );

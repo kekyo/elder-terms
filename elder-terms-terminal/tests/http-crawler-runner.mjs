@@ -44,13 +44,22 @@ const server = createServer((request, response) => {
     ),
     '/pub/limit': 'x'.repeat(2 * 1024 * 1024 + 1),
     '/pub/too-many': '<a href="file">one</a>'.repeat(10001),
+    '/pub/bad-encoding': Buffer.from([60, 112, 62, 0xff, 60, 47, 112, 62]),
+    '/pub/unknown-encoding': '<a href="file">one</a>',
   };
   pages['/pub/sjis'] = Buffer.concat([
     pages['/pub/sjis'],
     Buffer.from([0x82, 0xa0]),
     Buffer.from('.txt">one</a><a href="%82%A0.txt">two</a>'),
   ]);
-  if (request.url === '/pub/redirect') {
+  if (request.url.startsWith('/pub/redirect-limit?')) {
+    response.writeHead(302, {
+      Location:
+        'redirect-limit?n=' +
+        (Number(new URL(request.url, origin).searchParams.get('n')) + 1),
+    });
+    response.end();
+  } else if (request.url === '/pub/redirect') {
     response.writeHead(302, { Location: 'child' });
     response.end();
   } else if (request.url === '/pub/escape') {
@@ -79,6 +88,8 @@ const server = createServer((request, response) => {
       response.setHeader('Content-Type', type);
     if (request.url === '/pub/meta')
       response.setHeader('Content-Type', 'text/html');
+    if (request.url === '/pub/unknown-encoding')
+      response.setHeader('Content-Type', 'text/html; charset=unknown-charset');
     if (request.url === '/pub/attachment')
       response.setHeader(
         'Content-Disposition',
@@ -144,7 +155,20 @@ try {
   }
   await run(['redirect']);
   assert.deepEqual(requests, ['GET /pub/redirect', 'GET /pub/child']);
-  for (const path of ['escape', 'loop', 'missing', 'limit', 'too-many']) {
+  await run(['redirect-limit?n=0'], false);
+  assert.deepEqual(
+    requests,
+    Array.from({ length: 6 }, (_, n) => `GET /pub/redirect-limit?n=${n}`)
+  );
+  for (const path of [
+    'escape',
+    'loop',
+    'missing',
+    'limit',
+    'too-many',
+    'bad-encoding',
+    'unknown-encoding',
+  ]) {
     await run([path], false);
     assert.deepEqual(requests, [`GET /pub/${path}`]);
   }

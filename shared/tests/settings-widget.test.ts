@@ -561,7 +561,8 @@ const visibleSettingsTabNames = async (
       continue;
     }
     const info = await tab.info();
-    if (info.states.includes('showing')) {
+    // Available tabs may be outside a scrollable strip's current viewport.
+    if (info.states.includes('visible')) {
       names.push(info.name);
     }
   }
@@ -1167,6 +1168,7 @@ describe.concurrent('shared settings widget', () => {
           'SFTP',
           'FTP',
           'WebDAV',
+          'HTTP/HTTPS',
           'SMB',
           'SSH proxy',
           '端末',
@@ -7218,6 +7220,7 @@ describe.concurrent('shared settings widget', () => {
           'SFTP',
           'FTP',
           'WebDAV',
+          'HTTP/HTTPS',
           'SMB',
           'SSH proxy',
           'Terminal',

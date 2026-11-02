@@ -70,7 +70,11 @@ static std::string job_progress_text(const FileTransferJobSnapshot &job) {
       static_cast<unsigned long long>(job.result->succeeded_items),
       static_cast<unsigned long long>(job.result->skipped_items));
   if (job.state == FileTransferJobState::queued) return _("Waiting");
-  if (!p.discovery_complete) return _("Total unknown");
+  if (!p.discovery_complete) {
+    if (!p.transferred_bytes) return _("Total unknown");
+    return format_job_text(_("%llu bytes · %s"),
+        static_cast<unsigned long long>(p.transferred_bytes), _("Total unknown"));
+  }
   const auto count = format_job_text(_("%llu / %llu items"),
       static_cast<unsigned long long>(p.completed_items + p.skipped_items),
       static_cast<unsigned long long>(p.total_items));

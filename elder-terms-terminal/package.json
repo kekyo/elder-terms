@@ -13,6 +13,7 @@
     "@types/pngjs": ">=6.0.0",
     "agent-rover": "0.10.0",
     "gestament": ">=1.3.0",
+    "http-server": "^14.1.1",
     "pngjs": ">=7.0.0",
     "prettier-max": ">=1.16.0",
     "typescript": ">=6.0.0",

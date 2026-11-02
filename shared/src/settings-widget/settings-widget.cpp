@@ -6467,6 +6467,10 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   assign_accessible_id(state->root, root_id.c_str());
 
   state->notebook = gtk_notebook_new();
+  // Global defaults include every protocol. Keep the added HTTP tab from
+  // forcing the dialog wider than the screen and hiding its action buttons.
+  gtk_notebook_set_scrollable(GTK_NOTEBOOK(state->notebook),
+      state->mode == SettingsWidgetMode::global_defaults);
   const std::string notebook_id = widget_id(state, "notebook");
   assign_accessible_id(state->notebook, notebook_id.c_str());
   gtk_widget_set_vexpand(state->notebook, TRUE);

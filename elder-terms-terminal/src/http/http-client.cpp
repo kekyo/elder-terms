@@ -92,7 +92,12 @@ static cardio::promise<std::optional<RemoteReceiveSource>> prepare_async(
   };
   std::unique_ptr<RemoteFileReader> reader;
   try { reader = std::move(co_await open_http_reader_async(connection->session, std::move(options), cancellation)); }
-  catch (const HttpAlreadyVisited &) { co_return std::nullopt; }
+  catch (const HttpAlreadyVisited &) {
+    // The final resource was already visited, but the redirect chain also
+    // belongs to this job. Remember it before another page repeats the alias.
+    connection->visited.insert(aliases->begin(), aliases->end());
+    co_return std::nullopt;
+  }
   HttpCrawlerPage page;
   std::exception_ptr failure;
   const bool html = !as_file && http_response_is_html(*response);

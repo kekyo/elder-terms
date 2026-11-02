@@ -1,6 +1,6 @@
 # SSH proxyの使用
 
-SSH踏み台を経由して、SSH、SFTP、Telnet、WebDAV、パッシブFTP／FTPS、SMBの接続先へアクセスできます。SMBでのSSH proxyはexperimental機能です。
+SSH踏み台を経由して、SSH、SFTP、Telnet、HTTP/HTTPS、WebDAV、パッシブFTP／FTPS、SMBの接続先へアクセスできます。SMBでのSSH proxyはexperimental機能です。
 接続先のアドレスやユーザー名は、それぞれの接続設定に入力します。
 独立した「SSH proxy」タブには、踏み台の接続情報を入力して使用を有効にします。
 SSHとSFTPでは、踏み台と最終接続先を別々に認証し、ホスト鍵もそれぞれ確認します。

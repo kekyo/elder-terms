@@ -93,6 +93,18 @@ static HttpDocument parse_html(const std::string &body, const std::string &url,
     }
     if (encoding.empty()) encoding = "UTF-8";
   }
+  if (!encoding.empty()) {
+    // libxml2's HTML recovery may silently reinterpret malformed input. Validate
+    // the declared encoding first so URL bytes never depend on that recovery.
+    if (encoding.find('/') != std::string::npos)
+      throw std::runtime_error("HTTP HTML character encoding is not supported");
+    GError *error = nullptr;
+    const std::unique_ptr<char, decltype(&g_free)> converted(
+        g_convert(body.data(), body.size(), "UTF-8", encoding.c_str(), nullptr, nullptr, &error), g_free);
+    const std::unique_ptr<GError, decltype(&g_error_free)> failure(error, g_error_free);
+    if (!converted) throw std::runtime_error("HTTP HTML character decoding failed: " +
+        std::string(error ? error->message : "unknown encoding"));
+  }
   HttpDocument document(xhtml
       ? xmlReadMemory(body.data(), static_cast<int>(body.size()), url.c_str(), encoding.empty() ? nullptr : encoding.c_str(),
           XML_PARSE_NONET | XML_PARSE_NOERROR | XML_PARSE_NOWARNING)
