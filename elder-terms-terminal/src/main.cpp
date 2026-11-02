@@ -468,6 +468,13 @@ static void start_shared_sftp_connection_check(
           state->sftp_cancel_source->get_cancellation()));
 }
 
+static bool should_auto_close_terminal(const ApplicationState *state) {
+  // Failed connections remain open for retry; serial sessions also wait for
+  // their device or carrier to return, regardless of the auto-close setting.
+  return state->auto_close && !state->connection_failed &&
+      state->active_profile.kind != elder_terms::TerminalConnectionKind::serial;
+}
+
 static void update_application_reconnect_presentation(ApplicationState *state) {
   if (state == nullptr || state->window == nullptr) {
     return;
@@ -475,14 +482,14 @@ static void update_application_reconnect_presentation(ApplicationState *state) {
   elder_terms::set_main_window_reconnect_presentation(
       state->main_window,
       elder_terms::terminal_reconnect_presentation(
-          state->auto_close, state->connection_phase,
+          should_auto_close_terminal(state), state->connection_phase,
           elder_terms::terminal_runtime_can_connect(state->runtime),
           state->closing));
 }
 
 static void on_reconnect_clicked(GtkButton *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
-  if (state == nullptr || state->window == nullptr || state->auto_close || state->closing ||
+  if (state == nullptr || state->window == nullptr || should_auto_close_terminal(state) || state->closing ||
       state->connection_phase != elder_terms::TerminalSessionConnectionPhase::disconnected ||
       !elder_terms::terminal_runtime_can_connect(state->runtime)) {
     return;
@@ -737,7 +744,7 @@ static void application_terminal_changed(void *context) {
   } else if (connection.phase == elder_terms::TerminalConnectionPhase::closed && connection.generation != state->closed_generation) {
     state->closed_generation = connection.generation;
     if (connection.operation_error || connection.spawn.state == BOXRIG_POSIX_PTY_SPAWN_FAILED) {
-      state->connection_failed = state->active_profile.kind == elder_terms::TerminalConnectionKind::ssh;
+      state->connection_failed = true;
       const auto message = connection.operation_error_message.empty() ?
           std::string(g_strerror(connection.operation_error ? connection.operation_error : connection.spawn.error_number)) :
           connection.operation_error_message;
@@ -747,7 +754,7 @@ static void application_terminal_changed(void *context) {
         elder_terms::set_main_window_connection_failure(state->main_window, message, state->active_profile.kind);
     }
     set_application_connection_phase(state, elder_terms::TerminalSessionConnectionPhase::disconnected);
-    if (state->auto_close && !state->connection_failed && state->active_profile.kind != elder_terms::TerminalConnectionKind::serial)
+    if (should_auto_close_terminal(state))
       gtk_window_close(GTK_WINDOW(state->window));
   }
   update_application_reconnect_presentation(state);

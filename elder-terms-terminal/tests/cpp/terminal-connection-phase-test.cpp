@@ -69,8 +69,8 @@ static void disconnected_phase_is_the_only_phase_that_shows_disconnected() {
               "Disconnected phase must show Disconnected");
 }
 
-static void reconnect_is_available_for_every_manual_disconnection() {
-  for (const bool auto_close : {false, true}) {
+static void reconnect_is_available_when_the_disconnected_window_stays_open() {
+  for (const bool close_on_disconnect : {false, true}) {
     for (const auto phase : {TerminalSessionConnectionPhase::connecting,
                             TerminalSessionConnectionPhase::verifying_host,
                             TerminalSessionConnectionPhase::authenticating,
@@ -80,8 +80,8 @@ static void reconnect_is_available_for_every_manual_disconnection() {
       for (const bool ready : {false, true}) {
         for (const bool closing : {false, true}) {
           const auto presentation = terminal_reconnect_presentation(
-              auto_close, phase, ready, closing);
-          const bool visible = !auto_close && !closing &&
+              close_on_disconnect, phase, ready, closing);
+          const bool visible = !close_on_disconnect && !closing &&
               phase == TerminalSessionConnectionPhase::disconnected;
           expect_true(presentation.visible == visible, "reconnect visibility must honor closing policy");
           expect_true(presentation.sensitive == (visible && ready), "reconnect must wait for cleanup");
@@ -100,7 +100,7 @@ int main() {
     elder_terms::connected_phase_enables_the_terminal();
     elder_terms::
         disconnected_phase_is_the_only_phase_that_shows_disconnected();
-    elder_terms::reconnect_is_available_for_every_manual_disconnection();
+    elder_terms::reconnect_is_available_when_the_disconnected_window_stays_open();
     return 0;
   } catch (...) {
     return 1;

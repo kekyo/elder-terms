@@ -20,9 +20,9 @@ TerminalConnectionPresentation terminal_connection_presentation(
 }
 
 TerminalReconnectPresentation terminal_reconnect_presentation(
-    bool auto_close,
+    bool close_on_disconnect,
     TerminalSessionConnectionPhase phase, bool ready, bool closing) {
-  const bool visible = !auto_close && !closing &&
+  const bool visible = !close_on_disconnect && !closing &&
       phase == TerminalSessionConnectionPhase::disconnected;
   return {.visible = visible, .sensitive = visible && ready};
 }
