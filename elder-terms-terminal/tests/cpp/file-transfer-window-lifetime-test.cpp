@@ -369,6 +369,30 @@ static cardio::promise<void> verify_async(
     GtkWidget *path = find_widget(root, "file_transfer_remote_path_entry");
     expect(frame != nullptr && tree != nullptr && path != nullptr,
            "The remote browser must expose its controls");
+    for (const char *id : {"file_transfer_local_tree", "file_transfer_remote_tree"}) {
+      auto *browser = GTK_TREE_VIEW(find_widget(root, id));
+      auto *column = gtk_tree_view_get_column(browser, 0);
+      GList *cells = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(column));
+      GtkTreeIter entry;
+      auto *model = gtk_tree_view_get_model(browser);
+      gtk_tree_store_append(GTK_TREE_STORE(model), &entry, nullptr);
+      gtk_tree_store_set(GTK_TREE_STORE(model), &entry, 0, "Icon test.PDF", 7, "image/picture_as_pdf", -1);
+      gtk_tree_view_column_cell_set_cell_data(column, model, &entry, FALSE, FALSE);
+      auto *surface = static_cast<cairo_surface_t *>(g_object_get_data(G_OBJECT(cells->data), "node-icon"));
+      expect(surface != nullptr && cairo_surface_status(surface) == CAIRO_STATUS_SUCCESS,
+          "File rows must provide a decoded drawable icon");
+      auto *entry_path = gtk_tree_model_get_path(model, &entry);
+      const int row = gtk_tree_path_get_indices(entry_path)[0];
+      gtk_tree_path_free(entry_path);
+      auto *accessible = atk_table_ref_at(ATK_TABLE(gtk_widget_get_accessible(GTK_WIDGET(browser))), row, 0);
+      expect(accessible && g_strcmp0(atk_object_get_name(accessible), "Icon test.PDF") == 0,
+          "Icons must preserve the accessible file name");
+      g_object_unref(accessible);
+      gtk_tree_store_remove(GTK_TREE_STORE(model), &entry);
+      g_list_free(cells);
+      expect(gtk_tree_selection_get_mode(gtk_tree_view_get_selection(browser)) == GTK_SELECTION_MULTIPLE,
+          "Tree icons must preserve multiple selection");
+    }
     expect(!gtk_widget_is_sensitive(tree) && !gtk_widget_is_sensitive(path),
            "Directory loading must prevent selecting stale rows or editing an overwritten path");
     GList *menus = gtk_menu_get_for_attach_widget(tree);

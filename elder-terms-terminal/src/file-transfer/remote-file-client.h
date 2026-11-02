@@ -39,6 +39,16 @@ enum class RemoteFileType {
   other,
 };
 
+/** Display-only role of a remote item; permissions still use path_capabilities(). */
+enum class RemoteFileRole {
+  /** Ordinary filesystem item. */
+  ordinary,
+  /** SMB disk share, retaining directory semantics. */
+  smb_share,
+  /** NFS exported root, retaining directory semantics. */
+  nfs_export,
+};
+
 /** Optional remote filesystem features understood by the transfer engine. */
 struct RemoteFileCapabilities {
   /** True when uploads and remote filesystem changes are available. */
@@ -81,6 +91,8 @@ struct RemoteFileAttributes {
   std::optional<std::int64_t> access_time_unix_seconds;
   /** Last modification time as Unix seconds, when reported by the service. */
   std::optional<std::int64_t> modification_time_unix_seconds;
+  /** Presentation role supplied by the service, never inferred from path depth. */
+  RemoteFileRole role = RemoteFileRole::ordinary;
 };
 
 /** One atomically loaded remote directory and its canonical path. */

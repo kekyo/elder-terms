@@ -6,6 +6,7 @@
 #include <elder-terms/modal-dialog.h>
 #include <elder-terms/tracked-window.h>
 #include <elder-terms/connection-icon-image.h>
+#include <elder-terms/connection-icon-presets.h>
 #include <elder-terms/connection-desktop-session.h>
 #include <elder-terms/settings-widget.h>
 #include "file-transfer-window.h"
@@ -18,6 +19,7 @@
 #include <exception>
 #include <filesystem>
 #include <memory>
+#include <map>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -34,6 +36,7 @@
 #include <glib/gi18n-lib.h>
 
 #include "file-transfer-engine.h"
+#include "file-transfer-node-icon.h"
 #include "activity-file-client.h"
 #include "../activity-indicator.h"
 #include "../compact-header.h"
@@ -82,7 +85,8 @@ enum FileTransferTreeColumn {
   file_transfer_tree_type_column = 4,
   file_transfer_tree_loaded_column = 5,
   file_transfer_tree_dummy_column = 6,
-  file_transfer_tree_column_count = 7,
+  file_transfer_tree_icon_column = 7,
+  file_transfer_tree_column_count = 8,
 };
 
 struct FileTransferGObjectDeleter {
@@ -351,7 +355,8 @@ static void set_browser_row(
       file_transfer_tree_type_column, static_cast<int>(attributes.type),
       file_transfer_tree_loaded_column,
       attributes.type != RemoteFileType::directory,
-      file_transfer_tree_dummy_column, FALSE, -1);
+      file_transfer_tree_dummy_column, FALSE,
+      file_transfer_tree_icon_column, file_transfer_node_icon(attributes).data(), -1);
   if (attributes.type == RemoteFileType::directory) {
     append_dummy_row(store, iterator);
   }
@@ -2235,6 +2240,15 @@ static void render_file_transfer_tree_cell_text(
       cr, cell_area->x, cell_area->y, cell_area->width,
       cell_area->height);
   cairo_clip(cr);
+  if (auto *icon = static_cast<cairo_surface_t *>(g_object_get_data(G_OBJECT(renderer), "node-icon"))) {
+    const bool rtl = gtk_widget_get_direction(widget) == GTK_TEXT_DIR_RTL;
+    cairo_set_source_surface(cr, icon,
+        rtl ? cell_area->x + cell_area->width - 18 : cell_area->x + 2,
+        cell_area->y + (cell_area->height - 16) / 2);
+    cairo_paint(cr);
+    if (!rtl) adjusted_cell_area.x += 20;
+    adjusted_cell_area.width = std::max(0, adjusted_cell_area.width - 20);
+  }
   GTK_CELL_RENDERER_CLASS(
       file_transfer_tree_cell_renderer_text_parent_class)
       ->render(renderer, cr, widget, background_area,
@@ -2316,6 +2330,32 @@ static FileTransferTreeRowMetrics get_file_transfer_tree_row_metrics(
   };
 }
 
+static void render_file_transfer_node_icon(GtkTreeViewColumn *, GtkCellRenderer *renderer,
+    GtkTreeModel *model, GtkTreeIter *iterator, gpointer data) {
+  auto *tree = GTK_WIDGET(data);
+  using Surfaces = std::map<std::pair<std::string, int>, std::shared_ptr<cairo_surface_t>>;
+  auto *cache = static_cast<Surfaces *>(g_object_get_data(G_OBJECT(tree), "node-icons"));
+  if (!cache) {
+    cache = new Surfaces;
+    g_object_set_data_full(G_OBJECT(tree), "node-icons", cache,
+        +[](gpointer value) { delete static_cast<Surfaces *>(value); });
+  }
+  gchar *name = nullptr;
+  gtk_tree_model_get(model, iterator, file_transfer_tree_icon_column, &name, -1);
+  const std::string icon = name ? name : "editor/insert_drive_file";
+  g_free(name);
+  const int scale = gtk_widget_get_scale_factor(tree);
+  auto &surface = (*cache)[{icon, scale}];
+  if (!surface) {
+    // Bundled glyphs already include a contrasting outline for selected/dark rows.
+    const auto pixels = connection_icon_preset_thumbnail("material:" + icon, 16 * scale);
+    if (pixels) surface = {gdk_cairo_surface_create_from_pixbuf(pixels.get(), scale, nullptr), cairo_surface_destroy};
+  }
+  g_object_set_data_full(G_OBJECT(renderer), "node-icon",
+      surface ? cairo_surface_reference(surface.get()) : nullptr,
+      +[](gpointer value) { cairo_surface_destroy(static_cast<cairo_surface_t *>(value)); });
+}
+
 static void append_file_transfer_tree_column(
     GtkWidget *tree, const char *title, int model_column,
     bool expand, const char *width_sample,
@@ -2344,9 +2384,14 @@ static void append_file_transfer_tree_column(
         renderer, tree, &minimum_width, &fixed_width);
     g_object_set(renderer, "text", "", nullptr);
   }
-  GtkTreeViewColumn *column =
-      gtk_tree_view_column_new_with_attributes(
-          title, renderer, "text", model_column, nullptr);
+  GtkTreeViewColumn *column = gtk_tree_view_column_new();
+  gtk_tree_view_column_set_title(column, title);
+  gtk_tree_view_column_pack_start(column, renderer, TRUE);
+  if (model_column == file_transfer_tree_name_column) {
+    // Keep one accessible text cell: GTK's multi-renderer container has no name.
+    gtk_tree_view_column_set_cell_data_func(column, renderer, render_file_transfer_node_icon, tree, nullptr);
+  }
+  gtk_tree_view_column_add_attribute(column, renderer, "text", model_column);
   gtk_tree_view_column_set_sizing(
       column, GTK_TREE_VIEW_COLUMN_FIXED);
   // The name column receives the remaining width. Explicit widths keep long
@@ -2362,7 +2407,7 @@ static GtkWidget *create_file_transfer_tree(FileTransferPaneState *pane,
   pane->store = gtk_tree_store_new(
       file_transfer_tree_column_count, G_TYPE_STRING, G_TYPE_STRING,
       G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT, G_TYPE_BOOLEAN,
-      G_TYPE_BOOLEAN);
+      G_TYPE_BOOLEAN, G_TYPE_STRING);
   GtkWidget *tree = gtk_tree_view_new_with_model(
       GTK_TREE_MODEL(pane->store));
   gestament_gtk_assign_accessible_id(tree, accessible_id);

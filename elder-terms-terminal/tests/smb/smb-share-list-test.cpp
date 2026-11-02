@@ -22,6 +22,9 @@ int main() {
     require(list.canonical_path == "/" && list.entries.size() == 3, "Only disk shares belong in the server root");
     require(list.entries[0].path == "/Public" && list.entries[1].path == "/Admin$" && list.entries[2].path == "/日本語 space", "Share paths and UTF-8 names differ");
     require(!list.entries[0].size && !list.entries[0].modification_time_unix_seconds, "Share metadata must remain unknown");
+    for (const auto &entry : list.entries)
+      require(entry.type == RemoteFileType::directory && entry.role == RemoteFileRole::smb_share,
+          "Shares must retain directory behavior and explicitly identify their display role");
     for (const int status : {5, 234, -EACCES, -ECONNRESET}) {
       bool rejected = false;
       try { (void)decode_smb_share_list(status, &reply); }
