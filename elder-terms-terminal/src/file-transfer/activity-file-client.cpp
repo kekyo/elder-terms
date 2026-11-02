@@ -89,6 +89,42 @@ struct ActivityFileClient final : RemoteFileClient {
   }
   bool try_begin_transfer() override { return delegate->try_begin_transfer(); }
   void end_transfer() override { delegate->end_transfer(); }
+  RemoteReceiveLimits receive_limits() const override { return delegate->receive_limits(); }
+
+  cardio::promise<RemoteDirectorySnapshot> browse_directory_async(
+      std::string path, bool refresh, bool force_html, cardio::cancellation cancellation) override {
+    try {
+      cancellation.throw_if_cancellation_requested();
+      activity(ActivityIndicatorId::sd);
+      auto result = co_await delegate->browse_directory_async(std::move(path), refresh, force_html, cancellation);
+      activity(ActivityIndicatorId::rd);
+      co_return result;
+    } catch (const RemoteFileError &error) {
+      if (error.connection_lost && disconnected) disconnected();
+      throw;
+    }
+  }
+
+  cardio::promise<std::optional<RemoteReceiveSource>> prepare_receive_async(
+      std::string path, bool as_file, cardio::cancellation cancellation) override {
+    try {
+      cancellation.throw_if_cancellation_requested();
+      activity(ActivityIndicatorId::sd);
+      auto result = std::move(co_await delegate->prepare_receive_async(std::move(path), as_file, cancellation));
+      activity(ActivityIndicatorId::rd);
+      if (result && result->reader) {
+        auto reader = std::make_unique<ActivityFileReader>();
+        reader->delegate = std::move(result->reader);
+        reader->activity = activity;
+        reader->disconnected = disconnected;
+        result->reader = std::move(reader);
+      }
+      co_return result;
+    } catch (const RemoteFileError &error) {
+      if (error.connection_lost && disconnected) disconnected();
+      throw;
+    }
+  }
 
   cardio::promise<RemoteDirectorySnapshot>
   load_directory_async(std::string path,

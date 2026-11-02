@@ -222,7 +222,7 @@ try {
               certificateAction,
             ]);
             if (expected === 'failure')
-              assert.match(result, /WebDAV request failed/);
+              assert.match(result, /HTTP request failed/);
             // mod_dav_fs keeps its private property database in .DAV; it is not a DAV resource.
             // https://github.com/apache/httpd/blob/2.4.x/modules/dav/fs/dbm.c
             const remaining = (await readdir(join(documentRoot, 'dav'))).filter(

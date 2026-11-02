@@ -217,7 +217,8 @@ const visibleSettingsTabNames = async (
     const tab = await notebook.childAt(index);
     if (tab !== undefined) {
       const info = await tab.info();
-      if (info.states.includes('showing')) {
+      // Available tabs may be outside a scrollable strip's current viewport.
+      if (info.states.includes('visible')) {
         names.push(info.name);
       }
     }
@@ -1022,6 +1023,7 @@ describe('elder-terms main window', () => {
               'SFTP',
               'FTP',
               'WebDAV',
+              'HTTP/HTTPS',
               'SMB',
               'SSH proxy',
               '端末',
@@ -1510,6 +1512,7 @@ describe('elder-terms main window', () => {
               'SFTP',
               'FTP',
               'WebDAV',
+              'HTTP/HTTPS',
               'SMB',
               'SSH proxy',
               'Terminal',

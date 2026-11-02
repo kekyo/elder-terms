@@ -1,3 +1,4 @@
+elder_terms_shared_curl_dep = dependency('libcurl')
 elder_terms_shared_glib_dep = dependency('glib-2.0')
 elder_terms_shared_gio_dep = dependency('gio-2.0')
 elder_terms_shared_gtk_dep = dependency('gtk+-3.0')
@@ -130,6 +131,8 @@ elder_terms_shared_sources = elder_terms_shared_resources + elder_terms_noto_pre
   'src/settings/application-settings.cpp',
   'src/settings/ftp-settings.cpp',
   'src/settings/webdav-settings.cpp',
+  'src/settings/http-settings.cpp',
+  'src/http-url.cpp',
   'src/settings/smb-settings.cpp',
   'src/settings/general-settings.cpp',
   'src/settings/hyperlink-settings.cpp',
@@ -153,6 +156,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + elder_terms_noto_pre
   'src/settings-widget/connection-icon-picker.cpp',
   'src/settings-widget/hyperlink-settings-editor.cpp',
   'src/settings-widget/webdav-settings-editor.cpp',
+  'src/settings-widget/http-settings-editor.cpp',
   'src/settings-widget/smb-settings-editor.cpp',
   'src/settings-widget/ssh-proxy-settings-editor.cpp',
   'src/settings-widget/settings-widget.cpp',
@@ -181,6 +185,7 @@ elder_terms_library = shared_library(
     elder_terms_shared_gdk_wayland_dep,
     elder_terms_shared_gdk_x11_dep,
     elder_terms_shared_gmodule_dep,
+    elder_terms_shared_curl_dep,
     boxrig_deps['boxrig'],
     boxrig_deps['boxrig-ui'],
   ],
@@ -404,4 +409,10 @@ executable(
     elder_terms_dep,
   ],
 )
+endif
+
+if get_option('build_tests')
+http_settings_test = executable('http-settings-test', 'tests/http-settings-test.cpp', dependencies: elder_terms_dep)
+test('http-settings-test', find_program('xvfb-run'), args: ['-a', http_settings_test],
+  env: ['NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals'])
 endif

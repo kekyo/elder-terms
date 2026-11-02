@@ -2901,3 +2901,30 @@ msgstr "実行中 %zu 件、待機中 %zu 件、終了 %zu 件"
 #, c-format
 msgid "; skipped %llu"
 msgstr "、スキップ %llu 件"
+
+msgid "Base URL"
+msgstr "基準URL"
+
+msgid "Start page URL"
+msgstr "開始ページURL"
+
+msgid "HTTP/HTTPS"
+msgstr "HTTP/HTTPS"
+
+msgid "Receive as file"
+msgstr "ファイルとして受信"
+
+msgid "Receive as directory"
+msgstr "ディレクトリとして受信"
+
+msgid "Expand as HTML"
+msgstr "HTMLとして展開"
+
+msgid "This response is a file; use Receive as file"
+msgstr "この応答はファイルです。「ファイルとして受信」を選んでください"
+
+msgid "HTTP authentication"
+msgstr "HTTP認証"
+
+msgid "Failed to start HTTP"
+msgstr "HTTP接続を開始できませんでした"

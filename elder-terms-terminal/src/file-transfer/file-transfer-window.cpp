@@ -9,6 +9,7 @@
 #include <elder-terms/connection-icon-presets.h>
 #include <elder-terms/connection-desktop-session.h>
 #include <elder-terms/settings-widget.h>
+#include <elder-terms/http-url.h>
 #include "file-transfer-window.h"
 
 #include <algorithm>
@@ -23,6 +24,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -132,6 +134,8 @@ struct FileTransferPaneState {
   GtkTreeStore *store = nullptr;
   GtkWidget *menu = nullptr;
   GtkWidget *transfer_item = nullptr;
+  GtkWidget *receive_file_item = nullptr;
+  GtkWidget *expand_html_item = nullptr;
   GtkWidget *hash_item = nullptr;
   GtkWidget *open_directory_item = nullptr;
   GtkWidget *new_directory_item = nullptr;
@@ -362,10 +366,10 @@ static void set_browser_row(
       file_transfer_tree_path_column, attributes.path.c_str(),
       file_transfer_tree_type_column, static_cast<int>(attributes.type),
       file_transfer_tree_loaded_column,
-      attributes.type != RemoteFileType::directory,
+      attributes.type != RemoteFileType::directory && attributes.type != RemoteFileType::unresolved,
       file_transfer_tree_dummy_column, FALSE,
       file_transfer_tree_icon_column, file_transfer_node_icon(attributes).data(), -1);
-  if (attributes.type == RemoteFileType::directory) {
+  if (attributes.type == RemoteFileType::directory || attributes.type == RemoteFileType::unresolved) {
     append_dummy_row(store, iterator);
   }
 }
@@ -567,6 +571,10 @@ static std::string canonical_local_directory(
 
 static std::string remote_parent_directory(
     const std::string &path) {
+  if (path.starts_with("http://") || path.starts_with("https://")) {
+    const auto url_path = path.substr(0, path.find('?'));
+    return http_resolve_url(path, url_path.ends_with('/') ? "../" : "./");
+  }
   std::string normalized = path;
   while (normalized.size() > 1 && normalized.back() == '/') {
     normalized.pop_back();
@@ -910,10 +918,10 @@ static void clear_tree_children(GtkTreeStore *store,
 static cardio::promise<RemoteDirectorySnapshot>
 load_file_transfer_pane_directory_async(
     FileTransferPaneState *pane, std::string path,
-    cardio::cancellation cancellation) {
+    cardio::cancellation cancellation, bool refresh = false, bool force_html = false) {
   if (pane->remote) {
     co_return co_await load_file_transfer_queue_directory_async(pane->window->jobs,
-        std::move(path), std::move(cancellation));
+        std::move(path), std::move(cancellation), refresh, force_html);
   }
   std::string canonical_path = canonical_local_directory(path);
   std::vector<RemoteFileAttributes> entries =
@@ -926,7 +934,7 @@ load_file_transfer_pane_directory_async(
 }
 
 static cardio::promise<void> load_file_transfer_pane_root_async(
-    FileTransferPaneState *pane, std::string requested_path) {
+    FileTransferPaneState *pane, std::string requested_path, bool refresh, bool force_html) {
   FileTransferWindow *window = pane->window;
   const std::uint64_t generation = ++pane->generation;
   const cardio::cancellation cancellation =
@@ -934,8 +942,14 @@ static cardio::promise<void> load_file_transfer_pane_root_async(
   try {
     RemoteDirectorySnapshot snapshot =
         co_await load_file_transfer_pane_directory_async(
-            pane, std::move(requested_path), cancellation);
+            pane, std::move(requested_path), cancellation, refresh, force_html);
     if (window->destroyed || generation != pane->generation) {
+      set_file_transfer_pane_busy(pane, false);
+      co_return;
+    }
+    if (snapshot.resource_type != RemoteFileType::directory) {
+      set_file_transfer_status(window, _("This response is a file; use Receive as file"));
+      gtk_entry_set_text(GTK_ENTRY(pane->path_entry), pane->current_directory.c_str());
       set_file_transfer_pane_busy(pane, false);
       co_return;
     }
@@ -960,7 +974,7 @@ static cardio::promise<void> load_file_transfer_pane_root_async(
 }
 
 static void start_file_transfer_pane_navigation(
-    FileTransferPaneState *pane, std::string path) {
+    FileTransferPaneState *pane, std::string path, bool refresh = false, bool force_html = false) {
   if (pane == nullptr || pane->window == nullptr ||
       pane->window->destroyed || pane->busy ||
       (pane->remote &&
@@ -970,7 +984,7 @@ static void start_file_transfer_pane_navigation(
   pane->task.reset();
   set_file_transfer_pane_busy(pane, true);
   pane->task.emplace(
-      load_file_transfer_pane_root_async(pane, std::move(path)));
+      load_file_transfer_pane_root_async(pane, std::move(path), refresh, force_html));
 }
 
 static cardio::promise<void> expand_file_transfer_directory_async(
@@ -995,6 +1009,27 @@ static cardio::promise<void> expand_file_transfer_directory_async(
     if (tree_path != nullptr &&
         gtk_tree_model_get_iter(
             GTK_TREE_MODEL(pane->store), &iterator, tree_path)) {
+      // The same resource may appear under multiple branches. Suppress only
+      // ancestors of this occurrence, retaining independent visits elsewhere.
+      std::set<std::string> ancestors{pane->current_directory, snapshot.canonical_path};
+      GtkTreeIter ancestor = iterator;
+      for (;;) {
+        gchar *ancestor_path = nullptr;
+        gtk_tree_model_get(GTK_TREE_MODEL(pane->store), &ancestor, file_transfer_tree_path_column, &ancestor_path, -1);
+        if (ancestor_path) ancestors.insert(ancestor_path);
+        g_free(ancestor_path);
+        GtkTreeIter parent;
+        if (!gtk_tree_model_iter_parent(GTK_TREE_MODEL(pane->store), &parent, &ancestor)) break;
+        ancestor = parent;
+      }
+      std::erase_if(snapshot.entries, [&ancestors](const auto &entry) { return ancestors.contains(entry.path); });
+      RemoteFileAttributes classified;
+      classified.path = snapshot.canonical_path;
+      classified.type = snapshot.resource_type;
+      gtk_tree_store_set(pane->store, &iterator,
+          file_transfer_tree_type_column, static_cast<int>(snapshot.resource_type),
+          file_transfer_tree_path_column, snapshot.canonical_path.c_str(),
+          file_transfer_tree_icon_column, file_transfer_node_icon(classified).data(), -1);
       replace_dummy_with_browser_entries(
           pane->store, &iterator, std::move(snapshot.entries));
     }
@@ -1053,7 +1088,7 @@ static void on_file_transfer_row_expanded(
       path == nullptr ? std::string() : std::string(path);
   g_free(path);
   if (loaded != FALSE || dummy != FALSE ||
-      type != static_cast<gint>(RemoteFileType::directory) ||
+      (type != static_cast<gint>(RemoteFileType::directory) && type != static_cast<gint>(RemoteFileType::unresolved)) ||
       directory.empty()) {
     return;
   }
@@ -1092,7 +1127,7 @@ static void on_file_transfer_up_clicked(GtkButton *, gpointer data) {
 
 static void on_file_transfer_refresh_clicked(GtkButton *, gpointer data) {
   auto *pane = static_cast<FileTransferPaneState *>(data);
-  start_file_transfer_pane_navigation(pane, pane->current_directory);
+  start_file_transfer_pane_navigation(pane, pane->current_directory, true);
 }
 
 static void on_file_transfer_row_activated(
@@ -1116,7 +1151,7 @@ static void on_file_transfer_row_activated(
       item_path == nullptr ? std::string() : std::string(item_path);
   g_free(item_path);
   if (dummy == FALSE &&
-      type == static_cast<gint>(RemoteFileType::directory) &&
+      (type == static_cast<gint>(RemoteFileType::directory) || type == static_cast<gint>(RemoteFileType::unresolved)) &&
       !directory.empty()) {
     start_file_transfer_pane_navigation(pane, directory);
   }
@@ -1308,6 +1343,14 @@ static gboolean on_file_transfer_tree_button_press(
   gtk_widget_set_sensitive(pane->new_directory_item, idle && (!pane->remote || remote_creatable));
   gtk_widget_set_sensitive(pane->transfer_item,
       transfer_ready && !items.empty() && (pane->remote || remote_creatable));
+  if (pane->receive_file_item) {
+    const bool http = pane->window->client && pane->window->client->capabilities().incremental_receive;
+    gtk_widget_set_visible(pane->receive_file_item, http);
+    gtk_widget_set_visible(pane->expand_html_item, http);
+    gtk_widget_set_sensitive(pane->receive_file_item, transfer_ready && !items.empty());
+    gtk_widget_set_sensitive(pane->expand_html_item, idle && items.size() == 1);
+    gtk_menu_item_set_label(GTK_MENU_ITEM(pane->transfer_item), http ? _("Receive as directory") : _("Receive"));
+  }
   gtk_widget_set_sensitive(pane->rename_item, modifiable && items.size() == 1);
   if (pane->open_directory_item != nullptr) {
     gtk_menu_item_set_label(GTK_MENU_ITEM(pane->open_directory_item),
@@ -1950,7 +1993,7 @@ static void file_transfer_job_changed(FileTransferWindow *window, const FileTran
 }
 
 static void start_file_transfer_transfer(
-    FileTransferWindow *window, FileTransferDirection direction) {
+    FileTransferWindow *window, FileTransferDirection direction, bool as_file = false) {
   if (window == nullptr || window->destroyed ||
       window->browser_action_active ||
       !window->connection_available ||
@@ -1977,6 +2020,7 @@ static void start_file_transfer_transfer(
 
   FileTransferRequest request;
   request.direction = direction;
+  request.receive_as_file = as_file;
   request.source_paths = sources;
   request.destination_directory = destination;
   submit_file_transfer_request(window, std::move(request));
@@ -1989,6 +2033,17 @@ static void on_file_transfer_item_activate(
       pane->window,
       pane->remote ? FileTransferDirection::receive
                    : FileTransferDirection::send);
+}
+
+static void on_http_receive_file(GtkMenuItem *, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  start_file_transfer_transfer(pane->window, FileTransferDirection::receive, true);
+}
+
+static void on_http_expand_html(GtkMenuItem *, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  const auto items = selected_file_transfer_items(pane);
+  if (items.size() == 1) start_file_transfer_pane_navigation(pane, items.front().path, true, true);
 }
 
 static void on_file_transfer_cancel_clicked(
@@ -2453,6 +2508,16 @@ static GtkWidget *create_file_transfer_pane(
   g_signal_connect(
       pane->transfer_item, "activate",
       G_CALLBACK(on_file_transfer_item_activate), pane);
+  if (remote) {
+    pane->receive_file_item = gtk_menu_item_new_with_label(_("Receive as file"));
+    gestament_gtk_assign_accessible_id(pane->receive_file_item, "file_transfer_receive_file_item");
+    gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu), pane->receive_file_item);
+    g_signal_connect(pane->receive_file_item, "activate", G_CALLBACK(on_http_receive_file), pane);
+    pane->expand_html_item = gtk_menu_item_new_with_label(_("Expand as HTML"));
+    gestament_gtk_assign_accessible_id(pane->expand_html_item, "file_transfer_expand_html_item");
+    gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu), pane->expand_html_item);
+    g_signal_connect(pane->expand_html_item, "activate", G_CALLBACK(on_http_expand_html), pane);
+  }
   if (!remote || window->remote_file_hash) {
     pane->hash_item =
         gtk_menu_item_new_with_label(_("Calculate Hash Values"));
@@ -2829,6 +2894,7 @@ create_file_transfer_window(FileTransferWindowOptions options) {
           FileTransferRequest request;
           request.direction = job.direction;
           request.source_paths = job.source_paths;
+          request.receive_as_file = job.receive_as_file;
           request.destination_directory = job.destination_directory;
           submit_file_transfer_request(owner.get(), std::move(request));
         }

@@ -6,10 +6,28 @@
 #pragma once
 
 #include "../file-transfer/remote-file-client.h"
-#include "curl-http-session.h"
+#include "../http/curl-http-session.h"
 #include <elder-terms/settings/webdav-settings.h>
 
 namespace elder_terms {
+
+/**
+ * Extracts protocol-independent transport settings from a WebDAV endpoint.
+ * @param settings Effective WebDAV settings.
+ * @returns HTTP transport settings without WebDAV path or XML policy.
+ */
+inline CurlHttpSettings webdav_http_settings(const WebdavConnectionSettings &settings) {
+  const auto auth = settings.authentication;
+  return {.scheme = settings.scheme, .address = settings.address, .port = settings.port,
+      .authentication = auth == WebdavAuthentication::none ? HttpAuthentication::none
+          : auth == WebdavAuthentication::basic ? HttpAuthentication::basic
+          : auth == WebdavAuthentication::digest ? HttpAuthentication::digest : HttpAuthentication::automatic,
+      .username = settings.username, .ca_file = settings.ca_file,
+      .prompt_certificate = settings.prompt_certificate,
+      .connect_timeout_seconds = settings.connect_timeout_seconds,
+      .idle_timeout_seconds = settings.idle_timeout_seconds,
+      .validation_errors = settings.validation_errors};
+}
 
 /** Parameters owned by one authenticated WebDAV connection. */
 struct WebdavClientOpenOptions {
@@ -18,7 +36,7 @@ struct WebdavClientOpenOptions {
   /** Runtime password, never written to settings. */
   std::string password;
   /** Optional asynchronous decision for this connection only. */
-  WebdavCertificateConfirmation confirm_certificate;
+  HttpCertificateConfirmation confirm_certificate;
   /** Owned SSH route, or null for direct HTTP connections. */
   std::shared_ptr<SshSocksProxy> proxy{};
 };

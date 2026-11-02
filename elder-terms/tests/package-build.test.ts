@@ -176,6 +176,8 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     ['usr/share/doc/elder-terms/docs/en/webdav.md', '# WebDAV\n'],
     ['usr/share/doc/elder-terms/docs/ja/smb.md', '# SMB\n'],
     ['usr/share/doc/elder-terms/docs/en/smb.md', '# SMB\n'],
+    ['usr/share/doc/elder-terms/docs/ja/http.md', '# HTTP/HTTPS\n'],
+    ['usr/share/doc/elder-terms/docs/en/http.md', '# HTTP/HTTPS\n'],
     [
       'usr/share/doc/elder-terms/docs/en/webdav-validation.md',
       '# WebDAV validation\n',
@@ -1052,8 +1054,8 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     for (const language of ['ja', 'en']) {
       const documents =
         language === 'en'
-          ? ['webdav.md', 'webdav-validation.md', 'smb.md']
-          : ['webdav.md', 'smb.md'];
+          ? ['webdav.md', 'webdav-validation.md', 'smb.md', 'http.md']
+          : ['webdav.md', 'smb.md', 'http.md'];
       for (const document of documents) {
         const missingPath = `usr/share/doc/elder-terms/docs/${language}/${document}`;
         const stage = join(

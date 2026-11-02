@@ -4,7 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 // Verify certificate approval boundaries across real HTTPS handshakes.
-#include "curl-http-session.h"
+#include "../../src/http/curl-http-session.h"
 
 #include <iostream>
 #include <cstdlib>
@@ -56,12 +56,11 @@ static cardio::promise<void> check_async(
   CertificateConfirmations confirmations;
   CertificateConfirmations separate_confirmations;
   try {
-    elder_terms::WebdavConnectionSettings settings;
+    elder_terms::CurlHttpSettings settings;
     settings.scheme = "https";
     settings.address = std::getenv("ELDER_TERMS_TEST_PROXY_PORT") ? "proxy-test.invalid" : "127.0.0.1";
     settings.port = port;
-    settings.base_path = "/dav/";
-    settings.authentication = elder_terms::WebdavAuthentication::basic;
+    settings.authentication = elder_terms::HttpAuthentication::basic;
     settings.username = "alice";
     settings.prompt_certificate = true;
     if (const auto *proxy_port = std::getenv("ELDER_TERMS_TEST_PROXY_PORT")) {

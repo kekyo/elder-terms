@@ -36,6 +36,7 @@ std::shared_ptr<FileTransferJob> create_file_transfer_job(std::string connection
   job->snapshot.direction = request.direction;
   job->snapshot.source_paths = request.source_paths;
   job->snapshot.destination_directory = request.destination_directory;
+  job->snapshot.receive_as_file = request.receive_as_file;
   job->snapshot.progress.total_bytes = std::nullopt;
   job->changed = std::move(changed);
   return job;
@@ -82,6 +83,7 @@ cardio::promise<void> run_file_transfer_job_async(std::shared_ptr<FileTransferJo
   request.direction = job->snapshot.direction;
   request.source_paths = job->snapshot.source_paths;
   request.destination_directory = job->snapshot.destination_directory;
+  request.receive_as_file = job->snapshot.receive_as_file;
   request.callbacks.conflict = [job, handler = callbacks.conflict](const FileTransferConflict &conflict,
       cardio::cancellation stop) -> cardio::promise<FileTransferConflictAction> {
     stop.throw_if_cancellation_requested();
@@ -109,7 +111,8 @@ cardio::promise<void> run_file_transfer_job_async(std::shared_ptr<FileTransferJo
   request.callbacks.progress = [job, handler = callbacks.progress](const FileTransferProgress &progress) {
     job->snapshot.progress = progress;
     if (job->snapshot.state != FileTransferJobState::cancelling)
-      job->snapshot.state = progress.discovery_complete ? FileTransferJobState::transferring : FileTransferJobState::discovering;
+      job->snapshot.state = progress.discovery_complete || progress.transferred_bytes
+          ? FileTransferJobState::transferring : FileTransferJobState::discovering;
     publish_job(job);
     if (handler) handler(progress);
   };
@@ -225,14 +228,15 @@ cardio::promise<void> run_file_transfer_queue_async(std::shared_ptr<FileTransfer
 }
 
 cardio::promise<RemoteDirectorySnapshot> load_file_transfer_queue_directory_async(
-    std::shared_ptr<FileTransferQueue> queue, std::string path, cardio::cancellation cancellation) {
+    std::shared_ptr<FileTransferQueue> queue, std::string path, cardio::cancellation cancellation,
+    bool refresh, bool force_html) {
   if (!queue->available) throw cardio::canceled_exception();
   const auto generation = queue->generation;
   QueueCancellation stop{cardio::cancellations::any(cancellation, queue->stop.get_cancellation())};
   auto locking = queue->operations.lock(stop.source.get_cancellation());
   auto lock = std::move(co_await locking);
   if (!queue->available || generation != queue->generation) throw cardio::canceled_exception();
-  co_return co_await queue->client->load_directory_async(std::move(path), stop.source.get_cancellation());
+  co_return co_await queue->client->browse_directory_async(std::move(path), refresh, force_html, stop.source.get_cancellation());
 }
 
 } // namespace elder_terms
