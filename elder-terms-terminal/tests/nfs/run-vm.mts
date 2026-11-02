@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { createServer } from 'node:http';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,6 +77,8 @@ if (!process.argv.includes('--isolated')) {
   await mkdir(evidence, { recursive: true });
   const args = [
     '-enable-kvm',
+    '-cpu',
+    'host',
     '-m',
     '768',
     '-smp',
@@ -99,6 +102,18 @@ if (!process.argv.includes('--isolated')) {
     '-no-reboot',
   ];
   const observer = await createNfsWireObserver();
+  const control = createServer((request, response) => {
+    if (request.method === 'POST' && request.url === '/pause')
+      observer.pauseWritesAfter(uiVersion === 2 ? 8 : 1);
+    else if (request.method === 'POST' && request.url === '/resume')
+      observer.resumeWrites();
+    response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify({ waiting: observer.waitingWrites() }));
+  });
+  control.listen(0, '127.0.0.1');
+  await once(control, 'listening');
+  const controlAddress = control.address();
+  assert.ok(controlAddress && typeof controlAddress !== 'string');
   const vm = spawn('qemu-system-x86_64', args, {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -183,7 +198,11 @@ if (!process.argv.includes('--isolated')) {
             `NFS v${version} files`,
           ],
           180000,
-          { ...process.env, ELDER_NFS_VM_ACTIVE: '1' }
+          {
+            ...process.env,
+            ELDER_NFS_VM_ACTIVE: '1',
+            ELDER_NFS_CONTROL: `http://127.0.0.1:${controlAddress.port}`,
+          }
         );
         process.stdout.write(output);
         assert.deepEqual(
@@ -338,6 +357,17 @@ if (!process.argv.includes('--isolated')) {
         );
         assert.match(lost, /PASS lost CREATE/);
         if (version === 4) {
+          observer.omitV4Limits(true);
+          try {
+            const optionalLimits = await run(clientDriver, ['UTF-8', '4']);
+            await writeFile(
+              resolve(evidence, 'client-v4-optional-limits.log'),
+              optionalLimits
+            );
+            assert.match(optionalLimits, /PASS NFS client 4/);
+          } finally {
+            observer.omitV4Limits(false);
+          }
           observer.rejectV4Name(Buffer.from('8b9194db955c', 'hex'));
           const rejected = await run(clientDriver, ['--reject-name']);
           await writeFile(
@@ -419,6 +449,8 @@ if (!process.argv.includes('--isolated')) {
       }
     }
   } finally {
+    control.closeAllConnections();
+    await new Promise<void>((resolve) => control.close(() => resolve()));
     await observer.close();
     clearTimeout(watchdog);
     vm.kill('SIGTERM');

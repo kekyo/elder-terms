@@ -73,16 +73,31 @@ static cardio::promise<NfsTransferLimits> load_v4_transfer_limits(const std::sha
     if (last.resop != OP_GETATTR || last.nfs_resop4_u.opgetattr.status != NFS4_OK)
       throw RemoteFileError("Invalid NFS v4 transfer limit response", true);
     const auto &attributes = last.nfs_resop4_u.opgetattr.GETATTR4res_u.resok4.obj_attributes;
-    if (attributes.attrmask.bitmap4_len != 1 || attributes.attrmask.bitmap4_val[0] != mask ||
-        attributes.attr_vals.attrlist4_len != 16)
-      throw RemoteFileError("NFS v4 server did not provide its read and write limits", false);
+    const auto words = attributes.attrmask.bitmap4_len;
+    const auto returned = words ? attributes.attrmask.bitmap4_val[0] : 0U;
+    if ((returned & ~mask) || (words > 1 && std::any_of(attributes.attrmask.bitmap4_val + 1,
+        attributes.attrmask.bitmap4_val + words, [](std::uint32_t word) { return word != 0; })))
+      throw RemoteFileError("NFS v4 returned unexpected transfer limit attributes", true);
+    const auto count = static_cast<unsigned>((returned >> FATTR4_MAXREAD) & 1U) +
+        static_cast<unsigned>((returned >> FATTR4_MAXWRITE) & 1U);
+    if (attributes.attr_vals.attrlist4_len != count * 8)
+      throw RemoteFileError("NFS v4 returned malformed transfer limit attributes", true);
     const auto number = [&](std::size_t offset) {
       std::uint64_t value = 0;
       for (std::size_t index = 0; index < 8; ++index)
         value = (value << 8) | static_cast<unsigned char>(attributes.attr_vals.attrlist4_val[offset + index]);
       return value;
     };
-    const auto read_limit = number(0), write_limit = number(8);
+    // RFC 7530 marks these attributes RECOMMENDED, not mandatory. Missing
+    // limits must not prevent browsing; use modest requests until advertised.
+    std::size_t offset = 0;
+    const auto limit = [&](std::uint32_t bit) {
+      if (!(returned & (1U << bit))) return UINT64_C(4096);
+      const auto value = number(offset);
+      offset += 8;
+      return value;
+    };
+    const auto read_limit = limit(FATTR4_MAXREAD), write_limit = limit(FATTR4_MAXWRITE);
     if (!read_limit || !write_limit) throw RemoteFileError("NFS v4 server reported a zero transfer limit", false);
     // Public read/write completion counts are signed ints. The transfer engine
     // may request less, but no request can exceed either this bound or the server.

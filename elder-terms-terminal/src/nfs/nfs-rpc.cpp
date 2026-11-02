@@ -6,8 +6,17 @@
 #include "nfs-rpc.h"
 #include <poll.h>
 #include <cstring>
+#include <string_view>
 
 namespace elder_terms {
+
+static std::string readable_nfs_error(std::string_view message) {
+  // Library diagnostics can embed original filename bytes. Only this display
+  // text is repaired; filesystem identities and request arguments stay intact.
+  const auto text = std::unique_ptr<gchar, decltype(&g_free)>(
+      g_utf8_make_valid(message.data(), message.size()), g_free);
+  return text.get();
+}
 
 struct NfsCancellationScope {
   cardio::cancellation_source source;
@@ -85,7 +94,7 @@ void configure_nfs_ports(const std::shared_ptr<NfsRpcSession> &session, int nfs_
   const auto options = "nfs:///?auto-traverse-mounts=0&nfsport=" + std::to_string(nfs_port) +
       "&mountport=" + std::to_string(mount_port);
   auto *parsed = nfs_parse_url_incomplete(session->nfs, options.c_str());
-  if (!parsed) throw RemoteFileError(nfs_get_error(session->nfs), false);
+  if (!parsed) throw RemoteFileError(readable_nfs_error(nfs_get_error(session->nfs)), false);
   nfs_destroy_url(parsed);
 #endif
 }
@@ -132,7 +141,7 @@ static cardio::promise<void> wait_nfs_async(const std::shared_ptr<NfsRpcSession>
       if ((ready & cardio::fd_event::error) != cardio::fd_event::none) events |= POLLERR;
       if ((ready & cardio::fd_event::hangup) != cardio::fd_event::none) events |= POLLHUP;
       const int status = session->nfs ? nfs_service(session->nfs, events) : rpc_service(session->rpc, events);
-      if (status < 0) throw RemoteFileError(rpc_get_error(session->rpc), true);
+      if (status < 0) throw RemoteFileError(readable_nfs_error(rpc_get_error(session->rpc)), true);
     }
   } catch (const cardio::canceled_exception &) {
     // No retries or background service exist: the absolute request deadline also
@@ -187,7 +196,7 @@ cardio::promise<void> execute_nfs_raw_async(std::shared_ptr<NfsRpcSession> sessi
   try {
     if (start(raw_completed, &completion) < 0) {
       session->active = false;
-      throw RemoteFileError(rpc_get_error(session->rpc), false);
+      throw RemoteFileError(readable_nfs_error(rpc_get_error(session->rpc)), false);
     }
     co_await wait_nfs_async(session, completion, cancellation);
   } catch (...) {
@@ -196,7 +205,7 @@ cardio::promise<void> execute_nfs_raw_async(std::shared_ptr<NfsRpcSession> sessi
   }
   if (completion.result.status != RPC_STATUS_SUCCESS) {
     session->abort();
-    throw RemoteFileError("NFS RPC failure: " + completion.result.message, true);
+    throw RemoteFileError("NFS RPC failure: " + readable_nfs_error(completion.result.message), true);
   }
 }
 
@@ -212,7 +221,7 @@ void check_nfs_result(const NfsRpcResult &result, const char *operation) {
   if (result.status >= 0) return;
   const int error = -result.status;
   const bool lost = error == ECONNRESET || error == ENOTCONN || error == EPIPE || error == ETIMEDOUT || error == ESTALE;
-  throw RemoteFileError(std::string("NFS ") + operation + ": " + result.message, lost);
+  throw RemoteFileError(std::string("NFS ") + operation + ": " + readable_nfs_error(result.message), lost);
 }
 
 cardio::promise<std::size_t> read_nfs_async(std::shared_ptr<NfsRpcSession> session,

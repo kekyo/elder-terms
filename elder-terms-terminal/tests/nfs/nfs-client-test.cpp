@@ -5,6 +5,7 @@
 
 #include "../../src/nfs/nfs-client.h"
 #include "../../src/nfs/nfs-name.h"
+#include "../../src/nfs/nfs-rpc.h"
 #include "../../src/file-transfer/file-transfer-engine.h"
 #include "../../src/file-transfer/activity-file-client.h"
 #include <filesystem>
@@ -159,6 +160,7 @@ static cardio::promise<void> test_client(const std::string &encoding, int versio
   options.address = "127.0.0.1";
   options.version = version;
   options.filename_encoding = encoding;
+  options.uid = options.gid = 1000;
   if (version == 4) {
     options.known_namespace_paths = {"/other/public", "/public/deep"};
     options.known_exports = {"/must-not-be-interpreted-as-v4"};
@@ -204,6 +206,7 @@ static cardio::promise<void> test_client(const std::string &encoding, int versio
   const std::string content("binary\0\xff\n", 9);
   std::filesystem::create_directories(local / folder / "深い");
   { std::ofstream file(local / folder / "深い" / name, std::ios::binary); file.write(content.data(), content.size()); }
+  std::filesystem::permissions(local / folder / "深い" / name, std::filesystem::perms::owner_read);
   { std::ofstream file(local / folder / "empty"); }
   std::filesystem::create_symlink("深い/" + name, local / folder / "link");
   FileTransferRequest send;
@@ -220,6 +223,8 @@ static cardio::promise<void> test_client(const std::string &encoding, int versio
       "Display paths must decode every component without becoming operation identities");
   require((co_await observed->lstat_async(remote_file, {}))->size == content.size(),
       "New encoded child paths must identify the uploaded bytes");
+  require(((co_await observed->lstat_async(remote_file, {}))->permissions.value() & 0777) == 0400,
+      "Uploading a read-only source must preserve its mode after writing its complete contents");
   const auto link_bytes = co_await observed->read_link_async(observed->child_path(remote_folder, "link"), {});
   const auto expected_link = encode_nfs_name("深い", encoding, 255) + "/" + encode_nfs_name(name, encoding, 255);
   if (link_bytes != expected_link)
@@ -495,6 +500,13 @@ int main(int argc, char **argv) {
   std::exception_ptr failure;
   auto body = [&]() -> cardio::promise<void> {
     try {
+      bool valid_error = false;
+      try { check_nfs_result({-EACCES, std::string("Access denied: /") + char(0xff)}, "lookup"); }
+      catch (const RemoteFileError &error) {
+        valid_error = !error.connection_lost && g_utf8_validate(error.what(), -1, nullptr) &&
+            std::string(error.what()).find("Access denied") != std::string::npos;
+      }
+      require(valid_error, "Library errors containing raw filenames must remain readable UTF-8 for GTK");
       if (std::string_view(argv[1]) == "--known-exports") co_await test_known_exports(version);
       else if (std::string_view(argv[1]) == "--lost-create") co_await test_lost_create(version);
       else if (std::string_view(argv[1]) == "--reject-name") co_await test_v4_name_rejection();

@@ -43,6 +43,14 @@ export interface NfsWireObserver {
   repeatV2Cookie: () => void;
   /** Makes the next v2 WRITE fail, lose its reply, or acknowledge a short size. */
   failV2Write: (fault: 'nospace' | 'short' | 'disconnect') => void;
+  /** Omits the optional v4 maximum-transfer attributes from successful GETATTR. */
+  omitV4Limits: (enabled: boolean) => void;
+  /** Holds subsequent WRITE calls after the specified number have been forwarded. */
+  pauseWritesAfter: (count: number) => void;
+  /** Releases held writes and disables the gate. */
+  resumeWrites: () => void;
+  /** Number of writes currently held for deterministic UI observations. */
+  waitingWrites: () => number;
   /** Closes listeners and sockets, including interrupted clients. */
   close: () => Promise<void>;
 }
@@ -65,7 +73,15 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
   let v2ReadLimit = 8192;
   let repeatV2Cookie = false;
   let v2WriteFault: 'nospace' | 'short' | 'disconnect' | undefined;
+  let omitV4Limits = false;
+  let writesBeforePause = -1;
+  const heldWrites: (() => void)[] = [];
+  const resumeWrites = (): void => {
+    writesBeforePause = -1;
+    for (const forward of heldWrites.splice(0)) forward();
+  };
   const close = async (): Promise<void> => {
+    heldWrites.length = 0;
     for (const socket of sockets) socket.destroy();
     for (const server of servers)
       await new Promise<void>((done) => server.close(() => done()));
@@ -144,6 +160,12 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
               let minor: number | undefined;
               let opensFile = false;
               let readsDirectory = false;
+              let writesFile =
+                program === 100003 &&
+                ((version === 2 && procedure === 8) ||
+                  (version === 3 && procedure === 7));
+              let transferLimits = false;
+              const compoundOperations: number[] = [];
               if (program === 100003 && version === 4 && procedure === 1) {
                 let offset = 24;
                 for (let auth = 0; auth < 2; auth++)
@@ -155,6 +177,7 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
                 offset += 4;
                 for (let index = 0; index < count; index++) {
                   const op = record.readUInt32BE(offset);
+                  compoundOperations.push(op);
                   offset += 4;
                   if (op === 18) {
                     opensFile = true;
@@ -164,6 +187,10 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
                     readsDirectory = true;
                     break;
                   } // READDIR
+                  if (op === 38) {
+                    writesFile = true;
+                    break;
+                  } // WRITE
                   if ([10, 24, 31, 32].includes(op)) continue;
                   if (op === 3) {
                     offset += 4;
@@ -173,11 +200,28 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
                     offset += 4 + ((record.readUInt32BE(offset) + 3) & ~3);
                   } else if (op === 9) {
                     // GETATTR bitmap
+                    if (
+                      record.readUInt32BE(offset) === 1 &&
+                      record.readUInt32BE(offset + 4) === 0xc0000000
+                    )
+                      transferLimits = true;
                     offset += 4 + record.readUInt32BE(offset) * 4;
                   } else break;
                 }
               }
               calls.push({ program, version, procedure, minor });
+              if (omitV4Limits && transferLimits) {
+                const reply = Buffer.alloc(48 + compoundOperations.length * 8);
+                reply.writeUInt32BE((0x80000000 | (reply.length - 4)) >>> 0, 0);
+                reply.writeUInt32BE(record.readUInt32BE(0), 4);
+                reply.writeUInt32BE(1, 8);
+                reply.writeUInt32BE(compoundOperations.length, 36);
+                for (const [index, op] of compoundOperations.entries())
+                  reply.writeUInt32BE(op, 40 + index * 8);
+                // The final GETATTR has an empty attribute bitmap and value.
+                client.write(reply);
+                continue;
+              }
               if (
                 v2WriteFault &&
                 program === 100003 &&
@@ -235,7 +279,15 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
               } else {
                 const header = Buffer.alloc(4);
                 header.writeUInt32BE((record.length | 0x80000000) >>> 0);
-                upstream.write(Buffer.concat([header, record]));
+                const forward = (): void => {
+                  upstream.write(Buffer.concat([header, record]));
+                };
+                if (writesFile && writesBeforePause === 0)
+                  heldWrites.push(forward);
+                else {
+                  if (writesFile && writesBeforePause > 0) writesBeforePause--;
+                  forward();
+                }
               }
             }
           } catch (error) {
@@ -331,6 +383,14 @@ export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
       failV2Write: (fault) => {
         v2WriteFault = fault;
       },
+      omitV4Limits: (enabled) => {
+        omitV4Limits = enabled;
+      },
+      pauseWritesAfter: (count) => {
+        writesBeforePause = count;
+      },
+      resumeWrites,
+      waitingWrites: () => heldWrites.length,
       rejectV4Name: (bytes) => {
         rejectedV4Name = bytes;
       },

@@ -17,10 +17,18 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createGtkAppLauncher, type GtkTableElement } from 'gestament';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import {
+  createGtkAppLauncher,
+  type GtkTableElement,
+  type GtkWidgetElement,
+} from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import { createTestEvidence, expectElementKind } from './test-helpers.ts';
+const require = createRequire(import.meta.url);
+const { PNG } = require('pngjs') as typeof import('pngjs');
 
 it.for([2, 3, 4])(
   'transfers encoded NFS v%i files through protected public roots',
@@ -56,7 +64,9 @@ it.for([2, 3, 4])(
     const directory = await mkdtemp(join(tmpdir(), 'elder-nfs-window-'));
     const local = join(directory, 'local');
     await mkdir(join(local, '送信表', '深い'), { recursive: true });
-    const content = Buffer.from('NFS contents\0\xff\n', 'binary');
+    const content = Buffer.alloc(192 * 1024);
+    for (let index = 0; index < content.length; index++)
+      content[index] = index % 251;
     await writeFile(join(local, '送信表', '深い', '内容.txt'), content);
     const config = join(directory, 'connection.ini');
     await writeFile(
@@ -72,7 +82,7 @@ it.for([2, 3, 4])(
         'known_namespace_paths=/other/public;/public/deep;',
         'filename_encoding=CP932',
         `local_directory=${local}`,
-        'request_timeout_seconds=3',
+        'request_timeout_seconds=30',
         '',
       ].join('\n')
     );
@@ -93,6 +103,8 @@ it.for([2, 3, 4])(
       onSystemOutput: evidence.recordSystemOutputEvent,
       xvfbTrayHost: true,
     });
+    let recorder: ReturnType<typeof spawn> | undefined;
+    let recorded: Promise<number | null> | undefined;
     try {
       const app = await launcher.launch(['-c', config], {
         onOutput: evidence.recordAppOutputEvent,
@@ -171,9 +183,154 @@ it.for([2, 3, 4])(
         expect(await remotePath.text()).toBe(`${prefix}/public:/`)
       );
       await rowFor(remote, '日本語表');
+
+      const screen = PNG.sync.read((await app.capture()).image);
+      const environment = await app.environment();
+      const frameBytes = screen.width * screen.height * 4;
+      let pending = Buffer.allocUnsafe(frameBytes),
+        buffered = 0,
+        latest = Buffer.alloc(0),
+        frames = 0;
+      recorder = spawn(
+        'ffmpeg',
+        [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-f',
+          'x11grab',
+          '-framerate',
+          '10',
+          '-draw_mouse',
+          '0',
+          '-video_size',
+          `${screen.width}x${screen.height}`,
+          '-i',
+          environment.DISPLAY!,
+          '-map',
+          '0:v',
+          '-c:v',
+          'ffv1',
+          '-threads',
+          '1',
+          '-pix_fmt',
+          'bgr0',
+          join(evidence.directory, `nfs-v${version}-progress.mkv`),
+          '-map',
+          '0:v',
+          '-c:v',
+          'rawvideo',
+          '-threads',
+          '1',
+          '-pix_fmt',
+          'bgr0',
+          '-f',
+          'rawvideo',
+          'pipe:1',
+        ],
+        { env: environment, stdio: ['pipe', 'pipe', 'pipe'] }
+      );
+      recorded = new Promise((resolve) => recorder!.once('close', resolve));
+      let recordingError = '';
+      recorder.stderr!.on('data', (data: Buffer) => {
+        recordingError += data.toString();
+      });
+      recorder.stdout!.on('data', (data: Buffer) => {
+        let offset = 0;
+        while (offset < data.length) {
+          const count = Math.min(data.length - offset, frameBytes - buffered);
+          data.copy(pending, buffered, offset, offset + count);
+          buffered += count;
+          offset += count;
+          if (buffered === frameBytes) {
+            latest = pending;
+            pending = Buffer.allocUnsafe(frameBytes);
+            buffered = 0;
+            frames++;
+          }
+        }
+      });
+      const observed: { state: string; frame: number; pixels: string }[] = [];
+      const observeVideo = async (state: string): Promise<void> => {
+        const before = frames;
+        const capture = await waitForResult(async () => {
+          expect(frames, recordingError).toBeGreaterThan(before);
+          const area = (
+            await (await app.getById('file_transfer_jobs')).capture()
+          ).bounds;
+          const capture = await app.capture();
+          const expected = PNG.sync.read(capture.image);
+          let matches = 0,
+            samples = 0;
+          for (let y = 2; y < area.height - 2; y += 3)
+            for (let x = 2; x < area.width - 2; x += 3) {
+              const pixel = ((area.y + y) * screen.width + area.x + x) * 4;
+              if (
+                Math.abs(latest[pixel]! - expected.data[pixel + 2]!) < 12 &&
+                Math.abs(latest[pixel + 1]! - expected.data[pixel + 1]!) < 12 &&
+                Math.abs(latest[pixel + 2]! - expected.data[pixel]!) < 12
+              )
+                matches++;
+              samples++;
+            }
+          expect(matches / samples).toBeGreaterThan(0.96);
+          return capture;
+        });
+        await evidence.captureEvidence(
+          `nfs-v${version}-${state}`,
+          async () => capture
+        );
+        observed.push({
+          state,
+          frame: frames,
+          pixels: createHash('sha256').update(latest).digest('hex'),
+        });
+      };
+      expect(
+        (
+          await fetch(`${process.env.ELDER_NFS_CONTROL}/pause`, {
+            method: 'POST',
+          })
+        ).ok
+      ).toBe(true);
       await select(localTree, '送信表', 'right');
       await menu('file_transfer_send_item');
+      const state = expectElementKind(
+        await app.getById('file_transfer_job_1_state'),
+        'label'
+      );
+      await waitForResult(async () => {
+        const gate = await (
+          await fetch(`${process.env.ELDER_NFS_CONTROL}/status`)
+        ).json();
+        expect(gate).toEqual({ waiting: 1 });
+        expect(await state.text()).toBe('Transferring');
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_job_1_progress'),
+            'progressBar'
+          ).value()
+        ).toBeCloseTo(1 / 3, 2);
+      });
+      await observeVideo('transferring');
+      expect(
+        (
+          await fetch(`${process.env.ELDER_NFS_CONTROL}/resume`, {
+            method: 'POST',
+          })
+        ).ok
+      ).toBe(true);
       await rowFor(remote, '送信表');
+      await waitForResult(async () =>
+        expect(await state.text()).toBe('Completed')
+      );
+      await observeVideo('completed');
+      expect(observed[1]!.frame).toBeGreaterThan(observed[0]!.frame);
+      expect(new Set(observed.map((item) => item.pixels)).size).toBe(2);
+      await evidence.log('Observed NFS progress video states', observed);
+      recorder.stdin!.write('q\n');
+      expect(await recorded, recordingError).toBe(0);
+      recorder = undefined;
       await select(remote, '送信表', 'right');
       await menu('file_transfer_remote_rename_item');
       const prompt = expectElementKind(
@@ -197,7 +354,7 @@ it.for([2, 3, 4])(
           expect(
             await readFile(join(local, '変更表', '深い', '内容.txt'))
           ).toEqual(content),
-        { timeoutMs: 15000 }
+        { timeoutMs: 45000 }
       );
       await select(remote, '日本語表', 'right');
       await menu('file_transfer_receive_item');
@@ -328,8 +485,57 @@ it.for([2, 3, 4])(
         `nfs-v${version}-reconnected-encoding`,
         async () => app.capture()
       );
+      // Close a real connection with an outstanding WRITE. The wire gate makes
+      // this deterministic, independent of file size, host speed or fixed sleeps.
+      expect(
+        (
+          await fetch(`${process.env.ELDER_NFS_CONTROL}/pause`, {
+            method: 'POST',
+          })
+        ).ok
+      ).toBe(true);
+      await select(localTree, '変更表', 'right');
+      await menu('file_transfer_send_item');
+      await waitForResult(async () => {
+        expect(
+          await (await fetch(`${process.env.ELDER_NFS_CONTROL}/status`)).json()
+        ).toEqual({ waiting: 1 });
+      });
+      const widgets: GtkWidgetElement[] = [
+        await app.getById('file_transfer_header_bar'),
+      ];
+      let closed = false;
+      while (widgets.length) {
+        const widget = widgets.shift()!;
+        if (
+          widget.kind === 'button' &&
+          (await widget.info()).name === 'Close'
+        ) {
+          await widget.click();
+          closed = true;
+          break;
+        }
+        if ('getChildCount' in widget)
+          for (let index = 0; index < (await widget.getChildCount()); index++) {
+            const child = await widget.childAt(index);
+            if (child) widgets.push(child);
+          }
+      }
+      expect(closed).toBe(true);
+      await waitForResult(async () =>
+        expect((await app.output()).exitCode).toBe(0)
+      );
+      await evidence.flushOutputs([app], launcher);
     } finally {
+      if (recorder) {
+        recorder.stdin!.write('q\n');
+        await recorded;
+      }
+      await fetch(`${process.env.ELDER_NFS_CONTROL}/resume`, {
+        method: 'POST',
+      });
       await launcher.release();
+      await evidence.release();
       await rm(directory, { recursive: true, force: true });
     }
   }
