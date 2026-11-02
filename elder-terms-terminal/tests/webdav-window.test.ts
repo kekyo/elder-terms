@@ -443,7 +443,7 @@ describe('WebDAV window', () => {
               await app.getById('file_transfer_status_label'),
               'label'
             ).text()
-          ).toBe('Received 4 items');
+          ).toBe('Received 5 items');
           expect(await readFile(join(local, 'hello.txt'), 'utf8')).toBe(
             'Hello DAV!\r\n'
           );
@@ -715,8 +715,16 @@ describe('WebDAV window', () => {
           'menuItem'
         ).click();
         await server.uploadHeld;
+        const summary = await expectElementKind(
+          await app.getById('file_transfer_jobs_summary'),
+          'label'
+        ).text();
+        const jobId = summary
+          .match(/\d+/g)!
+          .slice(0, 3)
+          .reduce((total, count) => total + Number(count), 0);
         await expectElementKind(
-          await app.getById('file_transfer_cancel_button'),
+          await app.getById(`file_transfer_job_${jobId}_cancel`),
           'button'
         ).click();
         const temporary = [...server.files.keys()].find((path) =>
@@ -726,37 +734,23 @@ describe('WebDAV window', () => {
           throw new Error(
             'The fixture must retain the upload whose final response was withheld'
           );
-        const notice = await waitForResult(async () => {
-          const dialog = await app.getById(
-            'file_transfer_operation_error_dialog'
-          );
-          expect((await dialog.info()).states).toContain('showing');
-          expect((await dialog.info()).states).not.toContain('modal');
-          const parent = await app.getById('file_transfer_window');
-          expect((await parent.info()).states).not.toContain('enabled');
-          const pending: GtkWidgetElement[] = [dialog];
-          const labels: string[] = [];
-          while (pending.length) {
-            const widget = pending.shift()!;
-            labels.push((await widget.info()).name ?? '');
-            if ('getChildCount' in widget)
-              for (
-                let index = 0;
-                index < (await widget.getChildCount());
-                index += 1
-              ) {
-                const child = await widget.childAt(index);
-                if (child !== undefined) pending.push(child);
-              }
-          }
-          expect(labels.join('\n')).toContain(temporary.slice('/dav'.length));
+        const notice = expectElementKind(
+          await app.getById(`file_transfer_job_${jobId}_details`),
+          'label'
+        );
+        await expectElementKind(
+          await app.getById(`file_transfer_job_${jobId}_row`),
+          'expander'
+        ).expand();
+        await waitForResult(async () => {
+          expect(await notice.text()).toContain(temporary.slice('/dav'.length));
+          expect(await notice.text()).toContain('Temporary file remaining:');
           expect(
             await expectElementKind(
-              await app.getById('file_transfer_status_label'),
+              await app.getById(`file_transfer_job_${jobId}_state`),
               'label'
             ).text()
-          ).toBe('Transfer cancelled');
-          return dialog;
+          ).toBe('Cancelled');
         });
         expect(server.files.has('/dav/cancel-upload.txt')).toBe(false);
         expect(

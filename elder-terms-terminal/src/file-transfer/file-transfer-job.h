@@ -84,4 +84,39 @@ cardio::promise<void> run_file_transfer_job_async(std::shared_ptr<FileTransferJo
     std::shared_ptr<RemoteFileClient> client, FileTransferCallbacks callbacks,
     cardio::cancellation cancellation);
 
+/** Dispatcher-owned per-window history and single-connection execution queue. */
+struct FileTransferQueue;
+/** @param connection_id Credential-free owner identity. @param changed Job observer. @returns Empty queue. */
+std::shared_ptr<FileTransferQueue> create_file_transfer_queue(std::string connection_id,
+    std::function<void(const FileTransferJobSnapshot &)> changed);
+/** @param queue Idle, disconnected queue. @param client New service. @param protocol Display name. */
+void attach_file_transfer_queue(const std::shared_ptr<FileTransferQueue> &queue,
+    std::shared_ptr<RemoteFileClient> client, std::string protocol);
+/** @param queue Available service queue. @param request Captured copy request. @returns New waiting job. */
+std::shared_ptr<FileTransferJob> enqueue_file_transfer_job(const std::shared_ptr<FileTransferQueue> &queue,
+    const FileTransferRequest &request);
+/** @param queue History owner. @returns Jobs in submission order, retained until explicitly cleared. */
+const std::vector<std::shared_ptr<FileTransferJob>> &file_transfer_jobs(const std::shared_ptr<FileTransferQueue> &queue);
+/** @param queue History owner. Removes terminal jobs only; pending work is unaffected. */
+void clear_finished_file_transfer_jobs(const std::shared_ptr<FileTransferQueue> &queue);
+/**
+ * Retires a generation and requests cancellation of its operations.
+ * @param queue Owner queue. @param closing True for window close; false marks waiting jobs as requiring retry.
+ */
+void disconnect_file_transfer_queue(const std::shared_ptr<FileTransferQueue> &queue, bool closing);
+/**
+ * Drains waiting requests in order; waits for cleanup before starting the next.
+ * @param queue Queue retained until the drain ends. @param callbacks Decision handlers.
+ * @param cancellation Owner shutdown. @remarks Caller must await this before replacing or releasing a connection.
+ */
+cardio::promise<void> run_file_transfer_queue_async(std::shared_ptr<FileTransferQueue> queue,
+    FileTransferCallbacks callbacks, cardio::cancellation cancellation);
+/**
+ * Loads a browser directory in the connection's operation order.
+ * @param queue Service queue. @param path Directory to load. @param cancellation Owner cancellation.
+ * @returns Directory snapshot. @remarks Reads wait behind active transfers, including decision and cleanup phases.
+ */
+cardio::promise<RemoteDirectorySnapshot> load_file_transfer_queue_directory_async(
+    std::shared_ptr<FileTransferQueue> queue, std::string path, cardio::cancellation cancellation);
+
 } // namespace elder_terms

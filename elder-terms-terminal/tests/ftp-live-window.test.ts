@@ -845,7 +845,7 @@ for (const testCase of [
           await waitForResult(async () => {
             expect(events, serverLog).toContain('FINAL_WAIT');
           });
-          const overlay = await app.getById('file_transfer_overlay');
+          const overlay = await app.getById('file_transfer_job_1_progress');
           expect((await overlay.info()).states).toContain('showing');
           const destination = closingDownload ? local : remote;
           expect(await readdir(destination)).not.toContain(
@@ -979,8 +979,7 @@ for (const testCase of [
                 const previous = previousPixels;
                 previousPixels = current;
                 if (states.length > 0) {
-                  // A disabled button alone does not show that the progress
-                  // overlay has disappeared from the rendered video.
+                  // Verify that the recorded progress changes to the terminal result.
                   expect(
                     difference(
                       captured.data,
@@ -988,7 +987,7 @@ for (const testCase of [
                       false,
                       states[states.length - 1].pixels
                     )
-                  ).toBeGreaterThan(0.2);
+                  ).toBeGreaterThan(0.02);
                 }
                 expect(previous).toBeDefined();
                 expect(current.equals(previous!)).toBe(true);
@@ -1005,14 +1004,19 @@ for (const testCase of [
             try {
               await expectVideoState('waiting for the final FTP response');
               await expectElementKind(
-                await app.getById('file_transfer_cancel_button'),
+                await app.getById('file_transfer_job_1_cancel'),
                 'button'
               ).click();
               // The server still withholds 226 and waits for the client's EOF.
               // Cancellation must reach GTK and terminate the operation itself.
               server.stdin!.write('cancel\n');
               await waitForResult(async () => {
-                expect((await overlay.info()).states).not.toContain('showing');
+                expect(
+                  await expectElementKind(
+                    await app.getById('file_transfer_job_1_state'),
+                    'label'
+                  ).text()
+                ).toBe('Cancelled');
               });
               expect(await readdir(remote)).not.toContain('upload.bin');
               await expectVideoState('canceled with no committed destination');

@@ -1312,6 +1312,20 @@ run_file_transfer_async(std::shared_ptr<RemoteFileClient> client,
     cancellation.throw_if_cancellation_requested();
     if (!state.client->try_begin_transfer()) throw std::runtime_error("A bulk file transfer is already in progress");
     TransferSlotGuard slot(state.client);
+    // Queue admission cannot guarantee that the target still exists or is writable.
+    if (state.request.direction == FileTransferDirection::send) {
+      if (!state.client->capabilities().write_operations ||
+          !state.client->path_capabilities(state.request.destination_directory).create_children)
+        throw std::runtime_error("The remote destination does not permit uploads");
+      const auto destination = co_await state.client->lstat_async(state.request.destination_directory, cancellation);
+      if (!destination || destination->type != RemoteFileType::directory)
+        throw std::runtime_error("The remote destination directory no longer exists");
+    } else {
+      GObjectPtr<GFile> directory(g_file_new_for_path(state.request.destination_directory.c_str()));
+      const auto destination = co_await query_optional_local_attributes_async(directory.get(), cancellation);
+      if (!destination || (destination->type != RemoteFileType::directory && destination->type != RemoteFileType::symbolic_link))
+        throw std::runtime_error("The local destination directory no longer exists");
+    }
     std::vector<TransferNode> roots;
     for (const auto &source_path : state.request.source_paths) {
       cancellation.throw_if_cancellation_requested();

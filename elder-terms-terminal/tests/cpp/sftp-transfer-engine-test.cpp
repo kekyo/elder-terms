@@ -892,6 +892,76 @@ static cardio::promise<void> test_job_results_and_lifecycle() {
       "Discovery failure must retain the failed path and leave undiscovered totals unknown");
 }
 
+static cardio::promise<void> test_job_queue_and_disconnect() {
+  using namespace elder_terms;
+  const auto root = test_root_directory() / "queue";
+  const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+  std::filesystem::create_directories(root);
+  write_file(root / "first.txt", "existing");
+  auto client = std::make_shared<FakeSftpClient>();
+  client->add_directory("/");
+  client->add_file("/first.txt", "first");
+  client->add_file("/second.txt", "second");
+  auto queue = create_file_transfer_queue("queue", {});
+  attach_file_transfer_queue(queue, client, "SFTP");
+  FileTransferRequest request;
+  request.direction = FileTransferDirection::receive;
+  request.source_paths = {"/first.txt"};
+  request.destination_directory = root.string();
+  const auto first = enqueue_file_transfer_job(queue, request);
+  request.source_paths = {"/second.txt"};
+  const auto second = enqueue_file_transfer_job(queue, request);
+  const auto cancelled = enqueue_file_transfer_job(queue, request);
+  cancel_file_transfer_job(cancelled);
+  cardio::primitives::manually_conditional deciding{false}, decided{false};
+  FileTransferCallbacks callbacks;
+  callbacks.conflict = [&](const FileTransferConflict &, cardio::cancellation stop)
+      -> cardio::promise<FileTransferConflictAction> {
+    deciding.raise();
+    co_await decided.wait(stop);
+    co_return FileTransferConflictAction::overwrite;
+  };
+  auto running = run_file_transfer_queue_async(queue, callbacks, {});
+  co_await deciding.wait();
+  expect_true(file_transfer_job_snapshot(first).state == FileTransferJobState::awaiting_decision &&
+      file_transfer_job_snapshot(second).state == FileTransferJobState::queued,
+      "A decision wait must retain the connection slot and leave later jobs queued");
+  auto browsing = load_file_transfer_queue_directory_async(queue, "/", {});
+  expect_true(!browsing.is_ready(), "Browser reads must be serialized with active transfers");
+  decided.raise();
+  co_await running;
+  co_await browsing;
+  expect_true(read_file(root / "first.txt") == "first" && read_file(root / "second.txt") == "second" &&
+      file_transfer_job_snapshot(cancelled).state == FileTransferJobState::cancelled,
+      "Queued requests must execute sequentially without reviving a cancelled job");
+  const auto stale = enqueue_file_transfer_job(queue, request);
+  disconnect_file_transfer_queue(queue, false);
+  expect_true(file_transfer_job_snapshot(stale).state == FileTransferJobState::failed,
+      "Disconnected waiting jobs must explicitly require retry");
+  attach_file_transfer_queue(queue, client, "SFTP");
+  co_await run_file_transfer_queue_async(queue, {}, {});
+  expect_true(file_transfer_job_snapshot(stale).state == FileTransferJobState::failed,
+      "Reconnection must not automatically execute old requests");
+  const auto retry = enqueue_file_transfer_job(queue, request);
+  expect_true(file_transfer_job_snapshot(retry).connection_generation != file_transfer_job_snapshot(stale).connection_generation &&
+      file_transfer_job_snapshot(retry).id != file_transfer_job_snapshot(stale).id,
+      "Explicit retry must capture a new identity and connection generation");
+  disconnect_file_transfer_queue(queue, true);
+  expect_true(file_transfer_job_snapshot(retry).state == FileTransferJobState::cancelled,
+      "Owner close must cancel every waiting request");
+  attach_file_transfer_queue(queue, client, "SFTP");
+  request.direction = FileTransferDirection::send;
+  request.source_paths = {(root / "first.txt").string()};
+  request.destination_directory = "/gone";
+  client->add_directory("/gone");
+  const auto invalidated = enqueue_file_transfer_job(queue, request);
+  client->nodes.erase("/gone");
+  co_await run_file_transfer_queue_async(queue, {}, {});
+  expect_true(file_transfer_job_snapshot(invalidated).state == FileTransferJobState::failed &&
+      !client->nodes.contains("/gone/first.txt"),
+      "Execution must revalidate a queued destination before modifying the remote service");
+}
+
 static cardio::promise<void> test_rejects_parallel_bulk_transfer() {
   auto client = std::make_shared<FakeSftpClient>();
   client->add_directory("/");
@@ -931,6 +1001,7 @@ int main() {
       std::string failures;
       for (const auto &[name, run] : std::vector<std::pair<const char *, cardio::promise<void>(*)()>>{
           {"test_job_results_and_lifecycle", test_job_results_and_lifecycle},
+          {"test_job_queue_and_disconnect", test_job_queue_and_disconnect},
           {"test_receive_preserves_unknown_aggregate_size", test_receive_preserves_unknown_aggregate_size},
           {"test_receive_reports_unrepresentable_total_as_unknown", test_receive_reports_unrepresentable_total_as_unknown},
           {"test_receive_does_not_replace_a_directory_with_a_file", test_receive_does_not_replace_a_directory_with_a_file},

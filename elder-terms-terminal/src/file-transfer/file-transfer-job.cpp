@@ -5,6 +5,7 @@
 
 #include "file-transfer-job.h"
 #include <atomic>
+#include <algorithm>
 
 namespace elder_terms {
 
@@ -123,6 +124,115 @@ cardio::promise<void> run_file_transfer_job_async(std::shared_ptr<FileTransferJo
   }
   finish_job(job, std::move(*result));
   if (callbacks.finished) callbacks.finished(*job->snapshot.result);
+}
+
+struct FileTransferQueue {
+  std::string connection_id;
+  std::string protocol;
+  std::uint64_t generation = 0;
+  std::shared_ptr<RemoteFileClient> client;
+  std::function<void(const FileTransferJobSnapshot &)> changed;
+  std::vector<std::shared_ptr<FileTransferJob>> jobs;
+  cardio::primitives::mutex operations;
+  cardio::cancellation_source stop;
+  bool available = false;
+  bool running = false;
+};
+
+std::shared_ptr<FileTransferQueue> create_file_transfer_queue(std::string connection_id,
+    std::function<void(const FileTransferJobSnapshot &)> changed) {
+  auto queue = std::make_shared<FileTransferQueue>();
+  queue->connection_id = std::move(connection_id);
+  queue->changed = std::move(changed);
+  return queue;
+}
+
+void attach_file_transfer_queue(const std::shared_ptr<FileTransferQueue> &queue,
+    std::shared_ptr<RemoteFileClient> client, std::string protocol) {
+  if (queue->running || queue->operations.is_locked() || queue->available)
+    throw std::logic_error("Retire the old connection before attaching a new one");
+  if (!client) throw std::invalid_argument("Remote file client is required");
+  queue->client = std::move(client);
+  queue->protocol = std::move(protocol);
+  ++queue->generation;
+  queue->stop = cardio::cancellation_source{};
+  queue->available = true;
+}
+
+std::shared_ptr<FileTransferJob> enqueue_file_transfer_job(const std::shared_ptr<FileTransferQueue> &queue,
+    const FileTransferRequest &request) {
+  if (!queue->available) throw std::logic_error("Reconnect before submitting a transfer");
+  auto job = create_file_transfer_job(queue->connection_id, queue->generation, queue->protocol, request, queue->changed);
+  queue->jobs.push_back(job);
+  publish_job(job);
+  return job;
+}
+
+const std::vector<std::shared_ptr<FileTransferJob>> &file_transfer_jobs(const std::shared_ptr<FileTransferQueue> &queue) {
+  return queue->jobs;
+}
+
+void clear_finished_file_transfer_jobs(const std::shared_ptr<FileTransferQueue> &queue) {
+  std::erase_if(queue->jobs, [](const auto &job) { return file_transfer_job_finished(job->snapshot.state); });
+}
+
+void disconnect_file_transfer_queue(const std::shared_ptr<FileTransferQueue> &queue, bool closing) {
+  if (!queue) return;
+  queue->available = false;
+  // Work on a copy: observers can update the visible history during notifications.
+  const auto jobs = queue->jobs;
+  for (const auto &job : jobs) {
+    if (!closing && job->snapshot.state == FileTransferJobState::queued) {
+      FileTransferResult result;
+      result.outcome = FileTransferOutcome::failed;
+      result.failures.push_back({job->snapshot.direction, {}, job->snapshot.destination_directory,
+          "Disconnected before execution; retry after reconnecting"});
+      finish_job(job, std::move(result));
+    } else cancel_file_transfer_job(job);
+  }
+  (void)queue->stop.cancel();
+}
+
+struct QueueCancellation {
+  cardio::cancellation_source source;
+  ~QueueCancellation() { (void)source.cancel(); }
+};
+
+cardio::promise<void> run_file_transfer_queue_async(std::shared_ptr<FileTransferQueue> queue,
+    FileTransferCallbacks callbacks, cardio::cancellation cancellation) {
+  if (queue->running) co_return;
+  queue->running = true;
+  QueueCancellation stop{cardio::cancellations::any(cancellation, queue->stop.get_cancellation())};
+  try {
+    while (queue->available) {
+      const auto next = std::find_if(queue->jobs.begin(), queue->jobs.end(), [](const auto &job) {
+        return job->snapshot.state == FileTransferJobState::queued;
+      });
+      if (next == queue->jobs.end()) break;
+      const auto job = *next;
+      auto locking = queue->operations.lock(stop.source.get_cancellation());
+      auto lock = std::move(co_await locking);
+      if (!queue->available || job->snapshot.connection_generation != queue->generation) break;
+      co_await run_file_transfer_job_async(job, queue->client, callbacks, stop.source.get_cancellation());
+    }
+  } catch (const cardio::canceled_exception &) {
+    if (queue->available) disconnect_file_transfer_queue(queue, true);
+  } catch (...) {
+    queue->running = false;
+    throw;
+  }
+  queue->running = false;
+}
+
+cardio::promise<RemoteDirectorySnapshot> load_file_transfer_queue_directory_async(
+    std::shared_ptr<FileTransferQueue> queue, std::string path, cardio::cancellation cancellation) {
+  if (!queue->available) throw cardio::canceled_exception();
+  const auto generation = queue->generation;
+  QueueCancellation stop{cardio::cancellations::any(cancellation, queue->stop.get_cancellation())};
+  auto locking = queue->operations.lock(stop.source.get_cancellation());
+  auto lock = std::move(co_await locking);
+  if (!queue->available || generation != queue->generation) throw cardio::canceled_exception();
+  co_return co_await queue->client->load_directory_async(std::move(path), stop.source.get_cancellation());
 }
 
 } // namespace elder_terms

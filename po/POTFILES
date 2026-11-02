@@ -16,6 +16,7 @@ elder-terms-terminal/src/main-window.cpp
 elder-terms-terminal/src/file-transfer/file-transfer-main.cpp
 elder-terms-terminal/src/file-transfer/file-transfer-certificate-prompt.cpp
 elder-terms-terminal/src/file-transfer/file-transfer-window.cpp
+elder-terms-terminal/src/file-transfer/file-transfer-job-view.cpp
 elder-terms-terminal/src/terminal-text-send-runner.cpp
 elder-terms-terminal/src/terminal-transfer-runner.cpp
 elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp
