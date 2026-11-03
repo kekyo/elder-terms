@@ -223,6 +223,7 @@ libssh_dep = dependency('libssh')
 ssh_transport_library = static_library('elder-terms-ssh-transport',
   ['src/connection-runtime/ssh/ssh-channel-connection.cpp',
    'src/connection-runtime/ssh/ssh-proxy.cpp',
+   'src/connection-runtime/ssh/ssh-tcp-proxy.cpp',
    'src/connection-runtime/ssh/ssh-socks-proxy.cpp',
    'src/connection-runtime/tcp-connector.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, elder_terms_shared_gio_dep, libssh_dep, cardio_liburing_dep])
@@ -507,5 +508,9 @@ endif
 if get_option('build_tests')
 ssh_proxy_test_server = executable('ssh-proxy-test-server',
   'tests/ssh-proxy-test-server.cpp', dependencies: [libssh_dep])
+ssh_tcp_proxy_test = executable('ssh-tcp-proxy-test', 'tests/ssh-tcp-proxy-test.cpp',
+  dependencies: [ssh_transport_dep])
+test('ssh-tcp-proxy', find_program('node'),
+  args: [files('tests/ssh-tcp-proxy-runner.mts'), ssh_tcp_proxy_test, ssh_proxy_test_server], timeout: 60)
 
 endif

@@ -5,7 +5,7 @@
 
 #include "smb-application.h"
 #include "smb-client.h"
-#include "smb-ssh-proxy.h"
+#include "../../../shared/src/connection-runtime/ssh/ssh-tcp-proxy.h"
 #include "../file-transfer/file-transfer-window.h"
 #include "../file-transfer/file-transfer-paths.h"
 #include <elder-terms/connection-desktop-session.h>
@@ -20,7 +20,7 @@ struct SmbApplication {
   cardio::dispatcher_group_glib *dispatcher_group;
   SmbConnectionSettings connection;
   SshProxySettings proxy;
-  std::shared_ptr<SmbSshProxy> route;
+  std::shared_ptr<SshTcpProxy> route;
   std::string ssh_known_hosts_file;
   std::shared_ptr<RemoteFileClient> client;
   std::shared_ptr<FileTransferWindow> window;
@@ -38,7 +38,7 @@ static cardio::promise<void> finish_application_async(SmbApplication *state) {
   auto closing = close_file_transfer_window_async(state->window);
   try {
     if (state->client) co_await stop_smb_client_async(state->client);
-    co_await stop_smb_ssh_proxy_async(state->route);
+    co_await stop_ssh_tcp_proxy_async(state->route);
     co_await closing;
   } catch (const std::exception &error) { std::cerr << error.what() << '\n'; }
   shutdown_connection_desktop_session();
@@ -66,10 +66,11 @@ static cardio::promise<void> start_application_async(SmbApplication *state) {
     gateway_callbacks.ssh_prompt = [state](const SshUserPrompt &prompt, cardio::cancellation signal) {
       return prompt_file_transfer_ssh_async(state->window, prompt, signal);
     };
-    auto opening_proxy = open_smb_ssh_proxy_async(state->proxy, state->connection.address,
-        static_cast<std::uint16_t>(state->connection.port), std::move(gateway_callbacks),
+    auto opening_proxy = open_ssh_tcp_proxy_async(state->proxy, std::move(gateway_callbacks),
         {.known_hosts_file = state->ssh_known_hosts_file, .config_file = {}}, cancellation);
     state->route = std::move(co_await opening_proxy);
+    const auto local_port = state->route ? co_await forward_ssh_tcp_port_async(state->route,
+        state->connection.address, static_cast<std::uint16_t>(state->connection.port), cancellation) : 0;
     {
       std::string username = options.connection.username;
       if (username.empty() && g_get_user_name()) username = g_get_user_name();
@@ -106,7 +107,7 @@ static cardio::promise<void> start_application_async(SmbApplication *state) {
       // Keep the saved endpoint and authentication prompts addressed to the
       // real server; all libsmb2 share connections use the local relay.
       options.connection.address = "127.0.0.1";
-      options.connection.port = smb_ssh_proxy_port(state->route);
+      options.connection.port = local_port;
     }
     state->client = co_await open_smb_server_async(std::move(options), cancellation);
     attach_file_transfer_window_client(state->window, state->client);
@@ -115,7 +116,7 @@ static cardio::promise<void> start_application_async(SmbApplication *state) {
     stop_application(state);
     co_return;
   } catch (const std::exception &error) { failure = error.what(); }
-  co_await stop_smb_ssh_proxy_async(state->route);
+  co_await stop_ssh_tcp_proxy_async(state->route);
   if (!state->shutting_down) {
     std::cerr << failure << '\n';
     co_await show_file_transfer_window_connection_error_async(
@@ -127,7 +128,7 @@ static cardio::promise<void> reconnect_application_async(
     SmbApplication *state, SettingsStore settings) {
   if (state->startup) co_await *state->startup;
   if (state->client) co_await stop_smb_client_async(state->client);
-  co_await stop_smb_ssh_proxy_async(state->route);
+  co_await stop_ssh_tcp_proxy_async(state->route);
   state->route.reset();
   state->client.reset();
   if (state->shutting_down) co_return;

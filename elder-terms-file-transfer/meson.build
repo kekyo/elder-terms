@@ -40,7 +40,6 @@ executable(
     'src/nfs/nfs-v2.cpp',
     'src/nfs/nfs-name.cpp', 'src/nfs/nfs-rpc.cpp',
     'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp',
-    'src/smb/smb-ssh-proxy.cpp',
     'src/main.cpp',
     'src/file-transfer/file-transfer-certificate-prompt.cpp',
   ],
@@ -113,7 +112,7 @@ webdav_metadata_test = executable(
 test('webdav-metadata-test', webdav_metadata_test)
 
 smb_share_probe = executable('smb-share-probe',
-  ['tests/smb/smb-share-probe.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp', 'src/smb/smb-ssh-proxy.cpp'],
+  ['tests/smb/smb-share-probe.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep])
 test('smb-share-probe', find_program('node'),
   args: [files('tests/smb/run-client.mts'), smb_share_probe], timeout: 180)
@@ -122,7 +121,7 @@ test('smb-share-probe-proxy', find_program('node'),
 
 smb_server_test = executable('smb-server-test',
   ['tests/smb/smb-server-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp',
-   'src/smb/smb-ssh-proxy.cpp', 'src/file-transfer/activity-file-client.cpp', 'src/file-transfer/file-transfer-engine.cpp'],
+   'src/file-transfer/activity-file-client.cpp', 'src/file-transfer/file-transfer-engine.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep])
 test('smb-server', find_program('node'),
   args: [files('tests/smb/run-client.mts'), smb_server_test], timeout: 180)
@@ -145,7 +144,7 @@ smb_share_list_test = executable('smb-share-list-test',
 test('smb-share-list', smb_share_list_test)
 
 smb_ssh_proxy_test = executable('smb-ssh-proxy-test',
-  ['tests/smb/smb-ssh-proxy-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp', 'src/smb/smb-ssh-proxy.cpp'],
+  ['tests/smb/smb-ssh-proxy-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep])
 test('smb-ssh-proxy', find_program('node'),
   args: [files('tests/smb/run-client.mts'), smb_ssh_proxy_test, '--proxy', ssh_proxy_test_server], timeout: 180)
