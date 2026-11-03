@@ -27,6 +27,7 @@ import {
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import {
+  expandTransferDirectory,
   openTransferDirectory,
   selectCurrentTransferDirectory,
 } from './file-transfer-destination-helpers.ts';
@@ -824,6 +825,8 @@ for (const testCase of [
             expect((await remoteTree.info()).states).toContain('sensitive');
           });
           const row = await rowFor(tree, name);
+          for (const selected of await tree.selectedRows())
+            await tree.deselectRow(selected);
           await tree.selectRow(row);
           const cell = await tree.cellAt(row, 0);
           expect((await cell?.info())?.name).toBe(name);
@@ -843,6 +846,7 @@ for (const testCase of [
           ).text()
         ).toBe('/home');
         await selectCurrentTransferDirectory(app, !closingDownload);
+        if (!held) await expandTransferDirectory(app, true, '/home', 0);
         await contextMenu(
           closingDownload ? remoteTree : localTree,
           closingDownload ? 'download.bin' : 'upload.bin'
@@ -1084,9 +1088,16 @@ for (const testCase of [
             );
           });
           expect(await readFile(join(remote, 'upload.bin'))).toEqual(upload);
+          await rowFor(remoteTree, 'upload.bin');
+          const homeRow = await rowFor(remoteTree, 'home');
+          expect(
+            (await (await remoteTree.cellAt(homeRow, 0))!.info()).states
+          ).toContain('expanded');
+          expect(await remoteTree.selectedRows()).toEqual([homeRow]);
           await openTransferDirectory(app, true, '/home');
           await rowFor(remoteTree, 'upload.bin');
           await selectCurrentTransferDirectory(app, false);
+          await expandTransferDirectory(app, false, local, 0);
           await contextMenu(remoteTree, 'download.bin');
           await expectElementKind(
             await app.getById('file_transfer_receive_item'),
@@ -1104,6 +1115,15 @@ for (const testCase of [
             );
           });
           expect(await readFile(join(local, 'download.bin'))).toEqual(download);
+          await rowFor(localTree, 'download.bin');
+          const localRow = await rowFor(
+            localTree,
+            local.slice(local.lastIndexOf('/') + 1)
+          );
+          expect(
+            (await (await localTree.cellAt(localRow, 0))!.info()).states
+          ).toContain('expanded');
+          expect(await localTree.selectedRows()).toEqual([localRow]);
           await openTransferDirectory(app, false, local);
           await contextMenu(remoteTree, 'upload.bin');
           await expectElementKind(

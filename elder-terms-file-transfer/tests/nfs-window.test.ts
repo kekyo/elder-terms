@@ -27,6 +27,7 @@ import {
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import {
+  expandTransferDirectory,
   openTransferDirectory,
   selectCurrentTransferDirectory,
 } from './file-transfer-destination-helpers.ts';
@@ -406,6 +407,29 @@ it.for([2, 3, 4])(
       ).toBe(true);
       await selectCurrentTransferDirectory(app, true);
       expect(await remotePath.text()).toBe(prefix || '/');
+      if (prefix) {
+        await expectElementKind(
+          await app.getById('file_transfer_remote_up_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect(await remotePath.text()).toBe('/')
+        );
+        await expandTransferDirectory(app, true, prefix, 0);
+      }
+      await expandTransferDirectory(
+        app,
+        true,
+        `${prefix}/public`,
+        prefix ? 1 : 0
+      );
+      await expandTransferDirectory(
+        app,
+        true,
+        `${prefix}/public/deep`,
+        prefix ? 2 : 1
+      );
+      await select(remote, publicName, 'left');
       await select(localTree, '送信表', 'right');
       await menu('file_transfer_send_item');
       const state = expectElementKind(
@@ -435,6 +459,22 @@ it.for([2, 3, 4])(
       ).toBe(true);
       await waitForResult(async () =>
         expect(await state.text()).toBe('Completed')
+      );
+      await waitForResult(async () =>
+        expect((await remote.info()).states).toContain('sensitive')
+      );
+      expect(await remotePath.text()).toBe('/');
+      for (const name of [...(prefix ? [prefix] : []), 'public', 'deep'])
+        expect(
+          (await (await remote.cellAt(await rowFor(remote, name), 0))!.info())
+            .states
+        ).toContain('expanded');
+      expect(await remote.selectedRows()).toEqual([
+        await rowFor(remote, publicName),
+      ]);
+      await rowFor(remote, '送信表');
+      await evidence.captureEvidence('nfs-preserved-transfer-tree', async () =>
+        app.capture()
       );
       await openTransferDirectory(app, true, `${prefix}/public`);
       await rowFor(remote, '送信表');

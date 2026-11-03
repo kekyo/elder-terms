@@ -102,3 +102,38 @@ export const openTransferDirectory = async (
     expect((await tree.info()).states).toContain('sensitive');
   });
 };
+
+/**
+ * Expands a nonempty directory without navigating away from its parent.
+ * @param app File transfer application.
+ * @param remote Whether to operate on the remote pane.
+ * @param path Display path identifying the directory row.
+ * @param depth Row depth below the pane root, starting at zero.
+ * @returns Completion after its children are loaded and the row is expanded.
+ */
+export const expandTransferDirectory = async (
+  app: GtkApp,
+  remote: boolean,
+  path: string,
+  depth: number
+): Promise<void> => {
+  const tree = expectElementKind(
+    await app.getById(`file_transfer_${remote ? 'remote' : 'local'}_tree`),
+    'table'
+  );
+  const row = await directoryRow(tree, path);
+  const bounds = (await (await tree.cellAt(row, 0))!.capture()).bounds;
+  const area = (await tree.capture()).bounds;
+  await app.input.moveMouseTo(
+    Math.round(area.x + 10 + depth * 20),
+    Math.round(bounds.y + bounds.height / 2)
+  );
+  await app.input.setMouseButton('left', true);
+  await app.input.setMouseButton('left', false);
+  await waitForResult(async () => {
+    expect((await tree.info()).states).toContain('sensitive');
+    expect((await (await tree.cellAt(row, 0))!.info()).states).toContain(
+      'expanded'
+    );
+  });
+};

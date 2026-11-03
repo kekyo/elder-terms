@@ -19,6 +19,7 @@ import { createGtkAppLauncher, type GtkTableElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import {
+  expandTransferDirectory,
   openTransferDirectory,
   selectCurrentTransferDirectory,
 } from './file-transfer-destination-helpers.ts';
@@ -60,7 +61,7 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
     }
     const requests: string[] = [];
     const source =
-      '<a href="tree/">tree</a><a href="document.html">document</a><a href="untouched/">untouched</a><a href="first.bin">first</a><a href="second.bin">second</a>';
+      '<a href="tree/">tree</a><a href="document.html">document</a><a href="untouched/">untouched</a><a href="first.bin">first</a><a href="second.bin">second</a><a href="shortcut/">shortcut</a>';
     const server = scheme.startsWith('https')
       ? createHttpsServer({
           key: await readFile(key),
@@ -71,6 +72,11 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
       requests.push(`${request.method} ${request.url}`);
       response.setHeader('Content-Type', 'text/html');
       if (request.url === '/pub/') response.end(source);
+      else if (request.url === '/pub/shortcut/') {
+        response.writeHead(302, { Location: '/pub/linked/' });
+        response.end();
+      } else if (request.url === '/pub/linked/')
+        response.end('<a href="linked.bin">linked</a>');
       else if (request.url === '/pub/document.html') {
         response.setHeader('Content-Type', 'text/plain');
         response.end('<p>Original HTML</p>');
@@ -167,7 +173,7 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
         });
       await ready();
       await waitForResult(async () => {
-        expect(await tree.getRowCount()).toBe(5);
+        expect(await tree.getRowCount()).toBe(6);
       });
       expect(requests).toEqual(['GET /pub/']);
       const rowFor = async (name: string) =>
@@ -228,6 +234,8 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
           'sensitive'
         );
       await app.input.pressKey('Escape');
+      await expandTransferDirectory(app, true, '/pub/shortcut', 0);
+      await rowFor('linked.bin');
       await selectCurrentTransferDirectory(app, false);
       await clickRow('document.html', 'right');
       for (const id of ['new_directory', 'rename', 'delete'])
@@ -245,6 +253,17 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
         );
       });
       await ready();
+      expect(
+        (await (await tree.cellAt(await rowFor('tree'), 0))!.info()).states
+      ).toContain('expanded');
+      expect(await tree.selectedRows()).toEqual([
+        await rowFor('document.html'),
+      ]);
+      expect(
+        (await (await tree.cellAt(await rowFor('shortcut'), 0))!.info()).states
+      ).toContain('expanded');
+      await rowFor('linked.bin');
+      await rowFor('file.bin');
       await openTransferDirectory(app, false, local);
       await selectCurrentTransferDirectory(app, false);
       await clickRow('tree', 'right');
@@ -280,6 +299,11 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
       expect(
         (await (await app.getById('file_transfer_job_2_row')).info()).name
       ).toContain('tree');
+      expect(
+        (await (await tree.cellAt(await rowFor('tree'), 0))!.info()).states
+      ).toContain('expanded');
+      expect(await tree.selectedRows()).toEqual([await rowFor('tree')]);
+      await rowFor('file.bin');
       await openTransferDirectory(app, false, local);
       await expectElementKind(
         await app.getById('file_transfer_remote_refresh_button'),
@@ -310,7 +334,7 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
       ).click();
       await waitForResult(async () => {
         expect(await path.text()).toBe('/pub/');
-        expect(await tree.getRowCount()).toBe(5);
+        expect(await tree.getRowCount()).toBe(6);
       });
       expect(
         requests.filter((request) => request === 'GET /pub/tree/')

@@ -26,6 +26,7 @@ import {
 import { waitForResult } from 'gestament/testing';
 import { describe, expect, it } from 'vitest';
 import {
+  expandTransferDirectory,
   openTransferDirectory,
   selectCurrentTransferDirectory,
 } from './file-transfer-destination-helpers.ts';
@@ -640,6 +641,14 @@ describe('WebDAV window', () => {
           join(local, 'send-tree/資料 #+%.txt'),
           'replacement from shared UI'
         );
+        await expandTransferDirectory(app, true, '/UI folder', 0);
+        await expandTransferDirectory(app, true, '/UI folder/send-tree', 1);
+        await expandTransferDirectory(
+          app,
+          true,
+          '/UI folder/send-tree/nested',
+          2
+        );
         for (const row of await tree.selectedRows())
           await tree.deselectRow(row);
         await tree.selectRow(await rowFor(tree, 'UI folder'));
@@ -673,6 +682,26 @@ describe('WebDAV window', () => {
               ?.content.toString()
           ).toBe('replacement from shared UI');
         });
+        await waitForResult(async () =>
+          expect((await tree.info()).states).toContain('sensitive')
+        );
+        for (const name of ['UI folder', 'send-tree', 'nested'])
+          expect(
+            (await (await tree.cellAt(await rowFor(tree, name), 0))!.info())
+              .states
+          ).toContain('expanded');
+        expect(await tree.selectedRows()).toEqual([
+          await rowFor(tree, 'UI folder'),
+        ]);
+        await rowFor(tree, 'empty.txt');
+        expect(
+          (
+            await (await tree.cellAt(
+              await rowFor(tree, '資料 #+%.txt'),
+              1
+            ))!.info()
+          ).name
+        ).toBe('26 bytes');
         await navigate('/UI folder');
         await contextMenu(tree, 'send-tree');
         await expectElementKind(

@@ -15,6 +15,7 @@ import { createGtkAppLauncher, type GtkTableElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import {
+  expandTransferDirectory,
   openTransferDirectory,
   selectCurrentTransferDirectory,
 } from './file-transfer-destination-helpers.ts';
@@ -458,11 +459,25 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
       'button'
     ).click();
     await selectCurrentTransferDirectory(app, true);
+    await expandTransferDirectory(app, true, `/${share}`, 0);
     await contextMenu(localTree, 'kept.txt');
     await expectElementKind(
       await app.getById('file_transfer_send_item'),
       'menuItem'
     ).click();
+    await rowFor('kept.txt');
+    await waitForResult(async () =>
+      expect((await tree.info()).states).toContain('sensitive')
+    );
+    const selectedShare = await rowFor(share);
+    expect(
+      (await (await tree.cellAt(selectedShare, 0))!.info()).states
+    ).toContain('expanded');
+    expect(await tree.selectedRows()).toEqual([selectedShare]);
+    expect(await remotePath.text()).toBe('/');
+    await evidence.captureEvidence('smb-preserved-transfer-tree', async () =>
+      app.capture()
+    );
     await openTransferDirectory(app, true, `/${share}`);
     await rowFor('kept.txt');
     await writeFile(upload, 'replacement upload\n');

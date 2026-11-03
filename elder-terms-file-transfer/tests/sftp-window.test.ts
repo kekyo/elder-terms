@@ -289,6 +289,8 @@ const openContextMenu = async (
   row: number
 ): Promise<void> => {
   if (!(await table.selectedRows()).includes(row)) {
+    for (const selected of await table.selectedRows())
+      await table.deselectRow(selected);
     await table.selectRow(row);
   }
   const cell = await table.cellAt(row, 0);
@@ -2134,6 +2136,162 @@ describe('SFTP window', () => {
         await evidence.captureEvidence(
           'selected-transfer-destinations',
           async () => app.capture()
+        );
+      }
+    );
+  });
+
+  it('preserves expanded branches and selections while refreshing completed transfers', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      undefined,
+      async ({ app, localDirectory, evidence }) => {
+        await mkdir(join(localDirectory, 'documents', 'nested'));
+        await writeFile(
+          join(localDirectory, 'documents', 'nested', 'kept.txt'),
+          'keep\n'
+        );
+        await mkdir(join(localDirectory, 'documents', 'closed'));
+        await writeFile(
+          join(localDirectory, 'documents', 'closed', 'hidden.txt'),
+          'hidden\n'
+        );
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
+        await clickTreeExpander(
+          app,
+          localTree,
+          await findRow(localTree, 'documents')
+        );
+        await clickTreeRowAtHorizontalOffset(
+          app,
+          localTree,
+          await findRow(localTree, 'closed'),
+          30
+        );
+        await findRow(localTree, 'hidden.txt');
+        await clickTreeRowAtHorizontalOffset(
+          app,
+          localTree,
+          await findRow(localTree, 'closed'),
+          30
+        );
+        await clickTreeRowAtHorizontalOffset(
+          app,
+          localTree,
+          await findRow(localTree, 'nested'),
+          30
+        );
+        await findRow(localTree, 'kept.txt');
+        await clickTreeExpander(
+          app,
+          remoteTree,
+          await findRow(remoteTree, 'archive')
+        );
+        await findRow(remoteTree, 'old.log');
+        for (const row of await remoteTree.selectedRows())
+          await remoteTree.deselectRow(row);
+        await remoteTree.selectRow(await findRow(remoteTree, 'archive'));
+        for (const row of await localTree.selectedRows())
+          await localTree.deselectRow(row);
+        await openContextMenu(
+          app,
+          localTree,
+          await findRow(localTree, 'hello.txt')
+        );
+        await expectElementKind(
+          await app.getById('file_transfer_send_item'),
+          'menuItem'
+        ).click();
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Sent 1 item');
+          expect((await localTree.info()).states).toContain('sensitive');
+          expect((await remoteTree.info()).states).toContain('sensitive');
+        });
+        for (const [tree, names] of [
+          [localTree, ['documents', 'nested']],
+          [remoteTree, ['archive']],
+        ] as const) {
+          for (const name of names)
+            expect(
+              (await (await tree.cellAt(await findRow(tree, name), 0))!.info())
+                .states
+            ).toContain('expanded');
+        }
+        expect(await localTree.selectedRows()).toEqual([
+          await findRow(localTree, 'hello.txt'),
+        ]);
+        expect(await remoteTree.selectedRows()).toEqual([
+          await findRow(remoteTree, 'archive'),
+        ]);
+        await findRow(remoteTree, 'hello.txt');
+        await findRow(localTree, 'kept.txt');
+        expect(
+          (
+            await (await localTree.cellAt(
+              await findRow(localTree, 'closed'),
+              0
+            ))!.info()
+          ).states
+        ).not.toContain('expanded');
+        await rm(join(localDirectory, 'documents', 'nested', 'kept.txt'));
+        await writeFile(
+          join(localDirectory, 'documents', 'nested', 'aaa-first.txt'),
+          'added\n'
+        );
+
+        for (const row of await localTree.selectedRows())
+          await localTree.deselectRow(row);
+        await localTree.selectRow(await findRow(localTree, 'nested'));
+        for (const row of await remoteTree.selectedRows())
+          await remoteTree.deselectRow(row);
+        await openContextMenu(
+          app,
+          remoteTree,
+          await findRow(remoteTree, 'old.log')
+        );
+        await expectElementKind(
+          await app.getById('file_transfer_receive_item'),
+          'menuItem'
+        ).click();
+        await waitForResult(async () => {
+          expect(
+            await readFile(
+              join(localDirectory, 'documents', 'nested', 'old.log'),
+              'utf8'
+            )
+          ).toBe('old remote log\n');
+          expect((await localTree.info()).states).toContain('sensitive');
+          expect((await remoteTree.info()).states).toContain('sensitive');
+        });
+        await findRow(localTree, 'old.log');
+        expect(await findRow(localTree, 'aaa-first.txt')).toBeLessThan(
+          await findRow(localTree, 'old.log')
+        );
+        for (let row = 0; row < (await localTree.getRowCount()); row++)
+          expect(
+            (await (await localTree.cellAt(row, 0))!.info()).name
+          ).not.toBe('kept.txt');
+        expect(await localTree.selectedRows()).toEqual([
+          await findRow(localTree, 'nested'),
+        ]);
+        expect(await remoteTree.selectedRows()).toEqual([
+          await findRow(remoteTree, 'old.log'),
+        ]);
+        await findRow(remoteTree, 'hello.txt');
+        await evidence.captureEvidence('transfer-preserved-trees', async () =>
+          app.capture()
         );
       }
     );
