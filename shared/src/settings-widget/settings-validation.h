@@ -41,6 +41,14 @@ GtkWidget *decorate_settings_control(GtkWidget *control);
 void refresh_settings_validation(GtkWidget *root, const std::vector<SettingValidationIssue> &issues);
 
 /**
+ * Controls whether a subtree participates in the current editor's validation.
+ * @param root Settings subtree, or nullptr.
+ * @param enabled True for settings that currently affect Apply and Save.
+ * @remarks Retains rejected input and constraints while their section is inactive.
+ */
+void set_settings_validation_enabled(GtkWidget *root, bool enabled);
+
+/**
  * Collects explanations from a control and its descendants.
  * @param root Control or container, or nullptr.
  * @returns Distinct localized explanations separated by newlines.

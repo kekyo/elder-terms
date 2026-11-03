@@ -17,6 +17,7 @@ struct InputValidation {
   std::string constraint_error;
   std::optional<SettingKey> field;
   GtkWidget *indicator = nullptr;
+  bool enabled = true;
   std::optional<std::string> original_tooltip;
   std::optional<std::string> original_description;
 };
@@ -35,8 +36,8 @@ static InputValidation *validation_state(GtkWidget *widget) {
 
 static void present_validation(GtkWidget *widget, InputValidation *state) {
   // A rejected draft takes precedence over constraints on the last accepted value.
-  const auto message = settings_validation_message(
-      state->input_error.empty() ? state->constraint_error : state->input_error);
+  const auto message = state->enabled ? settings_validation_message(
+      state->input_error.empty() ? state->constraint_error : state->input_error) : std::string();
   if (state->message == message) return;
   auto *accessible = gtk_widget_get_accessible(widget);
   if (state->message.empty()) {
@@ -73,6 +74,21 @@ void set_settings_input_error(GtkWidget *widget, const std::string &reason) {
   present_validation(widget, state);
 }
 
+void set_settings_validation_enabled(GtkWidget *root, bool enabled) {
+  if (!root) return;
+  auto *state = static_cast<InputValidation *>(g_object_get_data(G_OBJECT(root), validation_key));
+  if (state) {
+    state->enabled = enabled;
+    present_validation(root, state);
+  }
+  if (GTK_IS_CONTAINER(root)) {
+    auto *children = gtk_container_get_children(GTK_CONTAINER(root));
+    for (auto *child = children; child; child = child->next)
+      set_settings_validation_enabled(GTK_WIDGET(child->data), enabled);
+    g_list_free(children);
+  }
+}
+
 void bind_settings_field(GtkWidget *widget, const SettingKey &key) {
   if (GTK_IS_ENTRY(widget) || GTK_IS_COMBO_BOX(widget) || GTK_IS_TEXT_VIEW(widget)) {
     validation_state(widget)->field = key;
@@ -97,22 +113,23 @@ GtkWidget *decorate_settings_control(GtkWidget *control) {
   return row;
 }
 
-static void collect_validation(GtkWidget *root, std::vector<std::string> &messages) {
+static void collect_validation(GtkWidget *root, std::vector<std::string> &messages, bool include_entries) {
   if (!root) return;
   const auto message = settings_input_error(root);
-  if (!message.empty() && std::find(messages.begin(), messages.end(), message) == messages.end())
+  if ((include_entries || !GTK_IS_ENTRY(root)) && !message.empty() &&
+      std::find(messages.begin(), messages.end(), message) == messages.end())
     messages.push_back(message);
   if (GTK_IS_CONTAINER(root)) {
     auto *children = gtk_container_get_children(GTK_CONTAINER(root));
     for (auto *child = children; child; child = child->next)
-      collect_validation(GTK_WIDGET(child->data), messages);
+      collect_validation(GTK_WIDGET(child->data), messages, include_entries);
     g_list_free(children);
   }
 }
 
 std::string settings_validation_summary(GtkWidget *root) {
   std::vector<std::string> messages;
-  collect_validation(root, messages);
+  collect_validation(root, messages, true);
   std::string summary;
   for (const auto &message : messages) {
     if (!summary.empty()) summary += '\n';
@@ -143,7 +160,14 @@ void refresh_settings_validation(GtkWidget *root, const std::vector<SettingValid
     g_list_free(children);
   }
   if (state && state->indicator) {
-    const auto summary = settings_validation_summary(root);
+    // Entries already have an inline icon; the adjacent icon is for other controls.
+    std::vector<std::string> messages;
+    collect_validation(root, messages, false);
+    std::string summary;
+    for (const auto &message : messages) {
+      if (!summary.empty()) summary += '\n';
+      summary += message;
+    }
     gtk_widget_set_visible(state->indicator, !summary.empty());
     gtk_widget_set_tooltip_text(state->indicator, summary.empty() ? nullptr : summary.c_str());
   }

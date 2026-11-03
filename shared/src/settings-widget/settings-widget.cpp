@@ -876,6 +876,7 @@ static void update_connection_pages(SettingsWidgetState *state) {
   for (const ConnectionSettingsPage &page : state->connection_pages) {
     const bool visible =
         state->mode == SettingsWidgetMode::global_defaults ||
+        !settings_validation_summary(page.page).empty() ||
         std::any_of(page.connection_types.begin(),
                     page.connection_types.end(),
                     [&active_type](const char *connection_type) {
@@ -883,6 +884,9 @@ static void update_connection_pages(SettingsWidgetState *state) {
                     });
     gtk_widget_set_visible(page.page, visible);
     gtk_widget_set_visible(page.tab_label, visible);
+    // GTK3 exposes notebook tab visibility through its descendant label to AT-SPI.
+    auto *label = static_cast<GtkWidget *>(g_object_get_data(G_OBJECT(page.tab_label), "elder-terms-tab-label"));
+    if (label) gtk_widget_set_visible(label, visible);
   }
   if (state->ssh_proxy_experimental_label != nullptr) {
     gtk_widget_set_visible(state->ssh_proxy_experimental_label,
@@ -937,8 +941,12 @@ static void update_general_name_from_widget(SettingsWidgetState *state) {
 
 static GtkWidget *create_tab_label(const char *text, const char *id) {
   GtkWidget *label = gtk_label_new(text);
-  assign_accessible_id(label, id);
-  return label;
+  assign_accessible_id(label, (std::string(id) + "_label").c_str());
+  gtk_widget_show(label);
+  auto *tab = decorate_settings_control(label);
+  assign_accessible_id(tab, id);
+  g_object_set_data(G_OBJECT(tab), "elder-terms-tab-label", label);
+  return tab;
 }
 
 static void update_general_type_from_widget(SettingsWidgetState *state) {
@@ -1583,6 +1591,16 @@ static void update_action_sensitivity(SettingsWidgetState *state) {
   };
   const auto type = connection_type_value(state->draft_store);
   const bool global = state->mode == SettingsWidgetMode::global_defaults;
+  if (state->http_editor) set_settings_validation_enabled(http_settings_editor_root(state->http_editor), global || type == http_connection_type);
+  if (state->webdav_editor) set_settings_validation_enabled(webdav_settings_editor_root(state->webdav_editor), global || type == webdav_connection_type);
+  if (state->smb_editor) set_settings_validation_enabled(smb_settings_editor_root(state->smb_editor), global || type == smb_connection_type);
+  if (state->nfs_editor) set_settings_validation_enabled(nfs_settings_editor_root(state->nfs_editor), global || type == nfs_connection_type);
+  if (state->ssh_proxy_editor) set_settings_validation_enabled(ssh_proxy_settings_editor_root(state->ssh_proxy_editor),
+      global || (type != local_connection_type && type != serial_connection_type));
+  for (const auto &control : state->ftp_tls_controls) {
+    set_settings_validation_enabled(control.combo, global || type == ftp_connection_type);
+    set_settings_validation_enabled(control.entry, global || type == ftp_connection_type);
+  }
   if (global || type == ftp_connection_type) include(ftp_connection_settings(state->draft_store));
   if (global || type == http_connection_type) include(http_connection_settings(state->draft_store));
   if (global || type == webdav_connection_type) include(webdav_connection_settings(state->draft_store));
@@ -1590,6 +1608,19 @@ static void update_action_sensitivity(SettingsWidgetState *state) {
   if (global || type == nfs_connection_type) include(nfs_connection_settings(state->draft_store));
   include(global ? ssh_proxy_settings(state->draft_store) : ssh_proxy_connection_settings(state->draft_store));
   refresh_settings_validation(state->root, issues);
+  if (state->notebook) {
+    const auto count = gtk_notebook_get_n_pages(GTK_NOTEBOOK(state->notebook));
+    for (int index = 0; index < count; ++index) {
+      auto *page = gtk_notebook_get_nth_page(GTK_NOTEBOOK(state->notebook), index);
+      auto *tab = gtk_notebook_get_tab_label(GTK_NOTEBOOK(state->notebook), page);
+      auto *label = static_cast<GtkWidget *>(g_object_get_data(G_OBJECT(tab), "elder-terms-tab-label"));
+      const auto summary = settings_validation_summary(page);
+      set_settings_input_error(tab, summary);
+      set_settings_input_error(label, summary);
+      refresh_settings_validation(tab, {});
+    }
+    update_connection_pages(state);
+  }
   const gboolean sensitive = !state->action_pending && settings_inputs_valid(state);
   if (state->apply_button != nullptr) {
     gtk_widget_set_sensitive(state->apply_button, sensitive);
@@ -2243,6 +2274,16 @@ static bool macro_id_is_duplicated(const SettingsWidgetState *state,
 }
 
 static void update_macro_validation(SettingsWidgetState *state) {
+  for (std::size_t index = 0; index < state->draft_store.macro_rules.size(); ++index) {
+    auto *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(state->macro_list), static_cast<int>(index));
+    if (!row) continue;
+    const auto &candidate = state->draft_store.macro_rules[index];
+    std::string reason;
+    macro_rule_is_valid(candidate, &reason);
+    if (macro_id_is_duplicated(state, &candidate)) reason = "identifier must be unique";
+    set_settings_input_error(GTK_WIDGET(row), reason);
+    set_settings_input_error(static_cast<GtkWidget *>(g_object_get_data(G_OBJECT(row), "elder-terms-rule-label")), reason);
+  }
   const MacroRule *rule = selected_macro_rule(state);
   if (rule == nullptr) {
     set_entry_validation(state->macro_id_entry, true, {});
@@ -2446,7 +2487,8 @@ static void rebuild_macro_list(SettingsWidgetState *state) {
     GtkWidget *label =
         gtk_label_new(state->draft_store.macro_rules[index].id.c_str());
     gtk_label_set_xalign(GTK_LABEL(label), 0.0F);
-    gtk_container_add(GTK_CONTAINER(row), label);
+    gtk_container_add(GTK_CONTAINER(row), decorate_settings_control(label));
+    g_object_set_data(G_OBJECT(row), "elder-terms-rule-label", label);
     g_object_set_data(G_OBJECT(row), "elder-terms-macro-index",
                       GINT_TO_POINTER(static_cast<int>(index) + 1));
     gtk_container_add(GTK_CONTAINER(state->macro_list), row);

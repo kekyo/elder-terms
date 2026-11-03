@@ -10,6 +10,12 @@
 
 static GtkWidget *find(GtkWidget *widget, const char *id) {
   if (std::strcmp(gtk_widget_get_name(widget), id) == 0) return widget;
+  if (GTK_IS_NOTEBOOK(widget)) {
+    for (int index = 0; index < gtk_notebook_get_n_pages(GTK_NOTEBOOK(widget)); ++index) {
+      auto *page = gtk_notebook_get_nth_page(GTK_NOTEBOOK(widget), index);
+      if (auto *result = find(gtk_notebook_get_tab_label(GTK_NOTEBOOK(widget), page), id)) return result;
+    }
+  }
   if (!GTK_IS_CONTAINER(widget)) return nullptr;
   auto *children = gtk_container_get_children(GTK_CONTAINER(widget));
   GtkWidget *result = nullptr;
@@ -61,8 +67,11 @@ int main(int argc, char **argv) {
     assert(!gtk_widget_get_sensitive(apply));
     assert(tooltip(proxy).find("SMB") != std::string::npos);
     assert(gtk_style_context_has_class(gtk_widget_get_style_context(proxy), GTK_STYLE_CLASS_ERROR));
+    assert(!tooltip(find(root, "settings_ssh_proxy_tab")).empty());
+    assert(!tooltip(find(root, "settings_smb_tab")).empty());
     gtk_combo_box_set_active_id(GTK_COMBO_BOX(version), "3");
     assert(tooltip(proxy).empty());
+    assert(tooltip(find(root, "settings_ssh_proxy_tab")).empty());
     assert(gtk_widget_get_sensitive(apply));
     gtk_combo_box_set_active_id(GTK_COMBO_BOX(version), "1");
     assert(!gtk_widget_get_sensitive(apply));
@@ -85,6 +94,11 @@ int main(int argc, char **argv) {
     assert(tooltip(proxy).empty());
     assert(std::string(gtk_entry_get_text(GTK_ENTRY(port))) == "unfinished");
     assert(!tooltip(port).empty() && !gtk_widget_get_sensitive(apply));
+    auto *kind = find(root, "settings_general_type_combo");
+    assert(gtk_combo_box_set_active_id(GTK_COMBO_BOX(kind), "local"));
+    assert(gtk_widget_get_sensitive(apply) && tooltip(port).empty());
+    assert(gtk_combo_box_set_active_id(GTK_COMBO_BOX(kind), "smb"));
+    assert(!gtk_widget_get_sensitive(apply) && !tooltip(port).empty());
     gtk_entry_set_text(GTK_ENTRY(port), "445");
     assert(tooltip(port).empty() && gtk_widget_get_sensitive(apply));
   } else if (scenario == "http") {
@@ -136,29 +150,73 @@ int main(int argc, char **argv) {
     assert(!gtk_style_context_has_class(gtk_widget_get_style_context(command), GTK_STYLE_CLASS_ERROR));
     gtk_entry_set_text(GTK_ENTRY(argument), "${1}");
     assert(gtk_widget_get_sensitive(apply) && tooltip(argument).empty());
+    // An unselected invalid rule must still identify its row and tab.
+    auto revised = settings_widget_draft_store(state);
+    if (scenario == "macro") revised.macro_rules.push_back({.id = "broken", .pattern = "("});
+    else revised.hyperlink_rules.push_back({.id = "broken", .pattern = "(", .command = "echo", .arguments = {}});
+    update_settings_widget_store(state, revised);
+    const auto tab_id = scenario == "macro" ? "settings_macro_tab" : "settings_link_tab";
+    const auto list_id = scenario == "macro" ? "settings_macro_list" : "settings_link_list";
+    auto *list = find(root, list_id);
+    assert(list);
+    auto *first = gtk_list_box_get_row_at_index(GTK_LIST_BOX(list), 0);
+    auto *second = gtk_list_box_get_row_at_index(GTK_LIST_BOX(list), 1);
+    gtk_list_box_select_row(GTK_LIST_BOX(list), first);
+    assert(!gtk_widget_get_sensitive(apply));
+    assert(!tooltip(GTK_WIDGET(second)).empty());
+    assert(!tooltip(find(root, tab_id)).empty());
+    gtk_list_box_select_row(GTK_LIST_BOX(list), second);
+    gtk_entry_set_text(GTK_ENTRY(find(root, (std::string(prefix) + "regex_entry").c_str())), "(test)");
+    if (scenario == "macro") {
+      auto *send = find(root, "settings_macro_send_text");
+      gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(send)), "text", -1);
+    }
+    assert(gtk_widget_get_sensitive(apply));
+    assert(tooltip(GTK_WIDGET(second)).empty());
+    assert(tooltip(find(root, tab_id)).empty());
   } else {
-  auto *width = find(root, "settings_terminal_width_entry");
-  assert(width && apply);
-  gtk_entry_set_text(GTK_ENTRY(width), "invalid");
-  assert(!gtk_widget_get_sensitive(apply));
-  assert(gtk_style_context_has_class(gtk_widget_get_style_context(width), GTK_STYLE_CLASS_ERROR));
-  // The whole input must explain why Apply is blocked, including away from its icon.
-  assert(!tooltip(width).empty());
-  gtk_entry_set_text(GTK_ENTRY(width), "88");
-  assert(gtk_widget_get_sensitive(apply));
-  assert(!gtk_style_context_has_class(gtk_widget_get_style_context(width), GTK_STYLE_CLASS_ERROR));
-  assert(tooltip(width).empty());
+    auto *width = find(root, "settings_terminal_width_entry");
+    assert(width && apply);
+    gtk_entry_set_text(GTK_ENTRY(width), "invalid");
+    assert(!gtk_widget_get_sensitive(apply));
+    assert(gtk_style_context_has_class(gtk_widget_get_style_context(width), GTK_STYLE_CLASS_ERROR));
+    // The whole input must explain why Apply is blocked, including away from its icon.
+    assert(!tooltip(width).empty());
+    gtk_entry_set_text(GTK_ENTRY(width), "88");
+    assert(gtk_widget_get_sensitive(apply));
+    assert(!gtk_style_context_has_class(gtk_widget_get_style_context(width), GTK_STYLE_CLASS_ERROR));
+    assert(tooltip(width).empty());
 
-  auto *strength = find(root, "settings_terminal_color_vision_strength_entry");
-  assert(strength);
-  const auto original = tooltip(strength);
-  gtk_entry_set_text(GTK_ENTRY(strength), "101");
-  assert(!gtk_widget_get_sensitive(apply));
-  assert(!tooltip(strength).empty());
-  assert(original != tooltip(strength));
-  gtk_entry_set_text(GTK_ENTRY(strength), "50");
-  assert(gtk_widget_get_sensitive(apply));
-  assert(original == tooltip(strength));
+    auto *strength = find(root, "settings_terminal_color_vision_strength_entry");
+    assert(strength);
+    const auto original = tooltip(strength);
+    gtk_entry_set_text(GTK_ENTRY(strength), "101");
+    assert(!gtk_widget_get_sensitive(apply));
+    assert(!tooltip(strength).empty());
+    assert(original != tooltip(strength));
+    gtk_entry_set_text(GTK_ENTRY(strength), "50");
+    assert(gtk_widget_get_sensitive(apply));
+    assert(original == tooltip(strength));
+    struct EntryCase { const char *id; const char *invalid; const char *valid; };
+    for (const auto &test : {
+        EntryCase{"settings_terminal_height_entry", "0", "25"},
+        EntryCase{"settings_terminal_scrollback_lines_entry", "invalid", "1000"},
+        EntryCase{"settings_general_border_width_entry", "invalid", "2"},
+        EntryCase{"settings_terminal_font_size_dip_entry", "invalid", "12"},
+        EntryCase{"settings_telnet_port_entry", "0", "23"},
+        EntryCase{"settings_ssh_port_entry", "0", "22"},
+        EntryCase{"settings_ftp_port_entry", "0", "21"},
+        EntryCase{"settings_serial_baudrate_entry", "invalid", "9600"},
+        EntryCase{"settings_terminal_encoding_entry", "invalid-encoding", "UTF-8"},
+        EntryCase{"settings_log_file_name_format_entry", "../outside.log", "terminal.log"}}) {
+      auto *entry = find(root, test.id);
+      assert(entry);
+      gtk_entry_set_text(GTK_ENTRY(entry), test.invalid);
+      assert(!gtk_widget_get_sensitive(apply) && !tooltip(entry).empty());
+      gtk_entry_set_text(GTK_ENTRY(entry), test.valid);
+      assert(gtk_widget_get_sensitive(apply));
+      assert(!gtk_style_context_has_class(gtk_widget_get_style_context(entry), GTK_STYLE_CLASS_ERROR));
+    }
   }
 
   gtk_widget_destroy(window);

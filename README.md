@@ -125,6 +125,12 @@ In terminal and file transfer windows, the settings dialog stays open after Appl
 records the changes and closes it. Cancel discards edits since the last Apply
 or Save; already applied changes remain active.
 
+Apply and Save are unavailable while required input is missing or settings conflict.
+The affected controls show an error border or icon; hover over a control to read the reason.
+Tabs and macro or link rule rows also show errors, including unselected rules.
+Correcting the input clears the indicators and restores the usual help text.
+When an empty field means inheritance, validation uses the inherited value.
+
 Terminal settings are split into two tabs. "Terminal" contains encoding, character width, special
 keys, rows and columns, scrollback, BEL, shortcuts, screen-reader access, and copy settings.
 "Terminal appearance" contains fonts, text size, the cursor, background,

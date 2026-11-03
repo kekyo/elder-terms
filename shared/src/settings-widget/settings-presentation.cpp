@@ -625,7 +625,71 @@ std::string settings_validation_message(const std::string &reason) {
   if (reason == "must name a log file") {
     return _("Must name a log file");
   }
-  return _(reason.c_str());
+  constexpr const char *messages[] = {
+      N_("A known export path is required when export discovery is disabled"),
+      N_("A known NFS v4 namespace path is required when namespace discovery is disabled"),
+      N_("[ftp] tls_min_version must not exceed tls_max_version"),
+      N_("HTTP or HTTPS URL required"),
+      N_("HTTP base URL must not contain a query or fragment"),
+      N_("HTTP base URL must end in a slash"),
+      N_("Malformed HTTP URL escape"),
+      N_("Ambiguous HTTP URL character"),
+      N_("Ambiguous encoded HTTP path separator"),
+      N_("Invalid HTTP base URL"),
+      N_("Invalid HTTP endpoint"),
+      N_("must be an absolute path without dot segments or control characters"),
+      N_("must be an encoded absolute URL path without a query, fragment, or dot segments"),
+      N_("must not contain control characters"),
+      N_("security levels must be selected with tls_compatibility"),
+      N_("TLS 1.3 cipher suites must encrypt data"),
+      N_("SMB server address is required"),
+      N_("NFS server address is required"),
+      N_("HTTP base URL is required"),
+      N_("HTTP start page is outside the base URL"),
+      N_("[ssh_proxy] address: SSH proxy server address is required"),
+      N_("Enter a valid value"),
+      N_("must contain valid UTF-8 without control characters"),
+      N_("must be a hostname or IP address without a scheme, path, or credentials"),
+      N_("must be an integer between 1 and 65535"),
+      N_("must be between 0 (automatic) and 65535"),
+      N_("must be between 1 and 86400 seconds"),
+      N_("must be an integer between 1 and 86400"),
+      N_("must be auto, 1, 2, or 3"),
+      N_("must select NFS version 2, 3 or 4.0"),
+      N_("must be at most 15 ASCII letters, digits, hyphens, or underscores"),
+      N_("must be an absolute path without dot segments, colons, trailing dots or spaces, or control characters"),
+      N_("must be empty or an absolute path without empty, dot, or parent components"),
+      N_("must contain absolute paths without empty, dot, or parent components"),
+      N_("must be -1 (current process) or an unsigned 32-bit ID"),
+      N_("must contain at most 16 unsigned 32-bit group IDs"),
+      N_("must be an available encoding without replacement or ignore modifiers"),
+      N_("must be an absolute PEM CA bundle path or empty"),
+      N_("identifier must not be empty"),
+      N_("identifier may contain only letters, digits, '-' and '_'"),
+      N_("identifier must be unique"),
+      N_("regular expression must not be empty"),
+      N_("command must not be empty"),
+      N_("command must not contain a NUL byte"),
+      N_("send text must not be empty"),
+      N_("path template must not be empty when path validation is enabled"),
+      N_("font family names must be valid UTF-8 without NUL characters"),
+      N_("font family names must not contain commas or control characters"),
+      N_("font family names must be non-empty and unique"),
+      N_("contains an empty capture placeholder"),
+      N_("contains an unmatched capture placeholder"),
+      N_("literal '$' must be written as '$$'"),
+      N_("contains more than one capture transformation"),
+  };
+  for (const auto *message : messages)
+    if (reason == message) return _(message);
+  constexpr char capture_prefix[] = "references an unknown capture: ";
+  if (reason.starts_with(capture_prefix)) {
+    auto *message = g_strdup_printf(_("references an unknown capture: %s"), reason.substr(sizeof(capture_prefix) - 1).c_str());
+    const std::string result = message;
+    g_free(message);
+    return result;
+  }
+  return reason;
 }
 
 } // namespace elder_terms

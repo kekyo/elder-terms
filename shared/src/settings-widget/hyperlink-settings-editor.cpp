@@ -160,6 +160,16 @@ static bool all_rules_are_valid(
 }
 
 static void update_validation(HyperlinkSettingsEditorState *state) {
+  for (std::size_t index = 0; index < state->store->hyperlink_rules.size(); ++index) {
+    auto *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(state->rule_list), static_cast<int>(index));
+    if (!row) continue;
+    const auto &candidate = state->store->hyperlink_rules[index];
+    std::string reason;
+    hyperlink_action_rule_is_valid(candidate, &reason);
+    if (!rule_id_is_unique(state, &candidate)) reason = _("Identifier must be unique");
+    set_settings_input_error(GTK_WIDGET(row), reason);
+    set_settings_input_error(static_cast<GtkWidget *>(g_object_get_data(G_OBJECT(row), "elder-terms-rule-label")), reason);
+  }
   const HyperlinkActionRule *rule = selected_rule(state);
   if (rule == nullptr) {
     set_entry_validation(state->id_entry, true, {});
@@ -360,7 +370,8 @@ static void rebuild_rule_list(HyperlinkSettingsEditorState *state) {
     GtkWidget *label =
         gtk_label_new(state->store->hyperlink_rules[index].id.c_str());
     gtk_label_set_xalign(GTK_LABEL(label), 0.0F);
-    gtk_container_add(GTK_CONTAINER(row), label);
+    gtk_container_add(GTK_CONTAINER(row), decorate_settings_control(label));
+    g_object_set_data(G_OBJECT(row), "elder-terms-rule-label", label);
     g_object_set_data(G_OBJECT(row), link_widget_index_key,
                       GINT_TO_POINTER(static_cast<int>(index) + 1));
     gtk_container_add(GTK_CONTAINER(state->rule_list), row);
