@@ -41,6 +41,7 @@
 #include "terminal-background-editor.h"
 #include "terminal-color-preview.h"
 #include "settings-presentation.h"
+#include "settings-validation.h"
 
 #define GETTEXT_PACKAGE "elder-terms"
 #include <glib/gi18n-lib.h>
@@ -489,22 +490,7 @@ static void sync_inheritable_entry(GtkWidget *entry,
 
 static void set_entry_validation(GtkWidget *entry, bool valid,
                                  const std::string &reason) {
-  if (entry == nullptr) {
-    return;
-  }
-  GtkStyleContext *context = gtk_widget_get_style_context(entry);
-  if (valid) {
-    gtk_style_context_remove_class(context, GTK_STYLE_CLASS_ERROR);
-  } else {
-    gtk_style_context_add_class(context, GTK_STYLE_CLASS_ERROR);
-  }
-  gtk_entry_set_icon_from_icon_name(
-      GTK_ENTRY(entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : "dialog-error-symbolic");
-  const std::string message = settings_validation_message(reason);
-  gtk_entry_set_icon_tooltip_text(GTK_ENTRY(entry),
-                                  GTK_ENTRY_ICON_SECONDARY,
-                                  valid ? nullptr : message.c_str());
+  set_settings_input_error(entry, valid ? std::string() : reason);
 }
 
 static void update_string_entry(SettingsWidgetState *state, GtkWidget *entry,
