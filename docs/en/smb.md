@@ -20,7 +20,9 @@ There is no separate share name setting. To open a particular share initially, s
 
 The window shows local and remote folders side by side. Select an item and right-click to send or receive files and folders, rename or delete items, or create a folder. Folder transfers and deletion include their contents. If the destination already exists, choose whether to overwrite or skip it.
 
-You cannot upload to or create folders at the share list `/`, or rename or delete shares themselves. Receiving a share and managing files and folders inside a share are supported.
+Before sending, select one destination folder in Remote; before receiving, select one in Local. Send and Receive are unavailable when no destination is selected, a non-folder is selected, or multiple items are selected. The path field is not used as the destination.
+
+You cannot upload to or create folders at the share list `/`, or rename or delete shares themselves. Selecting a share in the list lets you send into it. Receiving a share and managing files and folders inside a share are also supported.
 
 Disable "Close window when session ends" to keep the window open after disconnection and reconnect using "Reconnect". Canceling an operation in progress may also require reconnection. Interrupted operations are not retried automatically. After reconnecting, refresh the listing and check what the server completed before trying again.
 

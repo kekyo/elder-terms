@@ -26,7 +26,7 @@ Responses with `text/html` or `application/xhtml+xml` are normally expanded. Att
 
 ## Receive files and directories
 
-Select one or more items and choose the receive mode from the context menu.
+Select one destination folder in Local, then select one or more items in Remote and choose the receive mode from the context menu. Both receive modes are unavailable when no destination is selected, a non-folder is selected, or multiple destination items are selected. The Local path field is not used as the destination.
 
 | Operation | Result |
 | --- | --- |

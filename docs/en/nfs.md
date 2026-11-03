@@ -26,7 +26,9 @@ When public paths are nested, navigation uses the deepest known public path cont
 
 Right-click an item to send, receive, rename, delete, or create a folder. Folder transfers and deletion include descendants. Symbolic links are copied as links without recursively following their targets. Permissions and access/modification timestamps are preserved where allowed by the server.
 
-Public roots, including nested ones, cannot be renamed or deleted. The list grouping public paths and any unexported parents cannot be modified or contain newly created items. When `/` itself is published, items can be created beneath it if the server permits. Renaming across public roots is unavailable; receive and send the item separately if needed.
+Before sending, select one destination folder in Remote; before receiving, select one in Local. Send and Receive are unavailable when no destination is selected, a non-folder is selected, or multiple items are selected. The path field is not used as the destination. Selecting a public root lets you send into it.
+
+Public roots, including nested ones, cannot be renamed or deleted. The list grouping public paths and any unexported parents cannot be modified, contain newly created items, or serve as transfer destinations. When `/` itself is published, items can be created beneath it if the server permits. Renaming across public roots is unavailable; receive and send the item separately if needed.
 
 When a destination already exists, choose overwrite or skip. Uploads use a temporary location and install the final name only after all data has been sent. For v2, this temporary location is a folder. If a lost connection prevents ownership or cleanup from being confirmed, the job result retains the temporary path. Reconnect, inspect its contents, and delete it if no longer needed.
 
