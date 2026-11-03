@@ -60,6 +60,7 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
       expect((await once(generating, 'close'))[0]).toBe(0);
     }
     const requests: string[] = [];
+    let refreshed = false;
     const source =
       '<a href="tree/">tree</a><a href="document.html">document</a><a href="untouched/">untouched</a><a href="first.bin">first</a><a href="second.bin">second</a><a href="shortcut/">shortcut</a>';
     const server = scheme.startsWith('https')
@@ -82,7 +83,8 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
         response.end('<p>Original HTML</p>');
       } else if (request.url === '/pub/tree/')
         response.end(
-          '<a href="file.bin">file</a><a href="../">parent</a><a href="#self">self</a>'
+          '<a href="file.bin">file</a><a href="../">parent</a><a href="#self">self</a>' +
+            (refreshed ? '<a href="added.bin">added</a>' : '')
         );
       else if (request.url?.startsWith('/pub/query%3Fdir/?'))
         response.end('<p>Query page</p>');
@@ -305,6 +307,7 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
       expect(await tree.selectedRows()).toEqual([await rowFor('tree')]);
       await rowFor('file.bin');
       await openTransferDirectory(app, false, local);
+      refreshed = true;
       await expectElementKind(
         await app.getById('file_transfer_remote_refresh_button'),
         'button'
@@ -315,6 +318,14 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
           requests.filter((request) => request === 'GET /pub/')
         ).toHaveLength(2);
       });
+      expect(
+        (await (await tree.cellAt(await rowFor('tree'), 0))!.info()).states
+      ).toContain('expanded');
+      expect(await tree.selectedRows()).toEqual([await rowFor('tree')]);
+      await rowFor('added.bin');
+      expect(requests.some((request) => request.includes('untouched'))).toBe(
+        false
+      );
       const path = expectElementKind(
         await app.getById('file_transfer_remote_path_entry'),
         'entry'
@@ -338,7 +349,7 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
       });
       expect(
         requests.filter((request) => request === 'GET /pub/tree/')
-      ).toHaveLength(1);
+      ).toHaveLength(2);
       await clickRow('document.html', 'right');
       await expectElementKind(
         await app.getById('file_transfer_expand_html_item'),

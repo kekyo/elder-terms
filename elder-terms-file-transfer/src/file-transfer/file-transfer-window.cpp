@@ -993,7 +993,7 @@ load_file_transfer_pane_directory_async(
 static cardio::promise<void> refresh_file_transfer_tree_async(
     FileTransferPaneState *pane, GtkTreeIter *parent,
     std::vector<RemoteFileAttributes> entries, std::set<std::string> ancestors,
-    cardio::cancellation cancellation, std::uint64_t generation) {
+    cardio::cancellation cancellation, std::uint64_t generation, bool refresh) {
   std::erase_if(entries, [&ancestors](const auto &entry) { return ancestors.contains(entry.path); });
   auto rows = update_browser_entries(pane->store, parent, std::move(entries));
   for (auto &row : rows) {
@@ -1009,7 +1009,7 @@ static cardio::promise<void> refresh_file_transfer_tree_async(
     if (!loaded || type != static_cast<int>(RemoteFileType::directory)) continue;
     // Only revisit branches already loaded by the user. Unopened directories
     // remain lazy, and collapsed branches keep their existing expansion state.
-    auto snapshot = co_await load_file_transfer_pane_directory_async(pane, directory, cancellation);
+    auto snapshot = co_await load_file_transfer_pane_directory_async(pane, directory, cancellation, refresh);
     cancellation.throw_if_cancellation_requested();
     if (pane->window->destroyed || generation != pane->generation) throw cardio::canceled_exception();
     gtk_tree_store_set(pane->store, &row,
@@ -1028,13 +1028,12 @@ static cardio::promise<void> refresh_file_transfer_tree_async(
     branch_ancestors.insert(directory);
     branch_ancestors.insert(snapshot.canonical_path);
     co_await refresh_file_transfer_tree_async(pane, &row, std::move(snapshot.entries),
-        std::move(branch_ancestors), cancellation, generation);
+        std::move(branch_ancestors), cancellation, generation, refresh);
   }
 }
 
 static cardio::promise<void> load_file_transfer_pane_root_async(
-    FileTransferPaneState *pane, std::string requested_path, bool refresh, bool force_html, bool from_input,
-    bool preserve_tree) {
+    FileTransferPaneState *pane, std::string requested_path, bool refresh, bool force_html, bool from_input) {
   FileTransferWindow *window = pane->window;
   const std::uint64_t generation = ++pane->generation;
   const cardio::cancellation cancellation =
@@ -1054,10 +1053,12 @@ static cardio::promise<void> load_file_transfer_pane_root_async(
       set_file_transfer_pane_busy(pane, false);
       co_return;
     }
-    if (preserve_tree && snapshot.canonical_path == pane->current_directory) {
+    // Reloading the same location preserves browser state for every operation,
+    // including explicit refresh and recovery after a failed mutation.
+    if (snapshot.canonical_path == pane->current_directory) {
       std::set<std::string> ancestors{snapshot.canonical_path};
       co_await refresh_file_transfer_tree_async(pane, nullptr, std::move(snapshot.entries),
-          std::move(ancestors), cancellation, generation);
+          std::move(ancestors), cancellation, generation, refresh);
     } else {
       gtk_tree_store_clear(pane->store);
       append_browser_entries(pane->store, nullptr, std::move(snapshot.entries));
@@ -1083,8 +1084,7 @@ static cardio::promise<void> load_file_transfer_pane_root_async(
 }
 
 static void start_file_transfer_pane_navigation(
-    FileTransferPaneState *pane, std::string path, bool refresh = false, bool force_html = false, bool from_input = false,
-    bool preserve_tree = false) {
+    FileTransferPaneState *pane, std::string path, bool refresh = false, bool force_html = false, bool from_input = false) {
   if (pane == nullptr || pane->window == nullptr ||
       pane->window->destroyed || pane->busy ||
       (pane->remote &&
@@ -1094,7 +1094,7 @@ static void start_file_transfer_pane_navigation(
   pane->task.reset();
   set_file_transfer_pane_busy(pane, true);
   pane->task.emplace(
-      load_file_transfer_pane_root_async(pane, std::move(path), refresh, force_html, from_input, preserve_tree));
+      load_file_transfer_pane_root_async(pane, std::move(path), refresh, force_html, from_input));
 }
 
 static cardio::promise<void> expand_file_transfer_directory_async(
@@ -1679,6 +1679,30 @@ static void on_file_transfer_open_directory_item_activate(GtkMenuItem *, gpointe
       run_file_transfer_open_directory_async(pane->window, items.front()));
 }
 
+static void rename_file_transfer_tree_paths(
+    GtkTreeStore *store, GtkTreeIter *parent,
+    const std::string &source, const std::string &destination) {
+  GtkTreeModel *model = GTK_TREE_MODEL(store);
+  GtkTreeIter row;
+  if (!gtk_tree_model_iter_children(model, &row, parent)) return;
+  do {
+    // Writable clients use hierarchical operation paths. Replace the whole
+    // source prefix without decoding NFS identities or reconstructing names.
+    // Descendants keep their row identity, selection, and expansion on reload.
+    for (const auto column : {file_transfer_tree_path_column, file_transfer_tree_identity_column}) {
+      gchar *value = nullptr;
+      gtk_tree_model_get(model, &row, column, &value, -1);
+      const std::string path = value ? value : "";
+      g_free(value);
+      if (path == source || path.starts_with(source + "/")) {
+        const auto renamed = destination + path.substr(source.size());
+        gtk_tree_store_set(store, &row, column, renamed.c_str(), -1);
+      }
+    }
+    rename_file_transfer_tree_paths(store, &row, source, destination);
+  } while (gtk_tree_model_iter_next(model, &row));
+}
+
 static cardio::promise<void> run_file_transfer_rename_async(
     FileTransferPaneState *pane, FileTransferSelectedItem item) {
   FileTransferWindow *window = pane->window;
@@ -1714,6 +1738,7 @@ static cardio::promise<void> run_file_transfer_rename_async(
     if (window->destroyed) {
       co_return;
     }
+    rename_file_transfer_tree_paths(pane->store, nullptr, item.path, destination);
     set_file_transfer_browser_action_phase(window, false, false, {});
     set_file_transfer_status(
         window,
@@ -2046,10 +2071,10 @@ static void on_file_transfer_delete_item_activate(
 
 static void refresh_file_transfer_panes(FileTransferWindow *window) {
   start_file_transfer_pane_navigation(
-      &window->local, window->local.current_directory, false, false, false, /*preserve_tree=*/true);
+      &window->local, window->local.current_directory);
   if (window->connection_available) {
     start_file_transfer_pane_navigation(
-        &window->remote, window->remote.current_directory, false, false, false, /*preserve_tree=*/true);
+        &window->remote, window->remote.current_directory);
   }
 }
 

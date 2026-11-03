@@ -420,6 +420,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
         'button'
       ).click();
     };
+    await expandTransferDirectory(app, true, `/${share}/folder`, 0);
     await contextMenu(tree, 'single.txt');
     const newFolder = expectElementKind(
       await app.getById('file_transfer_remote_new_directory_item'),
@@ -429,6 +430,10 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     await newFolder.click();
     await acceptName('ui-folder');
     await rowFor('ui-folder');
+    expect(
+      (await (await tree.cellAt(await rowFor('folder'), 0))!.info()).states
+    ).toContain('expanded');
+    await rowFor('nested.txt');
     await contextMenu(tree, 'ui-folder');
     await expectElementKind(
       await app.getById('file_transfer_remote_rename_item'),
@@ -436,6 +441,10 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     ).click();
     await acceptName('ui-renamed');
     await rowFor('ui-renamed');
+    expect(
+      (await (await tree.cellAt(await rowFor('folder'), 0))!.info()).states
+    ).toContain('expanded');
+    expect(await tree.selectedRows()).toEqual([await rowFor('ui-renamed')]);
     await contextMenu(tree, 'ui-renamed');
     await expectElementKind(
       await app.getById('file_transfer_remote_delete_item'),
@@ -451,6 +460,13 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
         names.push((await (await tree.cellAt(row, 0))?.info())?.name);
       expect(names).not.toContain('ui-renamed');
     });
+    expect(
+      (await (await tree.cellAt(await rowFor('folder'), 0))!.info()).states
+    ).toContain('expanded');
+    await rowFor('nested.txt');
+    await evidence.captureEvidence('smb-preserved-delete-tree', async () =>
+      app.capture()
+    );
 
     const upload = join(local, 'kept.txt');
     await writeFile(upload, 'first upload\n');

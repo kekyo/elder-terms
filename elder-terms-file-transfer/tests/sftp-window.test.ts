@@ -1540,6 +1540,11 @@ describe('SFTP window', () => {
         await waitForResult(async () => {
           expect(await localTree.getRowCount()).toBe(42);
         });
+        // Refresh retains the visible rows; position the new rows before measuring.
+        await expectElementKind(
+          await app.getById('file_transfer_local_vertical_scrollbar'),
+          'scrollbar'
+        ).setValue(0);
 
         const firstDirectoryRow = await findRow(localTree, 'dir-000');
         const secondDirectoryRow = await findRow(localTree, 'dir-001');
@@ -2296,6 +2301,222 @@ describe('SFTP window', () => {
       }
     );
   });
+
+  for (const side of ['local', 'remote'] as const)
+    for (const operation of [
+      'delete',
+      'rename',
+      'new_directory',
+      'refresh',
+      'rename_error',
+      ...(side === 'local' ? (['create_error'] as const) : []),
+    ] as const)
+      it(`preserves browser state after ${side} ${operation}`, async (context) => {
+        await runSftpFixture(
+          context,
+          false,
+          [],
+          undefined,
+          async ({ app, localDirectory, evidence }) => {
+            await mkdir(join(localDirectory, 'documents', 'nested'));
+            await writeFile(
+              join(localDirectory, 'documents', 'nested', 'kept.txt'),
+              'keep\n'
+            );
+            const localTree = expectTable(
+              await app.getById('file_transfer_local_tree')
+            );
+            const remoteTree = expectTable(
+              await app.getById('file_transfer_remote_tree')
+            );
+            await clickTreeExpander(
+              app,
+              localTree,
+              await findRow(localTree, 'documents')
+            );
+            await clickTreeRowAtHorizontalOffset(
+              app,
+              localTree,
+              await findRow(localTree, 'nested'),
+              30
+            );
+            await findRow(localTree, 'kept.txt');
+            await clickTreeExpander(
+              app,
+              remoteTree,
+              await findRow(remoteTree, 'archive')
+            );
+            await findRow(remoteTree, 'old.log');
+            for (const [tree, branch] of [
+              [localTree, 'documents'],
+              [remoteTree, 'archive'],
+            ] as const) {
+              for (const row of await tree.selectedRows())
+                await tree.deselectRow(row);
+              await tree.selectRow(await findRow(tree, branch));
+            }
+            const tree = side === 'local' ? localTree : remoteTree;
+            const branch = side === 'local' ? 'documents' : 'archive';
+            const file = side === 'local' ? 'hello.txt' : 'readme.txt';
+            const prompt = await app.getById('file_transfer_prompt_panel');
+            const accept = expectElementKind(
+              await app.getById('file_transfer_prompt_accept_button'),
+              'button'
+            );
+            const title = expectElementKind(
+              await app.getById('file_transfer_prompt_title_label'),
+              'label'
+            );
+            const entry = expectElementKind(
+              await app.getById('file_transfer_prompt_entry'),
+              'entry'
+            );
+            const status = expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            );
+            if (operation === 'refresh') {
+              if (side === 'local')
+                await writeFile(
+                  join(localDirectory, 'documents', 'nested', 'added.txt'),
+                  'new\n'
+                );
+              await expectElementKind(
+                await app.getById(`file_transfer_${side}_refresh_button`),
+                'button'
+              ).click();
+            } else {
+              const deleting = operation === 'delete';
+              const creating =
+                operation === 'new_directory' || operation === 'create_error';
+              await openContextMenu(
+                app,
+                tree,
+                await findRow(
+                  tree,
+                  deleting || operation === 'rename_error' ? file : branch
+                )
+              );
+              await expectElementKind(
+                await app.getById(
+                  `file_transfer_${side}_${creating ? 'new_directory' : deleting ? 'delete' : 'rename'}_item`
+                ),
+                'menuItem'
+              ).click();
+              await expectShowing(prompt);
+              if (!deleting)
+                await entry.setText(
+                  operation.endsWith('_error')
+                    ? branch
+                    : creating
+                      ? 'created-folder'
+                      : 'renamed-branch'
+                );
+              await accept.click();
+              if (operation.endsWith('_error')) {
+                await waitForResult(async () =>
+                  expect(await title.text()).toBe(
+                    creating
+                      ? 'Failed to create folder'
+                      : 'Failed to rename item'
+                  )
+                );
+                await accept.click();
+              } else {
+                await waitForResult(async () =>
+                  expect(await status.text()).toBe(
+                    deleting
+                      ? 'Deleted 1 item'
+                      : creating
+                        ? 'Created folder "created-folder"'
+                        : `Renamed "${branch}" to "renamed-branch"`
+                  )
+                );
+              }
+              await expectHidden(prompt);
+            }
+            await waitForResult(async () => {
+              expect((await localTree.info()).states).toContain('sensitive');
+              expect((await remoteTree.info()).states).toContain('sensitive');
+            });
+            const renamed = operation === 'rename';
+            for (const [candidate, original] of [
+              [localTree, 'documents'],
+              [remoteTree, 'archive'],
+            ] as const) {
+              const name =
+                candidate === tree && renamed ? 'renamed-branch' : original;
+              expect(
+                (
+                  await (await candidate.cellAt(
+                    await findRow(candidate, name),
+                    0
+                  ))!.info()
+                ).states
+              ).toContain('expanded');
+              if (
+                candidate !== tree ||
+                (operation !== 'delete' && operation !== 'rename_error')
+              )
+                expect(await candidate.selectedRows()).toEqual([
+                  await findRow(candidate, name),
+                ]);
+            }
+            expect(
+              (
+                await (await localTree.cellAt(
+                  await findRow(localTree, 'nested'),
+                  0
+                ))!.info()
+              ).states
+            ).toContain('expanded');
+            await findRow(localTree, 'kept.txt');
+            await findRow(remoteTree, 'old.log');
+            await evidence.captureEvidence(
+              'preserved-operation-tree',
+              async () => app.capture()
+            );
+            if (operation === 'delete') {
+              for (let row = 0; row < (await tree.getRowCount()); row++)
+                expect(
+                  (await (await tree.cellAt(row, 0))!.info()).name
+                ).not.toBe(file);
+              expect(await tree.selectedRows()).toEqual([]);
+            } else if (operation === 'new_directory') {
+              await findRow(tree, 'created-folder');
+            } else if (operation === 'refresh' && side === 'local') {
+              await findRow(tree, 'added.txt');
+            } else if (renamed && side === 'local') {
+              // Descendants must use the new operation paths, not only retain their appearance.
+              await openContextMenu(app, tree, await findRow(tree, 'kept.txt'));
+              await expectElementKind(
+                await app.getById(`file_transfer_${side}_hash_item`),
+                'menuItem'
+              ).click();
+              await waitForResult(async () =>
+                expect(await title.text()).toBe('File hash values')
+              );
+              await accept.click();
+              await expectHidden(prompt);
+            } else if (renamed) {
+              await openContextMenu(app, tree, await findRow(tree, 'old.log'));
+              await expectElementKind(
+                await app.getById('file_transfer_receive_item'),
+                'menuItem'
+              ).click();
+              await waitForResult(async () => {
+                expect(
+                  await readFile(
+                    join(localDirectory, 'documents', 'old.log'),
+                    'utf8'
+                  )
+                ).toBe('old remote log\n');
+                expect((await tree.info()).states).toContain('sensitive');
+              });
+            }
+          }
+        );
+      });
 
   it('shows local and remote file hashes from the pane context menus', async (context) => {
     await runSftpFixture(context, false, [], undefined, async ({ app }) => {

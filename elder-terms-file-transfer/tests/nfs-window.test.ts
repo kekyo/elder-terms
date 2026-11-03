@@ -485,6 +485,14 @@ it.for([2, 3, 4])(
       recorder.stdin!.write('q\n');
       expect(await recorded, recordingError).toBe(0);
       recorder = undefined;
+      await expandTransferDirectory(app, true, `${prefix}/public/送信表`, 0);
+      await expandTransferDirectory(
+        app,
+        true,
+        `${prefix}/public/送信表/深い`,
+        1
+      );
+      await rowFor(remote, '内容.txt');
       await select(remote, '送信表', 'right');
       await menu('file_transfer_remote_rename_item');
       const prompt = expectElementKind(
@@ -500,6 +508,18 @@ it.for([2, 3, 4])(
         'button'
       ).click();
       await rowFor(remote, '変更表');
+      await waitForResult(async () =>
+        expect((await remote.info()).states).toContain('sensitive')
+      );
+      for (const name of ['変更表', '深い'])
+        expect(
+          (await (await remote.cellAt(await rowFor(remote, name), 0))!.info())
+            .states
+        ).toContain('expanded');
+      expect(await remote.selectedRows()).toEqual([
+        await rowFor(remote, '変更表'),
+      ]);
+      await rowFor(remote, '内容.txt');
       await rename(join(local, '送信表'), join(directory, 'original'));
       await selectCurrentTransferDirectory(app, false);
       await select(remote, '変更表', 'right');
@@ -527,6 +547,34 @@ it.for([2, 3, 4])(
         (await (await app.getById('file_transfer_job_3_row')).info()).name
       ).toContain('日本語表');
       await evidence.captureEvidence(`nfs-v${version}-transferred`, async () =>
+        app.capture()
+      );
+      await expandTransferDirectory(app, true, `${prefix}/public/deep`, 0);
+      await select(remote, '変更表', 'right');
+      await menu('file_transfer_remote_delete_item');
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_status_label'),
+            'label'
+          ).text()
+        ).toBe('Deleted 1 item');
+        expect((await remote.info()).states).toContain('sensitive');
+      });
+      expect(
+        (await (await remote.cellAt(await rowFor(remote, 'deep'), 0))!.info())
+          .states
+      ).toContain('expanded');
+      await rowFor(remote, 'inside');
+      for (let row = 0; row < (await remote.getRowCount()); row++)
+        expect((await (await remote.cellAt(row, 0))!.info()).name).not.toBe(
+          '変更表'
+        );
+      await evidence.captureEvidence('nfs-preserved-delete-tree', async () =>
         app.capture()
       );
       await expectElementKind(
