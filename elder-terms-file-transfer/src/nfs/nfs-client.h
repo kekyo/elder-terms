@@ -28,6 +28,8 @@ struct NfsClientOpenOptions {
   int nfs_port = 0;
   /** Zero for discovery, or an explicit TCP MOUNT service port. */
   int mount_port = 0;
+  /** Require a TCP source port below 1024; does not grant OS privileges. */
+  bool require_reserved_port = false;
   /** Filename encoding, independent of locale and terminal settings. */
   std::string filename_encoding = "UTF-8";
   /** Known absolute exports in UTF-8; v4 uses its own namespace paths. */

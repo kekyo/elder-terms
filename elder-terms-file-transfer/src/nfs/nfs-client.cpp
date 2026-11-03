@@ -540,6 +540,7 @@ struct NfsServer final : RemoteFileClient {
       for (const auto &address : addresses) {
         auto session = options.version == 2 ? create_nfs_raw_session(options.connect_timeout_ms) :
             create_nfs_rpc_session(options.version, options.connect_timeout_ms);
+        session->require_reserved_port = options.require_reserved_port;
         if (session->nfs) {
           configure_nfs_ports(session, options.nfs_port, options.mount_port);
           if (options.uid) nfs_set_uid(session->nfs, std::bit_cast<std::int32_t>(*options.uid));
@@ -885,6 +886,7 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_nfs_server_async(
     for (const auto &address : server->addresses) {
       try {
         auto mount = create_nfs_raw_session(server->options.connect_timeout_ms);
+        mount->require_reserved_port = server->options.require_reserved_port;
         if (server->options.uid) rpc_set_uid(mount->rpc, std::bit_cast<std::int32_t>(*server->options.uid));
         if (server->options.gid) rpc_set_gid(mount->rpc, std::bit_cast<std::int32_t>(*server->options.gid));
         auto groups = server->options.supplementary_gids;

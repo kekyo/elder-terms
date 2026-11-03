@@ -183,6 +183,9 @@ static cardio::promise<void> probe_v2(Probe &probe) {
 
 static cardio::promise<void> probe_fault(int version, const std::string &host, int port, const std::string &mode) {
   auto session = version == 2 ? create_nfs_raw_session(700) : create_nfs_rpc_session(version, 700);
+  const bool source_port_test = mode.starts_with("reserved-");
+  session->require_reserved_port = mode == "reserved-required";
+  if (source_port_test) session->timeout_ms = 10000;
   const guint signal = g_unix_signal_add(SIGUSR1, +[](void *data) -> gboolean {
     static_cast<NfsRpcSession *>(data)->stop();
     return G_SOURCE_CONTINUE;
@@ -196,10 +199,12 @@ static cardio::promise<void> probe_fault(int version, const std::string &host, i
         return nfs_mount_async(session->nfs, host.c_str(), "/", cb, data);
       }, {}, {}), "fault mount");
     }
-  } catch (const cardio::canceled_exception &) { expected = mode == "cancel"; }
+  } catch (const cardio::canceled_exception &) { expected = mode == "cancel" || source_port_test; }
   catch (const RemoteFileError &error) {
     expected = error.connection_lost && (mode == "disconnect" ||
-        (mode == "timeout" && std::string(error.what()).find("timed out") != std::string::npos));
+        (mode == "timeout" && std::string(error.what()).find("timed out") != std::string::npos) ||
+        (mode == "reserved-required" && std::string(error.what()).find("reserved source port") != std::string::npos));
+    if (source_port_test) std::cout << error.what() << '\n';
   }
   g_source_remove(signal);
   require(expected && !session->rpc && !session->active,

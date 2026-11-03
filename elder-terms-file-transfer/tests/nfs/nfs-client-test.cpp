@@ -161,6 +161,7 @@ static cardio::promise<void> test_client(const std::string &encoding, int versio
   options.version = version;
   options.filename_encoding = encoding;
   options.uid = options.gid = 1000;
+  options.require_reserved_port = true;
   if (version == 4) {
     options.known_namespace_paths = {"/other/public", "/public/deep"};
     options.known_exports = {"/must-not-be-interpreted-as-v4"};

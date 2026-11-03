@@ -68,6 +68,7 @@ cardio::promise<std::shared_ptr<Nfs2Filesystem>> open_nfs2_filesystem_async(
   struct CancellationEnd { cardio::cancellation_source &source; ~CancellationEnd() { (void)source.cancel(); } } end{stopped};
   const auto stop = stopped.get_cancellation();
   auto mount = create_nfs_raw_session(options.connect_timeout_ms);
+  mount->require_reserved_port = options.require_reserved_port;
   configure_nfs2_auth(mount->rpc, options);
   co_await connect_nfs_raw_async(mount, address, options.mount_port, MOUNT_PROGRAM, MOUNT_V1, stop);
   mountres1 mounted{};
