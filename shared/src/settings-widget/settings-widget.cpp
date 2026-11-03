@@ -299,6 +299,7 @@ enum IpScanResultColumn {
   ip_scan_webdav_https_column,
   ip_scan_webdav_http_column,
   ip_scan_smb_column,
+  ip_scan_nfs_column,
   ip_scan_result_column_count,
 };
 
@@ -5576,7 +5577,9 @@ static void update_ip_scan_result(
                      ip_scan_webdav_http_column,
                      ip_scan_check_mark_for_port(entry.open_ports, 80),
                      ip_scan_smb_column,
-                     ip_scan_check_mark_for_port(entry.open_ports, 445), -1);
+                     ip_scan_check_mark_for_port(entry.open_ports, 445),
+                     ip_scan_nfs_column,
+                     ip_scan_check_mark_for_port(entry.open_ports, 2049), -1);
 }
 
 static void update_ip_scan_progress(
@@ -5760,7 +5763,7 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
   GtkListStore *result_store = gtk_list_store_new(
       ip_scan_result_column_count, G_TYPE_STRING, G_TYPE_STRING,
       G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
-      G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
+      G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
   GtkWidget *results =
       gtk_tree_view_new_with_model(GTK_TREE_MODEL(result_store));
   dialog_state->results = results;
@@ -5797,6 +5800,9 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
   append_ip_scan_column(GTK_TREE_VIEW(results),
                         settings_ui_text(SettingsUiText::smb_port_column),
                         ip_scan_smb_column, false);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::nfs_port_column),
+                        ip_scan_nfs_column, false);
   g_signal_connect(results, "row-activated",
                    G_CALLBACK(on_ip_scan_result_activated),
                    dialog_state.get());
@@ -6610,7 +6616,10 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(webdav_page), FALSE);
   assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(webdav_page)),
       widget_id(state, "webdav_page_scrollbar").c_str());
-  gtk_container_add(GTK_CONTAINER(webdav_page), webdav_settings_editor_root(state->webdav_editor));
+  // Keep the editor's outer spacing inside a painted scrollable surface.
+  GtkWidget *webdav_surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_container_add(GTK_CONTAINER(webdav_surface), webdav_settings_editor_root(state->webdav_editor));
+  gtk_container_add(GTK_CONTAINER(webdav_page), webdav_surface);
   GtkWidget *webdav_tab = create_tab_label(
       "WebDAV",
       widget_id(state, "webdav_tab").c_str());
@@ -6634,7 +6643,9 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(http_page), FALSE);
   assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(http_page)),
       widget_id(state, "http_page_scrollbar").c_str());
-  gtk_container_add(GTK_CONTAINER(http_page), http_settings_editor_root(state->http_editor));
+  GtkWidget *http_surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_container_add(GTK_CONTAINER(http_surface), http_settings_editor_root(state->http_editor));
+  gtk_container_add(GTK_CONTAINER(http_page), http_surface);
   GtkWidget *http_tab = create_tab_label(
       "HTTP/HTTPS",
       widget_id(state, "http_tab").c_str());
@@ -6673,14 +6684,23 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   state->nfs_editor = create_nfs_settings_editor(
       &state->draft_store, state->id_prefix, state->is_runtime, [state] {
+        sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, true);
         update_action_sensitivity(state);
         notify_changed(state);
+      }, [state](GtkWidget *entry) {
+        return create_ip_scan_address_row(
+            state, entry, "nfs_ip_scan_button",
+            state->is_runtime ? FALSE : TRUE);
       });
   auto *nfs_page = gtk_scrolled_window_new(nullptr, nullptr);
   assign_accessible_id(nfs_page, widget_id(state, "nfs_page").c_str());
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(nfs_page), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
   gtk_scrolled_window_set_overlay_scrolling(GTK_SCROLLED_WINDOW(nfs_page), FALSE);
-  gtk_container_add(GTK_CONTAINER(nfs_page), nfs_settings_editor_root(state->nfs_editor));
+  assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(nfs_page)),
+      widget_id(state, "nfs_page_scrollbar").c_str());
+  auto *nfs_surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_container_add(GTK_CONTAINER(nfs_surface), nfs_settings_editor_root(state->nfs_editor));
+  gtk_container_add(GTK_CONTAINER(nfs_page), nfs_surface);
   auto *nfs_tab = create_tab_label("NFS", widget_id(state, "nfs_tab").c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), nfs_page, nfs_tab);
   gtk_widget_show_all(nfs_page);
@@ -6710,7 +6730,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_widget_set_no_show_all(proxy_page, TRUE);
   gtk_widget_set_no_show_all(proxy_tab, TRUE);
   state->connection_pages.push_back({
-      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type, webdav_connection_type, http_connection_type, ftp_connection_type, smb_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
+      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type, webdav_connection_type, http_connection_type, ftp_connection_type, smb_connection_type, nfs_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
 
   auto [terminal_page, terminal_appearance_page] = create_terminal_pages(state);
   const std::string terminal_tab_id = widget_id(state, "terminal_tab");

@@ -26,6 +26,11 @@ import {
 import { waitForResult } from 'gestament/testing';
 import { describe, expect, it } from 'vitest';
 import {
+  expandTransferDirectory,
+  openTransferDirectory,
+  selectCurrentTransferDirectory,
+} from './file-transfer-destination-helpers.ts';
+import {
   createTestEvidence,
   expectElementKind,
 } from '../../shared/tests/connection-test-helpers.ts';
@@ -420,6 +425,7 @@ describe('WebDAV window', () => {
         await waitForResult(async () => {
           expect(await tree.getRowCount()).toBe(4);
         });
+        await selectCurrentTransferDirectory(app, false);
         for (let row = 0; row < 4; row += 1) await tree.selectRow(row);
         expect(await tree.selectedRows()).toHaveLength(4);
         const firstCell = await tree.cellAt(0, 0);
@@ -459,6 +465,7 @@ describe('WebDAV window', () => {
           );
         });
 
+        await openTransferDirectory(app, false, local);
         const localTree = expectElementKind(
           await app.getById('file_transfer_local_tree'),
           'table'
@@ -605,6 +612,9 @@ describe('WebDAV window', () => {
           await app.getById('file_transfer_local_refresh_button'),
           'button'
         ).click();
+        for (const row of await tree.selectedRows())
+          await tree.deselectRow(row);
+        await tree.selectRow(await rowFor(tree, 'UI folder'));
         await contextMenu(localTree, 'send-tree');
         await expectElementKind(
           await app.getById('file_transfer_send_item'),
@@ -618,16 +628,30 @@ describe('WebDAV window', () => {
             ).text()
           ).toBe('Sent 4 items');
           expect(
-            server.files.get('/dav/send-tree/資料 #+%.txt')?.content.toString()
+            server.files
+              .get('/dav/UI folder/send-tree/資料 #+%.txt')
+              ?.content.toString()
           ).toBe('upload from shared UI');
           expect(
-            server.files.get('/dav/send-tree/nested/empty.txt')?.content
+            server.files.get('/dav/UI folder/send-tree/nested/empty.txt')
+              ?.content
           ).toHaveLength(0);
         });
         await writeFile(
           join(local, 'send-tree/資料 #+%.txt'),
           'replacement from shared UI'
         );
+        await expandTransferDirectory(app, true, '/UI folder', 0);
+        await expandTransferDirectory(app, true, '/UI folder/send-tree', 1);
+        await expandTransferDirectory(
+          app,
+          true,
+          '/UI folder/send-tree/nested',
+          2
+        );
+        for (const row of await tree.selectedRows())
+          await tree.deselectRow(row);
+        await tree.selectRow(await rowFor(tree, 'UI folder'));
         await contextMenu(localTree, 'send-tree');
         await expectElementKind(
           await app.getById('file_transfer_send_item'),
@@ -653,9 +677,32 @@ describe('WebDAV window', () => {
             ).text()
           ).toBe('Sent 4 items');
           expect(
-            server.files.get('/dav/send-tree/資料 #+%.txt')?.content.toString()
+            server.files
+              .get('/dav/UI folder/send-tree/資料 #+%.txt')
+              ?.content.toString()
           ).toBe('replacement from shared UI');
         });
+        await waitForResult(async () =>
+          expect((await tree.info()).states).toContain('sensitive')
+        );
+        for (const name of ['UI folder', 'send-tree', 'nested'])
+          expect(
+            (await (await tree.cellAt(await rowFor(tree, name), 0))!.info())
+              .states
+          ).toContain('expanded');
+        expect(await tree.selectedRows()).toEqual([
+          await rowFor(tree, 'UI folder'),
+        ]);
+        await rowFor(tree, 'empty.txt');
+        expect(
+          (
+            await (await tree.cellAt(
+              await rowFor(tree, '資料 #+%.txt'),
+              1
+            ))!.info()
+          ).name
+        ).toBe('26 bytes');
+        await navigate('/UI folder');
         await contextMenu(tree, 'send-tree');
         await expectElementKind(
           await app.getById('file_transfer_remote_rename_item'),
@@ -665,10 +712,10 @@ describe('WebDAV window', () => {
         await rowFor(tree, 'renamed 日本語 #');
         expect(
           server.files
-            .get('/dav/renamed 日本語 #/資料 #+%.txt')
+            .get('/dav/UI folder/renamed 日本語 #/資料 #+%.txt')
             ?.content.toString()
         ).toBe('replacement from shared UI');
-        expect(server.directories.has('/dav/send-tree')).toBe(false);
+        expect(server.directories.has('/dav/UI folder/send-tree')).toBe(false);
         await contextMenu(tree, 'renamed 日本語 #');
         await expectElementKind(
           await app.getById('file_transfer_remote_delete_item'),
@@ -685,10 +732,12 @@ describe('WebDAV window', () => {
               'label'
             ).text()
           ).toBe('Deleted 1 item');
-          expect(server.directories.has('/dav/renamed 日本語 #')).toBe(false);
-          expect(server.files.has('/dav/renamed 日本語 #/資料 #+%.txt')).toBe(
-            false
-          );
+          expect(
+            server.directories.has('/dav/UI folder/renamed 日本語 #')
+          ).toBe(false);
+          expect(
+            server.files.has('/dav/UI folder/renamed 日本語 #/資料 #+%.txt')
+          ).toBe(false);
         });
         await contextMenu(localTree, 'send-tree');
         await expectElementKind(
@@ -712,6 +761,7 @@ describe('WebDAV window', () => {
           await app.getById('file_transfer_local_refresh_button'),
           'button'
         ).click();
+        await selectCurrentTransferDirectory(app, true);
         await contextMenu(localTree, 'cancel-upload.txt');
         await expectElementKind(
           await app.getById('file_transfer_send_item'),
@@ -731,7 +781,7 @@ describe('WebDAV window', () => {
           'button'
         ).click();
         const temporary = [...server.files.keys()].find((path) =>
-          path.startsWith('/dav/cancel-upload.txt.elder-terms-part-')
+          path.startsWith('/dav/UI folder/cancel-upload.txt.elder-terms-part-')
         );
         if (temporary === undefined)
           throw new Error(
@@ -755,7 +805,9 @@ describe('WebDAV window', () => {
             ).text()
           ).toBe('Cancelled');
         });
-        expect(server.files.has('/dav/cancel-upload.txt')).toBe(false);
+        expect(server.files.has('/dav/UI folder/cancel-upload.txt')).toBe(
+          false
+        );
         expect(
           server.requests.some(
             (request) =>

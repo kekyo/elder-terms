@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import type { GtkApp, GtkWidgetElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { describe, expect, it } from 'vitest';
+import { selectCurrentTransferDirectory } from '../../elder-terms-file-transfer/tests/file-transfer-destination-helpers.ts';
 import {
   expectCaptureToMatchFixture,
   expectElementKind,
@@ -3292,6 +3293,7 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
                 expect((await remoteTree.info()).states).toContain('sensitive');
                 expect(await remoteTree.getRowCount()).toBeGreaterThan(0);
               });
+              await selectCurrentTransferDirectory(app, true);
               const row = await waitForResult(async () => {
                 for (
                   let index = 0;

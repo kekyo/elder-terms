@@ -5,6 +5,9 @@
 
 #include "nfs-rpc.h"
 #include <poll.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <cerrno>
 #include <cstring>
 #include <string_view>
 
@@ -121,6 +124,25 @@ static void raw_completed(rpc_context *, int status, void *data, void *opaque) {
   complete(*static_cast<NfsCompletion *>(opaque), status, data, status == RPC_STATUS_SUCCESS);
 }
 
+static void check_nfs_source_port(const NfsRpcSession &session) {
+  if (!session.require_reserved_port) return;
+  const auto fd = rpc_get_fd(session.rpc);
+  if (fd < 0) return; // The connect entry point has not created its socket yet.
+  sockaddr_storage address{};
+  socklen_t length = sizeof(address);
+  if (getsockname(fd, reinterpret_cast<sockaddr *>(&address), &length) != 0)
+    throw RemoteFileError("Cannot inspect NFS source port: " + std::string(std::strerror(errno)), true);
+  std::uint16_t port;
+  if (address.ss_family == AF_INET && length >= sizeof(sockaddr_in))
+    port = ntohs(reinterpret_cast<const sockaddr_in *>(&address)->sin_port);
+  else if (address.ss_family == AF_INET6 && length >= sizeof(sockaddr_in6))
+    port = ntohs(reinterpret_cast<const sockaddr_in6 *>(&address)->sin6_port);
+  else throw RemoteFileError("Cannot inspect NFS source port: unsupported socket address", true);
+  if (port == 0 || port >= IPPORT_RESERVED)
+    throw RemoteFileError("NFS requires a reserved source port below 1024, but the source port is " +
+        std::to_string(port) + ". Grant permission to bind reserved ports or disable this requirement.", true);
+}
+
 static cardio::promise<void> wait_nfs_async(const std::shared_ptr<NfsRpcSession> &session,
     NfsCompletion &completion, cardio::cancellation cancellation) {
   NfsCancellationScope deadline{cardio::cancellations::timeout(session->timeout_ms)};
@@ -131,6 +153,9 @@ static cardio::promise<void> wait_nfs_async(const std::shared_ptr<NfsRpcSession>
       const auto fd = rpc_get_fd(session->rpc);
       const auto wanted = rpc_which_events(session->rpc);
       if (fd < 0) throw RemoteFileError("NFS socket is unavailable", true);
+      // libnfs may replace its socket while discovering RPC ports or mounting.
+      // Check each socket before its next service call can send RPC requests.
+      check_nfs_source_port(*session);
       auto interest = cardio::fd_event::none;
       if (wanted & POLLIN) interest |= cardio::fd_event::read;
       if (wanted & POLLOUT) interest |= cardio::fd_event::write;
@@ -174,6 +199,7 @@ cardio::promise<NfsRpcResult> execute_nfs_async(std::shared_ptr<NfsRpcSession> s
   NfsCompletion completion;
   completion.consume = std::move(consume);
   try {
+    check_nfs_source_port(*session);
     const int status = start(high_completed, &completion);
     if (status < 0) {
       session->active = false;
@@ -194,6 +220,7 @@ cardio::promise<void> execute_nfs_raw_async(std::shared_ptr<NfsRpcSession> sessi
   NfsCompletion completion;
   completion.consume = [consume = std::move(consume)](int, void *data) { if (consume) consume(data); };
   try {
+    check_nfs_source_port(*session);
     if (start(raw_completed, &completion) < 0) {
       session->active = false;
       throw RemoteFileError(readable_nfs_error(rpc_get_error(session->rpc)), false);

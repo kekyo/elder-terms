@@ -15,6 +15,11 @@ import { createGtkAppLauncher, type GtkTableElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import {
+  expandTransferDirectory,
+  openTransferDirectory,
+  selectCurrentTransferDirectory,
+} from './file-transfer-destination-helpers.ts';
+import {
   createTestEvidence,
   expectElementKind,
 } from '../../shared/tests/connection-test-helpers.ts';
@@ -245,7 +250,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
       );
     expect(
       (await (await app.getById('file_transfer_receive_item')).info()).states
-    ).toContain('sensitive');
+    ).not.toContain('sensitive');
     await evidence.captureEvidence('smb-shares', async () => app.capture());
     await app.input.pressKey('Escape');
     const localTree = expectElementKind(
@@ -265,7 +270,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     await app.input.setMouseButton('right', false);
     expect(
       (await (await app.getById('file_transfer_send_item')).info()).states
-    ).not.toContain('sensitive');
+    ).toContain('sensitive');
     await app.input.pressKey('Escape');
     const treeBounds = (await tree.capture()).bounds;
     await app.input.moveMouseTo(
@@ -336,6 +341,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     expect(await rowFor('single.txt')).toBeGreaterThanOrEqual(0);
     expect(await rowFor('folder')).toBeGreaterThanOrEqual(0);
     for (const name of ['single.txt', 'folder']) {
+      await selectCurrentTransferDirectory(app, false);
       for (const selected of await tree.selectedRows())
         await tree.deselectRow(selected);
       const row = await rowFor(name);
@@ -357,6 +363,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
         expect((await receive.info()).states).toContain('showing');
       });
       await receive.click();
+      await openTransferDirectory(app, false, local);
     }
     await waitForResult(
       async () => {
@@ -413,6 +420,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
         'button'
       ).click();
     };
+    await expandTransferDirectory(app, true, `/${share}/folder`, 0);
     await contextMenu(tree, 'single.txt');
     const newFolder = expectElementKind(
       await app.getById('file_transfer_remote_new_directory_item'),
@@ -422,6 +430,10 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     await newFolder.click();
     await acceptName('ui-folder');
     await rowFor('ui-folder');
+    expect(
+      (await (await tree.cellAt(await rowFor('folder'), 0))!.info()).states
+    ).toContain('expanded');
+    await rowFor('nested.txt');
     await contextMenu(tree, 'ui-folder');
     await expectElementKind(
       await app.getById('file_transfer_remote_rename_item'),
@@ -429,6 +441,10 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     ).click();
     await acceptName('ui-renamed');
     await rowFor('ui-renamed');
+    expect(
+      (await (await tree.cellAt(await rowFor('folder'), 0))!.info()).states
+    ).toContain('expanded');
+    expect(await tree.selectedRows()).toEqual([await rowFor('ui-renamed')]);
     await contextMenu(tree, 'ui-renamed');
     await expectElementKind(
       await app.getById('file_transfer_remote_delete_item'),
@@ -444,6 +460,13 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
         names.push((await (await tree.cellAt(row, 0))?.info())?.name);
       expect(names).not.toContain('ui-renamed');
     });
+    expect(
+      (await (await tree.cellAt(await rowFor('folder'), 0))!.info()).states
+    ).toContain('expanded');
+    await rowFor('nested.txt');
+    await evidence.captureEvidence('smb-preserved-delete-tree', async () =>
+      app.capture()
+    );
 
     const upload = join(local, 'kept.txt');
     await writeFile(upload, 'first upload\n');
@@ -451,13 +474,32 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
       await app.getById('file_transfer_local_refresh_button'),
       'button'
     ).click();
+    await selectCurrentTransferDirectory(app, true);
+    await expandTransferDirectory(app, true, `/${share}`, 0);
+    for (const row of await tree.selectedRows()) await tree.deselectRow(row);
+    await tree.selectRow(await rowFor('single.txt'));
     await contextMenu(localTree, 'kept.txt');
     await expectElementKind(
       await app.getById('file_transfer_send_item'),
       'menuItem'
     ).click();
     await rowFor('kept.txt');
+    await waitForResult(async () =>
+      expect((await tree.info()).states).toContain('sensitive')
+    );
+    const selectedShare = await rowFor(share);
+    expect(
+      (await (await tree.cellAt(selectedShare, 0))!.info()).states
+    ).toContain('expanded');
+    expect(await tree.selectedRows()).toEqual([await rowFor('single.txt')]);
+    expect(await remotePath.text()).toBe('/');
+    await evidence.captureEvidence('smb-preserved-transfer-tree', async () =>
+      app.capture()
+    );
+    await openTransferDirectory(app, true, `/${share}`);
+    await rowFor('kept.txt');
     await writeFile(upload, 'replacement upload\n');
+    await selectCurrentTransferDirectory(app, true);
     await contextMenu(localTree, 'kept.txt');
     await expectElementKind(
       await app.getById('file_transfer_send_item'),
@@ -483,11 +525,13 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
         ).text()
       ).toContain('0 active, 0 waiting');
     });
+    await openTransferDirectory(app, true, `/${share}`);
     await rm(upload);
     await expectElementKind(
       await app.getById('file_transfer_local_refresh_button'),
       'button'
     ).click();
+    await selectCurrentTransferDirectory(app, false);
     await contextMenu(tree, 'kept.txt');
     await expectElementKind(
       await app.getById('file_transfer_receive_item'),
@@ -496,11 +540,13 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     await waitForResult(async () => {
       expect(await readFile(upload, 'utf8')).toBe('first upload\n');
     });
+    await openTransferDirectory(app, false, local);
     await writeFile(upload, 'replacement upload\n');
     await expectElementKind(
       await app.getById('file_transfer_local_refresh_button'),
       'button'
     ).click();
+    await selectCurrentTransferDirectory(app, true);
     await contextMenu(localTree, 'kept.txt');
     await expectElementKind(
       await app.getById('file_transfer_send_item'),
@@ -526,6 +572,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
         ).text()
       ).toContain('0 active, 0 waiting');
     });
+    await openTransferDirectory(app, true, `/${share}`);
     if (!externalAddress)
       expect(podman(['exec', container, 'cat', '/share/kept.txt'])).toBe(
         'replacement upload\n'
@@ -883,7 +930,21 @@ it('downloads and uploads over experimental SMB SSH proxy in the transfer window
               expect((await remote.info()).states).toContain('sensitive');
               if (target !== share) expect(await remote.getRowCount()).toBe(0);
             });
+            if (target !== share) {
+              // Return to the nonempty share list so the next empty listing
+              // proves navigation completed instead of matching the old one.
+              await expectElementKind(
+                await app.getById('file_transfer_remote_up_button'),
+                'button'
+              ).click();
+              await waitForResult(async () => {
+                expect(await path.text()).toBe('/');
+                expect((await remote.info()).states).toContain('sensitive');
+                expect(await remote.getRowCount()).toBeGreaterThan(0);
+              });
+            }
           }
+          await selectCurrentTransferDirectory(app, false);
           await selectMenu(
             'file_transfer_remote_tree',
             download,
@@ -896,16 +957,19 @@ it('downloads and uploads over experimental SMB SSH proxy in the transfer window
               ),
             { timeoutMs: 30_000 }
           );
+          await openTransferDirectory(app, false, local);
           await writeFile(join(local, 'proxy-upload.txt'), 'proxy upload\n');
           await expectElementKind(
             await app.getById('file_transfer_local_refresh_button'),
             'button'
           ).click();
+          await selectCurrentTransferDirectory(app, true);
           await selectMenu(
             'file_transfer_local_tree',
             'proxy-upload.txt',
             'file_transfer_send_item'
           );
+          await openTransferDirectory(app, true, `/${share}`);
           await waitForResult(async () => {
             expect((await remote.info()).states).toContain('sensitive');
             const names = [];
@@ -914,6 +978,7 @@ it('downloads and uploads over experimental SMB SSH proxy in the transfer window
             expect(names).toContain('proxy-upload.txt');
           });
           await rm(join(local, 'proxy-upload.txt'));
+          await selectCurrentTransferDirectory(app, false);
           await selectMenu(
             'file_transfer_remote_tree',
             'proxy-upload.txt',
@@ -924,6 +989,7 @@ it('downloads and uploads over experimental SMB SSH proxy in the transfer window
               await readFile(join(local, 'proxy-upload.txt'), 'utf8')
             ).toBe('proxy upload\n')
           );
+          await openTransferDirectory(app, false, local);
           await waitForResult(async () =>
             expect((await remote.info()).states).toContain('sensitive')
           );

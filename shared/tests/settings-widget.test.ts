@@ -3742,17 +3742,29 @@ describe.concurrent('shared settings widget', () => {
       ],
       async ({ app, directory }) => {
         await selectSettingsTab(app, 'NFS');
-        const encoding = expectElementKind(
-          await app.getById('settings_nfs_filename_encoding_entry'),
-          'entry'
+        const encoding = await expectInheritedEntry(
+          app,
+          'settings_nfs_filename_encoding_entry',
+          'CP932 (global default)'
         );
-        const inherit = expectElementKind(
-          await app.getById('settings_nfs_filename_encoding_inherit'),
-          'checkbox'
-        );
-        expect(await encoding.text()).toBe('CP932');
-        expect(await inherit.isChecked()).toBe(true);
-        await inherit.toggle();
+        await expectSensitive(encoding);
+        expect(
+          await comboOptionNames(app, 'settings_nfs_version_combo')
+        ).toEqual([
+          'NFS v3 (TCP) (built-in default)',
+          'NFS v2 (TCP)',
+          'NFS v3 (TCP)',
+          'NFS v4.0 (TCP)',
+        ]);
+        expect(
+          await comboOptionNames(app, 'settings_nfs_discover_exports_combo')
+        ).toEqual(['Enabled (built-in default)', 'Enabled', 'Disabled']);
+        expect(
+          await comboOptionNames(
+            app,
+            'settings_nfs_require_reserved_port_combo'
+          )
+        ).toEqual(['Disabled (built-in default)', 'Enabled', 'Disabled']);
         await encoding.setText('CP932//IGNORE');
         await expectInsensitive(await app.getById('settings_apply_button'));
         await encoding.setText('EUC-JP');
@@ -3761,9 +3773,34 @@ describe.concurrent('shared settings widget', () => {
           join(directory, 'nfs-settings.png'),
           (await app.capture()).image
         );
-        await inherit.toggle();
-        expect(await encoding.text()).toBe('CP932');
-        await expectInsensitive(encoding);
+        await encoding.setText('');
+        await expectInheritedEntry(
+          app,
+          'settings_nfs_filename_encoding_entry',
+          'CP932 (global default)'
+        );
+        await expectSensitive(encoding);
+        const scroll = expectElementKind(
+          await app.getById('settings_nfs_page_scrollbar'),
+          'scrollbar'
+        );
+        await scroll.setValue((await scroll.valueInfo()).maximum);
+        await waitForResult(async () => {
+          const field = await (
+            await app.getById('settings_nfs_require_reserved_port_combo')
+          ).capture();
+          const apply = await (
+            await app.getById('settings_apply_button')
+          ).capture();
+          expect(field.bounds.y).toBeGreaterThan(0);
+          expect(field.bounds.y + field.bounds.height).toBeLessThan(
+            apply.bounds.y
+          );
+        });
+        await writeFile(
+          join(directory, 'nfs-reserved-port-setting.png'),
+          (await app.capture()).image
+        );
       }
     );
   });
@@ -4493,6 +4530,7 @@ describe.concurrent('shared settings widget', () => {
           'settings_ftp_ip_scan_button',
           'settings_webdav_ip_scan_button',
           'settings_smb_ip_scan_button',
+          'settings_nfs_ip_scan_button',
         ]) {
           const button = expectElementKind(await app.getById(id), 'button');
           expect((await button.info()).name).toBe('IP scan');
@@ -4536,7 +4574,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForResult(async () => {
           expect(await results.getRowCount()).toBe(1);
         });
-        expect(await results.getColumnCount()).toBe(9);
+        expect(await results.getColumnCount()).toBe(10);
         for (const heading of [
           'SSH/SFTP(22)',
           'TELNET(23)',
@@ -4545,6 +4583,7 @@ describe.concurrent('shared settings widget', () => {
           'WebDAV(443)',
           'WebDAV(80)',
           'SMB(445)',
+          'NFS(2049)',
         ]) {
           expect(await dialog.findText(heading)).toBeDefined();
         }
@@ -4554,6 +4593,7 @@ describe.concurrent('shared settings widget', () => {
           '',
           '✓',
           '✓',
+          '',
           '',
           '',
           '',
@@ -4604,8 +4644,9 @@ describe.concurrent('shared settings widget', () => {
     '443',
     '445',
     '990',
-    '21,22,23,80,443,445,990',
-    '21,443,990',
+    '2049',
+    '21,22,23,80,443,445,990,2049',
+    '21,443,990,2049',
     '',
   ]) {
     it(`shows only the responding IP scan ports: ${ports || 'none'}`, async (context) => {
@@ -4635,12 +4676,12 @@ describe.concurrent('shared settings widget', () => {
             await app.getById('settings_ip_scan_results'),
             'table'
           );
-          expect(await results.getColumnCount()).toBe(9);
           expect(await results.getRowCount()).toBe(ports ? 1 : 0);
+          expect(await results.getColumnCount()).toBe(10);
           if (ports) {
             const open = ports.split(',').map(Number);
             for (const [index, port] of [
-              22, 23, 21, 990, 443, 80, 445,
+              22, 23, 21, 990, 443, 80, 445, 2049,
             ].entries()) {
               expect(
                 (await (await results.cellAt(0, index + 2))?.info())?.name
@@ -4707,7 +4748,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForResult(async () => {
           expect((await dialog.bounds()).width).toBeLessThanOrEqual(640);
         });
-        expect(await results.getColumnCount()).toBe(9);
+        expect(await results.getColumnCount()).toBe(10);
         for (const [column, expected] of [
           '✓',
           '',
@@ -4767,6 +4808,98 @@ describe.concurrent('shared settings widget', () => {
       }
     );
   });
+
+  for (const version of ['2', '3', '4.0']) {
+    for (const language of ['C', 'ja']) {
+      it(`preserves NFS v${version} settings after IP scan in ${language}`, async (context) => {
+        const directory = await mkdtemp(join(tmpdir(), 'elder-scan-nfs-'));
+        const savePath = join(directory, 'connection.ini');
+        const retained = [
+          `version=${version}`,
+          `nfs_port=${version === '4.0' ? 0 : 22049}`,
+          'mount_port=20048',
+          'filename_encoding=CP932',
+          'uid=1234',
+          'gid=2345',
+          version === '4.0'
+            ? 'namespace_path=/public'
+            : 'export_path=/srv/public',
+        ];
+        try {
+          await runSharedGtkTest(
+            context,
+            [
+              '--page=nfs',
+              '--type=nfs',
+              '--connection=nfs.address=before.example.test',
+              ...retained.map((setting) => `--connection=nfs.${setting}`),
+              '--ip-scan=complete',
+              '--ip-scan-ports=2049',
+              `--save-file=${savePath}`,
+            ],
+            async ({ app, directory: evidence }) => {
+              await selectSettingsTab(app, 'NFS');
+              const entry = expectElementKind(
+                await app.getById('settings_nfs_address_entry'),
+                'entry'
+              );
+              const button = expectElementKind(
+                await app.getById('settings_nfs_ip_scan_button'),
+                'button'
+              );
+              expect((await button.info()).name).toBe(
+                language === 'ja' ? 'IPスキャン' : 'IP scan'
+              );
+              await button.click();
+              const results = expectElementKind(
+                await app.getById('settings_ip_scan_results'),
+                'table'
+              );
+              await waitForResult(async () => {
+                expect(await results.getRowCount()).toBe(1);
+                expect((await (await results.cellAt(0, 1))?.info())?.name).toBe(
+                  'router.example.test'
+                );
+              });
+              const dialog = expectElementKind(
+                await app.getById('settings_ip_scan_dialog'),
+                'window'
+              );
+              expect(await dialog.findText('NFS(2049)')).toBeDefined();
+              expect((await (await results.cellAt(0, 9))?.info())?.name).toBe(
+                '✓'
+              );
+              await writeFile(
+                join(evidence, 'nfs-scan.png'),
+                (await dialog.capture()).image
+              );
+              await doubleClickTableRow(app, results, 0);
+              await waitForResult(async () => {
+                expect(
+                  await app.findById('settings_ip_scan_dialog')
+                ).toBeUndefined();
+              });
+              expect(await entry.text()).toBe('router.example.test');
+              await expectElementKind(
+                await app.getById('settings_save_button'),
+                'button'
+              ).click();
+              await waitForPrintedStore(app, 'SAVED');
+              const saved = await readFile(savePath, 'utf8');
+              expect(saved).toContain('type=nfs\n');
+              expect(saved).toContain('[nfs]\n');
+              expect(saved).toContain('address=router.example.test\n');
+              for (const setting of retained)
+                expect(saved).toContain(`${setting}\n`);
+            },
+            language === 'ja' ? { env: japaneseTestEnvironment } : undefined
+          );
+        } finally {
+          await rm(directory, { recursive: true, force: true });
+        }
+      });
+    }
+  }
 
   for (const type of ['ssh', 'sftp', 'telnet', 'ftp', 'webdav', 'smb']) {
     for (const mode of ['complete', 'no-name', 'pending', 'mdns', 'llmnr']) {

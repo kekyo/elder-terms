@@ -302,19 +302,19 @@ In an INI file, `[general] icon` accepts these forms:
 
 ![IP scan results](./images/ip-scan-results.png)
 
-The TELNET, SSH/SFTP, FTP/FTPS, WebDAV, and SMB settings place an "IP scan" button beside the
+The TELNET, SSH/SFTP, FTP/FTPS, WebDAV, SMB, and NFS settings place an "IP scan" button beside the
 address field.
 Opening it immediately scans the IPv4 ranges of all configured network interfaces
 for the standard FTP/explicit FTPS (21), SSH/SFTP (22), TELNET (23), WebDAV HTTP (80),
-WebDAV HTTPS (443), SMB (445), and implicit FTPS (990) TCP ports.
-All connection settings scan the same seven ports.
+WebDAV HTTPS (443), SMB (445), implicit FTPS (990), and NFS (2049) TCP ports.
+All connection settings scan the same eight ports.
 
 For example, a `/24` interface scans every address whose final octet is 0 through 255.
 A range wider than `/24` is limited to its first 256 addresses by treating the additional upper host bits as zero.
 For example, an address on `172.20.0.0/16` scans `172.20.0.0` through `172.20.0.255`.
 
 You can select discovered hosts while the scan is still running. Resolved host names appear as they become available.
-The table has columns for the IP address, host name, and seven ports, with a check mark for each port that accepted a TCP connection.
+The table has columns for the IP address, host name, and eight ports, with a check mark for each port that accepted a TCP connection.
 A check mark identifies a candidate host; it does not verify service support such as WebDAV, successful authentication, or TLS certificate validity.
 The FTP/FTPS (21) column covers both plain FTP and explicit FTPS.
 The progress bar counts checked addresses in the scan range. Scroll horizontally if the table does not fit.
@@ -323,7 +323,7 @@ Double-click a row to stop the scan, close the dialog,
 and copy the resolved name into the setting if it is already available.
 Otherwise, the numeric IP address is used.
 Only the address changes. The connection type, port, entry name, WebDAV HTTPS/HTTP choice,
-FTP TLS mode, paths, and authentication settings are preserved.
+FTP TLS mode, NFS version, paths, and authentication settings are preserved.
 Check the connection settings and save them after selecting a host.
 
 Click "Cancel" to stop and close the scan without changing the address.
@@ -349,7 +349,7 @@ See the [systemd resolver API documentation](https://github.com/systemd/systemd/
 
 ![SSH and SFTP connection settings](./images/ssh-sftp-settings.png)
 
-SSH, SFTP, TELNET, WebDAV and passive FTP/FTPS can use an SSH gateway.
+SSH, SFTP, TELNET, HTTP/HTTPS, WebDAV, passive FTP/FTPS, SMB and NFS can use an SSH gateway.
 Configure it in the separate "SSH proxy" tab, keeping the final destination in
 its protocol tab. See [Using SSH proxy](./docs/en/ssh-proxy.md) for inheritance,
 authentication and supported connection modes.
@@ -379,9 +379,12 @@ The FTP, FTPS, SFTP, WebDAV, and SMB windows show local files on the left and re
 Icons beside names distinguish folders, documents, images, source code, archives, links, and other file types.
 SMB shares have a different icon from ordinary folders.
 
-Select items, right-click, and choose "Send" or "Receive".
+Select one folder or regular file in the opposite pane, then right-click the source items and choose "Send" or "Receive".
+Choose the destination in Remote on the right for Send, or Local on the left for Receive. Selecting a folder transfers into that folder; selecting a file transfers into its containing folder.
+These actions are unavailable when no destination is selected, a symbolic link is selected, or multiple items are selected.
+The path field is not used as the destination. To transfer into the folder currently open, select a file directly inside it, or use "Up" to open its parent and select that folder.
 Each selection becomes one transfer job in the "Transfers" list at the bottom of the window.
-The destination is the folder selected when you submit the request. Additional jobs run in order.
+The destination is fixed when you submit the request. Changing the selection later does not change an existing job's destination. Additional jobs run in order.
 
 Expand "Transfers" to see each job's state, progress, and Cancel button.
 Drag the divider above the list to change its height.

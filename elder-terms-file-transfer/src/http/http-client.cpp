@@ -136,6 +136,21 @@ static void reject_write() { throw RemoteFileError("HTTP connections are read-on
 class HttpClient final : public RemoteFileClient {
 public:
   std::shared_ptr<HttpConnection> connection;
+  std::string display_path(const std::string &path) const override {
+    const auto url = resource_url(*connection, path);
+    return url.substr(url.find('/', url.find("://") + 3));
+  }
+  cardio::promise<std::string> resolve_input_path_async(
+      std::string text, cardio::cancellation cancellation) override {
+    cancellation.throw_if_cancellation_requested();
+    if (text.starts_with('/')) {
+      const auto &base = connection->options.base_url;
+      // An entered absolute path always belongs to this connection, including
+      // paths beginning with two slashes that URL resolution treats as a host.
+      text = base.substr(0, base.find('/', base.find("://") + 3)) + text;
+    }
+    co_return resource_url(*connection, text);
+  }
   std::string parent_path(const std::string &path) const override {
     const auto url_path = path.substr(0, path.find('?'));
     return http_resolve_url(path, url_path.ends_with('/') ? "../" : "./");

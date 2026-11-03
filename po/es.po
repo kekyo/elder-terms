@@ -2643,5 +2643,9 @@ msgid "SMB(445)"
 msgstr "SMB(445)"
 
 #: shared/src/settings-widget/settings-presentation.cpp
+msgid "NFS(2049)"
+msgstr "NFS(2049)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
 msgid "Shows TCP port responses. Service support and authentication are not verified."
 msgstr "Muestra las respuestas de los puertos TCP. No se comprueban la compatibilidad con los servicios ni la autenticación."

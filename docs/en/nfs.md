@@ -6,19 +6,41 @@ NFS connects to directories published by a server, called exports. elder-terms s
 
 Choose "NFS" as the connection type in the launcher, then specify the server address and version on the NFS tab. The default is v3. Select a version accepted by the server; a failed connection never falls back to another version.
 
-Authentication uses AUTH_SYS with numeric user and group IDs. No password is requested. UID and GID default to the current process's IDs and can be set to match server permissions. Up to 16 supplementary groups are supported. UDP, RPCSEC_GSS, NFS v4.1/v4.2, and SSH proxy are outside the supported scope.
+Use "IP scan" beside the address field to find a server. A check mark under "NFS(2049)" identifies a candidate that accepted a TCP connection on port 2049. Verify the supported version and access to public paths by connecting. Selecting a candidate preserves the version, NFS and MOUNT ports, and authentication settings. Enter the address and port manually for servers using a port other than 2049.
 
-For v2 and v3, `/` on the remote side lists exports. Register known export paths when the server does not allow enumeration. Registered paths remain usable when enumeration fails.
+Authentication uses AUTH_SYS with numeric user and group IDs. No password is requested. UID and GID default to the current process's IDs and can be set to match server permissions. Up to 16 supplementary groups are supported. UDP, RPCSEC_GSS, and NFS v4.1/v4.2 are outside the supported scope.
+
+For v2 and v3, the application requests the server's export list. Register known export paths when the server does not allow enumeration. Registered paths remain usable when enumeration fails.
 
 For v4.0, the application explores the server's public directory tree. This differs from the v2/v3 export list. For example, if a server exposes v3's `/srv/public` as `/public` in v4, enter `/public` in the dedicated v4 path settings. Known public paths can be registered even when intermediate directories cannot be listed.
 
-Open a public root to browse its contents. "Up" returns to the parent, or to the root list from a public root. The path field displays the current location and cannot be edited. `/srv/public:/Documents`, for example, means Documents inside that export.
+Public paths are grouped by their common parent directories. For example, expand `/storage1` at the root to see `/storage1/home` and `/storage1/public`. Registered public paths remain browsable when their parent is not exported.
+
+When `/` itself is published, its contents appear at the remote root. Otherwise, the root lists the public paths.
+
+Open a public root to browse its contents. "Up" returns to its parent in the tree. The path field displays an absolute path such as `/srv/public/Documents`. Enter a path and press Enter to navigate there. `.` and `..` components and consecutive slashes within the path are not accepted. Trailing slashes are omitted from the display except for the root.
+
+When public paths are nested, navigation uses the deepest known public path containing the entered location. For example, if `/srv/public` and `/srv/public/archive` are known, `/srv/public/archive/Documents` uses the latter. You can navigate directly to a known public path even when its parents cannot be listed.
+
+## Connect through SSH proxy
+
+Enable the gateway on the SSH proxy tab and keep the final server on the NFS tab. The gateway resolves the destination hostname. Browsing multiple exports shares the same SSH connection.
+
+For v2/v3, both NFS and MOUNT traffic pass through the gateway. A port set to 0 is discovered through the server's TCP port 111. Specifying both ports avoids discovery. For v4.0, the configured NFS port is used, or TCP 2049 when it is 0; MOUNT and port discovery are not needed. See [libnfs port settings](https://github.com/sahlberg/libnfs#readme).
+
+SSH proxy cannot be combined with Require reserved source port. Enabling both produces an error in settings and before connecting, without changing either setting. Standard SSH forwarding cannot request a source port below 1024 on the gateway. See the [SSH TCP forwarding specification](https://www.rfc-editor.org/rfc/rfc4254.html#section-7.2).
+
+The NFS server sees connections from the gateway. Allow that host in exports and, if the server requires reserved source ports, specify `insecure` for that connection. File access continues to use the UID and GID from the NFS tab, independently of the SSH login user. Follow the [exports specification](https://man7.org/linux/man-pages/man5/exports.5.html).
+
+SSH encrypts traffic between this machine and the gateway. If the gateway is a separate machine from the NFS server, SSH does not encrypt that final segment. Connection or forwarding failure never switches to a direct connection. See [Using SSH proxy](ssh-proxy.md) for authentication and inheritance.
 
 ## Transfers and file operations
 
 Right-click an item to send, receive, rename, delete, or create a folder. Folder transfers and deletion include descendants. Symbolic links are copied as links without recursively following their targets. Permissions and access/modification timestamps are preserved where allowed by the server.
 
-Public roots cannot be renamed or deleted, and items cannot be created in the root list `/`. Nested public roots are also protected. Renaming across public roots is unavailable; receive and send the item separately if needed.
+Before sending, select one folder or regular file in Remote; before receiving, select one in Local. Selecting a folder transfers into that folder. Selecting a file transfers into its containing folder. Send and Receive are unavailable when no destination is selected, a symbolic link is selected, or multiple items are selected. The path field is not used as the destination. Selecting a public root lets you send into it.
+
+Public roots, including nested ones, cannot be renamed or deleted. The list grouping public paths and any unexported parents cannot be modified, contain newly created items, or serve as transfer destinations. When `/` itself is published, items can be created beneath it if the server permits. Renaming across public roots is unavailable; receive and send the item separately if needed.
 
 When a destination already exists, choose overwrite or skip. Uploads use a temporary location and install the final name only after all data has been sent. For v2, this temporary location is a folder. If a lost connection prevents ownership or cleanup from being confirmed, the job result retains the temporary path. Reconnect, inspect its contents, and delete it if no longer needed.
 
@@ -32,7 +54,11 @@ The default is UTF-8. Set "Filename encoding" to CP932, Shift_JIS, EUC-JP, or an
 
 Each setting can inherit from global connection defaults or be overridden for one connection. Theme inheritance is not yet supported. Saving a new filename encoding during a connection leaves that connection unchanged; reconnect to apply it. Existing job labels retain their original display names.
 
+Clear a text or numeric entry to display and use its inherited value. Version and enabled/disabled selectors include a default option to restore inheritance. Select "Custom" to edit a multiline list. An empty custom list overrides any inherited entries with an empty list.
+
 Names are not automatically detected, including in directories containing mixed encodings. Undecodable names display their original bytes, for example `[undecodable: FF]`. Different original names remain separate entries even when their display names match. Downloads request a decision when a local filename cannot be formed or would collide. Skipping the item lets other items continue.
+
+If multiple items have the same displayed path, navigation through the path field reports an error. Select the desired item in the tree instead. Tree operations distinguish original names even when their display names match.
 
 Creating or renaming an item fails when the new name cannot be represented exactly. The application does not substitute characters or normalize Unicode names. Link targets are copied only when they can also be converted exactly.
 
@@ -48,10 +74,11 @@ Settings are stored in the `[nfs]` INI section. Separate lists of paths or suppl
 | `version` | `3` | `2`, `3`, or `4.0` |
 | `nfs_port` | `0` | Automatic; use 1–65535 for a fixed port |
 | `mount_port` | `0` | v2/v3 MOUNT port; 0 discovers it automatically |
-| `export_path` | Empty | Initial v2/v3 export; empty shows the list |
+| `require_reserved_port` | `false` | Require a source port below 1024 |
+| `export_path` | Empty | Initial v2/v3 export; empty opens `/` |
 | `known_exports` | Empty | Known absolute v2/v3 export paths |
 | `discover_exports` | `true` | Request the v2/v3 export list |
-| `namespace_path` | Empty | Initial v4.0 public path; empty shows the list |
+| `namespace_path` | Empty | Initial v4.0 public path; empty opens `/` |
 | `known_namespace_paths` | Empty | Known v4.0 public paths |
 | `discover_namespace` | `true` | Explore the v4.0 public tree |
 | `filename_encoding` | `UTF-8` | Encoding of filenames and link targets |
@@ -81,6 +108,8 @@ gid=1000
 
 ## Connection and size limits
 
-A server requiring a reserved source port needs the application to have permission to use that port. The connection fails without it. Check server export policies and numeric user IDs when troubleshooting access. Reserved-port requirements are described in [nfs-utils exports(5)](https://man7.org/linux/man-pages/man5/exports.5.html).
+A reserved port is a source port below 1024. A server requiring a reserved port needs the application to have permission to use that port. The connection fails without it. Check server export policies and numeric user IDs when troubleshooting access. Reserved-port requirements are described in [nfs-utils exports(5)](https://man7.org/linux/man-pages/man5/exports.5.html).
+
+"Require reserved source port" in the NFS tab is disabled by default. When enabled, the application checks that the source port is below 1024. If it is not, the application sends no NFS requests and displays the reason. This setting applies to IPv4 and IPv6 connections using v2, v3, or v4.0. Enabling it does not grant additional execution privileges.
 
 NFS v2 represents file sizes and offsets with 32 bits. To avoid ambiguous boundary responses, elder-terms rejects uploads of 4,294,967,295 bytes or more and downloads whose reported size equals that boundary. Inconsistent received data and size metadata also cause an error. Use v3 or v4.0 for large files. See [RFC 1094](https://www.rfc-editor.org/rfc/rfc1094.html) for protocol limits.

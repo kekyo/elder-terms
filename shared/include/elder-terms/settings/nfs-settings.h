@@ -24,6 +24,8 @@ struct NfsConnectionSettings {
   gint64 nfs_port = 0;
   /** MOUNT service port, or zero for PORTMAP discovery. */
   gint64 mount_port = 0;
+  /** Require a source port below 1024 without granting OS privileges. */
+  bool require_reserved_port = false;
   /** Initial v2/v3 export, or empty to show all available exports. */
   std::string export_path;
   /** Additional absolute v2/v3 export paths, independent of their basenames. */

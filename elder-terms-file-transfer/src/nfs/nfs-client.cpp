@@ -337,11 +337,20 @@ struct NfsLocation {
   std::string native;
 };
 
+struct NfsBrowserDirectory {
+  std::string bytes;
+  std::string parent;
+  bool virtual_directory;
+  std::vector<RemoteFileAttributes> children;
+};
+
 struct NfsServer final : RemoteFileClient {
   NfsClientOpenOptions options;
   std::vector<std::string> addresses;
   std::string generation;
   std::map<std::string, NfsExport> exports;
+  std::map<std::string, std::string> browser_paths;
+  std::map<std::string, NfsBrowserDirectory> browser_directories;
   std::shared_ptr<NfsRpcSession> namespace_session;
   cardio::primitives::mutex operations;
   bool stopped = false;
@@ -362,15 +371,90 @@ struct NfsServer final : RemoteFileClient {
       throw RemoteFileError("NFS server returned an invalid export path", false);
     exports.try_emplace("/" + generation + nfs_identifier_component(bytes), NfsExport{bytes, {}, {}, {}});
   }
+  std::string root_path() const {
+    const auto id = "/" + generation + nfs_identifier_component("/");
+    return exports.contains(id) ? id : "/";
+  }
+  std::string display_absolute_path(const std::string &bytes) const {
+    // Decode components separately so an undecodable name cannot hide its parents.
+    std::string result;
+    for (std::size_t start = 1; start < bytes.size();) {
+      const auto end = bytes.find('/', start);
+      result += "/" + display_nfs_name(bytes.substr(start,
+          end == std::string::npos ? end : end - start), options.filename_encoding).text;
+      if (end == std::string::npos) break;
+      start = end + 1;
+    }
+    return result.empty() ? "/" : result;
+  }
+  RemoteFileAttributes browser_attributes(const std::string &path) const {
+    const auto &directory = browser_directories.at(path);
+    RemoteFileAttributes result;
+    result.path = path;
+    result.name = directory.bytes == "/" ? "/" : display_nfs_name(directory.parent == "/" ? directory.bytes :
+        directory.bytes.substr(directory.bytes.find_last_of('/') + 1), options.filename_encoding).text;
+    result.type = RemoteFileType::directory;
+    result.role = RemoteFileRole::nfs_export;
+    return result;
+  }
+  void build_browser_tree() {
+    for (const auto &[id, item] : exports) {
+      browser_paths[item.bytes] = id;
+      for (auto end = item.bytes.find('/', 1); end != std::string::npos; end = item.bytes.find('/', end + 1))
+        browser_paths.try_emplace(item.bytes.substr(0, end), "");
+    }
+    for (auto &[bytes, id] : browser_paths) {
+      if (!id.empty()) continue;
+      std::string ancestor;
+      std::size_t ancestor_length = 0;
+      for (const auto &[export_id, item] : exports) {
+        if ((item.bytes == "/" || bytes.starts_with(item.bytes + "/")) && item.bytes.size() > ancestor_length) {
+          ancestor = export_id;
+          ancestor_length = item.bytes.size();
+        }
+      }
+      if (ancestor.empty()) {
+        id = "/" + generation + "group-" + nfs_identifier_component(bytes);
+      } else {
+        // An ancestor that is already exported remains a real directory. Its
+        // files must not disappear behind a synthetic list of nested exports.
+        id = ancestor;
+        for (auto start = ancestor_length == 1 ? 1 : ancestor_length + 1; start < bytes.size();) {
+          const auto end = bytes.find('/', start);
+          id += "/" + nfs_identifier_component(bytes.substr(start, end == std::string::npos ? end : end - start));
+          if (end == std::string::npos) break;
+          start = end + 1;
+        }
+      }
+    }
+    const auto root = root_path();
+    if (root == "/") browser_directories.emplace(root, NfsBrowserDirectory{"/", root, true, {}});
+    for (const auto &[bytes, id] : browser_paths) {
+      const auto separator = bytes.find_last_of('/');
+      const auto parent = separator == 0 ? root : browser_paths.at(bytes.substr(0, separator));
+      browser_directories.emplace(id, NfsBrowserDirectory{bytes, parent,
+          !exports.contains(id.substr(0, id.find('/', 1))), {}});
+    }
+    for (const auto &[bytes, id] : browser_paths) {
+      (void)bytes;
+      if (id == root) continue;
+      browser_directories.at(browser_directories.at(id).parent).children.push_back(browser_attributes(id));
+    }
+  }
+  bool is_virtual_directory(const std::string &path) const {
+    const auto found = browser_directories.find(path);
+    return found != browser_directories.end() && found->second.virtual_directory;
+  }
   NfsLocation locate(const std::string &path) const {
-    const auto separator = path.find('/', 1);
-    const auto root = path.substr(0, separator);
+    const auto identity = path == "/" ? root_path() : path;
+    const auto separator = identity.find('/', 1);
+    const auto root = identity.substr(0, separator);
     const auto found = exports.find(root);
     if (found == exports.end()) throw RemoteFileError("Unknown or expired NFS path identity", false);
     NfsLocation result{root, "", found->second.bytes, ""};
     for (auto start = separator; start != std::string::npos;) {
-      const auto next = path.find('/', start + 1);
-      const auto component = path.substr(start + 1, next == std::string::npos ? next : next - start - 1);
+      const auto next = identity.find('/', start + 1);
+      const auto component = identity.substr(start + 1, next == std::string::npos ? next : next - start - 1);
       const auto raw = nfs_identifier_bytes(component);
       if (raw.empty() || raw == "." || raw == ".." || raw.find('/') != std::string::npos || raw.find('\0') != std::string::npos)
         throw RemoteFileError("Invalid NFS path component", false);
@@ -397,44 +481,93 @@ struct NfsServer final : RemoteFileClient {
   void require_mutable(const NfsLocation &path) const {
     if (is_public_root(path)) throw RemoteFileError("NFS public roots cannot be modified", false);
   }
+  std::string directory_child_path(const std::string &parent, const std::string &bytes) const {
+    const auto location = locate(parent);
+    const auto &base = exports.at(location.root).bytes;
+    const auto absolute = (base == "/" ? "" : base) + (location.bytes == "/" ? "" : location.bytes) + "/" + bytes;
+    const auto known = browser_paths.find(absolute);
+    return known == browser_paths.end() ? (parent == "/" ? location.root : parent) + "/" + nfs_identifier_component(bytes) : known->second;
+  }
   RemoteFileCapabilities capabilities() const noexcept override {
     return {.write_operations = true, .symbolic_links = true, .permissions = true, .access_time = true,
         .modification_time = true, .upload_commit = true};
   }
   RemotePathCapabilities path_capabilities(const std::string &path) const override {
     require_open();
-    if (path == "/") return {false, false};
+    if (is_virtual_directory(path)) return {false, false};
     const auto target = locate(path);
     return {true, !is_public_root(target)};
   }
   std::string child_path(const std::string &parent, const std::string &name) const override {
     require_open();
-    (void)locate(parent);
-    return parent + "/" + nfs_identifier_component(encode_nfs_name(name, options.filename_encoding, 255));
+    return directory_child_path(parent, encode_nfs_name(name, options.filename_encoding, 255));
   }
   std::string parent_path(const std::string &path) const override {
     if (path == "/") return path;
+    const auto directory = browser_directories.find(path);
+    if (directory != browser_directories.end()) return directory->second.parent;
     (void)locate(path);
     return RemoteFileClient::parent_path(path);
   }
   std::string display_path(const std::string &path) const override {
     if (path == "/" || path.empty()) return path;
+    if (is_virtual_directory(path)) return display_absolute_path(browser_directories.at(path).bytes);
     const auto target = locate(path);
-    auto result = display_nfs_name(exports.at(target.root).bytes, options.filename_encoding).text + ":";
-    for (std::size_t start = 0; start < target.bytes.size();) {
-      const auto next = target.bytes.find('/', start + 1);
-      result += "/" + display_nfs_name(target.bytes.substr(start + 1,
-          next == std::string::npos ? next : next - start - 1), options.filename_encoding).text;
-      if (next == std::string::npos) break;
-      start = next;
-    }
-    return result;
+    const auto &base = exports.at(target.root).bytes;
+    return display_absolute_path(target.bytes == "/" ? base : (base == "/" ? "" : base) + target.bytes);
   }
-  bool path_input_editable() const noexcept override { return false; }
+  cardio::promise<std::string> resolve_input_path_async(
+      std::string text, cardio::cancellation cancellation) override {
+    require_open();
+    cancellation.throw_if_cancellation_requested();
+    if (text.empty() || text.front() != '/' || text.find('\0') != std::string::npos ||
+        !g_utf8_validate(text.data(), text.size(), nullptr))
+      throw RemoteFileError("Enter an absolute NFS path starting with /", false);
+    while (text.size() > 1 && text.back() == '/') text.pop_back();
+    for (std::size_t start = 1; start < text.size();) {
+      const auto end = text.find('/', start);
+      const auto component = text.substr(start, end == std::string::npos ? end : end - start);
+      if (component.empty() || component == "." || component == "..")
+        throw RemoteFileError("NFS paths cannot contain empty, . or .. components", false);
+      if (end == std::string::npos) break;
+      start = end + 1;
+    }
+    auto identity = root_path();
+    std::size_t matched = 1;
+    bool ambiguous = false;
+    // A deeper known export is directly addressable even when listing its
+    // ancestors is forbidden. Match whole components, never raw text prefixes.
+    for (const auto &[bytes, id] : browser_paths) {
+      const auto shown = display_absolute_path(bytes);
+      if (shown == "/" || (text != shown && !text.starts_with(shown + "/"))) continue;
+      if (shown.size() > matched) {
+        identity = id;
+        matched = shown.size();
+        ambiguous = false;
+      } else if (shown.size() == matched && id != identity) ambiguous = true;
+    }
+    if (ambiguous) throw RemoteFileError("NFS path is ambiguous: " + text, false);
+    for (auto start = matched == 1 ? 1 : matched + 1; start < text.size();) {
+      const auto end = text.find('/', start);
+      const auto name = text.substr(start, end == std::string::npos ? end : end - start);
+      const auto listing = co_await load_directory_async(identity, cancellation);
+      std::string selected;
+      for (const auto &entry : listing.entries) {
+        if (entry.name != name) continue;
+        if (!selected.empty()) throw RemoteFileError("NFS path is ambiguous: " + text, false);
+        selected = entry.path;
+      }
+      if (selected.empty()) throw RemoteFileError("NFS path was not found: " + text, false);
+      identity = std::move(selected);
+      if (end == std::string::npos) break;
+      start = end + 1;
+    }
+    co_return identity;
+  }
   std::optional<std::string> local_filename(const RemoteFileAttributes &item) const override {
     if (item.path == "/") return std::nullopt;
-    auto raw = locate(item.path).name;
-    if (item.role == RemoteFileRole::nfs_export) raw = raw.substr(raw.find_last_of('/') + 1);
+    auto raw = is_virtual_directory(item.path) ? browser_directories.at(item.path).bytes : locate(item.path).name;
+    if (is_virtual_directory(item.path) || item.role == RemoteFileRole::nfs_export) raw = raw.substr(raw.find_last_of('/') + 1);
     const auto name = display_nfs_name(raw, options.filename_encoding);
     return name.decoded ? std::optional(name.text) : std::nullopt;
   }
@@ -466,6 +599,7 @@ struct NfsServer final : RemoteFileClient {
       for (const auto &address : addresses) {
         auto session = options.version == 2 ? create_nfs_raw_session(options.connect_timeout_ms) :
             create_nfs_rpc_session(options.version, options.connect_timeout_ms);
+        session->require_reserved_port = options.require_reserved_port;
         if (session->nfs) {
           configure_nfs_ports(session, options.nfs_port, options.mount_port);
           if (options.uid) nfs_set_uid(session->nfs, std::bit_cast<std::int32_t>(*options.uid));
@@ -504,20 +638,14 @@ struct NfsServer final : RemoteFileClient {
       cardio::cancellation cancellation) override {
     auto lock = std::move(co_await operations.lock(cancellation));
     require_open();
+    if (path == "/") path = root_path();
     RemoteDirectorySnapshot snapshot{path, {}};
-    if (path == "/") {
-      if (options.version == 4) snapshot.notice = "NFS v4 public namespace";
-      if (!discovery_error.empty()) snapshot.notice =
+    if (path == root_path() && options.version == 4) snapshot.notice = "NFS v4 public namespace";
+    if (is_virtual_directory(path)) {
+      if (path == "/" && !discovery_error.empty()) snapshot.notice =
           (options.version == 4 ? "Namespace discovery failed; showing configured paths. " :
            "Export discovery failed; showing configured paths. ") + discovery_error;
-      for (const auto &[id, item] : exports) {
-        RemoteFileAttributes entry;
-        entry.path = id;
-        entry.name = display_nfs_name(item.bytes, options.filename_encoding).text;
-        entry.type = RemoteFileType::directory;
-        entry.role = RemoteFileRole::nfs_export;
-        snapshot.entries.push_back(std::move(entry));
-      }
+      snapshot.entries = browser_directories.at(path).children;
       co_return snapshot;
     }
     const auto target = locate(path);
@@ -526,9 +654,9 @@ struct NfsServer final : RemoteFileClient {
       auto entries = co_await list_nfs2_directory_async(exports.at(target.root).v2, target.native, cancellation);
       for (auto &entry : entries) {
         auto &item = entry.attributes;
-        item.path = path + "/" + nfs_identifier_component(entry.bytes);
+        item.path = directory_child_path(path, entry.bytes);
         item.name = display_nfs_name(entry.bytes, options.filename_encoding).text;
-        if (is_public_root(locate(item.path))) item.role = RemoteFileRole::nfs_export;
+        if (browser_directories.contains(item.path) || is_public_root(locate(item.path))) item.role = RemoteFileRole::nfs_export;
         snapshot.entries.push_back(std::move(item));
       }
       co_return snapshot;
@@ -543,7 +671,7 @@ struct NfsServer final : RemoteFileClient {
         const std::string raw(entry->name);
         if (raw == "." || raw == "..") continue;
         RemoteFileAttributes item;
-        item.path = path + "/" + nfs_identifier_component(raw);
+        item.path = directory_child_path(path, raw);
         item.name = display_nfs_name(raw, options.filename_encoding).text;
         item.type = entry->type == 1 ? RemoteFileType::regular : entry->type == 2 ? RemoteFileType::directory :
             entry->type == 5 ? RemoteFileType::symbolic_link : RemoteFileType::other;
@@ -551,7 +679,7 @@ struct NfsServer final : RemoteFileClient {
         item.permissions = entry->mode;
         item.access_time_unix_seconds = entry->atime.tv_sec;
         item.modification_time_unix_seconds = entry->mtime.tv_sec;
-        if (is_public_root(locate(item.path))) item.role = RemoteFileRole::nfs_export;
+        if (browser_directories.contains(item.path) || is_public_root(locate(item.path))) item.role = RemoteFileRole::nfs_export;
         snapshot.entries.push_back(std::move(item));
       }
     }, cancellation), "list directory");
@@ -562,12 +690,7 @@ struct NfsServer final : RemoteFileClient {
       cardio::cancellation cancellation) override {
     auto lock = std::move(co_await operations.lock(cancellation));
     require_open();
-    if (path == "/") {
-      RemoteFileAttributes result;
-      result.path = result.name = "/";
-      result.type = RemoteFileType::directory;
-      co_return result;
-    }
+    if (is_virtual_directory(path)) co_return browser_attributes(path);
     const auto target = locate(path);
     auto session = co_await mounted(target, cancellation);
     if (options.version == 2) {
@@ -575,7 +698,7 @@ struct NfsServer final : RemoteFileClient {
       if (item) {
         item->path = path;
         item->name = display_nfs_name(target.name, options.filename_encoding).text;
-        if (is_public_root(target)) item->role = RemoteFileRole::nfs_export;
+        if (browser_directories.contains(path) || is_public_root(target)) item->role = RemoteFileRole::nfs_export;
       }
       co_return item;
     }
@@ -583,7 +706,7 @@ struct NfsServer final : RemoteFileClient {
     const auto value = co_await stat_native(session, target.native, cancellation);
     if (!value) co_return std::nullopt;
     auto attributes = attributes_for(path, target.name, options.filename_encoding, *value);
-    if (is_public_root(target)) attributes.role = RemoteFileRole::nfs_export;
+    if (browser_directories.contains(path) || is_public_root(target)) attributes.role = RemoteFileRole::nfs_export;
     co_return attributes;
   }
 
@@ -823,6 +946,7 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_nfs_server_async(
     for (const auto &address : server->addresses) {
       try {
         auto mount = create_nfs_raw_session(server->options.connect_timeout_ms);
+        mount->require_reserved_port = server->options.require_reserved_port;
         if (server->options.uid) rpc_set_uid(mount->rpc, std::bit_cast<std::int32_t>(*server->options.uid));
         if (server->options.gid) rpc_set_gid(mount->rpc, std::bit_cast<std::int32_t>(*server->options.gid));
         auto groups = server->options.supplementary_gids;
@@ -852,6 +976,7 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_nfs_server_async(
       throw RemoteFileError(server->discovery_error, true);
   }
   if (server->exports.empty()) throw RemoteFileError("No NFS public paths were found; configure a known path", false);
+  server->build_browser_tree();
   co_return server;
 }
 

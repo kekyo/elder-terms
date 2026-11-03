@@ -3,7 +3,7 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
-#include "../../src/smb/smb-ssh-proxy.h"
+#include "../../../shared/src/connection-runtime/ssh/ssh-tcp-proxy.h"
 #include "../../src/smb/smb-client.h"
 #include <smb2/smb2.h>
 #include <smb2/libsmb2.h>
@@ -82,7 +82,7 @@ static cardio::promise<void> probe(int argc, char **argv) {
   require(argc == 5, "Usage: smb-share-probe host expected-share user port");
   std::string host = argv[1];
   int port = std::stoi(argv[4]);
-  std::shared_ptr<SmbSshProxy> route;
+  std::shared_ptr<SshTcpProxy> route;
   if (g_getenv("ELDER_SMB_PROXY_PORT")) {
     SshProxySettings settings;
     settings.enabled = true;
@@ -93,10 +93,10 @@ static cardio::promise<void> probe(int argc, char **argv) {
     callbacks.ssh_prompt = [](const SshUserPrompt &prompt, cardio::cancellation) -> cardio::promise<SshUserPromptResponse> {
       co_return SshUserPromptResponse{.accepted = true, .text = prompt.initial_text};
     };
-    route = co_await open_smb_ssh_proxy_async(settings, "proxy-test.invalid", port, callbacks,
+    route = co_await open_ssh_tcp_proxy_async(settings, callbacks,
         {.known_hosts_file = g_getenv("ELDER_SMB_PROXY_KNOWN_HOSTS"), .config_file = {}}, {});
     host = "127.0.0.1";
-    port = smb_ssh_proxy_port(route);
+    port = co_await forward_ssh_tcp_port_async(route, "proxy-test.invalid", port, {});
   }
   auto *context = smb2_init_context();
   require(context, "No SMB context");
@@ -127,7 +127,7 @@ static cardio::promise<void> probe(int argc, char **argv) {
       co_await stop_smb_client_async(client);
       smb2_destroy_context(context);
       context = nullptr;
-      co_await stop_smb_ssh_proxy_async(route);
+      co_await stop_ssh_tcp_proxy_async(route);
       std::cout << "PASS SMB client enumeration denial with direct known-share browsing\n";
       co_return;
     }
@@ -168,7 +168,7 @@ static cardio::promise<void> probe(int argc, char **argv) {
     std::cout << "PASS SMB client share enumeration disks=" << shares.size() << " cancellation/cleanup\n";
   } catch (...) { failure = std::current_exception(); }
   if (context) smb2_destroy_context(context);
-  co_await stop_smb_ssh_proxy_async(route);
+  co_await stop_ssh_tcp_proxy_async(route);
   if (failure) std::rethrow_exception(failure);
 }
 

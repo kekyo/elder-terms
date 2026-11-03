@@ -4,7 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "../../src/smb/smb-client.h"
-#include "../../src/smb/smb-ssh-proxy.h"
+#include "../../../shared/src/connection-runtime/ssh/ssh-tcp-proxy.h"
 #include <array>
 #include <iostream>
 
@@ -32,18 +32,17 @@ static cardio::promise<void> exercise_async(int argc, char **argv) {
   cardio::cancellation_source canceled;
   (void)canceled.cancel();
   bool was_canceled = false;
-  try { (void)co_await open_smb_ssh_proxy_async(proxy, "proxy-test.invalid", std::stoi(argv[4]),
-      callbacks, {}, canceled.get_cancellation()); }
+  try { (void)co_await open_ssh_tcp_proxy_async(proxy, callbacks, {}, canceled.get_cancellation()); }
   catch (const cardio::canceled_exception &) { was_canceled = true; }
   require(was_canceled && prompts == 0, "Canceled route started SSH authentication");
-  auto opening = open_smb_ssh_proxy_async(proxy, "proxy-test.invalid", std::stoi(argv[4]),
-      callbacks, {.known_hosts_file = g_getenv("ELDER_SMB_PROXY_KNOWN_HOSTS"), .config_file = {}}, {});
+  auto opening = open_ssh_tcp_proxy_async(proxy, callbacks, {.known_hosts_file = g_getenv("ELDER_SMB_PROXY_KNOWN_HOSTS"), .config_file = {}}, {});
   auto route = std::move(co_await opening);
-  require(route && smb_ssh_proxy_port(route), "Enabled SMB SSH proxy must open a route");
+  const auto local_port = co_await forward_ssh_tcp_port_async(route, "proxy-test.invalid", std::stoi(argv[4]), {});
+  require(route && local_port, "Enabled SMB SSH proxy must open a route");
   require(prompts == 2, "Gateway user name and host key must be confirmed once");
   if (mode == "pending") {
-    co_await stop_smb_ssh_proxy_async(route);
-    co_await stop_smb_ssh_proxy_async(route);
+    co_await stop_ssh_tcp_proxy_async(route);
+    co_await stop_ssh_tcp_proxy_async(route);
     std::cout << "PASS SMB client SSH proxy cancellation before SMB connection\n";
     co_return;
   }
@@ -52,7 +51,7 @@ static cardio::promise<void> exercise_async(int argc, char **argv) {
   try {
     SmbClientOpenOptions options;
     options.connection.address = "127.0.0.1";
-    options.connection.port = smb_ssh_proxy_port(route);
+    options.connection.port = local_port;
 
     options.connection.username = argv[3];
     options.connection.require_encryption = std::string(argv[2]) == "encrypted" || mode == "encrypted";
@@ -93,21 +92,21 @@ static cardio::promise<void> exercise_async(int argc, char **argv) {
       co_await client->remove_directory_async(directory, {});
     }
     // Closing the SSH route must invalidate the established SMB session.
-    co_await stop_smb_ssh_proxy_async(route);
+    co_await stop_ssh_tcp_proxy_async(route);
     bool disconnected = false;
     try { (void)co_await client->load_directory_async("/", {}); }
     catch (const RemoteFileError &error) { disconnected = error.connection_lost; }
     require(disconnected, "Closed SSH route accepted an SMB operation");
   } catch (...) { failure = std::current_exception(); }
   co_await stop_smb_client_async(client);
-  co_await stop_smb_ssh_proxy_async(route);
-  co_await stop_smb_ssh_proxy_async(route);
+  co_await stop_ssh_tcp_proxy_async(route);
+  co_await stop_ssh_tcp_proxy_async(route);
   if (failure) std::rethrow_exception(failure);
   proxy.enabled = false;
-  require(!co_await open_smb_ssh_proxy_async(proxy, "", 0, {}, {}, {}), "Disabled proxy opened a route");
+  require(!co_await open_ssh_tcp_proxy_async(proxy, {}, {}, {}), "Disabled proxy opened a route");
   proxy.validation_errors.push_back("Invalid proxy setting");
   bool rejected = false;
-  try { (void)co_await open_smb_ssh_proxy_async(proxy, "", 0, {}, {}, {}); }
+  try { (void)co_await open_ssh_tcp_proxy_async(proxy, {}, {}, {}); }
   catch (const std::invalid_argument &) { rejected = true; }
   require(rejected, "Invalid proxy settings were ignored");
   std::cout << "PASS SMB client SSH proxy listing/round-trip/commit/permissions/disconnect/cleanup\n";

@@ -66,6 +66,7 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"nfs", "local_directory", N_("Local directory")},
     SettingLabelEntry{"nfs", "nfs_port", N_("NFS port (0: automatic)")},
     SettingLabelEntry{"nfs", "mount_port", N_("MOUNT port (0: automatic)")},
+    SettingLabelEntry{"nfs", "require_reserved_port", N_("Require reserved source port")},
     SettingLabelEntry{"nfs", "uid", N_("User ID (-1: current process)")},
     SettingLabelEntry{"nfs", "gid", N_("Group ID (-1: current process)")},
     SettingLabelEntry{"nfs", "supplementary_gids", N_("Additional group IDs (one per line)")},
@@ -459,6 +460,8 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("WebDAV(80)");
   case SettingsUiText::smb_port_column:
     return _("SMB(445)");
+  case SettingsUiText::nfs_port_column:
+    return _("NFS(2049)");
   case SettingsUiText::ip_scan_description:
     return _("Shows TCP port responses. Service support and authentication are not verified.");
   case SettingsUiText::scanning:

@@ -36,6 +36,10 @@ int main(int argc, char **argv) {
     expect(set_explicit_setting_value(&store, nfs_setting_key("address"), std::string("localhost")), "Accept a hostname");
     expect(nfs_connection_settings(store).filename_encoding == "UTF-8", "The default encoding must be explicit UTF-8");
     expect(nfs_connection_settings(store).validation_errors.empty(), "Default NFS v3 settings must be valid");
+    expect(!nfs_connection_settings(store).require_reserved_port, "Reserved source ports are optional by default");
+    expect(set_explicit_setting_value(&store, nfs_setting_key("require_reserved_port"), true),
+        "Requiring a reserved source port must be a persisted NFS setting");
+    expect(nfs_connection_settings(store).require_reserved_port, "Resolve the required source-port policy");
     expect(set_explicit_setting_value(&store, nfs_setting_key("version"), std::string("4.0")),
         "NFS v4.0 must be selectable without ambiguous minor-version negotiation");
     expect(!set_explicit_setting_value(&store, nfs_setting_key("version"), std::string("4.2")),
@@ -70,6 +74,11 @@ int main(int argc, char **argv) {
     const SettingsLoadOptions load_options{.config_path = connection_path, .startup_config_path = std::nullopt,
         .global_config_path = global_path};
     auto inherited = load_settings(load_options, 1.0).store;
+    expect(nfs_connection_settings(inherited).require_reserved_port &&
+        setting_value_source(inherited, nfs_setting_key("require_reserved_port")) == SettingValueSource::global,
+        "The source-port policy must inherit the global setting");
+    expect(set_explicit_setting_value(&inherited, nfs_setting_key("require_reserved_port"), false),
+        "A connection can override the inherited source-port requirement");
     expect(nfs_connection_settings(inherited).filename_encoding == "CP932" &&
         setting_value_source(inherited, nfs_setting_key("filename_encoding")) == SettingValueSource::global,
         "Unset connection encoding must inherit the global default");
@@ -78,6 +87,11 @@ int main(int argc, char **argv) {
         "Known paths must preserve distinct full export names");
     expect(save_settings(inherited, connection_path).saved, "Save the connection override");
     auto loaded = load_settings(load_options, 1.0).store;
+    expect(!nfs_connection_settings(loaded).require_reserved_port,
+        "An explicit false source-port policy must survive save and reload");
+    clear_explicit_setting_value(&loaded, nfs_setting_key("require_reserved_port"));
+    expect(nfs_connection_settings(loaded).require_reserved_port,
+        "Clearing the source-port override restores the global requirement");
     expect(nfs_connection_settings(loaded).filename_encoding == "EUC-JP" &&
         nfs_connection_settings(loaded).known_exports == std::vector<std::string>{"/srv/public", "/other/public"},
         "Connection settings must survive save and reload");
@@ -107,22 +121,69 @@ int main(int argc, char **argv) {
     auto *page = find_widget(root, "settings_nfs_page");
     expect(page && gtk_widget_get_visible(page), "NFS connections must have an editable settings page");
     auto *encoding = find_widget(root, "settings_nfs_filename_encoding_entry");
-    auto *inherit = find_widget(root, "settings_nfs_filename_encoding_inherit");
-    expect(encoding && inherit, "Encoding must support an explicit override and inheritance");
+    expect(encoding, "Encoding must support an explicit override and inheritance");
     expect(std::string(gtk_entry_get_text(GTK_ENTRY(encoding))) == "EUC-JP", "Show the effective override");
     gtk_entry_set_text(GTK_ENTRY(encoding), "CP932//IGNORE");
     expect(!settings_widget_is_valid(widget), "An invalid encoding must prevent Save");
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(inherit), TRUE);
-    expect(settings_widget_is_valid(widget) && !gtk_widget_get_sensitive(encoding) &&
-        std::string(gtk_entry_get_text(GTK_ENTRY(encoding))) == "CP932", "Inheritance must restore the global encoding");
-    expect(!gtk_widget_get_visible(find_widget(root, "settings_ssh_proxy_page")), "NFS must not advertise an unsupported SSH proxy");
-    auto *version_inherit = find_widget(root, "settings_nfs_version_inherit");
+    gtk_entry_set_text(GTK_ENTRY(encoding), "");
+    expect(settings_widget_is_valid(widget) && gtk_widget_get_sensitive(encoding) &&
+        std::string(gtk_entry_get_placeholder_text(GTK_ENTRY(encoding))) == "CP932 (global default)" &&
+        nfs_connection_settings(settings_widget_draft_store(widget)).filename_encoding == "CP932",
+        "An empty editable entry must show and use the inherited encoding like other settings tabs");
+    expect(gtk_widget_get_visible(find_widget(root, "settings_ssh_proxy_page")), "NFS must offer SSH proxy settings");
     auto *version = find_widget(root, "settings_nfs_version_combo");
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(version_inherit), FALSE);
+    expect(std::string(gtk_combo_box_get_active_id(GTK_COMBO_BOX(version))) == "inherit",
+        "The version selector must include inheritance in its choices");
     gtk_combo_box_set_active_id(GTK_COMBO_BOX(version), "4.0");
-    expect(!gtk_widget_get_sensitive(find_widget(root, "settings_nfs_known_exports_inherit")) &&
-        gtk_widget_get_sensitive(find_widget(root, "settings_nfs_known_namespace_paths_inherit")),
+    expect(!gtk_widget_get_sensitive(find_widget(root, "settings_nfs_known_exports_combo")) &&
+        gtk_widget_get_sensitive(find_widget(root, "settings_nfs_known_namespace_paths_combo")),
         "The v4 editor must distinguish namespace inputs from inactive v3 export settings");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(version), "inherit");
+    expect(nfs_connection_settings(settings_widget_draft_store(widget)).version == "3",
+        "Selecting inheritance must restore the global protocol version");
+    auto *discovery = find_widget(root, "settings_nfs_discover_exports_combo");
+    auto *reserved_port = find_widget(root, "settings_nfs_require_reserved_port_combo");
+    expect(reserved_port && std::string(gtk_combo_box_get_active_id(GTK_COMBO_BOX(reserved_port))) == "disabled",
+        "The source-port selector must show the connection override");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(reserved_port), "enabled");
+    expect(nfs_connection_settings(settings_widget_draft_store(widget)).require_reserved_port,
+        "Enable the source-port requirement from the settings page");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(reserved_port), "disabled");
+    expect(!nfs_connection_settings(settings_widget_draft_store(widget)).require_reserved_port,
+        "Disable the source-port requirement from the settings page");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(reserved_port), "inherit");
+    expect(nfs_connection_settings(settings_widget_draft_store(widget)).require_reserved_port &&
+        !setting_has_explicit_value(settings_widget_draft_store(widget), nfs_setting_key("require_reserved_port")),
+        "The source-port selector must restore inheritance");
+    expect(discovery, "Boolean settings must offer inherited, enabled and disabled choices");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(discovery), "disabled");
+    expect(!nfs_connection_settings(settings_widget_draft_store(widget)).discover_exports,
+        "Discovery can be disabled independently of the inherited value");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(discovery), "inherit");
+    expect(nfs_connection_settings(settings_widget_draft_store(widget)).discover_exports,
+        "The discovery choice can return to inheritance");
+    auto *groups = find_widget(root, "settings_nfs_supplementary_gids_combo");
+    auto *group_list = find_widget(root, "settings_nfs_supplementary_gids_list");
+    expect(groups && group_list, "List settings must offer inherited and custom values in the control column");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(groups), "custom");
+    auto *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(group_list));
+    gtk_text_buffer_set_text(buffer, "", -1);
+    expect(nfs_connection_settings(settings_widget_draft_store(widget)).supplementary_gids.empty() &&
+        setting_has_explicit_value(settings_widget_draft_store(widget), nfs_setting_key("supplementary_gids")),
+        "An explicit empty list must override inherited groups");
+    gtk_text_buffer_set_text(buffer, "invalid", -1);
+    expect(!settings_widget_is_valid(widget), "Invalid list values must prevent Save");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(groups), "inherit");
+    expect(settings_widget_is_valid(widget) && !gtk_widget_get_sensitive(group_list) &&
+        nfs_connection_settings(settings_widget_draft_store(widget)).supplementary_gids == std::vector<std::uint32_t>{1, 4294967295U},
+        "Selecting inheritance must discard invalid list input and restore global groups");
+    auto *port = find_widget(root, "settings_nfs_nfs_port_entry");
+    gtk_entry_set_text(GTK_ENTRY(port), "65536");
+    expect(!settings_widget_is_valid(widget), "Invalid numeric overrides must prevent Save");
+    gtk_entry_set_text(GTK_ENTRY(port), "");
+    expect(settings_widget_is_valid(widget) && nfs_connection_settings(settings_widget_draft_store(widget)).nfs_port == 0,
+        "Clearing a numeric override must restore automatic port selection");
+    expect(find_widget(root, "settings_nfs_ip_scan_button"), "NFS must offer address discovery like the other server settings");
     destroy_settings_widget(widget);
     SettingsWidgetOptions runtime_options;
     runtime_options.store = inherited;
@@ -133,6 +194,8 @@ int main(int argc, char **argv) {
         "Runtime encoding edits must be available for the next connection without changing the active client's encoding");
     expect(!gtk_widget_get_sensitive(find_widget(runtime_root, "settings_nfs_address_entry")),
         "Runtime encoding edits must not unlock the active endpoint");
+    expect(!gtk_widget_get_sensitive(find_widget(runtime_root, "settings_nfs_require_reserved_port_combo")),
+        "The active connection's source-port requirement must not change in place");
     destroy_settings_widget(runtime);
     std::cout << "PASS NFS settings and inheritance\n";
   } catch (const std::exception &error) { std::cerr << error.what() << '\n'; return 1; }

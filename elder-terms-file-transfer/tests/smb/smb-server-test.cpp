@@ -4,7 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "../../src/smb/smb-client.h"
-#include "../../src/smb/smb-ssh-proxy.h"
+#include "../../../shared/src/connection-runtime/ssh/ssh-tcp-proxy.h"
 #include "../../src/file-transfer/file-transfer-engine.h"
 #include "../../src/file-transfer/activity-file-client.h"
 #include <array>
@@ -16,7 +16,7 @@ static void require(bool value, const char *message) {
 }
 
 struct Fixture {
-  std::shared_ptr<elder_terms::SmbSshProxy> route;
+  std::shared_ptr<elder_terms::SshTcpProxy> route;
   std::shared_ptr<elder_terms::RemoteFileClient> server;
 };
 
@@ -42,10 +42,9 @@ static cardio::promise<void> exercise(Fixture &fixture, int argc, char **argv) {
       ++prompts;
       co_return SshUserPromptResponse{.accepted = true, .text = prompt.initial_text};
     };
-    fixture.route = co_await open_smb_ssh_proxy_async(proxy, "proxy-test.invalid", options.connection.port,
-        callbacks, {.known_hosts_file = g_getenv("ELDER_SMB_PROXY_KNOWN_HOSTS"), .config_file = {}}, {});
+    fixture.route = co_await open_ssh_tcp_proxy_async(proxy, callbacks, {.known_hosts_file = g_getenv("ELDER_SMB_PROXY_KNOWN_HOSTS"), .config_file = {}}, {});
     options.connection.address = "127.0.0.1";
-    options.connection.port = smb_ssh_proxy_port(fixture.route);
+    options.connection.port = co_await forward_ssh_tcp_port_async(fixture.route, "proxy-test.invalid", options.connection.port, {});
   }
   auto server = co_await open_smb_server_async(options, {});
   fixture.server = server;
@@ -150,7 +149,7 @@ static cardio::promise<void> run(cardio::dispatcher_group_glib &group, int argc,
   Fixture fixture;
   try { co_await exercise(fixture, argc, argv); } catch (...) { failure = std::current_exception(); }
   co_await elder_terms::stop_smb_client_async(fixture.server);
-  co_await elder_terms::stop_smb_ssh_proxy_async(fixture.route);
+  co_await elder_terms::stop_ssh_tcp_proxy_async(fixture.route);
   group.shutdown();
 }
 

@@ -47,7 +47,7 @@ enum class RemoteFileRole {
   ordinary,
   /** SMB disk share, retaining directory semantics. */
   smb_share,
-  /** NFS exported root, retaining directory semantics. */
+  /** NFS exported root or an ancestor in the export tree, retaining directory semantics. */
   nfs_export,
 };
 
@@ -241,8 +241,17 @@ public:
   /** @param path Operation identity. @returns Human-readable path, never used to reconstruct the identity. */
   virtual std::string display_path(const std::string &path) const { return path; }
 
-  /** @returns Whether arbitrary address-entry text can be used as an operation path. */
-  virtual bool path_input_editable() const noexcept { return true; }
+  /**
+   * Resolves address-entry text without interpreting operation identities as display text.
+   * @param text User-entered path, using this service's path syntax.
+   * @param cancellation Owner cancellation during any directory lookups.
+   * @returns Operation identity; ambiguous or unavailable paths throw.
+   */
+  virtual cardio::promise<std::string> resolve_input_path_async(
+      std::string text, cardio::cancellation cancellation) {
+    cancellation.throw_if_cancellation_requested();
+    co_return text;
+  }
 
   /**
    * Builds a new child identity using this connection's filename rules.

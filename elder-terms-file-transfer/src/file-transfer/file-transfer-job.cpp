@@ -257,13 +257,15 @@ cardio::promise<void> run_file_transfer_queue_async(std::shared_ptr<FileTransfer
 
 cardio::promise<RemoteDirectorySnapshot> load_file_transfer_queue_directory_async(
     std::shared_ptr<FileTransferQueue> queue, std::string path, cardio::cancellation cancellation,
-    bool refresh, bool force_html) {
+    bool refresh, bool force_html, bool from_input) {
   if (!queue->available) throw cardio::canceled_exception();
   const auto generation = queue->generation;
   QueueCancellation stop{cardio::cancellations::any(cancellation, queue->stop.get_cancellation())};
   auto locking = queue->operations.lock(stop.source.get_cancellation());
   auto lock = std::move(co_await locking);
   if (!queue->available || generation != queue->generation) throw cardio::canceled_exception();
+  if (from_input)
+    path = co_await queue->client->resolve_input_path_async(std::move(path), stop.source.get_cancellation());
   co_return co_await queue->client->browse_directory_async(std::move(path), refresh, force_html, stop.source.get_cancellation());
 }
 

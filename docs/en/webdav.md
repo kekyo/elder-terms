@@ -20,6 +20,8 @@ WebDAV uses the same two-pane browser as SFTP, FTP and FTPS. Select items and us
 rename or delete them. Folder transfers and deletions include their descendants.
 New Folder is also available in an empty pane.
 
+Before sending, select one folder or regular file in Remote; before receiving, select one in Local. Selecting a folder transfers into that folder. Selecting a file transfers into its containing folder. Send and Receive are unavailable when no destination is selected, a symbolic link is selected, or multiple items are selected. The path field is not used as the destination.
+
 A blank size means the server did not report the file's size; it does not mean the file is empty.
 Progress uses the available size or item information.
 Reported modification times can be displayed, but remote POSIX permissions, symbolic links,

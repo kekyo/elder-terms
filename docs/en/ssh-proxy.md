@@ -1,6 +1,6 @@
 # Using SSH proxy
 
-Use an SSH gateway to reach SSH, SFTP, Telnet, HTTP/HTTPS, WebDAV, passive FTP/FTPS and SMB destinations. SMB over SSH proxy is experimental.
+Use an SSH gateway to reach SSH, SFTP, Telnet, HTTP/HTTPS, WebDAV, passive FTP/FTPS, SMB and NFS destinations. SMB over SSH proxy is experimental.
 Keep the destination address and login in its protocol tab. Enter the gateway details in the separate SSH proxy tab and enable it.
 SSH and SFTP authenticate the gateway and destination separately and verify both host keys.
 Gateway prompts include the SSH proxy label.
@@ -48,7 +48,7 @@ WebDAV and FTP/FTPS use the selected SSH proxy even when `NO_PROXY` or `no_proxy
 The gateway must permit TCP forwarding. For OpenSSH, check `AllowTcpForwarding`, `PermitOpen` and per-key restrictions in the [server configuration](https://man.openbsd.org/sshd_config).
 
 SSH/SFTP retain SSH to the final destination. HTTPS and explicit/implicit FTPS retain end-to-end TLS and certificate name verification.
-For Telnet, HTTP and plain FTP, SSH encrypts the connection only as far as the gateway; the gateway-to-destination segment is plaintext.
+For Telnet, HTTP, plain FTP and NFS, SSH encrypts the connection only as far as the gateway; the gateway-to-destination segment is plaintext.
 For SMB, traffic between the gateway and the share server is also outside the SSH encryption boundary. SMB signing and encryption follow the SMB tab settings.
 
 Select Passive in the FTP tab. Both the control connection and each listing/upload/download data connection pass through the gateway.
@@ -64,3 +64,5 @@ For SMB, the gateway connects to the server and port configured on the SMB tab. 
 If the connection fails, check whether TCP forwarding from the gateway to the SMB server is permitted. See [Using SMB](smb.md).
 
 One gateway is supported. Multiple hops, arbitrary ProxyCommand execution and a general-purpose SOCKS service for external clients are outside this scope.
+
+NFS forwarding includes port discovery and MOUNT for v2/v3. Version 4.0 uses only the NFS service port. Combining SSH proxy with Require reserved source port is rejected in settings and at connection time. See [Using NFS](nfs.md#connect-through-ssh-proxy) for server access rules and UID/GID settings.

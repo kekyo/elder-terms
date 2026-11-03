@@ -51,8 +51,8 @@ struct PortProbeResult {
   std::exception_ptr error;
 };
 
-static constexpr std::array<std::uint16_t, 7> standard_service_ports{
-    21, 22, 23, 80, 443, 445, 990};
+static constexpr std::array<std::uint16_t, 8> standard_service_ports{
+    21, 22, 23, 80, 443, 445, 990, 2049};
 
 static constexpr std::uint32_t ipv4_loopback_network = UINT32_C(0x7f000000);
 static constexpr std::uint32_t ipv4_loopback_mask = UINT32_C(0xff000000);

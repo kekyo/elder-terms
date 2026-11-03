@@ -27,6 +27,11 @@ import {
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import {
+  expandTransferDirectory,
+  openTransferDirectory,
+  selectCurrentTransferDirectory,
+} from './file-transfer-destination-helpers.ts';
+import {
   createTestEvidence,
   expectElementKind,
 } from '../../shared/tests/connection-test-helpers.ts';
@@ -81,7 +86,14 @@ it.for([2, 3, 4])(
         'name=NFS files',
         '[nfs]',
         'address=127.0.0.1',
+        'require_reserved_port=true',
         `version=${version === 4 ? '4.0' : version}`,
+        ...(version === 2
+          ? [
+              'discover_exports=false',
+              'known_exports=/srv/public;/srv/public/deep;/srv/other/public;/srv/readonly;/srv/restricted;',
+            ]
+          : []),
         'known_namespace_paths=/other/public;/public/deep;',
         'filename_encoding=CP932',
         `local_directory=${local}`,
@@ -90,13 +102,14 @@ it.for([2, 3, 4])(
       ].join('\n')
     );
     const evidence = createTestEvidence(context);
+    const applicationPath = fileURLToPath(
+      new URL(
+        '../../.build/elder-terms-file-transfer/elder-terms-file-transfer',
+        import.meta.url
+      )
+    );
     const launcher = createGtkAppLauncher({
-      appPath: fileURLToPath(
-        new URL(
-          '../../.build/elder-terms-file-transfer/elder-terms-file-transfer',
-          import.meta.url
-        )
-      ),
+      appPath: applicationPath,
       env: {
         LANGUAGE: 'en',
         LC_ALL: 'C.UTF-8',
@@ -109,6 +122,46 @@ it.for([2, 3, 4])(
     let recorder: ReturnType<typeof spawn> | undefined;
     let recorded: Promise<number | null> | undefined;
     try {
+      if (version === 3) {
+        const unprivileged = createGtkAppLauncher({
+          appPath: '/usr/bin/setpriv',
+          env: {
+            LANGUAGE: 'en',
+            LC_ALL: 'C.UTF-8',
+            XDG_CONFIG_HOME: join(directory, 'unprivileged-config'),
+            XDG_DATA_HOME: join(directory, 'unprivileged-data'),
+          },
+          onSystemOutput: evidence.recordSystemOutputEvent,
+          xvfbTrayHost: true,
+        });
+        try {
+          const rejected = await unprivileged.launch(
+            ['--bounding-set=-net_bind_service', applicationPath, '-c', config],
+            { onOutput: evidence.recordAppOutputEvent }
+          );
+          await waitForResult(async () => {
+            expect(
+              await expectElementKind(
+                await rejected.getById('file_transfer_prompt_title_label'),
+                'label'
+              ).text()
+            ).toBe('Failed to start NFS');
+            expect(
+              await expectElementKind(
+                await rejected.getById('file_transfer_prompt_message_label'),
+                'label'
+              ).text()
+            ).toContain('requires a reserved source port below 1024');
+          });
+          await evidence.captureEvidence(
+            'nfs-reserved-port-required',
+            async () => rejected.capture()
+          );
+          await evidence.flushOutputs([rejected], unprivileged);
+        } finally {
+          await unprivileged.release();
+        }
+      }
       const app = await launcher.launch(['-c', config], {
         onOutput: evidence.recordAppOutputEvent,
       });
@@ -162,10 +215,32 @@ it.for([2, 3, 4])(
         );
         await item.click();
       };
-      await rowFor(remote, `${prefix}/other/public`);
-      await rowFor(remote, `${prefix}/public/deep`);
-      await select(remote, `${prefix}/public`, 'right');
-      for (const action of ['new_directory', 'rename', 'delete'])
+      const publicName = 'public';
+      const showExportParent = async (): Promise<void> => {
+        if (version !== 4 && (await remotePath.text()) === '/') {
+          await select(remote, '/srv', 'left');
+          await waitForResult(async () =>
+            expect((await remote.info()).states).toContain('focused')
+          );
+          await app.input.pressKey('Return');
+          await waitForResult(async () =>
+            expect(await remotePath.text()).toBe('/srv')
+          );
+        }
+      };
+      if (version === 2) {
+        // The common parent only groups exports; it cannot accept uploads.
+        await select(remote, '/srv', 'left');
+        await select(localTree, '送信表', 'right');
+        expect(
+          (await (await app.getById('file_transfer_send_item')).info()).states
+        ).not.toContain('sensitive');
+        await app.input.pressKey('Escape');
+      }
+      await showExportParent();
+      await rowFor(remote, 'other');
+      await select(remote, publicName, 'right');
+      for (const action of ['rename', 'delete'])
         expect(
           (
             await (
@@ -173,18 +248,52 @@ it.for([2, 3, 4])(
             ).info()
           ).states
         ).not.toContain('sensitive');
+      expect(
+        (
+          await (
+            await app.getById('file_transfer_remote_new_directory_item')
+          ).info()
+        ).states.includes('sensitive')
+      ).toBe(version !== 2);
       await evidence.captureEvidence('nfs-export-roots', async () =>
         app.capture()
       );
       await app.input.pressKey('Escape');
-      await select(remote, `${prefix}/public`, 'left');
+      await select(remote, publicName, 'left');
       await waitForResult(async () =>
         expect((await remote.info()).states).toContain('focused')
       );
       await app.input.pressKey('Return');
       await waitForResult(async () =>
-        expect(await remotePath.text()).toBe(`${prefix}/public:/`)
+        expect(await remotePath.text()).toBe(`${prefix}/public`)
       );
+      await rowFor(remote, '日本語表');
+
+      const pathBounds = (await remotePath.capture()).bounds;
+      await app.input.moveMouseTo(
+        pathBounds.x + 20,
+        pathBounds.y + pathBounds.height / 2
+      );
+      await app.input.setMouseButton('left', true);
+      await app.input.setMouseButton('left', false);
+      await remotePath.setText(`${prefix}/public/deep/inside/`);
+      await app.input.pressKey('Return');
+      await waitForResult(async () =>
+        expect(await remotePath.text()).toBe(`${prefix}/public/deep/inside`)
+      );
+      await rowFor(remote, 'payload.txt');
+      await evidence.captureEvidence('nfs-plain-input-path', async () =>
+        app.capture()
+      );
+      for (const expected of [`${prefix}/public/deep`, `${prefix}/public`]) {
+        await expectElementKind(
+          await app.getById('file_transfer_remote_up_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect(await remotePath.text()).toBe(expected)
+        );
+      }
       await rowFor(remote, '日本語表');
 
       const screen = PNG.sync.read((await app.capture()).image);
@@ -296,6 +405,31 @@ it.for([2, 3, 4])(
           })
         ).ok
       ).toBe(true);
+      await selectCurrentTransferDirectory(app, true);
+      expect(await remotePath.text()).toBe(prefix || '/');
+      if (prefix) {
+        await expectElementKind(
+          await app.getById('file_transfer_remote_up_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect(await remotePath.text()).toBe('/')
+        );
+        await expandTransferDirectory(app, true, prefix, 0);
+      }
+      await expandTransferDirectory(
+        app,
+        true,
+        `${prefix}/public`,
+        prefix ? 1 : 0
+      );
+      await expandTransferDirectory(
+        app,
+        true,
+        `${prefix}/public/deep`,
+        prefix ? 2 : 1
+      );
+      await select(remote, '日本語表', 'left');
       await select(localTree, '送信表', 'right');
       await menu('file_transfer_send_item');
       const state = expectElementKind(
@@ -323,10 +457,27 @@ it.for([2, 3, 4])(
           })
         ).ok
       ).toBe(true);
-      await rowFor(remote, '送信表');
       await waitForResult(async () =>
         expect(await state.text()).toBe('Completed')
       );
+      await waitForResult(async () =>
+        expect((await remote.info()).states).toContain('sensitive')
+      );
+      expect(await remotePath.text()).toBe('/');
+      for (const name of [...(prefix ? [prefix] : []), 'public', 'deep'])
+        expect(
+          (await (await remote.cellAt(await rowFor(remote, name), 0))!.info())
+            .states
+        ).toContain('expanded');
+      expect(await remote.selectedRows()).toEqual([
+        await rowFor(remote, '日本語表'),
+      ]);
+      await rowFor(remote, '送信表');
+      await evidence.captureEvidence('nfs-preserved-transfer-tree', async () =>
+        app.capture()
+      );
+      await openTransferDirectory(app, true, `${prefix}/public`);
+      await rowFor(remote, '送信表');
       await observeVideo('completed');
       expect(observed[1]!.frame).toBeGreaterThan(observed[0]!.frame);
       expect(new Set(observed.map((item) => item.pixels)).size).toBe(2);
@@ -334,6 +485,14 @@ it.for([2, 3, 4])(
       recorder.stdin!.write('q\n');
       expect(await recorded, recordingError).toBe(0);
       recorder = undefined;
+      await expandTransferDirectory(app, true, `${prefix}/public/送信表`, 0);
+      await expandTransferDirectory(
+        app,
+        true,
+        `${prefix}/public/送信表/深い`,
+        1
+      );
+      await rowFor(remote, '内容.txt');
       await select(remote, '送信表', 'right');
       await menu('file_transfer_remote_rename_item');
       const prompt = expectElementKind(
@@ -349,7 +508,20 @@ it.for([2, 3, 4])(
         'button'
       ).click();
       await rowFor(remote, '変更表');
+      await waitForResult(async () =>
+        expect((await remote.info()).states).toContain('sensitive')
+      );
+      for (const name of ['変更表', '深い'])
+        expect(
+          (await (await remote.cellAt(await rowFor(remote, name), 0))!.info())
+            .states
+        ).toContain('expanded');
+      expect(await remote.selectedRows()).toEqual([
+        await rowFor(remote, '変更表'),
+      ]);
+      await rowFor(remote, '内容.txt');
       await rename(join(local, '送信表'), join(directory, 'original'));
+      await selectCurrentTransferDirectory(app, false);
       await select(remote, '変更表', 'right');
       await menu('file_transfer_receive_item');
       await waitForResult(
@@ -359,11 +531,14 @@ it.for([2, 3, 4])(
           ).toEqual(content),
         { timeoutMs: 45000 }
       );
+      await openTransferDirectory(app, false, local);
+      await selectCurrentTransferDirectory(app, false);
       await select(remote, '日本語表', 'right');
       await menu('file_transfer_receive_item');
       await waitForResult(async () =>
         expect(await readFile(join(local, '日本語表'), 'utf8')).toBe('CP932\n')
       );
+      await openTransferDirectory(app, false, local);
       await rowFor(localTree, '日本語表');
       expect(
         (await (await app.getById('file_transfer_job_2_row')).info()).name
@@ -374,12 +549,40 @@ it.for([2, 3, 4])(
       await evidence.captureEvidence(`nfs-v${version}-transferred`, async () =>
         app.capture()
       );
+      await expandTransferDirectory(app, true, `${prefix}/public/deep`, 0);
+      await select(remote, '変更表', 'right');
+      await menu('file_transfer_remote_delete_item');
+      await expectElementKind(
+        await app.getById('file_transfer_prompt_accept_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_status_label'),
+            'label'
+          ).text()
+        ).toBe('Deleted 1 item');
+        expect((await remote.info()).states).toContain('sensitive');
+      });
+      expect(
+        (await (await remote.cellAt(await rowFor(remote, 'deep'), 0))!.info())
+          .states
+      ).toContain('expanded');
+      await rowFor(remote, 'inside');
+      for (let row = 0; row < (await remote.getRowCount()); row++)
+        expect((await (await remote.cellAt(row, 0))!.info()).name).not.toBe(
+          '変更表'
+        );
+      await evidence.captureEvidence('nfs-preserved-delete-tree', async () =>
+        app.capture()
+      );
       await expectElementKind(
         await app.getById('file_transfer_remote_up_button'),
         'button'
       ).click();
-      await rowFor(remote, `${prefix}/public`);
-      expect(await remotePath.text()).toBe('/');
+      await rowFor(remote, publicName);
+      expect(await remotePath.text()).toBe(prefix || '/');
 
       await expectElementKind(
         await app.getById('application_menu_button'),
@@ -404,7 +607,8 @@ it.for([2, 3, 4])(
         'button'
       ).click();
       const enterPublic = async (): Promise<void> => {
-        await select(remote, `${prefix}/public`, 'left');
+        await showExportParent();
+        await select(remote, publicName, 'left');
         await waitForResult(async () =>
           expect((await remote.info()).states).toContain('focused')
         );
@@ -413,6 +617,7 @@ it.for([2, 3, 4])(
       };
       let nextJapaneseJob = 4;
       const receiveJapanese = async (expected: string): Promise<void> => {
+        await selectCurrentTransferDirectory(app, false);
         await select(remote, '日本語表', 'right');
         await menu('file_transfer_receive_item');
         const overwrite = expectElementKind(
@@ -433,6 +638,7 @@ it.for([2, 3, 4])(
         await waitForResult(async () =>
           expect(await readFile(join(local, '日本語表'), 'utf8')).toBe(expected)
         );
+        await openTransferDirectory(app, false, local);
         await rowFor(localTree, '日本語表');
       };
       await enterPublic();
@@ -479,6 +685,7 @@ it.for([2, 3, 4])(
             : 'rpc.nfsd -N 2 -V 3 -N 4 -U 8'
       );
       await reconnect.click();
+      await rowFor(remote, version === 4 ? 'public' : '/srv');
       await enterPublic();
       await receiveJapanese('EUC-JP\n');
       expect(
@@ -497,6 +704,7 @@ it.for([2, 3, 4])(
           })
         ).ok
       ).toBe(true);
+      await selectCurrentTransferDirectory(app, true);
       await select(localTree, '変更表', 'right');
       await menu('file_transfer_send_item');
       await waitForResult(async () => {
