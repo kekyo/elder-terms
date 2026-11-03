@@ -3289,7 +3289,7 @@ cardio::promise<void> show_file_transfer_window_connection_error_async(
   InlinePromptRequest request{
       .title = std::move(title),
       .message = std::move(message),
-      .accept_label = window->reconnecting ? _("OK") : _("Close"),
+      .accept_label = window->reconnect ? _("OK") : _("Close"),
       .cancel_label = _("Cancel"),
       .input_required = false,
       .echo = false,
@@ -3299,7 +3299,9 @@ cardio::promise<void> show_file_transfer_window_connection_error_async(
       window->prompt, std::move(request), std::move(cancellation));
   const InlinePromptResponse response = co_await pending;
   if (response.accepted && !window->destroyed && window->window != nullptr) {
-    if (window->reconnecting) {
+    if (window->reconnect) {
+      // Initial failures and failed retries both leave the connection available
+      // for a new attempt, even when successful sessions would auto-close.
       window->connection_state = FileTransferConnectionState::disconnected;
       set_file_transfer_status(window.get(), _("Disconnected"));
       update_file_action_overlay_presentation(window.get());

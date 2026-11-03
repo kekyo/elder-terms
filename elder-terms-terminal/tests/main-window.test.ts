@@ -1439,7 +1439,7 @@ describe.concurrent('elder-terms-terminal main window', () => {
   }
 
   for (const autoClose of ['[general]', 'auto_close=true\n', '']) {
-    it(`preserves TELNET automatic closing after connection refusal with ${autoClose === '' ? 'default' : 'explicit'} settings`, async (context) => {
+    it(`offers TELNET reconnection after connection refusal with ${autoClose === '' ? 'default' : 'explicit'} auto-close settings`, async (context) => {
       await withTemporaryDirectory(async (directory) => {
         const server = createServer();
         const port = await listenOnLocalhost(server);
@@ -1451,12 +1451,23 @@ describe.concurrent('elder-terms-terminal main window', () => {
           'utf8'
         );
         await runGtkTest(context, ['-c', configPath], async (app) => {
-          await waitForResult(async () => {
-            const output = await app.output();
-            expect(output.exitCode).toBe(0);
-            expect(output.exitSignal).toBeNull();
-            expect(output.stderr).toContain('Connection refused');
-          });
+          const reconnect = expectElementKind(
+            await app.getById('reconnect_button'),
+            'button'
+          );
+          for (let attempt = 1; attempt <= 2; ++attempt) {
+            await waitForResult(async () => {
+              const output = await app.output();
+              expect(output.exitCode).toBeNull();
+              expect(output.exitSignal).toBeNull();
+              expect(output.stderr.match(/Connection refused/g)).toHaveLength(
+                attempt
+              );
+              expect((await reconnect.info()).states).toContain('showing');
+              expect((await reconnect.info()).states).toContain('sensitive');
+            });
+            if (attempt === 1) await clickWidget(app, reconnect);
+          }
         });
       });
     });

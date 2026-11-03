@@ -50,7 +50,7 @@ TerminalConnectionPresentation terminal_connection_presentation(
 
 /** Presentation of the optional disconnected-session reconnect button. */
 struct TerminalReconnectPresentation {
-  /** True for disconnected terminals when automatic window closing is disabled. */
+  /** True for disconnected terminals whose windows will remain open. */
   bool visible;
   /** True when the runtime can accept a manual reconnect request. */
   bool sensitive;
@@ -58,14 +58,14 @@ struct TerminalReconnectPresentation {
 
 /**
  * Derives reconnection controls without altering automatic closing policy.
- * @param auto_close Whether automatic closing is configured.
+ * @param close_on_disconnect Whether the current session will close its window on disconnection.
  * @param phase Current backend phase.
  * @param ready Whether the session manager can accept a reconnect request.
  * @param closing Whether the terminal window is closing.
  * @returns Visibility and sensitivity of the reconnect button.
  */
 TerminalReconnectPresentation terminal_reconnect_presentation(
-    bool auto_close,
+    bool close_on_disconnect,
     TerminalSessionConnectionPhase phase, bool ready, bool closing);
 
 } // namespace elder_terms

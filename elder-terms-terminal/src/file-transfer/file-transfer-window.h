@@ -121,12 +121,14 @@ cardio::promise<InlinePromptResponse> confirm_file_transfer_window_async(
 void mark_file_transfer_certificate_exception(const std::shared_ptr<FileTransferWindow> &window);
 
 /**
- * Shows a connection failure inside the file-transfer surface until closed.
+ * Shows a connection failure inside the file-transfer surface until acknowledged.
  *
  * @param window File-transfer window hosting the error.
  * @param title Short connection failure heading.
  * @param message Detailed failure text.
  * @param cancellation Application shutdown cancellation signal.
+ * @remarks Acknowledgement offers reconnection when a reconnect callback is
+ * available, including after the initial attempt; otherwise it closes the window.
  */
 cardio::promise<void> show_file_transfer_window_connection_error_async(
     const std::shared_ptr<FileTransferWindow> &window, std::string title,
