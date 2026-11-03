@@ -24,8 +24,14 @@ static GtkWidget *find_notebook(GtkWidget *widget) {
 
 static GtkWidget *find_label(GtkWidget *widget) {
   if (GTK_IS_LABEL(widget)) return widget;
-  if (GTK_IS_BIN(widget)) return find_label(gtk_bin_get_child(GTK_BIN(widget)));
-  return nullptr;
+  if (!GTK_IS_CONTAINER(widget)) return nullptr;
+  auto *children = gtk_container_get_children(GTK_CONTAINER(widget));
+  GtkWidget *found = nullptr;
+  for (auto *child = children; child != nullptr && found == nullptr; child = child->next) {
+    found = find_label(GTK_WIDGET(child->data));
+  }
+  g_list_free(children);
+  return found;
 }
 
 int main(int argc, char **argv) {

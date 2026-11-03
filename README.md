@@ -135,7 +135,8 @@ Terminal settings are split into two tabs. "Terminal" contains encoding, charact
 keys, rows and columns, scrollback, BEL, shortcuts, screen-reader access, and copy settings.
 "Terminal appearance" contains fonts, text size, the cursor, background,
 and color correction. The same layout is used for individual connections and
-"Connection defaults". Neither tab is shown for file transfers.
+"Connection defaults". These tabs are normally hidden for file transfers.
+A tab remains available when it contains input that needs correction.
 Border visibility and width are configured on the "General" tab for both
 terminal and file transfer windows.
 
