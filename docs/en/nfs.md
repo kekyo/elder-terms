@@ -12,13 +12,15 @@ For v2 and v3, `/` on the remote side lists exports. Register known export paths
 
 For v4.0, the application explores the server's public directory tree. This differs from the v2/v3 export list. For example, if a server exposes v3's `/srv/public` as `/public` in v4, enter `/public` in the dedicated v4 path settings. Known public paths can be registered even when intermediate directories cannot be listed.
 
-Open a public root to browse its contents. "Up" returns to the parent, or to the root list from a public root. The path field displays the current location and cannot be edited. `/srv/public:/Documents`, for example, means Documents inside that export.
+Public paths are grouped by their common parent directories. For example, expand `/storage1` at the root to see `/storage1/home` and `/storage1/public`. Registered public paths remain browsable when their parent is not exported.
+
+Open a public root to browse its contents. "Up" returns to its parent in the tree. The path field displays the current location and cannot be edited. `/srv/public:/Documents`, for example, means Documents inside that export.
 
 ## Transfers and file operations
 
 Right-click an item to send, receive, rename, delete, or create a folder. Folder transfers and deletion include descendants. Symbolic links are copied as links without recursively following their targets. Permissions and access/modification timestamps are preserved where allowed by the server.
 
-Public roots cannot be renamed or deleted, and items cannot be created in the root list `/`. Nested public roots are also protected. Renaming across public roots is unavailable; receive and send the item separately if needed.
+Public roots cannot be renamed or deleted, and items cannot be created in the root list `/`. Unexported parents shown to group public paths cannot be modified either. Nested public roots are also protected. Renaming across public roots is unavailable; receive and send the item separately if needed.
 
 When a destination already exists, choose overwrite or skip. Uploads use a temporary location and install the final name only after all data has been sent. For v2, this temporary location is a folder. If a lost connection prevents ownership or cleanup from being confirmed, the job result retains the temporary path. Reconnect, inspect its contents, and delete it if no longer needed.
 
@@ -31,6 +33,8 @@ Disable "Close window when session ends" to keep the window after a disconnect a
 The default is UTF-8. Set "Filename encoding" to CP932, Shift_JIS, EUC-JP, or another supported encoding when appropriate for the server's names. File contents are never converted. CP932 and Shift_JIS are treated as distinct encodings.
 
 Each setting can inherit from global connection defaults or be overridden for one connection. Theme inheritance is not yet supported. Saving a new filename encoding during a connection leaves that connection unchanged; reconnect to apply it. Existing job labels retain their original display names.
+
+Clear a text or numeric entry to display and use its inherited value. Version and enabled/disabled selectors include a default option to restore inheritance. Select "Custom" to edit a multiline list. An empty custom list overrides any inherited entries with an empty list.
 
 Names are not automatically detected, including in directories containing mixed encodings. Undecodable names display their original bytes, for example `[undecodable: FF]`. Different original names remain separate entries even when their display names match. Downloads request a decision when a local filename cannot be formed or would collide. Skipping the item lets other items continue.
 

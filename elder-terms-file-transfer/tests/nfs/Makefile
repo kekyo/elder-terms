@@ -18,6 +18,7 @@ deps:
 
 test: build
 	$(BUILD_DIR)/nfs-name-test
+	$(BUILD_DIR)/nfs-client-test --export-tree
 	ELDER_NFS_PROBE=$(BUILD_DIR)/nfs-probe node run-faults.mts
 	ELDER_NFS_PROBE=$(BUILD_DIR)/nfs-probe node run-vm.mts
 

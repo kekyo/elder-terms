@@ -175,23 +175,26 @@ static cardio::promise<void> test_client(const std::string &encoding, int versio
       return entry.name == "/must-not-be-interpreted-as-v4";
     }), "v3 export settings must not leak into the v4 namespace");
   }
-  std::string root, other, nested;
-  for (const auto &entry : roots.entries) {
-    require(entry.role == RemoteFileRole::nfs_export, "Exports must retain their UI role");
-    require(!client->path_capabilities(entry.path).modify, "Export roots must be protected");
-    if (entry.name == prefix + "/public") root = entry.path;
-    if (entry.name == prefix + "/other/public") other = entry.path;
-    if (entry.name == prefix + "/public/deep") nested = entry.path;
-  }
-  require(!root.empty() && !other.empty() && !nested.empty() && root != other && root != nested,
+  const auto root = nfs_export_identity(client, prefix + "/public");
+  const auto other = nfs_export_identity(client, prefix + "/other/public");
+  const auto nested = nfs_export_identity(client, prefix + "/public/deep");
+  const auto siblings = co_await observed->load_directory_async(observed->parent_path(root), {});
+  require(std::any_of(siblings.entries.begin(), siblings.entries.end(), [&](const auto &entry) {
+    return entry.path == root && entry.role == RemoteFileRole::nfs_export &&
+        entry.name == (version == 4 ? "/public" : "public");
+  }), "Exports must retain their UI role beneath their common directory");
+  require(root != other && root != nested,
       "Same-basename and nested exports must have distinct operation identities");
-  require(observed->parent_path(root) == "/" && observed->parent_path("/") == "/" &&
+  require(observed->display_path(observed->parent_path(root)) == (prefix.empty() ? "/" : prefix + ":/") && observed->parent_path("/") == "/" &&
       observed->display_path(root) == prefix + "/public:/" && !observed->path_input_editable(),
       "Browser navigation must use identities while displaying the export path");
   require(nfs_export_identity(client, prefix + "/public") == root,
       "An explicitly configured export must resolve to this connection's identity");
   const auto listing = co_await observed->load_directory_async(root, {});
   require(listing.entries.size() >= 8, "A real export must be browsable");
+  require(std::any_of(listing.entries.begin(), listing.entries.end(), [&](const auto &entry) {
+    return entry.path == nested && entry.name == "deep" && entry.role == RemoteFileRole::nfs_export;
+  }), "Nested exports must retain their mount identities when reached through an exported ancestor");
   require(!client->path_capabilities("/").create_children, "The server root is not a writable directory");
   require(!client->path_capabilities(client->child_path(root, "deep")).modify,
       "A nested public root must remain protected when reached through its parent export");
@@ -363,8 +366,11 @@ static cardio::promise<void> test_known_exports(int version) {
   }
   auto client = co_await open_nfs_server_async(options, {});
   const auto root = co_await client->load_directory_async("/", {});
-  require(root.notice.find("failed") != std::string::npos && root.entries.size() == 4,
+  require(root.notice.find("failed") != std::string::npos && root.entries.size() == (version == 4 ? 4 : 1),
       "Failed export enumeration must show configured roots with a visible explanation");
+  const auto parent = client->parent_path(nfs_export_identity(client, prefix + "/public"));
+  require((co_await client->load_directory_async(parent, {})).entries.size() == 4,
+      "Configured exports must remain accessible beneath shared parents when discovery fails");
   const auto restricted = nfs_export_identity(client, prefix + "/restricted");
   bool denied = false;
   try { (void)co_await client->load_directory_async(restricted, {}); }
@@ -492,6 +498,67 @@ static cardio::promise<void> test_v2_boundaries(bool repeated_cookie) {
   std::cout << "PASS v2 directory and size boundary\n";
 }
 
+static cardio::promise<void> test_export_tree() {
+  for (const auto version : {2, 3, 4}) {
+    NfsClientOpenOptions options;
+    options.address = "127.0.0.1";
+    options.version = version;
+    options.discover_exports = options.discover_namespace = false;
+    options.known_exports = options.known_namespace_paths = {
+        "/storage0/music", "/storage1/home", "/storage1/images", "/storage1/media",
+        "/storage1/public", "/storage2/videos", "/storage4/youtube", "/storage1/home"};
+    auto client = co_await open_nfs_server_async(options, {});
+    const auto roots = co_await client->load_directory_async("/", {});
+    std::vector<std::string> names;
+    for (const auto &entry : roots.entries) names.push_back(entry.name);
+    require(names == std::vector<std::string>{"/storage0", "/storage1", "/storage2", "/storage4"},
+        "Common export prefixes must appear once as four root directories");
+    const auto group = roots.entries[1].path;
+    require(client->display_path(group) == "/storage1" && client->parent_path(group) == "/" &&
+        client->local_filename(roots.entries[1]) == "storage1",
+        "Virtual export groups must support display, parent navigation and local folder names");
+    require(!client->path_capabilities(group).create_children && !client->path_capabilities(group).modify,
+        "Grouping directories must not allow server filesystem mutations");
+    const auto attributes = co_await client->lstat_async(group, {});
+    require(attributes && attributes->type == RemoteFileType::directory && attributes->path == group,
+        "Grouping directories must be inspectable without mounting an unexported parent");
+    const auto children = co_await client->load_directory_async(group, {});
+    names.clear();
+    for (const auto &entry : children.entries) {
+      names.push_back(entry.name);
+      require(entry.role == RemoteFileRole::nfs_export && client->parent_path(entry.path) == group &&
+          entry.path == nfs_export_identity(client, "/storage1/" + entry.name),
+          "Grouped leaves must keep their mount identities and protected export role");
+    }
+    require(names == std::vector<std::string>{"home", "images", "media", "public"},
+        "Expanding a common prefix must reveal every export exactly once");
+    const auto leaf = children.entries.front().path;
+    const auto file = client->child_path(leaf, "song.txt");
+    require(client->display_path(file) == "/storage1/home:/song.txt" && client->parent_path(file) == leaf &&
+        client->path_capabilities(leaf).create_children && !client->path_capabilities(leaf).modify,
+        "Transfers inside grouped exports must retain their original paths and permissions");
+    co_await stop_nfs_client_async(client);
+    client = co_await open_nfs_server_async(options, {});
+    bool rejected = false;
+    try { (void)co_await client->load_directory_async(group, {}); }
+    catch (const RemoteFileError &error) { rejected = !error.connection_lost; }
+    require(rejected, "Grouping identities must expire when the connection is replaced");
+    co_await stop_nfs_client_async(client);
+
+    options.filename_encoding = "CP932";
+    options.known_exports = options.known_namespace_paths = {"/公開", "/公開/資料/写真", "/公開/資料/動画"};
+    client = co_await open_nfs_server_async(options, {});
+    const auto exported = nfs_export_identity(client, "/公開");
+    const auto intermediate = client->child_path(exported, "資料");
+    const auto nested = nfs_export_identity(client, "/公開/資料/写真");
+    require(client->parent_path(nested) == intermediate && client->parent_path(intermediate) == exported &&
+        client->child_path(intermediate, "写真") == nested && client->path_capabilities(intermediate).create_children,
+        "Shared ancestors inside a real export must remain real directories with lossless encoded identities");
+    co_await stop_nfs_client_async(client);
+  }
+  std::cout << "PASS grouped NFS exports for v2, v3 and v4\n";
+}
+
 int main(int argc, char **argv) {
   if (argc < 2 || argc > 3) return 2;
   const int version = argc == 3 ? std::stoi(argv[2]) : 3;
@@ -507,7 +574,8 @@ int main(int argc, char **argv) {
             std::string(error.what()).find("Access denied") != std::string::npos;
       }
       require(valid_error, "Library errors containing raw filenames must remain readable UTF-8 for GTK");
-      if (std::string_view(argv[1]) == "--known-exports") co_await test_known_exports(version);
+      if (std::string_view(argv[1]) == "--export-tree") co_await test_export_tree();
+      else if (std::string_view(argv[1]) == "--known-exports") co_await test_known_exports(version);
       else if (std::string_view(argv[1]) == "--lost-create") co_await test_lost_create(version);
       else if (std::string_view(argv[1]) == "--reject-name") co_await test_v4_name_rejection();
       else if (std::string_view(argv[1]) == "--v2-cookie") co_await test_v2_boundaries(true);

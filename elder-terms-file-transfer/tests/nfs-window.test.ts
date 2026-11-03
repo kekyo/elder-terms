@@ -162,10 +162,23 @@ it.for([2, 3, 4])(
         );
         await item.click();
       };
-      await rowFor(remote, `${prefix}/other/public`);
-      await rowFor(remote, `${prefix}/public/deep`);
-      await select(remote, `${prefix}/public`, 'right');
-      for (const action of ['new_directory', 'rename', 'delete'])
+      const publicName = version === 4 ? '/public' : 'public';
+      const showExportParent = async (): Promise<void> => {
+        if (version !== 4 && (await remotePath.text()) === '/') {
+          await select(remote, '/srv', 'left');
+          await waitForResult(async () =>
+            expect((await remote.info()).states).toContain('focused')
+          );
+          await app.input.pressKey('Return');
+          await waitForResult(async () =>
+            expect(await remotePath.text()).toBe('/srv:/')
+          );
+        }
+      };
+      await showExportParent();
+      await rowFor(remote, version === 4 ? '/other' : 'other');
+      await select(remote, publicName, 'right');
+      for (const action of ['rename', 'delete'])
         expect(
           (
             await (
@@ -173,11 +186,18 @@ it.for([2, 3, 4])(
             ).info()
           ).states
         ).not.toContain('sensitive');
+      expect(
+        (
+          await (
+            await app.getById('file_transfer_remote_new_directory_item')
+          ).info()
+        ).states.includes('sensitive')
+      ).toBe(version !== 4);
       await evidence.captureEvidence('nfs-export-roots', async () =>
         app.capture()
       );
       await app.input.pressKey('Escape');
-      await select(remote, `${prefix}/public`, 'left');
+      await select(remote, publicName, 'left');
       await waitForResult(async () =>
         expect((await remote.info()).states).toContain('focused')
       );
@@ -378,8 +398,8 @@ it.for([2, 3, 4])(
         await app.getById('file_transfer_remote_up_button'),
         'button'
       ).click();
-      await rowFor(remote, `${prefix}/public`);
-      expect(await remotePath.text()).toBe('/');
+      await rowFor(remote, publicName);
+      expect(await remotePath.text()).toBe(prefix ? `${prefix}:/` : '/');
 
       await expectElementKind(
         await app.getById('application_menu_button'),
@@ -404,7 +424,8 @@ it.for([2, 3, 4])(
         'button'
       ).click();
       const enterPublic = async (): Promise<void> => {
-        await select(remote, `${prefix}/public`, 'left');
+        await showExportParent();
+        await select(remote, publicName, 'left');
         await waitForResult(async () =>
           expect((await remote.info()).states).toContain('focused')
         );
@@ -479,6 +500,7 @@ it.for([2, 3, 4])(
             : 'rpc.nfsd -N 2 -V 3 -N 4 -U 8'
       );
       await reconnect.click();
+      await rowFor(remote, version === 4 ? '/public' : '/srv');
       await enterPublic();
       await receiveJapanese('EUC-JP\n');
       expect(
