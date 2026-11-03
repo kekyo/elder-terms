@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGtkAppLauncher, type GtkTableElement } from 'gestament';
-import { waitForResult } from 'gestament/testing';
+import { expectCapture, waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import {
   createTestEvidence,
@@ -379,9 +379,22 @@ it.for([false, true])(
         ).toContain('reserved');
       expect(gatewayConnections).toBe(reserved ? 0 : 1);
       expect(directConnections).toBe(0);
-      await evidence.captureEvidence('nfs-proxy-rejected', async () =>
-        app.capture()
-      );
+      // Accessible labels change before GTK paints the next frame. Verify the
+      // rendered failure title before saving evidence of the rejected route.
+      const bounds = (await title.capture()).bounds;
+      const capture = await waitForResult(async () => {
+        const current = await app.capture();
+        await expectCapture(current, 'nfs-proxy-error-render').toContainText(
+          'Failed to start NFS',
+          {
+            region: bounds,
+            preprocess: { scale: 3 },
+            pageSegmentationModes: ['singleLine'],
+          }
+        );
+        return current;
+      });
+      await evidence.captureEvidence('nfs-proxy-rejected', async () => capture);
     } finally {
       await evidence.flushOutputs([], launcher);
       await launcher.release();
