@@ -592,6 +592,18 @@ static void set_file_transfer_status(FileTransferWindow *window,
 static std::vector<FileTransferSelectedItem>
 selected_file_transfer_items(FileTransferPaneState *pane);
 
+static std::optional<std::string> selected_file_transfer_destination(
+    FileTransferPaneState *pane) {
+  const auto items = selected_file_transfer_items(pane);
+  if (items.size() != 1 || items.front().type != RemoteFileType::directory)
+    return std::nullopt;
+  if (pane->remote && (!pane->window->connection_available || !pane->window->client ||
+      !pane->window->client->path_capabilities(items.front().path).create_children))
+    return std::nullopt;
+  // Keep the selected operation identity; display paths can be ambiguous.
+  return items.front().path;
+}
+
 static bool can_create_remote_children(const FileTransferWindow *window) {
   return window->client && !window->remote.current_directory.empty() &&
       window->client->path_capabilities(
@@ -618,12 +630,18 @@ static void update_file_transfer_sensitivity(FileTransferWindow *window) {
       idle && !window->remote.busy && window->connection_available;
   const bool transfer_ready = local_ready && remote_ready;
   const bool remote_creatable = can_create_remote_children(window);
+  const auto local_destination = selected_file_transfer_destination(&window->local);
+  const auto remote_destination = selected_file_transfer_destination(&window->remote);
   const auto remote_items = selected_file_transfer_items(&window->remote);
   const bool remote_modifiable = can_modify_remote_items(window, remote_items);
   gtk_widget_set_sensitive(window->local.frame, local_ready);
   gtk_widget_set_sensitive(window->remote.frame, remote_ready);
-  gtk_widget_set_sensitive(window->local.transfer_item, transfer_ready && remote_creatable);
-  gtk_widget_set_sensitive(window->remote.transfer_item, transfer_ready);
+  gtk_widget_set_sensitive(window->local.transfer_item,
+      transfer_ready && remote_destination.has_value() && !selected_file_transfer_items(&window->local).empty());
+  const bool receive_ready = transfer_ready && local_destination.has_value() && !remote_items.empty();
+  gtk_widget_set_sensitive(window->remote.transfer_item, receive_ready);
+  if (window->remote.receive_file_item != nullptr)
+    gtk_widget_set_sensitive(window->remote.receive_file_item, receive_ready);
   if (window->local.hash_item != nullptr) {
     gtk_widget_set_sensitive(window->local.hash_item, local_ready && !window->transfer_active);
   }
@@ -1331,16 +1349,18 @@ static gboolean on_file_transfer_tree_button_press(
   const bool transfer_ready = !pane->window->local.busy &&
       !pane->window->remote.busy && pane->window->connection_available;
   const bool remote_creatable = can_create_remote_children(pane->window);
+  const auto destination = selected_file_transfer_destination(
+      pane->remote ? &pane->window->local : &pane->window->remote);
+  const bool can_transfer = transfer_ready && !items.empty() && destination.has_value();
   const bool idle = !pane->window->transfer_active;
   const bool modifiable = idle && (!pane->remote || can_modify_remote_items(pane->window, items));
   gtk_widget_set_sensitive(pane->new_directory_item, idle && (!pane->remote || remote_creatable));
-  gtk_widget_set_sensitive(pane->transfer_item,
-      transfer_ready && !items.empty() && (pane->remote || remote_creatable));
+  gtk_widget_set_sensitive(pane->transfer_item, can_transfer);
   if (pane->receive_file_item) {
     const bool http = pane->window->client && pane->window->client->capabilities().incremental_receive;
     gtk_widget_set_visible(pane->receive_file_item, http);
     gtk_widget_set_visible(pane->expand_html_item, http);
-    gtk_widget_set_sensitive(pane->receive_file_item, transfer_ready && !items.empty());
+    gtk_widget_set_sensitive(pane->receive_file_item, can_transfer);
     gtk_widget_set_sensitive(pane->expand_html_item, idle && items.size() == 1);
     gtk_menu_item_set_label(GTK_MENU_ITEM(pane->transfer_item), http ? _("Receive as directory") : _("Receive"));
   }
@@ -1979,10 +1999,8 @@ static void file_transfer_job_changed(FileTransferWindow *window, const FileTran
 static void start_file_transfer_transfer(
     FileTransferWindow *window, FileTransferDirection direction, bool as_file = false) {
   if (window == nullptr || window->destroyed ||
-      window->browser_action_active ||
-      !window->connection_available ||
-      (direction == FileTransferDirection::send &&
-       !can_create_remote_children(window))) {
+      window->browser_action_active || window->reconnecting || window->certificate_confirmation ||
+      window->local.busy || window->remote.busy || !window->connection_available) {
     return;
   }
   FileTransferPaneState *source =
@@ -1994,11 +2012,9 @@ static void start_file_transfer_transfer(
   if (sources.empty()) {
     return;
   }
-  const std::string destination =
-      direction == FileTransferDirection::send
-          ? window->remote.current_directory
-          : window->local.current_directory;
-  if (destination.empty()) {
+  const auto destination = selected_file_transfer_destination(
+      direction == FileTransferDirection::send ? &window->remote : &window->local);
+  if (!destination) {
     return;
   }
 
@@ -2006,7 +2022,7 @@ static void start_file_transfer_transfer(
   request.direction = direction;
   request.receive_as_file = as_file;
   request.source_paths = sources;
-  request.destination_directory = destination;
+  request.destination_directory = *destination;
   submit_file_transfer_request(window, std::move(request));
 }
 

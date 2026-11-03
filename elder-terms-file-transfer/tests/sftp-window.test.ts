@@ -659,6 +659,10 @@ describe('SFTP window', () => {
         const localTree = expectTable(
           await app.getById('file_transfer_local_tree')
         );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
+        await remoteTree.selectRow(await findRow(remoteTree, 'archive'));
         await openContextMenu(
           app,
           localTree,
@@ -2001,19 +2005,42 @@ describe('SFTP window', () => {
     );
   });
 
-  it('sends and receives selected items from the pane context menus', async (context) => {
+  it('requires one selected destination directory for sending and receiving', async (context) => {
     await runSftpFixture(
       context,
       false,
       [],
       undefined,
-      async ({ app, localDirectory }) => {
+      async ({ app, localDirectory, evidence }) => {
         const localTree = expectTable(
           await app.getById('file_transfer_local_tree')
         );
         const remoteTree = expectTable(
           await app.getById('file_transfer_remote_tree')
         );
+        for (const names of [
+          [],
+          ['readme.txt'],
+          ['latest'],
+          ['archive', 'readme.txt'],
+        ]) {
+          for (const row of await remoteTree.selectedRows())
+            await remoteTree.deselectRow(row);
+          for (const name of names)
+            await remoteTree.selectRow(await findRow(remoteTree, name));
+          await openContextMenu(
+            app,
+            localTree,
+            await findRow(localTree, 'hello.txt')
+          );
+          expect(
+            (await (await app.getById('file_transfer_send_item')).info()).states
+          ).not.toContain('sensitive');
+          await app.input.pressKey('Escape');
+        }
+        for (const row of await remoteTree.selectedRows())
+          await remoteTree.deselectRow(row);
+        await remoteTree.selectRow(await findRow(remoteTree, 'archive'));
         await openContextMenu(
           app,
           localTree,
@@ -2024,6 +2051,7 @@ describe('SFTP window', () => {
           'menuItem'
         );
         await expectShowing(send);
+        expect((await send.info()).states).toContain('sensitive');
         await send.click();
         await waitForResult(async () => {
           expect(
@@ -2032,10 +2060,41 @@ describe('SFTP window', () => {
               'label'
             ).text()
           ).toBe('Sent 1 item');
-          expect(await findRow(remoteTree, 'hello.txt')).toBeGreaterThanOrEqual(
-            0
-          );
+          expect((await remoteTree.info()).states).toContain('sensitive');
         });
+        expect(await remoteTree.getRowCount()).toBe(3);
+        await clickTreeExpander(
+          app,
+          remoteTree,
+          await findRow(remoteTree, 'archive')
+        );
+        await findRow(remoteTree, 'hello.txt');
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_remote_path_entry'),
+            'entry'
+          ).text()
+        ).toBe('/remote');
+
+        for (const names of [[], ['hello.txt'], ['documents', 'hello.txt']]) {
+          for (const row of await localTree.selectedRows())
+            await localTree.deselectRow(row);
+          for (const name of names)
+            await localTree.selectRow(await findRow(localTree, name));
+          await openContextMenu(
+            app,
+            remoteTree,
+            await findRow(remoteTree, 'readme.txt')
+          );
+          expect(
+            (await (await app.getById('file_transfer_receive_item')).info())
+              .states
+          ).not.toContain('sensitive');
+          await app.input.pressKey('Escape');
+        }
+        for (const row of await localTree.selectedRows())
+          await localTree.deselectRow(row);
+        await localTree.selectRow(await findRow(localTree, 'documents'));
 
         await openContextMenu(
           app,
@@ -2047,6 +2106,7 @@ describe('SFTP window', () => {
           'menuItem'
         );
         await expectShowing(receive);
+        expect((await receive.info()).states).toContain('sensitive');
         await receive.click();
         await waitForResult(async () => {
           expect(
@@ -2056,9 +2116,25 @@ describe('SFTP window', () => {
             ).text()
           ).toBe('Received 1 item');
           expect(
-            await readFile(join(localDirectory, 'readme.txt'), 'utf8')
+            await readFile(
+              join(localDirectory, 'documents', 'readme.txt'),
+              'utf8'
+            )
           ).toBe('hello from remote\n');
         });
+        await expect(
+          access(join(localDirectory, 'readme.txt'))
+        ).rejects.toThrow();
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_local_path_entry'),
+            'entry'
+          ).text()
+        ).toBe(localDirectory);
+        await evidence.captureEvidence(
+          'selected-transfer-destinations',
+          async () => app.capture()
+        );
       }
     );
   });
@@ -2527,7 +2603,11 @@ describe('SFTP window', () => {
         const remoteTree = expectTable(
           await app.getById('file_transfer_remote_tree')
         );
-        await chmod(localDirectory, 0o555);
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
+        await localTree.selectRow(await findRow(localTree, 'documents'));
+        await chmod(join(localDirectory, 'documents'), 0o555);
         try {
           await openContextMenu(
             app,
@@ -2576,7 +2656,7 @@ describe('SFTP window', () => {
           });
           expect(await app.getWindowCount()).toBe(1);
         } finally {
-          await chmod(localDirectory, 0o755);
+          await chmod(join(localDirectory, 'documents'), 0o755);
         }
       }
     );
