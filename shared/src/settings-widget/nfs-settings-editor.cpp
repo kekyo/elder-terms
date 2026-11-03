@@ -218,6 +218,7 @@ NfsSettingsEditor *create_nfs_settings_editor(SettingsStore *store, std::string 
     g_signal_connect(signal_source, signal, G_CALLBACK(field_changed), &field);
     auto *container = field.control;
     if (field.kind == NfsFieldKind::list) {
+      gtk_widget_set_valign(label, GTK_ALIGN_START);
       container = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
       field.mode = gtk_combo_box_text_new();
       assign_id(field.mode, id + "_combo");
