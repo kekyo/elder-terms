@@ -6679,6 +6679,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   state->nfs_editor = create_nfs_settings_editor(
       &state->draft_store, state->id_prefix, state->is_runtime, [state] {
+        sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, true);
         update_action_sensitivity(state);
         notify_changed(state);
       }, [state](GtkWidget *entry) {
@@ -6722,7 +6723,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_widget_set_no_show_all(proxy_page, TRUE);
   gtk_widget_set_no_show_all(proxy_tab, TRUE);
   state->connection_pages.push_back({
-      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type, webdav_connection_type, http_connection_type, ftp_connection_type, smb_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
+      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type, webdav_connection_type, http_connection_type, ftp_connection_type, smb_connection_type, nfs_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
 
   auto [terminal_page, terminal_appearance_page] = create_terminal_pages(state);
   const std::string terminal_tab_id = widget_id(state, "terminal_tab");

@@ -6,6 +6,7 @@
 #include <elder-terms/settings/ssh-proxy-settings.h>
 #include <elder-terms/settings/general-settings.h>
 #include <elder-terms/settings/ftp-settings.h>
+#include <elder-terms/settings/nfs-settings.h>
 
 #include <algorithm>
 #include <utility>
@@ -81,6 +82,8 @@ SshProxySettings ssh_proxy_connection_settings(const SettingsStore &store) {
   if (result.enabled && kind == ConnectionKind::ftp &&
       ftp_connection_settings(store).data_connection_mode == FtpDataConnectionMode::active)
     result.validation_errors.emplace_back(_("SSH proxy requires passive FTP/FTPS; select Passive or disable SSH proxy"));
+  if (result.enabled && kind == ConnectionKind::nfs && nfs_connection_settings(store).require_reserved_port)
+    result.validation_errors.emplace_back(_("SSH proxy cannot require reserved NFS source ports; disable the reserved-port requirement or SSH proxy"));
   return result;
 }
 

@@ -2983,3 +2983,6 @@ msgstr "ファイル名の文字コードの変更は再接続後に反映され
 
 msgid "Failed to start NFS"
 msgstr "NFS接続を開始できませんでした"
+
+msgid "SSH proxy cannot require reserved NFS source ports; disable the reserved-port requirement or SSH proxy"
+msgstr "SSH proxyではNFSの予約済み送信元ポートを必須にできません。予約済みポートの必須設定かSSH proxyを無効にしてください"

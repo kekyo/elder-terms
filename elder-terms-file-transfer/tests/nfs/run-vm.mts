@@ -11,6 +11,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createNfsWireObserver } from './nfs-wire-observer.mts';
+import { withSshGateway } from '../../../shared/tests/ssh-proxy-test-helper.mjs';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const root = resolve(directory, '../../..');
@@ -20,6 +21,8 @@ const driver =
   process.env.ELDER_NFS_PROBE ?? resolve(root, '.build/nfs/nfs-probe');
 const clientDriver = resolve(dirname(driver), 'nfs-client-test');
 const uiOnly = process.argv.includes('--ui-window-only');
+const proxyOnly = process.argv.includes('--ssh-proxy-only');
+const uiProxy = process.argv.includes('--ui-ssh-proxy');
 const uiVersion = Number(
   process.argv
     .find((argument) => argument.startsWith('--ui-version='))
@@ -68,6 +71,8 @@ if (!process.argv.includes('--isolated')) {
         fileURLToPath(import.meta.url),
         '--isolated',
         ...(uiOnly ? ['--ui-window-only', `--ui-version=${uiVersion}`] : []),
+        ...(proxyOnly ? ['--ssh-proxy-only'] : []),
+        ...(uiProxy ? ['--ui-ssh-proxy'] : []),
       ],
       240000
     )
@@ -193,9 +198,13 @@ if (!process.argv.includes('--isolated')) {
             'run',
             '--root',
             resolve(root, 'elder-terms-file-transfer'),
-            'tests/nfs-window.test.ts',
+            uiProxy
+              ? 'tests/nfs-proxy-window.test.ts'
+              : 'tests/nfs-window.test.ts',
             '--testNamePattern',
-            `NFS v${version} files`,
+            uiProxy
+              ? `NFS v${version} through SSH proxy`
+              : `NFS v${version} files`,
           ],
           180000,
           {
@@ -221,6 +230,49 @@ if (!process.argv.includes('--isolated')) {
         );
         continue;
       }
+      for (const mode of ['discovery', 'fixed']) {
+        await withSshGateway(
+          resolve(root, '.build/shared/ssh-proxy-test-server'),
+          evidence,
+          async (gateway) => {
+            const output = await run(
+              resolve(
+                root,
+                '.build/elder-terms-file-transfer/nfs-ssh-proxy-test'
+              ),
+              [String(version), mode],
+              60000,
+              {
+                ...process.env,
+                ELDER_NFS_PROXY_PORT: String(gateway.port),
+                ELDER_NFS_PROXY_KNOWN_HOSTS: gateway.knownHosts,
+              }
+            );
+            assert.ok(
+              gateway.requests.every(
+                (request) => request.host === 'proxy-test.invalid'
+              )
+            );
+            const ports = [
+              ...new Set(gateway.requests.map((request) => request.port)),
+            ].sort((a, b) => a - b);
+            assert.deepEqual(
+              ports,
+              version === 4
+                ? [mode === 'fixed' ? 22049 : 2049]
+                : mode === 'fixed'
+                  ? [22048, 22049]
+                  : [111, 2049, 20048]
+            );
+            await writeFile(
+              resolve(evidence, `ssh-proxy-v${version}-${mode}.log`),
+              output
+            );
+            process.stdout.write(output);
+          }
+        );
+      }
+      if (proxyOnly) continue;
       for (const encoding of ['UTF-8', 'CP932', 'SHIFT-JIS', 'EUC-JP']) {
         for (const fixed of version === 4 ? [false] : [false, true]) {
           observer.calls.length = 0;

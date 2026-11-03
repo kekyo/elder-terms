@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
         std::string(gtk_entry_get_placeholder_text(GTK_ENTRY(encoding))) == "CP932 (global default)" &&
         nfs_connection_settings(settings_widget_draft_store(widget)).filename_encoding == "CP932",
         "An empty editable entry must show and use the inherited encoding like other settings tabs");
-    expect(!gtk_widget_get_visible(find_widget(root, "settings_ssh_proxy_page")), "NFS must not advertise an unsupported SSH proxy");
+    expect(gtk_widget_get_visible(find_widget(root, "settings_ssh_proxy_page")), "NFS must offer SSH proxy settings");
     auto *version = find_widget(root, "settings_nfs_version_combo");
     expect(std::string(gtk_combo_box_get_active_id(GTK_COMBO_BOX(version))) == "inherit",
         "The version selector must include inheritance in its choices");

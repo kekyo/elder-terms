@@ -37,7 +37,7 @@ executable(
     'src/webdav/webdav-metadata.cpp',
     'src/smb/smb-application.cpp',
     'src/nfs/nfs-application.cpp', 'src/nfs/nfs-client.cpp',
-    'src/nfs/nfs-v2.cpp',
+    'src/nfs/nfs-v2.cpp', 'src/nfs/nfs-ssh-proxy.cpp',
     'src/nfs/nfs-name.cpp', 'src/nfs/nfs-rpc.cpp',
     'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp',
     'src/main.cpp',
@@ -110,6 +110,13 @@ webdav_metadata_test = executable(
   dependencies: [cardio_dep, elder_terms_dep, libcurl_dep, ssh_transport_dep, libxml2_dep],
 )
 test('webdav-metadata-test', webdav_metadata_test)
+
+nfs_ssh_proxy_test = executable('nfs-ssh-proxy-test',
+  ['tests/nfs/nfs-ssh-proxy-test.cpp', 'src/nfs/nfs-ssh-proxy.cpp',
+   'src/nfs/nfs-client.cpp', 'src/nfs/nfs-v2.cpp', 'src/nfs/nfs-rpc.cpp', 'src/nfs/nfs-name.cpp'],
+  dependencies: [file_transfer_dep, nfs_dep])
+test('nfs-ssh-proxy-discovery', find_program('node'),
+  args: [files('tests/nfs/run-proxy-discovery.mts'), nfs_ssh_proxy_test, ssh_proxy_test_server], timeout: 60)
 
 smb_share_probe = executable('smb-share-probe',
   ['tests/smb/smb-share-probe.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp'],

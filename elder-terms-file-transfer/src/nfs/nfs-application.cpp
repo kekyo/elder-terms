@@ -5,6 +5,7 @@
 
 #include "nfs-application.h"
 #include "nfs-client.h"
+#include "nfs-ssh-proxy.h"
 #include "../file-transfer/file-transfer-window.h"
 #include "../file-transfer/file-transfer-paths.h"
 #include <elder-terms/connection-desktop-session.h>
@@ -18,6 +19,9 @@ namespace elder_terms {
 struct NfsApplication {
   cardio::dispatcher_group_glib *dispatcher_group;
   NfsConnectionSettings connection;
+  SshProxySettings proxy;
+  std::shared_ptr<SshTcpProxy> route;
+  std::string ssh_known_hosts_file;
   std::shared_ptr<RemoteFileClient> client;
   std::shared_ptr<FileTransferWindow> window;
   cardio::cancellation_source stopping;
@@ -33,6 +37,7 @@ static cardio::promise<void> finish_application_async(NfsApplication *state) {
   auto closing = close_file_transfer_window_async(state->window);
   try {
     if (state->client) co_await stop_nfs_client_async(state->client);
+    co_await stop_ssh_tcp_proxy_async(state->route);
     co_await closing;
   } catch (const std::exception &error) { std::cerr << error.what() << '\n'; }
   shutdown_connection_desktop_session();
@@ -69,6 +74,14 @@ static cardio::promise<void> start_application_async(NfsApplication *state) {
     options.supplementary_gids = state->connection.supplementary_gids;
     options.connect_timeout_ms = static_cast<int>(state->connection.connect_timeout_seconds * 1000);
     options.request_timeout_ms = static_cast<int>(state->connection.request_timeout_seconds * 1000);
+    TerminalSessionCallbacks callbacks{};
+    callbacks.ssh_prompt = [state](const SshUserPrompt &prompt, cardio::cancellation signal) {
+      return prompt_file_transfer_ssh_async(state->window, prompt, signal);
+    };
+    state->route = std::move(co_await open_ssh_tcp_proxy_async(state->proxy, std::move(callbacks),
+        {.known_hosts_file = state->ssh_known_hosts_file, .config_file = {}}, cancellation));
+    if (state->route)
+      options = co_await forward_nfs_ssh_ports_async(state->route, std::move(options), cancellation);
     state->client = co_await open_nfs_server_async(std::move(options), cancellation);
     const auto initial = nfs_export_identity(state->client, state->connection.version == "4.0" ?
         state->connection.namespace_path : state->connection.export_path);
@@ -76,6 +89,7 @@ static cardio::promise<void> start_application_async(NfsApplication *state) {
     co_return;
   } catch (const cardio::canceled_exception &) { stop_application(state); co_return; }
   catch (const std::exception &error) { failure = error.what(); }
+  co_await stop_ssh_tcp_proxy_async(state->route);
   if (!state->shutting_down) {
     std::cerr << failure << '\n';
     co_await show_file_transfer_window_connection_error_async(
@@ -86,18 +100,24 @@ static cardio::promise<void> start_application_async(NfsApplication *state) {
 static cardio::promise<void> reconnect_application_async(NfsApplication *state, SettingsStore settings) {
   if (state->startup) co_await *state->startup;
   if (state->client) co_await stop_nfs_client_async(state->client);
+  co_await stop_ssh_tcp_proxy_async(state->route);
+  state->route.reset();
   state->client.reset();
   if (state->shutting_down) co_return;
   state->connection = nfs_connection_settings(settings);
+  state->proxy = ssh_proxy_connection_settings(settings);
   co_await start_application_async(state);
 }
 
-int run_nfs_application(const SettingsLoadResult &settings, std::optional<std::filesystem::path> config_path) {
+int run_nfs_application(const SettingsLoadResult &settings, std::optional<std::filesystem::path> config_path,
+    std::string ssh_known_hosts_file) {
   cardio::dispatcher_group_glib group;
   cardio::dispatcher_host_glib_auto dispatcher(group);
   NfsApplication state;
   state.dispatcher_group = &group;
   state.connection = nfs_connection_settings(settings.store);
+  state.proxy = ssh_proxy_connection_settings(settings.store);
+  state.ssh_known_hosts_file = std::move(ssh_known_hosts_file);
   state.window = create_file_transfer_window({
       .connection_name = general_connection_name(settings.store), .protocol_name = "NFS v" + state.connection.version,
       .local_directory = resolve_file_transfer_local_directory(settings.store, state.connection.local_directory),
