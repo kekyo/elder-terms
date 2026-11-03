@@ -74,7 +74,7 @@ try {
     'cancel-commit',
     'short-write',
     'zero-write',
-    'invalid-name', 'connect-timeout',
+    'invalid-name', 'connect-timeout', 'partial-shares',
   ]) {
     const relay = spawn(
       'podman',

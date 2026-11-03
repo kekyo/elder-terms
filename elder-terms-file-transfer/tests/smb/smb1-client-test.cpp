@@ -162,7 +162,14 @@ static cardio::promise<void> exercise_response(const std::string &mode) {
   auto client = co_await open_smb_server_async(options, {});
   std::cout << "READY fault" << std::endl;
   co_await input_byte();
-  if (mode == "invalid-name") {
+  if (mode == "partial-shares") {
+    bool failed = false;
+    try { (void)co_await client->load_directory_async("/", {}); }
+    catch (const RemoteFileError &error) { failed = !error.connection_lost; }
+    require(failed, "ERROR_MORE_DATA must not become a complete successful share listing");
+    require((co_await client->load_directory_async("/empty", {})).entries.empty(),
+            "Known shares must remain usable after an incomplete share listing");
+  } else if (mode == "invalid-name") {
     bool failed = false;
     try { (void)co_await client->load_directory_async("/names", {}); }
     catch (const RemoteFileError &) { failed = true; }
@@ -300,7 +307,7 @@ int main(int argc, char **argv) {
   int status = 0;
   const auto run = [&]() -> cardio::promise<void> {
     try {
-      if (argc == 2 && (std::string_view(argv[1]) == "short-write" || std::string_view(argv[1]) == "invalid-name" || std::string_view(argv[1]) == "connect-timeout"))
+      if (argc == 2 && (std::string_view(argv[1]) == "short-write" || std::string_view(argv[1]) == "invalid-name" || std::string_view(argv[1]) == "connect-timeout" || std::string_view(argv[1]) == "partial-shares"))
         co_await exercise_response(argv[1]);
       else if (argc == 2 && std::string_view(argv[1]).find('-') != std::string_view::npos && std::string_view(argv[1]) != "worker-exit")
         co_await exercise_upload_fault(argv[1]);

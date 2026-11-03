@@ -281,10 +281,9 @@
  
          com_len  = *((uint32_t *)data);
          data    += 3 * sizeof(uint32_t);  // Move pointer to beginning of Comment.
--        if (com_len % 2) com_len += 1;    // Align next move
 +        if (com_len > (size_t)(eod - data) / 2)
 +            break;
-+        if (com_len % 2) com_len += 1;    // Align next move
+         if (com_len % 2) com_len += 1;    // Align next move
 +        if (com_len > (size_t)(eod - data) / 2)
 +            break;
          data    += com_len * 2;           // Move the pointer to next item
@@ -298,4 +297,36 @@
 +    }
      return i;
  }
+ 
+@@ -366,7 +386,7 @@
+ 
+     // Is the server throwing pile of shit back at me ?
+     res = smb_session_recv_msg(s, &resp);
+-    if (resp.payload_size < 71)
++    if (!res || resp.payload_size < 71)
+     {
+         BDSM_dbg("[smb_share_get_list]Malformed message\n");
+         ret = DSM_ERROR_NETWORK;
+@@ -464,17 +484,19 @@
+ 
+     // Is the server throwing pile of shit back at me ?
+     res = smb_session_recv_msg(s, &resp);
+-    if (resp.payload_size < 4)
++    if (!res || resp.payload_size < 4)
+     {
+         BDSM_dbg("[smb_share_get_list]Malformed message\n");
+         ret = DSM_ERROR_NETWORK;
+         goto error;
+     }
+ 
+-    if (!res && (uint32_t)resp.packet->payload[resp.payload_size - 4])
++    uint32_t status;
++    memcpy(&status, resp.packet->payload + resp.payload_size - 4, sizeof(status));
++    if (status != 0)
+     {
+         BDSM_dbg("NetShareEnumAll call failed.\n");
+-        ret = DSM_ERROR_NETWORK;
++        ret = DSM_ERROR_GENERIC;
+         goto error;
+     }
  
