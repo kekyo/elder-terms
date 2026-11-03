@@ -133,9 +133,10 @@ cardio::promise<void> run_file_transfer_queue_async(std::shared_ptr<FileTransfer
  * @returns Directory snapshot. @remarks Reads wait behind active transfers, including decision and cleanup phases.
  * @param refresh Explicitly refresh this page rather than using a cached listing.
  * @param force_html Interpret this response as HTML when explicitly requested.
+ * @param from_input Resolve user-entered text before loading, under the same operation lock.
  */
 cardio::promise<RemoteDirectorySnapshot> load_file_transfer_queue_directory_async(
     std::shared_ptr<FileTransferQueue> queue, std::string path, cardio::cancellation cancellation,
-    bool refresh = false, bool force_html = false);
+    bool refresh = false, bool force_html = false, bool from_input = false);
 
 } // namespace elder_terms

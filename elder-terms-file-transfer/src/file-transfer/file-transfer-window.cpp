@@ -898,10 +898,10 @@ static void clear_tree_children(GtkTreeStore *store,
 static cardio::promise<RemoteDirectorySnapshot>
 load_file_transfer_pane_directory_async(
     FileTransferPaneState *pane, std::string path,
-    cardio::cancellation cancellation, bool refresh = false, bool force_html = false) {
+    cardio::cancellation cancellation, bool refresh = false, bool force_html = false, bool from_input = false) {
   if (pane->remote) {
     co_return co_await load_file_transfer_queue_directory_async(pane->window->jobs,
-        std::move(path), std::move(cancellation), refresh, force_html);
+        std::move(path), std::move(cancellation), refresh, force_html, from_input);
   }
   std::string canonical_path = canonical_local_directory(path);
   std::vector<RemoteFileAttributes> entries =
@@ -914,7 +914,7 @@ load_file_transfer_pane_directory_async(
 }
 
 static cardio::promise<void> load_file_transfer_pane_root_async(
-    FileTransferPaneState *pane, std::string requested_path, bool refresh, bool force_html) {
+    FileTransferPaneState *pane, std::string requested_path, bool refresh, bool force_html, bool from_input) {
   FileTransferWindow *window = pane->window;
   const std::uint64_t generation = ++pane->generation;
   const cardio::cancellation cancellation =
@@ -922,7 +922,7 @@ static cardio::promise<void> load_file_transfer_pane_root_async(
   try {
     RemoteDirectorySnapshot snapshot =
         co_await load_file_transfer_pane_directory_async(
-            pane, std::move(requested_path), cancellation, refresh, force_html);
+            pane, std::move(requested_path), cancellation, refresh, force_html, from_input);
     if (window->destroyed || generation != pane->generation) {
       set_file_transfer_pane_busy(pane, false);
       co_return;
@@ -958,7 +958,7 @@ static cardio::promise<void> load_file_transfer_pane_root_async(
 }
 
 static void start_file_transfer_pane_navigation(
-    FileTransferPaneState *pane, std::string path, bool refresh = false, bool force_html = false) {
+    FileTransferPaneState *pane, std::string path, bool refresh = false, bool force_html = false, bool from_input = false) {
   if (pane == nullptr || pane->window == nullptr ||
       pane->window->destroyed || pane->busy ||
       (pane->remote &&
@@ -968,7 +968,7 @@ static void start_file_transfer_pane_navigation(
   pane->task.reset();
   set_file_transfer_pane_busy(pane, true);
   pane->task.emplace(
-      load_file_transfer_pane_root_async(pane, std::move(path), refresh, force_html));
+      load_file_transfer_pane_root_async(pane, std::move(path), refresh, force_html, from_input));
 }
 
 static cardio::promise<void> expand_file_transfer_directory_async(
@@ -1103,10 +1103,10 @@ static void on_file_transfer_row_expanded(
 
 static void on_file_transfer_path_activate(GtkEntry *entry, gpointer data) {
   auto *pane = static_cast<FileTransferPaneState *>(data);
-  if (pane->remote && (!pane->window->client || !pane->window->client->path_input_editable())) return;
+  if (pane->remote && !pane->window->client) return;
   const char *text = gtk_entry_get_text(entry);
   start_file_transfer_pane_navigation(
-      pane, text == nullptr ? std::string() : std::string(text));
+      pane, text == nullptr ? std::string() : std::string(text), false, false, true);
 }
 
 static void on_file_transfer_up_clicked(GtkButton *, gpointer data) {
@@ -3200,9 +3200,6 @@ void attach_file_transfer_window_client(
     throw std::logic_error("Remote file client is already attached");
   }
   if (!initial_directory.empty()) window->remote.current_directory = std::move(initial_directory);
-  gtk_editable_set_editable(GTK_EDITABLE(window->remote.path_entry), client->path_input_editable());
-  gtk_widget_set_tooltip_text(window->remote.path_entry, client->path_input_editable() ? nullptr :
-      _("Use the folder list and Up button to navigate this server."));
   window->client = create_activity_file_client(std::move(client),
       [weak = std::weak_ptr<FileTransferWindow>(window)](ActivityIndicatorId id) {
         const auto owner = weak.lock();

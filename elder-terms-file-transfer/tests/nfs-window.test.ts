@@ -204,7 +204,7 @@ it.for([2, 3, 4])(
         );
         await item.click();
       };
-      const publicName = version === 4 ? '/public' : 'public';
+      const publicName = 'public';
       const showExportParent = async (): Promise<void> => {
         if (version !== 4 && (await remotePath.text()) === '/') {
           await select(remote, '/srv', 'left');
@@ -213,12 +213,12 @@ it.for([2, 3, 4])(
           );
           await app.input.pressKey('Return');
           await waitForResult(async () =>
-            expect(await remotePath.text()).toBe('/srv:/')
+            expect(await remotePath.text()).toBe('/srv')
           );
         }
       };
       await showExportParent();
-      await rowFor(remote, version === 4 ? '/other' : 'other');
+      await rowFor(remote, 'other');
       await select(remote, publicName, 'right');
       for (const action of ['rename', 'delete'])
         expect(
@@ -234,7 +234,7 @@ it.for([2, 3, 4])(
             await app.getById('file_transfer_remote_new_directory_item')
           ).info()
         ).states.includes('sensitive')
-      ).toBe(version !== 4);
+      ).toBe(true);
       await evidence.captureEvidence('nfs-export-roots', async () =>
         app.capture()
       );
@@ -245,8 +245,35 @@ it.for([2, 3, 4])(
       );
       await app.input.pressKey('Return');
       await waitForResult(async () =>
-        expect(await remotePath.text()).toBe(`${prefix}/public:/`)
+        expect(await remotePath.text()).toBe(`${prefix}/public`)
       );
+      await rowFor(remote, '日本語表');
+
+      const pathBounds = (await remotePath.capture()).bounds;
+      await app.input.moveMouseTo(
+        pathBounds.x + 20,
+        pathBounds.y + pathBounds.height / 2
+      );
+      await app.input.setMouseButton('left', true);
+      await app.input.setMouseButton('left', false);
+      await remotePath.setText(`${prefix}/public/deep/inside/`);
+      await app.input.pressKey('Return');
+      await waitForResult(async () =>
+        expect(await remotePath.text()).toBe(`${prefix}/public/deep/inside`)
+      );
+      await rowFor(remote, 'payload.txt');
+      await evidence.captureEvidence('nfs-plain-input-path', async () =>
+        app.capture()
+      );
+      for (const expected of [`${prefix}/public/deep`, `${prefix}/public`]) {
+        await expectElementKind(
+          await app.getById('file_transfer_remote_up_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect(await remotePath.text()).toBe(expected)
+        );
+      }
       await rowFor(remote, '日本語表');
 
       const screen = PNG.sync.read((await app.capture()).image);
@@ -441,7 +468,7 @@ it.for([2, 3, 4])(
         'button'
       ).click();
       await rowFor(remote, publicName);
-      expect(await remotePath.text()).toBe(prefix ? `${prefix}:/` : '/');
+      expect(await remotePath.text()).toBe(prefix || '/');
 
       await expectElementKind(
         await app.getById('application_menu_button'),
@@ -542,7 +569,7 @@ it.for([2, 3, 4])(
             : 'rpc.nfsd -N 2 -V 3 -N 4 -U 8'
       );
       await reconnect.click();
-      await rowFor(remote, version === 4 ? '/public' : '/srv');
+      await rowFor(remote, version === 4 ? 'public' : '/srv');
       await enterPublic();
       await receiveJapanese('EUC-JP\n');
       expect(

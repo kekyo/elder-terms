@@ -98,7 +98,15 @@ struct ActivityFileClient final : RemoteFileClient {
   }
   std::string parent_path(const std::string &path) const override { return delegate->parent_path(path); }
   std::string display_path(const std::string &path) const override { return delegate->display_path(path); }
-  bool path_input_editable() const noexcept override { return delegate->path_input_editable(); }
+  cardio::promise<std::string> resolve_input_path_async(
+      std::string text, cardio::cancellation cancellation) override {
+    try {
+      co_return co_await delegate->resolve_input_path_async(std::move(text), std::move(cancellation));
+    } catch (const RemoteFileError &error) {
+      if (error.connection_lost && disconnected) disconnected();
+      throw;
+    }
+  }
   std::string import_link_target(const std::string &target) const override { return delegate->import_link_target(target); }
   std::string export_link_target(const std::string &target) const override { return delegate->export_link_target(target); }
   bool try_begin_transfer() override { return delegate->try_begin_transfer(); }
