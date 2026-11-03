@@ -379,10 +379,10 @@ it.for([false, true])(
         ).toContain('reserved');
       expect(gatewayConnections).toBe(reserved ? 0 : 1);
       expect(directConnections).toBe(0);
-      // Accessible labels change before GTK paints the next frame. Verify the
-      // rendered failure title before saving evidence of the rejected route.
-      const bounds = (await title.capture()).bounds;
+      // Accessible labels change before GTK lays out and paints the next frame.
+      // Follow the title's current bounds while waiting for the failure screen.
       const capture = await waitForResult(async () => {
+        const bounds = (await title.capture()).bounds;
         const current = await app.capture();
         await expectCapture(current, 'nfs-proxy-error-render').toContainText(
           'Failed to start NFS',
