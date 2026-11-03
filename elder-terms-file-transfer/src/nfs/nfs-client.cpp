@@ -378,7 +378,7 @@ struct NfsServer final : RemoteFileClient {
     result.name = display_nfs_name(directory.parent == "/" ? directory.bytes :
         directory.bytes.substr(directory.bytes.find_last_of('/') + 1), options.filename_encoding).text;
     result.type = RemoteFileType::directory;
-    if (exports.contains(path)) result.role = RemoteFileRole::nfs_export;
+    result.role = RemoteFileRole::nfs_export;
     return result;
   }
   void build_browser_tree() {
@@ -595,7 +595,7 @@ struct NfsServer final : RemoteFileClient {
         auto &item = entry.attributes;
         item.path = directory_child_path(path, entry.bytes);
         item.name = display_nfs_name(entry.bytes, options.filename_encoding).text;
-        if (is_public_root(locate(item.path))) item.role = RemoteFileRole::nfs_export;
+        if (browser_directories.contains(item.path) || is_public_root(locate(item.path))) item.role = RemoteFileRole::nfs_export;
         snapshot.entries.push_back(std::move(item));
       }
       co_return snapshot;
@@ -618,7 +618,7 @@ struct NfsServer final : RemoteFileClient {
         item.permissions = entry->mode;
         item.access_time_unix_seconds = entry->atime.tv_sec;
         item.modification_time_unix_seconds = entry->mtime.tv_sec;
-        if (is_public_root(locate(item.path))) item.role = RemoteFileRole::nfs_export;
+        if (browser_directories.contains(item.path) || is_public_root(locate(item.path))) item.role = RemoteFileRole::nfs_export;
         snapshot.entries.push_back(std::move(item));
       }
     }, cancellation), "list directory");
@@ -637,7 +637,7 @@ struct NfsServer final : RemoteFileClient {
       if (item) {
         item->path = path;
         item->name = display_nfs_name(target.name, options.filename_encoding).text;
-        if (is_public_root(target)) item->role = RemoteFileRole::nfs_export;
+        if (browser_directories.contains(path) || is_public_root(target)) item->role = RemoteFileRole::nfs_export;
       }
       co_return item;
     }
@@ -645,7 +645,7 @@ struct NfsServer final : RemoteFileClient {
     const auto value = co_await stat_native(session, target.native, cancellation);
     if (!value) co_return std::nullopt;
     auto attributes = attributes_for(path, target.name, options.filename_encoding, *value);
-    if (is_public_root(target)) attributes.role = RemoteFileRole::nfs_export;
+    if (browser_directories.contains(path) || is_public_root(target)) attributes.role = RemoteFileRole::nfs_export;
     co_return attributes;
   }
 

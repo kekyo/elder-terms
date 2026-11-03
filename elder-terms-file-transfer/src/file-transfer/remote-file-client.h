@@ -47,7 +47,7 @@ enum class RemoteFileRole {
   ordinary,
   /** SMB disk share, retaining directory semantics. */
   smb_share,
-  /** NFS exported root, retaining directory semantics. */
+  /** NFS exported root or an ancestor in the export tree, retaining directory semantics. */
   nfs_export,
 };
 
