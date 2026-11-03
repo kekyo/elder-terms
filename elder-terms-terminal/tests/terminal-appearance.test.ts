@@ -127,6 +127,10 @@ process.stdout.write('\\x1b]12;#ffffff\\x07\\x1b[48;2;0;0;0m\\x1b[2J\\x1b[H\\x1b
                   'rawvideo',
                   '-pix_fmt',
                   'rgb24',
+                  // Decode each recorded frame once, regardless of the frame
+                  // rate inferred from variable X11 capture timestamps.
+                  '-fps_mode',
+                  'passthrough',
                   'pipe:1',
                 ],
                 { encoding: 'buffer', maxBuffer: 1024 * 1024 }
