@@ -16,7 +16,11 @@ Connecting fetches only the start page. Its links appear as unresolved items. Se
 
 Expanding an item fetches its response and determines its type. HTML exposes its links as children; other responses become files. Neither an extension nor a trailing `/` determines the type. Unresolved children remain unfetched until needed.
 
-Listings are cached for the connection. Collapsing and reopening an item reuses the listing; “Refresh” fetches only the current page again. URL navigation and “Up” remain restricted to the configured base URL.
+Listings are cached for the connection. Collapsing and reopening an item reuses the listing; “Refresh” fetches only the current page again.
+
+The path field omits the scheme, hostname, and port. For example, `https://example.com/pub/docs/` appears as `/pub/docs/`. Enter a path and press Enter to navigate there. Queries and trailing slashes remain visible because they may identify different pages. Percent escapes for reserved characters, such as `%3F`, are also preserved.
+
+Full URLs are also accepted. Navigation through the path field and “Up” remains restricted to the configured base URL. It cannot switch to a different host, port, or scheme.
 
 Responses with `text/html` or `application/xhtml+xml` are normally expanded. Attachments and responses without a recognized type are treated as content. Choose “Expand as HTML” from the context menu when a server reports an incorrect type.
 
@@ -29,7 +33,7 @@ Select one or more items and choose the receive mode from the context menu.
 | Receive as file | Saves the selected response unchanged, including original HTML, without following its links. |
 | Receive as directory | Follows HTML links incrementally and saves them under a local directory. Non-HTML responses are saved as files. |
 
-Directory reception follows only the selected entry points. It does not scan ahead to calculate totals. URLs already processed by the job and links to ancestors are not repeatedly traversed.
+Directory reception follows links incrementally from the selected items as needed. It does not scan ahead to calculate totals. URLs already processed by the job and links to ancestors are not repeatedly traversed.
 
 Local names come from URL paths. Names that cannot be decoded for display retain their percent escapes. Query variants or other name collisions receive numeric suffixes. Display names never replace the original request URL. Existing local files use the shared overwrite confirmation.
 
