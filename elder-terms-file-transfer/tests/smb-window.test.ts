@@ -883,6 +883,19 @@ it('downloads and uploads over experimental SMB SSH proxy in the transfer window
               expect((await remote.info()).states).toContain('sensitive');
               if (target !== share) expect(await remote.getRowCount()).toBe(0);
             });
+            if (target !== share) {
+              // Return to the nonempty share list so the next empty listing
+              // proves navigation completed instead of matching the old one.
+              await expectElementKind(
+                await app.getById('file_transfer_remote_up_button'),
+                'button'
+              ).click();
+              await waitForResult(async () => {
+                expect(await path.text()).toBe('/');
+                expect((await remote.info()).states).toContain('sensitive');
+                expect(await remote.getRowCount()).toBeGreaterThan(0);
+              });
+            }
           }
           await selectMenu(
             'file_transfer_remote_tree',
