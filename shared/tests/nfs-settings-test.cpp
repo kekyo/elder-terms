@@ -107,22 +107,56 @@ int main(int argc, char **argv) {
     auto *page = find_widget(root, "settings_nfs_page");
     expect(page && gtk_widget_get_visible(page), "NFS connections must have an editable settings page");
     auto *encoding = find_widget(root, "settings_nfs_filename_encoding_entry");
-    auto *inherit = find_widget(root, "settings_nfs_filename_encoding_inherit");
-    expect(encoding && inherit, "Encoding must support an explicit override and inheritance");
+    expect(encoding, "Encoding must support an explicit override and inheritance");
     expect(std::string(gtk_entry_get_text(GTK_ENTRY(encoding))) == "EUC-JP", "Show the effective override");
     gtk_entry_set_text(GTK_ENTRY(encoding), "CP932//IGNORE");
     expect(!settings_widget_is_valid(widget), "An invalid encoding must prevent Save");
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(inherit), TRUE);
-    expect(settings_widget_is_valid(widget) && !gtk_widget_get_sensitive(encoding) &&
-        std::string(gtk_entry_get_text(GTK_ENTRY(encoding))) == "CP932", "Inheritance must restore the global encoding");
+    gtk_entry_set_text(GTK_ENTRY(encoding), "");
+    expect(settings_widget_is_valid(widget) && gtk_widget_get_sensitive(encoding) &&
+        std::string(gtk_entry_get_placeholder_text(GTK_ENTRY(encoding))) == "CP932 (global default)" &&
+        nfs_connection_settings(settings_widget_draft_store(widget)).filename_encoding == "CP932",
+        "An empty editable entry must show and use the inherited encoding like other settings tabs");
     expect(!gtk_widget_get_visible(find_widget(root, "settings_ssh_proxy_page")), "NFS must not advertise an unsupported SSH proxy");
-    auto *version_inherit = find_widget(root, "settings_nfs_version_inherit");
     auto *version = find_widget(root, "settings_nfs_version_combo");
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(version_inherit), FALSE);
+    expect(std::string(gtk_combo_box_get_active_id(GTK_COMBO_BOX(version))) == "inherit",
+        "The version selector must include inheritance in its choices");
     gtk_combo_box_set_active_id(GTK_COMBO_BOX(version), "4.0");
-    expect(!gtk_widget_get_sensitive(find_widget(root, "settings_nfs_known_exports_inherit")) &&
-        gtk_widget_get_sensitive(find_widget(root, "settings_nfs_known_namespace_paths_inherit")),
+    expect(!gtk_widget_get_sensitive(find_widget(root, "settings_nfs_known_exports_combo")) &&
+        gtk_widget_get_sensitive(find_widget(root, "settings_nfs_known_namespace_paths_combo")),
         "The v4 editor must distinguish namespace inputs from inactive v3 export settings");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(version), "inherit");
+    expect(nfs_connection_settings(settings_widget_draft_store(widget)).version == "3",
+        "Selecting inheritance must restore the global protocol version");
+    auto *discovery = find_widget(root, "settings_nfs_discover_exports_combo");
+    expect(discovery, "Boolean settings must offer inherited, enabled and disabled choices");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(discovery), "disabled");
+    expect(!nfs_connection_settings(settings_widget_draft_store(widget)).discover_exports,
+        "Discovery can be disabled independently of the inherited value");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(discovery), "inherit");
+    expect(nfs_connection_settings(settings_widget_draft_store(widget)).discover_exports,
+        "The discovery choice can return to inheritance");
+    auto *groups = find_widget(root, "settings_nfs_supplementary_gids_combo");
+    auto *group_list = find_widget(root, "settings_nfs_supplementary_gids_list");
+    expect(groups && group_list, "List settings must offer inherited and custom values in the control column");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(groups), "custom");
+    auto *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(group_list));
+    gtk_text_buffer_set_text(buffer, "", -1);
+    expect(nfs_connection_settings(settings_widget_draft_store(widget)).supplementary_gids.empty() &&
+        setting_has_explicit_value(settings_widget_draft_store(widget), nfs_setting_key("supplementary_gids")),
+        "An explicit empty list must override inherited groups");
+    gtk_text_buffer_set_text(buffer, "invalid", -1);
+    expect(!settings_widget_is_valid(widget), "Invalid list values must prevent Save");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(groups), "inherit");
+    expect(settings_widget_is_valid(widget) && !gtk_widget_get_sensitive(group_list) &&
+        nfs_connection_settings(settings_widget_draft_store(widget)).supplementary_gids == std::vector<std::uint32_t>{1, 4294967295U},
+        "Selecting inheritance must discard invalid list input and restore global groups");
+    auto *port = find_widget(root, "settings_nfs_nfs_port_entry");
+    gtk_entry_set_text(GTK_ENTRY(port), "65536");
+    expect(!settings_widget_is_valid(widget), "Invalid numeric overrides must prevent Save");
+    gtk_entry_set_text(GTK_ENTRY(port), "");
+    expect(settings_widget_is_valid(widget) && nfs_connection_settings(settings_widget_draft_store(widget)).nfs_port == 0,
+        "Clearing a numeric override must restore automatic port selection");
+    expect(find_widget(root, "settings_nfs_ip_scan_button"), "NFS must offer address discovery like the other server settings");
     destroy_settings_widget(widget);
     SettingsWidgetOptions runtime_options;
     runtime_options.store = inherited;

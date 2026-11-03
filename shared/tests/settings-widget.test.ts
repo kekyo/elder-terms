@@ -3742,17 +3742,23 @@ describe.concurrent('shared settings widget', () => {
       ],
       async ({ app, directory }) => {
         await selectSettingsTab(app, 'NFS');
-        const encoding = expectElementKind(
-          await app.getById('settings_nfs_filename_encoding_entry'),
-          'entry'
+        const encoding = await expectInheritedEntry(
+          app,
+          'settings_nfs_filename_encoding_entry',
+          'CP932 (global default)'
         );
-        const inherit = expectElementKind(
-          await app.getById('settings_nfs_filename_encoding_inherit'),
-          'checkbox'
-        );
-        expect(await encoding.text()).toBe('CP932');
-        expect(await inherit.isChecked()).toBe(true);
-        await inherit.toggle();
+        await expectSensitive(encoding);
+        expect(
+          await comboOptionNames(app, 'settings_nfs_version_combo')
+        ).toEqual([
+          'NFS v3 (TCP) (built-in default)',
+          'NFS v2 (TCP)',
+          'NFS v3 (TCP)',
+          'NFS v4.0 (TCP)',
+        ]);
+        expect(
+          await comboOptionNames(app, 'settings_nfs_discover_exports_combo')
+        ).toEqual(['Enabled (built-in default)', 'Enabled', 'Disabled']);
         await encoding.setText('CP932//IGNORE');
         await expectInsensitive(await app.getById('settings_apply_button'));
         await encoding.setText('EUC-JP');
@@ -3761,9 +3767,13 @@ describe.concurrent('shared settings widget', () => {
           join(directory, 'nfs-settings.png'),
           (await app.capture()).image
         );
-        await inherit.toggle();
-        expect(await encoding.text()).toBe('CP932');
-        await expectInsensitive(encoding);
+        await encoding.setText('');
+        await expectInheritedEntry(
+          app,
+          'settings_nfs_filename_encoding_entry',
+          'CP932 (global default)'
+        );
+        await expectSensitive(encoding);
       }
     );
   });

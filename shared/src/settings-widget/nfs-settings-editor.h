@@ -19,10 +19,12 @@ struct NfsSettingsEditor;
  * @param prefix Accessible widget ID prefix.
  * @param runtime Locks endpoint fields while allowing encoding edits for reconnection.
  * @param changed Parent validation and dirty-state callback.
+ * @param create_address_row Wraps the address entry with the shared discovery action.
  * @returns Editor to release with destroy_nfs_settings_editor().
  */
 NfsSettingsEditor *create_nfs_settings_editor(SettingsStore *store, std::string prefix,
-    bool runtime, std::function<void()> changed);
+    bool runtime, std::function<void()> changed,
+    std::function<GtkWidget *(GtkWidget *)> create_address_row);
 
 /** @param editor Editor state. @returns Root GTK widget. */
 GtkWidget *nfs_settings_editor_root(NfsSettingsEditor *editor);

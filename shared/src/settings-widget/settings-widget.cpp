@@ -6675,11 +6675,17 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
       &state->draft_store, state->id_prefix, state->is_runtime, [state] {
         update_action_sensitivity(state);
         notify_changed(state);
+      }, [state](GtkWidget *entry) {
+        return create_ip_scan_address_row(
+            state, entry, "nfs_ip_scan_button",
+            state->is_runtime ? FALSE : TRUE);
       });
   auto *nfs_page = gtk_scrolled_window_new(nullptr, nullptr);
   assign_accessible_id(nfs_page, widget_id(state, "nfs_page").c_str());
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(nfs_page), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
   gtk_scrolled_window_set_overlay_scrolling(GTK_SCROLLED_WINDOW(nfs_page), FALSE);
+  assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(nfs_page)),
+      widget_id(state, "nfs_page_scrollbar").c_str());
   gtk_container_add(GTK_CONTAINER(nfs_page), nfs_settings_editor_root(state->nfs_editor));
   auto *nfs_tab = create_tab_label("NFS", widget_id(state, "nfs_tab").c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), nfs_page, nfs_tab);
