@@ -1007,13 +1007,21 @@ static cardio::promise<void> expand_file_transfer_directory_async(
         ancestor = parent;
       }
       std::erase_if(snapshot.entries, [&ancestors](const auto &entry) { return ancestors.contains(entry.path); });
-      RemoteFileAttributes classified;
-      classified.path = snapshot.canonical_path;
-      classified.type = snapshot.resource_type;
+      gint previous_type;
+      gtk_tree_model_get(GTK_TREE_MODEL(pane->store), &iterator,
+          file_transfer_tree_type_column, &previous_type, -1);
       gtk_tree_store_set(pane->store, &iterator,
           file_transfer_tree_type_column, static_cast<int>(snapshot.resource_type),
-          file_transfer_tree_path_column, snapshot.canonical_path.c_str(),
-          file_transfer_tree_icon_column, file_transfer_node_icon(classified).data(), -1);
+          file_transfer_tree_path_column, snapshot.canonical_path.c_str(), -1);
+      // Keep service-specific directory icons when expanding an already known
+      // directory. Only a changed resource type needs a newly classified icon.
+      if (previous_type != static_cast<int>(snapshot.resource_type)) {
+        RemoteFileAttributes classified;
+        classified.path = snapshot.canonical_path;
+        classified.type = snapshot.resource_type;
+        gtk_tree_store_set(pane->store, &iterator,
+            file_transfer_tree_icon_column, file_transfer_node_icon(classified).data(), -1);
+      }
       replace_dummy_with_browser_entries(
           pane->store, &iterator, std::move(snapshot.entries));
     }
