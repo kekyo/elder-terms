@@ -33,18 +33,32 @@ const listener = createServer((client) => {
       const size = 4 + pending.readUInt32BE(0);
       let packet = pending.subarray(0, size);
       pending = pending.subarray(size);
-      const operation = mode === 'partial-shares' ? 0x25 : mode === 'connect-timeout' ? 0x72 : mode.endsWith('create')
-        ? 0x00
-        : mode.endsWith('write')
-          ? 0x2f
-          : mode.endsWith('commit')
-            ? 0x07
-            : mode === 'invalid-name'
-              ? 0x32
-              : 0x2e;
+      const operation =
+        mode === 'partial-shares'
+          ? 0x25
+          : mode === 'connect-timeout'
+            ? 0x72
+            : mode.endsWith('create')
+              ? 0x00
+              : mode.endsWith('write')
+                ? 0x2f
+                : mode.endsWith('commit')
+                  ? 0x07
+                  : mode === 'invalid-name'
+                    ? 0x32
+                    : 0x2e;
       // NetShareEnum is a request PDU; the preceding bind uses the same SMB command.
-      const shareRequest = mode !== 'partial-shares' || (packet.length > 111 && packet[90] === 0 && packet.readUInt16LE(110) === 15);
-      if (armed && packet.length > 8 && packet[8] === operation && shareRequest) {
+      const shareRequest =
+        mode !== 'partial-shares' ||
+        (packet.length > 111 &&
+          packet[90] === 0 &&
+          packet.readUInt16LE(110) === 15);
+      if (
+        armed &&
+        packet.length > 8 &&
+        packet[8] === operation &&
+        shareRequest
+      ) {
         armed = false;
         held = true;
         if (mode === 'short-write') {
@@ -67,14 +81,21 @@ const listener = createServer((client) => {
       return;
     }
     if (reported) return;
-    if (['short-write', 'zero-write', 'invalid-name', 'partial-shares'].includes(mode)) {
+    if (
+      ['short-write', 'zero-write', 'invalid-name', 'partial-shares'].includes(
+        mode
+      )
+    ) {
       response = Buffer.concat([response, Buffer.from(bytes)]);
       if (response.length < 4 || response.length < 4 + response.readUInt32BE(0))
         return;
       if (mode === 'zero-write') response.writeUInt16LE(0, 41);
       if (mode === 'partial-shares') {
         const statusOffset = response.readUInt32BE(0);
-        if (response.readUInt32LE(statusOffset) !== 0) throw new Error('NetShareEnum did not succeed before fault injection');
+        if (response.readUInt32LE(statusOffset) !== 0)
+          throw new Error(
+            'NetShareEnum did not succeed before fault injection'
+          );
         response.writeUInt32LE(234, statusOffset); // ERROR_MORE_DATA, MS-SRVS NetrShareEnum.
       }
       if (mode === 'invalid-name') {
