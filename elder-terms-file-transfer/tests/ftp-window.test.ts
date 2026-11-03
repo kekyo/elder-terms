@@ -441,7 +441,7 @@ describe('FTP window', () => {
         }
         throw new Error('FTP renamed file was not listed');
       });
-      await remoteTree.selectRow(renamedRow);
+      expect(await remoteTree.selectedRows()).toEqual([renamedRow]);
       const renamedCell = await remoteTree.cellAt(renamedRow, 0);
       const renamedBounds = (await renamedCell?.capture())?.bounds;
       if (renamedBounds === undefined) {
