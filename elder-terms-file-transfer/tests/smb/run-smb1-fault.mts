@@ -26,6 +26,7 @@ try {
     server.once('error', reject);
     server.once('exit', (code) => { clearTimeout(timeout); reject(new Error(`Samba exited ${code}: ${output}`)); });
   });
+  const namespacePid = podman(['inspect', '--format', '{{.State.Pid}}', name]).trim();
   for (const mode of ['cancel', 'timeout', 'disconnect', 'worker-exit']) {
     const relay = spawn('podman', ['exec', '-i', name, '/elder-node', resolve(directory, 'smb1-relay.mts')],
       { env, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -40,8 +41,8 @@ try {
       relay.once('error', reject);
       relay.once('exit', (code) => { clearTimeout(timer); reject(new Error(`Relay exited ${code}: ${relayOutput}`)); });
     });
-    const driver = spawn('podman', ['exec', '-i', '--env', 'ELDER_SMB_PASSWORD', '--env', 'LC_ALL=C', name,
-      resolve(process.argv[2]), mode], { env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const driver = spawn('podman', ['unshare', 'nsenter', '-t', namespacePid, '-n',
+      resolve(process.argv[2]), mode], { env: { ...env, LC_ALL: 'C' }, stdio: ['pipe', 'pipe', 'pipe'] });
     let output = '', armed = false, injected = false;
     driver.stdout.on('data', (data: Buffer) => {
       output += data;

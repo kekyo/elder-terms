@@ -35,9 +35,10 @@ static cardio::promise<void> exercise_fault(const std::string &mode) {
   options.connection.address = "127.0.0.1";
   options.connection.username = "elder";
   options.connection.require_signing = false;
+  options.connection.version = "1";
   options.connection.idle_timeout_seconds = mode == "timeout" ? 1 : 60;
   options.password = std::getenv("ELDER_SMB_PASSWORD");
-  auto client = co_await open_smb1_server_async(options, {});
+  auto client = co_await open_smb_server_async(options, {});
   auto reader = std::move(co_await client->open_read_async("/names/before.txt", {}));
   const auto owned = children();
   require(owned.size() == 1, "The client must own exactly one worker");
@@ -58,11 +59,11 @@ static cardio::promise<void> exercise_fault(const std::string &mode) {
   catch (const RemoteFileError &error) { failed = mode != "cancel" && error.connection_lost; }
   if (interrupted) co_await *interrupted;
   require(failed, "A withheld read must not succeed");
-  co_await stop_smb1_client_async(client);
+  co_await stop_smb_client_async(client);
   require(children().empty(), "The terminated worker must be reaped before stop returns");
-  client = co_await open_smb1_server_async(options, {});
+  client = co_await open_smb_server_async(options, {});
   require((co_await client->load_directory_async("/empty", {})).entries.empty(), "Reconnect after failure must work");
-  co_await stop_smb1_client_async(client);
+  co_await stop_smb_client_async(client);
   require(children().empty(), "Reconnect must not leave a child process");
   std::cout << "PASS SMB1 fault " << mode << " reaped/reconnected" << std::endl;
 }
@@ -74,15 +75,19 @@ static cardio::promise<void> exercise() {
   options.connection.username = "elder";
   options.connection.require_signing = false;
   options.password = std::getenv("ELDER_SMB_PASSWORD");
+  options.connection.version = "1";
+  std::string actual_version;
+  options.negotiated = [&](std::string value) { actual_version = std::move(value); };
   const std::string parent_locale = std::setlocale(LC_ALL, nullptr);
   auto rejected_options = options;
   rejected_options.password += "invalid";
   bool rejected = false;
-  try { (void)co_await open_smb1_server_async(rejected_options, {}); }
+  try { (void)co_await open_smb_server_async(rejected_options, {}); }
   catch (const RemoteFileError &) { rejected = true; }
   require(rejected, "Incorrect credentials must fail authentication");
   require(children().empty(), "Failed authentication must reap its worker before returning");
-  auto client = co_await open_smb1_server_async(options, {});
+  auto client = co_await open_smb_server_async(options, {});
+  require(actual_version == "SMB 1", "SMB1 must report its actual protocol");
   auto shares = co_await client->load_directory_async("/", {});
   require(std::any_of(shares.entries.begin(), shares.entries.end(), [](const auto &item) {
     return item.name == "日本語 space" && item.role == RemoteFileRole::smb_share;
@@ -134,12 +139,12 @@ static cardio::promise<void> exercise() {
   co_await client->remove_file_async("/probe/folder/renamed.txt", {});
   co_await client->remove_directory_async("/probe/folder", {});
   require(!(co_await client->lstat_async("/probe/folder", {})), "Deleted directory must be absent");
-  co_await stop_smb1_client_async(client);
+  co_await stop_smb_client_async(client);
   require(children().empty(), "Normal stop must reap its worker");
   require(parent_locale == std::setlocale(LC_ALL, nullptr), "The parent locale must remain unchanged");
-  client = co_await open_smb1_server_async(options, {});
+  client = co_await open_smb_server_async(options, {});
   require((co_await client->load_directory_async("/empty", {})).entries.empty(), "Reconnect must create a usable worker");
-  co_await stop_smb1_client_async(client);
+  co_await stop_smb_client_async(client);
   std::cout << "PASS SMB1 client" << std::endl;
 }
 

@@ -406,6 +406,8 @@ validate_deb_package() {
 		usr/lib/elder-terms/libboxrig-gtk3.so.0 \
 		usr/lib/elder-terms/libjemalloc.so.2 \
 		usr/lib/elder-terms/libsmb2.so.7 \
+		usr/lib/elder-terms/libdsm.so.3 \
+		usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker \
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/launcher/main-window.ui \
 		usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
@@ -442,6 +444,9 @@ validate_deb_package() {
 		usr/share/doc/elder-terms/licenses/boxrig/Wayland-protocols-NOTICES.md \
 		usr/share/doc/elder-terms/licenses/jemalloc/COPYING \
 		usr/share/doc/elder-terms/licenses/libsmb2/COPYING \
+		usr/share/doc/elder-terms/licenses/libdsm/COPYING \
+		usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.gz \
+		usr/share/doc/elder-terms/licenses/libdsm/libdsm-correctness.patch \
 		usr/share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt \
 		usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz \
 		usr/share/doc/elder-terms/licenses/connection-icons/NOTO-LICENSE \
@@ -469,6 +474,8 @@ validate_deb_package() {
 		usr/lib/elder-terms/libboxrig-gtk3.so.0 \
 		usr/lib/elder-terms/libjemalloc.so.2 \
 		usr/lib/elder-terms/libsmb2.so.7 \
+		usr/lib/elder-terms/libdsm.so.3 \
+		usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker \
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
 		usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer; do

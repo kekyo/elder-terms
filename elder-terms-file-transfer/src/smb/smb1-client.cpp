@@ -321,6 +321,8 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb1_server_async(
     throw std::invalid_argument("SMB1 does not support required signing or encryption");
   if (options.connection.port != 445 && options.connection.port != 139)
     throw std::invalid_argument("SMB1 supports only ports 445 and 139");
+  if (options.connection.port == 139 && options.connection.netbios_name.empty())
+    throw std::invalid_argument("SMB1 on port 139 requires the server NetBIOS name");
   Smb1Cancellation deadline{cardio::cancellations::timeout(options.connection.connect_timeout_seconds * 1000)};
   Smb1Cancellation pending{cardio::cancellations::any(cancellation, deadline.get())};
   const std::shared_ptr<GResolver> resolver(g_resolver_get_default(), g_object_unref);
@@ -350,7 +352,9 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb1_server_async(
   session->process = std::shared_ptr<GSubprocess>(process, g_object_unref);
   session->timeout_ms = options.connection.connect_timeout_seconds * 1000;
   session->reaped.emplace(watch_worker(session->process, session));
-  Payload payload; payload.text(address); payload.text(options.connection.address); payload.number(options.connection.port);
+  Payload payload; payload.text(address);
+  payload.text(options.connection.port == 139 ? options.connection.netbios_name : options.connection.address);
+  payload.number(options.connection.port);
   payload.text(options.connection.domain); payload.text(options.connection.username); payload.text(options.password);
   std::exception_ptr failure;
   try { (void)co_await request(session, Command::connect, std::move(payload), pending.get()); }
@@ -362,6 +366,7 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb1_server_async(
   }
   session->timeout_ms = options.connection.idle_timeout_seconds * 1000;
   session->disconnected = std::move(options.disconnected);
+  if (options.negotiated) options.negotiated("SMB 1");
   co_return std::make_shared<Smb1Client>(std::move(session));
 }
 

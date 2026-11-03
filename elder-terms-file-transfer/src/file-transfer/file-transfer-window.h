@@ -146,6 +146,14 @@ void set_file_transfer_window_connection_available(
     const std::shared_ptr<FileTransferWindow> &window, bool available);
 
 /**
+ * Displays the protocol negotiated by the current connection.
+ * @param window Transfer window receiving the connection result.
+ * @param protocol_name Protocol and negotiated version for the title and jobs.
+ */
+void set_file_transfer_window_protocol(
+    const std::shared_ptr<FileTransferWindow> &window, std::string protocol_name);
+
+/**
  * Applies optional exterior and browser backgrounds at runtime.
  *
  * @param window File-transfer window state.

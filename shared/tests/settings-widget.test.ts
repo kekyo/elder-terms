@@ -3805,6 +3805,59 @@ describe.concurrent('shared settings widget', () => {
     );
   });
 
+  it('shows the SMB version as read-only during a connection', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=smb', '--type=smb', '--runtime', '--connection=smb.version=1'],
+      async ({ app }) => {
+        await selectSettingsTab(app, 'SMB');
+        await expectInsensitive(
+          await app.getById('settings_smb_version_combo')
+        );
+      }
+    );
+  });
+
+  it('selects SMB1 while retaining inherited security requirements', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=smb',
+        '--type=smb',
+        '--global=smb.address=server',
+        '--global=smb.require_signing=true',
+      ],
+      async ({ app }) => {
+        await selectSettingsTab(app, 'SMB');
+        const version = expectElementKind(
+          await app.getById('settings_smb_version_combo'),
+          'comboBox'
+        );
+        await version.selectChildAt(2);
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        const scroll = expectElementKind(
+          await app.getById('settings_smb_page_scrollbar'),
+          'scrollbar'
+        );
+        await scroll.setValue((await scroll.valueInfo()).maximum);
+        const signing = expectElementKind(
+          await app.getById('settings_smb_require_signing_combo'),
+          'comboBox'
+        );
+        await signing.selectChildAt(2);
+        await expectSensitive(await app.getById('settings_apply_button'));
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        expect(await waitForAppliedStore(app)).toMatchObject({
+          smb_version: '1',
+          smb_signing: 'false',
+        });
+      }
+    );
+  });
+
   it('validates and applies SMB settings with independently inherited defaults', async (context) => {
     await runSharedGtkTest(
       context,

@@ -830,6 +830,7 @@ static void print_store(const char *prefix,
             << " smb_username=" << elder_terms::smb_connection_settings(store).username
             << " smb_address=" << elder_terms::smb_connection_settings(store).address
             << " smb_port=" << elder_terms::smb_connection_settings(store).port
+            << " smb_version=" << elder_terms::smb_connection_settings(store).version
             << " smb_remote_directory=" << elder_terms::smb_connection_settings(store).remote_directory
             << " smb_signing=" << (elder_terms::smb_connection_settings(store).require_signing ? "true" : "false")
             << " smb_encryption=" << (elder_terms::smb_connection_settings(store).require_encryption ? "true" : "false")

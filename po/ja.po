@@ -2986,3 +2986,42 @@ msgstr "NFS接続を開始できませんでした"
 
 msgid "SSH proxy cannot require reserved NFS source ports; disable the reserved-port requirement or SSH proxy"
 msgstr "SSH proxyではNFSの予約済み送信元ポートを必須にできません。予約済みポートの必須設定かSSH proxyを無効にしてください"
+
+msgid "SMB version"
+msgstr "SMBバージョン"
+
+msgid "NetBIOS server name (port 139)"
+msgstr "NetBIOSサーバー名（ポート139）"
+
+msgid "Automatic — SMB 2/3"
+msgstr "自動・SMB 2/3"
+
+msgid "SMB 1"
+msgstr "SMB 1"
+
+msgid "SMB 2"
+msgstr "SMB 2"
+
+msgid "SMB 3"
+msgstr "SMB 3"
+
+msgid "[smb] port: SMB 1 supports only 445 and 139"
+msgstr "[smb] port: SMB1で使えるポートは445と139です"
+
+msgid "[smb] netbios_name: SMB 1 on port 139 requires the server NetBIOS name"
+msgstr "[smb] netbios_name: SMB1のポート139接続にはサーバーのNetBIOS名が必要です"
+
+msgid "[smb] address: SMB 1 requires IPv4"
+msgstr "[smb] address: SMB1にはIPv4アドレスが必要です"
+
+msgid "[smb] require_signing: SMB 1 cannot satisfy required signing"
+msgstr "[smb] require_signing: SMB1では署名要求を満たせません"
+
+msgid "[smb] require_encryption: SMB 1 cannot satisfy required encryption"
+msgstr "[smb] require_encryption: SMB1では暗号化要求を満たせません"
+
+msgid "[smb] require_encryption: SMB encryption requires SMB 3"
+msgstr "[smb] require_encryption: 暗号化にはSMB3が必要です"
+
+msgid "SSH proxy is unavailable with SMB 1; select SMB 2/3 or disable SSH proxy"
+msgstr "SMB1ではSSH proxyを利用できません。SMB2/3を選ぶか、SSH proxyを無効にしてください"

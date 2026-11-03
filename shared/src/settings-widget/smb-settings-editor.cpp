@@ -40,7 +40,7 @@ struct SmbSettingsEditor {
   GtkWidget *error;
   bool synchronizing = false;
   std::vector<SmbField> fields{
-      {"address"}, {"port"}, {"domain"}, {"username"},
+      {"address"}, {"version"}, {"port"}, {"netbios_name"}, {"domain"}, {"username"},
       {"local_directory"}, {"remote_directory"},
       {"require_signing", true}, {"require_encryption", true},
       {"connect_timeout_seconds"}, {"idle_timeout_seconds"}};
@@ -87,9 +87,24 @@ void sync_smb_settings_editor(SmbSettingsEditor *editor, bool preserve_invalid) 
     const std::string unfinished_text = unfinished ? gtk_entry_get_text(GTK_ENTRY(field.entry)) : "";
     const auto key = smb_setting_key(field.name);
     const bool explicit_value = setting_has_explicit_value(*editor->store, key);
-    if (field.boolean) {
-      const bool inherited = std::get<bool>(setting_fallback_value(*editor->store, key, false));
-      const bool effective = setting_boolean_value_or_default(*editor->store, key, false);
+    if (std::string_view(field.name) == "version") {
+      const auto effective = setting_text(*editor->store, field.name, false);
+      const auto inherited = setting_text(*editor->store, field.name, true);
+      auto *combo = GTK_COMBO_BOX_TEXT(field.combo);
+      gtk_combo_box_text_remove_all(combo);
+      gtk_combo_box_text_append(combo, "inherit", inherited_setting_label(
+          setting_choice_label(key, inherited), setting_fallback_source(*editor->store, key)).c_str());
+      for (const auto *version : {"auto", "1", "2", "3"})
+        gtk_combo_box_text_append(combo, version, setting_choice_label(key, version).c_str());
+      if (effective != "auto" && effective != "1" && effective != "2" && effective != "3")
+        gtk_combo_box_text_append(combo, effective.c_str(), effective.c_str());
+      gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo), explicit_value ? effective.c_str() : "inherit");
+    } else if (field.boolean) {
+      bool inherited = std::get<bool>(setting_fallback_value(*editor->store, key, false));
+      if (std::string_view(field.name) == "require_signing" &&
+          setting_fallback_source(*editor->store, key) == SettingValueSource::built_in &&
+          smb_connection_settings(*editor->store).version == "1") inherited = false;
+      const bool effective = explicit_value ? setting_boolean_value_or_default(*editor->store, key, false) : inherited;
       gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(field.combo));
       gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.combo), "inherit",
           inherited_setting_label(inherited ? _("Enabled") : _("Disabled"),
@@ -144,10 +159,12 @@ static void combo_changed(GtkComboBox *widget, gpointer data) {
     if (!choice) return;
     const auto key = smb_setting_key(field.name);
     if (std::string_view(choice) == "inherit") clear_explicit_setting_value(editor->store, key);
+    else if (std::string_view(field.name) == "version")
+      field.valid = set_explicit_setting_value(editor->store, key, std::string(choice));
     else field.valid = set_explicit_setting_value(editor->store, key,
                                                   std::string_view(choice) == "enabled");
   }
-  update_validation(editor);
+  sync_smb_settings_editor(editor, true);
   editor->changed();
 }
 
@@ -165,7 +182,7 @@ SmbSettingsEditor *create_smb_settings_editor(SettingsStore *store,
     auto *label = gtk_label_new(setting_label(smb_setting_key(field.name)).c_str());
     gtk_label_set_xalign(GTK_LABEL(label), 0);
     GtkWidget *control;
-    if (field.boolean) {
+    if (field.boolean || std::string_view(field.name) == "version") {
       field.combo = gtk_combo_box_text_new();
       assign_accessible_id(field.combo, id + "_combo");
       g_signal_connect(field.combo, "changed", G_CALLBACK(combo_changed), editor);

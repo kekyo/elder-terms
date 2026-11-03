@@ -31,3 +31,4 @@ shared/src/settings-widget/http-settings-editor.cpp
 elder-terms-file-transfer/src/http/http-application.cpp
 shared/src/settings-widget/nfs-settings-editor.cpp
 elder-terms-file-transfer/src/nfs/nfs-application.cpp
+shared/src/settings/smb-settings.cpp

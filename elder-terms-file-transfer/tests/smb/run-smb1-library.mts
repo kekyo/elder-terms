@@ -33,11 +33,12 @@ try {
     server.once('error', reject);
     server.once('exit', (code) => { clearTimeout(timeout); reject(new Error(`Samba exited ${code}: ${output}`)); });
   });
+  const namespacePid = podman(['inspect', '--format', '{{.State.Pid}}', name]).trim();
   let failures = 0;
   const cases = process.argv[3] === '--client' ? [['TCP', 'client']] : [['TCP', 'files'], ['NBT', 'files'], ['TCP', 'names']];
   for (const [transport, mode] of cases) {
-    const driver = spawn('podman', ['exec', '--env', 'ELDER_SMB_PASSWORD', '--env', 'LC_ALL=C', name,
-      resolve(process.argv[2]), '127.0.0.1', transport, ...(mode === 'names' ? ['names'] : [])], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const driver = spawn('podman', ['unshare', 'nsenter', '-t', namespacePid, '-n',
+      resolve(process.argv[2]), '127.0.0.1', transport, ...(mode === 'names' ? ['names'] : [])], { env: { ...env, LC_ALL: 'C' }, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';
     driver.stdout.on('data', (chunk: Buffer) => { output += chunk; });
     driver.stderr.on('data', (chunk: Buffer) => { output += chunk; });

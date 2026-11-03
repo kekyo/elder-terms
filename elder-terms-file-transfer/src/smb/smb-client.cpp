@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "smb-client.h"
+#include "smb1-client.h"
 #include "smb-share-list.h"
 
 #include <smb2/smb2.h>
@@ -655,6 +656,8 @@ struct SmbConnectError : RemoteFileError {
 
 static cardio::promise<std::shared_ptr<SmbSession>> open_session_async(
     SmbClientOpenOptions options, std::string share, cardio::cancellation cancellation) {
+  if (options.connection.version != "auto" && options.connection.version != "2" && options.connection.version != "3")
+    throw std::invalid_argument("SMB2/3 share sessions require version auto, 2, or 3");
   if (!options.connection.validation_errors.empty())
     throw std::invalid_argument(options.connection.validation_errors.front());
   auto session = std::make_shared<SmbSession>();
@@ -672,6 +675,8 @@ static cardio::promise<std::shared_ptr<SmbSession>> open_session_async(
       auto *url = smb2_parse_url(session->context, "smb://localhost/share?sec=ntlmssp");
       if (!url) throw RemoteFileError("SMB NTLMSSP authentication is unavailable", false);
       smb2_destroy_url(url);
+      smb2_set_version(session->context, options.connection.version == "2" ? SMB2_VERSION_ANY2 :
+          options.connection.version == "3" ? SMB2_VERSION_ANY3 : SMB2_VERSION_ANY);
       smb2_set_user(session->context, options.connection.username.c_str());
       smb2_set_password(session->context, options.password.c_str());
       smb2_set_domain(session->context, options.connection.domain.c_str());
@@ -693,6 +698,19 @@ static cardio::promise<std::shared_ptr<SmbSession>> open_session_async(
           throw SmbConnectError(error, static_cast<uint32_t>(smb2_get_nterror(session->context)));
         }
         session->disconnected = std::move(options.disconnected);
+        if (options.negotiated) {
+          const auto dialect = smb2_get_dialect(session->context);
+          std::string version;
+          switch (dialect) {
+          case SMB2_VERSION_0202: version = "SMB 2.02"; break;
+          case SMB2_VERSION_0210: version = "SMB 2.10"; break;
+          case SMB2_VERSION_0300: version = "SMB 3.00"; break;
+          case SMB2_VERSION_0302: version = "SMB 3.02"; break;
+          case SMB2_VERSION_0311: version = "SMB 3.1.1"; break;
+          default: throw RemoteFileError("The server negotiated an unknown SMB version", true);
+          }
+          options.negotiated(std::move(version));
+        }
         (void)deadline.cancel();
         co_return session;
       } catch (const cardio::canceled_exception &) { throw; }
@@ -941,12 +959,15 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb_client_async(
 }
 
 cardio::promise<void> stop_smb_client_async(std::shared_ptr<RemoteFileClient> client) {
+  co_await stop_smb1_client_async(client);
   if (auto smb = std::dynamic_pointer_cast<SmbClient>(client)) co_await smb->stop_async();
   if (auto server = std::dynamic_pointer_cast<SmbServerClient>(client)) co_await server->stop_async();
 }
 
 cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb_server_async(
     SmbClientOpenOptions options, cardio::cancellation cancellation) {
+  if (options.connection.version == "1")
+    co_return co_await open_smb1_server_async(std::move(options), cancellation);
   cancellation.throw_if_cancellation_requested();
   if (!options.connection.validation_errors.empty()) throw std::invalid_argument(options.connection.validation_errors.front());
   auto client = std::make_shared<SmbServerClient>(std::move(options));

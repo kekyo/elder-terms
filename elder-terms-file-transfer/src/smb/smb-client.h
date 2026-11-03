@@ -10,7 +10,7 @@
 
 namespace elder_terms {
 
-/** Endpoint and credentials for one direct SMB2/3 connection. */
+/** Endpoint and credentials for one SMB connection. */
 struct SmbClientOpenOptions {
   /** Validated settings, including the runtime user name. */
   SmbConnectionSettings connection;
@@ -18,6 +18,8 @@ struct SmbClientOpenOptions {
   std::string password;
   /** Called once when an established session ends; runs on its dispatcher. */
   std::function<void()> disconnected = {};
+  /** Reports the actual negotiated protocol after authentication. */
+  std::function<void(std::string)> negotiated = {};
 };
 
 /**

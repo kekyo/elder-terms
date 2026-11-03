@@ -90,6 +90,8 @@ calculate_shlibdeps() {
 			"$private_dir/libboxrig-gtk3.so.0" \
 			"$private_dir/libjemalloc.so.2" \
 			"$private_dir/libsmb2.so.7" \
+			"$private_dir/libdsm.so.3" \
+			"$private_dir/elder-terms-file-transfer/elder-terms-smb1-worker" \
 			"$private_dir/launcher/elder-terms" \
 			"$private_dir/elder-terms-terminal/elder-terms-terminal" \
 			"$private_dir/elder-terms-file-transfer/elder-terms-file-transfer" |
@@ -103,6 +105,7 @@ calculate_shlibdeps() {
 
 validate_dynamic_links() {
 	for executable_path in \
+		/usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker \
 		/usr/lib/elder-terms/launcher/elder-terms \
 		/usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
 		/usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer; do
@@ -147,6 +150,8 @@ validate_installed_package() {
 		/usr/lib/elder-terms/libboxrig-gtk3.so.0 \
 		/usr/lib/elder-terms/libjemalloc.so.2 \
 		/usr/lib/elder-terms/libsmb2.so.7 \
+		/usr/lib/elder-terms/libdsm.so.3 \
+		/usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker \
 		/usr/lib/elder-terms/launcher/elder-terms \
 		/usr/lib/elder-terms/launcher/main-window.ui \
 		/usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
@@ -180,6 +185,9 @@ validate_installed_package() {
 		/usr/share/doc/elder-terms/licenses/boxrig/WHATWG-Encoding-LICENSE \
 		/usr/share/doc/elder-terms/licenses/boxrig/Wayland-protocols-NOTICES.md \
 		/usr/share/doc/elder-terms/licenses/jemalloc/COPYING \
+		/usr/share/doc/elder-terms/licenses/libdsm/COPYING \
+		/usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.gz \
+		/usr/share/doc/elder-terms/licenses/libdsm/libdsm-correctness.patch \
 		/usr/share/doc/elder-terms/licenses/libsmb2/COPYING \
 		/usr/share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt \
 		/usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz \
@@ -300,6 +308,8 @@ for staged_file in \
 	usr/lib/elder-terms/libboxrig-gtk3.so.0 \
 	usr/lib/elder-terms/libjemalloc.so.2 \
 	usr/lib/elder-terms/libsmb2.so.7 \
+	usr/lib/elder-terms/libdsm.so.3 \
+	usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker \
 	usr/lib/elder-terms/launcher/elder-terms \
 	usr/lib/elder-terms/launcher/main-window.ui \
 	usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
@@ -333,6 +343,9 @@ for staged_file in \
 	usr/share/doc/elder-terms/licenses/boxrig/WHATWG-Encoding-LICENSE \
 	usr/share/doc/elder-terms/licenses/boxrig/Wayland-protocols-NOTICES.md \
 	usr/share/doc/elder-terms/licenses/jemalloc/COPYING \
+	usr/share/doc/elder-terms/licenses/libdsm/COPYING \
+	usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.gz \
+	usr/share/doc/elder-terms/licenses/libdsm/libdsm-correctness.patch \
 	usr/share/doc/elder-terms/licenses/libsmb2/COPYING \
 	usr/share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt \
 	usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz \
