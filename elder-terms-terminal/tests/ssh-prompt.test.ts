@@ -10,11 +10,12 @@ import type { GtkApp, GtkWidgetElement } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { toPass } from 'gestament/testing';
 import {
+  withTemporaryDirectory,
   capturePixel,
   expectCaptureToMatchFixture,
   expectElementKind,
-} from './test-helpers';
-import { runGtkTest, withTemporaryDirectory } from './gtk-test-helpers';
+} from '../../shared/tests/connection-test-helpers.ts';
+import { runGtkTest } from './gtk-test-helpers';
 
 const connectionColorsSshPromptFixturePath = fileURLToPath(
   new URL('./fixtures/connection-colors-ssh-prompt.png', import.meta.url)

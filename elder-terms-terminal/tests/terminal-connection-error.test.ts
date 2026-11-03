@@ -8,9 +8,12 @@ import { createServer, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { expectElementKind } from './test-helpers.ts';
-import { runGtkTest, withTemporaryDirectory } from './gtk-test-helpers.ts';
-import { startSshLatencyFixture } from './performance/ssh-latency-fixture.mts';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
+import { runGtkTest } from './gtk-test-helpers.ts';
+import { startSshLatencyFixture } from '../../shared/tests/ssh-latency-fixture.mts';
 
 describe.concurrent('terminal connection error recovery', () => {
   for (const autoClose of [false, true]) {

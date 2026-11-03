@@ -8,8 +8,11 @@ import { join } from 'node:path';
 import { PNG } from 'pngjs';
 import { expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { runGtkTest, withTemporaryDirectory } from './gtk-test-helpers';
-import { expectElementKind } from './test-helpers';
+import { runGtkTest } from './gtk-test-helpers';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 // Accepted stage-one reference colors: ANSI red/green, indexed 166/37,
 // and TrueColor log samples. Native tests separately check discrimination.

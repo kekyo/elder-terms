@@ -100,6 +100,7 @@ const createPackageStage = (
     'usr/lib/elder-terms',
     'usr/lib/elder-terms/launcher',
     'usr/lib/elder-terms/elder-terms-terminal',
+    'usr/lib/elder-terms/elder-terms-file-transfer',
     'usr/share/applications',
     'usr/share/doc/elder-terms',
     'usr/share/doc/elder-terms/docs/ja',
@@ -142,7 +143,7 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     'usr/lib/elder-terms/libsmb2.so.7',
     'usr/lib/elder-terms/launcher/elder-terms',
     'usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal',
-    'usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer',
+    'usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer',
   ];
   for (const executablePath of executablePaths) {
     if (executablePath !== omittedPath) {
@@ -170,6 +171,8 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     ],
     ['usr/lib/elder-terms/elder-terms-terminal/green-on.png', 'on\n'],
     ['usr/lib/elder-terms/elder-terms-terminal/green-off.png', 'off\n'],
+    ['usr/lib/elder-terms/elder-terms-file-transfer/green-on.png', 'on\n'],
+    ['usr/lib/elder-terms/elder-terms-file-transfer/green-off.png', 'off\n'],
     ['usr/share/doc/elder-terms/README.md', '# elder-terms\n'],
     ['usr/share/doc/elder-terms/README_ja.md', '# elder-terms\n'],
     ['usr/share/doc/elder-terms/docs/ja/webdav.md', '# WebDAV\n'],
@@ -246,7 +249,7 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     join(stageRoot, 'usr/bin/elder-terms-terminal')
   );
   symlinkSync(
-    '../lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer',
+    '../lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer',
     join(stageRoot, 'usr/bin/elder-terms-file-transfer')
   );
 };
@@ -994,7 +997,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     createPackageStage(
       missingFileTransferStage,
       debianArchitecture,
-      'usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer',
+      'usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer',
       true,
       true
     );
@@ -1172,7 +1175,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     );
     expect(missingFileTransferValidation.status).not.toBe(0);
     expect(missingFileTransferValidation.stderr).toContain(
-      'usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer'
+      'usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'
     );
 
     const missingOpenSshClientValidation = runSourced(
@@ -1256,7 +1259,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
         join(
           '..',
           libraryDirectory,
-          'elder-terms/elder-terms-terminal/elder-terms-file-transfer'
+          'elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'
         ),
       ],
     ]);
@@ -1277,11 +1280,19 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       ),
       join(
         libraryDirectory,
-        'elder-terms/elder-terms-terminal/elder-terms-file-transfer'
+        'elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'
       ),
       join(libraryDirectory, 'elder-terms/elder-terms-terminal/main-window.ui'),
       join(libraryDirectory, 'elder-terms/elder-terms-terminal/green-on.png'),
       join(libraryDirectory, 'elder-terms/elder-terms-terminal/green-off.png'),
+      join(
+        libraryDirectory,
+        'elder-terms/elder-terms-file-transfer/green-on.png'
+      ),
+      join(
+        libraryDirectory,
+        'elder-terms/elder-terms-file-transfer/green-off.png'
+      ),
       'share/applications/net.kekyo.elder-terms.desktop',
       'share/applications/net.kekyo.elder-terms-terminal.desktop',
       'share/metainfo/net.kekyo.elder-terms.metainfo.xml',

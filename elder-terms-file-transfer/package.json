@@ -1,0 +1,23 @@
+{
+  "name": "elder-terms-file-transfer",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "prebuild": "node ../scripts/prepare-test-fonts.mts",
+    "build": "meson setup ../.build .. --reconfigure || meson setup ../.build .. && meson compile -C ../.build",
+    "test": "npm run build && npm run test:nfs && vitest run",
+    "test:nfs": "make -C tests/nfs test"
+  },
+  "devDependencies": {
+    "@types/node": ">=24.0.0",
+    "@types/pngjs": ">=6.0.0",
+    "agent-rover": "0.10.0",
+    "gestament": ">=1.3.0",
+    "http-server": "^14.1.1",
+    "pngjs": ">=7.0.0",
+    "prettier-max": ">=1.16.0",
+    "typescript": ">=6.0.0",
+    "vitest": ">=4.0.0"
+  },
+  "private": true
+}

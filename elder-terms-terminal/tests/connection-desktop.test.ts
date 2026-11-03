@@ -12,8 +12,11 @@ import { PNG } from 'pngjs';
 import { createGtkAppLauncher } from 'gestament';
 import type { GtkApp, GtkWidgetElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
-import { runGtkTest, withTemporaryDirectory } from './gtk-test-helpers';
-import { expectElementKind } from './test-helpers';
+import { runGtkTest } from './gtk-test-helpers';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 const clickWidget = async (
   app: GtkApp,
@@ -123,7 +126,7 @@ it('uses the same connection identity for the SFTP file-transfer window', async 
   const launcher = createGtkAppLauncher({
     appPath: fileURLToPath(
       new URL(
-        '../../.build/elder-terms-terminal/elder-terms-file-transfer',
+        '../../.build/elder-terms-file-transfer/elder-terms-file-transfer',
         import.meta.url
       )
     ),

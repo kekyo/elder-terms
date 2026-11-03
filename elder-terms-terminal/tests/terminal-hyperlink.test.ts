@@ -3,17 +3,13 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
+import { withTemporaryDirectory } from '../../shared/tests/connection-test-helpers.ts';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import { PNG } from 'pngjs';
-import {
-  defaultColumns,
-  defaultRows,
-  runGtkTest,
-  withTemporaryDirectory,
-} from './gtk-test-helpers';
+import { defaultColumns, defaultRows, runGtkTest } from './gtk-test-helpers';
 
 const shellQuote = (value: string): string =>
   `'${value.split("'").join("'\\''")}'`;

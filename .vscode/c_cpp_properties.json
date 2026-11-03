@@ -13,6 +13,9 @@
       ],
       "includePath": [
         "${workspaceFolder}/elder-terms-terminal/src",
+        "${workspaceFolder}/elder-terms-file-transfer/src",
+        "${workspaceFolder}/shared/include",
+        "${workspaceFolder}/shared/src/connection-runtime",
         "${workspaceFolder}/node_modules/gestament/include",
         "${workspaceFolder}/deps/cardio/include",
         "${workspaceFolder}/deps/libxyzm/include"
@@ -20,6 +23,9 @@
       "browse": {
         "path": [
           "${workspaceFolder}/elder-terms-terminal/src",
+          "${workspaceFolder}/elder-terms-file-transfer/src",
+          "${workspaceFolder}/shared/include",
+          "${workspaceFolder}/shared/src/connection-runtime",
           "${workspaceFolder}/node_modules/gestament/include",
           "${workspaceFolder}/deps/cardio/include",
           "${workspaceFolder}/deps/libxyzm/include"

@@ -14,9 +14,11 @@ import {
   defaultRows,
   readWindowCellLayout,
   runGtkTest,
-  withTemporaryDirectory,
 } from './gtk-test-helpers';
-import { expectElementKind } from './test-helpers';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 describe.concurrent('terminal selection autoscroll video', () => {
   for (const [backend, footerRows] of [

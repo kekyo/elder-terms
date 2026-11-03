@@ -225,6 +225,7 @@ cardio_dep = declare_dependency(
 
 subdir('shared')
 subdir('elder-terms')
+subdir('elder-terms-file-transfer')
 subdir('elder-terms-terminal')
 subdir('po')
 

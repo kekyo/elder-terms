@@ -1700,7 +1700,7 @@ static std::string resolve_child_executable(
         launcher_path.parent_path();
     const std::vector<std::filesystem::path> candidates = {
         launcher_directory / executable_name,
-        launcher_directory.parent_path() / "elder-terms-terminal" /
+        launcher_directory.parent_path() / executable_name /
             executable_name,
     };
     for (const auto &candidate : candidates) {

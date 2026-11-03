@@ -10,11 +10,13 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { SshLatencyFixture } from './ssh-latency-fixture.mjs';
+import type { SshLatencyFixture } from '../../../shared/tests/ssh-latency-fixture.mts';
 
-const fixtureModule: typeof import('./ssh-latency-fixture.mjs') = await import(
-  new URL('./ssh-latency-fixture.mts', import.meta.url).href
-);
+const fixtureModule: typeof import('../../../shared/tests/ssh-latency-fixture.mts') =
+  await import(
+    new URL('../../../shared/tests/ssh-latency-fixture.mts', import.meta.url)
+      .href
+  );
 
 const exec = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');

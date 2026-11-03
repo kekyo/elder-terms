@@ -17,10 +17,12 @@ import {
   expectMainWindowStatus,
   runGtkTest,
   telnetLocalhostConfigPath,
-  withTemporaryDirectory,
 } from './gtk-test-helpers';
 import { openTerminalContextMenu } from './clipboard-test-helpers';
-import { expectElementKind } from './test-helpers';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 import {
   activateTextSend,
   expectTextSendActive,

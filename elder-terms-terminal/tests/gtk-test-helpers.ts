@@ -35,7 +35,7 @@ import {
   createTestEvidence,
   expectElementKind,
   type TestEvidence,
-} from './test-helpers';
+} from '../../shared/tests/connection-test-helpers.ts';
 
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
@@ -309,25 +309,6 @@ const cropPng = (
   }
 
   return cropped;
-};
-
-/**
- * Creates and deletes a temporary directory for a test body.
- *
- * @param body Test body receiving the directory path.
- * @returns Promise resolved after cleanup.
- */
-export const withTemporaryDirectory = async (
-  body: (directory: string) => Promise<void>
-): Promise<void> => {
-  const directory = await mkdtemp(
-    join(tmpdir(), 'elder-terms-terminal-config-')
-  );
-  try {
-    await body(directory);
-  } finally {
-    await rm(directory, { force: true, recursive: true });
-  }
 };
 
 /**

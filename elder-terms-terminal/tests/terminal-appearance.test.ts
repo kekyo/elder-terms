@@ -10,12 +10,11 @@ import { join } from 'node:path';
 import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
+import { runGtkTest, readTerminalGridLayout } from './gtk-test-helpers';
 import {
-  runGtkTest,
   withTemporaryDirectory,
-  readTerminalGridLayout,
-} from './gtk-test-helpers';
-import { expectElementKind } from './test-helpers';
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 const exec = promisify(execFile);
 const luminance = (rgb: number): number => {

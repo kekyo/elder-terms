@@ -31,9 +31,11 @@ import {
   terminalTextGrid80x24Path,
   terminalTextGrid81x25Path,
   terminalPlainTextGridConfigPath,
-  withTemporaryDirectory,
 } from './gtk-test-helpers';
-import { capturePixel } from './test-helpers';
+import {
+  withTemporaryDirectory,
+  capturePixel,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');

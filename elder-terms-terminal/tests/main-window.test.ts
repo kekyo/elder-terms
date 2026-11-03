@@ -28,7 +28,10 @@ import {
   activateTextSend,
   expectTextSendActive,
 } from './text-send-test-helpers';
-import { expectElementKind } from './test-helpers';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 import {
   defaultColumns,
   defaultRows,
@@ -36,7 +39,6 @@ import {
   readTerminalGridLayout,
   readWindowCellLayout,
   runGtkTest,
-  withTemporaryDirectory,
 } from './gtk-test-helpers';
 
 const execFileAsync = promisify(execFile);

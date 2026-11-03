@@ -7,8 +7,8 @@
 #include "../../../shared/src/connection-runtime/ssh/ssh-proxy.h"
 #include "../../../shared/src/connection-runtime/ssh/ssh-socks-proxy.h"
 #include "../../src/terminal-sessions/telnet-session/telnet-protocol.h"
-#include "../../src/file-transfer/file-hash.h"
-#include "../../src/sftp/sftp-client.h"
+#include "../../../elder-terms-file-transfer/src/file-transfer/file-hash.h"
+#include "../../../elder-terms-file-transfer/src/sftp/sftp-client.h"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>

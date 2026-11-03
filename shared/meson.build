@@ -503,3 +503,9 @@ test('nfs-settings-test', find_program('xvfb-run'), args: ['-a', nfs_settings_te
 test('http-settings-test', find_program('xvfb-run'), args: ['-a', http_settings_test],
   env: ['NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals'])
 endif
+
+if get_option('build_tests')
+ssh_proxy_test_server = executable('ssh-proxy-test-server',
+  'tests/ssh-proxy-test-server.cpp', dependencies: [libssh_dep])
+
+endif

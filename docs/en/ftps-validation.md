@@ -134,7 +134,7 @@ For the full installed-package UI checks, add the normal GUI test dependencies
 vsftpd to a disposable test image, then run all workspaces with:
 
 ```sh
-export ELDER_TERMS_TEST_FTP_APP=/usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer
+export ELDER_TERMS_TEST_FTP_APP=/usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer
 export ELDER_TERMS_TERMINAL_TEST_MAX_CONCURRENCY=4
 export ELDER_TERMS_TERMINAL_TEST_FILE_PARALLELISM=true
 # As an ordinary user, run the three complete workspace commands above.
@@ -161,7 +161,7 @@ the automation driver's architecture.
 
 ## Independent server and system trust
 
-`elder-terms-terminal/tests/ftps-vsftpd-runner.mjs` is registered with Meson. It exits
+`elder-terms-file-transfer/tests/ftps-vsftpd-runner.mjs` is registered with Meson. It exits
 with the standard optional-test skip status unless `ELDER_TERMS_TEST_VSFTPD=1`.
 When enabled it requires container root and Podman's container marker. Use a
 disposable container without a host CA-store mount. Run the complete C++ suite

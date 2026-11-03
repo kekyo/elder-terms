@@ -12,8 +12,11 @@ import { createGtkAppLauncher } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { PNG } from 'pngjs';
 import { expect, it } from 'vitest';
-import { withTemporaryDirectory } from './gtk-test-helpers';
-import { expectElementKind } from './test-helpers';
+
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 for (const backend of ['cairo', 'opengl']) {
   for (const mode of ['transparent', 'blur']) {

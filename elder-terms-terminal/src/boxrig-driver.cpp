@@ -8,7 +8,7 @@
 #include "terminal-transports.h"
 #include "../../shared/src/connection-runtime/inline-prompt.h"
 #include "terminal-log.h"
-#include "sftp/sftp-client.h"
+#include "../../elder-terms-file-transfer/src/sftp/sftp-client.h"
 #include <elder-terms/terminal-color-filter.h>
 
 #include <gestament/gtk.h>

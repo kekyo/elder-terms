@@ -37,9 +37,11 @@ import {
   expectWindowCellSize,
   readWindowCellLayout,
   runGtkTest,
-  withTemporaryDirectory,
 } from './gtk-test-helpers';
-import { expectElementKind } from './test-helpers';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 import {
   activateTextSend,
   expectTextSendActive,

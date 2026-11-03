@@ -17,13 +17,17 @@ import type {
 } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { capturePixel, expectElementKind } from './test-helpers';
+import {
+  withTemporaryDirectory,
+  capturePixel,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 import {
   expectActivityIndicatorImageState,
   serialActivityIndicatorIds,
   waitForActivityIndicatorImageState,
 } from './activity-indicator-test-helpers';
-import { runGtkTest, withTemporaryDirectory } from './gtk-test-helpers';
+import { runGtkTest } from './gtk-test-helpers';
 
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
