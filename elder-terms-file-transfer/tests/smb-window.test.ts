@@ -476,6 +476,8 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     ).click();
     await selectCurrentTransferDirectory(app, true);
     await expandTransferDirectory(app, true, `/${share}`, 0);
+    for (const row of await tree.selectedRows()) await tree.deselectRow(row);
+    await tree.selectRow(await rowFor('single.txt'));
     await contextMenu(localTree, 'kept.txt');
     await expectElementKind(
       await app.getById('file_transfer_send_item'),
@@ -489,7 +491,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     expect(
       (await (await tree.cellAt(selectedShare, 0))!.info()).states
     ).toContain('expanded');
-    expect(await tree.selectedRows()).toEqual([selectedShare]);
+    expect(await tree.selectedRows()).toEqual([await rowFor('single.txt')]);
     expect(await remotePath.text()).toBe('/');
     await evidence.captureEvidence('smb-preserved-transfer-tree', async () =>
       app.capture()

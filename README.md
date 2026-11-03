@@ -379,10 +379,10 @@ The FTP, FTPS, SFTP, WebDAV, and SMB windows show local files on the left and re
 Icons beside names distinguish folders, documents, images, source code, archives, links, and other file types.
 SMB shares have a different icon from ordinary folders.
 
-Select one destination folder in the opposite pane, then right-click the source items and choose "Send" or "Receive".
-Send uses the folder selected in Remote on the right; Receive uses the folder selected in Local on the left.
-These actions are unavailable when no destination is selected, a non-folder is selected, or multiple items are selected.
-The path field is not used as the destination. To transfer into the folder currently open, use "Up" to open its parent and select that folder.
+Select one folder or regular file in the opposite pane, then right-click the source items and choose "Send" or "Receive".
+Choose the destination in Remote on the right for Send, or Local on the left for Receive. Selecting a folder transfers into that folder; selecting a file transfers into its containing folder.
+These actions are unavailable when no destination is selected, a symbolic link is selected, or multiple items are selected.
+The path field is not used as the destination. To transfer into the folder currently open, select a file directly inside it, or use "Up" to open its parent and select that folder.
 Each selection becomes one transfer job in the "Transfers" list at the bottom of the window.
 The destination is fixed when you submit the request. Changing the selection later does not change an existing job's destination. Additional jobs run in order.
 

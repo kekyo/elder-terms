@@ -20,7 +20,7 @@ There is no separate share name setting. To open a particular share initially, s
 
 The window shows local and remote folders side by side. Select an item and right-click to send or receive files and folders, rename or delete items, or create a folder. Folder transfers and deletion include their contents. If the destination already exists, choose whether to overwrite or skip it.
 
-Before sending, select one destination folder in Remote; before receiving, select one in Local. Send and Receive are unavailable when no destination is selected, a non-folder is selected, or multiple items are selected. The path field is not used as the destination.
+Before sending, select one folder or regular file in Remote; before receiving, select one in Local. Selecting a folder transfers into that folder. Selecting a file transfers into its containing folder. Send and Receive are unavailable when no destination is selected, a symbolic link is selected, or multiple items are selected. The path field is not used as the destination.
 
 You cannot upload to or create folders at the share list `/`, or rename or delete shares themselves. Selecting a share in the list lets you send into it. Receiving a share and managing files and folders inside a share are also supported.
 

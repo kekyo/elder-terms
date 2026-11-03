@@ -429,7 +429,7 @@ it.for([2, 3, 4])(
         `${prefix}/public/deep`,
         prefix ? 2 : 1
       );
-      await select(remote, publicName, 'left');
+      await select(remote, '日本語表', 'left');
       await select(localTree, '送信表', 'right');
       await menu('file_transfer_send_item');
       const state = expectElementKind(
@@ -470,7 +470,7 @@ it.for([2, 3, 4])(
             .states
         ).toContain('expanded');
       expect(await remote.selectedRows()).toEqual([
-        await rowFor(remote, publicName),
+        await rowFor(remote, '日本語表'),
       ]);
       await rowFor(remote, '送信表');
       await evidence.captureEvidence('nfs-preserved-transfer-tree', async () =>

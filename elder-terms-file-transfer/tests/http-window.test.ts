@@ -20,7 +20,6 @@ import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import {
   expandTransferDirectory,
-  openTransferDirectory,
   selectCurrentTransferDirectory,
 } from './file-transfer-destination-helpers.ts';
 import {
@@ -33,6 +32,7 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
     const directory = await mkdtemp(join(tmpdir(), 'elder-http-ui-'));
     const local = join(directory, 'local');
     await mkdir(local);
+    await writeFile(join(local, 'destination.txt'), 'keep destination file\n');
     const certificate = join(directory, 'ca.pem');
     const key = join(directory, 'key.pem');
     if (scheme.startsWith('https')) {
@@ -238,7 +238,11 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
       await app.input.pressKey('Escape');
       await expandTransferDirectory(app, true, '/pub/shortcut', 0);
       await rowFor('linked.bin');
-      await selectCurrentTransferDirectory(app, false);
+      const localTree = expectElementKind(
+        await app.getById('file_transfer_local_tree'),
+        'table'
+      );
+      await localTree.selectRow(0);
       await clickRow('document.html', 'right');
       for (const id of ['new_directory', 'rename', 'delete'])
         expect(
@@ -266,8 +270,12 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
       ).toContain('expanded');
       await rowFor('linked.bin');
       await rowFor('file.bin');
-      await openTransferDirectory(app, false, local);
-      await selectCurrentTransferDirectory(app, false);
+      expect((await (await localTree.cellAt(0, 0))!.info()).name).toBe(
+        'destination.txt'
+      );
+      for (const row of await localTree.selectedRows())
+        await localTree.deselectRow(row);
+      await localTree.selectRow(0);
       await clickRow('tree', 'right');
       await expectElementKind(
         await app.getById('file_transfer_receive_item'),
@@ -276,6 +284,9 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
       await waitForResult(async () => {
         expect(await readFile(join(local, 'tree', 'file.bin'), 'utf8')).toBe(
           'download bytes'
+        );
+        expect(await readFile(join(local, 'destination.txt'), 'utf8')).toBe(
+          'keep destination file\n'
         );
       });
       await waitForResult(async () => {
@@ -306,7 +317,6 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
       ).toContain('expanded');
       expect(await tree.selectedRows()).toEqual([await rowFor('tree')]);
       await rowFor('file.bin');
-      await openTransferDirectory(app, false, local);
       refreshed = true;
       await expectElementKind(
         await app.getById('file_transfer_remote_refresh_button'),

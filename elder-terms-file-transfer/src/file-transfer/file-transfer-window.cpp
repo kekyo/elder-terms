@@ -605,13 +605,20 @@ selected_file_transfer_items(FileTransferPaneState *pane);
 static std::optional<std::string> selected_file_transfer_destination(
     FileTransferPaneState *pane) {
   const auto items = selected_file_transfer_items(pane);
-  if (items.size() != 1 || items.front().type != RemoteFileType::directory)
+  if (items.size() != 1 || (items.front().type != RemoteFileType::directory &&
+      items.front().type != RemoteFileType::regular))
     return std::nullopt;
-  if (pane->remote && (!pane->window->connection_available || !pane->window->client ||
-      !pane->window->client->path_capabilities(items.front().path).create_children))
+  if (pane->remote && (!pane->window->connection_available || !pane->window->client))
     return std::nullopt;
-  // Keep the selected operation identity; display paths can be ambiguous.
-  return items.front().path;
+  // Derive the destination from the operation identity; display paths can be
+  // ambiguous, and a selected file supplies its parent rather than its own path.
+  const auto &item = items.front();
+  const auto destination = item.type == RemoteFileType::directory ? item.path
+      : pane->remote ? pane->window->client->parent_path(item.path)
+                     : local_parent_directory(item.path);
+  if (pane->remote && !pane->window->client->path_capabilities(destination).create_children)
+    return std::nullopt;
+  return destination;
 }
 
 static bool can_create_remote_children(const FileTransferWindow *window) {

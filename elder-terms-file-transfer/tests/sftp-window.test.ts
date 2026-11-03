@@ -2012,7 +2012,7 @@ describe('SFTP window', () => {
     );
   });
 
-  it('requires one selected destination directory for sending and receiving', async (context) => {
+  it('requires one selected destination directory or regular file for sending and receiving', async (context) => {
     await runSftpFixture(
       context,
       false,
@@ -2025,12 +2025,7 @@ describe('SFTP window', () => {
         const remoteTree = expectTable(
           await app.getById('file_transfer_remote_tree')
         );
-        for (const names of [
-          [],
-          ['readme.txt'],
-          ['latest'],
-          ['archive', 'readme.txt'],
-        ]) {
+        for (const names of [[], ['latest'], ['archive', 'readme.txt']]) {
           for (const row of await remoteTree.selectedRows())
             await remoteTree.deselectRow(row);
           for (const name of names)
@@ -2083,7 +2078,7 @@ describe('SFTP window', () => {
           ).text()
         ).toBe('/remote');
 
-        for (const names of [[], ['hello.txt'], ['documents', 'hello.txt']]) {
+        for (const names of [[], ['documents', 'hello.txt']]) {
           for (const row of await localTree.selectedRows())
             await localTree.deselectRow(row);
           for (const name of names)
@@ -2141,6 +2136,114 @@ describe('SFTP window', () => {
         await evidence.captureEvidence(
           'selected-transfer-destinations',
           async () => app.capture()
+        );
+      }
+    );
+  });
+
+  it('uses the selected destination file parent for sending and receiving', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      undefined,
+      async ({ app, localDirectory, evidence }) => {
+        await writeFile(
+          join(localDirectory, 'documents', 'anchor.txt'),
+          'local anchor\n'
+        );
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
+        await clickTreeExpander(
+          app,
+          localTree,
+          await findRow(localTree, 'documents')
+        );
+        await findRow(localTree, 'anchor.txt');
+        await clickTreeExpander(
+          app,
+          remoteTree,
+          await findRow(remoteTree, 'archive')
+        );
+        for (const row of await remoteTree.selectedRows())
+          await remoteTree.deselectRow(row);
+        await remoteTree.selectRow(await findRow(remoteTree, 'old.log'));
+        await openContextMenu(
+          app,
+          localTree,
+          await findRow(localTree, 'hello.txt')
+        );
+        const send = expectElementKind(
+          await app.getById('file_transfer_send_item'),
+          'menuItem'
+        );
+        expect((await send.info()).states).toContain('sensitive');
+        await send.click();
+        await waitForResult(async () => {
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Sent 1 item');
+          expect((await remoteTree.info()).states).toContain('sensitive');
+        });
+        await findRow(remoteTree, 'hello.txt');
+        expect(await remoteTree.selectedRows()).toEqual([
+          await findRow(remoteTree, 'old.log'),
+        ]);
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_remote_path_entry'),
+            'entry'
+          ).text()
+        ).toBe('/remote');
+        for (const row of await localTree.selectedRows())
+          await localTree.deselectRow(row);
+        await localTree.selectRow(await findRow(localTree, 'anchor.txt'));
+        for (const [name, contents] of [
+          ['hello.txt', 'hello from local\n'],
+          ['old.log', 'old remote log\n'],
+        ] as const) {
+          await openContextMenu(
+            app,
+            remoteTree,
+            await findRow(remoteTree, name)
+          );
+          const receive = expectElementKind(
+            await app.getById('file_transfer_receive_item'),
+            'menuItem'
+          );
+          expect((await receive.info()).states).toContain('sensitive');
+          await receive.click();
+          await waitForResult(async () => {
+            expect(
+              await readFile(join(localDirectory, 'documents', name), 'utf8')
+            ).toBe(contents);
+            expect((await localTree.info()).states).toContain('sensitive');
+          });
+          expect(await localTree.selectedRows()).toEqual([
+            await findRow(localTree, 'anchor.txt'),
+          ]);
+        }
+        expect(
+          await readFile(
+            join(localDirectory, 'documents', 'anchor.txt'),
+            'utf8'
+          )
+        ).toBe('local anchor\n');
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_local_path_entry'),
+            'entry'
+          ).text()
+        ).toBe(localDirectory);
+        await evidence.captureEvidence('selected-file-destinations', async () =>
+          app.capture()
         );
       }
     );
