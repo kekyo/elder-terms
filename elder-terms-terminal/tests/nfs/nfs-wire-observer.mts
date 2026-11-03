@@ -1,0 +1,402 @@
+// elder-terms: A terminal application, inspired by personal computing in the 1990s.
+// Copyright (c) Kouji Matsui. (@kekyo@mi.kekyo.net)
+// Under MIT.
+// https://github.com/kekyo/elder-terms/
+
+import {
+  createConnection,
+  createServer,
+  type Server,
+  type Socket,
+} from 'node:net';
+import { once } from 'node:events';
+
+/** RPC request information observed on the actual TCP connection. */
+export interface NfsObservedCall {
+  /** ONC RPC program number. */
+  program: number;
+  /** ONC RPC program version. */
+  version: number;
+  /** Procedure number. */
+  procedure: number;
+  /** NFSv4 COMPOUND minor version, if this is a COMPOUND request. */
+  minor: number | undefined;
+}
+
+/** Test-only transparent proxy; independent of libnfs diagnostic APIs. */
+export interface NfsWireObserver {
+  /** Captured requests; the runner clears this before starting each probe. */
+  calls: NfsObservedCall[];
+  /** Malformed records encountered by the observer. */
+  errors: string[];
+  /** Rejects only MOUNT EXPORT while allowing known-export MNT calls through. */
+  rejectExports: (enabled: boolean) => void;
+  /** Drops the next CREATE/OPEN reply after the real server has processed it. */
+  loseCreateReply: () => void;
+  /** Rejects the next v4 request containing a specific encoded name. */
+  rejectV4Name: (bytes: Buffer) => void;
+  /** Denies the first v4 directory listing for namespace-root access tests. */
+  rejectNamespaceListing: () => void;
+  /** Caps v2 READ counts before forwarding, to exercise short successful replies. */
+  limitV2Reads: (maximum: number) => void;
+  /** Returns a nonadvancing v2 READDIR cookie once, without claiming EOF. */
+  repeatV2Cookie: () => void;
+  /** Makes the next v2 WRITE fail, lose its reply, or acknowledge a short size. */
+  failV2Write: (fault: 'nospace' | 'short' | 'disconnect') => void;
+  /** Omits the optional v4 maximum-transfer attributes from successful GETATTR. */
+  omitV4Limits: (enabled: boolean) => void;
+  /** Holds subsequent WRITE calls after the specified number have been forwarded. */
+  pauseWritesAfter: (count: number) => void;
+  /** Releases held writes and disables the gate. */
+  resumeWrites: () => void;
+  /** Number of writes currently held for deterministic UI observations. */
+  waitingWrites: () => number;
+  /** Closes listeners and sockets, including interrupted clients. */
+  close: () => Promise<void>;
+}
+
+/**
+ * Observes NFS and MOUNT requests, including fragmented RPC records.
+ * @returns Observer listening at 2049 and 20048, forwarding to 22049 and 22048.
+ * @remarks Runs in the test's private network namespace. Reserved-source-port
+ * tests bypass this proxy so forwarding cannot change their authentication.
+ */
+export const createNfsWireObserver = async (): Promise<NfsWireObserver> => {
+  const calls: NfsObservedCall[] = [];
+  const errors: string[] = [];
+  const sockets = new Set<Socket>();
+  const servers: Server[] = [];
+  let rejectExports = false;
+  let loseCreateReply = false;
+  let rejectedV4Name: Buffer | undefined;
+  let rejectNamespaceListing = false;
+  let v2ReadLimit = 8192;
+  let repeatV2Cookie = false;
+  let v2WriteFault: 'nospace' | 'short' | 'disconnect' | undefined;
+  let omitV4Limits = false;
+  let writesBeforePause = -1;
+  const heldWrites: (() => void)[] = [];
+  const resumeWrites = (): void => {
+    writesBeforePause = -1;
+    for (const forward of heldWrites.splice(0)) forward();
+  };
+  const close = async (): Promise<void> => {
+    heldWrites.length = 0;
+    for (const socket of sockets) socket.destroy();
+    for (const server of servers)
+      await new Promise<void>((done) => server.close(() => done()));
+  };
+  try {
+    for (const [port, upstreamPort] of [
+      [2049, 22049],
+      [20048, 22048],
+    ]) {
+      const server = createServer((client) => {
+        const upstream = createConnection({
+          host: '127.0.0.1',
+          port: upstreamPort,
+        });
+        for (const socket of [client, upstream]) {
+          sockets.add(socket);
+          socket.on('close', () => sockets.delete(socket));
+          socket.on('error', () => {
+            client.destroy();
+            upstream.destroy();
+          });
+        }
+        client.on('close', () => upstream.destroy());
+        upstream.on('close', () => client.destroy());
+        let pending = Buffer.alloc(0);
+        let fragments: Buffer[] = [];
+        const lostReplies = new Set<number>();
+        const repeatedCookies = new Map<number, Buffer>();
+        const shortWrites = new Set<number>();
+        client.on('data', (bytes: Buffer) => {
+          try {
+            pending = Buffer.concat([pending, bytes]);
+            while (pending.length >= 4) {
+              const marker = pending.readUInt32BE(0);
+              const size = marker & 0x7fffffff;
+              if (size > 16 * 1024 * 1024)
+                throw new Error('RPC record is too large');
+              if (pending.length < size + 4) break;
+              fragments.push(pending.subarray(4, size + 4));
+              pending = pending.subarray(size + 4);
+              if ((marker & 0x80000000) === 0) continue;
+              const record = Buffer.concat(fragments);
+              fragments = [];
+              if (
+                record.length < 24 ||
+                record.readUInt32BE(4) !== 0 ||
+                record.readUInt32BE(8) !== 2
+              )
+                throw new Error('Invalid ONC RPC call');
+              const program = record.readUInt32BE(12);
+              const version = record.readUInt32BE(16);
+              const procedure = record.readUInt32BE(20);
+              let bodyOffset = 24;
+              for (let auth = 0; auth < 2; auth++)
+                bodyOffset +=
+                  8 + ((record.readUInt32BE(bodyOffset + 4) + 3) & ~3);
+              if (program === 100003 && version === 2 && procedure === 6) {
+                const count = bodyOffset + 36;
+                record.writeUInt32BE(
+                  Math.min(record.readUInt32BE(count), v2ReadLimit),
+                  count
+                );
+              }
+              if (
+                repeatV2Cookie &&
+                program === 100003 &&
+                version === 2 &&
+                procedure === 16
+              ) {
+                repeatedCookies.set(
+                  record.readUInt32BE(0),
+                  Buffer.from(record.subarray(bodyOffset + 32, bodyOffset + 36))
+                );
+                repeatV2Cookie = false;
+              }
+              let minor: number | undefined;
+              let opensFile = false;
+              let readsDirectory = false;
+              let writesFile =
+                program === 100003 &&
+                ((version === 2 && procedure === 8) ||
+                  (version === 3 && procedure === 7));
+              let transferLimits = false;
+              const compoundOperations: number[] = [];
+              if (program === 100003 && version === 4 && procedure === 1) {
+                let offset = 24;
+                for (let auth = 0; auth < 2; auth++)
+                  offset += 8 + ((record.readUInt32BE(offset + 4) + 3) & ~3);
+                offset += 4 + ((record.readUInt32BE(offset) + 3) & ~3);
+                minor = record.readUInt32BE(offset);
+                offset += 4;
+                const count = record.readUInt32BE(offset);
+                offset += 4;
+                for (let index = 0; index < count; index++) {
+                  const op = record.readUInt32BE(offset);
+                  compoundOperations.push(op);
+                  offset += 4;
+                  if (op === 18) {
+                    opensFile = true;
+                    break;
+                  } // OPEN
+                  if (op === 26) {
+                    readsDirectory = true;
+                    break;
+                  } // READDIR
+                  if (op === 38) {
+                    writesFile = true;
+                    break;
+                  } // WRITE
+                  if ([10, 24, 31, 32].includes(op)) continue;
+                  if (op === 3) {
+                    offset += 4;
+                  } // ACCESS
+                  else if (op === 15 || op === 22) {
+                    // LOOKUP / PUTFH
+                    offset += 4 + ((record.readUInt32BE(offset) + 3) & ~3);
+                  } else if (op === 9) {
+                    // GETATTR bitmap
+                    if (
+                      record.readUInt32BE(offset) === 1 &&
+                      record.readUInt32BE(offset + 4) === 0xc0000000
+                    )
+                      transferLimits = true;
+                    offset += 4 + record.readUInt32BE(offset) * 4;
+                  } else break;
+                }
+              }
+              calls.push({ program, version, procedure, minor });
+              if (omitV4Limits && transferLimits) {
+                const reply = Buffer.alloc(48 + compoundOperations.length * 8);
+                reply.writeUInt32BE((0x80000000 | (reply.length - 4)) >>> 0, 0);
+                reply.writeUInt32BE(record.readUInt32BE(0), 4);
+                reply.writeUInt32BE(1, 8);
+                reply.writeUInt32BE(compoundOperations.length, 36);
+                for (const [index, op] of compoundOperations.entries())
+                  reply.writeUInt32BE(op, 40 + index * 8);
+                // The final GETATTR has an empty attribute bitmap and value.
+                client.write(reply);
+                continue;
+              }
+              if (
+                v2WriteFault &&
+                program === 100003 &&
+                version === 2 &&
+                procedure === 8
+              ) {
+                const fault = v2WriteFault;
+                v2WriteFault = undefined;
+                const xid = record.readUInt32BE(0);
+                if (fault === 'disconnect') lostReplies.add(xid);
+                else if (fault === 'short') shortWrites.add(xid);
+                else {
+                  const reply = Buffer.alloc(32);
+                  reply.writeUInt32BE(0x8000001c, 0);
+                  reply.writeUInt32BE(xid, 4);
+                  reply.writeUInt32BE(1, 8);
+                  reply.writeUInt32BE(28, 28); // NFSERR_NOSPC, request not forwarded.
+                  client.write(reply);
+                  continue;
+                }
+              }
+              if (
+                loseCreateReply &&
+                program === 100003 &&
+                ((version === 2 && procedure === 14) ||
+                  (version === 3 && procedure === 8) ||
+                  (version === 4 && opensFile)) &&
+                record.includes(Buffer.from('.elder-terms-part-'))
+              ) {
+                lostReplies.add(record.readUInt32BE(0));
+                loseCreateReply = false;
+              }
+              if (rejectExports && program === 100005 && procedure === 5) {
+                const reply = Buffer.alloc(28);
+                reply.writeUInt32BE(0x80000018, 0);
+                reply.writeUInt32BE(record.readUInt32BE(0), 4);
+                reply.writeUInt32BE(1, 8);
+                reply.writeUInt32BE(5, 24); // RPC accepted, SYSTEM_ERR.
+                client.write(reply);
+              } else if (
+                version === 4 &&
+                ((rejectedV4Name && record.includes(rejectedV4Name)) ||
+                  (rejectNamespaceListing && readsDirectory))
+              ) {
+                const status =
+                  rejectNamespaceListing && readsDirectory ? 13 : 22;
+                if (status === 13) rejectNamespaceListing = false;
+                else rejectedV4Name = undefined;
+                const reply = Buffer.alloc(40);
+                reply.writeUInt32BE(0x80000024, 0);
+                reply.writeUInt32BE(record.readUInt32BE(0), 4);
+                reply.writeUInt32BE(1, 8);
+                reply.writeUInt32BE(status, 28); // NFS error, empty tag and result list.
+                client.write(reply);
+              } else {
+                const header = Buffer.alloc(4);
+                header.writeUInt32BE((record.length | 0x80000000) >>> 0);
+                const forward = (): void => {
+                  upstream.write(Buffer.concat([header, record]));
+                };
+                if (writesFile && writesBeforePause === 0)
+                  heldWrites.push(forward);
+                else {
+                  if (writesFile && writesBeforePause > 0) writesBeforePause--;
+                  forward();
+                }
+              }
+            }
+          } catch (error) {
+            errors.push(String(error));
+            client.destroy();
+            upstream.destroy();
+          }
+        });
+        let replies = Buffer.alloc(0);
+        let replyFragments: Buffer[] = [];
+        upstream.on('data', (bytes: Buffer) => {
+          replies = Buffer.concat([replies, bytes]);
+          while (replies.length >= 4) {
+            const marker = replies.readUInt32BE(0);
+            const length = marker & 0x7fffffff;
+            if (replies.length < length + 4) break;
+            replyFragments.push(replies.subarray(4, length + 4));
+            replies = replies.subarray(length + 4);
+            if ((marker & 0x80000000) === 0) continue;
+            const record = Buffer.concat(replyFragments);
+            replyFragments = [];
+            if (shortWrites.delete(record.readUInt32BE(0))) {
+              let offset = 12;
+              offset += 8 + ((record.readUInt32BE(offset + 4) + 3) & ~3);
+              if (
+                record.readUInt32BE(offset) !== 0 ||
+                record.readUInt32BE(offset + 4) !== 0
+              )
+                throw new Error('Expected successful v2 WRITE reply');
+              const size = offset + 28; // RPC accept status, NFS status, then fattr2 size.
+              record.writeUInt32BE(
+                Math.max(0, record.readUInt32BE(size) - 1),
+                size
+              );
+            }
+            const cookie = repeatedCookies.get(record.readUInt32BE(0));
+            if (cookie) {
+              repeatedCookies.delete(record.readUInt32BE(0));
+              let offset = 12;
+              offset += 8 + ((record.readUInt32BE(offset + 4) + 3) & ~3);
+              if (
+                record.readUInt32BE(offset) !== 0 ||
+                record.readUInt32BE(offset + 4) !== 0
+              )
+                throw new Error('Expected successful v2 READDIR reply');
+              offset += 8;
+              let lastCookie = -1;
+              while (record.readUInt32BE(offset) !== 0) {
+                offset += 8; // Entry-present flag and file ID.
+                offset += 4 + ((record.readUInt32BE(offset) + 3) & ~3);
+                lastCookie = offset;
+                offset += 4;
+              }
+              if (lastCookie < 0)
+                throw new Error('Expected a v2 directory entry');
+              cookie.copy(record, lastCookie);
+              record.writeUInt32BE(0, offset + 4); // No EOF, no cookie progress.
+            }
+            if (lostReplies.delete(record.readUInt32BE(0))) {
+              client.destroy();
+              upstream.destroy();
+              return;
+            }
+            const header = Buffer.alloc(4);
+            header.writeUInt32BE((record.length | 0x80000000) >>> 0);
+            client.write(Buffer.concat([header, record]));
+          }
+        });
+      });
+      servers.push(server);
+      server.listen(port, '127.0.0.1');
+      await once(server, 'listening');
+    }
+    return {
+      calls,
+      errors,
+      close,
+      rejectExports: (enabled) => {
+        rejectExports = enabled;
+      },
+      loseCreateReply: () => {
+        loseCreateReply = true;
+      },
+      rejectNamespaceListing: () => {
+        rejectNamespaceListing = true;
+      },
+      limitV2Reads: (maximum) => {
+        v2ReadLimit = maximum;
+      },
+      repeatV2Cookie: () => {
+        repeatV2Cookie = true;
+      },
+      failV2Write: (fault) => {
+        v2WriteFault = fault;
+      },
+      omitV4Limits: (enabled) => {
+        omitV4Limits = enabled;
+      },
+      pauseWritesAfter: (count) => {
+        writesBeforePause = count;
+      },
+      resumeWrites,
+      waitingWrites: () => heldWrites.length,
+      rejectV4Name: (bytes) => {
+        rejectedV4Name = bytes;
+      },
+    };
+  } catch (error) {
+    await close();
+    throw error;
+  }
+};

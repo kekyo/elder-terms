@@ -29,3 +29,5 @@ elder-terms-terminal/src/webdav/webdav-application.cpp
 elder-terms-terminal/src/smb/smb-application.cpp
 shared/src/settings-widget/http-settings-editor.cpp
 elder-terms-terminal/src/http/http-application.cpp
+shared/src/settings-widget/nfs-settings-editor.cpp
+elder-terms-terminal/src/nfs/nfs-application.cpp

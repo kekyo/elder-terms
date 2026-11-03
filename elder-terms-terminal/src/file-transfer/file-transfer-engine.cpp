@@ -6,6 +6,9 @@
 #include "file-transfer-engine.h"
 
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <cerrno>
 
 #include <algorithm>
 #include <array>
@@ -15,6 +18,7 @@
 #include <exception>
 #include <filesystem>
 #include <memory>
+#include <map>
 #include <limits>
 #include <optional>
 #include <span>
@@ -66,6 +70,7 @@ struct TransferNode {
   std::vector<TransferNode> children;
   std::optional<std::uint64_t> total_bytes = 0;
   std::uint64_t total_items = 1;
+  std::string discovery_error = {};
 };
 
 static std::optional<std::uint64_t> sum_discovered_bytes(
@@ -483,6 +488,39 @@ move_local_async(GFile *source, GFile *destination, GFileCopyFlags flags,
 }
 
 static cardio::promise<void>
+set_local_link_times_async(GFile *file, const RemoteFileAttributes &attributes,
+                           cardio::cancellation cancellation) {
+  if (!attributes.access_time_unix_seconds && !attributes.modification_time_unix_seconds) co_return;
+  const std::array<timespec, 2> times{{
+      {attributes.access_time_unix_seconds.value_or(0), attributes.access_time_unix_seconds ? 0 : UTIME_OMIT},
+      {attributes.modification_time_unix_seconds.value_or(0), attributes.modification_time_unix_seconds ? 0 : UTIME_OMIT}}};
+  // GIO 2.80 ignores NOFOLLOW_SYMLINKS when setting times:
+  // https://github.com/GNOME/glib/blob/2.80.0/gio/glocalfileinfo.c#L2628
+  // Use GIO's existing task pool for this missing operation, awaiting its
+  // completion even after cancellation; no detached work may outlive the job.
+  co_await cardio::gio::submit<void>(
+      [file, times](GCancellable *cancellable, GAsyncReadyCallback callback, gpointer user_data) {
+        GObjectPtr<GTask> task(g_task_new(file, cancellable, callback, user_data));
+        g_task_set_task_data(task.get(), new std::array<timespec, 2>(times),
+            [](gpointer data) { delete static_cast<std::array<timespec, 2> *>(data); });
+        g_task_run_in_thread(task.get(), [](GTask *task, gpointer source, gpointer data, GCancellable *) {
+          if (g_task_return_error_if_cancelled(task)) return;
+          const auto *values = static_cast<const std::array<timespec, 2> *>(data);
+          if (utimensat(AT_FDCWD, g_file_peek_path(G_FILE(source)), values->data(), AT_SYMLINK_NOFOLLOW) != 0) {
+            const int code = errno;
+            g_task_return_new_error(task, G_IO_ERROR, g_io_error_from_errno(code),
+                "Cannot set symbolic link times: %s", g_strerror(code));
+          } else {
+            g_task_return_boolean(task, TRUE);
+          }
+        });
+      },
+      [](GObject *, GAsyncResult *result, GError **error) {
+        if (!g_task_propagate_boolean(G_TASK(result), error)) throw cardio::gio::gio_error(*error);
+      }, std::move(cancellation));
+}
+
+static cardio::promise<void>
 set_local_attributes_async(
     GFile *file, const RemoteFileAttributes &attributes,
     bool include_permissions, cardio::cancellation cancellation) {
@@ -559,34 +597,23 @@ static bool has_mutable_attributes(
 
 static bool valid_child_name(const std::string &name) {
   return !name.empty() && name != "." && name != ".." &&
-         name.find('/') == std::string::npos;
+         name.find('/') == std::string::npos && name.find('\0') == std::string::npos &&
+         g_utf8_validate(name.data(), name.size(), nullptr);
 }
 
-static std::string remote_basename(const std::string &path) {
-  std::string trimmed = path;
-  while (trimmed.size() > 1 && trimmed.back() == '/') {
-    trimmed.pop_back();
-  }
-  const std::size_t separator = trimmed.find_last_of('/');
-  return separator == std::string::npos
-             ? trimmed
-             : trimmed.substr(separator + 1);
+static void mark_receive_name_collisions(std::vector<TransferNode> &nodes) {
+  std::map<std::string, std::set<std::string>> identities;
+  for (const auto &node : nodes)
+    if (node.discovery_error.empty()) identities[node.destination_path].insert(node.source_path);
+  for (auto &node : nodes)
+    if (node.discovery_error.empty() && identities[node.destination_path].size() > 1)
+      node.discovery_error = "Different remote items have the same local filename. Rename the source and restart, or skip it.";
 }
 
-static std::string remote_child_path(const std::string &directory,
-                                     const std::string &name) {
-  if (!valid_child_name(name)) {
-    throw std::runtime_error(
-        "Remote service returned an invalid item name");
-  }
-  if (directory.empty() || directory == ".") {
-    return directory.empty() ? name : "./" + name;
-  }
-  if (directory == "/") {
-    return "/" + name;
-  }
-  return directory.back() == '/' ? directory + name
-                                 : directory + "/" + name;
+static TransferNode unnamed_receive_node(const RemoteFileAttributes &item, const std::string &destination) {
+  return {.source_path = item.path, .destination_path = destination, .attributes = item,
+      .link_target = {}, .children = {}, .total_bytes = std::nullopt, .total_items = 1,
+      .discovery_error = "The remote name cannot be used as a local filename. Rename the source and restart, or skip it."};
 }
 
 static std::string local_child_path(const std::string &directory,
@@ -604,7 +631,8 @@ static std::string local_link_target(GFileInfo *info) {
 }
 
 static cardio::promise<TransferNode>
-discover_local_node_async(GFile *file, std::string destination_path,
+discover_local_node_async(const std::shared_ptr<RemoteFileClient> &client,
+                          GFile *file, std::string destination_path,
                           cardio::cancellation cancellation) {
   GObjectPtr<GFileInfo> info(
       co_await query_local_info_async(file, cancellation));
@@ -622,15 +650,16 @@ discover_local_node_async(GFile *file, std::string destination_path,
       .source_path = attributes->path,
       .destination_path = std::move(destination_path),
       .attributes = *attributes,
-      .link_target =
-          attributes->type == RemoteFileType::symbolic_link
-              ? local_link_target(info.get())
-              : std::string(),
+      .link_target = {},
       .children = {},
       .total_bytes =
           attributes->type == RemoteFileType::regular ? attributes->size : std::optional<std::uint64_t>(0),
       .total_items = 1,
   };
+  if (node.attributes.type == RemoteFileType::symbolic_link) {
+    try { node.link_target = client->import_link_target(local_link_target(info.get())); }
+    catch (const std::exception &error) { node.discovery_error = error.what(); }
+  }
   if (node.attributes.type != RemoteFileType::directory) {
     co_return node;
   }
@@ -641,7 +670,7 @@ discover_local_node_async(GFile *file, std::string destination_path,
     cancellation.throw_if_cancellation_requested();
     GObjectPtr<GFile> child(g_file_get_child(file, name.c_str()));
     TransferNode child_node = co_await discover_local_node_async(
-        child.get(), remote_child_path(node.destination_path, name),
+        client, child.get(), client->child_path(node.destination_path, name),
         cancellation);
     node.total_bytes = sum_discovered_bytes(node.total_bytes, child_node.total_bytes);
     node.total_items += child_node.total_items;
@@ -680,8 +709,9 @@ discover_remote_node_async(
       throw std::runtime_error(
           "Remote service reported an unsupported symbolic link");
     }
-    node.link_target =
-        co_await client->read_link_async(node.source_path, cancellation);
+    const auto target = co_await client->read_link_async(node.source_path, cancellation);
+    try { node.link_target = client->export_link_target(target); }
+    catch (const std::exception &error) { node.discovery_error = error.what(); }
     co_return node;
   }
   if (node.attributes.type != RemoteFileType::directory) {
@@ -697,18 +727,16 @@ discover_remote_node_async(
               return left.name < right.name;
             });
   for (const RemoteFileAttributes &child : children) {
-    if (!valid_child_name(child.name)) {
-      throw std::runtime_error(
-          "Remote service returned an invalid item name");
-    }
-    TransferNode child_node = co_await discover_remote_node_async(
-        client, remote_child_path(node.source_path, child.name),
-        local_child_path(node.destination_path, child.name),
-        cancellation);
+    const auto name = client->local_filename(child);
+    TransferNode child_node = unnamed_receive_node(child, node.destination_path);
+    if (name && valid_child_name(*name))
+      child_node = co_await discover_remote_node_async(client, child.path,
+          local_child_path(node.destination_path, *name), cancellation);
     node.total_bytes = sum_discovered_bytes(node.total_bytes, child_node.total_bytes);
     node.total_items += child_node.total_items;
     node.children.push_back(std::move(child_node));
   }
+  mark_receive_name_collisions(node.children);
   co_return node;
 }
 
@@ -753,7 +781,7 @@ remove_remote_tree_async(
       (co_await client->load_directory_async(path, cancellation)).entries;
   for (const RemoteFileAttributes &child : children) {
     co_await remove_remote_tree_async(
-        client, remote_child_path(path, child.name), cancellation);
+        client, child.path, cancellation);
   }
   co_await client->remove_directory_async(path, cancellation);
 }
@@ -833,7 +861,7 @@ available_remote_temporary_path_async(
     const std::string &destination,
     cardio::cancellation cancellation) {
   for (std::size_t attempt = 0; attempt < 100; ++attempt) {
-    const std::string candidate = next_temporary_path(destination);
+    const std::string candidate = client->upload_temporary_path(destination, next_temporary_path(""));
     if (!(co_await client->lstat_async(candidate, cancellation))
              .has_value()) {
       co_return candidate;
@@ -991,6 +1019,7 @@ receive_regular_file_async(TransferRunState *state,
         co_await open_local_replace_async(temporary.get(), cancellation));
     temporary_created = true;
     std::array<std::byte, file_transfer_chunk_size> buffer{};
+    std::uint64_t copied = 0;
     for (;;) {
       cancellation.throw_if_cancellation_requested();
       const std::size_t size = co_await input->read_async(
@@ -999,13 +1028,19 @@ receive_regular_file_async(TransferRunState *state,
       if (size == 0) {
         break;
       }
+      if (size > UINT64_MAX - copied ||
+          (node.attributes.size && (copied > *node.attributes.size || size > *node.attributes.size - copied)))
+        throw std::runtime_error("The remote source grew after discovery");
       co_await write_local_stream_async(
           G_OUTPUT_STREAM(output.get()),
           std::span<const std::byte>(buffer.data(), size),
           cancellation);
+      copied += size;
       state->progress.transferred_bytes += size;
       publish_progress(state, node.source_path);
     }
+    if (node.attributes.size && copied != *node.attributes.size)
+      throw std::runtime_error("The remote source became shorter after discovery");
     co_await input->close_async(cancellation);
     input.reset();
     co_await close_local_output_async(G_OUTPUT_STREAM(output.get()),
@@ -1154,8 +1189,8 @@ receive_node_once_async(TransferRunState *state,
         destination.get(), node.link_target, cancellation);
     // Linux does not provide a portable symlink permission operation. Times
     // are still applied without following the stored target.
-    co_await set_local_attributes_async(
-        destination.get(), node.attributes, false, cancellation);
+    co_await set_local_link_times_async(
+        destination.get(), node.attributes, cancellation);
     ++state->progress.completed_items;
     publish_progress(state, node.source_path);
     co_return;
@@ -1190,6 +1225,7 @@ transfer_node_with_recovery_async(
     publish_progress(state, node.source_path);
     std::exception_ptr failure;
     try {
+      if (!node.discovery_error.empty()) throw std::runtime_error(node.discovery_error);
       if (state->request.direction == FileTransferDirection::send) {
         co_await send_node_once_async(state, node, cancellation);
       } else {
@@ -1324,21 +1360,21 @@ discover_selected_source_async(
               "Selected local transfer source has no item name");
         }
         co_return co_await discover_local_node_async(
-            source.get(),
-            remote_child_path(state->request.destination_directory,
+            state->client, source.get(),
+            state->client->child_path(state->request.destination_directory,
                               basename.get()),
             cancellation);
       }
 
-      const std::string basename = remote_basename(source_path);
-      if (!valid_child_name(basename)) {
-        throw std::runtime_error(
-            "Selected remote transfer source has no valid item name");
-      }
+      const auto attributes = co_await state->client->lstat_async(source_path, cancellation);
+      if (!attributes) throw std::runtime_error("Remote transfer source does not exist: " + source_path);
+      const auto basename = state->client->local_filename(*attributes);
+      if (!basename || !valid_child_name(*basename))
+        co_return unnamed_receive_node(*attributes, state->request.destination_directory);
       co_return co_await discover_remote_node_async(
           state->client, source_path,
           local_child_path(state->request.destination_directory,
-                           basename),
+                           *basename),
           cancellation);
     } catch (const cardio::canceled_exception &) {
       throw;
@@ -1429,6 +1465,7 @@ run_file_transfer_async(std::shared_ptr<RemoteFileClient> client,
       state.progress.total_items += node->total_items;
       roots.push_back(std::move(*node));
     }
+    if (state.request.direction == FileTransferDirection::receive) mark_receive_name_collisions(roots);
     state.progress.discovery_complete = true;
     publish_progress(&state, {});
     for (const auto &node : roots)

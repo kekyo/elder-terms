@@ -81,9 +81,13 @@ struct RemotePathCapabilities {
 
 /** Portable attributes used by the remote browser and transfer engine. */
 struct RemoteFileAttributes {
-  /** Item name without its parent path. */
+  /** UTF-8 display name without its parent; never reconstruct path from it. */
   std::string name;
-  /** Full remote path. */
+  /**
+   * Client-owned operation identity, retained exactly as returned by the client.
+   * The identity belongs to this connection; it must not be reused after reconnect.
+   * UTF-8 presentation and new destination names are separate from this value.
+   */
   std::string path;
   /** Remote item kind, determined without following symbolic links. */
   RemoteFileType type = RemoteFileType::other;
@@ -107,6 +111,8 @@ struct RemoteDirectorySnapshot {
   std::vector<RemoteFileAttributes> entries;
   /** Actual resource type after an attempted expansion. */
   RemoteFileType resource_type = RemoteFileType::directory;
+  /** Nonfatal discovery information, such as using configured exports after enumeration failed. */
+  std::string notice{};
 };
 
 /** Asynchronous reader for one remote regular file. */
@@ -222,6 +228,68 @@ public:
     const bool writable = capabilities().write_operations;
     return {.create_children = writable, .modify = writable};
   }
+
+  /** @param path Existing operation identity. @returns Identity of its parent, or itself at the root. */
+  virtual std::string parent_path(const std::string &path) const {
+    auto normalized = path;
+    while (normalized.size() > 1 && normalized.back() == '/') normalized.pop_back();
+    const auto separator = normalized.find_last_of('/');
+    if (separator == std::string::npos) return ".";
+    return separator == 0 ? "/" : normalized.substr(0, separator);
+  }
+
+  /** @param path Operation identity. @returns Human-readable path, never used to reconstruct the identity. */
+  virtual std::string display_path(const std::string &path) const { return path; }
+
+  /** @returns Whether arbitrary address-entry text can be used as an operation path. */
+  virtual bool path_input_editable() const noexcept { return true; }
+
+  /**
+   * Builds a new child identity using this connection's filename rules.
+   * @param parent Existing parent identity, never a display path.
+   * @param name New UTF-8 filename, without directory separators.
+   * @returns Child identity; encoding failures throw before any remote changes.
+   */
+  virtual std::string child_path(const std::string &parent, const std::string &name) const {
+    if (name.empty() || name == "." || name == ".." ||
+        name.find('/') != std::string::npos || name.find('\0') != std::string::npos)
+      throw std::invalid_argument("Invalid new remote item name");
+    return parent.empty() || parent.back() == '/' ? parent + name : parent + "/" + name;
+  }
+
+  /**
+   * Builds an adjacent temporary upload identity without altering opaque paths.
+   * @param destination Final destination identity.
+   * @param suffix Unique ASCII filename suffix supplied by the transfer engine.
+   * @returns Candidate identity; allocation and ownership require remote I/O.
+   */
+  virtual std::string upload_temporary_path(const std::string &destination,
+                                           const std::string &suffix) const {
+    return destination + suffix;
+  }
+
+  /**
+   * Suggests a local UTF-8 filename for an existing remote identity.
+   * @param item Listed or statted item, including its original identity.
+   * @returns Losslessly decoded filename, or no value when explicit naming is required.
+   */
+  virtual std::optional<std::string> local_filename(const RemoteFileAttributes &item) const {
+    return item.name;
+  }
+
+  /**
+   * Converts a local symbolic-link target for creation on this service.
+   * @param target Stored local target, retaining relative segments and separators.
+   * @returns Remote target bytes; throws when the mapping is not lossless.
+   */
+  virtual std::string import_link_target(const std::string &target) const { return target; }
+
+  /**
+   * Converts a remote symbolic-link target for creation in the local filesystem.
+   * @param target Original stored remote bytes, never its display representation.
+   * @returns Local target; throws when conversion would change its meaning.
+   */
+  virtual std::string export_link_target(const std::string &target) const { return target; }
 
   /**
    * Loads one directory as a single logical remote operation.

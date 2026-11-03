@@ -2035,7 +2035,7 @@ static void launch_selected_connection(ApplicationState *state) {
       kind == elder_terms::ConnectionKind::ftp ||
       kind == elder_terms::ConnectionKind::webdav ||
       kind == elder_terms::ConnectionKind::http ||
-      kind == elder_terms::ConnectionKind::smb;
+      kind == elder_terms::ConnectionKind::smb || kind == elder_terms::ConnectionKind::nfs;
   const std::string &executable =
       file_transfer ? state->file_transfer_executable
                     : state->terminal_executable;
@@ -2095,7 +2095,7 @@ static void launch_saved_connection(
       kind == elder_terms::ConnectionKind::ftp ||
       kind == elder_terms::ConnectionKind::webdav ||
       kind == elder_terms::ConnectionKind::http ||
-      kind == elder_terms::ConnectionKind::smb;
+      kind == elder_terms::ConnectionKind::smb || kind == elder_terms::ConnectionKind::nfs;
   const std::string &executable =
       file_transfer ? state->file_transfer_executable
                     : state->terminal_executable;

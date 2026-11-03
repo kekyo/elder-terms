@@ -36,6 +36,7 @@
 #include "webdav-settings-editor.h"
 #include "http-settings-editor.h"
 #include "smb-settings-editor.h"
+#include "nfs-settings-editor.h"
 #include "ssh-proxy-settings-editor.h"
 #include "terminal-background-editor.h"
 #include "terminal-color-preview.h"
@@ -60,6 +61,7 @@ static constexpr char ftp_connection_type[] = "ftp";
 static constexpr char webdav_connection_type[] = "webdav";
 static constexpr char http_connection_type[] = "http";
 static constexpr char smb_connection_type[] = "smb";
+static constexpr char nfs_connection_type[] = "nfs";
 static constexpr char zmodem_autostart_enabled[] = "enabled";
 static constexpr char zmodem_autostart_disabled[] = "disabled";
 static constexpr char terminal_text_default[] = "default";
@@ -214,6 +216,7 @@ struct SettingsWidgetState {
   WebdavSettingsEditor *webdav_editor = nullptr;
   HttpSettingsEditor *http_editor = nullptr;
   SmbSettingsEditor *smb_editor = nullptr;
+  NfsSettingsEditor *nfs_editor = nullptr;
   SshProxySettingsEditor *ssh_proxy_editor = nullptr;
   GtkWidget *ssh_proxy_experimental_label = nullptr;
   int selected_macro = -1;
@@ -1580,6 +1583,8 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
           (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != webdav_connection_type)) &&
          (smb_settings_editor_is_valid(state->smb_editor) ||
           (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != smb_connection_type)) &&
+         (nfs_settings_editor_is_valid(state->nfs_editor) ||
+          (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != nfs_connection_type)) &&
          state->serial_baudrate_valid &&
          state->transfer_text_send_rate_valid &&
          terminal_key_binding_inputs_valid(state) &&
@@ -2839,6 +2844,8 @@ static void sync_general_type_combo(SettingsWidgetState *state) {
            .label = connection_type_label(webdav_connection_type)},
           {.id = smb_connection_type,
            .label = connection_type_label(smb_connection_type)},
+          {.id = nfs_connection_type,
+           .label = connection_type_label(nfs_connection_type)},
       },
       effective);
 }
@@ -3337,6 +3344,7 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_in
   sync_webdav_settings_editor(state->webdav_editor, preserve_invalid_draft);
   sync_http_settings_editor(state->http_editor, preserve_invalid_draft);
   sync_smb_settings_editor(state->smb_editor, preserve_invalid_draft);
+  sync_nfs_settings_editor(state->nfs_editor, preserve_invalid_draft);
   sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, preserve_invalid_draft);
   const TerminalDisplaySettings display =
       terminal_display_settings(state->draft_store);
@@ -6663,6 +6671,25 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   state->connection_pages.push_back({
       .connection_types = {smb_connection_type}, .page = smb_page, .tab_label = smb_tab});
 
+  state->nfs_editor = create_nfs_settings_editor(
+      &state->draft_store, state->id_prefix, state->is_runtime, [state] {
+        update_action_sensitivity(state);
+        notify_changed(state);
+      });
+  auto *nfs_page = gtk_scrolled_window_new(nullptr, nullptr);
+  assign_accessible_id(nfs_page, widget_id(state, "nfs_page").c_str());
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(nfs_page), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_overlay_scrolling(GTK_SCROLLED_WINDOW(nfs_page), FALSE);
+  gtk_container_add(GTK_CONTAINER(nfs_page), nfs_settings_editor_root(state->nfs_editor));
+  auto *nfs_tab = create_tab_label("NFS", widget_id(state, "nfs_tab").c_str());
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), nfs_page, nfs_tab);
+  gtk_widget_show_all(nfs_page);
+  gtk_widget_show_all(nfs_tab);
+  gtk_widget_set_no_show_all(nfs_page, TRUE);
+  gtk_widget_set_no_show_all(nfs_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {nfs_connection_type}, .page = nfs_page, .tab_label = nfs_tab});
+
   state->ssh_proxy_editor = create_ssh_proxy_settings_editor(
       &state->draft_store, state->id_prefix, state->is_runtime,
       state->mode == SettingsWidgetMode::global_defaults, [state] {
@@ -7092,6 +7119,7 @@ void destroy_settings_widget(SettingsWidgetState *state) {
   destroy_webdav_settings_editor(state->webdav_editor);
   destroy_http_settings_editor(state->http_editor);
   destroy_smb_settings_editor(state->smb_editor);
+  destroy_nfs_settings_editor(state->nfs_editor);
   destroy_ssh_proxy_settings_editor(state->ssh_proxy_editor);
   if (state->root != nullptr && gtk_widget_get_parent(state->root) == nullptr) {
     gtk_widget_destroy(state->root);

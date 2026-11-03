@@ -553,6 +553,7 @@ exit 91
       `#!/bin/sh
 printf '%s\\n' "$*" >>"$ELDER_TERMS_TEST_PKG_CONFIG_INVOCATION"
 if [ "\${ELDER_TERMS_TEST_MISSING_CURL:-0}" = 1 ] && [ "$*" = "--exists libcurl" ]; then exit 1; fi
+if [ "\${ELDER_TERMS_TEST_MISSING_NFS:-0}" = 1 ] && [ "$*" = "--exists libnfs >= 5.0.2" ]; then exit 1; fi
 exit 0
 `
     );
@@ -587,6 +588,9 @@ exit 0
     expect(readFileSync(pkgConfigInvocationPath, 'utf8').split('\n')).toContain(
       '--exists libcanberra'
     );
+    expect(readFileSync(pkgConfigInvocationPath, 'utf8').split('\n')).toContain(
+      '--exists libnfs >= 5.0.2'
+    );
     expect(
       readFileSync(pkgConfigInvocationPath, 'utf8').split('\n')
     ).not.toContain('--exists libpcre2-8');
@@ -599,6 +603,15 @@ exit 0
     expect(missingCurl.status).toBe(1);
     expect(missingCurl.stderr).toContain(
       'Missing required pkg-config module: libcurl'
+    );
+    expect(() => lstatSync(invocationPath)).toThrow();
+    const missingNfs = run(containerScript, [], {
+      ...environment,
+      ELDER_TERMS_TEST_MISSING_NFS: '1',
+    });
+    expect(missingNfs.status).toBe(1);
+    expect(missingNfs.stderr).toContain(
+      'Missing required pkg-config module: libnfs >= 5.0.2'
     );
     expect(() => lstatSync(invocationPath)).toThrow();
   });
@@ -863,6 +876,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'libgl-dev',
       'libegl-dev',
       'libssh-dev',
+      'libnfs-dev',
       'libudev-dev',
       'libsystemd-dev',
       'liburing-dev',

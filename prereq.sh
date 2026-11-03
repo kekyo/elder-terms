@@ -53,6 +53,7 @@ libwayland-dev
 libgl-dev
 libegl-dev
 libssh-dev
+libnfs-dev
 libudev-dev
 libsystemd-dev
 liburing-dev

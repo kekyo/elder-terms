@@ -136,6 +136,10 @@ static void reject_write() { throw RemoteFileError("HTTP connections are read-on
 class HttpClient final : public RemoteFileClient {
 public:
   std::shared_ptr<HttpConnection> connection;
+  std::string parent_path(const std::string &path) const override {
+    const auto url_path = path.substr(0, path.find('?'));
+    return http_resolve_url(path, url_path.ends_with('/') ? "../" : "./");
+  }
   RemoteFileCapabilities capabilities() const noexcept override {
     return {.write_operations = false, .incremental_receive = true};
   }
