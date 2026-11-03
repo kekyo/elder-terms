@@ -6616,7 +6616,10 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(webdav_page), FALSE);
   assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(webdav_page)),
       widget_id(state, "webdav_page_scrollbar").c_str());
-  gtk_container_add(GTK_CONTAINER(webdav_page), webdav_settings_editor_root(state->webdav_editor));
+  // Keep the editor's outer spacing inside a painted scrollable surface.
+  GtkWidget *webdav_surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_container_add(GTK_CONTAINER(webdav_surface), webdav_settings_editor_root(state->webdav_editor));
+  gtk_container_add(GTK_CONTAINER(webdav_page), webdav_surface);
   GtkWidget *webdav_tab = create_tab_label(
       "WebDAV",
       widget_id(state, "webdav_tab").c_str());
@@ -6640,7 +6643,9 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(http_page), FALSE);
   assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(http_page)),
       widget_id(state, "http_page_scrollbar").c_str());
-  gtk_container_add(GTK_CONTAINER(http_page), http_settings_editor_root(state->http_editor));
+  GtkWidget *http_surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_container_add(GTK_CONTAINER(http_surface), http_settings_editor_root(state->http_editor));
+  gtk_container_add(GTK_CONTAINER(http_page), http_surface);
   GtkWidget *http_tab = create_tab_label(
       "HTTP/HTTPS",
       widget_id(state, "http_tab").c_str());
@@ -6693,7 +6698,9 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_scrolled_window_set_overlay_scrolling(GTK_SCROLLED_WINDOW(nfs_page), FALSE);
   assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(nfs_page)),
       widget_id(state, "nfs_page_scrollbar").c_str());
-  gtk_container_add(GTK_CONTAINER(nfs_page), nfs_settings_editor_root(state->nfs_editor));
+  auto *nfs_surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_container_add(GTK_CONTAINER(nfs_surface), nfs_settings_editor_root(state->nfs_editor));
+  gtk_container_add(GTK_CONTAINER(nfs_page), nfs_surface);
   auto *nfs_tab = create_tab_label("NFS", widget_id(state, "nfs_tab").c_str());
   gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), nfs_page, nfs_tab);
   gtk_widget_show_all(nfs_page);
