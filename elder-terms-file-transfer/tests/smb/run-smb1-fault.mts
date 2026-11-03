@@ -63,7 +63,19 @@ try {
     '{{.State.Pid}}',
     name,
   ]).trim();
-  for (const mode of ['cancel', 'timeout', 'disconnect', 'worker-exit']) {
+  for (const mode of [
+    'cancel',
+    'timeout',
+    'disconnect',
+    'worker-exit',
+    'cancel-create',
+    'disconnect-create',
+    'cancel-write',
+    'cancel-commit',
+    'short-write',
+    'zero-write',
+    'invalid-name', 'connect-timeout',
+  ]) {
     const relay = spawn(
       'podman',
       ['exec', '-i', name, '/elder-node', resolve(directory, 'smb1-relay.mts')],
@@ -122,7 +134,7 @@ try {
       if (text.includes('ARMED')) driver.stdin.write('r');
       if (text.includes('HELD')) {
         injected = true;
-        if (mode === 'cancel' || mode === 'worker-exit')
+        if (mode.startsWith('cancel') || mode === 'worker-exit')
           driver.stdin.write('c');
       }
     });
@@ -132,7 +144,7 @@ try {
       assert.equal(status, 0, `${output}\n${relayOutput}`);
       assert.ok(
         injected,
-        'The server must process a real read before its response is withheld'
+        'The relay must inject the requested condition into a real server operation'
       );
       assert.match(output, /PASS SMB1 fault/);
       console.log(`${mode}: ${output.trim()}`);

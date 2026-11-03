@@ -9,7 +9,12 @@ const directory = fileURLToPath(new URL('.', import.meta.url));
 const root = resolve(directory, '../../..');
 const name = `elder-smb1-window-${process.pid}`;
 const password = randomBytes(24).toString('hex');
-const env = { ...process.env, ELDER_SMB_PASSWORD: password };
+const scenario = process.argv[2];
+const env = {
+  ...process.env,
+  ELDER_SMB_PASSWORD: password,
+  ELDER_SMB_PORT: scenario ? '1445' : '445',
+};
 const podman = (args: string[]): string =>
   execFileSync('podman', args, { env, encoding: 'utf8' });
 try {
@@ -33,6 +38,8 @@ const server = spawn(
     name,
     '--env',
     'ELDER_SMB_PASSWORD',
+    '--env',
+    'ELDER_SMB_PORT',
     '-v',
     `${root}:${root}:ro`,
     'localhost/elder-plan18-samba',
@@ -84,9 +91,9 @@ try {
       process.execPath,
       resolve(root, 'node_modules/vitest/vitest.mjs'),
       'run',
-      'tests/smb-window.test.ts',
+      scenario ? 'tests/smb1-lifecycle.test.ts' : 'tests/smb-window.test.ts',
       '-t',
-      'opens SMB 1',
+      scenario ? `closes SMB1 while ${scenario}` : 'opens SMB 1',
     ],
     {
       cwd: resolve(directory, '../..'),
@@ -106,14 +113,16 @@ try {
   );
   const [status] = await once(child, 'exit');
   assert.equal(status, 0, 'SMB1 window test failed');
-  assert.equal(
-    podman(['exec', name, 'cat', '/share/送信😀/日本語/内容.txt']),
-    'recursive SMB1 upload\n'
-  );
-  assert.equal(
-    podman(['exec', name, 'cat', '/share/kept.txt']),
-    'replacement upload\n'
-  );
+  if (!scenario)
+    assert.equal(
+      podman(['exec', name, 'cat', '/share/送信😀/日本語/内容.txt']),
+      'recursive SMB1 upload\n'
+    );
+  if (!scenario)
+    assert.equal(
+      podman(['exec', name, 'cat', '/share/kept.txt']),
+      'replacement upload\n'
+    );
 } finally {
   podman(['rm', '-f', name]);
 }

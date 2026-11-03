@@ -232,3 +232,70 @@
                      smb_message_destroy(msg);
  
                      if (!files)
+--- a/src/smb_share.c
++++ b/src/smb_share.c
+@@ -203,8 +203,13 @@
+     // Let's skip smb parameters and DCE/RPC stuff until we are at the begginning of
+     // NetShareCtrl
+ 
++    if (msg->payload_size < 72)
++        return -1;
++
+     p_share_count = (uint32_t *)(msg->packet->payload + 60);
+     share_count = *p_share_count;
++    if (share_count > (msg->payload_size - 72) / 12)
++        return -1;
+     data        = msg->packet->payload + 72 + share_count * 12;
+     eod         = msg->packet->payload + msg->payload_size;
+ 
+@@ -216,7 +221,7 @@
+     {
+         uint32_t name_len, com_len;
+ 
+-        if (data + sizeof(uint32_t) > eod)
++        if ((size_t)(eod - data) < 3 * sizeof(uint32_t))
+         {
+             BDSM_dbg("[smb_share_parse_enum]Malformed message\n");
+             break;
+@@ -225,23 +230,38 @@
+         name_len = *((uint32_t *)data);   // Read 'Max Count', make it a multiple of 2
+         data    += 3 * sizeof(uint32_t);  // Move pointer to beginning of Name.
+ 
+-        if (data +  sizeof(uint32_t) + name_len * 2 + sizeof(uint32_t) > eod)
++        if (name_len == 0 || name_len > (size_t)(eod - data) / 2)
+         {
+             BDSM_dbg("[smb_share_parse_enum]Malformed message\n");
+             break;
+         }
+ 
+-        smb_from_utf16((const char *)data, name_len * 2, (*list) + i);
++        if (smb_from_utf16((const char *)data, name_len * 2, (*list) + i) == 0)
++            break;
+ 
+         if (name_len % 2) name_len += 1;  // Align next move
++        if (name_len > (size_t)(eod - data) / 2)
++            break;
+         data    += name_len * 2;          // Move the pointer to Comment 'Max count'
++        if ((size_t)(eod - data) < 3 * sizeof(uint32_t))
++            break;
+ 
+         com_len  = *((uint32_t *)data);
+         data    += 3 * sizeof(uint32_t);  // Move pointer to beginning of Comment.
+-        if (com_len % 2) com_len += 1;    // Align next move
++        if (com_len > (size_t)(eod - data) / 2)
++            break;
++        if (com_len % 2) com_len += 1;    // Align next move
++        if (com_len > (size_t)(eod - data) / 2)
++            break;
+         data    += com_len * 2;           // Move the pointer to next item
+     }
+ 
++    if (i != share_count)
++    {
++        smb_share_list_destroy(*list);
++        *list = NULL;
++        return -1;
++    }
+     return i;
+ }
+ 

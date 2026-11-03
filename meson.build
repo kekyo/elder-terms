@@ -193,16 +193,16 @@ libdsm_build_target = custom_target('libdsm-build',
   output: 'libdsm-build.stamp', command: libdsm_prepare_args,
   build_by_default: true, build_always_stale: true)
 libdsm_sdk = meson.project_build_root() / 'libdsm/sdk'
-libdsm_dep = declare_dependency(
-  compile_args: ['-isystem', libdsm_sdk / 'include'],
-  dependencies: meson.get_compiler('cpp').find_library('dsm',
-    dirs: libdsm_sdk / 'lib', static: false),
-  sources: libdsm_build_target)
-custom_target('libdsm-private-runtime',
+libdsm_runtime_target = custom_target('libdsm-private-runtime',
   output: 'libdsm.so.3',
   command: [find_program('cp'), libdsm_sdk / 'lib/libdsm.so.3', '@OUTPUT@'],
   depends: libdsm_build_target, build_by_default: true,
   install: true, install_dir: elder_terms_private_install_dir)
+libdsm_dep = declare_dependency(
+  compile_args: ['-isystem', libdsm_sdk / 'include'],
+  dependencies: meson.get_compiler('cpp').find_library('dsm',
+    dirs: libdsm_sdk / 'lib', static: false),
+  sources: [libdsm_build_target, libdsm_runtime_target])
 custom_target('libdsm-source-bundle',
   output: 'libdsm-source.tar.gz',
   command: [find_program('cp'), libdsm_sdk / 'libdsm-source.tar.gz', '@OUTPUT@'],

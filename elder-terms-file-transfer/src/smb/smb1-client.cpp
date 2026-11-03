@@ -332,7 +332,13 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb1_server_async(
       }, [](GObject *object, GAsyncResult *result, GError **error) {
         return g_resolver_lookup_by_name_finish(G_RESOLVER(object), result, error);
       }, pending.get());
-  auto *addresses = co_await lookup;
+  GList *addresses = nullptr;
+  try { addresses = co_await lookup; }
+  catch (const cardio::canceled_exception &) {
+    if (!cancellation.is_cancellation_requested() && deadline.get().is_cancellation_requested())
+      throw RemoteFileError("SMB1 connection timed out.", true);
+    throw;
+  }
   std::string address;
   for (auto *entry = addresses; entry; entry = entry->next) {
     if (g_inet_address_get_family(G_INET_ADDRESS(entry->data)) != G_SOCKET_FAMILY_IPV4) continue;
@@ -358,6 +364,10 @@ cardio::promise<std::shared_ptr<RemoteFileClient>> open_smb1_server_async(
   payload.text(options.connection.domain); payload.text(options.connection.username); payload.text(options.password);
   std::exception_ptr failure;
   try { (void)co_await request(session, Command::connect, std::move(payload), pending.get()); }
+  catch (const cardio::canceled_exception &) {
+    failure = !cancellation.is_cancellation_requested() && deadline.get().is_cancellation_requested() ?
+        std::make_exception_ptr(RemoteFileError("SMB1 connection timed out.", true)) : std::current_exception();
+  }
   catch (...) { failure = std::current_exception(); }
   if (failure) {
     session->stop();

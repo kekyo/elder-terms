@@ -15,7 +15,7 @@ netbios name = ELDERTEST
 server min protocol = NT1
 server max protocol = NT1
 server signing = disabled
-map to guest = never
+map to guest = Bad User
 load printers = no
 disable spoolss = yes
 log level = 3
@@ -47,4 +47,9 @@ fi
 if [ "${ELDER_SMB_DENY_ENUMERATION:-0}" = 1 ]; then
   printf '\n[IPC$]\npath = /tmp\nvalid users = root\n' >>/etc/samba/smb.conf
 fi
+count=${ELDER_SMB_SHARE_COUNT:-0}
+while [ "$count" -gt 0 ]; do
+  printf '\n[bulk-%s]\npath = /empty\nread only = yes\nvalid users = elder\n' "$count" >>/etc/samba/smb.conf
+  count=$((count - 1))
+done
 exec smbd --foreground --no-process-group --debug-stdout

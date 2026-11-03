@@ -44,6 +44,8 @@ const server = spawn(
     'ELDER_SMB_PASSWORD',
     '--env',
     'ELDER_SMB_DENY_ENUMERATION',
+    '--env',
+    'ELDER_SMB_SHARE_COUNT',
     '-v',
     `${root}:${root}:ro`,
     image,
