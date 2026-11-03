@@ -85,6 +85,9 @@ test('smb1-client', find_program('node'),
 test('smb1-fault', find_program('node'),
   args: [files('tests/smb/run-smb1-fault.mts'), smb1_client_test],
   depends: smb1_worker, timeout: 180)
+test('smb1-known-share', find_program('node'),
+  args: [files('tests/smb/run-smb1-library.mts'), smb1_client_test, '--client'],
+  env: ['ELDER_SMB_DENY_ENUMERATION=1'], depends: smb1_worker, timeout: 180)
 smb_client_test = executable('smb-client-test',
   ['tests/smb/smb-client-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb1-client.cpp', 'src/smb/smb-share-list.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])

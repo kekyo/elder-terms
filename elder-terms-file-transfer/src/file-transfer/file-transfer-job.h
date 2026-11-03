@@ -107,6 +107,14 @@ std::shared_ptr<FileTransferQueue> create_file_transfer_queue(std::string connec
 /** @param queue Idle, disconnected queue. @param client New service. @param protocol Display name. */
 void attach_file_transfer_queue(const std::shared_ptr<FileTransferQueue> &queue,
     std::shared_ptr<RemoteFileClient> client, std::string protocol);
+
+/**
+ * Updates the negotiated protocol label for subsequently submitted jobs.
+ * @param queue Existing connection queue; its jobs and lifetime are preserved.
+ * @param protocol Actual protocol reported by the current connection.
+ */
+void set_file_transfer_queue_protocol(const std::shared_ptr<FileTransferQueue> &queue,
+    std::string protocol);
 /** @param queue Available service queue. @param request Captured copy request. @returns New waiting job. */
 std::shared_ptr<FileTransferJob> enqueue_file_transfer_job(const std::shared_ptr<FileTransferQueue> &queue,
     const FileTransferRequest &request);

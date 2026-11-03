@@ -8,60 +8,132 @@ import { fileURLToPath } from 'node:url';
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const root = resolve(directory, '../../..');
 const name = `elder-smb1-fault-${process.pid}`;
-const env = { ...process.env, ELDER_SMB_PASSWORD: randomBytes(24).toString('hex') };
-const podman = (args: string[]): string => execFileSync('podman', args, { env, encoding: 'utf8' });
-const server = spawn('podman', ['run', '--rm', '--name', name, '--env', 'ELDER_SMB_PASSWORD',
-  '--env', 'ELDER_SMB_PORT=1445', '-v', `${root}:${root}:ro`, '-v', `${process.execPath}:/elder-node:ro`,
-  'localhost/elder-plan18-samba', 'sh', resolve(directory, 'samba1-entry.sh')],
-  { env, stdio: ['ignore', 'pipe', 'pipe'] });
+const env = {
+  ...process.env,
+  ELDER_SMB_PASSWORD: randomBytes(24).toString('hex'),
+};
+const podman = (args: string[]): string =>
+  execFileSync('podman', args, { env, encoding: 'utf8' });
+const server = spawn(
+  'podman',
+  [
+    'run',
+    '--rm',
+    '--name',
+    name,
+    '--env',
+    'ELDER_SMB_PASSWORD',
+    '--env',
+    'ELDER_SMB_PORT=1445',
+    '-v',
+    `${root}:${root}:ro`,
+    '-v',
+    `${process.execPath}:/elder-node:ro`,
+    'localhost/elder-plan18-samba',
+    'sh',
+    resolve(directory, 'samba1-entry.sh'),
+  ],
+  { env, stdio: ['ignore', 'pipe', 'pipe'] }
+);
 try {
   await new Promise<void>((ready, reject) => {
     let output = '';
-    const timeout = setTimeout(() => reject(new Error(`Samba startup timeout: ${output}`)), 30000);
+    const timeout = setTimeout(
+      () => reject(new Error(`Samba startup timeout: ${output}`)),
+      30000
+    );
     const collect = (data: Buffer) => {
       output += data;
-      if (output.includes('waiting for connections')) { clearTimeout(timeout); ready(); }
+      if (output.includes('waiting for connections')) {
+        clearTimeout(timeout);
+        ready();
+      }
     };
-    server.stdout.on('data', collect); server.stderr.on('data', collect);
+    server.stdout.on('data', collect);
+    server.stderr.on('data', collect);
     server.once('error', reject);
-    server.once('exit', (code) => { clearTimeout(timeout); reject(new Error(`Samba exited ${code}: ${output}`)); });
+    server.once('exit', (code) => {
+      clearTimeout(timeout);
+      reject(new Error(`Samba exited ${code}: ${output}`));
+    });
   });
-  const namespacePid = podman(['inspect', '--format', '{{.State.Pid}}', name]).trim();
+  const namespacePid = podman([
+    'inspect',
+    '--format',
+    '{{.State.Pid}}',
+    name,
+  ]).trim();
   for (const mode of ['cancel', 'timeout', 'disconnect', 'worker-exit']) {
-    const relay = spawn('podman', ['exec', '-i', name, '/elder-node', resolve(directory, 'smb1-relay.mts')],
-      { env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const relay = spawn(
+      'podman',
+      ['exec', '-i', name, '/elder-node', resolve(directory, 'smb1-relay.mts')],
+      { env, stdio: ['pipe', 'pipe', 'pipe'] }
+    );
     let relayOutput = '';
     await new Promise<void>((ready, reject) => {
-      const timer = setTimeout(() => reject(new Error(`Relay startup timeout: ${relayOutput}`)), 30000);
+      const timer = setTimeout(
+        () => reject(new Error(`Relay startup timeout: ${relayOutput}`)),
+        30000
+      );
       relay.stdout.on('data', (data: Buffer) => {
         relayOutput += data;
-        if (relayOutput.includes('READY relay')) { clearTimeout(timer); ready(); }
+        if (relayOutput.includes('READY relay')) {
+          clearTimeout(timer);
+          ready();
+        }
       });
-      relay.stderr.on('data', (data: Buffer) => { relayOutput += data; });
+      relay.stderr.on('data', (data: Buffer) => {
+        relayOutput += data;
+      });
       relay.once('error', reject);
-      relay.once('exit', (code) => { clearTimeout(timer); reject(new Error(`Relay exited ${code}: ${relayOutput}`)); });
+      relay.once('exit', (code) => {
+        clearTimeout(timer);
+        reject(new Error(`Relay exited ${code}: ${relayOutput}`));
+      });
     });
-    const driver = spawn('podman', ['unshare', 'nsenter', '-t', namespacePid, '-n',
-      resolve(process.argv[2]), mode], { env: { ...env, LC_ALL: 'C' }, stdio: ['pipe', 'pipe', 'pipe'] });
-    let output = '', armed = false, injected = false;
+    const driver = spawn(
+      'podman',
+      [
+        'unshare',
+        'nsenter',
+        '-t',
+        namespacePid,
+        '-n',
+        resolve(process.argv[2]),
+        mode,
+      ],
+      { env: { ...env, LC_ALL: 'C' }, stdio: ['pipe', 'pipe', 'pipe'] }
+    );
+    let output = '',
+      armed = false,
+      injected = false;
     driver.stdout.on('data', (data: Buffer) => {
       output += data;
-      if (!armed && output.includes('READY fault')) { armed = true; relay.stdin.write(mode); }
+      if (!armed && output.includes('READY fault')) {
+        armed = true;
+        relay.stdin.write(mode);
+      }
     });
-    driver.stderr.on('data', (data: Buffer) => { output += data; });
+    driver.stderr.on('data', (data: Buffer) => {
+      output += data;
+    });
     relay.stdout.on('data', (data: Buffer) => {
       const text = data.toString();
       if (text.includes('ARMED')) driver.stdin.write('r');
       if (text.includes('HELD')) {
         injected = true;
-        if (mode === 'cancel' || mode === 'worker-exit') driver.stdin.write('c');
+        if (mode === 'cancel' || mode === 'worker-exit')
+          driver.stdin.write('c');
       }
     });
     const watchdog = setTimeout(() => driver.kill('SIGKILL'), 30000);
     try {
       const [status] = await once(driver, 'exit');
       assert.equal(status, 0, `${output}\n${relayOutput}`);
-      assert.ok(injected, 'The server must process a real read before its response is withheld');
+      assert.ok(
+        injected,
+        'The server must process a real read before its response is withheld'
+      );
       assert.match(output, /PASS SMB1 fault/);
       console.log(`${mode}: ${output.trim()}`);
     } finally {
@@ -70,4 +142,6 @@ try {
       await once(relay, 'exit');
     }
   }
-} finally { podman(['rm', '-f', name]); }
+} finally {
+  podman(['rm', '-f', name]);
+}

@@ -13,7 +13,9 @@ const listener = createServer((client) => {
   const upstream = createConnection({ host: '127.0.0.1', port: 1445 });
   for (const socket of [client, upstream]) {
     sockets.add(socket);
-    socket.on('error', () => { /* Fault cases deliberately break connections. */ });
+    socket.on('error', () => {
+      /* Fault cases deliberately break connections. */
+    });
     socket.on('close', () => sockets.delete(socket));
   }
   client.on('close', () => upstream.destroy());
@@ -22,8 +24,11 @@ const listener = createServer((client) => {
   let held = false;
   let reported = false;
   client.on('data', (bytes) => {
-    pending = Buffer.concat([pending, bytes]);
-    while (pending.length >= 4 && pending.length >= 4 + pending.readUInt32BE(0)) {
+    pending = Buffer.concat([pending, Buffer.from(bytes)]);
+    while (
+      pending.length >= 4 &&
+      pending.length >= 4 + pending.readUInt32BE(0)
+    ) {
       const size = 4 + pending.readUInt32BE(0);
       const packet = pending.subarray(0, size);
       pending = pending.subarray(size);
@@ -35,7 +40,10 @@ const listener = createServer((client) => {
     }
   });
   upstream.on('data', (bytes) => {
-    if (!held) { client.write(bytes); return; }
+    if (!held) {
+      client.write(bytes);
+      return;
+    }
     if (reported) return;
     reported = true;
     console.log('HELD');

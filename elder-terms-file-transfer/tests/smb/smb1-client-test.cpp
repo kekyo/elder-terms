@@ -68,10 +68,12 @@ static cardio::promise<void> exercise_fault(const std::string &mode) {
   std::cout << "PASS SMB1 fault " << mode << " reaped/reconnected" << std::endl;
 }
 
-static cardio::promise<void> exercise() {
+static cardio::promise<void> exercise(const std::string &transport) {
   SmbClientOpenOptions options;
   options.connection.address = "127.0.0.1";
   options.connection.domain = "WORKGROUP";
+  options.connection.port = transport == "NBT" ? 139 : 445;
+  options.connection.netbios_name = "ELDERTEST";
   options.connection.username = "elder";
   options.connection.require_signing = false;
   options.password = std::getenv("ELDER_SMB_PASSWORD");
@@ -88,10 +90,17 @@ static cardio::promise<void> exercise() {
   require(children().empty(), "Failed authentication must reap its worker before returning");
   auto client = co_await open_smb_server_async(options, {});
   require(actual_version == "SMB 1", "SMB1 must report its actual protocol");
-  auto shares = co_await client->load_directory_async("/", {});
-  require(std::any_of(shares.entries.begin(), shares.entries.end(), [](const auto &item) {
-    return item.name == "日本語 space" && item.role == RemoteFileRole::smb_share;
-  }), "The browser must expose Unicode shares");
+  if (std::getenv("ELDER_SMB_DENY_ENUMERATION")) {
+    bool denied = false;
+    try { (void)co_await client->load_directory_async("/", {}); }
+    catch (const RemoteFileError &error) { denied = !error.connection_lost; }
+    require(denied, "Share enumeration refusal must be an explicit recoverable error");
+  } else {
+    auto shares = co_await client->load_directory_async("/", {});
+    require(std::any_of(shares.entries.begin(), shares.entries.end(), [](const auto &item) {
+      return item.name == "日本語 space" && item.role == RemoteFileRole::smb_share;
+    }), "The browser must expose Unicode shares");
+  }
   const auto names = co_await client->load_directory_async("/names", {});
   require(names.entries.size() == 3, "Listing must retain every Unicode name");
   require((co_await client->load_directory_async("/empty", {})).entries.empty(), "Empty share must remain browsable");
@@ -156,7 +165,7 @@ int main(int argc, char **argv) {
   const auto run = [&]() -> cardio::promise<void> {
     try {
       if (argc == 2) co_await exercise_fault(argv[1]);
-      else co_await exercise();
+      else co_await exercise(argc > 2 ? argv[2] : "TCP");
     }
     catch (const std::exception &error) { std::cerr << error.what() << std::endl; status = 1; }
     group.shutdown();

@@ -44,4 +44,7 @@ EOF
 if [ -n "${ELDER_SMB_PORT:-}" ]; then
   printf '\n[global]\nsmb ports = %s\n' "$ELDER_SMB_PORT" >>/etc/samba/smb.conf
 fi
+if [ "${ELDER_SMB_DENY_ENUMERATION:-0}" = 1 ]; then
+  printf '\n[IPC$]\npath = /tmp\nvalid users = root\n' >>/etc/samba/smb.conf
+fi
 exec smbd --foreground --no-process-group --debug-stdout
