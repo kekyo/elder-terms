@@ -300,7 +300,7 @@ SSH proxyを設定していても、探索はこのマシンから行います�
 
 ![SSHとSFTPの接続設定](./images/ssh-sftp-settings.png)
 
-SSH、SFTP、TELNET、HTTP/HTTPS、WebDAV、パッシブFTP／FTPS、SMB、NFSはSSH踏み台を経由して接続できます。
+SSH、SFTP、TELNET、HTTP/HTTPS、WebDAV、パッシブFTP／FTPS、SMB2/3、NFSはSSH踏み台を経由して接続できます。
 独立した「SSH proxy」タブに踏み台を設定し、最終接続先は各プロトコルのタブで指定します。
 設定の継承、認証、対応範囲は[SSH proxyの使用](./docs/ja/ssh-proxy.md)を参照して下さい。
 
@@ -420,7 +420,7 @@ HTTPS証明書の検証に失敗した場合は、設定に応じて接続を拒
 
 ## SMBの使用
 
-ランチャーで接続種別を「SMB」にし、SMBタブへサーバーのアドレスを入力して保存します。既定の接続先はTCPポート445です。
+ランチャーで接続種別を「SMB」にし、SMBタブへサーバーのアドレスを入力して保存します。既定の接続先はTCPポート445で、SMB2/3を自動選択します。バージョン欄でSMB1・SMB2・SMB3を指定することもできます。SMB1はIPv4の直接接続に対応します。
 ウインドウを開くとユーザー名とパスワードを順に尋ねます。パスワードは保存しません。
 
 接続後は、リモート側の`/`に共有一覧を表示します。共有を開くか、`/共有名/フォルダー`の形式でパスを入力して探索できます。
@@ -1347,7 +1347,7 @@ sudo apt install build-essential git meson ninja-build pkg-config gettext imagem
   libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev libxfixes-dev \
   libxkbcommon-dev liburing-dev libudev-dev libsystemd-dev libssh-dev libnfs-dev libcurl4-openssl-dev \
   libcairo2-dev libpango1.0-dev libfontconfig1-dev libepoxy-dev libibus-1.0-dev \
-  libwayland-dev libgl-dev libegl-dev libssl-dev libxml2-dev ca-certificates xdg-utils
+  libwayland-dev libgl-dev libegl-dev libssl-dev libxml2-dev libtasn1-6-dev libtasn1-bin doxygen patch ca-certificates xdg-utils
 ```
 
 このほか、Node.js 22.18以降が必要です。[TypeScriptを直接実行できる版](https://nodejs.org/docs/latest-v22.x/api/typescript.html)を使用します。ディストリビューションのパッケージを使う場合は、インストール後にバージョンを確認してください。
