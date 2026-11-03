@@ -2,7 +2,7 @@
 
 作成日：2026年11月2日
 
-状態：計画作成。実装は未着手です。libdsmの実行方法と、既存SMB設定との組合せを先に検証します。
+状態：実装中。段階1の実通信ドライバーと補助プロセスを実装し、設定と画面への統合を進めます。
 
 ## 目的と範囲
 
@@ -16,10 +16,10 @@ SMB設定にバージョン指定を追加し、SMB v1をlibdsmで利用でき�
 | --- | --- |
 | 設定 | [smb-settings.h](../../../shared/include/elder-terms/settings/smb-settings.h)にアドレス、ポート、ドメイン、ユーザー名、署名・暗号化の要求、期限がある。プロトコルの版はない |
 | 設定画面 | [smb-settings-editor.cpp](../../../shared/src/settings-widget/smb-settings-editor.cpp)がSMBの項目を構成する |
-| SMB実装 | [smb-client.cpp](../../../elder-terms-terminal/src/smb/smb-client.cpp)がlibsmb2の非同期APIを使う。サーバーの共有列挙と共有内操作を分けている |
-| 起動と再接続 | [smb-application.cpp](../../../elder-terms-terminal/src/smb/smb-application.cpp)が認証入力とクライアントの寿命を管理する |
-| SSH proxy | [smb-ssh-proxy.cpp](../../../elder-terms-terminal/src/smb/smb-ssh-proxy.cpp)に既存SMB向けの経路がある |
-| 試験 | [tests/smb](../../../elder-terms-terminal/tests/smb/)にSamba、Windows、直接接続、SSH proxyの試験がある |
+| SMB実装 | [smb-client.cpp](../../../elder-terms-file-transfer/src/smb/smb-client.cpp)がlibsmb2の非同期APIを使う。サーバーの共有列挙と共有内操作を分けている |
+| 起動と再接続 | [smb-application.cpp](../../../elder-terms-file-transfer/src/smb/smb-application.cpp)が認証入力とクライアントの寿命を管理する |
+| SSH proxy | [smb-ssh-proxy.cpp](../../../elder-terms-file-transfer/src/smb/smb-ssh-proxy.cpp)に既存SMB向けの経路がある |
+| 試験 | [tests/smb](../../../elder-terms-file-transfer/tests/smb/)にSamba、Windows、直接接続、SSH proxyの試験がある |
 
 libdsmは`0f3edc6df6ab5950f2550d453035351440f71e31`を調査しました。[README](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/README.md)ではSMB v1の共有列挙、読み書き、削除、名前変更、ディレクトリ作成を挙げています。[公開ファイルAPI](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/include/bdsm/smb_file.h)にも`read`・`write`の同期呼び出しがあります。
 
@@ -88,7 +88,7 @@ SMB v1用の実装も`RemoteFileClient`を満たすようにし、画面へlibds
 
 ## 段階1：SMB v1の実通信と中止を観測する
 
-libdsmを固定して外部コードを変更せずにビルドします。SMB v1だけを許すSamba環境で、補助プロセスを介した認証、共有一覧、1ファイルの読み書き、通信停止中のキャンセルを実行します。
+libdsmを固定し、承認された不具合修正だけをビルド用コピーへ適用します。サブモジュールは上流コミットのまま維持します。SMB v1だけを許すSamba環境で、補助プロセスを介した認証、共有一覧、1ファイルの読み書き、通信停止中のキャンセルを実行します。
 
 親が非UTF-8ロケールの場合も補助プロセスの日本語名を正しく扱えること、変換不能な名前を誤操作しないこと、OEM専用サーバーの対応可否を確認します。公開APIから得られる名前の範囲と、制御できる文字列方式を記録します。
 
@@ -118,4 +118,26 @@ libsmb2のSMB v2/v3、既存の署名・暗号化設定、SambaとWindowsの直�
 2. libdsmで共有の列挙、既知共有への移動、双方向転送、基本的なファイル操作を実行できる。
 3. UIを止めずに中止・切断・再接続でき、補助プロセスを確実に回収する。
 4. 対応しない接続条件と文字列の範囲を明示し、指定した要求や経路を無視して接続しない。ロケールの変換と通信上のUnicode/OEMを混同しない。
-5. SMB v2/v3の回帰試験と全体テストが通り、外部ソースを変更していない。
+5. SMB v2/v3の回帰試験と全体テストが通る。外部サブモジュールを変更せず、libdsmへの修正は承認された不具合修正パッチとして管理する。
+
+## 段階1の結果と計画の変更
+
+対象ディストリビューションの公式パッケージ検索ではlibdsmの供給を確認できませんでした。[Debianの検索](https://packages.debian.org/search?keywords=libdsm&searchon=names&suite=all&section=all)と[Ubuntuの検索](https://packages.ubuntu.com/search?keywords=libdsm&searchon=names&suite=all&section=all)を調べ、固定コミットのベンダー参照を採用しました。
+
+上流版では、絵文字を含むディレクトリの一覧が途中で終わり、NT_STATUS=0となる不具合を再現しました。[変換処理](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/src/smb_utils.c)のUCS-2LEと、[一覧処理](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/src/smb_trans2.c)のエラー伝播が原因です。利用者から「libdsmの不具合修正を例外として許可する」と回答を得たため、UTF-16LEへの修正と部分一覧の破棄をパッチとして管理します。現行ツールチェーンのビルド警告もこのパッチで修正します。任意ポートやOEM対応などの機能追加には、この例外を適用しません。
+
+| 確認項目 | 結果・対応範囲 |
+| --- | --- |
+| IPv4・TCP 445 | NT1限定のSambaで認証、一覧、読み書き、名前変更、削除が成功 |
+| NetBIOS 139 | 公開APIのNBT指定とサーバー名ELDERTESTで同じ操作が成功。設定にNetBIOS名を追加する |
+| 任意ポート・IPv6・SSH proxy | [接続API](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/include/bdsm/smb_session.h)に対応する指定がないため、v1では入力エラーにする |
+| 署名・暗号化の要求 | 採用版の公開APIに要求を満たす指定がないため、v1では入力エラーにする |
+| 日本語・補助平面の文字 | 修正後は日本語共有、絵文字ファイルと前後の通常ファイルを欠落なく列挙。転送内容も一致 |
+| 親の非UTF-8ロケール | LC_ALL=Cの親から接続し、子だけC.UTF-8を使用。親のロケールを維持 |
+| OEM専用サーバー | [送信処理](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/src/smb_message.c)はUnicodeを指定し、公開APIにOEM切替がないため対象外 |
+| 通信中の中止・期限・切断・子異常終了 | 実通信の読み取り応答を中継で止めて確認。親はCardioで待機し、子を終了・回収して再接続可能 |
+| 排他的作成と置換 | [ファイルAPI](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/include/bdsm/smb_file.h)に排他的ファイル作成指定がない。専用ディレクトリの新規作成で一時領域を確保する |
+
+送信先を置換する際は、既存ファイルを一時領域へ退避してから新しいファイルを移動します。原子的な置換ではなく、置換中に送信先が存在しない期間があります。失敗時は退避ファイルの復元を試み、結果が不明なら一時領域のパスを後始末エラーとして残します。通信の中止を、サーバー側変更の取消しとは扱いません。
+
+再現手順は`make -C elder-terms-file-transfer/tests/smb -f Makefile.smb1 test test-client`です。Sambaの445/139番ポートは使い捨てコンテナー内で開き、ホストのポート設定を変更しません。
