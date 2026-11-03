@@ -31,6 +31,20 @@ static cardio::promise<void> run_async(
     const auto root = co_await client->load_directory_async(base, {});
     const auto repeated = co_await client->load_directory_async(base, {});
     expect(root.entries.size() == 2 && repeated.entries.size() == 2, "Opening and revisiting must reuse the initial page");
+    expect(client->display_path(root.canonical_path) == "/pub/",
+        "HTTP browser paths must omit the scheme and authority without hiding the base directory");
+    for (const std::string path : {"/pub/tree/", "/pub/tree", "/pub/a%3Fb/?page=1", "/pub/a%3Fb/?page=2", "/pub/%82%A0.txt"}) {
+      const auto identity = base + path.substr(5);
+      expect(client->display_path(identity) == path &&
+          co_await client->resolve_input_path_async(path, {}) == identity,
+          "HTTP paths must preserve trailing slashes, encoded bytes and query variants");
+    }
+    for (const std::string input : {"/outside/", "https://other.invalid/pub/", "//other.invalid/pub/"}) {
+      bool outside = false;
+      try { (void)co_await client->resolve_input_path_async(input, {}); }
+      catch (const std::invalid_argument &) { outside = true; }
+      expect(outside, "Typed HTTP paths must remain inside the configured connection scope");
+    }
     expect(root.entries.front().type == RemoteFileType::unresolved, "Listing must not resolve child resources");
     const auto info = co_await client->lstat_async(base + "tree/", {});
     expect(info && info->type == RemoteFileType::unresolved, "Attribute display must not fetch the child");

@@ -74,6 +74,8 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
         response.end(
           '<a href="file.bin">file</a><a href="../">parent</a><a href="#self">self</a>'
         );
+      else if (request.url?.startsWith('/pub/query%3Fdir/?'))
+        response.end('<p>Query page</p>');
       else if (request.url === '/pub/tree/file.bin') {
         response.setHeader('Content-Type', 'application/octet-stream');
         response.end('download bytes');
@@ -276,11 +278,12 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
         await app.getById('file_transfer_remote_path_entry'),
         'entry'
       );
+      expect(await path.text()).toBe('/pub/');
       const bounds = (await path.capture()).bounds;
       await app.input.moveMouseTo(bounds.x + 20, bounds.y + bounds.height / 2);
       await app.input.setMouseButton('left', true);
       await app.input.setMouseButton('left', false);
-      await path.setText(base + 'tree/');
+      await path.setText('/pub/tree/');
       await app.input.pressKey('Return');
       await ready();
       await rowFor('file.bin');
@@ -289,7 +292,7 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
         'button'
       ).click();
       await waitForResult(async () => {
-        expect(await path.text()).toBe(base);
+        expect(await path.text()).toBe('/pub/');
         expect(await tree.getRowCount()).toBe(5);
       });
       expect(
@@ -301,9 +304,31 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
         'menuItem'
       ).click();
       await waitForResult(async () => {
-        expect(await path.text()).toBe(base + 'document.html');
+        expect(await path.text()).toBe('/pub/document.html');
         expect(await tree.getRowCount()).toBe(0);
       });
+      for (const query of ['page=1', 'page=2']) {
+        const entered = `/pub/query%3Fdir/?${query}`;
+        await app.input.moveMouseTo(
+          bounds.x + 20,
+          bounds.y + bounds.height / 2
+        );
+        await app.input.setMouseButton('left', true);
+        await app.input.setMouseButton('left', false);
+        await path.setText(entered);
+        await app.input.pressKey('Return');
+        await waitForResult(async () => {
+          expect(
+            requests.filter((request) => request === `GET ${entered}`)
+          ).toHaveLength(1);
+          expect(await path.text()).toBe(entered);
+          expect((await tree.info()).states).toContain('sensitive');
+          expect(await tree.getRowCount()).toBe(0);
+        });
+      }
+      await evidence.captureEvidence('http-plain-query-path', async () =>
+        app.capture()
+      );
       await expectElementKind(
         await app.getById('file_transfer_remote_up_button'),
         'button'
