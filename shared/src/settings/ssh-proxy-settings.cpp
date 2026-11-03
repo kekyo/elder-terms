@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include <elder-terms/settings/ssh-proxy-settings.h>
+#include "validation-issues.h"
 #include <elder-terms/settings/general-settings.h>
 #include <elder-terms/settings/ftp-settings.h>
 #include <elder-terms/settings/nfs-settings.h>
@@ -67,12 +68,13 @@ SshProxySettings ssh_proxy_settings(const SettingsStore &store) {
     if (entry.definition.key.section != "ssh_proxy" || entry.validation_error.empty()) continue;
     // An invalid enable flag must never silently choose the direct route.
     if (!result.enabled && entry.definition.key.name != "enabled") continue;
+    result.validation_issues.push_back({{entry.definition.key}, entry.validation_error});
     const auto source = setting_value_source(store, entry.definition.key);
     result.validation_errors.push_back("[ssh_proxy] " + entry.definition.key.name + " (" +
         (source == SettingValueSource::global ? "global" : "connection") + "): " + entry.validation_error);
   }
   if (result.enabled && result.endpoint.address.empty())
-    result.validation_errors.emplace_back("[ssh_proxy] address: SSH proxy server address is required");
+    add_validation_issue(result, {ssh_proxy_setting_key("address")}, "[ssh_proxy] address: SSH proxy server address is required");
   return result;
 }
 
@@ -82,11 +84,14 @@ SshProxySettings ssh_proxy_connection_settings(const SettingsStore &store) {
   auto result = ssh_proxy_settings(store);
   if (result.enabled && kind == ConnectionKind::ftp &&
       ftp_connection_settings(store).data_connection_mode == FtpDataConnectionMode::active)
-    result.validation_errors.emplace_back(_("SSH proxy requires passive FTP/FTPS; select Passive or disable SSH proxy"));
+    add_validation_issue(result, {ssh_proxy_setting_key("enabled"), ftp_data_connection_mode_setting_key()},
+        _("SSH proxy requires passive FTP/FTPS; select Passive or disable SSH proxy"));
   if (result.enabled && kind == ConnectionKind::nfs && nfs_connection_settings(store).require_reserved_port)
-    result.validation_errors.emplace_back(_("SSH proxy cannot require reserved NFS source ports; disable the reserved-port requirement or SSH proxy"));
+    add_validation_issue(result, {ssh_proxy_setting_key("enabled"), nfs_setting_key("require_reserved_port")},
+        _("SSH proxy cannot require reserved NFS source ports; disable the reserved-port requirement or SSH proxy"));
   if (result.enabled && kind == ConnectionKind::smb && smb_connection_settings(store).version == "1")
-    result.validation_errors.emplace_back(_("SSH proxy is unavailable with SMB 1; select SMB 2/3 or disable SSH proxy"));
+    add_validation_issue(result, {ssh_proxy_setting_key("enabled"), smb_setting_key("version")},
+        _("SSH proxy is unavailable with SMB 1; select SMB 2/3 or disable SSH proxy"));
   return result;
 }
 

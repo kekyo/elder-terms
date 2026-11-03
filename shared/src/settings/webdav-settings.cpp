@@ -154,6 +154,7 @@ WebdavConnectionSettings webdav_connection_settings(const SettingsStore &store) 
   result.idle_timeout_seconds = setting_integer_value_or_default(store, webdav_setting_key("idle_timeout_seconds"), 60);
   for (const auto &entry : store.entries) {
     if (entry.definition.key.section != "webdav" || entry.validation_error.empty()) continue;
+    result.validation_issues.push_back({{entry.definition.key}, entry.validation_error});
     const auto source = setting_value_source(store, entry.definition.key);
     result.validation_errors.push_back("[webdav] " + entry.definition.key.name + " (" +
         (source == SettingValueSource::global ? "global" : "connection") + "): " + entry.validation_error);

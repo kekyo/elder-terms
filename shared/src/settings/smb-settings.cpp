@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include <elder-terms/settings/smb-settings.h>
+#include "validation-issues.h"
 
 #include <algorithm>
 #include <utility>
@@ -129,26 +130,27 @@ SmbConnectionSettings smb_connection_settings(const SettingsStore &store) {
   result.idle_timeout_seconds = setting_integer_value_or_default(store, smb_setting_key("idle_timeout_seconds"), 60);
   for (const auto &entry : store.entries) {
     if (entry.definition.key.section != "smb" || entry.validation_error.empty()) continue;
+    result.validation_issues.push_back({{entry.definition.key}, entry.validation_error});
     const auto source = setting_value_source(store, entry.definition.key);
     result.validation_errors.push_back("[smb] " + entry.definition.key.name + " (" +
         (source == SettingValueSource::global ? "global" : "connection") + "): " + entry.validation_error);
   }
   if (general_connection_kind(store) == ConnectionKind::smb) {
-    if (result.address.empty()) result.validation_errors.emplace_back("SMB server address is required");
+    if (result.address.empty()) add_validation_issue(result, {smb_setting_key("address")}, "SMB server address is required");
   }
   if (result.version == "1") {
     if (result.port != 445 && result.port != 139)
-      result.validation_errors.emplace_back(_("[smb] port: SMB 1 supports only 445 and 139"));
+      add_validation_issue(result, {smb_setting_key("port"), smb_setting_key("version")}, _("[smb] port: SMB 1 supports only 445 and 139"));
     if (result.port == 139 && result.netbios_name.empty())
-      result.validation_errors.emplace_back(_("[smb] netbios_name: SMB 1 on port 139 requires the server NetBIOS name"));
+      add_validation_issue(result, {smb_setting_key("netbios_name")}, _("[smb] netbios_name: SMB 1 on port 139 requires the server NetBIOS name"));
     if (result.address.find(':') != std::string::npos)
-      result.validation_errors.emplace_back(_("[smb] address: SMB 1 requires IPv4"));
+      add_validation_issue(result, {smb_setting_key("address"), smb_setting_key("version")}, _("[smb] address: SMB 1 requires IPv4"));
     if (result.require_signing)
-      result.validation_errors.emplace_back(_("[smb] require_signing: SMB 1 cannot satisfy required signing"));
+      add_validation_issue(result, {smb_setting_key("require_signing"), smb_setting_key("version")}, _("[smb] require_signing: SMB 1 cannot satisfy required signing"));
     if (result.require_encryption)
-      result.validation_errors.emplace_back(_("[smb] require_encryption: SMB 1 cannot satisfy required encryption"));
+      add_validation_issue(result, {smb_setting_key("require_encryption"), smb_setting_key("version")}, _("[smb] require_encryption: SMB 1 cannot satisfy required encryption"));
   } else if (result.version == "2" && result.require_encryption)
-    result.validation_errors.emplace_back(_("[smb] require_encryption: SMB encryption requires SMB 3"));
+    add_validation_issue(result, {smb_setting_key("require_encryption"), smb_setting_key("version")}, _("[smb] require_encryption: SMB encryption requires SMB 3"));
   return result;
 }
 

@@ -625,7 +625,7 @@ std::string settings_validation_message(const std::string &reason) {
   if (reason == "must name a log file") {
     return _("Must name a log file");
   }
-  return _("Invalid value");
+  return _(reason.c_str());
 }
 
 } // namespace elder_terms

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <elder-terms/export.h>
+#include <elder-terms/settings/rule-validation.h>
 
 namespace elder_terms {
 
@@ -69,9 +70,11 @@ ELDER_TERMS_API bool macro_rule_id_is_valid(const std::string &id,
  *
  * @param rule Rule to validate.
  * @param reason Receives a human-readable reason when validation fails.
+ * @param location Optional destination for the editable location of a failure.
  * @returns True when the rule can be compiled and executed.
  */
 ELDER_TERMS_API bool macro_rule_is_valid(const MacroRule &rule,
-                                         std::string *reason);
+                                         std::string *reason,
+                                         RuleValidationLocation *location = nullptr);
 
 } // namespace elder_terms

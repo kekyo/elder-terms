@@ -28,6 +28,14 @@ struct SettingKey {
   std::string name;
 };
 
+/** Identifies the controls involved in an existing settings validation error. */
+struct SettingValidationIssue {
+  /** Settings that can be edited to resolve the error. */
+  std::vector<SettingKey> fields;
+  /** Explanation of the error. */
+  std::string message;
+};
+
 /**
  * Stores a supported scalar or ordered string-list setting value.
  *
