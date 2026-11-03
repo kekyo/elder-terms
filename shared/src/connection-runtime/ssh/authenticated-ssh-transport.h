@@ -14,7 +14,7 @@
 
 #include <elder-terms/settings.h>
 
-#include "../../terminal-session-callbacks.h"
+#include "../terminal-session-callbacks.h"
 
 namespace elder_terms {
 

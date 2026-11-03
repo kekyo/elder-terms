@@ -15,10 +15,10 @@
 
 #include <elder-terms/settings.h>
 
-#include "../inline-prompt.h"
+#include "../../../shared/src/connection-runtime/inline-prompt.h"
 #include "file-hash.h"
 #include "remote-file-client.h"
-#include "../terminal-sessions/ssh-session/ssh-user-prompt.h"
+#include "../../../shared/src/connection-runtime/ssh/ssh-user-prompt.h"
 
 namespace elder_terms {
 

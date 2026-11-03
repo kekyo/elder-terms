@@ -37,7 +37,7 @@
 #include <elder-terms/settings.h>
 #include <elder-terms/settings-widget.h>
 
-#include "launch-options.h"
+#include "../../shared/src/connection-runtime/launch-options.h"
 #include "gtk-initialization.h"
 #include "main-window.h"
 #include "file-transfer/file-hash.h"
@@ -55,7 +55,7 @@
 #include "terminal-log.h"
 #include "terminal-text-send.h"
 #include "terminal-transfer-runner.h"
-#include "terminal-sessions/ssh-session/authenticated-ssh-transport.h"
+#include "../../shared/src/connection-runtime/ssh/authenticated-ssh-transport.h"
 
 static constexpr char terminal_application_id[] =
     "net.kekyo.elder-terms-terminal";

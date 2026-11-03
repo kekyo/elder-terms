@@ -11,7 +11,7 @@
 
 #include "activity-indicator-id.h"
 #include "terminal-connection-phase.h"
-#include "terminal-sessions/ssh-session/ssh-user-prompt.h"
+#include "ssh/ssh-user-prompt.h"
 
 namespace elder_terms {
 

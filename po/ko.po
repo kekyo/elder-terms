@@ -1427,7 +1427,7 @@ msgstr "하이퍼링크 명령이 실패했습니다."
 
 #: elder-terms-terminal/src/main.cpp:339
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:225
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:756
 #, fuzzy
 msgid "SSH Host Key Changed"
 msgstr "SSH 호스트 키"
@@ -1450,7 +1450,7 @@ msgstr ""
 
 #: elder-terms-terminal/src/main.cpp:373
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:254
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:756
 msgid "SSH Host Key"
 msgstr "SSH 호스트 키"
 
@@ -1471,9 +1471,9 @@ msgstr ""
 #: elder-terms-terminal/src/main-window.ui:307
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:276
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:285
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:270
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:917
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:996
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:270
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:917
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:996
 msgid "SSH Authentication"
 msgstr "SSH 인증"
 
@@ -1662,7 +1662,7 @@ msgid "Enter the user name and password for %s."
 msgstr "%s의 사용자 이름과 비밀번호를 입력하세요."
 
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:421
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:266
 #: elder-terms-terminal/src/webdav/webdav-application.cpp:76
 msgid "User name must not be empty."
 msgstr "사용자 이름은 비워 둘 수 없습니다."
@@ -2087,35 +2087,35 @@ msgstr "BREAK 보내기 실패"
 msgid "serial: (unknown)"
 msgstr "일련번호: (알 수 없음)"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:82
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1175
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:82
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1175
 msgid "SSH session has no socket"
 msgstr "SSH 세션에 소켓이 없습니다."
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:263
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:263
 #, c-format
 msgid "User name for %s:"
 msgstr "%s의 사용자 이름:"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:279
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:279
 msgid "SSH user name was not provided"
 msgstr "SSH 사용자 이름이 입력되지 않았습니다."
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:544
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:544
 #, fuzzy
 msgid "Failed to start ssh-keygen"
 msgstr "%s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:545
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:545
 #, fuzzy, c-format
 msgid "Failed to start ssh-keygen: %s"
 msgstr "%s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:683
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:683
 msgid "unknown"
 msgstr "알 수 없음"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:711
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:711
 #, c-format
 msgid ""
 "The SSH host key type for %s:%u differs from the saved key.\n"
@@ -2125,7 +2125,7 @@ msgid ""
 "Fingerprint: %s"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:715
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:715
 #, c-format
 msgid ""
 "The SSH host key for %s:%u has changed.\n"
@@ -2135,26 +2135,26 @@ msgid ""
 "Fingerprint: %s"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:726
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:726
 msgid ""
 "Choose Reset and Connect only if this change is expected. ssh-keygen will "
 "preserve a backup of the saved per-user file.\n"
 "Equivalent command:"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:730
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:730
 msgid ""
 "The conflicting key is in a system-wide known_hosts file and cannot be reset "
 "automatically. Ask an administrator to verify the change and run:"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:734
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:734
 msgid ""
 "The conflicting known_hosts entry could not be located automatically. Verify "
 "the change and run the appropriate command before reconnecting:"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:743
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:743
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%u\n"
@@ -2165,153 +2165,153 @@ msgstr ""
 "키 유형: %s\n"
 "지문: %s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:749
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:749
 msgid "The known_hosts file does not exist and will be created."
 msgstr "Known_hosts 파일이 존재하지 않으며 생성됩니다."
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:752
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:752
 msgid "Accept and save this host key?"
 msgstr "이 호스트 키를 수락하고 저장하시겠습니까?"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:773
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:798
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:833
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:773
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:798
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:833
 #, fuzzy
 msgid "SSH host key was not reset"
 msgstr "SSH 호스트 키가 허용되지 않았습니다."
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:790
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:790
 #, fuzzy
 msgid "Failed to reset SSH host key"
 msgstr "SSH 호스트 키"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:791
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:791
 #, fuzzy, c-format
 msgid "Failed to reset SSH host key: %s"
 msgstr "SSH 호스트 키"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:795
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:843
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:795
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:843
 msgid "Failed to save SSH host key"
 msgstr "SSH 호스트 키"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:813
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:813
 msgid "Failed to check SSH host key"
 msgstr "SSH 호스트 키"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:840
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:840
 msgid "SSH host key was not accepted"
 msgstr "SSH 호스트 키가 허용되지 않았습니다."
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:872
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:872
 msgid "SSH Key Passphrase"
 msgstr "SSH 키 암호"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:874
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:874
 #, c-format
 msgid "Passphrase for %s (attempt %u of %u):"
 msgstr "%s에 대한 암호(%u의 %u 시도):"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:919
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:919
 #, c-format
 msgid "Password for %s (attempt %u of %u):"
 msgstr "%s의 비밀번호(%u의 %u 시도):"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:941
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:941
 msgid "SSH password authentication failed"
 msgstr "SSH 비밀번호 인증 실패"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:966
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:966
 msgid "SSH authentication response:"
 msgstr "SSH 인증 응답:"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1024
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1024
 msgid "SSH keyboard-interactive authentication failed"
 msgstr "SSH 키보드 대화형 인증 실패"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1043
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1043
 msgid "SSH authentication negotiation failed"
 msgstr "SSH 인증 협상 실패"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1048
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1048
 msgid "Failed to list SSH authentication methods"
 msgstr "SSH 인증 방법을 나열하지 못했습니다."
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1059
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1059
 msgid "SSH public-key authentication failed"
 msgstr "SSH 공개 키 인증 실패"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1081
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1081
 msgid "Failed to refresh SSH authentication methods"
 msgstr "SSH 인증 방법을 새로 고치지 못했습니다."
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1094
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1094
 msgid "SSH server did not accept an available authentication method"
 msgstr "SSH 서버가 사용 가능한 인증 방법을 수락하지 않았습니다."
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1277
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1595
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1746
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1277
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1595
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1746
 msgid "SSH transport is closed"
 msgstr "SSH 운송이 종료되었습니다"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1496
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1496
 msgid "Failed to allocate SSH session"
 msgstr "SSH 세션"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1502
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1502
 msgid "Failed to set SSH host"
 msgstr "SSH 호스트"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1507
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1507
 msgid "Failed to parse SSH configuration"
 msgstr "SSH 구성을 구문 분석하지 못했습니다."
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1516
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1516
 msgid "Failed to configure SSH endpoint"
 msgstr "SSH 끝점"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1522
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1522
 msgid "Failed to configure SSH user name"
 msgstr "SSH 사용자 이름을 구성하지 못했습니다."
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1528
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1528
 msgid "Failed to configure SSH known_hosts"
 msgstr "SSHknown_hosts"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1534
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1534
 msgid "Failed to attach SSH socket"
 msgstr "SSH 소켓"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1544
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1544
 msgid "Failed to configure SSH callbacks"
 msgstr "SSH 콜백을 구성하지 못했습니다."
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1598
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1598
 #, fuzzy
 msgid "SSH command is required"
 msgstr "SSH 운송이 필요합니다"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1695
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1695
 msgid "SSH command output is too large"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1700
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1700
 msgid "SSH command error output is too large"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1707
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1707
 msgid "SSH command did not return an exit status"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1843
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1843
 msgid "SSH transport is required"
 msgstr "SSH 운송이 필요합니다"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1898
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1967
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2005
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2025
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1898
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1967
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:2005
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:2025
 msgid "SSH channel is closed"
 msgstr "SSH 채널이 폐쇄되었습니다"
 

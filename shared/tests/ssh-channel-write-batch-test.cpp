@@ -3,7 +3,7 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
-#include "../../src/terminal-sessions/ssh-session/ssh-channel-write-batch.h"
+#include "../src/connection-runtime/ssh/ssh-channel-write-batch.h"
 
 #include <cstdint>
 #include <initializer_list>

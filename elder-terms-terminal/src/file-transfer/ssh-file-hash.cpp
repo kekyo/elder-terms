@@ -5,7 +5,7 @@
 
 #include "file-hash.h"
 
-#include "../terminal-sessions/ssh-session/authenticated-ssh-transport.h"
+#include "../../../shared/src/connection-runtime/ssh/authenticated-ssh-transport.h"
 
 #include <algorithm>
 #include <array>

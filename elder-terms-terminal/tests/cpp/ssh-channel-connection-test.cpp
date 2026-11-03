@@ -3,9 +3,9 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
-#include "../../src/terminal-sessions/ssh-session/ssh-channel-connection.h"
-#include "../../src/terminal-sessions/ssh-session/ssh-proxy.h"
-#include "../../src/terminal-sessions/ssh-session/ssh-socks-proxy.h"
+#include "../../../shared/src/connection-runtime/ssh/ssh-channel-connection.h"
+#include "../../../shared/src/connection-runtime/ssh/ssh-proxy.h"
+#include "../../../shared/src/connection-runtime/ssh/ssh-socks-proxy.h"
 #include "../../src/terminal-sessions/telnet-session/telnet-protocol.h"
 #include "../../src/file-transfer/file-hash.h"
 #include "../../src/sftp/sftp-client.h"

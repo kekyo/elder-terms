@@ -3,9 +3,9 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
-#include "../../src/activity-indicator-id.h"
-#include "../../src/activity-indicator.h"
-#include "../../src/indicator-color.h"
+#include "../src/connection-runtime/activity-indicator-id.h"
+#include "../src/connection-runtime/activity-indicator.h"
+#include "../src/connection-runtime/indicator-color.h"
 
 #include <algorithm>
 #include <array>

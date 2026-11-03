@@ -20,7 +20,7 @@
 #include <elder-terms/http-authentication.h>
 #include "../tls/certificate-failure.h"
 #include "../file-transfer/remote-file-client.h"
-#include "../terminal-sessions/ssh-session/ssh-socks-proxy.h"
+#include "../../../shared/src/connection-runtime/ssh/ssh-socks-proxy.h"
 
 namespace elder_terms {
 

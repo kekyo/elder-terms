@@ -1536,7 +1536,7 @@ msgstr "ハイパーリンクコマンドの実行に失敗しました"
 
 #: elder-terms-terminal/src/main.cpp:339
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:225
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:756
 msgid "SSH Host Key Changed"
 msgstr "SSHホスト鍵の変更"
 
@@ -1566,7 +1566,7 @@ msgstr ""
 
 #: elder-terms-terminal/src/main.cpp:373
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:254
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:756
 msgid "SSH Host Key"
 msgstr "SSHホスト鍵"
 
@@ -1587,9 +1587,9 @@ msgstr ""
 #: elder-terms-terminal/src/main-window.ui:307
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:276
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:285
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:270
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:917
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:996
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:270
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:917
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:996
 msgid "SSH Authentication"
 msgstr "SSH認証"
 
@@ -1775,7 +1775,7 @@ msgid "Accept the fixture SSH host key?"
 msgstr "テスト用SSHホスト鍵を承認しますか？"
 
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:421
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:266
 #: elder-terms-terminal/src/webdav/webdav-application.cpp:76
 msgid "User name must not be empty."
 msgstr "ユーザー名を空にすることは出来ません。"
@@ -2200,34 +2200,34 @@ msgstr "BREAKの送信に失敗しました"
 msgid "serial: (unknown)"
 msgstr "シリアル:（不明）"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:82
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1175
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:82
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1175
 msgid "SSH session has no socket"
 msgstr "SSHセッションにソケットがありません"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:263
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:263
 #, c-format
 msgid "User name for %s:"
 msgstr "%sのユーザー名:"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:279
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:279
 msgid "SSH user name was not provided"
 msgstr "SSHユーザー名が入力されませんでした"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:544
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:544
 msgid "Failed to start ssh-keygen"
 msgstr "ssh-keygenの起動に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:545
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:545
 #, c-format
 msgid "Failed to start ssh-keygen: %s"
 msgstr "ssh-keygenの起動に失敗しました: %s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:683
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:683
 msgid "unknown"
 msgstr "不明"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:711
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:711
 #, c-format
 msgid ""
 "The SSH host key type for %s:%u differs from the saved key.\n"
@@ -2242,7 +2242,7 @@ msgstr ""
 "鍵の種類: %s\n"
 "フィンガープリント: %s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:715
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:715
 #, c-format
 msgid ""
 "The SSH host key for %s:%u has changed.\n"
@@ -2257,7 +2257,7 @@ msgstr ""
 "鍵の種類: %s\n"
 "フィンガープリント: %s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:726
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:726
 msgid ""
 "Choose Reset and Connect only if this change is expected. ssh-keygen will "
 "preserve a backup of the saved per-user file.\n"
@@ -2267,7 +2267,7 @@ msgstr ""
 "keygenは保存済みのユーザー用ファイルのバックアップを保持します。\n"
 "同等のコマンド:"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:730
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:730
 msgid ""
 "The conflicting key is in a system-wide known_hosts file and cannot be reset "
 "automatically. Ask an administrator to verify the change and run:"
@@ -2275,7 +2275,7 @@ msgstr ""
 "競合する鍵はシステム共通のknown_hostsファイルにあるため、自動的にはリセットで"
 "きません。管理者に変更の確認と次のコマンドの実行を依頼してください:"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:734
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:734
 msgid ""
 "The conflicting known_hosts entry could not be located automatically. Verify "
 "the change and run the appropriate command before reconnecting:"
@@ -2283,7 +2283,7 @@ msgstr ""
 "競合するknown_hostsエントリーの場所を自動判定できませんでした。変更を確認し、"
 "再接続する前に適切なコマンドを実行してください:"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:743
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:743
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%u\n"
@@ -2294,151 +2294,151 @@ msgstr ""
 "鍵の種類: %s\n"
 "フィンガープリント: %s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:749
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:749
 msgid "The known_hosts file does not exist and will be created."
 msgstr "known_hostsファイルが存在しないため作成します。"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:752
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:752
 msgid "Accept and save this host key?"
 msgstr "このホスト鍵を承認して保存しますか？"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:773
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:798
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:833
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:773
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:798
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:833
 msgid "SSH host key was not reset"
 msgstr "SSHホスト鍵はリセットされませんでした"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:790
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:790
 msgid "Failed to reset SSH host key"
 msgstr "SSHホスト鍵のリセットに失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:791
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:791
 #, c-format
 msgid "Failed to reset SSH host key: %s"
 msgstr "SSHホスト鍵のリセットに失敗しました: %s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:795
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:843
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:795
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:843
 msgid "Failed to save SSH host key"
 msgstr "SSHホスト鍵の保存に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:813
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:813
 msgid "Failed to check SSH host key"
 msgstr "SSHホスト鍵の確認に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:840
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:840
 msgid "SSH host key was not accepted"
 msgstr "SSHホスト鍵が承認されませんでした"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:872
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:872
 msgid "SSH Key Passphrase"
 msgstr "SSH鍵のパスフレーズ"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:874
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:874
 #, c-format
 msgid "Passphrase for %s (attempt %u of %u):"
 msgstr "%sのパスフレーズ（%u/%u回目）:"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:919
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:919
 #, c-format
 msgid "Password for %s (attempt %u of %u):"
 msgstr "%sのパスワード（%u/%u回目）:"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:941
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:941
 msgid "SSH password authentication failed"
 msgstr "SSHパスワード認証に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:966
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:966
 msgid "SSH authentication response:"
 msgstr "SSH認証への応答:"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1024
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1024
 msgid "SSH keyboard-interactive authentication failed"
 msgstr "SSHキーボードインタラクティブ認証に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1043
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1043
 msgid "SSH authentication negotiation failed"
 msgstr "SSH認証のネゴシエーションに失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1048
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1048
 msgid "Failed to list SSH authentication methods"
 msgstr "SSH認証方法の取得に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1059
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1059
 msgid "SSH public-key authentication failed"
 msgstr "SSH公開鍵認証に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1081
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1081
 msgid "Failed to refresh SSH authentication methods"
 msgstr "SSH認証方法の更新に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1094
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1094
 msgid "SSH server did not accept an available authentication method"
 msgstr "SSHサーバーは利用可能な認証方法を受け入れませんでした"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1277
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1595
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1746
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1277
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1595
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1746
 msgid "SSH transport is closed"
 msgstr "SSHトランスポートは閉じられています"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1496
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1496
 msgid "Failed to allocate SSH session"
 msgstr "SSHセッションの割り当てに失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1502
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1502
 msgid "Failed to set SSH host"
 msgstr "SSHホストの設定に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1507
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1507
 msgid "Failed to parse SSH configuration"
 msgstr "SSH設定の解析に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1516
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1516
 msgid "Failed to configure SSH endpoint"
 msgstr "SSHエンドポイントの設定に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1522
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1522
 msgid "Failed to configure SSH user name"
 msgstr "SSHユーザー名の設定に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1528
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1528
 msgid "Failed to configure SSH known_hosts"
 msgstr "SSHのknown_hostsの設定に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1534
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1534
 msgid "Failed to attach SSH socket"
 msgstr "SSHソケットの割り当てに失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1544
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1544
 msgid "Failed to configure SSH callbacks"
 msgstr "SSHコールバックの設定に失敗しました"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1598
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1598
 #, fuzzy
 msgid "SSH command is required"
 msgstr "SSHトランスポートが必要です"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1695
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1695
 msgid "SSH command output is too large"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1700
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1700
 msgid "SSH command error output is too large"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1707
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1707
 msgid "SSH command did not return an exit status"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1843
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1843
 msgid "SSH transport is required"
 msgstr "SSHトランスポートが必要です"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1898
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1967
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2005
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2025
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1898
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1967
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:2005
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:2025
 msgid "SSH channel is closed"
 msgstr "SSHチャネルは閉じられています"
 

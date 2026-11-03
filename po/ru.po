@@ -1440,7 +1440,7 @@ msgstr "Не удалось выполнить команду гиперссыл
 
 #: elder-terms-terminal/src/main.cpp:339
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:225
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:756
 #, fuzzy
 msgid "SSH Host Key Changed"
 msgstr "SSH Ключ хоста"
@@ -1463,7 +1463,7 @@ msgstr ""
 
 #: elder-terms-terminal/src/main.cpp:373
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:254
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:756
 msgid "SSH Host Key"
 msgstr "SSH Ключ хоста"
 
@@ -1484,9 +1484,9 @@ msgstr ""
 #: elder-terms-terminal/src/main-window.ui:307
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:276
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:285
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:270
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:917
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:996
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:270
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:917
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:996
 msgid "SSH Authentication"
 msgstr "SSH Аутентификация"
 
@@ -1675,7 +1675,7 @@ msgid "Enter the user name and password for %s."
 msgstr "Введите имя пользователя и пароль для %s."
 
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:421
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:266
 #: elder-terms-terminal/src/webdav/webdav-application.cpp:76
 msgid "User name must not be empty."
 msgstr "Имя пользователя не должно быть пустым."
@@ -2108,35 +2108,35 @@ msgstr "Не удалось отправить BREAK"
 msgid "serial: (unknown)"
 msgstr "серийный номер: (неизвестно)"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:82
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1175
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:82
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1175
 msgid "SSH session has no socket"
 msgstr "SSH нет сокета"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:263
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:263
 #, c-format
 msgid "User name for %s:"
 msgstr "Имя пользователя для %s:"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:279
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:279
 msgid "SSH user name was not provided"
 msgstr "Имя пользователя SSH не указано"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:544
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:544
 #, fuzzy
 msgid "Failed to start ssh-keygen"
 msgstr "Не удалось запустить %s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:545
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:545
 #, fuzzy, c-format
 msgid "Failed to start ssh-keygen: %s"
 msgstr "Не удалось запустить %s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:683
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:683
 msgid "unknown"
 msgstr "неизвестно"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:711
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:711
 #, c-format
 msgid ""
 "The SSH host key type for %s:%u differs from the saved key.\n"
@@ -2146,7 +2146,7 @@ msgid ""
 "Fingerprint: %s"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:715
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:715
 #, c-format
 msgid ""
 "The SSH host key for %s:%u has changed.\n"
@@ -2156,26 +2156,26 @@ msgid ""
 "Fingerprint: %s"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:726
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:726
 msgid ""
 "Choose Reset and Connect only if this change is expected. ssh-keygen will "
 "preserve a backup of the saved per-user file.\n"
 "Equivalent command:"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:730
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:730
 msgid ""
 "The conflicting key is in a system-wide known_hosts file and cannot be reset "
 "automatically. Ask an administrator to verify the change and run:"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:734
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:734
 msgid ""
 "The conflicting known_hosts entry could not be located automatically. Verify "
 "the change and run the appropriate command before reconnecting:"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:743
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:743
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%u\n"
@@ -2186,153 +2186,153 @@ msgstr ""
 "Тип ключа: %s\n"
 "Отпечаток пальца: %s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:749
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:749
 msgid "The known_hosts file does not exist and will be created."
 msgstr "Файлknown_hosts не существует и будет создан."
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:752
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:752
 msgid "Accept and save this host key?"
 msgstr "Принять и сохранить этот ключ хоста?"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:773
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:798
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:833
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:773
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:798
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:833
 #, fuzzy
 msgid "SSH host key was not reset"
 msgstr "SSH ключ хоста не принят"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:790
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:790
 #, fuzzy
 msgid "Failed to reset SSH host key"
 msgstr "Не удалось сохранить ключ хоста SSH"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:791
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:791
 #, fuzzy, c-format
 msgid "Failed to reset SSH host key: %s"
 msgstr "Не удалось сохранить ключ хоста SSH"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:795
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:843
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:795
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:843
 msgid "Failed to save SSH host key"
 msgstr "Не удалось сохранить ключ хоста SSH"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:813
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:813
 msgid "Failed to check SSH host key"
 msgstr "Не удалось проверить ключ хоста SSH"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:840
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:840
 msgid "SSH host key was not accepted"
 msgstr "SSH ключ хоста не принят"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:872
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:872
 msgid "SSH Key Passphrase"
 msgstr "SSH Ключевая фраза-пароль"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:874
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:874
 #, c-format
 msgid "Passphrase for %s (attempt %u of %u):"
 msgstr "Парольная фраза для %s (попытка %u из %u):"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:919
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:919
 #, c-format
 msgid "Password for %s (attempt %u of %u):"
 msgstr "Пароль для %s (попытка %u из %u):"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:941
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:941
 msgid "SSH password authentication failed"
 msgstr "SSH аутентификация по паролю не удалась"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:966
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:966
 msgid "SSH authentication response:"
 msgstr "SSH ответ аутентификации:"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1024
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1024
 msgid "SSH keyboard-interactive authentication failed"
 msgstr "SSH интерактивная аутентификация с помощью клавиатуры не удалась"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1043
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1043
 msgid "SSH authentication negotiation failed"
 msgstr "SSH не удалось выполнить согласование аутентификации"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1048
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1048
 msgid "Failed to list SSH authentication methods"
 msgstr "Не удалось вывести список методов аутентификации SSH"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1059
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1059
 msgid "SSH public-key authentication failed"
 msgstr "SSH аутентификация с открытым ключом не удалась"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1081
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1081
 msgid "Failed to refresh SSH authentication methods"
 msgstr "Не удалось обновить SSH методы аутентификации"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1094
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1094
 msgid "SSH server did not accept an available authentication method"
 msgstr "SSH сервер не принял доступный метод аутентификации"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1277
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1595
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1746
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1277
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1595
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1746
 msgid "SSH transport is closed"
 msgstr "SSH транспорт закрыт"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1496
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1496
 msgid "Failed to allocate SSH session"
 msgstr "Не удалось выделить сеанс SSH"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1502
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1502
 msgid "Failed to set SSH host"
 msgstr "Не удалось установить SSH хост"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1507
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1507
 msgid "Failed to parse SSH configuration"
 msgstr "Не удалось проанализировать конфигурацию SSH"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1516
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1516
 msgid "Failed to configure SSH endpoint"
 msgstr "Не удалось настроить конечную точку SSH"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1522
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1522
 msgid "Failed to configure SSH user name"
 msgstr "Не удалось настроить имя пользователя SSH"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1528
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1528
 msgid "Failed to configure SSH known_hosts"
 msgstr "Не удалось настроить SSH известные_хосты"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1534
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1534
 msgid "Failed to attach SSH socket"
 msgstr "Не удалось подключить сокет SSH"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1544
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1544
 msgid "Failed to configure SSH callbacks"
 msgstr "Не удалось настроить обратные вызовы SSH"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1598
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1598
 #, fuzzy
 msgid "SSH command is required"
 msgstr "SSH требуется транспорт"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1695
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1695
 msgid "SSH command output is too large"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1700
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1700
 msgid "SSH command error output is too large"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1707
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1707
 msgid "SSH command did not return an exit status"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1843
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1843
 msgid "SSH transport is required"
 msgstr "SSH требуется транспорт"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1898
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1967
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2005
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2025
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1898
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1967
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:2005
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:2025
 msgid "SSH channel is closed"
 msgstr "SSH канал закрыт"
 

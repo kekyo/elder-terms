@@ -3,7 +3,7 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
-#include "../../src/widget-background.h"
+#include "../src/connection-runtime/widget-background.h"
 
 #include <cstdint>
 #include <cmath>

@@ -14,7 +14,7 @@
 
 #include "../file-transfer/remote-file-client.h"
 #include "../tls/certificate-failure.h"
-#include "../terminal-sessions/ssh-session/ssh-socks-proxy.h"
+#include "../../../shared/src/connection-runtime/ssh/ssh-socks-proxy.h"
 
 namespace elder_terms {
 

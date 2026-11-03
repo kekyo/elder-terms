@@ -1424,7 +1424,7 @@ msgstr "हाइपरलिंक कमांड विफल"
 
 #: elder-terms-terminal/src/main.cpp:339
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:225
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:756
 #, fuzzy
 msgid "SSH Host Key Changed"
 msgstr "SSH होस्ट कुंजी"
@@ -1447,7 +1447,7 @@ msgstr ""
 
 #: elder-terms-terminal/src/main.cpp:373
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:254
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:756
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:756
 msgid "SSH Host Key"
 msgstr "SSH होस्ट कुंजी"
 
@@ -1468,9 +1468,9 @@ msgstr ""
 #: elder-terms-terminal/src/main-window.ui:307
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:276
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:285
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:270
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:917
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:996
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:270
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:917
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:996
 msgid "SSH Authentication"
 msgstr "SSH प्रमाणीकरण"
 
@@ -1659,7 +1659,7 @@ msgid "Enter the user name and password for %s."
 msgstr "%s के लिए उपयोगकर्ता नाम और पासवर्ड दर्ज करें।"
 
 #: elder-terms-terminal/src/file-transfer/file-transfer-main.cpp:421
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:266
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:266
 #: elder-terms-terminal/src/webdav/webdav-application.cpp:76
 msgid "User name must not be empty."
 msgstr "उपयोगकर्ता नाम खाली नहीं होना चाहिए।"
@@ -2086,35 +2086,35 @@ msgstr "BREAK भेजना विफल रहा"
 msgid "serial: (unknown)"
 msgstr "सीरियल: (अज्ञात)"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:82
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1175
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:82
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1175
 msgid "SSH session has no socket"
 msgstr "SSH सत्र में कोई सॉकेट नहीं है"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:263
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:263
 #, c-format
 msgid "User name for %s:"
 msgstr "%s के लिए उपयोगकर्ता नाम:"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:279
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:279
 msgid "SSH user name was not provided"
 msgstr "SSH उपयोगकर्ता नाम प्रदान नहीं किया गया"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:544
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:544
 #, fuzzy
 msgid "Failed to start ssh-keygen"
 msgstr "प्रारंभ करने में विफल %s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:545
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:545
 #, fuzzy, c-format
 msgid "Failed to start ssh-keygen: %s"
 msgstr "प्रारंभ करने में विफल %s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:683
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:683
 msgid "unknown"
 msgstr "अज्ञात"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:711
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:711
 #, c-format
 msgid ""
 "The SSH host key type for %s:%u differs from the saved key.\n"
@@ -2124,7 +2124,7 @@ msgid ""
 "Fingerprint: %s"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:715
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:715
 #, c-format
 msgid ""
 "The SSH host key for %s:%u has changed.\n"
@@ -2134,26 +2134,26 @@ msgid ""
 "Fingerprint: %s"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:726
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:726
 msgid ""
 "Choose Reset and Connect only if this change is expected. ssh-keygen will "
 "preserve a backup of the saved per-user file.\n"
 "Equivalent command:"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:730
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:730
 msgid ""
 "The conflicting key is in a system-wide known_hosts file and cannot be reset "
 "automatically. Ask an administrator to verify the change and run:"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:734
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:734
 msgid ""
 "The conflicting known_hosts entry could not be located automatically. Verify "
 "the change and run the appropriate command before reconnecting:"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:743
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:743
 #, c-format
 msgid ""
 "Unknown SSH host key for %s:%u\n"
@@ -2164,153 +2164,153 @@ msgstr ""
 "कुंजी प्रकार: %s\n"
 "फ़िंगरप्रिंट: %s"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:749
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:749
 msgid "The known_hosts file does not exist and will be created."
 msgstr "Known_hosts फ़ाइल मौजूद नहीं है और बनाई जाएगी।"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:752
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:752
 msgid "Accept and save this host key?"
 msgstr "इस होस्ट कुंजी को स्वीकार करें और सहेजें?"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:773
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:798
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:833
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:773
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:798
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:833
 #, fuzzy
 msgid "SSH host key was not reset"
 msgstr "SSH होस्ट कुंजी स्वीकार नहीं की गई"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:790
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:790
 #, fuzzy
 msgid "Failed to reset SSH host key"
 msgstr "SSH होस्ट कुंजी सहेजने में विफल"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:791
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:791
 #, fuzzy, c-format
 msgid "Failed to reset SSH host key: %s"
 msgstr "SSH होस्ट कुंजी सहेजने में विफल"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:795
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:843
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:795
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:843
 msgid "Failed to save SSH host key"
 msgstr "SSH होस्ट कुंजी सहेजने में विफल"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:813
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:813
 msgid "Failed to check SSH host key"
 msgstr "SSH होस्ट कुंजी"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:840
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:840
 msgid "SSH host key was not accepted"
 msgstr "SSH होस्ट कुंजी स्वीकार नहीं की गई"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:872
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:872
 msgid "SSH Key Passphrase"
 msgstr "SSH कुंजी पासफ़्रेज़"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:874
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:874
 #, c-format
 msgid "Passphrase for %s (attempt %u of %u):"
 msgstr "%s के लिए पासफ़्रेज़ (%u का %u प्रयास करें):"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:919
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:919
 #, c-format
 msgid "Password for %s (attempt %u of %u):"
 msgstr "%s के लिए पासवर्ड (%u का %u प्रयास करें):"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:941
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:941
 msgid "SSH password authentication failed"
 msgstr "SSH पासवर्ड प्रमाणीकरण विफल"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:966
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:966
 msgid "SSH authentication response:"
 msgstr "SSH प्रमाणीकरण प्रतिक्रिया:"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1024
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1024
 msgid "SSH keyboard-interactive authentication failed"
 msgstr "SSH कीबोर्ड-इंटरैक्टिव प्रमाणीकरण विफल"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1043
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1043
 msgid "SSH authentication negotiation failed"
 msgstr "SSH प्रमाणीकरण वार्ता विफल"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1048
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1048
 msgid "Failed to list SSH authentication methods"
 msgstr "SSH प्रमाणीकरण विधियों को सूचीबद्ध करने में विफल"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1059
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1059
 msgid "SSH public-key authentication failed"
 msgstr "SSH सार्वजनिक-कुंजी प्रमाणीकरण विफल"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1081
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1081
 msgid "Failed to refresh SSH authentication methods"
 msgstr "SSH प्रमाणीकरण विधियों को ताज़ा करने में विफल"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1094
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1094
 msgid "SSH server did not accept an available authentication method"
 msgstr "SSH सर्वर ने उपलब्ध प्रमाणीकरण विधि स्वीकार नहीं की"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1277
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1595
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1746
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1277
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1595
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1746
 msgid "SSH transport is closed"
 msgstr "SSH परिवहन बंद है"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1496
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1496
 msgid "Failed to allocate SSH session"
 msgstr "SSH सत्र"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1502
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1502
 msgid "Failed to set SSH host"
 msgstr "SSH होस्ट"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1507
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1507
 msgid "Failed to parse SSH configuration"
 msgstr "SSH कॉन्फ़िगरेशन को पार्स करने में विफल"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1516
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1516
 msgid "Failed to configure SSH endpoint"
 msgstr "SSH एंडपॉइंट"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1522
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1522
 msgid "Failed to configure SSH user name"
 msgstr "SSH उपयोगकर्ता नाम कॉन्फ़िगर करने में विफल"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1528
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1528
 msgid "Failed to configure SSH known_hosts"
 msgstr "SSH ज्ञात_होस्ट"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1534
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1534
 msgid "Failed to attach SSH socket"
 msgstr "SSH सॉकेट संलग्न करने में विफल"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1544
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1544
 msgid "Failed to configure SSH callbacks"
 msgstr "SSH कॉलबैक कॉन्फ़िगर करने में विफल"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1598
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1598
 #, fuzzy
 msgid "SSH command is required"
 msgstr "SSH परिवहन आवश्यक है"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1695
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1695
 msgid "SSH command output is too large"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1700
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1700
 msgid "SSH command error output is too large"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1707
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1707
 msgid "SSH command did not return an exit status"
 msgstr ""
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1843
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1843
 msgid "SSH transport is required"
 msgstr "SSH परिवहन आवश्यक है"
 
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1898
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:1967
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2005
-#: elder-terms-terminal/src/terminal-sessions/ssh-session/ssh-channel-connection.cpp:2025
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1898
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:1967
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:2005
+#: shared/src/connection-runtime/ssh/ssh-channel-connection.cpp:2025
 msgid "SSH channel is closed"
 msgstr "SSH चैनल बंद है"
 

@@ -42,11 +42,11 @@
 #include "file-transfer-job-view.h"
 #include "file-transfer-node-icon.h"
 #include "activity-file-client.h"
-#include "../activity-indicator.h"
-#include "../compact-header.h"
-#include "../indicator-color.h"
+#include "../../../shared/src/connection-runtime/activity-indicator.h"
+#include "../../../shared/src/connection-runtime/compact-header.h"
+#include "../../../shared/src/connection-runtime/indicator-color.h"
 #include "local-file-reveal.h"
-#include "../widget-background.h"
+#include "../../../shared/src/connection-runtime/widget-background.h"
 
 namespace elder_terms {
 

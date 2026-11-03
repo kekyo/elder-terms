@@ -4,8 +4,8 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "smb-ssh-proxy.h"
-#include "../terminal-sessions/ssh-session/ssh-proxy.h"
-#include "../terminal-sessions/ssh-session/ssh-channel-connection.h"
+#include "../../../shared/src/connection-runtime/ssh/ssh-proxy.h"
+#include "../../../shared/src/connection-runtime/ssh/ssh-channel-connection.h"
 
 #include <arpa/inet.h>
 #include <cerrno>

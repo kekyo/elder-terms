@@ -6,7 +6,7 @@
 #pragma once
 
 #include "terminal-transport.h"
-#include "terminal-sessions/ssh-session/authenticated-ssh-transport.h"
+#include "../../shared/src/connection-runtime/ssh/authenticated-ssh-transport.h"
 
 namespace elder_terms {
 

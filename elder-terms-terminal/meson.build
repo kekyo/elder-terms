@@ -3,7 +3,6 @@ canberra_dep = dependency('libcanberra')
 gio_dep = dependency('gio-2.0')
 liburing_dep = dependency('liburing')
 libudev_dep = dependency('libudev')
-libssh_dep = dependency('libssh')
 libcurl_dep = dependency('libcurl', version: '>=7.88.1')
 libxml2_dep = dependency('libxml-2.0', version: '>=2.9.14')
 openssl_dep = dependency('openssl')
@@ -41,15 +40,6 @@ libxyzm_static_libraries = custom_target(
 libxyzm_static_library = libxyzm_static_libraries[0]
 libxyzm_async_static_library = libxyzm_static_libraries[1]
 
-ssh_transport_library = static_library('elder-terms-ssh-transport',
-  ['src/terminal-sessions/ssh-session/ssh-channel-connection.cpp',
-   'src/terminal-sessions/ssh-session/ssh-proxy.cpp',
-   'src/terminal-sessions/ssh-session/ssh-socks-proxy.cpp',
-   'src/terminal-sessions/tcp-connector.cpp'],
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libssh_dep, liburing_dep])
-ssh_transport_dep = declare_dependency(link_with: ssh_transport_library,
-  dependencies: [cardio_dep, elder_terms_dep, gio_dep, libssh_dep, liburing_dep])
-
 boxrig_runtime_library = static_library('elder-terms-terminal-runtime',
   ['src/terminal-runtime.cpp', 'src/terminal-connection.cpp',
    'src/terminal-links.cpp', 'src/terminal-hyperlink-action.cpp',
@@ -71,10 +61,10 @@ boxrig_runtime_dep = declare_dependency(
   include_directories: elder_terms_shared_include_dir,
   dependencies: [jemalloc_dep, boxrig_deps['boxrig-gtk3'], boxrig_deps['boxrig-posix'], cardio_dep, ssh_transport_dep],
 )
-executable('boxrig-driver', ['src/boxrig-driver.cpp', 'src/inline-prompt.cpp', 'src/terminal-log.cpp',
+executable('boxrig-driver', ['src/boxrig-driver.cpp',  'src/terminal-log.cpp',
     'src/sftp/sftp-client.cpp'],
   cpp_args: ['-I' + gestament_include_dir],
-  dependencies: [boxrig_runtime_dep],
+  dependencies: [connection_ui_dep, boxrig_runtime_dep],
 )
 
 # Keep the upstream headless driver unchanged and link the same shared core as
@@ -92,11 +82,6 @@ custom_target('boxrig-regex',
 telnet_protocol_source = 'src/terminal-sessions/telnet-session/telnet-protocol.cpp'
 elder_terms_sources = [
   'src/gtk-initialization.cpp',
-  'src/activity-indicator.cpp',
-  'src/compact-header.cpp',
-  'src/indicator-color.cpp',
-  'src/inline-prompt.cpp',
-  'src/launch-options.cpp',
   'src/main.cpp',
   'src/main-window.cpp',
   'src/terminal-background.cpp',
@@ -112,11 +97,9 @@ elder_terms_sources = [
     'src/file-transfer/file-transfer-job-view.cpp',
   'src/file-transfer/activity-file-client.cpp',
   'src/file-transfer/local-file-reveal.cpp',
-  'src/terminal-connection-phase.cpp',
   'src/terminal-bell.cpp',
   'src/terminal-bell-player.cpp',
   'src/terminal-log.cpp',
-  'src/widget-background.cpp',
   'src/terminal-presentation.cpp',
   'src/terminal-renderer-status.cpp',
 ]
@@ -129,6 +112,7 @@ elder_terms_terminal = executable(
     '-I' + libxyzm_include_dir,
   ],
   dependencies: [
+    connection_ui_dep,
     jemalloc_dep,
     cardio_dep,
     elder_terms_dep,
@@ -205,7 +189,7 @@ test('terminal-background-state-test', find_program('xvfb-run'), args: ['-a', ba
 terminal_dispatch_test = executable('terminal-dispatch-test',
   'tests/cpp/terminal-dispatch-test.cpp',
   objects: elder_terms_terminal.extract_all_objects(recursive: false),
-  dependencies: [cardio_dep, elder_terms_dep, canberra_dep, gio_dep, gtk_dep,
+  dependencies: [connection_ui_dep, cardio_dep, elder_terms_dep, canberra_dep, gio_dep, gtk_dep,
     liburing_dep, ssh_transport_dep, libudev_dep, boxrig_runtime_dep, boxrig_background_dep],
   link_with: libxyzm_async_static_library,
   link_args: ['-Wl,--wrap=main'])
@@ -216,21 +200,21 @@ test('terminal-dispatch-test', find_program('xvfb-run'),
 appearance_state_test = executable('terminal-appearance-state-test',
   'tests/cpp/terminal-appearance-state-test.cpp',
   objects: elder_terms_terminal.extract_all_objects(recursive: false),
-  dependencies: [cardio_dep, elder_terms_dep, canberra_dep, gio_dep, gtk_dep,
+  dependencies: [connection_ui_dep, cardio_dep, elder_terms_dep, canberra_dep, gio_dep, gtk_dep,
     liburing_dep, ssh_transport_dep, libudev_dep, boxrig_runtime_dep, boxrig_background_dep],
   link_with: libxyzm_async_static_library,
   link_args: ['-Wl,--wrap=main', '-Wl,--wrap=boxrig_gtk3_terminal_widget_frame'])
 cell_width_test = executable('terminal-cell-width-test',
   'tests/cpp/terminal-cell-width-test.cpp',
   objects: elder_terms_terminal.extract_all_objects(recursive: false),
-  dependencies: [cardio_dep, elder_terms_dep, canberra_dep, gio_dep, gtk_dep,
+  dependencies: [connection_ui_dep, cardio_dep, elder_terms_dep, canberra_dep, gio_dep, gtk_dep,
     liburing_dep, ssh_transport_dep, libudev_dep, boxrig_runtime_dep, boxrig_background_dep],
   link_with: libxyzm_async_static_library,
   link_args: ['-Wl,--wrap=main', '-Wl,--wrap=boxrig_gtk3_terminal_widget_frame'])
 selection_state_test = executable('terminal-selection-state-test',
   'tests/cpp/terminal-selection-state-test.cpp',
   objects: elder_terms_terminal.extract_all_objects(recursive: false),
-  dependencies: [cardio_dep, elder_terms_dep, canberra_dep, gio_dep, gtk_dep,
+  dependencies: [connection_ui_dep, cardio_dep, elder_terms_dep, canberra_dep, gio_dep, gtk_dep,
     liburing_dep, ssh_transport_dep, libudev_dep, boxrig_runtime_dep, boxrig_background_dep],
   link_with: libxyzm_async_static_library,
   link_args: ['-Wl,--wrap=main', '-Wl,--wrap=boxrig_gtk3_terminal_widget_frame',
@@ -266,9 +250,6 @@ endif
 executable(
   'elder-terms-file-transfer',
   [
-    'src/compact-header.cpp',
-    'src/inline-prompt.cpp',
-    'src/launch-options.cpp',
     'src/ftp/ftp-client.cpp',
     'src/ftp/curl-ftp-session.cpp', 'src/tls/certificate-policy.cpp',
     'src/ftp/ftp-metadata.cpp',
@@ -296,15 +277,12 @@ executable(
     'src/file-transfer/file-transfer-job.cpp',
     'src/file-transfer/file-transfer-job-view.cpp',
     'src/file-transfer/activity-file-client.cpp',
-    'src/activity-indicator.cpp',
-    'src/indicator-color.cpp',
     'src/file-transfer/local-file-reveal.cpp',
-    'src/widget-background.cpp',
   ],
   cpp_args: [
     '-I' + gestament_include_dir,
   ],
-  dependencies: [
+  dependencies: [connection_ui_dep,
     jemalloc_dep,
     cardio_dep,
     elder_terms_dep,
@@ -598,8 +576,6 @@ ftps_client_test = executable(
 test('ssh-proxy-ftp-test', find_program('node'),
   args: [files('tests/ssh-proxy-ftp-runner.mjs'), ftps_client_test, ftp_test_server, ssh_proxy_test_server], timeout: 180)
 
-
-
 curl_ftp_client_test = executable(
   'curl-ftp-client-test',
   [
@@ -706,10 +682,10 @@ endforeach
 file_transfer_window_lifetime_test = executable(
   'file-transfer-window-lifetime-test',
   [
-    'src/compact-header.cpp',
+    '../shared/src/connection-runtime/compact-header.cpp',
     'tests/cpp/file-transfer-window-lifetime-test.cpp',
-    'src/inline-prompt.cpp',
-    'src/widget-background.cpp',
+    '../shared/src/connection-runtime/inline-prompt.cpp',
+    '../shared/src/connection-runtime/widget-background.cpp',
     'src/sftp/sftp-fixture-client.cpp',
     'src/file-transfer/file-hash.cpp',
     'src/file-transfer/file-transfer-engine.cpp',
@@ -718,8 +694,8 @@ file_transfer_window_lifetime_test = executable(
     'src/file-transfer/file-transfer-job.cpp',
     'src/file-transfer/file-transfer-job-view.cpp',
     'src/file-transfer/activity-file-client.cpp',
-    'src/activity-indicator.cpp',
-    'src/indicator-color.cpp',
+    '../shared/src/connection-runtime/activity-indicator.cpp',
+    '../shared/src/connection-runtime/indicator-color.cpp',
     'src/file-transfer/local-file-reveal.cpp',
   ],
   include_directories: include_directories('src/file-transfer'),
@@ -728,14 +704,6 @@ file_transfer_window_lifetime_test = executable(
 )
 
 xvfb_run = find_program('xvfb-run')
-widget_background_test = executable(
-  'widget-background-test',
-  ['tests/cpp/widget-background-test.cpp', 'src/widget-background.cpp'],
-  dependencies: [elder_terms_dep, gtk_dep],
-)
-test('widget-background-test', xvfb_run,
-  args: ['-a', widget_background_test], timeout: 120)
-
 test('file-transfer-window-lifetime', xvfb_run,
   args: ['-a', file_transfer_window_lifetime_test], timeout: 120)
 
@@ -752,8 +720,6 @@ terminal_text_stream_test = executable(
 
 test('terminal-text-stream-test', terminal_text_stream_test)
 
-
-
 terminal_bell_test = executable(
   'terminal-bell-test',
   [
@@ -767,7 +733,6 @@ terminal_bell_test = executable(
 )
 
 test('terminal-bell-test', terminal_bell_test)
-
 
 terminal_hyperlink_action_test = executable(
   'terminal-hyperlink-action-test',
@@ -798,33 +763,6 @@ terminal_text_send_runner_test = executable(
 )
 
 test('terminal-text-send-runner-test', terminal_text_send_runner_test)
-
-cardio_lifetime_test = executable(
-  'cardio-lifetime-test',
-  'tests/cpp/cardio-lifetime-test.cpp',
-  dependencies: [
-    cardio_dep,
-    gio_dep,
-  ],
-)
-
-test('cardio-lifetime-test', cardio_lifetime_test)
-
-activity_indicator_test = executable(
-  'activity-indicator-test',
-  [
-    'tests/cpp/activity-indicator-test.cpp',
-    'src/activity-indicator.cpp',
-    'src/indicator-color.cpp',
-  ],
-  dependencies: [
-    gtk_dep,
-    elder_terms_dep,
-  ],
-)
-
-test('activity-indicator-test', xvfb_run,
-  args: ['-a', activity_indicator_test], timeout: 120)
 
 executable('file-manager-fixture', 'tests/cpp/file-manager-fixture.cpp',
   dependencies: [gio_dep])
@@ -857,19 +795,6 @@ file_hash_test = executable(
 
 test('file-hash-test', file_hash_test)
 
-terminal_connection_phase_test = executable(
-  'terminal-connection-phase-test',
-  [
-    'tests/cpp/terminal-connection-phase-test.cpp',
-    'src/terminal-connection-phase.cpp',
-  ],
-  include_directories: include_directories('src'),
-  dependencies: [elder_terms_dep],
-)
-
-test('terminal-connection-phase-test', terminal_connection_phase_test)
-
-
 ssh_channel_connection_test = executable(
   'ssh-channel-connection-test',
   [
@@ -891,13 +816,6 @@ ssh_channel_connection_test = executable(
 
 test('ssh-channel-connection-test', ssh_channel_connection_test,
   timeout: 60)
-
-ssh_channel_write_batch_test = executable(
-  'ssh-channel-write-batch-test',
-  'tests/cpp/ssh-channel-write-batch-test.cpp',
-)
-
-test('ssh-channel-write-batch-test', ssh_channel_write_batch_test)
 
 sftp_transfer_engine_test = executable(
   'sftp-transfer-engine-test',

@@ -7,7 +7,7 @@
 
 #include <functional>
 #include "remote-file-client.h"
-#include "../activity-indicator-id.h"
+#include "../../../shared/src/connection-runtime/activity-indicator-id.h"
 
 namespace elder_terms {
 /**

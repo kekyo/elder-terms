@@ -6,7 +6,7 @@
 #pragma once
 
 #include "main-window.h"
-#include "launch-options.h"
+#include "../../shared/src/connection-runtime/launch-options.h"
 #include "terminal-background-image.h"
 
 namespace elder_terms {
