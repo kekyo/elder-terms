@@ -121,6 +121,7 @@ std::vector<SettingDefinition> nfs_connection_setting_definitions() {
       {.key = nfs_setting_key("version"), .default_value = std::string("3"), .validate = validate_version, .retain_invalid = true},
       {.key = nfs_setting_key("nfs_port"), .default_value = gint64{0}, .validate = validate_port, .retain_invalid = true},
       {.key = nfs_setting_key("mount_port"), .default_value = gint64{0}, .validate = validate_port, .retain_invalid = true},
+      {.key = nfs_setting_key("require_reserved_port"), .default_value = false},
       {.key = nfs_setting_key("export_path"), .default_value = std::string(), .validate = validate_path, .retain_invalid = true},
       {.key = nfs_setting_key("known_exports"), .default_value = std::vector<std::string>(), .validate = validate_paths, .retain_invalid = true},
       {.key = nfs_setting_key("discover_exports"), .default_value = true},
@@ -152,6 +153,7 @@ NfsConnectionSettings nfs_connection_settings(const SettingsStore &store) {
   result.version = text("version", "3");
   result.nfs_port = number("nfs_port", 0);
   result.mount_port = number("mount_port", 0);
+  result.require_reserved_port = setting_boolean_value_or_default(store, nfs_setting_key("require_reserved_port"), false);
   result.export_path = text("export_path", "");
   result.known_exports = list("known_exports");
   result.discover_exports = setting_boolean_value_or_default(store, nfs_setting_key("discover_exports"), true);

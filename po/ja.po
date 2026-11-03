@@ -2963,6 +2963,9 @@ msgstr "NFSポート（0: 自動）"
 msgid "MOUNT port (0: automatic)"
 msgstr "MOUNTポート（0: 自動）"
 
+msgid "Require reserved source port"
+msgstr "予約済みポートを必須にする"
+
 msgid "User ID (-1: current process)"
 msgstr "利用者ID（-1: 現在のプロセス）"
 

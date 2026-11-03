@@ -66,6 +66,7 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"nfs", "local_directory", N_("Local directory")},
     SettingLabelEntry{"nfs", "nfs_port", N_("NFS port (0: automatic)")},
     SettingLabelEntry{"nfs", "mount_port", N_("MOUNT port (0: automatic)")},
+    SettingLabelEntry{"nfs", "require_reserved_port", N_("Require reserved source port")},
     SettingLabelEntry{"nfs", "uid", N_("User ID (-1: current process)")},
     SettingLabelEntry{"nfs", "gid", N_("Group ID (-1: current process)")},
     SettingLabelEntry{"nfs", "supplementary_gids", N_("Additional group IDs (one per line)")},

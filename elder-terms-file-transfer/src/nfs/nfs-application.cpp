@@ -56,6 +56,7 @@ static cardio::promise<void> start_application_async(NfsApplication *state) {
     options.version = state->connection.version == "4.0" ? 4 : state->connection.version == "2" ? 2 : 3;
     options.nfs_port = static_cast<int>(state->connection.nfs_port);
     options.mount_port = static_cast<int>(state->connection.mount_port);
+    options.require_reserved_port = state->connection.require_reserved_port;
     options.filename_encoding = state->connection.filename_encoding;
     options.known_exports = state->connection.known_exports;
     if (!state->connection.export_path.empty()) options.known_exports.push_back(state->connection.export_path);

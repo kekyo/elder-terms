@@ -54,6 +54,7 @@ Settings are stored in the `[nfs]` INI section. Separate lists of paths or suppl
 | `version` | `3` | `2`, `3`, or `4.0` |
 | `nfs_port` | `0` | Automatic; use 1–65535 for a fixed port |
 | `mount_port` | `0` | v2/v3 MOUNT port; 0 discovers it automatically |
+| `require_reserved_port` | `false` | Require a source port below 1024 |
 | `export_path` | Empty | Initial v2/v3 export; empty shows the list |
 | `known_exports` | Empty | Known absolute v2/v3 export paths |
 | `discover_exports` | `true` | Request the v2/v3 export list |
@@ -87,6 +88,8 @@ gid=1000
 
 ## Connection and size limits
 
-A server requiring a reserved source port needs the application to have permission to use that port. The connection fails without it. Check server export policies and numeric user IDs when troubleshooting access. Reserved-port requirements are described in [nfs-utils exports(5)](https://man7.org/linux/man-pages/man5/exports.5.html).
+A reserved port is a source port below 1024. A server requiring a reserved port needs the application to have permission to use that port. The connection fails without it. Check server export policies and numeric user IDs when troubleshooting access. Reserved-port requirements are described in [nfs-utils exports(5)](https://man7.org/linux/man-pages/man5/exports.5.html).
+
+"Require reserved source port" in the NFS tab is disabled by default. When enabled, the application checks that the source port is below 1024. If it is not, the application sends no NFS requests and displays the reason. This setting applies to IPv4 and IPv6 connections using v2, v3, or v4.0. Enabling it does not grant additional execution privileges.
 
 NFS v2 represents file sizes and offsets with 32 bits. To avoid ambiguous boundary responses, elder-terms rejects uploads of 4,294,967,295 bytes or more and downloads whose reported size equals that boundary. Inconsistent received data and size metadata also cause an error. Use v3 or v4.0 for large files. See [RFC 1094](https://www.rfc-editor.org/rfc/rfc1094.html) for protocol limits.

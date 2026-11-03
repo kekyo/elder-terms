@@ -39,6 +39,7 @@ struct NfsSettingsEditor {
       {"namespace_path"}, {"known_namespace_paths", NfsFieldKind::list},
       {"discover_namespace", NfsFieldKind::boolean}, {"local_directory"},
       {"nfs_port", NfsFieldKind::integer}, {"mount_port", NfsFieldKind::integer},
+      {"require_reserved_port", NfsFieldKind::boolean},
       {"uid", NfsFieldKind::integer}, {"gid", NfsFieldKind::integer}, {"supplementary_gids", NfsFieldKind::list},
       {"connect_timeout_seconds", NfsFieldKind::integer}, {"request_timeout_seconds", NfsFieldKind::integer}};
 };

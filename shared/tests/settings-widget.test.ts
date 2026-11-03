@@ -3759,6 +3759,12 @@ describe.concurrent('shared settings widget', () => {
         expect(
           await comboOptionNames(app, 'settings_nfs_discover_exports_combo')
         ).toEqual(['Enabled (built-in default)', 'Enabled', 'Disabled']);
+        expect(
+          await comboOptionNames(
+            app,
+            'settings_nfs_require_reserved_port_combo'
+          )
+        ).toEqual(['Disabled (built-in default)', 'Enabled', 'Disabled']);
         await encoding.setText('CP932//IGNORE');
         await expectInsensitive(await app.getById('settings_apply_button'));
         await encoding.setText('EUC-JP');
@@ -3774,6 +3780,27 @@ describe.concurrent('shared settings widget', () => {
           'CP932 (global default)'
         );
         await expectSensitive(encoding);
+        const scroll = expectElementKind(
+          await app.getById('settings_nfs_page_scrollbar'),
+          'scrollbar'
+        );
+        await scroll.setValue((await scroll.valueInfo()).maximum);
+        await waitForResult(async () => {
+          const field = await (
+            await app.getById('settings_nfs_require_reserved_port_combo')
+          ).capture();
+          const apply = await (
+            await app.getById('settings_apply_button')
+          ).capture();
+          expect(field.bounds.y).toBeGreaterThan(0);
+          expect(field.bounds.y + field.bounds.height).toBeLessThan(
+            apply.bounds.y
+          );
+        });
+        await writeFile(
+          join(directory, 'nfs-reserved-port-setting.png'),
+          (await app.capture()).image
+        );
       }
     );
   });

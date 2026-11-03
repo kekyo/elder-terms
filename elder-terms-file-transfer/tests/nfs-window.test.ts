@@ -81,6 +81,7 @@ it.for([2, 3, 4])(
         'name=NFS files',
         '[nfs]',
         'address=127.0.0.1',
+        'require_reserved_port=true',
         `version=${version === 4 ? '4.0' : version}`,
         'known_namespace_paths=/other/public;/public/deep;',
         'filename_encoding=CP932',
@@ -90,13 +91,14 @@ it.for([2, 3, 4])(
       ].join('\n')
     );
     const evidence = createTestEvidence(context);
+    const applicationPath = fileURLToPath(
+      new URL(
+        '../../.build/elder-terms-file-transfer/elder-terms-file-transfer',
+        import.meta.url
+      )
+    );
     const launcher = createGtkAppLauncher({
-      appPath: fileURLToPath(
-        new URL(
-          '../../.build/elder-terms-file-transfer/elder-terms-file-transfer',
-          import.meta.url
-        )
-      ),
+      appPath: applicationPath,
       env: {
         LANGUAGE: 'en',
         LC_ALL: 'C.UTF-8',
@@ -109,6 +111,46 @@ it.for([2, 3, 4])(
     let recorder: ReturnType<typeof spawn> | undefined;
     let recorded: Promise<number | null> | undefined;
     try {
+      if (version === 3) {
+        const unprivileged = createGtkAppLauncher({
+          appPath: '/usr/bin/setpriv',
+          env: {
+            LANGUAGE: 'en',
+            LC_ALL: 'C.UTF-8',
+            XDG_CONFIG_HOME: join(directory, 'unprivileged-config'),
+            XDG_DATA_HOME: join(directory, 'unprivileged-data'),
+          },
+          onSystemOutput: evidence.recordSystemOutputEvent,
+          xvfbTrayHost: true,
+        });
+        try {
+          const rejected = await unprivileged.launch(
+            ['--bounding-set=-net_bind_service', applicationPath, '-c', config],
+            { onOutput: evidence.recordAppOutputEvent }
+          );
+          await waitForResult(async () => {
+            expect(
+              await expectElementKind(
+                await rejected.getById('file_transfer_prompt_title_label'),
+                'label'
+              ).text()
+            ).toBe('Failed to start NFS');
+            expect(
+              await expectElementKind(
+                await rejected.getById('file_transfer_prompt_message_label'),
+                'label'
+              ).text()
+            ).toContain('requires a reserved source port below 1024');
+          });
+          await evidence.captureEvidence(
+            'nfs-reserved-port-required',
+            async () => rejected.capture()
+          );
+          await evidence.flushOutputs([rejected], unprivileged);
+        } finally {
+          await unprivileged.release();
+        }
+      }
       const app = await launcher.launch(['-c', config], {
         onOutput: evidence.recordAppOutputEvent,
       });
