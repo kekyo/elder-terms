@@ -8,12 +8,24 @@ import { fileURLToPath } from 'node:url';
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const root = resolve(directory, '../../..');
 const name = `elder-smb1-fault-${process.pid}`;
+const image = process.env.ELDER_SMB1_TEST_IMAGE ?? 'localhost/elder-plan18-samba';
 const env = {
   ...process.env,
   ELDER_SMB_PASSWORD: randomBytes(24).toString('hex'),
 };
 const podman = (args: string[]): string =>
   execFileSync('podman', args, { env, encoding: 'utf8' });
+try {
+  podman(['image', 'exists', image]);
+} catch {
+  const architecture = process.arch === 'x64' ? 'amd64' : process.arch;
+  execFileSync(
+    'podman',
+    ['build', '--platform', `linux/${architecture}`, '-t', image,
+      '-f', resolve(directory, 'Containerfile.smb1'), directory],
+    { stdio: 'inherit' }
+  );
+}
 const server = spawn(
   'podman',
   [
@@ -29,7 +41,7 @@ const server = spawn(
     `${root}:${root}:ro`,
     '-v',
     `${process.execPath}:/elder-node:ro`,
-    'localhost/elder-plan18-samba',
+    image,
     'sh',
     resolve(directory, 'samba1-entry.sh'),
   ],

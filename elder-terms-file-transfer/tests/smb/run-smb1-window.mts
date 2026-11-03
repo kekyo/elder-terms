@@ -20,8 +20,11 @@ const podman = (args: string[]): string =>
 try {
   podman(['image', 'exists', 'localhost/elder-plan18-samba']);
 } catch {
+  const architecture = process.arch === 'x64' ? 'amd64' : process.arch;
   podman([
     'build',
+    '--platform',
+    `linux/${architecture}`,
     '-t',
     'localhost/elder-plan18-samba',
     '-f',

@@ -18,10 +18,13 @@ const podman = (args: string[]): string =>
 try {
   podman(['image', 'exists', image]);
 } catch {
+  const architecture = process.arch === 'x64' ? 'amd64' : process.arch;
   execFileSync(
     'podman',
     [
       'build',
+      '--platform',
+      `linux/${architecture}`,
       '-t',
       image,
       '-f',
